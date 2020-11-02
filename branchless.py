@@ -165,6 +165,7 @@ def is_commit_old(commit: pygit2.Commit, now: int) -> bool:
 
 
 def smartlog(*, out: TextIO, show_old_commits: bool) -> None:
+    """Display a nice graph of commits you've recently worked on."""
     formatter = Formatter()
     repo = get_repo()
     # We don't use `repo.head`, because that resolves the HEAD reference
@@ -210,6 +211,7 @@ def smartlog(*, out: TextIO, show_old_commits: bool) -> None:
 
 
 def debug_ref_log_entry(*, out: TextIO, hash: str) -> None:
+    """(debug) Show all entries in the ref-log that affected a given commit."""
     formatter = Formatter()
     repo = get_repo()
     commit = repo[hash]
@@ -265,17 +267,16 @@ def main(argv: List[str], *, out: TextIO = sys.stdout) -> None:
     smartlog_parser = subparsers.add_parser(
         "smartlog",
         aliases=["sl"],
-        help="Display a nice graph of commits you've recently worked on.",
+        help=smartlog.__doc__,
     )
     smartlog_parser.add_argument(
         "--show-old", action="store_true", help="Show old commits (hidden by default)."
     )
     hide_parser = subparsers.add_parser("hide", help="hide a commit from the smartlog")
-    debug_ref_log_parser = subparsers.add_parser(
-        "debug-ref-log-entry",
-        help="(debug) Show all entries in the ref-log that affected a given commit.",
+    debug_ref_log_entry_parser = subparsers.add_parser(
+        "debug-ref-log-entry", help=debug_ref_log_entry.__doc__
     )
-    debug_ref_log_parser.add_argument("hash", type=str)
+    debug_ref_log_entry_parser.add_argument("hash", type=str)
     args = parser.parse_args(argv)
 
     if args.subcommand in ["smartlog", "sl"]:
