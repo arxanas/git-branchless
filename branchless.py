@@ -5,10 +5,11 @@ import collections
 import logging
 import os
 import re
+import string
 import sys
 import time
 from dataclasses import dataclass
-from typing import Dict, Iterator, List, Mapping, Optional, TextIO, Union, cast
+from typing import Any, Dict, Iterator, List, Mapping, Optional, TextIO, Union, cast
 
 import pygit2
 
@@ -16,6 +17,20 @@ import pygit2
 def get_repo() -> pygit2.Repository:
     repo_path: Optional[str] = pygit2.discover_repository(os.getcwd())
     return pygit2.Repository(repo_path)
+
+
+class Formatter(string.Formatter):
+    def format_field(self, value: Any, format_spec: str) -> str:
+        if format_spec == "oid":
+            assert isinstance(value, pygit2.Oid)
+            return f"{value!s:8.8}"
+        elif format_spec == "commit":
+            assert isinstance(value, pygit2.Commit)
+            message = cast(str, value.message)
+            first_line = message.split("\n", 1)[0]
+            return first_line
+        else:
+            raise ValueError(f"Unknown format spec {format_spec}")
 
 
 @dataclass(frozen=True, eq=True)
@@ -135,10 +150,6 @@ class RefLogReplayer:
         return (oid for oid in self._commit_history.keys() if self._is_reachable(oid))
 
 
-def first_line(message: str) -> str:
-    return message.split("\n", 1)[0]
-
-
 def is_commit_old(commit: pygit2.Commit, now: int) -> bool:
     # String like "-0430"
     offset_str = str(commit.commit_time_offset).zfill(5)
@@ -153,11 +164,8 @@ def is_commit_old(commit: pygit2.Commit, now: int) -> bool:
     return commit_timestamp < (now - max_age)
 
 
-def oid_to_str(oid: pygit2.Oid) -> str:
-    return f"{oid!s:8.8}"
-
-
 def smartlog(*, out: TextIO, show_old_commits: bool) -> None:
+    formatter = Formatter()
     repo = get_repo()
     # We don't use `repo.head`, because that resolves the HEAD reference
     # (e.g. into refs/head/master). We want the actual ref-log of HEAD, not
@@ -178,18 +186,31 @@ def smartlog(*, out: TextIO, show_old_commits: bool) -> None:
         if is_master_commit and not replayer.is_head(oid):
             # Do not display.
             logging.debug(
-                f"Commit {oid_to_str(oid)} is a master commit and not HEAD, not showing"
+                formatter.format(
+                    "Commit {oid:oid} is a master commit and not HEAD, not showing",
+                    oid=oid,
+                )
             )
         elif is_commit_old(commit, now=now):
             num_old_commits += 1
-            logging.debug(f"Commit {oid_to_str(oid)} is too old to be displayed")
+            logging.debug(
+                formatter.format("Commit {oid:oid} is too old to be displayed", oid=oid)
+            )
         else:
-            out.write(f"{oid_to_str(oid)} {first_line(commit.message)}\n")
+            out.write(
+                formatter.format("{oid:oid} {commit:commit}\n", oid=oid, commit=commit)
+            )
     if num_old_commits > 0:
-        out.write(f"({num_old_commits} old commits hidden, use --show-old to show)\n")
+        out.write(
+            formatter.format(
+                "({num_old_commits} old commits hidden, use --show-old to show)\n",
+                num_old_commits=num_old_commits,
+            )
+        )
 
 
 def debug_ref_log_entry(*, out: TextIO, hash: str) -> None:
+    formatter = Formatter()
     repo = get_repo()
     commit = repo[hash]
     commit_oid = commit.oid
@@ -201,7 +222,11 @@ def debug_ref_log_entry(*, out: TextIO, hash: str) -> None:
         replayer.process(entry)
         if commit_oid in [entry.oid_old, entry.oid_new]:
             out.write(
-                f"{oid_to_str(entry.oid_old)} -> {oid_to_str(entry.oid_new)} {entry.message}: {first_line(commit.message)}\n"
+                formatter.format(
+                    "{entry.oid_old:oid} -> {entry.oid_new:oid} {entry.message}: {commit:commit}\n",
+                    entry=entry,
+                    commit=commit,
+                )
             )
 
     out.write(f"Reachable commit history for {commit_oid!s}\n")
@@ -213,12 +238,20 @@ def debug_ref_log_entry(*, out: TextIO, hash: str) -> None:
             if isinstance(entry, MarkedUnreachable):
                 entry = entry.ref_log_entry
                 out.write(
-                    f"DELETED {oid_to_str(entry.oid_old)} -> {oid_to_str(entry.oid_new)} {entry.message}: {first_line(commit.message)}\n"
+                    formatter.format(
+                        "DELETED {entry.oid_old:oid} -> {entry.oid_new:oid} {entry.message}: {commit:commit}\n",
+                        entry=entry,
+                        commit=commit,
+                    )
                 )
             else:
                 assert isinstance(entry, pygit2.RefLogEntry)
                 out.write(
-                    f"{oid_to_str(entry.oid_old)} -> {oid_to_str(entry.oid_new)} {entry.message}: {first_line(commit.message)}\n"
+                    formatter.format(
+                        "{entry.oid_old:oid} -> {entry.oid_new:oid} {entry.message}: {commit:commit}\n",
+                        entry=entry,
+                        commit=commit,
+                    )
                 )
 
 
