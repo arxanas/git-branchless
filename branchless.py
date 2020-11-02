@@ -1,4 +1,42 @@
 #!/usr/bin/env python3
+"""Branchless workflow for Git.
+
+# Why?
+
+Most Git workflows involve heavy use of branches to track commit work that is
+underway. However, branches require that you "name" every commit you're
+interested in tracking. If you spend a lot of time doing any of the following:
+
+  * Switching between work tasks.
+  * Separating minor cleanups/refactorings into their own commits, for ease of
+    reviewability.
+  * Performing speculative work which may not be ultimately committed.
+  * Working on top of work that you or a collaborator produced, which is not
+    yet checked in.
+  * Losing track of `git stash`es you made previously.
+
+Then the branchless workflow may be for you instead.
+
+# Branchless workflow and concepts
+
+The branchless workflow does away with needing to explicitly name commits
+with branches (although you are free to do so if you like). Rather than use
+branches to see your current work items, you simply make commits as you go.
+
+The branchless extensions infer which commits you're working on, and display
+them to you with the `git smartlog` (or `git sl`) command.
+
+A commit is in one of three states:
+
+  * **Master**: A commit which has been checked into master. No longer mutable.
+    Visible to you in the branchless workflow.
+  * **Visible**: A commit which you are working on currently. Visible to you in
+    the branchless workflow.
+  * **Hidden**: A commit which has been discarded or replaced. In particular,
+    old versions of rebased commits are considered hidden. You can also
+    manually hide commits that you no longer need. Not visible to you in the
+    branchless workflow.
+"""
 import argparse
 import asyncio
 import collections
@@ -15,11 +53,14 @@ import pygit2
 
 
 def get_repo() -> pygit2.Repository:
+    """Get the git repository associated with the current directory."""
     repo_path: Optional[str] = pygit2.discover_repository(os.getcwd())
     return pygit2.Repository(repo_path)
 
 
 class Formatter(string.Formatter):
+    """Formatter with additional directives for commits, etc."""
+
     def format_field(self, value: Any, format_spec: str) -> str:
         if format_spec == "oid":
             assert isinstance(value, pygit2.Oid)
@@ -35,8 +76,22 @@ class Formatter(string.Formatter):
 
 @dataclass(frozen=True, eq=True)
 class RefLogAction:
+    """Wrapper around an action taken in a ref-log.
+
+    We scrape these entries to attempt to determine what happened in the past
+    to the HEAD ref.
+    """
+
     action: str
+    """An action, like "checkout"."""
+
     action_message: Optional[str]
+    """An additional piece of description for the action, like "moving from X to Y".
+
+    Most, but not every, ref-log action has an additional piece of
+    description attached to it. An example of a ref-log action which doesn't
+    would be "initial pull".
+    """
 
     REF_LOG_LINE_RE = re.compile(
         r"""
@@ -64,12 +119,31 @@ class RefLogAction:
 
 
 @dataclass(frozen=True, eq=True)
-class MarkedUnreachable:
+class MarkedHidden:
+    """Wrapper for a ref-log entry which caused a commit to be marked as
+    "hidden".
+
+    Typically, this is for actions that "hid" the given commit, usually due
+    to replacing with it a new one. For example, rebasing a commit is
+    essentially implemented by replaying the commit on top of a different
+    base commit than it was originally applied to. There's no inherent
+    relationship between the old and the new commit in the eyes of Git,
+    except that if you had a branch checked out, it no longer points to the
+    old version of the commit.
+
+    In a branchless workflow, we can't use the presence or absence of a
+    branch to determine if the user was still using a given commit. Instead,
+    we read the ref-log to determine if there was an action which logically
+    hid the commit. When detected, we wrap those entries in this class.
+    """
+
     ref_log_entry: pygit2.RefLogEntry
 
 
 class RefLogReplayer:
-    CommitHistory = List[Union[pygit2.RefLogEntry, MarkedUnreachable]]
+    """Replay ref-log entries to determine which commits are visible."""
+
+    CommitHistory = List[Union[pygit2.RefLogEntry, MarkedHidden]]
 
     def __init__(self, head_ref: pygit2.Reference) -> None:
         head_oid: pygit2.Oid = head_ref.resolve().target
@@ -121,7 +195,7 @@ class RefLogReplayer:
             or action.action.startswith("merge ")
             or action.action.startswith("pull --rebase")
         ):
-            self._mark_unreachable(oid=entry.oid_old, entry=entry)
+            self._mark_hidden(oid=entry.oid_old, entry=entry)
             self._commit_history[entry.oid_new].append(entry)
         else:
             logging.warning(
@@ -131,7 +205,9 @@ class RefLogReplayer:
     def is_head(self, oid: pygit2.Oid) -> bool:
         return cast(bool, oid == self._head_oid)
 
-    def _is_reachable(self, oid: pygit2.Oid) -> bool:
+    def _is_visible(self, oid: pygit2.Oid) -> bool:
+        # HEAD is always visible, since is denotes the commit you're currently
+        # working on.
         if self.is_head(oid):
             return True
 
@@ -141,16 +217,21 @@ class RefLogReplayer:
         if history is None:
             return False
         else:
-            return not isinstance(history[-1], MarkedUnreachable)
+            return not isinstance(history[-1], MarkedHidden)
 
-    def _mark_unreachable(self, oid: pygit2.Oid, entry: pygit2.RefLogEntry) -> None:
-        self._commit_history[oid].append(MarkedUnreachable(ref_log_entry=entry))
+    def _mark_hidden(self, oid: pygit2.Oid, entry: pygit2.RefLogEntry) -> None:
+        self._commit_history[oid].append(MarkedHidden(ref_log_entry=entry))
 
-    def reachable_commits(self) -> Iterator[pygit2.Oid]:
-        return (oid for oid in self._commit_history.keys() if self._is_reachable(oid))
+    def get_visible_commits(self) -> Iterator[pygit2.Oid]:
+        """Get all commits thought to be visible according to the ref-log."""
+        return (oid for oid in self._commit_history.keys() if self._is_visible(oid))
 
 
 def is_commit_old(commit: pygit2.Commit, now: int) -> bool:
+    """Determine if a commit has not been touched for a while (is "old").
+
+    Such commits are visible, but by default, not shown by the smartlog.
+    """
     # String like "-0430"
     offset_str = str(commit.commit_time_offset).zfill(5)
     offset_sign = -1 if offset_str[0] == "-" else 1
@@ -237,7 +318,7 @@ def debug_ref_log_entry(*, out: TextIO, hash: str) -> None:
         out.write("<none>\n")
     else:
         for entry in history:
-            if isinstance(entry, MarkedUnreachable):
+            if isinstance(entry, MarkedHidden):
                 entry = entry.ref_log_entry
                 out.write(
                     formatter.format(
@@ -257,7 +338,7 @@ def debug_ref_log_entry(*, out: TextIO, hash: str) -> None:
                 )
 
 
-def main(argv: List[str], *, out: TextIO = sys.stdout) -> None:
+def main(argv: List[str], *, out: TextIO) -> None:
     logging.basicConfig(level=logging.DEBUG)
 
     parser = argparse.ArgumentParser(prog="branchless")
@@ -291,4 +372,4 @@ def main(argv: List[str], *, out: TextIO = sys.stdout) -> None:
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    main(sys.argv[1:], out=sys.stdout)
