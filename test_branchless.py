@@ -6,7 +6,7 @@ from typing import Any, List, Optional
 import py
 import pytest
 
-from branchless import main
+from branchless.__main__ import main
 
 GIT_PATH = "/opt/twitter_mde/bin/git"
 
@@ -76,5 +76,6 @@ def test_show_reachable_commit(tmpdir: py.path.local) -> None:
             out.getvalue()
             == """\
 e5aad67e create test.txt
+c967edc2 create initial.txt
 """
         )
