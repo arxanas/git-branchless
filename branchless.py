@@ -341,7 +341,10 @@ def debug_ref_log_entry(*, out: TextIO, hash: str) -> None:
 def main(argv: List[str], *, out: TextIO) -> None:
     logging.basicConfig(level=logging.DEBUG)
 
-    parser = argparse.ArgumentParser(prog="branchless")
+    parser = argparse.ArgumentParser(prog="branchless", add_help=False)
+    parser.add_argument(
+        "-h", "--help", action="store_true", help="show this help message and exit"
+    )
     subparsers = parser.add_subparsers(
         dest="subcommand",
     )
@@ -360,14 +363,16 @@ def main(argv: List[str], *, out: TextIO) -> None:
     debug_ref_log_entry_parser.add_argument("hash", type=str)
     args = parser.parse_args(argv)
 
-    if args.subcommand in ["smartlog", "sl"]:
+    if args.help:
+        parser.print_help(file=out)
+    elif args.subcommand in ["smartlog", "sl"]:
         smartlog(out=out, show_old_commits=args.show_old)
     elif args.subcommand == "debug-ref-log-entry":
         debug_ref_log_entry(out=out, hash=args.hash)
     elif args.subcommand == "hide":
         raise NotImplementedError()
     else:
-        parser.print_usage()
+        parser.print_usage(file=out)
         sys.exit(1)
 
 

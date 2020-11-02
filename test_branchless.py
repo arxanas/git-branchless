@@ -46,13 +46,13 @@ def git_initial_commit(cwd: py.path.local) -> None:
     git_commit_file(cwd, name="initial")
 
 
-def test_help(capsys: Any) -> None:
-    with pytest.raises(SystemExit):
-        main(["--help"])
-    assert "usage: branchless" in capsys.readouterr().out
+def test_help() -> None:
+    with io.StringIO() as out:
+        main(["--help"], out=out)
+        assert "usage: branchless" in out.getvalue()
 
 
-def test_init(tmpdir: py.path.local, capsys: Any) -> None:
+def test_init(tmpdir: py.path.local) -> None:
     with tmpdir.as_cwd(), io.StringIO() as out:
         git_initial_commit(tmpdir)
 
