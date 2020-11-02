@@ -1,10 +1,12 @@
-import py
+import io
 import subprocess
+import sys
+from typing import Any, List, Optional
+
+import py
 import pytest
+
 from branchless import main
-
-from typing import Any, Optional, List
-
 
 GIT_PATH = "/opt/twitter_mde/bin/git"
 
@@ -33,11 +35,15 @@ def git(command: str, args: Optional[List[str]] = None) -> str:
     return result.stdout.decode()
 
 
-def init_git(cwd: py.path.local) -> None:
-    git("init")
-    cwd.join("initial.txt").write("initial")
+def git_commit_file(cwd: py.path.local, name: str) -> None:
+    cwd.join(f"{name}.txt").write(f"{name} contents\n")
     git("add", ["."])
-    git("commit", ["-m", "Initial commit"])
+    git("commit", ["-m", f"create {name}.txt"])
+
+
+def git_initial_commit(cwd: py.path.local) -> None:
+    git("init")
+    git_commit_file(cwd, name="initial")
 
 
 def test_help(capsys: Any) -> None:
@@ -47,17 +53,28 @@ def test_help(capsys: Any) -> None:
 
 
 def test_init(tmpdir: py.path.local, capsys: Any) -> None:
-    with tmpdir.as_cwd():
-        init_git(tmpdir)
+    with tmpdir.as_cwd(), io.StringIO() as out:
+        git_initial_commit(tmpdir)
 
-        tmpdir.join("test2.txt").write("hello")
-        git("add", ["."])
-        git("commit", ["-m", "create test2.txt"])
-
-        main(["smartlog"])
+        main(["smartlog"], out=out)
         assert (
-            capsys.readouterr().out
+            out.getvalue()
             == """\
-d4dd7470 create test2.txt
+c967edc2 create initial.txt
+"""
+        )
+
+
+def test_show_reachable_commit(tmpdir: py.path.local) -> None:
+    with tmpdir.as_cwd(), io.StringIO() as out:
+        git_initial_commit(tmpdir)
+        git("checkout", ["-b", "initial-branch"])
+        git_commit_file(tmpdir, name="test")
+
+        main(["smartlog"], out=out)
+        assert (
+            out.getvalue()
+            == """\
+e5aad67e create test.txt
 """
         )

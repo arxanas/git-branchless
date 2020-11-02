@@ -4,13 +4,13 @@ import asyncio
 import collections
 import logging
 import os
-import pygit2
 import re
-import time
 import sys
-
+import time
 from dataclasses import dataclass
-from typing import cast, List, Optional, Dict
+from typing import Dict, Iterator, List, Mapping, Optional, TextIO, Union, cast
+
+import pygit2
 
 
 def get_repo() -> pygit2.Repository:
@@ -48,17 +48,27 @@ class RefLogAction:
         )
 
 
+@dataclass(frozen=True, eq=True)
+class MarkedUnreachable:
+    ref_log_entry: pygit2.RefLogEntry
+
+
 class RefLogReplayer:
+    CommitHistory = List[Union[pygit2.RefLogEntry, MarkedUnreachable]]
+
     def __init__(self, head_ref: pygit2.Reference) -> None:
         head_oid: pygit2.Oid = head_ref.resolve().target
         self._head_oid: pygit2.Oid = head_oid
         self._current_oid: pygit2.Oid = head_oid
-        self.commit_history: Dict[
-            pygit2.Oid, List[pygit2.RefLogEntry]
+
+        # Invariant: if present, the value is always a non-empty list.
+        self._commit_history: Dict[
+            pygit2.Oid, RefLogReplayer.CommitHistory
         ] = collections.defaultdict(list)
 
-        # Ensure that the head commit is marked as reachable to begin with.
-        self.commit_history[head_oid] = []
+    @property
+    def commit_history(self) -> Dict[pygit2.Oid, CommitHistory]:
+        return self._commit_history
 
     def process(self, entry: pygit2.RefLogEntry) -> None:
         self._current_oid = entry.oid_new
@@ -83,21 +93,21 @@ class RefLogReplayer:
             "rebase -i (pick)",
             "rebase -i (fixup)",
         ]:
-            self.commit_history[entry.oid_new].append(entry)
+            self._commit_history[entry.oid_new].append(entry)
         elif (
             action.action
             in [
                 "rebase finished",
                 "rebase (finish)",
                 "rebase -i (finish)",
-                "rebase",  # XXX
+                "rebase",
                 "pull",
             ]
             or action.action.startswith("merge ")
             or action.action.startswith("pull --rebase")
         ):
-            self.mark_unreachable(entry.oid_old)
-            self.commit_history[entry.oid_new].append(entry)
+            self._mark_unreachable(oid=entry.oid_old, entry=entry)
+            self._commit_history[entry.oid_new].append(entry)
         else:
             logging.warning(
                 f"Reflog entry action type '{action.action}' ignored: {entry.oid_old} -> {entry.oid_new}: {entry.message}'"
@@ -106,19 +116,23 @@ class RefLogReplayer:
     def is_head(self, oid: pygit2.Oid) -> bool:
         return cast(bool, oid == self._head_oid)
 
-    def mark_unreachable(self, oid: pygit2.Oid) -> None:
+    def _is_reachable(self, oid: pygit2.Oid) -> bool:
         if self.is_head(oid):
-            # HEAD is always reachable.
-            return
+            return True
 
-        try:
-            # Mark the commit as unreachable, if present.
-            del self.commit_history[oid]
-        except KeyError:
-            pass
+        # Don't instantiate an empty list for this oid if it's not in the
+        # history.
+        history = self._commit_history.get(oid)
+        if history is None:
+            return False
+        else:
+            return not isinstance(history[-1], MarkedUnreachable)
 
-    def reachable_commits(self) -> List[pygit2.Oid]:
-        return list(self.commit_history.keys())
+    def _mark_unreachable(self, oid: pygit2.Oid, entry: pygit2.RefLogEntry) -> None:
+        self._commit_history[oid].append(MarkedUnreachable(ref_log_entry=entry))
+
+    def reachable_commits(self) -> Iterator[pygit2.Oid]:
+        return (oid for oid in self._commit_history.keys() if self._is_reachable(oid))
 
 
 def first_line(message: str) -> str:
@@ -143,7 +157,7 @@ def oid_to_str(oid: pygit2.Oid) -> str:
     return f"{oid!s:8.8}"
 
 
-def smartlog(*, show_old_commits: bool) -> None:
+def smartlog(*, out: TextIO, show_old_commits: bool) -> None:
     repo = get_repo()
     # We don't use `repo.head`, because that resolves the HEAD reference
     # (e.g. into refs/head/master). We want the actual ref-log of HEAD, not
@@ -157,22 +171,58 @@ def smartlog(*, show_old_commits: bool) -> None:
 
     now = int(time.time())
     num_old_commits = 0
-    for oid, history in replayer.commit_history.items():
+    for oid, history in reversed(replayer.commit_history.items()):
         commit: pygit2.Commit = repo[oid]
         (num_ahead, num_behind) = repo.ahead_behind(oid, master)
         is_master_commit = num_ahead == 0
         if is_master_commit and not replayer.is_head(oid):
             # Do not display.
-            pass
+            logging.debug(
+                f"Commit {oid_to_str(oid)} is a master commit and not HEAD, not showing"
+            )
         elif is_commit_old(commit, now=now):
             num_old_commits += 1
+            logging.debug(f"Commit {oid_to_str(oid)} is too old to be displayed")
         else:
-            print(f"{oid_to_str(oid)} {first_line(commit.message)}")
+            out.write(f"{oid_to_str(oid)} {first_line(commit.message)}\n")
     if num_old_commits > 0:
-        print(f"({num_old_commits} old commits hidden, use --show-old to show)")
+        out.write(f"({num_old_commits} old commits hidden, use --show-old to show)\n")
 
 
-def main(argv: List[str]) -> None:
+def debug_ref_log_entry(*, out: TextIO, hash: str) -> None:
+    repo = get_repo()
+    commit = repo[hash]
+    commit_oid = commit.oid
+
+    head_ref = repo.references["HEAD"]
+    replayer = RefLogReplayer(head_ref)
+    out.write(f"Ref-log entries that involved {commit_oid!s}\n")
+    for entry in head_ref.log():
+        replayer.process(entry)
+        if commit_oid in [entry.oid_old, entry.oid_new]:
+            out.write(
+                f"{oid_to_str(entry.oid_old)} -> {oid_to_str(entry.oid_new)} {entry.message}: {first_line(commit.message)}\n"
+            )
+
+    out.write(f"Reachable commit history for {commit_oid!s}\n")
+    history = replayer.commit_history.get(commit_oid)
+    if history is None:
+        out.write("<none>\n")
+    else:
+        for entry in history:
+            if isinstance(entry, MarkedUnreachable):
+                entry = entry.ref_log_entry
+                out.write(
+                    f"DELETED {oid_to_str(entry.oid_old)} -> {oid_to_str(entry.oid_new)} {entry.message}: {first_line(commit.message)}\n"
+                )
+            else:
+                assert isinstance(entry, pygit2.RefLogEntry)
+                out.write(
+                    f"{oid_to_str(entry.oid_old)} -> {oid_to_str(entry.oid_new)} {entry.message}: {first_line(commit.message)}\n"
+                )
+
+
+def main(argv: List[str], *, out: TextIO = sys.stdout) -> None:
     logging.basicConfig(level=logging.DEBUG)
 
     parser = argparse.ArgumentParser(prog="branchless")
@@ -187,12 +237,18 @@ def main(argv: List[str]) -> None:
     smartlog_parser.add_argument(
         "--show-old", action="store_true", help="Show old commits (hidden by default)."
     )
-
     hide_parser = subparsers.add_parser("hide", help="hide a commit from the smartlog")
+    debug_ref_log_parser = subparsers.add_parser(
+        "debug-ref-log-entry",
+        help="(debug) Show all entries in the ref-log that affected a given commit.",
+    )
+    debug_ref_log_parser.add_argument("hash", type=str)
     args = parser.parse_args(argv)
 
     if args.subcommand in ["smartlog", "sl"]:
-        smartlog(show_old_commits=args.show_old)
+        smartlog(out=out, show_old_commits=args.show_old)
+    elif args.subcommand == "debug-ref-log-entry":
+        debug_ref_log_entry(out=out, hash=args.hash)
     elif args.subcommand == "hide":
         raise NotImplementedError()
     else:
