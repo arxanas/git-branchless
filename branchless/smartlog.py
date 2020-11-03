@@ -43,11 +43,11 @@ def expand_visible_commits(
     """Find additional commits that should be displayed."""
     graph: Dict[pygit2.Oid, DisplayedCommit] = {}
     for commit_oid in commit_oids:
-        merge_base_oid: Optional[pygit2.Oid] = repo.merge_base(commit_oid, master_oid)
+        merge_base_oid = repo.merge_base(commit_oid, master_oid)
         assert merge_base_oid is not None, formatter.format(
-            "No merge-base found for commits {commit_oid:oid} and {master_oid:oid}".format(
-                commit_oid=commit_oid, master_oid=master_oid
-            )
+            "No merge-base found for commits {commit_oid:oid} and {master_oid:oid}",
+            commit_oid=commit_oid,
+            master_oid=master_oid,
         )
         previous_oid = commit_oid
         for current_commit in repo.walk(commit_oid, pygit2.GIT_SORT_TOPOLOGICAL):

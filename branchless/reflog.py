@@ -79,7 +79,7 @@ class RefLogReplayer:
     CommitHistory = List[Union[pygit2.RefLogEntry, MarkedHidden]]
 
     def __init__(self, head_ref: pygit2.Reference) -> None:
-        head_oid: pygit2.Oid = head_ref.resolve().target
+        head_oid = head_ref.resolve().target
         self._head_oid: pygit2.Oid = head_oid
         self._current_oid: pygit2.Oid = head_oid
 
@@ -136,7 +136,7 @@ class RefLogReplayer:
             )
 
     def is_head(self, oid: pygit2.Oid) -> bool:
-        return cast(bool, oid == self._head_oid)
+        return oid == self._head_oid
 
     def _is_visible(self, oid: pygit2.Oid) -> bool:
         # HEAD is always visible, since is denotes the commit you're currently

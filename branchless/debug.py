@@ -32,22 +32,21 @@ def debug_ref_log_entry(*, out: TextIO, hash: str) -> None:
     if history is None:
         out.write("<none>\n")
     else:
-        for entry in history:
-            if isinstance(entry, MarkedHidden):
-                entry = entry.ref_log_entry
+        for entry_or_hidden in history:
+            if isinstance(entry_or_hidden, MarkedHidden):
                 out.write(
                     formatter.format(
                         "DELETED {entry.oid_old:oid} -> {entry.oid_new:oid} {entry.message}: {commit:commit}\n",
-                        entry=entry,
+                        entry=entry_or_hidden.ref_log_entry,
                         commit=commit,
                     )
                 )
             else:
-                assert isinstance(entry, pygit2.RefLogEntry)
+                assert isinstance(entry_or_hidden, pygit2.RefLogEntry)
                 out.write(
                     formatter.format(
                         "{entry.oid_old:oid} -> {entry.oid_new:oid} {entry.message}: {commit:commit}\n",
-                        entry=entry,
+                        entry=entry_or_hidden,
                         commit=commit,
                     )
                 )

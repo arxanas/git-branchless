@@ -11,9 +11,8 @@
     "python.testing.pytestEnabled": true,
     "python.pythonPath": "./venv/bin/python3",
     "python.linting.mypyArgs": [
-        "--ignore-missing-imports",
-        "--follow-imports=silent",
         "--show-column-numbers",
-        "--strict"
+        "--strict",
+        "stubs"
     ]
 }
