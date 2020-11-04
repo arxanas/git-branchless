@@ -2,7 +2,7 @@ import collections
 import logging
 import re
 from dataclasses import dataclass
-from typing import Dict, Iterator, List, Optional, Union, cast
+from typing import Dict, Iterator, List, Mapping, Optional, Sequence, Tuple, Union, cast
 
 import pygit2
 
@@ -15,8 +15,8 @@ class RefLogAction:
     to the HEAD ref.
     """
 
-    action: str
-    """An action, like "checkout"."""
+    action_type: str
+    """An action type, like "checkout"."""
 
     action_message: Optional[str]
     """An additional piece of description for the action, like "moving from X to Y".
@@ -26,10 +26,16 @@ class RefLogAction:
     would be "initial pull".
     """
 
+    oid_old: pygit2.Oid
+    """The OID of the reference before the action took place (for debugging)."""
+
+    oid_new: pygit2.Oid
+    """The OID of the reference after the action took place (for debugging)."""
+
     REF_LOG_LINE_RE = re.compile(
         r"""
         ^
-        (?P<action>[^:]+)
+        (?P<action_type>[^:]+)
         (
             :[ ]
             (?P<action_message>.+)
@@ -40,24 +46,27 @@ class RefLogAction:
     )
 
     @classmethod
-    def parse_ref_log_message(cls, message: str) -> "RefLogAction":
+    def from_entry(cls, entry: pygit2.RefLogEntry) -> "RefLogAction":
+        message = entry.message
         match = cls.REF_LOG_LINE_RE.match(message)
         assert match is not None, f"Failed to parse ref-log message: {message}"
-        action = match.group("action")
+        action_type = match.group("action_type")
         action_message = match.group("action_message")
+
         return cls(
-            action=action,
+            action_type=action_type,
             action_message=action_message,
+            oid_old=entry.oid_old,
+            oid_new=entry.oid_new,
         )
 
 
 @dataclass(frozen=True, eq=True)
 class MarkedHidden:
-    """Wrapper for a ref-log entry which caused a commit to be marked as
-    "hidden".
+    """Wrapper class to mark when an action marked a commit as "hidden".
 
-    Typically, this is for actions that "hid" the given commit, usually due
-    to replacing with it a new one. For example, rebasing a commit is
+    This detects actions that "hid" the given commit, usually due to
+    replacing with it a new one. For example, rebasing a commit is
     essentially implemented by replaying the commit on top of a different
     base commit than it was originally applied to. There's no inherent
     relationship between the old and the new commit in the eyes of Git,
@@ -67,21 +76,21 @@ class MarkedHidden:
     In a branchless workflow, we can't use the presence or absence of a
     branch to determine if the user was still using a given commit. Instead,
     we read the ref-log to determine if there was an action which logically
-    hid the commit. When detected, we wrap those entries in this class.
+    hid the commit.
     """
 
-    ref_log_entry: pygit2.RefLogEntry
+    action: RefLogAction
 
 
 class RefLogReplayer:
     """Replay ref-log entries to determine which commits are visible."""
 
-    CommitHistory = List[Union[pygit2.RefLogEntry, MarkedHidden]]
+    CommitHistory = List[Tuple[int, Union[RefLogAction, MarkedHidden]]]
 
-    def __init__(self, head_ref: pygit2.Reference) -> None:
-        head_oid = head_ref.resolve().target
+    def __init__(self, head_oid: pygit2.Oid) -> None:
         self._head_oid: pygit2.Oid = head_oid
         self._current_oid: pygit2.Oid = head_oid
+        self._timestamp = 0
 
         # Invariant: if present, the value is always a non-empty list.
         self._commit_history: Dict[
@@ -89,52 +98,80 @@ class RefLogReplayer:
         ] = collections.defaultdict(list)
 
     @property
-    def commit_history(self) -> Dict[pygit2.Oid, CommitHistory]:
+    def commit_history(self) -> Mapping[pygit2.Oid, CommitHistory]:
+        """Mapping from OID to actions that affected that commit (for
+        debugging).
+
+        Note that the caller is expected to have supplied the ref log actions
+        in *reverse* order, which means that each list of actions is ordered
+        from most-recent to least-recent.
+        """
         return self._commit_history
 
     def process(self, entry: pygit2.RefLogEntry) -> None:
         self._current_oid = entry.oid_new
+        action = RefLogAction.from_entry(entry)
 
-        action = RefLogAction.parse_ref_log_message(entry.message)
-        if action.action in [
+        # We want to hide the old OID *before* we register the action for the
+        # new OID. For example, if an entry were to mark the current OID as
+        # hidden, but stay on the same OID, then it should be marked visible
+        # again. However, since we're processing ref log entries in reverse
+        # order, we insert the `MarkedHidden` entry *after* we register the
+        # action for the new OID.
+        self.commit_history[entry.oid_new].append((self._timestamp, action))
+        if self._does_action_hide_old_oid(entry=entry, action=action):
+            self.commit_history[entry.oid_old].append(
+                (self._timestamp, MarkedHidden(action=action))
+            )
+
+        self._timestamp += 1
+
+    def _does_action_hide_old_oid(
+        self, entry: pygit2.RefLogEntry, action: RefLogAction
+    ) -> bool:
+        action_type = action.action_type
+        if action_type in [
             # Branching (may or may not be referring to the
             # currently-checked-out branch).
             "branch",
             "Branch",
-            # Checking out to commit/adjusting working copy.
             "initial pull",
             "reset",
             "checkout",
-            "rebase (start)",
-            "rebase -i (start)",
             # Committing.
             "commit",
-            "commit (amend)",
             "commit (initial)",
             "rebase (pick)",
             "rebase (fixup)",
             "rebase -i (pick)",
             "rebase -i (fixup)",
+            "rebase finished",
+            "rebase (finish)",
+            "rebase -i (finish)",
+            "rebase",
+            "pull",
         ]:
-            self._commit_history[entry.oid_new].append(entry)
+            return False
         elif (
-            action.action
+            action_type
             in [
-                "rebase finished",
-                "rebase (finish)",
-                "rebase -i (finish)",
-                "rebase",
-                "pull",
+                "rebase (start)",
+                "rebase -i (start)",
+                "commit (amend)",
             ]
-            or action.action.startswith("merge ")
-            or action.action.startswith("pull --rebase")
+            or action_type.startswith("merge ")
+            or action_type.startswith("pull --rebase")
         ):
-            self._mark_hidden(oid=entry.oid_old, entry=entry)
-            self._commit_history[entry.oid_new].append(entry)
+            return True
         else:
             logging.warning(
-                f"Reflog entry action type '{action.action}' ignored: {entry.oid_old} -> {entry.oid_new}: {entry.message}'"
+                f"Reflog entry action type '{action_type}' ignored: {entry.oid_old} -> {entry.oid_new}: {entry.message}'"
             )
+            return False
+
+    def finish_processing(self) -> None:
+        for v in self._commit_history.values():
+            v.reverse()
 
     def is_head(self, oid: pygit2.Oid) -> bool:
         return oid == self._head_oid
@@ -151,11 +188,9 @@ class RefLogReplayer:
         if history is None:
             return False
         else:
-            return not isinstance(history[-1], MarkedHidden)
+            (_timestamp, action) = history[-1]
+            return not isinstance(action, MarkedHidden)
 
-    def _mark_hidden(self, oid: pygit2.Oid, entry: pygit2.RefLogEntry) -> None:
-        self._commit_history[oid].append(MarkedHidden(ref_log_entry=entry))
-
-    def get_visible_commits(self) -> Iterator[pygit2.Oid]:
-        """Get all commits thought to be visible according to the ref-log."""
-        return (oid for oid in self._commit_history.keys() if self._is_visible(oid))
+    def get_visible_oids(self) -> Sequence[pygit2.Oid]:
+        """Get all OIDs thought to be visible according to the ref-log."""
+        return [oid for oid in self._commit_history.keys() if self._is_visible(oid)]

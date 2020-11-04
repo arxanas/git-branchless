@@ -3,7 +3,7 @@ from typing import TextIO
 import pygit2
 
 from . import Formatter, get_repo
-from .reflog import MarkedHidden, RefLogReplayer
+from .reflog import RefLogReplayer
 
 
 def debug_ref_log_entry(*, out: TextIO, hash: str) -> None:
@@ -14,7 +14,8 @@ def debug_ref_log_entry(*, out: TextIO, hash: str) -> None:
     commit_oid = commit.oid
 
     head_ref = repo.references["HEAD"]
-    replayer = RefLogReplayer(head_ref)
+    head_oid = head_ref.resolve().target
+    replayer = RefLogReplayer(head_oid)
     out.write(f"Ref-log entries that involved {commit_oid!s}\n")
     for entry in head_ref.log():
         replayer.process(entry)
@@ -32,21 +33,21 @@ def debug_ref_log_entry(*, out: TextIO, hash: str) -> None:
     if history is None:
         out.write("<none>\n")
     else:
-        for entry_or_hidden in history:
-            if isinstance(entry_or_hidden, MarkedHidden):
+        for (_timestamp, action) in history:
+            if action.did_mark_hidden:
                 out.write(
                     formatter.format(
-                        "DELETED {entry.oid_old:oid} -> {entry.oid_new:oid} {entry.message}: {commit:commit}\n",
-                        entry=entry_or_hidden.ref_log_entry,
+                        "DELETED {action.oid_old:oid} -> {action.oid_new:oid} {action.message}: {commit:commit}\n",
+                        action=action,
                         commit=commit,
                     )
                 )
             else:
-                assert isinstance(entry_or_hidden, pygit2.RefLogEntry)
+                assert isinstance(action, pygit2.RefLogEntry)
                 out.write(
                     formatter.format(
-                        "{entry.oid_old:oid} -> {entry.oid_new:oid} {entry.message}: {commit:commit}\n",
-                        entry=entry_or_hidden,
+                        "{action.oid_old:oid} -> {action.oid_new:oid} {action.message}: {commit:commit}\n",
+                        action=action,
                         commit=commit,
                     )
                 )

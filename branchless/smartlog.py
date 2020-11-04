@@ -166,7 +166,7 @@ def split_commit_graph_by_roots(
 @dataclass
 class ChildInfo:
     displayed_commit: DisplayedCommit
-    depth: int
+    render_depth: int
     is_last_child: bool
 
 
@@ -174,7 +174,7 @@ def walk_children(
     repo: pygit2.Repository,
     graph: CommitGraph,
     root_oid: pygit2.Oid,
-    depth: int,
+    render_depth: int,
     is_last_child: bool,
 ) -> Iterator[ChildInfo]:
     """Walk children commits according to the provided graph.
@@ -186,18 +186,24 @@ def walk_children(
     except KeyError:
         return
 
-    yield ChildInfo(displayed_commit=current, depth=depth, is_last_child=is_last_child)
+    yield ChildInfo(
+        displayed_commit=current, render_depth=render_depth, is_last_child=is_last_child
+    )
 
     # Sort earlier commits first, so that they're displayed at the bottom of
     # the smartlog.
     children = sorted(current.children, key=lambda oid: repo[oid].commit_time)
     for i, child_oid in enumerate(children):
         is_last_child = i == len(children) - 1
+        if is_last_child:
+            child_depth = render_depth
+        else:
+            child_depth = render_depth + 1
         yield from walk_children(
             repo=repo,
             graph=graph,
             root_oid=child_oid,
-            depth=depth + 1,
+            render_depth=child_depth,
             is_last_child=is_last_child,
         )
 
@@ -217,18 +223,18 @@ def get_output(
 ) -> Output:
     """Render a pretty graph starting from the given root OIDs in the given graph."""
     num_old_commits = 0
-    is_first = True
+    is_first_node = True
     lines_reversed = []
     for i, root_oid in enumerate(root_oids):
         for child_info in walk_children(
             repo=repo,
             graph=graph,
             root_oid=root_oid,
-            depth=0,
+            render_depth=0,
             is_last_child=False,
         ):
             displayed_commit = child_info.displayed_commit
-            depth = child_info.depth
+            render_depth = child_info.render_depth
             is_last_child = child_info.is_last_child
 
             oid = displayed_commit.oid
@@ -242,22 +248,19 @@ def get_output(
                 )
                 continue
 
-            if is_last_child:
-                if not is_first:
-                    lines_reversed.append("| " * depth + "\n")
-                commit_line_depth = depth - 1
-            else:
-                if not is_first:
-                    lines_reversed.append("| " * (depth - 1) + "|/" + "\n")
-                commit_line_depth = depth
-            is_first = False
+            if not is_first_node:
+                if is_last_child:
+                    lines_reversed.append("| " * (render_depth + 1))
+                else:
+                    lines_reversed.append("| " * (render_depth - 1) + "|/")
+            is_first_node = False
 
             lines_reversed.append(
                 formatter.format(
-                    "{lines}{oid:oid} {commit:commit}\n",
+                    "{lines}{oid:oid} {commit:commit}",
                     oid=oid,
                     commit=commit,
-                    lines=("| " * commit_line_depth) + "o ",
+                    lines=("| " * render_depth) + "o ",
                 )
             )
 
@@ -273,9 +276,12 @@ def smartlog(*, out: TextIO, show_old_commits: bool) -> None:
     # (e.g. into refs/head/master). We want the actual ref-log of HEAD, not
     # the reference it points to.
     head_ref = repo.references["HEAD"]
-    replayer = RefLogReplayer(head_ref)
+    head_oid = head_ref.resolve().target
+    replayer = RefLogReplayer(head_oid)
     for entry in head_ref.log():
         replayer.process(entry)
+    replayer.finish_processing()
+    visible_commit_oids = replayer.get_visible_oids()
 
     master_oid = repo.branches["master"].target
 
@@ -283,7 +289,7 @@ def smartlog(*, out: TextIO, show_old_commits: bool) -> None:
         formatter=formatter,
         repo=repo,
         master_oid=master_oid,
-        commit_oids=list(replayer.get_visible_commits()),
+        commit_oids=visible_commit_oids,
     )
     root_oids = split_commit_graph_by_roots(formatter=formatter, repo=repo, graph=graph)
     output = get_output(
@@ -296,6 +302,7 @@ def smartlog(*, out: TextIO, show_old_commits: bool) -> None:
 
     for line in output.lines:
         out.write(line)
+        out.write("\n")
     if output.num_old_commits > 0:
         out.write(
             formatter.format(
