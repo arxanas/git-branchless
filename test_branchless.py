@@ -1,4 +1,5 @@
 import io
+import os
 import subprocess
 import sys
 from typing import Any, List, Optional
@@ -36,15 +37,17 @@ def git(command: str, args: Optional[List[str]] = None, time: int = 0) -> str:
     return result.stdout.decode()
 
 
-def git_commit_file(cwd: py.path.local, name: str, time: int) -> None:
-    cwd.join(f"{name}.txt").write(f"{name} contents\n")
+def git_commit_file(name: str, time: int) -> None:
+    path = os.path.join(os.getcwd(), f"{name}.txt")
+    with open(path, "w") as f:
+        f.write(f"{name} contents\n")
     git("add", ["."])
     git("commit", ["-m", f"create {name}.txt"], time=time)
 
 
-def git_initial_commit(cwd: py.path.local) -> None:
+def git_initial_commit() -> None:
     git("init")
-    git_commit_file(cwd, name="initial", time=0)
+    git_commit_file(name="initial", time=0)
 
 
 def detach_head() -> None:
@@ -73,7 +76,7 @@ def test_help() -> None:
 
 def test_init(tmpdir: py.path.local) -> None:
     with tmpdir.as_cwd(), io.StringIO() as out:
-        git_initial_commit(tmpdir)
+        git_initial_commit()
 
         main(["smartlog"], out=out)
         compare(
@@ -86,9 +89,9 @@ o f777ecc9 create initial.txt
 
 def test_show_reachable_commit(tmpdir: py.path.local) -> None:
     with tmpdir.as_cwd(), io.StringIO() as out:
-        git_initial_commit(tmpdir)
+        git_initial_commit()
         git("checkout", ["-b", "initial-branch"])
-        git_commit_file(tmpdir, name="test", time=1)
+        git_commit_file(name="test", time=1)
 
         main(["smartlog"], out=out)
         compare(
@@ -103,12 +106,12 @@ o f777ecc9 create initial.txt
 
 def test_tree(tmpdir: py.path.local) -> None:
     with tmpdir.as_cwd(), io.StringIO() as out:
-        git_initial_commit(tmpdir)
+        git_initial_commit()
         detach_head()
         git("branch", ["initial"])
-        git_commit_file(tmpdir, name="test1", time=1)
+        git_commit_file(name="test1", time=1)
         git("checkout", ["initial"])
-        git_commit_file(tmpdir, name="test2", time=2)
+        git_commit_file(name="test2", time=2)
 
         main(["smartlog"], out=out)
         compare(
