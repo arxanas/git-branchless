@@ -1,4 +1,4 @@
-from typing import AbstractSet, Iterator, Mapping, Optional, Union
+from typing import AbstractSet, Iterator, List, Mapping, Optional, Union
 
 
 class Oid:
@@ -10,6 +10,7 @@ class Commit:
     message: str
     commit_time: int
     commit_time_offset: int
+    parents: List[Commit]
 
 
 class RefLogEntry:
