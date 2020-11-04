@@ -33,7 +33,7 @@ def test_init(tmpdir: py.path.local) -> None:
         compare(
             actual=out.getvalue(),
             expected="""\
-o f777ecc9 create initial.txt
+* f777ecc9 create initial.txt
 """,
         )
 
@@ -48,7 +48,7 @@ def test_show_reachable_commit(tmpdir: py.path.local) -> None:
         compare(
             actual=out.getvalue(),
             expected="""\
-o 3df4b935 create test.txt
+* 3df4b935 create test.txt
 | 
 o f777ecc9 create initial.txt
 """,
@@ -68,7 +68,7 @@ def test_tree(tmpdir: py.path.local) -> None:
         compare(
             actual=out.getvalue(),
             expected="""\
-o fe65c1fe create test2.txt
+* fe65c1fe create test2.txt
 |
 | o 62fc20d2 create test1.txt
 |/
@@ -90,7 +90,7 @@ def test_rebase(tmpdir: py.path.local) -> None:
         compare(
             actual=out.getvalue(),
             expected="""\
-o f8d9985b create test2.txt
+* f8d9985b create test2.txt
 |
 o 62fc20d2 create test1.txt
 |
