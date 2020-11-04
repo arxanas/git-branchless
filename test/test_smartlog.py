@@ -119,3 +119,33 @@ o 62fc20d2 create test1.txt
 o f777ecc9 create initial.txt
 """,
         )
+
+
+def test_merge_commit(tmpdir: py.path.local) -> None:
+    with tmpdir.as_cwd(), io.StringIO() as out:
+        git_initial_commit()
+        git("checkout", ["-b", "test1"])
+        git_commit_file(name="test1", time=1)
+        git("checkout", ["master"])
+        git_commit_file(name="test2", time=2)
+        git_commit_file(name="test3", time=3)
+        git("merge", ["test1"], time=4)
+
+        # Note that we may want to change the rendering/handling of merge
+        # commits in the future. Currently, we ignore the fact that merge
+        # commits have multiple parents, and pick a single parent with which to
+        # render it. We also don't properly mark the merged-from commits as
+        # hidden.
+        smartlog(out=out, show_old_commits=False)
+        compare(
+            actual=out.getvalue(),
+            expected="""\
+o fe65c1fe create test2.txt
+|
+| * 8b417665 Merge branch 'test1'
+| |
+| o 62fc20d2 create test1.txt
+|/
+o f777ecc9 create initial.txt
+""",
+        )
