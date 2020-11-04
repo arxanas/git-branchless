@@ -112,6 +112,7 @@ class RefLogReplayer:
             "commit (amend)",
             "commit (initial)",
             "rebase (pick)",
+            "rebase (fixup)",
             "rebase -i (pick)",
             "rebase -i (fixup)",
         ]:
