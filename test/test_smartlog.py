@@ -97,3 +97,25 @@ o 62fc20d2 create test1.txt
 o f777ecc9 create initial.txt
 """,
         )
+
+
+def test_sequential_master_commits(tmpdir: py.path.local) -> None:
+    with tmpdir.as_cwd(), io.StringIO() as out:
+        git_initial_commit()
+        git_commit_file(name="test1", time=1)
+        git_commit_file(name="test2", time=2)
+        git_commit_file(name="test3", time=3)
+
+        smartlog(out=out, show_old_commits=False)
+        compare(
+            actual=out.getvalue(),
+            expected="""\
+* 70deb1e2 create test3.txt
+|
+o 96d1c37a create test2.txt
+|
+o 62fc20d2 create test1.txt
+|
+o f777ecc9 create initial.txt
+""",
+        )

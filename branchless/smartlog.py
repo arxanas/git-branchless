@@ -77,6 +77,12 @@ def walk_from_visible_commits(
     happened for this commit since `master`).
     """
     graph: CommitGraph = {}
+
+    def link(parent_oid: pygit2.Oid, child_oid: Optional[pygit2.Oid]) -> None:
+        if child_oid is not None:
+            graph[child_oid].parent = parent_oid
+            graph[parent_oid].children.add(child_oid)
+
     for commit_oid in commit_oids:
         merge_base_oid = repo.merge_base(commit_oid, master_oid)
         assert merge_base_oid is not None, formatter.format(
@@ -85,6 +91,7 @@ def walk_from_visible_commits(
             master_oid=master_oid,
         )
 
+        current_commit = repo[commit_oid]
         previous_oid = None
         for current_commit in find_path_to_merge_base(
             formatter=formatter,
@@ -95,18 +102,12 @@ def walk_from_visible_commits(
             current_oid = current_commit.oid
 
             if current_oid not in graph:
-                should_break = False
                 graph[current_oid] = DisplayedCommit(
                     commit=current_commit, parent=None, children=set(), status="visible"
                 )
+                link(parent_oid=current_oid, child_oid=previous_oid)
             else:
-                should_break = True
-
-            if previous_oid is not None:
-                graph[previous_oid].parent = current_oid
-                graph[current_oid].children.add(previous_oid)
-
-            if should_break:
+                link(parent_oid=current_oid, child_oid=previous_oid)
                 break
 
             previous_oid = current_oid
@@ -120,6 +121,15 @@ def walk_from_visible_commits(
                     merge_base_oid=merge_base_oid,
                 )
             )
+    # Link any adjacent merge-bases (i.e. adjacent commits in master).
+    # TODO: may not be necessary, depending on if we want to hide master
+    # commits.
+    for oid, displayed_commit in graph.items():
+        if displayed_commit.status == "master":
+            for parent in displayed_commit.commit.parents:
+                if parent.oid in graph:
+                    link(parent_oid=parent.oid, child_oid=displayed_commit.commit.oid)
+                    break
 
     return graph
 
