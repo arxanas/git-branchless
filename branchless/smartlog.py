@@ -3,6 +3,7 @@ import logging
 import string
 import time
 from dataclasses import dataclass
+from queue import Queue
 from typing import Dict, Iterator, List, Optional, Sequence, Set, TextIO
 
 import pygit2
@@ -31,29 +32,35 @@ class DisplayedCommit:
 CommitGraph = Dict[pygit2.Oid, DisplayedCommit]
 
 
-def walk_commit_parents(
-    formatter: Formatter, repo: pygit2.Repository, commit_oid: pygit2.Oid
-) -> Iterator[pygit2.Commit]:
-    """Faster implementation of `repo.walk`.
+def find_path_to_merge_base(
+    formatter: Formatter,
+    repo: pygit2.Repository,
+    commit_oid: pygit2.Oid,
+    target_oid: pygit2.Oid,
+) -> List[pygit2.Commit]:
+    """Find a shortest path between the given commits.
 
-    For some reason, `repo.walk` hangs for a while when trying to run on a
-    large repo.
+    This is particularly important for multi-parent commits (i.e. merge
+    commits). If we don't happen to traverse the correct parent, we may end
+    up traversing a huge amount of commit history, with a significant
+    performance hit.
     """
-    commit = repo[commit_oid]
-    while True:
-        yield commit
-        parents = commit.parents
-        if len(parents) == 0:
-            break
-        if len(parents) > 1:
-            # TODO: we may choose the wrong one and never reach the intended merge-base.
-            logging.debug(
-                formatter.format(
-                    "Multiple parents for commit {commit.oid:oid}, choosing one arbitrarily",
-                    commit=commit,
-                )
-            )
-        commit = parents[0]
+    queue: Queue[List[pygit2.Commit]] = Queue()
+    queue.put([repo[commit_oid]])
+    while not queue.empty():
+        path = queue.get()
+        if path[-1].oid == target_oid:
+            return path
+
+        for parent in path[-1].parents:
+            queue.put(path + [parent])
+    raise ValueError(
+        formatter.format(
+            "No path between {commit_oid:oid} and {target_oid:oid}",
+            commit_oid=commit_oid,
+            target_oid=target_oid,
+        )
+    )
 
 
 def walk_from_visible_commits(
@@ -73,8 +80,11 @@ def walk_from_visible_commits(
         )
 
         previous_oid = None
-        for current_commit in walk_commit_parents(
-            formatter=formatter, repo=repo, commit_oid=commit_oid
+        for current_commit in find_path_to_merge_base(
+            formatter=formatter,
+            repo=repo,
+            commit_oid=commit_oid,
+            target_oid=merge_base_oid,
         ):
             current_oid = current_commit.oid
 
@@ -93,11 +103,18 @@ def walk_from_visible_commits(
             if should_break:
                 break
 
-            if current_oid == merge_base_oid:
-                graph[current_oid].status = "master"
-                break
-
             previous_oid = current_oid
+
+        if merge_base_oid in graph:
+            graph[merge_base_oid].status = "master"
+        else:
+            logging.warning(
+                formatter.format(
+                    "Could not find merge base {merge_base_oid:oid}",
+                    merge_base_oid=merge_base_oid,
+                )
+            )
+
     return graph
 
 
