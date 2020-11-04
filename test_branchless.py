@@ -51,6 +51,20 @@ def detach_head() -> None:
     git("checkout", ["--detach", "HEAD"])
 
 
+def rstrip_lines(lines: str) -> str:
+    return "".join(line.rstrip() + "\n" for line in lines.splitlines())
+
+
+def compare(actual: str, expected: str) -> None:
+    actual = rstrip_lines(actual)
+    expected = rstrip_lines(expected)
+    print("Expected:")
+    print(expected)
+    print("Actual:")
+    print(actual)
+    assert actual == expected
+
+
 def test_help() -> None:
     with io.StringIO() as out:
         main(["--help"], out=out)
@@ -62,11 +76,11 @@ def test_init(tmpdir: py.path.local) -> None:
         git_initial_commit(tmpdir)
 
         main(["smartlog"], out=out)
-        assert (
-            out.getvalue()
-            == """\
-f777ecc9 create initial.txt
-"""
+        compare(
+            actual=out.getvalue(),
+            expected="""\
+o f777ecc9 create initial.txt
+""",
         )
 
 
@@ -77,12 +91,13 @@ def test_show_reachable_commit(tmpdir: py.path.local) -> None:
         git_commit_file(tmpdir, name="test", time=1)
 
         main(["smartlog"], out=out)
-        assert (
-            out.getvalue()
-            == """\
-3df4b935 create test.txt
-f777ecc9 create initial.txt
-"""
+        compare(
+            actual=out.getvalue(),
+            expected="""\
+o 3df4b935 create test.txt
+| 
+o f777ecc9 create initial.txt
+""",
         )
 
 
@@ -96,11 +111,13 @@ def test_tree(tmpdir: py.path.local) -> None:
         git_commit_file(tmpdir, name="test2", time=2)
 
         main(["smartlog"], out=out)
-        assert (
-            out.getvalue()
-            == """\
-fe65c1fe create test2.txt
-62fc20d2 create test1.txt
-f777ecc9 create initial.txt
-"""
+        compare(
+            actual=out.getvalue(),
+            expected="""\
+o fe65c1fe create test2.txt
+|
+| o 62fc20d2 create test1.txt
+|/
+o f777ecc9 create initial.txt
+""",
         )

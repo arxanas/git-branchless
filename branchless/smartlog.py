@@ -4,7 +4,7 @@ import string
 import time
 from dataclasses import dataclass
 from queue import Queue
-from typing import Dict, Iterator, List, Optional, Sequence, Set, TextIO
+from typing import Dict, Iterator, List, Optional, Sequence, Set, TextIO, Tuple
 
 import pygit2
 
@@ -69,7 +69,13 @@ def walk_from_visible_commits(
     master_oid: pygit2.Oid,
     commit_oids: Sequence[pygit2.Oid],
 ) -> CommitGraph:
-    """Find additional commits that should be displayed."""
+    """Find additional commits that should be displayed.
+
+    For example, if you check out a commit that has intermediate parent
+    commits between it and `master`, those intermediate commits should be
+    shown (or else you won't get a good idea of the line of development that
+    happened for this commit since `master`).
+    """
     graph: CommitGraph = {}
     for commit_oid in commit_oids:
         merge_base_oid = repo.merge_base(commit_oid, master_oid)
@@ -123,8 +129,8 @@ def split_commit_graph_by_roots(
 ) -> List[pygit2.Oid]:
     """Split fully-independent subgraphs into multiple graphs.
 
-    This is intended to if you have multiple lines of work rooted from
-    different commits in master.
+    This is intended to handle the situation of having multiple lines of work
+    rooted from different commits in master.
 
     Returns the list such that the topologically-earlier subgraphs are first
     in the list (i.e. those that would be rendered at the bottom of the
@@ -157,21 +163,106 @@ def split_commit_graph_by_roots(
     return root_commit_oids
 
 
+@dataclass
+class ChildInfo:
+    displayed_commit: DisplayedCommit
+    depth: int
+    is_last_child: bool
+
+
 def walk_children(
-    repo: pygit2.Repository, graph: CommitGraph, root_oid: pygit2.Oid
-) -> Iterator[DisplayedCommit]:
+    repo: pygit2.Repository,
+    graph: CommitGraph,
+    root_oid: pygit2.Oid,
+    depth: int,
+    is_last_child: bool,
+) -> Iterator[ChildInfo]:
+    """Walk children commits according to the provided graph.
+
+    Returns useful information about the depth of each child, for later rendering.
+    """
     try:
         current = graph[root_oid]
     except KeyError:
         return
 
-    yield current
+    yield ChildInfo(displayed_commit=current, depth=depth, is_last_child=is_last_child)
 
     # Sort earlier commits first, so that they're displayed at the bottom of
     # the smartlog.
     children = sorted(current.children, key=lambda oid: repo[oid].commit_time)
-    for child_oid in children:
-        yield from walk_children(repo=repo, graph=graph, root_oid=child_oid)
+    for i, child_oid in enumerate(children):
+        is_last_child = i == len(children) - 1
+        yield from walk_children(
+            repo=repo,
+            graph=graph,
+            root_oid=child_oid,
+            depth=depth + 1,
+            is_last_child=is_last_child,
+        )
+
+
+@dataclass
+class Output:
+    lines: Sequence[str]
+    num_old_commits: int
+
+
+def get_output(
+    formatter: Formatter,
+    repo: pygit2.Repository,
+    graph: CommitGraph,
+    root_oids: List[pygit2.Oid],
+    now: int,
+) -> Output:
+    """Render a pretty graph starting from the given root OIDs in the given graph."""
+    num_old_commits = 0
+    is_first = True
+    lines_reversed = []
+    for i, root_oid in enumerate(root_oids):
+        for child_info in walk_children(
+            repo=repo,
+            graph=graph,
+            root_oid=root_oid,
+            depth=0,
+            is_last_child=False,
+        ):
+            displayed_commit = child_info.displayed_commit
+            depth = child_info.depth
+            is_last_child = child_info.is_last_child
+
+            oid = displayed_commit.oid
+            commit = repo[oid]
+            if is_commit_old(commit, now=now):
+                num_old_commits += 1
+                logging.debug(
+                    formatter.format(
+                        "Commit {oid:oid} is too old to be displayed", oid=oid
+                    )
+                )
+                continue
+
+            if is_last_child:
+                if not is_first:
+                    lines_reversed.append("| " * depth + "\n")
+                commit_line_depth = depth - 1
+            else:
+                if not is_first:
+                    lines_reversed.append("| " * (depth - 1) + "|/" + "\n")
+                commit_line_depth = depth
+            is_first = False
+
+            lines_reversed.append(
+                formatter.format(
+                    "{lines}{oid:oid} {commit:commit}\n",
+                    oid=oid,
+                    commit=commit,
+                    lines=("| " * commit_line_depth) + "o ",
+                )
+            )
+
+    lines = list(reversed(lines_reversed))
+    return Output(lines=lines, num_old_commits=num_old_commits)
 
 
 def smartlog(*, out: TextIO, show_old_commits: bool) -> None:
@@ -188,8 +279,6 @@ def smartlog(*, out: TextIO, show_old_commits: bool) -> None:
 
     master_oid = repo.branches["master"].target
 
-    now = int(time.time())
-    num_old_commits = 0
     graph = walk_from_visible_commits(
         formatter=formatter,
         repo=repo,
@@ -197,35 +286,20 @@ def smartlog(*, out: TextIO, show_old_commits: bool) -> None:
         commit_oids=list(replayer.get_visible_commits()),
     )
     root_oids = split_commit_graph_by_roots(formatter=formatter, repo=repo, graph=graph)
+    output = get_output(
+        formatter=formatter,
+        repo=repo,
+        graph=graph,
+        root_oids=root_oids,
+        now=int(time.time()),
+    )
 
-    lines_reversed = []
-    for root_oid in root_oids:
-        for displayed_commit in walk_children(
-            repo=repo, graph=graph, root_oid=root_oid
-        ):
-            oid = displayed_commit.oid
-            commit = repo[oid]
-            if is_commit_old(commit, now=now):
-                num_old_commits += 1
-                logging.debug(
-                    formatter.format(
-                        "Commit {oid:oid} is too old to be displayed", oid=oid
-                    )
-                )
-            else:
-                lines_reversed.append(
-                    formatter.format(
-                        "{oid:oid} {commit:commit}\n", oid=oid, commit=commit
-                    )
-                )
-
-    lines = reversed(lines_reversed)
-    for line in lines:
+    for line in output.lines:
         out.write(line)
-    if num_old_commits > 0:
+    if output.num_old_commits > 0:
         out.write(
             formatter.format(
                 "({num_old_commits} old commits hidden, use --show-old to show)\n",
-                num_old_commits=num_old_commits,
+                num_old_commits=output.num_old_commits,
             )
         )
