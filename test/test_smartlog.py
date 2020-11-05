@@ -6,9 +6,15 @@ from typing import Any, List, Optional
 
 import py
 import pytest
-
 from branchless.smartlog import smartlog
-from helpers import git, git_initial_commit, git_commit_file, git_detach_head
+
+from helpers import (
+    git,
+    git_commit_file,
+    git_detach_head,
+    git_initial_commit,
+    git_resolve_file,
+)
 
 
 def rstrip_lines(lines: str) -> str:
@@ -146,6 +152,32 @@ o fe65c1fe create test2.txt
 | |
 | o 62fc20d2 create test1.txt
 |/
+o f777ecc9 create initial.txt
+""",
+        )
+
+
+def test_rebase_conflict(tmpdir: py.path.local) -> None:
+    with tmpdir.as_cwd(), io.StringIO() as out:
+        git_initial_commit()
+        git("checkout", ["-b", "branch1", "master"])
+        git_commit_file(name="test", time=1, contents="contents 1")
+        git("checkout", ["-b", "branch2", "master"])
+        git_commit_file(name="test", time=2, contents="contents 2")
+
+        # Should produce a conflict.
+        git("rebase", ["branch1"])
+        git_resolve_file(name="test", contents="contents resolved")
+        git("rebase", ["--continue"])
+
+        smartlog(out=out, show_old_commits=False)
+        compare(
+            actual=out.getvalue(),
+            expected="""\
+* 4549af33 create test.txt
+|
+o 88646b56 create test.txt
+|
 o f777ecc9 create initial.txt
 """,
         )
