@@ -66,6 +66,7 @@ def find_path_to_merge_base(
 def walk_from_visible_commits(
     formatter: Formatter,
     repo: pygit2.Repository,
+    head_oid: pygit2.Oid,
     master_oid: pygit2.Oid,
     commit_oids: Sequence[pygit2.Oid],
 ) -> CommitGraph:
@@ -90,6 +91,13 @@ def walk_from_visible_commits(
             commit_oid=commit_oid,
             master_oid=master_oid,
         )
+
+        # If this was a commit directly to master, and it's not HEAD, then
+        # don't show it. It's been superseded by other commits to master. Note
+        # that this doesn't prohibit commits from master which are a parent of
+        # a commit that we care about from being rendered.
+        if commit_oid == merge_base_oid and commit_oid != head_oid:
+            continue
 
         current_commit = repo[commit_oid]
         previous_oid = None
@@ -299,6 +307,7 @@ def smartlog(*, out: TextIO, show_old_commits: bool) -> None:
     graph = walk_from_visible_commits(
         formatter=formatter,
         repo=repo,
+        head_oid=head_oid,
         master_oid=master_oid,
         commit_oids=visible_commit_oids,
     )

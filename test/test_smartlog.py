@@ -47,7 +47,7 @@ def test_init(tmpdir: py.path.local) -> None:
 def test_show_reachable_commit(tmpdir: py.path.local) -> None:
     with tmpdir.as_cwd(), io.StringIO() as out:
         git_initial_commit()
-        git("checkout", ["-b", "initial-branch"])
+        git("checkout", ["-b", "initial-branch", "master"])
         git_commit_file(name="test", time=1)
 
         smartlog(out=out, show_old_commits=False)
@@ -86,9 +86,10 @@ o f777ecc9 create initial.txt
 def test_rebase(tmpdir: py.path.local) -> None:
     with tmpdir.as_cwd(), io.StringIO() as out:
         git_initial_commit()
-        git("checkout", ["-b", "test1"])
+        git("checkout", ["-b", "test1", "master"])
         git_commit_file(name="test1", time=1)
-        git("checkout", ["HEAD^"])
+        git("checkout", ["master"])
+        git_detach_head()
         git_commit_file(name="test2", time=2)
         git("rebase", ["test1"])
 
@@ -117,12 +118,6 @@ def test_sequential_master_commits(tmpdir: py.path.local) -> None:
             actual=out.getvalue(),
             expected="""\
 * 70deb1e2 create test3.txt
-|
-o 96d1c37a create test2.txt
-|
-o 62fc20d2 create test1.txt
-|
-o f777ecc9 create initial.txt
 """,
         )
 
@@ -130,9 +125,9 @@ o f777ecc9 create initial.txt
 def test_merge_commit(tmpdir: py.path.local) -> None:
     with tmpdir.as_cwd(), io.StringIO() as out:
         git_initial_commit()
-        git("checkout", ["-b", "test1"])
+        git("checkout", ["-b", "test1", "master"])
         git_commit_file(name="test1", time=1)
-        git("checkout", ["master"])
+        git("checkout", ["-b", "test2and3", "master"])
         git_commit_file(name="test2", time=2)
         git_commit_file(name="test3", time=3)
         git("merge", ["test1"], time=4)
@@ -148,7 +143,7 @@ def test_merge_commit(tmpdir: py.path.local) -> None:
             expected="""\
 o fe65c1fe create test2.txt
 |
-| * 8b417665 Merge branch 'test1'
+| * fa4e4e1a Merge branch 'test1' into test2and3
 | |
 | o 62fc20d2 create test1.txt
 |/
