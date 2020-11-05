@@ -30,7 +30,12 @@ class Reference:
         ...
 
     def log(self) -> Iterator[RefLogEntry]:
-        pass
+        ...
+
+    def set_target(
+        self, target: Union[Oid, str], message: Optional[str] = None
+    ) -> None:
+        ...
 
 
 class Branch:

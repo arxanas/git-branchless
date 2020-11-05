@@ -63,3 +63,17 @@ def git_initial_commit() -> None:
 
 def git_detach_head() -> None:
     git("checkout", ["--detach", "HEAD"])
+
+
+def _rstrip_lines(lines: str) -> str:
+    return "".join(line.rstrip() + "\n" for line in lines.splitlines())
+
+
+def compare(actual: str, expected: str) -> None:
+    actual = _rstrip_lines(actual)
+    expected = _rstrip_lines(expected)
+    print("Expected:")
+    print(expected)
+    print("Actual:")
+    print(actual)
+    assert actual == expected

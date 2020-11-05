@@ -6,6 +6,8 @@ from typing import Dict, Iterator, List, Mapping, Optional, Sequence, Tuple, Uni
 
 import pygit2
 
+import branchless.hide
+
 
 @dataclass(frozen=True, eq=True)
 class RefLogAction:
@@ -152,6 +154,8 @@ class RefLogReplayer:
             "rebase -i (finish)",
             "rebase",
             "pull",
+            # Internal operations.
+            branchless.hide.CHECKOUT_REF_LOG_COMMAND,
         ]:
             return False
         elif (
@@ -160,6 +164,7 @@ class RefLogReplayer:
                 "rebase (start)",
                 "rebase -i (start)",
                 "commit (amend)",
+                branchless.hide.HIDE_REF_LOG_COMMAND,
             ]
             or action_type.startswith("merge ")
             or action_type.startswith("pull --rebase")

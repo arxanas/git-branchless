@@ -26,6 +26,7 @@ def main(argv: List[str], *, out: TextIO) -> None:
         "--show-old", action="store_true", help="Show old commits (hidden by default)."
     )
     hide_parser = subparsers.add_parser("hide", help="hide a commit from the smartlog")
+    hide_parser.add_argument("commit", type=str, help="The commit hash to hide.")
     debug_ref_log_entry_parser = subparsers.add_parser(
         "debug-ref-log-entry", help=debug_ref_log_entry.__doc__
     )
@@ -39,7 +40,7 @@ def main(argv: List[str], *, out: TextIO) -> None:
     elif args.subcommand == "debug-ref-log-entry":
         debug_ref_log_entry(out=out, hash=args.hash)
     elif args.subcommand == "hide":
-        raise NotImplementedError()
+        hide(out=out, hash=args.hash)
     else:
         parser.print_usage(file=out)
         sys.exit(1)

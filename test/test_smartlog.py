@@ -9,26 +9,13 @@ import pytest
 from branchless.smartlog import smartlog
 
 from helpers import (
+    compare,
     git,
     git_commit_file,
     git_detach_head,
     git_initial_commit,
     git_resolve_file,
 )
-
-
-def rstrip_lines(lines: str) -> str:
-    return "".join(line.rstrip() + "\n" for line in lines.splitlines())
-
-
-def compare(actual: str, expected: str) -> None:
-    actual = rstrip_lines(actual)
-    expected = rstrip_lines(expected)
-    print("Expected:")
-    print(expected)
-    print("Actual:")
-    print(actual)
-    assert actual == expected
 
 
 def test_init(tmpdir: py.path.local) -> None:
