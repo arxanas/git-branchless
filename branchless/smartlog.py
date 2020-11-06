@@ -9,6 +9,7 @@ from typing import Dict, Iterator, List, Optional, Sequence, Set, TextIO, Tuple
 import pygit2
 
 from . import CommitStatus, Formatter, get_repo
+from .glyphs import Glyphs, PrettyGlyphs, TextGlyphs
 from .reflog import RefLogReplayer
 
 
@@ -269,6 +270,7 @@ class Output:
 
 
 def get_output(
+    glyphs: Glyphs,
     formatter: Formatter,
     graph: CommitGraph,
     head_oid: pygit2.Oid,
@@ -305,9 +307,9 @@ def get_output(
             depth = child_info.depth
 
             if child_idx == 0:
-                left_line = ":"
+                left_line = glyphs.vertical_ellipsis
             else:
-                left_line = "|"
+                left_line = glyphs.line
 
             is_left_aligned = child_info.is_left_aligned
             if is_left_aligned and root_idx != len(root_oids) - 1:
@@ -316,22 +318,29 @@ def get_output(
                 # space for the line to the next root.
                 is_left_aligned = False
                 depth += 1
-                left_line = ":"
+                left_line = glyphs.vertical_ellipsis
 
             # Print the line connecting the previous node to this node (unless
             # this is the initial commit for the repository).
             if len(commit.parents) > 0:
+                connecting_left_line = left_line
                 if child_idx == 0:
                     right_line = ""
                 elif is_left_aligned:
                     if depth > 1:
-                        right_line = " |"
+                        right_line = " " + glyphs.line
                     else:
                         right_line = ""
                 else:
-                    right_line = "/"
+                    right_line = glyphs.slash
+                    if connecting_left_line == glyphs.line:
+                        connecting_left_line = glyphs.line_with_offshoot
 
-                lines_reversed.append(left_line + (" |" * (depth - 2)) + right_line)
+                lines_reversed.append(
+                    connecting_left_line
+                    + ((" " + glyphs.line) * (depth - 2))
+                    + right_line
+                )
             is_first_node = False
 
             # Print the current node and its commit.
@@ -341,16 +350,16 @@ def get_output(
                 left_line += " "
 
             if commit.oid == head_oid:
-                cursor = "*"
+                cursor = glyphs.commit_head
             else:
-                cursor = "o"
+                cursor = glyphs.commit
 
             lines_reversed.append(
                 formatter.format(
                     "{left_line}{middle_lines}{cursor} {commit.oid:oid} {commit:commit}",
                     commit=commit,
                     left_line=left_line,
-                    middle_lines=("| " * (depth - 2)),
+                    middle_lines=((glyphs.line + " ") * (depth - 2)),
                     cursor=cursor,
                 )
             )
@@ -384,7 +393,14 @@ def smartlog(*, out: TextIO, show_old_commits: bool) -> None:
         commit_oids=visible_commit_oids,
     )
     root_oids = split_commit_graph_by_roots(formatter=formatter, repo=repo, graph=graph)
+
+    glyphs: Glyphs
+    if out.isatty() and PrettyGlyphs.ENABLED:
+        glyphs = PrettyGlyphs()
+    else:
+        glyphs = TextGlyphs()
     output = get_output(
+        glyphs=glyphs,
         formatter=formatter,
         graph=graph,
         head_oid=head_oid,
