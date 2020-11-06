@@ -1,4 +1,5 @@
 import collections
+import enum
 import logging
 import re
 from dataclasses import dataclass
@@ -84,6 +85,74 @@ class MarkedHidden:
     action: RefLogAction
 
 
+class ClassifiedActionType(enum.Enum):
+    BRANCH = enum.auto()
+    CHECKOUT = enum.auto()
+    COMMIT = enum.auto()
+    HIDE = enum.auto()
+    INIT = enum.auto()
+    MERGE = enum.auto()
+    REWRITE = enum.auto()
+    UNKNOWN = enum.auto()
+
+    @classmethod
+    def classify(
+        cls, entry: pygit2.RefLogEntry, action_type: str
+    ) -> "ClassifiedActionType":
+        if action_type in [
+            # Branching (may or may not be referring to the
+            # currently-checked-out branch).
+            "branch",
+            "Branch",
+        ]:
+            return cls.BRANCH
+        elif action_type in [
+            "commit",
+            "commit (initial)",
+            "rebase (pick)",
+            "rebase (fixup)",
+            "rebase (continue)",
+            "rebase (squash)",
+            "rebase -i (pick)",
+            "rebase -i (fixup)",
+            "rebase finished",
+            "rebase (finish)",
+            "rebase -i (finish)",
+            "rebase",
+            "pull",
+        ]:
+            return cls.COMMIT
+        elif action_type in [
+            "reset",
+            "checkout",
+            branchless.hide.CHECKOUT_REF_LOG_COMMAND,
+        ]:
+            return cls.CHECKOUT
+        elif action_type in [
+            "initial pull",
+        ]:
+            return cls.INIT
+        elif action_type in [branchless.hide.HIDE_REF_LOG_COMMAND]:
+            return cls.HIDE
+        elif (
+            action_type
+            in [
+                "rebase (start)",
+                "rebase -i (start)",
+                "commit (amend)",
+            ]
+            or action_type.startswith("pull --rebase")
+        ):
+            return cls.REWRITE
+        elif action_type.startswith("merge "):
+            return cls.MERGE
+        else:
+            logging.warning(
+                f"Reflog entry action type '{action_type}' ignored: {entry.oid_old} -> {entry.oid_new}: {entry.message}'"
+            )
+            return cls.UNKNOWN
+
+
 class RefLogReplayer:
     """Replay ref-log entries to determine which commits are visible."""
 
@@ -131,50 +200,25 @@ class RefLogReplayer:
     def _does_action_hide_old_oid(
         self, entry: pygit2.RefLogEntry, action: RefLogAction
     ) -> bool:
-        action_type = action.action_type
-        if action_type in [
-            # Branching (may or may not be referring to the
-            # currently-checked-out branch).
-            "branch",
-            "Branch",
-            "initial pull",
-            "reset",
-            "checkout",
-            # Committing.
-            "commit",
-            "commit (initial)",
-            "rebase (pick)",
-            "rebase (fixup)",
-            "rebase (continue)",
-            "rebase (squash)",
-            "rebase -i (pick)",
-            "rebase -i (fixup)",
-            "rebase finished",
-            "rebase (finish)",
-            "rebase -i (finish)",
-            "rebase",
-            "pull",
-            # Internal operations.
-            branchless.hide.CHECKOUT_REF_LOG_COMMAND,
-        ]:
+        action_class = ClassifiedActionType.classify(
+            entry=entry, action_type=action.action_type
+        )
+        if (
+            False
+            or action_class is ClassifiedActionType.BRANCH
+            or action_class is ClassifiedActionType.CHECKOUT
+            or action_class is ClassifiedActionType.COMMIT
+            or action_class is ClassifiedActionType.INIT
+            or action_class is ClassifiedActionType.UNKNOWN
+        ):
             return False
         elif (
-            action_type
-            in [
-                "rebase (start)",
-                "rebase -i (start)",
-                "commit (amend)",
-                branchless.hide.HIDE_REF_LOG_COMMAND,
-            ]
-            or action_type.startswith("merge ")
-            or action_type.startswith("pull --rebase")
+            False
+            or action_class is ClassifiedActionType.HIDE
+            or action_class is ClassifiedActionType.MERGE
+            or action_class is ClassifiedActionType.REWRITE
         ):
             return True
-        else:
-            logging.warning(
-                f"Reflog entry action type '{action_type}' ignored: {entry.oid_old} -> {entry.oid_new}: {entry.message}'"
-            )
-            return False
 
     def finish_processing(self) -> None:
         for v in self._commit_history.values():
