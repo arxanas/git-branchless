@@ -37,7 +37,6 @@ A commit is in one of three states:
     branchless workflow.
 """
 import os
-import string
 from typing import Any, Literal, Optional, Union, cast
 
 import pygit2
@@ -50,22 +49,3 @@ def get_repo() -> pygit2.Repository:
     repo_path = pygit2.discover_repository(os.getcwd())
     assert repo_path is not None, "Failed to discover repository"
     return pygit2.Repository(repo_path)
-
-
-class Formatter(string.Formatter):
-    """Formatter with additional directives for commits, etc."""
-
-    def format_field(
-        self,
-        value: object,
-        format_spec: str,
-    ) -> str:
-        if format_spec == "oid":
-            assert isinstance(value, pygit2.Oid)
-            return f"{value!s:8.8}"
-        elif format_spec == "commit":
-            assert isinstance(value, pygit2.Commit)
-            return value.message.split("\n", 1)[0]
-        else:
-            result = super().format_field(value, format_spec)
-            return cast(str, result)

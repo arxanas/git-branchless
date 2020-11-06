@@ -6,10 +6,11 @@ from dataclasses import dataclass
 from queue import Queue
 from typing import Dict, Iterator, List, Optional, Sequence, Set, TextIO, Tuple
 
+import colorama
 import pygit2
 
-from . import CommitStatus, Formatter, get_repo
-from .glyphs import Glyphs, PrettyGlyphs, TextGlyphs
+from . import CommitStatus, get_repo
+from .formatting import Formatter, Glyphs, make_glyphs
 from .reflog import RefLogReplayer
 
 
@@ -307,7 +308,9 @@ def get_output(
             depth = child_info.depth
 
             if child_idx == 0:
-                left_line = glyphs.vertical_ellipsis
+                left_line = glyphs.style(
+                    style=colorama.Style.DIM, message=glyphs.vertical_ellipsis
+                )
             else:
                 left_line = glyphs.line
 
@@ -318,7 +321,9 @@ def get_output(
                 # space for the line to the next root.
                 is_left_aligned = False
                 depth += 1
-                left_line = glyphs.vertical_ellipsis
+                left_line = glyphs.style(
+                    style=colorama.Style.DIM, message=glyphs.vertical_ellipsis
+                )
 
             # Print the line connecting the previous node to this node (unless
             # this is the initial commit for the repository).
@@ -351,20 +356,24 @@ def get_output(
             else:
                 left_line += " "
 
+            text = "{oid} {message}".format(
+                oid=glyphs.color_fg(
+                    color=colorama.Fore.YELLOW,
+                    message=formatter.format("{commit.oid:oid}", commit=commit),
+                ),
+                message=formatter.format("{commit:commit}", commit=commit),
+            )
+
             if commit.oid == head_oid:
-                cursor = glyphs.commit_head
+                cursor = glyphs.style(
+                    style=colorama.Style.BRIGHT, message=glyphs.commit_head
+                )
+                text = glyphs.style(style=colorama.Style.BRIGHT, message=text)
             else:
                 cursor = glyphs.commit
 
-            lines_reversed.append(
-                formatter.format(
-                    "{left_line}{middle_lines}{cursor} {commit.oid:oid} {commit:commit}",
-                    commit=commit,
-                    left_line=left_line,
-                    middle_lines=((glyphs.line + " ") * (depth - 2)),
-                    cursor=cursor,
-                )
-            )
+            middle_lines = (glyphs.line + " ") * (depth - 2)
+            lines_reversed.append(f"{left_line}{middle_lines}{cursor} {text}")
 
     lines = list(reversed(lines_reversed))
     return Output(lines=lines, num_old_commits=num_old_commits)
@@ -372,7 +381,9 @@ def get_output(
 
 def smartlog(*, out: TextIO, show_old_commits: bool) -> None:
     """Display a nice graph of commits you've recently worked on."""
+    glyphs = make_glyphs(out)
     formatter = Formatter()
+
     repo = get_repo()
     # We don't use `repo.head`, because that resolves the HEAD reference
     # (e.g. into refs/head/master). We want the actual ref-log of HEAD, not
@@ -396,11 +407,6 @@ def smartlog(*, out: TextIO, show_old_commits: bool) -> None:
     )
     root_oids = split_commit_graph_by_roots(formatter=formatter, repo=repo, graph=graph)
 
-    glyphs: Glyphs
-    if out.isatty() and PrettyGlyphs.ENABLED:
-        glyphs = PrettyGlyphs()
-    else:
-        glyphs = TextGlyphs()
     output = get_output(
         glyphs=glyphs,
         formatter=formatter,
