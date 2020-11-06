@@ -105,6 +105,7 @@ def test_sequential_master_commits(tmpdir: py.path.local) -> None:
             actual=out.getvalue(),
             expected="""\
 * 70deb1e2 create test3.txt
+:
 """,
         )
 
@@ -160,6 +161,32 @@ def test_rebase_conflict(tmpdir: py.path.local) -> None:
 |
 o 88646b56 create test.txt
 |
+o f777ecc9 create initial.txt
+""",
+        )
+
+
+def test_non_adjacent_commits(tmpdir: py.path.local) -> None:
+    with tmpdir.as_cwd(), io.StringIO() as out:
+        git_initial_commit()
+        git_detach_head()
+        git_commit_file(name="test1", time=1)
+        git("checkout", ["master"])
+        git_commit_file(name="test2", time=2)
+        git_commit_file(name="test3", time=3)
+        git_detach_head()
+        git_commit_file(name="test4", time=4)
+
+        smartlog(out=out, show_old_commits=False)
+        compare(
+            actual=out.getvalue(),
+            expected="""\
+* 8e62740b create test4.txt
+|
+o 02067177 create test3.txt
+:
+: o 62fc20d2 create test1.txt
+:/
 o f777ecc9 create initial.txt
 """,
         )

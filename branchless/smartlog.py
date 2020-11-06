@@ -163,10 +163,10 @@ def split_commit_graph_by_roots(
     def compare(lhs: pygit2.Oid, rhs: pygit2.Oid) -> int:
         merge_base = repo.merge_base(lhs, rhs)
         if merge_base == lhs:
-            # lhs was topologically first, so it should be sorted later in the list.
-            return 1
-        elif merge_base == rhs:
+            # lhs was topologically first, so it should be sorted earlier in the list.
             return -1
+        elif merge_base == rhs:
+            return 1
         else:
             logging.warning(
                 formatter.format(
@@ -184,15 +184,53 @@ def split_commit_graph_by_roots(
 @dataclass
 class ChildInfo:
     displayed_commit: DisplayedCommit
-    render_depth: int
-    is_last_child: bool
+    """The commit to be displayed."""
+
+    depth: int
+    """How far from the left side this commit is.
+
+    The left-most commit has depth 1.
+
+    ```
+    o depth 1
+    |
+    | o depth 2
+    |/
+    o depth 1
+    ```
+    """
+
+    is_left_aligned: bool
+    """Whether or not this commit should be left-aligned.
+
+    A commit should be left-aligned if it's the last child of its parent. Not
+    every terminal node should be left aligned, and not every left-aligned
+    node is the last element in the list of children returned by
+    `walk_children`.
+
+    Normally, a commit has a depth equal to the number of parents it has,
+    plus one. However, left-aligned commits have a `depth` of one less than
+    their siblings. For example:
+
+    ```
+    o depth 1 (left-aligned)
+    |
+    | o depth 2 (left-aligned)
+    | |
+    | | o depth 3
+    | |/
+    | o depth 2
+    |/
+    o depth 1
+    ```
+    """
 
 
 def walk_children(
     graph: CommitGraph,
     root_oid: pygit2.Oid,
-    render_depth: int,
-    is_last_child: bool,
+    depth: int,
+    is_left_aligned: bool,
 ) -> Iterator[ChildInfo]:
     """Walk children commits according to the provided graph.
 
@@ -204,23 +242,23 @@ def walk_children(
         return
 
     yield ChildInfo(
-        displayed_commit=current, render_depth=render_depth, is_last_child=is_last_child
+        displayed_commit=current, depth=depth, is_left_aligned=is_left_aligned
     )
 
     # Sort earlier commits first, so that they're displayed at the bottom of
     # the smartlog.
     children = sorted(current.children, key=lambda oid: graph[oid].commit.commit_time)
     for i, child_oid in enumerate(children):
-        is_last_child = i == len(children) - 1
-        if is_last_child:
-            child_depth = render_depth
+        is_left_aligned = i == len(children) - 1
+        if is_left_aligned:
+            child_depth = depth
         else:
-            child_depth = render_depth + 1
+            child_depth = depth + 1
         yield from walk_children(
             graph=graph,
             root_oid=child_oid,
-            render_depth=child_depth,
-            is_last_child=is_last_child,
+            depth=child_depth,
+            is_left_aligned=is_left_aligned,
         )
 
 
@@ -241,19 +279,18 @@ def get_output(
     num_old_commits = 0
     is_first_node = True
     lines_reversed = []
-    for i, root_oid in enumerate(root_oids):
+    for root_idx, root_oid in enumerate(root_oids):
+        children = []
         for child_info in walk_children(
             graph=graph,
             root_oid=root_oid,
-            render_depth=0,
-            is_last_child=False,
+            depth=1,
+            is_left_aligned=False,
         ):
-            displayed_commit = child_info.displayed_commit
-            render_depth = child_info.render_depth
-            is_last_child = child_info.is_last_child
-
-            commit = displayed_commit.commit
-            if is_commit_old(commit, now=now):
+            commit = child_info.displayed_commit.commit
+            if not is_commit_old(commit, now=now):
+                children.append(child_info)
+            else:
                 num_old_commits += 1
                 logging.debug(
                     formatter.format(
@@ -261,24 +298,59 @@ def get_output(
                         commit=commit,
                     )
                 )
-                continue
 
-            if not is_first_node:
-                if is_last_child:
-                    lines_reversed.append("| " * (render_depth + 1))
+        for child_idx, child_info in enumerate(children):
+            displayed_commit = child_info.displayed_commit
+            commit = displayed_commit.commit
+            depth = child_info.depth
+
+            if child_idx == 0:
+                left_line = ":"
+            else:
+                left_line = "|"
+
+            is_left_aligned = child_info.is_left_aligned
+            if is_left_aligned and root_idx != len(root_oids) - 1:
+                # If there's a connection via `master` to the next root,
+                # then we need to push this commit to the right to make
+                # space for the line to the next root.
+                is_left_aligned = False
+                depth += 1
+                left_line = ":"
+
+            # Print the line connecting the previous node to this node (unless
+            # this is the initial commit for the repository).
+            if len(commit.parents) > 0:
+                if child_idx == 0:
+                    right_line = ""
+                elif is_left_aligned:
+                    if depth > 1:
+                        right_line = " |"
+                    else:
+                        right_line = ""
                 else:
-                    lines_reversed.append("| " * (render_depth - 1) + "|/")
+                    right_line = "/"
+
+                lines_reversed.append(left_line + (" |" * (depth - 2)) + right_line)
             is_first_node = False
+
+            # Print the current node and its commit.
+            if depth == 1:
+                left_line = ""
+            else:
+                left_line += " "
 
             if commit.oid == head_oid:
                 cursor = "*"
             else:
                 cursor = "o"
+
             lines_reversed.append(
                 formatter.format(
-                    "{lines}{cursor} {commit.oid:oid} {commit:commit}",
+                    "{left_line}{middle_lines}{cursor} {commit.oid:oid} {commit:commit}",
                     commit=commit,
-                    lines=("| " * render_depth),
+                    left_line=left_line,
+                    middle_lines=("| " * (depth - 2)),
                     cursor=cursor,
                 )
             )
