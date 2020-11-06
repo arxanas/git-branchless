@@ -323,7 +323,8 @@ def get_output(
             # Print the line connecting the previous node to this node (unless
             # this is the initial commit for the repository).
             if len(commit.parents) > 0:
-                connecting_left_line = left_line
+                left_and_middle_lines = left_line + (" " + glyphs.line) * (depth - 2)
+
                 if child_idx == 0:
                     right_line = ""
                 elif is_left_aligned:
@@ -333,14 +334,15 @@ def get_output(
                         right_line = ""
                 else:
                     right_line = glyphs.slash
-                    if connecting_left_line == glyphs.line:
-                        connecting_left_line = glyphs.line_with_offshoot
+                    if (
+                        len(left_and_middle_lines) > 0
+                        and left_and_middle_lines[-1] == glyphs.line
+                    ):
+                        left_and_middle_lines = (
+                            left_and_middle_lines[:-1] + glyphs.line_with_offshoot
+                        )
 
-                lines_reversed.append(
-                    connecting_left_line
-                    + ((" " + glyphs.line) * (depth - 2))
-                    + right_line
-                )
+                lines_reversed.append(left_and_middle_lines + right_line)
             is_first_node = False
 
             # Print the current node and its commit.
