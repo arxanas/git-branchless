@@ -377,7 +377,7 @@ def get_output(
     return Output(lines=lines, num_old_commits=num_old_commits)
 
 
-def smartlog(*, out: TextIO, show_old_commits: bool) -> None:
+def smartlog(*, out: TextIO, show_old_commits: bool) -> int:
     """Display a nice graph of commits you've recently worked on."""
     glyphs = make_glyphs(out)
     formatter = Formatter()
@@ -424,3 +424,4 @@ def smartlog(*, out: TextIO, show_old_commits: bool) -> None:
                 num_old_commits=output.num_old_commits,
             )
         )
+    return 0

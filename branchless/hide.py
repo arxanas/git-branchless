@@ -7,7 +7,7 @@ CHECKOUT_REF_LOG_COMMAND = "branchless-checkout"
 HIDE_REF_LOG_COMMAND = "branchless-hide"
 
 
-def hide(*, out: TextIO, hash: str) -> None:
+def hide(*, out: TextIO, hash: str) -> int:
     formatter = Formatter()
     repo = get_repo()
     oid = repo[hash].oid
@@ -25,3 +25,4 @@ def hide(*, out: TextIO, hash: str) -> None:
             "To unhide this commit, run: git checkout {oid:oid}\n", oid=oid
         )
     )
+    return 0
