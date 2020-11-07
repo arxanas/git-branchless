@@ -3,7 +3,7 @@ import enum
 import logging
 import re
 from dataclasses import dataclass
-from typing import Dict, Iterator, List, Mapping, Optional, Sequence, Tuple, Union, cast
+from typing import Dict, List, Mapping, Optional, Sequence, Tuple, Union
 
 import pygit2
 

@@ -37,7 +37,7 @@ A commit is in one of three states:
     branchless workflow.
 """
 import os
-from typing import Any, Literal, Optional, Union, cast
+from typing import Literal, Union
 
 import pygit2
 

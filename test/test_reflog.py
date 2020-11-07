@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import List, Set, cast
+from typing import Set, cast
 
 import pygit2
 from branchless.reflog import RefLogReplayer

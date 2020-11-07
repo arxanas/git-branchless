@@ -14,5 +14,6 @@
         "--show-column-numbers",
         "--strict",
         "stubs"
-    ]
+    ],
+    "python.linting.flake8Enabled": true
 }

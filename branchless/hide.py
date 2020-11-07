@@ -1,14 +1,13 @@
 from typing import TextIO
 
 from . import get_repo
-from .formatting import Formatter, make_glyphs
+from .formatting import Formatter
 
 CHECKOUT_REF_LOG_COMMAND = "branchless-checkout"
 HIDE_REF_LOG_COMMAND = "branchless-hide"
 
 
 def hide(*, out: TextIO, hash: str) -> None:
-    glyphs = make_glyphs(out)
     formatter = Formatter()
     repo = get_repo()
     oid = repo[hash].oid

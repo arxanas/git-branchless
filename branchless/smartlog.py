@@ -4,7 +4,7 @@ import string
 import time
 from dataclasses import dataclass
 from queue import Queue
-from typing import Dict, Iterator, List, Optional, Sequence, Set, TextIO, Tuple
+from typing import Dict, Iterator, List, Optional, Sequence, Set, TextIO
 
 import colorama
 import pygit2
@@ -280,7 +280,6 @@ def get_output(
 ) -> Output:
     """Render a pretty graph starting from the given root OIDs in the given graph."""
     num_old_commits = 0
-    is_first_node = True
     lines_reversed = []
     for root_idx, root_oid in enumerate(root_oids):
         children = []
@@ -348,7 +347,6 @@ def get_output(
                         )
 
                 lines_reversed.append(left_and_middle_lines + right_line)
-            is_first_node = False
 
             # Print the current node and its commit.
             if depth == 1:

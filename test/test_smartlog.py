@@ -1,11 +1,6 @@
 import io
-import os
-import subprocess
-import sys
-from typing import Any, List, Optional
 
 import py
-import pytest
 from branchless.smartlog import smartlog
 
 from helpers import (
@@ -42,7 +37,7 @@ def test_show_reachable_commit(tmpdir: py.path.local) -> None:
             actual=out.getvalue(),
             expected="""\
 * 3df4b935 create test.txt
-| 
+|
 o f777ecc9 create initial.txt
 """,
         )
