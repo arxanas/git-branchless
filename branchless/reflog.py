@@ -7,8 +7,6 @@ from typing import Dict, List, Mapping, Optional, Sequence, Tuple, Union
 
 import pygit2
 
-import branchless.hide
-
 
 @dataclass(frozen=True, eq=True)
 class RefLogAction:
@@ -89,7 +87,6 @@ class ClassifiedActionType(enum.Enum):
     BRANCH = enum.auto()
     CHECKOUT = enum.auto()
     COMMIT = enum.auto()
-    HIDE = enum.auto()
     INIT = enum.auto()
     MERGE = enum.auto()
     REWRITE = enum.auto()
@@ -125,15 +122,12 @@ class ClassifiedActionType(enum.Enum):
         elif action_type in [
             "reset",
             "checkout",
-            branchless.hide.CHECKOUT_REF_LOG_COMMAND,
         ]:
             return cls.CHECKOUT
         elif action_type in [
             "initial pull",
         ]:
             return cls.INIT
-        elif action_type in [branchless.hide.HIDE_REF_LOG_COMMAND]:
-            return cls.HIDE
         elif (
             action_type
             in [
@@ -169,7 +163,9 @@ class RefLogReplayer:
         ] = collections.defaultdict(list)
 
     @property
-    def commit_history(self) -> Mapping[pygit2.Oid, CommitHistory]:
+    def commit_history(
+        self,
+    ) -> Mapping[pygit2.Oid, CommitHistory]:
         """Mapping from OID to actions that affected that commit (for
         debugging).
 
@@ -189,20 +185,36 @@ class RefLogReplayer:
         # again. However, since we're processing ref log entries in reverse
         # order, we insert the `MarkedHidden` entry *after* we register the
         # action for the new OID.
-        self.commit_history[entry.oid_new].append((self._timestamp, action))
-        if self._does_action_hide_old_oid(entry=entry, action=action):
-            self.commit_history[entry.oid_old].append(
-                (self._timestamp, MarkedHidden(action=action))
-            )
-
-        self._timestamp += 1
-
-    def _does_action_hide_old_oid(
-        self, entry: pygit2.RefLogEntry, action: RefLogAction
-    ) -> bool:
         action_class = ClassifiedActionType.classify(
             entry=entry, action_type=action.action_type
         )
+        if self._does_action_vivify_new_oid(action_class=action_class):
+            self.commit_history[entry.oid_new].append((self._timestamp, action))
+        if self._does_action_hide_old_oid(action_class=action_class):
+            self.commit_history[entry.oid_old].append(
+                (self._timestamp, MarkedHidden(action=action))
+            )
+        self._timestamp += 1
+
+    def _does_action_vivify_new_oid(self, action_class: ClassifiedActionType) -> bool:
+        if (
+            False
+            or action_class is ClassifiedActionType.COMMIT
+            or action_class is ClassifiedActionType.INIT
+            or action_class is ClassifiedActionType.MERGE
+            or action_class is ClassifiedActionType.REWRITE
+        ):
+            return True
+        elif (
+            False
+            or action_class is ClassifiedActionType.BRANCH
+            or action_class is ClassifiedActionType.CHECKOUT
+            or action_class is ClassifiedActionType.UNKNOWN
+            or action_class is ClassifiedActionType.HIDE
+        ):
+            return False
+
+    def _does_action_hide_old_oid(self, action_class: ClassifiedActionType) -> bool:
         if (
             False
             or action_class is ClassifiedActionType.BRANCH
@@ -214,7 +226,6 @@ class RefLogReplayer:
             return False
         elif (
             False
-            or action_class is ClassifiedActionType.HIDE
             or action_class is ClassifiedActionType.MERGE
             or action_class is ClassifiedActionType.REWRITE
         ):

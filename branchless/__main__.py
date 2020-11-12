@@ -26,7 +26,7 @@ def main(argv: List[str], *, out: TextIO) -> int:
         "--show-old", action="store_true", help="Show old commits (hidden by default)."
     )
     hide_parser = subparsers.add_parser("hide", help="hide a commit from the smartlog")
-    hide_parser.add_argument("commit", type=str, help="The commit hash to hide.")
+    hide_parser.add_argument("hash", type=str, help="The commit hash to hide.")
     args = parser.parse_args(argv)
 
     if args.help:

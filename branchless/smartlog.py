@@ -4,13 +4,15 @@ import string
 import time
 from dataclasses import dataclass
 from queue import Queue
-from typing import Dict, Iterator, List, Optional, Sequence, Set, TextIO
+from typing import Dict, Iterator, List, Literal, Optional, Sequence, Set, TextIO, Union
 
 import colorama
 import pygit2
 
 from . import CommitStatus, get_repo
+from .db import make_db_for_repo
 from .formatting import Formatter, Glyphs, make_glyphs
+from .hide import HideDb
 from .reflog import RefLogReplayer
 
 
@@ -70,7 +72,8 @@ def walk_from_visible_commits(
     repo: pygit2.Repository,
     head_oid: pygit2.Oid,
     master_oid: pygit2.Oid,
-    commit_oids: Sequence[pygit2.Oid],
+    visible_commit_oids: Set[pygit2.Oid],
+    hidden_commit_oids: Set[str],
 ) -> CommitGraph:
     """Find additional commits that should be displayed.
 
@@ -86,7 +89,7 @@ def walk_from_visible_commits(
             graph[child_oid].parent = parent_oid
             graph[parent_oid].children.add(child_oid)
 
-    for commit_oid in commit_oids:
+    for commit_oid in visible_commit_oids:
         merge_base_oid = repo.merge_base(commit_oid, master_oid)
         assert merge_base_oid is not None, formatter.format(
             "No merge-base found for commits {commit_oid:oid} and {master_oid:oid}",
@@ -112,8 +115,16 @@ def walk_from_visible_commits(
             current_oid = current_commit.oid
 
             if current_oid not in graph:
+                status: Union[Literal["hidden"], Literal["visible"]]
+                if current_oid.hex in hidden_commit_oids:
+                    status = "hidden"
+                else:
+                    status = "visible"
                 graph[current_oid] = DisplayedCommit(
-                    commit=current_commit, parent=None, children=set(), status="visible"
+                    commit=current_commit,
+                    parent=None,
+                    children=set(),
+                    status=status,
                 )
                 link(parent_oid=current_oid, child_oid=previous_oid)
             else:
@@ -131,14 +142,46 @@ def walk_from_visible_commits(
                     merge_base_oid=merge_base_oid,
                 )
             )
+
+    def should_prune(oid: pygit2.Oid) -> bool:
+        if oid == head_oid:
+            # Always show the HEAD commit and its children.
+            return False
+
+        node = graph[oid]
+        if node.status == "hidden":
+            return True
+        parent = node.parent
+        if parent is not None:
+            return should_prune(parent)
+        else:
+            return False
+
+    # Hide all subtrees which descend from a hidden commit, unless HEAD is in
+    # that subtree.
+    potential_oids_to_hide = {oid for oid, node in graph.items() if not node.children}
+    while potential_oids_to_hide:
+        next_potential_oids_to_hide = set()
+        for potential_oid_to_hide in potential_oids_to_hide:
+            if should_prune(potential_oid_to_hide):
+                parent_oid = graph[potential_oid_to_hide].parent
+                del graph[potential_oid_to_hide]
+                if parent_oid is not None:
+                    graph[parent_oid].children.remove(potential_oid_to_hide)
+                    next_potential_oids_to_hide.add(parent_oid)
+        potential_oids_to_hide = next_potential_oids_to_hide
+
     # Link any adjacent merge-bases (i.e. adjacent commits in master).
     # TODO: may not be necessary, depending on if we want to hide master
     # commits.
     for oid, displayed_commit in graph.items():
         if displayed_commit.status == "master":
-            for parent in displayed_commit.commit.parents:
-                if parent.oid in graph:
-                    link(parent_oid=parent.oid, child_oid=displayed_commit.commit.oid)
+            for parent_commit in displayed_commit.commit.parents:
+                if parent_commit.oid in graph:
+                    link(
+                        parent_oid=parent_commit.oid,
+                        child_oid=displayed_commit.commit.oid,
+                    )
                     break
 
     return graph
@@ -368,6 +411,8 @@ def get_output(
                     style=colorama.Style.BRIGHT, message=glyphs.commit_head
                 )
                 text = glyphs.style(style=colorama.Style.BRIGHT, message=text)
+            elif displayed_commit.status == "hidden":
+                cursor = "x"  # TODO
             else:
                 cursor = glyphs.commit
 
@@ -393,7 +438,16 @@ def smartlog(*, out: TextIO, show_old_commits: bool) -> int:
     for entry in head_ref.log():
         replayer.process(entry)
     replayer.finish_processing()
-    visible_commit_oids = replayer.get_visible_oids()
+    visible_commit_oids = set(replayer.get_visible_oids())
+
+    db = make_db_for_repo(repo)
+    hide_db = HideDb(db)
+    hidden_commit_oids = hide_db.get_hidden_oids()
+    visible_commit_oids = {
+        oid
+        for oid in visible_commit_oids
+        if not (oid.hex in hidden_commit_oids and oid.hex != head_oid.hex)
+    }
 
     master_oid = repo.branches["master"].target
 
@@ -402,7 +456,8 @@ def smartlog(*, out: TextIO, show_old_commits: bool) -> int:
         repo=repo,
         head_oid=head_oid,
         master_oid=master_oid,
-        commit_oids=visible_commit_oids,
+        visible_commit_oids=visible_commit_oids,
+        hidden_commit_oids=hidden_commit_oids,
     )
     root_oids = split_commit_graph_by_roots(formatter=formatter, repo=repo, graph=graph)
 

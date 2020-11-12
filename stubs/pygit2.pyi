@@ -2,7 +2,7 @@ from typing import AbstractSet, Iterator, List, Mapping, Optional, Union
 
 
 class Oid:
-    pass
+    hex: str
 
 
 class Commit:
@@ -10,7 +10,7 @@ class Commit:
     message: str
     commit_time: int
     commit_time_offset: int
-    parents: List[Commit]
+    parents: List["Commit"]
 
 
 class RefLogEntry:
@@ -51,6 +51,9 @@ GIT_SORT_TOPOLOGICAL: WalkOptions
 
 
 class Repository:
+    path: str
+    """Path of the `.git` directory for the repository."""
+
     references: Mapping[Union[Oid, str], Reference]
     branches: Mapping[str, Branch]
 
@@ -59,6 +62,9 @@ class Repository:
 
     def __getitem__(self, oid: Union[Oid, str]) -> Commit:
         ...
+
+    def __contains__(self, oid: Union[Oid, str]) -> bool:
+        pass
 
     def merge_base(self, lhs: Oid, rhs: Oid) -> Optional[Oid]:
         ...

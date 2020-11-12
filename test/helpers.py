@@ -1,7 +1,6 @@
-from typing import Optional, List
-
 import os
 import subprocess
+from typing import List, Optional
 
 GIT_PATH = "/opt/twitter_mde/bin/git"
 
