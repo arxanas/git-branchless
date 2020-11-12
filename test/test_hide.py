@@ -17,7 +17,7 @@ def test_hide_commit(tmpdir: py.path.local) -> None:
         git_commit_file(name="test2", time=2)
 
         with io.StringIO() as out:
-            assert smartlog(out=out, show_old_commits=False) == 0
+            assert smartlog(out=out, show_old_commits=True) == 0
             compare(
                 actual=out.getvalue(),
                 expected="""\
@@ -40,7 +40,7 @@ To unhide this commit, run: git checkout 62fc20d2
             )
 
         with io.StringIO() as out:
-            assert smartlog(out=out, show_old_commits=False) == 0
+            assert smartlog(out=out, show_old_commits=True) == 0
             compare(
                 actual=out.getvalue(),
                 expected="""\

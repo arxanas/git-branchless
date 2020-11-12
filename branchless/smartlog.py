@@ -277,6 +277,7 @@ def get_output(
     head_oid: pygit2.Oid,
     root_oids: List[pygit2.Oid],
     now: int,
+    show_old_commits: bool,
 ) -> Output:
     """Render a pretty graph starting from the given root OIDs in the given graph."""
     num_old_commits = 0
@@ -290,9 +291,7 @@ def get_output(
             is_left_aligned=False,
         ):
             commit = child_info.displayed_commit.commit
-            if not is_commit_old(commit, now=now):
-                children.append(child_info)
-            else:
+            if is_commit_old(commit, now=now) and not show_old_commits:
                 num_old_commits += 1
                 logging.debug(
                     formatter.format(
@@ -300,6 +299,8 @@ def get_output(
                         commit=commit,
                     )
                 )
+            else:
+                children.append(child_info)
 
         for child_idx, child_info in enumerate(children):
             displayed_commit = child_info.displayed_commit
@@ -412,6 +413,7 @@ def smartlog(*, out: TextIO, show_old_commits: bool) -> int:
         head_oid=head_oid,
         root_oids=root_oids,
         now=int(time.time()),
+        show_old_commits=show_old_commits,
     )
 
     for line in output.lines:
