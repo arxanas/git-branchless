@@ -15,5 +15,6 @@
         "--strict",
         "stubs"
     ],
-    "python.linting.flake8Enabled": true
+    "python.linting.flake8Enabled": true,
+    "editor.formatOnSave": true
 }
