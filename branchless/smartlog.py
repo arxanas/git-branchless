@@ -4,7 +4,7 @@ import string
 import time
 from dataclasses import dataclass
 from queue import Queue
-from typing import Dict, List, Literal, Optional, Sequence, Set, TextIO, Union
+from typing import Dict, List, Literal, Optional, Sequence, Set, TextIO, Tuple, Union
 
 import colorama
 import pygit2
@@ -235,6 +235,7 @@ def split_commit_graph_by_roots(
 class Output:
     lines: Sequence[str]
     num_old_commits: int
+    displayed_any_nodes: bool
 
 
 def get_child_output(
@@ -310,7 +311,11 @@ def get_child_output(
             for child_line in child_output.lines:
                 lines_reversed.append(glyphs.line + " " + child_line)
 
-    return Output(lines=lines_reversed, num_old_commits=num_old_commits)
+    return Output(
+        lines=lines_reversed,
+        num_old_commits=num_old_commits,
+        displayed_any_nodes=len(children) > 0,
+    )
 
 
 def get_output(
@@ -325,7 +330,9 @@ def get_output(
     """Render a pretty graph starting from the given root OIDs in the given graph."""
     num_old_commits = 0
     lines_reversed = []
-    for root_idx, root_oid in enumerate(root_oids):
+
+    roots_and_outputs: List[Tuple[Node, Output]] = []
+    for root_oid in root_oids:
         child_output = get_child_output(
             glyphs=glyphs,
             formatter=formatter,
@@ -336,7 +343,18 @@ def get_output(
             show_old_commits=show_old_commits,
         )
         num_old_commits += child_output.num_old_commits
-        if graph[root_oid].commit.parents:
+        root_node = graph[root_oid]
+        if (
+            root_oid != head_oid
+            and root_node.status == "master"
+            and not child_output.displayed_any_nodes
+        ):
+            num_old_commits += 1
+        else:
+            roots_and_outputs.append((root_node, child_output))
+
+    for root_idx, (root_node, child_output) in enumerate(roots_and_outputs):
+        if root_node.commit.parents:
             lines_reversed.append(
                 glyphs.style(style=colorama.Style.DIM, message=glyphs.vertical_ellipsis)
             )
@@ -360,7 +378,11 @@ def get_output(
                     )
 
     lines = list(reversed(lines_reversed))
-    return Output(lines=lines, num_old_commits=num_old_commits)
+    return Output(
+        lines=lines,
+        num_old_commits=num_old_commits,
+        displayed_any_nodes=len(roots_and_outputs) > 0,
+    )
 
 
 def smartlog(*, out: TextIO, show_old_commits: bool) -> int:
