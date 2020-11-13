@@ -181,7 +181,36 @@ def test_non_adjacent_commits(tmpdir: py.path.local) -> None:
 o 02067177 create test3.txt
 :
 : o 62fc20d2 create test1.txt
-:/
+|/
+o f777ecc9 create initial.txt
+""",
+        )
+
+
+def test_non_adjacent_commits2(tmpdir: py.path.local) -> None:
+    with tmpdir.as_cwd(), io.StringIO() as out:
+        git_initial_commit()
+        git_detach_head()
+        git_commit_file(name="test1", time=1)
+        git_commit_file(name="test2", time=2)
+        git("checkout", ["master"])
+        git_commit_file(name="test3", time=3)
+        git_commit_file(name="test4", time=4)
+        git_detach_head()
+        git_commit_file(name="test5", time=5)
+
+        assert smartlog(out=out, show_old_commits=True) == 0
+        compare(
+            actual=out.getvalue(),
+            expected="""\
+* 13932989 create test5.txt
+|
+o 2b633ed7 create test4.txt
+:
+: o 96d1c37a create test2.txt
+: |
+: o 62fc20d2 create test1.txt
+|/
 o f777ecc9 create initial.txt
 """,
         )

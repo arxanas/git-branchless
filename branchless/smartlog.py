@@ -4,7 +4,7 @@ import string
 import time
 from dataclasses import dataclass
 from queue import Queue
-from typing import Dict, Iterator, List, Literal, Optional, Sequence, Set, TextIO, Union
+from typing import Dict, List, Literal, Optional, Sequence, Set, TextIO, Union
 
 import colorama
 import pygit2
@@ -26,14 +26,14 @@ def is_commit_old(commit: pygit2.Commit, now: int) -> bool:
 
 
 @dataclass
-class DisplayedCommit:
+class Node:
     commit: pygit2.Commit
     parent: Optional[pygit2.Oid]
     children: Set[pygit2.Oid]
     status: CommitStatus
 
 
-CommitGraph = Dict[pygit2.Oid, DisplayedCommit]
+CommitGraph = Dict[pygit2.Oid, Node]
 
 
 def find_path_to_merge_base(
@@ -120,7 +120,7 @@ def walk_from_visible_commits(
                     status = "hidden"
                 else:
                     status = "visible"
-                graph[current_oid] = DisplayedCommit(
+                graph[current_oid] = Node(
                     commit=current_commit,
                     parent=None,
                     children=set(),
@@ -174,13 +174,13 @@ def walk_from_visible_commits(
     # Link any adjacent merge-bases (i.e. adjacent commits in master).
     # TODO: may not be necessary, depending on if we want to hide master
     # commits.
-    for oid, displayed_commit in graph.items():
-        if displayed_commit.status == "master":
-            for parent_commit in displayed_commit.commit.parents:
+    for oid, node in graph.items():
+        if node.status == "master":
+            for parent_commit in node.commit.parents:
                 if parent_commit.oid in graph:
                     link(
                         parent_oid=parent_commit.oid,
-                        child_oid=displayed_commit.commit.oid,
+                        child_oid=node.commit.oid,
                     )
                     break
 
@@ -200,9 +200,7 @@ def split_commit_graph_by_roots(
     smartlog).
     """
     root_commit_oids = [
-        commit_oid
-        for commit_oid, displayed_commit in graph.items()
-        if displayed_commit.parent is None
+        commit_oid for commit_oid, node in graph.items() if node.parent is None
     ]
 
     def compare(lhs: pygit2.Oid, rhs: pygit2.Oid) -> int:
@@ -227,90 +225,85 @@ def split_commit_graph_by_roots(
 
 
 @dataclass
-class ChildInfo:
-    displayed_commit: DisplayedCommit
-    """The commit to be displayed."""
-
-    depth: int
-    """How far from the left side this commit is.
-
-    The left-most commit has depth 1.
-
-    ```
-    o depth 1
-    |
-    | o depth 2
-    |/
-    o depth 1
-    ```
-    """
-
-    is_left_aligned: bool
-    """Whether or not this commit should be left-aligned.
-
-    A commit should be left-aligned if it's the last child of its parent. Not
-    every terminal node should be left aligned, and not every left-aligned
-    node is the last element in the list of children returned by
-    `walk_children`.
-
-    Normally, a commit has a depth equal to the number of parents it has,
-    plus one. However, left-aligned commits have a `depth` of one less than
-    their siblings. For example:
-
-    ```
-    o depth 1 (left-aligned)
-    |
-    | o depth 2 (left-aligned)
-    | |
-    | | o depth 3
-    | |/
-    | o depth 2
-    |/
-    o depth 1
-    ```
-    """
-
-
-def walk_children(
-    graph: CommitGraph,
-    root_oid: pygit2.Oid,
-    depth: int,
-    is_left_aligned: bool,
-) -> Iterator[ChildInfo]:
-    """Walk children commits according to the provided graph.
-
-    Returns useful information about the depth of each child, for later rendering.
-    """
-    try:
-        current = graph[root_oid]
-    except KeyError:
-        return
-
-    yield ChildInfo(
-        displayed_commit=current, depth=depth, is_left_aligned=is_left_aligned
-    )
-
-    # Sort earlier commits first, so that they're displayed at the bottom of
-    # the smartlog.
-    children = sorted(current.children, key=lambda oid: graph[oid].commit.commit_time)
-    for i, child_oid in enumerate(children):
-        is_left_aligned = i == len(children) - 1
-        if is_left_aligned:
-            child_depth = depth
-        else:
-            child_depth = depth + 1
-        yield from walk_children(
-            graph=graph,
-            root_oid=child_oid,
-            depth=child_depth,
-            is_left_aligned=is_left_aligned,
-        )
-
-
-@dataclass
 class Output:
     lines: Sequence[str]
     num_old_commits: int
+
+
+def get_child_output(
+    glyphs: Glyphs,
+    formatter: Formatter,
+    graph: CommitGraph,
+    head_oid: pygit2.Oid,
+    current_oid: pygit2.Oid,
+    now: int,
+    show_old_commits: bool,
+) -> Output:
+    current = graph[current_oid]
+    text = "{oid} {message}".format(
+        oid=glyphs.color_fg(
+            color=colorama.Fore.YELLOW,
+            message=formatter.format("{commit.oid:oid}", commit=current.commit),
+        ),
+        message=formatter.format("{commit:commit}", commit=current.commit),
+    )
+
+    if current.status == "hidden":
+        if current.commit.oid == head_oid:
+            cursor = glyphs.commit_head_hidden
+        else:
+            cursor = glyphs.commit_hidden
+    else:
+        if current.commit.oid == head_oid:
+            cursor = glyphs.commit_head
+        else:
+            cursor = glyphs.commit
+    if current.commit.oid == head_oid:
+        cursor = glyphs.style(style=colorama.Style.BRIGHT, message=cursor)
+        text = glyphs.style(style=colorama.Style.BRIGHT, message=text)
+
+    lines_reversed = [f"{cursor} {text}"]
+
+    num_old_commits = 0
+    children = []
+    for child_oid in graph[current_oid].children:
+        commit = graph[child_oid].commit
+        if is_commit_old(commit, now=now) and not show_old_commits:
+            num_old_commits += 1
+            logging.debug(
+                formatter.format(
+                    "Commit {commit.oid:oid} is too old to be displayed",
+                    commit=commit,
+                )
+            )
+        else:
+            children.append(graph[child_oid])
+
+    # Sort earlier commits first, so that they're displayed at the bottom of
+    # the smartlog.
+    children = sorted(
+        children, key=lambda child: graph[child.commit.oid].commit.commit_time
+    )
+    for child_idx, child_node in enumerate(children):
+        child_output = get_child_output(
+            glyphs=glyphs,
+            formatter=formatter,
+            graph=graph,
+            head_oid=head_oid,
+            current_oid=child_node.commit.oid,
+            now=now,
+            show_old_commits=show_old_commits,
+        )
+        num_old_commits += child_output.num_old_commits
+        if child_idx == len(children) - 1:
+            lines_reversed.append(glyphs.line)
+            lines_reversed.extend(child_output.lines)
+        else:
+            lines_reversed.append(glyphs.line_with_offshoot + glyphs.slash)
+            for child_line in child_output.lines:
+                lines_reversed.append(glyphs.line + " " + child_line)
+
+    return Output(lines=lines_reversed, num_old_commits=num_old_commits)
 
 
 def get_output(
@@ -326,102 +319,38 @@ def get_output(
     num_old_commits = 0
     lines_reversed = []
     for root_idx, root_oid in enumerate(root_oids):
-        children = []
-        for child_info in walk_children(
+        child_output = get_child_output(
+            glyphs=glyphs,
+            formatter=formatter,
             graph=graph,
-            root_oid=root_oid,
-            depth=1,
-            is_left_aligned=False,
-        ):
-            commit = child_info.displayed_commit.commit
-            if is_commit_old(commit, now=now) and not show_old_commits:
-                num_old_commits += 1
-                logging.debug(
-                    formatter.format(
-                        "Commit {commit.oid:oid} is too old to be displayed",
-                        commit=commit,
-                    )
-                )
-            else:
-                children.append(child_info)
-
-        for child_idx, child_info in enumerate(children):
-            displayed_commit = child_info.displayed_commit
-            commit = displayed_commit.commit
-            depth = child_info.depth
-
-            if child_idx == 0:
-                left_line = glyphs.style(
-                    style=colorama.Style.DIM, message=glyphs.vertical_ellipsis
-                )
-            else:
-                left_line = glyphs.line
-
-            is_left_aligned = child_info.is_left_aligned
-            if is_left_aligned and root_idx != len(root_oids) - 1:
-                # If there's a connection via `master` to the next root,
-                # then we need to push this commit to the right to make
-                # space for the line to the next root.
-                is_left_aligned = False
-                depth += 1
-                left_line = glyphs.style(
-                    style=colorama.Style.DIM, message=glyphs.vertical_ellipsis
-                )
-
-            # Print the line connecting the previous node to this node (unless
-            # this is the initial commit for the repository).
-            if len(commit.parents) > 0:
-                left_and_middle_lines = left_line + (" " + glyphs.line) * (depth - 2)
-
-                if child_idx == 0:
-                    right_line = ""
-                elif is_left_aligned:
-                    if depth > 1:
-                        right_line = " " + glyphs.line
-                    else:
-                        right_line = ""
-                else:
-                    right_line = glyphs.slash
-                    if (
-                        len(left_and_middle_lines) > 0
-                        and left_and_middle_lines[-1] == glyphs.line
-                    ):
-                        left_and_middle_lines = (
-                            left_and_middle_lines[:-1] + glyphs.line_with_offshoot
-                        )
-
-                lines_reversed.append(left_and_middle_lines + right_line)
-
-            # Print the current node and its commit.
-            if depth == 1:
-                left_line = ""
-            else:
-                left_line += " "
-
-            text = "{oid} {message}".format(
-                oid=glyphs.color_fg(
-                    color=colorama.Fore.YELLOW,
-                    message=formatter.format("{commit.oid:oid}", commit=commit),
-                ),
-                message=formatter.format("{commit:commit}", commit=commit),
+            head_oid=head_oid,
+            current_oid=root_oid,
+            now=now,
+            show_old_commits=show_old_commits,
+        )
+        num_old_commits += child_output.num_old_commits
+        if graph[root_oid].commit.parents:
+            lines_reversed.append(
+                glyphs.style(style=colorama.Style.DIM, message=glyphs.vertical_ellipsis)
             )
-
-            if displayed_commit.status == "hidden":
-                if commit.oid == head_oid:
-                    cursor = glyphs.commit_head_hidden
+        if root_idx == len(root_oids) - 1:
+            lines_reversed.extend(child_output.lines)
+        else:
+            for child_line_idx, child_line in enumerate(child_output.lines):
+                # HACK: merge the child graph into the root graph by modifying
+                # the first two lines.
+                if child_line_idx == 0:
+                    lines_reversed.append(child_line)
+                elif child_line_idx == 1:
+                    lines_reversed.append(glyphs.line_with_offshoot + glyphs.slash)
                 else:
-                    cursor = glyphs.commit_hidden
-            else:
-                if commit.oid == head_oid:
-                    cursor = glyphs.commit_head
-                else:
-                    cursor = glyphs.commit
-            if commit.oid == head_oid:
-                cursor = glyphs.style(style=colorama.Style.BRIGHT, message=cursor)
-                text = glyphs.style(style=colorama.Style.BRIGHT, message=text)
-
-            middle_lines = (glyphs.line + " ") * (depth - 2)
-            lines_reversed.append(f"{left_line}{middle_lines}{cursor} {text}")
+                    lines_reversed.append(
+                        glyphs.style(
+                            style=colorama.Style.DIM, message=glyphs.vertical_ellipsis
+                        )
+                        + " "
+                        + child_line
+                    )
 
     lines = list(reversed(lines_reversed))
     return Output(lines=lines, num_old_commits=num_old_commits)
