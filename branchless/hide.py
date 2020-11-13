@@ -56,7 +56,7 @@ def hide(*, out: TextIO, hash: str) -> int:
     hide_db = HideDb(make_db_for_repo(repo))
 
     try:
-        oid = repo[hash].oid
+        oid = repo.revparse_single(hash).oid
     except KeyError:
         out.write(f"Commit not found: {hash}\n")
         return 1

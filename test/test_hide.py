@@ -100,3 +100,72 @@ o 62fc20d2 create test1.txt
 * f777ecc9 create initial.txt
 """,
             )
+
+
+def test_hide_already_hidden_commit(tmpdir: py.path.local) -> None:
+    with tmpdir.as_cwd():
+        git_initial_commit()
+        git_detach_head()
+        git_commit_file(name="test1", time=1)
+
+        with io.StringIO() as out:
+            assert hide(out=out, hash="62fc20d2") == 0
+
+        with io.StringIO() as out:
+            assert hide(out=out, hash="62fc20d2") == 0
+            compare(
+                actual=out.getvalue(),
+                expected="""\
+Hid commit: 62fc20d2
+(It was already hidden, so this operation had no effect.)
+To unhide this commit, run: git checkout 62fc20d2
+""",
+            )
+
+
+def test_hide_current_commit(tmpdir: py.path.local) -> None:
+    with tmpdir.as_cwd():
+        git_initial_commit()
+        git_detach_head()
+        git_commit_file(name="test", time=1)
+
+        with io.StringIO() as out:
+            assert hide(out=out, hash="HEAD") == 0
+
+        with io.StringIO() as out:
+            assert smartlog(out=out, show_old_commits=True) == 0
+            compare(
+                expected=out.getvalue(),
+                actual="""\
+% 3df4b935 create test.txt
+|
+o f777ecc9 create initial.txt
+""",
+            )
+
+
+def test_hidden_commit_with_head_as_child(tmpdir: py.path.local) -> None:
+    with tmpdir.as_cwd():
+        git_initial_commit()
+        git_detach_head()
+        git_commit_file(name="test1", time=1)
+        git_commit_file(name="test2", time=2)
+        git_commit_file(name="test3", time=3)
+        git("checkout", ["HEAD^"])
+
+        with io.StringIO() as out:
+            assert hide(out=out, hash="HEAD^") == 0
+            assert hide(out=out, hash="70deb1e2") == 0
+
+        with io.StringIO() as out:
+            assert smartlog(out=out, show_old_commits=True) == 0
+            compare(
+                actual=out.getvalue(),
+                expected="""\
+* 96d1c37a create test2.txt
+|
+x 62fc20d2 create test1.txt
+|
+o f777ecc9 create initial.txt
+""",
+            )

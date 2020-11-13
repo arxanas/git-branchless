@@ -13,7 +13,9 @@ class Glyphs(Protocol):
     vertical_ellipsis: str
     slash: str
     commit: str
+    commit_hidden: str
     commit_head: str
+    commit_head_hidden: str
 
     def color_fg(self, color: colorama.Fore, message: str) -> str:
         ...
@@ -28,7 +30,9 @@ class TextGlyphs:
     vertical_ellipsis = ":"
     slash = "/"
     commit = "o"
+    commit_hidden = "x"
     commit_head = "*"
+    commit_head_hidden = "%"
 
     def color_fg(self, color: colorama.Fore, message: str) -> str:
         return message
@@ -43,7 +47,9 @@ class PrettyGlyphs:
     vertical_ellipsis = "⋮"
     slash = "━┛"
     commit = "◯"
+    commit_hidden = "✕"
     commit_head = "●"
+    commit_head_hidden = "⦻"
 
     def __init__(self) -> None:
         colorama.init()

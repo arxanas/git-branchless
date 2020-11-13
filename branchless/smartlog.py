@@ -406,15 +406,19 @@ def get_output(
                 message=formatter.format("{commit:commit}", commit=commit),
             )
 
-            if commit.oid == head_oid:
-                cursor = glyphs.style(
-                    style=colorama.Style.BRIGHT, message=glyphs.commit_head
-                )
-                text = glyphs.style(style=colorama.Style.BRIGHT, message=text)
-            elif displayed_commit.status == "hidden":
-                cursor = "x"  # TODO
+            if displayed_commit.status == "hidden":
+                if commit.oid == head_oid:
+                    cursor = glyphs.commit_head_hidden
+                else:
+                    cursor = glyphs.commit_hidden
             else:
-                cursor = glyphs.commit
+                if commit.oid == head_oid:
+                    cursor = glyphs.commit_head
+                else:
+                    cursor = glyphs.commit
+            if commit.oid == head_oid:
+                cursor = glyphs.style(style=colorama.Style.BRIGHT, message=cursor)
+                text = glyphs.style(style=colorama.Style.BRIGHT, message=text)
 
             middle_lines = (glyphs.line + " ") * (depth - 2)
             lines_reversed.append(f"{left_line}{middle_lines}{cursor} {text}")

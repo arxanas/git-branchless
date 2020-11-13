@@ -72,6 +72,9 @@ class Repository:
     def walk(self, oid: Oid, options: WalkOptions) -> Iterator[Commit]:
         ...
 
+    def revparse_single(self, rev: str) -> Commit:
+        ...
+
 
 def discover_repository(path: str) -> Optional[str]:
     ...
