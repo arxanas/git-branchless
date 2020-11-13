@@ -17,7 +17,7 @@ class HideDb:
         self._conn.execute(
             """
 CREATE TABLE IF NOT EXISTS hidden_oids (
-    oid TEXT UNIQUE
+    oid TEXT UNIQUE NOT NULL
 )
 """
         )

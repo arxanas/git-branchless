@@ -13,6 +13,7 @@ from . import CommitStatus, get_repo
 from .db import make_db_for_repo
 from .formatting import Formatter, Glyphs, make_glyphs
 from .hide import HideDb
+from .mergebase import MergeBaseDb
 from .reflog import RefLogReplayer
 
 
@@ -70,6 +71,7 @@ def find_path_to_merge_base(
 def walk_from_visible_commits(
     formatter: Formatter,
     repo: pygit2.Repository,
+    merge_base_db: MergeBaseDb,
     head_oid: pygit2.Oid,
     master_oid: pygit2.Oid,
     visible_commit_oids: Set[pygit2.Oid],
@@ -90,7 +92,9 @@ def walk_from_visible_commits(
             graph[parent_oid].children.add(child_oid)
 
     for commit_oid in visible_commit_oids:
-        merge_base_oid = repo.merge_base(commit_oid, master_oid)
+        merge_base_oid = merge_base_db.get_merge_base_oid(
+            repo=repo, lhs_oid=commit_oid, rhs_oid=master_oid
+        )
         assert merge_base_oid is not None, formatter.format(
             "No merge-base found for commits {commit_oid:oid} and {master_oid:oid}",
             commit_oid=commit_oid,
@@ -188,7 +192,10 @@ def walk_from_visible_commits(
 
 
 def split_commit_graph_by_roots(
-    formatter: string.Formatter, repo: pygit2.Repository, graph: CommitGraph
+    formatter: string.Formatter,
+    repo: pygit2.Repository,
+    merge_base_db: MergeBaseDb,
+    graph: CommitGraph,
 ) -> List[pygit2.Oid]:
     """Split fully-independent subgraphs into multiple graphs.
 
@@ -204,11 +211,11 @@ def split_commit_graph_by_roots(
     ]
 
     def compare(lhs: pygit2.Oid, rhs: pygit2.Oid) -> int:
-        merge_base = repo.merge_base(lhs, rhs)
-        if merge_base == lhs:
+        merge_base_oid = merge_base_db.get_merge_base_oid(repo, lhs, rhs)
+        if merge_base_oid == lhs:
             # lhs was topologically first, so it should be sorted earlier in the list.
             return -1
-        elif merge_base == rhs:
+        elif merge_base_oid == rhs:
             return 1
         else:
             logging.warning(
@@ -384,15 +391,24 @@ def smartlog(*, out: TextIO, show_old_commits: bool) -> int:
 
     master_oid = repo.branches["master"].target
 
+    merge_base_db = MergeBaseDb(db)
+    if merge_base_db.is_empty():
+        logging.debug(
+            "Merge-base cache not initialized -- it may take a while to populate it"
+        )
+
     graph = walk_from_visible_commits(
         formatter=formatter,
         repo=repo,
+        merge_base_db=merge_base_db,
         head_oid=head_oid,
         master_oid=master_oid,
         visible_commit_oids=visible_commit_oids,
         hidden_commit_oids=hidden_commit_oids,
     )
-    root_oids = split_commit_graph_by_roots(formatter=formatter, repo=repo, graph=graph)
+    root_oids = split_commit_graph_by_roots(
+        formatter=formatter, repo=repo, merge_base_db=merge_base_db, graph=graph
+    )
 
     output = get_output(
         glyphs=glyphs,

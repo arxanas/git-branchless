@@ -22,5 +22,6 @@ def make_cursor(conn: sqlite3.Connection) -> Iterator[sqlite3.Cursor]:
         yield conn.cursor()
     except Exception:
         conn.rollback()
+        raise
     finally:
         conn.commit()
