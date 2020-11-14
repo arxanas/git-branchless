@@ -227,6 +227,7 @@ def get_child_output(
     graph: CommitGraph,
     head_oid: pygit2.Oid,
     current_oid: pygit2.Oid,
+    last_child_line_char: Optional[str],
 ) -> List[str]:
     current = graph[current_oid]
     text = "{oid} {message}".format(
@@ -265,13 +266,24 @@ def get_child_output(
             graph=graph,
             head_oid=head_oid,
             current_oid=child_oid,
+            last_child_line_char=None,
         )
+
         if child_idx == len(children) - 1:
-            lines_reversed.append(glyphs.line)
-            lines_reversed.extend(child_output)
+            if last_child_line_char is not None:
+                lines_reversed.append(glyphs.line_with_offshoot + glyphs.slash)
+            else:
+                lines_reversed.append(glyphs.line)
         else:
             lines_reversed.append(glyphs.line_with_offshoot + glyphs.slash)
-            for child_line in child_output:
+
+        for child_line in child_output:
+            if child_idx == len(children) - 1:
+                if last_child_line_char is not None:
+                    lines_reversed.append(last_child_line_char + " " + child_line)
+                else:
+                    lines_reversed.append(child_line)
+            else:
                 lines_reversed.append(glyphs.line + " " + child_line)
 
     return lines_reversed
@@ -294,31 +306,23 @@ def get_output(
                 glyphs.style(style=colorama.Style.DIM, message=glyphs.vertical_ellipsis)
             )
 
+        last_child_line_char: Optional[str]
+        if root_idx == len(root_oids) - 1:
+            last_child_line_char = None
+        else:
+            last_child_line_char = glyphs.style(
+                style=colorama.Style.DIM, message=glyphs.vertical_ellipsis
+            )
+
         child_output = get_child_output(
             glyphs=glyphs,
             formatter=formatter,
             graph=graph,
             head_oid=head_oid,
             current_oid=root_oid,
+            last_child_line_char=last_child_line_char,
         )
-        if root_idx == len(root_oids) - 1:
-            lines_reversed.extend(child_output)
-        else:
-            for child_line_idx, child_line in enumerate(child_output):
-                # HACK: merge the child graph into the root graph by modifying
-                # the first two lines.
-                if child_line_idx == 0:
-                    lines_reversed.append(child_line)
-                elif child_line_idx == 1:
-                    lines_reversed.append(glyphs.line_with_offshoot + glyphs.slash)
-                else:
-                    lines_reversed.append(
-                        glyphs.style(
-                            style=colorama.Style.DIM, message=glyphs.vertical_ellipsis
-                        )
-                        + " "
-                        + child_line
-                    )
+        lines_reversed.extend(child_output)
 
     return lines_reversed
 
