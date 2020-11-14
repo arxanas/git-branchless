@@ -1,10 +1,9 @@
 import functools
 import logging
 import string
-import time
 from dataclasses import dataclass
 from queue import Queue
-from typing import Dict, List, Literal, Optional, Sequence, Set, TextIO, Tuple, Union
+from typing import Dict, List, Literal, Optional, Set, TextIO, Union
 
 import colorama
 import pygit2
@@ -15,15 +14,6 @@ from .formatting import Formatter, Glyphs, make_glyphs
 from .hide import HideDb
 from .mergebase import MergeBaseDb
 from .reflog import RefLogReplayer
-
-
-def is_commit_old(commit: pygit2.Commit, now: int) -> bool:
-    """Determine if a commit has not been touched for a while (is "old").
-
-    Such commits are visible, but by default, not shown by the smartlog.
-    """
-    max_age = 14 * 24 * 60 * 60  # 2 weeks
-    return commit.commit_time < (now - max_age)
 
 
 @dataclass
@@ -231,22 +221,13 @@ def split_commit_graph_by_roots(
     return root_commit_oids
 
 
-@dataclass
-class Output:
-    lines: Sequence[str]
-    num_old_commits: int
-    displayed_any_nodes: bool
-
-
 def get_child_output(
     glyphs: Glyphs,
     formatter: Formatter,
     graph: CommitGraph,
     head_oid: pygit2.Oid,
     current_oid: pygit2.Oid,
-    now: int,
-    show_old_commits: bool,
-) -> Output:
+) -> List[str]:
     current = graph[current_oid]
     text = "{oid} {message}".format(
         oid=glyphs.color_fg(
@@ -272,50 +253,28 @@ def get_child_output(
 
     lines_reversed = [f"{cursor} {text}"]
 
-    num_old_commits = 0
-    children = []
-    for child_oid in graph[current_oid].children:
-        commit = graph[child_oid].commit
-        if is_commit_old(commit, now=now) and not show_old_commits:
-            num_old_commits += 1
-            logging.debug(
-                formatter.format(
-                    "Commit {commit.oid:oid} is too old to be displayed",
-                    commit=commit,
-                )
-            )
-        else:
-            children.append(graph[child_oid])
-
     # Sort earlier commits first, so that they're displayed at the bottom of
     # the smartlog.
     children = sorted(
-        children, key=lambda child: graph[child.commit.oid].commit.commit_time
+        current.children, key=lambda child: graph[child].commit.commit_time
     )
-    for child_idx, child_node in enumerate(children):
+    for child_idx, child_oid in enumerate(children):
         child_output = get_child_output(
             glyphs=glyphs,
             formatter=formatter,
             graph=graph,
             head_oid=head_oid,
-            current_oid=child_node.commit.oid,
-            now=now,
-            show_old_commits=show_old_commits,
+            current_oid=child_oid,
         )
-        num_old_commits += child_output.num_old_commits
         if child_idx == len(children) - 1:
             lines_reversed.append(glyphs.line)
-            lines_reversed.extend(child_output.lines)
+            lines_reversed.extend(child_output)
         else:
             lines_reversed.append(glyphs.line_with_offshoot + glyphs.slash)
-            for child_line in child_output.lines:
+            for child_line in child_output:
                 lines_reversed.append(glyphs.line + " " + child_line)
 
-    return Output(
-        lines=lines_reversed,
-        num_old_commits=num_old_commits,
-        displayed_any_nodes=len(children) > 0,
-    )
+    return lines_reversed
 
 
 def get_output(
@@ -324,44 +283,28 @@ def get_output(
     graph: CommitGraph,
     head_oid: pygit2.Oid,
     root_oids: List[pygit2.Oid],
-    now: int,
-    show_old_commits: bool,
-) -> Output:
+) -> List[str]:
     """Render a pretty graph starting from the given root OIDs in the given graph."""
-    num_old_commits = 0
     lines_reversed = []
 
-    roots_and_outputs: List[Tuple[Node, Output]] = []
-    for root_oid in root_oids:
+    for root_idx, root_oid in enumerate(root_oids):
+        root_node = graph[root_oid]
+        if root_node.commit.parents:
+            lines_reversed.append(
+                glyphs.style(style=colorama.Style.DIM, message=glyphs.vertical_ellipsis)
+            )
+
         child_output = get_child_output(
             glyphs=glyphs,
             formatter=formatter,
             graph=graph,
             head_oid=head_oid,
             current_oid=root_oid,
-            now=now,
-            show_old_commits=show_old_commits,
         )
-        num_old_commits += child_output.num_old_commits
-        root_node = graph[root_oid]
-        if (
-            root_oid != head_oid
-            and root_node.status == "master"
-            and not child_output.displayed_any_nodes
-        ):
-            num_old_commits += 1
-        else:
-            roots_and_outputs.append((root_node, child_output))
-
-    for root_idx, (root_node, child_output) in enumerate(roots_and_outputs):
-        if root_node.commit.parents:
-            lines_reversed.append(
-                glyphs.style(style=colorama.Style.DIM, message=glyphs.vertical_ellipsis)
-            )
         if root_idx == len(root_oids) - 1:
-            lines_reversed.extend(child_output.lines)
+            lines_reversed.extend(child_output)
         else:
-            for child_line_idx, child_line in enumerate(child_output.lines):
+            for child_line_idx, child_line in enumerate(child_output):
                 # HACK: merge the child graph into the root graph by modifying
                 # the first two lines.
                 if child_line_idx == 0:
@@ -377,15 +320,10 @@ def get_output(
                         + child_line
                     )
 
-    lines = list(reversed(lines_reversed))
-    return Output(
-        lines=lines,
-        num_old_commits=num_old_commits,
-        displayed_any_nodes=len(roots_and_outputs) > 0,
-    )
+    return lines_reversed
 
 
-def smartlog(*, out: TextIO, show_old_commits: bool) -> int:
+def smartlog(*, out: TextIO) -> int:
     """Display a nice graph of commits you've recently worked on."""
     glyphs = make_glyphs(out)
     formatter = Formatter()
@@ -432,24 +370,15 @@ def smartlog(*, out: TextIO, show_old_commits: bool) -> int:
         formatter=formatter, repo=repo, merge_base_db=merge_base_db, graph=graph
     )
 
-    output = get_output(
+    lines_reversed = get_output(
         glyphs=glyphs,
         formatter=formatter,
         graph=graph,
         head_oid=head_oid,
         root_oids=root_oids,
-        now=int(time.time()),
-        show_old_commits=show_old_commits,
     )
 
-    for line in output.lines:
+    for line in reversed(lines_reversed):
         out.write(line)
         out.write("\n")
-    if output.num_old_commits > 0:
-        out.write(
-            formatter.format(
-                "({num_old_commits} old commits hidden, use --show-old to show)\n",
-                num_old_commits=output.num_old_commits,
-            )
-        )
     return 0

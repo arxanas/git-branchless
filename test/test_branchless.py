@@ -18,7 +18,7 @@ def test_commands(tmpdir: py.path.local) -> None:
         git_commit_file(name="test", time=1)
 
         with io.StringIO() as out:
-            main(["smartlog", "--show-old"], out=out)
+            main(["smartlog"], out=out)
             compare(
                 actual=out.getvalue(),
                 expected="""\

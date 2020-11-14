@@ -17,7 +17,7 @@ def test_hide_commit(tmpdir: py.path.local) -> None:
         git_commit_file(name="test2", time=2)
 
         with io.StringIO() as out:
-            assert smartlog(out=out, show_old_commits=True) == 0
+            assert smartlog(out=out) == 0
             compare(
                 actual=out.getvalue(),
                 expected="""\
@@ -40,7 +40,7 @@ To unhide this commit, run: git checkout 62fc20d2
             )
 
         with io.StringIO() as out:
-            assert smartlog(out=out, show_old_commits=True) == 0
+            assert smartlog(out=out) == 0
             compare(
                 actual=out.getvalue(),
                 expected="""\
@@ -73,7 +73,7 @@ def test_hide_transitive(tmpdir: py.path.local) -> None:
         git("checkout", ["master"])
 
         with io.StringIO() as out:
-            smartlog(out=out, show_old_commits=True)
+            smartlog(out=out)
             compare(
                 actual=out.getvalue(),
                 expected="""\
@@ -91,7 +91,7 @@ o 62fc20d2 create test1.txt
             assert hide(out=out, hash="96d1c37a") == 0
 
         with io.StringIO() as out:
-            smartlog(out=out, show_old_commits=True)
+            smartlog(out=out)
             compare(
                 actual=out.getvalue(),
                 expected="""\
@@ -133,7 +133,7 @@ def test_hide_current_commit(tmpdir: py.path.local) -> None:
             assert hide(out=out, hash="HEAD") == 0
 
         with io.StringIO() as out:
-            assert smartlog(out=out, show_old_commits=True) == 0
+            assert smartlog(out=out) == 0
             compare(
                 expected=out.getvalue(),
                 actual="""\
@@ -158,7 +158,7 @@ def test_hidden_commit_with_head_as_child(tmpdir: py.path.local) -> None:
             assert hide(out=out, hash="70deb1e2") == 0
 
         with io.StringIO() as out:
-            assert smartlog(out=out, show_old_commits=True) == 0
+            assert smartlog(out=out) == 0
             compare(
                 actual=out.getvalue(),
                 expected="""\

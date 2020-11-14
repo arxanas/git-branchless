@@ -17,13 +17,10 @@ def main(argv: List[str], *, out: TextIO) -> int:
     subparsers = parser.add_subparsers(
         dest="subcommand",
     )
-    smartlog_parser = subparsers.add_parser(
+    subparsers.add_parser(
         "smartlog",
         aliases=["sl"],
         help=smartlog.__doc__,
-    )
-    smartlog_parser.add_argument(
-        "--show-old", action="store_true", help="Show old commits (hidden by default)."
     )
     hide_parser = subparsers.add_parser("hide", help="hide a commit from the smartlog")
     hide_parser.add_argument("hash", type=str, help="The commit hash to hide.")
@@ -33,7 +30,7 @@ def main(argv: List[str], *, out: TextIO) -> int:
         parser.print_help(file=out)
         return 0
     elif args.subcommand in ["smartlog", "sl"]:
-        return smartlog(out=out, show_old_commits=args.show_old)
+        return smartlog(out=out)
     elif args.subcommand == "hide":
         return hide(out=out, hash=args.hash)
     else:

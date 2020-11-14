@@ -17,7 +17,7 @@ def test_init(tmpdir: py.path.local) -> None:
     with tmpdir.as_cwd(), io.StringIO() as out:
         git_initial_commit()
 
-        assert smartlog(out=out, show_old_commits=True) == 0
+        assert smartlog(out=out) == 0
         compare(
             actual=out.getvalue(),
             expected="""\
@@ -32,7 +32,7 @@ def test_show_reachable_commit(tmpdir: py.path.local) -> None:
         git("checkout", ["-b", "initial-branch", "master"])
         git_commit_file(name="test", time=1)
 
-        assert smartlog(out=out, show_old_commits=True) == 0
+        assert smartlog(out=out) == 0
         compare(
             actual=out.getvalue(),
             expected="""\
@@ -52,7 +52,7 @@ def test_tree(tmpdir: py.path.local) -> None:
         git("checkout", ["initial"])
         git_commit_file(name="test2", time=2)
 
-        assert smartlog(out=out, show_old_commits=True) == 0
+        assert smartlog(out=out) == 0
         compare(
             actual=out.getvalue(),
             expected="""\
@@ -75,7 +75,7 @@ def test_rebase(tmpdir: py.path.local) -> None:
         git_commit_file(name="test2", time=2)
         git("rebase", ["test1"])
 
-        assert smartlog(out=out, show_old_commits=True) == 0
+        assert smartlog(out=out) == 0
         compare(
             actual=out.getvalue(),
             expected="""\
@@ -95,7 +95,7 @@ def test_sequential_master_commits(tmpdir: py.path.local) -> None:
         git_commit_file(name="test2", time=2)
         git_commit_file(name="test3", time=3)
 
-        assert smartlog(out=out, show_old_commits=True) == 0
+        assert smartlog(out=out) == 0
         compare(
             actual=out.getvalue(),
             expected="""\
@@ -120,7 +120,7 @@ def test_merge_commit(tmpdir: py.path.local) -> None:
         # commits have multiple parents, and pick a single parent with which to
         # render it. We also don't properly mark the merged-from commits as
         # hidden.
-        assert smartlog(out=out, show_old_commits=True) == 0
+        assert smartlog(out=out) == 0
         compare(
             actual=out.getvalue(),
             expected="""\
@@ -148,7 +148,7 @@ def test_rebase_conflict(tmpdir: py.path.local) -> None:
         git_resolve_file(name="test", contents="contents resolved")
         git("rebase", ["--continue"])
 
-        assert smartlog(out=out, show_old_commits=True) == 0
+        assert smartlog(out=out) == 0
         compare(
             actual=out.getvalue(),
             expected="""\
@@ -172,7 +172,7 @@ def test_non_adjacent_commits(tmpdir: py.path.local) -> None:
         git_detach_head()
         git_commit_file(name="test4", time=4)
 
-        assert smartlog(out=out, show_old_commits=True) == 0
+        assert smartlog(out=out) == 0
         compare(
             actual=out.getvalue(),
             expected="""\
@@ -199,7 +199,7 @@ def test_non_adjacent_commits2(tmpdir: py.path.local) -> None:
         git_detach_head()
         git_commit_file(name="test5", time=5)
 
-        assert smartlog(out=out, show_old_commits=True) == 0
+        assert smartlog(out=out) == 0
         compare(
             actual=out.getvalue(),
             expected="""\
