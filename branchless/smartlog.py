@@ -137,6 +137,48 @@ def walk_from_visible_commits(
                 )
             )
 
+    # Link any adjacent merge-bases (i.e. adjacent commits in master).
+    # TODO: may not be necessary, depending on if we want to hide master
+    # commits.
+    for oid, node in graph.items():
+        if node.status == "master":
+            for parent_commit in node.commit.parents:
+                if parent_commit.oid in graph:
+                    link(
+                        parent_oid=parent_commit.oid,
+                        child_oid=node.commit.oid,
+                    )
+                    break
+
+    return graph
+
+
+def consistency_check_graph(graph: CommitGraph) -> None:
+    """Verify that each parent-child connection is mutual."""
+    for node_oid, node in graph.items():
+        parent_oid = node.parent
+        if parent_oid is not None:
+            assert parent_oid != node_oid
+            assert parent_oid in graph
+            assert node_oid in graph[parent_oid].children
+
+        for child_oid in node.children:
+            assert child_oid != node_oid
+            assert child_oid in graph
+            assert graph[child_oid].parent == node_oid
+
+
+def hide_commits(graph: CommitGraph, head_oid: pygit2.Oid) -> None:
+    """Hide commits according to their status.
+
+    Commits with the hidden status should not be displayed. Additionally,
+    commits descending from that commit should be not be displayed as well,
+    since the user probably intended to hide the entire subtree.
+
+    However, we want to be sure to always display the commit pointed to by
+    HEAD, and its ancestry.
+    """
+
     def should_prune(oid: pygit2.Oid) -> bool:
         if oid == head_oid:
             # Always show the HEAD commit and its children.
@@ -162,23 +204,9 @@ def walk_from_visible_commits(
                 del graph[potential_oid_to_hide]
                 if parent_oid is not None:
                     graph[parent_oid].children.remove(potential_oid_to_hide)
-                    next_potential_oids_to_hide.add(parent_oid)
+                    if not graph[parent_oid].children:
+                        next_potential_oids_to_hide.add(parent_oid)
         potential_oids_to_hide = next_potential_oids_to_hide
-
-    # Link any adjacent merge-bases (i.e. adjacent commits in master).
-    # TODO: may not be necessary, depending on if we want to hide master
-    # commits.
-    for oid, node in graph.items():
-        if node.status == "master":
-            for parent_commit in node.commit.parents:
-                if parent_commit.oid in graph:
-                    link(
-                        parent_oid=parent_commit.oid,
-                        child_oid=node.commit.oid,
-                    )
-                    break
-
-    return graph
 
 
 def split_commit_graph_by_roots(
@@ -347,11 +375,6 @@ def smartlog(*, out: TextIO) -> int:
     db = make_db_for_repo(repo)
     hide_db = HideDb(db)
     hidden_commit_oids = hide_db.get_hidden_oids()
-    visible_commit_oids = {
-        oid
-        for oid in visible_commit_oids
-        if not (oid.hex in hidden_commit_oids and oid.hex != head_oid.hex)
-    }
 
     master_oid = repo.branches["master"].target
 
@@ -370,10 +393,13 @@ def smartlog(*, out: TextIO) -> int:
         visible_commit_oids=visible_commit_oids,
         hidden_commit_oids=hidden_commit_oids,
     )
+    consistency_check_graph(graph)
+    hide_commits(graph=graph, head_oid=head_oid)
+    consistency_check_graph(graph)
+
     root_oids = split_commit_graph_by_roots(
         formatter=formatter, repo=repo, merge_base_db=merge_base_db, graph=graph
     )
-
     lines_reversed = get_output(
         glyphs=glyphs,
         formatter=formatter,
