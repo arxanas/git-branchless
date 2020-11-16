@@ -56,6 +56,7 @@ class Repository:
 
     references: Mapping[Union[Oid, str], Reference]
     branches: Mapping[str, Branch]
+    config: Mapping[str, str]
 
     def __init__(self, path: str) -> None:
         ...

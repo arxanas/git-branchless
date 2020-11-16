@@ -3,7 +3,7 @@ import io
 import py
 from branchless.__main__ import main
 
-from helpers import compare, git_commit_file, git_initial_commit
+from helpers import compare, git_commit_file, git_init_repo
 
 
 def test_help() -> None:
@@ -14,7 +14,7 @@ def test_help() -> None:
 
 def test_commands(tmpdir: py.path.local) -> None:
     with tmpdir.as_cwd():
-        git_initial_commit()
+        git_init_repo()
         git_commit_file(name="test", time=1)
 
         with io.StringIO() as out:

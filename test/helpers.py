@@ -1,5 +1,7 @@
 import os
 import subprocess
+import sys
+from pathlib import Path
 from typing import List, Optional
 
 GIT_PATH = "/opt/twitter_mde/bin/git"
@@ -13,6 +15,7 @@ def git(
     command: str,
     args: Optional[List[str]] = None,
     time: int = 0,
+    check: bool = True,
 ) -> str:
     if args is None:
         args = []
@@ -28,10 +31,19 @@ def git(
         "GIT_COMMITTER_NAME": DUMMY_NAME,
         "GIT_COMMITTER_EMAIL": DUMMY_EMAIL,
         "GIT_COMMITTER_DATE": date,
+        # Fake "editor" which accepts the default contents of any commit
+        # messages. Usually, we can set this with `git commit -m`, but we have
+        # no such option for things such as `git rebase`, which may call `git
+        # commit` later as a part of their execution.
         "GIT_EDITOR": "true",
     }
 
-    result = subprocess.run(args, stdout=subprocess.PIPE, env=env)
+    result = subprocess.run(
+        args,
+        stdout=subprocess.PIPE,
+        env=env,
+        check=check,
+    )
     return result.stdout.decode()
 
 
@@ -55,9 +67,19 @@ def git_resolve_file(name: str, contents: str) -> None:
     git("add", [path])
 
 
-def git_initial_commit() -> None:
+def git_init_repo() -> None:
     git("init")
     git_commit_file(name="initial", time=0)
+
+    python_path = Path(__file__).parent.parent
+    git(
+        "config",
+        [
+            "alias.branchless",
+            f"!env PYTHONPATH={python_path} {sys.executable} -m branchless",
+        ],
+    )
+    git("branchless", ["init"])
 
 
 def git_detach_head() -> None:

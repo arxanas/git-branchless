@@ -8,14 +8,14 @@ from helpers import (
     git,
     git_commit_file,
     git_detach_head,
-    git_initial_commit,
+    git_init_repo,
     git_resolve_file,
 )
 
 
 def test_init(tmpdir: py.path.local) -> None:
     with tmpdir.as_cwd(), io.StringIO() as out:
-        git_initial_commit()
+        git_init_repo()
 
         assert smartlog(out=out) == 0
         compare(
@@ -28,7 +28,7 @@ def test_init(tmpdir: py.path.local) -> None:
 
 def test_show_reachable_commit(tmpdir: py.path.local) -> None:
     with tmpdir.as_cwd(), io.StringIO() as out:
-        git_initial_commit()
+        git_init_repo()
         git("checkout", ["-b", "initial-branch", "master"])
         git_commit_file(name="test", time=1)
 
@@ -45,7 +45,7 @@ o f777ecc9 create initial.txt
 
 def test_tree(tmpdir: py.path.local) -> None:
     with tmpdir.as_cwd(), io.StringIO() as out:
-        git_initial_commit()
+        git_init_repo()
         git_detach_head()
         git("branch", ["initial"])
         git_commit_file(name="test1", time=1)
@@ -67,7 +67,7 @@ o f777ecc9 create initial.txt
 
 def test_rebase(tmpdir: py.path.local) -> None:
     with tmpdir.as_cwd(), io.StringIO() as out:
-        git_initial_commit()
+        git_init_repo()
         git("checkout", ["-b", "test1", "master"])
         git_commit_file(name="test1", time=1)
         git("checkout", ["master"])
@@ -90,7 +90,7 @@ o f777ecc9 create initial.txt
 
 def test_sequential_master_commits(tmpdir: py.path.local) -> None:
     with tmpdir.as_cwd(), io.StringIO() as out:
-        git_initial_commit()
+        git_init_repo()
         git_commit_file(name="test1", time=1)
         git_commit_file(name="test2", time=2)
         git_commit_file(name="test3", time=3)
@@ -107,7 +107,7 @@ def test_sequential_master_commits(tmpdir: py.path.local) -> None:
 
 def test_merge_commit(tmpdir: py.path.local) -> None:
     with tmpdir.as_cwd(), io.StringIO() as out:
-        git_initial_commit()
+        git_init_repo()
         git("checkout", ["-b", "test1", "master"])
         git_commit_file(name="test1", time=1)
         git("checkout", ["-b", "test2and3", "master"])
@@ -137,14 +137,14 @@ o f777ecc9 create initial.txt
 
 def test_rebase_conflict(tmpdir: py.path.local) -> None:
     with tmpdir.as_cwd(), io.StringIO() as out:
-        git_initial_commit()
+        git_init_repo()
         git("checkout", ["-b", "branch1", "master"])
         git_commit_file(name="test", time=1, contents="contents 1")
         git("checkout", ["-b", "branch2", "master"])
         git_commit_file(name="test", time=2, contents="contents 2")
 
         # Should produce a conflict.
-        git("rebase", ["branch1"])
+        git("rebase", ["branch1"], check=False)
         git_resolve_file(name="test", contents="contents resolved")
         git("rebase", ["--continue"])
 
@@ -163,7 +163,7 @@ o f777ecc9 create initial.txt
 
 def test_non_adjacent_commits(tmpdir: py.path.local) -> None:
     with tmpdir.as_cwd(), io.StringIO() as out:
-        git_initial_commit()
+        git_init_repo()
         git_detach_head()
         git_commit_file(name="test1", time=1)
         git("checkout", ["master"])
@@ -189,7 +189,7 @@ o f777ecc9 create initial.txt
 
 def test_non_adjacent_commits2(tmpdir: py.path.local) -> None:
     with tmpdir.as_cwd(), io.StringIO() as out:
-        git_initial_commit()
+        git_init_repo()
         git_detach_head()
         git_commit_file(name="test1", time=1)
         git_commit_file(name="test2", time=2)

@@ -4,6 +4,7 @@ import sys
 from typing import List, TextIO
 
 from .hide import hide
+from .init import init
 from .smartlog import smartlog
 
 
@@ -18,6 +19,9 @@ def main(argv: List[str], *, out: TextIO) -> int:
         dest="subcommand",
     )
     subparsers.add_parser(
+        "init", help="Initialize the branchless workflow for this repository."
+    )
+    subparsers.add_parser(
         "smartlog",
         aliases=["sl"],
         help=smartlog.__doc__,
@@ -29,6 +33,8 @@ def main(argv: List[str], *, out: TextIO) -> int:
     if args.help:
         parser.print_help(file=out)
         return 0
+    elif args.subcommand == "init":
+        return init(out=out)
     elif args.subcommand in ["smartlog", "sl"]:
         return smartlog(out=out)
     elif args.subcommand == "hide":

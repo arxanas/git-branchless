@@ -4,12 +4,12 @@ import py
 from branchless.hide import hide
 from branchless.smartlog import smartlog
 
-from helpers import compare, git, git_commit_file, git_detach_head, git_initial_commit
+from helpers import compare, git, git_commit_file, git_detach_head, git_init_repo
 
 
 def test_hide_commit(tmpdir: py.path.local) -> None:
     with tmpdir.as_cwd():
-        git_initial_commit()
+        git_init_repo()
         git_detach_head()
         git_commit_file(name="test1", time=1)
         git("checkout", ["master"])
@@ -53,7 +53,7 @@ o f777ecc9 create initial.txt
 
 def test_hide_bad_commit(tmpdir: py.path.local) -> None:
     with tmpdir.as_cwd(), io.StringIO() as out:
-        git_initial_commit()
+        git_init_repo()
         assert hide(out=out, hash="abc123") == 1
         compare(
             actual=out.getvalue(),
@@ -65,7 +65,7 @@ Commit not found: abc123
 
 def test_hide_transitive(tmpdir: py.path.local) -> None:
     with tmpdir.as_cwd():
-        git_initial_commit()
+        git_init_repo()
         git_detach_head()
         git_commit_file(name="test1", time=1)
         git_commit_file(name="test2", time=2)
@@ -104,7 +104,7 @@ o 62fc20d2 create test1.txt
 
 def test_hide_already_hidden_commit(tmpdir: py.path.local) -> None:
     with tmpdir.as_cwd():
-        git_initial_commit()
+        git_init_repo()
         git_detach_head()
         git_commit_file(name="test1", time=1)
 
@@ -125,7 +125,7 @@ To unhide this commit, run: git checkout 62fc20d2
 
 def test_hide_current_commit(tmpdir: py.path.local) -> None:
     with tmpdir.as_cwd():
-        git_initial_commit()
+        git_init_repo()
         git_detach_head()
         git_commit_file(name="test", time=1)
 
@@ -146,7 +146,7 @@ o f777ecc9 create initial.txt
 
 def test_hidden_commit_with_head_as_child(tmpdir: py.path.local) -> None:
     with tmpdir.as_cwd():
-        git_initial_commit()
+        git_init_repo()
         git_detach_head()
         git_commit_file(name="test1", time=1)
         git_commit_file(name="test2", time=2)
