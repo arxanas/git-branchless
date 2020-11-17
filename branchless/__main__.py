@@ -26,7 +26,7 @@ def main(argv: List[str], *, out: TextIO) -> int:
         aliases=["sl"],
         help=smartlog.__doc__,
     )
-    hide_parser = subparsers.add_parser("hide", help="hide a commit from the smartlog")
+    hide_parser = subparsers.add_parser("hide", help="Hide a commit from the smartlog.")
     hide_parser.add_argument("hash", type=str, help="The commit hash to hide.")
     args = parser.parse_args(argv)
 
