@@ -17,17 +17,17 @@ from .reflog import RefLogReplayer
 
 
 @dataclass
-class Node:
+class _Node:
     commit: pygit2.Commit
     parent: Optional[pygit2.Oid]
     children: Set[pygit2.Oid]
     status: CommitStatus
 
 
-CommitGraph = Dict[pygit2.Oid, Node]
+_CommitGraph = Dict[pygit2.Oid, _Node]
 
 
-def find_path_to_merge_base(
+def _find_path_to_merge_base(
     formatter: Formatter,
     repo: pygit2.Repository,
     commit_oid: pygit2.Oid,
@@ -58,7 +58,7 @@ def find_path_to_merge_base(
     )
 
 
-def walk_from_visible_commits(
+def _walk_from_visible_commits(
     formatter: Formatter,
     repo: pygit2.Repository,
     merge_base_db: MergeBaseDb,
@@ -66,7 +66,7 @@ def walk_from_visible_commits(
     master_oid: pygit2.Oid,
     visible_commit_oids: Set[pygit2.Oid],
     hidden_commit_oids: Set[str],
-) -> CommitGraph:
+) -> _CommitGraph:
     """Find additional commits that should be displayed.
 
     For example, if you check out a commit that has intermediate parent
@@ -74,7 +74,7 @@ def walk_from_visible_commits(
     shown (or else you won't get a good idea of the line of development that
     happened for this commit since `master`).
     """
-    graph: CommitGraph = {}
+    graph: _CommitGraph = {}
 
     def link(parent_oid: pygit2.Oid, child_oid: Optional[pygit2.Oid]) -> None:
         if child_oid is not None:
@@ -100,7 +100,7 @@ def walk_from_visible_commits(
 
         current_commit = repo[commit_oid]
         previous_oid = None
-        for current_commit in find_path_to_merge_base(
+        for current_commit in _find_path_to_merge_base(
             formatter=formatter,
             repo=repo,
             commit_oid=commit_oid,
@@ -114,7 +114,7 @@ def walk_from_visible_commits(
                     status = "hidden"
                 else:
                     status = "visible"
-                graph[current_oid] = Node(
+                graph[current_oid] = _Node(
                     commit=current_commit,
                     parent=None,
                     children=set(),
@@ -153,7 +153,7 @@ def walk_from_visible_commits(
     return graph
 
 
-def consistency_check_graph(graph: CommitGraph) -> None:
+def _consistency_check_graph(graph: _CommitGraph) -> None:
     """Verify that each parent-child connection is mutual."""
     for node_oid, node in graph.items():
         parent_oid = node.parent
@@ -168,7 +168,7 @@ def consistency_check_graph(graph: CommitGraph) -> None:
             assert graph[child_oid].parent == node_oid
 
 
-def hide_commits(graph: CommitGraph, head_oid: pygit2.Oid) -> None:
+def _hide_commits(graph: _CommitGraph, head_oid: pygit2.Oid) -> None:
     """Hide commits according to their status.
 
     Commits with the hidden status should not be displayed. Additionally,
@@ -209,11 +209,11 @@ def hide_commits(graph: CommitGraph, head_oid: pygit2.Oid) -> None:
         potential_oids_to_hide = next_potential_oids_to_hide
 
 
-def split_commit_graph_by_roots(
+def _split_commit_graph_by_roots(
     formatter: string.Formatter,
     repo: pygit2.Repository,
     merge_base_db: MergeBaseDb,
-    graph: CommitGraph,
+    graph: _CommitGraph,
 ) -> List[pygit2.Oid]:
     """Split fully-independent subgraphs into multiple graphs.
 
@@ -249,10 +249,10 @@ def split_commit_graph_by_roots(
     return root_commit_oids
 
 
-def get_child_output(
+def _get_child_output(
     glyphs: Glyphs,
     formatter: Formatter,
-    graph: CommitGraph,
+    graph: _CommitGraph,
     head_oid: pygit2.Oid,
     current_oid: pygit2.Oid,
     last_child_line_char: Optional[str],
@@ -288,7 +288,7 @@ def get_child_output(
         current.children, key=lambda child: graph[child].commit.commit_time
     )
     for child_idx, child_oid in enumerate(children):
-        child_output = get_child_output(
+        child_output = _get_child_output(
             glyphs=glyphs,
             formatter=formatter,
             graph=graph,
@@ -317,10 +317,10 @@ def get_child_output(
     return lines_reversed
 
 
-def get_output(
+def _get_output(
     glyphs: Glyphs,
     formatter: Formatter,
-    graph: CommitGraph,
+    graph: _CommitGraph,
     head_oid: pygit2.Oid,
     root_oids: List[pygit2.Oid],
 ) -> List[str]:
@@ -342,7 +342,7 @@ def get_output(
                 style=colorama.Style.DIM, message=glyphs.vertical_ellipsis
             )
 
-        child_output = get_child_output(
+        child_output = _get_child_output(
             glyphs=glyphs,
             formatter=formatter,
             graph=graph,
@@ -384,7 +384,7 @@ def smartlog(*, out: TextIO) -> int:
             "Merge-base cache not initialized -- it may take a while to populate it"
         )
 
-    graph = walk_from_visible_commits(
+    graph = _walk_from_visible_commits(
         formatter=formatter,
         repo=repo,
         merge_base_db=merge_base_db,
@@ -393,14 +393,14 @@ def smartlog(*, out: TextIO) -> int:
         visible_commit_oids=visible_commit_oids,
         hidden_commit_oids=hidden_commit_oids,
     )
-    consistency_check_graph(graph)
-    hide_commits(graph=graph, head_oid=head_oid)
-    consistency_check_graph(graph)
+    _consistency_check_graph(graph)
+    _hide_commits(graph=graph, head_oid=head_oid)
+    _consistency_check_graph(graph)
 
-    root_oids = split_commit_graph_by_roots(
+    root_oids = _split_commit_graph_by_roots(
         formatter=formatter, repo=repo, merge_base_db=merge_base_db, graph=graph
     )
-    lines_reversed = get_output(
+    lines_reversed = _get_output(
         glyphs=glyphs,
         formatter=formatter,
         graph=graph,

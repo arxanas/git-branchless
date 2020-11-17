@@ -9,7 +9,7 @@ import pygit2
 
 
 @dataclass(frozen=True, eq=True)
-class RefLogAction:
+class _RefLogAction:
     """Wrapper around an action taken in a ref-log.
 
     We scrape these entries to attempt to determine what happened in the past
@@ -47,7 +47,7 @@ class RefLogAction:
     )
 
     @classmethod
-    def from_entry(cls, entry: pygit2.RefLogEntry) -> "RefLogAction":
+    def from_entry(cls, entry: pygit2.RefLogEntry) -> "_RefLogAction":
         message = entry.message
         match = cls.REF_LOG_LINE_RE.match(message)
         assert match is not None, f"Failed to parse ref-log message: {message}"
@@ -63,7 +63,7 @@ class RefLogAction:
 
 
 @dataclass(frozen=True, eq=True)
-class MarkedHidden:
+class _MarkedHidden:
     """Wrapper class to mark when an action marked a commit as "hidden".
 
     This detects actions that "hid" the given commit, usually due to
@@ -80,10 +80,10 @@ class MarkedHidden:
     hid the commit.
     """
 
-    action: RefLogAction
+    action: _RefLogAction
 
 
-class ClassifiedActionType(enum.Enum):
+class _ClassifiedActionType(enum.Enum):
     BRANCH = enum.auto()
     CHECKOUT = enum.auto()
     COMMIT = enum.auto()
@@ -95,7 +95,7 @@ class ClassifiedActionType(enum.Enum):
     @classmethod
     def classify(
         cls, entry: pygit2.RefLogEntry, action_type: str
-    ) -> "ClassifiedActionType":
+    ) -> "_ClassifiedActionType":
         if action_type in [
             # Branching (may or may not be referring to the
             # currently-checked-out branch).
@@ -150,7 +150,7 @@ class ClassifiedActionType(enum.Enum):
 class RefLogReplayer:
     """Replay ref-log entries to determine which commits are visible."""
 
-    CommitHistory = List[Tuple[int, Union[RefLogAction, MarkedHidden]]]
+    CommitHistory = List[Tuple[int, Union[_RefLogAction, _MarkedHidden]]]
 
     def __init__(self, head_oid: pygit2.Oid) -> None:
         self._head_oid: pygit2.Oid = head_oid
@@ -177,7 +177,7 @@ class RefLogReplayer:
 
     def process(self, entry: pygit2.RefLogEntry) -> None:
         self._current_oid = entry.oid_new
-        action = RefLogAction.from_entry(entry)
+        action = _RefLogAction.from_entry(entry)
 
         # We want to hide the old OID *before* we register the action for the
         # new OID. For example, if an entry were to mark the current OID as
@@ -185,49 +185,49 @@ class RefLogReplayer:
         # again. However, since we're processing ref log entries in reverse
         # order, we insert the `MarkedHidden` entry *after* we register the
         # action for the new OID.
-        action_class = ClassifiedActionType.classify(
+        action_class = _ClassifiedActionType.classify(
             entry=entry, action_type=action.action_type
         )
         if self._does_action_vivify_new_oid(action_class=action_class):
             self.commit_history[entry.oid_new].append((self._timestamp, action))
         if self._does_action_hide_old_oid(action_class=action_class):
             self.commit_history[entry.oid_old].append(
-                (self._timestamp, MarkedHidden(action=action))
+                (self._timestamp, _MarkedHidden(action=action))
             )
         self._timestamp += 1
 
-    def _does_action_vivify_new_oid(self, action_class: ClassifiedActionType) -> bool:
+    def _does_action_vivify_new_oid(self, action_class: _ClassifiedActionType) -> bool:
         if (
             False
-            or action_class is ClassifiedActionType.COMMIT
-            or action_class is ClassifiedActionType.INIT
-            or action_class is ClassifiedActionType.MERGE
-            or action_class is ClassifiedActionType.REWRITE
+            or action_class is _ClassifiedActionType.COMMIT
+            or action_class is _ClassifiedActionType.INIT
+            or action_class is _ClassifiedActionType.MERGE
+            or action_class is _ClassifiedActionType.REWRITE
         ):
             return True
         elif (
             False
-            or action_class is ClassifiedActionType.BRANCH
-            or action_class is ClassifiedActionType.CHECKOUT
-            or action_class is ClassifiedActionType.UNKNOWN
-            or action_class is ClassifiedActionType.HIDE
+            or action_class is _ClassifiedActionType.BRANCH
+            or action_class is _ClassifiedActionType.CHECKOUT
+            or action_class is _ClassifiedActionType.UNKNOWN
+            or action_class is _ClassifiedActionType.HIDE
         ):
             return False
 
-    def _does_action_hide_old_oid(self, action_class: ClassifiedActionType) -> bool:
+    def _does_action_hide_old_oid(self, action_class: _ClassifiedActionType) -> bool:
         if (
             False
-            or action_class is ClassifiedActionType.BRANCH
-            or action_class is ClassifiedActionType.CHECKOUT
-            or action_class is ClassifiedActionType.COMMIT
-            or action_class is ClassifiedActionType.INIT
-            or action_class is ClassifiedActionType.UNKNOWN
+            or action_class is _ClassifiedActionType.BRANCH
+            or action_class is _ClassifiedActionType.CHECKOUT
+            or action_class is _ClassifiedActionType.COMMIT
+            or action_class is _ClassifiedActionType.INIT
+            or action_class is _ClassifiedActionType.UNKNOWN
         ):
             return False
         elif (
             False
-            or action_class is ClassifiedActionType.MERGE
-            or action_class is ClassifiedActionType.REWRITE
+            or action_class is _ClassifiedActionType.MERGE
+            or action_class is _ClassifiedActionType.REWRITE
         ):
             return True
 
@@ -251,7 +251,7 @@ class RefLogReplayer:
             return False
         else:
             (_timestamp, action) = history[-1]
-            return not isinstance(action, MarkedHidden)
+            return not isinstance(action, _MarkedHidden)
 
     def get_visible_oids(self) -> Sequence[pygit2.Oid]:
         """Get all OIDs thought to be visible according to the ref-log."""
