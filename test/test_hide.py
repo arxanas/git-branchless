@@ -21,11 +21,11 @@ def test_hide_commit(tmpdir: py.path.local) -> None:
             compare(
                 actual=out.getvalue(),
                 expected="""\
-@ fe65c1fe create test2.txt
-|
-| o 62fc20d2 create test1.txt
-|/
 O f777ecc9 create initial.txt
+|\\
+| o 62fc20d2 create test1.txt
+|
+@ fe65c1fe create test2.txt
 """,
             )
 
@@ -44,9 +44,9 @@ To unhide this commit, run: git checkout 62fc20d2
             compare(
                 actual=out.getvalue(),
                 expected="""\
-@ fe65c1fe create test2.txt
-|
 O f777ecc9 create initial.txt
+|
+@ fe65c1fe create test2.txt
 """,
             )
 
@@ -77,13 +77,13 @@ def test_hide_transitive(tmpdir: py.path.local) -> None:
             compare(
                 actual=out.getvalue(),
                 expected="""\
-o 70deb1e2 create test3.txt
-|
-o 96d1c37a create test2.txt
+@ f777ecc9 create initial.txt
 |
 o 62fc20d2 create test1.txt
 |
-@ f777ecc9 create initial.txt
+o 96d1c37a create test2.txt
+|
+o 70deb1e2 create test3.txt
 """,
             )
 
@@ -95,9 +95,9 @@ o 62fc20d2 create test1.txt
             compare(
                 actual=out.getvalue(),
                 expected="""\
-o 62fc20d2 create test1.txt
-|
 @ f777ecc9 create initial.txt
+|
+o 62fc20d2 create test1.txt
 """,
             )
 
@@ -137,9 +137,9 @@ def test_hide_current_commit(tmpdir: py.path.local) -> None:
             compare(
                 expected=out.getvalue(),
                 actual="""\
-% 3df4b935 create test.txt
-|
 O f777ecc9 create initial.txt
+|
+% 3df4b935 create test.txt
 """,
             )
 
@@ -162,11 +162,11 @@ def test_hidden_commit_with_head_as_child(tmpdir: py.path.local) -> None:
             compare(
                 actual=out.getvalue(),
                 expected="""\
-@ 96d1c37a create test2.txt
+O f777ecc9 create initial.txt
 |
 x 62fc20d2 create test1.txt
 |
-O f777ecc9 create initial.txt
+@ 96d1c37a create test2.txt
 """,
             )
 
@@ -190,7 +190,7 @@ def test_hide_master_commit_with_hidden_children(tmpdir: py.path.local) -> None:
             compare(
                 actual=out.getvalue(),
                 expected="""\
-@ 20230db7 create test5.txt
 :
+@ 20230db7 create test5.txt
 """,
             )

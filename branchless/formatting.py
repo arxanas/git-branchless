@@ -60,7 +60,7 @@ class TextGlyphs:
     line = "|"
     line_with_offshoot = line
     vertical_ellipsis = ":"
-    slash = "/"
+    slash = "\\"
     commit_visible = "o"
     commit_visible_head = "@"
     commit_hidden = "x"
@@ -81,7 +81,7 @@ class PrettyGlyphs:
     line = "┃"
     line_with_offshoot = "┣"
     vertical_ellipsis = "⋮"
-    slash = "━┛"
+    slash = "━┓"
     commit_visible = "◯"
     commit_visible_head = "●"
     commit_hidden = "✕"

@@ -271,7 +271,7 @@ def _get_child_output(
         cursor = glyphs.style(style=colorama.Style.BRIGHT, message=cursor)
         text = glyphs.style(style=colorama.Style.BRIGHT, message=text)
 
-    lines_reversed = [f"{cursor} {text}"]
+    lines = [f"{cursor} {text}"]
 
     # Sort earlier commits first, so that they're displayed at the bottom of
     # the smartlog.
@@ -290,22 +290,22 @@ def _get_child_output(
 
         if child_idx == len(children) - 1:
             if last_child_line_char is not None:
-                lines_reversed.append(glyphs.line_with_offshoot + glyphs.slash)
+                lines.append(glyphs.line_with_offshoot + glyphs.slash)
             else:
-                lines_reversed.append(glyphs.line)
+                lines.append(glyphs.line)
         else:
-            lines_reversed.append(glyphs.line_with_offshoot + glyphs.slash)
+            lines.append(glyphs.line_with_offshoot + glyphs.slash)
 
         for child_line in child_output:
             if child_idx == len(children) - 1:
                 if last_child_line_char is not None:
-                    lines_reversed.append(last_child_line_char + " " + child_line)
+                    lines.append(last_child_line_char + " " + child_line)
                 else:
-                    lines_reversed.append(child_line)
+                    lines.append(child_line)
             else:
-                lines_reversed.append(glyphs.line + " " + child_line)
+                lines.append(glyphs.line + " " + child_line)
 
-    return lines_reversed
+    return lines
 
 
 def _get_output(
@@ -316,7 +316,7 @@ def _get_output(
     root_oids: List[pygit2.Oid],
 ) -> List[str]:
     """Render a pretty graph starting from the given root OIDs in the given graph."""
-    lines_reversed = []
+    lines = []
 
     def has_real_parent(oid: pygit2.Oid, parent_oid: pygit2.Oid) -> bool:
         """Determine if the provided OID has the provided parent OID as a parent.
@@ -333,9 +333,9 @@ def _get_output(
             if root_idx > 0 and has_real_parent(
                 oid=root_oid, parent_oid=root_oids[root_idx - 1]
             ):
-                lines_reversed.append(glyphs.line)
+                lines.append(glyphs.line)
             else:
-                lines_reversed.append(
+                lines.append(
                     glyphs.style(
                         style=colorama.Style.DIM, message=glyphs.vertical_ellipsis
                     )
@@ -361,9 +361,9 @@ def _get_output(
             current_oid=root_oid,
             last_child_line_char=last_child_line_char,
         )
-        lines_reversed.extend(child_output)
+        lines.extend(child_output)
 
-    return lines_reversed
+    return lines
 
 
 def smartlog(*, out: TextIO) -> int:
@@ -418,7 +418,7 @@ def smartlog(*, out: TextIO) -> int:
     root_oids = _split_commit_graph_by_roots(
         formatter=formatter, repo=repo, merge_base_db=merge_base_db, graph=graph
     )
-    lines_reversed = _get_output(
+    lines = _get_output(
         glyphs=glyphs,
         formatter=formatter,
         graph=graph,
@@ -426,7 +426,7 @@ def smartlog(*, out: TextIO) -> int:
         root_oids=root_oids,
     )
 
-    for line in reversed(lines_reversed):
+    for line in lines:
         out.write(line)
         out.write("\n")
     return 0
