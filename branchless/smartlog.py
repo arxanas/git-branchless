@@ -9,7 +9,7 @@ import string
 import time
 from dataclasses import dataclass
 from queue import Queue
-from typing import Dict, List, Literal, Optional, Set, TextIO, Union
+from typing import Dict, List, Literal, Optional, Set, TextIO, Tuple, Union
 
 import colorama
 import pygit2
@@ -29,14 +29,27 @@ from .metadata import (
 
 
 @dataclass
-class _Node:
+class Node:
+    """Node contained in the smartlog commit graph."""
+
     commit: pygit2.Commit
+    """The underlying commit object."""
+
     parent: Optional[OidStr]
+    """The OID of the parent node in the smartlog commit graph.
+
+    This is different from inspecting `commit.parents`, since the smartlog
+    will hide most nodes from the commit graph, including parent nodes.
+    """
+
     children: Set[OidStr]
+    """The OIDs of the children nodes in the smartlog commit graph."""
+
     status: CommitStatus
+    """The status of this commit."""
 
 
-_CommitGraph = Dict[OidStr, _Node]
+CommitGraph = Dict[OidStr, Node]
 
 
 def _find_path_to_merge_base(
@@ -79,7 +92,7 @@ def _walk_from_visible_commits(
     master_oid: pygit2.Oid,
     visible_commit_oids: Set[OidStr],
     hidden_commit_oids: Set[OidStr],
-) -> _CommitGraph:
+) -> CommitGraph:
     """Find additional commits that should be displayed.
 
     For example, if you check out a commit that has intermediate parent
@@ -87,7 +100,7 @@ def _walk_from_visible_commits(
     shown (or else you won't get a good idea of the line of development that
     happened for this commit since `master`).
     """
-    graph: _CommitGraph = {}
+    graph: CommitGraph = {}
 
     def link(parent_oid: OidStr, child_oid: Optional[OidStr]) -> None:
         if child_oid is not None:
@@ -131,7 +144,7 @@ def _walk_from_visible_commits(
                     status = "hidden"
                 else:
                     status = "visible"
-                graph[current_oid] = _Node(
+                graph[current_oid] = Node(
                     commit=current_commit,
                     parent=None,
                     children=set(),
@@ -157,7 +170,7 @@ def _walk_from_visible_commits(
     return graph
 
 
-def _consistency_check_graph(graph: _CommitGraph) -> None:
+def _consistency_check_graph(graph: CommitGraph) -> None:
     """Verify that each parent-child connection is mutual."""
     for node_oid, node in graph.items():
         parent_oid = node.parent
@@ -173,7 +186,7 @@ def _consistency_check_graph(graph: _CommitGraph) -> None:
 
 
 def _hide_commits(
-    graph: _CommitGraph, branch_oids: Set[OidStr], head_oid: pygit2.Oid
+    graph: CommitGraph, branch_oids: Set[OidStr], head_oid: pygit2.Oid
 ) -> None:
     """Hide commits according to their status.
 
@@ -222,7 +235,7 @@ def _split_commit_graph_by_roots(
     formatter: string.Formatter,
     repo: pygit2.Repository,
     merge_base_db: MergeBaseDb,
-    graph: _CommitGraph,
+    graph: CommitGraph,
 ) -> List[OidStr]:
     """Split fully-independent subgraphs into multiple graphs.
 
@@ -263,7 +276,7 @@ def _split_commit_graph_by_roots(
 def _get_child_output(
     glyphs: Glyphs,
     formatter: Formatter,
-    graph: _CommitGraph,
+    graph: CommitGraph,
     commit_metadata_providers: List[CommitMetadataProvider],
     head_oid: pygit2.Oid,
     current_oid: OidStr,
@@ -338,7 +351,7 @@ def _get_child_output(
 def _get_output(
     glyphs: Glyphs,
     formatter: Formatter,
-    graph: _CommitGraph,
+    graph: CommitGraph,
     commit_metadata_providers: List[CommitMetadataProvider],
     head_oid: pygit2.Oid,
     root_oids: List[OidStr],
@@ -389,16 +402,23 @@ def _get_output(
     return lines
 
 
-def smartlog(*, out: TextIO) -> int:
-    """Display a nice graph of commits you've recently worked on.
+def make_graph(
+    formatter: Formatter,
+    repo: pygit2.Repository,
+    merge_base_db: MergeBaseDb,
+    event_log_db: EventLogDb,
+) -> Tuple[pygit2.Oid, CommitGraph]:
+    """Construct the smartlog graph for the repo.
 
     Args:
-      out: The output stream to write to.
+      formatter: The formatter to use to format commit OIDs, etc.
+      repo: The Git repository.
+      merge_base_db: The merge-base database.
+      event_log_db:  The hidden OID database.
 
     Returns:
-      Exit code (0 denotes successful exit).
+      A tuple of the head OID and the commit graph.
     """
-    glyphs = make_glyphs(out)
     formatter = Formatter()
 
     repo = get_repo()
@@ -445,6 +465,37 @@ def smartlog(*, out: TextIO) -> int:
     _consistency_check_graph(graph)
     _hide_commits(graph=graph, branch_oids=branch_oids, head_oid=head_oid)
     _consistency_check_graph(graph)
+    return (head_oid, graph)
+
+
+def smartlog(*, out: TextIO) -> int:
+    """Display a nice graph of commits you've recently worked on.
+
+    Args:
+      out: The output stream to write to.
+
+    Returns:
+      Exit code (0 denotes successful exit).
+    """
+    glyphs = make_glyphs(out)
+    formatter = Formatter()
+
+    repo = get_repo()
+
+    db = make_db_for_repo(repo)
+    event_log_db = EventLogDb(db)
+    merge_base_db = MergeBaseDb(db)
+    if merge_base_db.is_empty():
+        logging.debug(
+            "Merge-base cache not initialized -- it may take a while to populate it"
+        )
+
+    (head_oid, graph) = make_graph(
+        formatter=formatter,
+        repo=repo,
+        merge_base_db=merge_base_db,
+        event_log_db=event_log_db,
+    )
 
     commit_metadata_providers: List[CommitMetadataProvider] = [
         RelativeTimeProvider(glyphs=glyphs, repo=repo, now=int(time.time())),

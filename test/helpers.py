@@ -4,6 +4,8 @@ import sys
 from pathlib import Path
 from typing import List, Optional
 
+from _pytest.capture import CaptureFixture
+
 GIT_PATH = "/opt/twitter_mde/bin/git"
 
 DUMMY_NAME = "Testy McTestface"
@@ -102,6 +104,25 @@ def compare(actual: str, expected: str) -> None:
     expected = _rstrip_lines(expected)
     print("Expected:")
     print(expected)
-    print("Actual:")
+    if actual == expected:
+        print("Actual (passed):")
+    else:
+        print("Actual (failed):")
     print(actual)
     assert actual == expected
+
+
+def clear_capture(capture_fixture: CaptureFixture[str]) -> None:
+    """Clear the capture fixture's contents.
+
+    To be called after each `compare` call when using `capsys` or `capfd`
+    (which have to be used when calling `subprocess`es).
+
+    `compare` will write to stdout, and we don't want to that pollute future
+    captures or pollute the test runner's output (if there was no issue).
+
+    If an assertion in `compare` fails, we won't reach this line, and Pytest
+    will print out the captured content for debugging (which is what we want,
+    since `compare` writes content to `stdout`).
+    """
+    capture_fixture.readouterr()

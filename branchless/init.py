@@ -105,6 +105,7 @@ def _install_hooks(out: TextIO, repo: pygit2.Repository) -> None:
         repo=repo,
         hook_type="post-commit",
         hook_script="""\
+#!/bin/sh
 git branchless hook-post-commit "$@"
 """,
     )
@@ -113,6 +114,7 @@ git branchless hook-post-commit "$@"
         repo=repo,
         hook_type="post-rewrite",
         hook_script="""\
+#!/bin/sh
 git branchless hook-post-rewrite "$@"
 """,
     )
@@ -121,6 +123,7 @@ git branchless hook-post-rewrite "$@"
         repo=repo,
         hook_type="post-checkout",
         hook_script="""\
+#!/bin/sh
 git branchless hook-post-checkout "$@"
 """,
     )
@@ -136,6 +139,8 @@ def _install_aliases(out: TextIO, repo: pygit2.Repository) -> None:
     _install_alias(out=out, repo=repo, alias="sl")
     _install_alias(out=out, repo=repo, alias="hide")
     _install_alias(out=out, repo=repo, alias="unhide")
+    _install_alias(out=out, repo=repo, alias="prev")
+    _install_alias(out=out, repo=repo, alias="next")
 
 
 def init(*, out: TextIO) -> int:

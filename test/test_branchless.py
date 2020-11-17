@@ -3,7 +3,7 @@ import io
 import py
 
 from branchless.__main__ import main
-from helpers import compare, git_commit_file, git_init_repo
+from helpers import compare, git, git_commit_file, git_init_repo
 
 
 def test_help() -> None:
@@ -17,32 +17,46 @@ def test_commands(tmpdir: py.path.local) -> None:
         git_init_repo()
         git_commit_file(name="test", time=1)
 
-        with io.StringIO() as out:
-            main(["smartlog"], out=out)
-            compare(
-                actual=out.getvalue(),
-                expected="""\
+        compare(
+            actual=git("smartlog"),
+            expected="""\
 :
 @ 3df4b935 (master) create test.txt
 """,
-            )
+        )
 
-        with io.StringIO() as out:
-            main(["hide", "3df4b935"], out=out)
-            compare(
-                actual=out.getvalue(),
-                expected="""\
+        compare(
+            actual=git("hide", ["3df4b935"]),
+            expected="""\
 Hid commit: 3df4b935
 To unhide this commit, run: git unhide 3df4b935
 """,
-            )
+        )
 
-        with io.StringIO() as out:
-            main(["unhide", "3df4b935"], out=out)
-            compare(
-                actual=out.getvalue(),
-                expected="""\
+        compare(
+            actual=git("unhide", ["3df4b935"]),
+            expected="""\
 Unhid commit: 3df4b935
 To hide this commit, run: git hide 3df4b935
 """,
-            )
+        )
+
+        compare(
+            actual=git("prev"),
+            expected="""\
+branchless: git checkout HEAD^
+@ f777ecc9 create initial.txt
+|
+O 3df4b935 (master) create test.txt
+""",
+        )
+
+        compare(
+            actual=git("next"),
+            expected="""\
+branchless: git checkout f777ecc9b0db5ed372b2615695191a8a17f79f24
+@ f777ecc9 create initial.txt
+|
+O 3df4b935 (master) create test.txt
+""",
+        )

@@ -7,6 +7,7 @@ from typing import List, TextIO
 from .eventlog import hook_post_checkout, hook_post_commit, hook_post_rewrite
 from .hide import hide, unhide
 from .init import init
+from .navigation import next, prev
 from .smartlog import smartlog
 
 
@@ -49,6 +50,31 @@ def main(argv: List[str], *, out: TextIO) -> int:
     unhide_parser.add_argument(
         "hash", type=str, help="The commit hash to unhide.", nargs="*"
     )
+    prev_parser = subparsers.add_parser("prev", help="Go to a previous commit.")
+    prev_parser.add_argument(
+        "num_commits", type=int, help="The number of commits backward to go.", nargs="?"
+    )
+    next_parser = subparsers.add_parser("next", help="Go to a later commit.")
+    next_parser.add_argument(
+        "num_commits", type=int, help="The number of commits forward to go.", nargs="?"
+    )
+    next_parser_towards_group = next_parser.add_mutually_exclusive_group()
+    next_parser_towards_group.add_argument(
+        "-o",
+        "--oldest",
+        help="When encountering multiple next commits, choose the oldest.",
+        dest="towards",
+        action="store_const",
+        const="oldest",
+    )
+    next_parser_towards_group.add_argument(
+        "-n",
+        "--newest",
+        help="When encountering multiple next commits, choose the newest.",
+        dest="towards",
+        action="store_const",
+        const="newest",
+    )
 
     # Hook parsers.
     hook_post_rewrite_parser = subparsers.add_parser(
@@ -76,6 +102,10 @@ def main(argv: List[str], *, out: TextIO) -> int:
         return hide(out=out, hashes=args.hash)
     elif args.subcommand == "unhide":
         return unhide(out=out, hashes=args.hash)
+    elif args.subcommand == "prev":
+        return prev(out=out, num_commits=args.num_commits)
+    elif args.subcommand == "next":
+        return next(out=out, num_commits=args.num_commits, towards=args.towards)
     elif args.subcommand == "hook-post-rewrite":
         hook_post_rewrite(out=out)
         return 0
