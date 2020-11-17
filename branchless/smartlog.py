@@ -137,19 +137,6 @@ def _walk_from_visible_commits(
                 )
             )
 
-    # Link any adjacent merge-bases (i.e. adjacent commits in master).
-    # TODO: may not be necessary, depending on if we want to hide master
-    # commits.
-    for oid, node in graph.items():
-        if node.status == "master":
-            for parent_commit in node.commit.parents:
-                if parent_commit.oid in graph:
-                    link(
-                        parent_oid=parent_commit.oid,
-                        child_oid=node.commit.oid,
-                    )
-                    break
-
     return graph
 
 
@@ -325,20 +312,40 @@ def _get_output(
     """Render a pretty graph starting from the given root OIDs in the given graph."""
     lines_reversed = []
 
+    def has_real_parent(oid: pygit2.Oid, parent_oid: pygit2.Oid) -> bool:
+        """Determine if the provided OID has the provided parent OID as a parent.
+
+        This returns `True` in strictly more cases than checking `graph`,
+        since there may be links between adjacent `master` commits which are
+        not reflected in `graph`.
+        """
+        return any(parent.oid == parent_oid for parent in graph[oid].commit.parents)
+
     for root_idx, root_oid in enumerate(root_oids):
         root_node = graph[root_oid]
         if root_node.commit.parents:
-            lines_reversed.append(
-                glyphs.style(style=colorama.Style.DIM, message=glyphs.vertical_ellipsis)
-            )
+            if root_idx > 0 and has_real_parent(
+                oid=root_oid, parent_oid=root_oids[root_idx - 1]
+            ):
+                lines_reversed.append(glyphs.line)
+            else:
+                lines_reversed.append(
+                    glyphs.style(
+                        style=colorama.Style.DIM, message=glyphs.vertical_ellipsis
+                    )
+                )
 
         last_child_line_char: Optional[str]
         if root_idx == len(root_oids) - 1:
             last_child_line_char = None
         else:
-            last_child_line_char = glyphs.style(
-                style=colorama.Style.DIM, message=glyphs.vertical_ellipsis
-            )
+            next_root_oid = root_oids[root_idx + 1]
+            if has_real_parent(oid=next_root_oid, parent_oid=root_oid):
+                last_child_line_char = glyphs.line
+            else:
+                last_child_line_char = glyphs.style(
+                    style=colorama.Style.DIM, message=glyphs.vertical_ellipsis
+                )
 
         child_output = _get_child_output(
             glyphs=glyphs,
