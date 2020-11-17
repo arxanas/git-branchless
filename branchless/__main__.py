@@ -1,3 +1,4 @@
+"""Main entry-point."""
 import argparse
 import logging
 import sys
@@ -9,6 +10,15 @@ from .smartlog import smartlog
 
 
 def main(argv: List[str], *, out: TextIO) -> int:
+    """Run the provided sub-command.
+
+    Args:
+      argv: List of command-line arguments (e.g. from `sys.argv`).
+      out: Output stream to write to (may be a TTY).
+
+    Returns:
+      Exit code (0 denotes successful exit).
+    """
     logging.basicConfig(level=logging.DEBUG)
 
     parser = argparse.ArgumentParser(prog="branchless", add_help=False)

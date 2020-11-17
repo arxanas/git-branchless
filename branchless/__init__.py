@@ -42,10 +42,34 @@ from typing import Literal, Union
 import pygit2
 
 CommitStatus = Union[Literal["master"], Literal["visible"], Literal["hidden"]]
+"""The possible states a commit can be in.
+
+  * `master`: a commit to the `master` branch. These are considered to be
+  immutable and will never leave the `master` state.
+  * `visible`: a commit that hasn't been checked into master, but the user is
+  actively working on. We may infer this from user behavior, e.g. they
+  committed something recently, so they are now working on it.
+  * `hidden`: a commit that hasn't been checked into master, and the user is no
+  longer working on. We may infer this from user behavior, e.g. they have
+  rebased a commit and no longer want to see the old version of that commit.
+  The user can also manually hide commits.
+
+Commits can transition between `visible` and `hidden` depending on user
+behavior, but commits never transition to or from `master`. (It's assumed
+that commits are added to `master` only via pulling from the remote.)
+"""
 
 
 def get_repo() -> pygit2.Repository:
-    """Get the git repository associated with the current directory."""
+    """Get the git repository associated with the current directory.
+
+    Returns:
+      The repository object associated with the current directory.
+
+    Raises:
+      RuntimeError: If the repository could not be found.
+    """
     repo_path = pygit2.discover_repository(os.getcwd())
-    assert repo_path is not None, "Failed to discover repository"
+    if repo_path is None:
+        raise RuntimeError("Failed to discover repository")
     return pygit2.Repository(repo_path)

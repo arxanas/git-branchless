@@ -1,3 +1,4 @@
+"""Install any hooks, aliases, etc. to set up Branchless in this repo."""
 import logging
 import stat
 from dataclasses import dataclass
@@ -129,6 +130,14 @@ def _install_aliases(out: TextIO, repo: pygit2.Repository) -> None:
 
 
 def init(*, out: TextIO) -> int:
+    """Initialize Branchless in the current repo.
+
+    Args:
+      out: The output stream to write to.
+
+    Returns:
+      Exit code (0 denotes successful exit).
+    """
     repo = get_repo()
     _install_hooks(out=out, repo=repo)
     _install_aliases(out=out, repo=repo)

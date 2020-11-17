@@ -1,3 +1,8 @@
+"""Display a graph of commits that the user has worked on recently.
+
+The set of commits that are still being worked on is inferred from the
+ref-log; see the `reflog` module.
+"""
 import functools
 import logging
 import string
@@ -362,7 +367,14 @@ def _get_output(
 
 
 def smartlog(*, out: TextIO) -> int:
-    """Display a nice graph of commits you've recently worked on."""
+    """Display a nice graph of commits you've recently worked on.
+
+    Args:
+      out: The output stream to write to.
+
+    Returns:
+      Exit code (0 denotes successful exit).
+    """
     glyphs = make_glyphs(out)
     formatter = Formatter()
 

@@ -1,3 +1,9 @@
+"""Formatting and output helpers.
+
+We try to handle both textual output and interactive output (output to a
+"TTY"). In the case of interactive output, we render with prettier non-ASCII
+characters and with colors, using shell-specific escape codes.
+"""
 from typing import TextIO, cast
 import string
 
@@ -8,6 +14,8 @@ import pygit2
 
 
 class Glyphs(Protocol):
+    """Interface for glyphs to use for rendering the smartlog."""
+
     line: str
     line_with_offshoot: str
     vertical_ellipsis: str
@@ -20,13 +28,35 @@ class Glyphs(Protocol):
     commit_master_head: str
 
     def color_fg(self, color: colorama.Fore, message: str) -> str:
+        """Render the foreground (text) color for the given message.
+
+        Args:
+          color: The color to render the foreground as.
+          message: The message to render.
+
+        Returns:
+          An updated message that potentially includes escape codes to render
+          the color.
+        """
         ...
 
     def style(self, style: colorama.Style, message: str) -> str:
+        """Apply a certain style to the given message.
+
+        Args:
+          style: The style to apply.
+          message: The message to render.
+
+        Returns:
+          An updated message that potentially includes escape codes to render
+          the style.
+        """
         ...
 
 
 class TextGlyphs:
+    """Glyphs used for output to a text file or non-TTY."""
+
     line = "|"
     line_with_offshoot = line
     vertical_ellipsis = ":"
@@ -46,6 +76,8 @@ class TextGlyphs:
 
 
 class PrettyGlyphs:
+    """Glyphs used for output to a TTY."""
+
     line = "┃"
     line_with_offshoot = "┣"
     vertical_ellipsis = "⋮"
@@ -68,6 +100,14 @@ class PrettyGlyphs:
 
 
 def make_glyphs(out: TextIO) -> Glyphs:
+    """Make the `Glyphs` object appropriate for the provided output stream.
+
+    Args:
+      out: The output stream being written to.
+
+    Returns:
+      The `Glyphs` object.
+    """
     if out.isatty():
         return PrettyGlyphs()
     else:

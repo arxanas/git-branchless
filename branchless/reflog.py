@@ -1,3 +1,18 @@
+"""Process the ref-log.
+
+The "ref-log" is a recording of the history of "refs" for the repository. A
+"ref" is a reference to either a commit (a "direct" reference) or another
+reference (a "symbolic" reference). References include branches and the
+special `HEAD` reference.
+
+Each action that moves the ref from one commit to another is recorded in the
+"ref log" for that ref. We're particularly interested in the HEAD ref,
+because it tracks the user's navigation through the repo. (We could in
+principle track the history of branches in the repo if we needed to.)
+
+We scrape the ref-log entries and infer what happened to repo over time to
+infer which commits the user is working on and which commits they aren't.
+"""
 import collections
 import enum
 import logging
@@ -154,8 +169,14 @@ class RefLogReplayer:
     """Replay ref-log entries to determine which commits are visible."""
 
     CommitHistory = List[Tuple[int, Union[_RefLogAction, _MarkedHidden]]]
+    """History of actions that occurred to each commit."""
 
     def __init__(self, head_oid: pygit2.Oid) -> None:
+        """Constructor.
+
+        Args:
+          head_oid: The OID that HEAD currently points to.
+        """
         self._head_oid: pygit2.Oid = head_oid
         self._current_oid: pygit2.Oid = head_oid
         self._timestamp = 0
@@ -175,10 +196,21 @@ class RefLogReplayer:
         Note that the caller is expected to have supplied the ref log actions
         in *reverse* order, which means that each list of actions is ordered
         from most-recent to least-recent.
+
+        Returns:
+          The commit history observed by the replayer.
         """
         return self._commit_history
 
     def process(self, entry: pygit2.RefLogEntry) -> None:
+        """Process the given ref-log entry.
+
+        It's expected that this is called for each ref-log entry, starting
+        from the most recent to the least recent.
+
+        Args:
+          entry: The ref-log entry.
+        """
         self._current_oid = entry.oid_new
         action = _RefLogAction.from_entry(entry)
 
@@ -235,10 +267,19 @@ class RefLogReplayer:
             return True
 
     def finish_processing(self) -> None:
+        """Must be called after all entries have been passed to `process`."""
         for v in self._commit_history.values():
             v.reverse()
 
     def is_head(self, oid: pygit2.Oid) -> bool:
+        """Determine if the given OID is the HEAD OID.
+
+        Args:
+          oid: An OID.
+
+        Returns:
+          Whether or not the given OID the is OID pointed to by HEAD.
+        """
         return oid == self._head_oid
 
     def _is_visible(self, oid: pygit2.Oid) -> bool:
@@ -257,5 +298,9 @@ class RefLogReplayer:
             return not isinstance(action, _MarkedHidden)
 
     def get_visible_oids(self) -> Sequence[pygit2.Oid]:
-        """Get all OIDs thought to be visible according to the ref-log."""
+        """Get all OIDs thought to be visible according to the ref-log.
+
+        Returns:
+          All visible OIDs. Order is not significant.
+        """
         return [oid for oid in self._commit_history.keys() if self._is_visible(oid)]
