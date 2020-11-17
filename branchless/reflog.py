@@ -137,6 +137,7 @@ class _ClassifiedActionType(enum.Enum):
         ]:
             return cls.CHECKOUT
         elif action_type in [
+            "clone",
             "initial pull",
         ]:
             return cls.INIT
