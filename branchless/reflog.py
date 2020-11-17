@@ -119,19 +119,16 @@ class _ClassifiedActionType(enum.Enum):
         ]:
             return cls.BRANCH
         elif action_type in [
-            "commit",
             "commit (initial)",
-            "rebase (pick)",
-            "rebase (fixup)",
-            "rebase (continue)",
-            "rebase (squash)",
-            "rebase -i (pick)",
-            "rebase -i (fixup)",
-            "rebase finished",
-            "rebase (finish)",
-            "rebase -i (finish)",
-            "rebase",
+            "commit",
             "pull",
+            "rebase (continue)",
+            "rebase (finish)",
+            "rebase (pick)",
+            "rebase -i (finish)",
+            "rebase -i (pick)",
+            "rebase finished",
+            "rebase",
         ]:
             return cls.COMMIT
         elif action_type in [
@@ -146,13 +143,17 @@ class _ClassifiedActionType(enum.Enum):
         elif (
             action_type
             in [
-                "rebase (start)",
-                "rebase -i (start)",
-                "commit (amend)",
-                "rebase (reword)",
-                "rebase -i (reword)",
-                "rebase (abort)",
                 "cherry-pick",
+                "commit (amend)",
+                "rebase (abort)",
+                "rebase (fixup)",
+                "rebase (reword)",
+                "rebase (squash)",
+                "rebase (start)",
+                "rebase -i (fixup)",
+                "rebase -i (reword)",
+                "rebase -i (squash)",
+                "rebase -i (start)",
             ]
             or action_type.startswith("pull --rebase")
         ):
