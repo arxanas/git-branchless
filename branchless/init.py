@@ -117,7 +117,19 @@ git branchless hook-post-rewrite "$@"
     )
 
 
+def _install_alias(out: TextIO, repo: pygit2.Repository, alias: str) -> None:
+    out.write(f"Installing alias (non-global): git {alias}\n")
+    repo.config[f"alias.{alias}"] = f"branchless {alias}"
+
+
+def _install_aliases(out: TextIO, repo: pygit2.Repository) -> None:
+    _install_alias(out=out, repo=repo, alias="smartlog")
+    _install_alias(out=out, repo=repo, alias="sl")
+    _install_alias(out=out, repo=repo, alias="hide")
+
+
 def init(*, out: TextIO) -> int:
     repo = get_repo()
     _install_hooks(out=out, repo=repo)
+    _install_aliases(out=out, repo=repo)
     return 0

@@ -50,13 +50,21 @@ WalkOptions = AbstractSet[WalkOption]
 GIT_SORT_TOPOLOGICAL: WalkOptions
 
 
+class Config:
+    def __getitem__(self, name: str) -> str:
+        ...
+
+    def __setitem__(self, name: str, value: str) -> None:
+        ...
+
+
 class Repository:
     path: str
     """Path of the `.git` directory for the repository."""
 
     references: Mapping[Union[Oid, str], Reference]
     branches: Mapping[str, Branch]
-    config: Mapping[str, str]
+    config: Config
 
     def __init__(self, path: str) -> None:
         ...
