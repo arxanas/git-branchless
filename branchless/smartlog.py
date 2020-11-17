@@ -335,11 +335,7 @@ def _get_output(
             ):
                 lines.append(glyphs.line)
             else:
-                lines.append(
-                    glyphs.style(
-                        style=colorama.Style.DIM, message=glyphs.vertical_ellipsis
-                    )
-                )
+                lines.append(glyphs.vertical_ellipsis)
 
         last_child_line_char: Optional[str]
         if root_idx == len(root_oids) - 1:
@@ -349,9 +345,7 @@ def _get_output(
             if has_real_parent(oid=next_root_oid, parent_oid=root_oid):
                 last_child_line_char = glyphs.line
             else:
-                last_child_line_char = glyphs.style(
-                    style=colorama.Style.DIM, message=glyphs.vertical_ellipsis
-                )
+                last_child_line_char = glyphs.vertical_ellipsis
 
         child_output = _get_child_output(
             glyphs=glyphs,
