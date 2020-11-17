@@ -166,34 +166,34 @@ def _hide_commits(graph: _CommitGraph, head_oid: pygit2.Oid) -> None:
     HEAD, and its ancestry.
     """
 
-    def should_prune(oid: pygit2.Oid) -> bool:
-        if oid == head_oid:
-            # Always show the HEAD commit and its children.
-            return False
+    unhideable_oids = set()
+    unhideable_oid: Optional[pygit2.Oid] = head_oid
+    while unhideable_oid is not None and unhideable_oid in graph:
+        unhideable_oids.add(unhideable_oid)
+        unhideable_oid = graph[unhideable_oid].parent
 
-        node = graph[oid]
-        if node.status == "hidden":
-            return True
-        parent = node.parent
-        if parent is not None:
-            return should_prune(parent)
-        else:
-            return False
+    all_oids_to_hide = set()
+    current_oids_to_hide = {
+        oid for oid, node in graph.items() if node.status == "hidden"
+    }
+    while current_oids_to_hide:
+        all_oids_to_hide.update(current_oids_to_hide)
+        next_oids_to_hide = set()
+        for oid in current_oids_to_hide:
+            next_oids_to_hide.update(graph[oid].children)
+        current_oids_to_hide = next_oids_to_hide
 
-    # Hide all subtrees which descend from a hidden commit, unless HEAD is in
-    # that subtree.
-    potential_oids_to_hide = {oid for oid, node in graph.items() if not node.children}
-    while potential_oids_to_hide:
-        next_potential_oids_to_hide = set()
-        for potential_oid_to_hide in potential_oids_to_hide:
-            if should_prune(potential_oid_to_hide):
-                parent_oid = graph[potential_oid_to_hide].parent
-                del graph[potential_oid_to_hide]
-                if parent_oid is not None:
-                    graph[parent_oid].children.remove(potential_oid_to_hide)
-                    if not graph[parent_oid].children:
-                        next_potential_oids_to_hide.add(parent_oid)
-        potential_oids_to_hide = next_potential_oids_to_hide
+    for oid, node in graph.items():
+        if node.status == "master" and node.children.issubset(all_oids_to_hide):
+            all_oids_to_hide.add(oid)
+
+    all_oids_to_hide.difference_update(unhideable_oids)
+    for oid in all_oids_to_hide:
+        parent_oid = graph[oid].parent
+        del graph[oid]
+        if parent_oid is not None and parent_oid in graph:
+            graph[parent_oid].children.remove(oid)
+    return
 
 
 def _split_commit_graph_by_roots(

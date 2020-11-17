@@ -169,3 +169,28 @@ x 62fc20d2 create test1.txt
 O f777ecc9 create initial.txt
 """,
             )
+
+
+def test_hide_master_commit_with_hidden_children(tmpdir: py.path.local) -> None:
+    with tmpdir.as_cwd():
+        git_init_repo()
+        git_commit_file(name="test1", time=1)
+        git_commit_file(name="test2", time=2)
+        git_detach_head()
+        git_commit_file(name="test3", time=3)
+        git("checkout", ["master"])
+        git_commit_file(name="test4", time=4)
+        git_commit_file(name="test5", time=5)
+        git("reflog", ["delete", "HEAD@{1}"])
+
+        with io.StringIO() as out:
+            assert hide(out=out, hash="70deb1e2") == 0
+        with io.StringIO() as out:
+            assert smartlog(out=out) == 0
+            compare(
+                actual=out.getvalue(),
+                expected="""\
+@ 20230db7 create test5.txt
+:
+""",
+            )
