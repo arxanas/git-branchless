@@ -134,6 +134,7 @@ class _ClassifiedActionType(enum.Enum):
                 "rebase (start)",
                 "rebase -i (start)",
                 "commit (amend)",
+                "cherry-pick",
             ]
             or action_type.startswith("pull --rebase")
         ):
