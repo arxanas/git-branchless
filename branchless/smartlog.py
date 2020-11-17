@@ -85,11 +85,12 @@ def _walk_from_visible_commits(
         merge_base_oid = merge_base_db.get_merge_base_oid(
             repo=repo, lhs_oid=commit_oid, rhs_oid=master_oid
         )
-        assert merge_base_oid is not None, formatter.format(
-            "No merge-base found for commits {commit_oid:oid} and {master_oid:oid}",
-            commit_oid=commit_oid,
-            master_oid=master_oid,
-        )
+
+        # Occasionally we may find a commit that has no merge-base with
+        # `master`. For example: a rewritten initial commit. This is somewhat
+        # pathological. We'll just handle it by not rendering it.
+        if merge_base_oid is None:
+            continue
 
         # If this was a commit directly to master, and it's not HEAD, then
         # don't show it. It's been superseded by other commits to master. Note

@@ -246,3 +246,31 @@ O 62fc20d2 create test1.txt
 :
 """,
         )
+
+
+def test_amended_initial_commit(tmpdir: py.path.local) -> None:
+    with tmpdir.as_cwd():
+        git_init_repo()
+        git_commit_file(name="test1", time=1)
+        git("checkout", ["HEAD^"])
+        git("commit", ["--amend", "-m", "new initial commit"])
+
+        with io.StringIO() as out:
+            assert smartlog(out=out) == 0
+            # Pathological output, could be changed.
+            compare(
+                actual=out.getvalue(),
+                expected="""\
+""",
+            )
+
+        git("rebase", ["--onto", "HEAD", "HEAD", "master"])
+        with io.StringIO() as out:
+            assert smartlog(out=out) == 0
+            compare(
+                actual=out.getvalue(),
+                expected="""\
+@ f402d39c create test1.txt
+:
+""",
+            )
