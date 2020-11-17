@@ -266,16 +266,14 @@ def _get_child_output(
         message=formatter.format("{commit:commit}", commit=current.commit),
     )
 
-    if current.status == "hidden":
-        if current.commit.oid == head_oid:
-            cursor = glyphs.commit_head_hidden
-        else:
-            cursor = glyphs.commit_hidden
-    else:
-        if current.commit.oid == head_oid:
-            cursor = glyphs.commit_head
-        else:
-            cursor = glyphs.commit
+    cursor = {
+        ("visible", False): glyphs.commit_visible,
+        ("visible", True): glyphs.commit_visible_head,
+        ("hidden", False): glyphs.commit_hidden,
+        ("hidden", True): glyphs.commit_hidden_head,
+        ("master", False): glyphs.commit_master,
+        ("master", True): glyphs.commit_master_head,
+    }[(current.status, current.commit.oid == head_oid)]
     if current.commit.oid == head_oid:
         cursor = glyphs.style(style=colorama.Style.BRIGHT, message=cursor)
         text = glyphs.style(style=colorama.Style.BRIGHT, message=text)

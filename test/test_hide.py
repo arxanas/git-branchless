@@ -21,11 +21,11 @@ def test_hide_commit(tmpdir: py.path.local) -> None:
             compare(
                 actual=out.getvalue(),
                 expected="""\
-* fe65c1fe create test2.txt
+@ fe65c1fe create test2.txt
 |
 | o 62fc20d2 create test1.txt
 |/
-o f777ecc9 create initial.txt
+O f777ecc9 create initial.txt
 """,
             )
 
@@ -44,9 +44,9 @@ To unhide this commit, run: git checkout 62fc20d2
             compare(
                 actual=out.getvalue(),
                 expected="""\
-* fe65c1fe create test2.txt
+@ fe65c1fe create test2.txt
 |
-o f777ecc9 create initial.txt
+O f777ecc9 create initial.txt
 """,
             )
 
@@ -83,7 +83,7 @@ o 96d1c37a create test2.txt
 |
 o 62fc20d2 create test1.txt
 |
-* f777ecc9 create initial.txt
+@ f777ecc9 create initial.txt
 """,
             )
 
@@ -97,7 +97,7 @@ o 62fc20d2 create test1.txt
                 expected="""\
 o 62fc20d2 create test1.txt
 |
-* f777ecc9 create initial.txt
+@ f777ecc9 create initial.txt
 """,
             )
 
@@ -139,7 +139,7 @@ def test_hide_current_commit(tmpdir: py.path.local) -> None:
                 actual="""\
 % 3df4b935 create test.txt
 |
-o f777ecc9 create initial.txt
+O f777ecc9 create initial.txt
 """,
             )
 
@@ -162,10 +162,10 @@ def test_hidden_commit_with_head_as_child(tmpdir: py.path.local) -> None:
             compare(
                 actual=out.getvalue(),
                 expected="""\
-* 96d1c37a create test2.txt
+@ 96d1c37a create test2.txt
 |
 x 62fc20d2 create test1.txt
 |
-o f777ecc9 create initial.txt
+O f777ecc9 create initial.txt
 """,
             )
