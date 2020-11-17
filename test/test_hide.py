@@ -30,7 +30,7 @@ O f777ecc9 create initial.txt
             )
 
         with io.StringIO() as out:
-            assert hide(out=out, hash="62fc20d2") == 0
+            assert hide(out=out, hashes=["62fc20d2"]) == 0
             compare(
                 actual=out.getvalue(),
                 expected="""\
@@ -54,7 +54,7 @@ O f777ecc9 create initial.txt
 def test_hide_bad_commit(tmpdir: py.path.local) -> None:
     with tmpdir.as_cwd(), io.StringIO() as out:
         git_init_repo()
-        assert hide(out=out, hash="abc123") == 1
+        assert hide(out=out, hashes=["abc123"]) == 1
         compare(
             actual=out.getvalue(),
             expected="""\
@@ -88,7 +88,7 @@ o 62fc20d2 create test1.txt
             )
 
         with io.StringIO() as out:
-            assert hide(out=out, hash="96d1c37a") == 0
+            assert hide(out=out, hashes=["96d1c37a"]) == 0
 
         with io.StringIO() as out:
             smartlog(out=out)
@@ -109,10 +109,10 @@ def test_hide_already_hidden_commit(tmpdir: py.path.local) -> None:
         git_commit_file(name="test1", time=1)
 
         with io.StringIO() as out:
-            assert hide(out=out, hash="62fc20d2") == 0
+            assert hide(out=out, hashes=["62fc20d2"]) == 0
 
         with io.StringIO() as out:
-            assert hide(out=out, hash="62fc20d2") == 0
+            assert hide(out=out, hashes=["62fc20d2"]) == 0
             compare(
                 actual=out.getvalue(),
                 expected="""\
@@ -130,7 +130,7 @@ def test_hide_current_commit(tmpdir: py.path.local) -> None:
         git_commit_file(name="test", time=1)
 
         with io.StringIO() as out:
-            assert hide(out=out, hash="HEAD") == 0
+            assert hide(out=out, hashes=["HEAD"]) == 0
 
         with io.StringIO() as out:
             assert smartlog(out=out) == 0
@@ -154,8 +154,8 @@ def test_hidden_commit_with_head_as_child(tmpdir: py.path.local) -> None:
         git("checkout", ["HEAD^"])
 
         with io.StringIO() as out:
-            assert hide(out=out, hash="HEAD^") == 0
-            assert hide(out=out, hash="70deb1e2") == 0
+            assert hide(out=out, hashes=["HEAD^"]) == 0
+            assert hide(out=out, hashes=["70deb1e2"]) == 0
 
         with io.StringIO() as out:
             assert smartlog(out=out) == 0
@@ -184,7 +184,7 @@ def test_hide_master_commit_with_hidden_children(tmpdir: py.path.local) -> None:
         git("reflog", ["delete", "HEAD@{1}"])
 
         with io.StringIO() as out:
-            assert hide(out=out, hash="70deb1e2") == 0
+            assert hide(out=out, hashes=["70deb1e2"]) == 0
         with io.StringIO() as out:
             assert smartlog(out=out) == 0
             compare(

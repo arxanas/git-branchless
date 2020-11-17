@@ -50,24 +50,25 @@ FROM hidden_oids
         return set(oid for (oid,) in results)
 
 
-def hide(*, out: TextIO, hash: str) -> int:
+def hide(*, out: TextIO, hashes: List[str]) -> int:
     formatter = Formatter()
     repo = get_repo()
     hide_db = HideDb(make_db_for_repo(repo))
 
-    try:
-        oid = repo.revparse_single(hash).oid
-    except KeyError:
-        out.write(f"Commit not found: {hash}\n")
-        return 1
+    for hash in hashes:
+        try:
+            oid = repo.revparse_single(hash).oid
+        except KeyError:
+            out.write(f"Commit not found: {hash}\n")
+            return 1
 
-    hide_succeeded = hide_db.add_hidden_oid(oid)
-    out.write(formatter.format("Hid commit: {oid:oid}\n", oid=oid))
-    if not hide_succeeded:
-        out.write("(It was already hidden, so this operation had no effect.)\n")
-    out.write(
-        formatter.format(
-            "To unhide this commit, run: git checkout {oid:oid}\n", oid=oid
+        hide_succeeded = hide_db.add_hidden_oid(oid)
+        out.write(formatter.format("Hid commit: {oid:oid}\n", oid=oid))
+        if not hide_succeeded:
+            out.write("(It was already hidden, so this operation had no effect.)\n")
+        out.write(
+            formatter.format(
+                "To unhide this commit, run: git checkout {oid:oid}\n", oid=oid
+            )
         )
-    )
     return 0
