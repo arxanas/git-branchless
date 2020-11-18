@@ -21,7 +21,7 @@ def test_hide_commit(tmpdir: py.path.local) -> None:
             compare(
                 actual=out.getvalue(),
                 expected="""\
-O f777ecc9 create initial.txt
+O f777ecc9 (master) create initial.txt
 |\\
 | o 62fc20d2 create test1.txt
 |
@@ -44,7 +44,7 @@ To unhide this commit, run: git checkout 62fc20d2
             compare(
                 actual=out.getvalue(),
                 expected="""\
-O f777ecc9 create initial.txt
+O f777ecc9 (master) create initial.txt
 |
 @ fe65c1fe create test2.txt
 """,
@@ -77,7 +77,7 @@ def test_hide_transitive(tmpdir: py.path.local) -> None:
             compare(
                 actual=out.getvalue(),
                 expected="""\
-@ f777ecc9 create initial.txt
+@ f777ecc9 (master) create initial.txt
 |
 o 62fc20d2 create test1.txt
 |
@@ -95,7 +95,7 @@ o 70deb1e2 create test3.txt
             compare(
                 actual=out.getvalue(),
                 expected="""\
-@ f777ecc9 create initial.txt
+@ f777ecc9 (master) create initial.txt
 |
 o 62fc20d2 create test1.txt
 """,
@@ -137,7 +137,7 @@ def test_hide_current_commit(tmpdir: py.path.local) -> None:
             compare(
                 expected=out.getvalue(),
                 actual="""\
-O f777ecc9 create initial.txt
+O f777ecc9 (master) create initial.txt
 |
 % 3df4b935 create test.txt
 """,
@@ -162,7 +162,7 @@ def test_hidden_commit_with_head_as_child(tmpdir: py.path.local) -> None:
             compare(
                 actual=out.getvalue(),
                 expected="""\
-O f777ecc9 create initial.txt
+O f777ecc9 (master) create initial.txt
 |
 x 62fc20d2 create test1.txt
 |
@@ -191,6 +191,43 @@ def test_hide_master_commit_with_hidden_children(tmpdir: py.path.local) -> None:
                 actual=out.getvalue(),
                 expected="""\
 :
-@ 20230db7 create test5.txt
+@ 20230db7 (master) create test5.txt
+""",
+            )
+
+
+def test_branches_always_visible(tmpdir: py.path.local) -> None:
+    with tmpdir.as_cwd():
+        git_init_repo()
+        git_detach_head()
+        git_commit_file(name="test1", time=1)
+        git_commit_file(name="test2", time=2)
+        git("branch", ["test"])
+        git("checkout", ["master"])
+
+        with io.StringIO() as out:
+            assert hide(out=out, hashes=["test", "test^"]) == 0
+
+        with io.StringIO() as out:
+            assert smartlog(out=out) == 0
+            compare(
+                actual=out.getvalue(),
+                expected="""\
+@ f777ecc9 (master) create initial.txt
+|
+x 62fc20d2 create test1.txt
+|
+x 96d1c37a (test) create test2.txt
+""",
+            )
+
+        git("branch", ["-D", "test"])
+
+        with io.StringIO() as out:
+            assert smartlog(out=out) == 0
+            compare(
+                actual=out.getvalue(),
+                expected="""\
+@ f777ecc9 (master) create initial.txt
 """,
             )

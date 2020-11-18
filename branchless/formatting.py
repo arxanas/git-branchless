@@ -123,7 +123,6 @@ class Formatter(string.Formatter):
         format_spec: str,
     ) -> str:
         if format_spec == "oid":
-            assert isinstance(value, pygit2.Oid)
             return f"{value!s:8.8}"
         elif format_spec == "commit":
             assert isinstance(value, pygit2.Commit)

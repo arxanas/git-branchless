@@ -21,7 +21,7 @@ def test_init(tmpdir: py.path.local) -> None:
         compare(
             actual=out.getvalue(),
             expected="""\
-@ f777ecc9 create initial.txt
+@ f777ecc9 (master) create initial.txt
 """,
         )
 
@@ -36,9 +36,9 @@ def test_show_reachable_commit(tmpdir: py.path.local) -> None:
         compare(
             actual=out.getvalue(),
             expected="""\
-O f777ecc9 create initial.txt
+O f777ecc9 (master) create initial.txt
 |
-@ 3df4b935 create test.txt
+@ 3df4b935 (initial-branch) create test.txt
 """,
         )
 
@@ -56,11 +56,11 @@ def test_tree(tmpdir: py.path.local) -> None:
         compare(
             actual=out.getvalue(),
             expected="""\
-O f777ecc9 create initial.txt
+O f777ecc9 (master) create initial.txt
 |\\
 | o 62fc20d2 create test1.txt
 |
-@ fe65c1fe create test2.txt
+@ fe65c1fe (initial) create test2.txt
 """,
         )
 
@@ -79,9 +79,9 @@ def test_rebase(tmpdir: py.path.local) -> None:
         compare(
             actual=out.getvalue(),
             expected="""\
-O f777ecc9 create initial.txt
+O f777ecc9 (master) create initial.txt
 |
-o 62fc20d2 create test1.txt
+o 62fc20d2 (test1) create test1.txt
 |
 @ f8d9985b create test2.txt
 """,
@@ -100,7 +100,7 @@ def test_sequential_master_commits(tmpdir: py.path.local) -> None:
             actual=out.getvalue(),
             expected="""\
 :
-@ 70deb1e2 create test3.txt
+@ 70deb1e2 (master) create test3.txt
 """,
         )
 
@@ -124,11 +124,11 @@ def test_merge_commit(tmpdir: py.path.local) -> None:
         compare(
             actual=out.getvalue(),
             expected="""\
-O f777ecc9 create initial.txt
+O f777ecc9 (master) create initial.txt
 |\\
-| o 62fc20d2 create test1.txt
+| o 62fc20d2 (test1) create test1.txt
 | |
-| @ fa4e4e1a Merge branch 'test1' into test2and3
+| @ fa4e4e1a (test2and3) Merge branch 'test1' into test2and3
 |
 o fe65c1fe create test2.txt
 """,
@@ -152,11 +152,11 @@ def test_rebase_conflict(tmpdir: py.path.local) -> None:
         compare(
             actual=out.getvalue(),
             expected="""\
-O f777ecc9 create initial.txt
+O f777ecc9 (master) create initial.txt
 |
-o 88646b56 create test.txt
+o 88646b56 (branch1) create test.txt
 |
-@ 4549af33 create test.txt
+@ 4549af33 (branch2) create test.txt
 """,
         )
 
@@ -180,7 +180,7 @@ O f777ecc9 create initial.txt
 |\\
 : o 62fc20d2 create test1.txt
 :
-O 02067177 create test3.txt
+O 02067177 (master) create test3.txt
 |
 @ 8e62740b create test4.txt
 """,
@@ -209,7 +209,7 @@ O f777ecc9 create initial.txt
 : |
 : o 96d1c37a create test2.txt
 :
-O 2b633ed7 create test4.txt
+O 2b633ed7 (master) create test4.txt
 |
 @ 13932989 create test5.txt
 """,
@@ -243,7 +243,7 @@ O 4838e49b create test3.txt
 |\\
 : o a2482074 create test4.txt
 :
-@ 500c9b3e create test6.txt
+@ 500c9b3e (master) create test6.txt
 """,
         )
 
@@ -261,6 +261,8 @@ def test_amended_initial_commit(tmpdir: py.path.local) -> None:
             compare(
                 actual=out.getvalue(),
                 expected="""\
+:
+O 62fc20d2 (master) create test1.txt
 """,
             )
 
@@ -271,6 +273,24 @@ def test_amended_initial_commit(tmpdir: py.path.local) -> None:
                 actual=out.getvalue(),
                 expected="""\
 :
-@ f402d39c create test1.txt
+@ f402d39c (master) create test1.txt
 """,
             )
+
+
+def test_multiple_branches_for_same_commit(tmpdir: py.path.local) -> None:
+    with tmpdir.as_cwd():
+        git_init_repo()
+        git("branch", ["abc"])
+        git("branch", ["xyz"])
+
+        # Ensure that the branches are always in alphabetical order.
+        for i in range(10):
+            with io.StringIO() as out:
+                assert smartlog(out=out) == 0
+                compare(
+                    actual=out.getvalue(),
+                    expected="""\
+@ f777ecc9 (abc, master, xyz) create initial.txt
+""",
+                )

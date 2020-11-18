@@ -45,12 +45,12 @@ def test_alias_installed(tmpdir: py.path.local) -> None:
         assert (
             git("smartlog")
             == """\
-@ f777ecc9 create initial.txt
+@ f777ecc9 (master) create initial.txt
 """
         )
         assert (
             git("sl")
             == """\
-@ f777ecc9 create initial.txt
+@ f777ecc9 (master) create initial.txt
 """
         )

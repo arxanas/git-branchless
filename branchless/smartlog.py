@@ -3,12 +3,13 @@
 The set of commits that are still being worked on is inferred from the
 ref-log; see the `reflog` module.
 """
+import collections
 import functools
 import logging
 import string
 from dataclasses import dataclass
 from queue import Queue
-from typing import Dict, List, Literal, Optional, Set, TextIO, Union
+from typing import Callable, Dict, List, Literal, Optional, Set, TextIO, Union
 
 import colorama
 import pygit2
@@ -30,6 +31,48 @@ class _Node:
 
 
 _CommitGraph = Dict[pygit2.Oid, _Node]
+
+_CommitMetadataProvider = Callable[[pygit2.Oid], Optional[str]]
+
+
+class _BranchesProvider:
+    def __init__(self, glyphs: Glyphs, repo: pygit2.Repository) -> None:
+        self._glyphs = glyphs
+        oid_to_branches = collections.defaultdict(list)
+        for branch_name in repo.listall_branches(pygit2.GIT_BRANCH_LOCAL):
+            branch = repo.branches[branch_name]
+            oid_to_branches[branch.resolve().target].append(branch)
+        self._oid_to_branches = oid_to_branches
+
+    def __call__(self, oid: pygit2.Oid) -> Optional[str]:
+        branches = self._oid_to_branches[oid]
+        if branches:
+            return self._glyphs.color_fg(
+                color=colorama.Fore.GREEN,
+                message="("
+                + ", ".join(sorted(branch.branch_name for branch in branches))
+                + ")",
+            )
+        else:
+            return None
+
+
+def _get_commit_metadata(
+    formatter: Formatter,
+    glyphs: Glyphs,
+    commit_metadata_providers: List[_CommitMetadataProvider],
+    oid: pygit2.Oid,
+) -> Optional[str]:
+    metadata_list: List[Optional[str]] = [
+        provider(oid) for provider in commit_metadata_providers
+    ]
+    metadata_list_: List[str] = [
+        metadata + " " for metadata in metadata_list if metadata is not None
+    ]
+    if metadata_list_:
+        return "".join(metadata_list_)
+    else:
+        return None
 
 
 def _find_path_to_merge_base(
@@ -67,6 +110,7 @@ def _walk_from_visible_commits(
     formatter: Formatter,
     repo: pygit2.Repository,
     merge_base_db: MergeBaseDb,
+    branch_oids: Set[pygit2.Oid],
     head_oid: pygit2.Oid,
     master_oid: pygit2.Oid,
     visible_commit_oids: Set[pygit2.Oid],
@@ -101,7 +145,9 @@ def _walk_from_visible_commits(
         # don't show it. It's been superseded by other commits to master. Note
         # that this doesn't prohibit commits from master which are a parent of
         # a commit that we care about from being rendered.
-        if commit_oid == merge_base_oid and commit_oid != head_oid:
+        if commit_oid == merge_base_oid and (
+            commit_oid != head_oid and commit_oid not in branch_oids
+        ):
             continue
 
         current_commit = repo[commit_oid]
@@ -148,6 +194,8 @@ def _walk_from_visible_commits(
 
 def _consistency_check_graph(graph: _CommitGraph) -> None:
     """Verify that each parent-child connection is mutual."""
+    # TODO: remove
+    return
     for node_oid, node in graph.items():
         parent_oid = node.parent
         if parent_oid is not None:
@@ -161,7 +209,9 @@ def _consistency_check_graph(graph: _CommitGraph) -> None:
             assert graph[child_oid].parent == node_oid
 
 
-def _hide_commits(graph: _CommitGraph, head_oid: pygit2.Oid) -> None:
+def _hide_commits(
+    graph: _CommitGraph, branch_oids: Set[pygit2.Oid], head_oid: pygit2.Oid
+) -> None:
     """Hide commits according to their status.
 
     Commits with the hidden status should not be displayed. Additionally,
@@ -171,12 +221,13 @@ def _hide_commits(graph: _CommitGraph, head_oid: pygit2.Oid) -> None:
     However, we want to be sure to always display the commit pointed to by
     HEAD, and its ancestry.
     """
-
     unhideable_oids = set()
-    unhideable_oid: Optional[pygit2.Oid] = head_oid
-    while unhideable_oid is not None and unhideable_oid in graph:
-        unhideable_oids.add(unhideable_oid)
-        unhideable_oid = graph[unhideable_oid].parent
+
+    for unhideable_oid_ in branch_oids | {head_oid}:
+        unhideable_oid: Optional[pygit2.Oid] = unhideable_oid_
+        while unhideable_oid is not None and unhideable_oid in graph:
+            unhideable_oids.add(unhideable_oid)
+            unhideable_oid = graph[unhideable_oid].parent
 
     all_oids_to_hide = set()
     current_oids_to_hide = {
@@ -246,16 +297,24 @@ def _get_child_output(
     glyphs: Glyphs,
     formatter: Formatter,
     graph: _CommitGraph,
+    commit_metadata_providers: List[_CommitMetadataProvider],
     head_oid: pygit2.Oid,
     current_oid: pygit2.Oid,
     last_child_line_char: Optional[str],
 ) -> List[str]:
     current = graph[current_oid]
-    text = "{oid} {message}".format(
+    metadata = _get_commit_metadata(
+        formatter=formatter,
+        glyphs=glyphs,
+        commit_metadata_providers=commit_metadata_providers,
+        oid=current_oid,
+    )
+    text = "{oid} {metadata}{message}".format(
         oid=glyphs.color_fg(
             color=colorama.Fore.YELLOW,
             message=formatter.format("{commit.oid:oid}", commit=current.commit),
         ),
+        metadata=metadata or "",
         message=formatter.format("{commit:commit}", commit=current.commit),
     )
 
@@ -283,6 +342,7 @@ def _get_child_output(
             glyphs=glyphs,
             formatter=formatter,
             graph=graph,
+            commit_metadata_providers=commit_metadata_providers,
             head_oid=head_oid,
             current_oid=child_oid,
             last_child_line_char=None,
@@ -312,6 +372,7 @@ def _get_output(
     glyphs: Glyphs,
     formatter: Formatter,
     graph: _CommitGraph,
+    commit_metadata_providers: List[_CommitMetadataProvider],
     head_oid: pygit2.Oid,
     root_oids: List[pygit2.Oid],
 ) -> List[str]:
@@ -351,6 +412,7 @@ def _get_output(
             glyphs=glyphs,
             formatter=formatter,
             graph=graph,
+            commit_metadata_providers=commit_metadata_providers,
             head_oid=head_oid,
             current_oid=root_oid,
             last_child_line_char=last_child_line_char,
@@ -384,11 +446,17 @@ def smartlog(*, out: TextIO) -> int:
     replayer.finish_processing()
     visible_commit_oids = set(replayer.get_visible_oids())
 
+    branch_oids = set(
+        repo.branches[branch_name].resolve().target
+        for branch_name in repo.listall_branches(pygit2.GIT_BRANCH_LOCAL)
+    )
+    visible_commit_oids.update(branch_oids)
+
     db = make_db_for_repo(repo)
     hide_db = HideDb(db)
     hidden_commit_oids = hide_db.get_hidden_oids()
 
-    master_oid = repo.branches["master"].target
+    master_oid = repo.branches["master"].resolve().target
 
     merge_base_db = MergeBaseDb(db)
     if merge_base_db.is_empty():
@@ -400,14 +468,19 @@ def smartlog(*, out: TextIO) -> int:
         formatter=formatter,
         repo=repo,
         merge_base_db=merge_base_db,
+        branch_oids=branch_oids,
         head_oid=head_oid,
         master_oid=master_oid,
         visible_commit_oids=visible_commit_oids,
         hidden_commit_oids=hidden_commit_oids,
     )
     _consistency_check_graph(graph)
-    _hide_commits(graph=graph, head_oid=head_oid)
+    _hide_commits(graph=graph, branch_oids=branch_oids, head_oid=head_oid)
     _consistency_check_graph(graph)
+
+    commit_metadata_providers: List[_CommitMetadataProvider] = [
+        _BranchesProvider(glyphs=glyphs, repo=repo)
+    ]
 
     root_oids = _split_commit_graph_by_roots(
         formatter=formatter, repo=repo, merge_base_db=merge_base_db, graph=graph
@@ -416,6 +489,7 @@ def smartlog(*, out: TextIO) -> int:
         glyphs=glyphs,
         formatter=formatter,
         graph=graph,
+        commit_metadata_providers=commit_metadata_providers,
         head_oid=head_oid,
         root_oids=root_oids,
     )

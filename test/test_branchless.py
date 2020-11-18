@@ -23,7 +23,7 @@ def test_commands(tmpdir: py.path.local) -> None:
                 actual=out.getvalue(),
                 expected="""\
 :
-@ 3df4b935 create test.txt
+@ 3df4b935 (master) create test.txt
 """,
             )
 

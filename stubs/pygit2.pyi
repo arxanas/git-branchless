@@ -1,4 +1,4 @@
-from typing import AbstractSet, Iterator, List, Mapping, Optional, Union
+from typing import AbstractSet, Iterator, List, Mapping, Optional, Sequence, Union
 
 
 class Oid:
@@ -38,8 +38,8 @@ class Reference:
         ...
 
 
-class Branch:
-    target: Oid
+class Branch(Reference):
+    branch_name: str
 
 
 class WalkOption:
@@ -48,6 +48,16 @@ class WalkOption:
 
 WalkOptions = AbstractSet[WalkOption]
 GIT_SORT_TOPOLOGICAL: WalkOptions
+
+
+class ListAllBranchesOption:
+    pass
+
+
+ListAllBranchesOptions = AbstractSet[ListAllBranchesOption]
+GIT_BRANCH_LOCAL: ListAllBranchesOptions
+GIT_BRANCH_REMOTE: ListAllBranchesOptions
+GIT_BRANCH_ALL: ListAllBranchesOptions
 
 
 class Config:
@@ -82,6 +92,9 @@ class Repository:
         ...
 
     def revparse_single(self, rev: str) -> Commit:
+        ...
+
+    def listall_branches(self, options: ListAllBranchesOptions) -> Sequence[str]:
         ...
 
 
