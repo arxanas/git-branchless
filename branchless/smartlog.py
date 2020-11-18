@@ -3,13 +3,12 @@
 The set of commits that are still being worked on is inferred from the
 ref-log; see the `reflog` module.
 """
-import collections
 import functools
 import logging
 import string
 from dataclasses import dataclass
 from queue import Queue
-from typing import Callable, Dict, List, Literal, Optional, Set, TextIO, Union
+from typing import Dict, List, Literal, Optional, Set, TextIO, Union
 
 import colorama
 import pygit2
@@ -19,6 +18,12 @@ from .db import make_db_for_repo
 from .formatting import Formatter, Glyphs, make_glyphs
 from .hide import HideDb
 from .mergebase import MergeBaseDb
+from .metadata import (
+    BranchesProvider,
+    CommitMetadataProvider,
+    DifferentialRevisionProvider,
+    get_commit_metadata,
+)
 from .reflog import RefLogReplayer
 
 
@@ -31,48 +36,6 @@ class _Node:
 
 
 _CommitGraph = Dict[pygit2.Oid, _Node]
-
-_CommitMetadataProvider = Callable[[pygit2.Oid], Optional[str]]
-
-
-class _BranchesProvider:
-    def __init__(self, glyphs: Glyphs, repo: pygit2.Repository) -> None:
-        self._glyphs = glyphs
-        oid_to_branches = collections.defaultdict(list)
-        for branch_name in repo.listall_branches(pygit2.GIT_BRANCH_LOCAL):
-            branch = repo.branches[branch_name]
-            oid_to_branches[branch.resolve().target].append(branch)
-        self._oid_to_branches = oid_to_branches
-
-    def __call__(self, oid: pygit2.Oid) -> Optional[str]:
-        branches = self._oid_to_branches[oid]
-        if branches:
-            return self._glyphs.color_fg(
-                color=colorama.Fore.GREEN,
-                message="("
-                + ", ".join(sorted(branch.branch_name for branch in branches))
-                + ")",
-            )
-        else:
-            return None
-
-
-def _get_commit_metadata(
-    formatter: Formatter,
-    glyphs: Glyphs,
-    commit_metadata_providers: List[_CommitMetadataProvider],
-    oid: pygit2.Oid,
-) -> Optional[str]:
-    metadata_list: List[Optional[str]] = [
-        provider(oid) for provider in commit_metadata_providers
-    ]
-    metadata_list_: List[str] = [
-        metadata + " " for metadata in metadata_list if metadata is not None
-    ]
-    if metadata_list_:
-        return "".join(metadata_list_)
-    else:
-        return None
 
 
 def _find_path_to_merge_base(
@@ -297,13 +260,13 @@ def _get_child_output(
     glyphs: Glyphs,
     formatter: Formatter,
     graph: _CommitGraph,
-    commit_metadata_providers: List[_CommitMetadataProvider],
+    commit_metadata_providers: List[CommitMetadataProvider],
     head_oid: pygit2.Oid,
     current_oid: pygit2.Oid,
     last_child_line_char: Optional[str],
 ) -> List[str]:
     current = graph[current_oid]
-    metadata = _get_commit_metadata(
+    metadata = get_commit_metadata(
         formatter=formatter,
         glyphs=glyphs,
         commit_metadata_providers=commit_metadata_providers,
@@ -372,7 +335,7 @@ def _get_output(
     glyphs: Glyphs,
     formatter: Formatter,
     graph: _CommitGraph,
-    commit_metadata_providers: List[_CommitMetadataProvider],
+    commit_metadata_providers: List[CommitMetadataProvider],
     head_oid: pygit2.Oid,
     root_oids: List[pygit2.Oid],
 ) -> List[str]:
@@ -478,8 +441,9 @@ def smartlog(*, out: TextIO) -> int:
     _hide_commits(graph=graph, branch_oids=branch_oids, head_oid=head_oid)
     _consistency_check_graph(graph)
 
-    commit_metadata_providers: List[_CommitMetadataProvider] = [
-        _BranchesProvider(glyphs=glyphs, repo=repo)
+    commit_metadata_providers: List[CommitMetadataProvider] = [
+        BranchesProvider(glyphs=glyphs, repo=repo),
+        DifferentialRevisionProvider(repo=repo),
     ]
 
     root_oids = _split_commit_graph_by_roots(

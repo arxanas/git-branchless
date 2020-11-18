@@ -276,21 +276,3 @@ O 62fc20d2 (master) create test1.txt
 @ f402d39c (master) create test1.txt
 """,
             )
-
-
-def test_multiple_branches_for_same_commit(tmpdir: py.path.local) -> None:
-    with tmpdir.as_cwd():
-        git_init_repo()
-        git("branch", ["abc"])
-        git("branch", ["xyz"])
-
-        # Ensure that the branches are always in alphabetical order.
-        for i in range(10):
-            with io.StringIO() as out:
-                assert smartlog(out=out) == 0
-                compare(
-                    actual=out.getvalue(),
-                    expected="""\
-@ f777ecc9 (abc, master, xyz) create initial.txt
-""",
-                )
