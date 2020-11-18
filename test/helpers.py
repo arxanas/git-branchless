@@ -79,6 +79,10 @@ def git_init_repo() -> None:
             f"!env PYTHONPATH={python_path} {sys.executable} -m branchless",
         ],
     )
+
+    # Non-deterministic metadata (depends on current time).
+    git("config", ["branchless.commit-metadata.relative-time", "false"])
+
     git("branchless", ["init"])
 
 

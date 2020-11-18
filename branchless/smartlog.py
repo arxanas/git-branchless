@@ -6,6 +6,7 @@ ref-log; see the `reflog` module.
 import functools
 import logging
 import string
+import time
 from dataclasses import dataclass
 from queue import Queue
 from typing import Dict, List, Literal, Optional, Set, TextIO, Union
@@ -22,6 +23,7 @@ from .metadata import (
     BranchesProvider,
     CommitMetadataProvider,
     DifferentialRevisionProvider,
+    RelativeTimeProvider,
     get_commit_metadata,
 )
 from .reflog import RefLogReplayer
@@ -442,8 +444,9 @@ def smartlog(*, out: TextIO) -> int:
     _consistency_check_graph(graph)
 
     commit_metadata_providers: List[CommitMetadataProvider] = [
+        RelativeTimeProvider(glyphs=glyphs, repo=repo, now=int(time.time())),
         BranchesProvider(glyphs=glyphs, repo=repo),
-        DifferentialRevisionProvider(repo=repo),
+        DifferentialRevisionProvider(glyphs=glyphs, repo=repo),
     ]
 
     root_oids = _split_commit_graph_by_roots(

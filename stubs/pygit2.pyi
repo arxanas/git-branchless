@@ -67,6 +67,9 @@ class Config:
     def __setitem__(self, name: str, value: str) -> None:
         ...
 
+    def get_bool(self, name: str) -> bool:
+        ...
+
 
 class Repository:
     path: str
