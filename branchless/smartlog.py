@@ -18,7 +18,6 @@ from . import CommitStatus, get_repo
 from .db import make_db_for_repo
 from .eventlog import EventLogDb, EventReplayer, OidStr
 from .formatting import Formatter, Glyphs, make_glyphs
-from .hide import HideDb
 from .mergebase import MergeBaseDb
 from .metadata import (
     BranchesProvider,
@@ -423,8 +422,7 @@ def smartlog(*, out: TextIO) -> int:
     )
     visible_commit_oids.update(branch_oids)
 
-    hide_db = HideDb(db)
-    hidden_commit_oids = hide_db.get_hidden_oids()
+    hidden_commit_oids = replayer.get_hidden_oids()
 
     master_oid = repo.branches["master"].resolve().target
 
