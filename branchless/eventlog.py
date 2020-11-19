@@ -11,7 +11,7 @@ import sqlite3
 import sys
 import time
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Sequence, Set, TextIO, Tuple, Union
+from typing import Dict, List, Literal, Optional, Sequence, Set, TextIO, Tuple, Union
 
 from . import get_repo
 from .db import make_cursor, make_db_for_repo
@@ -475,20 +475,25 @@ class EventReplayer:
         else:
             raise TypeError(f"Unhandled event: {event}")
 
-    def is_commit_visible(self, oid: OidStr) -> Optional[bool]:
-        """Determines whether a commit has been marked as visible.
+    def get_commit_visibility(
+        self, oid: OidStr
+    ) -> Optional[Union[Literal["visible"], Literal["hidden"]]]:
+        """Determines whether a commit has been marked as visible or hidden.
 
         Args:
           oid: The OID of the commit to check.
 
         Returns:
-          Whether or not the commit is visible. Returns `None` if no history
+          Whether the commit is visible or hidden. Returns `None` if no history
           has been recorded for that commit.
         """
         if oid not in self._commit_history:
             return None
         (classification, history) = self._commit_history[oid][-1]
-        return classification is _EventClassification.SHOW
+        if classification is _EventClassification.SHOW:
+            return "visible"
+        else:
+            return "hidden"
 
     def get_visible_oids(self) -> Set[str]:
         """Get the visible OIDs according to the repository history.

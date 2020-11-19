@@ -33,6 +33,16 @@ def test_commands(tmpdir: py.path.local) -> None:
                 actual=out.getvalue(),
                 expected="""\
 Hid commit: 3df4b935
-To unhide this commit, run: git checkout 3df4b935
+To unhide this commit, run: git unhide 3df4b935
+""",
+            )
+
+        with io.StringIO() as out:
+            main(["unhide", "3df4b935"], out=out)
+            compare(
+                actual=out.getvalue(),
+                expected="""\
+Unhid commit: 3df4b935
+To hide this commit, run: git hide 3df4b935
 """,
             )

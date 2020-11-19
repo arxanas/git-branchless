@@ -4,10 +4,10 @@ import logging
 import sys
 from typing import List, TextIO
 
-from .hide import hide
+from .eventlog import hook_post_checkout, hook_post_commit, hook_post_rewrite
+from .hide import hide, unhide
 from .init import init
 from .smartlog import smartlog
-from .eventlog import hook_post_checkout, hook_post_commit, hook_post_rewrite
 
 
 def main(argv: List[str], *, out: TextIO) -> int:
@@ -43,6 +43,12 @@ def main(argv: List[str], *, out: TextIO) -> int:
     hide_parser.add_argument(
         "hash", type=str, help="The commit hash to hide.", nargs="*"
     )
+    unhide_parser = subparsers.add_parser(
+        "unhide", help="Unhide a previously-hidden commit from the smartlog."
+    )
+    unhide_parser.add_argument(
+        "hash", type=str, help="The commit hash to unhide.", nargs="*"
+    )
 
     # Hook parsers.
     hook_post_rewrite_parser = subparsers.add_parser(
@@ -68,6 +74,8 @@ def main(argv: List[str], *, out: TextIO) -> int:
         return smartlog(out=out)
     elif args.subcommand == "hide":
         return hide(out=out, hashes=args.hash)
+    elif args.subcommand == "unhide":
+        return unhide(out=out, hashes=args.hash)
     elif args.subcommand == "hook-post-rewrite":
         hook_post_rewrite(out=out)
         return 0

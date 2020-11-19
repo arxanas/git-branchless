@@ -135,6 +135,7 @@ def _install_aliases(out: TextIO, repo: pygit2.Repository) -> None:
     _install_alias(out=out, repo=repo, alias="smartlog")
     _install_alias(out=out, repo=repo, alias="sl")
     _install_alias(out=out, repo=repo, alias="hide")
+    _install_alias(out=out, repo=repo, alias="unhide")
 
 
 def init(*, out: TextIO) -> int:
