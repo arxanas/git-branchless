@@ -47,4 +47,4 @@ def test_rebase() -> None:
 
     # OID 3 should have been superseded by OID 4 by the "rebase (start)"
     # action.
-    compare_visible_oids(replayer, {"1", "2", "4"})
+    compare_visible_oids(replayer, {"0", "1", "2", "4"})

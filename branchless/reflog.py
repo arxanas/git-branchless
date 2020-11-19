@@ -306,4 +306,6 @@ class RefLogReplayer:
         Returns:
           All visible OIDs. Order is not significant.
         """
-        return [oid for oid in self._commit_history.keys() if self._is_visible(oid)]
+        return [self._head_oid] + [
+            oid for oid in self._commit_history.keys() if self._is_visible(oid)
+        ]
