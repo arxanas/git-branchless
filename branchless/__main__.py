@@ -7,6 +7,7 @@ from typing import List, TextIO
 from .hide import hide
 from .init import init
 from .smartlog import smartlog
+from .eventlog import hook_post_checkout, hook_post_commit, hook_post_rewrite
 
 
 def main(argv: List[str], *, out: TextIO) -> int:
@@ -28,6 +29,8 @@ def main(argv: List[str], *, out: TextIO) -> int:
     subparsers = parser.add_subparsers(
         dest="subcommand",
     )
+
+    # Command parsers.
     subparsers.add_parser(
         "init", help="Initialize the branchless workflow for this repository."
     )
@@ -40,6 +43,20 @@ def main(argv: List[str], *, out: TextIO) -> int:
     hide_parser.add_argument(
         "hash", type=str, help="The commit hash to hide.", nargs="*"
     )
+
+    # Hook parsers.
+    hook_post_rewrite_parser = subparsers.add_parser(
+        "hook-post-rewrite", help="Internal use."
+    )
+    hook_post_rewrite_parser.add_argument("rewrite_type", type=str)
+    hook_post_checkout_parser = subparsers.add_parser(
+        "hook-post-checkout", help="Internal use."
+    )
+    hook_post_checkout_parser.add_argument("previous_commit", type=str)
+    hook_post_checkout_parser.add_argument("current_commit", type=str)
+    hook_post_checkout_parser.add_argument("is_branch_checkout", type=int)
+    subparsers.add_parser("hook-post-commit", help="Internal use.")
+
     args = parser.parse_args(argv)
 
     if args.help:
@@ -51,6 +68,20 @@ def main(argv: List[str], *, out: TextIO) -> int:
         return smartlog(out=out)
     elif args.subcommand == "hide":
         return hide(out=out, hashes=args.hash)
+    elif args.subcommand == "hook-post-rewrite":
+        hook_post_rewrite(out=out)
+        return 0
+    elif args.subcommand == "hook-post-checkout":
+        hook_post_checkout(
+            out=out,
+            previous_head_ref=args.previous_commit,
+            current_head_ref=args.current_commit,
+            is_branch_checkout=args.is_branch_checkout,
+        )
+        return 0
+    elif args.subcommand == "hook-post-commit":
+        hook_post_commit(out=out)
+        return 0
     else:
         parser.print_usage(file=out)
         return 1

@@ -116,6 +116,14 @@ git branchless hook-post-commit "$@"
 git branchless hook-post-rewrite "$@"
 """,
     )
+    _install_hook(
+        out=out,
+        repo=repo,
+        hook_type="post-checkout",
+        hook_script="""\
+git branchless hook-post-checkout "$@"
+""",
+    )
 
 
 def _install_alias(out: TextIO, repo: pygit2.Repository, alias: str) -> None:

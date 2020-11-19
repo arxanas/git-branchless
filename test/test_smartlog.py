@@ -131,6 +131,8 @@ O f777ecc9 (master) create initial.txt
 | @ fa4e4e1a (test2and3) Merge branch 'test1' into test2and3
 |
 o fe65c1fe create test2.txt
+|
+o 02067177 create test3.txt
 """,
         )
 

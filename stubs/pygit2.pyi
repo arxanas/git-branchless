@@ -78,6 +78,7 @@ class Repository:
     references: Mapping[Union[Oid, str], Reference]
     branches: Mapping[str, Branch]
     config: Config
+    head: ResolvedReference
 
     def __init__(self, path: str) -> None:
         ...

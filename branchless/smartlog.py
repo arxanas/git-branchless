@@ -16,6 +16,7 @@ import pygit2
 
 from . import CommitStatus, get_repo
 from .db import make_db_for_repo
+from .eventlog import EventLogDb, EventReplayer, OidStr
 from .formatting import Formatter, Glyphs, make_glyphs
 from .hide import HideDb
 from .mergebase import MergeBaseDb
@@ -26,18 +27,17 @@ from .metadata import (
     RelativeTimeProvider,
     get_commit_metadata,
 )
-from .reflog import RefLogReplayer
 
 
 @dataclass
 class _Node:
     commit: pygit2.Commit
-    parent: Optional[pygit2.Oid]
-    children: Set[pygit2.Oid]
+    parent: Optional[OidStr]
+    children: Set[OidStr]
     status: CommitStatus
 
 
-_CommitGraph = Dict[pygit2.Oid, _Node]
+_CommitGraph = Dict[OidStr, _Node]
 
 
 def _find_path_to_merge_base(
@@ -75,11 +75,11 @@ def _walk_from_visible_commits(
     formatter: Formatter,
     repo: pygit2.Repository,
     merge_base_db: MergeBaseDb,
-    branch_oids: Set[pygit2.Oid],
+    branch_oids: Set[OidStr],
     head_oid: pygit2.Oid,
     master_oid: pygit2.Oid,
-    visible_commit_oids: Set[pygit2.Oid],
-    hidden_commit_oids: Set[str],
+    visible_commit_oids: Set[OidStr],
+    hidden_commit_oids: Set[OidStr],
 ) -> _CommitGraph:
     """Find additional commits that should be displayed.
 
@@ -90,12 +90,13 @@ def _walk_from_visible_commits(
     """
     graph: _CommitGraph = {}
 
-    def link(parent_oid: pygit2.Oid, child_oid: Optional[pygit2.Oid]) -> None:
+    def link(parent_oid: OidStr, child_oid: Optional[OidStr]) -> None:
         if child_oid is not None:
             graph[child_oid].parent = parent_oid
             graph[parent_oid].children.add(child_oid)
 
-    for commit_oid in visible_commit_oids:
+    for commit_oid_hex in visible_commit_oids:
+        commit_oid = repo[commit_oid_hex].oid
         merge_base_oid = merge_base_db.get_merge_base_oid(
             repo=repo, lhs_oid=commit_oid, rhs_oid=master_oid
         )
@@ -111,7 +112,7 @@ def _walk_from_visible_commits(
         # that this doesn't prohibit commits from master which are a parent of
         # a commit that we care about from being rendered.
         if commit_oid == merge_base_oid and (
-            commit_oid != head_oid and commit_oid not in branch_oids
+            commit_oid != head_oid and commit_oid.hex not in branch_oids
         ):
             continue
 
@@ -123,11 +124,11 @@ def _walk_from_visible_commits(
             commit_oid=commit_oid,
             target_oid=merge_base_oid,
         ):
-            current_oid = current_commit.oid
+            current_oid = current_commit.oid.hex
 
             if current_oid not in graph:
                 status: Union[Literal["hidden"], Literal["visible"]]
-                if current_oid.hex in hidden_commit_oids:
+                if current_oid in hidden_commit_oids:
                     status = "hidden"
                 else:
                     status = "visible"
@@ -144,8 +145,8 @@ def _walk_from_visible_commits(
 
             previous_oid = current_oid
 
-        if merge_base_oid in graph:
-            graph[merge_base_oid].status = "master"
+        if merge_base_oid.hex in graph:
+            graph[merge_base_oid.hex].status = "master"
         else:
             logging.warning(
                 formatter.format(
@@ -159,8 +160,6 @@ def _walk_from_visible_commits(
 
 def _consistency_check_graph(graph: _CommitGraph) -> None:
     """Verify that each parent-child connection is mutual."""
-    # TODO: remove
-    return
     for node_oid, node in graph.items():
         parent_oid = node.parent
         if parent_oid is not None:
@@ -175,7 +174,7 @@ def _consistency_check_graph(graph: _CommitGraph) -> None:
 
 
 def _hide_commits(
-    graph: _CommitGraph, branch_oids: Set[pygit2.Oid], head_oid: pygit2.Oid
+    graph: _CommitGraph, branch_oids: Set[OidStr], head_oid: pygit2.Oid
 ) -> None:
     """Hide commits according to their status.
 
@@ -188,11 +187,13 @@ def _hide_commits(
     """
     unhideable_oids = set()
 
-    for unhideable_oid_ in branch_oids | {head_oid}:
-        unhideable_oid: Optional[pygit2.Oid] = unhideable_oid_
-        while unhideable_oid is not None and unhideable_oid in graph:
+    for unhideable_oid in branch_oids | {head_oid.hex}:
+        while unhideable_oid in graph:
             unhideable_oids.add(unhideable_oid)
-            unhideable_oid = graph[unhideable_oid].parent
+            parent = graph[unhideable_oid].parent
+            if parent is None:
+                break
+            unhideable_oid = parent
 
     all_oids_to_hide = set()
     current_oids_to_hide = {
@@ -223,7 +224,7 @@ def _split_commit_graph_by_roots(
     repo: pygit2.Repository,
     merge_base_db: MergeBaseDb,
     graph: _CommitGraph,
-) -> List[pygit2.Oid]:
+) -> List[OidStr]:
     """Split fully-independent subgraphs into multiple graphs.
 
     This is intended to handle the situation of having multiple lines of work
@@ -237,12 +238,14 @@ def _split_commit_graph_by_roots(
         commit_oid for commit_oid, node in graph.items() if node.parent is None
     ]
 
-    def compare(lhs: pygit2.Oid, rhs: pygit2.Oid) -> int:
-        merge_base_oid = merge_base_db.get_merge_base_oid(repo, lhs, rhs)
-        if merge_base_oid == lhs:
+    def compare(lhs: OidStr, rhs: OidStr) -> int:
+        lhs_oid = repo[lhs].oid
+        rhs_oid = repo[rhs].oid
+        merge_base_oid = merge_base_db.get_merge_base_oid(repo, lhs_oid, rhs_oid)
+        if merge_base_oid == lhs_oid:
             # lhs was topologically first, so it should be sorted earlier in the list.
             return -1
-        elif merge_base_oid == rhs:
+        elif merge_base_oid == rhs_oid:
             return 1
         else:
             logging.warning(
@@ -264,7 +267,7 @@ def _get_child_output(
     graph: _CommitGraph,
     commit_metadata_providers: List[CommitMetadataProvider],
     head_oid: pygit2.Oid,
-    current_oid: pygit2.Oid,
+    current_oid: OidStr,
     last_child_line_char: Optional[str],
 ) -> List[str]:
     current = graph[current_oid]
@@ -339,19 +342,19 @@ def _get_output(
     graph: _CommitGraph,
     commit_metadata_providers: List[CommitMetadataProvider],
     head_oid: pygit2.Oid,
-    root_oids: List[pygit2.Oid],
+    root_oids: List[OidStr],
 ) -> List[str]:
     """Render a pretty graph starting from the given root OIDs in the given graph."""
     lines = []
 
-    def has_real_parent(oid: pygit2.Oid, parent_oid: pygit2.Oid) -> bool:
+    def has_real_parent(oid: OidStr, parent_oid: OidStr) -> bool:
         """Determine if the provided OID has the provided parent OID as a parent.
 
         This returns `True` in strictly more cases than checking `graph`,
         since there may be links between adjacent `master` commits which are
         not reflected in `graph`.
         """
-        return any(parent.oid == parent_oid for parent in graph[oid].commit.parents)
+        return any(parent.oid.hex == parent_oid for parent in graph[oid].commit.parents)
 
     for root_idx, root_oid in enumerate(root_oids):
         root_node = graph[root_oid]
@@ -400,24 +403,26 @@ def smartlog(*, out: TextIO) -> int:
     formatter = Formatter()
 
     repo = get_repo()
+    db = make_db_for_repo(repo)
     # We don't use `repo.head`, because that resolves the HEAD reference
     # (e.g. into refs/head/master). We want the actual ref-log of HEAD, not
     # the reference it points to.
     head_ref = repo.references["HEAD"]
     head_oid = head_ref.resolve().target
-    replayer = RefLogReplayer(head_oid)
-    for entry in head_ref.log():
-        replayer.process(entry)
-    replayer.finish_processing()
-    visible_commit_oids = set(replayer.get_visible_oids())
+
+    event_log_db = EventLogDb(db)
+    replayer = EventReplayer()
+    for event in event_log_db.get_events():
+        replayer.process_event(event)
+    visible_commit_oids = replayer.get_visible_oids()
+    visible_commit_oids.add(head_oid.hex)
 
     branch_oids = set(
-        repo.branches[branch_name].resolve().target
+        repo.branches[branch_name].resolve().target.hex
         for branch_name in repo.listall_branches(pygit2.GIT_BRANCH_LOCAL)
     )
     visible_commit_oids.update(branch_oids)
 
-    db = make_db_for_repo(repo)
     hide_db = HideDb(db)
     hidden_commit_oids = hide_db.get_hidden_oids()
 

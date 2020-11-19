@@ -5,16 +5,17 @@ from typing import Callable, Optional, List
 import pygit2
 import colorama
 
+from .eventlog import OidStr
 from .formatting import Glyphs, Formatter
 
-CommitMetadataProvider = Callable[[pygit2.Oid], Optional[str]]
+CommitMetadataProvider = Callable[[OidStr], Optional[str]]
 
 
 def get_commit_metadata(
     formatter: Formatter,
     glyphs: Glyphs,
     commit_metadata_providers: List[CommitMetadataProvider],
-    oid: pygit2.Oid,
+    oid: OidStr,
 ) -> Optional[str]:
     metadata_list: List[Optional[str]] = [
         provider(oid) for provider in commit_metadata_providers
@@ -43,10 +44,10 @@ class BranchesProvider:
         oid_to_branches = collections.defaultdict(list)
         for branch_name in repo.listall_branches(pygit2.GIT_BRANCH_LOCAL):
             branch = repo.branches[branch_name]
-            oid_to_branches[branch.resolve().target].append(branch)
+            oid_to_branches[branch.resolve().target.hex].append(branch)
         self._oid_to_branches = oid_to_branches
 
-    def __call__(self, oid: pygit2.Oid) -> Optional[str]:
+    def __call__(self, oid: OidStr) -> Optional[str]:
         if not self._is_enabled:
             return None
 
@@ -79,7 +80,7 @@ $
         self._glyphs = glyphs
         self._repo = repo
 
-    def __call__(self, oid: pygit2.Oid) -> Optional[str]:
+    def __call__(self, oid: OidStr) -> Optional[str]:
         if not self._is_enabled:
             return None
 
@@ -120,7 +121,7 @@ class RelativeTimeProvider:
         # Arguably at this point, users would want a specific date rather than a delta.
         return f"{time_delta}y"
 
-    def __call__(self, oid: pygit2.Oid) -> Optional[str]:
+    def __call__(self, oid: OidStr) -> Optional[str]:
         if not self._is_enabled:
             return None
 
