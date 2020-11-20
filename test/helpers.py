@@ -6,8 +6,6 @@ from typing import List, Optional
 
 from _pytest.capture import CaptureFixture
 
-GIT_PATH = "/opt/twitter_mde/bin/git"
-
 DUMMY_NAME = "Testy McTestface"
 DUMMY_EMAIL = "test@example.com"
 DUMMY_DATE = "Wed 29 Oct 12:34:56 2020 PDT"
@@ -21,7 +19,7 @@ def git(
 ) -> str:
     if args is None:
         args = []
-    args = [GIT_PATH, command, *args]
+    args = ["git", command, *args]
 
     # Required for determinism, as these values will be baked into the commit
     # hash.
