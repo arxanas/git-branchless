@@ -1,6 +1,5 @@
 import enum
 
-
 def init() -> None:
     ...
 

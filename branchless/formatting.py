@@ -4,13 +4,12 @@ We try to handle both textual output and interactive output (output to a
 "TTY"). In the case of interactive output, we render with prettier non-ASCII
 characters and with colors, using shell-specific escape codes.
 """
-from typing import TextIO, cast
 import string
+from typing import TextIO, cast
 
 import colorama
-from typing_extensions import Protocol
-
 import pygit2
+from typing_extensions import Protocol
 
 
 class Glyphs(Protocol):

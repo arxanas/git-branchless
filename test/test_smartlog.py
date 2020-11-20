@@ -1,8 +1,8 @@
 import io
 
 import py
-from branchless.smartlog import smartlog
 
+from branchless.smartlog import smartlog
 from helpers import (
     compare,
     git,

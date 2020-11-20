@@ -14,7 +14,7 @@ the current `master` commit, so the merge-base calculation may take a while.
 It can also happen when simply checking out an old commit to examine it.
 """
 import sqlite3
-from typing import List, Tuple, Optional
+from typing import List, Optional, Tuple
 
 import pygit2
 

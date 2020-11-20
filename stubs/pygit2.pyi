@@ -1,6 +1,5 @@
 from typing import AbstractSet, Iterator, List, Mapping, Optional, Sequence, Union
 
-
 class Oid:
     hex: str
 

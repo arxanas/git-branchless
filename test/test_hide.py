@@ -1,9 +1,9 @@
 import io
 
 import py
+
 from branchless.hide import hide, unhide
 from branchless.smartlog import smartlog
-
 from helpers import compare, git, git_commit_file, git_detach_head, git_init_repo
 
 

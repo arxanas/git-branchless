@@ -1,12 +1,12 @@
 import collections
 import re
-from typing import Callable, Optional, List
+from typing import Callable, List, Optional
 
-import pygit2
 import colorama
+import pygit2
 
 from .eventlog import OidStr
-from .formatting import Glyphs, Formatter
+from .formatting import Formatter, Glyphs
 
 CommitMetadataProvider = Callable[[OidStr], Optional[str]]
 

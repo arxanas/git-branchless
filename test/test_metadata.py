@@ -4,9 +4,9 @@ from unittest.mock import patch
 
 import py
 import pytest
+
 from branchless.metadata import RelativeTimeProvider
 from branchless.smartlog import smartlog
-
 from helpers import compare, git, git_commit_file, git_init_repo
 
 

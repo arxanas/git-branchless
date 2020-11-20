@@ -1,8 +1,8 @@
 import io
 
 import py
-from branchless.__main__ import main
 
+from branchless.__main__ import main
 from helpers import compare, git_commit_file, git_init_repo
 
 

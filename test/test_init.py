@@ -1,12 +1,12 @@
 import stat
 
 import py
+
 from branchless.init import (
     _UPDATE_MARKER_END,
     _UPDATE_MARKER_START,
     _update_between_lines,
 )
-
 from helpers import git, git_init_repo
 
 

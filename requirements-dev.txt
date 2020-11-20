@@ -4,3 +4,5 @@ pytest==6.1.2
 black==20.8b1
 pytest-pythonpath==0.7.3
 flake8==3.8.4
+flake8-isort==4.0.0
+isort==5.6.4
