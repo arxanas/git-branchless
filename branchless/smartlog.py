@@ -83,7 +83,7 @@ def _get_child_output(
         formatter=formatter,
         glyphs=glyphs,
         commit_metadata_providers=commit_metadata_providers,
-        oid=current_oid,
+        node=current,
     )
     text = "{oid} {metadata}{message}".format(
         oid=glyphs.color_fg(

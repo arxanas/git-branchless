@@ -1,3 +1,8 @@
+"""Additional metadata to display for commits.
+
+These are rendered inline in the smartlog, between the commit hash and the
+commit message.
+"""
 import collections
 import re
 from typing import Callable, List, Optional
@@ -5,20 +10,33 @@ from typing import Callable, List, Optional
 import colorama
 import pygit2
 
-from .eventlog import OidStr
 from .formatting import Formatter, Glyphs
+from .graph import Node
 
-CommitMetadataProvider = Callable[[OidStr], Optional[str]]
+CommitMetadataProvider = Callable[[Node], Optional[str]]
+"""Interface to display information about a commit in the smartlog."""
 
 
 def get_commit_metadata(
     formatter: Formatter,
     glyphs: Glyphs,
     commit_metadata_providers: List[CommitMetadataProvider],
-    oid: OidStr,
+    node: Node,
 ) -> Optional[str]:
+    """Get the complete description for a given commit.
+
+    Args:
+      formatter: The formatter to use.
+      glyphs: The glyphs to use.
+      commit_metadata_providers: The providers of the metadata for the
+        commit. These are displayed in order and concatenated with spaces.
+      node: The node representing the commit to describe.
+
+    Returns:
+      A string of additional metadata describing the commit.
+    """
     metadata_list: List[Optional[str]] = [
-        provider(oid) for provider in commit_metadata_providers
+        provider(node) for provider in commit_metadata_providers
     ]
     metadata_list_: List[str] = [
         metadata + " " for metadata in metadata_list if metadata is not None
@@ -38,6 +56,8 @@ def _is_enabled(repo: pygit2.Repository, name: str, default: bool) -> bool:
 
 
 class BranchesProvider:
+    """Display branches that point to a given commit."""
+
     def __init__(self, glyphs: Glyphs, repo: pygit2.Repository) -> None:
         self._is_enabled = _is_enabled(repo=repo, name="branches", default=True)
         self._glyphs = glyphs
@@ -47,11 +67,11 @@ class BranchesProvider:
             oid_to_branches[branch.resolve().target.hex].append(branch)
         self._oid_to_branches = oid_to_branches
 
-    def __call__(self, oid: OidStr) -> Optional[str]:
+    def __call__(self, node: Node) -> Optional[str]:
         if not self._is_enabled:
             return None
 
-        branches = self._oid_to_branches[oid]
+        branches = self._oid_to_branches[node.commit.oid.hex]
         if branches:
             return self._glyphs.color_fg(
                 color=colorama.Fore.GREEN,
@@ -64,6 +84,8 @@ class BranchesProvider:
 
 
 class DifferentialRevisionProvider:
+    """Display the associated Phabricator revision for a given commit."""
+
     RE = re.compile(
         r"""
 ^
@@ -80,12 +102,11 @@ $
         self._glyphs = glyphs
         self._repo = repo
 
-    def __call__(self, oid: OidStr) -> Optional[str]:
+    def __call__(self, node: Node) -> Optional[str]:
         if not self._is_enabled:
             return None
 
-        commit_message = self._repo[oid].message
-        match = self.RE.search(commit_message)
+        match = self.RE.search(node.commit.message)
         if match is not None:
             revision_number = match.group("diff")
             return self._glyphs.color_fg(
@@ -96,6 +117,8 @@ $
 
 
 class RelativeTimeProvider:
+    """Display how long ago the given commit was committed."""
+
     def __init__(self, glyphs: Glyphs, repo: pygit2.Repository, now: int) -> None:
         self._is_enabled = _is_enabled(repo=repo, name="relative-time", default=True)
         self._glyphs = glyphs
@@ -121,11 +144,11 @@ class RelativeTimeProvider:
         # Arguably at this point, users would want a specific date rather than a delta.
         return f"{time_delta}y"
 
-    def __call__(self, oid: OidStr) -> Optional[str]:
+    def __call__(self, node: Node) -> Optional[str]:
         if not self._is_enabled:
             return None
 
-        commit = self._repo[oid]
+        commit = node.commit
         description = self._describe_time_delta(
             now=self._now, commit_time=commit.commit_time
         )

@@ -6,8 +6,9 @@ from . import get_repo
 from .db import make_db_for_repo
 from .eventlog import EventLogDb
 from .formatting import Formatter, make_glyphs
+from .graph import make_graph
 from .mergebase import MergeBaseDb
-from .smartlog import make_graph, smartlog
+from .smartlog import smartlog
 
 
 def _git_checkout(out: TextIO, target: str) -> int:
