@@ -1,11 +1,11 @@
 import logging
 from dataclasses import dataclass
 from queue import Queue
-from typing import Dict, List, Literal, Optional, Set, Union
+from typing import Dict, List, Literal, Optional, Set, Tuple, Union
 
 import pygit2
 
-from .eventlog import Event, EventLogDb, EventReplayer, HideEvent, OidStr
+from .eventlog import Event, EventReplayer, HideEvent, OidStr
 from .mergebase import MergeBaseDb
 
 CommitStatus = Union[Literal["master"], Literal["visible"], Literal["hidden"]]
@@ -234,24 +234,17 @@ def _hide_commits(
             graph[parent_oid].children.remove(oid)
 
 
-@dataclass
-class GraphResult:
-    head_oid: pygit2.Oid
-    graph: CommitGraph
-    event_replayer: EventReplayer
-
-
 def make_graph(
     repo: pygit2.Repository,
     merge_base_db: MergeBaseDb,
-    event_log_db: EventLogDb,
-) -> GraphResult:
+    event_replayer: EventReplayer,
+) -> Tuple[pygit2.Oid, CommitGraph]:
     """Construct the smartlog graph for the repo.
 
     Args:
       repo: The Git repository.
       merge_base_db: The merge-base database.
-      event_log_db:  The event log database.
+      event_replayer: The event replayer.
 
     Returns:
       A tuple of the head OID and the commit graph.
@@ -263,9 +256,6 @@ def make_graph(
     head_ref = repo.references["HEAD"]
     head_oid = head_ref.resolve().target
 
-    event_replayer = EventReplayer()
-    for event in event_log_db.get_events():
-        event_replayer.process_event(event)
     visible_commit_oids = event_replayer.get_visible_oids()
 
     branch_oids = set(
@@ -294,4 +284,4 @@ def make_graph(
         head_oid=head_oid,
     )
     _consistency_check_graph(graph)
-    return GraphResult(head_oid=head_oid, graph=graph, event_replayer=event_replayer)
+    return (head_oid, graph)

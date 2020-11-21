@@ -443,6 +443,13 @@ class EventReplayer:
             str, List[Tuple[_EventClassification, Event]]
         ] = collections.defaultdict(list)
 
+    @classmethod
+    def from_event_log_db(cls, event_log_db: EventLogDb) -> "EventReplayer":
+        result = cls()
+        for event in event_log_db.get_events():
+            result.process_event(event)
+        return result
+
     def process_event(self, event: Event) -> None:
         """Process the given event.
 

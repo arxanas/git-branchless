@@ -13,7 +13,7 @@ import pygit2
 
 from . import get_repo
 from .db import make_db_for_repo
-from .eventlog import EventLogDb, OidStr
+from .eventlog import EventLogDb, EventReplayer, OidStr
 from .formatting import Glyphs, make_glyphs
 from .graph import CommitGraph, make_graph
 from .mergebase import MergeBaseDb
@@ -202,13 +202,12 @@ def smartlog(*, out: TextIO) -> int:
             "Merge-base cache not initialized -- it may take a while to populate it"
         )
 
-    graph_result = make_graph(
+    event_replayer = EventReplayer.from_event_log_db(event_log_db)
+    (head_oid, graph) = make_graph(
         repo=repo,
         merge_base_db=merge_base_db,
-        event_log_db=event_log_db,
+        event_replayer=event_replayer,
     )
-    head_oid = graph_result.head_oid
-    graph = graph_result.graph
 
     commit_metadata_providers: List[CommitMetadataProvider] = [
         CommitOidProvider(glyphs=glyphs, use_color=True),

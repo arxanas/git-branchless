@@ -3,7 +3,7 @@ from typing import Literal, Optional, TextIO, Union
 
 from . import get_repo, run_git
 from .db import make_db_for_repo
-from .eventlog import EventLogDb
+from .eventlog import EventLogDb, EventReplayer
 from .formatting import make_glyphs
 from .graph import make_graph
 from .mergebase import MergeBaseDb
@@ -33,13 +33,11 @@ def next(
     db = make_db_for_repo(repo)
     merge_base_db = MergeBaseDb(db)
     event_log_db = EventLogDb(db)
-    graph_result = make_graph(
-        repo=repo,
-        merge_base_db=merge_base_db,
-        event_log_db=event_log_db,
+    event_replayer = EventReplayer.from_event_log_db(event_log_db)
+
+    (head_oid, graph) = make_graph(
+        repo=repo, merge_base_db=merge_base_db, event_replayer=event_replayer
     )
-    head_oid = graph_result.head_oid
-    graph = graph_result.graph
 
     if num_commits is None:
         num_commits_ = 1

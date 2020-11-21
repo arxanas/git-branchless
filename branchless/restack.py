@@ -95,13 +95,10 @@ def _restack_commits(
     event_log_db: EventLogDb,
     preserve_timestamps: bool,
 ) -> int:
-    graph_result = make_graph(
-        repo=repo,
-        merge_base_db=merge_base_db,
-        event_log_db=event_log_db,
+    event_replayer = EventReplayer.from_event_log_db(event_log_db)
+    (_head_oid, graph) = make_graph(
+        repo=repo, merge_base_db=merge_base_db, event_replayer=event_replayer
     )
-    graph = graph_result.graph
-    event_replayer = graph_result.event_replayer
 
     for oid in graph:
         new_oid = _find_rewrite_target(
@@ -156,13 +153,10 @@ def _restack_branches(
     merge_base_db: MergeBaseDb,
     event_log_db: EventLogDb,
 ) -> int:
-    graph_result = make_graph(
-        repo=repo,
-        merge_base_db=merge_base_db,
-        event_log_db=event_log_db,
+    event_replayer = EventReplayer.from_event_log_db(event_log_db)
+    (_head_oid, graph) = make_graph(
+        repo=repo, merge_base_db=merge_base_db, event_replayer=event_replayer
     )
-    graph = graph_result.graph
-    event_replayer = graph_result.event_replayer
 
     for branch_name in repo.listall_branches(pygit2.GIT_BRANCH_LOCAL):
         branch = repo.branches[branch_name]

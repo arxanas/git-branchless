@@ -24,10 +24,7 @@ def _process_hashes(
 ) -> Tuple[EventReplayer, EventLogDb, List[OidStr]]:
     db = make_db_for_repo(repo=repo)
     event_log_db = EventLogDb(db)
-
-    replayer = EventReplayer()
-    for event in event_log_db.get_events():
-        replayer.process_event(event)
+    event_replayer = EventReplayer.from_event_log_db(event_log_db)
 
     oids = []
     for hash in hashes:
@@ -36,7 +33,7 @@ def _process_hashes(
         except KeyError as e:
             raise CommitNotFoundError(hash) from e
         oids.append(oid.hex)
-    return (replayer, event_log_db, oids)
+    return (event_replayer, event_log_db, oids)
 
 
 def hide(*, out: TextIO, hashes: List[str]) -> int:
