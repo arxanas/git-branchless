@@ -7,7 +7,8 @@ import pygit2
 from . import get_repo
 from .db import make_db_for_repo
 from .eventlog import EventLogDb, EventReplayer, HideEvent, OidStr, UnhideEvent
-from .formatting import Formatter
+from .formatting import make_glyphs
+from .metadata import CommitMessageProvider, CommitOidProvider, render_commit_metadata
 
 
 class CommitNotFoundError(Exception):
@@ -50,7 +51,6 @@ def hide(*, out: TextIO, hashes: List[str]) -> int:
       Exit code (0 denotes successful exit).
     """
     timestamp = time.time()
-    formatter = Formatter()
     repo = get_repo()
     try:
         (replayer, event_log_db, oids) = _process_hashes(
@@ -62,16 +62,29 @@ def hide(*, out: TextIO, hashes: List[str]) -> int:
     events = [HideEvent(timestamp=timestamp, commit_oid=oid) for oid in oids]
     event_log_db.add_events(events)
 
+    glyphs = make_glyphs(out=out)
     for event in events:
-        oid = repo[event.commit_oid].oid
-        out.write(formatter.format("Hid commit: {oid:oid}\n", oid=oid))
-        if replayer.get_commit_visibility(oid.hex) == "hidden":
-            out.write("(It was already hidden, so this operation had no effect.)\n")
-        out.write(
-            formatter.format(
-                "To unhide this commit, run: git unhide {oid:oid}\n", oid=oid
-            )
+        commit = repo[event.commit_oid]
+        hidden_commit_text = render_commit_metadata(
+            glyphs=glyphs,
+            commit=commit,
+            commit_metadata_providers=[
+                CommitOidProvider(glyphs=glyphs, use_color=True),
+                CommitMessageProvider(),
+            ],
         )
+        out.write(f"Hid commit: {hidden_commit_text}\n")
+        if replayer.get_commit_visibility(commit.oid.hex) == "hidden":
+            out.write("(It was already hidden, so this operation had no effect.)\n")
+
+        command_target_oid = render_commit_metadata(
+            glyphs=glyphs,
+            commit=commit,
+            commit_metadata_providers=[
+                CommitOidProvider(glyphs=glyphs, use_color=False),
+            ],
+        )
+        out.write(f"To unhide this commit, run: git unhide {command_target_oid}\n")
     return 0
 
 
@@ -87,7 +100,6 @@ def unhide(*, out: TextIO, hashes: List[str]) -> int:
       Exit code (0 denotes successful exit).
     """
     timestamp = time.time()
-    formatter = Formatter()
     repo = get_repo()
     try:
         (replayer, event_log_db, oids) = _process_hashes(
@@ -99,12 +111,27 @@ def unhide(*, out: TextIO, hashes: List[str]) -> int:
     events = [UnhideEvent(timestamp=timestamp, commit_oid=oid) for oid in oids]
     event_log_db.add_events(events)
 
+    glyphs = make_glyphs(out=out)
     for event in events:
-        oid = repo[event.commit_oid].oid
-        out.write(formatter.format("Unhid commit: {oid:oid}\n", oid=oid))
-        if replayer.get_commit_visibility(oid.hex) == "visible":
-            out.write("(It was not hidden, so this operation had no effect.)\n")
-        out.write(
-            formatter.format("To hide this commit, run: git hide {oid:oid}\n", oid=oid)
+        commit = repo[event.commit_oid]
+        unhidden_commit_text = render_commit_metadata(
+            glyphs=glyphs,
+            commit=commit,
+            commit_metadata_providers=[
+                CommitOidProvider(glyphs=glyphs, use_color=True),
+                CommitMessageProvider(),
+            ],
         )
+        out.write(f"Unhid commit: {unhidden_commit_text}\n")
+        if replayer.get_commit_visibility(commit.oid.hex) == "visible":
+            out.write("(It was not hidden, so this operation had no effect.)\n")
+
+        command_target_oid = render_commit_metadata(
+            glyphs=glyphs,
+            commit=commit,
+            commit_metadata_providers=[
+                CommitOidProvider(glyphs=glyphs, use_color=False),
+            ],
+        )
+        out.write(f"To hide this commit, run: git hide {command_target_oid}\n")
     return 0

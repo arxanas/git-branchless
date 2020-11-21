@@ -10,41 +10,32 @@ from typing import Callable, List, Optional
 import colorama
 import pygit2
 
-from .formatting import Formatter, Glyphs
-from .graph import Node
+from .formatting import Glyphs
 
-CommitMetadataProvider = Callable[[Node], Optional[str]]
+CommitMetadataProvider = Callable[[pygit2.Commit], Optional[str]]
 """Interface to display information about a commit in the smartlog."""
 
 
-def get_commit_metadata(
-    formatter: Formatter,
+def render_commit_metadata(
     glyphs: Glyphs,
     commit_metadata_providers: List[CommitMetadataProvider],
-    node: Node,
-) -> Optional[str]:
+    commit: pygit2.Commit,
+) -> str:
     """Get the complete description for a given commit.
 
     Args:
-      formatter: The formatter to use.
       glyphs: The glyphs to use.
       commit_metadata_providers: The providers of the metadata for the
         commit. These are displayed in order and concatenated with spaces.
-      node: The node representing the commit to describe.
+      commit: The commit to render the metadata for.
 
     Returns:
       A string of additional metadata describing the commit.
     """
     metadata_list: List[Optional[str]] = [
-        provider(node) for provider in commit_metadata_providers
+        provider(commit) for provider in commit_metadata_providers
     ]
-    metadata_list_: List[str] = [
-        metadata + " " for metadata in metadata_list if metadata is not None
-    ]
-    if metadata_list_:
-        return "".join(metadata_list_)
-    else:
-        return None
+    return " ".join(text for text in metadata_list if text is not None)
 
 
 def _is_enabled(repo: pygit2.Repository, name: str, default: bool) -> bool:
@@ -53,6 +44,30 @@ def _is_enabled(repo: pygit2.Repository, name: str, default: bool) -> bool:
         return repo.config.get_bool(name)
     except KeyError:
         return default
+
+
+class CommitOidProvider:
+    """Display an abbreviated commit hash."""
+
+    def __init__(self, glyphs: Glyphs, use_color: bool) -> None:
+        self._glyphs = glyphs
+        self._use_color = use_color
+
+    def __call__(self, commit: pygit2.Commit) -> Optional[str]:
+        abbreviated_oid = f"{commit.oid!s:8.8}"
+        if self._use_color:
+            return self._glyphs.color_fg(
+                color=colorama.Fore.YELLOW, message=abbreviated_oid
+            )
+        else:
+            return abbreviated_oid
+
+
+class CommitMessageProvider:
+    """Display the first line of the commit message."""
+
+    def __call__(self, commit: pygit2.Commit) -> Optional[str]:
+        return commit.message.split("\n", 1)[0]
 
 
 class BranchesProvider:
@@ -67,11 +82,11 @@ class BranchesProvider:
             oid_to_branches[branch.resolve().target.hex].append(branch)
         self._oid_to_branches = oid_to_branches
 
-    def __call__(self, node: Node) -> Optional[str]:
+    def __call__(self, commit: pygit2.Commit) -> Optional[str]:
         if not self._is_enabled:
             return None
 
-        branches = self._oid_to_branches[node.commit.oid.hex]
+        branches = self._oid_to_branches[commit.oid.hex]
         if branches:
             return self._glyphs.color_fg(
                 color=colorama.Fore.GREEN,
@@ -100,13 +115,12 @@ $
             repo=repo, name="differential-revision", default=True
         )
         self._glyphs = glyphs
-        self._repo = repo
 
-    def __call__(self, node: Node) -> Optional[str]:
+    def __call__(self, commit: pygit2.Commit) -> Optional[str]:
         if not self._is_enabled:
             return None
 
-        match = self.RE.search(node.commit.message)
+        match = self.RE.search(commit.message)
         if match is not None:
             revision_number = match.group("diff")
             return self._glyphs.color_fg(
@@ -122,7 +136,6 @@ class RelativeTimeProvider:
     def __init__(self, glyphs: Glyphs, repo: pygit2.Repository, now: int) -> None:
         self._is_enabled = _is_enabled(repo=repo, name="relative-time", default=True)
         self._glyphs = glyphs
-        self._repo = repo
         self._now = now
 
     @staticmethod
@@ -144,11 +157,10 @@ class RelativeTimeProvider:
         # Arguably at this point, users would want a specific date rather than a delta.
         return f"{time_delta}y"
 
-    def __call__(self, node: Node) -> Optional[str]:
+    def __call__(self, commit: pygit2.Commit) -> Optional[str]:
         if not self._is_enabled:
             return None
 
-        commit = node.commit
         description = self._describe_time_delta(
             now=self._now, commit_time=commit.commit_time
         )

@@ -28,7 +28,7 @@ def test_commands(tmpdir: py.path.local) -> None:
         compare(
             actual=git("hide", ["3df4b935"]),
             expected="""\
-Hid commit: 3df4b935
+Hid commit: 3df4b935 create test.txt
 To unhide this commit, run: git unhide 3df4b935
 """,
         )
@@ -36,7 +36,7 @@ To unhide this commit, run: git unhide 3df4b935
         compare(
             actual=git("unhide", ["3df4b935"]),
             expected="""\
-Unhid commit: 3df4b935
+Unhid commit: 3df4b935 create test.txt
 To hide this commit, run: git hide 3df4b935
 """,
         )

@@ -8,7 +8,6 @@ import pygit2
 from . import get_repo
 from .db import make_db_for_repo
 from .eventlog import EventLogDb, EventReplayer, OidStr
-from .formatting import Formatter
 from .mergebase import MergeBaseDb
 
 CommitStatus = Union[Literal["master"], Literal["visible"], Literal["hidden"]]
@@ -56,7 +55,6 @@ CommitGraph = Dict[OidStr, Node]
 
 
 def _find_path_to_merge_base(
-    formatter: Formatter,
     repo: pygit2.Repository,
     commit_oid: pygit2.Oid,
     target_oid: pygit2.Oid,
@@ -78,16 +76,11 @@ def _find_path_to_merge_base(
         for parent in path[-1].parents:
             queue.put(path + [parent])
     raise ValueError(
-        formatter.format(
-            "No path between {commit_oid:oid} and {target_oid:oid}",
-            commit_oid=commit_oid,
-            target_oid=target_oid,
-        )
+        f"No path between {commit_oid} and {target_oid}",
     )
 
 
 def _walk_from_visible_commits(
-    formatter: Formatter,
     repo: pygit2.Repository,
     merge_base_db: MergeBaseDb,
     branch_oids: Set[OidStr],
@@ -134,7 +127,6 @@ def _walk_from_visible_commits(
         current_commit = repo[commit_oid]
         previous_oid = None
         for current_commit in _find_path_to_merge_base(
-            formatter=formatter,
             repo=repo,
             commit_oid=commit_oid,
             target_oid=merge_base_oid,
@@ -164,10 +156,7 @@ def _walk_from_visible_commits(
             graph[merge_base_oid.hex].status = "master"
         else:
             logging.warning(
-                formatter.format(
-                    "Could not find merge base {merge_base_oid:oid}",
-                    merge_base_oid=merge_base_oid,
-                )
+                f"Could not find merge base {merge_base_oid}",
             )
 
     return graph
@@ -235,7 +224,6 @@ def _hide_commits(
 
 
 def make_graph(
-    formatter: Formatter,
     repo: pygit2.Repository,
     merge_base_db: MergeBaseDb,
     event_log_db: EventLogDb,
@@ -251,7 +239,6 @@ def make_graph(
     Returns:
       A tuple of the head OID and the commit graph.
     """
-    formatter = Formatter()
 
     repo = get_repo()
     db = make_db_for_repo(repo)
@@ -285,7 +272,6 @@ def make_graph(
         )
 
     graph = _walk_from_visible_commits(
-        formatter=formatter,
         repo=repo,
         merge_base_db=merge_base_db,
         branch_oids=branch_oids,

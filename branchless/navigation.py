@@ -5,9 +5,10 @@ from typing import Literal, Optional, TextIO, Union
 from . import get_repo
 from .db import make_db_for_repo
 from .eventlog import EventLogDb
-from .formatting import Formatter, make_glyphs
+from .formatting import make_glyphs
 from .graph import make_graph
 from .mergebase import MergeBaseDb
+from .metadata import CommitMessageProvider, CommitOidProvider, render_commit_metadata
 from .smartlog import smartlog
 
 
@@ -33,14 +34,12 @@ def next(
     num_commits: Optional[int],
     towards: Optional[Union[Literal["newest"], Literal["oldest"]]],
 ) -> int:
-    formatter = Formatter()
     glyphs = make_glyphs(out)
     repo = get_repo()
     db = make_db_for_repo(repo)
     merge_base_db = MergeBaseDb(db)
     event_log_db = EventLogDb(db)
     (head_oid, graph) = make_graph(
-        formatter=formatter,
         repo=repo,
         merge_base_db=merge_base_db,
         event_log_db=event_log_db,
@@ -75,13 +74,17 @@ def next(
                     descriptor = " (newest)"
                 else:
                     descriptor = ""
+
+                commit_text = render_commit_metadata(
+                    glyphs=glyphs,
+                    commit=repo[child_oid],
+                    commit_metadata_providers=[
+                        CommitOidProvider(glyphs=glyphs, use_color=True),
+                        CommitMessageProvider(),
+                    ],
+                )
                 out.write(
-                    formatter.format(
-                        "  {bullet} {commit.oid:oid} {commit:commit}{descriptor}\n",
-                        bullet=glyphs.bullet_point,
-                        commit=repo[child_oid],
-                        descriptor=descriptor,
-                    )
+                    f"  {glyphs.bullet_point} {commit_text}{descriptor}\n",
                 )
             out.write(
                 "(Pass --oldest (-o) or --newest (-n) to select between ambiguous next commits)\n"

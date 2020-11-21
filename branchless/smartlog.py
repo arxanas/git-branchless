@@ -5,7 +5,6 @@ ref-log; see the `reflog` module.
 """
 import functools
 import logging
-import string
 import time
 from typing import List, Optional, TextIO
 
@@ -15,20 +14,21 @@ import pygit2
 from . import get_repo
 from .db import make_db_for_repo
 from .eventlog import EventLogDb, OidStr
-from .formatting import Formatter, Glyphs, make_glyphs
+from .formatting import Glyphs, make_glyphs
 from .graph import CommitGraph, make_graph
 from .mergebase import MergeBaseDb
 from .metadata import (
     BranchesProvider,
+    CommitMessageProvider,
     CommitMetadataProvider,
+    CommitOidProvider,
     DifferentialRevisionProvider,
     RelativeTimeProvider,
-    get_commit_metadata,
+    render_commit_metadata,
 )
 
 
 def _split_commit_graph_by_roots(
-    formatter: string.Formatter,
     repo: pygit2.Repository,
     merge_base_db: MergeBaseDb,
     graph: CommitGraph,
@@ -57,11 +57,7 @@ def _split_commit_graph_by_roots(
             return 1
         else:
             logging.warning(
-                formatter.format(
-                    "Root commits {lhs:oid} and {rhs:oid} were not orderable",
-                    lhs=lhs,
-                    rhs=rhs,
-                )
+                f"Root commits {lhs} and {rhs} were not orderable",
             )
             return 0
 
@@ -71,7 +67,6 @@ def _split_commit_graph_by_roots(
 
 def _get_child_output(
     glyphs: Glyphs,
-    formatter: Formatter,
     graph: CommitGraph,
     commit_metadata_providers: List[CommitMetadataProvider],
     head_oid: pygit2.Oid,
@@ -79,19 +74,10 @@ def _get_child_output(
     last_child_line_char: Optional[str],
 ) -> List[str]:
     current = graph[current_oid]
-    metadata = get_commit_metadata(
-        formatter=formatter,
+    text = render_commit_metadata(
         glyphs=glyphs,
+        commit=current.commit,
         commit_metadata_providers=commit_metadata_providers,
-        node=current,
-    )
-    text = "{oid} {metadata}{message}".format(
-        oid=glyphs.color_fg(
-            color=colorama.Fore.YELLOW,
-            message=formatter.format("{commit.oid:oid}", commit=current.commit),
-        ),
-        metadata=metadata or "",
-        message=formatter.format("{commit:commit}", commit=current.commit),
     )
 
     cursor = {
@@ -116,7 +102,6 @@ def _get_child_output(
     for child_idx, child_oid in enumerate(children):
         child_output = _get_child_output(
             glyphs=glyphs,
-            formatter=formatter,
             graph=graph,
             commit_metadata_providers=commit_metadata_providers,
             head_oid=head_oid,
@@ -146,7 +131,6 @@ def _get_child_output(
 
 def _get_output(
     glyphs: Glyphs,
-    formatter: Formatter,
     graph: CommitGraph,
     commit_metadata_providers: List[CommitMetadataProvider],
     head_oid: pygit2.Oid,
@@ -186,7 +170,6 @@ def _get_output(
 
         child_output = _get_child_output(
             glyphs=glyphs,
-            formatter=formatter,
             graph=graph,
             commit_metadata_providers=commit_metadata_providers,
             head_oid=head_oid,
@@ -208,7 +191,6 @@ def smartlog(*, out: TextIO) -> int:
       Exit code (0 denotes successful exit).
     """
     glyphs = make_glyphs(out)
-    formatter = Formatter()
 
     repo = get_repo()
 
@@ -221,24 +203,24 @@ def smartlog(*, out: TextIO) -> int:
         )
 
     (head_oid, graph) = make_graph(
-        formatter=formatter,
         repo=repo,
         merge_base_db=merge_base_db,
         event_log_db=event_log_db,
     )
 
     commit_metadata_providers: List[CommitMetadataProvider] = [
+        CommitOidProvider(glyphs=glyphs, use_color=True),
         RelativeTimeProvider(glyphs=glyphs, repo=repo, now=int(time.time())),
         BranchesProvider(glyphs=glyphs, repo=repo),
         DifferentialRevisionProvider(glyphs=glyphs, repo=repo),
+        CommitMessageProvider(),
     ]
 
     root_oids = _split_commit_graph_by_roots(
-        formatter=formatter, repo=repo, merge_base_db=merge_base_db, graph=graph
+        repo=repo, merge_base_db=merge_base_db, graph=graph
     )
     lines = _get_output(
         glyphs=glyphs,
-        formatter=formatter,
         graph=graph,
         commit_metadata_providers=commit_metadata_providers,
         head_oid=head_oid,

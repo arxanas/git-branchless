@@ -4,11 +4,9 @@ We try to handle both textual output and interactive output (output to a
 "TTY"). In the case of interactive output, we render with prettier non-ASCII
 characters and with colors, using shell-specific escape codes.
 """
-import string
-from typing import TextIO, cast
+from typing import TextIO
 
 import colorama
-import pygit2
 from typing_extensions import Protocol
 
 
@@ -114,21 +112,3 @@ def make_glyphs(out: TextIO) -> Glyphs:
         return PrettyGlyphs()
     else:
         return TextGlyphs()
-
-
-class Formatter(string.Formatter):
-    """Formatter with additional directives for commits, etc."""
-
-    def format_field(
-        self,
-        value: object,
-        format_spec: str,
-    ) -> str:
-        if format_spec == "oid":
-            return f"{value!s:8.8}"
-        elif format_spec == "commit":
-            assert isinstance(value, pygit2.Commit)
-            return value.message.split("\n", 1)[0]
-        else:
-            result = super().format_field(value, format_spec)
-            return cast(str, result)

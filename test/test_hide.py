@@ -34,7 +34,7 @@ O f777ecc9 (master) create initial.txt
             compare(
                 actual=out.getvalue(),
                 expected="""\
-Hid commit: 62fc20d2
+Hid commit: 62fc20d2 create test1.txt
 To unhide this commit, run: git unhide 62fc20d2
 """,
             )
@@ -116,7 +116,7 @@ def test_hide_already_hidden_commit(tmpdir: py.path.local) -> None:
             compare(
                 actual=out.getvalue(),
                 expected="""\
-Hid commit: 62fc20d2
+Hid commit: 62fc20d2 create test1.txt
 (It was already hidden, so this operation had no effect.)
 To unhide this commit, run: git unhide 62fc20d2
 """,
@@ -246,7 +246,7 @@ def test_unhide(tmpdir: py.path.local) -> None:
             compare(
                 actual=out.getvalue(),
                 expected="""\
-Unhid commit: 96d1c37a
+Unhid commit: 96d1c37a create test2.txt
 (It was not hidden, so this operation had no effect.)
 To hide this commit, run: git hide 96d1c37a
 """,
@@ -271,7 +271,7 @@ o 62fc20d2 create test1.txt
             compare(
                 actual=out.getvalue(),
                 expected="""\
-Unhid commit: 96d1c37a
+Unhid commit: 96d1c37a create test2.txt
 To hide this commit, run: git hide 96d1c37a
 """,
             )
