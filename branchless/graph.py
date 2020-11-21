@@ -5,8 +5,6 @@ from typing import Dict, List, Literal, Optional, Set, Tuple, Union
 
 import pygit2
 
-from . import get_repo
-from .db import make_db_for_repo
 from .eventlog import EventLogDb, EventReplayer, OidStr
 from .mergebase import MergeBaseDb
 
@@ -83,11 +81,11 @@ def _find_path_to_merge_base(
 def _walk_from_visible_commits(
     repo: pygit2.Repository,
     merge_base_db: MergeBaseDb,
+    event_replayer: EventReplayer,
     branch_oids: Set[OidStr],
     head_oid: pygit2.Oid,
     master_oid: pygit2.Oid,
     visible_commit_oids: Set[OidStr],
-    hidden_commit_oids: Set[OidStr],
 ) -> CommitGraph:
     """Find additional commits that should be displayed.
 
@@ -135,7 +133,7 @@ def _walk_from_visible_commits(
 
             if current_oid not in graph:
                 status: Union[Literal["hidden"], Literal["visible"]]
-                if current_oid in hidden_commit_oids:
+                if event_replayer.get_commit_visibility(current_oid) == "hidden":
                     status = "hidden"
                 else:
                     status = "visible"
@@ -231,28 +229,24 @@ def make_graph(
     """Construct the smartlog graph for the repo.
 
     Args:
-      formatter: The formatter to use to format commit OIDs, etc.
       repo: The Git repository.
       merge_base_db: The merge-base database.
-      event_log_db:  The hidden OID database.
+      event_log_db:  The event log database.
 
     Returns:
       A tuple of the head OID and the commit graph.
     """
 
-    repo = get_repo()
-    db = make_db_for_repo(repo)
     # We don't use `repo.head`, because that resolves the HEAD reference
     # (e.g. into refs/head/master). We want the actual ref-log of HEAD, not
     # the reference it points to.
     head_ref = repo.references["HEAD"]
     head_oid = head_ref.resolve().target
 
-    event_log_db = EventLogDb(db)
-    replayer = EventReplayer()
+    event_replayer = EventReplayer()
     for event in event_log_db.get_events():
-        replayer.process_event(event)
-    visible_commit_oids = replayer.get_visible_oids()
+        event_replayer.process_event(event)
+    visible_commit_oids = event_replayer.get_visible_oids()
     visible_commit_oids.add(head_oid.hex)
 
     branch_oids = set(
@@ -261,24 +255,16 @@ def make_graph(
     )
     visible_commit_oids.update(branch_oids)
 
-    hidden_commit_oids = replayer.get_hidden_oids()
-
     master_oid = repo.branches["master"].resolve().target
-
-    merge_base_db = MergeBaseDb(db)
-    if merge_base_db.is_empty():
-        logging.debug(
-            "Merge-base cache not initialized -- it may take a while to populate it"
-        )
 
     graph = _walk_from_visible_commits(
         repo=repo,
         merge_base_db=merge_base_db,
+        event_replayer=event_replayer,
         branch_oids=branch_oids,
         head_oid=head_oid,
         master_oid=master_oid,
         visible_commit_oids=visible_commit_oids,
-        hidden_commit_oids=hidden_commit_oids,
     )
     _consistency_check_graph(graph)
     _hide_commits(graph=graph, branch_oids=branch_oids, head_oid=head_oid)
