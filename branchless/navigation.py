@@ -1,8 +1,7 @@
 import builtins
-import subprocess
 from typing import Literal, Optional, TextIO, Union
 
-from . import get_repo
+from . import get_repo, run_git
 from .db import make_db_for_repo
 from .eventlog import EventLogDb
 from .formatting import make_glyphs
@@ -12,17 +11,11 @@ from .metadata import CommitMessageProvider, CommitOidProvider, render_commit_me
 from .smartlog import smartlog
 
 
-def _git_checkout(out: TextIO, target: str) -> int:
-    out.write(f"branchless: git checkout {target}\n")
-    result = subprocess.run(["git", "checkout", target], stdout=out)
-    return result.returncode
-
-
 def prev(out: TextIO, num_commits: Optional[int]) -> int:
     if num_commits is None:
-        result = _git_checkout(out=out, target="HEAD^")
+        result = run_git(out=out, args=["checkout", "HEAD^"])
     else:
-        result = _git_checkout(out=out, target=f"HEAD~{num_commits}")
+        result = run_git(out=out, args=["checkout", f"HEAD~{num_commits}"])
     if result != 0:
         return result
 
@@ -39,11 +32,13 @@ def next(
     db = make_db_for_repo(repo)
     merge_base_db = MergeBaseDb(db)
     event_log_db = EventLogDb(db)
-    (head_oid, graph) = make_graph(
+    graph_result = make_graph(
         repo=repo,
         merge_base_db=merge_base_db,
         event_log_db=event_log_db,
     )
+    head_oid = graph_result.head_oid
+    graph = graph_result.graph
 
     if num_commits is None:
         num_commits_ = 1
@@ -91,7 +86,7 @@ def next(
             )
             return 1
 
-    result = _git_checkout(out=out, target=current_oid)
+    result = run_git(out=out, args=["checkout", current_oid])
     if result != 0:
         return result
 

@@ -37,6 +37,8 @@ A commit is in one of three states:
     branchless workflow.
 """
 import os
+import subprocess
+from typing import List, TextIO
 
 import pygit2
 
@@ -54,3 +56,23 @@ def get_repo() -> pygit2.Repository:
     if repo_path is None:
         raise RuntimeError("Failed to discover repository")
     return pygit2.Repository(repo_path)
+
+
+def run_git(out: TextIO, args: List[str]) -> int:
+    """Run Git in a subprocess, and inform the user.
+
+    This is suitable for commands which affect the working copy or should run
+    hooks. We don't want our process to be responsible for that.
+
+    Args:
+      out: The output stream to write to.
+      args: The list of arguments to pass to Git. Should not include the Git
+        executable itself.
+
+    Returns:
+      The exit code of Git (non-zero signifies error).
+    """
+    args = ["git", *args]
+    out.write(f"branchless: {' '.join(args)}\n")
+    result = subprocess.run(args, stdout=out)
+    return result.returncode

@@ -1,11 +1,11 @@
 import logging
 from dataclasses import dataclass
 from queue import Queue
-from typing import Dict, List, Literal, Optional, Set, Tuple, Union
+from typing import Dict, List, Literal, Optional, Set, Union
 
 import pygit2
 
-from .eventlog import EventLogDb, EventReplayer, OidStr
+from .eventlog import Event, EventLogDb, EventReplayer, HideEvent, OidStr
 from .mergebase import MergeBaseDb
 
 CommitStatus = Union[Literal["master"], Literal["visible"], Literal["hidden"]]
@@ -46,6 +46,14 @@ class Node:
 
     status: CommitStatus
     """The status of this commit."""
+
+    event: Optional[Event]
+    """The latest event to affect this commit.
+
+    It's possible that no event affected this commit, and it was simply
+    visible due to a reference pointing to it. In that case, this field is
+    `None`.
+    """
 
 
 CommitGraph = Dict[OidStr, Node]
@@ -132,16 +140,16 @@ def _walk_from_visible_commits(
             current_oid = current_commit.oid.hex
 
             if current_oid not in graph:
-                status: Union[Literal["hidden"], Literal["visible"]]
-                if event_replayer.get_commit_visibility(current_oid) == "hidden":
-                    status = "hidden"
-                else:
+                status = event_replayer.get_commit_visibility(current_oid)
+                if status is None:
                     status = "visible"
+                event = event_replayer.get_commit_latest_event(current_oid)
                 graph[current_oid] = Node(
                     commit=current_commit,
                     parent=None,
                     children=set(),
                     status=status,
+                    event=event,
                 )
                 link(parent_oid=current_oid, child_oid=previous_oid)
             else:
@@ -176,19 +184,15 @@ def _consistency_check_graph(graph: CommitGraph) -> None:
 
 
 def _hide_commits(
-    graph: CommitGraph, branch_oids: Set[OidStr], head_oid: pygit2.Oid
+    graph: CommitGraph,
+    event_replayer: EventReplayer,
+    branch_oids: Set[OidStr],
+    head_oid: pygit2.Oid,
 ) -> None:
-    """Hide commits according to their status.
-
-    Commits with the hidden status should not be displayed. Additionally,
-    commits descending from that commit should be not be displayed as well,
-    since the user probably intended to hide the entire subtree.
-
-    However, we want to be sure to always display the commit pointed to by
-    HEAD, and its ancestry.
-    """
+    """Remove commits from the graph according to their status."""
+    # OIDs which are pointed to by HEAD or a branch should not be hidden.
+    # Therefore, we can't hide them *or* their ancestors.
     unhideable_oids = set()
-
     for unhideable_oid in branch_oids | {head_oid.hex}:
         while unhideable_oid in graph:
             unhideable_oids.add(unhideable_oid)
@@ -197,9 +201,14 @@ def _hide_commits(
                 break
             unhideable_oid = parent
 
+    # Recursively hide children of commits that have been explicitly marked as
+    # hidden by the user. However, this doesn't apply to commits that were
+    # hidden due to a rewrite.
     all_oids_to_hide = set()
     current_oids_to_hide = {
-        oid for oid, node in graph.items() if node.status == "hidden"
+        oid
+        for oid, node in graph.items()
+        if node.status == "hidden" and isinstance(node.event, HideEvent)
     }
     while current_oids_to_hide:
         all_oids_to_hide.update(current_oids_to_hide)
@@ -208,24 +217,35 @@ def _hide_commits(
             next_oids_to_hide.update(graph[oid].children)
         current_oids_to_hide = next_oids_to_hide
 
+    # Master nodes whose children are all hidden should also be hidden.
+    # Otherwise, we get sequences of master nodes that appear in the graph for
+    # no apparent reason, simply because they're technically "visible".
     for oid, node in graph.items():
         if node.status == "master" and node.children.issubset(all_oids_to_hide):
             all_oids_to_hide.add(oid)
 
+    # Actually update the graph and delete any parent-child links, as
+    # appropriate.
     all_oids_to_hide.difference_update(unhideable_oids)
     for oid in all_oids_to_hide:
         parent_oid = graph[oid].parent
         del graph[oid]
         if parent_oid is not None and parent_oid in graph:
             graph[parent_oid].children.remove(oid)
-    return
+
+
+@dataclass
+class GraphResult:
+    head_oid: pygit2.Oid
+    graph: CommitGraph
+    event_replayer: EventReplayer
 
 
 def make_graph(
     repo: pygit2.Repository,
     merge_base_db: MergeBaseDb,
     event_log_db: EventLogDb,
-) -> Tuple[pygit2.Oid, CommitGraph]:
+) -> GraphResult:
     """Construct the smartlog graph for the repo.
 
     Args:
@@ -247,15 +267,15 @@ def make_graph(
     for event in event_log_db.get_events():
         event_replayer.process_event(event)
     visible_commit_oids = event_replayer.get_visible_oids()
-    visible_commit_oids.add(head_oid.hex)
 
     branch_oids = set(
-        repo.branches[branch_name].resolve().target.hex
+        repo.branches[branch_name].target.hex
         for branch_name in repo.listall_branches(pygit2.GIT_BRANCH_LOCAL)
     )
     visible_commit_oids.update(branch_oids)
+    visible_commit_oids.add(head_oid.hex)
 
-    master_oid = repo.branches["master"].resolve().target
+    master_oid = repo.branches["master"].target
 
     graph = _walk_from_visible_commits(
         repo=repo,
@@ -267,6 +287,11 @@ def make_graph(
         visible_commit_oids=visible_commit_oids,
     )
     _consistency_check_graph(graph)
-    _hide_commits(graph=graph, branch_oids=branch_oids, head_oid=head_oid)
+    _hide_commits(
+        graph=graph,
+        event_replayer=event_replayer,
+        branch_oids=branch_oids,
+        head_oid=head_oid,
+    )
     _consistency_check_graph(graph)
-    return (head_oid, graph)
+    return GraphResult(head_oid=head_oid, graph=graph, event_replayer=event_replayer)

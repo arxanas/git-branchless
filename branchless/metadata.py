@@ -79,7 +79,7 @@ class BranchesProvider:
         oid_to_branches = collections.defaultdict(list)
         for branch_name in repo.listall_branches(pygit2.GIT_BRANCH_LOCAL):
             branch = repo.branches[branch_name]
-            oid_to_branches[branch.resolve().target.hex].append(branch)
+            oid_to_branches[branch.target.hex].append(branch)
         self._oid_to_branches = oid_to_branches
 
     def __call__(self, commit: pygit2.Commit) -> Optional[str]:

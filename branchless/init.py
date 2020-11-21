@@ -141,6 +141,7 @@ def _install_aliases(out: TextIO, repo: pygit2.Repository) -> None:
     _install_alias(out=out, repo=repo, alias="unhide")
     _install_alias(out=out, repo=repo, alias="prev")
     _install_alias(out=out, repo=repo, alias="next")
+    _install_alias(out=out, repo=repo, alias="restack")
 
 
 def init(*, out: TextIO) -> int:

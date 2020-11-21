@@ -202,11 +202,13 @@ def smartlog(*, out: TextIO) -> int:
             "Merge-base cache not initialized -- it may take a while to populate it"
         )
 
-    (head_oid, graph) = make_graph(
+    graph_result = make_graph(
         repo=repo,
         merge_base_db=merge_base_db,
         event_log_db=event_log_db,
     )
+    head_oid = graph_result.head_oid
+    graph = graph_result.graph
 
     commit_metadata_providers: List[CommitMetadataProvider] = [
         CommitOidProvider(glyphs=glyphs, use_color=True),

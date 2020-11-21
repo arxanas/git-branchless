@@ -489,11 +489,26 @@ class EventReplayer:
         """
         if oid not in self._commit_history:
             return None
-        (classification, history) = self._commit_history[oid][-1]
+        (classification, _event) = self._commit_history[oid][-1]
         if classification is _EventClassification.SHOW:
             return "visible"
         else:
             return "hidden"
+
+    def get_commit_latest_event(self, oid: OidStr) -> Optional[Event]:
+        """Get the latest event affecting a given commit.
+
+        Args:
+          oid: The OID of the commit to check.
+
+        Returns:
+          The most recent event that affected that commit. If this commit was
+          not observed by the replayer, returns `None`.
+        """
+        if oid not in self._commit_history:
+            return None
+        (_classification, event) = self._commit_history[oid][-1]
+        return event
 
     def get_visible_oids(self) -> Set[str]:
         """Get the visible OIDs according to the repository history.
@@ -505,16 +520,4 @@ class EventReplayer:
             oid
             for oid, history in self._commit_history.items()
             if history[-1][0] is _EventClassification.SHOW
-        }
-
-    def get_hidden_oids(self) -> Set[str]:
-        """Get the hidden OIDs according to the repository history.
-
-        Returns:
-          The set of OIDs referring to commits which are thought to be hidden due to user action.
-        """
-        return {
-            oid
-            for oid, history in self._commit_history.items()
-            if history[-1][0] is _EventClassification.HIDE
         }

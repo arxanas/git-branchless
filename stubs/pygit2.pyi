@@ -1,5 +1,6 @@
 from typing import AbstractSet, Iterator, List, Mapping, Optional, Sequence, Union
 
+
 class Oid:
     hex: str
 
@@ -18,12 +19,29 @@ class RefLogEntry:
     message: str
 
 
+class GitRefSymbolicType:
+    pass
+
+
+class GitRefOidType:
+    pass
+
+
+GIT_REF_SYMBOLIC: GitRefSymbolicType
+GIT_REF_OID: GitRefOidType
+ReferenceType = Union[GitRefSymbolicType, GitRefOidType]
+
+
 class ResolvedReference:
     target: Oid
+    type: ReferenceType
+    shorthand: str
 
 
 class Reference:
     target: Union[Oid, str]
+    type: ReferenceType
+    shorthand: str
 
     def resolve(self) -> "ResolvedReference":
         ...
@@ -37,7 +55,7 @@ class Reference:
         ...
 
 
-class Branch(Reference):
+class Branch(ResolvedReference):
     branch_name: str
 
 

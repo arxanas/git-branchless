@@ -8,6 +8,7 @@ from .eventlog import hook_post_checkout, hook_post_commit, hook_post_rewrite
 from .hide import hide, unhide
 from .init import init
 from .navigation import next, prev
+from .restack import restack
 from .smartlog import smartlog
 
 
@@ -75,6 +76,10 @@ def main(argv: List[str], *, out: TextIO) -> int:
         action="store_const",
         const="newest",
     )
+    subparsers.add_parser(
+        "restack",
+        help="Rebase abandoned commits onto their most up-to-date counterparts.",
+    )
 
     # Hook parsers.
     hook_post_rewrite_parser = subparsers.add_parser(
@@ -106,6 +111,8 @@ def main(argv: List[str], *, out: TextIO) -> int:
         return prev(out=out, num_commits=args.num_commits)
     elif args.subcommand == "next":
         return next(out=out, num_commits=args.num_commits, towards=args.towards)
+    elif args.subcommand == "restack":
+        return restack(out=out, preserve_timestamps=False)
     elif args.subcommand == "hook-post-rewrite":
         hook_post_rewrite(out=out)
         return 0
