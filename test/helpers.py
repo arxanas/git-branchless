@@ -84,7 +84,7 @@ def git_init_repo() -> None:
     git("config", ["advice.detachedHead", "false"])
 
     # Non-deterministic metadata (depends on current time).
-    git("config", ["branchless.commit-metadata.relative-time", "false"])
+    git("config", ["branchless.commitMetadata.relativeTime", "false"])
 
     git("branchless", ["init"])
 

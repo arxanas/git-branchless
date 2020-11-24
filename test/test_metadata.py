@@ -59,7 +59,7 @@ Differential Revision: https://some-phabricator-url.example/D12345
 def test_relative_time_provider(tmpdir: py.path.local) -> None:
     with tmpdir.as_cwd():
         git_init_repo()
-        git("config", ["branchless.commit-metadata.relative-time", "true"])
+        git("config", ["branchless.commitMetadata.relativeTime", "true"])
 
         initial_commit_timestamp = int(git("show", ["-s", "--format=%ct"]).strip())
         with io.StringIO() as out, patch.object(

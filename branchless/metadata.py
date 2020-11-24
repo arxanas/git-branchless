@@ -39,7 +39,7 @@ def render_commit_metadata(
 
 
 def _is_enabled(repo: pygit2.Repository, name: str, default: bool) -> bool:
-    name = f"branchless.commit-metadata.{name}"
+    name = f"branchless.commitMetadata.{name}"
     try:
         return repo.config.get_bool(name)
     except KeyError:
@@ -112,7 +112,7 @@ $
 
     def __init__(self, glyphs: Glyphs, repo: pygit2.Repository) -> None:
         self._is_enabled = _is_enabled(
-            repo=repo, name="differential-revision", default=True
+            repo=repo, name="differentialRevision", default=True
         )
         self._glyphs = glyphs
 
@@ -134,7 +134,7 @@ class RelativeTimeProvider:
     """Display how long ago the given commit was committed."""
 
     def __init__(self, glyphs: Glyphs, repo: pygit2.Repository, now: int) -> None:
-        self._is_enabled = _is_enabled(repo=repo, name="relative-time", default=True)
+        self._is_enabled = _is_enabled(repo=repo, name="relativeTime", default=True)
         self._glyphs = glyphs
         self._now = now
 
