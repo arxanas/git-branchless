@@ -12,7 +12,7 @@ from .restack import restack
 from .smartlog import smartlog
 
 
-def main(argv: List[str], *, out: TextIO) -> int:
+def main(argv: List[str], *, out: TextIO, err: TextIO) -> int:
     """Run the provided sub-command.
 
     Args:
@@ -108,11 +108,13 @@ def main(argv: List[str], *, out: TextIO) -> int:
     elif args.subcommand == "unhide":
         return unhide(out=out, hashes=args.hash)
     elif args.subcommand == "prev":
-        return prev(out=out, num_commits=args.num_commits)
+        return prev(out=out, err=err, num_commits=args.num_commits)
     elif args.subcommand == "next":
-        return next(out=out, num_commits=args.num_commits, towards=args.towards)
+        return next(
+            out=out, err=err, num_commits=args.num_commits, towards=args.towards
+        )
     elif args.subcommand == "restack":
-        return restack(out=out, preserve_timestamps=False)
+        return restack(out=out, err=err, preserve_timestamps=False)
     elif args.subcommand == "hook-post-rewrite":
         hook_post_rewrite(out=out)
         return 0
@@ -133,4 +135,4 @@ def main(argv: List[str], *, out: TextIO) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:], out=sys.stdout))
+    sys.exit(main(sys.argv[1:], out=sys.stdout, err=sys.stderr))

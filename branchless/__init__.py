@@ -58,7 +58,7 @@ def get_repo() -> pygit2.Repository:
     return pygit2.Repository(repo_path)
 
 
-def run_git(out: TextIO, args: List[str]) -> int:
+def run_git(out: TextIO, err: TextIO, args: List[str]) -> int:
     """Run Git in a subprocess, and inform the user.
 
     This is suitable for commands which affect the working copy or should run
@@ -74,5 +74,7 @@ def run_git(out: TextIO, args: List[str]) -> int:
     """
     args = ["git", *args]
     out.write(f"branchless: {' '.join(args)}\n")
-    result = subprocess.run(args, stdout=out)
+    out.flush()
+    err.flush()
+    result = subprocess.run(args, stdout=out, stderr=err)
     return result.returncode

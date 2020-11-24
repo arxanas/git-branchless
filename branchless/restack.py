@@ -89,6 +89,7 @@ def _find_rewrite_target(
 
 def _restack_commits(
     out: TextIO,
+    err: TextIO,
     repo: pygit2.Repository,
     merge_base_db: MergeBaseDb,
     event_log_db: EventLogDb,
@@ -127,6 +128,7 @@ def _restack_commits(
             additional_args = ["--committer-date-is-author-date"]
         result = run_git(
             out=out,
+            err=err,
             args=["rebase", oid, child_oid, "--onto", new_oid] + additional_args,
         )
         if result != 0:
@@ -136,6 +138,7 @@ def _restack_commits(
         # Repeat until we hit a fixed-point.
         return _restack_commits(
             out=out,
+            err=err,
             repo=repo,
             merge_base_db=merge_base_db,
             event_log_db=event_log_db,
@@ -148,6 +151,7 @@ def _restack_commits(
 
 def _restack_branches(
     out: TextIO,
+    err: TextIO,
     repo: pygit2.Repository,
     merge_base_db: MergeBaseDb,
     event_log_db: EventLogDb,
@@ -171,12 +175,13 @@ def _restack_branches(
         if new_oid is None:
             continue
 
-        result = run_git(out=out, args=["branch", "-f", branch_name, new_oid])
+        result = run_git(out=out, err=err, args=["branch", "-f", branch_name, new_oid])
         if result != 0:
             return result
         else:
             return _restack_branches(
                 out=out,
+                err=err,
                 repo=repo,
                 merge_base_db=merge_base_db,
                 event_log_db=event_log_db,
@@ -186,7 +191,7 @@ def _restack_branches(
     return 0
 
 
-def restack(out: TextIO, preserve_timestamps: bool) -> int:
+def restack(out: TextIO, err: TextIO, preserve_timestamps: bool) -> int:
     """Restack all abandoned commits.
 
     Args:
@@ -211,6 +216,7 @@ def restack(out: TextIO, preserve_timestamps: bool) -> int:
 
     result = _restack_commits(
         out=out,
+        err=err,
         repo=repo,
         merge_base_db=merge_base_db,
         event_log_db=event_log_db,
@@ -220,12 +226,16 @@ def restack(out: TextIO, preserve_timestamps: bool) -> int:
         return result
 
     result = _restack_branches(
-        out=out, repo=repo, merge_base_db=merge_base_db, event_log_db=event_log_db
+        out=out,
+        err=err,
+        repo=repo,
+        merge_base_db=merge_base_db,
+        event_log_db=event_log_db,
     )
     if result != 0:
         return result
 
-    result = run_git(out=out, args=["checkout", head_location])
+    result = run_git(out=out, err=err, args=["checkout", head_location])
     if result != 0:
         return result
 

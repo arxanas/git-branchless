@@ -7,8 +7,8 @@ from helpers import compare, git, git_commit_file, git_init_repo
 
 
 def test_help() -> None:
-    with io.StringIO() as out:
-        assert main(["--help"], out=out) == 0
+    with io.StringIO() as out, io.StringIO() as err:
+        assert main(["--help"], out=out, err=err) == 0
         assert "usage: branchless" in out.getvalue()
 
 

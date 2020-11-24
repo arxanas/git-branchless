@@ -11,11 +11,11 @@ from .metadata import CommitMessageProvider, CommitOidProvider, render_commit_me
 from .smartlog import smartlog
 
 
-def prev(out: TextIO, num_commits: Optional[int]) -> int:
+def prev(out: TextIO, err: TextIO, num_commits: Optional[int]) -> int:
     if num_commits is None:
-        result = run_git(out=out, args=["checkout", "HEAD^"])
+        result = run_git(out=out, err=err, args=["checkout", "HEAD^"])
     else:
-        result = run_git(out=out, args=["checkout", f"HEAD~{num_commits}"])
+        result = run_git(out=out, err=err, args=["checkout", f"HEAD~{num_commits}"])
     if result != 0:
         return result
 
@@ -24,6 +24,7 @@ def prev(out: TextIO, num_commits: Optional[int]) -> int:
 
 def next(
     out: TextIO,
+    err: TextIO,
     num_commits: Optional[int],
     towards: Optional[Union[Literal["newest"], Literal["oldest"]]],
 ) -> int:
@@ -86,7 +87,7 @@ def next(
             )
             return 1
 
-    result = run_git(out=out, args=["checkout", current_oid])
+    result = run_git(out=out, err=err, args=["checkout", current_oid])
     if result != 0:
         return result
 

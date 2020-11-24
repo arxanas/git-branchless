@@ -1,10 +1,10 @@
+import contextlib
 import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
-from typing import List, Optional
-
-from _pytest.capture import CaptureFixture
+from typing import Iterator, List, Optional, TextIO, cast
 
 DUMMY_NAME = "Testy McTestface"
 DUMMY_EMAIL = "test@example.com"
@@ -110,17 +110,32 @@ def compare(actual: str, expected: str) -> None:
     assert actual == expected
 
 
-def clear_capture(capture_fixture: CaptureFixture[str]) -> None:
-    """Clear the capture fixture's contents.
+class FileBasedCapture:
+    """Wraps a `TextIO` by putting it in a temporary file.
 
-    To be called after each `compare` call when using `capsys` or `capfd`
-    (which have to be used when calling `subprocess`es).
-
-    `compare` will write to stdout, and we don't want to that pollute future
-    captures or pollute the test runner's output (if there was no issue).
-
-    If an assertion in `compare` fails, we won't reach this line, and Pytest
-    will print out the captured content for debugging (which is what we want,
-    since `compare` writes content to `stdout`).
+    This is necessary for operations such as `subprocess.call`, which call
+    `.fileno()` on the stream. This method is not available for in-memory
+    `io.StringIO` instances.
     """
-    capture_fixture.readouterr()
+
+    def __init__(self, stream: TextIO) -> None:
+        """Constructor.
+
+        Args:
+          stream: The handle to the underlying file to wrap.
+        """
+        self.stream = stream
+
+    def getvalue(self) -> str:
+        """Get the data that has been written to this stream so far.
+
+        Must only be called once.
+        """
+        self.stream.seek(0)
+        return self.stream.read()
+
+
+@contextlib.contextmanager
+def capture() -> Iterator[FileBasedCapture]:
+    with tempfile.NamedTemporaryFile("r+") as f:
+        yield FileBasedCapture(cast(TextIO, f))
