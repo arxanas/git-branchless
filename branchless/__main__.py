@@ -10,6 +10,7 @@ from .init import init
 from .navigation import next, prev
 from .restack import restack
 from .smartlog import smartlog
+from .undo import undo
 
 
 def main(argv: List[str], *, out: TextIO, err: TextIO) -> int:
@@ -92,6 +93,10 @@ def main(argv: List[str], *, out: TextIO, err: TextIO) -> int:
         "restack",
         help="Rebase abandoned commits onto their most up-to-date counterparts.",
     )
+    subparsers.add_parser(
+        "undo",
+        help="Return to a past state of the repository.",
+    )
 
     # Hook parsers.
     hook_post_rewrite_parser = subparsers.add_parser(
@@ -127,6 +132,8 @@ def main(argv: List[str], *, out: TextIO, err: TextIO) -> int:
         )
     elif args.subcommand == "restack":
         return restack(out=out, err=err, preserve_timestamps=False)
+    elif args.subcommand == "undo":
+        return undo(out=out)
     elif args.subcommand == "hook-post-rewrite":
         hook_post_rewrite(out=out)
         return 0

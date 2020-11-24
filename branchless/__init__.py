@@ -38,9 +38,18 @@ A commit is in one of three states:
 """
 import os
 import subprocess
-from typing import List, TextIO
+from typing import Dict, List, Set, TextIO
 
 import pygit2
+
+OidStr = str
+"""Represents an object ID in the Git repository.
+
+We don't use `pygit2.Oid` directly since it requires looking up the object in
+the repo, and we don't want to spend time hitting disk for that.
+Consequently, the object pointed to by an OID is not guaranteed to exist
+anymore (such as if it was garbage collected).
+"""
 
 
 def get_repo() -> pygit2.Repository:
@@ -79,3 +88,114 @@ def run_git(out: TextIO, err: TextIO, args: List[str]) -> int:
 
     result = subprocess.run(args, stdout=out, stderr=err)
     return result.returncode
+
+
+def run_git_silent(repo: pygit2.Repository, args: List[str]) -> str:
+    """Run Git silently (don't display output to the user).
+
+    Whenever possible, `pygit2`'s bindings to Git used instead, as they're
+    considerably more lightweight and reliable.
+
+    Args:
+      repo: The Git repository.
+      args: The command-line args to pass to Git. The `git` executable will
+        be prepended to this list automatically.
+
+    Raises:
+      subprocess.CalledProcessError: if the command failed.
+
+    Result:
+      The output from the command.
+    """
+    result = subprocess.run(
+        ["git", "-C", repo.path, *args],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        check=True,
+    )
+    return result.stdout.decode()
+
+
+def get_head_oid(repo: pygit2.Repository) -> pygit2.Oid:
+    """Get the OID for the repository's `HEAD` reference.
+
+    Args:
+      repo: The Git repository.
+
+    Returns:
+      The OID for the repository's `HEAD` reference.
+    """
+    # We don't use `repo.head`, because that resolves the HEAD reference
+    # (e.g. into refs/head/master). We want the actual ref-log of HEAD, not
+    # the reference it points to.
+    head_ref = repo.references["HEAD"]
+    return head_ref.resolve().target
+
+
+def get_main_branch_name(repo: pygit2.Repository) -> str:
+    """Get the name of the main branch for the repository.
+
+    Args:
+      repo: The Git repository.
+
+    Returns:
+      The name of the main branch for the repository.
+    """
+    try:
+        return repo.config["branchless.mainBranch"]
+    except KeyError:
+        return "master"
+
+
+def get_main_branch_oid(repo: pygit2.Repository) -> pygit2.Oid:
+    """Get the OID corresponding to the main branch.
+
+    Args:
+      repo: The Git repository.
+
+    Raises:
+      KeyError: if there was no such branch.
+
+    Returns:
+      The OID corresponding to the main branch.
+    """
+    main_branch_name = get_main_branch_name(repo)
+    return repo.branches[main_branch_name].target
+
+
+def get_branch_names(repo: pygit2.Repository) -> Set[str]:
+    """Get the branch names for the repository.
+
+    This only includes local branches; we don't want to spend time processing
+    all of the remote branches, as they're unlikely to relate to the user's
+    work.
+
+    Args:
+      repo: The Git repository.
+
+    Returns:
+      The set of branch names for the repository.
+    """
+    return set(repo.listall_branches(pygit2.GIT_BRANCH_LOCAL))
+
+
+def get_branch_oid_to_names(repo: pygit2.Repository) -> Dict[OidStr, List[str]]:
+    """Get the mapping of branch OIDs to branch names.
+
+    This mapping the lets you quickly look up which branches are pointing to
+    a given OID, or just to enumerate OIDs/branch names in general.
+
+    Args:
+      repo: The Git repository.
+
+    Returns:
+      A mapping from an OID to the names of branches pointing to that
+      OID.
+    """
+    result: Dict[OidStr, List[str]] = {}
+    for branch_name in get_branch_names(repo):
+        branch_oid = repo.branches[branch_name].target.hex
+        if branch_oid not in result:
+            result[branch_oid] = []
+        result[branch_oid].append(branch_name)
+    return result

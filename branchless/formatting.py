@@ -26,6 +26,7 @@ class Glyphs(Protocol):
     commit_main_hidden: str
     commit_main_hidden_head: str
     bullet_point: str
+    terminal_clear_screen: str
 
     def color_fg(self, color: colorama.Fore, message: str) -> str:  # pragma: no cover
         """Render the foreground (text) color for the given message.
@@ -70,6 +71,7 @@ class TextGlyphs:
     commit_main_hidden = "X"
     commit_main_hidden_head = "%"
     bullet_point = "-"
+    terminal_clear_screen = ""
 
     def color_fg(self, color: colorama.Fore, message: str) -> str:
         return message
@@ -94,6 +96,7 @@ class PrettyGlyphs:
     commit_main_hidden = "✕"
     commit_main_hidden_head = "❖"
     bullet_point = "•"
+    terminal_clear_screen = "\033[2J"
 
     def __init__(self) -> None:
         colorama.init()

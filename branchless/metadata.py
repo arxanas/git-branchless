@@ -3,13 +3,13 @@
 These are rendered inline in the smartlog, between the commit hash and the
 commit message.
 """
-import collections
 import re
-from typing import Callable, List, Optional
+from typing import Callable, Dict, List, Optional
 
 import colorama
 import pygit2
 
+from . import OidStr
 from .formatting import Glyphs
 
 CommitMetadataProvider = Callable[[pygit2.Commit], Optional[str]]
@@ -73,25 +73,26 @@ class CommitMessageProvider:
 class BranchesProvider:
     """Display branches that point to a given commit."""
 
-    def __init__(self, glyphs: Glyphs, repo: pygit2.Repository) -> None:
+    def __init__(
+        self,
+        glyphs: Glyphs,
+        repo: pygit2.Repository,
+        branch_oid_to_names: Dict[OidStr, List[str]],
+    ) -> None:
         self._is_enabled = _is_enabled(repo=repo, name="branches", default=True)
         self._glyphs = glyphs
-        oid_to_branches = collections.defaultdict(list)
-        for branch_name in repo.listall_branches(pygit2.GIT_BRANCH_LOCAL):
-            branch = repo.branches[branch_name]
-            oid_to_branches[branch.target.hex].append(branch)
-        self._oid_to_branches = oid_to_branches
+        self._branch_oid_to_names = branch_oid_to_names
 
     def __call__(self, commit: pygit2.Commit) -> Optional[str]:
         if not self._is_enabled:
             return None
 
-        branches = self._oid_to_branches[commit.oid.hex]
-        if branches:
+        branches = self._branch_oid_to_names.get(commit.oid.hex)
+        if branches is not None:
             return self._glyphs.color_fg(
                 color=colorama.Fore.GREEN,
                 message="("
-                + ", ".join(sorted(branch.branch_name for branch in branches))
+                + ", ".join(sorted(branch_name for branch_name in branches))
                 + ")",
             )
         else:
@@ -139,8 +140,8 @@ class RelativeTimeProvider:
         self._now = now
 
     @staticmethod
-    def _describe_time_delta(now: int, commit_time: int) -> str:
-        time_delta = now - commit_time
+    def describe_time_delta(now: int, previous_time: int) -> str:
+        time_delta = now - previous_time
         if time_delta < 60:
             return f"{time_delta}s"
         time_delta //= 60
@@ -161,8 +162,8 @@ class RelativeTimeProvider:
         if not self._is_enabled:
             return None
 
-        description = self._describe_time_delta(
-            now=self._now, commit_time=commit.commit_time
+        description = self.describe_time_delta(
+            now=self._now, previous_time=commit.commit_time
         )
         return self._glyphs.color_fg(
             color=colorama.Fore.GREEN,

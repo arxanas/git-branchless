@@ -4,11 +4,17 @@ from typing import Callable, Iterator, List, Set, TextIO
 
 import pygit2
 
-from . import get_repo
+from . import (
+    OidStr,
+    get_branch_oid_to_names,
+    get_head_oid,
+    get_main_branch_oid,
+    get_repo,
+)
 from .db import make_db_for_repo
-from .eventlog import EventLogDb, EventReplayer, HideEvent, OidStr, UnhideEvent
+from .eventlog import EventLogDb, EventReplayer, HideEvent, UnhideEvent
 from .formatting import make_glyphs
-from .graph import Node, get_main_branch_oid, make_graph
+from .graph import Node, make_graph
 from .mergebase import MergeBaseDb
 from .metadata import CommitMessageProvider, CommitOidProvider, render_commit_metadata
 
@@ -44,12 +50,16 @@ def _recurse_on_oids(
     oids: List[OidStr],
     condition: Callable[[Node], bool],
 ) -> List[OidStr]:
+    head_oid = get_head_oid(repo)
     main_branch_oid = get_main_branch_oid(repo)
-    (_head_oid, graph) = make_graph(
+    branch_oids_to_names = get_branch_oid_to_names(repo)
+    graph = make_graph(
         repo=repo,
         merge_base_db=merge_base_db,
         event_replayer=event_replayer,
+        head_oid=head_oid.hex,
         main_branch_oid=main_branch_oid,
+        branch_oids=set(branch_oids_to_names),
         hide_commits=False,
     )
 

@@ -4,11 +4,18 @@ from typing import Literal, Optional, TextIO, Tuple, Union
 
 import pygit2
 
-from . import get_repo, run_git
+from . import (
+    OidStr,
+    get_branch_oid_to_names,
+    get_head_oid,
+    get_main_branch_oid,
+    get_repo,
+    run_git,
+)
 from .db import make_db_for_repo
-from .eventlog import EventLogDb, EventReplayer, OidStr
+from .eventlog import EventLogDb, EventReplayer
 from .formatting import Glyphs, make_glyphs
-from .graph import CommitGraph, find_path_to_merge_base, get_main_branch_oid, make_graph
+from .graph import CommitGraph, find_path_to_merge_base, make_graph
 from .mergebase import MergeBaseDb
 from .metadata import CommitMessageProvider, CommitOidProvider, render_commit_metadata
 from .smartlog import smartlog
@@ -118,12 +125,16 @@ def next(out: TextIO, err: TextIO, num_commits: Optional[int], towards: Towards)
     event_log_db = EventLogDb(db)
     event_replayer = EventReplayer.from_event_log_db(event_log_db)
 
+    head_oid = get_head_oid(repo)
     main_branch_oid = get_main_branch_oid(repo)
-    (head_oid, graph) = make_graph(
+    branch_oid_to_names = get_branch_oid_to_names(repo)
+    graph = make_graph(
         repo=repo,
         merge_base_db=merge_base_db,
         event_replayer=event_replayer,
+        head_oid=head_oid.hex,
         main_branch_oid=main_branch_oid,
+        branch_oids=set(branch_oid_to_names),
         hide_commits=True,
     )
 

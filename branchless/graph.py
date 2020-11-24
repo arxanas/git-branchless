@@ -2,11 +2,12 @@ import functools
 import logging
 from dataclasses import dataclass
 from queue import Queue
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Set
 
 import pygit2
 
-from .eventlog import Event, EventReplayer, OidStr
+from . import OidStr
+from .eventlog import Event, EventReplayer
 from .mergebase import MergeBaseDb
 
 
@@ -122,9 +123,9 @@ def _walk_from_commits(
     repo: pygit2.Repository,
     merge_base_db: MergeBaseDb,
     event_replayer: EventReplayer,
-    branch_oids: Set[OidStr],
-    head_oid: pygit2.Oid,
+    head_oid: Optional[OidStr],
     main_branch_oid: pygit2.Oid,
+    branch_oids: Set[OidStr],
     commit_oids: Set[OidStr],
 ) -> CommitGraph:
     """Find additional commits that should be displayed.
@@ -214,13 +215,15 @@ def _walk_from_commits(
 def _hide_commits(
     graph: CommitGraph,
     event_replayer: EventReplayer,
+    head_oid: Optional[OidStr],
     branch_oids: Set[OidStr],
-    head_oid: pygit2.Oid,
 ) -> None:
     """Remove commits from the graph according to their status."""
     # OIDs which are pointed to by HEAD or a branch should not be hidden.
     # Therefore, we can't hide them *or* their ancestors.
-    unhideable_oids = branch_oids | {head_oid.hex}
+    unhideable_oids = set(branch_oids)
+    if head_oid is not None:
+        unhideable_oids.add(head_oid)
 
     # Hide any subtrees which are entirely hidden.
     @functools.lru_cache
@@ -258,39 +261,24 @@ def _hide_commits(
             graph[parent_oid].children.remove(oid)
 
 
-def get_main_branch_oid(repo: pygit2.Repository) -> pygit2.Oid:
-    """Get the OID corresponding to the main branch.
-
-    Args:
-      repo: The Git repository.
-
-    Raises:
-      KeyError: if there was no such branch.
-
-    Returns:
-      The OID corresponding to the main branch.
-    """
-    try:
-        main_branch_name = repo.config["branchless.mainBranch"]
-    except KeyError:
-        main_branch_name = "master"
-    return repo.branches[main_branch_name].target
-
-
 def make_graph(
     repo: pygit2.Repository,
     merge_base_db: MergeBaseDb,
     event_replayer: EventReplayer,
+    head_oid: Optional[OidStr],
     main_branch_oid: pygit2.Oid,
+    branch_oids: Set[OidStr],
     hide_commits: bool,
-) -> Tuple[pygit2.Oid, CommitGraph]:
+) -> CommitGraph:
     """Construct the smartlog graph for the repo.
 
     Args:
       repo: The Git repository.
       merge_base_db: The merge-base database.
       event_replayer: The event replayer.
+      head_oid: The OID of the repository's `HEAD` reference.
       main_branch_oid: The OID of the main branch.
+      branch_oids: The set of OIDs pointed to by branches.
       hide_commits: If set to `True`, then, after constructing the graph,
         remove nodes from it that appear to be hidden by user activity. This
         should be set to `True` for most display-related purposes.
@@ -298,29 +286,18 @@ def make_graph(
     Returns:
       A tuple of the head OID and the commit graph.
     """
-
-    # We don't use `repo.head`, because that resolves the HEAD reference
-    # (e.g. into refs/head/master). We want the actual ref-log of HEAD, not
-    # the reference it points to.
-    head_ref = repo.references["HEAD"]
-    head_oid = head_ref.resolve().target
-
     commit_oids = event_replayer.get_active_oids()
-
-    branch_oids = set(
-        repo.branches[branch_name].target.hex
-        for branch_name in repo.listall_branches(pygit2.GIT_BRANCH_LOCAL)
-    )
     commit_oids.update(branch_oids)
-    commit_oids.add(head_oid.hex)
+    if head_oid is not None:
+        commit_oids.add(head_oid)
 
     graph = _walk_from_commits(
         repo=repo,
         merge_base_db=merge_base_db,
         event_replayer=event_replayer,
-        branch_oids=branch_oids,
         head_oid=head_oid,
         main_branch_oid=main_branch_oid,
+        branch_oids=branch_oids,
         commit_oids=commit_oids,
     )
     if hide_commits:
@@ -330,4 +307,4 @@ def make_graph(
             branch_oids=branch_oids,
             head_oid=head_oid,
         )
-    return (head_oid, graph)
+    return graph

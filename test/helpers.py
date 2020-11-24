@@ -1,4 +1,5 @@
 import contextlib
+import difflib
 import os
 import subprocess
 import sys
@@ -97,20 +98,19 @@ class Git:
         self.run("checkout", ["--detach", "HEAD"])
 
 
-def _rstrip_lines(lines: str) -> str:
-    return "".join(line.rstrip() + "\n" for line in lines.splitlines())
+def _rstrip_lines(lines: str) -> List[str]:
+    return [line.rstrip() + "\n" for line in lines.splitlines()]
 
 
 def compare(actual: str, expected: str) -> None:
-    actual = _rstrip_lines(actual)
-    expected = _rstrip_lines(expected)
-    print("Expected:")
-    print(expected)
-    if actual == expected:
-        print("Actual (passed):")
-    else:
-        print("Actual (failed):")
-    print(actual)
+    actual_lines = _rstrip_lines(actual)
+    expected_lines = _rstrip_lines(expected)
+
+    sys.stdout.writelines(
+        difflib.context_diff(
+            expected_lines, actual_lines, fromfile="Expected", tofile="Actual", n=999
+        )
+    )
     assert actual == expected
 
 

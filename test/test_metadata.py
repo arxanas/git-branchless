@@ -91,5 +91,5 @@ def test_relative_time_provider(git: Git) -> None:
     ],
 )
 def test_relative_time_descriptions(delta: int, expected: str) -> None:
-    actual = RelativeTimeProvider._describe_time_delta(now=delta, commit_time=0)
+    actual = RelativeTimeProvider.describe_time_delta(now=delta, previous_time=0)
     assert expected == actual

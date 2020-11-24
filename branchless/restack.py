@@ -59,10 +59,17 @@ from typing import Optional, TextIO
 
 import pygit2
 
-from . import get_repo, run_git
+from . import (
+    OidStr,
+    get_branch_oid_to_names,
+    get_head_oid,
+    get_main_branch_oid,
+    get_repo,
+    run_git,
+)
 from .db import make_db_for_repo
-from .eventlog import EventLogDb, EventReplayer, OidStr, RewriteEvent
-from .graph import CommitGraph, get_main_branch_oid, make_graph
+from .eventlog import EventLogDb, EventReplayer, RewriteEvent
+from .graph import CommitGraph, make_graph
 from .mergebase import MergeBaseDb
 from .smartlog import smartlog
 
@@ -96,12 +103,16 @@ def _restack_commits(
     preserve_timestamps: bool,
 ) -> int:
     event_replayer = EventReplayer.from_event_log_db(event_log_db)
+    head_oid = get_head_oid(repo)
     main_branch_oid = get_main_branch_oid(repo)
-    (_head_oid, graph) = make_graph(
+    branch_oid_to_names = get_branch_oid_to_names(repo)
+    graph = make_graph(
         repo=repo,
         merge_base_db=merge_base_db,
         event_replayer=event_replayer,
+        head_oid=head_oid.hex,
         main_branch_oid=main_branch_oid,
+        branch_oids=set(branch_oid_to_names),
         hide_commits=True,
     )
 
@@ -173,12 +184,16 @@ def _restack_branches(
     event_log_db: EventLogDb,
 ) -> int:
     event_replayer = EventReplayer.from_event_log_db(event_log_db)
+    head_oid = get_head_oid(repo)
     main_branch_oid = get_main_branch_oid(repo)
-    (_head_oid, graph) = make_graph(
+    branch_oid_to_names = get_branch_oid_to_names(repo)
+    graph = make_graph(
         repo=repo,
         merge_base_db=merge_base_db,
         event_replayer=event_replayer,
+        head_oid=head_oid.hex,
         main_branch_oid=main_branch_oid,
+        branch_oids=set(branch_oid_to_names),
         hide_commits=True,
     )
 

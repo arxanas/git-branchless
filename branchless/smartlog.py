@@ -11,11 +11,17 @@ from typing import List, Optional, TextIO
 import colorama
 import pygit2
 
-from . import get_repo
+from . import (
+    OidStr,
+    get_branch_oid_to_names,
+    get_head_oid,
+    get_main_branch_oid,
+    get_repo,
+)
 from .db import make_db_for_repo
-from .eventlog import EventLogDb, EventReplayer, OidStr
+from .eventlog import EventLogDb, EventReplayer
 from .formatting import Glyphs, make_glyphs
-from .graph import CommitGraph, get_main_branch_oid, make_graph
+from .graph import CommitGraph, make_graph
 from .mergebase import MergeBaseDb
 from .metadata import (
     BranchesProvider,
@@ -84,7 +90,7 @@ def _get_child_output(
     graph: CommitGraph,
     root_oids: List[OidStr],
     commit_metadata_providers: List[CommitMetadataProvider],
-    head_oid: pygit2.Oid,
+    head_oid: Optional[OidStr],
     current_oid: OidStr,
     last_child_line_char: Optional[str],
 ) -> List[str]:
@@ -104,8 +110,8 @@ def _get_child_output(
         (True, False, True): glyphs.commit_main_hidden_head,
         (True, True, False): glyphs.commit_main,
         (True, True, True): glyphs.commit_main_head,
-    }[(current.is_main, current.is_visible, current.commit.oid == head_oid)]
-    if current.commit.oid == head_oid:
+    }[(current.is_main, current.is_visible, current.commit.oid.hex == head_oid)]
+    if current.commit.oid.hex == head_oid:
         cursor = glyphs.style(style=colorama.Style.BRIGHT, message=cursor)
         text = glyphs.style(style=colorama.Style.BRIGHT, message=text)
 
@@ -155,7 +161,7 @@ def _get_output(
     glyphs: Glyphs,
     graph: CommitGraph,
     commit_metadata_providers: List[CommitMetadataProvider],
-    head_oid: pygit2.Oid,
+    head_oid: Optional[OidStr],
     root_oids: List[OidStr],
 ) -> List[str]:
     """Render a pretty graph starting from the given root OIDs in the given graph."""
@@ -208,6 +214,33 @@ def _get_output(
     return lines
 
 
+def render_graph(
+    out: TextIO,
+    glyphs: Glyphs,
+    repo: pygit2.Repository,
+    merge_base_db: MergeBaseDb,
+    graph: CommitGraph,
+    head_oid: Optional[OidStr],
+    commit_metadata_providers: List[CommitMetadataProvider],
+) -> None:
+    root_oids = _split_commit_graph_by_roots(
+        repo=repo, merge_base_db=merge_base_db, graph=graph
+    )
+    lines = _get_output(
+        glyphs=glyphs,
+        graph=graph,
+        commit_metadata_providers=commit_metadata_providers,
+        head_oid=head_oid,
+        root_oids=root_oids,
+    )
+
+    for line in lines:
+        if out.isatty():
+            out.write("\033[K")
+        out.write(line)
+        out.write("\n")
+
+
 def smartlog(*, out: TextIO) -> int:
     """Display a nice graph of commits you've recently worked on.
 
@@ -231,34 +264,33 @@ def smartlog(*, out: TextIO) -> int:
         )
 
     event_replayer = EventReplayer.from_event_log_db(event_log_db)
-    (head_oid, graph) = make_graph(
+    head_oid = get_head_oid(repo)
+    branch_oid_to_names = get_branch_oid_to_names(repo)
+    graph = make_graph(
         repo=repo,
         merge_base_db=merge_base_db,
         event_replayer=event_replayer,
+        head_oid=head_oid.hex,
         main_branch_oid=main_branch_oid,
+        branch_oids=set(branch_oid_to_names),
         hide_commits=True,
     )
 
-    commit_metadata_providers: List[CommitMetadataProvider] = [
-        CommitOidProvider(glyphs=glyphs, use_color=True),
-        RelativeTimeProvider(glyphs=glyphs, repo=repo, now=int(time.time())),
-        BranchesProvider(glyphs=glyphs, repo=repo),
-        DifferentialRevisionProvider(glyphs=glyphs, repo=repo),
-        CommitMessageProvider(),
-    ]
-
-    root_oids = _split_commit_graph_by_roots(
-        repo=repo, merge_base_db=merge_base_db, graph=graph
-    )
-    lines = _get_output(
+    render_graph(
+        out=out,
         glyphs=glyphs,
+        repo=repo,
+        merge_base_db=merge_base_db,
         graph=graph,
-        commit_metadata_providers=commit_metadata_providers,
-        head_oid=head_oid,
-        root_oids=root_oids,
+        head_oid=head_oid.hex,
+        commit_metadata_providers=[
+            CommitOidProvider(glyphs=glyphs, use_color=True),
+            RelativeTimeProvider(glyphs=glyphs, repo=repo, now=int(time.time())),
+            BranchesProvider(
+                glyphs=glyphs, repo=repo, branch_oid_to_names=branch_oid_to_names
+            ),
+            DifferentialRevisionProvider(glyphs=glyphs, repo=repo),
+            CommitMessageProvider(),
+        ],
     )
-
-    for line in lines:
-        out.write(line)
-        out.write("\n")
     return 0
