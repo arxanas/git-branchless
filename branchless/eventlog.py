@@ -62,18 +62,18 @@ class RewriteEvent(_BaseEvent):
 
     type = "rewrite"
 
-    commit_oid_old: OidStr
+    old_commit_oid: OidStr
     """The OID of the commit before the rewrite."""
 
-    commit_oid_new: OidStr
+    new_commit_oid: OidStr
     """The OID of the commit after the rewrite."""
 
     def to_row(self) -> _Row:
         return _Row(
             timestamp=self.timestamp,
             type=self.type,
-            ref1=self.commit_oid_old,
-            ref2=self.commit_oid_new,
+            ref1=self.old_commit_oid,
+            ref2=self.new_commit_oid,
             ref_name=None,
             message=None,
         )
@@ -84,7 +84,7 @@ class RewriteEvent(_BaseEvent):
         assert row.ref1 is not None
         assert row.ref2 is not None
         return cls(
-            timestamp=row.timestamp, commit_oid_old=row.ref1, commit_oid_new=row.ref2
+            timestamp=row.timestamp, old_commit_oid=row.ref1, new_commit_oid=row.ref2
         )
 
 
@@ -105,14 +105,14 @@ class RefUpdateEvent(_BaseEvent):
     For example, `HEAD` or `refs/heads/master`.
     """
 
-    ref_old: str
+    old_ref: str
     """The old referent.
 
     May be an OID (in the case of a direct reference) or another reference
     name (in the case of a symbolic reference).
     """
 
-    ref_new: str
+    new_ref: str
     """The updated referent.
 
     This may not be different from the old referent.
@@ -128,8 +128,8 @@ class RefUpdateEvent(_BaseEvent):
         return _Row(
             timestamp=self.timestamp,
             type=self.type,
-            ref1=self.ref_old,
-            ref2=self.ref_new,
+            ref1=self.old_ref,
+            ref2=self.new_ref,
             ref_name=self.ref_name,
             message=self.message,
         )
@@ -142,8 +142,8 @@ class RefUpdateEvent(_BaseEvent):
         assert row.ref_name is not None
         return cls(
             timestamp=row.timestamp,
-            ref_old=row.ref1,
-            ref_new=row.ref2,
+            old_ref=row.ref1,
+            new_ref=row.ref2,
             ref_name=row.ref_name,
             message=row.message,
         )
@@ -270,8 +270,8 @@ class EventLogDb:
 CREATE TABLE IF NOT EXISTS event_log (
     timestamp REAL NOT NULL,
     type TEXT NOT NULL,
-    ref_old TEXT,
-    ref_new TEXT,
+    old_ref TEXT,
+    new_ref TEXT,
     ref_name TEXT,
     message TEXT
 )
@@ -295,8 +295,8 @@ CREATE TABLE IF NOT EXISTS event_log (
 INSERT INTO event_log VALUES (
     :timestamp,
     :type,
-    :ref_old,
-    :ref_new,
+    :old_ref,
+    :new_ref,
     :ref_name,
     :message
 )
@@ -304,8 +304,8 @@ INSERT INTO event_log VALUES (
                     {
                         "timestamp": row.timestamp,
                         "type": row.type,
-                        "ref_old": row.ref1,
-                        "ref_new": row.ref2,
+                        "old_ref": row.ref1,
+                        "new_ref": row.ref2,
                         "ref_name": row.ref_name,
                         "message": row.message,
                     },
@@ -320,7 +320,7 @@ INSERT INTO event_log VALUES (
         with make_cursor(self._conn) as cursor:
             result = cursor.execute(
                 """
-SELECT timestamp, type, ref_old, ref_new, ref_name, message
+SELECT timestamp, type, old_ref, new_ref, ref_name, message
 FROM event_log
 ORDER BY timestamp ASC,
          rowid ASC
@@ -364,10 +364,10 @@ def hook_post_rewrite(out: TextIO) -> None:
     events = []
     for line in sys.stdin:
         line = line.strip()
-        [ref_old, ref_new, *extras] = line.split(" ")
+        [old_ref, new_ref, *extras] = line.split(" ")
         events.append(
             RewriteEvent(
-                timestamp=timestamp, commit_oid_old=ref_old, commit_oid_new=ref_new
+                timestamp=timestamp, old_commit_oid=old_ref, new_commit_oid=new_ref
             )
         )
     out.write(f"branchless: processing {len(events)} rewritten commit(s)\n")
@@ -399,8 +399,8 @@ def hook_post_checkout(
         [
             RefUpdateEvent(
                 timestamp=timestamp,
-                ref_old=previous_head_ref,
-                ref_new=current_head_ref,
+                old_ref=previous_head_ref,
+                new_ref=current_head_ref,
                 ref_name="HEAD",
                 message=None,
             )
@@ -458,10 +458,10 @@ class EventReplayer:
           replayer in order from oldest to newest.
         """
         if isinstance(event, RewriteEvent):
-            self._commit_history[event.commit_oid_old].append(
+            self._commit_history[event.old_commit_oid].append(
                 (_EventClassification.HIDE, event)
             )
-            self._commit_history[event.commit_oid_new].append(
+            self._commit_history[event.new_commit_oid].append(
                 (_EventClassification.SHOW, event)
             )
         elif isinstance(event, RefUpdateEvent):

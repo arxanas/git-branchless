@@ -74,8 +74,8 @@ def _find_rewrite_target(
     if not isinstance(event, RewriteEvent):
         return None
 
-    if event.commit_oid_old == oid and event.commit_oid_new != oid:
-        new_oid = event.commit_oid_new
+    if event.old_commit_oid == oid and event.new_commit_oid != oid:
+        new_oid = event.new_commit_oid
         possible_newer_oid = _find_rewrite_target(
             graph=graph, event_replayer=event_replayer, oid=new_oid
         )
