@@ -25,7 +25,7 @@ class Glyphs(Protocol):
     commit_master_head: str
     bullet_point: str
 
-    def color_fg(self, color: colorama.Fore, message: str) -> str:
+    def color_fg(self, color: colorama.Fore, message: str) -> str:  # pragma: no cover
         """Render the foreground (text) color for the given message.
 
         Args:
@@ -38,7 +38,7 @@ class Glyphs(Protocol):
         """
         ...
 
-    def style(self, style: colorama.Style, message: str) -> str:
+    def style(self, style: colorama.Style, message: str) -> str:  # pragma: no cover
         """Apply a certain style to the given message.
 
         Args:

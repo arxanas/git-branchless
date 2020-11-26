@@ -11,6 +11,10 @@ def test_help() -> None:
         assert main(["--help"], out=out, err=err) == 0
         assert "usage: branchless" in out.getvalue()
 
+    with io.StringIO() as out, io.StringIO() as err:
+        assert main([], out=out, err=err) == 1
+        assert "usage: branchless" in out.getvalue()
+
 
 def test_commands(tmpdir: py.path.local) -> None:
     with tmpdir.as_cwd():

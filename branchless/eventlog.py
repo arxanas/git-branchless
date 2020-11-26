@@ -42,11 +42,11 @@ class _Row:
 class _BaseEvent:
     timestamp: float
 
-    def to_row(self) -> _Row:
+    def to_row(self) -> _Row:  # pragma: no cover
         raise NotImplementedError()
 
     @classmethod
-    def from_row(cls, row: _Row) -> "Event":
+    def from_row(cls, row: _Row) -> "Event":  # pragma: no cover
         raise NotImplementedError()
 
 
@@ -348,7 +348,7 @@ ORDER BY timestamp ASC,
                 events.append(HideEvent.from_row(row))
             elif type == UnhideEvent.type:
                 events.append(UnhideEvent.from_row(row))
-            else:
+            else:  # pragma: no cover
                 raise TypeError(f"Unknown event log type: {type}")
 
         return events
@@ -479,7 +479,7 @@ class EventReplayer:
             self._commit_history[event.commit_oid].append(
                 (_EventClassification.SHOW, event)
             )
-        else:
+        else:  # pragma: no cover
             raise TypeError(f"Unhandled event: {event}")
 
     def get_commit_visibility(

@@ -91,6 +91,7 @@ def test_relative_time_provider(tmpdir: py.path.local) -> None:
         (60 * 60, "1h"),
         (60 * 60 * 24 * 3, "3d"),
         (60 * 60 * 24 * 300, "300d"),
+        (60 * 60 * 24 * 400, "1y"),
     ],
 )
 def test_relative_time_descriptions(delta: int, expected: str) -> None:

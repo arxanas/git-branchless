@@ -79,7 +79,7 @@ def _update_hook_contents(hook: _Hook, hook_contents: str) -> None:
         # Can safely overwrite, since our hook exists in its own file. No need
         # to update the hook contents.
         pass
-    else:
+    else:  # pragma: no cover
         raise TypeError(f"Unknown hook type: {hook}")
 
     hook.path.parent.mkdir(parents=True, exist_ok=True)
