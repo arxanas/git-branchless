@@ -76,5 +76,6 @@ def run_git(out: TextIO, err: TextIO, args: List[str]) -> int:
     out.write(f"branchless: {' '.join(args)}\n")
     out.flush()
     err.flush()
+
     result = subprocess.run(args, stdout=out, stderr=err)
     return result.returncode

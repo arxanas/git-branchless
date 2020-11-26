@@ -37,6 +37,7 @@ def git(
         # commit` later as a part of their execution.
         "GIT_EDITOR": "true",
     }
+    env.update({k: v for k, v in os.environ.items() if k.startswith("COV_")})
 
     result = subprocess.run(
         args,

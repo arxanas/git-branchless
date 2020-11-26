@@ -1,0 +1,2 @@
+def init() -> None:
+    pass

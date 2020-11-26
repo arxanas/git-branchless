@@ -135,4 +135,11 @@ def main(argv: List[str], *, out: TextIO, err: TextIO) -> int:
 
 
 if __name__ == "__main__":
+    try:
+        from pytest_cov.embed import init as pytest_cov_init
+
+        pytest_cov_init()
+    except ImportError:  # pragma: no cover
+        pass
+
     sys.exit(main(sys.argv[1:], out=sys.stdout, err=sys.stderr))

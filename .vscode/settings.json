@@ -4,7 +4,9 @@
     "python.linting.enabled": true,
     "python.formatting.provider": "black",
     "python.testing.pytestArgs": [
-        "."
+        ".",
+        "-n",
+        "auto"
     ],
     "python.testing.unittestEnabled": false,
     "python.testing.nosetestsEnabled": false,
