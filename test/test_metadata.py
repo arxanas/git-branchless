@@ -2,76 +2,72 @@ import io
 import time
 from unittest.mock import patch
 
-import py
 import pytest
 
 from branchless.metadata import RelativeTimeProvider
 from branchless.smartlog import smartlog
-from helpers import compare, git, git_commit_file, git_init_repo
+from helpers import Git, compare
 
 
-def test_multiple_branches_for_same_commit(tmpdir: py.path.local) -> None:
-    with tmpdir.as_cwd():
-        git_init_repo()
-        git("branch", ["abc"])
-        git("branch", ["xyz"])
+def test_multiple_branches_for_same_commit(git: Git) -> None:
+    git.init_repo()
+    git.run("branch", ["abc"])
+    git.run("branch", ["xyz"])
 
-        # Ensure that the branches are always in alphabetical order.
-        for i in range(10):
-            with io.StringIO() as out:
-                assert smartlog(out=out) == 0
-                compare(
-                    actual=out.getvalue(),
-                    expected="""\
-@ f777ecc9 (abc, master, xyz) create initial.txt
-""",
-                )
-
-
-def test_differential_revision_provider(tmpdir: py.path.local) -> None:
-    with tmpdir.as_cwd():
-        git_init_repo()
-        git_commit_file(name="name1", time=1)
-        git(
-            "commit",
-            [
-                "--amend",
-                "-m",
-                """\
-create test1.txt
-
-Differential Revision: https://some-phabricator-url.example/D12345
-""",
-            ],
-        )
-
+    # Ensure that the branches are always in alphabetical order.
+    for i in range(10):
         with io.StringIO() as out:
             assert smartlog(out=out) == 0
             compare(
                 actual=out.getvalue(),
                 expected="""\
+@ f777ecc9 (abc, master, xyz) create initial.txt
+""",
+            )
+
+
+def test_differential_revision_provider(git: Git) -> None:
+    git.init_repo()
+    git.commit_file(name="name1", time=1)
+    git.run(
+        "commit",
+        [
+            "--amend",
+            "-m",
+            """\
+create test1.txt
+
+Differential Revision: https://some-phabricator-url.example/D12345
+""",
+        ],
+    )
+
+    with io.StringIO() as out:
+        assert smartlog(out=out) == 0
+        compare(
+            actual=out.getvalue(),
+            expected="""\
 :
 @ 4d4ded9a (master) D12345 create test1.txt
 """,
-            )
+        )
 
 
-def test_relative_time_provider(tmpdir: py.path.local) -> None:
-    with tmpdir.as_cwd():
-        git_init_repo()
-        git("config", ["branchless.commitMetadata.relativeTime", "true"])
+def test_relative_time_provider(git: Git) -> None:
+    git.init_repo()
+    git.run("config", ["branchless.commitMetadata.relativeTime", "true"])
 
-        initial_commit_timestamp = int(git("show", ["-s", "--format=%ct"]).strip())
-        with io.StringIO() as out, patch.object(
-            time, "time", return_value=initial_commit_timestamp + 10
-        ):
-            assert smartlog(out=out) == 0
-            compare(
-                actual=out.getvalue(),
-                expected="""\
+    initial_commit_timestamp = int(git.run("show", ["-s", "--format=%ct"]).strip())
+    with io.StringIO() as out, patch.object(
+        time, "time", return_value=initial_commit_timestamp + 10
+    ):
+        assert smartlog(out=out) == 0
+        compare(
+            actual=out.getvalue(),
+            expected="""\
 @ f777ecc9 10s (master) create initial.txt
 """,
-            )
+        )
 
 
 @pytest.mark.parametrize(

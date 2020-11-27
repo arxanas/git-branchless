@@ -6,92 +6,95 @@ import tempfile
 from pathlib import Path
 from typing import Iterator, List, Optional, TextIO, cast
 
+import py
+
 DUMMY_NAME = "Testy McTestface"
 DUMMY_EMAIL = "test@example.com"
 DUMMY_DATE = "Wed 29 Oct 12:34:56 2020 PDT"
 
 
-def git(
-    command: str,
-    args: Optional[List[str]] = None,
-    time: int = 0,
-    check: bool = True,
-) -> str:
-    if args is None:
-        args = []
-    args = ["git", command, *args]
+class Git:
+    def __init__(self, path: py.path.local) -> None:
+        self.path = path
 
-    # Required for determinism, as these values will be baked into the commit
-    # hash.
-    date = f"{DUMMY_DATE} -{time:02d}00"
-    env = {
-        "GIT_AUTHOR_NAME": DUMMY_NAME,
-        "GIT_AUTHOR_EMAIL": DUMMY_EMAIL,
-        "GIT_AUTHOR_DATE": date,
-        "GIT_COMMITTER_NAME": DUMMY_NAME,
-        "GIT_COMMITTER_EMAIL": DUMMY_EMAIL,
-        "GIT_COMMITTER_DATE": date,
-        # Fake "editor" which accepts the default contents of any commit
-        # messages. Usually, we can set this with `git commit -m`, but we have
-        # no such option for things such as `git rebase`, which may call `git
-        # commit` later as a part of their execution.
-        "GIT_EDITOR": "true",
-    }
-    env.update({k: v for k, v in os.environ.items() if k.startswith("COV_")})
+    def init_repo(self) -> None:
+        self.run("init")
+        self.commit_file(name="initial", time=0)
 
-    result = subprocess.run(
-        args,
-        stdout=subprocess.PIPE,
-        env=env,
-        check=check,
-    )
-    return result.stdout.decode()
+        python_path = Path(__file__).parent.parent
+        self.run(
+            "config",
+            [
+                "alias.branchless",
+                f"!env PYTHONPATH={python_path} {sys.executable} -m branchless",
+            ],
+        )
 
+        # Silence some log-spam.
+        self.run("config", ["advice.detachedHead", "false"])
 
-def git_commit_file(name: str, time: int, contents: Optional[str] = None) -> None:
-    path = os.path.join(os.getcwd(), f"{name}.txt")
-    with open(path, "w") as f:
-        if contents is None:
-            f.write(f"{name} contents\n")
-        else:
+        # Non-deterministic metadata (depends on current time).
+        self.run("config", ["branchless.commitMetadata.relativeTime", "false"])
+
+        self.run("branchless", ["init"])
+
+    def run(
+        self,
+        command: str,
+        args: Optional[List[str]] = None,
+        time: int = 0,
+        check: bool = True,
+    ) -> str:
+        if args is None:
+            args = []
+        args = ["git", command, *args]
+
+        # Required for determinism, as these values will be baked into the commit
+        # hash.
+        date = f"{DUMMY_DATE} -{time:02d}00"
+        env = {
+            "GIT_AUTHOR_NAME": DUMMY_NAME,
+            "GIT_AUTHOR_EMAIL": DUMMY_EMAIL,
+            "GIT_AUTHOR_DATE": date,
+            "GIT_COMMITTER_NAME": DUMMY_NAME,
+            "GIT_COMMITTER_EMAIL": DUMMY_EMAIL,
+            "GIT_COMMITTER_DATE": date,
+            # Fake "editor" which accepts the default contents of any commit
+            # messages. Usually, we can set this with `git commit -m`, but we have
+            # no such option for things such as `git rebase`, which may call `git
+            # commit` later as a part of their execution.
+            "GIT_EDITOR": "true",
+        }
+        env.update({k: v for k, v in os.environ.items() if k.startswith("COV_")})
+
+        result = subprocess.run(
+            args,
+            stdout=subprocess.PIPE,
+            env=env,
+            check=check,
+        )
+        return result.stdout.decode()
+
+    def commit_file(self, name: str, time: int, contents: Optional[str] = None) -> None:
+        path = os.path.join(os.getcwd(), f"{name}.txt")
+        with open(path, "w") as f:
+            if contents is None:
+                f.write(f"{name} contents\n")
+            else:
+                f.write(contents)
+                f.write("\n")
+        self.run("add", ["."])
+        self.run("commit", ["-m", f"create {name}.txt"], time=time)
+
+    def resolve_file(self, name: str, contents: str) -> None:
+        path = os.path.join(os.getcwd(), f"{name}.txt")
+        with open(path, "w") as f:
             f.write(contents)
             f.write("\n")
-    git("add", ["."])
-    git("commit", ["-m", f"create {name}.txt"], time=time)
+        self.run("add", [path])
 
-
-def git_resolve_file(name: str, contents: str) -> None:
-    path = os.path.join(os.getcwd(), f"{name}.txt")
-    with open(path, "w") as f:
-        f.write(contents)
-        f.write("\n")
-    git("add", [path])
-
-
-def git_init_repo() -> None:
-    git("init")
-    git_commit_file(name="initial", time=0)
-
-    python_path = Path(__file__).parent.parent
-    git(
-        "config",
-        [
-            "alias.branchless",
-            f"!env PYTHONPATH={python_path} {sys.executable} -m branchless",
-        ],
-    )
-
-    # Silence some log-spam.
-    git("config", ["advice.detachedHead", "false"])
-
-    # Non-deterministic metadata (depends on current time).
-    git("config", ["branchless.commitMetadata.relativeTime", "false"])
-
-    git("branchless", ["init"])
-
-
-def git_detach_head() -> None:
-    git("checkout", ["--detach", "HEAD"])
+    def detach_head(self) -> None:
+        self.run("checkout", ["--detach", "HEAD"])
 
 
 def _rstrip_lines(lines: str) -> str:

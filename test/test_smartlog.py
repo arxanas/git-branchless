@@ -1,22 +1,12 @@
 import io
 
-import py
-
 from branchless.smartlog import smartlog
-from helpers import (
-    compare,
-    git,
-    git_commit_file,
-    git_detach_head,
-    git_init_repo,
-    git_resolve_file,
-)
+from helpers import Git, compare
 
 
-def test_init(tmpdir: py.path.local) -> None:
-    with tmpdir.as_cwd(), io.StringIO() as out:
-        git_init_repo()
-
+def test_init(git: Git) -> None:
+    git.init_repo()
+    with io.StringIO() as out:
         assert smartlog(out=out) == 0
         compare(
             actual=out.getvalue(),
@@ -26,12 +16,12 @@ def test_init(tmpdir: py.path.local) -> None:
         )
 
 
-def test_show_reachable_commit(tmpdir: py.path.local) -> None:
-    with tmpdir.as_cwd(), io.StringIO() as out:
-        git_init_repo()
-        git("checkout", ["-b", "initial-branch", "master"])
-        git_commit_file(name="test", time=1)
+def test_show_reachable_commit(git: Git) -> None:
+    git.init_repo()
+    git.run("checkout", ["-b", "initial-branch", "master"])
+    git.commit_file(name="test", time=1)
 
+    with io.StringIO() as out:
         assert smartlog(out=out) == 0
         compare(
             actual=out.getvalue(),
@@ -43,15 +33,15 @@ O f777ecc9 (master) create initial.txt
         )
 
 
-def test_tree(tmpdir: py.path.local) -> None:
-    with tmpdir.as_cwd(), io.StringIO() as out:
-        git_init_repo()
-        git_detach_head()
-        git("branch", ["initial"])
-        git_commit_file(name="test1", time=1)
-        git("checkout", ["initial"])
-        git_commit_file(name="test2", time=2)
+def test_tree(git: Git) -> None:
+    git.init_repo()
+    git.detach_head()
+    git.run("branch", ["initial"])
+    git.commit_file(name="test1", time=1)
+    git.run("checkout", ["initial"])
+    git.commit_file(name="test2", time=2)
 
+    with io.StringIO() as out:
         assert smartlog(out=out) == 0
         compare(
             actual=out.getvalue(),
@@ -65,16 +55,16 @@ O f777ecc9 (master) create initial.txt
         )
 
 
-def test_rebase(tmpdir: py.path.local) -> None:
-    with tmpdir.as_cwd(), io.StringIO() as out:
-        git_init_repo()
-        git("checkout", ["-b", "test1", "master"])
-        git_commit_file(name="test1", time=1)
-        git("checkout", ["master"])
-        git_detach_head()
-        git_commit_file(name="test2", time=2)
-        git("rebase", ["test1"])
+def test_rebase(git: Git) -> None:
+    git.init_repo()
+    git.run("checkout", ["-b", "test1", "master"])
+    git.commit_file(name="test1", time=1)
+    git.run("checkout", ["master"])
+    git.detach_head()
+    git.commit_file(name="test2", time=2)
+    git.run("rebase", ["test1"])
 
+    with io.StringIO() as out:
         assert smartlog(out=out) == 0
         compare(
             actual=out.getvalue(),
@@ -88,13 +78,13 @@ o 62fc20d2 (test1) create test1.txt
         )
 
 
-def test_sequential_master_commits(tmpdir: py.path.local) -> None:
-    with tmpdir.as_cwd(), io.StringIO() as out:
-        git_init_repo()
-        git_commit_file(name="test1", time=1)
-        git_commit_file(name="test2", time=2)
-        git_commit_file(name="test3", time=3)
+def test_sequential_master_commits(git: Git) -> None:
+    git.init_repo()
+    git.commit_file(name="test1", time=1)
+    git.commit_file(name="test2", time=2)
+    git.commit_file(name="test3", time=3)
 
+    with io.StringIO() as out:
         assert smartlog(out=out) == 0
         compare(
             actual=out.getvalue(),
@@ -105,16 +95,16 @@ def test_sequential_master_commits(tmpdir: py.path.local) -> None:
         )
 
 
-def test_merge_commit(tmpdir: py.path.local) -> None:
-    with tmpdir.as_cwd(), io.StringIO() as out:
-        git_init_repo()
-        git("checkout", ["-b", "test1", "master"])
-        git_commit_file(name="test1", time=1)
-        git("checkout", ["-b", "test2and3", "master"])
-        git_commit_file(name="test2", time=2)
-        git_commit_file(name="test3", time=3)
-        git("merge", ["test1"], time=4)
+def test_merge_commit(git: Git) -> None:
+    git.init_repo()
+    git.run("checkout", ["-b", "test1", "master"])
+    git.commit_file(name="test1", time=1)
+    git.run("checkout", ["-b", "test2and3", "master"])
+    git.commit_file(name="test2", time=2)
+    git.commit_file(name="test3", time=3)
+    git.run("merge", ["test1"], time=4)
 
+    with io.StringIO() as out:
         # Note that we may want to change the rendering/handling of merge
         # commits in the future. Currently, we ignore the fact that merge
         # commits have multiple parents, and pick a single parent with which to
@@ -137,19 +127,19 @@ o 02067177 create test3.txt
         )
 
 
-def test_rebase_conflict(tmpdir: py.path.local) -> None:
-    with tmpdir.as_cwd(), io.StringIO() as out:
-        git_init_repo()
-        git("checkout", ["-b", "branch1", "master"])
-        git_commit_file(name="test", time=1, contents="contents 1")
-        git("checkout", ["-b", "branch2", "master"])
-        git_commit_file(name="test", time=2, contents="contents 2")
+def test_rebase_conflict(git: Git) -> None:
+    git.init_repo()
+    git.run("checkout", ["-b", "branch1", "master"])
+    git.commit_file(name="test", time=1, contents="contents 1")
+    git.run("checkout", ["-b", "branch2", "master"])
+    git.commit_file(name="test", time=2, contents="contents 2")
 
-        # Should produce a conflict.
-        git("rebase", ["branch1"], check=False)
-        git_resolve_file(name="test", contents="contents resolved")
-        git("rebase", ["--continue"])
+    # Should produce a conflict.
+    git.run("rebase", ["branch1"], check=False)
+    git.resolve_file(name="test", contents="contents resolved")
+    git.run("rebase", ["--continue"])
 
+    with io.StringIO() as out:
         assert smartlog(out=out) == 0
         compare(
             actual=out.getvalue(),
@@ -163,17 +153,17 @@ o 88646b56 (branch1) create test.txt
         )
 
 
-def test_non_adjacent_commits(tmpdir: py.path.local) -> None:
-    with tmpdir.as_cwd(), io.StringIO() as out:
-        git_init_repo()
-        git_detach_head()
-        git_commit_file(name="test1", time=1)
-        git("checkout", ["master"])
-        git_commit_file(name="test2", time=2)
-        git_commit_file(name="test3", time=3)
-        git_detach_head()
-        git_commit_file(name="test4", time=4)
+def test_non_adjacent_commits(git: Git) -> None:
+    git.init_repo()
+    git.detach_head()
+    git.commit_file(name="test1", time=1)
+    git.run("checkout", ["master"])
+    git.commit_file(name="test2", time=2)
+    git.commit_file(name="test3", time=3)
+    git.detach_head()
+    git.commit_file(name="test4", time=4)
 
+    with io.StringIO() as out:
         assert smartlog(out=out) == 0
         compare(
             actual=out.getvalue(),
@@ -189,18 +179,18 @@ O 02067177 (master) create test3.txt
         )
 
 
-def test_non_adjacent_commits2(tmpdir: py.path.local) -> None:
-    with tmpdir.as_cwd(), io.StringIO() as out:
-        git_init_repo()
-        git_detach_head()
-        git_commit_file(name="test1", time=1)
-        git_commit_file(name="test2", time=2)
-        git("checkout", ["master"])
-        git_commit_file(name="test3", time=3)
-        git_commit_file(name="test4", time=4)
-        git_detach_head()
-        git_commit_file(name="test5", time=5)
+def test_non_adjacent_commits2(git: Git) -> None:
+    git.init_repo()
+    git.detach_head()
+    git.commit_file(name="test1", time=1)
+    git.commit_file(name="test2", time=2)
+    git.run("checkout", ["master"])
+    git.commit_file(name="test3", time=3)
+    git.commit_file(name="test4", time=4)
+    git.detach_head()
+    git.commit_file(name="test5", time=5)
 
+    with io.StringIO() as out:
         assert smartlog(out=out) == 0
         compare(
             actual=out.getvalue(),
@@ -218,20 +208,20 @@ O 2b633ed7 (master) create test4.txt
         )
 
 
-def test_non_adjacent_commits3(tmpdir: py.path.local) -> None:
-    with tmpdir.as_cwd(), io.StringIO() as out:
-        git_init_repo()
-        git_commit_file(name="test1", time=1)
-        git_detach_head()
-        git_commit_file(name="test2", time=2)
-        git("checkout", ["master"])
-        git_commit_file(name="test3", time=3)
-        git_detach_head()
-        git_commit_file(name="test4", time=4)
-        git("checkout", ["master"])
-        git_commit_file(name="test5", time=5)
-        git_commit_file(name="test6", time=6)
+def test_non_adjacent_commits3(git: Git) -> None:
+    git.init_repo()
+    git.commit_file(name="test1", time=1)
+    git.detach_head()
+    git.commit_file(name="test2", time=2)
+    git.run("checkout", ["master"])
+    git.commit_file(name="test3", time=3)
+    git.detach_head()
+    git.commit_file(name="test4", time=4)
+    git.run("checkout", ["master"])
+    git.commit_file(name="test5", time=5)
+    git.commit_file(name="test6", time=6)
 
+    with io.StringIO() as out:
         assert smartlog(out=out) == 0
         compare(
             actual=out.getvalue(),
@@ -250,31 +240,30 @@ O 4838e49b create test3.txt
         )
 
 
-def test_amended_initial_commit(tmpdir: py.path.local) -> None:
-    with tmpdir.as_cwd():
-        git_init_repo()
-        git_commit_file(name="test1", time=1)
-        git("checkout", ["HEAD^"])
-        git("commit", ["--amend", "-m", "new initial commit"])
+def test_amended_initial_commit(git: Git) -> None:
+    git.init_repo()
+    git.commit_file(name="test1", time=1)
+    git.run("checkout", ["HEAD^"])
+    git.run("commit", ["--amend", "-m", "new initial commit"])
 
-        with io.StringIO() as out:
-            assert smartlog(out=out) == 0
-            # Pathological output, could be changed.
-            compare(
-                actual=out.getvalue(),
-                expected="""\
+    with io.StringIO() as out:
+        assert smartlog(out=out) == 0
+        # Pathological output, could be changed.
+        compare(
+            actual=out.getvalue(),
+            expected="""\
 :
 O 62fc20d2 (master) create test1.txt
 """,
-            )
+        )
 
-        git("rebase", ["--onto", "HEAD", "HEAD", "master"])
-        with io.StringIO() as out:
-            assert smartlog(out=out) == 0
-            compare(
-                actual=out.getvalue(),
-                expected="""\
+    git.run("rebase", ["--onto", "HEAD", "HEAD", "master"])
+    with io.StringIO() as out:
+        assert smartlog(out=out) == 0
+        compare(
+            actual=out.getvalue(),
+            expected="""\
 :
 @ f402d39c (master) create test1.txt
 """,
-            )
+        )
