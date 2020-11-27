@@ -15,7 +15,7 @@ from . import get_repo
 from .db import make_db_for_repo
 from .eventlog import EventLogDb, EventReplayer, OidStr
 from .formatting import Glyphs, make_glyphs
-from .graph import CommitGraph, make_graph
+from .graph import CommitGraph, get_master_oid, make_graph
 from .mergebase import MergeBaseDb
 from .metadata import (
     BranchesProvider,
@@ -193,6 +193,7 @@ def smartlog(*, out: TextIO) -> int:
     glyphs = make_glyphs(out)
 
     repo = get_repo()
+    master_oid = get_master_oid(repo)
 
     db = make_db_for_repo(repo)
     event_log_db = EventLogDb(db)
@@ -207,6 +208,7 @@ def smartlog(*, out: TextIO) -> int:
         repo=repo,
         merge_base_db=merge_base_db,
         event_replayer=event_replayer,
+        master_oid=master_oid,
     )
 
     commit_metadata_providers: List[CommitMetadataProvider] = [

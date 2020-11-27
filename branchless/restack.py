@@ -62,7 +62,7 @@ import pygit2
 from . import get_repo, run_git
 from .db import make_db_for_repo
 from .eventlog import EventLogDb, EventReplayer, OidStr, RewriteEvent
-from .graph import CommitGraph, make_graph
+from .graph import CommitGraph, get_master_oid, make_graph
 from .mergebase import MergeBaseDb
 from .smartlog import smartlog
 
@@ -96,8 +96,12 @@ def _restack_commits(
     preserve_timestamps: bool,
 ) -> int:
     event_replayer = EventReplayer.from_event_log_db(event_log_db)
+    master_oid = get_master_oid(repo)
     (_head_oid, graph) = make_graph(
-        repo=repo, merge_base_db=merge_base_db, event_replayer=event_replayer
+        repo=repo,
+        merge_base_db=merge_base_db,
+        event_replayer=event_replayer,
+        master_oid=master_oid,
     )
 
     for oid in graph:
@@ -154,8 +158,12 @@ def _restack_branches(
     event_log_db: EventLogDb,
 ) -> int:
     event_replayer = EventReplayer.from_event_log_db(event_log_db)
+    master_oid = get_master_oid(repo)
     (_head_oid, graph) = make_graph(
-        repo=repo, merge_base_db=merge_base_db, event_replayer=event_replayer
+        repo=repo,
+        merge_base_db=merge_base_db,
+        event_replayer=event_replayer,
+        master_oid=master_oid,
     )
 
     for branch_name in repo.listall_branches(pygit2.GIT_BRANCH_LOCAL):

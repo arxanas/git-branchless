@@ -234,10 +234,26 @@ def _hide_commits(
             graph[parent_oid].children.remove(oid)
 
 
+def get_master_oid(repo: pygit2.Repository) -> pygit2.Oid:
+    """Get the OID corresponding to the `master` branch.
+
+    Args:
+      repo: The Git repository.
+
+    Raises:
+      KeyError: if there was no such branch.
+
+    Returns:
+      The OID corresponding to the `master` branch.
+    """
+    return repo.branches["master"].target
+
+
 def make_graph(
     repo: pygit2.Repository,
     merge_base_db: MergeBaseDb,
     event_replayer: EventReplayer,
+    master_oid: pygit2.Oid,
 ) -> Tuple[pygit2.Oid, CommitGraph]:
     """Construct the smartlog graph for the repo.
 
@@ -264,8 +280,6 @@ def make_graph(
     )
     visible_commit_oids.update(branch_oids)
     visible_commit_oids.add(head_oid.hex)
-
-    master_oid = repo.branches["master"].target
 
     graph = _walk_from_visible_commits(
         repo=repo,

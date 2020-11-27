@@ -5,7 +5,7 @@ from . import get_repo, run_git
 from .db import make_db_for_repo
 from .eventlog import EventLogDb, EventReplayer
 from .formatting import make_glyphs
-from .graph import make_graph
+from .graph import get_master_oid, make_graph
 from .mergebase import MergeBaseDb
 from .metadata import CommitMessageProvider, CommitOidProvider, render_commit_metadata
 from .smartlog import smartlog
@@ -30,13 +30,17 @@ def next(
 ) -> int:
     glyphs = make_glyphs(out)
     repo = get_repo()
+    master_oid = get_master_oid(repo)
     db = make_db_for_repo(repo)
     merge_base_db = MergeBaseDb(db)
     event_log_db = EventLogDb(db)
     event_replayer = EventReplayer.from_event_log_db(event_log_db)
 
     (head_oid, graph) = make_graph(
-        repo=repo, merge_base_db=merge_base_db, event_replayer=event_replayer
+        repo=repo,
+        merge_base_db=merge_base_db,
+        event_replayer=event_replayer,
+        master_oid=master_oid,
     )
 
     if num_commits is None:
