@@ -60,17 +60,28 @@ CommitGraph = Dict[OidStr, Node]
 """Graph of commits that the user is working on."""
 
 
-def _find_path_to_merge_base(
+def find_path_to_merge_base(
     repo: pygit2.Repository,
     commit_oid: pygit2.Oid,
     target_oid: pygit2.Oid,
-) -> List[pygit2.Commit]:
+) -> Optional[List[pygit2.Commit]]:
     """Find a shortest path between the given commits.
 
     This is particularly important for multi-parent commits (i.e. merge
     commits). If we don't happen to traverse the correct parent, we may end
     up traversing a huge amount of commit history, with a significant
     performance hit.
+
+    Args:
+      repo: The Git repository.
+      commit_oid: The OID of the commit to start at. We take parents of the
+        provided commit until we end up at the target OID.
+      target_oid: The OID of the commit to end at.
+
+    Returns:
+      A path of commits from `commit_oid` through parents to `target_oid`.
+      The path includes `commit_oid` at the beginning and `target_oid` at the
+      end. If there is no such path, returns `None`.
     """
     queue: Queue[List[pygit2.Commit]] = Queue()
     queue.put([repo[commit_oid]])
@@ -81,9 +92,7 @@ def _find_path_to_merge_base(
 
         for parent in path[-1].parents:
             queue.put(path + [parent])
-    raise ValueError(
-        f"No path between {commit_oid} and {target_oid}",
-    )
+    return None
 
 
 def _walk_from_visible_commits(
@@ -132,11 +141,18 @@ def _walk_from_visible_commits(
 
         current_commit = repo[commit_oid]
         previous_oid = None
-        for current_commit in _find_path_to_merge_base(
+        path_to_merge_base = find_path_to_merge_base(
             repo=repo,
             commit_oid=commit_oid,
             target_oid=merge_base_oid,
-        ):
+        )
+        if path_to_merge_base is None:
+            # All visible commits should be rooted in master, so this shouldn't
+            # happen.
+            logging.warning("No path to merge-base for commit %s", commit_oid)
+            continue
+
+        for current_commit in path_to_merge_base:
             current_oid = current_commit.oid.hex
 
             if current_oid not in graph:

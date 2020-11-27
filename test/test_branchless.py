@@ -58,9 +58,8 @@ O 3df4b935 (master) create test.txt
         compare(
             actual=git("next"),
             expected="""\
-branchless: git checkout f777ecc9b0db5ed372b2615695191a8a17f79f24
-@ f777ecc9 create initial.txt
-|
-O 3df4b935 (master) create test.txt
+branchless: git checkout 3df4b9355b3b072aa6c50c6249bf32e289b3a661
+:
+@ 3df4b935 (master) create test.txt
 """,
         )

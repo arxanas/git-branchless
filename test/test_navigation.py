@@ -151,3 +151,56 @@ O f777ecc9 (master) create initial.txt
 @ 98b9119d create test3.txt
 """,
             )
+
+
+def test_next_on_master(tmpdir: py.path.local) -> None:
+    with tmpdir.as_cwd():
+        git_init_repo()
+        git_commit_file(name="test1", time=1)
+        git_commit_file(name="test2", time=2)
+        git_detach_head()
+        git_commit_file(name="test3", time=3)
+        git("checkout", ["HEAD^^"])
+
+        with capture() as out, capture() as err:
+            assert (
+                next(out=out.stream, err=err.stream, num_commits=2, towards=None) == 0
+            )
+            compare(
+                actual=out.getvalue(),
+                expected="""\
+branchless: git checkout 70deb1e28791d8e7dd5a1f0c871a51b91282562f
+:
+O 96d1c37a (master) create test2.txt
+|
+@ 70deb1e2 create test3.txt
+""",
+            )
+
+
+def test_next_on_master2(tmpdir: py.path.local) -> None:
+    with tmpdir.as_cwd():
+        git_init_repo()
+        git_commit_file(name="test1", time=1)
+        git_detach_head()
+        git_commit_file(name="test2", time=2)
+        git_commit_file(name="test3", time=3)
+        git("checkout", ["HEAD^"])
+
+        with capture() as out, capture() as err:
+            assert (
+                next(out=out.stream, err=err.stream, num_commits=None, towards=None)
+                == 0
+            )
+            compare(
+                actual=out.getvalue(),
+                expected="""\
+branchless: git checkout 70deb1e28791d8e7dd5a1f0c871a51b91282562f
+:
+O 62fc20d2 (master) create test1.txt
+|
+o 96d1c37a create test2.txt
+|
+@ 70deb1e2 create test3.txt
+""",
+            )

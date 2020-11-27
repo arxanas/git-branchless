@@ -1,14 +1,19 @@
 import builtins
-from typing import Literal, Optional, TextIO, Union
+import logging
+from typing import Literal, Optional, TextIO, Tuple, Union
+
+import pygit2
 
 from . import get_repo, run_git
 from .db import make_db_for_repo
-from .eventlog import EventLogDb, EventReplayer
-from .formatting import make_glyphs
-from .graph import get_master_oid, make_graph
+from .eventlog import EventLogDb, EventReplayer, OidStr
+from .formatting import Glyphs, make_glyphs
+from .graph import CommitGraph, find_path_to_merge_base, get_master_oid, make_graph
 from .mergebase import MergeBaseDb
 from .metadata import CommitMessageProvider, CommitOidProvider, render_commit_metadata
 from .smartlog import smartlog
+
+Towards = Optional[Union[Literal["newest"], Literal["oldest"]]]
 
 
 def prev(out: TextIO, err: TextIO, num_commits: Optional[int]) -> int:
@@ -22,34 +27,44 @@ def prev(out: TextIO, err: TextIO, num_commits: Optional[int]) -> int:
     return smartlog(out=out)
 
 
-def next(
-    out: TextIO,
-    err: TextIO,
-    num_commits: Optional[int],
-    towards: Optional[Union[Literal["newest"], Literal["oldest"]]],
-) -> int:
-    glyphs = make_glyphs(out)
-    repo = get_repo()
-    master_oid = get_master_oid(repo)
-    db = make_db_for_repo(repo)
-    merge_base_db = MergeBaseDb(db)
-    event_log_db = EventLogDb(db)
-    event_replayer = EventReplayer.from_event_log_db(event_log_db)
-
-    (head_oid, graph) = make_graph(
-        repo=repo,
-        merge_base_db=merge_base_db,
-        event_replayer=event_replayer,
-        master_oid=master_oid,
+def _advance_towards_master(
+    repo: pygit2.Repository,
+    graph: CommitGraph,
+    current_oid: pygit2.Oid,
+    master_oid: pygit2.Oid,
+    num_commits: int,
+) -> Tuple[int, pygit2.Oid]:
+    path = find_path_to_merge_base(
+        repo=repo, target_oid=current_oid, commit_oid=master_oid
     )
+    if path is None:
+        return (0, current_oid)
+    if len(path) == 1:
+        # Must be the case that `current_oid == master_oid`.
+        return (0, current_oid)
 
-    if num_commits is None:
-        num_commits_ = 1
-    else:
-        num_commits_ = num_commits
+    for i, commit in enumerate(path[-2::-1], start=1):
+        if commit.oid.hex in graph:
+            return (i, commit.oid)
 
-    current_oid = head_oid.hex
-    for i in range(num_commits_):
+    # The `master_oid` commit itself should be in `graph`, so we should always
+    # find a commit.
+    logging.warning(
+        "Failed to find graph commit when advancing towards master"
+    )  # pragma: no cover
+    return (0, current_oid)  # pragma: no cover
+
+
+def _advance_towards_own_commit(
+    out: TextIO,
+    glyphs: Glyphs,
+    repo: pygit2.Repository,
+    graph: CommitGraph,
+    current_oid: OidStr,
+    num_commits: int,
+    towards: Towards,
+) -> Optional[OidStr]:
+    for i in range(num_commits):
         children = list(graph[current_oid].children)
         children.sort(key=lambda child_oid: graph[child_oid].commit.commit_time)
         if len(children) == 0:
@@ -87,9 +102,52 @@ def next(
             out.write(
                 "(Pass --oldest (-o) or --newest (-n) to select between ambiguous next commits)\n"
             )
-            return 1
+            return None
+    return current_oid
 
-    result = run_git(out=out, err=err, args=["checkout", current_oid])
+
+def next(out: TextIO, err: TextIO, num_commits: Optional[int], towards: Towards) -> int:
+    glyphs = make_glyphs(out)
+    repo = get_repo()
+    db = make_db_for_repo(repo)
+    merge_base_db = MergeBaseDb(db)
+    event_log_db = EventLogDb(db)
+    event_replayer = EventReplayer.from_event_log_db(event_log_db)
+
+    master_oid = get_master_oid(repo)
+    (head_oid, graph) = make_graph(
+        repo=repo,
+        merge_base_db=merge_base_db,
+        event_replayer=event_replayer,
+        master_oid=master_oid,
+    )
+
+    if num_commits is None:
+        num_commits_ = 1
+    else:
+        num_commits_ = num_commits
+
+    (num_commits_traversed_towards_master, current_oid) = _advance_towards_master(
+        repo=repo,
+        graph=graph,
+        master_oid=master_oid,
+        current_oid=head_oid,
+        num_commits=num_commits_,
+    )
+    num_commits_ -= num_commits_traversed_towards_master
+    current_oid_str = _advance_towards_own_commit(
+        out=out,
+        glyphs=glyphs,
+        repo=repo,
+        graph=graph,
+        current_oid=current_oid.hex,
+        num_commits=num_commits_,
+        towards=towards,
+    )
+    if current_oid_str is None:
+        return 1
+
+    result = run_git(out=out, err=err, args=["checkout", current_oid_str])
     if result != 0:
         return result
 
