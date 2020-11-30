@@ -29,13 +29,17 @@ def prev(out: TextIO, err: TextIO, num_commits: Optional[int]) -> int:
 
 def _advance_towards_master(
     repo: pygit2.Repository,
+    merge_base_db: MergeBaseDb,
     graph: CommitGraph,
     current_oid: pygit2.Oid,
     master_oid: pygit2.Oid,
     num_commits: int,
 ) -> Tuple[int, pygit2.Oid]:
     path = find_path_to_merge_base(
-        repo=repo, target_oid=current_oid, commit_oid=master_oid
+        repo=repo,
+        merge_base_db=merge_base_db,
+        target_oid=current_oid,
+        commit_oid=master_oid,
     )
     if path is None:
         return (0, current_oid)
@@ -129,6 +133,7 @@ def next(out: TextIO, err: TextIO, num_commits: Optional[int], towards: Towards)
 
     (num_commits_traversed_towards_master, current_oid) = _advance_towards_master(
         repo=repo,
+        merge_base_db=merge_base_db,
         graph=graph,
         master_oid=master_oid,
         current_oid=head_oid,

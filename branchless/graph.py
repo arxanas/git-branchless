@@ -62,6 +62,7 @@ CommitGraph = Dict[OidStr, Node]
 
 def find_path_to_merge_base(
     repo: pygit2.Repository,
+    merge_base_db: MergeBaseDb,
     commit_oid: pygit2.Oid,
     target_oid: pygit2.Oid,
 ) -> Optional[List[pygit2.Commit]]:
@@ -85,12 +86,26 @@ def find_path_to_merge_base(
     """
     queue: Queue[List[pygit2.Commit]] = Queue()
     queue.put([repo[commit_oid]])
+    merge_base_oid = merge_base_db.get_merge_base_oid(
+        repo=repo, lhs_oid=commit_oid, rhs_oid=target_oid
+    )
     while not queue.empty():
         path = queue.get()
         if path[-1].oid == target_oid:
             return path
+        if path[-1].oid == merge_base_oid:
+            # We've hit the common ancestor of these two commits without
+            # finding a path between them. That means it's impossible to find a
+            # path between them by traversing more ancestors. Possibly the
+            # caller passed them in in the wrong order, i.e. `commit_oid` is
+            # actually a parent of `target_oid`.
+            continue
 
         for parent in path[-1].parents:
+            # For test: access the parent commit through `repo` so that we can
+            # track it.
+            parent = repo[parent.oid]
+
             queue.put(path + [parent])
     return None
 
@@ -143,6 +158,7 @@ def _walk_from_visible_commits(
         previous_oid = None
         path_to_merge_base = find_path_to_merge_base(
             repo=repo,
+            merge_base_db=merge_base_db,
             commit_oid=commit_oid,
             target_oid=merge_base_oid,
         )
