@@ -114,7 +114,7 @@ def _restack_commits(
         abandoned_child_oids = [
             child_oid
             for child_oid in graph[oid].children
-            if graph[child_oid].status != "hidden"
+            if graph[child_oid].is_visible
         ]
         if not abandoned_child_oids:
             continue
@@ -136,7 +136,7 @@ def _restack_commits(
             out.write("branchless: resolve rebase, then run 'git restack' again\n")
             return result
 
-        # Repeat until we hit a fixed-point.
+        # Repeat until we reach a fixed-point.
         return _restack_commits(
             out=out,
             err=err,

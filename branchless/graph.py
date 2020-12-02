@@ -1,30 +1,12 @@
 import logging
 from dataclasses import dataclass
 from queue import Queue
-from typing import Dict, List, Literal, Optional, Set, Tuple, Union
+from typing import Dict, List, Optional, Set, Tuple
 
 import pygit2
 
 from .eventlog import Event, EventReplayer, HideEvent, OidStr
 from .mergebase import MergeBaseDb
-
-CommitStatus = Union[Literal["master"], Literal["visible"], Literal["hidden"]]
-"""The possible states a commit can be in.
-
-  * `master`: a commit to the `master` branch. These are considered to be
-  immutable and will never leave the `master` state.
-  * `visible`: a commit that hasn't been checked into master, but the user is
-  actively working on. We may infer this from user behavior, e.g. they
-  committed something recently, so they are now working on it.
-  * `hidden`: a commit that hasn't been checked into master, and the user is no
-  longer working on. We may infer this from user behavior, e.g. they have
-  rebased a commit and no longer want to see the old version of that commit.
-  The user can also manually hide commits.
-
-Commits can transition between `visible` and `hidden` depending on user
-behavior, but commits never transition to or from `master`. (It's assumed
-that commits are added to `master` only via pulling from the remote.)
-"""
 
 
 @dataclass
@@ -44,8 +26,31 @@ class Node:
     children: Set[OidStr]
     """The OIDs of the children nodes in the smartlog commit graph."""
 
-    status: CommitStatus
-    """The status of this commit."""
+    is_master: bool
+    """Indicates that this is a commit to the master branch.
+
+    These commits are considered to be immutable and should never leave the
+    `master` state. However, this can still happen sometimes if the user's
+    workflow is different than expected.
+    """
+
+    is_visible: bool
+    """Indicates that this commit should be considered "visible".
+
+    A visible commit is a commit that hasn't been checked into master, but
+    the user is actively working on. We may infer this from user behavior,
+    e.g. they committed something recently, so they are now working on it.
+
+    In contrast, a hidden commit is a commit that hasn't been checked into
+    master, and the user is no longer working on. We may infer this from user
+    behavior, e.g. they have rebased a commit and no longer want to see the
+    old version of that commit. The user can also manually hide commits.
+
+    Occasionally, a `master` commit can be marked as hidden, such as if a
+    commit in master has been rewritten. We don't expect this to happen in
+    the monorepo workflow, but it can happen in other workflows where you
+    commit directly to master and then later rewrite the commit.
+    """
 
     event: Optional[Event]
     """The latest event to affect this commit.
@@ -172,15 +177,19 @@ def _walk_from_visible_commits(
             current_oid = current_commit.oid.hex
 
             if current_oid not in graph:
-                status = event_replayer.get_commit_visibility(current_oid)
-                if status is None:
-                    status = "visible"
+                visibility = event_replayer.get_commit_visibility(current_oid)
+                if visibility is None or visibility == "visible":
+                    is_visible = True
+                else:
+                    is_visible = False
+
                 event = event_replayer.get_commit_latest_event(current_oid)
                 graph[current_oid] = Node(
                     commit=current_commit,
                     parent=None,
                     children=set(),
-                    status=status,
+                    is_master=False,
+                    is_visible=is_visible,
                     event=event,
                 )
                 link(parent_oid=current_oid, child_oid=previous_oid)
@@ -191,7 +200,7 @@ def _walk_from_visible_commits(
             previous_oid = current_oid
 
         if merge_base_oid.hex in graph:
-            graph[merge_base_oid.hex].status = "master"
+            graph[merge_base_oid.hex].is_master = True
         else:
             logging.warning(
                 f"Could not find merge base {merge_base_oid}",
@@ -240,7 +249,7 @@ def _hide_commits(
     current_oids_to_hide = {
         oid
         for oid, node in graph.items()
-        if node.status == "hidden" and isinstance(node.event, HideEvent)
+        if not node.is_visible and isinstance(node.event, HideEvent)
     }
     while current_oids_to_hide:
         all_oids_to_hide.update(current_oids_to_hide)
@@ -253,7 +262,7 @@ def _hide_commits(
     # Otherwise, we get sequences of master nodes that appear in the graph for
     # no apparent reason, simply because they're technically "visible".
     for oid, node in graph.items():
-        if node.status == "master" and node.children.issubset(all_oids_to_hide):
+        if node.is_master and node.children.issubset(all_oids_to_hide):
             all_oids_to_hide.add(oid)
 
     # Actually update the graph and delete any parent-child links, as
@@ -293,6 +302,7 @@ def make_graph(
       repo: The Git repository.
       merge_base_db: The merge-base database.
       event_replayer: The event replayer.
+      master_oid: The OID of the master branch.
 
     Returns:
       A tuple of the head OID and the commit graph.

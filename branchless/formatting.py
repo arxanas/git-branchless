@@ -23,6 +23,8 @@ class Glyphs(Protocol):
     commit_hidden_head: str
     commit_master: str
     commit_master_head: str
+    commit_master_hidden: str
+    commit_master_hidden_head: str
     bullet_point: str
 
     def color_fg(self, color: colorama.Fore, message: str) -> str:  # pragma: no cover
@@ -65,6 +67,8 @@ class TextGlyphs:
     commit_hidden_head = "%"
     commit_master = "O"
     commit_master_head = "@"
+    commit_master_hidden = "X"
+    commit_master_hidden_head = "%"
     bullet_point = "-"
 
     def color_fg(self, color: colorama.Fore, message: str) -> str:
@@ -87,6 +91,8 @@ class PrettyGlyphs:
     commit_hidden_head = "⦻"
     commit_master = "◇"
     commit_master_head = "◆"
+    commit_master_hidden = "✕"
+    commit_master_hidden_head = "❖"
     bullet_point = "•"
 
     def __init__(self) -> None:

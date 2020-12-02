@@ -81,13 +81,15 @@ def _get_child_output(
     )
 
     cursor = {
-        ("visible", False): glyphs.commit_visible,
-        ("visible", True): glyphs.commit_visible_head,
-        ("hidden", False): glyphs.commit_hidden,
-        ("hidden", True): glyphs.commit_hidden_head,
-        ("master", False): glyphs.commit_master,
-        ("master", True): glyphs.commit_master_head,
-    }[(current.status, current.commit.oid == head_oid)]
+        (False, False, False): glyphs.commit_hidden,
+        (False, False, True): glyphs.commit_hidden_head,
+        (False, True, False): glyphs.commit_visible,
+        (False, True, True): glyphs.commit_visible_head,
+        (True, False, False): glyphs.commit_master_hidden,
+        (True, False, True): glyphs.commit_master_hidden_head,
+        (True, True, False): glyphs.commit_master,
+        (True, True, True): glyphs.commit_master_head,
+    }[(current.is_master, current.is_visible, current.commit.oid == head_oid)]
     if current.commit.oid == head_oid:
         cursor = glyphs.style(style=colorama.Style.BRIGHT, message=cursor)
         text = glyphs.style(style=colorama.Style.BRIGHT, message=text)
