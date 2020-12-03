@@ -202,9 +202,9 @@ def _walk_from_commits(
     for oid, node in graph.items():
         if node.is_master:
             continue
-        for parent in node.commit.parents:
-            if parent.oid.hex in graph:
-                link(parent_oid=parent.oid.hex, child_oid=oid)
+        for parent_oid in node.commit.parent_ids:
+            if parent_oid.hex in graph:
+                link(parent_oid=parent_oid.hex, child_oid=oid)
 
     return graph
 

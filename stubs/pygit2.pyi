@@ -11,6 +11,7 @@ class Commit:
     commit_time: int
     commit_time_offset: int
     parents: List["Commit"]
+    parent_ids: List[Oid]
 
 
 class RefLogEntry:

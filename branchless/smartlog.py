@@ -156,11 +156,11 @@ def _get_output(
         since there may be links between adjacent `master` commits which are
         not reflected in `graph`.
         """
-        return any(parent.oid.hex == parent_oid for parent in graph[oid].commit.parents)
+        return any(parent.hex == parent_oid for parent in graph[oid].commit.parent_ids)
 
     for root_idx, root_oid in enumerate(root_oids):
         root_node = graph[root_oid]
-        if root_node.commit.parents:
+        if len(root_node.commit.parent_ids) > 0:
             if root_idx > 0 and has_real_parent(
                 oid=root_oid, parent_oid=root_oids[root_idx - 1]
             ):
