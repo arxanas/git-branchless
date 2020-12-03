@@ -1,7 +1,5 @@
 import io
 
-import pytest
-
 from branchless.hide import hide, unhide
 from branchless.smartlog import smartlog
 from helpers import Git, compare
@@ -29,7 +27,7 @@ O f777ecc9 (master) create initial.txt
         )
 
     with io.StringIO() as out:
-        assert hide(out=out, hashes=["62fc20d2"]) == 0
+        assert hide(out=out, hashes=["62fc20d2"], recursive=False) == 0
         compare(
             actual=out.getvalue(),
             expected="""\
@@ -53,50 +51,11 @@ O f777ecc9 (master) create initial.txt
 def test_hide_bad_commit(git: Git) -> None:
     git.init_repo()
     with io.StringIO() as out:
-        assert hide(out=out, hashes=["abc123"]) == 1
+        assert hide(out=out, hashes=["abc123"], recursive=False) == 1
         compare(
             actual=out.getvalue(),
             expected="""\
 Commit not found: abc123
-""",
-        )
-
-
-@pytest.mark.xfail
-def test_hide_transitive(git: Git) -> None:
-    git.init_repo()
-    git.detach_head()
-    git.commit_file(name="test1", time=1)
-    git.commit_file(name="test2", time=2)
-    git.commit_file(name="test3", time=3)
-    git.run("checkout", ["master"])
-
-    with io.StringIO() as out:
-        smartlog(out=out)
-        compare(
-            actual=out.getvalue(),
-            expected="""\
-@ f777ecc9 (master) create initial.txt
-|
-o 62fc20d2 create test1.txt
-|
-o 96d1c37a create test2.txt
-|
-o 70deb1e2 create test3.txt
-""",
-        )
-
-    with io.StringIO() as out:
-        assert hide(out=out, hashes=["96d1c37a"]) == 0
-
-    with io.StringIO() as out:
-        smartlog(out=out)
-        compare(
-            actual=out.getvalue(),
-            expected="""\
-@ f777ecc9 (master) create initial.txt
-|
-o 62fc20d2 create test1.txt
 """,
         )
 
@@ -107,10 +66,10 @@ def test_hide_already_hidden_commit(git: Git) -> None:
     git.commit_file(name="test1", time=1)
 
     with io.StringIO() as out:
-        assert hide(out=out, hashes=["62fc20d2"]) == 0
+        assert hide(out=out, hashes=["62fc20d2"], recursive=False) == 0
 
     with io.StringIO() as out:
-        assert hide(out=out, hashes=["62fc20d2"]) == 0
+        assert hide(out=out, hashes=["62fc20d2"], recursive=False) == 0
         compare(
             actual=out.getvalue(),
             expected="""\
@@ -127,7 +86,7 @@ def test_hide_current_commit(git: Git) -> None:
     git.commit_file(name="test", time=1)
 
     with io.StringIO() as out:
-        assert hide(out=out, hashes=["HEAD"]) == 0
+        assert hide(out=out, hashes=["HEAD"], recursive=False) == 0
 
     with io.StringIO() as out:
         assert smartlog(out=out) == 0
@@ -150,8 +109,8 @@ def test_hidden_commit_with_head_as_child(git: Git) -> None:
     git.run("checkout", ["HEAD^"])
 
     with io.StringIO() as out:
-        assert hide(out=out, hashes=["HEAD^"]) == 0
-        assert hide(out=out, hashes=["70deb1e2"]) == 0
+        assert hide(out=out, hashes=["HEAD^"], recursive=False) == 0
+        assert hide(out=out, hashes=["70deb1e2"], recursive=False) == 0
 
     with io.StringIO() as out:
         assert smartlog(out=out) == 0
@@ -179,7 +138,7 @@ def test_hide_master_commit_with_hidden_children(git: Git) -> None:
     git.run("reflog", ["delete", "HEAD@{1}"])
 
     with io.StringIO() as out:
-        assert hide(out=out, hashes=["70deb1e2"]) == 0
+        assert hide(out=out, hashes=["70deb1e2"], recursive=False) == 0
 
     with io.StringIO() as out:
         assert smartlog(out=out) == 0
@@ -201,7 +160,7 @@ def test_branches_always_visible(git: Git) -> None:
     git.run("checkout", ["master"])
 
     with io.StringIO() as out:
-        assert hide(out=out, hashes=["test", "test^"]) == 0
+        assert hide(out=out, hashes=["test", "test^"], recursive=False) == 0
 
     with io.StringIO() as out:
         assert smartlog(out=out) == 0
@@ -236,7 +195,7 @@ def test_unhide(git: Git) -> None:
     git.run("checkout", ["master"])
 
     with io.StringIO() as out:
-        assert unhide(out=out, hashes=["96d1c37"]) == 0
+        assert unhide(out=out, hashes=["96d1c37"], recursive=False) == 0
         compare(
             actual=out.getvalue(),
             expected="""\
@@ -247,7 +206,7 @@ To hide this commit, run: git hide 96d1c37a
         )
 
     with io.StringIO() as out:
-        assert hide(out=out, hashes=["96d1c37"]) == 0
+        assert hide(out=out, hashes=["96d1c37"], recursive=False) == 0
 
     with io.StringIO() as out:
         assert smartlog(out=out) == 0
@@ -261,7 +220,7 @@ o 62fc20d2 create test1.txt
         )
 
     with io.StringIO() as out:
-        assert unhide(out=out, hashes=["96d1c37"]) == 0
+        assert unhide(out=out, hashes=["96d1c37"], recursive=False) == 0
         compare(
             actual=out.getvalue(),
             expected="""\
@@ -280,5 +239,79 @@ To hide this commit, run: git hide 96d1c37a
 o 62fc20d2 create test1.txt
 |
 o 96d1c37a create test2.txt
+""",
+        )
+
+
+def test_recursive(git: Git) -> None:
+    git.init_repo()
+    git.detach_head()
+    git.commit_file(name="test1", time=1)
+    git.commit_file(name="test2", time=2)
+    git.commit_file(name="test3", time=3)
+    git.run("checkout", ["master"])
+
+    with io.StringIO() as out:
+        smartlog(out=out)
+        compare(
+            actual=out.getvalue(),
+            expected="""\
+@ f777ecc9 (master) create initial.txt
+|
+o 62fc20d2 create test1.txt
+|
+o 96d1c37a create test2.txt
+|
+o 70deb1e2 create test3.txt
+""",
+        )
+
+    with io.StringIO() as out:
+        assert hide(out=out, hashes=["96d1c37a"], recursive=True) == 0
+        compare(
+            actual=out.getvalue(),
+            expected="""\
+Hid commit: 96d1c37a create test2.txt
+To unhide this commit, run: git unhide 96d1c37a
+Hid commit: 70deb1e2 create test3.txt
+To unhide this commit, run: git unhide 70deb1e2
+""",
+        )
+
+    with io.StringIO() as out:
+        smartlog(out=out)
+        compare(
+            actual=out.getvalue(),
+            expected="""\
+@ f777ecc9 (master) create initial.txt
+|
+o 62fc20d2 create test1.txt
+""",
+        )
+
+    with io.StringIO() as out:
+        assert unhide(out=out, hashes=["96d1c37a"], recursive=True) == 0
+        compare(
+            actual=out.getvalue(),
+            expected="""\
+Unhid commit: 96d1c37a create test2.txt
+To hide this commit, run: git hide 96d1c37a
+Unhid commit: 70deb1e2 create test3.txt
+To hide this commit, run: git hide 70deb1e2
+""",
+        )
+
+    with io.StringIO() as out:
+        smartlog(out=out)
+        compare(
+            actual=out.getvalue(),
+            expected="""\
+@ f777ecc9 (master) create initial.txt
+|
+o 62fc20d2 create test1.txt
+|
+o 96d1c37a create test2.txt
+|
+o 70deb1e2 create test3.txt
 """,
         )

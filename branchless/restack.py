@@ -102,6 +102,7 @@ def _restack_commits(
         merge_base_db=merge_base_db,
         event_replayer=event_replayer,
         master_oid=master_oid,
+        hide_commits=True,
     )
 
     for original_oid in graph:
@@ -178,6 +179,7 @@ def _restack_branches(
         merge_base_db=merge_base_db,
         event_replayer=event_replayer,
         master_oid=master_oid,
+        hide_commits=True,
     )
 
     for branch_name in repo.listall_branches(pygit2.GIT_BRANCH_LOCAL):

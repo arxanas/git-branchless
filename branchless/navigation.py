@@ -124,6 +124,7 @@ def next(out: TextIO, err: TextIO, num_commits: Optional[int], towards: Towards)
         merge_base_db=merge_base_db,
         event_replayer=event_replayer,
         master_oid=master_oid,
+        hide_commits=True,
     )
 
     if num_commits is None:

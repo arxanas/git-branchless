@@ -45,8 +45,20 @@ def main(argv: List[str], *, out: TextIO, err: TextIO) -> int:
     hide_parser.add_argument(
         "hash", type=str, help="The commit hash to hide.", nargs="*"
     )
+    hide_parser.add_argument(
+        "-r",
+        "--recursive",
+        action="store_true",
+        help="Hide all visible descendant commits as well.",
+    )
     unhide_parser = subparsers.add_parser(
         "unhide", help="Unhide a previously-hidden commit from the smartlog."
+    )
+    unhide_parser.add_argument(
+        "-r",
+        "--recursive",
+        action="store_true",
+        help="Unhide all visible descendant commits as well.",
     )
     unhide_parser.add_argument(
         "hash", type=str, help="The commit hash to unhide.", nargs="*"
@@ -104,9 +116,9 @@ def main(argv: List[str], *, out: TextIO, err: TextIO) -> int:
     elif args.subcommand in ["smartlog", "sl"]:
         return smartlog(out=out)
     elif args.subcommand == "hide":
-        return hide(out=out, hashes=args.hash)
+        return hide(out=out, hashes=args.hash, recursive=args.recursive)
     elif args.subcommand == "unhide":
-        return unhide(out=out, hashes=args.hash)
+        return unhide(out=out, hashes=args.hash, recursive=args.recursive)
     elif args.subcommand == "prev":
         return prev(out=out, err=err, num_commits=args.num_commits)
     elif args.subcommand == "next":

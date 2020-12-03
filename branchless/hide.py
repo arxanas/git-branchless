@@ -1,6 +1,6 @@
 """Handle hiding commits explicitly."""
 import time
-from typing import List, TextIO, Tuple
+from typing import Callable, Iterator, List, Set, TextIO
 
 import pygit2
 
@@ -8,6 +8,8 @@ from . import get_repo
 from .db import make_db_for_repo
 from .eventlog import EventLogDb, EventReplayer, HideEvent, OidStr, UnhideEvent
 from .formatting import make_glyphs
+from .graph import Node, get_master_oid, make_graph
+from .mergebase import MergeBaseDb
 from .metadata import CommitMessageProvider, CommitOidProvider, render_commit_metadata
 
 
@@ -20,12 +22,11 @@ class CommitNotFoundError(Exception):
 
 
 def _process_hashes(
-    out: TextIO, repo: pygit2.Repository, hashes: List[str]
-) -> Tuple[EventReplayer, EventLogDb, List[OidStr]]:
-    db = make_db_for_repo(repo=repo)
-    event_log_db = EventLogDb(db)
-    event_replayer = EventReplayer.from_event_log_db(event_log_db)
-
+    out: TextIO,
+    repo: pygit2.Repository,
+    event_replayer: EventReplayer,
+    hashes: List[str],
+) -> List[OidStr]:
     oids = []
     for hash in hashes:
         try:
@@ -33,10 +34,45 @@ def _process_hashes(
         except KeyError as e:
             raise CommitNotFoundError(hash) from e
         oids.append(oid.hex)
-    return (event_replayer, event_log_db, oids)
+    return oids
 
 
-def hide(*, out: TextIO, hashes: List[str]) -> int:
+def _recurse_on_oids(
+    repo: pygit2.Repository,
+    merge_base_db: MergeBaseDb,
+    event_replayer: EventReplayer,
+    oids: List[OidStr],
+    condition: Callable[[Node], bool],
+) -> List[OidStr]:
+    master_oid = get_master_oid(repo)
+    (_head_oid, graph) = make_graph(
+        repo=repo,
+        merge_base_db=merge_base_db,
+        event_replayer=event_replayer,
+        master_oid=master_oid,
+        hide_commits=False,
+    )
+
+    def helper(oid: OidStr) -> Iterator[OidStr]:
+        node = graph[oid]
+        if condition(node):
+            yield oid
+
+        for child_oid in node.children:
+            yield from helper(child_oid)
+
+    # Maintain ordering, since it's likely to be meaningful.
+    result: List[OidStr] = list()
+    seen_oids: Set[OidStr] = set()
+    for oid in oids:
+        for oid_to_add in helper(oid):
+            if oid_to_add not in seen_oids:
+                seen_oids.add(oid_to_add)
+                result.append(oid_to_add)
+    return result
+
+
+def hide(*, out: TextIO, hashes: List[str], recursive: bool) -> int:
     """Hide the hashes provided on the command-line.
 
     Args:
@@ -49,13 +85,27 @@ def hide(*, out: TextIO, hashes: List[str]) -> int:
     """
     timestamp = time.time()
     repo = get_repo()
+    db = make_db_for_repo(repo=repo)
+    event_log_db = EventLogDb(db)
+    event_replayer = EventReplayer.from_event_log_db(event_log_db)
+    merge_base_db = MergeBaseDb(db)
+
     try:
-        (replayer, event_log_db, oids) = _process_hashes(
-            out=out, repo=repo, hashes=hashes
+        oids = _process_hashes(
+            out=out, repo=repo, event_replayer=event_replayer, hashes=hashes
         )
     except CommitNotFoundError as e:
         out.write(str(e))
         return 1
+
+    if recursive:
+        oids = _recurse_on_oids(
+            repo=repo,
+            merge_base_db=merge_base_db,
+            event_replayer=event_replayer,
+            oids=oids,
+            condition=lambda node: node.is_visible,
+        )
     events = [HideEvent(timestamp=timestamp, commit_oid=oid) for oid in oids]
     event_log_db.add_events(events)
 
@@ -71,7 +121,7 @@ def hide(*, out: TextIO, hashes: List[str]) -> int:
             ],
         )
         out.write(f"Hid commit: {hidden_commit_text}\n")
-        if replayer.get_commit_visibility(commit.oid.hex) == "hidden":
+        if event_replayer.get_commit_visibility(commit.oid.hex) == "hidden":
             out.write("(It was already hidden, so this operation had no effect.)\n")
 
         command_target_oid = render_commit_metadata(
@@ -85,7 +135,7 @@ def hide(*, out: TextIO, hashes: List[str]) -> int:
     return 0
 
 
-def unhide(*, out: TextIO, hashes: List[str]) -> int:
+def unhide(*, out: TextIO, hashes: List[str], recursive: bool) -> int:
     """Unhide the hashes provided on the command-line.
 
     Args:
@@ -98,13 +148,27 @@ def unhide(*, out: TextIO, hashes: List[str]) -> int:
     """
     timestamp = time.time()
     repo = get_repo()
+    db = make_db_for_repo(repo=repo)
+    event_log_db = EventLogDb(db)
+    event_replayer = EventReplayer.from_event_log_db(event_log_db)
+    merge_base_db = MergeBaseDb(db)
+
     try:
-        (replayer, event_log_db, oids) = _process_hashes(
-            repo=repo, out=out, hashes=hashes
+        oids = _process_hashes(
+            repo=repo, out=out, hashes=hashes, event_replayer=event_replayer
         )
     except CommitNotFoundError as e:
         out.write(str(e))
+
         return 1
+    if recursive:
+        oids = _recurse_on_oids(
+            repo=repo,
+            merge_base_db=merge_base_db,
+            event_replayer=event_replayer,
+            oids=oids,
+            condition=lambda node: not node.is_visible,
+        )
     events = [UnhideEvent(timestamp=timestamp, commit_oid=oid) for oid in oids]
     event_log_db.add_events(events)
 
@@ -120,7 +184,7 @@ def unhide(*, out: TextIO, hashes: List[str]) -> int:
             ],
         )
         out.write(f"Unhid commit: {unhidden_commit_text}\n")
-        if replayer.get_commit_visibility(commit.oid.hex) == "visible":
+        if event_replayer.get_commit_visibility(commit.oid.hex) == "visible":
             out.write("(It was not hidden, so this operation had no effect.)\n")
 
         command_target_oid = render_commit_metadata(

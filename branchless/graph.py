@@ -276,6 +276,7 @@ def make_graph(
     merge_base_db: MergeBaseDb,
     event_replayer: EventReplayer,
     master_oid: pygit2.Oid,
+    hide_commits: bool,
 ) -> Tuple[pygit2.Oid, CommitGraph]:
     """Construct the smartlog graph for the repo.
 
@@ -284,6 +285,9 @@ def make_graph(
       merge_base_db: The merge-base database.
       event_replayer: The event replayer.
       master_oid: The OID of the master branch.
+      hide_commits: If set to `True`, then, after constructing the graph,
+        remove nodes from it that appear to be hidden by user activity. This
+        should be set to `True` for most display-related purposes.
 
     Returns:
       A tuple of the head OID and the commit graph.
@@ -313,10 +317,11 @@ def make_graph(
         master_oid=master_oid,
         commit_oids=commit_oids,
     )
-    _hide_commits(
-        graph=graph,
-        event_replayer=event_replayer,
-        branch_oids=branch_oids,
-        head_oid=head_oid,
-    )
+    if hide_commits:
+        _hide_commits(
+            graph=graph,
+            event_replayer=event_replayer,
+            branch_oids=branch_oids,
+            head_oid=head_oid,
+        )
     return (head_oid, graph)

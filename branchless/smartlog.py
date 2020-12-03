@@ -236,6 +236,7 @@ def smartlog(*, out: TextIO) -> int:
         merge_base_db=merge_base_db,
         event_replayer=event_replayer,
         master_oid=master_oid,
+        hide_commits=True,
     )
 
     commit_metadata_providers: List[CommitMetadataProvider] = [
