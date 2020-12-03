@@ -8,7 +8,7 @@ from . import get_repo, run_git
 from .db import make_db_for_repo
 from .eventlog import EventLogDb, EventReplayer, OidStr
 from .formatting import Glyphs, make_glyphs
-from .graph import CommitGraph, find_path_to_merge_base, get_master_oid, make_graph
+from .graph import CommitGraph, find_path_to_merge_base, get_main_branch_oid, make_graph
 from .mergebase import MergeBaseDb
 from .metadata import CommitMessageProvider, CommitOidProvider, render_commit_metadata
 from .smartlog import smartlog
@@ -27,34 +27,34 @@ def prev(out: TextIO, err: TextIO, num_commits: Optional[int]) -> int:
     return smartlog(out=out)
 
 
-def _advance_towards_master(
+def _advance_towards_main_branch(
     repo: pygit2.Repository,
     merge_base_db: MergeBaseDb,
     graph: CommitGraph,
     current_oid: pygit2.Oid,
-    master_oid: pygit2.Oid,
+    main_branch_oid: pygit2.Oid,
     num_commits: int,
 ) -> Tuple[int, pygit2.Oid]:
     path = find_path_to_merge_base(
         repo=repo,
         merge_base_db=merge_base_db,
         target_oid=current_oid,
-        commit_oid=master_oid,
+        commit_oid=main_branch_oid,
     )
     if path is None:
         return (0, current_oid)
     if len(path) == 1:
-        # Must be the case that `current_oid == master_oid`.
+        # Must be the case that `current_oid == main_branch_oid`.
         return (0, current_oid)
 
     for i, commit in enumerate(path[-2::-1], start=1):
         if commit.oid.hex in graph:
             return (i, commit.oid)
 
-    # The `master_oid` commit itself should be in `graph`, so we should always
+    # The `main_branch_oid` commit itself should be in `graph`, so we should always
     # find a commit.
     logging.warning(
-        "Failed to find graph commit when advancing towards master"
+        "Failed to find graph commit when advancing towards main branch"
     )  # pragma: no cover
     return (0, current_oid)  # pragma: no cover
 
@@ -118,12 +118,12 @@ def next(out: TextIO, err: TextIO, num_commits: Optional[int], towards: Towards)
     event_log_db = EventLogDb(db)
     event_replayer = EventReplayer.from_event_log_db(event_log_db)
 
-    master_oid = get_master_oid(repo)
+    main_branch_oid = get_main_branch_oid(repo)
     (head_oid, graph) = make_graph(
         repo=repo,
         merge_base_db=merge_base_db,
         event_replayer=event_replayer,
-        master_oid=master_oid,
+        main_branch_oid=main_branch_oid,
         hide_commits=True,
     )
 
@@ -132,15 +132,18 @@ def next(out: TextIO, err: TextIO, num_commits: Optional[int], towards: Towards)
     else:
         num_commits_ = num_commits
 
-    (num_commits_traversed_towards_master, current_oid) = _advance_towards_master(
+    (
+        num_commits_traversed_towards_main_branch,
+        current_oid,
+    ) = _advance_towards_main_branch(
         repo=repo,
         merge_base_db=merge_base_db,
         graph=graph,
-        master_oid=master_oid,
+        main_branch_oid=main_branch_oid,
         current_oid=head_oid,
         num_commits=num_commits_,
     )
-    num_commits_ -= num_commits_traversed_towards_master
+    num_commits_ -= num_commits_traversed_towards_main_branch
     current_oid_str = _advance_towards_own_commit(
         out=out,
         glyphs=glyphs,

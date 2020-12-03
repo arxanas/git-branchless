@@ -27,30 +27,32 @@ class Node:
     children: Set[OidStr]
     """The OIDs of the children nodes in the smartlog commit graph."""
 
-    is_master: bool
-    """Indicates that this is a commit to the master branch.
+    is_main: bool
+    """Indicates that this is a commit to the main branch.
 
     These commits are considered to be immutable and should never leave the
-    `master` state. However, this can still happen sometimes if the user's
+    `main` state. However, this can still happen sometimes if the user's
     workflow is different than expected.
     """
 
     is_visible: bool
     """Indicates that this commit should be considered "visible".
 
-    A visible commit is a commit that hasn't been checked into master, but
-    the user is actively working on. We may infer this from user behavior,
-    e.g. they committed something recently, so they are now working on it.
+    A visible commit is a commit that hasn't been checked into the main
+    branch, but the user is actively working on. We may infer this from user
+    behavior, e.g. they committed something recently, so they are now working
+    on it.
 
     In contrast, a hidden commit is a commit that hasn't been checked into
-    master, and the user is no longer working on. We may infer this from user
-    behavior, e.g. they have rebased a commit and no longer want to see the
-    old version of that commit. The user can also manually hide commits.
+    the main branch, and the user is no longer working on. We may infer this
+    from user behavior, e.g. they have rebased a commit and no longer want to
+    see the old version of that commit. The user can also manually hide
+    commits.
 
-    Occasionally, a `master` commit can be marked as hidden, such as if a
-    commit in master has been rewritten. We don't expect this to happen in
+    Occasionally, a main commit can be marked as hidden, such as if a commit
+    in the main branch has been rewritten. We don't expect this to happen in
     the monorepo workflow, but it can happen in other workflows where you
-    commit directly to master and then later rewrite the commit.
+    commit directly to the main branch and then later rewrite the commit.
     """
 
     event: Optional[Event]
@@ -122,27 +124,27 @@ def _walk_from_commits(
     event_replayer: EventReplayer,
     branch_oids: Set[OidStr],
     head_oid: pygit2.Oid,
-    master_oid: pygit2.Oid,
+    main_branch_oid: pygit2.Oid,
     commit_oids: Set[OidStr],
 ) -> CommitGraph:
     """Find additional commits that should be displayed.
 
     For example, if you check out a commit that has intermediate parent
-    commits between it and `master`, those intermediate commits should be
+    commits between it and the main branch, those intermediate commits should be
     shown (or else you won't get a good idea of the line of development that
-    happened for this commit since `master`).
+    happened for this commit since the main branch).
     """
     graph: CommitGraph = {}
 
     for commit_oid_hex in commit_oids:
         current_commit = repo[commit_oid_hex]
         merge_base_oid = merge_base_db.get_merge_base_oid(
-            repo=repo, lhs_oid=current_commit.oid, rhs_oid=master_oid
+            repo=repo, lhs_oid=current_commit.oid, rhs_oid=main_branch_oid
         )
 
-        # Occasionally we may find a commit that has no merge-base with
-        # `master`. For example: a rewritten initial commit. This is somewhat
-        # pathological. We'll just add it to the graph as a standalone
+        # Occasionally we may find a commit that has no merge-base with the
+        # main branch. For example: a rewritten initial commit. This is
+        # somewhat pathological. We'll just add it to the graph as a standalone
         # component and hope it works out.
         if merge_base_oid is None:
             path_to_merge_base: List[pygit2.Commit] = [current_commit]
@@ -154,8 +156,8 @@ def _walk_from_commits(
                 target_oid=merge_base_oid,
             )
             if path_to_merge_base_opt is None:
-                # All visible commits should be rooted in master, so this shouldn't
-                # happen.
+                # All visible commits should be rooted in the main branch, so
+                # this shouldn't happen.
                 logging.warning(
                     "No path to merge-base for commit %s", current_commit.oid
                 )
@@ -176,16 +178,16 @@ def _walk_from_commits(
                 is_visible = False
 
             if merge_base_oid is not None:
-                is_master = current_oid == merge_base_oid.hex
+                is_main = current_oid == merge_base_oid.hex
             else:
-                is_master = False
+                is_main = False
 
             event = event_replayer.get_commit_latest_event(current_oid)
             graph[current_oid] = Node(
                 commit=current_commit,
                 parent=None,
                 children=set(),
-                is_master=is_master,
+                is_main=is_main,
                 is_visible=is_visible,
                 event=event,
             )
@@ -200,7 +202,7 @@ def _walk_from_commits(
         graph[parent_oid].children.add(child_oid)
 
     for oid, node in graph.items():
-        if node.is_master:
+        if node.is_main:
             continue
         for parent_oid in node.commit.parent_ids:
             if parent_oid.hex in graph:
@@ -228,17 +230,17 @@ def _hide_commits(
 
         node = graph[oid]
 
-        if node.is_master:
-            # We only want to hide "uninteresting" master nodes. Master nodes
-            # should normally be visible, so instead, we only hide it if it's
-            # *not* visible, which is an anomaly that should be addressed by
-            # the user.
+        if node.is_main:
+            # We only want to hide "uninteresting" main branch nodes. Main
+            # branch nodes should normally be visible, so instead, we only hide
+            # it if it's *not* visible, which is an anomaly that should be
+            # addressed by the user.
             return node.is_visible and all(
                 should_hide(child_oid)
                 for child_oid in node.children
-                # Don't consider the next commit in `master` as a child for
-                # hiding purposes.
-                if not graph[child_oid].is_master
+                # Don't consider the next commit in the main branch as a child
+                # for hiding purposes.
+                if not graph[child_oid].is_main
             )
         else:
             return not node.is_visible and all(
@@ -256,8 +258,8 @@ def _hide_commits(
             graph[parent_oid].children.remove(oid)
 
 
-def get_master_oid(repo: pygit2.Repository) -> pygit2.Oid:
-    """Get the OID corresponding to the `master` branch.
+def get_main_branch_oid(repo: pygit2.Repository) -> pygit2.Oid:
+    """Get the OID corresponding to the main branch.
 
     Args:
       repo: The Git repository.
@@ -266,7 +268,7 @@ def get_master_oid(repo: pygit2.Repository) -> pygit2.Oid:
       KeyError: if there was no such branch.
 
     Returns:
-      The OID corresponding to the `master` branch.
+      The OID corresponding to the main branch.
     """
     return repo.branches["master"].target
 
@@ -275,7 +277,7 @@ def make_graph(
     repo: pygit2.Repository,
     merge_base_db: MergeBaseDb,
     event_replayer: EventReplayer,
-    master_oid: pygit2.Oid,
+    main_branch_oid: pygit2.Oid,
     hide_commits: bool,
 ) -> Tuple[pygit2.Oid, CommitGraph]:
     """Construct the smartlog graph for the repo.
@@ -284,7 +286,7 @@ def make_graph(
       repo: The Git repository.
       merge_base_db: The merge-base database.
       event_replayer: The event replayer.
-      master_oid: The OID of the master branch.
+      main_branch_oid: The OID of the main branch.
       hide_commits: If set to `True`, then, after constructing the graph,
         remove nodes from it that appear to be hidden by user activity. This
         should be set to `True` for most display-related purposes.
@@ -314,7 +316,7 @@ def make_graph(
         event_replayer=event_replayer,
         branch_oids=branch_oids,
         head_oid=head_oid,
-        master_oid=master_oid,
+        main_branch_oid=main_branch_oid,
         commit_oids=commit_oids,
     )
     if hide_commits:

@@ -8,7 +8,7 @@ from . import get_repo
 from .db import make_db_for_repo
 from .eventlog import EventLogDb, EventReplayer, HideEvent, OidStr, UnhideEvent
 from .formatting import make_glyphs
-from .graph import Node, get_master_oid, make_graph
+from .graph import Node, get_main_branch_oid, make_graph
 from .mergebase import MergeBaseDb
 from .metadata import CommitMessageProvider, CommitOidProvider, render_commit_metadata
 
@@ -44,12 +44,12 @@ def _recurse_on_oids(
     oids: List[OidStr],
     condition: Callable[[Node], bool],
 ) -> List[OidStr]:
-    master_oid = get_master_oid(repo)
+    main_branch_oid = get_main_branch_oid(repo)
     (_head_oid, graph) = make_graph(
         repo=repo,
         merge_base_db=merge_base_db,
         event_replayer=event_replayer,
-        master_oid=master_oid,
+        main_branch_oid=main_branch_oid,
         hide_commits=False,
     )
 

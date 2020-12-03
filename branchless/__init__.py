@@ -27,8 +27,8 @@ them to you with the `git smartlog` (or `git sl`) command.
 
 A commit is in one of three states:
 
-  * **Master**: A commit which has been checked into master. No longer mutable.
-    Visible to you in the branchless workflow.
+  * **Main**: A commit which has been checked into the main branch. No longer
+    mutable. Visible to you in the branchless workflow.
   * **Visible**: A commit which you are working on currently. Visible to you in
     the branchless workflow.
   * **Hidden**: A commit which has been discarded or replaced. In particular,

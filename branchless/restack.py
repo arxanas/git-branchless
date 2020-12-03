@@ -62,7 +62,7 @@ import pygit2
 from . import get_repo, run_git
 from .db import make_db_for_repo
 from .eventlog import EventLogDb, EventReplayer, OidStr, RewriteEvent
-from .graph import CommitGraph, get_master_oid, make_graph
+from .graph import CommitGraph, get_main_branch_oid, make_graph
 from .mergebase import MergeBaseDb
 from .smartlog import smartlog
 
@@ -96,12 +96,12 @@ def _restack_commits(
     preserve_timestamps: bool,
 ) -> int:
     event_replayer = EventReplayer.from_event_log_db(event_log_db)
-    master_oid = get_master_oid(repo)
+    main_branch_oid = get_main_branch_oid(repo)
     (_head_oid, graph) = make_graph(
         repo=repo,
         merge_base_db=merge_base_db,
         event_replayer=event_replayer,
-        master_oid=master_oid,
+        main_branch_oid=main_branch_oid,
         hide_commits=True,
     )
 
@@ -112,10 +112,10 @@ def _restack_commits(
         if rewritten_oid is None:
             continue
 
-        # Adjacent master commits are not linked in the commit graph, but if
-        # the user rewrote a master commit, then we may need to restack
-        # subsequent master commits. Find the real set of children commits so
-        # that we can do this.
+        # Adjacent main branch commits are not linked in the commit graph, but
+        # if the user rewrote a main branch commit, then we may need to restack
+        # subsequent main branch commits. Find the real set of children commits
+        # so that we can do this.
         real_children_oids = set(graph[original_oid].children)
         for possible_child_oid in graph.keys():
             if possible_child_oid in real_children_oids:
@@ -173,12 +173,12 @@ def _restack_branches(
     event_log_db: EventLogDb,
 ) -> int:
     event_replayer = EventReplayer.from_event_log_db(event_log_db)
-    master_oid = get_master_oid(repo)
+    main_branch_oid = get_main_branch_oid(repo)
     (_head_oid, graph) = make_graph(
         repo=repo,
         merge_base_db=merge_base_db,
         event_replayer=event_replayer,
-        master_oid=master_oid,
+        main_branch_oid=main_branch_oid,
         hide_commits=True,
     )
 

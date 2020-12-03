@@ -15,7 +15,7 @@ from . import get_repo
 from .db import make_db_for_repo
 from .eventlog import EventLogDb, EventReplayer, OidStr
 from .formatting import Glyphs, make_glyphs
-from .graph import CommitGraph, get_master_oid, make_graph
+from .graph import CommitGraph, get_main_branch_oid, make_graph
 from .mergebase import MergeBaseDb
 from .metadata import (
     BranchesProvider,
@@ -36,7 +36,7 @@ def _split_commit_graph_by_roots(
     """Split fully-independent subgraphs into multiple graphs.
 
     This is intended to handle the situation of having multiple lines of work
-    rooted from different commits in master.
+    rooted from different commits in the main branch.
 
     Returns the list such that the topologically-earlier subgraphs are first
     in the list (i.e. those that would be rendered at the bottom of the
@@ -100,11 +100,11 @@ def _get_child_output(
         (False, False, True): glyphs.commit_hidden_head,
         (False, True, False): glyphs.commit_visible,
         (False, True, True): glyphs.commit_visible_head,
-        (True, False, False): glyphs.commit_master_hidden,
-        (True, False, True): glyphs.commit_master_hidden_head,
-        (True, True, False): glyphs.commit_master,
-        (True, True, True): glyphs.commit_master_head,
-    }[(current.is_master, current.is_visible, current.commit.oid == head_oid)]
+        (True, False, False): glyphs.commit_main_hidden,
+        (True, False, True): glyphs.commit_main_hidden_head,
+        (True, True, False): glyphs.commit_main,
+        (True, True, True): glyphs.commit_main_head,
+    }[(current.is_main, current.is_visible, current.commit.oid == head_oid)]
     if current.commit.oid == head_oid:
         cursor = glyphs.style(style=colorama.Style.BRIGHT, message=cursor)
         text = glyphs.style(style=colorama.Style.BRIGHT, message=text)
@@ -165,8 +165,8 @@ def _get_output(
         """Determine if the provided OID has the provided parent OID as a parent.
 
         This returns `True` in strictly more cases than checking `graph`,
-        since there may be links between adjacent `master` commits which are
-        not reflected in `graph`.
+        since there may be links between adjacent main branch commits which
+        are not reflected in `graph`.
         """
         return any(parent.hex == parent_oid for parent in graph[oid].commit.parent_ids)
 
@@ -220,7 +220,7 @@ def smartlog(*, out: TextIO) -> int:
     glyphs = make_glyphs(out)
 
     repo = get_repo()
-    master_oid = get_master_oid(repo)
+    main_branch_oid = get_main_branch_oid(repo)
 
     db = make_db_for_repo(repo)
     event_log_db = EventLogDb(db)
@@ -235,7 +235,7 @@ def smartlog(*, out: TextIO) -> int:
         repo=repo,
         merge_base_db=merge_base_db,
         event_replayer=event_replayer,
-        master_oid=master_oid,
+        main_branch_oid=main_branch_oid,
         hide_commits=True,
     )
 
