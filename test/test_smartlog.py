@@ -236,3 +236,24 @@ O 4838e49b create test3.txt
 @ 500c9b3e (master) create test6.txt
 """,
         )
+
+
+def test_custom_main_branch(git: Git) -> None:
+    git.init_repo()
+    git.run("branch", ["-m", "master", "main"])
+    git.run("config", ["branchless.mainBranch", "main"])
+    git.commit_file(name="test1", time=1)
+    git.detach_head()
+    git.commit_file(name="test2", time=2)
+
+    with io.StringIO() as out:
+        assert smartlog(out=out) == 0
+        compare(
+            actual=out.getvalue(),
+            expected="""\
+:
+O 62fc20d2 (main) create test1.txt
+|
+@ 96d1c37a create test2.txt
+""",
+        )

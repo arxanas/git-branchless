@@ -270,7 +270,11 @@ def get_main_branch_oid(repo: pygit2.Repository) -> pygit2.Oid:
     Returns:
       The OID corresponding to the main branch.
     """
-    return repo.branches["master"].target
+    try:
+        main_branch_name = repo.config["branchless.mainBranch"]
+    except KeyError:
+        main_branch_name = "master"
+    return repo.branches[main_branch_name].target
 
 
 def make_graph(
