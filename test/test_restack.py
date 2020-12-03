@@ -1,3 +1,5 @@
+import pytest
+
 from branchless.restack import restack
 from branchless.smartlog import smartlog
 from helpers import Git, capture, compare
@@ -115,5 +117,80 @@ branchless: no more abandoned branches to restack
 branchless: git checkout 662b451fb905b92404787e024af717ced49e3045
 :
 @ 662b451f (master) amend test1.txt v2
+""",
+        )
+
+
+@pytest.mark.xfail
+def test_amended_initial_commit(git: Git) -> None:
+    git.init_repo()
+    git.commit_file(name="test1", time=1)
+    git.run("checkout", ["HEAD^"])
+    git.run("commit", ["--amend", "-m", "new initial commit"])
+
+    with capture() as out:
+        # Pathological output.
+        assert smartlog(out=out.stream) == 0
+        compare(
+            actual=out.getvalue(),
+            expected="""\
+@ 9a9f929a new initial commit
+
+X f777ecc9 create initial.txt
+|
+O 62fc20d2 (master) create test1.txt
+""",
+        )
+
+    with capture() as out, capture() as err:
+        assert restack(out=out.stream, err=err.stream, preserve_timestamps=True) == 0
+        compare(
+            actual=out.getvalue(),
+            expected="""\
+branchless: git rebase f777ecc9b0db5ed372b2615695191a8a17f79f24 \
+62fc20d2a290daea0d52bdc2ed2ad4be6491010e \
+--onto 9a9f929a0d4f052ff5d58bedd97b2f761120f8ed \
+--committer-date-is-author-date
+First, rewinding head to replay your work on top of it...
+Applying: create test1.txt
+branchless: no more abandoned commits to restack
+branchless: git branch -f master e18bf94239100139cb8d7a279c188981a8e7a445
+branchless: no more abandoned branches to restack
+branchless: git checkout 9a9f929a0d4f052ff5d58bedd97b2f761120f8ed
+@ 9a9f929a new initial commit
+|
+O e18bf942 (master) create test1.txt
+""",
+        )
+
+
+@pytest.mark.xfail
+def test_restack_amended_master(git: Git) -> None:
+    git.init_repo()
+    git.commit_file(name="test1", time=1)
+    git.commit_file(name="test2", time=1)
+    git.detach_head()
+    git.run("checkout", ["HEAD^"])
+    git.run("commit", ["--amend", "-m", "amended test1"])
+
+    with capture() as out, capture() as err:
+        assert restack(out=out.stream, err=err.stream, preserve_timestamps=True) == 0
+        compare(
+            actual=out.getvalue(),
+            expected="""\
+branchless: git rebase 62fc20d2a290daea0d52bdc2ed2ad4be6491010e \
+142901d553f71d2711a3754424a67191397915c4 \
+--onto ae94dc2a748bc0965c88fcf3edac2e30074ff7e2 \
+--committer-date-is-author-date
+First, rewinding head to replay your work on top of it...
+Applying: create test2.txt
+branchless: no more abandoned commits to restack
+branchless: git branch -f master 1b1619f6ea3e930df4932981f2680eeb33bf17b0
+branchless: no more abandoned branches to restack
+branchless: git checkout ae94dc2a748bc0965c88fcf3edac2e30074ff7e2
+:
+@ ae94dc2a amended test1
+|
+O 1b1619f6 (master) create test2.txt
 """,
         )

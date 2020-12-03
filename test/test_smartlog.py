@@ -105,11 +105,7 @@ def test_merge_commit(git: Git) -> None:
     git.run("merge", ["test1"], time=4)
 
     with io.StringIO() as out:
-        # Note that we may want to change the rendering/handling of merge
-        # commits in the future. Currently, we ignore the fact that merge
-        # commits have multiple parents, and pick a single parent with which to
-        # render it. We also don't properly mark the merged-from commits as
-        # hidden.
+        # Rendering here is arbitrary and open to change.
         assert smartlog(out=out) == 0
         compare(
             actual=out.getvalue(),
@@ -123,6 +119,8 @@ O f777ecc9 (master) create initial.txt
 o fe65c1fe create test2.txt
 |
 o 02067177 create test3.txt
+|
+@ fa4e4e1a (test2and3) Merge branch 'test1' into test2and3
 """,
         )
 
@@ -236,34 +234,5 @@ O 4838e49b create test3.txt
 : o a2482074 create test4.txt
 :
 @ 500c9b3e (master) create test6.txt
-""",
-        )
-
-
-def test_amended_initial_commit(git: Git) -> None:
-    git.init_repo()
-    git.commit_file(name="test1", time=1)
-    git.run("checkout", ["HEAD^"])
-    git.run("commit", ["--amend", "-m", "new initial commit"])
-
-    with io.StringIO() as out:
-        assert smartlog(out=out) == 0
-        # Pathological output, could be changed.
-        compare(
-            actual=out.getvalue(),
-            expected="""\
-:
-O 62fc20d2 (master) create test1.txt
-""",
-        )
-
-    git.run("rebase", ["--onto", "HEAD", "HEAD", "master"])
-    with io.StringIO() as out:
-        assert smartlog(out=out) == 0
-        compare(
-            actual=out.getvalue(),
-            expected="""\
-:
-@ f402d39c (master) create test1.txt
 """,
         )

@@ -1,3 +1,4 @@
+import functools
 import logging
 from dataclasses import dataclass
 from queue import Queue
@@ -5,7 +6,7 @@ from typing import Dict, List, Optional, Set, Tuple
 
 import pygit2
 
-from .eventlog import Event, EventReplayer, HideEvent, OidStr
+from .eventlog import Event, EventReplayer, OidStr
 from .mergebase import MergeBaseDb
 
 
@@ -115,14 +116,14 @@ def find_path_to_merge_base(
     return None
 
 
-def _walk_from_visible_commits(
+def _walk_from_commits(
     repo: pygit2.Repository,
     merge_base_db: MergeBaseDb,
     event_replayer: EventReplayer,
     branch_oids: Set[OidStr],
     head_oid: pygit2.Oid,
     master_oid: pygit2.Oid,
-    visible_commit_oids: Set[OidStr],
+    commit_oids: Set[OidStr],
 ) -> CommitGraph:
     """Find additional commits that should be displayed.
 
@@ -133,95 +134,79 @@ def _walk_from_visible_commits(
     """
     graph: CommitGraph = {}
 
-    def link(parent_oid: OidStr, child_oid: Optional[OidStr]) -> None:
-        if child_oid is not None:
-            graph[child_oid].parent = parent_oid
-            graph[parent_oid].children.add(child_oid)
-
-    for commit_oid_hex in visible_commit_oids:
-        commit_oid = repo[commit_oid_hex].oid
+    for commit_oid_hex in commit_oids:
+        current_commit = repo[commit_oid_hex]
         merge_base_oid = merge_base_db.get_merge_base_oid(
-            repo=repo, lhs_oid=commit_oid, rhs_oid=master_oid
+            repo=repo, lhs_oid=current_commit.oid, rhs_oid=master_oid
         )
 
         # Occasionally we may find a commit that has no merge-base with
         # `master`. For example: a rewritten initial commit. This is somewhat
-        # pathological. We'll just handle it by not rendering it.
+        # pathological. We'll just add it to the graph as a standalone
+        # component and hope it works out.
         if merge_base_oid is None:
-            continue
-
-        # If this was a commit directly to master, and it's not HEAD, then
-        # don't show it. It's been superseded by other commits to master. Note
-        # that this doesn't prohibit commits from master which are a parent of
-        # a commit that we care about from being rendered.
-        if commit_oid == merge_base_oid and (
-            commit_oid != head_oid and commit_oid.hex not in branch_oids
-        ):
-            continue
-
-        current_commit = repo[commit_oid]
-        previous_oid = None
-        path_to_merge_base = find_path_to_merge_base(
-            repo=repo,
-            merge_base_db=merge_base_db,
-            commit_oid=commit_oid,
-            target_oid=merge_base_oid,
-        )
-        if path_to_merge_base is None:
-            # All visible commits should be rooted in master, so this shouldn't
-            # happen.
-            logging.warning("No path to merge-base for commit %s", commit_oid)
-            continue
+            path_to_merge_base: List[pygit2.Commit] = [current_commit]
+        else:
+            path_to_merge_base_opt = find_path_to_merge_base(
+                repo=repo,
+                merge_base_db=merge_base_db,
+                commit_oid=current_commit.oid,
+                target_oid=merge_base_oid,
+            )
+            if path_to_merge_base_opt is None:
+                # All visible commits should be rooted in master, so this shouldn't
+                # happen.
+                logging.warning(
+                    "No path to merge-base for commit %s", current_commit.oid
+                )
+                continue
+            path_to_merge_base = path_to_merge_base_opt
 
         for current_commit in path_to_merge_base:
             current_oid = current_commit.oid.hex
-
-            if current_oid not in graph:
-                visibility = event_replayer.get_commit_visibility(current_oid)
-                if visibility is None or visibility == "visible":
-                    is_visible = True
-                else:
-                    is_visible = False
-
-                event = event_replayer.get_commit_latest_event(current_oid)
-                graph[current_oid] = Node(
-                    commit=current_commit,
-                    parent=None,
-                    children=set(),
-                    is_master=False,
-                    is_visible=is_visible,
-                    event=event,
-                )
-                link(parent_oid=current_oid, child_oid=previous_oid)
-            else:
-                link(parent_oid=current_oid, child_oid=previous_oid)
+            if current_oid in graph:
+                # This commit (and all of its parents!) should be in the graph
+                # already, so no need to continue this iteration.
                 break
 
-            previous_oid = current_oid
+            visibility = event_replayer.get_commit_visibility(current_oid)
+            if visibility is None or visibility == "visible":
+                is_visible = True
+            elif visibility == "hidden":
+                is_visible = False
 
-        if merge_base_oid.hex in graph:
-            graph[merge_base_oid.hex].is_master = True
-        else:
+            if merge_base_oid is not None:
+                is_master = current_oid == merge_base_oid.hex
+            else:
+                is_master = False
+
+            event = event_replayer.get_commit_latest_event(current_oid)
+            graph[current_oid] = Node(
+                commit=current_commit,
+                parent=None,
+                children=set(),
+                is_master=is_master,
+                is_visible=is_visible,
+                event=event,
+            )
+
+        if merge_base_oid is not None and merge_base_oid.hex not in graph:
             logging.warning(
                 f"Could not find merge base {merge_base_oid}",
             )
 
+    def link(parent_oid: OidStr, child_oid: OidStr) -> None:
+        graph[child_oid].parent = parent_oid
+        graph[parent_oid].children.add(child_oid)
+
+    for oid, node in graph.items():
+        if node.is_master:
+            continue
+        for parent in node.commit.parents:
+            if parent.oid.hex in graph:
+                link(parent_oid=parent.oid.hex, child_oid=oid)
+
     return graph
-
-
-def _consistency_check_graph(graph: CommitGraph) -> None:
-    """Verify that each parent-child connection is mutual."""
-    for node_oid, node in graph.items():
-        parent_oid = node.parent
-        if parent_oid is not None:
-            assert parent_oid != node_oid
-            assert parent_oid in graph
-            assert node_oid in graph[parent_oid].children
-
-        for child_oid in node.children:
-            assert child_oid != node_oid
-            assert child_oid in graph
-            assert graph[child_oid].parent == node_oid
 
 
 def _hide_commits(
@@ -233,41 +218,37 @@ def _hide_commits(
     """Remove commits from the graph according to their status."""
     # OIDs which are pointed to by HEAD or a branch should not be hidden.
     # Therefore, we can't hide them *or* their ancestors.
-    unhideable_oids = set()
-    for unhideable_oid in branch_oids | {head_oid.hex}:
-        while unhideable_oid in graph:
-            unhideable_oids.add(unhideable_oid)
-            parent = graph[unhideable_oid].parent
-            if parent is None:
-                break
-            unhideable_oid = parent
+    unhideable_oids = branch_oids | {head_oid.hex}
 
-    # Recursively hide children of commits that have been explicitly marked as
-    # hidden by the user. However, this doesn't apply to commits that were
-    # hidden due to a rewrite.
-    all_oids_to_hide = set()
-    current_oids_to_hide = {
-        oid
-        for oid, node in graph.items()
-        if not node.is_visible and isinstance(node.event, HideEvent)
-    }
-    while current_oids_to_hide:
-        all_oids_to_hide.update(current_oids_to_hide)
-        next_oids_to_hide = set()
-        for oid in current_oids_to_hide:
-            next_oids_to_hide.update(graph[oid].children)
-        current_oids_to_hide = next_oids_to_hide
+    # Hide any subtrees which are entirely hidden.
+    @functools.lru_cache
+    def should_hide(oid: OidStr) -> bool:
+        if oid in unhideable_oids:
+            return False
 
-    # Master nodes whose children are all hidden should also be hidden.
-    # Otherwise, we get sequences of master nodes that appear in the graph for
-    # no apparent reason, simply because they're technically "visible".
-    for oid, node in graph.items():
-        if node.is_master and node.children.issubset(all_oids_to_hide):
-            all_oids_to_hide.add(oid)
+        node = graph[oid]
+
+        if node.is_master:
+            # We only want to hide "uninteresting" master nodes. Master nodes
+            # should normally be visible, so instead, we only hide it if it's
+            # *not* visible, which is an anomaly that should be addressed by
+            # the user.
+            return node.is_visible and all(
+                should_hide(child_oid)
+                for child_oid in node.children
+                # Don't consider the next commit in `master` as a child for
+                # hiding purposes.
+                if not graph[child_oid].is_master
+            )
+        else:
+            return not node.is_visible and all(
+                should_hide(child_oid) for child_oid in node.children
+            )
+
+    all_oids_to_hide = {oid for oid in graph.keys() if should_hide(oid)}
 
     # Actually update the graph and delete any parent-child links, as
     # appropriate.
-    all_oids_to_hide.difference_update(unhideable_oids)
     for oid in all_oids_to_hide:
         parent_oid = graph[oid].parent
         del graph[oid]
@@ -314,30 +295,28 @@ def make_graph(
     head_ref = repo.references["HEAD"]
     head_oid = head_ref.resolve().target
 
-    visible_commit_oids = event_replayer.get_visible_oids()
+    commit_oids = event_replayer.get_active_oids()
 
     branch_oids = set(
         repo.branches[branch_name].target.hex
         for branch_name in repo.listall_branches(pygit2.GIT_BRANCH_LOCAL)
     )
-    visible_commit_oids.update(branch_oids)
-    visible_commit_oids.add(head_oid.hex)
+    commit_oids.update(branch_oids)
+    commit_oids.add(head_oid.hex)
 
-    graph = _walk_from_visible_commits(
+    graph = _walk_from_commits(
         repo=repo,
         merge_base_db=merge_base_db,
         event_replayer=event_replayer,
         branch_oids=branch_oids,
         head_oid=head_oid,
         master_oid=master_oid,
-        visible_commit_oids=visible_commit_oids,
+        commit_oids=commit_oids,
     )
-    _consistency_check_graph(graph)
     _hide_commits(
         graph=graph,
         event_replayer=event_replayer,
         branch_oids=branch_oids,
         head_oid=head_oid,
     )
-    _consistency_check_graph(graph)
     return (head_oid, graph)

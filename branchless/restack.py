@@ -104,16 +104,16 @@ def _restack_commits(
         master_oid=master_oid,
     )
 
-    for oid in graph:
-        new_oid = _find_rewrite_target(
-            graph=graph, event_replayer=event_replayer, oid=oid
+    for original_oid in graph:
+        rewritten_oid = _find_rewrite_target(
+            graph=graph, event_replayer=event_replayer, oid=original_oid
         )
-        if new_oid is None:
+        if rewritten_oid is None:
             continue
 
         abandoned_child_oids = [
             child_oid
-            for child_oid in graph[oid].children
+            for child_oid in graph[original_oid].children
             if graph[child_oid].is_visible
         ]
         if not abandoned_child_oids:
@@ -122,7 +122,7 @@ def _restack_commits(
         # Pick an arbitrary abandoned child. We'll rewrite it and then repeat,
         # and next time, it won't be considered abandoned because it's been
         # rewritten.
-        child_oid = abandoned_child_oids[0]
+        abandoned_oid = abandoned_child_oids[0]
 
         additional_args = []
         if preserve_timestamps:
@@ -130,7 +130,8 @@ def _restack_commits(
         result = run_git(
             out=out,
             err=err,
-            args=["rebase", oid, child_oid, "--onto", new_oid] + additional_args,
+            args=["rebase", original_oid, abandoned_oid, "--onto", rewritten_oid]
+            + additional_args,
         )
         if result != 0:
             out.write("branchless: resolve rebase, then run 'git restack' again\n")

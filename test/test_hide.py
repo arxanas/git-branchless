@@ -1,5 +1,7 @@
 import io
 
+import pytest
+
 from branchless.hide import hide, unhide
 from branchless.smartlog import smartlog
 from helpers import Git, compare
@@ -60,6 +62,7 @@ Commit not found: abc123
         )
 
 
+@pytest.mark.xfail
 def test_hide_transitive(git: Git) -> None:
     git.init_repo()
     git.detach_head()

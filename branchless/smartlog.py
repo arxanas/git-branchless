@@ -47,8 +47,10 @@ def _split_commit_graph_by_roots(
     ]
 
     def compare(lhs: OidStr, rhs: OidStr) -> int:
-        lhs_oid = repo[lhs].oid
-        rhs_oid = repo[rhs].oid
+        lhs_commit = repo[lhs]
+        lhs_oid = lhs_commit.oid
+        rhs_commit = repo[rhs]
+        rhs_oid = rhs_commit.oid
         merge_base_oid = merge_base_db.get_merge_base_oid(repo, lhs_oid, rhs_oid)
         if merge_base_oid == lhs_oid:
             # lhs was topologically first, so it should be sorted earlier in the list.
@@ -56,10 +58,10 @@ def _split_commit_graph_by_roots(
         elif merge_base_oid == rhs_oid:
             return 1
         else:
-            logging.warning(
-                f"Root commits {lhs} and {rhs} were not orderable",
-            )
-            return 0
+            # The commits were not orderable (pathlogical situation). Let's
+            # just order them by timestamp in that case to produce a consistent
+            # and reasonable guess at the intended topological ordering.
+            return lhs_commit.commit_time - rhs_commit.commit_time
 
     root_commit_oids.sort(key=functools.cmp_to_key(compare))
     return root_commit_oids
@@ -68,6 +70,7 @@ def _split_commit_graph_by_roots(
 def _get_child_output(
     glyphs: Glyphs,
     graph: CommitGraph,
+    root_oids: List[OidStr],
     commit_metadata_providers: List[CommitMetadataProvider],
     head_oid: pygit2.Oid,
     current_oid: OidStr,
@@ -102,9 +105,14 @@ def _get_child_output(
         current.children, key=lambda child: graph[child].commit.commit_time
     )
     for child_idx, child_oid in enumerate(children):
+        # Will be rendered by the parent.
+        if child_oid in root_oids:
+            continue
+
         child_output = _get_child_output(
             glyphs=glyphs,
             graph=graph,
+            root_oids=root_oids,
             commit_metadata_providers=commit_metadata_providers,
             head_oid=head_oid,
             current_oid=child_oid,
@@ -159,6 +167,10 @@ def _get_output(
                 lines.append(glyphs.line)
             else:
                 lines.append(glyphs.vertical_ellipsis)
+        elif root_idx > 0:
+            # Pathological case: multiple topologically-unrelated roots.
+            # Separate them with a newline.
+            lines.append("")
 
         last_child_line_char: Optional[str]
         if root_idx == len(root_oids) - 1:
@@ -173,6 +185,7 @@ def _get_output(
         child_output = _get_child_output(
             glyphs=glyphs,
             graph=graph,
+            root_oids=root_oids,
             commit_metadata_providers=commit_metadata_providers,
             head_oid=head_oid,
             current_oid=root_oid,

@@ -517,14 +517,10 @@ class EventReplayer:
         (_classification, event) = self._commit_history[oid][-1]
         return event
 
-    def get_visible_oids(self) -> Set[str]:
-        """Get the visible OIDs according to the repository history.
+    def get_active_oids(self) -> Set[str]:
+        """Get the OIDs which have activity according to the repository history.
 
         Returns:
-          The set of OIDs referring to commits which are thought to be visible due to user action.
+          The set of OIDs referring to commits which are thought to be active due to user action.
         """
-        return {
-            oid
-            for oid, history in self._commit_history.items()
-            if history[-1][0] is _EventClassification.SHOW
-        }
+        return set(self._commit_history.keys())
