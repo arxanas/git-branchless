@@ -1,5 +1,3 @@
-import pytest
-
 from branchless.restack import restack
 from branchless.smartlog import smartlog
 from helpers import Git, capture, compare
@@ -121,7 +119,6 @@ branchless: git checkout 662b451fb905b92404787e024af717ced49e3045
         )
 
 
-@pytest.mark.xfail
 def test_amended_initial_commit(git: Git) -> None:
     git.init_repo()
     git.commit_file(name="test1", time=1)
@@ -164,7 +161,6 @@ O e18bf942 (master) create test1.txt
         )
 
 
-@pytest.mark.xfail
 def test_restack_amended_master(git: Git) -> None:
     git.init_repo()
     git.commit_file(name="test1", time=1)

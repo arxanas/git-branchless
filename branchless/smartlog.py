@@ -57,11 +57,23 @@ def _split_commit_graph_by_roots(
             return -1
         elif merge_base_oid == rhs_oid:
             return 1
+
+        # The commits were not orderable (pathlogical situation). Let's
+        # just order them by timestamp in that case to produce a consistent
+        # and reasonable guess at the intended topological ordering.
+        if lhs_commit.commit_time < rhs_commit.commit_time:
+            return -1
+        elif lhs_commit.commit_time > rhs_commit.commit_time:
+            return 1
+
+        # Commits produced by automation may have the same timestamp, so pick
+        # any other consistent ordering.
+        if lhs_oid.hex < rhs_oid.hex:
+            return -1
+        elif lhs_oid.hex > rhs_oid.hex:
+            return 1
         else:
-            # The commits were not orderable (pathlogical situation). Let's
-            # just order them by timestamp in that case to produce a consistent
-            # and reasonable guess at the intended topological ordering.
-            return lhs_commit.commit_time - rhs_commit.commit_time
+            return 0
 
     root_commit_oids.sort(key=functools.cmp_to_key(compare))
     return root_commit_oids

@@ -111,10 +111,23 @@ def _restack_commits(
         if rewritten_oid is None:
             continue
 
+        # Adjacent master commits are not linked in the commit graph, but if
+        # the user rewrote a master commit, then we may need to restack
+        # subsequent master commits. Find the real set of children commits so
+        # that we can do this.
+        real_children_oids = set(graph[original_oid].children)
+        for possible_child_oid in graph.keys():
+            if possible_child_oid in real_children_oids:
+                continue
+            possible_child_node = graph[possible_child_oid]
+            if any(
+                parent_oid.hex == original_oid
+                for parent_oid in possible_child_node.commit.parent_ids
+            ):
+                real_children_oids.add(possible_child_oid)
+
         abandoned_child_oids = [
-            child_oid
-            for child_oid in graph[original_oid].children
-            if graph[child_oid].is_visible
+            child_oid for child_oid in real_children_oids if graph[child_oid].is_visible
         ]
         if not abandoned_child_oids:
             continue
