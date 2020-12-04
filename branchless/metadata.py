@@ -4,7 +4,7 @@ These are rendered inline in the smartlog, between the commit hash and the
 commit message.
 """
 import re
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional, Set
 
 import colorama
 import pygit2
@@ -77,7 +77,7 @@ class BranchesProvider:
         self,
         glyphs: Glyphs,
         repo: pygit2.Repository,
-        branch_oid_to_names: Dict[OidStr, List[str]],
+        branch_oid_to_names: Dict[OidStr, Set[str]],
     ) -> None:
         self._is_enabled = _is_enabled(repo=repo, name="branches", default=True)
         self._glyphs = glyphs
@@ -87,13 +87,11 @@ class BranchesProvider:
         if not self._is_enabled:
             return None
 
-        branches = self._branch_oid_to_names.get(commit.oid.hex)
-        if branches is not None:
+        branch_names = self._branch_oid_to_names.get(commit.oid.hex)
+        if branch_names is not None:
             return self._glyphs.color_fg(
                 color=colorama.Fore.GREEN,
-                message="("
-                + ", ".join(sorted(branch_name for branch_name in branches))
-                + ")",
+                message="(" + ", ".join(sorted(branch_names)) + ")",
             )
         else:
             return None

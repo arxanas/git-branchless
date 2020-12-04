@@ -1,5 +1,7 @@
 import io
 
+import py
+
 from branchless.smartlog import smartlog
 from helpers import Git, compare
 
@@ -257,3 +259,51 @@ O 62fc20d2 (main) create test1.txt
 @ 96d1c37a create test2.txt
 """,
         )
+
+
+def test_main_remote_branch(tmpdir: py.path.local) -> None:
+    original_repo_path = tmpdir.join("original")
+    original_repo_path.mkdir()
+    cloned_repo_path = tmpdir.join("cloned")
+    with original_repo_path.as_cwd():
+        git = Git(original_repo_path)
+        git.init_repo()
+        git.commit_file(name="test1", time=1)
+        git.run("clone", [str(original_repo_path), str(cloned_repo_path)])
+
+    with cloned_repo_path.as_cwd():
+        git = Git(cloned_repo_path)
+        git.init_repo(make_initial_commit=False)
+        git.detach_head()
+        git.run("config", ["branchless.mainBranch", "origin/master"])
+        git.run("branch", ["-d", "master"])
+
+        with io.StringIO() as out:
+            assert smartlog(out=out) == 0
+            compare(
+                actual=out.getvalue(),
+                expected="""\
+:
+@ 62fc20d2 (origin/master) create test1.txt
+""",
+            )
+
+    with original_repo_path.as_cwd():
+        git = Git(original_repo_path)
+        git.commit_file(name="test2", time=2)
+
+    with cloned_repo_path.as_cwd():
+        git = Git(cloned_repo_path)
+        git.run("fetch")
+
+        with io.StringIO() as out:
+            assert smartlog(out=out) == 0
+            compare(
+                actual=out.getvalue(),
+                expected="""\
+:
+@ 62fc20d2 create test1.txt
+|
+O 96d1c37a (origin/master) create test2.txt
+""",
+            )

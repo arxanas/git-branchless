@@ -287,7 +287,9 @@ def smartlog(*, out: TextIO) -> int:
             CommitOidProvider(glyphs=glyphs, use_color=True),
             RelativeTimeProvider(glyphs=glyphs, repo=repo, now=int(time.time())),
             BranchesProvider(
-                glyphs=glyphs, repo=repo, branch_oid_to_names=branch_oid_to_names
+                glyphs=glyphs,
+                repo=repo,
+                branch_oid_to_names=branch_oid_to_names,
             ),
             DifferentialRevisionProvider(glyphs=glyphs, repo=repo),
             CommitMessageProvider(),

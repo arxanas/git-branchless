@@ -731,7 +731,7 @@ class EventReplayer:
 
     def get_branch_oid_to_names(
         self, repo: pygit2.Repository
-    ) -> Dict[OidStr, List[str]]:
+    ) -> Dict[OidStr, Set[str]]:
         """Get the mapping of branch OIDs to names at the cursor's point in
         time.
 
@@ -747,14 +747,16 @@ class EventReplayer:
         """
         # NOTE: This doesn't get branches that existed historically, just the
         # old positions of branches that currently exist.
-        result: Dict[OidStr, List[str]] = {}
-        for branch_name in get_branch_names(repo):
+        result: Dict[OidStr, Set[str]] = {}
+        branch_names = get_branch_names(repo)
+        branch_names.add(get_main_branch_name(repo))
+        for branch_name in branch_names:
             branch_oid = self._get_cursor_branch_oid(repo=repo, branch_name=branch_name)
             if branch_oid is None:
                 continue
             if branch_oid not in result:
-                result[branch_oid] = []
-            result[branch_oid].append(branch_name)
+                result[branch_oid] = set()
+            result[branch_oid].add(branch_name)
         return result
 
     def get_event_before_cursor(self) -> Optional[Tuple[int, Event]]:

@@ -18,9 +18,10 @@ class Git:
     def __init__(self, path: py.path.local) -> None:
         self.path = path
 
-    def init_repo(self) -> None:
+    def init_repo(self, make_initial_commit: bool = True) -> None:
         self.run("init")
-        self.commit_file(name="initial", time=0)
+        if make_initial_commit:
+            self.commit_file(name="initial", time=0)
 
         python_path = Path(__file__).parent.parent
         self.run(

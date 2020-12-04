@@ -179,7 +179,7 @@ def get_branch_names(repo: pygit2.Repository) -> Set[str]:
     return set(repo.listall_branches(pygit2.GIT_BRANCH_LOCAL))
 
 
-def get_branch_oid_to_names(repo: pygit2.Repository) -> Dict[OidStr, List[str]]:
+def get_branch_oid_to_names(repo: pygit2.Repository) -> Dict[OidStr, Set[str]]:
     """Get the mapping of branch OIDs to branch names.
 
     This mapping the lets you quickly look up which branches are pointing to
@@ -192,10 +192,12 @@ def get_branch_oid_to_names(repo: pygit2.Repository) -> Dict[OidStr, List[str]]:
       A mapping from an OID to the names of branches pointing to that
       OID.
     """
-    result: Dict[OidStr, List[str]] = {}
-    for branch_name in get_branch_names(repo):
+    result: Dict[OidStr, Set[str]] = {}
+    branch_names = get_branch_names(repo)
+    branch_names.add(get_main_branch_name(repo))
+    for branch_name in branch_names:
         branch_oid = repo.branches[branch_name].target.hex
         if branch_oid not in result:
-            result[branch_oid] = []
-        result[branch_oid].append(branch_name)
+            result[branch_oid] = set()
+        result[branch_oid].add(branch_name)
     return result
