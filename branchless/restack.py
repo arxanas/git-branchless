@@ -55,7 +55,7 @@ o def002 Commit 2
 o def003 Commit 3
 ```
 """
-from typing import Optional, TextIO
+from typing import List, Optional, TextIO, Tuple
 
 import pygit2
 
@@ -94,6 +94,36 @@ def _find_rewrite_target(
         return None
 
 
+def find_abandoned_children(
+    graph: CommitGraph, event_replayer: EventReplayer, oid: OidStr
+) -> Optional[Tuple[OidStr, List[OidStr]]]:
+    rewritten_oid = _find_rewrite_target(
+        graph=graph, event_replayer=event_replayer, oid=oid
+    )
+    if rewritten_oid is None:
+        return None
+
+    # Adjacent main branch commits are not linked in the commit graph, but
+    # if the user rewrote a main branch commit, then we may need to restack
+    # subsequent main branch commits. Find the real set of children commits
+    # so that we can do this.
+    real_children_oids = set(graph[oid].children)
+    for possible_child_oid in graph.keys():
+        if possible_child_oid in real_children_oids:
+            continue
+        possible_child_node = graph[possible_child_oid]
+        if any(
+            parent_oid.hex == oid
+            for parent_oid in possible_child_node.commit.parent_ids
+        ):
+            real_children_oids.add(possible_child_oid)
+
+    return (
+        rewritten_oid,
+        [child_oid for child_oid in real_children_oids if graph[child_oid].is_visible],
+    )
+
+
 def _restack_commits(
     out: TextIO,
     err: TextIO,
@@ -117,30 +147,13 @@ def _restack_commits(
     )
 
     for original_oid in graph:
-        rewritten_oid = _find_rewrite_target(
+        abandoned_result = find_abandoned_children(
             graph=graph, event_replayer=event_replayer, oid=original_oid
         )
-        if rewritten_oid is None:
+        if not abandoned_result:
             continue
 
-        # Adjacent main branch commits are not linked in the commit graph, but
-        # if the user rewrote a main branch commit, then we may need to restack
-        # subsequent main branch commits. Find the real set of children commits
-        # so that we can do this.
-        real_children_oids = set(graph[original_oid].children)
-        for possible_child_oid in graph.keys():
-            if possible_child_oid in real_children_oids:
-                continue
-            possible_child_node = graph[possible_child_oid]
-            if any(
-                parent_oid.hex == original_oid
-                for parent_oid in possible_child_node.commit.parent_ids
-            ):
-                real_children_oids.add(possible_child_oid)
-
-        abandoned_child_oids = [
-            child_oid for child_oid in real_children_oids if graph[child_oid].is_visible
-        ]
+        (rewritten_oid, abandoned_child_oids) = abandoned_result
         if not abandoned_child_oids:
             continue
 

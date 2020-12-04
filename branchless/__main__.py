@@ -4,8 +4,8 @@ import logging
 import sys
 from typing import List, TextIO
 
-from .eventlog import hook_post_checkout, hook_post_commit, hook_post_rewrite
 from .hide import hide, unhide
+from .hooks import hook_post_checkout, hook_post_commit, hook_post_rewrite
 from .init import init
 from .navigation import next, prev
 from .restack import restack

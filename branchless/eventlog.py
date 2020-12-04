@@ -9,10 +9,8 @@ import collections
 import enum
 import re
 import sqlite3
-import sys
-import time
 from dataclasses import dataclass
-from typing import Dict, List, Literal, Optional, Sequence, Set, TextIO, Tuple, Union
+from typing import Dict, List, Literal, Optional, Sequence, Set, Tuple, Union
 
 import pygit2
 
@@ -21,10 +19,9 @@ from . import (
     get_branch_names,
     get_main_branch_name,
     get_main_branch_oid,
-    get_repo,
     run_git_silent,
 )
-from .db import make_cursor, make_db_for_repo
+from .db import make_cursor
 
 
 @dataclass(frozen=True, eq=True)
@@ -352,79 +349,6 @@ ORDER BY rowid ASC
                 raise TypeError(f"Unknown event log type: {type}")
 
         return events
-
-
-def hook_post_rewrite(out: TextIO) -> None:
-    """Handle Git's post-rewrite hook.
-
-    Args:
-      out: Output stream to write to.
-    """
-    timestamp = time.time()
-    events = []
-    for line in sys.stdin:
-        line = line.strip()
-        [old_ref, new_ref, *extras] = line.split(" ")
-        events.append(
-            RewriteEvent(
-                timestamp=timestamp, old_commit_oid=old_ref, new_commit_oid=new_ref
-            )
-        )
-    out.write(f"branchless: processing {len(events)} rewritten commit(s)\n")
-
-    repo = get_repo()
-    db = make_db_for_repo(repo=repo)
-    event_log_db = EventLogDb(db)
-    event_log_db.add_events(events)
-
-
-def hook_post_checkout(
-    out: TextIO, previous_head_ref: str, current_head_ref: str, is_branch_checkout: int
-) -> None:
-    """Handle Git's post-checkout hook.
-
-    Args:
-      out: Output stream to write to.
-    """
-    if is_branch_checkout == 0:
-        return
-
-    timestamp = time.time()
-    out.write("branchless: processing checkout\n")
-
-    repo = get_repo()
-    db = make_db_for_repo(repo=repo)
-    event_log_db = EventLogDb(db)
-    event_log_db.add_events(
-        [
-            RefUpdateEvent(
-                timestamp=timestamp,
-                old_ref=previous_head_ref,
-                new_ref=current_head_ref,
-                ref_name="HEAD",
-                message=None,
-            )
-        ]
-    )
-
-
-def hook_post_commit(out: TextIO) -> None:
-    """Handle Git's post-commit hook.
-
-    Args:
-      out: Output stream to write to.
-    """
-    out.write("branchless: processing commit\n")
-
-    repo = get_repo()
-    db = make_db_for_repo(repo=repo)
-    event_log_db = EventLogDb(db)
-
-    commit_oid = repo.head.target
-    timestamp = repo[commit_oid].commit_time
-    event_log_db.add_events(
-        [CommitEvent(timestamp=timestamp, commit_oid=commit_oid.hex)]
-    )
 
 
 class _EventClassification(enum.Enum):
