@@ -9,7 +9,7 @@ contains the implementations for the hooks.
 """
 import sys
 import time
-from typing import TextIO
+from typing import Set, TextIO
 
 import colorama
 
@@ -79,11 +79,10 @@ def hook_post_rewrite(out: TextIO) -> None:
             hide_commits=False,
         )
 
-        # Make sure we don't double-count any children (possibly in the case of
-        # a merge commit).
+        # Use a set for abandoned children to make sure we don't double-count
+        # any children (possibly in the case of a merge commit).
         all_abandoned_children = set()
-        # Branches can only point to one OID, so we can just keep count.
-        num_abandoned_branches = 0
+        all_abandoned_branches: Set[str] = set()
         for old_commit_oid in old_commits:
             abandoned_result = find_abandoned_children(
                 graph=graph, event_replayer=event_replayer, oid=old_commit_oid
@@ -92,8 +91,9 @@ def hook_post_rewrite(out: TextIO) -> None:
                 continue
             (_rewritten_oid, abandoned_children) = abandoned_result
             all_abandoned_children.update(abandoned_children)
-            num_abandoned_branches += len(branch_oid_to_names.get(old_commit_oid, []))
+            all_abandoned_branches.update(branch_oid_to_names.get(old_commit_oid, []))
         num_abandoned_children = len(all_abandoned_children)
+        num_abandoned_branches = len(all_abandoned_branches)
 
         if num_abandoned_children > 0 or num_abandoned_branches > 0:
             glyphs = make_glyphs(out=out)
@@ -107,12 +107,14 @@ def hook_post_rewrite(out: TextIO) -> None:
                     )
                 )
             if num_abandoned_branches > 0:
+                abandoned_branches_count = pluralize(
+                    amount=num_abandoned_branches,
+                    singular="branch",
+                    plural="branches",
+                )
+                abandoned_branches_list = ", ".join(sorted(all_abandoned_branches))
                 warning_items.append(
-                    pluralize(
-                        amount=num_abandoned_branches,
-                        singular="branch",
-                        plural="branches",
-                    )
+                    f"{abandoned_branches_count} ({abandoned_branches_list})"
                 )
 
             warning_message = " and ".join(warning_items)

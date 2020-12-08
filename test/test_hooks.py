@@ -34,7 +34,7 @@ branchless: processing 1 rewritten commit
         == """\
 branchless: processing commit
 branchless: processing 1 rewritten commit
-branchless: This operation abandoned 1 commit and 1 branch!
+branchless: This operation abandoned 1 commit and 1 branch (master)!
 branchless: Consider running one of the following:
 branchless:   - git restack: re-apply the abandoned commits/branches
 branchless:     (this is most likely what you want to do)
@@ -49,6 +49,7 @@ branchless:   - git config branchless.restack.warnAbandoned false: suppress this
 def test_abandoned_branch_message(git: Git, capfd: CaptureFixture[str]) -> None:
     git.init_repo()
     git.commit_file(name="test1", time=1)
+    git.run("branch", ["abc"])
     git.detach_head()
 
     clear_capture(capfd)
@@ -59,7 +60,7 @@ def test_abandoned_branch_message(git: Git, capfd: CaptureFixture[str]) -> None:
         == """\
 branchless: processing commit
 branchless: processing 1 rewritten commit
-branchless: This operation abandoned 1 branch!
+branchless: This operation abandoned 2 branches (abc, master)!
 branchless: Consider running one of the following:
 branchless:   - git restack: re-apply the abandoned commits/branches
 branchless:     (this is most likely what you want to do)
