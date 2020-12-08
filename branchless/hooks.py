@@ -22,7 +22,7 @@ from .eventlog import (
     RefUpdateEvent,
     RewriteEvent,
 )
-from .formatting import make_glyphs
+from .formatting import make_glyphs, pluralize
 from .graph import make_graph
 from .mergebase import MergeBaseDb
 from .restack import find_abandoned_children
@@ -46,7 +46,11 @@ def hook_post_rewrite(out: TextIO) -> None:
                 timestamp=timestamp, old_commit_oid=old_ref, new_commit_oid=new_ref
             )
         )
-    out.write(f"branchless: processing {len(events)} rewritten commit(s)\n")
+
+    message_rewritten_commits = pluralize(
+        amount=len(events), singular="rewritten commit", plural="rewritten commits"
+    )
+    out.write(f"branchless: processing {message_rewritten_commits}\n")
 
     repo = get_repo()
     db = make_db_for_repo(repo=repo)
@@ -93,11 +97,30 @@ def hook_post_rewrite(out: TextIO) -> None:
 
         if num_abandoned_children > 0 or num_abandoned_branches > 0:
             glyphs = make_glyphs(out=out)
+            warning_items = []
+            if num_abandoned_children > 0:
+                warning_items.append(
+                    pluralize(
+                        amount=num_abandoned_children,
+                        singular="commit",
+                        plural="commits",
+                    )
+                )
+            if num_abandoned_branches > 0:
+                warning_items.append(
+                    pluralize(
+                        amount=num_abandoned_branches,
+                        singular="branch",
+                        plural="branches",
+                    )
+                )
+
+            warning_message = " and ".join(warning_items)
             warning_message = glyphs.style(
                 style=colorama.Style.BRIGHT,
                 message=glyphs.color_fg(
                     color=colorama.Fore.YELLOW,
-                    message=f"This operation abandoned {num_abandoned_children} commit(s) and {num_abandoned_branches} branch(es)!",
+                    message=f"This operation abandoned {warning_message}!",
                 ),
             )
 

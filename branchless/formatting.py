@@ -121,3 +121,20 @@ def make_glyphs(out: TextIO) -> Glyphs:
         return PrettyGlyphs()
     else:
         return TextGlyphs()
+
+
+def pluralize(amount: int, singular: str, plural: str) -> str:
+    """Pluralize a quantity, as appropriate.
+
+    Args:
+      amount: The quantity to pluralize.
+      singular: The string to return if singular.
+      plural: The string to return if plural.
+
+    Returns:
+      The appropriately-pluralized amount as a string.
+    """
+    if amount == 1:
+        return f"{amount} {singular}"
+    else:
+        return f"{amount} {plural}"
