@@ -153,6 +153,10 @@ def main(argv: List[str], *, out: TextIO, err: TextIO) -> int:
         return 1
 
 
+def entry_point() -> None:
+    sys.exit(main(sys.argv[1:], out=sys.stdout, err=sys.stderr))
+
+
 if __name__ == "__main__":
     try:
         from pytest_cov.embed import init as pytest_cov_init
@@ -161,4 +165,4 @@ if __name__ == "__main__":
     except ImportError:  # pragma: no cover
         pass
 
-    sys.exit(main(sys.argv[1:], out=sys.stdout, err=sys.stderr))
+    entry_point()
