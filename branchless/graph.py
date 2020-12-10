@@ -138,7 +138,12 @@ def _walk_from_commits(
     graph: CommitGraph = {}
 
     for commit_oid_hex in commit_oids:
-        current_commit = repo[commit_oid_hex]
+        try:
+            current_commit = repo[commit_oid_hex]
+        except KeyError:
+            # Commit may have been garbage-collected.
+            continue
+
         merge_base_oid = merge_base_db.get_merge_base_oid(
             repo=repo, lhs_oid=current_commit.oid, rhs_oid=main_branch_oid
         )
