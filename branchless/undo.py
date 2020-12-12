@@ -4,13 +4,13 @@ This is accomplished by finding the events that have happened since a certain
 time and inverting them.
 """
 import time
-from typing import TextIO
+from typing import List, TextIO
 
 import colorama
 import pygit2
 import readchar
 
-from . import OidStr, get_repo
+from . import OidStr, get_repo, run_git
 from .db import make_db_for_repo
 from .eventlog import (
     CommitEvent,
@@ -36,6 +36,13 @@ from .metadata import (
 from .smartlog import render_graph
 
 
+def _render_ref_name(ref_name: str) -> str:
+    if ref_name.startswith("refs/heads/"):
+        return "branch " + ref_name[len("refs/heads/") :]
+    else:
+        return "ref " + ref_name
+
+
 def _describe_event(
     glyphs: Glyphs, repo: pygit2.Repository, event: Event, now: int
 ) -> str:
@@ -43,7 +50,7 @@ def _describe_event(
         try:
             commit = repo[oid]
         except KeyError:
-            return "<unavailable>"
+            return f"<unavailable: {oid} (possibly GC'ed)>"
         return render_commit_metadata(
             glyphs=glyphs,
             commit=commit,
@@ -61,20 +68,51 @@ def _describe_event(
         return "Unhide commit {}\n".format(render_commit(event.commit_oid))
     elif isinstance(event, RefUpdateEvent):
         if event.ref_name == "HEAD":
-            return """
+            assert event.new_ref is not None
+            if event.old_ref is not None:
+                return """
 Check out from {}
             to {}
 """.strip().format(
-                render_commit(event.old_ref), render_commit(event.new_ref)
-            )
-        else:
-            return """
-Move branch {} from {}
-            {}   to {}
+                    render_commit(event.old_ref), render_commit(event.new_ref)
+                )
+            else:
+                # Not sure if this can happen (when a repo is created, maybe?).
+                return """\
+Check out to {}
 """.strip().format(
-                event.ref_name,
+                    render_commit(event.new_ref)
+                )
+
+        elif event.old_ref is None:
+            ref_name = _render_ref_name(event.ref_name)
+            assert event.new_ref is not None
+            return """\
+Create {} at {}
+""".format(
+                ref_name, render_commit(event.new_ref)
+            )
+
+        elif event.new_ref is None:
+            ref_name = _render_ref_name(event.ref_name)
+            assert event.old_ref is not None
+            return """\
+Delete {} at {}
+""".format(
+                ref_name, render_commit(event.old_ref)
+            )
+
+        else:
+            ref_name = _render_ref_name(event.ref_name)
+            assert event.old_ref is not None
+            assert event.new_ref is not None
+            return """
+Move {} from {}
+     {}   to {}
+""".strip().format(
+                ref_name,
                 render_commit(event.old_ref),
-                " " * (len(event.ref_name)),
+                " " * (len(ref_name)),
                 render_commit(event.new_ref),
             )
     elif isinstance(event, RewriteEvent):
@@ -136,7 +174,7 @@ def _select_past_event(
         event_before_cursor = event_replayer.get_event_before_cursor()
         head_oid = event_replayer.get_cursor_head_oid()
         main_branch_oid = event_replayer.get_cursor_main_branch_oid(repo)
-        branch_oid_to_names = event_replayer.get_branch_oid_to_names(repo)
+        branch_oid_to_names = event_replayer.get_cursor_branch_oid_to_names(repo)
 
         graph = make_graph(
             repo=repo,
@@ -218,8 +256,24 @@ or `git rebase` on it.
     return False
 
 
+def _optimize_inverse_events(events: List[Event]) -> List[Event]:
+    optimized_events: List[Event] = []
+    seen_checkout = False
+    for event in reversed(events):
+        if isinstance(event, RefUpdateEvent) and event.ref_name == "HEAD":
+            if seen_checkout:
+                continue
+            else:
+                seen_checkout = True
+                optimized_events.append(event)
+        else:
+            optimized_events.append(event)
+    return list(reversed(optimized_events))
+
+
 def _undo_events(
     out: TextIO,
+    err: TextIO,
     glyphs: Glyphs,
     repo: pygit2.Repository,
     event_log_db: EventLogDb,
@@ -231,6 +285,7 @@ def _undo_events(
     inverse_events = [
         _inverse_event(now=now, event=event) for event in reversed(events_to_undo)
     ]
+    inverse_events = _optimize_inverse_events(inverse_events)
     if not inverse_events:
         out.write("No undo actions to apply, exiting.\n")
         return 0
@@ -252,7 +307,27 @@ def _undo_events(
     while True:
         confirmation = input("Confirm? [yN] ")
         if confirmation in ["y", "Y"]:
-            event_log_db.add_events(inverse_events)
+            for event in inverse_events:
+                if isinstance(event, RefUpdateEvent):
+                    if event.ref_name == "HEAD":
+                        # Most likely the user wanted to perform an actual
+                        # checkout in this case, rather than just update `HEAD`
+                        # (and be left with a dirty working copy). The `Git`
+                        # command will update the event log appropriately, as
+                        # it will invoke our hooks.
+                        assert event.new_ref is not None
+                        run_git(out=out, err=err, args=["checkout", event.new_ref])
+                    elif event.new_ref is None:
+                        assert event.old_ref is not None
+                        repo.references.delete(event.old_ref)
+                    else:
+                        # Create or update the given reference.
+                        repo.references.create(
+                            event.ref_name, event.new_ref, force=True
+                        )
+                else:
+                    event_log_db.add_events([event])
+
             num_inverse_events = pluralize(
                 amount=len(inverse_events),
                 singular="inverse event",
@@ -265,7 +340,7 @@ def _undo_events(
             return 1
 
 
-def undo(out: TextIO) -> int:
+def undo(out: TextIO, err: TextIO) -> int:
     now = int(time.time())
     glyphs = make_glyphs(out)
     repo = get_repo()
@@ -286,6 +361,7 @@ def undo(out: TextIO) -> int:
 
     return _undo_events(
         out=out,
+        err=err,
         glyphs=glyphs,
         repo=repo,
         event_log_db=event_log_db,

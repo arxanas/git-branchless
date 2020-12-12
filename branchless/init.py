@@ -129,6 +129,21 @@ git branchless hook-post-rewrite "$@"
 git branchless hook-post-checkout "$@"
 """,
     )
+    _install_hook(
+        out=out,
+        repo=repo,
+        hook_type="reference-transaction",
+        hook_script="""\
+#!/bin/sh
+# Avoid canceling the reference transaction in the case that `branchless` fails
+# for whatever reason.
+git branchless hook-reference-transaction "$@" || (
+    echo 'branchless: Failed to process reference transaction!'
+    echo 'branchless: Some events (e.g. branch updates) may have been lost.'
+    echo 'branchless: This is a bug. Please report it.'
+)
+""",
+    )
 
 
 def _install_alias(out: TextIO, repo: pygit2.Repository, alias: str) -> None:

@@ -232,3 +232,37 @@ def hook_post_commit(out: TextIO) -> None:
     event_log_db.add_events(
         [CommitEvent(timestamp=timestamp, commit_oid=commit_oid.hex)]
     )
+
+
+def hook_reference_transaction(out: TextIO, transaction_state: str) -> None:
+    """Handle Git's reference-transaction hook.
+
+    Args:
+      out: Output stream to write to.
+    """
+    if transaction_state == "committed":
+        timestamp = time.time()
+        events = []
+        for line in sys.stdin:
+            (old_value, new_value, ref_name) = line.strip().split(" ", 2)
+            events.append(
+                RefUpdateEvent(
+                    timestamp=timestamp,
+                    ref_name=ref_name,
+                    old_ref=old_value,
+                    new_ref=new_value,
+                    message=None,
+                )
+            )
+
+        num_reference_updates = pluralize(
+            amount=len(events),
+            singular="update to a branch/ref",
+            plural="updates to branches/refs",
+        )
+        out.write(f"branchless: processing {num_reference_updates}\n")
+
+        repo = get_repo()
+        db = make_db_for_repo(repo=repo)
+        event_log_db = EventLogDb(db)
+        event_log_db.add_events(events)

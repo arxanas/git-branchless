@@ -12,6 +12,7 @@ def preprocess_stderr(stderr: str) -> str:
         line
         for line in stderr.replace("\r", "\n").splitlines(keepends=True)
         if not line.isspace()
+        if not line.startswith("branchless: processing")
     )
 
 
@@ -22,13 +23,8 @@ def test_abandoned_commit_message(git: Git, capfd: CaptureFixture[str]) -> None:
     clear_capture(capfd)
     git.run("commit", ["--amend", "-m", "amend test1"])
     (_out, err) = capfd.readouterr()
-    assert (
-        err
-        == """\
-branchless: processing commit
-branchless: processing 1 rewritten commit
-"""
-    )
+    err = preprocess_stderr(err)
+    assert err == ""
 
     git.commit_file(name="test2", time=2)
     git.run("checkout", ["HEAD^"])
@@ -37,11 +33,10 @@ branchless: processing 1 rewritten commit
     clear_capture(capfd)
     git.run("commit", ["--amend", "-m", "amend test1 again"])
     (_out, err) = capfd.readouterr()
+    err = preprocess_stderr(err)
     assert (
         err
         == """\
-branchless: processing commit
-branchless: processing 1 rewritten commit
 branchless: This operation abandoned 1 commit and 1 branch (master)!
 branchless: Consider running one of the following:
 branchless:   - git restack: re-apply the abandoned commits/branches
@@ -63,11 +58,10 @@ def test_abandoned_branch_message(git: Git, capfd: CaptureFixture[str]) -> None:
     clear_capture(capfd)
     git.run("commit", ["--amend", "-m", "amend test1"])
     (_out, err) = capfd.readouterr()
+    err = preprocess_stderr(err)
     assert (
         err
         == """\
-branchless: processing commit
-branchless: processing 1 rewritten commit
 branchless: This operation abandoned 2 branches (abc, master)!
 branchless: Consider running one of the following:
 branchless:   - git restack: re-apply the abandoned commits/branches
@@ -100,13 +94,14 @@ def test_fixup_no_abandoned_commit_message(
         == """\
 Rebasing (2/3)
 Rebasing (3/3)
-branchless: processing 3 rewritten commits
 Successfully rebased and updated detached HEAD.
 """
     )
 
 
 def test_rebase_individual_commit(git: Git, capfd: CaptureFixture[str]) -> None:
+    git.requires_git29()
+
     git.init_repo()
     git.commit_file(name="test1", time=1)
     git.run("checkout", ["HEAD^"])
@@ -116,11 +111,11 @@ def test_rebase_individual_commit(git: Git, capfd: CaptureFixture[str]) -> None:
     clear_capture(capfd)
     git.run("rebase", ["master", "HEAD^", "--onto", "master"])
     (_out, err) = capfd.readouterr()
+    err = preprocess_stderr(err)
     assert (
         err
         == """\
-branchless: processing checkout
-branchless: processing 1 rewritten commit
+Rebasing (1/1)
 branchless: This operation abandoned 1 commit!
 branchless: Consider running one of the following:
 branchless:   - git restack: re-apply the abandoned commits/branches
@@ -129,6 +124,7 @@ branchless:   - git smartlog: assess the situation
 branchless:   - git hide [<commit>...]: hide the commits from the smartlog
 branchless:   - git undo: undo the operation
 branchless:   - git config branchless.restack.warnAbandoned false: suppress this message
+Successfully rebased and updated detached HEAD.
 """
     )
 

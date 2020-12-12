@@ -5,7 +5,12 @@ import sys
 from typing import List, TextIO
 
 from .hide import hide, unhide
-from .hooks import hook_post_checkout, hook_post_commit, hook_post_rewrite
+from .hooks import (
+    hook_post_checkout,
+    hook_post_commit,
+    hook_post_rewrite,
+    hook_reference_transaction,
+)
 from .init import init
 from .navigation import next, prev
 from .restack import restack
@@ -109,6 +114,10 @@ def main(argv: List[str], *, out: TextIO, err: TextIO) -> int:
     hook_post_checkout_parser.add_argument("previous_commit", type=str)
     hook_post_checkout_parser.add_argument("current_commit", type=str)
     hook_post_checkout_parser.add_argument("is_branch_checkout", type=int)
+    hook_reference_transaction_parser = subparsers.add_parser(
+        "hook-reference-transaction", help="Internal use."
+    )
+    hook_reference_transaction_parser.add_argument("transaction_state", type=str)
     subparsers.add_parser("hook-post-commit", help="Internal use.")
 
     args = parser.parse_args(argv)
@@ -133,7 +142,7 @@ def main(argv: List[str], *, out: TextIO, err: TextIO) -> int:
     elif args.subcommand == "restack":
         return restack(out=out, err=err, preserve_timestamps=False)
     elif args.subcommand == "undo":
-        return undo(out=out)
+        return undo(out=out, err=err)
     elif args.subcommand == "hook-post-rewrite":
         hook_post_rewrite(out=out, rewrite_type=args.rewrite_type)
         return 0
@@ -147,6 +156,9 @@ def main(argv: List[str], *, out: TextIO, err: TextIO) -> int:
         return 0
     elif args.subcommand == "hook-post-commit":
         hook_post_commit(out=out)
+        return 0
+    elif args.subcommand == "hook-reference-transaction":
+        hook_reference_transaction(out=out, transaction_state=args.transaction_state)
         return 0
     else:
         parser.print_usage(file=out)

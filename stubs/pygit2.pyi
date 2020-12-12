@@ -63,11 +63,18 @@ class Config:
     def __setitem__(self, name: str, value: str) -> None: ...
     def get_bool(self, name: str) -> bool: ...
 
+class References:
+    def __getitem__(self, name: str) -> Reference: ...
+    def create(
+        self, name: str, target: Union[Oid, str], force: Optional[bool] = False
+    ) -> None: ...
+    def delete(self, name: str) -> None: ...
+
 class Repository:
     path: str
     """Path of the `.git` directory for the repository."""
 
-    references: Mapping[Union[Oid, str], Reference]
+    references: References
     branches: Mapping[str, Branch]
     config: Config
     head: ResolvedReference

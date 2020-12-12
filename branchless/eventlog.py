@@ -7,21 +7,20 @@ they're still working on.
 """
 import collections
 import enum
-import re
 import sqlite3
 from dataclasses import dataclass
 from typing import Dict, List, Literal, Optional, Sequence, Set, Tuple, Union
 
 import pygit2
 
-from . import (
-    OidStr,
-    get_branch_names,
-    get_main_branch_name,
-    get_main_branch_oid,
-    run_git_silent,
-)
+from . import OidStr, get_main_branch_name, get_main_branch_oid
 from .db import make_cursor
+
+NULL_OID = "0" * 40
+"""Denotes the lack of an OID.
+
+This could happen e.g. when creating or deleting a reference.
+"""
 
 
 @dataclass(frozen=True, eq=True)
@@ -103,14 +102,14 @@ class RefUpdateEvent(_BaseEvent):
     For example, `HEAD` or `refs/heads/master`.
     """
 
-    old_ref: str
+    old_ref: Optional[str]
     """The old referent.
 
     May be an OID (in the case of a direct reference) or another reference
     name (in the case of a symbolic reference).
     """
 
-    new_ref: str
+    new_ref: Optional[str]
     """The updated referent.
 
     This may not be different from the old referent.
@@ -138,10 +137,21 @@ class RefUpdateEvent(_BaseEvent):
         assert row.ref1 is not None
         assert row.ref2 is not None
         assert row.ref_name is not None
+
+        if row.ref1 == NULL_OID:
+            old_ref = None
+        else:
+            old_ref = row.ref1
+
+        if row.ref2 == NULL_OID:
+            new_ref = None
+        else:
+            new_ref = row.ref2
+
         return cls(
             timestamp=row.timestamp,
-            old_ref=row.ref1,
-            new_ref=row.ref2,
+            old_ref=old_ref,
+            new_ref=new_ref,
             ref_name=row.ref_name,
             message=row.message,
         )
@@ -560,64 +570,13 @@ class EventReplayer:
             event = self._events[i]
             if isinstance(event, RefUpdateEvent) and event.ref_name == "HEAD":
                 return event.new_ref
+
+            # Not strictly necessary, but helps to compensate in case the user
+            # is not running Git v2.29 or above, and therefore don't have the
+            # corresponding `RefUpdateEvent`.
             elif isinstance(event, CommitEvent):
                 return event.commit_oid
         return None
-
-    def _parse_ref_log(
-        self, repo: pygit2.Repository, ref_name: str
-    ) -> List[RefUpdateEvent]:
-        # `libgit2` doesn't expose the timestamp of the ref-log entry at all
-        # (note that this is different from the timestamp of the pointed-to
-        # object). We must parse the timestamp by calling Git directly.
-        log_format = "%H %gd"
-        result = run_git_silent(
-            repo=repo,
-            args=["reflog", ref_name, "--date=unix", f"--format={log_format}"],
-        )
-        reflog_parse_re = re.compile(
-            r"""
-            ^
-            (?P<new_ref>[0-9a-f]+)
-            [ ]
-            [^@]+
-            @
-            \{
-            (?P<timestamp>[0-9]+)
-            \}
-            $
-        """,
-            re.VERBOSE,
-        )
-
-        events = []
-        for line in result.splitlines():
-            match = reflog_parse_re.match(line)
-            if match is None:
-                raise ValueError(f"Bad ref-log line: {line}")
-
-            timestamp = float(match.group("timestamp"))
-            new_ref = match.group("new_ref")
-            events.append(
-                RefUpdateEvent(
-                    timestamp=timestamp,
-                    ref_name=ref_name,
-                    old_ref="<unknown>",
-                    new_ref=new_ref,
-                    message=None,
-                )
-            )
-        events.reverse()
-        return events
-
-    def _get_ref_log_cached(
-        self, repo: pygit2.Repository, ref_name: str
-    ) -> List[RefUpdateEvent]:
-        if ref_name not in self._ref_logs_cached:
-            self._ref_logs_cached[ref_name] = self._parse_ref_log(
-                repo=repo, ref_name=ref_name
-            )
-        return self._ref_logs_cached[ref_name]
 
     def _get_cursor_branch_oid(
         self, repo: pygit2.Repository, branch_name: str
@@ -625,20 +584,11 @@ class EventReplayer:
         if not (0 <= self._cursor_event_id - 1 < len(self._events)):
             return None
 
-        current_timestamp = self._events[self._cursor_event_id - 1].timestamp
-
-        ref_log = self._get_ref_log_cached(repo=repo, ref_name=branch_name)
-        latest_event = None
-        for event in ref_log:
-            if latest_event is None or event.timestamp <= current_timestamp:
-                latest_event = event
-            else:
-                break
-
-        if latest_event is None:
-            return None
-        else:
-            return latest_event.new_ref
+        ref_name = f"refs/heads/{branch_name}"
+        for event in self._events[self._cursor_event_id - 1 :: -1]:
+            if isinstance(event, RefUpdateEvent) and event.ref_name == ref_name:
+                return event.new_ref
+        return None
 
     def get_cursor_main_branch_oid(self, repo: pygit2.Repository) -> pygit2.Oid:
         main_branch_name = get_main_branch_name(repo)
@@ -653,7 +603,7 @@ class EventReplayer:
         else:
             return repo[main_branch_oid].oid
 
-    def get_branch_oid_to_names(
+    def get_cursor_branch_oid_to_names(
         self, repo: pygit2.Repository
     ) -> Dict[OidStr, Set[str]]:
         """Get the mapping of branch OIDs to names at the cursor's point in
@@ -669,18 +619,29 @@ class EventReplayer:
           A mapping from an OID to the names of branches pointing to that
           OID.
         """
-        # NOTE: This doesn't get branches that existed historically, just the
-        # old positions of branches that currently exist.
+        ref_name_to_oid: Dict[str, OidStr] = {}
+        for event in self._events[: self._cursor_event_id]:
+            if isinstance(event, RefUpdateEvent):
+                if event.new_ref is not None:
+                    ref_name_to_oid[event.ref_name] = event.new_ref
+                else:
+                    del ref_name_to_oid[event.ref_name]
+
         result: Dict[OidStr, Set[str]] = {}
-        branch_names = get_branch_names(repo)
-        branch_names.add(get_main_branch_name(repo))
-        for branch_name in branch_names:
-            branch_oid = self._get_cursor_branch_oid(repo=repo, branch_name=branch_name)
-            if branch_oid is None:
+        for ref_name, ref_oid in ref_name_to_oid.items():
+            if not ref_name.startswith("refs/heads/"):
                 continue
-            if branch_oid not in result:
-                result[branch_oid] = set()
-            result[branch_oid].add(branch_name)
+            branch_name = ref_name[len("refs/heads/") :]
+            if ref_oid not in result:
+                result[ref_oid] = set()
+            result[ref_oid].add(branch_name)
+
+        main_branch_name = get_main_branch_name(repo)
+        main_branch_oid = self.get_cursor_main_branch_oid(repo).hex
+        if main_branch_oid not in result:
+            result[main_branch_oid] = set()
+        result[main_branch_oid].add(main_branch_name)
+
         return result
 
     def get_event_before_cursor(self) -> Optional[Tuple[int, Event]]:
