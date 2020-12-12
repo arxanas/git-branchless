@@ -7,11 +7,13 @@ commit should be considered "hidden".
 The hooks are installed by the `branchless init` command. This module
 contains the implementations for the hooks.
 """
+import os.path
 import sys
 import time
 from typing import Set, TextIO
 
 import colorama
+import pygit2
 
 from . import get_branch_oid_to_names, get_head_oid, get_main_branch_oid, get_repo
 from .db import make_db_for_repo
@@ -28,11 +30,42 @@ from .mergebase import MergeBaseDb
 from .restack import find_abandoned_children
 
 
-def hook_post_rewrite(out: TextIO) -> None:
+def _is_rebase_underway(repo: pygit2.Repository) -> bool:
+    """Detect if an interactive rebase has started but not completed.
+
+    Git will send us spurious `post-rewrite` events marked as `amend` during
+    an interactive rebase, indicating that some of the commits have been
+    rewritten as part of the rebase plan, but not all of them. This function
+    attempts to detect when an interactive rebase is underway, and if the
+    current `post-rewrite` event is spurious.
+
+    There are two practical issues for users as a result of this Git behavior:
+
+      * During an interactive rebase, we may see many "processing 1 rewritten
+      commit" messages, and then a final "processing X rewritten commits"
+      message once the rebase has concluded. This is potentially confusing
+      for users, since the operation logically only rewrote the commits once,
+      but we displayed the message multiple times.
+
+      * During an interactive rebase, we may warn about abandoned commits, when
+      the next operation in the rebase plan fixes up the abandoned commit.
+      This can happen even if no conflict occurred and the rebase completed
+      successfully without any user intervention.
+    """
+    for subdir in ["rebase-apply", "rebase-merge"]:
+        rebase_info_dir = os.path.join(repo.path, subdir)
+        if os.path.exists(rebase_info_dir):
+            return True
+    return False
+
+
+def hook_post_rewrite(out: TextIO, rewrite_type: str) -> None:
     """Handle Git's post-rewrite hook.
 
     Args:
       out: Output stream to write to.
+      rewrite_type: The type of rewrite. Currently one of "rebase" or
+        "amend".
     """
     timestamp = time.time()
     old_commits = []
@@ -50,9 +83,12 @@ def hook_post_rewrite(out: TextIO) -> None:
     message_rewritten_commits = pluralize(
         amount=len(events), singular="rewritten commit", plural="rewritten commits"
     )
-    out.write(f"branchless: processing {message_rewritten_commits}\n")
 
     repo = get_repo()
+    is_spurious_event = rewrite_type == "amend" and _is_rebase_underway(repo)
+    if not is_spurious_event:
+        out.write(f"branchless: processing {message_rewritten_commits}\n")
+
     db = make_db_for_repo(repo=repo)
     event_log_db = EventLogDb(db)
     event_log_db.add_events(events)
@@ -63,7 +99,7 @@ def hook_post_rewrite(out: TextIO) -> None:
     except KeyError:
         should_check_abandoned_commits = True
 
-    if should_check_abandoned_commits:
+    if should_check_abandoned_commits and not is_spurious_event:
         merge_base_db = MergeBaseDb(db)
         event_replayer = EventReplayer.from_event_log_db(event_log_db)
         head_oid = get_head_oid(repo)

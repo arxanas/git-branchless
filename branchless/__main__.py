@@ -135,7 +135,7 @@ def main(argv: List[str], *, out: TextIO, err: TextIO) -> int:
     elif args.subcommand == "undo":
         return undo(out=out)
     elif args.subcommand == "hook-post-rewrite":
-        hook_post_rewrite(out=out)
+        hook_post_rewrite(out=out, rewrite_type=args.rewrite_type)
         return 0
     elif args.subcommand == "hook-post-checkout":
         hook_post_checkout(
