@@ -261,18 +261,18 @@ O 62fc20d2 (main) create test1.txt
         )
 
 
-def test_main_remote_branch(tmpdir: py.path.local) -> None:
+def test_main_remote_branch(tmpdir: py.path.local, git_executable: str) -> None:
     original_repo_path = tmpdir.join("original")
     original_repo_path.mkdir()
     cloned_repo_path = tmpdir.join("cloned")
     with original_repo_path.as_cwd():
-        git = Git(original_repo_path)
+        git = Git(original_repo_path, git_executable=git_executable)
         git.init_repo()
         git.commit_file(name="test1", time=1)
         git.run("clone", [str(original_repo_path), str(cloned_repo_path)])
 
     with cloned_repo_path.as_cwd():
-        git = Git(cloned_repo_path)
+        git = Git(cloned_repo_path, git_executable=git_executable)
         git.init_repo(make_initial_commit=False)
         git.detach_head()
         git.run("config", ["branchless.mainBranch", "origin/master"])
@@ -289,11 +289,11 @@ def test_main_remote_branch(tmpdir: py.path.local) -> None:
             )
 
     with original_repo_path.as_cwd():
-        git = Git(original_repo_path)
+        git = Git(original_repo_path, git_executable=git_executable)
         git.commit_file(name="test2", time=2)
 
     with cloned_repo_path.as_cwd():
-        git = Git(cloned_repo_path)
+        git = Git(cloned_repo_path, git_executable=git_executable)
         git.run("fetch")
 
         with io.StringIO() as out:

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Iterator, List, Optional, TextIO, cast
 
 import py
+import pytest
 
 DUMMY_NAME = "Testy McTestface"
 DUMMY_EMAIL = "test@example.com"
@@ -15,8 +16,9 @@ DUMMY_DATE = "Wed 29 Oct 12:34:56 2020 PDT"
 
 
 class Git:
-    def __init__(self, path: py.path.local) -> None:
+    def __init__(self, path: py.path.local, git_executable: str) -> None:
         self.path = path
+        self.git_executable = git_executable
 
     def init_repo(self, make_initial_commit: bool = True) -> None:
         self.run("init")
@@ -49,7 +51,7 @@ class Git:
     ) -> str:
         if args is None:
             args = []
-        args = ["git", command, *args]
+        args = [self.git_executable, command, *args]
 
         # Required for determinism, as these values will be baked into the commit
         # hash.
@@ -76,6 +78,15 @@ class Git:
             check=check,
         )
         return result.stdout.decode()
+
+    def requires_git29(self) -> None:
+        version_str = self.run("version")
+        [_git, _version, version_str, *_rest] = version_str.split(" ")
+        [major, minor, patch, *_rest] = version_str.split(".")
+        version = (int(major), int(minor), int(patch))
+
+        if version < (2, 29, 0):
+            pytest.skip(f"Requires Git v2.29 or above (current is: {version_str})")
 
     def commit_file(self, name: str, time: int, contents: Optional[str] = None) -> None:
         path = os.path.join(os.getcwd(), f"{name}.txt")
