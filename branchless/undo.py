@@ -22,7 +22,7 @@ from .eventlog import (
     RewriteEvent,
     UnhideEvent,
 )
-from .formatting import Glyphs, make_glyphs
+from .formatting import Glyphs, make_glyphs, pluralize
 from .graph import make_graph
 from .mergebase import MergeBaseDb
 from .metadata import (
@@ -253,7 +253,12 @@ def _undo_events(
         confirmation = input("Confirm? [yN] ")
         if confirmation in ["y", "Y"]:
             event_log_db.add_events(inverse_events)
-            out.write(f"Applied {len(inverse_events)} inverse event(s).\n")
+            num_inverse_events = pluralize(
+                amount=len(inverse_events),
+                singular="inverse event",
+                plural="inverse events",
+            )
+            out.write(f"Applied {num_inverse_events}.\n")
             return 0
         elif confirmation in ["n", "N", "q", "Q"]:
             out.write("Aborted.\n")

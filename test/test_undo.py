@@ -156,7 +156,7 @@ Commit fe65c1fe create test2.txt
 
 Will apply these actions:
 1. Unhide commit 62fc20d2 create test1.txt
-Applied 1 inverse event(s).
+Applied 1 inverse event.
 """,
         )
 
@@ -183,6 +183,6 @@ Hide commit 62fc20d2 create test1.txt
 
 Will apply these actions:
 1. Hide commit 62fc20d2 create test1.txt
-Applied 1 inverse event(s).
+Applied 1 inverse event.
 """,
         )
