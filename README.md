@@ -2,9 +2,7 @@
 
 ## Demo
 
-(Note: bold colors don't appear in this embedded demo. [See the best rendition at asciinema](https://asciinema.org/a/ZHdMDW9997wzctW1T7QsUFe9G).)
-
-![Demo of using the branchless workflow](./media/demo.svg)
+[See the demo at asciinema](https://asciinema.org/a/ZHdMDW9997wzctW1T7QsUFe9G).
 
 ## Why?
 
