@@ -24,6 +24,9 @@ class Git:
 
     def init_repo(self, make_initial_commit: bool = True) -> None:
         self.run("init")
+        self.run("config", ["user.name", DUMMY_NAME])
+        self.run("config", ["user.email", DUMMY_EMAIL])
+
         if make_initial_commit:
             self.commit_file(name="initial", time=0)
 
@@ -59,11 +62,7 @@ class Git:
         # hash.
         date = f"{DUMMY_DATE} -{time:02d}00"
         env = {
-            "GIT_AUTHOR_NAME": DUMMY_NAME,
-            "GIT_AUTHOR_EMAIL": DUMMY_EMAIL,
             "GIT_AUTHOR_DATE": date,
-            "GIT_COMMITTER_NAME": DUMMY_NAME,
-            "GIT_COMMITTER_EMAIL": DUMMY_EMAIL,
             "GIT_COMMITTER_DATE": date,
             # Fake "editor" which accepts the default contents of any commit
             # messages. Usually, we can set this with `git commit -m`, but we have

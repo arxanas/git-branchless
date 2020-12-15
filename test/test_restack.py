@@ -53,7 +53,7 @@ branchless: {git.git_executable} rebase 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
 --onto 024c35ce32dae6b12e981963465ee8a62b7eff9b --committer-date-is-author-date
 branchless: {git.git_executable} rebase 96d1c37a3d4363611c49f7e52186e189a04c531f \
 70deb1e28791d8e7dd5a1f0c871a51b91282562f \
---onto 93ec27e52914527f98092b572e28e98ca4fbc25b --committer-date-is-author-date
+--onto 8cd7de680cafaba911d09f430d2bafb1169d6e65 --committer-date-is-author-date
 branchless: no more abandoned commits to restack
 branchless: no more abandoned branches to restack
 branchless: {git.git_executable} checkout 024c35ce32dae6b12e981963465ee8a62b7eff9b
@@ -61,9 +61,9 @@ O f777ecc9 (master) create initial.txt
 |
 @ 024c35ce amend test1.txt
 |
-o 93ec27e5 create test2.txt
+o 8cd7de68 create test2.txt
 |
-o 60a05cbd create test3.txt
+o b9a0491a create test3.txt
 """,
         )
 
@@ -93,7 +93,7 @@ branchless: {git.git_executable} rebase 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
 --onto 662b451fb905b92404787e024af717ced49e3045 --committer-date-is-author-date
 branchless: {git.git_executable} rebase 96d1c37a3d4363611c49f7e52186e189a04c531f \
 70deb1e28791d8e7dd5a1f0c871a51b91282562f \
---onto 8980f82a39a486a8e75be2c5d401f5cb46f59a6a --committer-date-is-author-date
+--onto 8e9bbde339899eaabf48cf0d8b89d52144db94e1 --committer-date-is-author-date
 branchless: no more abandoned commits to restack
 branchless: no more abandoned branches to restack
 branchless: {git.git_executable} checkout 662b451fb905b92404787e024af717ced49e3045
@@ -101,9 +101,9 @@ O f777ecc9 (master) create initial.txt
 |
 @ 662b451f amend test1.txt v2
 |
-o 8980f82a create test2.txt
+o 8e9bbde3 create test2.txt
 |
-o b71a20e4 create test3.txt
+o 9dc6dd07 create test3.txt
 """,
         )
 
@@ -173,12 +173,12 @@ branchless: {git.git_executable} rebase f777ecc9b0db5ed372b2615695191a8a17f79f24
 --onto 9a9f929a0d4f052ff5d58bedd97b2f761120f8ed \
 --committer-date-is-author-date
 branchless: no more abandoned commits to restack
-branchless: {git.git_executable} branch -f master e18bf94239100139cb8d7a279c188981a8e7a445
+branchless: {git.git_executable} branch -f master 6d85943be6d6e5941d5479f1059d02ebf1c8e307
 branchless: no more abandoned branches to restack
 branchless: {git.git_executable} checkout 9a9f929a0d4f052ff5d58bedd97b2f761120f8ed
 @ 9a9f929a new initial commit
 |
-O e18bf942 (master) create test1.txt
+O 6d85943b (master) create test1.txt
 """,
         )
 
@@ -209,12 +209,12 @@ branchless: {git.git_executable} rebase 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
 --onto ae94dc2a748bc0965c88fcf3edac2e30074ff7e2 \
 --committer-date-is-author-date
 branchless: no more abandoned commits to restack
-branchless: {git.git_executable} branch -f master 1b1619f6ea3e930df4932981f2680eeb33bf17b0
+branchless: {git.git_executable} branch -f master 38528a1a0effd235d909f2fa9ec9a7dd7aad77b5
 branchless: no more abandoned branches to restack
 branchless: {git.git_executable} checkout ae94dc2a748bc0965c88fcf3edac2e30074ff7e2
 :
 @ ae94dc2a amended test1
 |
-O 1b1619f6 (master) create test2.txt
+O 38528a1a (master) create test2.txt
 """,
         )
