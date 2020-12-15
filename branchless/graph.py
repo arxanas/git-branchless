@@ -231,7 +231,7 @@ def _hide_commits(
         unhideable_oids.add(head_oid)
 
     # Hide any subtrees which are entirely hidden.
-    @functools.lru_cache
+    @functools.lru_cache()
     def should_hide(oid: OidStr) -> bool:
         if oid in unhideable_oids:
             return False

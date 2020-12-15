@@ -1,8 +1,9 @@
 import builtins
 import logging
-from typing import Literal, Optional, TextIO, Tuple, Union
+from typing import Optional, TextIO, Tuple, Union
 
 import pygit2
+from typing_extensions import Literal
 
 from . import (
     OidStr,

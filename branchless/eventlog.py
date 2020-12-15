@@ -9,9 +9,10 @@ import collections
 import enum
 import sqlite3
 from dataclasses import dataclass
-from typing import Dict, List, Literal, Optional, Sequence, Set, Tuple, Union
+from typing import Dict, List, Optional, Sequence, Set, Tuple, Union
 
 import pygit2
+from typing_extensions import Literal
 
 from . import OidStr, get_main_branch_name, get_main_branch_oid
 from .db import make_cursor
