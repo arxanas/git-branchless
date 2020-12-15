@@ -1,0 +1,63 @@
+# This workflow will install Python dependencies, run tests and lint with a variety of Python versions
+# For more information see: https://help.github.com/actions/language-and-framework-guides/using-python-with-github-actions
+
+name: Continuous integration
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.6', '3.9']
+        
+        # Use a tag from https://github.com/git/git/tags
+        git-version: ['v2.24.3', 'v2.29.2']
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v2
+      with:
+        python-version: ${{ matrix.python-version }}
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e .
+        pip install -r requirements-dev.txt
+    - name: Typecheck with Mypy
+      run: mypy --show-column-numbers --strict branchless test stubs
+    - name: Lint with Flake8
+      run: flake8 branchless test stubs
+
+    - uses: actions/checkout@v2
+      with:
+        repository: git/git
+        ref: ${{ matrix.git-version }}
+        path: git-${{ matrix.git-version }}-src
+    - uses: actions/cache@v2
+      id: cache-git-build
+      with:
+        key: ${{ runner.os }}-git-${{ matrix.git-version }}
+        path: git
+    - name: Build Git ${{ matrix.git-version }}
+      if: steps.cache-git-build.outputs.cache-hit != 'true'
+      run: |
+        sudo apt-get update --fix-missing
+        # List of dependencies from https://git-scm.com/book/en/v2/Getting-Started-Installing-Git
+        sudo apt-get install dh-autoreconf libcurl4-gnutls-dev libexpat1-dev gettext libz-dev libssl-dev
+        cd git-${{ matrix.git-version }}-src
+        make
+        mv git ../git
+
+    - name: Test with Pytest
+      run: |
+        echo "Using Git:"
+        "$PWD"/git version
+        pytest --git-path="$PWD"/git
