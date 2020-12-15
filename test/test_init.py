@@ -1,5 +1,7 @@
 import stat
 
+import pytest
+
 from branchless.init import (
     _UPDATE_MARKER_END,
     _UPDATE_MARKER_START,
@@ -50,3 +52,10 @@ def test_alias_installed(git: Git) -> None:
 @ f777ecc9 (master) create initial.txt
 """
     )
+
+
+def test_old_git_version_warning(git: Git) -> None:
+    git.init_repo()
+    if git.get_version() >= (2, 29, 0):
+        pytest.skip("Requires Git version earlier than v2.29")
+    assert "requires Git v2.29" in git.run("branchless", ["init"]).replace("\n", " ")

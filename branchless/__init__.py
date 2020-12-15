@@ -38,7 +38,7 @@ A commit is in one of three states:
 """
 import os
 import subprocess
-from typing import Dict, List, Set, TextIO
+from typing import Dict, List, Set, TextIO, Tuple
 
 import pygit2
 
@@ -114,6 +114,28 @@ def run_git_silent(repo: pygit2.Repository, args: List[str]) -> str:
         check=True,
     )
     return result.stdout.decode()
+
+
+GitVersion = Tuple[int, int, int]
+"""Version string produced by Git.
+
+This tuple is in the form (major, minor, patch). You can do a version test by
+using `<` on another version tuple.
+"""
+
+
+def parse_git_version_output(output: str) -> GitVersion:
+    """Parse the `git version` output.
+
+    Args:
+      output: The output returned by `git version`.
+
+    Returns:
+      The parsed Git version.
+    """
+    [_git, _version, version_str, *_rest] = output.split(" ")
+    [major, minor, patch, *_rest] = version_str.split(".")
+    return (int(major), int(minor), int(patch))
 
 
 def get_head_oid(repo: pygit2.Repository) -> pygit2.Oid:

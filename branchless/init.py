@@ -5,9 +5,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List, TextIO, Union
 
+import colorama
 import pygit2
 
-from . import get_repo
+from . import get_repo, parse_git_version_output, run_git_silent
+from .formatting import make_glyphs
 
 
 @dataclass(frozen=True, eq=True)
@@ -143,6 +145,30 @@ def _install_aliases(out: TextIO, repo: pygit2.Repository) -> None:
     _install_alias(out=out, repo=repo, alias="next")
     _install_alias(out=out, repo=repo, alias="restack")
     _install_alias(out=out, repo=repo, alias="undo")
+
+    version_str = run_git_silent(repo=repo, args=["version"]).strip()
+    version = parse_git_version_output(version_str)
+    if version < (2, 29, 0):
+        glyphs = make_glyphs(out)
+        warning_str = glyphs.style(
+            style=colorama.Style.BRIGHT,
+            message=glyphs.color_fg(color=colorama.Fore.YELLOW, message="Warning"),
+        )
+        out.write(
+            f"""\
+{warning_str}: the branchless workflow's "git undo" command requires Git
+v2.29 or later, but your Git version is: {version_str}
+
+Some operations, such as branch updates, won't be correctly undone. Other
+operations may be undoable. Attempt at your own risk.
+
+Once you upgrade to Git v2.9, run `git branchless init` again. Any work you
+do from then on will be correctly undoable.
+
+This only applies to the "git undo" command. Other commands which are part of
+the branchless workflow will work properly.
+"""
+        )
 
 
 def init(*, out: TextIO) -> int:

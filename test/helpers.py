@@ -10,6 +10,8 @@ from typing import Iterator, List, Optional, TextIO, cast
 import py
 import pytest
 
+from branchless import GitVersion, parse_git_version_output
+
 DUMMY_NAME = "Testy McTestface"
 DUMMY_EMAIL = "test@example.com"
 DUMMY_DATE = "Wed 29 Oct 12:34:56 2020 PDT"
@@ -79,13 +81,14 @@ class Git:
         )
         return result.stdout.decode()
 
-    def requires_git29(self) -> None:
+    def get_version(self) -> GitVersion:
         version_str = self.run("version")
-        [_git, _version, version_str, *_rest] = version_str.split(" ")
-        [major, minor, patch, *_rest] = version_str.split(".")
-        version = (int(major), int(minor), int(patch))
+        return parse_git_version_output(version_str)
 
+    def requires_git29(self) -> None:
+        version = self.get_version()
         if version < (2, 29, 0):
+            version_str = ".".join(str(i) for i in version)
             pytest.skip(f"Requires Git v2.29 or above (current is: {version_str})")
 
     def commit_file(self, name: str, time: int, contents: Optional[str] = None) -> None:
