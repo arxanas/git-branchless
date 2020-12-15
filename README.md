@@ -1,5 +1,7 @@
 # Branchless workflow for Git
 
+![Continuous integration](https://github.com/arxanas/git-branchless/workflows/Continuous%20integration/badge.svg)
+
 ## Demo
 
 [See the demo at asciinema](https://asciinema.org/a/ZHdMDW9997wzctW1T7QsUFe9G).
