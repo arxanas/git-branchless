@@ -1,5 +1,11 @@
 # Branchless workflow for Git
 
+## Demo
+
+(Note: bold colors don't appear in this embedded demo. [See the best rendition at asciinema](https://asciinema.org/a/ZHdMDW9997wzctW1T7QsUFe9G).)
+
+![Demo of using the branchless workflow](./media/demo.svg)
+
 ## Why?
 
 Most Git workflows involve heavy use of branches to track commit work that is underway. However, branches require that you "name" every commit you're interested in tracking. If you spend a lot of time doing any of the following:
