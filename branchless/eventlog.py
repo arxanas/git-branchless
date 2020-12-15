@@ -415,6 +415,13 @@ class EventReplayer:
           event: The next event to process. Events should be passed to the
           replayer in order from oldest to newest.
         """
+        if isinstance(event, RefUpdateEvent) and (
+            event.ref_name == "ORIG_HEAD"
+            or (event.old_ref is None and event.new_ref is None)
+        ):
+            # Non-meaningful event. Drop it.
+            return
+
         id = self._id_counter
         self._id_counter += 1
         self._cursor_event_id = self._id_counter
@@ -624,7 +631,7 @@ class EventReplayer:
             if isinstance(event, RefUpdateEvent):
                 if event.new_ref is not None:
                     ref_name_to_oid[event.ref_name] = event.new_ref
-                else:
+                elif event.ref_name in ref_name_to_oid:
                     del ref_name_to_oid[event.ref_name]
 
         result: Dict[OidStr, Set[str]] = {}

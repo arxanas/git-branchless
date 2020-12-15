@@ -68,7 +68,9 @@ def _describe_event(
         return "Unhide commit {}\n".format(render_commit(event.commit_oid))
     elif isinstance(event, RefUpdateEvent):
         if event.ref_name == "HEAD":
-            assert event.new_ref is not None
+            assert (
+                event.new_ref is not None
+            ), f"New ref was None for HEAD event: {event!r}"
             if event.old_ref is not None:
                 return """
 Check out from {}
@@ -84,9 +86,21 @@ Check out to {}
                     render_commit(event.new_ref)
                 )
 
+        # Occasionally can happen with certain rebases, such as with the ref
+        # `CHERRY_PICK_HEAD`. Should have been filtered out by the event
+        # replayer by now.
+        elif event.old_ref is None and event.new_ref is None:  # pragma: no cover
+            ref_name = _render_ref_name(event.ref_name)  # pragma: no cover
+            return """\
+Empty event for {}
+This event should not appear. This is a (benign) bug -- please report it.
+""".format(
+                ref_name
+            )  # pragma: no cover
+
         elif event.old_ref is None:
-            ref_name = _render_ref_name(event.ref_name)
             assert event.new_ref is not None
+            ref_name = _render_ref_name(event.ref_name)
             return """\
 Create {} at {}
 """.format(
@@ -94,8 +108,8 @@ Create {} at {}
             )
 
         elif event.new_ref is None:
-            ref_name = _render_ref_name(event.ref_name)
             assert event.old_ref is not None
+            ref_name = _render_ref_name(event.ref_name)
             return """\
 Delete {} at {}
 """.format(
@@ -103,9 +117,9 @@ Delete {} at {}
             )
 
         else:
-            ref_name = _render_ref_name(event.ref_name)
             assert event.old_ref is not None
             assert event.new_ref is not None
+            ref_name = _render_ref_name(event.ref_name)
             return """
 Move {} from {}
      {}   to {}
@@ -283,7 +297,13 @@ def _undo_events(
     now = int(time.time())
     events_to_undo = event_replayer.get_events_since_cursor()
     inverse_events = [
-        _inverse_event(now=now, event=event) for event in reversed(events_to_undo)
+        _inverse_event(now=now, event=event)
+        for event in reversed(events_to_undo)
+        if not (
+            isinstance(event, RefUpdateEvent)
+            and event.ref_name == "HEAD"
+            and event.old_ref is None
+        )
     ]
     inverse_events = _optimize_inverse_events(inverse_events)
     if not inverse_events:
@@ -317,9 +337,17 @@ def _undo_events(
                         # it will invoke our hooks.
                         assert event.new_ref is not None
                         run_git(out=out, err=err, args=["checkout", event.new_ref])
+                    elif event.old_ref is None and event.new_ref is None:
+                        # Do nothing.
+                        pass
                     elif event.new_ref is None:
                         assert event.old_ref is not None
-                        repo.references.delete(event.old_ref)
+                        try:
+                            repo.references.delete(event.ref_name)
+                        except KeyError:
+                            out.write(
+                                f"Reference {event.ref_name} did not exist, not deleting it.\n"
+                            )
                     else:
                         # Create or update the given reference.
                         repo.references.create(
