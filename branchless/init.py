@@ -101,7 +101,7 @@ def _install_hook(
     _update_hook_contents(hook, hook_script)
 
 
-def _install_hooks(out: TextIO, repo: pygit2.Repository) -> None:
+def _install_hooks(out: TextIO, repo: pygit2.Repository, git_executable: str) -> None:
     _install_hook(
         out=out,
         repo=repo,
@@ -151,7 +151,7 @@ def _install_alias(out: TextIO, repo: pygit2.Repository, alias: str) -> None:
     repo.config[f"alias.{alias}"] = f"branchless {alias}"
 
 
-def _install_aliases(out: TextIO, repo: pygit2.Repository) -> None:
+def _install_aliases(out: TextIO, repo: pygit2.Repository, git_executable: str) -> None:
     _install_alias(out=out, repo=repo, alias="smartlog")
     _install_alias(out=out, repo=repo, alias="sl")
     _install_alias(out=out, repo=repo, alias="hide")
@@ -161,7 +161,9 @@ def _install_aliases(out: TextIO, repo: pygit2.Repository) -> None:
     _install_alias(out=out, repo=repo, alias="restack")
     _install_alias(out=out, repo=repo, alias="undo")
 
-    version_str = run_git_silent(repo=repo, args=["version"]).strip()
+    version_str = run_git_silent(
+        repo=repo, git_executable=git_executable, args=["version"]
+    ).strip()
     version = parse_git_version_output(version_str)
     if version < (2, 29, 0):
         glyphs = make_glyphs(out)
@@ -186,16 +188,17 @@ the branchless workflow will work properly.
         )
 
 
-def init(*, out: TextIO) -> int:
+def init(*, out: TextIO, git_executable: str) -> int:
     """Initialize Branchless in the current repo.
 
     Args:
       out: The output stream to write to.
+      git_executable: The path to the `git` executable on disk.
 
     Returns:
       Exit code (0 denotes successful exit).
     """
     repo = get_repo()
-    _install_hooks(out=out, repo=repo)
-    _install_aliases(out=out, repo=repo)
+    _install_hooks(out=out, repo=repo, git_executable=git_executable)
+    _install_aliases(out=out, repo=repo, git_executable=git_executable)
     return 0

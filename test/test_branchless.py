@@ -4,13 +4,15 @@ from branchless.__main__ import main
 from helpers import Git, compare
 
 
-def test_help() -> None:
+def test_help(git: Git) -> None:
     with io.StringIO() as out, io.StringIO() as err:
-        assert main(["--help"], out=out, err=err) == 0
+        assert (
+            main(["--help"], out=out, err=err, git_executable=git.git_executable) == 0
+        )
         assert "usage: branchless" in out.getvalue()
 
     with io.StringIO() as out, io.StringIO() as err:
-        assert main([], out=out, err=err) == 1
+        assert main([], out=out, err=err, git_executable=git.git_executable) == 1
         assert "usage: branchless" in out.getvalue()
 
 
@@ -44,8 +46,8 @@ To hide this commit, run: git hide 3df4b935
 
     compare(
         actual=git.run("prev"),
-        expected="""\
-branchless: git checkout HEAD^
+        expected=f"""\
+branchless: {git.git_executable} checkout HEAD^
 @ f777ecc9 create initial.txt
 |
 O 3df4b935 (master) create test.txt
@@ -54,8 +56,8 @@ O 3df4b935 (master) create test.txt
 
     compare(
         actual=git.run("next"),
-        expected="""\
-branchless: git checkout 3df4b9355b3b072aa6c50c6249bf32e289b3a661
+        expected=f"""\
+branchless: {git.git_executable} checkout 3df4b9355b3b072aa6c50c6249bf32e289b3a661
 :
 @ 3df4b935 (master) create test.txt
 """,

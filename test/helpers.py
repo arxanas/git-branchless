@@ -70,6 +70,8 @@ class Git:
             # no such option for things such as `git rebase`, which may call `git
             # commit` later as a part of their execution.
             "GIT_EDITOR": "true",
+            # Should be set by `git` fixture.
+            "PATH_TO_GIT": os.environ["PATH_TO_GIT"],
         }
         env.update({k: v for k, v in os.environ.items() if k.startswith("COV_")})
 
@@ -155,6 +157,12 @@ class FileBasedCapture:
 
 
 @contextlib.contextmanager
-def capture() -> Iterator[FileBasedCapture]:
+def capture(debug_name: str) -> Iterator[FileBasedCapture]:
     with tempfile.NamedTemporaryFile("r+") as f:
-        yield FileBasedCapture(cast(TextIO, f))
+        capture = FileBasedCapture(cast(TextIO, f))
+        try:
+            yield capture
+        except Exception:
+            print(f"Captured output for {debug_name}:")
+            print(capture.getvalue())
+            raise

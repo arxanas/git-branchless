@@ -36,7 +36,7 @@ def test_undo_help(git: Git) -> None:
     git.init_repo()
 
     with io.StringIO() as out, io.StringIO() as err, mock_keypresses(["h"]):
-        assert undo(out=out, err=err) == 0
+        assert undo(out=out, err=err, git_executable=git.git_executable) == 0
         compare(
             actual=out.getvalue(),
             expected="""\
@@ -67,7 +67,7 @@ def test_undo_navigate(git: Git) -> None:
     with io.StringIO() as out, io.StringIO() as err, mock_time_difference(), mock_keypresses(
         ["p", "n"]
     ):
-        assert undo(out=out, err=err) == 0
+        assert undo(out=out, err=err, git_executable=git.git_executable) == 0
         compare(
             actual=out.getvalue(),
             expected="""\
@@ -102,7 +102,7 @@ def test_undo_go_to_event(git: Git) -> None:
     ), mock_inputs(
         ["1"]
     ):
-        assert undo(out=out, err=err) == 0
+        assert undo(out=out, err=err, git_executable=git.git_executable) == 0
         compare(
             actual=out.getvalue(),
             expected="""\
@@ -126,7 +126,7 @@ Check out from f777ecc9 create initial.txt
     ), mock_inputs(
         ["foo"]
     ):
-        assert undo(out=out, err=err) == 0
+        assert undo(out=out, err=err, git_executable=git.git_executable) == 0
         compare(
             actual=out.getvalue(),
             expected="""\
@@ -156,7 +156,7 @@ def test_undo_hide(git: Git) -> None:
     ), mock_inputs(
         ["y"]
     ):
-        assert undo(out=out, err=err) == 0
+        assert undo(out=out, err=err, git_executable=git.git_executable) == 0
         compare(
             actual=out.getvalue(),
             expected="""\
@@ -194,7 +194,7 @@ Applied 2 inverse events.
     ), mock_inputs(
         ["y"]
     ):
-        assert undo(out=out, err=err) == 0
+        assert undo(out=out, err=err, git_executable=git.git_executable) == 0
         compare(
             actual=out.getvalue(),
             expected="""\
@@ -263,13 +263,19 @@ def test_undo_move_refs(git: Git) -> None:
     git.commit_file(name="test1", time=1)
     git.commit_file(name="test2", time=2)
 
-    with capture() as out, capture() as err, mock_time_difference(), mock_keypresses(
+    with capture("out") as out, capture(
+        "err"
+    ) as err, mock_time_difference(), mock_keypresses(
         ["p", "p", "p", readchar.key.ENTER]
-    ), mock_inputs(["y"]):
-        assert undo(out=out.stream, err=err.stream) == 0
+    ), mock_inputs(
+        ["y"]
+    ):
+        assert (
+            undo(out=out.stream, err=err.stream, git_executable=git.git_executable) == 0
+        )
         compare(
             actual=out.getvalue(),
-            expected="""\
+            expected=f"""\
 :
 @ 96d1c37a (master) create test2.txt
 Repo after event 6 (?s ago). Press 'h' for help, 'q' to quit.
@@ -298,13 +304,13 @@ Will apply these actions:
                         to 62fc20d2 create test1.txt
 3. Check out from 96d1c37a create test2.txt
                to 62fc20d2 create test1.txt
-branchless: git checkout 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
+branchless: {git.git_executable} checkout 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
 A\ttest2.txt
 Applied 3 inverse events.
 """,
         )
 
-    with capture() as out:
+    with capture("out") as out:
         assert smartlog(out=out.stream) == 0
         compare(
             actual=out.getvalue(),

@@ -128,6 +128,7 @@ def _restack_commits(
     out: TextIO,
     err: TextIO,
     repo: pygit2.Repository,
+    git_executable: str,
     merge_base_db: MergeBaseDb,
     event_log_db: EventLogDb,
     preserve_timestamps: bool,
@@ -168,6 +169,7 @@ def _restack_commits(
         result = run_git(
             out=out,
             err=err,
+            git_executable=git_executable,
             args=["rebase", original_oid, abandoned_oid, "--onto", rewritten_oid]
             + additional_args,
         )
@@ -180,6 +182,7 @@ def _restack_commits(
             out=out,
             err=err,
             repo=repo,
+            git_executable=git_executable,
             merge_base_db=merge_base_db,
             event_log_db=event_log_db,
             preserve_timestamps=preserve_timestamps,
@@ -193,6 +196,7 @@ def _restack_branches(
     out: TextIO,
     err: TextIO,
     repo: pygit2.Repository,
+    git_executable: str,
     merge_base_db: MergeBaseDb,
     event_log_db: EventLogDb,
 ) -> int:
@@ -221,7 +225,12 @@ def _restack_branches(
         if new_oid is None:
             continue
 
-        result = run_git(out=out, err=err, args=["branch", "-f", branch_name, new_oid])
+        result = run_git(
+            out=out,
+            err=err,
+            git_executable=git_executable,
+            args=["branch", "-f", branch_name, new_oid],
+        )
         if result != 0:
             return result
         else:
@@ -229,6 +238,7 @@ def _restack_branches(
                 out=out,
                 err=err,
                 repo=repo,
+                git_executable=git_executable,
                 merge_base_db=merge_base_db,
                 event_log_db=event_log_db,
             )
@@ -237,11 +247,15 @@ def _restack_branches(
     return 0
 
 
-def restack(out: TextIO, err: TextIO, preserve_timestamps: bool) -> int:
+def restack(
+    *, out: TextIO, err: TextIO, git_executable: str, preserve_timestamps: bool
+) -> int:
     """Restack all abandoned commits.
 
     Args:
       out: The output stream to write to.
+      err: The error stream to write to.
+      git_executable: The path to the `git` executable on disk.
       preserve_timestamps: Whether or not to use the original commit time for
         rebased commits, rather than the current time.
 
@@ -264,6 +278,7 @@ def restack(out: TextIO, err: TextIO, preserve_timestamps: bool) -> int:
         out=out,
         err=err,
         repo=repo,
+        git_executable=git_executable,
         merge_base_db=merge_base_db,
         event_log_db=event_log_db,
         preserve_timestamps=preserve_timestamps,
@@ -275,13 +290,19 @@ def restack(out: TextIO, err: TextIO, preserve_timestamps: bool) -> int:
         out=out,
         err=err,
         repo=repo,
+        git_executable=git_executable,
         merge_base_db=merge_base_db,
         event_log_db=event_log_db,
     )
     if result != 0:
         return result
 
-    result = run_git(out=out, err=err, args=["checkout", head_location])
+    result = run_git(
+        out=out,
+        err=err,
+        git_executable=git_executable,
+        args=["checkout", head_location],
+    )
     if result != 0:
         return result
 

@@ -6,24 +6,40 @@ def test_prev(git: Git) -> None:
     git.init_repo()
     git.commit_file(name="test1", time=1)
 
-    with capture() as out, capture() as err:
-        assert prev(out=out.stream, err=err.stream, num_commits=None) == 0
+    with capture("out") as out, capture("err") as err:
+        assert (
+            prev(
+                out=out.stream,
+                err=err.stream,
+                git_executable=git.git_executable,
+                num_commits=None,
+            )
+            == 0
+        )
         compare(
             actual=out.getvalue(),
-            expected="""\
-branchless: git checkout HEAD^
+            expected=f"""\
+branchless: {git.git_executable} checkout HEAD^
 @ f777ecc9 create initial.txt
 |
 O 62fc20d2 (master) create test1.txt
 """,
         )
 
-    with capture() as out, capture() as err:
-        assert prev(out=out.stream, err=err.stream, num_commits=None) == 1
+    with capture("out") as out, capture("err") as err:
+        assert (
+            prev(
+                out=out.stream,
+                err=err.stream,
+                git_executable=git.git_executable,
+                num_commits=None,
+            )
+            == 1
+        )
         compare(
             actual=out.getvalue() + err.getvalue(),
-            expected="""\
-branchless: git checkout HEAD^
+            expected=f"""\
+branchless: {git.git_executable} checkout HEAD^
 error: pathspec 'HEAD^' did not match any file(s) known to git
 """,
         )
@@ -34,12 +50,20 @@ def test_prev_multiple(git: Git) -> None:
     git.commit_file(name="test1", time=1)
     git.commit_file(name="test2", time=2)
 
-    with capture() as out, capture() as err:
-        assert prev(out=out.stream, err=err.stream, num_commits=2) == 0
+    with capture("out") as out, capture("err") as err:
+        assert (
+            prev(
+                out=out.stream,
+                err=err.stream,
+                git_executable=git.git_executable,
+                num_commits=2,
+            )
+            == 0
+        )
         compare(
             actual=out.getvalue(),
-            expected="""\
-branchless: git checkout HEAD~2
+            expected=f"""\
+branchless: {git.git_executable} checkout HEAD~2
 @ f777ecc9 create initial.txt
 :
 O 96d1c37a (master) create test2.txt
@@ -54,12 +78,21 @@ def test_next_multiple(git: Git) -> None:
     git.commit_file(name="test2", time=2)
     git.run("checkout", ["master"])
 
-    with capture() as out, capture() as err:
-        assert next(out=out.stream, err=err.stream, num_commits=2, towards=None) == 0
+    with capture("out") as out, capture("err") as err:
+        assert (
+            next(
+                out=out.stream,
+                err=err.stream,
+                git_executable=git.git_executable,
+                num_commits=2,
+                towards=None,
+            )
+            == 0
+        )
         compare(
             actual=out.getvalue(),
-            expected="""\
-branchless: git checkout 96d1c37a3d4363611c49f7e52186e189a04c531f
+            expected=f"""\
+branchless: {git.git_executable} checkout 96d1c37a3d4363611c49f7e52186e189a04c531f
 O f777ecc9 (master) create initial.txt
 |
 o 62fc20d2 create test1.txt
@@ -81,8 +114,17 @@ def test_next_ambiguous(git: Git) -> None:
     git.commit_file(name="test3", time=3)
     git.run("checkout", ["master"])
 
-    with capture() as out, capture() as err:
-        assert next(out=out.stream, err=err.stream, num_commits=None, towards=None) == 1
+    with capture("out") as out, capture("err") as err:
+        assert (
+            next(
+                out=out.stream,
+                err=err.stream,
+                git_executable=git.git_executable,
+                num_commits=None,
+                towards=None,
+            )
+            == 1
+        )
         compare(
             actual=out.getvalue(),
             expected="""\
@@ -94,15 +136,21 @@ Found multiple possible next commits to go to after traversing 0 children:
 """,
         )
 
-    with capture() as out, capture() as err:
+    with capture("out") as out, capture("err") as err:
         assert (
-            next(out=out.stream, err=err.stream, num_commits=None, towards="oldest")
+            next(
+                out=out.stream,
+                err=err.stream,
+                git_executable=git.git_executable,
+                num_commits=None,
+                towards="oldest",
+            )
             == 0
         )
         compare(
             actual=out.getvalue(),
-            expected="""\
-branchless: git checkout 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
+            expected=f"""\
+branchless: {git.git_executable} checkout 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
 O f777ecc9 (master) create initial.txt
 |\\
 | @ 62fc20d2 create test1.txt
@@ -115,15 +163,21 @@ o 98b9119d create test3.txt
 
     git.run("checkout", ["master"])
 
-    with capture() as out, capture() as err:
+    with capture("out") as out, capture("err") as err:
         assert (
-            next(out=out.stream, err=err.stream, num_commits=None, towards="newest")
+            next(
+                out=out.stream,
+                err=err.stream,
+                git_executable=git.git_executable,
+                num_commits=None,
+                towards="newest",
+            )
             == 0
         )
         compare(
             actual=out.getvalue(),
-            expected="""\
-branchless: git checkout 98b9119d16974f372e76cb64a3b77c528fc0b18b
+            expected=f"""\
+branchless: {git.git_executable} checkout 98b9119d16974f372e76cb64a3b77c528fc0b18b
 O f777ecc9 (master) create initial.txt
 |\\
 | o 62fc20d2 create test1.txt
@@ -143,12 +197,21 @@ def test_next_on_master(git: Git) -> None:
     git.commit_file(name="test3", time=3)
     git.run("checkout", ["HEAD^^"])
 
-    with capture() as out, capture() as err:
-        assert next(out=out.stream, err=err.stream, num_commits=2, towards=None) == 0
+    with capture("out") as out, capture("err") as err:
+        assert (
+            next(
+                out=out.stream,
+                err=err.stream,
+                git_executable=git.git_executable,
+                num_commits=2,
+                towards=None,
+            )
+            == 0
+        )
         compare(
             actual=out.getvalue(),
-            expected="""\
-branchless: git checkout 70deb1e28791d8e7dd5a1f0c871a51b91282562f
+            expected=f"""\
+branchless: {git.git_executable} checkout 70deb1e28791d8e7dd5a1f0c871a51b91282562f
 :
 O 96d1c37a (master) create test2.txt
 |
@@ -165,12 +228,21 @@ def test_next_on_master2(git: Git) -> None:
     git.commit_file(name="test3", time=3)
     git.run("checkout", ["HEAD^"])
 
-    with capture() as out, capture() as err:
-        assert next(out=out.stream, err=err.stream, num_commits=None, towards=None) == 0
+    with capture("out") as out, capture("err") as err:
+        assert (
+            next(
+                out=out.stream,
+                err=err.stream,
+                git_executable=git.git_executable,
+                num_commits=None,
+                towards=None,
+            )
+            == 0
+        )
         compare(
             actual=out.getvalue(),
-            expected="""\
-branchless: git checkout 70deb1e28791d8e7dd5a1f0c871a51b91282562f
+            expected=f"""\
+branchless: {git.git_executable} checkout 70deb1e28791d8e7dd5a1f0c871a51b91282562f
 :
 O 62fc20d2 (master) create test1.txt
 |

@@ -67,7 +67,7 @@ def get_repo() -> pygit2.Repository:
     return pygit2.Repository(repo_path)
 
 
-def run_git(out: TextIO, err: TextIO, args: List[str]) -> int:
+def run_git(out: TextIO, err: TextIO, git_executable: str, args: List[str]) -> int:
     """Run Git in a subprocess, and inform the user.
 
     This is suitable for commands which affect the working copy or should run
@@ -75,13 +75,15 @@ def run_git(out: TextIO, err: TextIO, args: List[str]) -> int:
 
     Args:
       out: The output stream to write to.
+      err: The error stream to write to.
+      git_executable: The path to the `git` executable on disk.
       args: The list of arguments to pass to Git. Should not include the Git
         executable itself.
 
     Returns:
       The exit code of Git (non-zero signifies error).
     """
-    args = ["git", *args]
+    args = [git_executable, *args]
     out.write(f"branchless: {' '.join(args)}\n")
     out.flush()
     err.flush()
@@ -90,7 +92,9 @@ def run_git(out: TextIO, err: TextIO, args: List[str]) -> int:
     return result.returncode
 
 
-def run_git_silent(repo: pygit2.Repository, args: List[str]) -> str:
+def run_git_silent(
+    repo: pygit2.Repository, git_executable: str, args: List[str]
+) -> str:
     """Run Git silently (don't display output to the user).
 
     Whenever possible, `pygit2`'s bindings to Git used instead, as they're
@@ -98,6 +102,7 @@ def run_git_silent(repo: pygit2.Repository, args: List[str]) -> str:
 
     Args:
       repo: The Git repository.
+      git_executable: The path to the `git` executable on disk.
       args: The command-line args to pass to Git. The `git` executable will
         be prepended to this list automatically.
 
@@ -108,7 +113,7 @@ def run_git_silent(repo: pygit2.Repository, args: List[str]) -> str:
       The output from the command.
     """
     result = subprocess.run(
-        ["git", "-C", repo.path, *args],
+        [git_executable, "-C", repo.path, *args],
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
         check=True,

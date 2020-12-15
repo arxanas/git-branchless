@@ -1,3 +1,4 @@
+import os
 from typing import Iterator
 
 import py
@@ -28,5 +29,6 @@ def git_executable(request: SubRequest) -> str:
 
 @pytest.fixture
 def git(tmpdir: py.path.local, git_executable: str) -> Iterator[Git]:
+    os.environ["PATH_TO_GIT"] = git_executable
     with tmpdir.as_cwd():
         yield Git(tmpdir, git_executable=git_executable)

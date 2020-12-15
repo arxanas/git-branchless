@@ -1,6 +1,7 @@
 """Main entry-point."""
 import argparse
 import logging
+import os
 import sys
 from typing import List, TextIO
 
@@ -18,12 +19,13 @@ from .smartlog import smartlog
 from .undo import undo
 
 
-def main(argv: List[str], *, out: TextIO, err: TextIO) -> int:
+def main(argv: List[str], *, out: TextIO, err: TextIO, git_executable: str) -> int:
     """Run the provided sub-command.
 
     Args:
       argv: List of command-line arguments (e.g. from `sys.argv`).
       out: Output stream to write to (may be a TTY).
+      git_executable: The path to the `git` executable on disk.
 
     Returns:
       Exit code (0 denotes successful exit).
@@ -126,7 +128,7 @@ def main(argv: List[str], *, out: TextIO, err: TextIO) -> int:
         parser.print_help(file=out)
         return 0
     elif args.subcommand == "init":
-        return init(out=out)
+        return init(out=out, git_executable=git_executable)
     elif args.subcommand in ["smartlog", "sl"]:
         return smartlog(out=out)
     elif args.subcommand == "hide":
@@ -134,15 +136,26 @@ def main(argv: List[str], *, out: TextIO, err: TextIO) -> int:
     elif args.subcommand == "unhide":
         return unhide(out=out, hashes=args.hash, recursive=args.recursive)
     elif args.subcommand == "prev":
-        return prev(out=out, err=err, num_commits=args.num_commits)
+        return prev(
+            out=out,
+            err=err,
+            git_executable=git_executable,
+            num_commits=args.num_commits,
+        )
     elif args.subcommand == "next":
         return next(
-            out=out, err=err, num_commits=args.num_commits, towards=args.towards
+            out=out,
+            err=err,
+            git_executable=git_executable,
+            num_commits=args.num_commits,
+            towards=args.towards,
         )
     elif args.subcommand == "restack":
-        return restack(out=out, err=err, preserve_timestamps=False)
+        return restack(
+            out=out, err=err, git_executable=git_executable, preserve_timestamps=False
+        )
     elif args.subcommand == "undo":
-        return undo(out=out, err=err)
+        return undo(out=out, err=err, git_executable=git_executable)
     elif args.subcommand == "hook-post-rewrite":
         hook_post_rewrite(out=out, rewrite_type=args.rewrite_type)
         return 0
@@ -166,10 +179,6 @@ def main(argv: List[str], *, out: TextIO, err: TextIO) -> int:
 
 
 def entry_point() -> None:
-    sys.exit(main(sys.argv[1:], out=sys.stdout, err=sys.stderr))
-
-
-if __name__ == "__main__":
     try:
         from pytest_cov.embed import init as pytest_cov_init
 
@@ -177,4 +186,15 @@ if __name__ == "__main__":
     except ImportError:  # pragma: no cover
         pass
 
+    # `PATH_TO_GIT` set in testing.
+    git_executable = os.environ.get("PATH_TO_GIT", "git")
+
+    sys.exit(
+        main(
+            sys.argv[1:], out=sys.stdout, err=sys.stderr, git_executable=git_executable
+        )
+    )
+
+
+if __name__ == "__main__":
     entry_point()

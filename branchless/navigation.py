@@ -24,11 +24,31 @@ from .smartlog import smartlog
 Towards = Optional[Union[Literal["newest"], Literal["oldest"]]]
 
 
-def prev(out: TextIO, err: TextIO, num_commits: Optional[int]) -> int:
+def prev(
+    *, out: TextIO, err: TextIO, git_executable: str, num_commits: Optional[int]
+) -> int:
+    """Go back a certain number of commits.
+
+    Args:
+      out: The output stream to write to.
+      err: The error stream to write to.
+      git_executable: The path to the `git` executable on disk.
+      num_commits: The number of commits to go back.
+
+    Returns:
+      Exit code (0 denotes successful exit).
+    """
     if num_commits is None:
-        result = run_git(out=out, err=err, args=["checkout", "HEAD^"])
+        result = run_git(
+            out=out, err=err, git_executable=git_executable, args=["checkout", "HEAD^"]
+        )
     else:
-        result = run_git(out=out, err=err, args=["checkout", f"HEAD~{num_commits}"])
+        result = run_git(
+            out=out,
+            err=err,
+            git_executable=git_executable,
+            args=["checkout", f"HEAD~{num_commits}"],
+        )
     if result != 0:
         return result
 
@@ -118,7 +138,27 @@ def _advance_towards_own_commit(
     return current_oid
 
 
-def next(out: TextIO, err: TextIO, num_commits: Optional[int], towards: Towards) -> int:
+def next(
+    *,
+    out: TextIO,
+    err: TextIO,
+    git_executable: str,
+    num_commits: Optional[int],
+    towards: Towards,
+) -> int:
+    """Go forward a certain number of commits.
+
+    Args:
+      out: The output stream to write to.
+      err: The error stream to write to.
+      git_executable: The path to the `git` executable on disk.
+      num_commits: The number of commits to go forward.
+      towards: Which commit to choose when encountering a commit with
+        multiple child commits.
+
+    Returns:
+      Exit code (0 denotes successful exit).
+    """
     glyphs = make_glyphs(out)
     repo = get_repo()
     db = make_db_for_repo(repo)
@@ -168,7 +208,12 @@ def next(out: TextIO, err: TextIO, num_commits: Optional[int], towards: Towards)
     if current_oid_str is None:
         return 1
 
-    result = run_git(out=out, err=err, args=["checkout", current_oid_str])
+    result = run_git(
+        out=out,
+        err=err,
+        git_executable=git_executable,
+        args=["checkout", current_oid_str],
+    )
     if result != 0:
         return result
 

@@ -290,6 +290,7 @@ def _undo_events(
     err: TextIO,
     glyphs: Glyphs,
     repo: pygit2.Repository,
+    git_executable: str,
     event_log_db: EventLogDb,
     event_replayer: EventReplayer,
 ) -> int:
@@ -336,7 +337,12 @@ def _undo_events(
                         # command will update the event log appropriately, as
                         # it will invoke our hooks.
                         assert event.new_ref is not None
-                        run_git(out=out, err=err, args=["checkout", event.new_ref])
+                        run_git(
+                            out=out,
+                            err=err,
+                            git_executable=git_executable,
+                            args=["checkout", event.new_ref],
+                        )
                     elif event.old_ref is None and event.new_ref is None:
                         # Do nothing.
                         pass
@@ -368,7 +374,17 @@ def _undo_events(
             return 1
 
 
-def undo(out: TextIO, err: TextIO) -> int:
+def undo(out: TextIO, err: TextIO, git_executable: str) -> int:
+    """Restore the repository to a previous state interactively.
+
+    Args:
+      out: The output stream to write to.
+      err: The error stream to write to.
+      git_executable: The path to the `git` executable on disk.
+
+    Returns:
+      Exit code (0 denotes successful exit).
+    """
     now = int(time.time())
     glyphs = make_glyphs(out)
     repo = get_repo()
@@ -392,6 +408,7 @@ def undo(out: TextIO, err: TextIO) -> int:
         err=err,
         glyphs=glyphs,
         repo=repo,
+        git_executable=git_executable,
         event_log_db=event_log_db,
         event_replayer=event_replayer,
     )
