@@ -26,38 +26,7 @@ The branchless workflow is perfectly compatible with local branches if you choos
 
 ## Installation
 
-Requires Python 3.6 or higher. To install:
-
-```
-$ pip3 install git+https://github.com/arxanas/git-branchless
-```
-
-Then enable it in your Git repository with `git branchless init`:
-
-```
-$ cd my/git/repo
-$ git branchless init
-Installing hook: post-commit
-Installing hook: post-rewrite
-Installing hook: post-checkout
-Installing alias (non-global): git smartlog
-Installing alias (non-global): git sl
-Installing alias (non-global): git hide
-Installing alias (non-global): git unhide
-Installing alias (non-global): git prev
-Installing alias (non-global): git next
-Installing alias (non-global): git restack
-Installing alias (non-global): git undo
-$ git sl
-⋮
-◆ b2c57ae3 9m (master) docs: add README.md
-```
-
-To uninstall:
-
-```
-$ pip3 uninstall branchless
-```
+See https://github.com/arxanas/git-branchless/wiki/Installation.
 
 ## Status
 
