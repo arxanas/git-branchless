@@ -4,7 +4,6 @@ The set of commits that are still being worked on is inferred from the
 ref-log; see the `reflog` module.
 """
 import functools
-import logging
 import time
 from typing import List, Optional, TextIO
 
@@ -258,11 +257,6 @@ def smartlog(*, out: TextIO) -> int:
     db = make_db_for_repo(repo)
     event_log_db = EventLogDb(db)
     merge_base_db = MergeBaseDb(db)
-    if merge_base_db.is_empty():
-        logging.debug(
-            "Merge-base cache not initialized -- it may take a while to populate it"
-        )
-
     event_replayer = EventReplayer.from_event_log_db(event_log_db)
     head_oid = get_head_oid(repo)
     branch_oid_to_names = get_branch_oid_to_names(repo)

@@ -49,23 +49,6 @@ CREATE TABLE IF NOT EXISTS merge_base_oids (
     """
             )
 
-    def is_empty(self) -> bool:
-        """Determine if there are any entries in the cache.
-
-        Returns:
-          Whether or not there are any entries in the cache.
-        """
-        with make_cursor(self._conn) as cursor:
-            result = cursor.execute(
-                """
-SELECT COUNT(*) = 0
-FROM merge_base_oids
-"""
-            )
-            results: List[Tuple[int]] = result.fetchall()
-            [(is_empty,)] = results
-            return bool(is_empty)
-
     def get_merge_base_oid(
         self, repo: pygit2.Repository, lhs_oid: pygit2.Oid, rhs_oid: pygit2.Oid
     ) -> Optional[pygit2.Oid]:
