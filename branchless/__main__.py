@@ -5,6 +5,7 @@ import os
 import sys
 from typing import List, TextIO
 
+from .gc import gc
 from .hide import hide, unhide
 from .hooks import (
     hook_post_checkout,
@@ -105,6 +106,8 @@ def main(argv: List[str], *, out: TextIO, err: TextIO, git_executable: str) -> i
         help="Return to a past state of the repository.",
     )
 
+    subparsers.add_parser("gc", help="Run internal garbage collection.")
+
     # Hook parsers.
     hook_post_rewrite_parser = subparsers.add_parser(
         "hook-post-rewrite", help="Internal use."
@@ -156,6 +159,9 @@ def main(argv: List[str], *, out: TextIO, err: TextIO, git_executable: str) -> i
         )
     elif args.subcommand == "undo":
         return undo(out=out, err=err, git_executable=git_executable)
+    elif args.subcommand == "gc":
+        gc(out=out)
+        return 0
     elif args.subcommand == "hook-post-rewrite":
         hook_post_rewrite(out=out, rewrite_type=args.rewrite_type)
         return 0

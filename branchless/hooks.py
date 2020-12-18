@@ -25,6 +25,7 @@ from .eventlog import (
     RewriteEvent,
 )
 from .formatting import make_glyphs, pluralize
+from .gc import mark_commit_reachable
 from .graph import make_graph
 from .mergebase import MergeBaseDb
 from .restack import find_abandoned_children
@@ -232,6 +233,7 @@ def hook_post_commit(out: TextIO) -> None:
     event_log_db.add_events(
         [CommitEvent(timestamp=timestamp, commit_oid=commit_oid.hex)]
     )
+    mark_commit_reachable(repo=repo, commit_oid=commit_oid)
 
 
 def hook_reference_transaction(out: TextIO, transaction_state: str) -> None:
