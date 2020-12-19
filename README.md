@@ -30,4 +30,4 @@ See https://github.com/arxanas/git-branchless/wiki/Installation.
 
 ## Status
 
-`git-branchless` is not yet suited for general use: commits in the smartlog are not explicitly referenced in Git's `refs` namespace, which means that an unfortunate garbage collection could remove them.
+`git-branchless` is currently in **beta**. It's believed that there are no major bugs, but it has not yet been comprehensively battle-tested.
