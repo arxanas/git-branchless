@@ -119,6 +119,7 @@ def main(argv: List[str], *, out: TextIO, err: TextIO, git_executable: str) -> i
     hook_post_checkout_parser.add_argument("previous_commit", type=str)
     hook_post_checkout_parser.add_argument("current_commit", type=str)
     hook_post_checkout_parser.add_argument("is_branch_checkout", type=int)
+    subparsers.add_parser("hook-pre-auto-gc", help="Internal use.")
     hook_reference_transaction_parser = subparsers.add_parser(
         "hook-reference-transaction", help="Internal use."
     )
@@ -159,7 +160,7 @@ def main(argv: List[str], *, out: TextIO, err: TextIO, git_executable: str) -> i
         )
     elif args.subcommand == "undo":
         return undo(out=out, err=err, git_executable=git_executable)
-    elif args.subcommand == "gc":
+    elif args.subcommand in ["gc", "hook-pre-auto-gc"]:
         gc(out=out)
         return 0
     elif args.subcommand == "hook-post-rewrite":

@@ -1,3 +1,6 @@
+import os
+import subprocess
+
 from _pytest.capture import CaptureFixture
 
 from helpers import Git
@@ -143,5 +146,20 @@ def test_interactive_rebase_noop(git: Git, capfd: CaptureFixture[str]) -> None:
         err
         == """\
 Successfully rebased and updated detached HEAD.
+"""
+    )
+
+
+def test_pre_auto_gc(git: Git) -> None:
+    git.init_repo()
+    # See https://stackoverflow.com/q/3433653/344643, it's hard to get the
+    # `pre-auto-gc` hook to be invoked at all. We'll just invoke the hook
+    # directly to make sure that it's installed properly.
+    hook_path = os.path.join(git.path, ".git", "hooks", "pre-auto-gc")
+    result = subprocess.run([hook_path], check=True, stdout=subprocess.PIPE)
+    assert (
+        result.stdout.decode()
+        == """\
+branchless: collecting garbage
 """
     )

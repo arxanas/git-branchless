@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Iterator, List, Optional, TextIO, cast
 
 import py
+import pygit2
 import pytest
 
 from branchless import GitVersion, parse_git_version_output
@@ -46,6 +47,9 @@ class Git:
         self.run("config", ["branchless.commitMetadata.relativeTime", "false"])
 
         self.run("branchless", ["init"])
+
+    def get_repo(self) -> pygit2.Repository:
+        return pygit2.Repository(str(self.path))
 
     def run(
         self,

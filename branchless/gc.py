@@ -80,5 +80,5 @@ def gc(*, out: TextIO) -> None:
         hide_commits=True,
     )
 
-    out.write("Garbage collecting...\n")
+    out.write("branchless: collecting garbage\n")
     _garbage_collect(repo=repo, graph=graph)

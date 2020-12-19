@@ -43,6 +43,8 @@ def _determine_hook_path(repo: pygit2.Repository, hook_type: str) -> _Hook:
     return _RegularHook(path=hooks_dir / hook_type)
 
 
+_SHEBANG = "#!/bin/sh\n"
+
 _UPDATE_MARKER_START = "## START BRANCHLESS CONFIG\n"
 
 _UPDATE_MARKER_END = "## END BRANCHLESS CONFIG\n"
@@ -76,7 +78,9 @@ def _update_hook_contents(hook: _Hook, hook_contents: str) -> None:
             )
             hook_contents = "".join(lines)
         except FileNotFoundError:
-            hook_contents = _UPDATE_MARKER_START + hook_contents + _UPDATE_MARKER_END
+            hook_contents = (
+                _SHEBANG + _UPDATE_MARKER_START + hook_contents + _UPDATE_MARKER_END
+            )
     elif isinstance(hook, _MultiHook):
         # Can safely overwrite, since our hook exists in its own file. No need
         # to update the hook contents.
@@ -107,7 +111,6 @@ def _install_hooks(out: TextIO, repo: pygit2.Repository, git_executable: str) ->
         repo=repo,
         hook_type="post-commit",
         hook_script="""\
-#!/bin/sh
 git branchless hook-post-commit "$@"
 """,
     )
@@ -116,7 +119,6 @@ git branchless hook-post-commit "$@"
         repo=repo,
         hook_type="post-rewrite",
         hook_script="""\
-#!/bin/sh
 git branchless hook-post-rewrite "$@"
 """,
     )
@@ -125,8 +127,15 @@ git branchless hook-post-rewrite "$@"
         repo=repo,
         hook_type="post-checkout",
         hook_script="""\
-#!/bin/sh
 git branchless hook-post-checkout "$@"
+""",
+    )
+    _install_hook(
+        out=out,
+        repo=repo,
+        hook_type="pre-auto-gc",
+        hook_script="""\
+git branchless hook-pre-auto-gc "$@"
 """,
     )
     _install_hook(
@@ -134,7 +143,6 @@ git branchless hook-post-checkout "$@"
         repo=repo,
         hook_type="reference-transaction",
         hook_script="""\
-#!/bin/sh
 # Avoid canceling the reference transaction in the case that `branchless` fails
 # for whatever reason.
 git branchless hook-reference-transaction "$@" || (

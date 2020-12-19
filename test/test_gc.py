@@ -1,3 +1,5 @@
+import pytest
+
 from helpers import Git, compare
 
 
@@ -18,11 +20,11 @@ o 62fc20d2 create test1.txt
     )
 
     git.run("hide", ["62fc20d2"])
-    assert (
-        git.run("branchless", ["gc"])
-        == """\
-Garbage collecting...
-"""
+    compare(
+        actual=git.run("branchless", ["gc"]),
+        expected="""\
+branchless: collecting garbage
+""",
     )
 
     git.run("gc", ["--prune=now"])
@@ -32,3 +34,7 @@ Garbage collecting...
 @ f777ecc9 (master) create initial.txt
 """,
     )
+
+    repo = git.get_repo()
+    with pytest.raises(KeyError):
+        repo["62fc20d2"]
