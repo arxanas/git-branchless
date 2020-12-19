@@ -15,23 +15,9 @@ import pygit2
 
 from . import get_branch_oid_to_names, get_head_oid, get_main_branch_oid, get_repo
 from .db import make_db_for_repo
-from .eventlog import EventLogDb, EventReplayer
+from .eventlog import EventLogDb, EventReplayer, is_gc_ref
 from .graph import CommitGraph, make_graph
 from .mergebase import MergeBaseDb
-
-
-def is_gc_ref(ref_name: str) -> bool:
-    """Determine whether a given reference is used to keep a commit alive.
-
-    Args:
-      ref_name: The name of the reference.
-
-    Returns:
-      Whether or not the given reference is used internally to keep the
-      commit alive, so that it's not collected by Git's garbage collection
-      mechanism.
-    """
-    return ref_name.startswith("refs/branchless/")
 
 
 def mark_commit_reachable(repo: pygit2.Repository, commit_oid: pygit2.Oid) -> None:

@@ -23,6 +23,7 @@ from .eventlog import (
     EventReplayer,
     RefUpdateEvent,
     RewriteEvent,
+    should_ignore_ref_updates,
 )
 from .formatting import make_glyphs, pluralize
 from .gc import mark_commit_reachable
@@ -247,15 +248,18 @@ def hook_reference_transaction(out: TextIO, transaction_state: str) -> None:
         events = []
         for line in sys.stdin:
             (old_value, new_value, ref_name) = line.strip().split(" ", 2)
-            events.append(
-                RefUpdateEvent(
-                    timestamp=timestamp,
-                    ref_name=ref_name,
-                    old_ref=old_value,
-                    new_ref=new_value,
-                    message=None,
+            if not should_ignore_ref_updates(ref_name):
+                events.append(
+                    RefUpdateEvent(
+                        timestamp=timestamp,
+                        ref_name=ref_name,
+                        old_ref=old_value,
+                        new_ref=new_value,
+                        message=None,
+                    )
                 )
-            )
+        if not events:
+            return
 
         num_reference_updates = pluralize(
             amount=len(events),

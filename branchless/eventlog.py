@@ -374,6 +374,24 @@ class _EventInfo:
     event_classification: _EventClassification
 
 
+def is_gc_ref(ref_name: str) -> bool:
+    """Determine whether a given reference is used to keep a commit alive.
+
+    Args:
+      ref_name: The name of the reference.
+
+    Returns:
+      Whether or not the given reference is used internally to keep the
+      commit alive, so that it's not collected by Git's garbage collection
+      mechanism.
+    """
+    return ref_name.startswith("refs/branchless/")
+
+
+def should_ignore_ref_updates(ref_name: str) -> bool:
+    return ref_name in ["ORIG_HEAD", "CHERRY_PICK_HEAD"] or is_gc_ref(ref_name)
+
+
 class EventReplayer:
     """Processes events in order and determine the repo's visible commits."""
 
@@ -417,7 +435,7 @@ class EventReplayer:
           replayer in order from oldest to newest.
         """
         if isinstance(event, RefUpdateEvent) and (
-            event.ref_name == "ORIG_HEAD"
+            should_ignore_ref_updates(event.ref_name)
             or (event.old_ref is None and event.new_ref is None)
         ):
             # Non-meaningful event. Drop it.
