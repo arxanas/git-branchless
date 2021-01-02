@@ -40,6 +40,7 @@
 use pyo3::prelude::*;
 
 mod mergebase;
+mod python;
 
 #[pymodule]
 fn rust(_py: Python<'_>, module: &PyModule) -> PyResult<()> {
