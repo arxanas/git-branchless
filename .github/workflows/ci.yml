@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [master]
+    branches: ["master", "rust"]
   pull_request:
-    branches: [master]
+    branches: ["master", "rust"]
 
 jobs:
   static-analysis:

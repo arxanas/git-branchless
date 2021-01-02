@@ -225,14 +225,14 @@ Applied 1 inverse event.
         (
             [
                 RefUpdateEvent(
-                    timestamp=0.0,
+                    timestamp=1.0,
                     ref_name="HEAD",
                     old_ref="1",
                     new_ref="2",
                     message=None,
                 ),
                 RefUpdateEvent(
-                    timestamp=0.0,
+                    timestamp=2.0,
                     ref_name="HEAD",
                     old_ref="1",
                     new_ref="3",
@@ -241,7 +241,7 @@ Applied 1 inverse event.
             ],
             [
                 RefUpdateEvent(
-                    timestamp=0.0,
+                    timestamp=2.0,
                     ref_name="HEAD",
                     old_ref="1",
                     new_ref="3",
@@ -253,7 +253,7 @@ Applied 1 inverse event.
 )
 def test_optimize_inverse_events(input: List[Event], expected: List[Event]) -> None:
     actual = _optimize_inverse_events(input)
-    assert actual == expected
+    assert [i.timestamp for i in actual] == [i.timestamp for i in expected]
 
 
 def test_undo_move_refs(git: Git) -> None:

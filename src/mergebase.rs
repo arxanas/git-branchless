@@ -14,12 +14,12 @@
 //! take a while. It can also happen when simply checking out an old commit to
 //! examine it.
 use anyhow::Context;
-use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::PyTuple;
 use rusqlite::OptionalExtension;
 
-use crate::python::map_err_to_py_err;
+use crate::python::{get_conn, map_err_to_py_err};
+use crate::util::wrap_git_error;
 
 struct MergeBaseDb {
     conn: rusqlite::Connection,
@@ -39,10 +39,6 @@ CREATE TABLE IF NOT EXISTS merge_base_oids (
     )
     .context("Creating tables")?;
     Ok(())
-}
-
-fn wrap_git_error(error: git2::Error) -> anyhow::Error {
-    anyhow::anyhow!("Git error {:?}: {}", error.code(), error.message())
 }
 
 impl MergeBaseDb {
@@ -84,10 +80,10 @@ FROM merge_base_oids
 WHERE lhs_oid = :lhs_oid
   AND rhs_oid = :rhs_oid
 ",
-                &[
-                    (&":lhs_oid", &lhs_oid.to_string()),
-                    (&":rhs_oid", &rhs_oid.to_string()),
-                ],
+                rusqlite::named_params! {
+                    ":lhs_oid": lhs_oid.to_string(),
+                    ":rhs_oid": rhs_oid.to_string(),
+                },
                 |row| row.get("merge_base_oid"),
             )
             .optional()
@@ -127,14 +123,11 @@ INSERT INTO merge_base_oids VALUES (
     :rhs_oid,
     :merge_base_oid
 )",
-                        &[
-                            (&":lhs_oid", &lhs_oid.to_string()),
-                            (&":rhs_oid", &rhs_oid.to_string()),
-                            (
-                                &":merge_base_oid",
-                                &merge_base_oid.map(|oid| oid.to_string()),
-                            ),
-                        ],
+                        rusqlite::named_params! {
+                            ":lhs_oid": &lhs_oid.to_string(),
+                            ":rhs_oid": &rhs_oid.to_string(),
+                            ":merge_base_oid": &merge_base_oid.map(|oid| oid.to_string()),
+                        },
                     )
                     .context("Caching merge-base OID")?;
 
@@ -153,26 +146,12 @@ pub struct PyMergeBaseDb {
 impl PyMergeBaseDb {
     #[new]
     fn new(py: Python, conn: PyObject) -> PyResult<Self> {
-        // https://stackoverflow.com/a/14505973
-        let query_result =
-            conn.call_method1(py, "execute", PyTuple::new(py, &["PRAGMA database_list;"]))?;
-        let rows: Vec<(i64, String, String)> =
-            query_result.call_method0(py, "fetchall")?.extract(py)?;
-        let db_path = match rows.as_slice() {
-            [(_, _, path)] => path,
-            _ => {
-                return Err(PyRuntimeError::new_err(
-                    "Could not process response from query: PRAGMA database_list",
-                ))
-            }
-        };
-
-        let conn = rusqlite::Connection::open(db_path);
-        let conn = map_err_to_py_err(conn, "Could not open SQLite database")?;
-
+        let conn = get_conn(py, conn)?;
         let merge_base_db = MergeBaseDb::new(conn).context("Constructing merge-base DB");
-        let merge_base_db =
-            map_err_to_py_err(merge_base_db, "Could not construct merge-base database")?;
+        let merge_base_db = map_err_to_py_err(
+            merge_base_db,
+            String::from("Could not construct merge-base database"),
+        )?;
 
         let merge_base_db = PyMergeBaseDb { merge_base_db };
         Ok(merge_base_db)
@@ -188,20 +167,21 @@ impl PyMergeBaseDb {
         let repo_path: String = repo.getattr(py, "path")?.extract(py)?;
         let py_repo = repo;
         let repo = git2::Repository::open(repo_path);
-        let repo = map_err_to_py_err(repo, "Could not open Git repo")?;
+        let repo = map_err_to_py_err(repo, String::from("Could not open Git repo"))?;
 
         let lhs_oid: String = lhs_oid.getattr(py, "hex")?.extract(py)?;
         let lhs_oid = git2::Oid::from_str(&lhs_oid);
-        let lhs_oid = map_err_to_py_err(lhs_oid, "Could not process LHS OID")?;
+        let lhs_oid = map_err_to_py_err(lhs_oid, String::from("Could not process LHS OID"))?;
 
         let rhs_oid: String = rhs_oid.getattr(py, "hex")?.extract(py)?;
         let rhs_oid = git2::Oid::from_str(&rhs_oid);
-        let rhs_oid = map_err_to_py_err(rhs_oid, "Could not process RHS OID")?;
+        let rhs_oid = map_err_to_py_err(rhs_oid, String::from("Could not process RHS OID"))?;
 
         let merge_base_oid = self
             .merge_base_db
             .get_merge_base_oid(repo, lhs_oid, rhs_oid);
-        let merge_base_oid = map_err_to_py_err(merge_base_oid, "Could not get merge base OID")?;
+        let merge_base_oid =
+            map_err_to_py_err(merge_base_oid, String::from("Could not get merge base OID"))?;
         match merge_base_oid {
             Some(merge_base_oid) => {
                 let args = PyTuple::new(py, &[merge_base_oid.to_string()]);
