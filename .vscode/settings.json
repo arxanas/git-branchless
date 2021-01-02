@@ -18,5 +18,6 @@
         "stubs"
     ],
     "python.linting.flake8Enabled": true,
-    "editor.formatOnSave": true
+    "editor.formatOnSave": true,
+    "rust.clippy_preference": "on"
 }
