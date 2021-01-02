@@ -13,9 +13,11 @@
 //! away from the current main branch commit, so the merge-base calculation may
 //! take a while. It can also happen when simply checking out an old commit to
 //! examine it.
+use anyhow::Context;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::PyTuple;
+use rusqlite::OptionalExtension;
 
 use crate::python::map_err_to_py_err;
 
@@ -23,7 +25,7 @@ struct MergeBaseDb {
     conn: rusqlite::Connection,
 }
 
-fn init_tables(conn: &rusqlite::Connection) -> rusqlite::Result<()> {
+fn init_tables(conn: &rusqlite::Connection) -> anyhow::Result<()> {
     conn.execute(
         "
 CREATE TABLE IF NOT EXISTS merge_base_oids (
@@ -34,7 +36,8 @@ CREATE TABLE IF NOT EXISTS merge_base_oids (
 )
 ",
         rusqlite::params![],
-    )?;
+    )
+    .context("Creating tables")?;
     Ok(())
 }
 
@@ -44,7 +47,7 @@ fn wrap_git_error(error: git2::Error) -> anyhow::Error {
 
 impl MergeBaseDb {
     fn new(conn: rusqlite::Connection) -> anyhow::Result<Self> {
-        init_tables(&conn)?;
+        init_tables(&conn).context("Initializing tables")?;
         Ok(MergeBaseDb { conn })
     }
 
@@ -66,14 +69,76 @@ impl MergeBaseDb {
         lhs_oid: git2::Oid,
         rhs_oid: git2::Oid,
     ) -> anyhow::Result<Option<git2::Oid>> {
-        match repo.merge_base(lhs_oid, rhs_oid) {
-            Ok(merge_base_oid) => Ok(Some(merge_base_oid)),
-            Err(err) => {
-                if err.code() == git2::ErrorCode::NotFound {
-                    Ok(None)
-                } else {
-                    Err(wrap_git_error(err))
+        let (lhs_oid, rhs_oid) = if lhs_oid < rhs_oid {
+            (lhs_oid, rhs_oid)
+        } else {
+            (rhs_oid, lhs_oid)
+        };
+
+        let merge_base_oid: Option<Option<String>> = self
+            .conn
+            .query_row_named(
+                "
+SELECT merge_base_oid
+FROM merge_base_oids
+WHERE lhs_oid = :lhs_oid
+  AND rhs_oid = :rhs_oid
+",
+                &[
+                    (&":lhs_oid", &lhs_oid.to_string()),
+                    (&":rhs_oid", &rhs_oid.to_string()),
+                ],
+                |row| row.get("merge_base_oid"),
+            )
+            .optional()
+            .context("Querying merge-base DB")?;
+
+        match merge_base_oid {
+            // Cached and non-NULL.
+            Some(Some(merge_base_oid)) => {
+                let merge_base_oid =
+                    git2::Oid::from_str(&merge_base_oid).context("Parsing merge-base OID")?;
+                Ok(Some(merge_base_oid))
+            }
+
+            // Cached and NULL.
+            Some(None) => Ok(None),
+
+            // Not cached.
+            None => {
+                let merge_base_oid = match repo.merge_base(lhs_oid, rhs_oid) {
+                    Ok(merge_base_oid) => Ok(Some(merge_base_oid)),
+                    Err(err) => {
+                        if err.code() == git2::ErrorCode::NotFound {
+                            Ok(None)
+                        } else {
+                            Err(wrap_git_error(err))
+                        }
+                    }
                 }
+                .context("Querying Git repository for merge-base OID")?;
+
+                // Cache computed merge-base OID.
+                self.conn
+                    .execute_named(
+                        "
+INSERT INTO merge_base_oids VALUES (
+    :lhs_oid,
+    :rhs_oid,
+    :merge_base_oid
+)",
+                        &[
+                            (&":lhs_oid", &lhs_oid.to_string()),
+                            (&":rhs_oid", &rhs_oid.to_string()),
+                            (
+                                &":merge_base_oid",
+                                &merge_base_oid.map(|oid| oid.to_string()),
+                            ),
+                        ],
+                    )
+                    .context("Caching merge-base OID")?;
+
+                Ok(merge_base_oid)
             }
         }
     }
@@ -105,7 +170,7 @@ impl PyMergeBaseDb {
         let conn = rusqlite::Connection::open(db_path);
         let conn = map_err_to_py_err(conn, "Could not open SQLite database")?;
 
-        let merge_base_db = MergeBaseDb::new(conn);
+        let merge_base_db = MergeBaseDb::new(conn).context("Constructing merge-base DB");
         let merge_base_db =
             map_err_to_py_err(merge_base_db, "Could not construct merge-base database")?;
 
