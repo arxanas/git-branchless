@@ -13,49 +13,49 @@ jobs:
       matrix:
         python-version: ["3.6", "3.9"]
     steps:
-    - uses: actions/checkout@v2
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v2
-      with:
-        python-version: ${{ matrix.python-version }}
-    - name: Install dependencies
-      run: pip install -r requirements-dev.txt
-    - name: Typecheck
-      run: mypy --show-column-numbers --strict branchless test stubs
-    - name: Lint
-      run: flake8 branchless test stubs
+      - uses: actions/checkout@v2
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+      - name: Typecheck
+        run: mypy --show-column-numbers --strict branchless test stubs
+      - name: Lint
+        run: flake8 branchless test stubs
 
   build-git:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-         # Use a tag from https://github.com/git/git/tags
+        # Use a tag from https://github.com/git/git/tags
         git-version: ["v2.24.3", "v2.29.2"]
     steps:
-    - uses: actions/checkout@v2
-      with:
-        repository: git/git
-        ref: ${{ matrix.git-version }}
-    - uses: actions/cache@v2
-      id: cache-git-build
-      with:
-        key: ${{ runner.os }}-git-${{ matrix.git-version }}
-        path: git
-    - name: Build Git ${{ matrix.git-version }}
-      if: steps.cache-git-build.outputs.cache-hit != 'true'
-      run: |
-        sudo apt-get update --fix-missing
-        # List of dependencies from https://git-scm.com/book/en/v2/Getting-Started-Installing-Git
-        sudo apt-get install dh-autoreconf libcurl4-gnutls-dev libexpat1-dev gettext libz-dev libssl-dev
-        make
-    - name: Package Git
-      run: tar -czf git.tar.gz git
-    - name: "Upload artifact: git"
-      uses: actions/upload-artifact@v2
-      with:
-        name: git-${{ matrix.git-version }}
-        path: git.tar.gz
-        if-no-files-found: error
+      - uses: actions/checkout@v2
+        with:
+          repository: git/git
+          ref: ${{ matrix.git-version }}
+      - uses: actions/cache@v2
+        id: cache-git-build
+        with:
+          key: ${{ runner.os }}-git-${{ matrix.git-version }}
+          path: git
+      - name: Build Git ${{ matrix.git-version }}
+        if: steps.cache-git-build.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update --fix-missing
+          # List of dependencies from https://git-scm.com/book/en/v2/Getting-Started-Installing-Git
+          sudo apt-get install dh-autoreconf libcurl4-gnutls-dev libexpat1-dev gettext libz-dev libssl-dev
+          make
+      - name: Package Git
+        run: tar -czf git.tar.gz git
+      - name: "Upload artifact: git"
+        uses: actions/upload-artifact@v2
+        with:
+          name: git-${{ matrix.git-version }}
+          path: git.tar.gz
+          if-no-files-found: error
 
   test:
     runs-on: ubuntu-latest
@@ -65,18 +65,18 @@ jobs:
         python-version: ["3.6", "3.9"]
         git-version: ["v2.24.3", "v2.29.2"]
     steps:
-    - uses: actions/checkout@v2
-    - name: "Download artifact: git"
-      uses: actions/download-artifact@v2
-      with:
-        name: git-${{ matrix.git-version }}
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v2
-      with:
-        python-version: ${{ matrix.python-version }}
-    - name: Run tests
-      run: |
-        tar -xf git.tar.gz
-        pip install -e .
-        pip install -r requirements-dev.txt
-        pytest --git-path="$PWD"/git -n auto
+      - uses: actions/checkout@v2
+      - name: "Download artifact: git"
+        uses: actions/download-artifact@v2
+        with:
+          name: git-${{ matrix.git-version }}
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Run tests
+        run: |
+          tar -xf git.tar.gz
+          pip install -e .
+          pip install -r requirements-dev.txt
+          pytest --git-path="$PWD"/git -n auto
