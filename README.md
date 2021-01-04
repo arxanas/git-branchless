@@ -1,6 +1,6 @@
 # Branchless workflow for Git
 
-![Continuous integration](https://github.com/arxanas/git-branchless/workflows/Continuous%20integration/badge.svg)
+[![CI](https://github.com/arxanas/git-branchless/workflows/CI/badge.svg)](https://github.com/arxanas/git-branchless/actions?query=workflow%3ACI+branch%3Amaster)
 
 ## Demo
 
