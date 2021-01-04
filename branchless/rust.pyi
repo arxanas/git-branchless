@@ -1,8 +1,9 @@
 import sqlite3
 from dataclasses import dataclass
-from typing import Optional, Sequence, Union
+from typing import Dict, List, Optional, Sequence, Set, Tuple, Union
 
 import pygit2
+from typing_extensions import Literal
 
 from . import OidStr
 
@@ -162,5 +163,133 @@ class PyEventLogDb:
 
         Returns:
           All the events in the database, ordered from oldest to newest.
+        """
+        ...
+
+class PyEventReplayer:
+    """Processes events in order and determine the repo's visible commits."""
+
+    def __init__(self) -> None: ...
+    @classmethod
+    def from_event_log_db(cls, event_log_db: PyEventLogDb) -> "PyEventReplayer":
+        """Construct the replayer from all the events in the database.
+
+        Args:
+          event_log_db: The database to query events from.
+
+        Returns:
+          The constructed replayer.
+        """
+        ...
+    def process_event(self, event: Event) -> None:
+        """Process the given event.
+
+        This also sets the event cursor to point to immediately after the
+        event that was just processed.
+
+        Args:
+          event: The next event to process. Events should be passed to the
+          replayer in order from oldest to newest.
+        """
+        ...
+    def get_commit_visibility(
+        self, oid: OidStr
+    ) -> Optional[Union[Literal["visible"], Literal["hidden"]]]:
+        """Determines whether a commit has been marked as visible or hidden.
+
+        Args:
+          oid: The OID of the commit to check.
+
+        Returns:
+          Whether the commit is visible or hidden. Returns `None` if no history
+          has been recorded for that commit.
+        """
+        ...
+    def get_commit_latest_event(self, oid: OidStr) -> Optional[Event]:
+        """Get the latest event affecting a given commit.
+
+        Args:
+          oid: The OID of the commit to check.
+
+        Returns:
+          The most recent event that affected that commit. If this commit was
+          not observed by the replayer, returns `None`.
+        """
+        ...
+    def get_active_oids(self) -> Set[str]:
+        """Get the OIDs which have activity according to the repository history.
+
+        Returns:
+          The set of OIDs referring to commits which are thought to be active
+          due to user action.
+        """
+        ...
+    def set_cursor(self, event_id: int) -> None:
+        """Set the event cursor to point to immediately after the provided event.
+
+        The "event cursor" is used to move the event replayer forward or
+        backward in time, so as to show the state of the repository at that
+        time.
+
+        The cursor is a position in between two events in the event log.
+        Thus, all events before to the cursor are considered to be in effect,
+        and all events after the cursor are considered to not have happened
+        yet.
+
+        Args:
+          event_id: The index of the event to set the cursor to point
+            immediately after. If out of bounds, the cursor is set to the
+            first or last valid position, as appropriate.
+        """
+        ...
+    def advance_cursor(self, num_events: int) -> None:
+        """Advance the event cursor by the specified number of events.
+
+        Args:
+          num_events: The number of events to advance by. Can be positive,
+            zero, or negative. If out of bounds, the cursor is set to the
+            first or last valid position, as appropriate.
+        """
+        ...
+    def get_cursor_head_oid(self) -> Optional[OidStr]:
+        """Get the OID of `HEAD` at the cursor's point in time.
+
+        Returns:
+          The OID pointed to by `HEAD` at that time, or `None` if `HEAD` was
+          never observed.
+        """
+        ...
+    def get_cursor_main_branch_oid(self, repo: pygit2.Repository) -> pygit2.Oid: ...
+    def get_cursor_branch_oid_to_names(
+        self, repo: pygit2.Repository
+    ) -> Dict[OidStr, Set[str]]:
+        """Get the mapping of branch OIDs to names at the cursor's point in
+        time.
+
+        Same as `branchless.get_branch_oid_to_names`, but for a previous
+        point in time.
+
+        Args:
+          repo: The Git repository.
+
+        Returns:
+          A mapping from an OID to the names of branches pointing to that
+          OID.
+        """
+        ...
+    def get_event_before_cursor(self) -> Optional[Tuple[int, Event]]:
+        """Get the event immediately before the cursor.
+
+        Returns:
+          A tuple of event ID and the event that most recently happened. If
+          no event was before the event cursor, returns `None` instead.
+        """
+        ...
+    def get_events_since_cursor(self) -> List[Event]:
+        """Get all the events that have happened since the event cursor.
+
+        Returns:
+          An ordered list of events that have happened since the event
+          cursor, from least recent to most recent.
         """
         ...

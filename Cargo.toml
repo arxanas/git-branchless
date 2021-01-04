@@ -14,8 +14,15 @@ name = "branchlessrust"
 anyhow = "1.0.37"
 console = "0.14.0"
 git2 = "0.13.15"
-pyo3 = {version = "0.13.0", features = ["extension-module"]}
+pyo3 = "0.13.0"
 rusqlite = "0.24.2"
 
 [dev-dependencies]
 clippy = "0.0.302"
+
+[features]
+# See https://pyo3.rs/v0.13.0/faq.html?highlight=test#i-cant-run-cargo-test-im-having-linker-issues-like-symbol-not-found-or-undefined-reference-to-_pyexc_systemerror
+# Must run `cargo test --no-default-features` to get tests to run.
+# Can remove this once PyO3 is not longer a dependency.
+default = ["extension-module"]
+extension-module = ["pyo3/extension-module"]
