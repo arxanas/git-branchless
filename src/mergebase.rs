@@ -15,10 +15,9 @@
 //! examine it.
 use anyhow::Context;
 use pyo3::prelude::*;
-use pyo3::types::PyTuple;
 use rusqlite::OptionalExtension;
 
-use crate::python::{get_conn, map_err_to_py_err};
+use crate::python::{get_conn, get_repo, map_err_to_py_err, PyOidStr};
 use crate::util::wrap_git_error;
 
 struct MergeBaseDb {
@@ -164,10 +163,8 @@ impl PyMergeBaseDb {
         lhs_oid: PyObject,
         rhs_oid: PyObject,
     ) -> PyResult<PyObject> {
-        let repo_path: String = repo.getattr(py, "path")?.extract(py)?;
-        let py_repo = repo;
-        let repo = git2::Repository::open(repo_path);
-        let repo = map_err_to_py_err(repo, String::from("Could not open Git repo"))?;
+        let py_repo = &repo;
+        let repo = get_repo(py, &repo)?;
 
         let lhs_oid: String = lhs_oid.getattr(py, "hex")?.extract(py)?;
         let lhs_oid = git2::Oid::from_str(&lhs_oid);
@@ -184,12 +181,10 @@ impl PyMergeBaseDb {
             map_err_to_py_err(merge_base_oid, String::from("Could not get merge base OID"))?;
         match merge_base_oid {
             Some(merge_base_oid) => {
-                let args = PyTuple::new(py, &[merge_base_oid.to_string()]);
-                let merge_base_commit = py_repo.call_method1(py, "__getitem__", args)?;
-                let merge_base_oid = merge_base_commit.getattr(py, "oid")?;
+                let merge_base_oid = PyOidStr(merge_base_oid).to_pygit2_oid(py, &py_repo)?;
                 Ok(merge_base_oid)
             }
-            None => Ok(Python::None(py)),
+            None => Ok(py.None()),
         }
     }
 }

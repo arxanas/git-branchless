@@ -4,7 +4,7 @@ use std::fmt::Debug;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::PyResult;
 use pyo3::types::PyTuple;
-use pyo3::{PyObject, Python};
+use pyo3::{FromPyObject, IntoPy, PyAny, PyObject, Python};
 
 pub fn raise_runtime_error<T>(message: String) -> PyResult<T> {
     Err(PyRuntimeError::new_err(message))
@@ -36,4 +36,50 @@ pub fn get_conn(py: Python, conn: PyObject) -> PyResult<rusqlite::Connection> {
         conn,
         format!("Could not open SQLite database at path {}", db_path),
     )
+}
+
+pub fn get_repo(py: Python, repo: &PyObject) -> PyResult<git2::Repository> {
+    let repo_path: String = repo.getattr(py, "path")?.extract(py)?;
+    let repo = git2::Repository::open(repo_path);
+    let repo = map_err_to_py_err(repo, String::from("Could not open Git repo"))?;
+    Ok(repo)
+}
+
+#[derive(Clone, Hash)]
+pub struct PyOidStr(pub git2::Oid);
+
+impl PyOidStr {
+    pub fn to_pygit2_oid(&self, py: Python, py_repo: &PyObject) -> PyResult<PyObject> {
+        // Convert the OID string into a `pygit2.Oid` object, by calling
+        // `repo[oid]` on the Python `repo` object.
+        let args = PyTuple::new(py, &[self.0.to_string()]);
+        let commit = py_repo.call_method1(py, "__getitem__", args)?;
+        let oid = commit.getattr(py, "oid")?;
+        Ok(oid)
+    }
+}
+
+impl PartialEq for PyOidStr {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl Eq for PyOidStr {}
+
+impl<'source> FromPyObject<'source> for PyOidStr {
+    fn extract(obj: &'source PyAny) -> PyResult<Self> {
+        let oid: String = obj.extract()?;
+        let oid = map_err_to_py_err(
+            git2::Oid::from_str(&oid),
+            format!("Could not process OID: {}", oid),
+        )?;
+        Ok(PyOidStr(oid))
+    }
+}
+
+impl IntoPy<PyObject> for PyOidStr {
+    fn into_py(self, py: Python) -> PyObject {
+        self.0.to_string().into_py(py)
+    }
 }
