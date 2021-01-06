@@ -20,7 +20,7 @@ use rusqlite::OptionalExtension;
 use crate::python::{get_conn, get_repo, map_err_to_py_err, PyOidStr};
 use crate::util::wrap_git_error;
 
-struct MergeBaseDb {
+pub struct MergeBaseDb {
     conn: rusqlite::Connection,
 }
 
@@ -58,9 +58,9 @@ impl MergeBaseDb {
     ///
     /// Returns: The merge-base OID for these two commits. Returns `None` if no
     /// merge-base could be found.
-    fn get_merge_base_oid(
+    pub fn get_merge_base_oid(
         &self,
-        repo: git2::Repository,
+        repo: &git2::Repository,
         lhs_oid: git2::Oid,
         rhs_oid: git2::Oid,
     ) -> anyhow::Result<Option<git2::Oid>> {
@@ -176,7 +176,7 @@ impl PyMergeBaseDb {
 
         let merge_base_oid = self
             .merge_base_db
-            .get_merge_base_oid(repo, lhs_oid, rhs_oid);
+            .get_merge_base_oid(&repo, lhs_oid, rhs_oid);
         let merge_base_oid =
             map_err_to_py_err(merge_base_oid, String::from("Could not get merge base OID"))?;
         match merge_base_oid {
