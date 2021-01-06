@@ -48,12 +48,6 @@ mod util;
 #[pymodule]
 fn rust(_py: Python<'_>, module: &PyModule) -> PyResult<()> {
     module.add_class::<mergebase::PyMergeBaseDb>()?;
-    module.add_class::<eventlog::PyRewriteEvent>()?;
-    module.add_class::<eventlog::PyRefUpdateEvent>()?;
-    module.add_class::<eventlog::PyCommitEvent>()?;
-    module.add_class::<eventlog::PyHideEvent>()?;
-    module.add_class::<eventlog::PyUnhideEvent>()?;
-    module.add_class::<eventlog::PyEventLogDb>()?;
-    module.add_class::<eventlog::PyEventReplayer>()?;
+    eventlog::register_python_symbols(&module)?;
     Ok(())
 }

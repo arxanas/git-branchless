@@ -760,6 +760,7 @@ impl PyEventLogDb {
 /// Returns: Whether or not the given reference is used internally to keep the
 /// commit alive, so that it's not collected by Git's garbage collection
 /// mechanism.
+#[pyfunction]
 pub fn is_gc_ref(ref_name: &str) -> bool {
     ref_name.starts_with("refs/branchless/")
 }
@@ -770,6 +771,7 @@ pub fn is_gc_ref(ref_name: &str) -> bool {
 /// * `ref_name`: The name of the reference to check.
 ///
 /// Returns: Whether or not updates to the given reference should be ignored.
+#[pyfunction]
 pub fn should_ignore_ref_updates(ref_name: &str) -> bool {
     if is_gc_ref(ref_name) {
         return true;
@@ -1318,6 +1320,19 @@ impl PyEventReplayer {
             .map(|event| event.clone().into_py(py))
             .collect()
     }
+}
+
+pub fn register_python_symbols(module: &PyModule) -> PyResult<()> {
+    module.add_class::<PyRewriteEvent>()?;
+    module.add_class::<PyRefUpdateEvent>()?;
+    module.add_class::<PyCommitEvent>()?;
+    module.add_class::<PyHideEvent>()?;
+    module.add_class::<PyUnhideEvent>()?;
+    module.add_class::<PyEventLogDb>()?;
+    module.add_class::<PyEventReplayer>()?;
+    module.add_function(pyo3::wrap_pyfunction!(is_gc_ref, module)?)?;
+    module.add_function(pyo3::wrap_pyfunction!(should_ignore_ref_updates, module)?)?;
+    Ok(())
 }
 
 #[cfg(test)]

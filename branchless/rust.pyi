@@ -36,6 +36,20 @@ class PyMergeBaseDb:
         """
         ...
 
+def is_gc_ref(ref_name: str) -> bool:
+    """Determine whether a given reference is used to keep a commit alive.
+
+    Args:
+      ref_name: The name of the reference.
+
+    Returns:
+      Whether or not the given reference is used internally to keep the
+      commit alive, so that it's not collected by Git's garbage collection
+      mechanism.
+    """
+    ...
+
+def should_ignore_ref_updates(ref_name: str) -> bool: ...
 @dataclass(frozen=True, eq=True)
 class _BaseEvent:
     timestamp: float
