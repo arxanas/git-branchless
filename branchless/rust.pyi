@@ -7,6 +7,8 @@ from typing_extensions import Literal
 
 from . import OidStr
 
+# mergebase.py
+
 class PyMergeBaseDb:
     """Cache for merge-base queries."""
 
@@ -35,6 +37,8 @@ class PyMergeBaseDb:
           merge-base could be found.
         """
         ...
+
+# eventlog.py
 
 def is_gc_ref(ref_name: str) -> bool:
     """Determine whether a given reference is used to keep a commit alive.
@@ -307,3 +311,113 @@ class PyEventReplayer:
           cursor, from least recent to most recent.
         """
         ...
+
+# graph.py
+@dataclass
+class PyNode:
+    """Node contained in the smartlog commit graph."""
+
+    commit: pygit2.Commit
+    """The underlying commit object."""
+
+    parent: Optional[OidStr]
+    """The OID of the parent node in the smartlog commit graph.
+
+    This is different from inspecting `commit.parents`, since the smartlog
+    will hide most nodes from the commit graph, including parent nodes.
+    """
+
+    children: Set[OidStr]
+    """The OIDs of the children nodes in the smartlog commit graph."""
+
+    is_main: bool
+    """Indicates that this is a commit to the main branch.
+
+    These commits are considered to be immutable and should never leave the
+    `main` state. However, this can still happen sometimes if the user's
+    workflow is different than expected.
+    """
+
+    is_visible: bool
+    """Indicates that this commit should be considered "visible".
+
+    A visible commit is a commit that hasn't been checked into the main
+    branch, but the user is actively working on. We may infer this from user
+    behavior, e.g. they committed something recently, so they are now working
+    on it.
+
+    In contrast, a hidden commit is a commit that hasn't been checked into
+    the main branch, and the user is no longer working on. We may infer this
+    from user behavior, e.g. they have rebased a commit and no longer want to
+    see the old version of that commit. The user can also manually hide
+    commits.
+
+    Occasionally, a main commit can be marked as hidden, such as if a commit
+    in the main branch has been rewritten. We don't expect this to happen in
+    the monorepo workflow, but it can happen in other workflows where you
+    commit directly to the main branch and then later rewrite the commit.
+    """
+
+    event: Optional[Event]
+    """The latest event to affect this commit.
+
+    It's possible that no event affected this commit, and it was simply
+    visible due to a reference pointing to it. In that case, this field is
+    `None`.
+    """
+
+def py_find_path_to_merge_base(
+    repo: pygit2.Repository,
+    merge_base_db: PyMergeBaseDb,
+    commit_oid: pygit2.Oid,
+    target_oid: pygit2.Oid,
+) -> Optional[List[pygit2.Commit]]:
+    """Find a shortest path between the given commits.
+
+    This is particularly important for multi-parent commits (i.e. merge
+    commits). If we don't happen to traverse the correct parent, we may end
+    up traversing a huge amount of commit history, with a significant
+    performance hit.
+
+    Args:
+      repo: The Git repository.
+      commit_oid: The OID of the commit to start at. We take parents of the
+        provided commit until we end up at the target OID.
+      target_oid: The OID of the commit to end at.
+
+    Returns:
+      A path of commits from `commit_oid` through parents to `target_oid`.
+      The path includes `commit_oid` at the beginning and `target_oid` at the
+      end. If there is no such path, returns `None`.
+    """
+    ...
+
+PyCommitGraph = Dict[OidStr, PyNode]
+"""Graph of commits that the user is working on."""
+
+def py_make_graph(
+    repo: pygit2.Repository,
+    merge_base_db: PyMergeBaseDb,
+    event_replayer: PyEventReplayer,
+    head_oid: Optional[OidStr],
+    main_branch_oid: pygit2.Oid,
+    branch_oids: Set[OidStr],
+    hide_commits: bool,
+) -> PyCommitGraph:
+    """Construct the smartlog graph for the repo.
+
+    Args:
+      repo: The Git repository.
+      merge_base_db: The merge-base database.
+      event_replayer: The event replayer.
+      head_oid: The OID of the repository's `HEAD` reference.
+      main_branch_oid: The OID of the main branch.
+      branch_oids: The set of OIDs pointed to by branches.
+      hide_commits: If set to `True`, then, after constructing the graph,
+        remove nodes from it that appear to be hidden by user activity. This
+        should be set to `True` for most display-related purposes.
+
+    Returns:
+      A tuple of the head OID and the commit graph.
+    """
+    ...

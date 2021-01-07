@@ -3,6 +3,7 @@ import functools
 from typing import Iterator, List, Union
 
 import pygit2
+import pytest
 
 from branchless import get_repo
 from branchless.db import make_db_for_repo
@@ -31,6 +32,8 @@ def spy_repository_getitem() -> Iterator[List[str]]:
         pygit2.Repository.__getitem__ = original_getitem  # type: ignore[assignment]
 
 
+# Must port to Rust.
+@pytest.mark.xfail
 def test_find_path_to_merge_base_stop_early(git: Git) -> None:
     git.init_repo()
     git.commit_file(name="test1", time=1)

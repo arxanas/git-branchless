@@ -519,17 +519,17 @@ impl PyUnhideEvent {
     }
 }
 
-impl IntoPy<PyObject> for Event {
-    fn into_py(self, py: Python) -> PyObject {
+impl ToPyObject for Event {
+    fn to_object(&self, py: Python) -> PyObject {
         match self {
             Event::RewriteEvent {
                 timestamp,
                 old_commit_oid,
                 new_commit_oid,
             } => PyRewriteEvent {
-                timestamp,
-                old_commit_oid: PyOidStr(old_commit_oid),
-                new_commit_oid: PyOidStr(new_commit_oid),
+                timestamp: *timestamp,
+                old_commit_oid: PyOidStr(*old_commit_oid),
+                new_commit_oid: PyOidStr(*new_commit_oid),
             }
             .into_py(py),
 
@@ -540,11 +540,11 @@ impl IntoPy<PyObject> for Event {
                 new_ref,
                 message,
             } => PyRefUpdateEvent {
-                timestamp,
-                ref_name,
-                old_ref,
-                new_ref,
-                message,
+                timestamp: *timestamp,
+                ref_name: ref_name.clone(),
+                old_ref: old_ref.clone(),
+                new_ref: new_ref.clone(),
+                message: message.clone(),
             }
             .into_py(py),
 
@@ -552,8 +552,8 @@ impl IntoPy<PyObject> for Event {
                 timestamp,
                 commit_oid,
             } => PyCommitEvent {
-                timestamp,
-                commit_oid: PyOidStr(commit_oid),
+                timestamp: *timestamp,
+                commit_oid: PyOidStr(*commit_oid),
             }
             .into_py(py),
 
@@ -561,8 +561,8 @@ impl IntoPy<PyObject> for Event {
                 timestamp,
                 commit_oid,
             } => PyHideEvent {
-                timestamp,
-                commit_oid: PyOidStr(commit_oid),
+                timestamp: *timestamp,
+                commit_oid: PyOidStr(*commit_oid),
             }
             .into_py(py),
 
@@ -570,8 +570,8 @@ impl IntoPy<PyObject> for Event {
                 timestamp,
                 commit_oid,
             } => PyUnhideEvent {
-                timestamp,
-                commit_oid: PyOidStr(commit_oid),
+                timestamp: *timestamp,
+                commit_oid: PyOidStr(*commit_oid),
             }
             .into_py(py),
         }
@@ -1207,7 +1207,7 @@ impl EventReplayer {
 
 #[pyclass]
 pub struct PyEventReplayer {
-    event_replayer: EventReplayer,
+    pub event_replayer: EventReplayer,
 }
 
 #[pymethods]
@@ -1234,7 +1234,7 @@ impl PyEventReplayer {
         Ok(())
     }
 
-    pub fn get_cursor_commit_visibility(&self, py: Python, oid: PyOidStr) -> PyResult<PyObject> {
+    fn get_commit_visibility(&self, py: Python, oid: PyOidStr) -> PyResult<PyObject> {
         let oid = oid.0;
         let commit_visibility = self.event_replayer.get_cursor_commit_visibility(oid);
         match commit_visibility {
@@ -1247,11 +1247,7 @@ impl PyEventReplayer {
     fn get_commit_latest_event(&self, py: Python, oid: PyOidStr) -> PyResult<PyObject> {
         let oid = oid.0;
         match self.event_replayer.get_cursor_commit_latest_event(oid) {
-            Some(event) => {
-                // `into_py` takes `self` instead of `&self`, so we have to
-                // clone `event`.
-                Ok(event.clone().into_py(py))
-            }
+            Some(event) => Ok(event.to_object(py)),
             None => Ok(py.None()),
         }
     }
@@ -1310,14 +1306,14 @@ impl PyEventReplayer {
     fn get_event_before_cursor(&self, py: Python) -> Option<(isize, PyObject)> {
         self.event_replayer
             .get_event_before_cursor()
-            .map(|(id, event)| (id, event.clone().into_py(py)))
+            .map(|(id, event)| (id, event.to_object(py)))
     }
 
     fn get_events_since_cursor(&self, py: Python) -> Vec<PyObject> {
         self.event_replayer
             .get_events_since_cursor()
             .iter()
-            .map(|event| event.clone().into_py(py))
+            .map(|event| event.to_object(py))
             .collect()
     }
 }

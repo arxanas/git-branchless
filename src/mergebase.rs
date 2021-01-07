@@ -138,7 +138,7 @@ INSERT INTO merge_base_oids VALUES (
 
 #[pyclass]
 pub struct PyMergeBaseDb {
-    merge_base_db: MergeBaseDb,
+    pub merge_base_db: MergeBaseDb,
 }
 
 #[pymethods]

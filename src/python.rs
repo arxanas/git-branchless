@@ -4,16 +4,23 @@ use std::fmt::Debug;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::PyResult;
 use pyo3::types::PyTuple;
-use pyo3::{FromPyObject, IntoPy, PyAny, PyObject, Python};
+use pyo3::{FromPyObject, IntoPy, PyAny, PyObject, Python, ToPyObject};
 
 pub fn raise_runtime_error<T>(message: String) -> PyResult<T> {
     Err(PyRuntimeError::new_err(message))
 }
 
-pub fn map_err_to_py_err<T, E: Debug>(result: Result<T, E>, message: String) -> PyResult<T> {
+pub fn map_err_to_py_err<T, E: Debug, S: AsRef<str>>(
+    result: Result<T, E>,
+    message: S,
+) -> PyResult<T> {
     match result {
         Ok(value) => Ok(value),
-        Err(err) => raise_runtime_error(format!("Message: {}\nError details: {:?}", message, err)),
+        Err(err) => raise_runtime_error(format!(
+            "Message: {}\nError details: {:?}",
+            message.as_ref(),
+            err
+        )),
     }
 }
 
@@ -43,6 +50,17 @@ pub fn get_repo(py: Python, repo: &PyObject) -> PyResult<git2::Repository> {
     let repo = git2::Repository::open(repo_path);
     let repo = map_err_to_py_err(repo, String::from("Could not open Git repo"))?;
     Ok(repo)
+}
+
+pub struct PyOid(pub git2::Oid);
+
+impl<'source> FromPyObject<'source> for PyOid {
+    fn extract(obj: &'source PyAny) -> PyResult<Self> {
+        let oid: String = obj.getattr("hex")?.extract()?;
+        let oid = git2::Oid::from_str(&oid);
+        let oid = map_err_to_py_err(oid, "Could not process OID")?;
+        Ok(PyOid(oid))
+    }
 }
 
 #[derive(Clone, Hash)]
@@ -78,8 +96,14 @@ impl<'source> FromPyObject<'source> for PyOidStr {
     }
 }
 
+impl ToPyObject for PyOidStr {
+    fn to_object(&self, py: Python) -> PyObject {
+        self.0.to_string().into_py(py)
+    }
+}
+
 impl IntoPy<PyObject> for PyOidStr {
     fn into_py(self, py: Python) -> PyObject {
-        self.0.to_string().into_py(py)
+        self.to_object(py)
     }
 }
