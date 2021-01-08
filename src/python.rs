@@ -24,7 +24,7 @@ pub fn map_err_to_py_err<T, E: Debug, S: AsRef<str>>(
     }
 }
 
-pub fn get_conn(py: Python, conn: PyObject) -> PyResult<rusqlite::Connection> {
+pub fn make_conn_from_py_conn(py: Python, conn: PyObject) -> PyResult<rusqlite::Connection> {
     // https://stackoverflow.com/a/14505973
     let query_result =
         conn.call_method1(py, "execute", PyTuple::new(py, &["PRAGMA database_list;"]))?;
@@ -45,7 +45,7 @@ pub fn get_conn(py: Python, conn: PyObject) -> PyResult<rusqlite::Connection> {
     )
 }
 
-pub fn get_repo(py: Python, repo: &PyObject) -> PyResult<git2::Repository> {
+pub fn make_repo_from_py_repo(py: Python, repo: &PyObject) -> PyResult<git2::Repository> {
     let repo_path: String = repo.getattr(py, "path")?.extract(py)?;
     let repo = git2::Repository::open(repo_path);
     let repo = map_err_to_py_err(repo, String::from("Could not open Git repo"))?;

@@ -5,7 +5,7 @@ use pyo3::types::PyTuple;
 
 use crate::eventlog::{CommitVisibility, Event, EventReplayer, PyEventReplayer};
 use crate::mergebase::{MergeBaseDb, PyMergeBaseDb};
-use crate::python::{get_repo, map_err_to_py_err, PyOid, PyOidStr};
+use crate::python::{make_repo_from_py_repo, map_err_to_py_err, PyOid, PyOidStr};
 
 pub struct HeadOid(Option<git2::Oid>);
 pub struct MainBranchOid(git2::Oid);
@@ -376,7 +376,7 @@ fn py_find_path_to_merge_base(
     target_oid: PyOid,
 ) -> PyResult<Option<Vec<PyObject>>> {
     let py_repo = &repo;
-    let repo = get_repo(py, &repo)?;
+    let repo = make_repo_from_py_repo(py, &repo)?;
     let PyMergeBaseDb { merge_base_db } = merge_base_db;
     let PyOid(commit_oid) = commit_oid;
     let PyOid(target_oid) = target_oid;
@@ -444,7 +444,7 @@ fn py_make_graph(
     hide_commits: bool,
 ) -> PyResult<PyCommitGraph> {
     let py_repo = &repo;
-    let repo = get_repo(py, &repo)?;
+    let repo = make_repo_from_py_repo(py, &repo)?;
     let PyMergeBaseDb { merge_base_db } = merge_base_db;
     let PyEventReplayer { event_replayer } = event_replayer;
     let head_oid = HeadOid(head_oid.map(|PyOidStr(oid)| oid));

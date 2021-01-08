@@ -17,7 +17,7 @@ use anyhow::Context;
 use pyo3::prelude::*;
 use rusqlite::OptionalExtension;
 
-use crate::python::{get_conn, get_repo, map_err_to_py_err, PyOidStr};
+use crate::python::{make_conn_from_py_conn, make_repo_from_py_repo, map_err_to_py_err, PyOidStr};
 use crate::util::wrap_git_error;
 
 pub struct MergeBaseDb {
@@ -145,7 +145,7 @@ pub struct PyMergeBaseDb {
 impl PyMergeBaseDb {
     #[new]
     fn new(py: Python, conn: PyObject) -> PyResult<Self> {
-        let conn = get_conn(py, conn)?;
+        let conn = make_conn_from_py_conn(py, conn)?;
         let merge_base_db = MergeBaseDb::new(conn).context("Constructing merge-base DB");
         let merge_base_db = map_err_to_py_err(
             merge_base_db,
@@ -164,7 +164,7 @@ impl PyMergeBaseDb {
         rhs_oid: PyObject,
     ) -> PyResult<PyObject> {
         let py_repo = &repo;
-        let repo = get_repo(py, &repo)?;
+        let repo = make_repo_from_py_repo(py, &repo)?;
 
         let lhs_oid: String = lhs_oid.getattr(py, "hex")?.extract(py)?;
         let lhs_oid = git2::Oid::from_str(&lhs_oid);
