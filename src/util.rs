@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use crate::config::get_main_branch_name;
 
 pub fn wrap_git_error(error: git2::Error) -> anyhow::Error {
@@ -30,3 +32,12 @@ pub fn get_main_branch_oid(repo: &git2::Repository) -> anyhow::Result<git2::Oid>
     let commit = branch.get().peel_to_commit()?;
     Ok(commit.id())
 }
+
+/// Get the git repository associated with the current directory.
+pub fn get_repo() -> anyhow::Result<git2::Repository> {
+    let path = std::env::current_dir()?;
+    let repository = git2::Repository::discover(path).map_err(wrap_git_error)?;
+    Ok(repository)
+}
+
+pub struct GitExecutable<'path>(pub &'path Path);

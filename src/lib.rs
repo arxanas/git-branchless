@@ -42,6 +42,7 @@ use pyo3::prelude::*;
 mod config;
 mod eventlog;
 mod graph;
+mod init;
 mod mergebase;
 mod python;
 mod util;
@@ -51,5 +52,6 @@ fn rust(_py: Python<'_>, module: &PyModule) -> PyResult<()> {
     module.add_class::<mergebase::PyMergeBaseDb>()?;
     eventlog::register_python_symbols(&module)?;
     graph::register_python_symbols(&module)?;
+    init::register_python_symbols(&module)?;
     Ok(())
 }

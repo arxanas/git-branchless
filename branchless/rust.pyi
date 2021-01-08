@@ -1,6 +1,6 @@
 import sqlite3
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Sequence, Set, Tuple, Union
+from typing import Dict, List, Optional, Sequence, Set, TextIO, Tuple, Union
 
 import pygit2
 from typing_extensions import Literal
@@ -421,3 +421,6 @@ def py_make_graph(
       A tuple of the head OID and the commit graph.
     """
     ...
+
+# init.py
+def py_init(*, out: TextIO, git_executable: str) -> int: ...
