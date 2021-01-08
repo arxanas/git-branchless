@@ -107,3 +107,38 @@ impl IntoPy<PyObject> for PyOidStr {
         self.to_object(py)
     }
 }
+
+pub struct TextIO<'py> {
+    py: Python<'py>,
+    text_io: PyObject,
+}
+
+impl<'py> TextIO<'py> {
+    pub fn new(py: Python<'py>, py_text_io: PyObject) -> TextIO<'py> {
+        TextIO {
+            py,
+            text_io: py_text_io,
+        }
+    }
+}
+
+impl std::io::Write for TextIO<'_> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let buf = String::from_utf8(buf.into()).expect("Could not convert bytes to UTF-8");
+        let result = self
+            .text_io
+            .call_method1(self.py, "write", PyTuple::new(self.py, &[&buf]));
+        match result {
+            Ok(_) => Ok(buf.len()),
+            Err(err) => Err(std::io::Error::new(std::io::ErrorKind::Other, err)),
+        }
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        let result = self.text_io.call_method0(self.py, "flush");
+        match result {
+            Ok(_) => Ok(()),
+            Err(err) => Err(std::io::Error::new(std::io::ErrorKind::Other, err)),
+        }
+    }
+}
