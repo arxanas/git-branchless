@@ -11,10 +11,10 @@ crate-type = ["cdylib"]
 name = "branchlessrust"
 
 [dependencies]
-anyhow = "1.0.37"
+anyhow = "1.0.38"
 console = "0.14.0"
 git2 = "0.13.15"
-pyo3 = "0.13.0"
+pyo3 = "0.13.1"
 rusqlite = "0.24.2"
 
 [dev-dependencies]
