@@ -36,6 +36,7 @@
 //!     manually hide commits that you no longer need. Not visible to you in the
 //!     branchless workflow.
 #![warn(clippy::all, missing_docs)]
+#![allow(clippy::clippy::too_many_arguments)]
 
 use pyo3::prelude::*;
 

@@ -192,7 +192,7 @@ fn walk_from_commits<'repo>(
 
             let event = event_replayer
                 .get_cursor_commit_latest_event(current_commit.id())
-                .map(|event| event.clone());
+                .cloned();
             graph.insert(
                 current_commit.id(),
                 Node {
@@ -328,12 +328,9 @@ pub fn make_graph<'repo>(
     let mut commit_oids: HashSet<git2::Oid> =
         event_replayer.get_active_oids().into_iter().collect();
     commit_oids.extend(branch_oids.0.iter().cloned());
-    match head_oid.0 {
-        Some(head_oid) => {
-            commit_oids.insert(head_oid);
-        }
-        None => {}
-    };
+    if let HeadOid(Some(head_oid)) = head_oid {
+        commit_oids.insert(*head_oid);
+    }
     let commit_oids = &CommitOids(commit_oids);
     let mut graph = walk_from_commits(
         repo,
@@ -406,7 +403,7 @@ struct PyNode {
 
 fn node_to_py_node(py: Python, py_repo: &PyObject, node: &Node<'_>) -> PyResult<PyNode> {
     let commit = commit_to_py_commit(py, py_repo, &node.commit)?;
-    let parent = node.parent.map(|oid| PyOidStr(oid));
+    let parent = node.parent.map(PyOidStr);
     let children = node.children.iter().map(|oid| PyOidStr(*oid)).collect();
     let is_main = node.is_main;
     let is_visible = node.is_visible;

@@ -780,10 +780,7 @@ pub fn should_ignore_ref_updates(ref_name: &str) -> bool {
         return true;
     }
 
-    match ref_name {
-        "ORIG_HEAD" | "CHERRY_PICK" => true,
-        _ => false,
-    }
+    matches!(ref_name, "ORIG_HEAD" | "CHERRY_PICK")
 }
 
 enum EventClassification {
@@ -851,19 +848,16 @@ impl EventReplayer {
     /// * `replayer` in order from oldest to newest.
     pub fn process_event(&mut self, event: &Event) {
         // Drop non-meaningful ref-update events.
-        match &event {
-            Event::RefUpdateEvent {
-                ref_name,
-                old_ref,
-                new_ref,
-                ..
-            } => {
-                if should_ignore_ref_updates(&ref_name) || (old_ref.is_none() && new_ref.is_none())
-                {
-                    return;
-                }
+        if let Event::RefUpdateEvent {
+            ref_name,
+            old_ref,
+            new_ref,
+            ..
+        } = event
+        {
+            if should_ignore_ref_updates(&ref_name) || (old_ref.is_none() && new_ref.is_none()) {
+                return;
             }
-            _ => (),
         }
 
         let id = self.id_counter;
@@ -879,7 +873,7 @@ impl EventReplayer {
             } => {
                 self.commit_history
                     .entry(*old_commit_oid)
-                    .or_insert(vec![])
+                    .or_insert_with(Vec::new)
                     .push(EventInfo {
                         id,
                         event: event.clone(),
@@ -887,7 +881,7 @@ impl EventReplayer {
                     });
                 self.commit_history
                     .entry(*new_commit_oid)
-                    .or_insert(vec![])
+                    .or_insert_with(Vec::new)
                     .push(EventInfo {
                         id,
                         event: event.clone(),
@@ -907,7 +901,7 @@ impl EventReplayer {
             } => self
                 .commit_history
                 .entry(*commit_oid)
-                .or_insert(vec![])
+                .or_insert_with(Vec::new)
                 .push(EventInfo {
                     id,
                     event: event.clone(),
@@ -920,7 +914,7 @@ impl EventReplayer {
             } => self
                 .commit_history
                 .entry(*commit_oid)
-                .or_insert(vec![])
+                .or_insert_with(Vec::new)
                 .push(EventInfo {
                     id,
                     event: event.clone(),
@@ -933,7 +927,7 @@ impl EventReplayer {
             } => self
                 .commit_history
                 .entry(*commit_oid)
-                .or_insert(vec![])
+                .or_insert_with(Vec::new)
                 .push(EventInfo {
                     id,
                     event: event.clone(),
@@ -1146,12 +1140,11 @@ impl EventReplayer {
                     new_ref: Some(new_ref),
                     ref_name,
                     ..
-                } => match git2::Oid::from_str(new_ref) {
-                    Ok(oid) => {
+                } => {
+                    if let Ok(oid) = git2::Oid::from_str(new_ref) {
                         ref_name_to_oid.insert(ref_name, oid);
                     }
-                    Err(_) => {}
-                },
+                }
                 Event::RefUpdateEvent {
                     new_ref: None,
                     ref_name,
@@ -1170,7 +1163,7 @@ impl EventReplayer {
                 Some(branch_name) => {
                     result
                         .entry(*ref_oid)
-                        .or_insert_with(|| HashSet::new())
+                        .or_insert_with(HashSet::new)
                         .insert(String::from(branch_name));
                 }
             }
@@ -1180,7 +1173,7 @@ impl EventReplayer {
         let main_branch_oid = self.get_cursor_main_branch_oid(repo)?;
         result
             .entry(main_branch_oid)
-            .or_insert_with(|| HashSet::new())
+            .or_insert_with(HashSet::new)
             .insert(main_branch_name);
         Ok(result)
     }
@@ -1272,9 +1265,7 @@ impl PyEventReplayer {
     }
 
     fn get_cursor_head_oid(&self) -> Option<PyOidStr> {
-        self.event_replayer
-            .get_cursor_head_oid()
-            .map(|oid| PyOidStr(oid))
+        self.event_replayer.get_cursor_head_oid().map(PyOidStr)
     }
 
     fn get_cursor_main_branch_oid(&self, py: Python, repo: PyObject) -> PyResult<PyObject> {

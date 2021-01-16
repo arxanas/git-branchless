@@ -15,11 +15,11 @@ pub fn wrap_git_error(error: git2::Error) -> anyhow::Error {
 /// * `repo`: The Git repository.
 ///
 /// Returns: The OID for the repository's `HEAD` reference.
-pub fn get_head_oid(repo: &git2::Repository) -> anyhow::Result<git2::Oid> {
-    let head_ref = repo.head()?;
-    let head_commit = head_ref.peel_to_commit()?;
-    Ok(head_commit.id())
-}
+// pub fn get_head_oid(repo: &git2::Repository) -> anyhow::Result<git2::Oid> {
+//     let head_ref = repo.head()?;
+//     let head_commit = head_ref.peel_to_commit()?;
+//     Ok(head_commit.id())
+// }
 
 /// Get the OID corresponding to the main branch.
 ///
@@ -103,12 +103,13 @@ pub struct GitVersion(pub isize, pub isize, pub isize);
 /// Returns: The parsed Git version.
 pub fn parse_git_version_output(output: &str) -> anyhow::Result<GitVersion> {
     let output = output.trim();
-    let version_str = match output.split(" ").collect::<Vec<&str>>().as_slice() {
-        &[_git, _version, version_str, ..] => version_str,
+    let words = output.split(' ').collect::<Vec<&str>>();
+    let version_str = match &words.as_slice() {
+        [_git, _version, version_str, ..] => version_str,
         _ => anyhow::bail!("Could not parse Git version output: {}", output),
     };
-    match version_str.split(".").collect::<Vec<&str>>().as_slice() {
-        &[major, minor, patch, ..] => {
+    match version_str.split('.').collect::<Vec<&str>>().as_slice() {
+        [major, minor, patch, ..] => {
             let major = major.parse()?;
             let minor = minor.parse()?;
             let patch = patch.parse()?;
