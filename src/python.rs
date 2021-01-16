@@ -63,7 +63,7 @@ impl<'source> FromPyObject<'source> for PyOid {
     }
 }
 
-#[derive(Clone, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub struct PyOidStr(pub git2::Oid);
 
 impl PyOidStr {
@@ -76,14 +76,6 @@ impl PyOidStr {
         Ok(oid)
     }
 }
-
-impl PartialEq for PyOidStr {
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
-    }
-}
-
-impl Eq for PyOidStr {}
 
 impl<'source> FromPyObject<'source> for PyOidStr {
     fn extract(obj: &'source PyAny) -> PyResult<Self> {

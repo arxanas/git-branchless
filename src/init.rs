@@ -19,10 +19,7 @@ enum Hook {
     MultiHook { path: PathBuf },
 }
 
-fn determine_hook_path<'repo>(
-    repo: &'repo git2::Repository,
-    hook_type: &str,
-) -> anyhow::Result<Hook> {
+fn determine_hook_path(repo: &git2::Repository, hook_type: &str) -> anyhow::Result<Hook> {
     let multi_hooks_path = repo.path().join("hook_multi");
     let hook = if multi_hooks_path.exists() {
         let path = multi_hooks_path
