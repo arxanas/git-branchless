@@ -133,9 +133,7 @@ fn walk_from_commits<'repo>(
     repo: &'repo git2::Repository,
     merge_base_db: &MergeBaseDb,
     event_replayer: &EventReplayer,
-    head_oid: &HeadOid,
     main_branch_oid: &MainBranchOid,
-    branch_oids: &BranchOids,
     commit_oids: &CommitOids,
 ) -> anyhow::Result<CommitGraph<'repo>> {
     let mut graph: CommitGraph = Default::default();
@@ -275,12 +273,7 @@ fn should_hide(
 }
 
 /// Remove commits from the graph according to their status.
-fn do_remove_commits(
-    graph: &mut CommitGraph,
-    event_replayer: &EventReplayer,
-    head_oid: &HeadOid,
-    branch_oids: &BranchOids,
-) {
+fn do_remove_commits(graph: &mut CommitGraph, head_oid: &HeadOid, branch_oids: &BranchOids) {
     // OIDs which are pointed to by HEAD or a branch should not be hidden.
     // Therefore, we can't hide them *or* their ancestors.
     let mut unhideable_oids = branch_oids.0.clone();
@@ -346,13 +339,11 @@ pub fn make_graph<'repo>(
         repo,
         merge_base_db,
         event_replayer,
-        head_oid,
         main_branch_oid,
-        branch_oids,
         commit_oids,
     )?;
     if remove_commits {
-        do_remove_commits(&mut graph, event_replayer, head_oid, branch_oids);
+        do_remove_commits(&mut graph, head_oid, branch_oids);
     }
     Ok(graph)
 }
