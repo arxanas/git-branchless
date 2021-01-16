@@ -3,10 +3,13 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use anyhow::Context;
+use console::style;
 use pyo3::prelude::*;
 
 use crate::python::{map_err_to_py_err, TextIO};
-use crate::util::{get_repo, GitExecutable};
+use crate::util::{
+    get_repo, parse_git_version_output, run_git_silent, wrap_git_error, GitExecutable, GitVersion,
+};
 
 enum Hook {
     /// Regular Git hook.
@@ -124,11 +127,7 @@ fn install_hook<Out: Write>(
     Ok(())
 }
 
-fn install_hooks<Out: Write>(
-    out: &mut Out,
-    repo: &git2::Repository,
-    git_executable: &GitExecutable,
-) -> anyhow::Result<()> {
+fn install_hooks<Out: Write>(out: &mut Out, repo: &git2::Repository) -> anyhow::Result<()> {
     install_hook(
         out,
         repo,
@@ -178,15 +177,74 @@ git branchless hook-reference-transaction "$@" || (
     Ok(())
 }
 
+fn install_alias<Out: Write>(
+    out: &mut Out,
+    config: &mut git2::Config,
+    alias: &str,
+) -> anyhow::Result<()> {
+    writeln!(out, "Installing alias (non-global): git {}", alias)?;
+    config
+        .set_str(
+            format!("alias.{}", alias).as_str(),
+            format!("branchless {}", alias).as_str(),
+        )
+        .map_err(wrap_git_error)
+        .with_context(|| format!("Setting alias {}", alias))?;
+    Ok(())
+}
+
+fn install_aliases<Out: Write>(
+    out: &mut Out,
+    repo: &mut git2::Repository,
+    git_executable: &GitExecutable,
+) -> anyhow::Result<()> {
+    let mut config = repo.config().with_context(|| "Getting repo config")?;
+    install_alias(out, &mut config, "smartlog")?;
+    install_alias(out, &mut config, "sl")?;
+    install_alias(out, &mut config, "hide")?;
+    install_alias(out, &mut config, "unhide")?;
+    install_alias(out, &mut config, "prev")?;
+    install_alias(out, &mut config, "next")?;
+    install_alias(out, &mut config, "restack")?;
+    install_alias(out, &mut config, "undo")?;
+
+    let version_str = run_git_silent(repo, git_executable, &["version"])
+        .with_context(|| "Determining Git version")?;
+    let version = parse_git_version_output(&version_str)
+        .with_context(|| format!("Parsing Git version string: {}", version_str))?;
+    if version < GitVersion(2, 29, 0) {
+        write!(
+            out,
+            "\
+{warning_str}: the branchless workflow's `git undo` command requires Git
+v2.29 or later, but your Git version is: {version_str}
+
+Some operations, such as branch updates, won't be correctly undone. Other
+operations may be undoable. Attempt at your own risk.
+
+Once you upgrade to Git v2.9, run `git branchless init` again. Any work you
+do from then on will be correctly undoable.
+
+This only applies to the `git undo` command. Other commands which are part of
+the branchless workflow will work properly.
+",
+            warning_str = style("Warning").yellow().bold(),
+            version_str = version_str,
+        )?;
+    }
+
+    Ok(())
+}
+
 /// Initialize `git-branchless` in the current repo.
 ///
 /// Args:
 /// * `out`: The output stream to write to.
 /// * `git_executable`: The path to the `git` executable on disk.
 fn init<Out: Write>(out: &mut Out, git_executable: &GitExecutable) -> anyhow::Result<()> {
-    let repo = get_repo()?;
-    install_hooks(out, &repo, git_executable)?;
-    // TODO: install aliases
+    let mut repo = get_repo()?;
+    install_hooks(out, &repo)?;
+    install_aliases(out, &mut repo, git_executable)?;
     Ok(())
 }
 

@@ -132,7 +132,8 @@ def main(argv: List[str], *, out: TextIO, err: TextIO, git_executable: str) -> i
         parser.print_help(file=out)
         return 0
     elif args.subcommand == "init":
-        return init(out=out, git_executable=git_executable)
+        init(out=out, git_executable=git_executable)
+        return 0
     elif args.subcommand in ["smartlog", "sl"]:
         return smartlog(out=out)
     elif args.subcommand == "hide":
