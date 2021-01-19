@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS merge_base_oids (
 }
 
 impl MergeBaseDb {
-    fn new(conn: rusqlite::Connection) -> anyhow::Result<Self> {
+    pub fn new(conn: rusqlite::Connection) -> anyhow::Result<Self> {
         init_tables(&conn).context("Initializing tables")?;
         Ok(MergeBaseDb { conn })
     }
@@ -187,4 +187,9 @@ impl PyMergeBaseDb {
             None => Ok(py.None()),
         }
     }
+}
+
+pub fn register_python_symbols(module: &PyModule) -> PyResult<()> {
+    module.add_class::<PyMergeBaseDb>()?;
+    Ok(())
 }

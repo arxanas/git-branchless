@@ -8,10 +8,10 @@ use crate::eventlog::{CommitVisibility, Event, EventReplayer, PyEventReplayer};
 use crate::mergebase::{MergeBaseDb, PyMergeBaseDb};
 use crate::python::{make_repo_from_py_repo, map_err_to_py_err, PyOid, PyOidStr};
 
-pub struct HeadOid(Option<git2::Oid>);
-pub struct MainBranchOid(git2::Oid);
-pub struct BranchOids(HashSet<git2::Oid>);
-pub struct CommitOids(HashSet<git2::Oid>);
+pub struct HeadOid(pub Option<git2::Oid>);
+pub struct MainBranchOid(pub git2::Oid);
+pub struct BranchOids(pub HashSet<git2::Oid>);
+pub struct CommitOids(pub HashSet<git2::Oid>);
 
 /// Node contained in the smartlog commit graph.
 pub struct Node<'repo> {

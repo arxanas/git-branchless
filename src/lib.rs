@@ -45,6 +45,7 @@ use simple_logger::SimpleLogger;
 
 mod config;
 mod eventlog;
+mod gc;
 mod graph;
 mod init;
 mod mergebase;
@@ -55,9 +56,11 @@ mod util;
 fn rust(_py: Python<'_>, module: &PyModule) -> PyResult<()> {
     map_err_to_py_err(SimpleLogger::new().init(), "Could not initialize logging")?;
 
-    module.add_class::<mergebase::PyMergeBaseDb>()?;
     eventlog::register_python_symbols(&module)?;
+    gc::register_python_symbols(&module)?;
     graph::register_python_symbols(&module)?;
     init::register_python_symbols(&module)?;
+    mergebase::register_python_symbols(&module)?;
+
     Ok(())
 }

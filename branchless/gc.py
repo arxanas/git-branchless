@@ -9,15 +9,9 @@ This module is responsible for adding extra references to Git, so that Git's
 garbage collection doesn't collect commits which branchless thinks are still
 visible.
 """
-from typing import TextIO
-
 import pygit2
 
-from . import get_branch_oid_to_names, get_head_oid, get_main_branch_oid, get_repo
-from .db import make_db_for_repo
-from .eventlog import EventLogDb, EventReplayer, is_gc_ref
-from .graph import CommitGraph, make_graph
-from .mergebase import MergeBaseDb
+from .rust import py_gc as gc
 
 
 def mark_commit_reachable(repo: pygit2.Repository, commit_oid: pygit2.Oid) -> None:
@@ -35,36 +29,5 @@ def mark_commit_reachable(repo: pygit2.Repository, commit_oid: pygit2.Oid) -> No
     repo.references.create(name=ref_name, target=commit_oid, force=True)
 
 
-def _garbage_collect(repo: pygit2.Repository, graph: CommitGraph) -> None:
-    for ref_name in repo.references:
-        ref = repo.references[ref_name]
-        if is_gc_ref(ref_name) and ref.resolve().target.hex not in graph:
-            repo.references.delete(ref_name)
-
-
-def gc(*, out: TextIO) -> None:
-    """Run branchless's garbage collection.
-
-    Args:
-      out: The output stream to write to.
-    """
-    repo = get_repo()
-    db = make_db_for_repo(repo)
-    event_log_db = EventLogDb(db)
-    merge_base_db = MergeBaseDb(db)
-    event_replayer = EventReplayer.from_event_log_db(event_log_db)
-    head_oid = get_head_oid(repo)
-    main_branch_oid = get_main_branch_oid(repo)
-    branch_oid_to_names = get_branch_oid_to_names(repo)
-    graph = make_graph(
-        repo=repo,
-        merge_base_db=merge_base_db,
-        event_replayer=event_replayer,
-        head_oid=head_oid.hex,
-        main_branch_oid=main_branch_oid,
-        branch_oids=set(branch_oid_to_names),
-        hide_commits=True,
-    )
-
-    out.write("branchless: collecting garbage\n")
-    _garbage_collect(repo=repo, graph=graph)
+# For flake8.
+_ = gc

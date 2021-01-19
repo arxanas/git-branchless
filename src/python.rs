@@ -1,10 +1,12 @@
 //! Helpers for the Rust/Python interop.
 use std::fmt::Debug;
 
+use anyhow::Context;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::PyResult;
 use pyo3::types::PyTuple;
 use pyo3::{FromPyObject, IntoPy, PyAny, PyObject, Python, ToPyObject};
+use rusqlite::NO_PARAMS;
 
 pub fn raise_runtime_error<T>(message: String) -> PyResult<T> {
     Err(PyRuntimeError::new_err(message))
@@ -22,6 +24,24 @@ pub fn map_err_to_py_err<T, E: Debug, S: AsRef<str>>(
             err
         )),
     }
+}
+
+/// HACK: Open a new SQLite connection to the same database.
+///
+/// This is for migration use only, because the connection cannot be shared
+/// safely between threads. This is only a concern for accessing the connection
+/// from Python. This function should be deleted once we no longer call from
+/// Python.
+pub fn clone_conn(conn: &rusqlite::Connection) -> anyhow::Result<rusqlite::Connection> {
+    let db_path = conn
+        .query_row("PRAGMA database_list", NO_PARAMS, |row| {
+            let db_path: String = row.get(2)?;
+            Ok(db_path)
+        })
+        .with_context(|| "Querying database list for cloning SQLite database")?;
+    let conn = rusqlite::Connection::open(db_path)
+        .with_context(|| "Opening cloned database connection")?;
+    Ok(conn)
 }
 
 pub fn make_conn_from_py_conn(py: Python, conn: PyObject) -> PyResult<rusqlite::Connection> {

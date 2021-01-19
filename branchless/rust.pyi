@@ -424,3 +424,13 @@ def py_make_graph(
 
 # init.py
 def py_init(*, out: TextIO, git_executable: str) -> None: ...
+
+# gc.py
+
+def py_gc(*, out: TextIO) -> None:
+    """Run branchless's garbage collection.
+
+    Args:
+      out: The output stream to write to.
+    """
+    ...
