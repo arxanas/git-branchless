@@ -427,6 +427,18 @@ def py_init(*, out: TextIO, git_executable: str) -> None: ...
 
 # gc.py
 
+def py_mark_commit_reachable(repo: pygit2.Repository, commit_oid: pygit2.Oid) -> None:
+    """Mark a commit as reachable.
+
+    Once marked as reachable, the commit won't be collected by Git's garbage
+    collection mechanism until first garbage-collected by branchless itself.
+
+    Args:
+      repo: The Git repository.
+      commit_oid: The commit OID to mark as reachable.
+    """
+    ...
+
 def py_gc(*, out: TextIO) -> None:
     """Run branchless's garbage collection.
 
