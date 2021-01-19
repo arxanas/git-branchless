@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Context;
 use console::style;
+use log::warn;
 use pyo3::prelude::*;
 
 use crate::python::{map_err_to_py_err, TextIO};
@@ -60,7 +61,7 @@ fn update_between_lines(lines: &str, updated_lines: &str) -> String {
         }
     }
     if is_ignoring_lines {
-        eprintln!("Unterminated branchless config comment in hook");
+        warn!("Unterminated branchless config comment in hook");
     }
     new_lines
 }

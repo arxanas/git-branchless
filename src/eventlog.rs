@@ -8,6 +8,7 @@ use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
 
 use anyhow::Context;
+use log::warn;
 use pyo3::prelude::*;
 use pyo3::types::PyType;
 
@@ -1048,7 +1049,7 @@ impl EventReplayer {
                     } if ref_name == "HEAD" => match git2::Oid::from_str(&new_ref) {
                         Ok(oid) => Some(oid),
                         Err(_) => {
-                            eprintln!(
+                            warn!(
                                 "Expected HEAD new_ref to point to an OID; \
                                 instead pointed to: {:?}",
                                 new_ref

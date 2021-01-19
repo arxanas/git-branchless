@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 
+use log::warn;
 use pyo3::prelude::*;
 use pyo3::types::PyTuple;
 
@@ -164,7 +165,7 @@ fn walk_from_commits<'repo>(
                 )?;
                 match path_to_merge_base {
                     None => {
-                        eprintln!("No path to merge-base for commit {}", current_commit.id());
+                        warn!("No path to merge-base for commit {}", current_commit.id());
                         continue;
                     }
                     Some(path_to_merge_base) => path_to_merge_base,
@@ -208,7 +209,7 @@ fn walk_from_commits<'repo>(
 
         if let Some(merge_base_oid) = merge_base_oid {
             if !graph.contains_key(&merge_base_oid) {
-                eprintln!("Could not find merge base OID {}", merge_base_oid);
+                warn!("Could not find merge base OID {}", merge_base_oid);
             }
         }
     }
