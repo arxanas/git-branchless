@@ -287,7 +287,7 @@ CREATE TABLE IF NOT EXISTS event_log (
 
 /// Stores `Event`s on disk.
 impl EventLogDb {
-    fn new(conn: rusqlite::Connection) -> anyhow::Result<Self> {
+    pub fn new(conn: rusqlite::Connection) -> anyhow::Result<Self> {
         init_tables(&conn)?;
         Ok(EventLogDb { conn })
     }
