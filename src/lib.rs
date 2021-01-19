@@ -38,7 +38,10 @@
 #![warn(clippy::all, missing_docs)]
 #![allow(clippy::clippy::too_many_arguments)]
 
+use log::warn;
 use pyo3::prelude::*;
+use python::map_err_to_py_err;
+use simple_logger::SimpleLogger;
 
 mod config;
 mod eventlog;
@@ -50,6 +53,8 @@ mod util;
 
 #[pymodule]
 fn rust(_py: Python<'_>, module: &PyModule) -> PyResult<()> {
+    map_err_to_py_err(SimpleLogger::new().init(), "Could not initialize logging")?;
+
     module.add_class::<mergebase::PyMergeBaseDb>()?;
     eventlog::register_python_symbols(&module)?;
     graph::register_python_symbols(&module)?;
