@@ -14,18 +14,19 @@ pub struct BranchOids(pub HashSet<git2::Oid>);
 pub struct CommitOids(pub HashSet<git2::Oid>);
 
 /// Node contained in the smartlog commit graph.
+#[derive(Debug)]
 pub struct Node<'repo> {
     /// The underlying commit object.
-    commit: git2::Commit<'repo>,
+    pub commit: git2::Commit<'repo>,
 
     /// The OID of the parent node in the smartlog commit graph.
     ///
     /// This is different from inspecting `commit.parents()`, since the smartlog
     /// will hide most nodes from the commit graph, including parent nodes.
-    parent: Option<git2::Oid>,
+    pub parent: Option<git2::Oid>,
 
     /// The OIDs of the children nodes in the smartlog commit graph.
-    children: HashSet<git2::Oid>,
+    pub children: HashSet<git2::Oid>,
 
     /// Indicates that this is a commit to the main branch.
     ///
@@ -51,14 +52,14 @@ pub struct Node<'repo> {
     /// in the main branch has been rewritten. We don't expect this to happen in
     /// the monorepo workflow, but it can happen in other workflows where you
     /// commit directly to the main branch and then later rewrite the commit.
-    is_visible: bool,
+    pub is_visible: bool,
 
     /// The latest event to affect this commit.
     ///
     /// It's possible that no event affected this commit, and it was simply
     /// visible due to a reference pointing to it. In that case, this field is
     /// `None`.
-    event: Option<Event>,
+    pub event: Option<Event>,
 }
 
 /// Graph of commits that the user is working on.

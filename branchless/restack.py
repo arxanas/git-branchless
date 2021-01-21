@@ -57,20 +57,10 @@ o def003 Commit 3
 """
 from typing import List, Optional, TextIO, Tuple
 
-import pygit2
-
-from . import (
-    OidStr,
-    get_branch_oid_to_names,
-    get_head_oid,
-    get_main_branch_oid,
-    get_repo,
-    run_git,
-)
-from .db import make_db_for_repo
-from .eventlog import EventLogDb, EventReplayer, RewriteEvent
-from .graph import CommitGraph, make_graph
-from .mergebase import MergeBaseDb
+from . import OidStr
+from .eventlog import EventReplayer, RewriteEvent
+from .graph import CommitGraph
+from .rust import py_restack
 from .smartlog import smartlog
 
 
@@ -124,129 +114,6 @@ def find_abandoned_children(
     )
 
 
-def _restack_commits(
-    out: TextIO,
-    err: TextIO,
-    repo: pygit2.Repository,
-    git_executable: str,
-    merge_base_db: MergeBaseDb,
-    event_log_db: EventLogDb,
-    preserve_timestamps: bool,
-) -> int:
-    event_replayer = EventReplayer.from_event_log_db(event_log_db)
-    head_oid = get_head_oid(repo)
-    main_branch_oid = get_main_branch_oid(repo)
-    branch_oid_to_names = get_branch_oid_to_names(repo)
-    graph = make_graph(
-        repo=repo,
-        merge_base_db=merge_base_db,
-        event_replayer=event_replayer,
-        head_oid=head_oid.hex,
-        main_branch_oid=main_branch_oid,
-        branch_oids=set(branch_oid_to_names),
-        hide_commits=True,
-    )
-
-    for original_oid in graph:
-        abandoned_result = find_abandoned_children(
-            graph=graph, event_replayer=event_replayer, oid=original_oid
-        )
-        if not abandoned_result:
-            continue
-
-        (rewritten_oid, abandoned_child_oids) = abandoned_result
-        if not abandoned_child_oids:
-            continue
-
-        # Pick an arbitrary abandoned child. We'll rewrite it and then repeat,
-        # and next time, it won't be considered abandoned because it's been
-        # rewritten.
-        abandoned_oid = abandoned_child_oids[0]
-
-        additional_args = []
-        if preserve_timestamps:
-            additional_args = ["--committer-date-is-author-date"]
-        result = run_git(
-            out=out,
-            err=err,
-            git_executable=git_executable,
-            args=["rebase", original_oid, abandoned_oid, "--onto", rewritten_oid]
-            + additional_args,
-        )
-        if result != 0:
-            out.write("branchless: resolve rebase, then run 'git restack' again\n")
-            return result
-
-        # Repeat until we reach a fixed-point.
-        return _restack_commits(
-            out=out,
-            err=err,
-            repo=repo,
-            git_executable=git_executable,
-            merge_base_db=merge_base_db,
-            event_log_db=event_log_db,
-            preserve_timestamps=preserve_timestamps,
-        )
-
-    out.write("branchless: no more abandoned commits to restack\n")
-    return 0
-
-
-def _restack_branches(
-    out: TextIO,
-    err: TextIO,
-    repo: pygit2.Repository,
-    git_executable: str,
-    merge_base_db: MergeBaseDb,
-    event_log_db: EventLogDb,
-) -> int:
-    event_replayer = EventReplayer.from_event_log_db(event_log_db)
-    head_oid = get_head_oid(repo)
-    main_branch_oid = get_main_branch_oid(repo)
-    branch_oid_to_names = get_branch_oid_to_names(repo)
-    graph = make_graph(
-        repo=repo,
-        merge_base_db=merge_base_db,
-        event_replayer=event_replayer,
-        head_oid=head_oid.hex,
-        main_branch_oid=main_branch_oid,
-        branch_oids=set(branch_oid_to_names),
-        hide_commits=True,
-    )
-
-    for branch_name in repo.listall_branches(pygit2.GIT_BRANCH_LOCAL):
-        branch = repo.branches[branch_name]
-        if branch.target.hex not in graph:
-            continue
-
-        new_oid = _find_rewrite_target(
-            graph=graph, event_replayer=event_replayer, oid=branch.target.hex
-        )
-        if new_oid is None:
-            continue
-
-        result = run_git(
-            out=out,
-            err=err,
-            git_executable=git_executable,
-            args=["branch", "-f", branch_name, new_oid],
-        )
-        if result != 0:
-            return result
-        else:
-            return _restack_branches(
-                out=out,
-                err=err,
-                repo=repo,
-                git_executable=git_executable,
-                merge_base_db=merge_base_db,
-                event_log_db=event_log_db,
-            )
-
-    out.write("branchless: no more abandoned branches to restack\n")
-    return 0
-
-
 def restack(
     *, out: TextIO, err: TextIO, git_executable: str, preserve_timestamps: bool
 ) -> int:
@@ -262,48 +129,14 @@ def restack(
     Returns:
       Exit code (0 denotes successful exit).
     """
-    repo = get_repo()
-    db = make_db_for_repo(repo)
-    merge_base_db = MergeBaseDb(db)
-    event_log_db = EventLogDb(db)
-
-    head_type = repo.references["HEAD"].type
-    if head_type == pygit2.GIT_REF_SYMBOLIC:
-        head_location = repo.head.shorthand
-    else:
-        assert head_type == pygit2.GIT_REF_OID
-        head_location = repo.head.target.hex
-
-    result = _restack_commits(
+    result = py_restack(
         out=out,
         err=err,
-        repo=repo,
         git_executable=git_executable,
-        merge_base_db=merge_base_db,
-        event_log_db=event_log_db,
         preserve_timestamps=preserve_timestamps,
     )
     if result != 0:
         return result
 
-    result = _restack_branches(
-        out=out,
-        err=err,
-        repo=repo,
-        git_executable=git_executable,
-        merge_base_db=merge_base_db,
-        event_log_db=event_log_db,
-    )
-    if result != 0:
-        return result
-
-    result = run_git(
-        out=out,
-        err=err,
-        git_executable=git_executable,
-        args=["checkout", head_location],
-    )
-    if result != 0:
-        return result
-
+    # TODO: `py_restack` should also display smartlog.
     return smartlog(out=out)
