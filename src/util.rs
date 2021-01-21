@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::convert::TryInto;
 use std::path::Path;
 use std::process::Command;
 
@@ -97,14 +98,67 @@ pub fn get_repo() -> anyhow::Result<git2::Repository> {
 pub fn get_db_conn(repo: &git2::Repository) -> anyhow::Result<rusqlite::Connection> {
     let dir = repo.path().join("branchless");
     std::fs::create_dir_all(&dir).with_context(|| "Creating .git/branchless dir")?;
-    let path = dir.join("db.sqlite");
+    let path = dir.join("db.sqlite3");
     let conn = rusqlite::Connection::open(&path)
         .with_context(|| format!("Opening database connection at {:?}", &path))?;
     Ok(conn)
 }
 
 /// Path to the `git` executable on disk to be executed.
+#[derive(Debug)]
 pub struct GitExecutable<'path>(pub &'path Path);
+
+/// Run Git in a subprocess, and inform the user.
+///
+/// This is suitable for commands which affect the working copy or should run
+/// hooks. We don't want our process to be responsible for that.
+///
+/// Args:
+/// * `out`: The output stream to write to.
+/// * `err`: The error stream to write to.
+/// * `git_executable`: The path to the `git` executable on disk.
+/// * `args`: The list of arguments to pass to Git. Should not include the Git
+/// executable itself.
+///
+/// Returns: The exit code of Git (non-zero signifies error).
+pub fn run_git<Out: std::io::Write, S: AsRef<str> + std::fmt::Debug>(
+    out: &mut Out,
+    err: &mut Out,
+    git_executable: &GitExecutable,
+    args: &[S],
+) -> anyhow::Result<isize> {
+    let GitExecutable(git_executable) = git_executable;
+    writeln!(
+        out,
+        "branchless: {} {}",
+        git_executable.to_string_lossy(),
+        args.iter()
+            .map(|arg| arg.as_ref())
+            .collect::<Vec<_>>()
+            .join(" ")
+    )?;
+    out.flush()?;
+    err.flush()?;
+
+    let mut child = Command::new(git_executable)
+        .args(args.iter().map(|arg| arg.as_ref()))
+        .spawn()
+        .with_context(|| format!("Spawning Git subprocess: {:?} {:?}", git_executable, args))?;
+    let result = child.wait().with_context(|| {
+        format!(
+            "Waiting for Git subprocess to complete: {:?} {:?}",
+            git_executable, args
+        )
+    })?;
+    // On Unix, if the child process was terminated by a signal, we need to call
+    // some Unix-specific functions to access the signal that terminated it. For
+    // simplicity, just return `1` in those cases.
+    let exit_code = result.code().unwrap_or(1);
+    let exit_code = exit_code
+        .try_into()
+        .with_context(|| format!("Converting exit code {} from i32 to isize", exit_code))?;
+    Ok(exit_code)
+}
 
 /// Run Git silently (don't display output to the user).
 ///

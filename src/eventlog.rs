@@ -784,6 +784,7 @@ pub fn should_ignore_ref_updates(ref_name: &str) -> bool {
     matches!(ref_name, "ORIG_HEAD" | "CHERRY_PICK")
 }
 
+#[derive(Debug)]
 enum EventClassification {
     Show,
     Hide,
@@ -794,12 +795,14 @@ pub enum CommitVisibility {
     Hidden,
 }
 
+#[derive(Debug)]
 struct EventInfo {
     id: isize,
     event: Event,
     event_classification: EventClassification,
 }
 
+#[derive(Debug)]
 pub struct EventReplayer {
     /// Events are numbered starting from zero.
     id_counter: isize,

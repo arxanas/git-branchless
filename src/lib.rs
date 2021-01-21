@@ -50,6 +50,7 @@ mod graph;
 mod init;
 mod mergebase;
 mod python;
+mod restack;
 mod util;
 
 #[pymodule]
@@ -61,6 +62,7 @@ fn rust(_py: Python<'_>, module: &PyModule) -> PyResult<()> {
     graph::register_python_symbols(&module)?;
     init::register_python_symbols(&module)?;
     mergebase::register_python_symbols(&module)?;
+    restack::register_python_symbols(&module)?;
 
     Ok(())
 }
