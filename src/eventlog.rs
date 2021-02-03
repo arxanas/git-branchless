@@ -582,7 +582,7 @@ impl ToPyObject for Event {
     }
 }
 
-fn py_event_to_event(py: Python, py_event: &PyObject) -> PyResult<Event> {
+pub fn py_event_to_event(py: Python, py_event: &PyObject) -> PyResult<Event> {
     let event_type: String = py_event.getattr(py, "type")?.extract(py)?;
     let event = match event_type.as_str() {
         "rewrite" => {

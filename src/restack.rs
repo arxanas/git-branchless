@@ -55,7 +55,7 @@
 //! o def003 Commit 3
 //! ```
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::path::Path;
 
@@ -63,10 +63,13 @@ use anyhow::Context;
 use log::info;
 use pyo3::prelude::*;
 
-use crate::eventlog::{Event, EventLogDb, EventReplayer};
-use crate::graph::{make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid};
+use crate::eventlog::{Event, EventLogDb, EventReplayer, PyEventReplayer};
+use crate::graph::{
+    make_graph, py_commit_graph_to_commit_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid,
+    PyCommitGraph, PyNode,
+};
 use crate::mergebase::MergeBaseDb;
-use crate::python::{clone_conn, map_err_to_py_err, TextIO};
+use crate::python::{clone_conn, map_err_to_py_err, PyOidStr, TextIO};
 use crate::util::{
     get_branch_oid_to_names, get_db_conn, get_head_oid, get_main_branch_oid, get_repo, run_git,
     GitExecutable,
@@ -356,8 +359,33 @@ pub fn restack<'out, Out: Write>(
 }
 
 #[pyfunction]
-fn py_find_abandoned_children() -> PyResult<()> {
-    todo!()
+fn py_find_abandoned_children(
+    py: Python,
+    graph: HashMap<PyOidStr, PyObject>,
+    event_replayer: &PyEventReplayer,
+    oid: PyOidStr,
+) -> PyResult<Option<(PyOidStr, Vec<PyOidStr>)>> {
+    let repo = get_repo();
+    let repo = map_err_to_py_err(repo, "Getting repository")?;
+    let graph: PyCommitGraph = graph
+        .into_iter()
+        .map(|(py_oid_str, py_node)| {
+            let py_node: PyNode = py_node.as_ref(py).extract()?;
+            Ok((py_oid_str, py_node))
+        })
+        .collect::<PyResult<PyCommitGraph>>()?;
+    let graph = py_commit_graph_to_commit_graph(py, &repo, &graph);
+    let graph = map_err_to_py_err(graph, "Converting PyCommitGraph to CommitGraph")?;
+    let PyEventReplayer { event_replayer } = event_replayer;
+    let PyOidStr(oid) = oid;
+
+    let result = find_abandoned_children(&graph, event_replayer, oid).map(|(oid, child_oids)| {
+        (
+            PyOidStr(oid),
+            child_oids.iter().copied().map(PyOidStr).collect(),
+        )
+    });
+    Ok(result)
 }
 
 #[pyfunction]
