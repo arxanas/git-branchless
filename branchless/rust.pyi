@@ -449,6 +449,9 @@ def py_gc(*, out: TextIO) -> None:
 
 # restack.py
 
+def py_find_abandoned_children(
+    graph: PyCommitGraph, event_replayer: PyEventReplayer, oid: OidStr
+) -> Optional[Tuple[OidStr, List[OidStr]]]: ...
 def py_restack(
     *, out: TextIO, err: TextIO, git_executable: str, preserve_timestamps: bool
 ) -> int:

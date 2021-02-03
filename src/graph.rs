@@ -1,10 +1,11 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 
+use anyhow::Context;
 use log::warn;
 use pyo3::prelude::*;
 use pyo3::types::PyTuple;
 
-use crate::eventlog::{CommitVisibility, Event, EventReplayer, PyEventReplayer};
+use crate::eventlog::{py_event_to_event, CommitVisibility, Event, EventReplayer, PyEventReplayer};
 use crate::mergebase::{MergeBaseDb, PyMergeBaseDb};
 use crate::python::{make_repo_from_py_repo, map_err_to_py_err, PyOid, PyOidStr};
 
@@ -387,8 +388,8 @@ fn py_find_path_to_merge_base(
 }
 
 #[pyclass]
-#[allow(dead_code)]
-struct PyNode {
+#[derive(Clone)]
+pub struct PyNode {
     #[pyo3(get)]
     commit: PyObject,
     #[pyo3(get)]
@@ -420,7 +421,55 @@ fn node_to_py_node(py: Python, py_repo: &PyObject, node: &Node<'_>) -> PyResult<
     })
 }
 
-type PyCommitGraph = HashMap<PyOidStr, PyNode>;
+fn py_node_to_node<'repo>(
+    py: Python,
+    repo: &'repo git2::Repository,
+    py_node: &PyNode,
+) -> anyhow::Result<Node<'repo>> {
+    let PyNode {
+        commit,
+        parent,
+        children,
+        is_main,
+        is_visible,
+        event,
+    } = py_node;
+    let commit_oid: String = commit.getattr(py, "hex")?.extract(py)?;
+    let commit_oid = git2::Oid::from_str(&commit_oid)?;
+    let commit = repo
+        .find_commit(commit_oid)
+        .with_context(|| format!("Looking up commit OID {}", commit_oid))?;
+    let parent = (&parent).map(|PyOidStr(oid)| oid);
+    let children = children.iter().map(|PyOidStr(oid)| oid).copied().collect();
+    let event = match event {
+        Some(event) => Some(py_event_to_event(py, &event)?),
+        None => None,
+    };
+    Ok(Node {
+        commit,
+        parent,
+        children,
+        is_main: *is_main,
+        is_visible: *is_visible,
+        event,
+    })
+}
+
+pub type PyCommitGraph = HashMap<PyOidStr, PyNode>;
+
+pub fn py_commit_graph_to_commit_graph<'python>(
+    py: Python<'python>,
+    repo: &'python git2::Repository,
+    py_commit_graph: &'python PyCommitGraph,
+) -> anyhow::Result<CommitGraph<'python>> {
+    py_commit_graph
+        .iter()
+        .map(|(PyOidStr(oid), py_node)| {
+            let node = py_node_to_node(py, repo, py_node)?;
+            Ok((*oid, node))
+        })
+        .collect()
+}
 
 #[pyfunction]
 fn py_make_graph(

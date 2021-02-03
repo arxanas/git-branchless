@@ -83,7 +83,7 @@ impl<'source> FromPyObject<'source> for PyOid {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct PyOidStr(pub git2::Oid);
 
 impl PyOidStr {
