@@ -227,7 +227,7 @@ impl Git {
         name: &str,
         time: isize,
         contents: &str,
-    ) -> anyhow::Result<()> {
+    ) -> anyhow::Result<git2::Oid> {
         let file_path = self.repo_path.join(format!("{}.txt", name));
         let mut file = File::create(file_path)?;
         file.write_all(contents.as_bytes())?;
@@ -239,12 +239,15 @@ impl Git {
                 ..Default::default()
             },
         )?;
-        Ok(())
+
+        let repo = self.get_repo()?;
+        let oid = repo.head()?.peel_to_commit()?.id();
+        Ok(oid)
     }
 
     /// Commit a file with default contents. The `time` argument is used to set
     /// the commit timestamp, which is factored into the commit hash.
-    pub fn commit_file(&self, name: &str, time: isize) -> anyhow::Result<()> {
+    pub fn commit_file(&self, name: &str, time: isize) -> anyhow::Result<git2::Oid> {
         self.commit_file_with_contents(name, time, &format!("{} contents\n", name))
     }
 

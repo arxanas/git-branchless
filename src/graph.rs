@@ -82,9 +82,10 @@ fn find_path_to_merge_base_internal<'repo>(
     merge_base_db: &MergeBaseDb,
     commit_oid: git2::Oid,
     target_oid: git2::Oid,
-    visited_commit_callback: impl Fn(&git2::Commit),
+    mut visited_commit_callback: impl FnMut(git2::Oid),
 ) -> anyhow::Result<Option<Vec<git2::Commit<'repo>>>> {
     let mut queue = VecDeque::new();
+    visited_commit_callback(commit_oid);
     queue.push_back(vec![repo.find_commit(commit_oid)?]);
     let merge_base_oid = merge_base_db.get_merge_base_oid(repo, commit_oid, target_oid)?;
     while let Some(path) = queue.pop_front() {
@@ -104,7 +105,7 @@ fn find_path_to_merge_base_internal<'repo>(
         }
 
         for parent in last_commit.parents() {
-            visited_commit_callback(&parent);
+            visited_commit_callback(parent.id());
             let mut new_path = path.clone();
             new_path.push(parent);
             queue.push_back(new_path);
@@ -532,4 +533,33 @@ pub fn register_python_symbols(module: &PyModule) -> PyResult<()> {
     module.add_function(pyo3::wrap_pyfunction!(py_find_path_to_merge_base, module)?)?;
     module.add_function(pyo3::wrap_pyfunction!(py_make_graph, module)?)?;
     Ok(())
+}
+
+#[test]
+fn test_find_path_to_merge_base_stop_early() -> anyhow::Result<()> {
+    crate::testing::with_git(|git| {
+        git.init_repo()?;
+        let test1_oid = git.commit_file("test1", 1)?;
+        let test2_oid = git.commit_file("test2", 2)?;
+        git.detach_head()?;
+        let test3_oid = git.commit_file("test3", 3)?;
+
+        let repo = git.get_repo()?;
+        let conn = crate::util::get_db_conn(&repo)?;
+        let merge_base_db = MergeBaseDb::new(conn)?;
+
+        let mut seen_oids = HashSet::new();
+        let path =
+            find_path_to_merge_base_internal(&repo, &merge_base_db, test2_oid, test3_oid, |oid| {
+                seen_oids.insert(oid);
+            })?;
+        assert!(path.is_none());
+
+        println!("Seen OIDs is {:?}", &seen_oids);
+        assert!(seen_oids.contains(&test2_oid));
+        assert!(!seen_oids.contains(&test3_oid));
+        assert!(!seen_oids.contains(&test1_oid));
+
+        Ok(())
+    })
 }
