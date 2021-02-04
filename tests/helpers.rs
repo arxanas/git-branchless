@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use anyhow::Context;
+use branchless::util::wrap_git_error;
 
 const DUMMY_NAME: &str = "Testy McTestface";
 const DUMMY_EMAIL: &str = "test@example.com";
@@ -214,6 +215,15 @@ impl Git {
 
     pub fn commit_file(&self, name: &str, time: isize) -> anyhow::Result<()> {
         self.commit_file_with_contents(name, time, &format!("{} contents\n", name))
+    }
+
+    pub fn detach_head(&self) -> anyhow::Result<()> {
+        self.run(&["checkout", "--detach"])?;
+        Ok(())
+    }
+
+    pub fn get_repo(&self) -> anyhow::Result<git2::Repository> {
+        git2::Repository::open(&self.repo_path).map_err(wrap_git_error)
     }
 }
 
