@@ -9,9 +9,7 @@ use log::warn;
 use pyo3::prelude::*;
 
 use crate::python::{map_err_to_py_err, TextIO};
-use crate::util::{
-    get_repo, parse_git_version_output, run_git_silent, wrap_git_error, GitExecutable, GitVersion,
-};
+use crate::util::{get_repo, run_git_silent, wrap_git_error, GitExecutable, GitVersion};
 
 enum Hook {
     /// Regular Git hook.
@@ -209,7 +207,8 @@ fn install_aliases<Out: Write>(
 
     let version_str = run_git_silent(repo, git_executable, &["version"])
         .with_context(|| "Determining Git version")?;
-    let version = parse_git_version_output(&version_str)
+    let version: GitVersion = version_str
+        .parse()
         .with_context(|| format!("Parsing Git version string: {}", version_str))?;
     if version < GitVersion(2, 29, 0) {
         write!(
