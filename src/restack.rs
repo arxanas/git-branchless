@@ -6,7 +6,7 @@
 //!
 //! For example, suppose we have this graph:
 //!
-//! ```
+//! ```text
 //! :
 //! O abc000 master
 //! |
@@ -20,7 +20,7 @@
 //! And then we amend the current commit ("Commit 1"). The descendant commits
 //! "Commit 2" and "Commit 3" will be abandoned:
 //!
-//! ```
+//! ```text
 //! :
 //! O abc000 master
 //! |\\
@@ -38,7 +38,7 @@
 //! hidden commits would not ordinarily be displayed; we show them only for the
 //! sake of example here):
 //!
-//! ```
+//! ```text
 //! :
 //! O abc000 master
 //! |\\
