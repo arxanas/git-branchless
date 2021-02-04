@@ -6,7 +6,7 @@
 //! they're still working on.
 
 use std::collections::{HashMap, HashSet};
-use std::convert::TryInto;
+use std::convert::{TryFrom, TryInto};
 
 use anyhow::Context;
 use log::warn;
@@ -118,15 +118,15 @@ pub enum Event {
     },
 }
 
-impl Event {
-    fn to_row(&self) -> Row {
-        match self {
+impl From<Event> for Row {
+    fn from(event: Event) -> Row {
+        match event {
             Event::RewriteEvent {
                 timestamp,
                 old_commit_oid,
                 new_commit_oid,
             } => Row {
-                timestamp: *timestamp,
+                timestamp,
                 type_: String::from("rewrite"),
                 ref1: Some(old_commit_oid.to_string()),
                 ref2: Some(new_commit_oid.to_string()),
@@ -141,19 +141,19 @@ impl Event {
                 new_ref,
                 message,
             } => Row {
-                timestamp: *timestamp,
+                timestamp,
                 type_: String::from("ref-move"),
-                ref1: old_ref.clone(),
-                ref2: new_ref.clone(),
-                ref_name: Some(ref_name.clone()),
-                message: message.clone(),
+                ref1: old_ref,
+                ref2: new_ref,
+                ref_name: Some(ref_name),
+                message,
             },
 
             Event::CommitEvent {
                 timestamp,
                 commit_oid,
             } => Row {
-                timestamp: *timestamp,
+                timestamp,
                 type_: String::from("commit"),
                 ref1: Some(commit_oid.to_string()),
                 ref2: None,
@@ -165,7 +165,7 @@ impl Event {
                 timestamp,
                 commit_oid,
             } => Row {
-                timestamp: *timestamp,
+                timestamp,
                 type_: String::from("hide"),
                 ref1: Some(commit_oid.to_string()),
                 ref2: None,
@@ -177,7 +177,7 @@ impl Event {
                 timestamp,
                 commit_oid,
             } => Row {
-                timestamp: *timestamp,
+                timestamp,
                 type_: String::from("unhide"),
                 ref1: Some(commit_oid.to_string()),
                 ref2: None,
@@ -186,8 +186,12 @@ impl Event {
             },
         }
     }
+}
 
-    fn from_row(row: &Row) -> anyhow::Result<Self> {
+impl TryFrom<Row> for Event {
+    type Error = anyhow::Error;
+
+    fn try_from(row: Row) -> Result<Self, Self::Error> {
         let Row {
             timestamp,
             type_,
@@ -213,48 +217,47 @@ impl Event {
 
         let event = match type_.as_str() {
             "rewrite" => {
-                let old_commit_oid = get_oid(ref1, "old commit OID")?;
-                let new_commit_oid = get_oid(ref2, "new commit OID")?;
+                let old_commit_oid = get_oid(&ref1, "old commit OID")?;
+                let new_commit_oid = get_oid(&ref2, "new commit OID")?;
                 Event::RewriteEvent {
-                    timestamp: *timestamp,
+                    timestamp,
                     old_commit_oid,
                     new_commit_oid,
                 }
             }
 
             "ref-move" => {
-                let ref_name = ref_name
-                    .clone()
-                    .ok_or_else(|| anyhow::anyhow!("ref-move event missing ref name"))?;
+                let ref_name =
+                    ref_name.ok_or_else(|| anyhow::anyhow!("ref-move event missing ref name"))?;
                 Event::RefUpdateEvent {
-                    timestamp: *timestamp,
+                    timestamp,
                     ref_name,
-                    old_ref: ref1.clone(),
-                    new_ref: ref2.clone(),
-                    message: message.clone(),
+                    old_ref: ref1,
+                    new_ref: ref2,
+                    message,
                 }
             }
 
             "commit" => {
-                let commit_oid = get_oid(ref1, "commit OID")?;
+                let commit_oid = get_oid(&ref1, "commit OID")?;
                 Event::CommitEvent {
-                    timestamp: *timestamp,
+                    timestamp,
                     commit_oid,
                 }
             }
 
             "hide" => {
-                let commit_oid = get_oid(ref1, "commit OID")?;
+                let commit_oid = get_oid(&ref1, "commit OID")?;
                 Event::HideEvent {
-                    timestamp: *timestamp,
+                    timestamp,
                     commit_oid,
                 }
             }
 
             "unhide" => {
-                let commit_oid = get_oid(ref1, "commit OID")?;
+                let commit_oid = get_oid(&ref1, "commit OID")?;
                 Event::UnhideEvent {
-                    timestamp: *timestamp,
+                    timestamp,
                     commit_oid,
                 }
             }
@@ -302,7 +305,7 @@ impl EventLogDb {
     fn add_events(&mut self, events: Vec<Event>) -> anyhow::Result<()> {
         let tx = self.conn.transaction()?;
         for event in events {
-            let row = event.to_row();
+            let row = Row::from(event);
             tx.execute_named(
                 "
 INSERT INTO event_log VALUES (
@@ -364,8 +367,7 @@ ORDER BY rowid ASC
             })?
             .collect();
         let rows = rows?;
-        let events = rows.iter().map(|row| Event::from_row(row)).collect();
-        events
+        rows.into_iter().map(Event::try_from).collect()
     }
 }
 
