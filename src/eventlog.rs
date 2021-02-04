@@ -4,6 +4,7 @@
 //! them in persistent storage. Later, we play back the actions in order to
 //! determine what actions the user took on the repository, and which commits
 //! they're still working on.
+
 use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
 
@@ -29,6 +30,7 @@ struct Row {
     message: Option<String>,
 }
 
+/// An event that occurred to one of the commits in the repository.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Event {
     /// Indicates that the commit was rewritten.
@@ -263,6 +265,7 @@ impl Event {
     }
 }
 
+/// Stores `Event`s on disk.
 pub struct EventLogDb {
     conn: rusqlite::Connection,
 }
@@ -285,8 +288,8 @@ CREATE TABLE IF NOT EXISTS event_log (
     Ok(())
 }
 
-/// Stores `Event`s on disk.
 impl EventLogDb {
+    /// Constructor.
     pub fn new(conn: rusqlite::Connection) -> anyhow::Result<Self> {
         init_tables(&conn)?;
         Ok(EventLogDb { conn })
@@ -368,7 +371,7 @@ ORDER BY rowid ASC
 
 #[pyclass]
 #[derive(FromPyObject)]
-#[allow(dead_code)]
+#[allow(missing_docs)]
 pub struct PyRewriteEvent {
     #[pyo3(get)]
     timestamp: f64,
@@ -399,7 +402,7 @@ impl PyRewriteEvent {
 
 #[pyclass]
 #[derive(FromPyObject)]
-#[allow(dead_code)]
+#[allow(missing_docs)]
 pub struct PyRefUpdateEvent {
     #[pyo3(get)]
     timestamp: f64,
@@ -444,7 +447,7 @@ impl PyRefUpdateEvent {
 
 #[pyclass]
 #[derive(FromPyObject)]
-#[allow(dead_code)]
+#[allow(missing_docs)]
 pub struct PyCommitEvent {
     #[pyo3(get)]
     timestamp: f64,
@@ -471,7 +474,7 @@ impl PyCommitEvent {
 
 #[pyclass]
 #[derive(FromPyObject)]
-#[allow(dead_code)]
+#[allow(missing_docs)]
 pub struct PyHideEvent {
     #[pyo3(get)]
     timestamp: f64,
@@ -498,7 +501,7 @@ impl PyHideEvent {
 
 #[pyclass]
 #[derive(FromPyObject)]
-#[allow(dead_code)]
+#[allow(missing_docs)]
 pub struct PyUnhideEvent {
     #[pyo3(get)]
     timestamp: f64,
@@ -582,6 +585,7 @@ impl ToPyObject for Event {
     }
 }
 
+#[allow(missing_docs)]
 pub fn py_event_to_event(py: Python, py_event: &PyObject) -> PyResult<Event> {
     let event_type: String = py_event.getattr(py, "type")?.extract(py)?;
     let event = match event_type.as_str() {
@@ -654,6 +658,7 @@ pub fn py_event_to_event(py: Python, py_event: &PyObject) -> PyResult<Event> {
 }
 
 #[pyclass]
+#[allow(missing_docs)]
 pub struct PyEventLogDb {
     event_log_db: EventLogDb,
 }
@@ -790,8 +795,15 @@ enum EventClassification {
     Hide,
 }
 
+/// Whether or not a commit is visible.
+///
+/// This is determined by the last `Event` that affected the commit.
 pub enum CommitVisibility {
+    /// The commit is visible, and should be rendered as part of the commit graph.
     Visible,
+
+    /// The commit is hidden, and should be hidden from the commit graph (unless
+    /// a descendant commit is visible).
     Hidden,
 }
 
@@ -802,6 +814,7 @@ struct EventInfo {
     event_classification: EventClassification,
 }
 
+/// Processes events in order and determine the repo's visible commits.
 #[derive(Debug)]
 pub struct EventReplayer {
     /// Events are numbered starting from zero.
@@ -817,7 +830,6 @@ pub struct EventReplayer {
     commit_history: HashMap<git2::Oid, Vec<EventInfo>>,
 }
 
-/// Processes events in order and determine the repo's visible commits.
 impl EventReplayer {
     fn new() -> Self {
         EventReplayer {
@@ -1206,6 +1218,7 @@ impl EventReplayer {
 }
 
 #[pyclass]
+#[allow(missing_docs)]
 pub struct PyEventReplayer {
     pub event_replayer: EventReplayer,
 }
@@ -1316,6 +1329,7 @@ impl PyEventReplayer {
     }
 }
 
+#[allow(missing_docs)]
 pub fn register_python_symbols(module: &PyModule) -> PyResult<()> {
     module.add_class::<PyRewriteEvent>()?;
     module.add_class::<PyRefUpdateEvent>()?;

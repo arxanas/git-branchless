@@ -1,3 +1,5 @@
+//! Utility functions.
+
 use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
 use std::path::Path;
@@ -8,6 +10,7 @@ use log::warn;
 
 use crate::config::get_main_branch_name;
 
+/// Convert a `git2::Error` into an `anyhow::Error` with an auto-generated message.
 pub fn wrap_git_error(error: git2::Error) -> anyhow::Error {
     anyhow::anyhow!("Git error {:?}: {}", error.code(), error.message())
 }
@@ -48,6 +51,7 @@ pub fn get_main_branch_oid(repo: &git2::Repository) -> anyhow::Result<git2::Oid>
     Ok(commit.id())
 }
 
+/// Get a mapping from OID to the names of branches which point to that OID.
 pub fn get_branch_oid_to_names(
     repo: &git2::Repository,
 ) -> anyhow::Result<HashMap<git2::Oid, HashSet<String>>> {
@@ -206,6 +210,7 @@ pub fn run_git_silent<S: AsRef<str> + std::fmt::Debug>(
     Ok(result)
 }
 
+/// The parsed version of Git.
 #[derive(Debug, PartialEq, PartialOrd, Eq)]
 pub struct GitVersion(pub isize, pub isize, pub isize);
 

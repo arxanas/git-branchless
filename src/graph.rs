@@ -1,3 +1,7 @@
+//! Renders the smartlog commit graph based on user activity.
+//!
+//! This is the basic data structure that most of branchless operates on.
+
 use std::collections::{HashMap, HashSet, VecDeque};
 
 use anyhow::Context;
@@ -9,9 +13,17 @@ use crate::eventlog::{py_event_to_event, CommitVisibility, Event, EventReplayer,
 use crate::mergebase::{MergeBaseDb, PyMergeBaseDb};
 use crate::python::{make_repo_from_py_repo, map_err_to_py_err, PyOid, PyOidStr};
 
+/// The OID of the repo's HEAD reference.
 pub struct HeadOid(pub Option<git2::Oid>);
+
+/// The OID that the repo's main branch points to.
 pub struct MainBranchOid(pub git2::Oid);
+
+/// The OIDs of any branches whose pointed-to commits should be included in the
+/// commit graph.
 pub struct BranchOids(pub HashSet<git2::Oid>);
+
+/// The OIDs of any visible commits that should be included in the commit graph.
 pub struct CommitOids(pub HashSet<git2::Oid>);
 
 /// Node contained in the smartlog commit graph.
@@ -389,6 +401,7 @@ fn py_find_path_to_merge_base(
 
 #[pyclass]
 #[derive(Clone)]
+#[allow(missing_docs)]
 pub struct PyNode {
     #[pyo3(get)]
     commit: PyObject,
@@ -455,8 +468,10 @@ fn py_node_to_node<'repo>(
     })
 }
 
+#[allow(missing_docs)]
 pub type PyCommitGraph = HashMap<PyOidStr, PyNode>;
 
+#[allow(missing_docs)]
 pub fn py_commit_graph_to_commit_graph<'python>(
     py: Python<'python>,
     repo: &'python git2::Repository,
@@ -472,6 +487,7 @@ pub fn py_commit_graph_to_commit_graph<'python>(
 }
 
 #[pyfunction]
+#[allow(missing_docs)]
 fn py_make_graph(
     py: Python,
     repo: PyObject,
@@ -511,6 +527,7 @@ fn py_make_graph(
     Ok(graph)
 }
 
+#[allow(missing_docs)]
 pub fn register_python_symbols(module: &PyModule) -> PyResult<()> {
     module.add_class::<PyNode>()?;
     module.add_function(pyo3::wrap_pyfunction!(py_find_path_to_merge_base, module)?)?;

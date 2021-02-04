@@ -129,6 +129,7 @@ fn py_gc(py: Python, out: PyObject) -> PyResult<()> {
     Ok(())
 }
 
+#[allow(missing_docs)]
 pub fn register_python_symbols(module: &PyModule) -> PyResult<()> {
     module.add_function(pyo3::wrap_pyfunction!(py_mark_commit_reachable, module)?)?;
     module.add_function(pyo3::wrap_pyfunction!(py_gc, module)?)?;
