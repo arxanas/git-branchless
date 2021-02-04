@@ -5,7 +5,7 @@ use anyhow::Context;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::PyResult;
 use pyo3::types::PyTuple;
-use pyo3::{FromPyObject, IntoPy, PyAny, PyObject, Python, ToPyObject};
+use pyo3::{FromPyObject, IntoPy, PyAny, PyNativeType, PyObject, Python, ToPyObject};
 use rusqlite::NO_PARAMS;
 
 #[allow(missing_docs)]
@@ -47,33 +47,43 @@ pub fn clone_conn(conn: &rusqlite::Connection) -> anyhow::Result<rusqlite::Conne
 }
 
 #[allow(missing_docs)]
-pub fn make_conn_from_py_conn(py: Python, conn: PyObject) -> PyResult<rusqlite::Connection> {
-    // https://stackoverflow.com/a/14505973
-    let query_result =
-        conn.call_method1(py, "execute", PyTuple::new(py, &["PRAGMA database_list;"]))?;
-    let rows: Vec<(i64, String, String)> =
-        query_result.call_method0(py, "fetchall")?.extract(py)?;
-    let db_path = match rows.as_slice() {
-        [(_, _, path)] => path,
-        _ => {
-            return Err(PyRuntimeError::new_err(
-                "Could not process response from query: PRAGMA database_list",
-            ))
-        }
-    };
-    let conn = rusqlite::Connection::open(db_path);
-    map_err_to_py_err(
-        conn,
-        format!("Could not open SQLite database at path {}", db_path),
-    )
+pub struct PyDbConn(pub rusqlite::Connection);
+
+impl<'source> FromPyObject<'source> for PyDbConn {
+    fn extract(conn: &'source PyAny) -> PyResult<Self> {
+        // https://stackoverflow.com/a/14505973
+        let query_result = conn.call_method1(
+            "execute",
+            PyTuple::new(conn.py(), &["PRAGMA database_list;"]),
+        )?;
+        let rows: Vec<(i64, String, String)> = query_result.call_method0("fetchall")?.extract()?;
+        let db_path = match rows.as_slice() {
+            [(_, _, path)] => path,
+            _ => {
+                return Err(PyRuntimeError::new_err(
+                    "Could not process response from query: PRAGMA database_list",
+                ))
+            }
+        };
+        let conn = rusqlite::Connection::open(db_path);
+        let conn = map_err_to_py_err(
+            conn,
+            format!("Could not open SQLite database at path {}", db_path),
+        )?;
+        Ok(PyDbConn(conn))
+    }
 }
 
 #[allow(missing_docs)]
-pub fn make_repo_from_py_repo(py: Python, repo: &PyObject) -> PyResult<git2::Repository> {
-    let repo_path: String = repo.getattr(py, "path")?.extract(py)?;
-    let repo = git2::Repository::open(repo_path);
-    let repo = map_err_to_py_err(repo, String::from("Could not open Git repo"))?;
-    Ok(repo)
+pub struct PyRepo(pub git2::Repository);
+
+impl<'source> FromPyObject<'source> for PyRepo {
+    fn extract(repo: &'source PyAny) -> PyResult<Self> {
+        let repo_path: String = repo.getattr("path")?.extract()?;
+        let repo = git2::Repository::open(repo_path);
+        let repo = map_err_to_py_err(repo, "Could not open Git repo")?;
+        Ok(PyRepo(repo))
+    }
 }
 
 #[allow(missing_docs)]
