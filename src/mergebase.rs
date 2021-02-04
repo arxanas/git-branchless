@@ -13,6 +13,7 @@
 //! away from the current main branch commit, so the merge-base calculation may
 //! take a while. It can also happen when simply checking out an old commit to
 //! examine it.
+
 use anyhow::Context;
 use pyo3::prelude::*;
 use rusqlite::OptionalExtension;
@@ -20,6 +21,7 @@ use rusqlite::OptionalExtension;
 use crate::python::{make_conn_from_py_conn, make_repo_from_py_repo, map_err_to_py_err, PyOidStr};
 use crate::util::wrap_git_error;
 
+/// On-disk cache for merge-base queries.
 pub struct MergeBaseDb {
     conn: rusqlite::Connection,
 }
@@ -41,6 +43,7 @@ CREATE TABLE IF NOT EXISTS merge_base_oids (
 }
 
 impl MergeBaseDb {
+    /// Constructor.
     pub fn new(conn: rusqlite::Connection) -> anyhow::Result<Self> {
         init_tables(&conn).context("Initializing tables")?;
         Ok(MergeBaseDb { conn })
@@ -137,6 +140,7 @@ INSERT INTO merge_base_oids VALUES (
 }
 
 #[pyclass]
+#[allow(missing_docs)]
 pub struct PyMergeBaseDb {
     pub merge_base_db: MergeBaseDb,
 }
@@ -189,6 +193,7 @@ impl PyMergeBaseDb {
     }
 }
 
+#[allow(missing_docs)]
 pub fn register_python_symbols(module: &PyModule) -> PyResult<()> {
     module.add_class::<PyMergeBaseDb>()?;
     Ok(())

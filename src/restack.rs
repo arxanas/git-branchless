@@ -110,6 +110,10 @@ fn find_rewrite_target(
     }
 }
 
+/// Find commits which have been "abandoned" in the commit graph.
+///
+/// A commit is considered "abandoned" if it is visible, but one of its parents
+/// is hidden.
 pub fn find_abandoned_children(
     graph: &CommitGraph,
     event_replayer: &EventReplayer,
@@ -404,6 +408,7 @@ fn py_restack(
     Ok(result)
 }
 
+#[allow(missing_docs)]
 pub fn register_python_symbols(module: &PyModule) -> PyResult<()> {
     module.add_function(pyo3::wrap_pyfunction!(py_find_abandoned_children, module)?)?;
     module.add_function(pyo3::wrap_pyfunction!(py_restack, module)?)?;

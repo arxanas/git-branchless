@@ -1,4 +1,5 @@
 //! Install any hooks, aliases, etc. to set up `git-branchless` in this repo.
+
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
@@ -256,6 +257,7 @@ fn py_init(py: Python, out: PyObject, git_executable: &str) -> PyResult<isize> {
     Ok(0)
 }
 
+#[allow(missing_docs)]
 pub fn register_python_symbols(module: &PyModule) -> PyResult<()> {
     module.add_function(pyo3::wrap_pyfunction!(py_init, module)?)?;
     Ok(())

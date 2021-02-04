@@ -35,6 +35,7 @@
 //!     old versions of rebased commits are considered hidden. You can also
 //!     manually hide commits that you no longer need. Not visible to you in the
 //!     branchless workflow.
+
 #![warn(clippy::all, missing_docs)]
 #![allow(clippy::clippy::too_many_arguments)]
 
@@ -43,15 +44,15 @@ use pyo3::prelude::*;
 use python::map_err_to_py_err;
 use simple_logger::SimpleLogger;
 
-mod config;
-mod eventlog;
-mod gc;
-mod graph;
-mod init;
-mod mergebase;
-mod python;
-mod restack;
-mod util;
+pub mod config;
+pub mod eventlog;
+pub mod gc;
+pub mod graph;
+pub mod init;
+pub mod mergebase;
+pub mod python;
+pub mod restack;
+pub mod util;
 
 #[pymodule]
 fn rust(_py: Python<'_>, module: &PyModule) -> PyResult<()> {

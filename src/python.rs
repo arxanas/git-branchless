@@ -8,10 +8,12 @@ use pyo3::types::PyTuple;
 use pyo3::{FromPyObject, IntoPy, PyAny, PyObject, Python, ToPyObject};
 use rusqlite::NO_PARAMS;
 
+#[allow(missing_docs)]
 pub fn raise_runtime_error<T>(message: String) -> PyResult<T> {
     Err(PyRuntimeError::new_err(message))
 }
 
+#[allow(missing_docs)]
 pub fn map_err_to_py_err<T, E: Debug, S: AsRef<str>>(
     result: Result<T, E>,
     message: S,
@@ -44,6 +46,7 @@ pub fn clone_conn(conn: &rusqlite::Connection) -> anyhow::Result<rusqlite::Conne
     Ok(conn)
 }
 
+#[allow(missing_docs)]
 pub fn make_conn_from_py_conn(py: Python, conn: PyObject) -> PyResult<rusqlite::Connection> {
     // https://stackoverflow.com/a/14505973
     let query_result =
@@ -65,6 +68,7 @@ pub fn make_conn_from_py_conn(py: Python, conn: PyObject) -> PyResult<rusqlite::
     )
 }
 
+#[allow(missing_docs)]
 pub fn make_repo_from_py_repo(py: Python, repo: &PyObject) -> PyResult<git2::Repository> {
     let repo_path: String = repo.getattr(py, "path")?.extract(py)?;
     let repo = git2::Repository::open(repo_path);
@@ -72,6 +76,7 @@ pub fn make_repo_from_py_repo(py: Python, repo: &PyObject) -> PyResult<git2::Rep
     Ok(repo)
 }
 
+#[allow(missing_docs)]
 pub struct PyOid(pub git2::Oid);
 
 impl<'source> FromPyObject<'source> for PyOid {
@@ -84,9 +89,11 @@ impl<'source> FromPyObject<'source> for PyOid {
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+#[allow(missing_docs)]
 pub struct PyOidStr(pub git2::Oid);
 
 impl PyOidStr {
+    #[allow(missing_docs)]
     pub fn to_pygit2_oid(&self, py: Python, py_repo: &PyObject) -> PyResult<PyObject> {
         // Convert the OID string into a `pygit2.Oid` object, by calling
         // `repo[oid]` on the Python `repo` object.
@@ -120,11 +127,13 @@ impl IntoPy<PyObject> for PyOidStr {
     }
 }
 
+#[allow(missing_docs)]
 pub struct TextIO<'py> {
     py: Python<'py>,
     text_io: PyObject,
 }
 
+#[allow(missing_docs)]
 impl<'py> TextIO<'py> {
     pub fn new(py: Python<'py>, py_text_io: PyObject) -> TextIO<'py> {
         TextIO {

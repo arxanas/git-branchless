@@ -1,3 +1,5 @@
+//! Accesses repo-specific configuration.
+
 /// Get the name of the main branch for the repository.
 ///
 /// Args:
