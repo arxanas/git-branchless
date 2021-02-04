@@ -52,6 +52,7 @@ pub mod init;
 pub mod mergebase;
 pub mod python;
 pub mod restack;
+pub mod testing;
 pub mod util;
 
 #[pymodule]
