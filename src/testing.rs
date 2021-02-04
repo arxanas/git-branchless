@@ -1,21 +1,36 @@
+//! Testing utilities.
+//!
+//! This is inside `src` rather than `tests` since we use this code in some unit
+//! tests.
+
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use crate::util::{wrap_git_error, GitVersion};
 use anyhow::Context;
-use branchless::util::{wrap_git_error, GitVersion};
 
 const DUMMY_NAME: &str = "Testy McTestface";
 const DUMMY_EMAIL: &str = "test@example.com";
 const DUMMY_DATE: &str = "Wed 29 Oct 12:34:56 2020 PDT";
 
+/// Wrapper around the Git executable, for testing.
 pub struct Git {
+    /// The path to the repository on disk. The directory itself must exist,
+    /// although it might not have a `.git` folder in it. (Use `Git::init_repo`
+    /// to initialize it.)
     pub repo_path: PathBuf,
+
+    /// The path to the Git executable on disk. This is important since we test
+    /// against multiple Git versions.
     pub git_executable: PathBuf,
 }
 
+/// Options for `Git::init_repo_with_options`.
 pub struct GitInitOptions {
+    /// If `true`, then `init_repo_with_options` makes an initial commit with
+    /// some content.
     pub make_initial_commit: bool,
 }
 
@@ -27,8 +42,14 @@ impl Default for GitInitOptions {
     }
 }
 
+/// Options for `Git::run_with_options`.
 pub struct GitRunOptions {
+    /// The timestamp of the command. Mostly useful for `git commit`. This should
+    /// be a number like 0, 1, 2, 3...
     pub time: isize,
+
+    /// If `true`, returns `Error` if the Git command returned a non-zero exit
+    /// code.
     pub check: bool,
 }
 
@@ -107,6 +128,7 @@ impl Git {
         Ok(stdout)
     }
 
+    /// Run a Git command.
     pub fn run_with_options<S: AsRef<str> + std::fmt::Debug>(
         &self,
         args: &[S],
@@ -144,6 +166,7 @@ impl Git {
         Ok((stdout, stderr))
     }
 
+    /// Run a Git command.
     pub fn run<S: AsRef<str> + std::fmt::Debug>(
         &self,
         args: &[S],
@@ -151,6 +174,8 @@ impl Git {
         self.run_with_options(args, &Default::default())
     }
 
+    /// Set up a Git repo in the directory and initialize git-branchless to work
+    /// with it.
     pub fn init_repo_with_options(&self, options: &GitInitOptions) -> anyhow::Result<()> {
         self.run(&["init"])?;
         self.run(&["config", "user.name", DUMMY_NAME])?;
@@ -189,10 +214,14 @@ impl Git {
         Ok(())
     }
 
+    /// Set up a Git repo in the directory and initialize git-branchless to work
+    /// with it.
     pub fn init_repo(&self) -> anyhow::Result<()> {
         self.init_repo_with_options(&Default::default())
     }
 
+    /// Commit a file with default contents. The `time` argument is used to set
+    /// the commit timestamp, which is factored into the commit hash.
     pub fn commit_file_with_contents(
         &self,
         name: &str,
@@ -213,25 +242,33 @@ impl Git {
         Ok(())
     }
 
+    /// Commit a file with default contents. The `time` argument is used to set
+    /// the commit timestamp, which is factored into the commit hash.
     pub fn commit_file(&self, name: &str, time: isize) -> anyhow::Result<()> {
         self.commit_file_with_contents(name, time, &format!("{} contents\n", name))
     }
 
+    /// Detach HEAD. This is useful to call to make sure that no branch is
+    /// checked out, and therefore that future commit operations don't move any
+    /// branches.
     pub fn detach_head(&self) -> anyhow::Result<()> {
         self.run(&["checkout", "--detach"])?;
         Ok(())
     }
 
+    /// Get a `git2::Repository` object for this repository.
     pub fn get_repo(&self) -> anyhow::Result<git2::Repository> {
         git2::Repository::open(&self.repo_path).map_err(wrap_git_error)
     }
 
+    /// Get the version of the Git executable.
     pub fn get_version(&self) -> anyhow::Result<GitVersion> {
         let (version_str, _stderr) = self.run(&["version"])?;
         version_str.parse()
     }
 }
 
+/// Create a temporary directory for testing and a `Git` instance to use with it.
 pub fn with_git(f: fn(Git) -> anyhow::Result<()>) -> anyhow::Result<()> {
     let repo_dir = tempfile::tempdir()?;
     let git_executable = std::env::var("PATH_TO_GIT")

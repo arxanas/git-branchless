@@ -1,11 +1,10 @@
 use anyhow::Context;
 use branchless::util::GitVersion;
 
-pub mod helpers;
-
+#[cfg(test)]
 #[test]
 fn test_hook_installed() -> anyhow::Result<()> {
-    helpers::with_git(|git| {
+    branchless::testing::with_git(|git| {
         git.init_repo()?;
         let hook_path = git.repo_path.join(".git").join("hooks").join("post-commit");
         assert!(hook_path.exists());
@@ -25,7 +24,7 @@ fn test_hook_installed() -> anyhow::Result<()> {
 
 #[test]
 fn test_alias_installed() -> anyhow::Result<()> {
-    helpers::with_git(|git| {
+    branchless::testing::with_git(|git| {
         git.init_repo()?;
 
         {
@@ -48,7 +47,7 @@ fn test_alias_installed() -> anyhow::Result<()> {
 
 #[test]
 fn test_old_git_version_warning() -> anyhow::Result<()> {
-    helpers::with_git(|git| {
+    branchless::testing::with_git(|git| {
         git.init_repo()?;
         let version = git.get_version()?;
         if version < GitVersion(2, 29, 0) {

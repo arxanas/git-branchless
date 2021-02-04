@@ -1,8 +1,6 @@
-pub mod helpers;
-
 #[test]
 fn test_commands() -> anyhow::Result<()> {
-    helpers::with_git(|git| {
+    branchless::testing::with_git(|git| {
         git.init_repo()?;
         git.commit_file("test", 1)?;
 
