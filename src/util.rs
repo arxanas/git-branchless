@@ -4,6 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
 use std::path::Path;
 use std::process::Command;
+use std::str::FromStr;
 
 use anyhow::Context;
 use log::warn;
@@ -214,27 +215,25 @@ pub fn run_git_silent<S: AsRef<str> + std::fmt::Debug>(
 #[derive(Debug, PartialEq, PartialOrd, Eq)]
 pub struct GitVersion(pub isize, pub isize, pub isize);
 
-/// Parse the `git version` output.
-///
-/// Args:
-/// * `output`: The output returned by `git version`.
-///
-/// Returns: The parsed Git version.
-pub fn parse_git_version_output(output: &str) -> anyhow::Result<GitVersion> {
-    let output = output.trim();
-    let words = output.split(' ').collect::<Vec<&str>>();
-    let version_str = match &words.as_slice() {
-        [_git, _version, version_str, ..] => version_str,
-        _ => anyhow::bail!("Could not parse Git version output: {}", output),
-    };
-    match version_str.split('.').collect::<Vec<&str>>().as_slice() {
-        [major, minor, patch, ..] => {
-            let major = major.parse()?;
-            let minor = minor.parse()?;
-            let patch = patch.parse()?;
-            Ok(GitVersion(major, minor, patch))
+impl FromStr for GitVersion {
+    type Err = anyhow::Error;
+
+    fn from_str(output: &str) -> anyhow::Result<GitVersion> {
+        let output = output.trim();
+        let words = output.split(' ').collect::<Vec<&str>>();
+        let version_str = match &words.as_slice() {
+            [_git, _version, version_str, ..] => version_str,
+            _ => anyhow::bail!("Could not parse Git version output: {}", output),
+        };
+        match version_str.split('.').collect::<Vec<&str>>().as_slice() {
+            [major, minor, patch, ..] => {
+                let major = major.parse()?;
+                let minor = minor.parse()?;
+                let patch = patch.parse()?;
+                Ok(GitVersion(major, minor, patch))
+            }
+            _ => anyhow::bail!("Could not parse Git version string: {}", version_str),
         }
-        _ => anyhow::bail!("Could not parse Git version string: {}", version_str),
     }
 }
 
@@ -245,15 +244,17 @@ mod tests {
     #[test]
     fn test_parse_git_version_output() {
         assert_eq!(
-            parse_git_version_output("git version 12.34.56").unwrap(),
+            "git version 12.34.56".parse::<GitVersion>().unwrap(),
             GitVersion(12, 34, 56)
         );
         assert_eq!(
-            parse_git_version_output("git version 12.34.56\n").unwrap(),
+            "git version 12.34.56\n".parse::<GitVersion>().unwrap(),
             GitVersion(12, 34, 56)
         );
         assert_eq!(
-            parse_git_version_output("git version 12.34.56.78.abcdef").unwrap(),
+            "git version 12.34.56.78.abcdef"
+                .parse::<GitVersion>()
+                .unwrap(),
             GitVersion(12, 34, 56)
         );
     }
