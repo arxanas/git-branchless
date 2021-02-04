@@ -102,5 +102,5 @@ jobs:
           pip install -e .
           pip install -r requirements-dev.txt
           pytest --git-path="$PWD"/git -n auto
-      - name: Run Rust tests
-        run: cargo test --no-default-features
+      # - name: Run Rust tests
+      #   run: PATH_TO_GIT="$PWD"/git cargo test --no-default-features
