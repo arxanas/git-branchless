@@ -7,7 +7,6 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use anyhow::Context;
 use log::warn;
 use pyo3::prelude::*;
-use pyo3::types::PyTuple;
 
 use crate::eventlog::{py_event_to_event, CommitVisibility, Event, EventReplayer, PyEventReplayer};
 use crate::mergebase::{MergeBaseDb, PyMergeBaseDb};
@@ -366,7 +365,7 @@ fn commit_to_py_commit(
     commit: &git2::Commit,
 ) -> PyResult<PyObject> {
     let oid = commit.id();
-    let commit = py_repo.call_method1(py, "__getitem__", PyTuple::new(py, &[PyOidStr(oid)]))?;
+    let commit = py_repo.call_method1(py, "__getitem__", (PyOidStr(oid),))?;
     Ok(commit)
 }
 
