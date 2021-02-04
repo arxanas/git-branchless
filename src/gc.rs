@@ -17,7 +17,7 @@ use pyo3::prelude::*;
 use crate::eventlog::{is_gc_ref, EventLogDb, EventReplayer};
 use crate::graph::{make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid};
 use crate::mergebase::MergeBaseDb;
-use crate::python::{clone_conn, make_repo_from_py_repo, map_err_to_py_err, PyOid, TextIO};
+use crate::python::{clone_conn, map_err_to_py_err, PyOid, PyRepo, TextIO};
 use crate::util::{
     get_branch_oid_to_names, get_db_conn, get_head_oid, get_main_branch_oid, get_repo,
 };
@@ -112,8 +112,8 @@ pub fn gc<Out: Write>(out: &mut Out) -> anyhow::Result<()> {
 }
 
 #[pyfunction]
-fn py_mark_commit_reachable(py: Python, repo: PyObject, commit_oid: PyOid) -> PyResult<()> {
-    let repo = make_repo_from_py_repo(py, &repo)?;
+fn py_mark_commit_reachable(repo: PyRepo, commit_oid: PyOid) -> PyResult<()> {
+    let PyRepo(repo) = repo;
     let PyOid(commit_oid) = commit_oid;
     map_err_to_py_err(
         mark_commit_reachable(&repo, commit_oid),

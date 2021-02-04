@@ -14,10 +14,7 @@ use pyo3::prelude::*;
 use pyo3::types::PyType;
 
 use crate::config::get_main_branch_name;
-use crate::python::{
-    make_conn_from_py_conn, make_repo_from_py_repo, map_err_to_py_err, raise_runtime_error,
-    PyOidStr,
-};
+use crate::python::{map_err_to_py_err, raise_runtime_error, PyDbConn, PyOidStr, PyRepo};
 use crate::util::{get_main_branch_oid, wrap_git_error};
 
 /// Wrapper around the row stored directly in the database.
@@ -668,8 +665,8 @@ pub struct PyEventLogDb {
 #[pymethods]
 impl PyEventLogDb {
     #[new]
-    fn new(py: Python, conn: PyObject) -> PyResult<Self> {
-        let conn = make_conn_from_py_conn(py, conn)?;
+    fn new(conn: PyDbConn) -> PyResult<Self> {
+        let PyDbConn(conn) = conn;
         let event_log_db = EventLogDb::new(conn);
         let event_log_db = map_err_to_py_err(
             event_log_db,
@@ -1289,7 +1286,7 @@ impl PyEventReplayer {
 
     fn get_cursor_main_branch_oid(&self, py: Python, repo: PyObject) -> PyResult<PyObject> {
         let py_repo = &repo;
-        let repo = make_repo_from_py_repo(py, &repo)?;
+        let PyRepo(repo) = repo.extract(py)?;
         let result = self.event_replayer.get_cursor_main_branch_oid(&repo);
         let result =
             map_err_to_py_err(result, String::from("Could not get cursor main branch OID"))?;
@@ -1300,10 +1297,9 @@ impl PyEventReplayer {
 
     fn get_cursor_branch_oid_to_names(
         &self,
-        py: Python,
-        repo: PyObject,
+        repo: PyRepo,
     ) -> PyResult<HashMap<PyOidStr, HashSet<String>>> {
-        let repo = make_repo_from_py_repo(py, &repo)?;
+        let PyRepo(repo) = repo;
         let result = self.event_replayer.get_cursor_branch_oid_to_names(&repo);
         let result = map_err_to_py_err(
             result,
