@@ -6,9 +6,7 @@ from .smartlog import smartlog
 find_abandoned_children = py_find_abandoned_children
 
 
-def restack(
-    *, out: TextIO, err: TextIO, git_executable: str, preserve_timestamps: bool
-) -> int:
+def restack(*, out: TextIO, err: TextIO, git_executable: str) -> int:
     """Restack all abandoned commits.
 
     Args:
@@ -25,7 +23,6 @@ def restack(
         out=out,
         err=err,
         git_executable=git_executable,
-        preserve_timestamps=preserve_timestamps,
     )
     if result != 0:
         return result
