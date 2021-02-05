@@ -88,11 +88,20 @@ impl Git {
         let branchless_path = cargo_bin_path
             .parent()
             .expect("Unable to find git-branchless path parent");
-        let new_path = vec![branchless_path]
-            .iter()
-            .map(|path| path.to_str().expect("Unable to decode path component"))
-            .collect::<Vec<_>>()
-            .join(":");
+        let git_path = self
+            .git_executable
+            .parent()
+            .expect("Unable to find git path parent");
+        let new_path = vec![
+            // For Git to be able to launch `git-branchless`.
+            branchless_path,
+            // For our hooks to be able to call back into `git`.
+            git_path,
+        ]
+        .iter()
+        .map(|path| path.to_str().expect("Unable to decode path component"))
+        .collect::<Vec<_>>()
+        .join(":");
 
         let env: Vec<(&str, &str)> = vec![
             ("GIT_AUTHOR_DATE", &date),
@@ -113,6 +122,13 @@ impl Git {
 
         let mut command = Command::new(&self.git_executable);
         command.args(&args).env_clear().envs(env.iter().copied());
+
+        // For PyO3 to be able to link to the correct version of Python at
+        // runtime. Can be removed once we no longer have a dependency on PyO3.
+        if let Ok(ld_library_path) = std::env::var("LD_LIBRARY_PATH") {
+            command.env("LD_LIBRARY_PATH", ld_library_path);
+        }
+
         command
     }
 
