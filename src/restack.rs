@@ -63,6 +63,7 @@ use anyhow::Context;
 use log::info;
 use pyo3::prelude::*;
 
+use crate::config::get_restack_preserve_timestamps;
 use crate::eventlog::{Event, EventLogDb, EventReplayer, PyEventReplayer};
 use crate::graph::{
     make_graph, py_commit_graph_to_commit_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid,
@@ -162,7 +163,6 @@ fn restack_commits<Out: Write>(
     git_executable: &GitExecutable,
     merge_base_db: &MergeBaseDb,
     event_log_db: &EventLogDb,
-    preserve_timestamps: bool,
 ) -> anyhow::Result<isize> {
     let event_replayer = EventReplayer::from_event_log_db(event_log_db)?;
     let head_oid = get_head_oid(repo)?;
@@ -177,6 +177,7 @@ fn restack_commits<Out: Write>(
         &BranchOids(branch_oid_to_names.keys().copied().collect()),
         true,
     )?;
+    let preserve_timestamps = get_restack_preserve_timestamps(&repo)?;
 
     for original_oid in graph.keys() {
         let (rewritten_oid, abandoned_child_oids) =
@@ -219,15 +220,7 @@ fn restack_commits<Out: Write>(
         }
 
         // Repeat until we reach a fixed point.
-        return restack_commits(
-            out,
-            err,
-            repo,
-            git_executable,
-            merge_base_db,
-            event_log_db,
-            preserve_timestamps,
-        );
+        return restack_commits(out, err, repo, git_executable, merge_base_db, event_log_db);
     }
 
     writeln!(out, "branchless: no more abandoned commits to restack")?;
@@ -305,15 +298,12 @@ fn restack_branches<Out: Write>(
 /// * `out`: The output stream to write to.
 /// * `err`: The error stream to write to.
 /// * `git_executable`: The path to the `git` executable on disk.
-/// * `preserve_timestamps`: Whether or not to use the original commit time for
-/// rebased commits, rather than the current time.
 ///
 /// Returns: Exit code (0 denotes successful exit).
 pub fn restack<'out, Out: Write>(
     out: &'out mut Out,
     err: &'out mut Out,
     git_executable: GitExecutable,
-    preserve_timestamps: bool,
 ) -> anyhow::Result<isize> {
     let repo = get_repo()?;
     let conn = get_db_conn(&repo)?;
@@ -328,7 +318,6 @@ pub fn restack<'out, Out: Write>(
         &git_executable,
         &merge_base_db,
         &event_log_db,
-        preserve_timestamps,
     )
     .with_context(|| "Restacking commits")?;
     if result != 0 {
@@ -393,17 +382,11 @@ fn py_find_abandoned_children(
 }
 
 #[pyfunction]
-fn py_restack(
-    py: Python,
-    out: PyObject,
-    err: PyObject,
-    git_executable: &str,
-    preserve_timestamps: bool,
-) -> PyResult<isize> {
+fn py_restack(py: Python, out: PyObject, err: PyObject, git_executable: &str) -> PyResult<isize> {
     let mut out = TextIO::new(py, out);
     let mut err = TextIO::new(py, err);
     let git_executable = GitExecutable(Path::new(git_executable));
-    let result = restack(&mut out, &mut err, git_executable, preserve_timestamps);
+    let result = restack(&mut out, &mut err, git_executable);
     let result = map_err_to_py_err(result, "Restack failed")?;
     Ok(result)
 }

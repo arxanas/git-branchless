@@ -452,17 +452,13 @@ def py_gc(*, out: TextIO) -> None:
 def py_find_abandoned_children(
     graph: PyCommitGraph, event_replayer: PyEventReplayer, oid: OidStr
 ) -> Optional[Tuple[OidStr, List[OidStr]]]: ...
-def py_restack(
-    *, out: TextIO, err: TextIO, git_executable: str, preserve_timestamps: bool
-) -> int:
+def py_restack(*, out: TextIO, err: TextIO, git_executable: str) -> int:
     """Restack all abandoned commits.
 
     Args:
       out: The output stream to write to.
       err: The error stream to write to.
       git_executable: The path to the `git` executable on disk.
-      preserve_timestamps: Whether or not to use the original commit time for
-        rebased commits, rather than the current time.
 
     Returns:
       Exit code (0 denotes successful exit).

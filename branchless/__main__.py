@@ -156,9 +156,7 @@ def main(argv: List[str], *, out: TextIO, err: TextIO, git_executable: str) -> i
             towards=args.towards,
         )
     elif args.subcommand == "restack":
-        return restack(
-            out=out, err=err, git_executable=git_executable, preserve_timestamps=False
-        )
+        return restack(out=out, err=err, git_executable=git_executable)
     elif args.subcommand == "undo":
         return undo(out=out, err=err, git_executable=git_executable)
     elif args.subcommand in ["gc", "hook-pre-auto-gc"]:

@@ -84,15 +84,11 @@ impl Git {
             new_args
         };
 
-        let git_path = self
-            .git_executable
-            .parent()
-            .expect("Unable to find git path parent");
         let cargo_bin_path = assert_cmd::cargo::cargo_bin("git-branchless");
         let branchless_path = cargo_bin_path
             .parent()
             .expect("Unable to find git-branchless path parent");
-        let new_path = vec![git_path, branchless_path]
+        let new_path = vec![branchless_path]
             .iter()
             .map(|path| path.to_str().expect("Unable to decode path component"))
             .collect::<Vec<_>>()
@@ -114,6 +110,7 @@ impl Git {
             ),
             ("PATH", &new_path),
         ];
+
         let mut command = Command::new(&self.git_executable);
         command.args(&args).env_clear().envs(env.iter().copied());
         command
