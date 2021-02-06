@@ -299,7 +299,7 @@ impl EventLogDb {
     ///
     /// Args:
     /// * events: The events to add.
-    fn add_events(&mut self, events: Vec<Event>) -> anyhow::Result<()> {
+    pub fn add_events(&mut self, events: Vec<Event>) -> anyhow::Result<()> {
         let tx = self.conn.transaction()?;
         for event in events {
             let row = Row::from(event);
@@ -331,7 +331,7 @@ INSERT INTO event_log VALUES (
     /// Get all the events in the database.
     ///
     /// Returns: All the events in the database, ordered from oldest to newest.
-    fn get_events(&self) -> anyhow::Result<Vec<Event>> {
+    pub fn get_events(&self) -> anyhow::Result<Vec<Event>> {
         let mut stmt = self.conn.prepare(
             "
 SELECT timestamp, type, old_ref, new_ref, ref_name, message
