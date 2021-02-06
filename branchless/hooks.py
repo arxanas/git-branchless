@@ -23,13 +23,13 @@ from .eventlog import (
     EventReplayer,
     RefUpdateEvent,
     RewriteEvent,
-    should_ignore_ref_updates,
 )
 from .formatting import make_glyphs, pluralize
 from .gc import mark_commit_reachable
 from .graph import make_graph
 from .mergebase import MergeBaseDb
 from .restack import find_abandoned_children
+from .rust import py_hook_reference_transaction
 
 
 def _is_rebase_underway(repo: pygit2.Repository) -> bool:
@@ -237,38 +237,4 @@ def hook_post_commit(out: TextIO) -> None:
     mark_commit_reachable(repo=repo, commit_oid=commit_oid)
 
 
-def hook_reference_transaction(out: TextIO, transaction_state: str) -> None:
-    """Handle Git's reference-transaction hook.
-
-    Args:
-      out: Output stream to write to.
-    """
-    if transaction_state == "committed":
-        timestamp = time.time()
-        events = []
-        for line in sys.stdin:
-            (old_value, new_value, ref_name) = line.strip().split(" ", 2)
-            if not should_ignore_ref_updates(ref_name):
-                events.append(
-                    RefUpdateEvent(
-                        timestamp=timestamp,
-                        ref_name=ref_name,
-                        old_ref=old_value,
-                        new_ref=new_value,
-                        message=None,
-                    )
-                )
-        if not events:
-            return
-
-        num_reference_updates = pluralize(
-            amount=len(events),
-            singular="update to a branch/ref",
-            plural="updates to branches/refs",
-        )
-        out.write(f"branchless: processing {num_reference_updates}\n")
-
-        repo = get_repo()
-        db = make_db_for_repo(repo=repo)
-        event_log_db = EventLogDb(db)
-        event_log_db.add_events(events)
+hook_reference_transaction = py_hook_reference_transaction

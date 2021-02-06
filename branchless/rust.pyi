@@ -464,3 +464,13 @@ def py_restack(*, out: TextIO, err: TextIO, git_executable: str) -> int:
       Exit code (0 denotes successful exit).
     """
     ...
+
+# hooks.py
+
+def py_hook_reference_transaction(out: TextIO, transaction_state: str) -> None:
+    """Handle Git's reference-transaction hook.
+
+    Args:
+      out: Output stream to write to.
+    """
+    ...
