@@ -16,8 +16,38 @@ use pyo3::prelude::*;
 
 use crate::eventlog::{should_ignore_ref_updates, Event, EventLogDb};
 use crate::formatting::Pluralize;
+use crate::gc::mark_commit_reachable;
 use crate::python::{map_err_to_py_err, TextIO};
 use crate::util::{get_db_conn, get_repo};
+
+/// Handle Git's `post-commit` hook.
+///
+/// See the man-page for `githooks(5)`.
+pub fn hook_post_commit<Out: Write>(out: &mut Out) -> anyhow::Result<()> {
+    writeln!(out, "branchless: processing commit")?;
+
+    let repo = get_repo()?;
+    let conn = get_db_conn(&repo)?;
+    let mut event_log_db = EventLogDb::new(conn)?;
+
+    let commit = repo
+        .head()
+        .with_context(|| "Getting repo HEAD")?
+        .peel_to_commit()
+        .with_context(|| "Getting HEAD commit")?;
+    mark_commit_reachable(&repo, commit.id())
+        .with_context(|| "Marking commit as reachable for GC purposes")?;
+
+    let timestamp = commit.time().seconds() as f64;
+    event_log_db
+        .add_events(vec![Event::CommitEvent {
+            timestamp,
+            commit_oid: commit.id(),
+        }])
+        .with_context(|| "Adding events to event-log")?;
+
+    Ok(())
+}
 
 fn parse_reference_transaction_line(now: SystemTime, line: &str) -> anyhow::Result<Option<Event>> {
     match *line.split(' ').collect::<Vec<_>>().as_slice() {
@@ -104,6 +134,14 @@ pub fn hook_reference_transaction<Out: Write>(
 }
 
 #[pyfunction]
+fn py_hook_post_commit(py: Python, out: PyObject) -> PyResult<()> {
+    let mut out = TextIO::new(py, out);
+    let result = hook_post_commit(&mut out);
+    map_err_to_py_err(result, "Could not invoke post-commit hook")?;
+    Ok(())
+}
+
+#[pyfunction]
 fn py_hook_reference_transaction(
     py: Python,
     out: PyObject,
@@ -117,6 +155,7 @@ fn py_hook_reference_transaction(
 
 #[allow(missing_docs)]
 pub fn register_python_symbols(module: &PyModule) -> PyResult<()> {
+    module.add_function(pyo3::wrap_pyfunction!(py_hook_post_commit, module)?)?;
     module.add_function(pyo3::wrap_pyfunction!(
         py_hook_reference_transaction,
         module
