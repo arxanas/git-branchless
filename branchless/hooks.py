@@ -17,19 +17,12 @@ import pygit2
 
 from . import get_branch_oid_to_names, get_head_oid, get_main_branch_oid, get_repo
 from .db import make_db_for_repo
-from .eventlog import (
-    CommitEvent,
-    EventLogDb,
-    EventReplayer,
-    RefUpdateEvent,
-    RewriteEvent,
-)
+from .eventlog import EventLogDb, EventReplayer, RefUpdateEvent, RewriteEvent
 from .formatting import make_glyphs, pluralize
-from .gc import mark_commit_reachable
 from .graph import make_graph
 from .mergebase import MergeBaseDb
 from .restack import find_abandoned_children
-from .rust import py_hook_reference_transaction
+from .rust import py_hook_post_commit, py_hook_reference_transaction
 
 
 def _is_rebase_underway(repo: pygit2.Repository) -> bool:
@@ -217,24 +210,5 @@ def hook_post_checkout(
     )
 
 
-def hook_post_commit(out: TextIO) -> None:
-    """Handle Git's post-commit hook.
-
-    Args:
-      out: Output stream to write to.
-    """
-    out.write("branchless: processing commit\n")
-
-    repo = get_repo()
-    db = make_db_for_repo(repo=repo)
-    event_log_db = EventLogDb(db)
-
-    commit_oid = repo.head.target
-    timestamp = repo[commit_oid].commit_time
-    event_log_db.add_events(
-        [CommitEvent(timestamp=timestamp, commit_oid=commit_oid.hex)]
-    )
-    mark_commit_reachable(repo=repo, commit_oid=commit_oid)
-
-
+hook_post_commit = py_hook_post_commit
 hook_reference_transaction = py_hook_reference_transaction

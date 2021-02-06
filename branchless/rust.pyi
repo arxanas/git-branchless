@@ -467,6 +467,14 @@ def py_restack(*, out: TextIO, err: TextIO, git_executable: str) -> int:
 
 # hooks.py
 
+def py_hook_post_commit(out: TextIO) -> None:
+    """Handle Git's post-commit hook.
+
+    Args:
+      out: Output stream to write to.
+    """
+    ...
+
 def py_hook_reference_transaction(out: TextIO, transaction_state: str) -> None:
     """Handle Git's reference-transaction hook.
 
