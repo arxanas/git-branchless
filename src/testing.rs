@@ -110,7 +110,7 @@ impl Git {
             // messages. Usually, we can set this with `git commit -m`, but we have
             // no such option for things such as `git rebase`, which may call `git
             // commit` later as a part of their execution.
-            ("GIT_EDITOR", "true"),
+            ("GIT_EDITOR", "/usr/bin/true"),
             (
                 "PATH_TO_GIT",
                 self.git_executable
@@ -281,6 +281,12 @@ impl Git {
     pub fn get_version(&self) -> anyhow::Result<GitVersion> {
         let (version_str, _stderr) = self.run(&["version"])?;
         version_str.parse()
+    }
+
+    /// Determine if the Git executable supports the `reference-transaction` hook.
+    pub fn supports_reference_transactions(&self) -> anyhow::Result<bool> {
+        let version = self.get_version()?;
+        Ok(version >= GitVersion(2, 29, 0))
     }
 }
 
