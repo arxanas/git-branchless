@@ -17,12 +17,16 @@ import pygit2
 
 from . import get_branch_oid_to_names, get_head_oid, get_main_branch_oid, get_repo
 from .db import make_db_for_repo
-from .eventlog import EventLogDb, EventReplayer, RefUpdateEvent, RewriteEvent
+from .eventlog import EventLogDb, EventReplayer, RewriteEvent
 from .formatting import make_glyphs, pluralize
 from .graph import make_graph
 from .mergebase import MergeBaseDb
 from .restack import find_abandoned_children
-from .rust import py_hook_post_commit, py_hook_reference_transaction
+from .rust import (
+    py_hook_post_checkout,
+    py_hook_post_commit,
+    py_hook_reference_transaction,
+)
 
 
 def _is_rebase_underway(repo: pygit2.Repository) -> bool:
@@ -180,35 +184,6 @@ branchless:   - {git_config}: suppress this message
             )
 
 
-def hook_post_checkout(
-    out: TextIO, previous_head_ref: str, current_head_ref: str, is_branch_checkout: int
-) -> None:
-    """Handle Git's post-checkout hook.
-
-    Args:
-      out: Output stream to write to.
-    """
-    if is_branch_checkout == 0:
-        return
-
-    timestamp = time.time()
-    out.write("branchless: processing checkout\n")
-
-    repo = get_repo()
-    db = make_db_for_repo(repo=repo)
-    event_log_db = EventLogDb(db)
-    event_log_db.add_events(
-        [
-            RefUpdateEvent(
-                timestamp=timestamp,
-                old_ref=previous_head_ref,
-                new_ref=current_head_ref,
-                ref_name="HEAD",
-                message=None,
-            )
-        ]
-    )
-
-
+hook_post_checkout = py_hook_post_checkout
 hook_post_commit = py_hook_post_commit
 hook_reference_transaction = py_hook_reference_transaction
