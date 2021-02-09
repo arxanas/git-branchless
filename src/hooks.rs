@@ -20,6 +20,38 @@ use crate::gc::mark_commit_reachable;
 use crate::python::{map_err_to_py_err, TextIO};
 use crate::util::{get_db_conn, get_repo};
 
+/// Handle Git's `post-checkout` hook.
+///
+/// See the man-page for `githooks(5)`.
+pub fn hook_post_checkout<Out: Write>(
+    out: &mut Out,
+    previous_head_ref: &str,
+    current_head_ref: &str,
+    is_branch_checkout: isize,
+) -> anyhow::Result<()> {
+    if is_branch_checkout == 0 {
+        return Ok(());
+    }
+
+    let now = SystemTime::now();
+    let timestamp = now.duration_since(SystemTime::UNIX_EPOCH)?;
+    writeln!(out, "branchless: processing checkout")?;
+
+    let repo = get_repo()?;
+    let conn = get_db_conn(&repo)?;
+    let mut event_log_db = EventLogDb::new(conn)?;
+    event_log_db
+        .add_events(vec![Event::RefUpdateEvent {
+            timestamp: timestamp.as_secs_f64(),
+            old_ref: Some(String::from(previous_head_ref)),
+            new_ref: Some(String::from(current_head_ref)),
+            ref_name: String::from("HEAD"),
+            message: None,
+        }])
+        .with_context(|| "Adding events to event-log")?;
+    Ok(())
+}
+
 /// Handle Git's `post-commit` hook.
 ///
 /// See the man-page for `githooks(5)`.
@@ -53,19 +85,16 @@ fn parse_reference_transaction_line(now: SystemTime, line: &str) -> anyhow::Resu
     match *line.split(' ').collect::<Vec<_>>().as_slice() {
         [old_value, new_value, ref_name] => {
             if !should_ignore_ref_updates(ref_name) {
-                let timestamp = now.duration_since(SystemTime::UNIX_EPOCH);
-                match &timestamp {
-                    Ok(timestamp) => Ok(Some(Event::RefUpdateEvent {
-                        timestamp: timestamp.as_secs_f64(),
-                        ref_name: String::from(ref_name),
-                        old_ref: Some(String::from(old_value)),
-                        new_ref: Some(String::from(new_value)),
-                        message: None,
-                    })),
-                    Err(err) => {
-                        anyhow::bail!("Unable to process timestamp: {:?}: {:?}", timestamp, err);
-                    }
-                }
+                let timestamp = now
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .with_context(|| "Processing timestamp")?;
+                Ok(Some(Event::RefUpdateEvent {
+                    timestamp: timestamp.as_secs_f64(),
+                    ref_name: String::from(ref_name),
+                    old_ref: Some(String::from(old_value)),
+                    new_ref: Some(String::from(new_value)),
+                    message: None,
+                }))
             } else {
                 Ok(None)
             }
@@ -134,6 +163,25 @@ pub fn hook_reference_transaction<Out: Write>(
 }
 
 #[pyfunction]
+fn py_hook_post_checkout(
+    py: Python,
+    out: PyObject,
+    previous_head_ref: &str,
+    current_head_ref: &str,
+    is_branch_checkout: isize,
+) -> PyResult<()> {
+    let mut out = TextIO::new(py, out);
+    let result = hook_post_checkout(
+        &mut out,
+        previous_head_ref,
+        current_head_ref,
+        is_branch_checkout,
+    );
+    map_err_to_py_err(result, "Could not invoke post-checkout hook")?;
+    Ok(())
+}
+
+#[pyfunction]
 fn py_hook_post_commit(py: Python, out: PyObject) -> PyResult<()> {
     let mut out = TextIO::new(py, out);
     let result = hook_post_commit(&mut out);
@@ -155,6 +203,7 @@ fn py_hook_reference_transaction(
 
 #[allow(missing_docs)]
 pub fn register_python_symbols(module: &PyModule) -> PyResult<()> {
+    module.add_function(pyo3::wrap_pyfunction!(py_hook_post_checkout, module)?)?;
     module.add_function(pyo3::wrap_pyfunction!(py_hook_post_commit, module)?)?;
     module.add_function(pyo3::wrap_pyfunction!(
         py_hook_reference_transaction,
