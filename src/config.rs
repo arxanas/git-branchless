@@ -24,3 +24,15 @@ pub fn get_restack_preserve_timestamps(repo: &git2::Repository) -> anyhow::Resul
         .get_bool("branchless.restack.preserveTimestamps")
         .or(Ok(false))
 }
+
+/// Config key for `get_restack_warn_abandoned`.
+pub const RESTACK_WARN_ABANDONED_CONFIG_KEY: &str = "branchless.restack.warnAbandoned";
+
+/// If `true`, when a rewrite event happens which abandons commits, warn the user
+/// and tell them to run `git restack`.
+pub fn get_restack_warn_abandoned(repo: &git2::Repository) -> anyhow::Result<bool> {
+    let config = repo.config()?;
+    config
+        .get_bool(RESTACK_WARN_ABANDONED_CONFIG_KEY)
+        .or(Ok(true))
+}

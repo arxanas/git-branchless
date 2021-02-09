@@ -53,6 +53,8 @@ pub fn get_main_branch_oid(repo: &git2::Repository) -> anyhow::Result<git2::Oid>
 }
 
 /// Get a mapping from OID to the names of branches which point to that OID.
+///
+/// The returned branch names do not include the `refs/heads/` prefix.
 pub fn get_branch_oid_to_names(
     repo: &git2::Repository,
 ) -> anyhow::Result<HashMap<git2::Oid, HashSet<String>>> {
@@ -76,6 +78,10 @@ pub fn get_branch_oid_to_names(
                         reference.name_bytes()
                     ),
                     Some(reference_name) => {
+                        let reference_name = match reference_name.strip_prefix("refs/heads/") {
+                            Some(reference_name) => reference_name,
+                            None => reference_name,
+                        };
                         let commit = reference.peel_to_commit().with_context(|| {
                             format!("Peeling branch into commit: {}", reference_name)
                         })?;

@@ -467,6 +467,16 @@ def py_restack(*, out: TextIO, err: TextIO, git_executable: str) -> int:
 
 # hooks.py
 
+def py_hook_post_rewrite(out: TextIO, rewrite_type: str) -> None:
+    """Handle Git's post-rewrite hook.
+
+    Args:
+      out: Output stream to write to.
+      rewrite_type: The type of rewrite. Currently one of "rebase" or
+        "amend".
+    """
+    ...
+
 def py_hook_post_checkout(
     out: TextIO, previous_head_ref: str, current_head_ref: str, is_branch_checkout: int
 ) -> None:
