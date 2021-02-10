@@ -36,3 +36,27 @@ pub fn get_restack_warn_abandoned(repo: &git2::Repository) -> anyhow::Result<boo
         .get_bool(RESTACK_WARN_ABANDONED_CONFIG_KEY)
         .or(Ok(true))
 }
+
+/// If `true`, show branches pointing to each commit in the smartlog.
+pub fn get_commit_metadata_branches(repo: &git2::Repository) -> anyhow::Result<bool> {
+    let config = repo.config()?;
+    config
+        .get_bool("branchless.commitMetadata.branches")
+        .or(Ok(true))
+}
+
+/// If `true`, show associated Phabricator commits in the smartlog.
+pub fn get_commit_metadata_differential_revision(repo: &git2::Repository) -> anyhow::Result<bool> {
+    let config = repo.config()?;
+    config
+        .get_bool("branchless.commitMetadata.differentialRevision")
+        .or(Ok(true))
+}
+
+/// If `true`, show the age of each commit in the smartlog.
+pub fn get_commit_metadata_relative_time(repo: &git2::Repository) -> anyhow::Result<bool> {
+    let config = repo.config()?;
+    config
+        .get_bool("branchless.commitMetadata.relativeTime")
+        .or(Ok(true))
+}
