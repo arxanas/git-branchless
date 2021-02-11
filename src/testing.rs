@@ -110,7 +110,15 @@ impl Git {
             // messages. Usually, we can set this with `git commit -m`, but we have
             // no such option for things such as `git rebase`, which may call `git
             // commit` later as a part of their execution.
-            ("GIT_EDITOR", "/usr/bin/true"),
+            ("GIT_EDITOR", {
+                // Some systems have `/bin/true` and others have
+                // `/usr/bin/true`. Pick whichever one we can find.
+                if Path::new("/bin/true").exists() {
+                    "/bin/true"
+                } else {
+                    "/usr/bin/true"
+                }
+            }),
             (
                 "PATH_TO_GIT",
                 self.git_executable
