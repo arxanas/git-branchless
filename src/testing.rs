@@ -3,12 +3,11 @@
 //! This is inside `src` rather than `tests` since we use this code in some unit
 //! tests.
 
-use std::fs::File;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::str::FromStr;
 
-use crate::util::{wrap_git_error, GitVersion};
+use crate::util::{wrap_git_error, GitExecutable, GitVersion};
 use anyhow::Context;
 
 const DUMMY_NAME: &str = "Testy McTestface";
@@ -51,6 +50,10 @@ pub struct GitRunOptions {
     /// If `true`, returns `Error` if the Git command returned a non-zero exit
     /// code.
     pub check: bool,
+
+    /// If `true`, use the system installation of `git` for this command, rather
+    /// than the version under test.
+    pub use_system_git: bool,
 }
 
 impl Default for GitRunOptions {
@@ -58,21 +61,29 @@ impl Default for GitRunOptions {
         GitRunOptions {
             time: 0,
             check: true,
+            use_system_git: false,
         }
     }
 }
 
 impl Git {
-    fn new(repo_path: &Path, git_executable: &Path) -> Self {
+    /// Constructor.
+    pub fn new(repo_path: &Path, git_executable: &GitExecutable) -> Self {
         let repo_path = repo_path.to_path_buf();
-        let git_executable = git_executable.to_path_buf();
+        let GitExecutable(git_executable) = git_executable;
         Git {
             repo_path,
-            git_executable,
+            git_executable: git_executable.clone(),
         }
     }
 
     fn build_command<S: AsRef<str>>(&self, args: &[S], options: &GitRunOptions) -> Command {
+        let git_executable = if !options.use_system_git {
+            self.git_executable.clone()
+        } else {
+            PathBuf::from_str("/usr/bin/git").expect("Could not decode Git executable path")
+        };
+
         // Required for determinism, as these values will be baked into the commit
         // hash.
         let date = format!("{date} -{time:0>2}", date = DUMMY_DATE, time = options.time);
@@ -121,14 +132,14 @@ impl Git {
             }),
             (
                 "PATH_TO_GIT",
-                self.git_executable
+                git_executable
                     .to_str()
                     .expect("Could not decode `git_executable`"),
             ),
             ("PATH", &new_path),
         ];
 
-        let mut command = Command::new(&self.git_executable);
+        let mut command = Command::new(&git_executable);
         command.args(&args).env_clear().envs(env.iter().copied());
 
         // For PyO3 to be able to link to the correct version of Python at
@@ -250,8 +261,7 @@ impl Git {
         contents: &str,
     ) -> anyhow::Result<git2::Oid> {
         let file_path = self.repo_path.join(format!("{}.txt", name));
-        let mut file = File::create(file_path)?;
-        file.write_all(contents.as_bytes())?;
+        std::fs::write(&file_path, contents)?;
         self.run(&["add", "."])?;
         self.run_with_options(
             &["commit", "-m", &format!("create {}.txt", name)],
@@ -291,18 +301,40 @@ impl Git {
         version_str.parse()
     }
 
-    /// Determine if the Git executable supports the `reference-transaction` hook.
+    /// Determine if the Git executable supports the `reference-transaction`
+    /// hook.
     pub fn supports_reference_transactions(&self) -> anyhow::Result<bool> {
         let version = self.get_version()?;
         Ok(version >= GitVersion(2, 29, 0))
     }
+
+    /// Resolve a file during a merge or rebase conflict with the provided
+    /// contents.
+    pub fn resolve_file(&self, name: &str, contents: &str) -> anyhow::Result<()> {
+        let file_path = self.repo_path.join(format!("{}.txt", name));
+        std::fs::write(&file_path, contents)?;
+        let file_path = match file_path.to_str() {
+            None => anyhow::bail!("Could not convert file path to string: {:?}", file_path),
+            Some(file_path) => file_path,
+        };
+        self.run(&["add", file_path])?;
+        Ok(())
+    }
+}
+
+/// Get the path to the Git executable for testing.
+pub fn get_git_executable() -> anyhow::Result<GitExecutable> {
+    let git_executable = std::env::var("PATH_TO_GIT").with_context(|| {
+        "No path to git set. Try running as: PATH_TO_GIT=$(which git) cargo test ..."
+    })?;
+    let git_executable = PathBuf::from_str(&git_executable)?;
+    Ok(GitExecutable(git_executable))
 }
 
 /// Create a temporary directory for testing and a `Git` instance to use with it.
 pub fn with_git(f: fn(Git) -> anyhow::Result<()>) -> anyhow::Result<()> {
     let repo_dir = tempfile::tempdir()?;
-    let git_executable = std::env::var("PATH_TO_GIT")
-        .expect("No path to git set. Try running as: PATH_TO_GIT=$(which git) cargo test ...");
-    let git = Git::new(Path::new(repo_dir.path()), Path::new(&git_executable));
+    let git_executable = get_git_executable()?;
+    let git = Git::new(Path::new(repo_dir.path()), &git_executable);
     f(git)
 }

@@ -53,6 +53,7 @@ Differential Revision: https://some-phabricator-url.example/D12345
         )
 
 
+@pytest.mark.skip
 def test_relative_time_provider(git: Git) -> None:
     git.init_repo()
     git.run("config", ["branchless.commitMetadata.relativeTime", "true"])

@@ -12,12 +12,14 @@ use std::time::{Duration, SystemTime};
 use console::style;
 use fn_error_context::context;
 use lazy_static::lazy_static;
+use pyo3::prelude::*;
 use regex::Regex;
 
 use crate::config::{
     get_commit_metadata_branches, get_commit_metadata_differential_revision,
     get_commit_metadata_relative_time,
 };
+use crate::python::{map_err_to_py_err, raise_runtime_error, PyOidStr};
 
 /// Interface to display information about a commit in the smartlog.
 pub trait CommitMetadataProvider {
@@ -55,7 +57,13 @@ impl CommitMetadataProvider for CommitOidProvider {
     #[context("Providing OID metadata for commit {:?}", commit.id())]
     fn describe_commit(&self, commit: &git2::Commit) -> anyhow::Result<Option<String>> {
         let oid = commit.id();
-        Ok(Some(oid.to_string()[..8].to_owned()))
+        let oid = &oid.to_string()[..8];
+        let oid = if console::user_attended() {
+            console::style(oid).yellow().to_string()
+        } else {
+            oid.to_owned()
+        };
+        Ok(Some(oid))
     }
 }
 
@@ -77,42 +85,49 @@ impl CommitMetadataProvider for CommitMessageProvider {
 }
 
 /// Display branches that point to a given commit.
-pub struct BranchesProvider<'repo> {
+pub struct BranchesProvider {
     is_enabled: bool,
-    branch_oid_to_names: &'repo HashMap<git2::Oid, HashSet<String>>,
+
+    // TODO: once we drop Python support, borrow this instead of cloning it.
+    branch_oid_to_names: HashMap<git2::Oid, HashSet<String>>,
 }
 
-impl<'repo> BranchesProvider<'repo> {
+impl BranchesProvider {
     /// Constructor.
     pub fn new(
-        repo: &'repo git2::Repository,
-        branch_oid_to_names: &'repo HashMap<git2::Oid, HashSet<String>>,
+        repo: &git2::Repository,
+        branch_oid_to_names: &HashMap<git2::Oid, HashSet<String>>,
     ) -> anyhow::Result<Self> {
         let is_enabled = get_commit_metadata_branches(repo)?;
         Ok(BranchesProvider {
             is_enabled,
-            branch_oid_to_names,
+            branch_oid_to_names: branch_oid_to_names.clone(),
         })
     }
 }
 
-impl<'a> CommitMetadataProvider for BranchesProvider<'a> {
+impl<'a> CommitMetadataProvider for BranchesProvider {
     #[context("Providing branch metadata for commit {:?}", commit.id())]
     fn describe_commit(&self, commit: &git2::Commit) -> anyhow::Result<Option<String>> {
         if !self.is_enabled {
             return Ok(None);
         }
 
-        let branch_names = self.branch_oid_to_names.get(&commit.id());
-        match branch_names {
-            None => Ok(None),
-            Some(branch_names) => {
-                let mut branch_names: Vec<&str> =
-                    branch_names.iter().map(|name| name.as_ref()).collect();
-                branch_names.sort_unstable();
-                let result = style(format!("({})", branch_names.join(", "))).green();
-                Ok(Some(result.to_string()))
-            }
+        let branch_names: HashSet<&str> = match self.branch_oid_to_names.get(&commit.id()) {
+            Some(branch_names) => branch_names
+                .iter()
+                .map(|branch_name| branch_name.as_ref())
+                .collect(),
+            None => HashSet::new(),
+        };
+
+        if branch_names.is_empty() {
+            Ok(None)
+        } else {
+            let mut branch_names: Vec<&str> = branch_names.into_iter().collect();
+            branch_names.sort_unstable();
+            let result = style(format!("({})", branch_names.join(", "))).green();
+            Ok(Some(result.to_string()))
         }
     }
 }
@@ -230,6 +245,43 @@ impl CommitMetadataProvider for RelativeTimeProvider {
         let result = style(description).green().to_string();
         Ok(Some(result))
     }
+}
+
+#[allow(missing_docs)]
+pub fn py_commit_metadata_provider_to_commit_metadata_provider(
+    py: Python,
+    repo: &git2::Repository,
+    py_commit_metadata_provider: PyObject,
+) -> PyResult<Box<dyn CommitMetadataProvider>> {
+    let inner = || -> anyhow::Result<_> {
+        let class: PyObject = py_commit_metadata_provider
+            .getattr(py, "__class__")?
+            .extract(py)?;
+        let class: String = class.getattr(py, "__name__")?.extract(py)?;
+
+        // HACK: ignore actual field values for now.
+        let result: Box<dyn CommitMetadataProvider> = match class.as_str() {
+            "CommitOidProvider" => Box::new(CommitOidProvider::new()?),
+            "CommitMessageProvider" => Box::new(CommitMessageProvider::new()?),
+            "BranchesProvider" => {
+                let branch_oid_to_names: HashMap<PyOidStr, HashSet<String>> =
+                    py_commit_metadata_provider
+                        .getattr(py, "_branch_oid_to_names")?
+                        .extract(py)?;
+                let branch_oid_to_names: HashMap<git2::Oid, HashSet<String>> = branch_oid_to_names
+                    .into_iter()
+                    .map(|(PyOidStr(oid), branch_names)| (oid, branch_names))
+                    .collect();
+                Box::new(BranchesProvider::new(&repo, &branch_oid_to_names)?)
+            }
+            "DifferentialRevisionProvider" => Box::new(DifferentialRevisionProvider::new(repo)?),
+            "RelativeTimeProvider" => Box::new(RelativeTimeProvider::new(repo, SystemTime::now())?),
+            _ => raise_runtime_error(format!("Invalid commit metadata provider type: {}", class))?,
+        };
+        Ok(result)
+    };
+    let result = map_err_to_py_err(inner(), "Could not convert commit metadata provider")?;
+    Ok(result)
 }
 
 #[cfg(test)]

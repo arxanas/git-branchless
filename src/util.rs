@@ -2,7 +2,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
-use std::path::Path;
+use std::path::PathBuf;
 use std::process::Command;
 use std::str::FromStr;
 
@@ -99,6 +99,16 @@ pub fn get_branch_oid_to_names(
             }
         }
     }
+
+    // The main branch may be a remote branch, in which case it won't be
+    // returned in the iteration above.
+    let main_branch_name = get_main_branch_name(repo)?;
+    let main_branch_oid = get_main_branch_oid(repo)?;
+    result
+        .entry(main_branch_oid)
+        .or_insert_with(HashSet::new)
+        .insert(main_branch_name);
+
     Ok(result)
 }
 
@@ -123,7 +133,7 @@ pub fn get_db_conn(repo: &git2::Repository) -> anyhow::Result<rusqlite::Connecti
 
 /// Path to the `git` executable on disk to be executed.
 #[derive(Debug)]
-pub struct GitExecutable<'path>(pub &'path Path);
+pub struct GitExecutable(pub PathBuf);
 
 /// Run Git in a subprocess, and inform the user.
 ///

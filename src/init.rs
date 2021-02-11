@@ -257,7 +257,7 @@ fn init<Out: Write>(out: &mut Out, git_executable: &GitExecutable) -> anyhow::Re
 fn py_init(py: Python, out: PyObject, git_executable: &str) -> PyResult<isize> {
     let mut text_io = TextIO::new(py, out);
     let git_executable = Path::new(git_executable);
-    let git_executable = GitExecutable(git_executable);
+    let git_executable = GitExecutable(git_executable.to_path_buf());
     let result = init(&mut text_io, &git_executable);
     let () = map_err_to_py_err(result, "Could not initialize git-branchless")?;
     Ok(0)
