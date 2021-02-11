@@ -1252,21 +1252,21 @@ impl PyEventReplayer {
         Ok(())
     }
 
-    fn get_commit_visibility(&self, py: Python, oid: PyOidStr) -> PyResult<PyObject> {
+    fn get_commit_visibility(&self, py: Python, oid: PyOidStr) -> PyObject {
         let oid = oid.0;
         let commit_visibility = self.event_replayer.get_cursor_commit_visibility(oid);
         match commit_visibility {
-            Some(CommitVisibility::Visible) => Ok(String::from("visible").into_py(py)),
-            Some(CommitVisibility::Hidden) => Ok(String::from("hidden").into_py(py)),
-            None => Ok(py.None()),
+            Some(CommitVisibility::Visible) => String::from("visible").into_py(py),
+            Some(CommitVisibility::Hidden) => String::from("hidden").into_py(py),
+            None => py.None(),
         }
     }
 
-    fn get_commit_latest_event(&self, py: Python, oid: PyOidStr) -> PyResult<PyObject> {
+    fn get_commit_latest_event(&self, py: Python, oid: PyOidStr) -> PyObject {
         let oid = oid.0;
         match self.event_replayer.get_cursor_commit_latest_event(oid) {
-            Some(event) => Ok(event.to_object(py)),
-            None => Ok(py.None()),
+            Some(event) => event.to_object(py),
+            None => py.None(),
         }
     }
 
