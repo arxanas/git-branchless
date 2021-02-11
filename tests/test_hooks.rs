@@ -163,11 +163,23 @@ fn test_pre_auto_gc() -> anyhow::Result<()> {
         // See https://stackoverflow.com/q/3433653/344643, it's hard to get the
         // `pre-auto-gc` hook to be invoked at all. We'll just invoke the hook
         // directly to make sure that it's installed properly.
+        std::env::set_current_dir(&git.repo_path)?;
         let hook_path = git.repo_path.join(".git").join("hooks").join("pre-auto-gc");
         let output = Command::new(hook_path).output()?;
-        assert!(output.status.success());
 
         let stdout = String::from_utf8(output.stdout)?;
+        let stderr = String::from_utf8(output.stderr)?;
+        assert!(
+            output.status.success(),
+            "Pre-auto-gc hook failed with exit code {:?}:
+            Stdout:
+            {}
+            Stderr:
+            {}",
+            output.status.code(),
+            stdout,
+            stderr
+        );
         insta::assert_snapshot!(stdout, @"branchless: collecting garbage
 ");
 
