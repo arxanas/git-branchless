@@ -10,6 +10,7 @@ use std::ops::Add;
 use std::time::{Duration, SystemTime};
 
 use console::style;
+use fn_error_context::context;
 use lazy_static::lazy_static;
 use regex::Regex;
 
@@ -28,6 +29,7 @@ pub trait CommitMetadataProvider {
 }
 
 /// Get the complete description for a given commit.
+#[context("Rendering commit metadata for commit {:?}", commit.id())]
 pub fn render_commit_metadata<'a>(
     commit_metadata_providers: impl Iterator<Item = &'a dyn CommitMetadataProvider>,
     commit: &git2::Commit,
@@ -50,6 +52,7 @@ impl CommitOidProvider {
 }
 
 impl CommitMetadataProvider for CommitOidProvider {
+    #[context("Providing OID metadata for commit {:?}", commit.id())]
     fn describe_commit(&self, commit: &git2::Commit) -> anyhow::Result<Option<String>> {
         let oid = commit.id();
         Ok(Some(oid.to_string()[..8].to_owned()))
@@ -67,6 +70,7 @@ impl CommitMessageProvider {
 }
 
 impl CommitMetadataProvider for CommitMessageProvider {
+    #[context("Providing message metadata for commit {:?}", commit.id())]
     fn describe_commit(&self, commit: &git2::Commit) -> anyhow::Result<Option<String>> {
         Ok(commit.summary().map(|summary| summary.to_owned()))
     }
@@ -93,6 +97,7 @@ impl<'repo> BranchesProvider<'repo> {
 }
 
 impl<'a> CommitMetadataProvider for BranchesProvider<'a> {
+    #[context("Providing branch metadata for commit {:?}", commit.id())]
     fn describe_commit(&self, commit: &git2::Commit) -> anyhow::Result<Option<String>> {
         if !self.is_enabled {
             return Ok(None);
@@ -146,6 +151,7 @@ $",
 }
 
 impl CommitMetadataProvider for DifferentialRevisionProvider {
+    #[context("Providing Differential revision metadata for commit {:?}", commit.id())]
     fn describe_commit(&self, commit: &git2::Commit) -> anyhow::Result<Option<String>> {
         if !self.is_enabled {
             return Ok(None);
@@ -212,6 +218,7 @@ fn describe_time_delta(now: SystemTime, previous_time: SystemTime) -> anyhow::Re
 }
 
 impl CommitMetadataProvider for RelativeTimeProvider {
+    #[context("Providing relative time metadata for commit {:?}", commit.id())]
     fn describe_commit(&self, commit: &git2::Commit) -> anyhow::Result<Option<String>> {
         if !self.is_enabled {
             return Ok(None);

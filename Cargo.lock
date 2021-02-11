@@ -248,6 +248,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7360491ce676a36bf9bb3c56c1aa791658183a54d2744120f27285738d90465a"
 
 [[package]]
+name = "fn-error-context"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ac0b92c51c8b8183a0c101a7b2ea5fac11d2f1e01057f91e390284c75d76ef44"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "form_urlencoded"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -298,6 +309,7 @@ dependencies = [
  "assert_cmd",
  "clippy",
  "console",
+ "fn-error-context",
  "git2",
  "insta",
  "lazy_static",

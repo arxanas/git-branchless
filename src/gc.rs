@@ -12,6 +12,7 @@
 use std::io::Write;
 
 use anyhow::Context;
+use fn_error_context::context;
 use pyo3::prelude::*;
 
 use crate::eventlog::{is_gc_ref, EventLogDb, EventReplayer};
@@ -62,6 +63,7 @@ fn find_dangling_references<'repo>(
 /// Args:
 /// * `repo`: The Git repository.
 /// * `commit_oid`: The commit OID to mark as reachable.
+#[context("Marking commit reachable: {:?}", commit_oid)]
 pub fn mark_commit_reachable(repo: &git2::Repository, commit_oid: git2::Oid) -> anyhow::Result<()> {
     let ref_name = format!("refs/branchless/{}", commit_oid.to_string());
     anyhow::ensure!(
@@ -81,6 +83,7 @@ pub fn mark_commit_reachable(repo: &git2::Repository, commit_oid: git2::Oid) -> 
 /// Run branchless's garbage collection.
 ///
 /// Frees any references to commits which are no longer visible in the smartlog.
+#[context("Running garbage-collection")]
 pub fn gc<Out: Write>(out: &mut Out) -> anyhow::Result<()> {
     let repo = get_repo()?;
     let conn = get_db_conn(&repo)?;

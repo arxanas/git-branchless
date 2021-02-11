@@ -9,6 +9,7 @@ use std::collections::{HashMap, HashSet};
 use std::convert::{TryFrom, TryInto};
 
 use anyhow::Context;
+use fn_error_context::context;
 use log::warn;
 use pyo3::prelude::*;
 use pyo3::types::PyType;
@@ -188,6 +189,7 @@ impl From<Event> for Row {
 impl TryFrom<Row> for Event {
     type Error = anyhow::Error;
 
+    #[context("Converting database result row into `Event`")]
     fn try_from(row: Row) -> Result<Self, Self::Error> {
         let Row {
             timestamp,
@@ -270,6 +272,7 @@ pub struct EventLogDb {
     conn: rusqlite::Connection,
 }
 
+#[context("Initializing `EventLogDb` tables")]
 fn init_tables(conn: &rusqlite::Connection) -> anyhow::Result<()> {
     conn.execute(
         "
@@ -290,6 +293,7 @@ CREATE TABLE IF NOT EXISTS event_log (
 
 impl EventLogDb {
     /// Constructor.
+    #[context("Constructing `EventLogDb`")]
     pub fn new(conn: rusqlite::Connection) -> anyhow::Result<Self> {
         init_tables(&conn)?;
         Ok(EventLogDb { conn })
@@ -299,6 +303,7 @@ impl EventLogDb {
     ///
     /// Args:
     /// * events: The events to add.
+    #[context("Adding events to event-log")]
     pub fn add_events(&mut self, events: Vec<Event>) -> anyhow::Result<()> {
         let tx = self.conn.transaction()?;
         for event in events {
@@ -331,6 +336,7 @@ INSERT INTO event_log VALUES (
     /// Get all the events in the database.
     ///
     /// Returns: All the events in the database, ordered from oldest to newest.
+    #[context("Querying events from `EventLogDb`")]
     pub fn get_events(&self) -> anyhow::Result<Vec<Event>> {
         let mut stmt = self.conn.prepare(
             "

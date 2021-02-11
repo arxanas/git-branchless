@@ -5,12 +5,15 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Context;
 use console::style;
+use fn_error_context::context;
 use log::warn;
 use pyo3::prelude::*;
 
+use crate::config::get_core_hooks_path;
 use crate::python::{map_err_to_py_err, TextIO};
 use crate::util::{get_repo, run_git_silent, wrap_git_error, GitExecutable, GitVersion};
 
+#[derive(Debug)]
 enum Hook {
     /// Regular Git hook.
     RegularHook { path: PathBuf },
@@ -19,6 +22,7 @@ enum Hook {
     MultiHook { path: PathBuf },
 }
 
+#[context("Determining hook path")]
 fn determine_hook_path(repo: &git2::Repository, hook_type: &str) -> anyhow::Result<Hook> {
     let multi_hooks_path = repo.path().join("hook_multi");
     let hook = if multi_hooks_path.exists() {
@@ -27,10 +31,7 @@ fn determine_hook_path(repo: &git2::Repository, hook_type: &str) -> anyhow::Resu
             .join("00_local_branchless");
         Hook::MultiHook { path }
     } else {
-        let config = repo.config().with_context(|| "Getting repo config")?;
-        let hooks_dir = config
-            .get_path("core.hooksPath")
-            .unwrap_or_else(|_err| repo.path().join("hooks"));
+        let hooks_dir = get_core_hooks_path(repo)?;
         let path = hooks_dir.join(hook_type);
         Hook::RegularHook { path }
     };
@@ -65,6 +66,7 @@ fn update_between_lines(lines: &str, updated_lines: &str) -> String {
     new_lines
 }
 
+#[context("Updating hook contents: {:?}", hook)]
 fn update_hook_contents(hook: &Hook, hook_contents: &str) -> anyhow::Result<()> {
     let (hook_path, hook_contents) = match hook {
         Hook::RegularHook { path } => match std::fs::read_to_string(path) {
@@ -112,6 +114,7 @@ fn update_hook_contents(hook: &Hook, hook_contents: &str) -> anyhow::Result<()> 
     Ok(())
 }
 
+#[context("Installing hook of type: {:?}", hook_type)]
 fn install_hook<Out: Write>(
     out: &mut Out,
     repo: &git2::Repository,
@@ -119,11 +122,12 @@ fn install_hook<Out: Write>(
     hook_script: &str,
 ) -> anyhow::Result<()> {
     writeln!(out, "Installing hook: {}", hook_type)?;
-    let hook = determine_hook_path(repo, hook_type).with_context(|| "Determining hook path")?;
+    let hook = determine_hook_path(repo, hook_type)?;
     update_hook_contents(&hook, hook_script)?;
     Ok(())
 }
 
+#[context("Installing all hooks")]
 fn install_hooks<Out: Write>(out: &mut Out, repo: &git2::Repository) -> anyhow::Result<()> {
     install_hook(
         out,
@@ -174,6 +178,7 @@ git branchless hook-reference-transaction "$@" || (
     Ok(())
 }
 
+#[context("Installing alias: {:?}", alias)]
 fn install_alias<Out: Write>(
     out: &mut Out,
     config: &mut git2::Config,
@@ -190,6 +195,7 @@ fn install_alias<Out: Write>(
     Ok(())
 }
 
+#[context("Installing all aliases")]
 fn install_aliases<Out: Write>(
     out: &mut Out,
     repo: &mut git2::Repository,
@@ -239,6 +245,7 @@ the branchless workflow will work properly.
 /// Args:
 /// * `out`: The output stream to write to.
 /// * `git_executable`: The path to the `git` executable on disk.
+#[context("Initializing git-branchless for repo")]
 fn init<Out: Write>(out: &mut Out, git_executable: &GitExecutable) -> anyhow::Result<()> {
     let mut repo = get_repo()?;
     install_hooks(out, &repo)?;
