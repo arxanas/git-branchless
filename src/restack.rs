@@ -57,7 +57,8 @@
 
 use std::collections::{HashMap, HashSet};
 use std::io::Write;
-use std::path::Path;
+use std::path::PathBuf;
+use std::str::FromStr;
 
 use anyhow::Context;
 use fn_error_context::context;
@@ -386,7 +387,7 @@ fn py_find_abandoned_children(
 fn py_restack(py: Python, out: PyObject, err: PyObject, git_executable: &str) -> PyResult<isize> {
     let mut out = TextIO::new(py, out);
     let mut err = TextIO::new(py, err);
-    let git_executable = GitExecutable(Path::new(git_executable));
+    let git_executable = GitExecutable(PathBuf::from_str(git_executable)?);
     let result = restack(&mut out, &mut err, git_executable);
     let result = map_err_to_py_err(result, "Restack failed")?;
     Ok(result)

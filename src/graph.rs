@@ -50,7 +50,7 @@ pub struct Node<'repo> {
     /// These commits are considered to be immutable and should never leave the
     /// `main` state. However, this can still happen sometimes if the user's
     /// workflow is different than expected.
-    is_main: bool,
+    pub is_main: bool,
 
     /// Indicates that this commit should be considered "visible".
     ///

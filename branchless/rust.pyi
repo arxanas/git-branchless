@@ -502,3 +502,25 @@ def py_hook_reference_transaction(out: TextIO, transaction_state: str) -> None:
       out: Output stream to write to.
     """
     ...
+
+# smartlog.py
+
+def py_render_graph(
+    out: TextIO,
+    glyphs: object,
+    repo: pygit2.Repository,
+    merge_base_db: PyMergeBaseDb,
+    graph: PyCommitGraph,
+    head_oid: Optional[OidStr],
+    commit_metadata_providers: List[object],
+) -> None: ...
+def py_smartlog(*, out: TextIO) -> int:
+    """Display a nice graph of commits you've recently worked on.
+
+    Args:
+      out: The output stream to write to.
+
+    Returns:
+      Exit code (0 denotes successful exit).
+    """
+    ...
