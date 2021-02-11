@@ -14,6 +14,7 @@ use std::time::SystemTime;
 
 use anyhow::Context;
 use console::style;
+use fn_error_context::context;
 use pyo3::prelude::*;
 
 use crate::config::{get_restack_warn_abandoned, RESTACK_WARN_ABANDONED_CONFIG_KEY};
@@ -48,6 +49,7 @@ use crate::util::{
 ///   next operation in the rebase plan fixes up the abandoned commit. This can
 ///   happen even if no conflict occurred and the rebase completed successfully
 ///   without any user intervention.
+#[context("Determining if rebase is underway")]
 fn is_rebase_underway(repo: &git2::Repository) -> anyhow::Result<bool> {
     let result = ["rebase-apply", "rebase-merge"]
         .iter()
@@ -58,6 +60,7 @@ fn is_rebase_underway(repo: &git2::Repository) -> anyhow::Result<bool> {
 /// Handle Git's `post-rewrite` hook.
 ///
 /// See the man-page for `githooks(5)`.
+#[context("Processing post-rewrite hook")]
 pub fn hook_post_rewrite<Out: Write>(out: &mut Out, rewrite_type: &str) -> anyhow::Result<()> {
     let now = SystemTime::now();
     let timestamp = now.duration_since(SystemTime::UNIX_EPOCH)?.as_secs_f64();
@@ -107,9 +110,7 @@ pub fn hook_post_rewrite<Out: Write>(out: &mut Out, rewrite_type: &str) -> anyho
 
     let conn = get_db_conn(&repo)?;
     let mut event_log_db = EventLogDb::new(clone_conn(&conn)?)?;
-    event_log_db
-        .add_events(events)
-        .with_context(|| "Adding events to event-log")?;
+    event_log_db.add_events(events)?;
 
     let should_check_abandoned_commits = get_restack_warn_abandoned(&repo)?;
     if is_spurious_event || !should_check_abandoned_commits {
@@ -219,6 +220,7 @@ branchless:   - {config_command}: suppress this message
 /// Handle Git's `post-checkout` hook.
 ///
 /// See the man-page for `githooks(5)`.
+#[context("Processing post-checkout hook")]
 pub fn hook_post_checkout<Out: Write>(
     out: &mut Out,
     previous_head_ref: &str,
@@ -236,15 +238,13 @@ pub fn hook_post_checkout<Out: Write>(
     let repo = get_repo()?;
     let conn = get_db_conn(&repo)?;
     let mut event_log_db = EventLogDb::new(conn)?;
-    event_log_db
-        .add_events(vec![Event::RefUpdateEvent {
-            timestamp: timestamp.as_secs_f64(),
-            old_ref: Some(String::from(previous_head_ref)),
-            new_ref: Some(String::from(current_head_ref)),
-            ref_name: String::from("HEAD"),
-            message: None,
-        }])
-        .with_context(|| "Adding events to event-log")?;
+    event_log_db.add_events(vec![Event::RefUpdateEvent {
+        timestamp: timestamp.as_secs_f64(),
+        old_ref: Some(String::from(previous_head_ref)),
+        new_ref: Some(String::from(current_head_ref)),
+        ref_name: String::from("HEAD"),
+        message: None,
+    }])?;
     Ok(())
 }
 
@@ -267,12 +267,10 @@ pub fn hook_post_commit<Out: Write>(out: &mut Out) -> anyhow::Result<()> {
         .with_context(|| "Marking commit as reachable for GC purposes")?;
 
     let timestamp = commit.time().seconds() as f64;
-    event_log_db
-        .add_events(vec![Event::CommitEvent {
-            timestamp,
-            commit_oid: commit.id(),
-        }])
-        .with_context(|| "Adding events to event-log")?;
+    event_log_db.add_events(vec![Event::CommitEvent {
+        timestamp,
+        commit_oid: commit.id(),
+    }])?;
 
     Ok(())
 }
@@ -307,6 +305,7 @@ fn parse_reference_transaction_line(now: SystemTime, line: &str) -> anyhow::Resu
 /// Handle Git's `reference-transaction` hook.
 ///
 /// See the man-page for `githooks(5)`.
+#[context("Processing reference-transaction hook")]
 pub fn hook_reference_transaction<Out: Write>(
     out: &mut Out,
     transaction_state: &str,
@@ -351,9 +350,7 @@ pub fn hook_reference_transaction<Out: Write>(
     let repo = get_repo()?;
     let conn = get_db_conn(&repo)?;
     let mut event_log_db = EventLogDb::new(conn)?;
-    event_log_db
-        .add_events(events)
-        .with_context(|| "Adding events to event-log")?;
+    event_log_db.add_events(events)?;
 
     Ok(())
 }

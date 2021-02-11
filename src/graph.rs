@@ -5,6 +5,7 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 
 use anyhow::Context;
+use fn_error_context::context;
 use log::warn;
 use pyo3::prelude::*;
 
@@ -13,16 +14,20 @@ use crate::mergebase::{MergeBaseDb, PyMergeBaseDb};
 use crate::python::{map_err_to_py_err, PyOid, PyOidStr, PyRepo};
 
 /// The OID of the repo's HEAD reference.
+#[derive(Debug)]
 pub struct HeadOid(pub Option<git2::Oid>);
 
 /// The OID that the repo's main branch points to.
+#[derive(Debug)]
 pub struct MainBranchOid(pub git2::Oid);
 
 /// The OIDs of any branches whose pointed-to commits should be included in the
 /// commit graph.
+#[derive(Debug)]
 pub struct BranchOids(pub HashSet<git2::Oid>);
 
 /// The OIDs of any visible commits that should be included in the commit graph.
+#[derive(Debug)]
 pub struct CommitOids(pub HashSet<git2::Oid>);
 
 /// Node contained in the smartlog commit graph.
@@ -129,6 +134,7 @@ fn find_path_to_merge_base_internal<'repo>(
 /// Returns: A path of commits from `commit_oid` through parents to `target_oid`.
 /// The path includes `commit_oid` at the beginning and `target_oid` at the end.
 /// If there is no such path, returns `None`.
+#[context("Finding path from {:?} to {:?}", commit_oid, target_oid)]
 pub fn find_path_to_merge_base<'repo>(
     repo: &'repo git2::Repository,
     merge_base_db: &MergeBaseDb,
@@ -144,6 +150,7 @@ pub fn find_path_to_merge_base<'repo>(
 /// between it and the main branch, those intermediate commits should be shown
 /// (or else you won't get a good idea of the line of development that happened
 /// for this commit since the main branch).
+#[context("Walking from commits: {:?}", commit_oids)]
 fn walk_from_commits<'repo>(
     repo: &'repo git2::Repository,
     merge_base_db: &MergeBaseDb,
@@ -331,6 +338,7 @@ fn do_remove_commits(graph: &mut CommitGraph, head_oid: &HeadOid, branch_oids: &
 /// be set to `True` for most display-related purposes.
 ///
 /// Returns: A tuple of the head OID and the commit graph.
+#[context("Creating commit graph")]
 pub fn make_graph<'repo>(
     repo: &'repo git2::Repository,
     merge_base_db: &MergeBaseDb,

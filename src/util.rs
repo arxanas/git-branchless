@@ -7,6 +7,7 @@ use std::process::Command;
 use std::str::FromStr;
 
 use anyhow::Context;
+use fn_error_context::context;
 use log::warn;
 
 use crate::config::get_main_branch_name;
@@ -22,6 +23,7 @@ pub fn wrap_git_error(error: git2::Error) -> anyhow::Error {
 /// * `repo`: The Git repository.
 ///
 /// Returns: The OID for the repository's `HEAD` reference.
+#[context("Getting HEAD OID for repository")]
 pub fn get_head_oid(repo: &git2::Repository) -> anyhow::Result<Option<git2::Oid>> {
     let head_ref = match repo.head() {
         Ok(head_ref) => Ok(head_ref),
@@ -43,6 +45,7 @@ pub fn get_head_oid(repo: &git2::Repository) -> anyhow::Result<Option<git2::Oid>
 /// * `repo`: The Git repository.
 ///
 /// Returns: The OID corresponding to the main branch.
+#[context("Getting main branch OID for repository")]
 pub fn get_main_branch_oid(repo: &git2::Repository) -> anyhow::Result<git2::Oid> {
     let main_branch_name = get_main_branch_name(&repo)?;
     let branch = repo
@@ -55,6 +58,7 @@ pub fn get_main_branch_oid(repo: &git2::Repository) -> anyhow::Result<git2::Oid>
 /// Get a mapping from OID to the names of branches which point to that OID.
 ///
 /// The returned branch names do not include the `refs/heads/` prefix.
+#[context("Getting branch-OID-to-names map for repository")]
 pub fn get_branch_oid_to_names(
     repo: &git2::Repository,
 ) -> anyhow::Result<HashMap<git2::Oid, HashSet<String>>> {
@@ -99,6 +103,7 @@ pub fn get_branch_oid_to_names(
 }
 
 /// Get the git repository associated with the current directory.
+#[context("Getting `git2::Repository` for repo")]
 pub fn get_repo() -> anyhow::Result<git2::Repository> {
     let path = std::env::current_dir().with_context(|| "Getting working directory")?;
     let repository = git2::Repository::discover(path).map_err(wrap_git_error)?;
@@ -106,6 +111,7 @@ pub fn get_repo() -> anyhow::Result<git2::Repository> {
 }
 
 /// Get the connection to the SQLite database for this repository.
+#[context("Getting connection to SQLite database for repo")]
 pub fn get_db_conn(repo: &git2::Repository) -> anyhow::Result<rusqlite::Connection> {
     let dir = repo.path().join("branchless");
     std::fs::create_dir_all(&dir).with_context(|| "Creating .git/branchless dir")?;
@@ -132,6 +138,7 @@ pub struct GitExecutable<'path>(pub &'path Path);
 /// executable itself.
 ///
 /// Returns: The exit code of Git (non-zero signifies error).
+#[context("Running Git ({:?}) with args: {:?}", git_executable, args)]
 pub fn run_git<Out: std::io::Write, S: AsRef<str> + std::fmt::Debug>(
     out: &mut Out,
     err: &mut Out,
@@ -224,6 +231,7 @@ pub struct GitVersion(pub isize, pub isize, pub isize);
 impl FromStr for GitVersion {
     type Err = anyhow::Error;
 
+    #[context("Parsing Git version from: {:?}", output)]
     fn from_str(output: &str) -> anyhow::Result<GitVersion> {
         let output = output.trim();
         let words = output.split(' ').collect::<Vec<&str>>();

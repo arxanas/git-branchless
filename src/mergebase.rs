@@ -15,6 +15,7 @@
 //! examine it.
 
 use anyhow::Context;
+use fn_error_context::context;
 use pyo3::prelude::*;
 use rusqlite::OptionalExtension;
 
@@ -26,6 +27,7 @@ pub struct MergeBaseDb {
     conn: rusqlite::Connection,
 }
 
+#[context("Initializing tables for `MergeBaseDb`")]
 fn init_tables(conn: &rusqlite::Connection) -> anyhow::Result<()> {
     conn.execute(
         "
@@ -44,6 +46,7 @@ CREATE TABLE IF NOT EXISTS merge_base_oids (
 
 impl MergeBaseDb {
     /// Constructor.
+    #[context("Constructing `MergeBaseDb`")]
     pub fn new(conn: rusqlite::Connection) -> anyhow::Result<Self> {
         init_tables(&conn).context("Initializing tables")?;
         Ok(MergeBaseDb { conn })
@@ -61,6 +64,7 @@ impl MergeBaseDb {
     ///
     /// Returns: The merge-base OID for these two commits. Returns `None` if no
     /// merge-base could be found.
+    #[context("Querying for merge-base of OIDs {:?} and {:?}", lhs_oid, rhs_oid)]
     pub fn get_merge_base_oid(
         &self,
         repo: &git2::Repository,

@@ -60,6 +60,7 @@ use std::io::Write;
 use std::path::Path;
 
 use anyhow::Context;
+use fn_error_context::context;
 use log::info;
 use pyo3::prelude::*;
 
@@ -156,6 +157,7 @@ pub fn find_abandoned_children(
     Some((rewritten_oid, visible_children_oids))
 }
 
+#[context("Restacking commits")]
 fn restack_commits<Out: Write>(
     out: &mut Out,
     err: &mut Out,
@@ -210,8 +212,7 @@ fn restack_commits<Out: Write>(
             }
             args
         };
-        let result = run_git(out, err, git_executable, &args)
-            .with_context(|| format!("Running git at {:?} with args {:?}", git_executable, args))?;
+        let result = run_git(out, err, git_executable, &args)?;
         if result != 0 {
             writeln!(
                 out,
@@ -227,6 +228,7 @@ fn restack_commits<Out: Write>(
     Ok(0)
 }
 
+#[context("Restacking branches")]
 fn restack_branches<Out: Write>(
     out: &mut Out,
     err: &mut Out,
@@ -300,6 +302,7 @@ fn restack_branches<Out: Write>(
 /// * `git_executable`: The path to the `git` executable on disk.
 ///
 /// Returns: Exit code (0 denotes successful exit).
+#[context("Restacking commits and branches")]
 pub fn restack<'out, Out: Write>(
     out: &'out mut Out,
     err: &'out mut Out,
@@ -318,8 +321,7 @@ pub fn restack<'out, Out: Write>(
         &git_executable,
         &merge_base_db,
         &event_log_db,
-    )
-    .with_context(|| "Restacking commits")?;
+    )?;
     if result != 0 {
         return Ok(result);
     }
@@ -331,8 +333,7 @@ pub fn restack<'out, Out: Write>(
         &git_executable,
         &merge_base_db,
         &event_log_db,
-    )
-    .with_context(|| "Restacking branches")?;
+    )?;
     if result != 0 {
         return Ok(result);
     }
