@@ -264,34 +264,41 @@ fn should_hide(
     unhideable_oids: &HashSet<git2::Oid>,
     oid: &git2::Oid,
 ) -> bool {
-    // TODO: figure out how to cache
-    // cache.entry(*oid).or_insert_with(|| {
-    if unhideable_oids.contains(oid) {
-        false
-    } else {
-        let node = &graph[oid];
-        if node.is_main {
-            // We only want to hide "uninteresting" main branch nodes. Main
-            // branch nodes should normally be visible, so instead, we only hide
-            // it if it's *not* visible, which is an anomaly that should be
-            // addressed by the user.
-            node.is_visible
-                && node
-                    .children
-                    .iter()
-                    // Don't consider the next commit in the main branch as a child
-                    // for hiding purposes.
-                    .filter(|child_oid| !graph[child_oid].is_main)
-                    .all(|child_oid| should_hide(cache, graph, unhideable_oids, child_oid))
-        } else {
-            !node.is_visible
-                && node
-                    .children
-                    .iter()
-                    .all(|child_oid| should_hide(cache, graph, unhideable_oids, child_oid))
+    let result = {
+        match cache.get(oid) {
+            Some(result) => *result,
+            None => {
+                if unhideable_oids.contains(oid) {
+                    false
+                } else {
+                    let node = &graph[oid];
+                    if node.is_main {
+                        // We only want to hide "uninteresting" main branch nodes. Main
+                        // branch nodes should normally be visible, so instead, we only hide
+                        // it if it's *not* visible, which is an anomaly that should be
+                        // addressed by the user.
+                        node.is_visible
+                            && node
+                                .children
+                                .iter()
+                                // Don't consider the next commit in the main branch as a child
+                                // for hiding purposes.
+                                .filter(|child_oid| !graph[child_oid].is_main)
+                                .all(|child_oid| {
+                                    should_hide(cache, graph, unhideable_oids, child_oid)
+                                })
+                    } else {
+                        !node.is_visible
+                            && node.children.iter().all(|child_oid| {
+                                should_hide(cache, graph, unhideable_oids, child_oid)
+                            })
+                    }
+                }
+            }
         }
-    }
-    // })
+    };
+    cache.insert(*oid, result);
+    result
 }
 
 /// Remove commits from the graph according to their status.
