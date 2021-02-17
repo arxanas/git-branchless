@@ -13,6 +13,7 @@ Most Git workflows involve heavy use of branches to track commit work that is un
   * Switching between work tasks.
   * Separating minor cleanups/refactorings into their own commits, for ease of
     reviewability.
+  * Extensively rewriting local history before submitting code for review.
   * Performing speculative work which may not be ultimately committed.
   * Working on top of work that you or a collaborator produced, which is not
     yet checked in.
