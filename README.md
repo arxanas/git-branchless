@@ -20,7 +20,7 @@ Most Git workflows involve heavy use of branches to track commit work that is un
 
 Then the branchless workflow may be for you instead. 
 
-The branchless workflow is designed for use at monorepo-scale, where the repository has a single main branch that all commits are applied to. It's based off of [Facebook's hg smartlog extension](https://www.mercurial-scm.org/wiki/SmartlogExtension) and related tooling. You can use it for smaller repositories as well, as long as you have a single main branch.
+The branchless workflow is designed for use at monorepo-scale, where the repository has a single main branch that all commits are applied to. It's based off the Mercurial workflows at large companies such as Google and Facebook. You can use it for smaller repositories as well, as long as you have a single main branch.
 
 The branchless workflow is perfectly compatible with local branches if you choose to use them — they're just not necessary anymore.
 
