@@ -9,12 +9,14 @@ use std::str::FromStr;
 
 use crate::util::{wrap_git_error, GitExecutable, GitVersion};
 use anyhow::Context;
+use fn_error_context::context;
 
 const DUMMY_NAME: &str = "Testy McTestface";
 const DUMMY_EMAIL: &str = "test@example.com";
 const DUMMY_DATE: &str = "Wed 29 Oct 12:34:56 2020 PDT";
 
 /// Wrapper around the Git executable, for testing.
+#[derive(Debug)]
 pub struct Git {
     /// The path to the repository on disk. The directory itself must exist,
     /// although it might not have a `.git` folder in it. (Use `Git::init_repo`
@@ -27,6 +29,7 @@ pub struct Git {
 }
 
 /// Options for `Git::init_repo_with_options`.
+#[derive(Debug)]
 pub struct GitInitOptions {
     /// If `true`, then `init_repo_with_options` makes an initial commit with
     /// some content.
@@ -42,6 +45,7 @@ impl Default for GitInitOptions {
 }
 
 /// Options for `Git::run_with_options`.
+#[derive(Debug)]
 pub struct GitRunOptions {
     /// The timestamp of the command. Mostly useful for `git commit`. This should
     /// be a number like 0, 1, 2, 3...
@@ -161,6 +165,7 @@ impl Git {
     }
 
     /// Run a Git command.
+    #[context("Running Git command with args: {:?} and options: {:?}", args, options)]
     pub fn run_with_options<S: AsRef<str> + std::fmt::Debug>(
         &self,
         args: &[S],
@@ -208,6 +213,7 @@ impl Git {
 
     /// Set up a Git repo in the directory and initialize git-branchless to work
     /// with it.
+    #[context("Initializing Git repo with options: {:?}", options)]
     pub fn init_repo_with_options(&self, options: &GitInitOptions) -> anyhow::Result<()> {
         self.run(&["init"])?;
         self.run(&["config", "user.name", DUMMY_NAME])?;
@@ -254,6 +260,12 @@ impl Git {
 
     /// Commit a file with default contents. The `time` argument is used to set
     /// the commit timestamp, which is factored into the commit hash.
+    #[context(
+        "Committing file {:?} at time {:?} with contents: {:?}",
+        name,
+        time,
+        contents
+    )]
     pub fn commit_file_with_contents(
         &self,
         name: &str,
@@ -285,17 +297,20 @@ impl Git {
     /// Detach HEAD. This is useful to call to make sure that no branch is
     /// checked out, and therefore that future commit operations don't move any
     /// branches.
+    #[context("Detaching HEAD")]
     pub fn detach_head(&self) -> anyhow::Result<()> {
         self.run(&["checkout", "--detach"])?;
         Ok(())
     }
 
     /// Get a `git2::Repository` object for this repository.
+    #[context("Getting the `git2::Repository` object for {:?}", self)]
     pub fn get_repo(&self) -> anyhow::Result<git2::Repository> {
         git2::Repository::open(&self.repo_path).map_err(wrap_git_error)
     }
 
     /// Get the version of the Git executable.
+    #[context("Getting the Git version for {:?}", self)]
     pub fn get_version(&self) -> anyhow::Result<GitVersion> {
         let (version_str, _stderr) = self.run(&["version"])?;
         version_str.parse()
@@ -303,6 +318,7 @@ impl Git {
 
     /// Determine if the Git executable supports the `reference-transaction`
     /// hook.
+    #[context("Detecting reference-transaction support for {:?}", self)]
     pub fn supports_reference_transactions(&self) -> anyhow::Result<bool> {
         let version = self.get_version()?;
         Ok(version >= GitVersion(2, 29, 0))
@@ -310,6 +326,7 @@ impl Git {
 
     /// Resolve a file during a merge or rebase conflict with the provided
     /// contents.
+    #[context("Resolving file {:?} with contents: {:?}", name, contents)]
     pub fn resolve_file(&self, name: &str, contents: &str) -> anyhow::Result<()> {
         let file_path = self.repo_path.join(format!("{}.txt", name));
         std::fs::write(&file_path, contents)?;
@@ -323,6 +340,7 @@ impl Git {
 }
 
 /// Get the path to the Git executable for testing.
+#[context("Getting the Git executable to use")]
 pub fn get_git_executable() -> anyhow::Result<GitExecutable> {
     let git_executable = std::env::var("PATH_TO_GIT").with_context(|| {
         "No path to git set. Try running as: PATH_TO_GIT=$(which git) cargo test ..."
