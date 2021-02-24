@@ -285,7 +285,7 @@ pub fn smartlog<Out: Write>(out: &mut Out) -> anyhow::Result<()> {
         true,
     )?;
 
-    let commit_oid_provider = CommitOidProvider::new()?;
+    let commit_oid_provider = CommitOidProvider::new(true)?;
     let relative_time_provider = RelativeTimeProvider::new(&repo, SystemTime::now())?;
     let branches_provider = BranchesProvider::new(&repo, &branch_oid_to_names)?;
     let differential_revision_provider = DifferentialRevisionProvider::new(&repo)?;
