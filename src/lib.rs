@@ -49,6 +49,7 @@ pub mod eventlog;
 pub mod formatting;
 pub mod gc;
 pub mod graph;
+pub mod hide;
 pub mod hooks;
 pub mod init;
 pub mod mergebase;
@@ -66,6 +67,7 @@ fn rust(_py: Python<'_>, module: &PyModule) -> PyResult<()> {
     eventlog::register_python_symbols(&module)?;
     gc::register_python_symbols(&module)?;
     graph::register_python_symbols(&module)?;
+    hide::register_python_symbols(&module)?;
     hooks::register_python_symbols(&module)?;
     init::register_python_symbols(&module)?;
     mergebase::register_python_symbols(&module)?;

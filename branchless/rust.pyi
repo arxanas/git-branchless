@@ -524,3 +524,31 @@ def py_smartlog(*, out: TextIO) -> int:
       Exit code (0 denotes successful exit).
     """
     ...
+
+# hide.py
+
+def py_hide(*, out: TextIO, hashes: List[str], recursive: bool) -> int:
+    """Hide the hashes provided on the command-line.
+
+    Args:
+      out: The output stream to write to.
+      hashes: A list of commit hashes to hide. Revs will be resolved (you can
+        provide an abbreviated commit hash or ref name).
+
+    Returns:
+      Exit code (0 denotes successful exit).
+    """
+    ...
+
+def py_unhide(*, out: TextIO, hashes: List[str], recursive: bool) -> int:
+    """Unhide the hashes provided on the command-line.
+
+    Args:
+      out: The output stream to write to.
+      hashes: A list of commit hashes to unhide. Revs will be resolved (you
+        can provide an abbreviated commit hash or ref name).
+
+    Returns:
+      Exit code (0 denotes successful exit).
+    """
+    ...

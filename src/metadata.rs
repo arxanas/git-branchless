@@ -44,12 +44,14 @@ pub fn render_commit_metadata<'a>(
 }
 
 /// Display an abbreviated commit hash.
-pub struct CommitOidProvider;
+pub struct CommitOidProvider {
+    use_color: bool,
+}
 
 impl CommitOidProvider {
     /// Constructor.
-    pub fn new() -> anyhow::Result<Self> {
-        Ok(CommitOidProvider)
+    pub fn new(use_color: bool) -> anyhow::Result<Self> {
+        Ok(CommitOidProvider { use_color })
     }
 }
 
@@ -58,7 +60,7 @@ impl CommitMetadataProvider for CommitOidProvider {
     fn describe_commit(&self, commit: &git2::Commit) -> anyhow::Result<Option<String>> {
         let oid = commit.id();
         let oid = &oid.to_string()[..8];
-        let oid = if console::user_attended() {
+        let oid = if console::user_attended() && self.use_color {
             console::style(oid).yellow().to_string()
         } else {
             oid.to_owned()
@@ -261,7 +263,7 @@ pub fn py_commit_metadata_provider_to_commit_metadata_provider(
 
         // HACK: ignore actual field values for now.
         let result: Box<dyn CommitMetadataProvider> = match class.as_str() {
-            "CommitOidProvider" => Box::new(CommitOidProvider::new()?),
+            "CommitOidProvider" => Box::new(CommitOidProvider::new(true)?),
             "CommitMessageProvider" => Box::new(CommitMessageProvider::new()?),
             "BranchesProvider" => {
                 let branch_oid_to_names: HashMap<PyOidStr, HashSet<String>> =
