@@ -54,6 +54,7 @@ pub mod hooks;
 pub mod init;
 pub mod mergebase;
 pub mod metadata;
+pub mod navigation;
 pub mod python;
 pub mod restack;
 pub mod smartlog;
@@ -71,6 +72,7 @@ fn rust(_py: Python<'_>, module: &PyModule) -> PyResult<()> {
     hooks::register_python_symbols(&module)?;
     init::register_python_symbols(&module)?;
     mergebase::register_python_symbols(&module)?;
+    navigation::register_python_symbols(&module)?;
     restack::register_python_symbols(&module)?;
     smartlog::register_python_symbols(&module)?;
 
