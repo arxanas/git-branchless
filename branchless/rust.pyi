@@ -552,3 +552,46 @@ def py_unhide(*, out: TextIO, hashes: List[str], recursive: bool) -> int:
       Exit code (0 denotes successful exit).
     """
     ...
+
+# navigation.py
+
+def py_prev(
+    *, out: TextIO, err: TextIO, git_executable: str, num_commits: Optional[int]
+) -> int:
+    """Go back a certain number of commits.
+
+    Args:
+      out: The output stream to write to.
+      err: The error stream to write to.
+      git_executable: The path to the `git` executable on disk.
+      num_commits: The number of commits to go back.
+
+    Returns:
+      Exit code (0 denotes successful exit).
+    """
+    ...
+
+Towards = Optional[Union[Literal["newest"], Literal["oldest"]]]
+
+def py_next(
+    *,
+    out: TextIO,
+    err: TextIO,
+    git_executable: str,
+    num_commits: Optional[int],
+    towards: Towards,
+) -> int:
+    """Go forward a certain number of commits.
+
+    Args:
+      out: The output stream to write to.
+      err: The error stream to write to.
+      git_executable: The path to the `git` executable on disk.
+      num_commits: The number of commits to go forward.
+      towards: Which commit to choose when encountering a commit with
+        multiple child commits.
+
+    Returns:
+      Exit code (0 denotes successful exit).
+    """
+    ...

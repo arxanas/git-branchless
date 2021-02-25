@@ -77,6 +77,9 @@ pub struct Glyphs {
     /// Cursor for a hidden commit belonging to the main branch, which is
     /// currently checked out. (This is an unusual situation.)
     pub commit_main_hidden_head: &'static str,
+
+    /// Bullet-point character for a list of newline-separated items.
+    pub bullet_point: &'static str,
 }
 
 impl Glyphs {
@@ -104,6 +107,7 @@ impl Glyphs {
             commit_main_head: "@",
             commit_main_hidden: "X",
             commit_main_hidden_head: "%",
+            bullet_point: "-",
         }
     }
 
@@ -122,6 +126,7 @@ impl Glyphs {
             commit_main_head: "◆",
             commit_main_hidden: "✕",
             commit_main_hidden_head: "❖",
+            bullet_point: "•",
         }
     }
 }

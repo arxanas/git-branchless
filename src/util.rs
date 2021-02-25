@@ -149,6 +149,7 @@ pub struct GitExecutable(pub PathBuf);
 ///
 /// Returns: The exit code of Git (non-zero signifies error).
 #[context("Running Git ({:?}) with args: {:?}", git_executable, args)]
+#[must_use]
 pub fn run_git<Out: std::io::Write, S: AsRef<str> + std::fmt::Debug>(
     out: &mut Out,
     err: &mut Out,
@@ -168,20 +169,22 @@ pub fn run_git<Out: std::io::Write, S: AsRef<str> + std::fmt::Debug>(
     out.flush()?;
     err.flush()?;
 
-    let mut child = Command::new(git_executable)
+    let result = Command::new(git_executable)
         .args(args.iter().map(|arg| arg.as_ref()))
-        .spawn()
-        .with_context(|| format!("Spawning Git subprocess: {:?} {:?}", git_executable, args))?;
-    let result = child.wait().with_context(|| {
-        format!(
-            "Waiting for Git subprocess to complete: {:?} {:?}",
-            git_executable, args
-        )
-    })?;
+        .output()
+        .with_context(|| {
+            format!(
+                "Waiting for Git subprocess to complete: {:?} {:?}",
+                git_executable, args
+            )
+        })?;
+    out.write_all(&result.stdout)?;
+    err.write_all(&result.stderr)?;
+
     // On Unix, if the child process was terminated by a signal, we need to call
     // some Unix-specific functions to access the signal that terminated it. For
     // simplicity, just return `1` in those cases.
-    let exit_code = result.code().unwrap_or(1);
+    let exit_code = result.status.code().unwrap_or(1);
     let exit_code = exit_code
         .try_into()
         .with_context(|| format!("Converting exit code {} from i32 to isize", exit_code))?;

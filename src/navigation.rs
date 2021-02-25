@@ -1,0 +1,260 @@
+//! Convenience commands to help the user move through a stack of commits.
+
+use std::collections::HashMap;
+use std::io::Write;
+use std::path::PathBuf;
+use std::str::FromStr;
+
+use log::warn;
+use pyo3::prelude::*;
+
+use crate::eventlog::{EventLogDb, EventReplayer};
+use crate::formatting::Glyphs;
+use crate::graph::{find_path_to_merge_base, make_graph, BranchOids, HeadOid, MainBranchOid, Node};
+use crate::mergebase::MergeBaseDb;
+use crate::metadata::{
+    render_commit_metadata, CommitMessageProvider, CommitMetadataProvider, CommitOidProvider,
+};
+use crate::python::{clone_conn, map_err_to_py_err, raise_runtime_error, TextIO};
+use crate::smartlog::smartlog;
+use crate::util::{
+    get_branch_oid_to_names, get_db_conn, get_head_oid, get_main_branch_oid, get_repo, run_git,
+    GitExecutable,
+};
+
+/// Go back a certain number of commits.
+pub fn prev<Out: Write>(
+    out: &mut Out,
+    err: &mut Out,
+    git_executable: &GitExecutable,
+    num_commits: Option<isize>,
+) -> anyhow::Result<isize> {
+    let exit_code = match num_commits {
+        None => run_git(out, err, git_executable, &["checkout", "HEAD^"])?,
+        Some(num_commits) => run_git(
+            out,
+            err,
+            git_executable,
+            &["checkout", &format!("HEAD~{}", num_commits)],
+        )?,
+    };
+    if exit_code != 0 {
+        return Ok(exit_code);
+    }
+    smartlog(out)?;
+    Ok(0)
+}
+
+/// Some commits have multiple children, which makes `next` ambiguous. These
+/// values disambiguate which child commit to go to, according to the committed
+/// date.
+#[derive(Clone, Copy, Debug)]
+pub enum Towards {
+    /// When encountering multiple children, select the newest one.
+    Newest,
+
+    /// When encountering multiple children, select the oldest one.
+    Oldest,
+}
+
+fn advance_towards_main_branch(
+    repo: &git2::Repository,
+    merge_base_db: &MergeBaseDb,
+    graph: &HashMap<git2::Oid, Node>,
+    current_oid: git2::Oid,
+    main_branch_oid: &MainBranchOid,
+) -> anyhow::Result<(isize, git2::Oid)> {
+    let MainBranchOid(main_branch_oid) = main_branch_oid;
+    let path = find_path_to_merge_base(repo, merge_base_db, *main_branch_oid, current_oid)?;
+    let path = match path {
+        None => return Ok((0, current_oid)),
+        Some(path) if path.len() == 1 => {
+            // Must be the case that `current_oid == main_branch_oid`.
+            return Ok((0, current_oid));
+        }
+        Some(path) => path,
+    };
+
+    for (i, commit) in (1..).zip(path.iter().rev().skip(1)) {
+        if graph.contains_key(&commit.id()) {
+            return Ok((i, commit.id()));
+        }
+    }
+
+    warn!("Failed to find graph commit when advancing towards main branch");
+    Ok((0, current_oid))
+}
+
+fn advance_towards_own_commit<Out: Write>(
+    out: &mut Out,
+    glyphs: &Glyphs,
+    repo: &git2::Repository,
+    graph: &HashMap<git2::Oid, Node>,
+    current_oid: git2::Oid,
+    num_commits: isize,
+    towards: Option<Towards>,
+) -> anyhow::Result<Option<git2::Oid>> {
+    let mut current_oid = current_oid;
+    for i in 0..num_commits {
+        let mut children: Vec<git2::Oid> = graph[&current_oid].children.iter().copied().collect();
+        children.sort_by_key(|child_oid| graph[child_oid].commit.time());
+        current_oid = match (towards, &children.as_slice()) {
+            (_, []) => {
+                // It would also make sense to issue an error here, rather than
+                // silently stop going forward commits.
+                break;
+            }
+            (_, [only_child_oid]) => *only_child_oid,
+            (Some(Towards::Newest), [.., newest_child_oid]) => *newest_child_oid,
+            (Some(Towards::Oldest), [oldest_child_oid, ..]) => *oldest_child_oid,
+            (None, [_, _, ..]) => {
+                writeln!(
+                    out,
+                    "Found multiple possible next commits to go to after traversing {} children:",
+                    i
+                )?;
+
+                for (j, child_oid) in (0..).zip(children.iter()) {
+                    let descriptor = if j == 0 {
+                        " (oldest)"
+                    } else if j + 1 == children.len() {
+                        " (newest)"
+                    } else {
+                        ""
+                    };
+
+                    let commit_oid_provider = CommitOidProvider::new(true)?;
+                    let commit_message_provider = CommitMessageProvider::new()?;
+                    let metadata_providers: Vec<&dyn CommitMetadataProvider> =
+                        vec![&commit_oid_provider, &commit_message_provider];
+                    let commit_text = render_commit_metadata(
+                        metadata_providers.into_iter(),
+                        &repo.find_commit(*child_oid)?,
+                    )?;
+                    writeln!(
+                        out,
+                        "  {} {}{}",
+                        glyphs.bullet_point, commit_text, descriptor
+                    )?;
+                }
+                writeln!(out, "(Pass --oldest (-o) or --newest (-n) to select between ambiguous next commits)")?;
+                return Ok(None);
+            }
+        };
+    }
+    Ok(Some(current_oid))
+}
+
+/// Go forward a certain number of commits.
+pub fn next<Out: Write>(
+    out: &mut Out,
+    err: &mut Out,
+    git_executable: &GitExecutable,
+    num_commits: Option<isize>,
+    towards: Option<Towards>,
+) -> anyhow::Result<isize> {
+    let glyphs = Glyphs::detect();
+    let repo = get_repo()?;
+    let conn = get_db_conn(&repo)?;
+    let merge_base_db = MergeBaseDb::new(clone_conn(&conn)?)?;
+    let event_log_db = EventLogDb::new(clone_conn(&conn)?)?;
+    let event_replayer = EventReplayer::from_event_log_db(&event_log_db)?;
+
+    let head_oid = match get_head_oid(&repo)? {
+        Some(head_oid) => head_oid,
+        None => anyhow::bail!("No HEAD present; cannot calculate next commit"),
+    };
+    let main_branch_oid = get_main_branch_oid(&repo)?;
+    let branch_oid_to_names = get_branch_oid_to_names(&repo)?;
+    let graph = make_graph(
+        &repo,
+        &merge_base_db,
+        &event_replayer,
+        &HeadOid(Some(head_oid)),
+        &MainBranchOid(main_branch_oid),
+        &BranchOids(branch_oid_to_names.keys().copied().collect()),
+        true,
+    )?;
+
+    let num_commits = num_commits.unwrap_or(1);
+    let (num_commits_traversed_towards_main_branch, current_oid) = advance_towards_main_branch(
+        &repo,
+        &merge_base_db,
+        &graph,
+        head_oid,
+        &MainBranchOid(main_branch_oid),
+    )?;
+    let num_commits = num_commits - num_commits_traversed_towards_main_branch;
+    let current_oid = advance_towards_own_commit(
+        out,
+        &glyphs,
+        &repo,
+        &graph,
+        current_oid,
+        num_commits,
+        towards,
+    )?;
+    let current_oid = match current_oid {
+        None => return Ok(1),
+        Some(current_oid) => current_oid,
+    };
+
+    let result = run_git(
+        out,
+        err,
+        git_executable,
+        &["checkout", &current_oid.to_string()],
+    )?;
+    if result != 0 {
+        return Ok(result);
+    }
+
+    smartlog(out)?;
+    Ok(0)
+}
+
+#[pyfunction]
+fn py_prev(
+    py: Python,
+    out: PyObject,
+    err: PyObject,
+    git_executable: &str,
+    num_commits: Option<isize>,
+) -> PyResult<isize> {
+    let mut out = TextIO::new(py, out);
+    let mut err = TextIO::new(py, err);
+    let git_executable = GitExecutable(PathBuf::from_str(git_executable)?);
+    let result = prev(&mut out, &mut err, &git_executable, num_commits);
+    let result = map_err_to_py_err(result, "Could not call `prev`")?;
+    Ok(result)
+}
+
+#[pyfunction]
+fn py_next(
+    py: Python,
+    out: PyObject,
+    err: PyObject,
+    git_executable: &str,
+    num_commits: Option<isize>,
+    towards: Option<&str>,
+) -> PyResult<isize> {
+    let mut out = TextIO::new(py, out);
+    let mut err = TextIO::new(py, err);
+    let git_executable = GitExecutable(PathBuf::from_str(git_executable)?);
+    let towards = match towards {
+        None => None,
+        Some("oldest") => Some(Towards::Oldest),
+        Some("newest") => Some(Towards::Newest),
+        Some(towards) => raise_runtime_error(format!("Invalid value for `towards`: {}", towards))?,
+    };
+    let result = next(&mut out, &mut err, &git_executable, num_commits, towards);
+    let result = map_err_to_py_err(result, "Could not call `prev`")?;
+    Ok(result)
+}
+
+#[allow(missing_docs)]
+pub fn register_python_symbols(module: &PyModule) -> PyResult<()> {
+    module.add_function(pyo3::wrap_pyfunction!(py_prev, module)?)?;
+    module.add_function(pyo3::wrap_pyfunction!(py_next, module)?)?;
+    Ok(())
+}
