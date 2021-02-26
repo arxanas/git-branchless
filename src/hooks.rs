@@ -458,7 +458,7 @@ mod tests {
             git.run_with_options(
                 &["rebase", &oid1.to_string()],
                 &GitRunOptions {
-                    check: false,
+                    expected_exit_code: 1,
                     ..Default::default()
                 },
             )?;

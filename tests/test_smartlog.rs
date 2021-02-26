@@ -158,7 +158,7 @@ fn test_rebase_conflict() -> anyhow::Result<()> {
         git.run_with_options(
             &["rebase", "branch1"],
             &GitRunOptions {
-                check: false,
+                expected_exit_code: 1,
                 ..Default::default()
             },
         )?;

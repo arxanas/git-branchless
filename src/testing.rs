@@ -51,9 +51,8 @@ pub struct GitRunOptions {
     /// be a number like 0, 1, 2, 3...
     pub time: isize,
 
-    /// If `true`, returns `Error` if the Git command returned a non-zero exit
-    /// code.
-    pub check: bool,
+    /// The exit code that `Git` should return.
+    pub expected_exit_code: i32,
 
     /// If `true`, use the system installation of `git` for this command, rather
     /// than the version under test.
@@ -64,7 +63,7 @@ impl Default for GitRunOptions {
     fn default() -> Self {
         GitRunOptions {
             time: 0,
-            check: true,
+            expected_exit_code: 0,
             use_system_git: false,
         }
     }
@@ -182,15 +181,21 @@ impl Git {
             )
         })?;
 
-        let result = if options.check && !result.status.success() {
+        let exit_code = result
+            .status
+            .code()
+            .expect("Failed to read exit code from Git process");
+        let result = if exit_code != options.expected_exit_code {
             anyhow::bail!(
-                "Git command {:?} {:?} failed
+                "Git command {:?} {:?} exited with unexpected code {} (expected {})
                 stdout:
                 {}
                 stderr:
                 {}",
                 &self.git_executable,
                 &args,
+                exit_code,
+                options.expected_exit_code,
                 &String::from_utf8_lossy(&result.stdout),
                 &String::from_utf8_lossy(&result.stderr),
             )

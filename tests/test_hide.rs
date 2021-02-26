@@ -51,7 +51,7 @@ fn test_hide_bad_commit() -> anyhow::Result<()> {
             let (stdout, _stderr) = git.run_with_options(
                 &["hide", "abc123"],
                 &GitRunOptions {
-                    check: false,
+                    expected_exit_code: 1,
                     ..Default::default()
                 },
             )?;
