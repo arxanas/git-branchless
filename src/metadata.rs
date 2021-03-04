@@ -32,11 +32,12 @@ pub trait CommitMetadataProvider {
 
 /// Get the complete description for a given commit.
 #[context("Rendering commit metadata for commit {:?}", commit.id())]
-pub fn render_commit_metadata<'a>(
-    commit_metadata_providers: impl Iterator<Item = &'a dyn CommitMetadataProvider>,
+pub fn render_commit_metadata(
     commit: &git2::Commit,
+    commit_metadata_providers: &[&dyn CommitMetadataProvider],
 ) -> anyhow::Result<String> {
     let descriptions = commit_metadata_providers
+        .iter()
         .filter_map(|provider| provider.describe_commit(commit).transpose())
         .collect::<anyhow::Result<Vec<_>>>()?;
     let result = descriptions.join(" ");
