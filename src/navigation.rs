@@ -12,9 +12,7 @@ use crate::eventlog::{EventLogDb, EventReplayer};
 use crate::formatting::Glyphs;
 use crate::graph::{find_path_to_merge_base, make_graph, BranchOids, HeadOid, MainBranchOid, Node};
 use crate::mergebase::MergeBaseDb;
-use crate::metadata::{
-    render_commit_metadata, CommitMessageProvider, CommitMetadataProvider, CommitOidProvider,
-};
+use crate::metadata::{render_commit_metadata, CommitMessageProvider, CommitOidProvider};
 use crate::python::{clone_conn, map_err_to_py_err, raise_runtime_error, TextIO};
 use crate::smartlog::smartlog;
 use crate::util::{
@@ -123,13 +121,12 @@ fn advance_towards_own_commit<Out: Write>(
                         ""
                     };
 
-                    let commit_oid_provider = CommitOidProvider::new(true)?;
-                    let commit_message_provider = CommitMessageProvider::new()?;
-                    let metadata_providers: Vec<&dyn CommitMetadataProvider> =
-                        vec![&commit_oid_provider, &commit_message_provider];
                     let commit_text = render_commit_metadata(
-                        metadata_providers.into_iter(),
                         &repo.find_commit(*child_oid)?,
+                        &[
+                            &CommitOidProvider::new(true)?,
+                            &CommitMessageProvider::new()?,
+                        ],
                     )?;
                     writeln!(
                         out,

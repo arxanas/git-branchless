@@ -14,9 +14,7 @@ use crate::eventlog::{EventLogDb, EventReplayer};
 
 use crate::graph::{make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid, Node};
 use crate::mergebase::MergeBaseDb;
-use crate::metadata::{
-    render_commit_metadata, CommitMessageProvider, CommitMetadataProvider, CommitOidProvider,
-};
+use crate::metadata::{render_commit_metadata, CommitMessageProvider, CommitOidProvider};
 use crate::python::{clone_conn, map_err_to_py_err, TextIO};
 use crate::util::{
     get_branch_oid_to_names, get_db_conn, get_head_oid, get_main_branch_oid, get_repo,
@@ -158,11 +156,13 @@ pub fn hide<Out: Write>(
 
     for commit in commits {
         let hidden_commit_text = {
-            let commit_oid_provider = CommitOidProvider::new(true)?;
-            let commit_message_provider = CommitMessageProvider::new()?;
-            let metadata_providers: Vec<&dyn CommitMetadataProvider> =
-                vec![&commit_oid_provider, &commit_message_provider];
-            render_commit_metadata(metadata_providers.into_iter(), &commit)?
+            render_commit_metadata(
+                &commit,
+                &[
+                    &CommitOidProvider::new(true)?,
+                    &CommitMessageProvider::new()?,
+                ],
+            )?
         };
         writeln!(out, "Hid commit: {}", hidden_commit_text)?;
         if let Some(CommitVisibility::Hidden) =
@@ -174,11 +174,8 @@ pub fn hide<Out: Write>(
             )?;
         }
 
-        let commit_target_oid = {
-            let commit_oid_provider = CommitOidProvider::new(false)?;
-            let metadata_providers: Vec<&dyn CommitMetadataProvider> = vec![&commit_oid_provider];
-            render_commit_metadata(metadata_providers.into_iter(), &commit)?
-        };
+        let commit_target_oid =
+            render_commit_metadata(&commit, &[&CommitOidProvider::new(false)?])?;
         writeln!(
             out,
             "To unhide this commit, run: git unhide {}",
@@ -241,11 +238,13 @@ pub fn unhide<Out: Write>(
 
     for commit in commits {
         let unhidden_commit_text = {
-            let commit_oid_provider = CommitOidProvider::new(true)?;
-            let commit_message_provider = CommitMessageProvider::new()?;
-            let metadata_providers: Vec<&dyn CommitMetadataProvider> =
-                vec![&commit_oid_provider, &commit_message_provider];
-            render_commit_metadata(metadata_providers.into_iter(), &commit)?
+            render_commit_metadata(
+                &commit,
+                &[
+                    &CommitOidProvider::new(true)?,
+                    &CommitMessageProvider::new()?,
+                ],
+            )?
         };
         writeln!(out, "Unhid commit: {}", unhidden_commit_text)?;
         if let Some(CommitVisibility::Visible) =
@@ -254,11 +253,8 @@ pub fn unhide<Out: Write>(
             writeln!(out, "(It was not hidden, so this operation had no effect.)")?;
         }
 
-        let commit_target_oid = {
-            let commit_oid_provider = CommitOidProvider::new(false)?;
-            let metadata_providers: Vec<&dyn CommitMetadataProvider> = vec![&commit_oid_provider];
-            render_commit_metadata(metadata_providers.into_iter(), &commit)?
-        };
+        let commit_target_oid =
+            render_commit_metadata(&commit, &[&CommitOidProvider::new(false)?])?;
         writeln!(
             out,
             "To hide this commit, run: git hide {}",

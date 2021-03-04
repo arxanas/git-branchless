@@ -97,10 +97,7 @@ fn get_child_output(
         Some(current_node.commit.id()) == *head_oid
     };
 
-    let text = render_commit_metadata(
-        commit_metadata_providers.iter().cloned(),
-        &current_node.commit,
-    )?;
+    let text = render_commit_metadata(&current_node.commit, commit_metadata_providers)?;
     let cursor = match (current_node.is_main, current_node.is_visible, is_head) {
         (false, false, false) => glyphs.commit_hidden,
         (false, false, true) => glyphs.commit_hidden_head,
