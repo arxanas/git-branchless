@@ -93,7 +93,7 @@ impl Glyphs {
     }
 
     /// Glyphs used for output to a text file or non-TTY.
-    fn text() -> Self {
+    pub fn text() -> Self {
         Glyphs {
             line: "|",
             line_with_offshoot: "|",

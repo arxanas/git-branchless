@@ -200,39 +200,49 @@ impl RelativeTimeProvider {
         let is_enabled = get_commit_metadata_relative_time(repo)?;
         Ok(RelativeTimeProvider { is_enabled, now })
     }
-}
 
-fn describe_time_delta(now: SystemTime, previous_time: SystemTime) -> anyhow::Result<String> {
-    let mut delta: i64 = if previous_time < now {
-        let delta = now.duration_since(previous_time)?;
-        delta.as_secs().try_into()?
-    } else {
-        let delta = previous_time.duration_since(now)?;
-        -(delta.as_secs().try_into()?)
-    };
-
-    if delta < 60 {
-        return Ok(format!("{}s", delta));
+    /// Whether or not relative times should be shown, according to the user's
+    /// settings.
+    pub fn is_enabled(&self) -> bool {
+        self.is_enabled
     }
-    delta /= 60;
 
-    if delta < 60 {
-        return Ok(format!("{}m", delta));
+    /// Describe a relative time delta, e.g. "3d ago".
+    pub fn describe_time_delta(
+        now: SystemTime,
+        previous_time: SystemTime,
+    ) -> anyhow::Result<String> {
+        let mut delta: i64 = if previous_time < now {
+            let delta = now.duration_since(previous_time)?;
+            delta.as_secs().try_into()?
+        } else {
+            let delta = previous_time.duration_since(now)?;
+            -(delta.as_secs().try_into()?)
+        };
+
+        if delta < 60 {
+            return Ok(format!("{}s", delta));
+        }
+        delta /= 60;
+
+        if delta < 60 {
+            return Ok(format!("{}m", delta));
+        }
+        delta /= 60;
+
+        if delta < 24 {
+            return Ok(format!("{}h", delta));
+        }
+        delta /= 24;
+
+        if delta < 365 {
+            return Ok(format!("{}d", delta));
+        }
+        delta /= 365;
+
+        // Arguably at this point, users would want a specific date rather than a delta.
+        Ok(format!("{}y", delta))
     }
-    delta /= 60;
-
-    if delta < 24 {
-        return Ok(format!("{}h", delta));
-    }
-    delta /= 24;
-
-    if delta < 365 {
-        return Ok(format!("{}d", delta));
-    }
-    delta /= 365;
-
-    // Arguably at this point, users would want a specific date rather than a delta.
-    Ok(format!("{}y", delta))
 }
 
 impl CommitMetadataProvider for RelativeTimeProvider {
@@ -244,7 +254,7 @@ impl CommitMetadataProvider for RelativeTimeProvider {
 
         let previous_time =
             SystemTime::UNIX_EPOCH.add(Duration::from_secs(commit.time().seconds().try_into()?));
-        let description = describe_time_delta(self.now, previous_time)?;
+        let description = Self::describe_time_delta(self.now, previous_time)?;
         let result = style(description).green().to_string();
         Ok(Some(result))
     }
@@ -341,7 +351,7 @@ Differential Revision: phabricator.com/D123";
             } else {
                 now.sub(Duration::from_secs(delta.try_into()?))
             };
-            let delta = describe_time_delta(now, previous_time)?;
+            let delta = RelativeTimeProvider::describe_time_delta(now, previous_time)?;
             assert_eq!(delta, expected);
         }
 

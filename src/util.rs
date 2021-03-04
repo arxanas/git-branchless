@@ -244,13 +244,13 @@ pub struct GitVersion(pub isize, pub isize, pub isize);
 impl FromStr for GitVersion {
     type Err = anyhow::Error;
 
-    #[context("Parsing Git version from: {:?}", output)]
+    #[context("Parsing Git version from string: {:?}", output)]
     fn from_str(output: &str) -> anyhow::Result<GitVersion> {
         let output = output.trim();
         let words = output.split(' ').collect::<Vec<&str>>();
         let version_str = match &words.as_slice() {
             [_git, _version, version_str, ..] => version_str,
-            _ => anyhow::bail!("Could not parse Git version output: {}", output),
+            _ => anyhow::bail!("Could not parse Git version output: {:?}", output),
         };
         match version_str.split('.').collect::<Vec<&str>>().as_slice() {
             [major, minor, patch, ..] => {

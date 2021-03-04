@@ -595,3 +595,18 @@ def py_next(
       Exit code (0 denotes successful exit).
     """
     ...
+
+# undo.py
+
+def py_undo(out: TextIO, err: TextIO, git_executable: str) -> int:
+    """Restore the repository to a previous state interactively.
+
+    Args:
+      out: The output stream to write to.
+      err: The error stream to write to.
+      git_executable: The path to the `git` executable on disk.
+
+    Returns:
+      Exit code (0 denotes successful exit).
+    """
+    ...

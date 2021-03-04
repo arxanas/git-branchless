@@ -59,6 +59,7 @@ pub mod python;
 pub mod restack;
 pub mod smartlog;
 pub mod testing;
+pub mod undo;
 pub mod util;
 
 #[pymodule]
@@ -75,6 +76,7 @@ fn rust(_py: Python<'_>, module: &PyModule) -> PyResult<()> {
     navigation::register_python_symbols(&module)?;
     restack::register_python_symbols(&module)?;
     smartlog::register_python_symbols(&module)?;
+    undo::register_python_symbols(&module)?;
 
     Ok(())
 }

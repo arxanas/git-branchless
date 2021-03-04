@@ -7,6 +7,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::convert::{TryFrom, TryInto};
+use std::time::{Duration, SystemTime};
 
 use anyhow::Context;
 use fn_error_context::context;
@@ -114,6 +115,20 @@ pub enum Event {
         /// The OID of the commit that was unhidden.
         commit_oid: git2::Oid,
     },
+}
+
+impl Event {
+    /// Get the timestamp associated with this event.
+    pub fn timestamp(&self) -> SystemTime {
+        let timestamp = match self {
+            Event::RewriteEvent { timestamp, .. } => timestamp,
+            Event::RefUpdateEvent { timestamp, .. } => timestamp,
+            Event::CommitEvent { timestamp, .. } => timestamp,
+            Event::HideEvent { timestamp, .. } => timestamp,
+            Event::UnhideEvent { timestamp, .. } => timestamp,
+        };
+        SystemTime::UNIX_EPOCH + Duration::from_secs_f64(*timestamp)
+    }
 }
 
 impl From<Event> for Row {
@@ -1030,7 +1045,7 @@ impl EventReplayer {
     /// * `event_id`: The index of the event to set the cursor to point
     /// immediately after. If out of bounds, the cursor is set to the first or
     /// last valid position, as appropriate.
-    fn set_cursor(&mut self, event_id: isize) {
+    pub fn set_cursor(&mut self, event_id: isize) {
         let event_id = if event_id < 0 { 0 } else { event_id };
         let num_events: isize = self.events.len().try_into().unwrap();
         let event_id = if event_id > num_events {
@@ -1047,7 +1062,7 @@ impl EventReplayer {
     /// * `num_events`: The number of events to advance by. Can be positive,
     /// zero, or negative. If out of bounds, the cursor is set to the first or
     /// last valid position, as appropriate.
-    fn advance_cursor(&mut self, num_events: isize) {
+    pub fn advance_cursor(&mut self, num_events: isize) {
         self.set_cursor(self.cursor_event_id + num_events)
     }
 
@@ -1055,7 +1070,7 @@ impl EventReplayer {
     ///
     /// Returns: The OID pointed to by `HEAD` at that time, or `None` if `HEAD`
     /// was never observed.
-    fn get_cursor_head_oid(&self) -> Option<git2::Oid> {
+    pub fn get_cursor_head_oid(&self) -> Option<git2::Oid> {
         let cursor_event_id: usize = self.cursor_event_id.try_into().unwrap();
         self.events[0..cursor_event_id]
             .iter()
@@ -1149,7 +1164,7 @@ impl EventReplayer {
     ///
     /// Returns: A mapping from an OID to the names of branches pointing to that
     /// OID.
-    fn get_cursor_branch_oid_to_names(
+    pub fn get_cursor_branch_oid_to_names(
         &self,
         repo: &git2::Repository,
     ) -> anyhow::Result<HashMap<git2::Oid, HashSet<String>>> {
@@ -1203,7 +1218,7 @@ impl EventReplayer {
     ///
     /// Returns: A tuple of event ID and the event that most recently happened.
     /// If no event was before the event cursor, returns `None` instead.
-    fn get_event_before_cursor(&self) -> Option<(isize, &Event)> {
+    pub fn get_event_before_cursor(&self) -> Option<(isize, &Event)> {
         if self.cursor_event_id == 0 {
             None
         } else {
@@ -1216,7 +1231,7 @@ impl EventReplayer {
     ///
     /// Returns: An ordered list of events that have happened since the event
     /// cursor, from least recent to most recent.
-    fn get_events_since_cursor(&self) -> &[Event] {
+    pub fn get_events_since_cursor(&self) -> &[Event] {
         let cursor_event_id: usize = self.cursor_event_id.try_into().unwrap();
         &self.events[cursor_event_id..]
     }

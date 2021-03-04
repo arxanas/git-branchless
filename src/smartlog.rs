@@ -251,10 +251,6 @@ pub fn render_graph<Out: Write>(
         &root_oids,
     )?;
 
-    if console::user_attended() {
-        // Clear the screen.
-        writeln!(out, "\033[K")?;
-    }
     for line in lines {
         writeln!(out, "{}", line)?;
     }
@@ -282,18 +278,6 @@ pub fn smartlog<Out: Write>(out: &mut Out) -> anyhow::Result<()> {
         true,
     )?;
 
-    let commit_oid_provider = CommitOidProvider::new(true)?;
-    let relative_time_provider = RelativeTimeProvider::new(&repo, SystemTime::now())?;
-    let branches_provider = BranchesProvider::new(&repo, &branch_oid_to_names)?;
-    let differential_revision_provider = DifferentialRevisionProvider::new(&repo)?;
-    let commit_message_provider = CommitMessageProvider::new()?;
-    let commit_metadata_providers: Vec<&dyn CommitMetadataProvider> = vec![
-        &commit_oid_provider,
-        &relative_time_provider,
-        &branches_provider,
-        &differential_revision_provider,
-        &commit_message_provider,
-    ];
     render_graph(
         out,
         &glyphs,
@@ -301,7 +285,13 @@ pub fn smartlog<Out: Write>(out: &mut Out) -> anyhow::Result<()> {
         &merge_base_db,
         &graph,
         &HeadOid(head_oid),
-        commit_metadata_providers.as_slice(),
+        &[
+            &CommitOidProvider::new(true)?,
+            &RelativeTimeProvider::new(&repo, SystemTime::now())?,
+            &BranchesProvider::new(&repo, &branch_oid_to_names)?,
+            &DifferentialRevisionProvider::new(&repo)?,
+            &CommitMessageProvider::new()?,
+        ],
     )?;
 
     Ok(())

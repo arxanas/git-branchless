@@ -80,8 +80,30 @@ impl Git {
         }
     }
 
-    fn build_command<S: AsRef<str>>(&self, args: &[S], options: &GitRunOptions) -> Command {
-        let git_executable = if !options.use_system_git {
+    /// Replace dynamic strings in the output, for testing purposes.
+    pub fn preprocess_stdout(&self, stdout: String) -> anyhow::Result<String> {
+        let git_executable = self
+            .git_executable
+            .to_str()
+            .ok_or_else(|| anyhow::anyhow!("Could not convert Git executable to string"))?;
+        let stdout = stdout.replace(git_executable, "<git-executable>");
+        Ok(stdout)
+    }
+
+    /// Run a Git command.
+    #[context("Running Git command with args: {:?} and options: {:?}", args, options)]
+    pub fn run_with_options<S: AsRef<str> + std::fmt::Debug>(
+        &self,
+        args: &[S],
+        options: &GitRunOptions,
+    ) -> anyhow::Result<(String, String)> {
+        let GitRunOptions {
+            use_system_git,
+            time,
+            expected_exit_code,
+        } = options;
+
+        let git_executable = if !use_system_git {
             self.git_executable.clone()
         } else {
             PathBuf::from_str("/usr/bin/git").expect("Could not decode Git executable path")
@@ -89,7 +111,7 @@ impl Git {
 
         // Required for determinism, as these values will be baked into the commit
         // hash.
-        let date = format!("{date} -{time:0>2}", date = DUMMY_DATE, time = options.time);
+        let date = format!("{date} -{time:0>2}", date = DUMMY_DATE, time = time);
 
         let args: Vec<&str> = {
             let repo_path = self.repo_path.to_str().expect("Could not decode repo path");
@@ -151,26 +173,6 @@ impl Git {
             command.env("LD_LIBRARY_PATH", ld_library_path);
         }
 
-        command
-    }
-
-    fn preprocess_stdout(&self, stdout: String) -> anyhow::Result<String> {
-        let git_executable = self
-            .git_executable
-            .to_str()
-            .ok_or_else(|| anyhow::anyhow!("Could not convert Git executable to string"))?;
-        let stdout = stdout.replace(git_executable, "<git-executable>");
-        Ok(stdout)
-    }
-
-    /// Run a Git command.
-    #[context("Running Git command with args: {:?} and options: {:?}", args, options)]
-    pub fn run_with_options<S: AsRef<str> + std::fmt::Debug>(
-        &self,
-        args: &[S],
-        options: &GitRunOptions,
-    ) -> anyhow::Result<(String, String)> {
-        let mut command = self.build_command(args, options);
         let result = command.output().with_context(|| {
             format!(
                 "Running git
@@ -185,7 +187,7 @@ impl Git {
             .status
             .code()
             .expect("Failed to read exit code from Git process");
-        let result = if exit_code != options.expected_exit_code {
+        let result = if exit_code != *expected_exit_code {
             anyhow::bail!(
                 "Git command {:?} {:?} exited with unexpected code {} (expected {})
                 stdout:
@@ -195,7 +197,7 @@ impl Git {
                 &self.git_executable,
                 &args,
                 exit_code,
-                options.expected_exit_code,
+                expected_exit_code,
                 &String::from_utf8_lossy(&result.stdout),
                 &String::from_utf8_lossy(&result.stderr),
             )
