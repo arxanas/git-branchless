@@ -124,6 +124,7 @@ pub fn hook_post_rewrite(out: &mut impl Write, rewrite_type: &str) -> anyhow::Re
         &repo,
         &merge_base_db,
         &event_replayer,
+        event_replayer.make_default_cursor(),
         &HeadOid(head_oid),
         &MainBranchOid(main_branch_oid),
         &BranchOids(branch_oid_to_names.keys().copied().collect()),

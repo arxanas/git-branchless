@@ -19,7 +19,7 @@ use cursive::views::{
 };
 use cursive::{Cursive, CursiveRunnable, CursiveRunner};
 
-use crate::eventlog::{Event, EventLogDb, EventReplayer};
+use crate::eventlog::{Event, EventCursor, EventLogDb, EventReplayer};
 use crate::formatting::{Glyphs, Pluralize};
 use crate::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
 use crate::mergebase::MergeBaseDb;
@@ -72,14 +72,16 @@ fn render_cursor_smartlog(
     repo: &git2::Repository,
     merge_base_db: &MergeBaseDb,
     event_replayer: &EventReplayer,
+    event_cursor: EventCursor,
 ) -> anyhow::Result<String> {
-    let head_oid = event_replayer.get_cursor_head_oid();
-    let main_branch_oid = event_replayer.get_cursor_main_branch_oid(repo)?;
-    let branch_oid_to_names = event_replayer.get_cursor_branch_oid_to_names(repo)?;
+    let head_oid = event_replayer.get_cursor_head_oid(event_cursor);
+    let main_branch_oid = event_replayer.get_cursor_main_branch_oid(event_cursor, repo)?;
+    let branch_oid_to_names = event_replayer.get_cursor_branch_oid_to_names(event_cursor, repo)?;
     let graph = make_graph(
         repo,
         merge_base_db,
         event_replayer,
+        event_cursor,
         &HeadOid(head_oid),
         &MainBranchOid(main_branch_oid),
         &BranchOids(branch_oid_to_names.keys().copied().collect()),
@@ -263,7 +265,7 @@ fn select_past_event(
     repo: &git2::Repository,
     merge_base_db: &MergeBaseDb,
     event_replayer: &mut EventReplayer,
-) -> anyhow::Result<Option<isize>> {
+) -> anyhow::Result<Option<EventCursor>> {
     #[derive(Clone, Copy, Debug)]
     enum Message {
         Init,
@@ -305,6 +307,7 @@ fn select_past_event(
         });
     });
 
+    let mut cursor = event_replayer.make_default_cursor();
     let now = SystemTime::now();
     main_tx.send(Message::Init)?;
     while siv.is_running() {
@@ -322,15 +325,22 @@ fn select_past_event(
         type InfoView = TextView;
         const INFO_VIEW_NAME: &str = "info-view";
         let redraw = |siv: &mut Cursive,
-                      event_replayer: &mut EventReplayer|
+                      event_replayer: &mut EventReplayer,
+                      event_cursor: EventCursor|
          -> anyhow::Result<()> {
-            let smartlog = render_cursor_smartlog(&glyphs, &repo, &merge_base_db, &event_replayer)?;
+            let smartlog = render_cursor_smartlog(
+                &glyphs,
+                &repo,
+                &merge_base_db,
+                &event_replayer,
+                event_cursor,
+            )?;
             siv.find_name::<SmartlogView>(SMARTLOG_VIEW_NAME)
                 .unwrap()
                 .get_inner_mut()
                 .set_content(smartlog);
 
-            let event = event_replayer.get_event_before_cursor();
+            let event = event_replayer.get_event_before_cursor(event_cursor);
             let info_view_contents = match event {
                 None => "There are no previous available events.".to_owned(),
                 Some((event_id, event)) => {
@@ -376,22 +386,22 @@ fn select_past_event(
                         .child(smartlog_view)
                         .child(info_view),
                 );
-                redraw(&mut siv, event_replayer)?;
+                redraw(&mut siv, event_replayer, cursor)?;
             }
 
             Ok(Message::Next) => {
-                event_replayer.advance_cursor(1);
-                redraw(&mut siv, event_replayer)?;
+                cursor = event_replayer.advance_cursor(cursor, 1);
+                redraw(&mut siv, event_replayer, cursor)?;
             }
 
             Ok(Message::Previous) => {
-                event_replayer.advance_cursor(-1);
-                redraw(&mut siv, event_replayer)?;
+                cursor = event_replayer.advance_cursor(cursor, -1);
+                redraw(&mut siv, event_replayer, cursor)?;
             }
 
             Ok(Message::SetEventReplayerCursor { event_id }) => {
-                event_replayer.set_cursor(event_id);
-                redraw(&mut siv, event_replayer)?;
+                cursor = event_replayer.make_cursor(event_id);
+                redraw(&mut siv, event_replayer, cursor)?;
             }
 
             Ok(Message::GoToEvent) => {
@@ -448,8 +458,8 @@ You can also copy a commit hash from the past and manually run `git unhide` or `
 
             Ok(Message::SelectEventIdAndQuit) => {
                 siv.quit();
-                match event_replayer.get_event_before_cursor() {
-                    Some((event_id, _)) => return Ok(Some(event_id)),
+                match event_replayer.get_event_before_cursor(cursor) {
+                    Some(_) => return Ok(Some(cursor)),
                     None => return Ok(None),
                 }
             }
@@ -541,10 +551,11 @@ fn undo_events(
     git_executable: &GitExecutable,
     event_log_db: &mut EventLogDb,
     event_replayer: &EventReplayer,
+    event_cursor: EventCursor,
 ) -> anyhow::Result<isize> {
     let now = SystemTime::now();
     let inverse_events: Vec<Event> = event_replayer
-        .get_events_since_cursor()
+        .get_events_since_cursor(event_cursor)
         .iter()
         .rev()
         .filter(|event| {
@@ -694,15 +705,12 @@ pub fn undo(
     let mut event_log_db = EventLogDb::new(&conn)?;
     let mut event_replayer = EventReplayer::from_event_log_db(&event_log_db)?;
 
-    // TODO: Actual event ID is not used here. Instead, the modified
-    // `event_replayer` state is directly read by `undo_events`. The cursor
-    // should be refactored so that `event_replayer` is not modified.
-    let _selected_event_id = {
+    let event_cursor = {
         let result = with_siv(|siv| {
             select_past_event(siv, &glyphs, &repo, &merge_base_db, &mut event_replayer)
         })?;
         match result {
-            Some(event_id) => event_id,
+            Some(event_cursor) => event_cursor,
             None => return Ok(0),
         }
     };
@@ -715,6 +723,7 @@ pub fn undo(
         &git_executable,
         &mut event_log_db,
         &event_replayer,
+        event_cursor,
     )?;
     Ok(result)
 }
@@ -725,7 +734,7 @@ pub mod testing {
 
     use cursive::{CursiveRunnable, CursiveRunner};
 
-    use crate::eventlog::{EventLogDb, EventReplayer};
+    use crate::eventlog::{EventCursor, EventLogDb, EventReplayer};
     use crate::formatting::Glyphs;
     use crate::mergebase::MergeBaseDb;
     use crate::util::GitExecutable;
@@ -742,7 +751,7 @@ pub mod testing {
         repo: &git2::Repository,
         merge_base_db: &MergeBaseDb,
         event_replayer: &mut EventReplayer,
-    ) -> anyhow::Result<Option<isize>> {
+    ) -> anyhow::Result<Option<EventCursor>> {
         super::select_past_event(siv, glyphs, repo, merge_base_db, event_replayer)
     }
 
@@ -754,6 +763,7 @@ pub mod testing {
         git_executable: &GitExecutable,
         event_log_db: &mut EventLogDb,
         event_replayer: &EventReplayer,
+        event_cursor: EventCursor,
     ) -> anyhow::Result<isize> {
         super::undo_events(
             in_,
@@ -763,6 +773,7 @@ pub mod testing {
             git_executable,
             event_log_db,
             event_replayer,
+            event_cursor,
         )
     }
 }

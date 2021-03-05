@@ -437,14 +437,26 @@ struct EventInfo {
     event_classification: EventClassification,
 }
 
+/// Events up to this cursor (exclusive) are available to the caller.
+///
+/// The "event cursor" is used to move the event replayer forward or
+/// backward in time, so as to show the state of the repository at that
+/// time.
+///
+/// The cursor is a position in between two events in the event log.
+/// Thus, all events before to the cursor are considered to be in effect,
+/// and all events after the cursor are considered to not have happened
+/// yet.
+#[derive(Clone, Copy, Debug)]
+pub struct EventCursor {
+    event_id: isize,
+}
+
 /// Processes events in order and determine the repo's visible commits.
 #[derive(Debug)]
 pub struct EventReplayer {
     /// Events are numbered starting from zero.
     id_counter: isize,
-
-    /// Events up to this number (exclusive) are available to the caller.
-    cursor_event_id: isize,
 
     /// The list of observed events.
     events: Vec<Event>,
@@ -457,7 +469,6 @@ impl EventReplayer {
     fn new() -> Self {
         EventReplayer {
             id_counter: 0,
-            cursor_event_id: 0,
             events: vec![],
             commit_history: HashMap::new(),
         }
@@ -501,7 +512,6 @@ impl EventReplayer {
 
         let id = self.id_counter;
         self.id_counter += 1;
-        self.cursor_event_id = self.id_counter;
         self.events.push(event.clone());
 
         match &event {
@@ -575,12 +585,12 @@ impl EventReplayer {
         };
     }
 
-    fn get_cursor_commit_history(&self, oid: git2::Oid) -> Vec<&EventInfo> {
+    fn get_cursor_commit_history(&self, cursor: EventCursor, oid: git2::Oid) -> Vec<&EventInfo> {
         match self.commit_history.get(&oid) {
             None => vec![],
             Some(history) => history
                 .iter()
-                .filter(|event_info| event_info.id < self.cursor_event_id)
+                .filter(|event_info| event_info.id < cursor.event_id)
                 .collect(),
         }
     }
@@ -593,8 +603,12 @@ impl EventReplayer {
     ///
     /// Returns: Whether the commit is visible or hidden. Returns `None` if no
     /// history has been recorded for that commit.
-    pub fn get_cursor_commit_visibility(&self, oid: git2::Oid) -> Option<CommitVisibility> {
-        let history = self.get_cursor_commit_history(oid);
+    pub fn get_cursor_commit_visibility(
+        &self,
+        cursor: EventCursor,
+        oid: git2::Oid,
+    ) -> Option<CommitVisibility> {
+        let history = self.get_cursor_commit_history(cursor, oid);
         let event_info = *history.last()?;
         match event_info.event_classification {
             EventClassification::Show => Some(CommitVisibility::Visible),
@@ -610,8 +624,12 @@ impl EventReplayer {
     ///
     /// Returns: The most recent event that affected that commit. If this commit
     /// was not observed by the replayer, returns `None`.
-    pub fn get_cursor_commit_latest_event(&self, oid: git2::Oid) -> Option<&Event> {
-        let history = self.get_cursor_commit_history(oid);
+    pub fn get_cursor_commit_latest_event(
+        &self,
+        cursor: EventCursor,
+        oid: git2::Oid,
+    ) -> Option<&Event> {
+        let history = self.get_cursor_commit_history(cursor, oid);
         let event_info = *history.last()?;
         Some(&event_info.event)
     }
@@ -620,11 +638,11 @@ impl EventReplayer {
     ///
     /// Returns: The set of OIDs referring to commits which are thought to be
     /// active due to user action.
-    pub fn get_active_oids(&self) -> HashSet<git2::Oid> {
+    pub fn get_cursor_active_oids(&self, cursor: EventCursor) -> HashSet<git2::Oid> {
         self.commit_history
             .iter()
             .filter_map(|(oid, history)| {
-                if history.iter().any(|event| event.id < self.cursor_event_id) {
+                if history.iter().any(|event| event.id < cursor.event_id) {
                     Some(*oid)
                 } else {
                     None
@@ -633,22 +651,16 @@ impl EventReplayer {
             .collect()
     }
 
-    /// Set the event cursor to point to immediately after the provided event.
+    /// Create an event cursor pointing to immediately after the last event.
+    pub fn make_default_cursor(&self) -> EventCursor {
+        self.make_cursor(self.events.len().try_into().unwrap())
+    }
+
+    /// Create an event cursor pointing to immediately after the provided event ID.
     ///
-    /// The "event cursor" is used to move the event replayer forward or
-    /// backward in time, so as to show the state of the repository at that
-    /// time.
-    ///
-    /// The cursor is a position in between two events in the event log.
-    /// Thus, all events before to the cursor are considered to be in effect,
-    /// and all events after the cursor are considered to not have happened
-    /// yet.
-    ///
-    /// Args:
-    /// * `event_id`: The index of the event to set the cursor to point
-    /// immediately after. If out of bounds, the cursor is set to the first or
-    /// last valid position, as appropriate.
-    pub fn set_cursor(&mut self, event_id: isize) {
+    /// If the event ID is too low or too high, it will be clamped to the valid
+    /// range for event IDs.
+    pub fn make_cursor(&self, event_id: isize) -> EventCursor {
         let event_id = if event_id < 0 { 0 } else { event_id };
         let num_events: isize = self.events.len().try_into().unwrap();
         let event_id = if event_id > num_events {
@@ -656,7 +668,7 @@ impl EventReplayer {
         } else {
             event_id
         };
-        self.cursor_event_id = event_id;
+        EventCursor { event_id }
     }
 
     /// Advance the event cursor by the specified number of events.
@@ -665,16 +677,16 @@ impl EventReplayer {
     /// * `num_events`: The number of events to advance by. Can be positive,
     /// zero, or negative. If out of bounds, the cursor is set to the first or
     /// last valid position, as appropriate.
-    pub fn advance_cursor(&mut self, num_events: isize) {
-        self.set_cursor(self.cursor_event_id + num_events)
+    pub fn advance_cursor(&self, cursor: EventCursor, num_events: isize) -> EventCursor {
+        self.make_cursor(cursor.event_id + num_events)
     }
 
     /// Get the OID of `HEAD` at the cursor's point in time.
     ///
     /// Returns: The OID pointed to by `HEAD` at that time, or `None` if `HEAD`
     /// was never observed.
-    pub fn get_cursor_head_oid(&self) -> Option<git2::Oid> {
-        let cursor_event_id: usize = self.cursor_event_id.try_into().unwrap();
+    pub fn get_cursor_head_oid(&self, cursor: EventCursor) -> Option<git2::Oid> {
+        let cursor_event_id: usize = cursor.event_id.try_into().unwrap();
         self.events[0..cursor_event_id]
             .iter()
             .rev()
@@ -709,8 +721,12 @@ impl EventReplayer {
             })
     }
 
-    fn get_cursor_branch_oid(&self, branch_name: &str) -> anyhow::Result<Option<git2::Oid>> {
-        let cursor_event_id: usize = self.cursor_event_id.try_into().unwrap();
+    fn get_cursor_branch_oid(
+        &self,
+        cursor: EventCursor,
+        branch_name: &str,
+    ) -> anyhow::Result<Option<git2::Oid>> {
+        let cursor_event_id: usize = cursor.event_id.try_into().unwrap();
         let target_ref_name = format!("refs/heads/{}", branch_name);
         let oid = self.events[0..cursor_event_id]
             .iter()
@@ -744,9 +760,13 @@ impl EventReplayer {
     ///
     /// Returns: A mapping from an OID to the names of branches pointing to that
     /// OID.
-    pub fn get_cursor_main_branch_oid(&self, repo: &git2::Repository) -> anyhow::Result<git2::Oid> {
+    pub fn get_cursor_main_branch_oid(
+        &self,
+        cursor: EventCursor,
+        repo: &git2::Repository,
+    ) -> anyhow::Result<git2::Oid> {
         let main_branch_name = get_main_branch_name(&repo)?;
-        let main_branch_oid = self.get_cursor_branch_oid(&main_branch_name)?;
+        let main_branch_oid = self.get_cursor_branch_oid(cursor, &main_branch_name)?;
         match main_branch_oid {
             Some(main_branch_oid) => Ok(main_branch_oid),
             None => {
@@ -769,10 +789,11 @@ impl EventReplayer {
     /// OID.
     pub fn get_cursor_branch_oid_to_names(
         &self,
+        cursor: EventCursor,
         repo: &git2::Repository,
     ) -> anyhow::Result<HashMap<git2::Oid, HashSet<String>>> {
         let mut ref_name_to_oid: HashMap<&String, git2::Oid> = HashMap::new();
-        let cursor_event_id: usize = self.cursor_event_id.try_into().unwrap();
+        let cursor_event_id: usize = cursor.event_id.try_into().unwrap();
         for event in self.events[..cursor_event_id].iter() {
             match event {
                 Event::RefUpdateEvent {
@@ -809,7 +830,7 @@ impl EventReplayer {
         }
 
         let main_branch_name = get_main_branch_name(&repo)?;
-        let main_branch_oid = self.get_cursor_main_branch_oid(repo)?;
+        let main_branch_oid = self.get_cursor_main_branch_oid(cursor, repo)?;
         result
             .entry(main_branch_oid)
             .or_insert_with(HashSet::new)
@@ -821,12 +842,12 @@ impl EventReplayer {
     ///
     /// Returns: A tuple of event ID and the event that most recently happened.
     /// If no event was before the event cursor, returns `None` instead.
-    pub fn get_event_before_cursor(&self) -> Option<(isize, &Event)> {
-        if self.cursor_event_id == 0 {
+    pub fn get_event_before_cursor(&self, cursor: EventCursor) -> Option<(isize, &Event)> {
+        if cursor.event_id == 0 {
             None
         } else {
-            let previous_cursor_event_id: usize = (self.cursor_event_id - 1).try_into().unwrap();
-            Some((self.cursor_event_id, &self.events[previous_cursor_event_id]))
+            let previous_cursor_event_id: usize = (cursor.event_id - 1).try_into().unwrap();
+            Some((cursor.event_id, &self.events[previous_cursor_event_id]))
         }
     }
 
@@ -834,8 +855,8 @@ impl EventReplayer {
     ///
     /// Returns: An ordered list of events that have happened since the event
     /// cursor, from least recent to most recent.
-    pub fn get_events_since_cursor(&self) -> &[Event] {
-        let cursor_event_id: usize = self.cursor_event_id.try_into().unwrap();
+    pub fn get_events_since_cursor(&self, cursor: EventCursor) -> &[Event] {
+        let cursor_event_id: usize = cursor.event_id.try_into().unwrap();
         &self.events[cursor_event_id..]
     }
 }
@@ -867,8 +888,9 @@ mod tests {
             message: None,
         });
 
+        let cursor = replayer.make_default_cursor();
         assert_eq!(
-            replayer.get_event_before_cursor(),
+            replayer.get_event_before_cursor(cursor),
             Some((1, &meaningful_event))
         );
         Ok(())

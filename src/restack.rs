@@ -77,7 +77,8 @@ fn find_rewrite_target(
     event_replayer: &EventReplayer,
     oid: git2::Oid,
 ) -> Option<git2::Oid> {
-    let event = event_replayer.get_cursor_commit_latest_event(oid);
+    let cursor = event_replayer.make_default_cursor();
+    let event = event_replayer.get_cursor_commit_latest_event(cursor, oid);
     let event = match event {
         Some(event) => event,
         None => return None,
@@ -169,6 +170,7 @@ fn restack_commits(
         repo,
         merge_base_db,
         &event_replayer,
+        event_replayer.make_default_cursor(),
         &HeadOid(head_oid),
         &MainBranchOid(main_branch_oid),
         &BranchOids(branch_oid_to_names.keys().copied().collect()),
@@ -240,6 +242,7 @@ fn restack_branches(
         repo,
         merge_base_db,
         &event_replayer,
+        event_replayer.make_default_cursor(),
         &HeadOid(head_oid),
         &MainBranchOid(main_branch_oid),
         &BranchOids(branch_oid_to_names.keys().copied().collect()),

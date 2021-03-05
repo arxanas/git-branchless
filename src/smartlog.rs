@@ -265,6 +265,7 @@ pub fn smartlog(out: &mut impl Write) -> anyhow::Result<()> {
         &repo,
         &merge_base_db,
         &event_replayer,
+        event_replayer.make_default_cursor(),
         &HeadOid(head_oid),
         &MainBranchOid(main_branch_oid),
         &BranchOids(branch_oid_to_names.keys().cloned().collect()),

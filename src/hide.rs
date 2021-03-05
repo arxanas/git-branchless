@@ -81,6 +81,7 @@ fn recurse_on_commits<'repo, F: Fn(&Node) -> bool>(
         repo,
         merge_base_db,
         event_replayer,
+        event_replayer.make_default_cursor(),
         &HeadOid(head_oid),
         &MainBranchOid(main_branch_oid),
         &BranchOids(branch_oid_to_names.keys().copied().collect()),
@@ -148,6 +149,7 @@ pub fn hide(out: &mut impl Write, hashes: Vec<String>, recursive: bool) -> anyho
         .collect();
     event_log_db.add_events(events)?;
 
+    let cursor = event_replayer.make_default_cursor();
     for commit in commits {
         let hidden_commit_text = {
             render_commit_metadata(
@@ -160,7 +162,7 @@ pub fn hide(out: &mut impl Write, hashes: Vec<String>, recursive: bool) -> anyho
         };
         writeln!(out, "Hid commit: {}", hidden_commit_text)?;
         if let Some(CommitVisibility::Hidden) =
-            event_replayer.get_cursor_commit_visibility(commit.id())
+            event_replayer.get_cursor_commit_visibility(cursor, commit.id())
         {
             writeln!(
                 out,
@@ -226,6 +228,7 @@ pub fn unhide(out: &mut impl Write, hashes: Vec<String>, recursive: bool) -> any
         .collect();
     event_log_db.add_events(events)?;
 
+    let cursor = event_replayer.make_default_cursor();
     for commit in commits {
         let unhidden_commit_text = {
             render_commit_metadata(
@@ -238,7 +241,7 @@ pub fn unhide(out: &mut impl Write, hashes: Vec<String>, recursive: bool) -> any
         };
         writeln!(out, "Unhid commit: {}", unhidden_commit_text)?;
         if let Some(CommitVisibility::Visible) =
-            event_replayer.get_cursor_commit_visibility(commit.id())
+            event_replayer.get_cursor_commit_visibility(cursor, commit.id())
         {
             writeln!(out, "(It was not hidden, so this operation had no effect.)")?;
         }

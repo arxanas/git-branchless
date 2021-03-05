@@ -4,7 +4,7 @@ use std::convert::Infallible;
 
 use std::rc::Rc;
 
-use branchless::eventlog::{EventLogDb, EventReplayer};
+use branchless::eventlog::{EventCursor, EventLogDb, EventReplayer};
 use branchless::formatting::Glyphs;
 use branchless::mergebase::MergeBaseDb;
 use branchless::util::{get_db_conn, GitExecutable};
@@ -108,7 +108,7 @@ impl Backend for CursiveTestingBackend {
 fn run_select_past_event(
     repo: &git2::Repository,
     events: Vec<CursiveTestingEvent>,
-) -> anyhow::Result<Option<isize>> {
+) -> anyhow::Result<Option<EventCursor>> {
     let glyphs = Glyphs::text();
     let conn = get_db_conn(&repo)?;
     let merge_base_db = MergeBaseDb::new(&conn)?;
@@ -126,12 +126,11 @@ fn run_select_past_event(
     )
 }
 
-fn run_undo_events(git: &Git, event_id: isize) -> anyhow::Result<(String, String)> {
+fn run_undo_events(git: &Git, event_cursor: EventCursor) -> anyhow::Result<(String, String)> {
     let repo = git.get_repo()?;
     let conn = get_db_conn(&repo)?;
     let mut event_log_db: EventLogDb = EventLogDb::new(&conn)?;
-    let mut event_replayer = EventReplayer::from_event_log_db(&event_log_db)?;
-    event_replayer.set_cursor(event_id);
+    let event_replayer = EventReplayer::from_event_log_db(&event_log_db)?;
     let input = "y";
     let mut in_ = input.as_bytes();
     let mut out = Vec::new();
@@ -144,6 +143,7 @@ fn run_undo_events(git: &Git, event_id: isize) -> anyhow::Result<(String, String
         &GitExecutable(git.git_executable.clone()),
         &mut event_log_db,
         &event_replayer,
+        event_cursor,
     )?;
     assert_eq!(result, 0);
 
@@ -231,7 +231,7 @@ fn test_undo_navigate() -> anyhow::Result<()> {
         {
             let screenshot1 = Default::default();
             let screenshot2 = Default::default();
-            let event_id = run_select_past_event(
+            let event_cursor = run_select_past_event(
                 &git.get_repo()?,
                 vec![
                     CursiveTestingEvent::Event('p'.into()),
@@ -242,9 +242,11 @@ fn test_undo_navigate() -> anyhow::Result<()> {
                     CursiveTestingEvent::Event(Key::Enter.into()),
                 ],
             )?;
-            insta::assert_debug_snapshot!(event_id, @r###"
+            insta::assert_debug_snapshot!(event_cursor, @r###"
             Some(
-                5,
+                EventCursor {
+                    event_id: 5,
+                },
             )
             "###);
             insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
@@ -339,7 +341,7 @@ fn test_undo_hide() -> anyhow::Result<()> {
             "###);
         }
 
-        let event_id = run_select_past_event(
+        let event_cursor = run_select_past_event(
             &git.get_repo()?,
             vec![
                 CursiveTestingEvent::Event('p'.into()),
@@ -348,15 +350,17 @@ fn test_undo_hide() -> anyhow::Result<()> {
                 CursiveTestingEvent::Event('y'.into()),
             ],
         )?;
-        insta::assert_debug_snapshot!(event_id, @r###"
+        insta::assert_debug_snapshot!(event_cursor, @r###"
         Some(
-            9,
+            EventCursor {
+                event_id: 9,
+            },
         )
         "###);
-        let event_id = event_id.unwrap();
+        let event_cursor = event_cursor.unwrap();
 
         {
-            let (stdout, stderr) = run_undo_events(&git, event_id)?;
+            let (stdout, stderr) = run_undo_events(&git, event_cursor)?;
             insta::assert_snapshot!(stderr, @"");
             insta::assert_snapshot!(stdout, @r###"
             Will apply these actions:
@@ -394,7 +398,7 @@ fn test_undo_move_refs() -> anyhow::Result<()> {
         git.commit_file("test1", 1)?;
         git.commit_file("test2", 2)?;
 
-        let event_id = run_select_past_event(
+        let event_cursor = run_select_past_event(
             &git.get_repo()?,
             vec![
                 CursiveTestingEvent::Event('p'.into()),
@@ -404,15 +408,17 @@ fn test_undo_move_refs() -> anyhow::Result<()> {
                 CursiveTestingEvent::Event('y'.into()),
             ],
         )?;
-        insta::assert_debug_snapshot!(event_id, @r###"
+        insta::assert_debug_snapshot!(event_cursor, @r###"
         Some(
-            3,
+            EventCursor {
+                event_id: 3,
+            },
         )
         "###);
-        let event_id = event_id.unwrap();
+        let event_cursor = event_cursor.unwrap();
 
         {
-            let (stdout, _stderr) = run_undo_events(&git, event_id)?;
+            let (stdout, _stderr) = run_undo_events(&git, event_cursor)?;
             insta::assert_snapshot!(stdout, @r###"
             Will apply these actions:
             1. Hide commit 96d1c37a create test2.txt

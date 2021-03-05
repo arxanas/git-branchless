@@ -7,7 +7,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use fn_error_context::context;
 use log::warn;
 
-use crate::eventlog::{CommitVisibility, Event, EventReplayer};
+use crate::eventlog::{CommitVisibility, Event, EventCursor, EventReplayer};
 use crate::mergebase::MergeBaseDb;
 
 /// The OID of the repo's HEAD reference.
@@ -156,6 +156,7 @@ fn walk_from_commits<'repo>(
     commit_oids: &CommitOids,
 ) -> anyhow::Result<CommitGraph<'repo>> {
     let mut graph: CommitGraph = Default::default();
+    let cursor = event_replayer.make_default_cursor();
 
     for commit_oid in &commit_oids.0 {
         let commit = repo.find_commit(*commit_oid);
@@ -198,7 +199,8 @@ fn walk_from_commits<'repo>(
                 break;
             }
 
-            let visibility = event_replayer.get_cursor_commit_visibility(current_commit.id());
+            let visibility =
+                event_replayer.get_cursor_commit_visibility(cursor, current_commit.id());
             let is_visible = match visibility {
                 Some(CommitVisibility::Visible) | None => true,
                 Some(CommitVisibility::Hidden) => false,
@@ -210,7 +212,7 @@ fn walk_from_commits<'repo>(
             };
 
             let event = event_replayer
-                .get_cursor_commit_latest_event(current_commit.id())
+                .get_cursor_commit_latest_event(cursor, current_commit.id())
                 .cloned();
             graph.insert(
                 current_commit.id(),
@@ -347,13 +349,16 @@ pub fn make_graph<'repo>(
     repo: &'repo git2::Repository,
     merge_base_db: &MergeBaseDb,
     event_replayer: &EventReplayer,
+    event_cursor: EventCursor,
     head_oid: &HeadOid,
     main_branch_oid: &MainBranchOid,
     branch_oids: &BranchOids,
     remove_commits: bool,
 ) -> anyhow::Result<CommitGraph<'repo>> {
-    let mut commit_oids: HashSet<git2::Oid> =
-        event_replayer.get_active_oids().into_iter().collect();
+    let mut commit_oids: HashSet<git2::Oid> = event_replayer
+        .get_cursor_active_oids(event_cursor)
+        .into_iter()
+        .collect();
     commit_oids.extend(branch_oids.0.iter().cloned());
     if let HeadOid(Some(head_oid)) = head_oid {
         commit_oids.insert(*head_oid);
