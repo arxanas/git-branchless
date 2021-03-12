@@ -195,11 +195,19 @@ def entry_point() -> None:
     # `PATH_TO_GIT` set in testing.
     git_executable = os.environ.get("PATH_TO_GIT", "git")
 
-    sys.exit(
-        main(
-            sys.argv[1:], out=sys.stdout, err=sys.stderr, git_executable=git_executable
+    try:
+        sys.exit(
+            main(
+                sys.argv[1:],
+                out=sys.stdout,
+                err=sys.stderr,
+                git_executable=git_executable,
+            )
         )
-    )
+    finally:
+        # Work around https://github.com/PyO3/pyo3/issues/1490
+        sys.stdout.flush()
+        sys.stderr.flush()
 
 
 if __name__ == "__main__":
