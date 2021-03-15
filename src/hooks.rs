@@ -22,7 +22,6 @@ use crate::formatting::Pluralize;
 use crate::gc::mark_commit_reachable;
 use crate::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
 use crate::mergebase::MergeBaseDb;
-use crate::python::clone_conn;
 use crate::restack::find_abandoned_children;
 use crate::util::{
     get_branch_oid_to_names, get_db_conn, get_head_oid, get_main_branch_oid, get_repo,
@@ -108,7 +107,7 @@ pub fn hook_post_rewrite(out: &mut impl Write, rewrite_type: &str) -> anyhow::Re
     }
 
     let conn = get_db_conn(&repo)?;
-    let mut event_log_db = EventLogDb::new(clone_conn(&conn)?)?;
+    let mut event_log_db = EventLogDb::new(&conn)?;
     event_log_db.add_events(events)?;
 
     let should_check_abandoned_commits = get_restack_warn_abandoned(&repo)?;
@@ -116,7 +115,7 @@ pub fn hook_post_rewrite(out: &mut impl Write, rewrite_type: &str) -> anyhow::Re
         return Ok(());
     }
 
-    let merge_base_db = MergeBaseDb::new(clone_conn(&conn)?)?;
+    let merge_base_db = MergeBaseDb::new(&conn)?;
     let event_replayer = EventReplayer::from_event_log_db(&event_log_db)?;
     let head_oid = get_head_oid(&repo)?;
     let main_branch_oid = get_main_branch_oid(&repo)?;
@@ -236,7 +235,7 @@ pub fn hook_post_checkout(
 
     let repo = get_repo()?;
     let conn = get_db_conn(&repo)?;
-    let mut event_log_db = EventLogDb::new(conn)?;
+    let mut event_log_db = EventLogDb::new(&conn)?;
     event_log_db.add_events(vec![Event::RefUpdateEvent {
         timestamp: timestamp.as_secs_f64(),
         old_ref: Some(String::from(previous_head_ref)),
@@ -255,7 +254,7 @@ pub fn hook_post_commit(out: &mut impl Write) -> anyhow::Result<()> {
 
     let repo = get_repo()?;
     let conn = get_db_conn(&repo)?;
-    let mut event_log_db = EventLogDb::new(conn)?;
+    let mut event_log_db = EventLogDb::new(&conn)?;
 
     let commit = repo
         .head()
@@ -348,7 +347,7 @@ pub fn hook_reference_transaction(
 
     let repo = get_repo()?;
     let conn = get_db_conn(&repo)?;
-    let mut event_log_db = EventLogDb::new(conn)?;
+    let mut event_log_db = EventLogDb::new(&conn)?;
     event_log_db.add_events(events)?;
 
     Ok(())

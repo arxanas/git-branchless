@@ -21,8 +21,8 @@ use rusqlite::OptionalExtension;
 use crate::util::wrap_git_error;
 
 /// On-disk cache for merge-base queries.
-pub struct MergeBaseDb {
-    conn: rusqlite::Connection,
+pub struct MergeBaseDb<'conn> {
+    conn: &'conn rusqlite::Connection,
 }
 
 #[context("Initializing tables for `MergeBaseDb`")]
@@ -42,10 +42,10 @@ CREATE TABLE IF NOT EXISTS merge_base_oids (
     Ok(())
 }
 
-impl MergeBaseDb {
+impl<'conn> MergeBaseDb<'conn> {
     /// Constructor.
     #[context("Constructing `MergeBaseDb`")]
-    pub fn new(conn: rusqlite::Connection) -> anyhow::Result<Self> {
+    pub fn new(conn: &'conn rusqlite::Connection) -> anyhow::Result<Self> {
         init_tables(&conn).context("Initializing tables")?;
         Ok(MergeBaseDb { conn })
     }

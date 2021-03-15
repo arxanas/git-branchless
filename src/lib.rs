@@ -50,7 +50,6 @@ pub mod init;
 pub mod mergebase;
 pub mod metadata;
 pub mod navigation;
-pub mod python;
 pub mod restack;
 pub mod smartlog;
 pub mod testing;

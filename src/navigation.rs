@@ -10,7 +10,6 @@ use crate::formatting::Glyphs;
 use crate::graph::{find_path_to_merge_base, make_graph, BranchOids, HeadOid, MainBranchOid, Node};
 use crate::mergebase::MergeBaseDb;
 use crate::metadata::{render_commit_metadata, CommitMessageProvider, CommitOidProvider};
-use crate::python::clone_conn;
 use crate::smartlog::smartlog;
 use crate::util::{
     get_branch_oid_to_names, get_db_conn, get_head_oid, get_main_branch_oid, get_repo, run_git,
@@ -150,8 +149,8 @@ pub fn next(
     let glyphs = Glyphs::detect();
     let repo = get_repo()?;
     let conn = get_db_conn(&repo)?;
-    let merge_base_db = MergeBaseDb::new(clone_conn(&conn)?)?;
-    let event_log_db = EventLogDb::new(clone_conn(&conn)?)?;
+    let merge_base_db = MergeBaseDb::new(&conn)?;
+    let event_log_db = EventLogDb::new(&conn)?;
     let event_replayer = EventReplayer::from_event_log_db(&event_log_db)?;
 
     let head_oid = match get_head_oid(&repo)? {

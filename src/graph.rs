@@ -383,7 +383,7 @@ fn test_find_path_to_merge_base_stop_early() -> anyhow::Result<()> {
 
         let repo = git.get_repo()?;
         let conn = crate::util::get_db_conn(&repo)?;
-        let merge_base_db = MergeBaseDb::new(conn)?;
+        let merge_base_db = MergeBaseDb::new(&conn)?;
 
         let mut seen_oids = HashSet::new();
         let path =

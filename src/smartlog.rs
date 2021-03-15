@@ -17,7 +17,6 @@ use crate::metadata::{
     render_commit_metadata, BranchesProvider, CommitMessageProvider, CommitMetadataProvider,
     CommitOidProvider, DifferentialRevisionProvider, RelativeTimeProvider,
 };
-use crate::python::clone_conn;
 use crate::util::{
     get_branch_oid_to_names, get_db_conn, get_head_oid, get_main_branch_oid, get_repo,
 };
@@ -256,8 +255,8 @@ pub fn smartlog(out: &mut impl Write) -> anyhow::Result<()> {
     let glyphs = Glyphs::detect();
     let repo = get_repo()?;
     let conn = get_db_conn(&repo)?;
-    let merge_base_db = MergeBaseDb::new(clone_conn(&conn)?)?;
-    let event_log_db = EventLogDb::new(clone_conn(&conn)?)?;
+    let merge_base_db = MergeBaseDb::new(&conn)?;
+    let event_log_db = EventLogDb::new(&conn)?;
     let event_replayer = EventReplayer::from_event_log_db(&event_log_db)?;
     let head_oid = get_head_oid(&repo)?;
     let main_branch_oid = get_main_branch_oid(&repo)?;

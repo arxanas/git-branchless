@@ -27,7 +27,6 @@ use crate::metadata::{
     render_commit_metadata, BranchesProvider, CommitMessageProvider, CommitOidProvider,
     DifferentialRevisionProvider, RelativeTimeProvider,
 };
-use crate::python::clone_conn;
 use crate::smartlog::render_graph;
 use crate::util::{get_db_conn, get_repo, run_git, GitExecutable};
 
@@ -691,8 +690,8 @@ pub fn undo(
     let glyphs = Glyphs::detect();
     let repo = get_repo()?;
     let conn = get_db_conn(&repo)?;
-    let merge_base_db = MergeBaseDb::new(clone_conn(&conn)?)?;
-    let mut event_log_db = EventLogDb::new(clone_conn(&conn)?)?;
+    let merge_base_db = MergeBaseDb::new(&conn)?;
+    let mut event_log_db = EventLogDb::new(&conn)?;
     let mut event_replayer = EventReplayer::from_event_log_db(&event_log_db)?;
 
     // TODO: Actual event ID is not used here. Instead, the modified

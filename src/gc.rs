@@ -17,7 +17,6 @@ use fn_error_context::context;
 use crate::eventlog::{is_gc_ref, EventLogDb, EventReplayer};
 use crate::graph::{make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid};
 use crate::mergebase::MergeBaseDb;
-use crate::python::clone_conn;
 use crate::util::{
     get_branch_oid_to_names, get_db_conn, get_head_oid, get_main_branch_oid, get_repo,
 };
@@ -86,8 +85,8 @@ pub fn mark_commit_reachable(repo: &git2::Repository, commit_oid: git2::Oid) -> 
 pub fn gc(out: &mut impl Write) -> anyhow::Result<()> {
     let repo = get_repo()?;
     let conn = get_db_conn(&repo)?;
-    let merge_base_db = MergeBaseDb::new(clone_conn(&conn)?)?;
-    let event_log_db = EventLogDb::new(clone_conn(&conn)?)?;
+    let merge_base_db = MergeBaseDb::new(&conn)?;
+    let event_log_db = EventLogDb::new(&conn)?;
     let event_replayer = EventReplayer::from_event_log_db(&event_log_db)?;
     let head_oid = get_head_oid(&repo)?;
     let main_branch_oid = get_main_branch_oid(&repo)?;

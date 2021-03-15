@@ -14,7 +14,6 @@ use crate::eventlog::{EventLogDb, EventReplayer};
 use crate::graph::{make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid, Node};
 use crate::mergebase::MergeBaseDb;
 use crate::metadata::{render_commit_metadata, CommitMessageProvider, CommitOidProvider};
-use crate::python::clone_conn;
 use crate::util::{
     get_branch_oid_to_names, get_db_conn, get_head_oid, get_main_branch_oid, get_repo,
 };
@@ -117,9 +116,9 @@ pub fn hide(out: &mut impl Write, hashes: Vec<String>, recursive: bool) -> anyho
     let timestamp = SystemTime::now();
     let repo = get_repo()?;
     let conn = get_db_conn(&repo)?;
-    let mut event_log_db = EventLogDb::new(clone_conn(&conn)?)?;
+    let mut event_log_db = EventLogDb::new(&conn)?;
     let event_replayer = EventReplayer::from_event_log_db(&event_log_db)?;
-    let merge_base_db = MergeBaseDb::new(clone_conn(&conn)?)?;
+    let merge_base_db = MergeBaseDb::new(&conn)?;
 
     let commits = process_hashes(&repo, hashes)?;
     let commits = match commits {
@@ -195,9 +194,9 @@ pub fn unhide(out: &mut impl Write, hashes: Vec<String>, recursive: bool) -> any
     let timestamp = SystemTime::now();
     let repo = get_repo()?;
     let conn = get_db_conn(&repo)?;
-    let mut event_log_db = EventLogDb::new(clone_conn(&conn)?)?;
+    let mut event_log_db = EventLogDb::new(&conn)?;
     let event_replayer = EventReplayer::from_event_log_db(&event_log_db)?;
-    let merge_base_db = MergeBaseDb::new(clone_conn(&conn)?)?;
+    let merge_base_db = MergeBaseDb::new(&conn)?;
 
     let commits = process_hashes(&repo, hashes)?;
     let commits = match commits {

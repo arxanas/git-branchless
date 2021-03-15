@@ -7,7 +7,6 @@ use std::rc::Rc;
 use branchless::eventlog::{EventLogDb, EventReplayer};
 use branchless::formatting::Glyphs;
 use branchless::mergebase::MergeBaseDb;
-use branchless::python::clone_conn;
 use branchless::util::{get_db_conn, GitExecutable};
 use cursive::backend::Backend;
 use cursive::event::Key;
@@ -112,8 +111,8 @@ fn run_select_past_event(
 ) -> anyhow::Result<Option<isize>> {
     let glyphs = Glyphs::text();
     let conn = get_db_conn(&repo)?;
-    let merge_base_db = MergeBaseDb::new(clone_conn(&conn)?)?;
-    let event_log_db: EventLogDb = EventLogDb::new(clone_conn(&conn)?)?;
+    let merge_base_db = MergeBaseDb::new(&conn)?;
+    let event_log_db: EventLogDb = EventLogDb::new(&conn)?;
     let mut event_replayer = EventReplayer::from_event_log_db(&event_log_db)?;
     let siv = CursiveRunnable::new::<Infallible, _>(move || {
         Ok(CursiveTestingBackend::init(events.clone()))
@@ -130,7 +129,7 @@ fn run_select_past_event(
 fn run_undo_events(git: &Git, event_id: isize) -> anyhow::Result<(String, String)> {
     let repo = git.get_repo()?;
     let conn = get_db_conn(&repo)?;
-    let mut event_log_db: EventLogDb = EventLogDb::new(clone_conn(&conn)?)?;
+    let mut event_log_db: EventLogDb = EventLogDb::new(&conn)?;
     let mut event_replayer = EventReplayer::from_event_log_db(&event_log_db)?;
     event_replayer.set_cursor(event_id);
     let input = "y";

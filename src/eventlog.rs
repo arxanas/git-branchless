@@ -280,8 +280,8 @@ impl TryFrom<Row> for Event {
 }
 
 /// Stores `Event`s on disk.
-pub struct EventLogDb {
-    conn: rusqlite::Connection,
+pub struct EventLogDb<'conn> {
+    conn: &'conn rusqlite::Connection,
 }
 
 #[context("Initializing `EventLogDb` tables")]
@@ -303,10 +303,10 @@ CREATE TABLE IF NOT EXISTS event_log (
     Ok(())
 }
 
-impl EventLogDb {
+impl<'conn> EventLogDb<'conn> {
     /// Constructor.
     #[context("Constructing `EventLogDb`")]
-    pub fn new(conn: rusqlite::Connection) -> anyhow::Result<Self> {
+    pub fn new(conn: &'conn rusqlite::Connection) -> anyhow::Result<Self> {
         init_tables(&conn)?;
         Ok(EventLogDb { conn })
     }
@@ -317,7 +317,7 @@ impl EventLogDb {
     /// * events: The events to add.
     #[context("Adding events to event-log")]
     pub fn add_events(&mut self, events: Vec<Event>) -> anyhow::Result<()> {
-        let tx = self.conn.transaction()?;
+        let tx = self.conn.unchecked_transaction()?;
         for event in events {
             let row = Row::from(event);
             tx.execute_named(

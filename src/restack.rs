@@ -66,7 +66,6 @@ use crate::config::get_restack_preserve_timestamps;
 use crate::eventlog::{Event, EventLogDb, EventReplayer};
 use crate::graph::{make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid};
 use crate::mergebase::MergeBaseDb;
-use crate::python::clone_conn;
 use crate::smartlog::smartlog;
 use crate::util::{
     get_branch_oid_to_names, get_db_conn, get_head_oid, get_main_branch_oid, get_repo, run_git,
@@ -306,8 +305,8 @@ pub fn restack(
 ) -> anyhow::Result<isize> {
     let repo = get_repo()?;
     let conn = get_db_conn(&repo)?;
-    let merge_base_db = MergeBaseDb::new(clone_conn(&conn)?)?;
-    let event_log_db = EventLogDb::new(clone_conn(&conn)?)?;
+    let merge_base_db = MergeBaseDb::new(&conn)?;
+    let event_log_db = EventLogDb::new(&conn)?;
     let head_oid = get_head_oid(&repo)?;
 
     let result = restack_commits(
