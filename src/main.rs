@@ -1,6 +1,6 @@
 use std::convert::TryInto;
 use std::io::{stderr, stdin, stdout};
-use std::path::PathBuf;
+use std::path::Path;
 
 use anyhow::Context;
 use branchless::util::GitExecutable;
@@ -104,7 +104,8 @@ fn main() -> anyhow::Result<()> {
     let mut stdout = stdout();
     let mut stderr = stderr();
     let git_executable = std::env::var("PATH_TO_GIT").unwrap_or_else(|_| "git".to_string());
-    let git_executable = GitExecutable(PathBuf::from(git_executable));
+    let git_executable = Path::new(&git_executable);
+    let git_executable = GitExecutable(&git_executable);
 
     let exit_code = match opts {
         Opts::Init => {

@@ -1,4 +1,5 @@
 use branchless::testing::{get_git_executable, with_git, Git, GitInitOptions, GitRunOptions};
+use branchless::util::GitExecutable;
 
 #[test]
 fn test_init() -> anyhow::Result<()> {
@@ -303,6 +304,7 @@ fn test_custom_main_branch() -> anyhow::Result<()> {
 #[test]
 fn test_main_remote_branch() -> anyhow::Result<()> {
     let git_executable = get_git_executable()?;
+    let git_executable = GitExecutable(&git_executable);
     let temp_dir = tempfile::tempdir()?;
     let original_repo_path = temp_dir.path().join("original");
     std::fs::create_dir(&original_repo_path)?;

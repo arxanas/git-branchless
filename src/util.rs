@@ -3,7 +3,7 @@
 use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::Path;
 use std::process::Command;
 use std::str::FromStr;
 
@@ -133,10 +133,8 @@ pub fn get_db_conn(repo: &git2::Repository) -> anyhow::Result<rusqlite::Connecti
 }
 
 /// Path to the `git` executable on disk to be executed.
-///
-/// TODO: change to be a `Path` instead of a `PathBuf`.
 #[derive(Debug)]
-pub struct GitExecutable(pub PathBuf);
+pub struct GitExecutable<'path>(pub &'path Path);
 
 /// Run Git in a subprocess, and inform the user.
 ///
