@@ -22,7 +22,7 @@ enum Hook {
 
 #[context("Determining hook path")]
 fn determine_hook_path(repo: &git2::Repository, hook_type: &str) -> anyhow::Result<Hook> {
-    let multi_hooks_path = repo.path().join("hook_multi");
+    let multi_hooks_path = repo.path().join("hooks_multi");
     let hook = if multi_hooks_path.exists() {
         let path = multi_hooks_path
             .join(format!("{}.d", hook_type))
@@ -83,7 +83,7 @@ fn update_hook_contents(hook: &Hook, hook_contents: &str) -> anyhow::Result<()> 
                 return Err(anyhow::anyhow!(other));
             }
         },
-        Hook::MultiHook { path } => (path, hook_contents.to_owned()),
+        Hook::MultiHook { path } => (path, format!("{}\n{}", SHEBANG, hook_contents)),
     };
 
     let hook_dir = hook_path
