@@ -178,20 +178,24 @@ git branchless hook-reference-transaction "$@" || (
     Ok(())
 }
 
-#[context("Installing alias: {:?}", alias)]
+#[context("Installing alias: git {:?} -> git branchless {:?}", from, to)]
 fn install_alias(
     out: &mut impl Write,
     config: &mut git2::Config,
-    alias: &str,
+    from: &str,
+    to: &str,
 ) -> anyhow::Result<()> {
-    writeln!(out, "Installing alias (non-global): git {}", alias)?;
+    writeln!(
+        out,
+        "Installing alias (non-global): git {} -> git branchless {}",
+        from, to
+    )?;
     config
         .set_str(
-            format!("alias.{}", alias).as_str(),
-            format!("branchless {}", alias).as_str(),
+            format!("alias.{}", from).as_str(),
+            format!("branchless {}", to).as_str(),
         )
-        .map_err(wrap_git_error)
-        .with_context(|| format!("Setting alias {}", alias))?;
+        .map_err(wrap_git_error)?;
     Ok(())
 }
 
@@ -202,14 +206,14 @@ fn install_aliases(
     git_executable: &GitExecutable,
 ) -> anyhow::Result<()> {
     let mut config = repo.config().with_context(|| "Getting repo config")?;
-    install_alias(out, &mut config, "smartlog")?;
-    install_alias(out, &mut config, "sl")?;
-    install_alias(out, &mut config, "hide")?;
-    install_alias(out, &mut config, "unhide")?;
-    install_alias(out, &mut config, "prev")?;
-    install_alias(out, &mut config, "next")?;
-    install_alias(out, &mut config, "restack")?;
-    install_alias(out, &mut config, "undo")?;
+    install_alias(out, &mut config, "smartlog", "smartlog")?;
+    install_alias(out, &mut config, "sl", "smartlog")?;
+    install_alias(out, &mut config, "hide", "hide")?;
+    install_alias(out, &mut config, "unhide", "unhide")?;
+    install_alias(out, &mut config, "prev", "prev")?;
+    install_alias(out, &mut config, "next", "next")?;
+    install_alias(out, &mut config, "restack", "restack")?;
+    install_alias(out, &mut config, "undo", "undo")?;
 
     let version_str = run_git_silent(repo, git_executable, &["version"])
         .with_context(|| "Determining Git version")?;

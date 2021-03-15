@@ -17,8 +17,7 @@ name = "branchless"
 anyhow = "1.0.38"
 assert_cmd = "1.0.3"
 console = "0.14.0"
-cursive = { version = "0.16.3", features = ["crossterm-backend"] }
-cursive_buffered_backend = "0.5.0"
+cursive = {version = "0.16.3", features = ["crossterm-backend"]}
 fn-error-context = "0.1.1"
 git2 = "0.13.17"
 lazy_static = "1.4.0"
@@ -27,6 +26,7 @@ pyo3 = "0.13.2"
 regex = "1.4.4"
 rusqlite = "0.24.2"
 simple_logger = "1.11.0"
+structopt = "0.3.21"
 tempfile = "3.2.0"
 
 [dev-dependencies]

@@ -133,6 +133,8 @@ pub fn get_db_conn(repo: &git2::Repository) -> anyhow::Result<rusqlite::Connecti
 }
 
 /// Path to the `git` executable on disk to be executed.
+///
+/// TODO: change to be a `Path` instead of a `PathBuf`.
 #[derive(Debug)]
 pub struct GitExecutable(pub PathBuf);
 

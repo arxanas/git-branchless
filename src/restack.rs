@@ -73,6 +73,7 @@ use crate::graph::{
 };
 use crate::mergebase::MergeBaseDb;
 use crate::python::{clone_conn, map_err_to_py_err, PyOidStr, TextIO};
+use crate::smartlog::smartlog;
 use crate::util::{
     get_branch_oid_to_names, get_db_conn, get_head_oid, get_main_branch_oid, get_repo, run_git,
     GitExecutable,
@@ -307,7 +308,7 @@ fn restack_branches(
 pub fn restack(
     out: &mut impl Write,
     err: &mut impl Write,
-    git_executable: GitExecutable,
+    git_executable: &GitExecutable,
 ) -> anyhow::Result<isize> {
     let repo = get_repo()?;
     let conn = get_db_conn(&repo)?;
@@ -349,7 +350,7 @@ pub fn restack(
         None => result,
     };
 
-    // TODO: also display smartlog.
+    smartlog(out)?;
     Ok(result)
 }
 
@@ -388,7 +389,7 @@ fn py_restack(py: Python, out: PyObject, err: PyObject, git_executable: &str) ->
     let mut out = TextIO::new(py, out);
     let mut err = TextIO::new(py, err);
     let git_executable = GitExecutable(PathBuf::from_str(git_executable)?);
-    let result = restack(&mut out, &mut err, git_executable);
+    let result = restack(&mut out, &mut err, &git_executable);
     let result = map_err_to_py_err(result, "Restack failed")?;
     Ok(result)
 }
