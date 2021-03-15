@@ -86,28 +86,26 @@ impl CommitMetadataProvider for CommitMessageProvider {
 }
 
 /// Display branches that point to a given commit.
-pub struct BranchesProvider {
+pub struct BranchesProvider<'a> {
     is_enabled: bool,
-
-    // TODO: once we drop Python support, borrow this instead of cloning it.
-    branch_oid_to_names: HashMap<git2::Oid, HashSet<String>>,
+    branch_oid_to_names: &'a HashMap<git2::Oid, HashSet<String>>,
 }
 
-impl BranchesProvider {
+impl<'a> BranchesProvider<'a> {
     /// Constructor.
     pub fn new(
         repo: &git2::Repository,
-        branch_oid_to_names: &HashMap<git2::Oid, HashSet<String>>,
+        branch_oid_to_names: &'a HashMap<git2::Oid, HashSet<String>>,
     ) -> anyhow::Result<Self> {
         let is_enabled = get_commit_metadata_branches(repo)?;
         Ok(BranchesProvider {
             is_enabled,
-            branch_oid_to_names: branch_oid_to_names.clone(),
+            branch_oid_to_names,
         })
     }
 }
 
-impl<'a> CommitMetadataProvider for BranchesProvider {
+impl<'a> CommitMetadataProvider for BranchesProvider<'a> {
     #[context("Providing branch metadata for commit {:?}", commit.id())]
     fn describe_commit(&self, commit: &git2::Commit) -> anyhow::Result<Option<String>> {
         if !self.is_enabled {
