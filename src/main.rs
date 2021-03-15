@@ -11,7 +11,7 @@ use structopt::StructOpt;
 ///
 /// See the documentation at https://github.com/arxanas/git-branchless/wiki.
 #[derive(StructOpt)]
-#[structopt(version = "0.1.0", author = "Waleed Khan <me@waleedkhan.name>")]
+#[structopt(version = "0.2.0", author = "Waleed Khan <me@waleedkhan.name>")]
 enum Opts {
     /// Initialize the branchless workflow for this repository.
     Init,

@@ -1,16 +1,19 @@
 [package]
 authors = ["Waleed Khan <me@waleedkhan.name>"]
+categories = ["command-line-utilities", "development-tools"]
+description = "Branchless workflow for Git"
+documentation = "https://github.com/arxanas/git-branchless/wiki"
 edition = "2018"
+homepage = "https://github.com/arxanas/git-branchless"
+keywords = ["cli", "git"]
+license = "Apache-2.0"
 name = "git-branchless"
+repository = "https://github.com/arxanas/git-branchless"
 version = "0.2.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
-crate-type = [
-  "cdylib", # For Python to link.
-  "lib", # For integration tests to find the code (see https://github.com/rust-lang/cargo/issues/6659).
-]
 name = "branchless"
 
 [dependencies]
