@@ -2,18 +2,15 @@
 
 use std::collections::HashMap;
 use std::io::Write;
-use std::path::PathBuf;
-use std::str::FromStr;
 
 use log::warn;
-use pyo3::prelude::*;
 
 use crate::eventlog::{EventLogDb, EventReplayer};
 use crate::formatting::Glyphs;
 use crate::graph::{find_path_to_merge_base, make_graph, BranchOids, HeadOid, MainBranchOid, Node};
 use crate::mergebase::MergeBaseDb;
 use crate::metadata::{render_commit_metadata, CommitMessageProvider, CommitOidProvider};
-use crate::python::{clone_conn, map_err_to_py_err, raise_runtime_error, TextIO};
+use crate::python::clone_conn;
 use crate::smartlog::smartlog;
 use crate::util::{
     get_branch_oid_to_names, get_db_conn, get_head_oid, get_main_branch_oid, get_repo, run_git,
@@ -208,50 +205,4 @@ pub fn next(
 
     smartlog(out)?;
     Ok(0)
-}
-
-#[pyfunction]
-fn py_prev(
-    py: Python,
-    out: PyObject,
-    err: PyObject,
-    git_executable: &str,
-    num_commits: Option<isize>,
-) -> PyResult<isize> {
-    let mut out = TextIO::new(py, out);
-    let mut err = TextIO::new(py, err);
-    let git_executable = GitExecutable(PathBuf::from_str(git_executable)?);
-    let result = prev(&mut out, &mut err, &git_executable, num_commits);
-    let result = map_err_to_py_err(result, "Could not call `prev`")?;
-    Ok(result)
-}
-
-#[pyfunction]
-fn py_next(
-    py: Python,
-    out: PyObject,
-    err: PyObject,
-    git_executable: &str,
-    num_commits: Option<isize>,
-    towards: Option<&str>,
-) -> PyResult<isize> {
-    let mut out = TextIO::new(py, out);
-    let mut err = TextIO::new(py, err);
-    let git_executable = GitExecutable(PathBuf::from_str(git_executable)?);
-    let towards = match towards {
-        None => None,
-        Some("oldest") => Some(Towards::Oldest),
-        Some("newest") => Some(Towards::Newest),
-        Some(towards) => raise_runtime_error(format!("Invalid value for `towards`: {}", towards))?,
-    };
-    let result = next(&mut out, &mut err, &git_executable, num_commits, towards);
-    let result = map_err_to_py_err(result, "Could not call `prev`")?;
-    Ok(result)
-}
-
-#[allow(missing_docs)]
-pub fn register_python_symbols(module: &PyModule) -> PyResult<()> {
-    module.add_function(pyo3::wrap_pyfunction!(py_prev, module)?)?;
-    module.add_function(pyo3::wrap_pyfunction!(py_next, module)?)?;
-    Ok(())
 }

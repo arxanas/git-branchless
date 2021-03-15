@@ -16,10 +16,8 @@
 
 use anyhow::Context;
 use fn_error_context::context;
-use pyo3::prelude::*;
 use rusqlite::OptionalExtension;
 
-use crate::python::{map_err_to_py_err, PyDbConn, PyOidStr, PyRepo};
 use crate::util::wrap_git_error;
 
 /// On-disk cache for merge-base queries.
@@ -141,64 +139,4 @@ INSERT INTO merge_base_oids VALUES (
             }
         }
     }
-}
-
-#[pyclass]
-#[allow(missing_docs)]
-pub struct PyMergeBaseDb {
-    pub merge_base_db: MergeBaseDb,
-}
-
-#[pymethods]
-impl PyMergeBaseDb {
-    #[new]
-    fn new(conn: PyDbConn) -> PyResult<Self> {
-        let PyDbConn(conn) = conn;
-        let merge_base_db = MergeBaseDb::new(conn).context("Constructing merge-base DB");
-        let merge_base_db = map_err_to_py_err(
-            merge_base_db,
-            String::from("Could not construct merge-base database"),
-        )?;
-
-        let merge_base_db = PyMergeBaseDb { merge_base_db };
-        Ok(merge_base_db)
-    }
-
-    fn get_merge_base_oid(
-        &self,
-        py: Python,
-        repo: PyObject,
-        lhs_oid: PyObject,
-        rhs_oid: PyObject,
-    ) -> PyResult<PyObject> {
-        let py_repo = &repo;
-        let PyRepo(repo) = repo.extract(py)?;
-
-        let lhs_oid: String = lhs_oid.getattr(py, "hex")?.extract(py)?;
-        let lhs_oid = git2::Oid::from_str(&lhs_oid);
-        let lhs_oid = map_err_to_py_err(lhs_oid, String::from("Could not process LHS OID"))?;
-
-        let rhs_oid: String = rhs_oid.getattr(py, "hex")?.extract(py)?;
-        let rhs_oid = git2::Oid::from_str(&rhs_oid);
-        let rhs_oid = map_err_to_py_err(rhs_oid, String::from("Could not process RHS OID"))?;
-
-        let merge_base_oid = self
-            .merge_base_db
-            .get_merge_base_oid(&repo, lhs_oid, rhs_oid);
-        let merge_base_oid =
-            map_err_to_py_err(merge_base_oid, String::from("Could not get merge base OID"))?;
-        match merge_base_oid {
-            Some(merge_base_oid) => {
-                let merge_base_oid = PyOidStr(merge_base_oid).to_pygit2_oid(py, py_repo)?;
-                Ok(merge_base_oid)
-            }
-            None => Ok(py.None()),
-        }
-    }
-}
-
-#[allow(missing_docs)]
-pub fn register_python_symbols(module: &PyModule) -> PyResult<()> {
-    module.add_class::<PyMergeBaseDb>()?;
-    Ok(())
 }

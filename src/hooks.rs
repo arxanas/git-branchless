@@ -15,7 +15,6 @@ use std::time::SystemTime;
 use anyhow::Context;
 use console::style;
 use fn_error_context::context;
-use pyo3::prelude::*;
 
 use crate::config::{get_restack_warn_abandoned, RESTACK_WARN_ABANDONED_CONFIG_KEY};
 use crate::eventlog::{should_ignore_ref_updates, Event, EventLogDb, EventReplayer};
@@ -23,7 +22,7 @@ use crate::formatting::Pluralize;
 use crate::gc::mark_commit_reachable;
 use crate::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
 use crate::mergebase::MergeBaseDb;
-use crate::python::{clone_conn, map_err_to_py_err, TextIO};
+use crate::python::clone_conn;
 use crate::restack::find_abandoned_children;
 use crate::util::{
     get_branch_oid_to_names, get_db_conn, get_head_oid, get_main_branch_oid, get_repo,
@@ -351,66 +350,6 @@ pub fn hook_reference_transaction(
     let conn = get_db_conn(&repo)?;
     let mut event_log_db = EventLogDb::new(conn)?;
     event_log_db.add_events(events)?;
-
-    Ok(())
-}
-
-#[pyfunction]
-fn py_hook_post_rewrite(py: Python, out: PyObject, rewrite_type: &str) -> PyResult<()> {
-    let mut out = TextIO::new(py, out);
-    let result = hook_post_rewrite(&mut out, rewrite_type);
-    map_err_to_py_err(result, "Could not invoke post-rewrite hook")?;
-    Ok(())
-}
-
-#[pyfunction]
-fn py_hook_post_checkout(
-    py: Python,
-    out: PyObject,
-    previous_head_ref: &str,
-    current_head_ref: &str,
-    is_branch_checkout: isize,
-) -> PyResult<()> {
-    let mut out = TextIO::new(py, out);
-    let result = hook_post_checkout(
-        &mut out,
-        previous_head_ref,
-        current_head_ref,
-        is_branch_checkout,
-    );
-    map_err_to_py_err(result, "Could not invoke post-checkout hook")?;
-    Ok(())
-}
-
-#[pyfunction]
-fn py_hook_post_commit(py: Python, out: PyObject) -> PyResult<()> {
-    let mut out = TextIO::new(py, out);
-    let result = hook_post_commit(&mut out);
-    map_err_to_py_err(result, "Could not invoke post-commit hook")?;
-    Ok(())
-}
-
-#[pyfunction]
-fn py_hook_reference_transaction(
-    py: Python,
-    out: PyObject,
-    transaction_state: &str,
-) -> PyResult<()> {
-    let mut out = TextIO::new(py, out);
-    let result = hook_reference_transaction(&mut out, transaction_state);
-    map_err_to_py_err(result, "Could not invoke reference-transaction hook")?;
-    Ok(())
-}
-
-#[allow(missing_docs)]
-pub fn register_python_symbols(module: &PyModule) -> PyResult<()> {
-    module.add_function(pyo3::wrap_pyfunction!(py_hook_post_rewrite, module)?)?;
-    module.add_function(pyo3::wrap_pyfunction!(py_hook_post_checkout, module)?)?;
-    module.add_function(pyo3::wrap_pyfunction!(py_hook_post_commit, module)?)?;
-    module.add_function(pyo3::wrap_pyfunction!(
-        py_hook_reference_transaction,
-        module
-    )?)?;
 
     Ok(())
 }

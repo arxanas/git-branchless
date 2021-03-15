@@ -1,2 +1,0 @@
-def init() -> None:
-    pass

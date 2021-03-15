@@ -7,7 +7,6 @@ use std::time::SystemTime;
 
 use fn_error_context::context;
 use git2::ErrorCode;
-use pyo3::prelude::*;
 
 use crate::eventlog::{CommitVisibility, Event};
 use crate::eventlog::{EventLogDb, EventReplayer};
@@ -15,7 +14,7 @@ use crate::eventlog::{EventLogDb, EventReplayer};
 use crate::graph::{make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid, Node};
 use crate::mergebase::MergeBaseDb;
 use crate::metadata::{render_commit_metadata, CommitMessageProvider, CommitOidProvider};
-use crate::python::{clone_conn, map_err_to_py_err, TextIO};
+use crate::python::clone_conn;
 use crate::util::{
     get_branch_oid_to_names, get_db_conn, get_head_oid, get_main_branch_oid, get_repo,
 };
@@ -255,27 +254,4 @@ pub fn unhide(out: &mut impl Write, hashes: Vec<String>, recursive: bool) -> any
     }
 
     Ok(0)
-}
-
-#[pyfunction]
-fn py_hide(py: Python, out: PyObject, hashes: Vec<String>, recursive: bool) -> PyResult<isize> {
-    let mut out = TextIO::new(py, out);
-    let result = hide(&mut out, hashes, recursive);
-    let result = map_err_to_py_err(result, "Could not hide commits")?;
-    Ok(result)
-}
-
-#[pyfunction]
-fn py_unhide(py: Python, out: PyObject, hashes: Vec<String>, recursive: bool) -> PyResult<isize> {
-    let mut out = TextIO::new(py, out);
-    let result = unhide(&mut out, hashes, recursive);
-    let result = map_err_to_py_err(result, "Could not hide commits")?;
-    Ok(result)
-}
-
-#[allow(missing_docs)]
-pub fn register_python_symbols(module: &PyModule) -> PyResult<()> {
-    module.add_function(pyo3::wrap_pyfunction!(py_hide, module)?)?;
-    module.add_function(pyo3::wrap_pyfunction!(py_unhide, module)?)?;
-    Ok(())
 }

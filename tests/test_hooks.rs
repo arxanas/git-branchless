@@ -165,7 +165,9 @@ fn test_pre_auto_gc() -> anyhow::Result<()> {
         // directly to make sure that it's installed properly.
         std::env::set_current_dir(&git.repo_path)?;
         let hook_path = git.repo_path.join(".git").join("hooks").join("pre-auto-gc");
-        let output = Command::new(hook_path).output()?;
+        let output = Command::new(hook_path)
+            .env("PATH", git.get_path_for_env())
+            .output()?;
 
         let stdout = String::from_utf8(output.stdout)?;
         let stderr = String::from_utf8(output.stderr)?;

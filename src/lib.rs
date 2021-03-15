@@ -39,11 +39,6 @@
 #![warn(clippy::all, missing_docs)]
 #![allow(clippy::clippy::too_many_arguments)]
 
-use log::warn;
-use pyo3::prelude::*;
-use python::map_err_to_py_err;
-use simple_logger::SimpleLogger;
-
 pub mod config;
 pub mod eventlog;
 pub mod formatting;
@@ -61,22 +56,3 @@ pub mod smartlog;
 pub mod testing;
 pub mod undo;
 pub mod util;
-
-#[pymodule]
-fn rust(_py: Python<'_>, module: &PyModule) -> PyResult<()> {
-    map_err_to_py_err(SimpleLogger::new().init(), "Could not initialize logging")?;
-
-    eventlog::register_python_symbols(&module)?;
-    gc::register_python_symbols(&module)?;
-    graph::register_python_symbols(&module)?;
-    hide::register_python_symbols(&module)?;
-    hooks::register_python_symbols(&module)?;
-    init::register_python_symbols(&module)?;
-    mergebase::register_python_symbols(&module)?;
-    navigation::register_python_symbols(&module)?;
-    restack::register_python_symbols(&module)?;
-    smartlog::register_python_symbols(&module)?;
-    undo::register_python_symbols(&module)?;
-
-    Ok(())
-}

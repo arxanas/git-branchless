@@ -4,7 +4,7 @@
 //! time and inverting them.
 
 use std::convert::TryInto;
-use std::io::{stdin, BufRead, BufReader, Read, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
 
 use std::time::SystemTime;
@@ -18,7 +18,6 @@ use cursive::views::{
     Dialog, EditView, LinearLayout, NamedView, OnEventView, ScrollView, TextView,
 };
 use cursive::{Cursive, CursiveRunnable, CursiveRunner};
-use pyo3::prelude::*;
 
 use crate::eventlog::{Event, EventLogDb, EventReplayer};
 use crate::formatting::{Glyphs, Pluralize};
@@ -28,7 +27,7 @@ use crate::metadata::{
     render_commit_metadata, BranchesProvider, CommitMessageProvider, CommitOidProvider,
     DifferentialRevisionProvider, RelativeTimeProvider,
 };
-use crate::python::{clone_conn, map_err_to_py_err, TextIO};
+use crate::python::clone_conn;
 use crate::smartlog::render_graph;
 use crate::util::{get_db_conn, get_repo, run_git, GitExecutable};
 
@@ -719,23 +718,6 @@ pub fn undo(
         &event_replayer,
     )?;
     Ok(result)
-}
-
-#[pyfunction]
-fn py_undo(py: Python, out: PyObject, err: PyObject, git_executable: String) -> PyResult<isize> {
-    let mut in_ = stdin();
-    let mut out = TextIO::new(py, out);
-    let mut err = TextIO::new(py, err);
-    let git_executable = GitExecutable(git_executable.into());
-    let result = undo(&mut in_, &mut out, &mut err, &git_executable);
-    let result = map_err_to_py_err(result, "Could not run `undo`")?;
-    Ok(result)
-}
-
-#[allow(missing_docs)]
-pub fn register_python_symbols(module: &PyModule) -> PyResult<()> {
-    module.add_function(pyo3::wrap_pyfunction!(py_undo, module)?)?;
-    Ok(())
 }
 
 #[allow(missing_docs)]

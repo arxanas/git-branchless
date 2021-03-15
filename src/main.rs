@@ -2,7 +2,9 @@ use std::convert::TryInto;
 use std::io::{stderr, stdin, stdout};
 use std::path::PathBuf;
 
+use anyhow::Context;
 use branchless::util::GitExecutable;
+use simple_logger::SimpleLogger;
 use structopt::StructOpt;
 
 /// Branchless workflow for Git.
@@ -93,6 +95,10 @@ enum Opts {
 }
 
 fn main() -> anyhow::Result<()> {
+    SimpleLogger::new()
+        .init()
+        .with_context(|| "Initializing logging")?;
+
     let opts = Opts::from_args();
     let mut stdin = stdin();
     let mut stdout = stdout();

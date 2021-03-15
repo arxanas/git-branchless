@@ -4,26 +4,20 @@
 //! log; see the `eventlog` module.
 
 use std::cmp::Ordering;
-use std::collections::HashMap;
 use std::io::Write;
 use std::time::SystemTime;
 
 use fn_error_context::context;
-use pyo3::prelude::*;
 
 use crate::eventlog::{EventLogDb, EventReplayer};
-use crate::formatting::{Glyphs, PyGlyphs};
-use crate::graph::{
-    make_graph, py_commit_graph_to_commit_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid,
-    PyNode,
-};
-use crate::mergebase::{MergeBaseDb, PyMergeBaseDb};
+use crate::formatting::Glyphs;
+use crate::graph::{make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid};
+use crate::mergebase::MergeBaseDb;
 use crate::metadata::{
-    py_commit_metadata_provider_to_commit_metadata_provider, render_commit_metadata,
-    BranchesProvider, CommitMessageProvider, CommitMetadataProvider, CommitOidProvider,
-    DifferentialRevisionProvider, RelativeTimeProvider,
+    render_commit_metadata, BranchesProvider, CommitMessageProvider, CommitMetadataProvider,
+    CommitOidProvider, DifferentialRevisionProvider, RelativeTimeProvider,
 };
-use crate::python::{clone_conn, map_err_to_py_err, PyOidStr, PyRepo, TextIO};
+use crate::python::clone_conn;
 use crate::util::{
     get_branch_oid_to_names, get_db_conn, get_head_oid, get_main_branch_oid, get_repo,
 };
@@ -294,62 +288,5 @@ pub fn smartlog(out: &mut impl Write) -> anyhow::Result<()> {
         ],
     )?;
 
-    Ok(())
-}
-
-#[pyfunction]
-fn py_render_graph(
-    py: Python,
-    out: PyObject,
-    glyphs: PyObject,
-    repo: PyObject,
-    merge_base_db: &PyMergeBaseDb,
-    graph: HashMap<PyOidStr, PyNode>,
-    head_oid: Option<PyOidStr>,
-    commit_metadata_providers: Vec<PyObject>,
-) -> PyResult<()> {
-    let mut out = TextIO::new(py, out);
-    let PyGlyphs(glyphs) = glyphs.extract(py)?;
-    let PyRepo(repo) = repo.extract(py)?;
-    let PyMergeBaseDb { merge_base_db } = merge_base_db;
-    let graph = py_commit_graph_to_commit_graph(py, &repo, &graph);
-    let graph = map_err_to_py_err(graph, "Could not convert graph")?;
-    let head_oid = HeadOid(head_oid.map(|PyOidStr(head_oid)| head_oid));
-
-    let commit_metadata_providers: Vec<Box<dyn CommitMetadataProvider>> = commit_metadata_providers
-        .into_iter()
-        .map(|provider| {
-            py_commit_metadata_provider_to_commit_metadata_provider(py, &repo, provider)
-        })
-        .collect::<PyResult<_>>()?;
-
-    let result = render_graph(
-        &mut out,
-        &glyphs,
-        &repo,
-        &merge_base_db,
-        &graph,
-        &head_oid,
-        &commit_metadata_providers
-            .iter()
-            .map(|provider| provider.as_ref())
-            .collect::<Vec<_>>(),
-    );
-    map_err_to_py_err(result, "Could not render graph")?;
-    Ok(())
-}
-
-#[pyfunction]
-fn py_smartlog(py: Python, out: PyObject) -> PyResult<isize> {
-    let mut out = TextIO::new(py, out);
-    let result = smartlog(&mut out);
-    map_err_to_py_err(result, "Could not generate smartlog")?;
-    Ok(0)
-}
-
-#[allow(missing_docs)]
-pub fn register_python_symbols(module: &PyModule) -> PyResult<()> {
-    module.add_function(pyo3::wrap_pyfunction!(py_render_graph, module)?)?;
-    module.add_function(pyo3::wrap_pyfunction!(py_smartlog, module)?)?;
     Ok(())
 }

@@ -2,7 +2,7 @@
 authors = ["Waleed Khan <me@waleedkhan.name>"]
 edition = "2018"
 name = "git-branchless"
-version = "0.1.0"
+version = "0.2.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -22,7 +22,6 @@ fn-error-context = "0.1.1"
 git2 = "0.13.17"
 lazy_static = "1.4.0"
 log = "0.4.14"
-pyo3 = "0.13.2"
 regex = "1.4.4"
 rusqlite = "0.24.2"
 simple_logger = "1.11.0"
@@ -32,10 +31,3 @@ tempfile = "3.2.0"
 [dev-dependencies]
 clippy = "0.0.302"
 insta = "1.7.0"
-
-[features]
-# See https://pyo3.rs/v0.13.0/faq.html?highlight=test#i-cant-run-cargo-test-im-having-linker-issues-like-symbol-not-found-or-undefined-reference-to-_pyexc_systemerror
-# Must run `cargo test --no-default-features` to get tests to run.
-# Can remove this once PyO3 is not longer a dependency.
-default = ["extension-module"]
-extension-module = ["pyo3/extension-module"]

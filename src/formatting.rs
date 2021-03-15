@@ -4,8 +4,6 @@
 //! "TTY"). In the case of interactive output, we render with prettier non-ASCII
 //! characters and with colors, using shell-specific escape codes.
 
-use pyo3::prelude::*;
-
 /// Pluralize a quantity, as appropriate. Example:
 ///
 /// ```
@@ -128,15 +126,5 @@ impl Glyphs {
             commit_main_hidden_head: "❖",
             bullet_point: "•",
         }
-    }
-}
-
-#[allow(missing_docs)]
-pub struct PyGlyphs(pub Glyphs);
-
-impl<'source> FromPyObject<'source> for PyGlyphs {
-    fn extract(_obj: &'source PyAny) -> PyResult<Self> {
-        // HACK: haven't bothered implementing this.
-        Ok(PyGlyphs(Glyphs::detect()))
     }
 }

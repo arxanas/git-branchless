@@ -12,14 +12,12 @@ use std::time::{Duration, SystemTime};
 use console::style;
 use fn_error_context::context;
 use lazy_static::lazy_static;
-use pyo3::prelude::*;
 use regex::Regex;
 
 use crate::config::{
     get_commit_metadata_branches, get_commit_metadata_differential_revision,
     get_commit_metadata_relative_time,
 };
-use crate::python::{map_err_to_py_err, raise_runtime_error, PyOidStr};
 
 /// Interface to display information about a commit in the smartlog.
 pub trait CommitMetadataProvider {
@@ -258,43 +256,6 @@ impl CommitMetadataProvider for RelativeTimeProvider {
         let result = style(description).green().to_string();
         Ok(Some(result))
     }
-}
-
-#[allow(missing_docs)]
-pub fn py_commit_metadata_provider_to_commit_metadata_provider(
-    py: Python,
-    repo: &git2::Repository,
-    py_commit_metadata_provider: PyObject,
-) -> PyResult<Box<dyn CommitMetadataProvider>> {
-    let inner = || -> anyhow::Result<_> {
-        let class: PyObject = py_commit_metadata_provider
-            .getattr(py, "__class__")?
-            .extract(py)?;
-        let class: String = class.getattr(py, "__name__")?.extract(py)?;
-
-        // HACK: ignore actual field values for now.
-        let result: Box<dyn CommitMetadataProvider> = match class.as_str() {
-            "CommitOidProvider" => Box::new(CommitOidProvider::new(true)?),
-            "CommitMessageProvider" => Box::new(CommitMessageProvider::new()?),
-            "BranchesProvider" => {
-                let branch_oid_to_names: HashMap<PyOidStr, HashSet<String>> =
-                    py_commit_metadata_provider
-                        .getattr(py, "_branch_oid_to_names")?
-                        .extract(py)?;
-                let branch_oid_to_names: HashMap<git2::Oid, HashSet<String>> = branch_oid_to_names
-                    .into_iter()
-                    .map(|(PyOidStr(oid), branch_names)| (oid, branch_names))
-                    .collect();
-                Box::new(BranchesProvider::new(&repo, &branch_oid_to_names)?)
-            }
-            "DifferentialRevisionProvider" => Box::new(DifferentialRevisionProvider::new(repo)?),
-            "RelativeTimeProvider" => Box::new(RelativeTimeProvider::new(repo, SystemTime::now())?),
-            _ => raise_runtime_error(format!("Invalid commit metadata provider type: {}", class))?,
-        };
-        Ok(result)
-    };
-    let result = map_err_to_py_err(inner(), "Could not convert commit metadata provider")?;
-    Ok(result)
 }
 
 #[cfg(test)]

@@ -1,16 +1,14 @@
 //! Install any hooks, aliases, etc. to set up `git-branchless` in this repo.
 
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use anyhow::Context;
 use console::style;
 use fn_error_context::context;
 use log::warn;
-use pyo3::prelude::*;
 
 use crate::config::get_core_hooks_path;
-use crate::python::{map_err_to_py_err, TextIO};
 use crate::util::{get_repo, run_git_silent, wrap_git_error, GitExecutable, GitVersion};
 
 #[derive(Debug)]
@@ -254,22 +252,6 @@ pub fn init(out: &mut impl Write, git_executable: &GitExecutable) -> anyhow::Res
     let mut repo = get_repo()?;
     install_hooks(out, &repo)?;
     install_aliases(out, &mut repo, git_executable)?;
-    Ok(())
-}
-
-#[pyfunction]
-fn py_init(py: Python, out: PyObject, git_executable: &str) -> PyResult<isize> {
-    let mut text_io = TextIO::new(py, out);
-    let git_executable = Path::new(git_executable);
-    let git_executable = GitExecutable(git_executable.to_path_buf());
-    let result = init(&mut text_io, &git_executable);
-    let () = map_err_to_py_err(result, "Could not initialize git-branchless")?;
-    Ok(0)
-}
-
-#[allow(missing_docs)]
-pub fn register_python_symbols(module: &PyModule) -> PyResult<()> {
-    module.add_function(pyo3::wrap_pyfunction!(py_init, module)?)?;
     Ok(())
 }
 

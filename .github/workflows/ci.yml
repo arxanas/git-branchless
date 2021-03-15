@@ -9,27 +9,14 @@ on:
 jobs:
   static-analysis:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ["3.6", "3.9"]
     steps:
       - uses: actions/checkout@v2
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v2
-        with:
-          python-version: ${{ matrix.python-version }}
       - name: Set up Rust
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
           toolchain: stable
           components: rustfmt, clippy
-      - name: Install dependencies
-        run: pip install -r requirements-dev.txt
-      - name: Typecheck
-        run: mypy --show-column-numbers --strict branchless test stubs
-      - name: Lint
-        run: flake8 branchless test stubs
       - name: Run `cargo fmt`
         uses: actions-rs/cargo@v1
         with:
@@ -78,7 +65,6 @@ jobs:
     needs: build-git
     strategy:
       matrix:
-        python-version: ["3.6", "3.9"]
         git-version: ["v2.24.3", "v2.29.2"]
     steps:
       - uses: actions/checkout@v2
@@ -86,21 +72,12 @@ jobs:
         uses: actions/download-artifact@v2
         with:
           name: git-${{ matrix.git-version }}
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v2
-        with:
-          python-version: ${{ matrix.python-version }}
+      - name: "Unpack artifact: git"
+        run: tar -xf git.tar.gz
       - name: Set up Rust
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
           toolchain: stable
-      - name: Run Python tests
-        run: |
-          tar -xf git.tar.gz
-          pip install setuptools_rust
-          pip install -e .
-          pip install -r requirements-dev.txt
-          pytest --git-path="$PWD"/git -n auto
       - name: Run Rust tests
-        run: PATH_TO_GIT="$PWD"/git cargo test --no-default-features
+        run: PATH_TO_GIT="$PWD"/git cargo test

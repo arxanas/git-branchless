@@ -13,12 +13,11 @@ use std::io::Write;
 
 use anyhow::Context;
 use fn_error_context::context;
-use pyo3::prelude::*;
 
 use crate::eventlog::{is_gc_ref, EventLogDb, EventReplayer};
 use crate::graph::{make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid};
 use crate::mergebase::MergeBaseDb;
-use crate::python::{clone_conn, map_err_to_py_err, PyOid, PyRepo, TextIO};
+use crate::python::clone_conn;
 use crate::util::{
     get_branch_oid_to_names, get_db_conn, get_head_oid, get_main_branch_oid, get_repo,
 };
@@ -111,30 +110,5 @@ pub fn gc(out: &mut impl Write) -> anyhow::Result<()> {
             .delete()
             .with_context(|| format!("Deleting reference {:?}", reference.name()))?;
     }
-    Ok(())
-}
-
-#[pyfunction]
-fn py_mark_commit_reachable(repo: PyRepo, commit_oid: PyOid) -> PyResult<()> {
-    let PyRepo(repo) = repo;
-    let PyOid(commit_oid) = commit_oid;
-    map_err_to_py_err(
-        mark_commit_reachable(&repo, commit_oid),
-        "Could not mark commit as reachable",
-    )?;
-    Ok(())
-}
-
-#[pyfunction]
-fn py_gc(py: Python, out: PyObject) -> PyResult<()> {
-    let mut text_io = TextIO::new(py, out);
-    map_err_to_py_err(gc(&mut text_io), "Failed to run GC")?;
-    Ok(())
-}
-
-#[allow(missing_docs)]
-pub fn register_python_symbols(module: &PyModule) -> PyResult<()> {
-    module.add_function(pyo3::wrap_pyfunction!(py_mark_commit_reachable, module)?)?;
-    module.add_function(pyo3::wrap_pyfunction!(py_gc, module)?)?;
     Ok(())
 }

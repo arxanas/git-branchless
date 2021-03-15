@@ -90,6 +90,28 @@ impl Git {
         Ok(stdout)
     }
 
+    /// Get the `PATH` environment variable to use for testing.
+    pub fn get_path_for_env(&self) -> String {
+        let cargo_bin_path = assert_cmd::cargo::cargo_bin("git-branchless");
+        let branchless_path = cargo_bin_path
+            .parent()
+            .expect("Unable to find git-branchless path parent");
+        let git_path = self
+            .git_executable
+            .parent()
+            .expect("Unable to find git path parent");
+        vec![
+            // For Git to be able to launch `git-branchless`.
+            branchless_path,
+            // For our hooks to be able to call back into `git`.
+            git_path,
+        ]
+        .iter()
+        .map(|path| path.to_str().expect("Unable to decode path component"))
+        .collect::<Vec<_>>()
+        .join(":")
+    }
+
     /// Run a Git command.
     #[context("Running Git command with args: {:?} and options: {:?}", args, options)]
     pub fn run_with_options<S: AsRef<str> + std::fmt::Debug>(
@@ -120,25 +142,7 @@ impl Git {
             new_args
         };
 
-        let cargo_bin_path = assert_cmd::cargo::cargo_bin("git-branchless");
-        let branchless_path = cargo_bin_path
-            .parent()
-            .expect("Unable to find git-branchless path parent");
-        let git_path = self
-            .git_executable
-            .parent()
-            .expect("Unable to find git path parent");
-        let new_path = vec![
-            // For Git to be able to launch `git-branchless`.
-            branchless_path,
-            // For our hooks to be able to call back into `git`.
-            git_path,
-        ]
-        .iter()
-        .map(|path| path.to_str().expect("Unable to decode path component"))
-        .collect::<Vec<_>>()
-        .join(":");
-
+        let new_path = self.get_path_for_env();
         let env: Vec<(&str, &str)> = vec![
             ("GIT_AUTHOR_DATE", &date),
             ("GIT_COMMITTER_DATE", &date),
@@ -166,12 +170,6 @@ impl Git {
 
         let mut command = Command::new(&git_executable);
         command.args(&args).env_clear().envs(env.iter().copied());
-
-        // For PyO3 to be able to link to the correct version of Python at
-        // runtime. Can be removed once we no longer have a dependency on PyO3.
-        if let Ok(ld_library_path) = std::env::var("LD_LIBRARY_PATH") {
-            command.env("LD_LIBRARY_PATH", ld_library_path);
-        }
 
         let result = command.output().with_context(|| {
             format!(
@@ -229,24 +227,6 @@ impl Git {
         if options.make_initial_commit {
             self.commit_file("initial", 0)?;
         }
-
-        let mut python_source_root = assert_cmd::cargo::cargo_bin("git-branchless");
-        python_source_root.pop();
-        python_source_root.pop();
-        let python_source_root = python_source_root.to_str().ok_or_else(|| {
-            anyhow::anyhow!(
-                "Could not convert Python source root path {:?} to string",
-                &python_source_root,
-            )
-        })?;
-        self.run(&[
-            "config",
-            "alias.branchless",
-            &format!(
-                "!env PYTHONPATH={} python -m branchless",
-                python_source_root
-            ),
-        ])?;
 
         // Silence some log-spam.
         self.run(&["config", "advice.detachedHead", "false"])?;

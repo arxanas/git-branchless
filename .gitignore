@@ -1,9 +1,2 @@
-/venv
-/.vscode/.ropeproject/
-__pycache__
-/.coverage
-/.coverage.*
-/htmlcov
-/*.egg-info
 /target
 *.so

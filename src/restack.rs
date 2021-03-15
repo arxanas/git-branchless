@@ -55,24 +55,18 @@
 //! o def003 Commit 3
 //! ```
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::io::Write;
-use std::path::PathBuf;
-use std::str::FromStr;
 
 use anyhow::Context;
 use fn_error_context::context;
 use log::info;
-use pyo3::prelude::*;
 
 use crate::config::get_restack_preserve_timestamps;
-use crate::eventlog::{Event, EventLogDb, EventReplayer, PyEventReplayer};
-use crate::graph::{
-    make_graph, py_commit_graph_to_commit_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid,
-    PyCommitGraph, PyNode,
-};
+use crate::eventlog::{Event, EventLogDb, EventReplayer};
+use crate::graph::{make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid};
 use crate::mergebase::MergeBaseDb;
-use crate::python::{clone_conn, map_err_to_py_err, PyOidStr, TextIO};
+use crate::python::clone_conn;
 use crate::smartlog::smartlog;
 use crate::util::{
     get_branch_oid_to_names, get_db_conn, get_head_oid, get_main_branch_oid, get_repo, run_git,
@@ -352,51 +346,4 @@ pub fn restack(
 
     smartlog(out)?;
     Ok(result)
-}
-
-#[pyfunction]
-fn py_find_abandoned_children(
-    py: Python,
-    graph: HashMap<PyOidStr, PyObject>,
-    event_replayer: &PyEventReplayer,
-    oid: PyOidStr,
-) -> PyResult<Option<(PyOidStr, Vec<PyOidStr>)>> {
-    let repo = get_repo();
-    let repo = map_err_to_py_err(repo, "Getting repository")?;
-    let graph: PyCommitGraph = graph
-        .into_iter()
-        .map(|(py_oid_str, py_node)| {
-            let py_node: PyNode = py_node.as_ref(py).extract()?;
-            Ok((py_oid_str, py_node))
-        })
-        .collect::<PyResult<PyCommitGraph>>()?;
-    let graph = py_commit_graph_to_commit_graph(py, &repo, &graph);
-    let graph = map_err_to_py_err(graph, "Converting PyCommitGraph to CommitGraph")?;
-    let PyEventReplayer { event_replayer } = event_replayer;
-    let PyOidStr(oid) = oid;
-
-    let result = find_abandoned_children(&graph, event_replayer, oid).map(|(oid, child_oids)| {
-        (
-            PyOidStr(oid),
-            child_oids.iter().copied().map(PyOidStr).collect(),
-        )
-    });
-    Ok(result)
-}
-
-#[pyfunction]
-fn py_restack(py: Python, out: PyObject, err: PyObject, git_executable: &str) -> PyResult<isize> {
-    let mut out = TextIO::new(py, out);
-    let mut err = TextIO::new(py, err);
-    let git_executable = GitExecutable(PathBuf::from_str(git_executable)?);
-    let result = restack(&mut out, &mut err, &git_executable);
-    let result = map_err_to_py_err(result, "Restack failed")?;
-    Ok(result)
-}
-
-#[allow(missing_docs)]
-pub fn register_python_symbols(module: &PyModule) -> PyResult<()> {
-    module.add_function(pyo3::wrap_pyfunction!(py_find_abandoned_children, module)?)?;
-    module.add_function(pyo3::wrap_pyfunction!(py_restack, module)?)?;
-    Ok(())
 }
