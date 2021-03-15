@@ -2,6 +2,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
+use std::io::Write;
 use std::path::PathBuf;
 use std::process::Command;
 use std::str::FromStr;
@@ -150,9 +151,9 @@ pub struct GitExecutable(pub PathBuf);
 /// Returns: The exit code of Git (non-zero signifies error).
 #[context("Running Git ({:?}) with args: {:?}", git_executable, args)]
 #[must_use]
-pub fn run_git<Out: std::io::Write, S: AsRef<str> + std::fmt::Debug>(
-    out: &mut Out,
-    err: &mut Out,
+pub fn run_git<S: AsRef<str> + std::fmt::Debug>(
+    out: &mut impl Write,
+    err: &mut impl Write,
     git_executable: &GitExecutable,
     args: &[S],
 ) -> anyhow::Result<isize> {

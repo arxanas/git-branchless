@@ -21,9 +21,9 @@ use crate::util::{
 };
 
 /// Go back a certain number of commits.
-pub fn prev<Out: Write>(
-    out: &mut Out,
-    err: &mut Out,
+pub fn prev(
+    out: &mut impl Write,
+    err: &mut impl Write,
     git_executable: &GitExecutable,
     num_commits: Option<isize>,
 ) -> anyhow::Result<isize> {
@@ -83,8 +83,8 @@ fn advance_towards_main_branch(
     Ok((0, current_oid))
 }
 
-fn advance_towards_own_commit<Out: Write>(
-    out: &mut Out,
+fn advance_towards_own_commit(
+    out: &mut impl Write,
     glyphs: &Glyphs,
     repo: &git2::Repository,
     graph: &HashMap<git2::Oid, Node>,
@@ -143,9 +143,9 @@ fn advance_towards_own_commit<Out: Write>(
 }
 
 /// Go forward a certain number of commits.
-pub fn next<Out: Write>(
-    out: &mut Out,
-    err: &mut Out,
+pub fn next(
+    out: &mut impl Write,
+    err: &mut impl Write,
     git_executable: &GitExecutable,
     num_commits: Option<isize>,
     towards: Option<Towards>,

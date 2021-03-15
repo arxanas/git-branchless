@@ -535,10 +535,10 @@ fn optimize_inverse_events(events: Vec<Event>) -> Vec<Event> {
     optimized_events
 }
 
-fn undo_events<In: Read, Out: Write>(
-    in_: &mut In,
-    out: &mut Out,
-    err: &mut Out,
+fn undo_events(
+    in_: &mut impl Read,
+    out: &mut impl Write,
+    err: &mut impl Write,
     repo: &git2::Repository,
     git_executable: &GitExecutable,
     event_log_db: &mut EventLogDb,
@@ -683,10 +683,10 @@ fn undo_events<In: Read, Out: Write>(
 }
 
 /// Restore the repository to a previous state interactively.
-pub fn undo<In: Read, Out: Write>(
-    in_: &mut In,
-    out: &mut Out,
-    err: &mut Out,
+pub fn undo(
+    in_: &mut impl Read,
+    out: &mut impl Write,
+    err: &mut impl Write,
     git_executable: &GitExecutable,
 ) -> anyhow::Result<isize> {
     let glyphs = Glyphs::detect();
@@ -765,10 +765,10 @@ pub mod testing {
         super::select_past_event(siv, glyphs, repo, merge_base_db, event_replayer)
     }
 
-    pub fn undo_events<In: Read, Out: Write>(
-        in_: &mut In,
-        out: &mut Out,
-        err: &mut Out,
+    pub fn undo_events(
+        in_: &mut impl Read,
+        out: &mut impl Write,
+        err: &mut impl Write,
         repo: &git2::Repository,
         git_executable: &GitExecutable,
         event_log_db: &mut EventLogDb,

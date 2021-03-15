@@ -114,11 +114,7 @@ fn recurse_on_commits<'repo, F: Fn(&Node) -> bool>(
 ///   commits as well.
 ///
 /// Returns: exit code (0 denotes successful exit).
-pub fn hide<Out: Write>(
-    out: &mut Out,
-    hashes: Vec<String>,
-    recursive: bool,
-) -> anyhow::Result<isize> {
+pub fn hide(out: &mut impl Write, hashes: Vec<String>, recursive: bool) -> anyhow::Result<isize> {
     let timestamp = SystemTime::now();
     let repo = get_repo()?;
     let conn = get_db_conn(&repo)?;
@@ -196,11 +192,7 @@ pub fn hide<Out: Write>(
 ///   commits as well.
 ///
 /// Returns: exit code (0 denotes successful exit).
-pub fn unhide<Out: Write>(
-    out: &mut Out,
-    hashes: Vec<String>,
-    recursive: bool,
-) -> anyhow::Result<isize> {
+pub fn unhide(out: &mut impl Write, hashes: Vec<String>, recursive: bool) -> anyhow::Result<isize> {
     let timestamp = SystemTime::now();
     let repo = get_repo()?;
     let conn = get_db_conn(&repo)?;

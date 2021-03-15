@@ -84,7 +84,7 @@ pub fn mark_commit_reachable(repo: &git2::Repository, commit_oid: git2::Oid) -> 
 ///
 /// Frees any references to commits which are no longer visible in the smartlog.
 #[context("Running garbage-collection")]
-pub fn gc<Out: Write>(out: &mut Out) -> anyhow::Result<()> {
+pub fn gc(out: &mut impl Write) -> anyhow::Result<()> {
     let repo = get_repo()?;
     let conn = get_db_conn(&repo)?;
     let merge_base_db = MergeBaseDb::new(clone_conn(&conn)?)?;

@@ -233,8 +233,8 @@ fn get_output(
 }
 
 /// Render the smartlog graph and write it to the provided stream.
-pub fn render_graph<Out: Write>(
-    out: &mut Out,
+pub fn render_graph(
+    out: &mut impl Write,
     glyphs: &Glyphs,
     repo: &git2::Repository,
     merge_base_db: &MergeBaseDb,
@@ -258,7 +258,7 @@ pub fn render_graph<Out: Write>(
 }
 
 /// Display a nice graph of commits you've recently worked on.
-pub fn smartlog<Out: Write>(out: &mut Out) -> anyhow::Result<()> {
+pub fn smartlog(out: &mut impl Write) -> anyhow::Result<()> {
     let glyphs = Glyphs::detect();
     let repo = get_repo()?;
     let conn = get_db_conn(&repo)?;

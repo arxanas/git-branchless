@@ -159,9 +159,9 @@ pub fn find_abandoned_children(
 }
 
 #[context("Restacking commits")]
-fn restack_commits<Out: Write>(
-    out: &mut Out,
-    err: &mut Out,
+fn restack_commits(
+    out: &mut impl Write,
+    err: &mut impl Write,
     repo: &git2::Repository,
     git_executable: &GitExecutable,
     merge_base_db: &MergeBaseDb,
@@ -230,9 +230,9 @@ fn restack_commits<Out: Write>(
 }
 
 #[context("Restacking branches")]
-fn restack_branches<Out: Write>(
-    out: &mut Out,
-    err: &mut Out,
+fn restack_branches(
+    out: &mut impl Write,
+    err: &mut impl Write,
     repo: &git2::Repository,
     git_executable: &GitExecutable,
     merge_base_db: &MergeBaseDb,
@@ -304,9 +304,9 @@ fn restack_branches<Out: Write>(
 ///
 /// Returns: Exit code (0 denotes successful exit).
 #[context("Restacking commits and branches")]
-pub fn restack<'out, Out: Write>(
-    out: &'out mut Out,
-    err: &'out mut Out,
+pub fn restack(
+    out: &mut impl Write,
+    err: &mut impl Write,
     git_executable: GitExecutable,
 ) -> anyhow::Result<isize> {
     let repo = get_repo()?;

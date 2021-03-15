@@ -61,7 +61,7 @@ fn is_rebase_underway(repo: &git2::Repository) -> anyhow::Result<bool> {
 ///
 /// See the man-page for `githooks(5)`.
 #[context("Processing post-rewrite hook")]
-pub fn hook_post_rewrite<Out: Write>(out: &mut Out, rewrite_type: &str) -> anyhow::Result<()> {
+pub fn hook_post_rewrite(out: &mut impl Write, rewrite_type: &str) -> anyhow::Result<()> {
     let now = SystemTime::now();
     let timestamp = now.duration_since(SystemTime::UNIX_EPOCH)?.as_secs_f64();
 
@@ -221,8 +221,8 @@ branchless:   - {config_command}: suppress this message
 ///
 /// See the man-page for `githooks(5)`.
 #[context("Processing post-checkout hook")]
-pub fn hook_post_checkout<Out: Write>(
-    out: &mut Out,
+pub fn hook_post_checkout(
+    out: &mut impl Write,
     previous_head_ref: &str,
     current_head_ref: &str,
     is_branch_checkout: isize,
@@ -251,7 +251,7 @@ pub fn hook_post_checkout<Out: Write>(
 /// Handle Git's `post-commit` hook.
 ///
 /// See the man-page for `githooks(5)`.
-pub fn hook_post_commit<Out: Write>(out: &mut Out) -> anyhow::Result<()> {
+pub fn hook_post_commit(out: &mut impl Write) -> anyhow::Result<()> {
     writeln!(out, "branchless: processing commit")?;
 
     let repo = get_repo()?;
@@ -306,8 +306,8 @@ fn parse_reference_transaction_line(now: SystemTime, line: &str) -> anyhow::Resu
 ///
 /// See the man-page for `githooks(5)`.
 #[context("Processing reference-transaction hook")]
-pub fn hook_reference_transaction<Out: Write>(
-    out: &mut Out,
+pub fn hook_reference_transaction(
+    out: &mut impl Write,
     transaction_state: &str,
 ) -> anyhow::Result<()> {
     if transaction_state != "committed" {

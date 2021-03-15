@@ -115,8 +115,8 @@ fn update_hook_contents(hook: &Hook, hook_contents: &str) -> anyhow::Result<()> 
 }
 
 #[context("Installing hook of type: {:?}", hook_type)]
-fn install_hook<Out: Write>(
-    out: &mut Out,
+fn install_hook(
+    out: &mut impl Write,
     repo: &git2::Repository,
     hook_type: &str,
     hook_script: &str,
@@ -128,7 +128,7 @@ fn install_hook<Out: Write>(
 }
 
 #[context("Installing all hooks")]
-fn install_hooks<Out: Write>(out: &mut Out, repo: &git2::Repository) -> anyhow::Result<()> {
+fn install_hooks(out: &mut impl Write, repo: &git2::Repository) -> anyhow::Result<()> {
     install_hook(
         out,
         repo,
@@ -179,8 +179,8 @@ git branchless hook-reference-transaction "$@" || (
 }
 
 #[context("Installing alias: {:?}", alias)]
-fn install_alias<Out: Write>(
-    out: &mut Out,
+fn install_alias(
+    out: &mut impl Write,
     config: &mut git2::Config,
     alias: &str,
 ) -> anyhow::Result<()> {
@@ -196,8 +196,8 @@ fn install_alias<Out: Write>(
 }
 
 #[context("Installing all aliases")]
-fn install_aliases<Out: Write>(
-    out: &mut Out,
+fn install_aliases(
+    out: &mut impl Write,
     repo: &mut git2::Repository,
     git_executable: &GitExecutable,
 ) -> anyhow::Result<()> {
@@ -246,7 +246,7 @@ the branchless workflow will work properly.
 /// * `out`: The output stream to write to.
 /// * `git_executable`: The path to the `git` executable on disk.
 #[context("Initializing git-branchless for repo")]
-fn init<Out: Write>(out: &mut Out, git_executable: &GitExecutable) -> anyhow::Result<()> {
+pub fn init(out: &mut impl Write, git_executable: &GitExecutable) -> anyhow::Result<()> {
     let mut repo = get_repo()?;
     install_hooks(out, &repo)?;
     install_aliases(out, &mut repo, git_executable)?;
