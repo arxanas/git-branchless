@@ -27,8 +27,8 @@ The branchless workflow is perfectly compatible with local branches if you choos
 
 ## Installation
 
-See https://github.com/arxanas/git-branchless/wiki/Installation.
+See https://github.com/arxanas/git-branchless/wiki/Installation. (Short version: run `cargo install git-branchless`, then run `git branchless init` in your repository.)
 
 ## Status
 
-`git-branchless` is currently in **beta**. It's believed that there are no major bugs, but it has not yet been comprehensively battle-tested.
+`git-branchless` is currently in **beta**. It's believed that there are no major bugs, but it has not yet been comprehensively battle-tested. You can see the known issues in the [issue tracker](https://github.com/arxanas/git-branchless/issues/1).
