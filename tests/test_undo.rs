@@ -4,17 +4,17 @@ use std::convert::Infallible;
 
 use std::rc::Rc;
 
-use branchless::eventlog::{EventCursor, EventLogDb, EventReplayer};
-use branchless::formatting::Glyphs;
-use branchless::mergebase::MergeBaseDb;
+use branchless::commands::undo::testing::{select_past_event, undo_events};
+use branchless::core::eventlog::{EventCursor, EventLogDb, EventReplayer};
+use branchless::core::formatting::Glyphs;
+use branchless::core::mergebase::MergeBaseDb;
+use branchless::testing::{with_git, Git};
 use branchless::util::{get_db_conn, GitExecutable};
+
 use cursive::backend::Backend;
 use cursive::event::Key;
 use cursive::theme::Color;
 use cursive::CursiveRunnable;
-
-use branchless::testing::{with_git, Git};
-use branchless::undo::testing::{select_past_event, undo_events};
 
 type Screen = Vec<Vec<char>>;
 

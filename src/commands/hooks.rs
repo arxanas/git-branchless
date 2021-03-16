@@ -16,13 +16,13 @@ use anyhow::Context;
 use console::style;
 use fn_error_context::context;
 
-use crate::config::{get_restack_warn_abandoned, RESTACK_WARN_ABANDONED_CONFIG_KEY};
-use crate::eventlog::{should_ignore_ref_updates, Event, EventLogDb, EventReplayer};
-use crate::formatting::Pluralize;
-use crate::gc::mark_commit_reachable;
-use crate::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
-use crate::mergebase::MergeBaseDb;
-use crate::restack::find_abandoned_children;
+use crate::commands::gc::mark_commit_reachable;
+use crate::commands::restack::find_abandoned_children;
+use crate::core::config::{get_restack_warn_abandoned, RESTACK_WARN_ABANDONED_CONFIG_KEY};
+use crate::core::eventlog::{should_ignore_ref_updates, Event, EventLogDb, EventReplayer};
+use crate::core::formatting::Pluralize;
+use crate::core::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
+use crate::core::mergebase::MergeBaseDb;
 use crate::util::{
     get_branch_oid_to_names, get_db_conn, get_head_oid, get_main_branch_oid, get_repo,
 };

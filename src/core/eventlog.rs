@@ -13,7 +13,7 @@ use anyhow::Context;
 use fn_error_context::context;
 use log::warn;
 
-use crate::config::get_main_branch_name;
+use crate::core::config::get_main_branch_name;
 use crate::util::{get_main_branch_oid, wrap_git_error};
 
 /// Wrapper around the row stored directly in the database.

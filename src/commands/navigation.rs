@@ -5,12 +5,14 @@ use std::io::Write;
 
 use log::warn;
 
-use crate::eventlog::{EventLogDb, EventReplayer};
-use crate::formatting::Glyphs;
-use crate::graph::{find_path_to_merge_base, make_graph, BranchOids, HeadOid, MainBranchOid, Node};
-use crate::mergebase::MergeBaseDb;
-use crate::metadata::{render_commit_metadata, CommitMessageProvider, CommitOidProvider};
-use crate::smartlog::smartlog;
+use crate::commands::smartlog::smartlog;
+use crate::core::eventlog::{EventLogDb, EventReplayer};
+use crate::core::formatting::Glyphs;
+use crate::core::graph::{
+    find_path_to_merge_base, make_graph, BranchOids, HeadOid, MainBranchOid, Node,
+};
+use crate::core::mergebase::MergeBaseDb;
+use crate::core::metadata::{render_commit_metadata, CommitMessageProvider, CommitOidProvider};
 use crate::util::{
     get_branch_oid_to_names, get_db_conn, get_head_oid, get_main_branch_oid, get_repo, run_git,
     GitExecutable,

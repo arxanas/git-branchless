@@ -7,7 +7,7 @@
 /// Pluralize a quantity, as appropriate. Example:
 ///
 /// ```
-/// # use branchless::formatting::Pluralize;
+/// # use branchless::core::formatting::Pluralize;
 /// let p = Pluralize { amount: 1, singular: "thing", plural: "things"};
 /// assert_eq!(p.to_string(), "1 thing");
 ///

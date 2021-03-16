@@ -39,19 +39,7 @@
 #![warn(clippy::all, missing_docs)]
 #![allow(clippy::clippy::too_many_arguments)]
 
-pub mod config;
-pub mod eventlog;
-pub mod formatting;
-pub mod gc;
-pub mod graph;
-pub mod hide;
-pub mod hooks;
-pub mod init;
-pub mod mergebase;
-pub mod metadata;
-pub mod navigation;
-pub mod restack;
-pub mod smartlog;
+pub mod commands;
+pub mod core;
 pub mod testing;
-pub mod undo;
 pub mod util;

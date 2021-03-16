@@ -14,9 +14,9 @@ use std::io::Write;
 use anyhow::Context;
 use fn_error_context::context;
 
-use crate::eventlog::{is_gc_ref, EventLogDb, EventReplayer};
-use crate::graph::{make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid};
-use crate::mergebase::MergeBaseDb;
+use crate::core::eventlog::{is_gc_ref, EventLogDb, EventReplayer};
+use crate::core::graph::{make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid};
+use crate::core::mergebase::MergeBaseDb;
 use crate::util::{
     get_branch_oid_to_names, get_db_conn, get_head_oid, get_main_branch_oid, get_repo,
 };

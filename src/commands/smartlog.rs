@@ -9,11 +9,11 @@ use std::time::SystemTime;
 
 use fn_error_context::context;
 
-use crate::eventlog::{EventLogDb, EventReplayer};
-use crate::formatting::Glyphs;
-use crate::graph::{make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid};
-use crate::mergebase::MergeBaseDb;
-use crate::metadata::{
+use crate::core::eventlog::{EventLogDb, EventReplayer};
+use crate::core::formatting::Glyphs;
+use crate::core::graph::{make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid};
+use crate::core::mergebase::MergeBaseDb;
+use crate::core::metadata::{
     render_commit_metadata, BranchesProvider, CommitMessageProvider, CommitMetadataProvider,
     CommitOidProvider, DifferentialRevisionProvider, RelativeTimeProvider,
 };

@@ -8,7 +8,7 @@ use console::style;
 use fn_error_context::context;
 use log::warn;
 
-use crate::config::get_core_hooks_path;
+use crate::core::config::get_core_hooks_path;
 use crate::util::{get_repo, run_git_silent, wrap_git_error, GitExecutable, GitVersion};
 
 #[derive(Debug)]

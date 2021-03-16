@@ -62,11 +62,11 @@ use anyhow::Context;
 use fn_error_context::context;
 use log::info;
 
-use crate::config::get_restack_preserve_timestamps;
-use crate::eventlog::{Event, EventLogDb, EventReplayer};
-use crate::graph::{make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid};
-use crate::mergebase::MergeBaseDb;
-use crate::smartlog::smartlog;
+use crate::commands::smartlog::smartlog;
+use crate::core::config::get_restack_preserve_timestamps;
+use crate::core::eventlog::{Event, EventLogDb, EventReplayer};
+use crate::core::graph::{make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid};
+use crate::core::mergebase::MergeBaseDb;
 use crate::util::{
     get_branch_oid_to_names, get_db_conn, get_head_oid, get_main_branch_oid, get_repo, run_git,
     GitExecutable,

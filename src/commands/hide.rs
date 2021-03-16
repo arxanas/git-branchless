@@ -8,12 +8,11 @@ use std::time::SystemTime;
 use fn_error_context::context;
 use git2::ErrorCode;
 
-use crate::eventlog::{CommitVisibility, Event};
-use crate::eventlog::{EventLogDb, EventReplayer};
-
-use crate::graph::{make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid, Node};
-use crate::mergebase::MergeBaseDb;
-use crate::metadata::{render_commit_metadata, CommitMessageProvider, CommitOidProvider};
+use crate::core::eventlog::{CommitVisibility, Event};
+use crate::core::eventlog::{EventLogDb, EventReplayer};
+use crate::core::graph::{make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid, Node};
+use crate::core::mergebase::MergeBaseDb;
+use crate::core::metadata::{render_commit_metadata, CommitMessageProvider, CommitOidProvider};
 use crate::util::{
     get_branch_oid_to_names, get_db_conn, get_head_oid, get_main_branch_oid, get_repo,
 };

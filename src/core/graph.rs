@@ -7,8 +7,8 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use fn_error_context::context;
 use log::warn;
 
-use crate::eventlog::{CommitVisibility, Event, EventCursor, EventReplayer};
-use crate::mergebase::MergeBaseDb;
+use crate::core::eventlog::{CommitVisibility, Event, EventCursor, EventReplayer};
+use crate::core::mergebase::MergeBaseDb;
 
 /// The OID of the repo's HEAD reference.
 #[derive(Debug)]

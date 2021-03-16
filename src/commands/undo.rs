@@ -19,15 +19,15 @@ use cursive::views::{
 };
 use cursive::{Cursive, CursiveRunnable, CursiveRunner};
 
-use crate::eventlog::{Event, EventCursor, EventLogDb, EventReplayer};
-use crate::formatting::{Glyphs, Pluralize};
-use crate::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
-use crate::mergebase::MergeBaseDb;
-use crate::metadata::{
+use crate::commands::smartlog::render_graph;
+use crate::core::eventlog::{Event, EventCursor, EventLogDb, EventReplayer};
+use crate::core::formatting::{Glyphs, Pluralize};
+use crate::core::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
+use crate::core::mergebase::MergeBaseDb;
+use crate::core::metadata::{
     render_commit_metadata, BranchesProvider, CommitMessageProvider, CommitOidProvider,
     DifferentialRevisionProvider, RelativeTimeProvider,
 };
-use crate::smartlog::render_graph;
 use crate::util::{get_db_conn, get_repo, run_git, GitExecutable};
 
 pub(crate) fn with_siv<T, F: FnOnce(CursiveRunner<CursiveRunnable>) -> anyhow::Result<T>>(
@@ -734,9 +734,9 @@ pub mod testing {
 
     use cursive::{CursiveRunnable, CursiveRunner};
 
-    use crate::eventlog::{EventCursor, EventLogDb, EventReplayer};
-    use crate::formatting::Glyphs;
-    use crate::mergebase::MergeBaseDb;
+    use crate::core::eventlog::{EventCursor, EventLogDb, EventReplayer};
+    use crate::core::formatting::Glyphs;
+    use crate::core::mergebase::MergeBaseDb;
     use crate::util::GitExecutable;
 
     pub fn with_siv<T, F: FnOnce(CursiveRunner<CursiveRunnable>) -> anyhow::Result<T>>(

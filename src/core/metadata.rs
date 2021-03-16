@@ -14,7 +14,7 @@ use fn_error_context::context;
 use lazy_static::lazy_static;
 use regex::Regex;
 
-use crate::config::{
+use crate::core::config::{
     get_commit_metadata_branches, get_commit_metadata_differential_revision,
     get_commit_metadata_relative_time,
 };
