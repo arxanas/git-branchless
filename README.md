@@ -4,7 +4,11 @@
 
 ## Demo
 
-[See the demo at asciinema](https://asciinema.org/a/ZHdMDW9997wzctW1T7QsUFe9G).
+[See the demo at asciinema](https://asciinema.org/a/ZHdMDW9997wzctW1T7QsUFe9G):
+
+<p align="center">
+<a href="https://asciinema.org/a/ZHdMDW9997wzctW1T7QsUFe9G" target="_blank"><img src="https://asciinema.org/a/ZHdMDW9997wzctW1T7QsUFe9G.svg" /></a>
+</p>
 
 ## Why?
 
