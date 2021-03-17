@@ -1,6 +1,7 @@
 # Branchless workflow for Git
 
 [![CI](https://github.com/arxanas/git-branchless/workflows/CI/badge.svg)](https://github.com/arxanas/git-branchless/actions?query=workflow%3ACI+branch%3Amaster)
+[![crates.io](http://meritbadge.herokuapp.com/git-branchless)](https://crates.io/crates/git-branchless)
 
 ## Demo
 
