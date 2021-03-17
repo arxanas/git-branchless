@@ -32,9 +32,6 @@ pub fn get_main_branch_name(repo: &git2::Repository) -> anyhow::Result<String> {
 
 /// If `true`, when restacking a commit, do not update its timestamp to the
 /// current time.
-///
-/// TODO: document this configuration option in the wiki at
-/// https://github.com/arxanas/git-branchless/wiki/Configuration
 pub fn get_restack_preserve_timestamps(repo: &git2::Repository) -> anyhow::Result<bool> {
     get_config(repo)?
         .get_bool("branchless.restack.preserveTimestamps")
