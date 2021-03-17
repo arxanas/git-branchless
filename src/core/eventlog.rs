@@ -5,8 +5,10 @@
 //! determine what actions the user took on the repository, and which commits
 //! they're still working on.
 
+use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::convert::{TryFrom, TryInto};
+use std::str::FromStr;
 use std::time::{Duration, SystemTime};
 
 use anyhow::Context;
@@ -16,14 +18,54 @@ use log::warn;
 use crate::core::config::get_main_branch_name;
 use crate::util::{get_main_branch_oid, wrap_git_error};
 
-/// Wrapper around the row stored directly in the database.
+/// When this environment variable is set, we reuse the ID for the transaction
+/// which the caller has already started.
+pub const BRANCHLESS_TRANSACTION_ID_ENV_VAR: &str = "BRANCHLESS_TRANSACTION_ID";
+
+// Wrapper around the row stored directly in the database.
 struct Row {
     timestamp: f64,
     type_: String,
+    event_tx_id: isize,
     ref1: Option<String>,
     ref2: Option<String>,
     ref_name: Option<String>,
     message: Option<String>,
+}
+
+/// The ID associated with the transactions that created an event.
+///
+/// A "event transaction" is a group of logically-related events. For example,
+/// during a rebase operation, all of the rebased commits have different
+/// `CommitEvent`s, but should belong to the same transaction. This improves the
+/// experience for `git undo`, since the user probably wants to see or undo all
+/// of the logically-related events at once, rather than individually.
+///
+/// Note that some logically-related events may not be included together in the
+/// same transaction. For example, if a rebase is interrupted due to a merge
+/// conflict, then the commits applied due to `git rebase` and the commits
+/// applied due to `git rebase --continue` may not share the same transaction.
+/// In this sense, a transaction is "best-effort".
+///
+/// Unlike in a database, there is no specific guarantee that an event
+/// transaction is an atomic unit of work.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct EventTransactionId(isize);
+
+impl ToString for EventTransactionId {
+    fn to_string(&self) -> String {
+        let EventTransactionId(event_id) = self;
+        event_id.to_string()
+    }
+}
+
+impl FromStr for EventTransactionId {
+    type Err = <isize as FromStr>::Err;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let event_id = s.parse()?;
+        Ok(EventTransactionId(event_id))
+    }
 }
 
 /// An event that occurred to one of the commits in the repository.
@@ -38,6 +80,9 @@ pub enum Event {
     RewriteEvent {
         /// The timestamp of the event.
         timestamp: f64,
+
+        /// The transaction ID of the event.
+        event_tx_id: EventTransactionId,
 
         /// The OID of the commit before the rewrite.
         old_commit_oid: git2::Oid,
@@ -54,6 +99,9 @@ pub enum Event {
     RefUpdateEvent {
         /// The timestamp of the event.
         timestamp: f64,
+
+        /// The transaction ID of the event.
+        event_tx_id: EventTransactionId,
 
         /// The full name of the reference that was updated.
         ///
@@ -85,6 +133,9 @@ pub enum Event {
         /// The timestamp of the event.
         timestamp: f64,
 
+        /// The transaction ID of the event.
+        event_tx_id: EventTransactionId,
+
         /// The new commit OID.
         commit_oid: git2::Oid,
     },
@@ -96,6 +147,9 @@ pub enum Event {
     HideEvent {
         /// The timestamp of the event.
         timestamp: f64,
+
+        /// The transaction ID of the event.
+        event_tx_id: EventTransactionId,
 
         /// The OID of the commit that was hidden.
         commit_oid: git2::Oid,
@@ -109,6 +163,9 @@ pub enum Event {
         /// The timestamp of the event.
         timestamp: f64,
 
+        /// The transaction ID of the event.
+        event_tx_id: EventTransactionId,
+
         /// The OID of the commit that was unhidden.
         commit_oid: git2::Oid,
     },
@@ -116,7 +173,7 @@ pub enum Event {
 
 impl Event {
     /// Get the timestamp associated with this event.
-    pub fn timestamp(&self) -> SystemTime {
+    pub fn get_timestamp(&self) -> SystemTime {
         let timestamp = match self {
             Event::RewriteEvent { timestamp, .. } => timestamp,
             Event::RefUpdateEvent { timestamp, .. } => timestamp,
@@ -126,6 +183,17 @@ impl Event {
         };
         SystemTime::UNIX_EPOCH + Duration::from_secs_f64(*timestamp)
     }
+
+    /// Get the event transaction ID associated with this event.
+    pub fn get_event_tx_id(&self) -> EventTransactionId {
+        match self {
+            Event::RewriteEvent { event_tx_id, .. } => *event_tx_id,
+            Event::RefUpdateEvent { event_tx_id, .. } => *event_tx_id,
+            Event::CommitEvent { event_tx_id, .. } => *event_tx_id,
+            Event::HideEvent { event_tx_id, .. } => *event_tx_id,
+            Event::UnhideEvent { event_tx_id, .. } => *event_tx_id,
+        }
+    }
 }
 
 impl From<Event> for Row {
@@ -133,10 +201,12 @@ impl From<Event> for Row {
         match event {
             Event::RewriteEvent {
                 timestamp,
+                event_tx_id: EventTransactionId(event_tx_id),
                 old_commit_oid,
                 new_commit_oid,
             } => Row {
                 timestamp,
+                event_tx_id,
                 type_: String::from("rewrite"),
                 ref1: Some(old_commit_oid.to_string()),
                 ref2: Some(new_commit_oid.to_string()),
@@ -146,12 +216,14 @@ impl From<Event> for Row {
 
             Event::RefUpdateEvent {
                 timestamp,
+                event_tx_id: EventTransactionId(event_tx_id),
                 ref_name,
                 old_ref,
                 new_ref,
                 message,
             } => Row {
                 timestamp,
+                event_tx_id,
                 type_: String::from("ref-move"),
                 ref1: old_ref,
                 ref2: new_ref,
@@ -161,9 +233,11 @@ impl From<Event> for Row {
 
             Event::CommitEvent {
                 timestamp,
+                event_tx_id: EventTransactionId(event_tx_id),
                 commit_oid,
             } => Row {
                 timestamp,
+                event_tx_id,
                 type_: String::from("commit"),
                 ref1: Some(commit_oid.to_string()),
                 ref2: None,
@@ -173,9 +247,11 @@ impl From<Event> for Row {
 
             Event::HideEvent {
                 timestamp,
+                event_tx_id: EventTransactionId(event_tx_id),
                 commit_oid,
             } => Row {
                 timestamp,
+                event_tx_id,
                 type_: String::from("hide"),
                 ref1: Some(commit_oid.to_string()),
                 ref2: None,
@@ -185,9 +261,11 @@ impl From<Event> for Row {
 
             Event::UnhideEvent {
                 timestamp,
+                event_tx_id: EventTransactionId(event_tx_id),
                 commit_oid,
             } => Row {
                 timestamp,
+                event_tx_id,
                 type_: String::from("unhide"),
                 ref1: Some(commit_oid.to_string()),
                 ref2: None,
@@ -205,12 +283,14 @@ impl TryFrom<Row> for Event {
     fn try_from(row: Row) -> Result<Self, Self::Error> {
         let Row {
             timestamp,
+            event_tx_id,
             type_,
             ref_name,
             ref1,
             ref2,
             message,
         } = row;
+        let event_tx_id = EventTransactionId(event_tx_id);
 
         let get_oid = |oid: &Option<String>, oid_name: &str| -> anyhow::Result<git2::Oid> {
             match oid {
@@ -232,6 +312,7 @@ impl TryFrom<Row> for Event {
                 let new_commit_oid = get_oid(&ref2, "new commit OID")?;
                 Event::RewriteEvent {
                     timestamp,
+                    event_tx_id,
                     old_commit_oid,
                     new_commit_oid,
                 }
@@ -242,6 +323,7 @@ impl TryFrom<Row> for Event {
                     ref_name.ok_or_else(|| anyhow::anyhow!("ref-move event missing ref name"))?;
                 Event::RefUpdateEvent {
                     timestamp,
+                    event_tx_id,
                     ref_name,
                     old_ref: ref1,
                     new_ref: ref2,
@@ -253,6 +335,7 @@ impl TryFrom<Row> for Event {
                 let commit_oid = get_oid(&ref1, "commit OID")?;
                 Event::CommitEvent {
                     timestamp,
+                    event_tx_id,
                     commit_oid,
                 }
             }
@@ -261,6 +344,7 @@ impl TryFrom<Row> for Event {
                 let commit_oid = get_oid(&ref1, "commit OID")?;
                 Event::HideEvent {
                     timestamp,
+                    event_tx_id,
                     commit_oid,
                 }
             }
@@ -269,6 +353,7 @@ impl TryFrom<Row> for Event {
                 let commit_oid = get_oid(&ref1, "commit OID")?;
                 Event::UnhideEvent {
                     timestamp,
+                    event_tx_id,
                     commit_oid,
                 }
             }
@@ -291,6 +376,7 @@ fn init_tables(conn: &rusqlite::Connection) -> anyhow::Result<()> {
 CREATE TABLE IF NOT EXISTS event_log (
     timestamp REAL NOT NULL,
     type TEXT NOT NULL,
+    event_tx_id INTEGER NOT NULL,
     old_ref TEXT,
     new_ref TEXT,
     ref_name TEXT,
@@ -299,7 +385,26 @@ CREATE TABLE IF NOT EXISTS event_log (
 ",
         rusqlite::params![],
     )
-    .context("Creating tables")?;
+    .context("Creating `event_log` table")?;
+
+    conn.execute(
+        "
+CREATE TABLE IF NOT EXISTS event_transactions (
+    timestamp REAL NOT NULL,
+
+    -- Set as `PRIMARY KEY` to have SQLite select a value automatically. Set as
+    -- `AUTOINCREMENT` to ensure that SQLite doesn't reuse the value later if a
+    -- row is deleted. (We don't plan to delete rows right now, but maybe
+    -- later?)
+    event_tx_id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+
+    message TEXT
+)
+",
+        rusqlite::params![],
+    )
+    .context("Creating `event_transactions` table")?;
+
     Ok(())
 }
 
@@ -319,12 +424,21 @@ impl<'conn> EventLogDb<'conn> {
     pub fn add_events(&mut self, events: Vec<Event>) -> anyhow::Result<()> {
         let tx = self.conn.unchecked_transaction()?;
         for event in events {
-            let row = Row::from(event);
+            let Row {
+                timestamp,
+                type_,
+                event_tx_id,
+                ref1,
+                ref2,
+                ref_name,
+                message,
+            } = Row::from(event);
             tx.execute_named(
                 "
 INSERT INTO event_log VALUES (
     :timestamp,
     :type,
+    :event_tx_id,
     :old_ref,
     :new_ref,
     :ref_name,
@@ -332,12 +446,13 @@ INSERT INTO event_log VALUES (
 )
             ",
                 rusqlite::named_params! {
-                    ":timestamp": row.timestamp,
-                    ":type": &row.type_,
-                    ":old_ref": &row.ref1,
-                    ":new_ref": &row.ref2,
-                    ":ref_name": &row.ref_name,
-                    ":message": &row.message,
+                    ":timestamp": timestamp,
+                    ":type": &type_,
+                    ":event_tx_id": event_tx_id,
+                    ":old_ref": &ref1,
+                    ":new_ref": &ref2,
+                    ":ref_name": &ref_name,
+                    ":message": &message,
                 },
             )?;
         }
@@ -352,7 +467,7 @@ INSERT INTO event_log VALUES (
     pub fn get_events(&self) -> anyhow::Result<Vec<Event>> {
         let mut stmt = self.conn.prepare(
             "
-SELECT timestamp, type, old_ref, new_ref, ref_name, message
+SELECT timestamp, type, event_tx_id, old_ref, new_ref, ref_name, message
 FROM event_log
 ORDER BY rowid ASC
 ",
@@ -360,6 +475,7 @@ ORDER BY rowid ASC
         let rows: rusqlite::Result<Vec<Row>> = stmt
             .query_map(rusqlite::params![], |row| {
                 let timestamp: f64 = row.get("timestamp")?;
+                let event_tx_id: isize = row.get("event_tx_id")?;
                 let type_: String = row.get("type")?;
                 let ref_name: Option<String> = row.get("ref_name")?;
                 let old_ref: Option<String> = row.get("old_ref")?;
@@ -373,6 +489,7 @@ ORDER BY rowid ASC
 
                 Ok(Row {
                     timestamp,
+                    event_tx_id,
                     type_,
                     ref_name,
                     ref1: old_ref,
@@ -383,6 +500,55 @@ ORDER BY rowid ASC
             .collect();
         let rows = rows?;
         rows.into_iter().map(Event::try_from).collect()
+    }
+
+    /// Create a new event transaction ID to be used to insert subsequent
+    /// `Event`s into the database.
+    #[context("Creating a new `EventTransactionId`")]
+    pub fn make_transaction_id(
+        &self,
+        now: SystemTime,
+        message: impl AsRef<str>,
+    ) -> anyhow::Result<EventTransactionId> {
+        if let Ok(transaction_id) = std::env::var(BRANCHLESS_TRANSACTION_ID_ENV_VAR) {
+            if let Ok(transaction_id) = transaction_id.parse::<EventTransactionId>() {
+                return Ok(transaction_id);
+            }
+        }
+
+        let tx = self.conn.unchecked_transaction()?;
+
+        let timestamp = now
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .with_context(|| format!("Calculating event transaction timestamp: {:?}", &now))?
+            .as_secs_f64();
+        self.conn
+            .execute_named(
+                "
+            INSERT INTO event_transactions
+            (timestamp, message)
+            VALUES
+            (:timestamp, :message)
+        ",
+                rusqlite::named_params! {
+                    ":timestamp": timestamp,
+                    ":message": message.as_ref(),
+                },
+            )
+            .with_context(|| {
+                format!(
+                    "Creating event transaction (now: {:?}, message: {:?})",
+                    &now,
+                    message.as_ref(),
+                )
+            })?;
+
+        // Ensure that we query `last_insert_rowid` in a transaction, in case
+        // there's another thread in this process making queries with the same
+        // SQLite connection.
+        let event_tx_id: isize = self.conn.last_insert_rowid().try_into()?;
+        tx.commit()?;
+        Ok(EventTransactionId(event_tx_id))
     }
 }
 
@@ -447,7 +613,7 @@ struct EventInfo {
 /// Thus, all events before to the cursor are considered to be in effect,
 /// and all events after the cursor are considered to not have happened
 /// yet.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct EventCursor {
     event_id: isize,
 }
@@ -517,6 +683,7 @@ impl EventReplayer {
         match &event {
             Event::RewriteEvent {
                 timestamp: _,
+                event_tx_id: _,
                 old_commit_oid,
                 new_commit_oid,
             } => {
@@ -546,6 +713,7 @@ impl EventReplayer {
 
             Event::CommitEvent {
                 timestamp: _,
+                event_tx_id: _,
                 commit_oid,
             } => self
                 .commit_history
@@ -559,6 +727,7 @@ impl EventReplayer {
 
             Event::HideEvent {
                 timestamp: _,
+                event_tx_id: _,
                 commit_oid,
             } => self
                 .commit_history
@@ -572,6 +741,7 @@ impl EventReplayer {
 
             Event::UnhideEvent {
                 timestamp: _,
+                event_tx_id: _,
                 commit_oid,
             } => self
                 .commit_history
@@ -679,6 +849,86 @@ impl EventReplayer {
     /// last valid position, as appropriate.
     pub fn advance_cursor(&self, cursor: EventCursor, num_events: isize) -> EventCursor {
         self.make_cursor(cursor.event_id + num_events)
+    }
+
+    fn get_event_tx_id_before_cursor(&self, cursor: EventCursor) -> Option<EventTransactionId> {
+        match self.get_event_before_cursor(cursor) {
+            None => None,
+            Some((_event_id, event)) => Some(event.get_event_tx_id()),
+        }
+    }
+
+    /// The event cursor may not be between two events with different transaction
+    /// IDs (that is, it may not be perfectly in between transactions). Move the
+    /// cursor forward until it is at the boundary of two transactions
+    fn snap_to_transaction_boundary(&self, cursor: EventCursor) -> EventCursor {
+        let next_cursor = self.advance_cursor(cursor, 1);
+        if cursor == next_cursor {
+            return cursor;
+        }
+        let current_tx_id = self.get_event_tx_id_before_cursor(cursor);
+        let next_tx_id = self.get_event_tx_id_before_cursor(next_cursor);
+        if current_tx_id == next_tx_id {
+            self.snap_to_transaction_boundary(next_cursor)
+        } else {
+            cursor
+        }
+    }
+
+    fn advance_cursor_by_transaction_helper(
+        &self,
+        cursor: EventCursor,
+        num_transactions: isize,
+    ) -> EventCursor {
+        match num_transactions.cmp(&0) {
+            Ordering::Equal => self.snap_to_transaction_boundary(cursor),
+            Ordering::Greater => {
+                let next_cursor = self.advance_cursor(cursor, 1);
+                if cursor == next_cursor {
+                    return next_cursor;
+                }
+                let current_tx_id = self.get_event_tx_id_before_cursor(cursor);
+                let next_tx_id = self.get_event_tx_id_before_cursor(next_cursor);
+                let num_transactions = if current_tx_id == next_tx_id {
+                    num_transactions
+                } else {
+                    num_transactions - 1
+                };
+                self.advance_cursor_by_transaction_helper(next_cursor, num_transactions)
+            }
+            Ordering::Less => {
+                let prev_cursor = self.advance_cursor(cursor, -1);
+                if cursor == prev_cursor {
+                    return prev_cursor;
+                }
+                let current_tx_id = self.get_event_tx_id_before_cursor(cursor);
+                let prev_tx_id = self.get_event_tx_id_before_cursor(prev_cursor);
+                let num_transactions = if current_tx_id == prev_tx_id {
+                    num_transactions
+                } else {
+                    num_transactions + 1
+                };
+                self.advance_cursor_by_transaction_helper(prev_cursor, num_transactions)
+            }
+        }
+    }
+
+    /// Advance the cursor to the transaction which is `num_transactions` after
+    /// the current cursor. `num_transactions` can be negative.
+    ///
+    /// The returned cursor will point to the position immediately after the last
+    /// event in the subsequent transaction.
+    pub fn advance_cursor_by_transaction(
+        &self,
+        cursor: EventCursor,
+        num_transactions: isize,
+    ) -> EventCursor {
+        if self.events.is_empty() {
+            cursor
+        } else {
+            let cursor = self.snap_to_transaction_boundary(cursor);
+            self.advance_cursor_by_transaction_helper(cursor, num_transactions)
+        }
     }
 
     /// Get the OID of `HEAD` at the cursor's point in time.
@@ -862,19 +1112,35 @@ impl EventReplayer {
 }
 
 #[cfg(test)]
+pub mod testing {
+    use super::*;
+
+    pub fn make_dummy_transaction_id(id: isize) -> EventTransactionId {
+        EventTransactionId(id)
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
+    use crate::testing::with_git;
+    use crate::util::get_db_conn;
+    use testing::make_dummy_transaction_id;
+
     #[test]
     fn test_drop_non_meaningful_events() -> anyhow::Result<()> {
+        let event_tx_id = make_dummy_transaction_id(123);
         let meaningful_event = Event::CommitEvent {
             timestamp: 0.0,
+            event_tx_id,
             commit_oid: git2::Oid::from_str("abc")?,
         };
         let mut replayer = EventReplayer::new();
         replayer.process_event(&meaningful_event);
         replayer.process_event(&Event::RefUpdateEvent {
             timestamp: 0.0,
+            event_tx_id,
             ref_name: String::from("ORIG_HEAD"),
             old_ref: Some(String::from("abc")),
             new_ref: Some(String::from("def")),
@@ -882,6 +1148,7 @@ mod tests {
         });
         replayer.process_event(&Event::RefUpdateEvent {
             timestamp: 0.0,
+            event_tx_id,
             ref_name: String::from("CHERRY_PICK_HEAD"),
             old_ref: None,
             new_ref: None,
@@ -893,6 +1160,125 @@ mod tests {
             replayer.get_event_before_cursor(cursor),
             Some((1, &meaningful_event))
         );
+        Ok(())
+    }
+
+    #[test]
+    fn test_different_event_transaction_ids() -> anyhow::Result<()> {
+        with_git(|git| {
+            git.init_repo()?;
+            git.commit_file("test1", 1)?;
+            git.run(&["hide", "HEAD"])?;
+
+            let repo = git.get_repo()?;
+            let conn = get_db_conn(&repo)?;
+            let event_log_db = EventLogDb::new(&conn)?;
+            let events = event_log_db.get_events()?;
+            let event_tx_ids: Vec<EventTransactionId> =
+                events.iter().map(|event| event.get_event_tx_id()).collect();
+            if git.supports_reference_transactions()? {
+                insta::assert_debug_snapshot!(event_tx_ids, @r###"
+                [
+                    EventTransactionId(
+                        1,
+                    ),
+                    EventTransactionId(
+                        1,
+                    ),
+                    EventTransactionId(
+                        2,
+                    ),
+                    EventTransactionId(
+                        3,
+                    ),
+                ]
+                "###);
+            } else {
+                insta::assert_debug_snapshot!(event_tx_ids, @r###"
+                [
+                    EventTransactionId(
+                        1,
+                    ),
+                    EventTransactionId(
+                        2,
+                    ),
+                ]
+                "###);
+            }
+            Ok(())
+        })
+    }
+
+    #[test]
+    fn test_advance_cursor_by_transaction() -> anyhow::Result<()> {
+        let mut event_replayer = EventReplayer::new();
+        for (timestamp, event_tx_id) in (0..).zip(&[1, 1, 2, 2, 3, 4]) {
+            let timestamp: f64 = timestamp.try_into()?;
+            event_replayer.process_event(&Event::UnhideEvent {
+                timestamp,
+                event_tx_id: EventTransactionId(*event_tx_id),
+                commit_oid: git2::Oid::zero(),
+            });
+        }
+
+        assert_eq!(
+            event_replayer.advance_cursor_by_transaction(EventCursor { event_id: 0 }, 1),
+            EventCursor { event_id: 2 },
+        );
+        assert_eq!(
+            event_replayer.advance_cursor_by_transaction(EventCursor { event_id: 1 }, 1),
+            EventCursor { event_id: 4 },
+        );
+        assert_eq!(
+            event_replayer.advance_cursor_by_transaction(EventCursor { event_id: 2 }, 1),
+            EventCursor { event_id: 4 },
+        );
+        assert_eq!(
+            event_replayer.advance_cursor_by_transaction(EventCursor { event_id: 3 }, 1),
+            EventCursor { event_id: 5 },
+        );
+        assert_eq!(
+            event_replayer.advance_cursor_by_transaction(EventCursor { event_id: 4 }, 1),
+            EventCursor { event_id: 5 },
+        );
+        assert_eq!(
+            event_replayer.advance_cursor_by_transaction(EventCursor { event_id: 5 }, 1),
+            EventCursor { event_id: 6 },
+        );
+        assert_eq!(
+            event_replayer.advance_cursor_by_transaction(EventCursor { event_id: 6 }, 1),
+            EventCursor { event_id: 6 },
+        );
+
+        assert_eq!(
+            event_replayer.advance_cursor_by_transaction(EventCursor { event_id: 6 }, -1),
+            EventCursor { event_id: 5 },
+        );
+        assert_eq!(
+            event_replayer.advance_cursor_by_transaction(EventCursor { event_id: 5 }, -1),
+            EventCursor { event_id: 4 },
+        );
+        assert_eq!(
+            event_replayer.advance_cursor_by_transaction(EventCursor { event_id: 4 }, -1),
+            EventCursor { event_id: 2 },
+        );
+        assert_eq!(
+            event_replayer.advance_cursor_by_transaction(EventCursor { event_id: 3 }, -1),
+            EventCursor { event_id: 2 },
+        );
+        assert_eq!(
+            event_replayer.advance_cursor_by_transaction(EventCursor { event_id: 2 }, -1),
+            EventCursor { event_id: 0 },
+        );
+        assert_eq!(
+            event_replayer.advance_cursor_by_transaction(EventCursor { event_id: 1 }, -1),
+            EventCursor { event_id: 0 },
+        );
+        assert_eq!(
+            event_replayer.advance_cursor_by_transaction(EventCursor { event_id: 0 }, -1),
+            EventCursor { event_id: 0 },
+        );
+
         Ok(())
     }
 }

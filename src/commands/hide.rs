@@ -113,7 +113,7 @@ fn recurse_on_commits<'repo, F: Fn(&Node) -> bool>(
 ///
 /// Returns: exit code (0 denotes successful exit).
 pub fn hide(out: &mut impl Write, hashes: Vec<String>, recursive: bool) -> anyhow::Result<isize> {
-    let timestamp = SystemTime::now();
+    let now = SystemTime::now();
     let repo = get_repo()?;
     let conn = get_db_conn(&repo)?;
     let mut event_log_db = EventLogDb::new(&conn)?;
@@ -136,13 +136,13 @@ pub fn hide(out: &mut impl Write, hashes: Vec<String>, recursive: bool) -> anyho
         commits
     };
 
-    let timestamp = timestamp
-        .duration_since(SystemTime::UNIX_EPOCH)?
-        .as_secs_f64();
+    let timestamp = now.duration_since(SystemTime::UNIX_EPOCH)?.as_secs_f64();
+    let event_tx_id = event_log_db.make_transaction_id(now, "hide")?;
     let events = commits
         .iter()
         .map(|commit| Event::HideEvent {
             timestamp,
+            event_tx_id,
             commit_oid: commit.id(),
         })
         .collect();
@@ -192,7 +192,7 @@ pub fn hide(out: &mut impl Write, hashes: Vec<String>, recursive: bool) -> anyho
 ///
 /// Returns: exit code (0 denotes successful exit).
 pub fn unhide(out: &mut impl Write, hashes: Vec<String>, recursive: bool) -> anyhow::Result<isize> {
-    let timestamp = SystemTime::now();
+    let now = SystemTime::now();
     let repo = get_repo()?;
     let conn = get_db_conn(&repo)?;
     let mut event_log_db = EventLogDb::new(&conn)?;
@@ -215,13 +215,13 @@ pub fn unhide(out: &mut impl Write, hashes: Vec<String>, recursive: bool) -> any
         commits
     };
 
-    let timestamp = timestamp
-        .duration_since(SystemTime::UNIX_EPOCH)?
-        .as_secs_f64();
+    let timestamp = now.duration_since(SystemTime::UNIX_EPOCH)?.as_secs_f64();
+    let event_tx_id = event_log_db.make_transaction_id(now, "unhide")?;
     let events = commits
         .iter()
         .map(|commit| Event::UnhideEvent {
             timestamp,
+            event_tx_id,
             commit_oid: commit.id(),
         })
         .collect();

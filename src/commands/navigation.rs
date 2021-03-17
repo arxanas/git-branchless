@@ -26,11 +26,12 @@ pub fn prev(
     num_commits: Option<isize>,
 ) -> anyhow::Result<isize> {
     let exit_code = match num_commits {
-        None => run_git(out, err, git_executable, &["checkout", "HEAD^"])?,
+        None => run_git(out, err, git_executable, None, &["checkout", "HEAD^"])?,
         Some(num_commits) => run_git(
             out,
             err,
             git_executable,
+            None,
             &["checkout", &format!("HEAD~{}", num_commits)],
         )?,
     };
@@ -199,6 +200,7 @@ pub fn next(
         out,
         err,
         git_executable,
+        None,
         &["checkout", &current_oid.to_string()],
     )?;
     if result != 0 {

@@ -19,7 +19,9 @@ use fn_error_context::context;
 use crate::commands::gc::mark_commit_reachable;
 use crate::commands::restack::find_abandoned_children;
 use crate::core::config::{get_restack_warn_abandoned, RESTACK_WARN_ABANDONED_CONFIG_KEY};
-use crate::core::eventlog::{should_ignore_ref_updates, Event, EventLogDb, EventReplayer};
+use crate::core::eventlog::{
+    should_ignore_ref_updates, Event, EventLogDb, EventReplayer, EventTransactionId,
+};
 use crate::core::formatting::Pluralize;
 use crate::core::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
 use crate::core::mergebase::MergeBaseDb;
@@ -63,6 +65,11 @@ pub fn hook_post_rewrite(out: &mut impl Write, rewrite_type: &str) -> anyhow::Re
     let now = SystemTime::now();
     let timestamp = now.duration_since(SystemTime::UNIX_EPOCH)?.as_secs_f64();
 
+    let repo = get_repo()?;
+    let conn = get_db_conn(&repo)?;
+    let mut event_log_db = EventLogDb::new(&conn)?;
+    let event_tx_id = event_log_db.make_transaction_id(now, "hook-post-rewrite")?;
+
     let (old_commits, events) = {
         let mut old_commits = Vec::new();
         let mut events = Vec::new();
@@ -83,6 +90,7 @@ pub fn hook_post_rewrite(out: &mut impl Write, rewrite_type: &str) -> anyhow::Re
                     old_commits.push(old_commit_oid);
                     events.push(Event::RewriteEvent {
                         timestamp,
+                        event_tx_id,
                         old_commit_oid,
                         new_commit_oid,
                     })
@@ -92,8 +100,6 @@ pub fn hook_post_rewrite(out: &mut impl Write, rewrite_type: &str) -> anyhow::Re
         }
         (old_commits, events)
     };
-
-    let repo = get_repo()?;
 
     let is_spurious_event = rewrite_type == "amend" && is_rebase_underway(&repo)?;
     if !is_spurious_event {
@@ -106,8 +112,6 @@ pub fn hook_post_rewrite(out: &mut impl Write, rewrite_type: &str) -> anyhow::Re
         writeln!(out, "branchless: processing {}", message_rewritten_commits)?;
     }
 
-    let conn = get_db_conn(&repo)?;
-    let mut event_log_db = EventLogDb::new(&conn)?;
     event_log_db.add_events(events)?;
 
     let should_check_abandoned_commits = get_restack_warn_abandoned(&repo)?;
@@ -237,8 +241,10 @@ pub fn hook_post_checkout(
     let repo = get_repo()?;
     let conn = get_db_conn(&repo)?;
     let mut event_log_db = EventLogDb::new(&conn)?;
+    let event_tx_id = event_log_db.make_transaction_id(now, "hook-post-checkout")?;
     event_log_db.add_events(vec![Event::RefUpdateEvent {
         timestamp: timestamp.as_secs_f64(),
+        event_tx_id,
         old_ref: Some(String::from(previous_head_ref)),
         new_ref: Some(String::from(current_head_ref)),
         ref_name: String::from("HEAD"),
@@ -253,6 +259,7 @@ pub fn hook_post_checkout(
 pub fn hook_post_commit(out: &mut impl Write) -> anyhow::Result<()> {
     writeln!(out, "branchless: processing commit")?;
 
+    let now = SystemTime::now();
     let repo = get_repo()?;
     let conn = get_db_conn(&repo)?;
     let mut event_log_db = EventLogDb::new(&conn)?;
@@ -266,15 +273,21 @@ pub fn hook_post_commit(out: &mut impl Write) -> anyhow::Result<()> {
         .with_context(|| "Marking commit as reachable for GC purposes")?;
 
     let timestamp = commit.time().seconds() as f64;
+    let event_tx_id = event_log_db.make_transaction_id(now, "hook-post-commit")?;
     event_log_db.add_events(vec![Event::CommitEvent {
         timestamp,
+        event_tx_id,
         commit_oid: commit.id(),
     }])?;
 
     Ok(())
 }
 
-fn parse_reference_transaction_line(now: SystemTime, line: &str) -> anyhow::Result<Option<Event>> {
+fn parse_reference_transaction_line(
+    line: &str,
+    now: SystemTime,
+    event_tx_id: EventTransactionId,
+) -> anyhow::Result<Option<Event>> {
     match *line.split(' ').collect::<Vec<_>>().as_slice() {
         [old_value, new_value, ref_name] => {
             if !should_ignore_ref_updates(ref_name) {
@@ -283,6 +296,7 @@ fn parse_reference_transaction_line(now: SystemTime, line: &str) -> anyhow::Resu
                     .with_context(|| "Processing timestamp")?;
                 Ok(Some(Event::RefUpdateEvent {
                     timestamp: timestamp.as_secs_f64(),
+                    event_tx_id,
                     ref_name: String::from(ref_name),
                     old_ref: Some(String::from(old_value)),
                     new_ref: Some(String::from(new_value)),
@@ -312,7 +326,12 @@ pub fn hook_reference_transaction(
     if transaction_state != "committed" {
         return Ok(());
     }
-    let timestamp = SystemTime::now();
+    let now = SystemTime::now();
+
+    let repo = get_repo()?;
+    let conn = get_db_conn(&repo)?;
+    let mut event_log_db = EventLogDb::new(&conn)?;
+    let event_tx_id = event_log_db.make_transaction_id(now, "reference-transaction")?;
 
     let events: Vec<Event> = stdin()
         .lock()
@@ -322,7 +341,7 @@ pub fn hook_reference_transaction(
                 Ok(line) => line,
                 Err(_) => return None,
             };
-            match parse_reference_transaction_line(timestamp, &line) {
+            match parse_reference_transaction_line(&line, now, event_tx_id) {
                 Ok(event) => event,
                 Err(err) => {
                     log::error!("Could not parse reference-transaction-line: {:?}", err);
@@ -345,10 +364,6 @@ pub fn hook_reference_transaction(
         "branchless: processing {}",
         num_reference_updates.to_string()
     )?;
-
-    let repo = get_repo()?;
-    let conn = get_db_conn(&repo)?;
-    let mut event_log_db = EventLogDb::new(&conn)?;
     event_log_db.add_events(events)?;
 
     Ok(())
@@ -362,12 +377,14 @@ mod tests {
 
     #[test]
     fn test_parse_reference_transaction_line() -> anyhow::Result<()> {
-        let timestamp = SystemTime::UNIX_EPOCH;
         let line = "123abc 456def mybranch";
+        let timestamp = SystemTime::UNIX_EPOCH;
+        let event_tx_id = crate::core::eventlog::testing::make_dummy_transaction_id(789);
         assert_eq!(
-            parse_reference_transaction_line(timestamp, &line)?,
+            parse_reference_transaction_line(&line, timestamp, event_tx_id)?,
             Some(Event::RefUpdateEvent {
                 timestamp: 0.0,
+                event_tx_id,
                 old_ref: Some(String::from("123abc")),
                 new_ref: Some(String::from("456def")),
                 ref_name: String::from("mybranch"),
@@ -376,10 +393,13 @@ mod tests {
         );
 
         let line = "123abc 456def ORIG_HEAD";
-        assert_eq!(parse_reference_transaction_line(timestamp, &line)?, None);
+        assert_eq!(
+            parse_reference_transaction_line(&line, timestamp, event_tx_id)?,
+            None
+        );
 
         let line = "there are not three fields here";
-        assert!(parse_reference_transaction_line(timestamp, &line).is_err());
+        assert!(parse_reference_transaction_line(&line, timestamp, event_tx_id).is_err());
 
         Ok(())
     }

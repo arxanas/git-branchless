@@ -57,6 +57,7 @@
 
 use std::collections::HashSet;
 use std::io::Write;
+use std::time::SystemTime;
 
 use anyhow::Context;
 use fn_error_context::context;
@@ -64,7 +65,7 @@ use log::info;
 
 use crate::commands::smartlog::smartlog;
 use crate::core::config::get_restack_preserve_timestamps;
-use crate::core::eventlog::{Event, EventLogDb, EventReplayer};
+use crate::core::eventlog::{Event, EventLogDb, EventReplayer, EventTransactionId};
 use crate::core::graph::{make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid};
 use crate::core::mergebase::MergeBaseDb;
 use crate::util::{
@@ -86,6 +87,7 @@ fn find_rewrite_target(
     match event {
         Event::RewriteEvent {
             timestamp: _,
+            event_tx_id: _,
             old_commit_oid,
             new_commit_oid,
         } => {
@@ -161,6 +163,7 @@ fn restack_commits(
     git_executable: &GitExecutable,
     merge_base_db: &MergeBaseDb,
     event_log_db: &EventLogDb,
+    event_tx_id: EventTransactionId,
 ) -> anyhow::Result<isize> {
     let event_replayer = EventReplayer::from_event_log_db(event_log_db)?;
     let head_oid = get_head_oid(repo)?;
@@ -209,7 +212,7 @@ fn restack_commits(
             }
             args
         };
-        let result = run_git(out, err, git_executable, &args)?;
+        let result = run_git(out, err, git_executable, Some(event_tx_id), &args)?;
         if result != 0 {
             writeln!(
                 out,
@@ -218,7 +221,15 @@ fn restack_commits(
         }
 
         // Repeat until we reach a fixed point.
-        return restack_commits(out, err, repo, git_executable, merge_base_db, event_log_db);
+        return restack_commits(
+            out,
+            err,
+            repo,
+            git_executable,
+            merge_base_db,
+            event_log_db,
+            event_tx_id,
+        );
     }
 
     writeln!(out, "branchless: no more abandoned commits to restack")?;
@@ -233,6 +244,7 @@ fn restack_branches(
     git_executable: &GitExecutable,
     merge_base_db: &MergeBaseDb,
     event_log_db: &EventLogDb,
+    event_tx_id: EventTransactionId,
 ) -> anyhow::Result<isize> {
     let event_replayer = EventReplayer::from_event_log_db(event_log_db)?;
     let head_oid = get_head_oid(repo)?;
@@ -280,11 +292,19 @@ fn restack_branches(
             None => anyhow::bail!("Invalid UTF-8 branch name: {:?}", branch.name_bytes()?),
         };
         let args = ["branch", "-f", branch_name, &new_oid];
-        let result = run_git(out, err, git_executable, &args)?;
+        let result = run_git(out, err, git_executable, Some(event_tx_id), &args)?;
         if result != 0 {
             return Ok(result);
         } else {
-            return restack_branches(out, err, repo, git_executable, merge_base_db, event_log_db);
+            return restack_branches(
+                out,
+                err,
+                repo,
+                git_executable,
+                merge_base_db,
+                event_log_db,
+                event_tx_id,
+            );
         }
     }
 
@@ -310,6 +330,7 @@ pub fn restack(
     let conn = get_db_conn(&repo)?;
     let merge_base_db = MergeBaseDb::new(&conn)?;
     let event_log_db = EventLogDb::new(&conn)?;
+    let event_tx_id = event_log_db.make_transaction_id(SystemTime::now(), "restack")?;
     let head_oid = get_head_oid(&repo)?;
 
     let result = restack_commits(
@@ -319,6 +340,7 @@ pub fn restack(
         &git_executable,
         &merge_base_db,
         &event_log_db,
+        event_tx_id,
     )?;
     if result != 0 {
         return Ok(result);
@@ -331,6 +353,7 @@ pub fn restack(
         &git_executable,
         &merge_base_db,
         &event_log_db,
+        event_tx_id,
     )?;
     if result != 0 {
         return Ok(result);
@@ -341,6 +364,7 @@ pub fn restack(
             out,
             err,
             &git_executable,
+            Some(event_tx_id),
             &["checkout", &head_oid.to_string()],
         )?,
         None => result,

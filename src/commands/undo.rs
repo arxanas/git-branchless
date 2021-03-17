@@ -20,7 +20,7 @@ use cursive::views::{
 use cursive::{Cursive, CursiveRunnable, CursiveRunner};
 
 use crate::commands::smartlog::render_graph;
-use crate::core::eventlog::{Event, EventCursor, EventLogDb, EventReplayer};
+use crate::core::eventlog::{Event, EventCursor, EventLogDb, EventReplayer, EventTransactionId};
 use crate::core::formatting::{Glyphs, Pluralize};
 use crate::core::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
 use crate::core::mergebase::MergeBaseDb;
@@ -133,6 +133,7 @@ fn describe_event(repo: &git2::Repository, event: &Event) -> anyhow::Result<Stri
     let result = match event {
         Event::CommitEvent {
             timestamp: _,
+            event_tx_id: _,
             commit_oid,
         } => {
             format!("Commit {}\n", render_commit(*commit_oid)?)
@@ -140,6 +141,7 @@ fn describe_event(repo: &git2::Repository, event: &Event) -> anyhow::Result<Stri
 
         Event::HideEvent {
             timestamp: _,
+            event_tx_id: _,
             commit_oid,
         } => {
             format!("Hide commit {}\n", render_commit(*commit_oid)?)
@@ -147,6 +149,7 @@ fn describe_event(repo: &git2::Repository, event: &Event) -> anyhow::Result<Stri
 
         Event::UnhideEvent {
             timestamp: _,
+            event_tx_id: _,
             commit_oid,
         } => {
             format!("Unhide commit {}\n", render_commit(*commit_oid)?)
@@ -154,6 +157,7 @@ fn describe_event(repo: &git2::Repository, event: &Event) -> anyhow::Result<Stri
 
         Event::RefUpdateEvent {
             timestamp: _,
+            event_tx_id: _,
             ref_name,
             old_ref: None,
             new_ref: Some(new_ref),
@@ -165,6 +169,7 @@ fn describe_event(repo: &git2::Repository, event: &Event) -> anyhow::Result<Stri
 
         Event::RefUpdateEvent {
             timestamp: _,
+            event_tx_id: _,
             ref_name,
             old_ref: Some(old_ref),
             new_ref: Some(new_ref),
@@ -181,6 +186,7 @@ Check out from {}
 
         Event::RefUpdateEvent {
             timestamp: _,
+            event_tx_id: _,
             ref_name,
             old_ref: None,
             new_ref: None,
@@ -197,6 +203,7 @@ This event should not appear. This is a (benign) bug -- please report it.
 
         Event::RefUpdateEvent {
             timestamp: _,
+            event_tx_id: _,
             ref_name,
             old_ref: None,
             new_ref: Some(new_ref),
@@ -211,6 +218,7 @@ This event should not appear. This is a (benign) bug -- please report it.
 
         Event::RefUpdateEvent {
             timestamp: _,
+            event_tx_id: _,
             ref_name,
             old_ref: Some(old_ref),
             new_ref: None,
@@ -225,6 +233,7 @@ This event should not appear. This is a (benign) bug -- please report it.
 
         Event::RefUpdateEvent {
             timestamp: _,
+            event_tx_id: _,
             ref_name,
             old_ref: Some(old_ref),
             new_ref: Some(new_ref),
@@ -244,6 +253,7 @@ Move {} from {}
 
         Event::RewriteEvent {
             timestamp: _,
+            event_tx_id: _,
             old_commit_oid,
             new_commit_oid,
         } => {
@@ -349,13 +359,14 @@ fn select_past_event(
                     let relative_time = if relative_time_provider.is_enabled() {
                         format!(
                             " ({} ago)",
-                            RelativeTimeProvider::describe_time_delta(now, event.timestamp())?
+                            RelativeTimeProvider::describe_time_delta(now, event.get_timestamp())?
                         )
                     } else {
                         String::new()
                     };
                     format!(
-                            "Repo after event {event_id}{relative_time}. Press 'h' for help, 'q' to quit.\n{event_description}\n",
+                            "Repo after transaction {event_tx_id} (event {event_id}){relative_time}. Press 'h' for help, 'q' to quit.\n{event_description}\n",
+                            event_tx_id = event.get_event_tx_id().to_string(),
                             event_id = event_id,
                             relative_time = relative_time,
                             event_description = event_description,
@@ -390,12 +401,12 @@ fn select_past_event(
             }
 
             Ok(Message::Next) => {
-                cursor = event_replayer.advance_cursor(cursor, 1);
+                cursor = event_replayer.advance_cursor_by_transaction(cursor, 1);
                 redraw(&mut siv, event_replayer, cursor)?;
             }
 
             Ok(Message::Previous) => {
-                cursor = event_replayer.advance_cursor(cursor, -1);
+                cursor = event_replayer.advance_cursor_by_transaction(cursor, -1);
                 redraw(&mut siv, event_replayer, cursor)?;
             }
 
@@ -473,47 +484,60 @@ You can also copy a commit hash from the past and manually run `git unhide` or `
     Ok(None)
 }
 
-fn inverse_event(now: SystemTime, event: Event) -> anyhow::Result<Event> {
+fn inverse_event(
+    event: Event,
+    now: SystemTime,
+    event_tx_id: EventTransactionId,
+) -> anyhow::Result<Event> {
     let timestamp = now.duration_since(SystemTime::UNIX_EPOCH)?.as_secs_f64();
     let inverse_event = match event {
         Event::CommitEvent {
             timestamp: _,
+            event_tx_id: _,
             commit_oid,
         }
         | Event::UnhideEvent {
             timestamp: _,
+            event_tx_id: _,
             commit_oid,
         } => Event::HideEvent {
             timestamp,
+            event_tx_id,
             commit_oid,
         },
 
         Event::HideEvent {
             timestamp: _,
+            event_tx_id: _,
             commit_oid,
         } => Event::UnhideEvent {
             timestamp,
+            event_tx_id,
             commit_oid,
         },
 
         Event::RewriteEvent {
             timestamp: _,
+            event_tx_id: _,
             old_commit_oid,
             new_commit_oid,
         } => Event::RewriteEvent {
             timestamp,
+            event_tx_id,
             old_commit_oid: new_commit_oid,
             new_commit_oid: old_commit_oid,
         },
 
         Event::RefUpdateEvent {
             timestamp: _,
+            event_tx_id: _,
             ref_name,
             old_ref,
             new_ref,
             message: _,
         } => Event::RefUpdateEvent {
             timestamp,
+            event_tx_id,
             ref_name,
             old_ref: new_ref,
             new_ref: old_ref,
@@ -554,6 +578,7 @@ fn undo_events(
     event_cursor: EventCursor,
 ) -> anyhow::Result<isize> {
     let now = SystemTime::now();
+    let event_tx_id = event_log_db.make_transaction_id(now, "undo")?;
     let inverse_events: Vec<Event> = event_replayer
         .get_events_since_cursor(event_cursor)
         .iter()
@@ -563,6 +588,7 @@ fn undo_events(
                 event,
                 Event::RefUpdateEvent {
                     timestamp: _,
+                    event_tx_id: _,
                     ref_name,
                     old_ref: None,
                     new_ref: _,
@@ -570,7 +596,7 @@ fn undo_events(
                 } if ref_name == "HEAD"
             )
         })
-        .map(|event| inverse_event(now, event.clone()))
+        .map(|event| inverse_event(event.clone(), now, event_tx_id))
         .collect::<anyhow::Result<Vec<Event>>>()?;
     let inverse_events = optimize_inverse_events(inverse_events);
     if inverse_events.is_empty() {
@@ -619,6 +645,7 @@ fn undo_events(
         match event {
             Event::RefUpdateEvent {
                 timestamp: _,
+                event_tx_id: _,
                 ref_name,
                 old_ref: _,
                 new_ref: Some(new_ref),
@@ -628,11 +655,18 @@ fn undo_events(
                 // this case, rather than just update `HEAD` (and be left with a
                 // dirty working copy). The `Git` command will update the event
                 // log appropriately, as it will invoke our hooks.
-                run_git(out, err, git_executable, &["checkout", &new_ref])
-                    .with_context(|| "Updating to previous HEAD location")?;
+                run_git(
+                    out,
+                    err,
+                    git_executable,
+                    Some(event_tx_id),
+                    &["checkout", &new_ref],
+                )
+                .with_context(|| "Updating to previous HEAD location")?;
             }
             Event::RefUpdateEvent {
                 timestamp: _,
+                event_tx_id: _,
                 ref_name: _,
                 old_ref: None,
                 new_ref: None,
@@ -642,6 +676,7 @@ fn undo_events(
             }
             Event::RefUpdateEvent {
                 timestamp: _,
+                event_tx_id: _,
                 ref_name,
                 old_ref: Some(_),
                 new_ref: None,
@@ -662,6 +697,7 @@ fn undo_events(
             },
             Event::RefUpdateEvent {
                 timestamp: _,
+                event_tx_id: _,
                 ref_name,
                 old_ref: None,
                 new_ref: Some(new_ref),
@@ -669,6 +705,7 @@ fn undo_events(
             }
             | Event::RefUpdateEvent {
                 timestamp: _,
+                event_tx_id: _,
                 ref_name,
                 old_ref: Some(_),
                 new_ref: Some(new_ref),
@@ -782,11 +819,15 @@ pub mod testing {
 mod tests {
     use super::*;
 
+    use crate::core::eventlog::testing::make_dummy_transaction_id;
+
     #[test]
     fn test_optimize_inverse_events() -> anyhow::Result<()> {
+        let event_tx_id = make_dummy_transaction_id(123);
         let input = vec![
             Event::RefUpdateEvent {
                 timestamp: 1.0,
+                event_tx_id,
                 ref_name: "HEAD".to_owned(),
                 old_ref: Some("1".parse()?),
                 new_ref: Some("2".parse()?),
@@ -794,6 +835,7 @@ mod tests {
             },
             Event::RefUpdateEvent {
                 timestamp: 2.0,
+                event_tx_id,
                 ref_name: "HEAD".to_owned(),
                 old_ref: Some("1".parse()?),
                 new_ref: Some("3".parse()?),
@@ -802,6 +844,7 @@ mod tests {
         ];
         let expected = vec![Event::RefUpdateEvent {
             timestamp: 2.0,
+            event_tx_id,
             ref_name: "HEAD".to_owned(),
             old_ref: Some("1".parse()?),
             new_ref: Some("3".parse()?),

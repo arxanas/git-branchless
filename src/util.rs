@@ -12,6 +12,7 @@ use fn_error_context::context;
 use log::warn;
 
 use crate::core::config::get_main_branch_name;
+use crate::core::eventlog::{EventTransactionId, BRANCHLESS_TRANSACTION_ID_ENV_VAR};
 
 /// Convert a `git2::Error` into an `anyhow::Error` with an auto-generated message.
 pub fn wrap_git_error(error: git2::Error) -> anyhow::Error {
@@ -145,6 +146,7 @@ pub struct GitExecutable<'path>(pub &'path Path);
 /// * `out`: The output stream to write to.
 /// * `err`: The error stream to write to.
 /// * `git_executable`: The path to the `git` executable on disk.
+/// * `event_tx_id`: The ID of the current event-log transaction, if any.
 /// * `args`: The list of arguments to pass to Git. Should not include the Git
 /// executable itself.
 ///
@@ -155,6 +157,7 @@ pub fn run_git<S: AsRef<str> + std::fmt::Debug>(
     out: &mut impl Write,
     err: &mut impl Write,
     git_executable: &GitExecutable,
+    event_tx_id: Option<EventTransactionId>,
     args: &[S],
 ) -> anyhow::Result<isize> {
     let GitExecutable(git_executable) = git_executable;
@@ -170,15 +173,17 @@ pub fn run_git<S: AsRef<str> + std::fmt::Debug>(
     out.flush()?;
     err.flush()?;
 
-    let result = Command::new(git_executable)
-        .args(args.iter().map(|arg| arg.as_ref()))
-        .output()
-        .with_context(|| {
-            format!(
-                "Waiting for Git subprocess to complete: {:?} {:?}",
-                git_executable, args
-            )
-        })?;
+    let mut command = Command::new(git_executable);
+    command.args(args.iter().map(|arg| arg.as_ref()));
+    if let Some(event_tx_id) = event_tx_id {
+        command.env(BRANCHLESS_TRANSACTION_ID_ENV_VAR, event_tx_id.to_string());
+    }
+    let result = command.output().with_context(|| {
+        format!(
+            "Waiting for Git subprocess to complete: {:?} {:?}",
+            git_executable, args
+        )
+    })?;
     out.write_all(&result.stdout)?;
     err.write_all(&result.stderr)?;
 
@@ -200,12 +205,14 @@ pub fn run_git<S: AsRef<str> + std::fmt::Debug>(
 /// Args:
 /// * `repo`: The Git repository.
 /// * `git_executable`: The path to the `git` executable on disk.
+/// * `event_tx_id`: The ID of the current event-log transaction, if any.
 /// * `args`: The command-line args to pass to Git.
 ///
 /// Returns: the stdout of the Git invocation.
 pub fn run_git_silent<S: AsRef<str> + std::fmt::Debug>(
     repo: &git2::Repository,
     git_executable: &GitExecutable,
+    event_tx_id: Option<EventTransactionId>,
     args: &[S],
 ) -> anyhow::Result<String> {
     let GitExecutable(git_executable) = git_executable;
@@ -225,8 +232,12 @@ pub fn run_git_silent<S: AsRef<str> + std::fmt::Debug>(
         result.extend(args.iter().map(|arg| arg.as_ref()));
         result
     };
-    let result = Command::new(git_executable)
-        .args(&args)
+    let mut command = Command::new(git_executable);
+    command.args(&args);
+    if let Some(event_tx_id) = event_tx_id {
+        command.env(BRANCHLESS_TRANSACTION_ID_ENV_VAR, event_tx_id.to_string());
+    }
+    let result = command
         .output()
         .with_context(|| format!("Spawning Git subprocess: {:?} {:?}", git_executable, args))?;
     let result = String::from_utf8(result.stdout).with_context(|| {

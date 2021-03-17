@@ -235,7 +235,6 @@ fn test_undo_navigate() -> anyhow::Result<()> {
                 &git.get_repo()?,
                 vec![
                     CursiveTestingEvent::Event('p'.into()),
-                    CursiveTestingEvent::Event('p'.into()),
                     CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot1)),
                     CursiveTestingEvent::Event('n'.into()),
                     CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot2)),
@@ -245,25 +244,22 @@ fn test_undo_navigate() -> anyhow::Result<()> {
             insta::assert_debug_snapshot!(event_cursor, @r###"
             Some(
                 EventCursor {
-                    event_id: 5,
+                    event_id: 6,
                 },
             )
             "###);
             insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
             :
-            O 62fc20d2 (master) create test1.txt
-            |
-            @ 96d1c37a create test2.txt
-            Repo after event 4. Press 'h' for help, 'q' to quit.
-            Check out from 62fc20d2 create test1.txt
+            @ 96d1c37a (master) create test2.txt
+            Repo after transaction 3 (event 5). Press 'h' for help, 'q' to quit.
+            Move branch master from 62fc20d2 create test1.txt
             to 96d1c37a create test2.txt
             "###);
             insta::assert_snapshot!(screen_to_string(&screenshot2), @r###"
             :
             @ 96d1c37a (master) create test2.txt
-            Repo after event 5. Press 'h' for help, 'q' to quit.
-            Move branch master from 62fc20d2 create test1.txt
-            to 96d1c37a create test2.txt
+            Repo after transaction 4 (event 6). Press 'h' for help, 'q' to quit.
+            Commit 96d1c37a create test2.txt
             "###);
         };
 
@@ -299,7 +295,7 @@ fn test_go_to_event() -> anyhow::Result<()> {
         insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
         :
         @ 96d1c37a (master) create test2.txt
-        Repo after event 6. Press 'h' for help, 'q' to quit.
+        Repo after transaction 4 (event 6). Press 'h' for help, 'q' to quit.
         Commit 96d1c37a create test2.txt
         "###);
         insta::assert_snapshot!(screen_to_string(&screenshot2), @r###"
@@ -307,7 +303,7 @@ fn test_go_to_event() -> anyhow::Result<()> {
         @ 62fc20d2 create test1.txt
         |
         O 96d1c37a (master) create test2.txt
-        Repo after event 1. Press 'h' for help, 'q' to quit.
+        Repo after transaction 1 (event 1). Press 'h' for help, 'q' to quit.
         Check out from f777ecc9 create initial.txt
         to 62fc20d2 create test1.txt
         "###);
@@ -403,7 +399,6 @@ fn test_undo_move_refs() -> anyhow::Result<()> {
             vec![
                 CursiveTestingEvent::Event('p'.into()),
                 CursiveTestingEvent::Event('p'.into()),
-                CursiveTestingEvent::Event('p'.into()),
                 CursiveTestingEvent::Event(Key::Enter.into()),
                 CursiveTestingEvent::Event('y'.into()),
             ],
@@ -433,8 +428,7 @@ fn test_undo_move_refs() -> anyhow::Result<()> {
         }
 
         {
-            let (stdout, stderr) = git.run(&["smartlog"])?;
-            eprintln!("@nocommit {}", stderr);
+            let (stdout, _stderr) = git.run(&["smartlog"])?;
             insta::assert_snapshot!(stdout, @r###"
             :
             @ 62fc20d2 (master) create test1.txt
