@@ -32,8 +32,14 @@ The branchless workflow is perfectly compatible with local branches if you choos
 
 ## Installation
 
-See https://github.com/arxanas/git-branchless/wiki/Installation. (Short version: run `cargo install git-branchless`, then run `git branchless init` in your repository.)
+See https://github.com/arxanas/git-branchless/wiki/Installation.
+
+Short version: run `cargo install git-branchless`, then run `git branchless init` in your repository.
 
 ## Status
 
 `git-branchless` is currently in **beta**. It's believed that there are no major bugs, but it has not yet been comprehensively battle-tested. You can see the known issues in the [issue tracker](https://github.com/arxanas/git-branchless/issues/1).
+
+`git-branchless` follows [semantic versioning](https://semver.org/). New 0.x.y versions, and new major versions after reaching 1.0.0, may change the on-disk format in a backward-incompatible way.
+
+To be notified about new versions, select Watch » Custom » Releases in Github's notifications menu at the top of the page. Or use [GitPunch](https://gitpunch.com/) to deliver notifications by email.
