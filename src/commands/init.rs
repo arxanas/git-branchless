@@ -228,7 +228,7 @@ v2.29 or later, but your Git version is: {version_str}
 Some operations, such as branch updates, won't be correctly undone. Other
 operations may be undoable. Attempt at your own risk.
 
-Once you upgrade to Git v2.9, run `git branchless init` again. Any work you
+Once you upgrade to Git v2.29, run `git branchless init` again. Any work you
 do from then on will be correctly undoable.
 
 This only applies to the `git undo` command. Other commands which are part of
