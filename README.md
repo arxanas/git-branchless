@@ -3,32 +3,109 @@
 [![CI](https://github.com/arxanas/git-branchless/workflows/CI/badge.svg)](https://github.com/arxanas/git-branchless/actions?query=workflow%3ACI+branch%3Amaster)
 [![crates.io](http://meritbadge.herokuapp.com/git-branchless)](https://crates.io/crates/git-branchless)
 
-## Demo
+`git-branchless` is a suite of tools to help you **visualize**, **navigate**, **manipulate**, and **repair** your commit history. It's based off of the branchless Mercurial workflows at large companies such as Google and Facebook.
 
-[See the demo at asciinema](https://asciinema.org/a/ZHdMDW9997wzctW1T7QsUFe9G):
+- [Demos](#demos)
+  - [Repair](#repair)
+  - [Visualize](#visualize)
+  - [Navigate and manipulate](#navigate-and-manipulate)
+- [About](#about)
+- [Installation](#installation)
+- [Status](#status)
+
+## Demos
+### Repair
+
+Undo almost anything:
+
+- Commits.
+- Amended commits.
+- Merges and rebases (e.g. if you resolved a conflict wrongly).
+- Checkouts.
+- Branch creations, updates, and deletions.
 
 <p align="center">
-<a href="https://asciinema.org/a/ZHdMDW9997wzctW1T7QsUFe9G" target="_blank"><img src="https://asciinema.org/a/ZHdMDW9997wzctW1T7QsUFe9G.svg" /></a>
+<a href="https://asciinema.org/a/2hRDqRZKyppzmDL3Dz8zRleNd" target="_blank"><img src="https://asciinema.org/a/2hRDqRZKyppzmDL3Dz8zRleNd.svg" /></a>
 </p>
 
-## Why?
+<details>
+<summary>Why not <code>git reflog</code>?</summary>
 
-Most Git workflows involve heavy use of branches to track commit work that is underway. However, branches require that you "name" every commit you're interested in tracking. If you spend a lot of time doing any of the following:
+`git reflog` is a tool to view the previous position of a single reference (like `HEAD`), which can be used to undo operations. But since it only tracks the position of a single reference, complicated operations like rebases can be tedious to reverse-engineer. `git undo` operates at a higher level of abstraction: the entire state of your repository.
 
-  * Switching between work tasks.
-  * Separating minor cleanups/refactorings into their own commits, for ease of
-    reviewability.
-  * Extensively rewriting local history before submitting code for review.
-  * Performing speculative work which may not be ultimately committed.
-  * Working on top of work that you or a collaborator produced, which is not
-    yet checked in.
-  * Losing track of `git stash`es you made previously.
+`git reflog` also fundamentally can't be used to undo some rare operations, such as certain branch creations, updates, and deletions. [See the architecture document](https://github.com/arxanas/git-branchless/wiki/Architecture#comparison-with-the-reflog) for more details.
 
-Then the branchless workflow may be for you instead. 
+</details>
 
-The branchless workflow is designed for use at monorepo-scale, where the repository has a single main branch that all commits are applied to. It's based off the Mercurial workflows at large companies such as Google and Facebook. You can use it for smaller repositories as well, as long as you have a single main branch.
+<details>
+<summary>What doesn't <code>git undo</code> handle?</summary>
 
-The branchless workflow is perfectly compatible with local branches if you choose to use them — they're just not necessary anymore.
+`git undo` relies on features in recent versions of Git to work properly. See the [compatibility chart](https://github.com/arxanas/git-branchless/wiki/Installation#compatibility).
+
+Currently, `git undo` can't undo the following. You can find the design document to handle some of these cases in [issue #10](https://github.com/arxanas/git-branchless/issues/10).
+
+- "Uncommitting" a commit by undoing the commit and restoring its changes to the working copy.
+  - In stock Git, this can be accomplished with `git reset --soft HEAD^` followed by `git restore .`.
+  - This scenario would be better implemented with a custom `git uncommit` command instead. See [issue #3](https://github.com/arxanas/git-branchless/issues/3).
+- Undoing the staging or unstaging of files. This is tracked by issue #10 above.
+- Undoing back into the _middle_ of a conflict, such that `git status` shows a message like `path/to/file (both modified)`, so that you can resolve that specific conflict differently. This is tracked by issue #10 above.
+
+Fundamentally, `git undo` is not intended to handle changes to untracked files.
+
+</details>
+
+<details>
+<summary>Comparison to other Git undo tools</summary>
+
+- [`gitjk`](https://github.com/mapmeld/gitjk): Requires a shell alias. Only undoes most recent command. Only handles some Git operations (e.g. doesn't handle rebases).
+- [`git-extras/git-undo`](https://github.com/tj/git-extras/blob/master/man/git-undo.md): Only undoes commits at current `HEAD`.
+- [`git-annex undo`](https://git-annex.branchable.com/git-annex-undo/): Only undoes the most recent change to a given file or directory.
+- [`thefuck`](https://github.com/nvbn/thefuck): Only undoes historical shell commands. Only handles some Git operations (e.g. doesn't handle rebases).
+
+</details>
+
+### Visualize
+
+Visualize your commit history with the smartlog (`git sl`):
+
+<p align="center">
+<img src="media/git-sl.png" /></a>
+</p>
+
+<details>
+<summary>Why not `git log --graph`?</summary>
+
+`git log --graph` only shows commits which have branches attached with them. If you prefer to work without branches, then `git log --graph` won't work for you.
+
+To support users who rewrite history extensively, `git sl` also points out commits which have been abandoned and need to be repaired (descendants of commits marked with `rewritten as abcd1234`). They can be automatically fixed up with `git restack`, or manually handled.
+
+</details>
+
+### Navigate and manipulate
+
+Rewrite history without fear:
+
+<p align="center">
+<a href="https://asciinema.org/a/3UVPMf0IpJaGdP6Kd6Zum4cq8" target="_blank"><img src="https://asciinema.org/a/3UVPMf0IpJaGdP6Kd6Zum4cq8.svg" /></a>
+</p>
+
+<details>
+<summary>Why not `git rebase -i`?</summary>
+
+Interactive rebasing with `git rebase -i` is fully supported, but it has a couple of shortcomings:
+
+- `git rebase -i` can only repair linear series of commits, not trees. If you modify a commit with multiple children, then you have to be sure to rebase all of the other children commits appropriately.
+- You have to commit to a plan of action before starting the rebase. For some use-cases, it can be easier to operate on individual commits at a time, rather than an entire series of commits all at once.
+
+When you use `git rebase -i` with `git-branchless`, you will be prompted to repair your history if you abandon any commits.
+
+</details>
+
+## About
+
+The branchless workflow is designed for use in a repository with a **single main branch** that all commits are rebased onto. It improves developer velocity by encouraging fast and frequent commits, and helps developers operate on these commits fearlessly.
+
+In the branchless workflow, the commits you're working on are inferred based on your activity, so you no longer need branches to keep track of them. Nonetheless, branches are sometimes convenient, and `git-branchless` fully supports them. If you prefer, you can continue to use your normal workflow and benefit from features like `git sl` or `git undo` without going entirely branchless.
 
 ## Installation
 
