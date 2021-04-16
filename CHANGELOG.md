@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Fixed: Visible commits in the smartlog sometimes showed the reason that they were hidden, even though they were visible.
+
 ## [0.3.1] - 2021-04-15
 
 - Added: Hidden commits which appear in the smartlog now show the reason why they're hidden.

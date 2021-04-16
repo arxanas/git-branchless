@@ -11,6 +11,9 @@ use super::graph::CommitGraph;
 /// For example, if we amend commit `abc` into commit `def1`, and then amend
 /// `def1` into `def2`, then we can traverse the event log to find out that `def2`
 /// is the newest version of `abc`.
+///
+/// If a commit was rewritten into itself through some chain of events, then
+/// returns `None`, rather than the same commit OID.
 pub fn find_rewrite_target(
     graph: &CommitGraph,
     event_replayer: &EventReplayer,
@@ -92,4 +95,83 @@ pub fn find_abandoned_children(
         .copied()
         .collect();
     Some((rewritten_oid, visible_children_oids))
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::core::eventlog::EventLogDb;
+    use crate::core::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
+    use crate::core::mergebase::MergeBaseDb;
+    use crate::testing::{with_git, Git, GitRunOptions};
+    use crate::util::{get_branch_oid_to_names, get_db_conn, get_head_oid, get_main_branch_oid};
+
+    use super::*;
+
+    fn find_rewrite_target_helper(git: &Git, oid: git2::Oid) -> anyhow::Result<Option<git2::Oid>> {
+        let repo = git.get_repo()?;
+        let conn = get_db_conn(&repo)?;
+        let merge_base_db = MergeBaseDb::new(&conn)?;
+        let event_log_db = EventLogDb::new(&conn)?;
+        let event_replayer = EventReplayer::from_event_log_db(&event_log_db)?;
+        let event_cursor = event_replayer.make_default_cursor();
+        let head_oid = get_head_oid(&repo)?;
+        let main_branch_oid = get_main_branch_oid(&repo)?;
+        let branch_oid_to_names = get_branch_oid_to_names(&repo)?;
+        let graph = make_graph(
+            &repo,
+            &merge_base_db,
+            &event_replayer,
+            event_cursor,
+            &HeadOid(head_oid),
+            &MainBranchOid(main_branch_oid),
+            &BranchOids(branch_oid_to_names.keys().copied().collect()),
+            true,
+        )?;
+
+        let rewrite_target = find_rewrite_target(&graph, &event_replayer, event_cursor, oid);
+        Ok(rewrite_target)
+    }
+
+    #[test]
+    fn test_find_rewrite_target() -> anyhow::Result<()> {
+        with_git(|git| {
+            git.init_repo()?;
+            let commit_time = 1;
+            let old_oid = git.commit_file("test1", commit_time)?;
+
+            {
+                git.run(&["commit", "--amend", "-m", "test1 amended once"])?;
+                let new_oid: git2::Oid = {
+                    let (stdout, _stderr) = git.run(&["rev-parse", "HEAD"])?;
+                    stdout.trim().parse()?
+                };
+                let rewrite_target = find_rewrite_target_helper(&git, old_oid)?;
+                assert_eq!(rewrite_target, Some(new_oid));
+            }
+
+            {
+                git.run(&["commit", "--amend", "-m", "test1 amended twice"])?;
+                let new_oid: git2::Oid = {
+                    let (stdout, _stderr) = git.run(&["rev-parse", "HEAD"])?;
+                    stdout.trim().parse()?
+                };
+                let rewrite_target = find_rewrite_target_helper(&git, old_oid)?;
+                assert_eq!(rewrite_target, Some(new_oid));
+            }
+
+            {
+                git.run_with_options(
+                    &["commit", "--amend", "-m", "create test1.txt"],
+                    &GitRunOptions {
+                        time: commit_time,
+                        ..Default::default()
+                    },
+                )?;
+                let rewrite_target = find_rewrite_target_helper(&git, old_oid)?;
+                assert_eq!(rewrite_target, None);
+            }
+
+            Ok(())
+        })
+    }
 }
