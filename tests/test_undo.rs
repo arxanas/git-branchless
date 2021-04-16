@@ -440,3 +440,39 @@ fn test_undo_move_refs() -> anyhow::Result<()> {
         Ok(())
     })
 }
+
+#[test]
+fn test_historical_smartlog_visibility() -> anyhow::Result<()> {
+    with_git(|git| {
+        git.init_repo()?;
+        git.commit_file("test1", 1)?;
+        git.run(&["hide", "HEAD"])?;
+
+        let screenshot1 = Default::default();
+        let screenshot2 = Default::default();
+        run_select_past_event(
+            &git.get_repo()?,
+            vec![
+                CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot1)),
+                CursiveTestingEvent::Event('p'.into()),
+                CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot2)),
+                CursiveTestingEvent::Event('q'.into()),
+            ],
+        )?;
+
+        insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
+        :
+        % 62fc20d2 (master) create test1.txt
+        Repo after transaction 3 (event 4). Press 'h' for help, 'q' to quit.
+        1. Hide commit 62fc20d2 create test1.txt
+        "###);
+        insta::assert_snapshot!(screen_to_string(&screenshot2), @r###"
+        :
+        @ 62fc20d2 (master) create test1.txt
+        Repo after transaction 2 (event 3). Press 'h' for help, 'q' to quit.
+        1. Commit 62fc20d2 create test1.txt
+        "###);
+
+        Ok(())
+    })
+}

@@ -152,11 +152,11 @@ fn walk_from_commits<'repo>(
     repo: &'repo git2::Repository,
     merge_base_db: &MergeBaseDb,
     event_replayer: &EventReplayer,
+    event_cursor: EventCursor,
     main_branch_oid: &MainBranchOid,
     commit_oids: &CommitOids,
 ) -> anyhow::Result<CommitGraph<'repo>> {
     let mut graph: CommitGraph = Default::default();
-    let cursor = event_replayer.make_default_cursor();
 
     for commit_oid in &commit_oids.0 {
         let commit = repo.find_commit(*commit_oid);
@@ -200,7 +200,7 @@ fn walk_from_commits<'repo>(
             }
 
             let visibility =
-                event_replayer.get_cursor_commit_visibility(cursor, current_commit.id());
+                event_replayer.get_cursor_commit_visibility(event_cursor, current_commit.id());
             let is_visible = match visibility {
                 Some(CommitVisibility::Visible) | None => true,
                 Some(CommitVisibility::Hidden) => false,
@@ -212,7 +212,7 @@ fn walk_from_commits<'repo>(
             };
 
             let event = event_replayer
-                .get_cursor_commit_latest_event(cursor, current_commit.id())
+                .get_cursor_commit_latest_event(event_cursor, current_commit.id())
                 .cloned();
             graph.insert(
                 current_commit.id(),
@@ -368,6 +368,7 @@ pub fn make_graph<'repo>(
         repo,
         merge_base_db,
         event_replayer,
+        event_cursor,
         main_branch_oid,
         commit_oids,
     )?;
