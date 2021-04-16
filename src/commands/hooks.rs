@@ -17,7 +17,6 @@ use console::style;
 use fn_error_context::context;
 
 use crate::commands::gc::mark_commit_reachable;
-use crate::commands::restack::find_abandoned_children;
 use crate::core::config::{get_restack_warn_abandoned, RESTACK_WARN_ABANDONED_CONFIG_KEY};
 use crate::core::eventlog::{
     should_ignore_ref_updates, Event, EventLogDb, EventReplayer, EventTransactionId,
@@ -25,6 +24,7 @@ use crate::core::eventlog::{
 use crate::core::formatting::Pluralize;
 use crate::core::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
 use crate::core::mergebase::MergeBaseDb;
+use crate::core::rewrite::find_abandoned_children;
 use crate::util::{
     get_branch_oid_to_names, get_db_conn, get_head_oid, get_main_branch_oid, get_repo,
 };
@@ -139,7 +139,12 @@ pub fn hook_post_rewrite(out: &mut impl Write, rewrite_type: &str) -> anyhow::Re
         let mut all_abandoned_children: HashSet<git2::Oid> = HashSet::new();
         let mut all_abandoned_branches: HashSet<&str> = HashSet::new();
         for old_commit_oid in old_commits {
-            let abandoned_result = find_abandoned_children(&graph, &event_replayer, old_commit_oid);
+            let abandoned_result = find_abandoned_children(
+                &graph,
+                &event_replayer,
+                event_replayer.make_default_cursor(),
+                old_commit_oid,
+            );
             let (_rewritten_oid, abandoned_children) = match abandoned_result {
                 Some(abandoned_result) => abandoned_result,
                 None => continue,
