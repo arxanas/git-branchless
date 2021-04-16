@@ -96,7 +96,7 @@ fn test_hide_current_commit() -> anyhow::Result<()> {
             insta::assert_snapshot!(stdout, @r###"
             O f777ecc9 (master) create initial.txt
             |
-            % 3df4b935 create test.txt
+            % 3df4b935 (manually hidden) create test.txt
             "###);
         }
 
@@ -122,7 +122,7 @@ fn test_hidden_commit_with_head_as_child() -> anyhow::Result<()> {
             insta::assert_snapshot!(stdout, @r###"
             O f777ecc9 (master) create initial.txt
             |
-            x 62fc20d2 create test1.txt
+            x 62fc20d2 (manually hidden) create test1.txt
             |
             @ 96d1c37a create test2.txt
             "###);
@@ -173,9 +173,9 @@ fn test_branches_always_visible() -> anyhow::Result<()> {
             insta::assert_snapshot!(stdout, @r###"
             @ f777ecc9 (master) create initial.txt
             |
-            x 62fc20d2 create test1.txt
+            x 62fc20d2 (manually hidden) create test1.txt
             |
-            x 96d1c37a (test) create test2.txt
+            x 96d1c37a (manually hidden) (test) create test2.txt
             "###);
         }
 

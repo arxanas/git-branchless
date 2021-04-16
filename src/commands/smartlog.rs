@@ -15,7 +15,8 @@ use crate::core::graph::{make_graph, BranchOids, CommitGraph, HeadOid, MainBranc
 use crate::core::mergebase::MergeBaseDb;
 use crate::core::metadata::{
     render_commit_metadata, BranchesProvider, CommitMessageProvider, CommitMetadataProvider,
-    CommitOidProvider, DifferentialRevisionProvider, RelativeTimeProvider,
+    CommitOidProvider, DifferentialRevisionProvider, HiddenExplanationProvider,
+    RelativeTimeProvider,
 };
 use crate::util::{
     get_branch_oid_to_names, get_db_conn, get_head_oid, get_main_branch_oid, get_repo,
@@ -282,6 +283,11 @@ pub fn smartlog(out: &mut impl Write) -> anyhow::Result<()> {
         &[
             &CommitOidProvider::new(true)?,
             &RelativeTimeProvider::new(&repo, SystemTime::now())?,
+            &HiddenExplanationProvider::new(
+                &graph,
+                &event_replayer,
+                event_replayer.make_default_cursor(),
+            )?,
             &BranchesProvider::new(&repo, &branch_oid_to_names)?,
             &DifferentialRevisionProvider::new(&repo)?,
             &CommitMessageProvider::new()?,

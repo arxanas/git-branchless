@@ -30,7 +30,7 @@ fn test_restack_amended_commit() -> anyhow::Result<()> {
             |\
             | @ 024c35ce amend test1.txt
             |
-            x 62fc20d2 create test1.txt
+            x 62fc20d2 (rewritten as 024c35ce) create test1.txt
             |
             o 96d1c37a create test2.txt
             |
@@ -139,12 +139,12 @@ fn test_amended_initial_commit() -> anyhow::Result<()> {
         {
             let (stdout, _stderr) = git.run(&["smartlog"])?;
             insta::assert_snapshot!(stdout, @r###"
-@ 9a9f929a new initial commit
+            @ 9a9f929a new initial commit
 
-X f777ecc9 create initial.txt
-|
-O 62fc20d2 (master) create test1.txt
-"###);
+            X f777ecc9 (rewritten as 9a9f929a) create initial.txt
+            |
+            O 62fc20d2 (master) create test1.txt
+            "###);
         }
 
         {

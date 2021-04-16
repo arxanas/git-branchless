@@ -372,3 +372,30 @@ fn test_main_remote_branch() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_show_rewritten_commit_hash() -> anyhow::Result<()> {
+    with_git(|git| {
+        git.init_repo()?;
+        git.commit_file("test1", 1)?;
+        git.commit_file("test2", 2)?;
+        git.run(&["prev"])?;
+        git.run(&["commit", "--amend", "-m", "test1 version 1"])?;
+        git.run(&["commit", "--amend", "-m", "test1 version 2"])?;
+
+        {
+            let (stdout, _stderr) = git.run(&["smartlog"])?;
+            insta::assert_snapshot!(stdout, @r###"
+            O f777ecc9 create initial.txt
+            |\
+            | @ 2ebe0950 test1 version 2
+            |
+            X 62fc20d2 (rewritten as 2ebe0950) create test1.txt
+            |
+            O 96d1c37a (master) create test2.txt
+            "###);
+        }
+
+        Ok(())
+    })
+}

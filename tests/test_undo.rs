@@ -39,7 +39,7 @@ impl<'screenshot> CursiveTestingBackend {
             events,
             event_index: 0,
             just_emitted_event: false,
-            screen: RefCell::new(vec![vec![' '; 80]; 24]),
+            screen: RefCell::new(vec![vec![' '; 120]; 24]),
             screenshots: Vec::new(),
         })
     }
@@ -83,7 +83,13 @@ impl Backend for CursiveTestingBackend {
     fn print_at(&self, pos: cursive::Vec2, text: &str) {
         for (i, c) in text.char_indices() {
             let mut screen = self.screen.borrow_mut();
-            screen[pos.y][pos.x + i] = c;
+            let screen_width = screen[0].len();
+            if pos.x + i < screen_width {
+                screen[pos.y][pos.x + i] = c;
+            } else {
+                // Indicate that the screen was overfull.
+                screen[pos.y][screen_width - 1] = '$';
+            }
         }
     }
 
@@ -196,20 +202,19 @@ fn test_undo_help() -> anyhow::Result<()> {
                 ],
             )?;
             insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
-            ┌───────────────────────────────┤─How to use ├───────────────────────────────┐
-            │ Use `git undo` to view and revert to previous states of the repository.    │
-            │                                                                            │
-            │ h/?: Show this help.                                                       │
-            │ q: Quit.                                                                   │
-            │ p/n or <left>/<right>: View next/previous state.                           │
-            │ g: Go to a provided event ID.                                              │
-            │ <enter>: Revert the repository to the given state (requires confirmation). │
-            │                                                                            │
-            │ You can also copy a commit hash from the past and manually run `git        │
-            │ unhide` or `git rebase` on it.                                             │
-            │                                                                            │
-            │                                                                    <Close> │
-            └────────────────────────────────────────────────────────────────────────────┘
+            ┌───────────────────────────────────────────┤─How to use ├───────────────────────────────────────────┐
+            │ Use `git undo` to view and revert to previous states of the repository.                            │
+            │                                                                                                    │
+            │ h/?: Show this help.                                                                               │
+            │ q: Quit.                                                                                           │
+            │ p/n or <left>/<right>: View next/previous state.                                                   │
+            │ g: Go to a provided event ID.                                                                      │
+            │ <enter>: Revert the repository to the given state (requires confirmation).                         │
+            │                                                                                                    │
+            │ You can also copy a commit hash from the past and manually run `git unhide` or `git rebase` on it. │
+            │                                                                                                    │
+            │                                                                                            <Close> │
+            └────────────────────────────────────────────────────────────────────────────────────────────────────┘
             "###);
         }
 
@@ -462,7 +467,7 @@ fn test_historical_smartlog_visibility() -> anyhow::Result<()> {
 
         insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
         :
-        % 62fc20d2 (master) create test1.txt
+        % 62fc20d2 (manually hidden) (master) create test1.txt
         Repo after transaction 3 (event 4). Press 'h' for help, 'q' to quit.
         1. Hide commit 62fc20d2 create test1.txt
         "###);

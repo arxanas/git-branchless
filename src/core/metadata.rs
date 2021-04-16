@@ -19,6 +19,10 @@ use crate::core::config::{
     get_commit_metadata_relative_time,
 };
 
+use super::eventlog::{Event, EventCursor, EventReplayer};
+use super::graph::CommitGraph;
+use super::rewrite::find_rewrite_target;
+
 /// Interface to display information about a commit in the smartlog.
 pub trait CommitMetadataProvider {
     /// Provide a description of the given commit.
@@ -82,6 +86,70 @@ impl CommitMetadataProvider for CommitMessageProvider {
     #[context("Providing message metadata for commit {:?}", commit.id())]
     fn describe_commit(&self, commit: &git2::Commit) -> anyhow::Result<Option<String>> {
         Ok(commit.summary().map(|summary| summary.to_owned()))
+    }
+}
+
+/// For hidden commits, provide the reason that it's hidden.
+pub struct HiddenExplanationProvider<'a> {
+    graph: &'a CommitGraph<'a>,
+    event_replayer: &'a EventReplayer,
+    event_cursor: EventCursor,
+}
+
+impl<'a> HiddenExplanationProvider<'a> {
+    /// Constructor.
+    pub fn new(
+        graph: &'a CommitGraph,
+        event_replayer: &'a EventReplayer,
+        event_cursor: EventCursor,
+    ) -> anyhow::Result<Self> {
+        Ok(HiddenExplanationProvider {
+            graph,
+            event_replayer,
+            event_cursor,
+        })
+    }
+}
+
+impl<'a> CommitMetadataProvider for HiddenExplanationProvider<'a> {
+    fn describe_commit(&self, commit: &git2::Commit) -> anyhow::Result<Option<String>> {
+        let event = self
+            .event_replayer
+            .get_cursor_commit_latest_event(self.event_cursor, commit.id());
+
+        let event = match event {
+            Some(event) => event,
+            None => return Ok(None),
+        };
+
+        let result = match event {
+            Event::RewriteEvent { .. } => {
+                let rewrite_target = find_rewrite_target(
+                    self.graph,
+                    self.event_replayer,
+                    self.event_cursor,
+                    commit.id(),
+                );
+                match rewrite_target {
+                    Some(rewritten_oid) => Some(
+                        style(format!(
+                            "(rewritten as {})",
+                            &rewritten_oid.to_string()[..8]
+                        ))
+                        .dim()
+                        .to_string(),
+                    ),
+                    None => None,
+                }
+            }
+
+            Event::HideEvent { .. } => Some(style("(manually hidden)").dim().to_string()),
+
+            Event::RefUpdateEvent { .. }
+            | Event::CommitEvent { .. }
+            | Event::UnhideEvent { .. } => None,
+        };
+        Ok(result)
     }
 }
 

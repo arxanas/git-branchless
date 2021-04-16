@@ -587,6 +587,7 @@ enum EventClassification {
 /// Whether or not a commit is visible.
 ///
 /// This is determined by the last `Event` that affected the commit.
+#[derive(Debug)]
 pub enum CommitVisibility {
     /// The commit is visible, and should be rendered as part of the commit graph.
     Visible,
