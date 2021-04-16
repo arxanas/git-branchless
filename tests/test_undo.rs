@@ -465,18 +465,33 @@ fn test_historical_smartlog_visibility() -> anyhow::Result<()> {
             ],
         )?;
 
-        insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
+        if git.supports_reference_transactions()? {
+            insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
         :
         % 62fc20d2 (manually hidden) (master) create test1.txt
         Repo after transaction 3 (event 4). Press 'h' for help, 'q' to quit.
         1. Hide commit 62fc20d2 create test1.txt
         "###);
-        insta::assert_snapshot!(screen_to_string(&screenshot2), @r###"
+            insta::assert_snapshot!(screen_to_string(&screenshot2), @r###"
         :
         @ 62fc20d2 (master) create test1.txt
         Repo after transaction 2 (event 3). Press 'h' for help, 'q' to quit.
         1. Commit 62fc20d2 create test1.txt
         "###);
+        } else {
+            insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
+            :
+            % 62fc20d2 (manually hidden) (master) create test1.txt
+            Repo after transaction 2 (event 2). Press 'h' for help, 'q' to quit.
+            1. Hide commit 62fc20d2 create test1.txt
+            "###);
+            insta::assert_snapshot!(screen_to_string(&screenshot2), @r###"
+            :
+            @ 62fc20d2 (master) create test1.txt
+            Repo after transaction 1 (event 1). Press 'h' for help, 'q' to quit.
+            1. Commit 62fc20d2 create test1.txt
+            "###);
+        }
 
         Ok(())
     })
