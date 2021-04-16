@@ -575,7 +575,10 @@ pub fn should_ignore_ref_updates(ref_name: &str) -> bool {
         return true;
     }
 
-    matches!(ref_name, "ORIG_HEAD" | "CHERRY_PICK")
+    matches!(
+        ref_name,
+        "ORIG_HEAD" | "CHERRY_PICK" | "REBASE_HEAD" | "CHERRY_PICK_HEAD" | "FETCH_HEAD"
+    )
 }
 
 #[derive(Debug)]
