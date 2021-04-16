@@ -269,6 +269,25 @@ Rewrite commit {}
     Ok(result)
 }
 
+fn describe_events_numbered(
+    out: &mut impl Write,
+    repo: &git2::Repository,
+    events: &[Event],
+) -> Result<(), anyhow::Error> {
+    for (i, event) in (1..).zip(events) {
+        let num_header = format!("{}. ", i);
+        for (j, line) in (0..).zip(describe_event(&repo, &event)?.split('\n')) {
+            if j == 0 {
+                write!(out, "{}", num_header)?;
+            } else {
+                write!(out, "{}", " ".repeat(num_header.len()))?;
+            }
+            writeln!(out, "{}", line)?;
+        }
+    }
+    Ok(())
+}
+
 fn select_past_event(
     mut siv: CursiveRunner<CursiveRunnable>,
     glyphs: &Glyphs,
@@ -350,23 +369,30 @@ fn select_past_event(
                 .get_inner_mut()
                 .set_content(smartlog);
 
-            let event = event_replayer.get_event_before_cursor(event_cursor);
+            let event = event_replayer.get_tx_events_before_cursor(event_cursor);
             let info_view_contents = match event {
                 None => "There are no previous available events.".to_owned(),
-                Some((event_id, event)) => {
-                    let event_description = describe_event(&repo, event)?;
+                Some((event_id, events)) => {
+                    let event_description = {
+                        let mut out = Vec::new();
+                        describe_events_numbered(&mut out, repo, &events)?;
+                        String::from_utf8(out)?
+                    };
                     let relative_time_provider = RelativeTimeProvider::new(repo, now)?;
                     let relative_time = if relative_time_provider.is_enabled() {
                         format!(
                             " ({} ago)",
-                            RelativeTimeProvider::describe_time_delta(now, event.get_timestamp())?
+                            RelativeTimeProvider::describe_time_delta(
+                                now,
+                                events[0].get_timestamp()
+                            )?
                         )
                     } else {
                         String::new()
                     };
                     format!(
                             "Repo after transaction {event_tx_id} (event {event_id}){relative_time}. Press 'h' for help, 'q' to quit.\n{event_description}\n",
-                            event_tx_id = event.get_event_tx_id().to_string(),
+                            event_tx_id = events[0].get_event_tx_id().to_string(),
                             event_id = event_id,
                             relative_time = relative_time,
                             event_description = event_description,
@@ -605,17 +631,7 @@ fn undo_events(
     }
 
     writeln!(out, "Will apply these actions:")?;
-    for (i, inverse_event) in (1..).zip(&inverse_events) {
-        let num_header = format!("{}. ", i);
-        for (j, line) in (0..).zip(describe_event(&repo, &inverse_event)?.split('\n')) {
-            if j == 0 {
-                write!(out, "{}", num_header)?;
-            } else {
-                write!(out, "{}", " ".repeat(num_header.len()))?;
-            }
-            writeln!(out, "{}", line)?;
-        }
-    }
+    describe_events_numbered(out, repo, &inverse_events)?;
 
     let confirmed = {
         write!(out, "Confirm? [yN] ")?;

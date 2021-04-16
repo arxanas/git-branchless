@@ -251,15 +251,17 @@ fn test_undo_navigate() -> anyhow::Result<()> {
             insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
             :
             @ 96d1c37a (master) create test2.txt
-            Repo after transaction 3 (event 5). Press 'h' for help, 'q' to quit.
-            Move branch master from 62fc20d2 create test1.txt
+            Repo after transaction 3 (event 4). Press 'h' for help, 'q' to quit.
+            1. Check out from 62fc20d2 create test1.txt
+            to 96d1c37a create test2.txt
+            2. Move branch master from 62fc20d2 create test1.txt
             to 96d1c37a create test2.txt
             "###);
             insta::assert_snapshot!(screen_to_string(&screenshot2), @r###"
             :
             @ 96d1c37a (master) create test2.txt
             Repo after transaction 4 (event 6). Press 'h' for help, 'q' to quit.
-            Commit 96d1c37a create test2.txt
+            1. Commit 96d1c37a create test2.txt
             "###);
         };
 
@@ -296,7 +298,7 @@ fn test_go_to_event() -> anyhow::Result<()> {
         :
         @ 96d1c37a (master) create test2.txt
         Repo after transaction 4 (event 6). Press 'h' for help, 'q' to quit.
-        Commit 96d1c37a create test2.txt
+        1. Commit 96d1c37a create test2.txt
         "###);
         insta::assert_snapshot!(screen_to_string(&screenshot2), @r###"
         :
@@ -304,7 +306,7 @@ fn test_go_to_event() -> anyhow::Result<()> {
         |
         O 96d1c37a (master) create test2.txt
         Repo after transaction 1 (event 1). Press 'h' for help, 'q' to quit.
-        Check out from f777ecc9 create initial.txt
+        1. Check out from f777ecc9 create initial.txt
         to 62fc20d2 create test1.txt
         "###);
 

@@ -1101,6 +1101,28 @@ impl EventReplayer {
         }
     }
 
+    /// Get all the events in the transaction immediately before the cursor.
+    ///
+    /// Returns: A tuple of event ID and the events that happened in the most
+    /// recent transaction. The event ID corresponds to the ID of the first event
+    /// in the returned list of events. If there were no events before the event
+    /// cursor (and therefore no transactions), returns `None` instead.
+    pub fn get_tx_events_before_cursor(&self, cursor: EventCursor) -> Option<(isize, &[Event])> {
+        let prev_tx_cursor = self.advance_cursor_by_transaction(cursor, -1);
+        let EventCursor {
+            event_id: prev_event_id,
+        } = prev_tx_cursor;
+        let EventCursor {
+            event_id: curr_event_id,
+        } = cursor;
+        let tx_events =
+            &self.events[prev_event_id.try_into().unwrap()..curr_event_id.try_into().unwrap()];
+        match tx_events {
+            [] => None,
+            events => Some((prev_event_id + 1, events)),
+        }
+    }
+
     /// Get all the events that have happened since the event cursor.
     ///
     /// Returns: An ordered list of events that have happened since the event
