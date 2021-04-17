@@ -496,10 +496,7 @@ You can also copy a commit hash from the past and manually run `git unhide` or `
 
             Ok(Message::SelectEventIdAndQuit) => {
                 siv.quit();
-                match event_replayer.get_event_before_cursor(cursor) {
-                    Some(_) => return Ok(Some(cursor)),
-                    None => return Ok(None),
-                }
+                return Ok(Some(cursor));
             }
         };
 
@@ -625,14 +622,24 @@ fn undo_events(
         })
         .map(|event| inverse_event(event.clone(), now, event_tx_id))
         .collect::<anyhow::Result<Vec<Event>>>()?;
-    let inverse_events = optimize_inverse_events(inverse_events);
+    let mut inverse_events = optimize_inverse_events(inverse_events);
+
+    // Move any checkout operations to be first. Otherwise, we have the risk
+    // that `HEAD` is a symbolic reference pointing to another reference, and we
+    // update that reference. This would cause the working copy to become dirty
+    // from Git's perspective.
+    inverse_events.sort_by_key(|event| match event {
+        Event::RefUpdateEvent { ref_name, .. } if ref_name == "HEAD" => 0,
+        _ => 1,
+    });
+
     if inverse_events.is_empty() {
         writeln!(out, "No undo actions to apply, exiting.")?;
         return Ok(0);
     }
 
     writeln!(out, "Will apply these actions:")?;
-    describe_events_numbered(out, repo, &inverse_events)?;
+    describe_events_numbered(out, &repo, &inverse_events)?;
 
     let confirmed = {
         write!(out, "Confirm? [yN] ")?;
@@ -658,6 +665,7 @@ fn undo_events(
         plural: "inverse events",
     }
     .to_string();
+
     for event in inverse_events.into_iter() {
         match event {
             Event::RefUpdateEvent {
@@ -677,7 +685,7 @@ fn undo_events(
                     err,
                     git_executable,
                     Some(event_tx_id),
-                    &["checkout", &new_ref],
+                    &["checkout", "--detach", &new_ref],
                 )
                 .with_context(|| "Updating to previous HEAD location")?;
             }
@@ -823,7 +831,7 @@ pub mod testing {
             in_,
             out,
             err,
-            repo,
+            &repo,
             git_executable,
             event_log_db,
             event_replayer,

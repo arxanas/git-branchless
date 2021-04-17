@@ -141,6 +141,13 @@ fn run_undo_events(git: &Git, event_cursor: EventCursor) -> anyhow::Result<(Stri
     let mut in_ = input.as_bytes();
     let mut out = Vec::new();
     let mut err = Vec::new();
+
+    // Ensure that nested calls to `git` are run under the correct environment.
+    // (Normally, the user will be running `git undo` from the correct directory
+    // already.)
+    std::env::set_current_dir(repo.workdir().unwrap())?;
+    std::env::set_var("PATH", git.get_path_for_env());
+
     let result = undo_events(
         &mut in_,
         &mut out,
@@ -423,13 +430,13 @@ fn test_undo_move_refs() -> anyhow::Result<()> {
             let (stdout, _stderr) = run_undo_events(&git, event_cursor)?;
             insta::assert_snapshot!(stdout, @r###"
             Will apply these actions:
-            1. Hide commit 96d1c37a create test2.txt
-
-            2. Move branch master from 96d1c37a create test2.txt
-                                    to 62fc20d2 create test1.txt
-            3. Check out from 96d1c37a create test2.txt
+            1. Check out from 96d1c37a create test2.txt
                            to 62fc20d2 create test1.txt
-            Confirm? [yN] branchless: <git-executable> checkout 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
+            2. Hide commit 96d1c37a create test2.txt
+
+            3. Move branch master from 96d1c37a create test2.txt
+                                    to 62fc20d2 create test1.txt
+            Confirm? [yN] branchless: <git-executable> checkout --detach 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
             Applied 3 inverse events.
             "###);
         }
@@ -491,6 +498,79 @@ fn test_historical_smartlog_visibility() -> anyhow::Result<()> {
             Repo after transaction 1 (event 1). Press 'h' for help, 'q' to quit.
             1. Commit 62fc20d2 create test1.txt
             "###);
+        }
+
+        Ok(())
+    })
+}
+
+#[test]
+fn test_undo_doesnt_make_working_dir_dirty() -> anyhow::Result<()> {
+    with_git(|git| {
+        if !git.supports_reference_transactions()? {
+            return Ok(());
+        }
+
+        git.init_repo()?;
+
+        // Modify a reference.
+        git.run(&["branch", "foo"])?;
+        // Make a change that causes a checkout.
+        git.commit_file("test1", 1)?;
+        // Modify a reference.
+        git.run(&["branch", "bar"])?;
+
+        let screenshot1 = Default::default();
+        let event_cursor = run_select_past_event(
+            &git.get_repo()?,
+            vec![
+                CursiveTestingEvent::Event('p'.into()),
+                CursiveTestingEvent::Event('p'.into()),
+                CursiveTestingEvent::Event('p'.into()),
+                CursiveTestingEvent::Event('p'.into()),
+                CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot1)),
+                CursiveTestingEvent::Event(Key::Enter.into()),
+            ],
+        )?;
+        insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
+        :
+        O 62fc20d2 (master) create test1.txt
+        There are no previous available events.
+        "###);
+
+        // If there are no dirty files in the repository prior to the `undo`,
+        // then there should still be no dirty files after the `undo`.
+        let event_cursor = event_cursor.expect("Should have an event cursor to undo");
+        {
+            let (stdout, _stderr) = git.run(&["status", "--porcelain"])?;
+            assert_eq!(stdout, "");
+        }
+        {
+            let (stdout, stderr) = run_undo_events(&git, event_cursor)?;
+            insta::assert_snapshot!(stdout, @r###"
+            Will apply these actions:
+            1. Check out from 62fc20d2 create test1.txt
+                           to f777ecc9 create initial.txt
+            2. Delete branch bar at 62fc20d2 create test1.txt
+
+            3. Hide commit 62fc20d2 create test1.txt
+
+            4. Move branch master from 62fc20d2 create test1.txt
+                                    to f777ecc9 create initial.txt
+            5. Delete branch foo at f777ecc9 create initial.txt
+
+            Confirm? [yN] branchless: <git-executable> checkout --detach f777ecc9b0db5ed372b2615695191a8a17f79f24
+            Applied 5 inverse events.
+            "###);
+            insta::assert_snapshot!(stderr, @r###"
+            branchless: processing 1 update to a branch/ref
+            HEAD is now at f777ecc create initial.txt
+            branchless: processing checkout
+            "###);
+        }
+        {
+            let (stdout, _stderr) = git.run(&["status", "--porcelain"])?;
+            assert_eq!(stdout, "");
         }
 
         Ok(())
