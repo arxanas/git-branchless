@@ -243,6 +243,25 @@ the branchless workflow will work properly.
     Ok(())
 }
 
+#[context("Setting config {}", name)]
+fn set_config(
+    out: &mut impl Write,
+    config: &mut git2::Config,
+    name: &str,
+    value: bool,
+) -> anyhow::Result<()> {
+    writeln!(out, "Setting config (non-global): {} = {}", name, value)?;
+    config.set_bool(name, value)?;
+    Ok(())
+}
+
+#[context("Setting all configs")]
+fn set_configs(out: &mut impl Write, repo: &mut git2::Repository) -> anyhow::Result<()> {
+    let mut config = repo.config().with_context(|| "Getting repo config")?;
+    set_config(out, &mut config, "advice.detachedHead", false)?;
+    Ok(())
+}
+
 /// Initialize `git-branchless` in the current repo.
 ///
 /// Args:
@@ -252,6 +271,7 @@ the branchless workflow will work properly.
 pub fn init(out: &mut impl Write, git_executable: &GitExecutable) -> anyhow::Result<()> {
     let mut repo = get_repo()?;
     install_hooks(out, &repo)?;
+    set_configs(out, &mut repo)?;
     install_aliases(out, &mut repo, git_executable)?;
     Ok(())
 }

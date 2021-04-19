@@ -227,9 +227,6 @@ impl<'a> Git<'a> {
             self.commit_file("initial", 0)?;
         }
 
-        // Silence some log-spam.
-        self.run(&["config", "advice.detachedHead", "false"])?;
-
         // Non-deterministic metadata (depends on current time).
         self.run(&["config", "branchless.commitMetadata.relativeTime", "false"])?;
 

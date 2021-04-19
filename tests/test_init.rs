@@ -60,6 +60,7 @@ fn test_old_git_version_warning() -> anyhow::Result<()> {
             Installing hook: post-checkout
             Installing hook: pre-auto-gc
             Installing hook: reference-transaction
+            Setting config (non-global): advice.detachedHead = false
             Installing alias (non-global): git smartlog -> git branchless smartlog
             Installing alias (non-global): git sl -> git branchless smartlog
             Installing alias (non-global): git hide -> git branchless hide
