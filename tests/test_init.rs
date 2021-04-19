@@ -52,7 +52,34 @@ fn test_old_git_version_warning() -> anyhow::Result<()> {
         let version = git.get_version()?;
         if version < GitVersion(2, 29, 0) {
             let (stdout, _stderr) = git.run(&["branchless", "init"])?;
-            assert!(stdout.replace("\n", " ").contains("requires Git v2.29"));
+            let (version_str, _stderr) = git.run(&["version"])?;
+            let stdout = stdout.replace(version_str.trim(), "<git version output>");
+            insta::assert_snapshot!(stdout, @r###"
+            Installing hook: post-commit
+            Installing hook: post-rewrite
+            Installing hook: post-checkout
+            Installing hook: pre-auto-gc
+            Installing hook: reference-transaction
+            Installing alias (non-global): git smartlog -> git branchless smartlog
+            Installing alias (non-global): git sl -> git branchless smartlog
+            Installing alias (non-global): git hide -> git branchless hide
+            Installing alias (non-global): git unhide -> git branchless unhide
+            Installing alias (non-global): git prev -> git branchless prev
+            Installing alias (non-global): git next -> git branchless next
+            Installing alias (non-global): git restack -> git branchless restack
+            Installing alias (non-global): git undo -> git branchless undo
+            Warning: the branchless workflow's `git undo` command requires Git
+            v2.29 or later, but your Git version is: <git version output>
+
+            Some operations, such as branch updates, won't be correctly undone. Other
+            operations may be undoable. Attempt at your own risk.
+
+            Once you upgrade to Git v2.29, run `git branchless init` again. Any work you
+            do from then on will be correctly undoable.
+
+            This only applies to the `git undo` command. Other commands which are part of
+            the branchless workflow will work properly.
+            "###);
         }
 
         Ok(())

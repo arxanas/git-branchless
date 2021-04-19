@@ -215,6 +215,7 @@ fn install_aliases(
 
     let version_str = run_git_silent(repo, git_executable, None, &["version"])
         .with_context(|| "Determining Git version")?;
+    let version_str = version_str.trim();
     let version: GitVersion = version_str
         .parse()
         .with_context(|| format!("Parsing Git version string: {}", version_str))?;
