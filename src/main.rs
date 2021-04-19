@@ -3,9 +3,16 @@ use std::io::{stderr, stdin, stdout};
 use std::path::Path;
 
 use anyhow::Context;
+use branchless::commands::wrap_command;
 use branchless::util::GitExecutable;
 use simple_logger::SimpleLogger;
 use structopt::StructOpt;
+
+#[derive(StructOpt)]
+enum WrappedCommand {
+    #[structopt(external_subcommand)]
+    WrappedCommand(Vec<String>),
+}
 
 /// Branchless workflow for Git.
 ///
@@ -73,6 +80,12 @@ enum Opts {
 
     /// Run internal garbage collection.
     Gc,
+
+    /// Wrap a Git command inside a branchless transaction.
+    WrapCommand {
+        #[structopt(subcommand)]
+        command: WrappedCommand,
+    },
 
     /// Internal use.
     HookPreAutoGc,
@@ -163,6 +176,13 @@ fn main() -> anyhow::Result<()> {
 
         Opts::Gc | Opts::HookPreAutoGc => {
             branchless::commands::gc::gc(&mut stdout)?;
+            0
+        }
+
+        Opts::WrapCommand {
+            command: WrappedCommand::WrappedCommand(args),
+        } => {
+            wrap_command::wrap_command(&git_executable, args.as_slice())?;
             0
         }
 
