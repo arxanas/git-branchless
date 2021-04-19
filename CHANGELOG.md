@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fixed: Visible commits in the smartlog sometimes showed the reason that they were hidden, even though they were visible.
 - Fixed: The working copy was sometimes left dirty after a `git undo`, even if it was clean beforehand.
+- Fixed: `git-branchless` now supports Git v2.31.
 
 ## [0.3.1] - 2021-04-15
 
