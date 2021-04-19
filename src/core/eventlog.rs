@@ -633,6 +633,13 @@ pub struct EventReplayer {
 
     /// The events that have affected each commit.
     commit_history: HashMap<git2::Oid, Vec<EventInfo>>,
+
+    /// Map from ref names to ref locations (an OID or another ref name). Works
+    /// around https://github.com/arxanas/git-branchless/issues/7.
+    ///
+    /// If an entry is not present, it was either never observed, or it most
+    /// recently changed to point to the zero hash (i.e. it was deleted).
+    ref_locations: HashMap<String, String>,
 }
 
 impl EventReplayer {
@@ -641,6 +648,7 @@ impl EventReplayer {
             id_counter: 0,
             events: vec![],
             commit_history: HashMap::new(),
+            ref_locations: HashMap::new(),
         }
     }
 
@@ -668,21 +676,23 @@ impl EventReplayer {
     /// * `replayer` in order from oldest to newest.
     pub fn process_event(&mut self, event: &Event) {
         // Drop non-meaningful ref-update events.
-        if let Event::RefUpdateEvent {
-            ref_name,
-            old_ref,
-            new_ref,
-            ..
-        } = event
-        {
-            if should_ignore_ref_updates(&ref_name) || (old_ref.is_none() && new_ref.is_none()) {
+        if let Event::RefUpdateEvent { ref_name, .. } = event {
+            if should_ignore_ref_updates(&ref_name) {
                 return;
             }
         }
 
+        let event = match self.fix_event_git_v2_31(event.clone()) {
+            None => {
+                return;
+            }
+            Some(event) => {
+                self.events.push(event);
+                self.events.last().unwrap()
+            }
+        };
         let id = self.id_counter;
         self.id_counter += 1;
-        self.events.push(event.clone());
 
         match &event {
             Event::RewriteEvent {
@@ -713,7 +723,16 @@ impl EventReplayer {
             // don't include it in the `commit_history`. We'll traverse the
             // history later to find historical locations of references when
             // needed.
-            Event::RefUpdateEvent { .. } => (),
+            Event::RefUpdateEvent {
+                ref_name, new_ref, ..
+            } => match new_ref {
+                Some(new_ref) => {
+                    self.ref_locations.insert(ref_name.clone(), new_ref.clone());
+                }
+                None => {
+                    self.ref_locations.remove(ref_name);
+                }
+            },
 
             Event::CommitEvent {
                 timestamp: _,
@@ -757,6 +776,67 @@ impl EventReplayer {
                     event_classification: EventClassification::Show,
                 }),
         };
+    }
+
+    /// See https://github.com/arxanas/git-branchless/issues/7.
+    fn fix_event_git_v2_31(&self, event: Event) -> Option<Event> {
+        let event = match event {
+            // Git v2.31 will sometimes fail to set the `old_ref` field when
+            // deleting refs. This means that undoing the operation later
+            // becomes incorrect, as we just swap the `old_ref` and `new_ref`
+            // values.
+            Event::RefUpdateEvent {
+                timestamp,
+                event_tx_id,
+                ref_name,
+                old_ref: None,
+                new_ref: None,
+                message,
+            } => {
+                let old_ref = match self.ref_locations.get(&ref_name) {
+                    Some(current_ref_location) => Some(current_ref_location.clone()),
+                    None => None,
+                };
+                Event::RefUpdateEvent {
+                    timestamp,
+                    event_tx_id,
+                    ref_name,
+                    old_ref,
+                    new_ref: None,
+                    message,
+                }
+            }
+
+            _ => event,
+        };
+
+        match (event, self.events.last()) {
+            // Sometimes, Git v2.31 will issue multiple delete reference
+            // transactions (one for the unpacked refs, and one for the packed
+            // refs). Ignore the duplicate second one, for determinism in
+            // testing. See https://lore.kernel.org/git/YFMCLSdImkW3B1rM@ncase/
+            // for more details.
+            (
+                Event::RefUpdateEvent {
+                    timestamp: _,
+                    event_tx_id: _,
+                    ref ref_name,
+                    old_ref: _,
+                    new_ref: None,
+                    ref message,
+                },
+                Some(Event::RefUpdateEvent {
+                    timestamp: _,
+                    event_tx_id: _,
+                    ref_name: last_ref_name,
+                    old_ref: _,
+                    new_ref: None,
+                    message: last_message,
+                }),
+            ) if ref_name == last_ref_name && message == last_message => None,
+
+            (event, _) => Some(event),
+        }
     }
 
     fn get_cursor_commit_history(&self, cursor: EventCursor, oid: git2::Oid) -> Vec<&EventInfo> {
@@ -1137,12 +1217,40 @@ impl EventReplayer {
     }
 }
 
-#[cfg(test)]
+/// Testing helpers.
 pub mod testing {
     use super::*;
 
+    /// Make a dummy transaction ID, for testing.
     pub fn make_dummy_transaction_id(id: isize) -> EventTransactionId {
         EventTransactionId(id)
+    }
+
+    /// Remove the timestamp for the event, for determinism in testing.
+    pub fn redact_event_timestamp(mut event: Event) -> Event {
+        match event {
+            Event::RewriteEvent {
+                ref mut timestamp, ..
+            } => *timestamp = 0.0,
+            Event::RefUpdateEvent {
+                ref mut timestamp, ..
+            } => *timestamp = 0.0,
+            Event::CommitEvent {
+                ref mut timestamp, ..
+            } => *timestamp = 0.0,
+            Event::HideEvent {
+                ref mut timestamp, ..
+            } => *timestamp = 0.0,
+            Event::UnhideEvent {
+                ref mut timestamp, ..
+            } => *timestamp = 0.0,
+        }
+        event
+    }
+
+    /// Get the events stored inside an `EventReplayer`.
+    pub fn get_event_replayer_events(event_replayer: &EventReplayer) -> &Vec<Event> {
+        &event_replayer.events
     }
 }
 
