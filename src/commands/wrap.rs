@@ -26,7 +26,7 @@ fn pass_through_git_command<S: AsRef<str> + std::fmt::Debug>(
 }
 
 /// Run the provided Git command, but wrapped in an event transaction.
-pub fn wrap_command<S: AsRef<str> + std::fmt::Debug>(
+pub fn wrap<S: AsRef<str> + std::fmt::Debug>(
     git_executable: &GitExecutable,
     args: &[S],
 ) -> anyhow::Result<isize> {
@@ -35,7 +35,7 @@ pub fn wrap_command<S: AsRef<str> + std::fmt::Debug>(
     let conn = get_db_conn(&repo)?;
     let event_log_db = EventLogDb::new(&conn)?;
     let event_tx_id = {
-        let message = args.first().map(|s| s.as_ref()).unwrap_or("wrap-command");
+        let message = args.first().map(|s| s.as_ref()).unwrap_or("wrap");
         event_log_db.make_transaction_id(now, message)?
     };
     let exit_code = pass_through_git_command(git_executable, args, event_tx_id)?;
@@ -62,7 +62,7 @@ mod tests {
             git.commit_file("test2", 2)?;
             git.run(&["checkout", "master"])?;
 
-            git.run(&["branchless", "wrap-command", "rebase", "foo"])?;
+            git.run(&["branchless", "wrap", "rebase", "foo"])?;
 
             let repo = git.get_repo()?;
             let conn = get_db_conn(&repo)?;

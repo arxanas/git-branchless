@@ -3,7 +3,7 @@ use std::io::{stderr, stdin, stdout};
 use std::path::Path;
 
 use anyhow::Context;
-use branchless::commands::wrap_command;
+use branchless::commands::wrap;
 use branchless::util::GitExecutable;
 use simple_logger::SimpleLogger;
 use structopt::StructOpt;
@@ -82,7 +82,7 @@ enum Opts {
     Gc,
 
     /// Wrap a Git command inside a branchless transaction.
-    WrapCommand {
+    Wrap {
         #[structopt(subcommand)]
         command: WrappedCommand,
     },
@@ -179,10 +179,10 @@ fn main() -> anyhow::Result<()> {
             0
         }
 
-        Opts::WrapCommand {
+        Opts::Wrap {
             command: WrappedCommand::WrappedCommand(args),
         } => {
-            wrap_command::wrap_command(&git_executable, args.as_slice())?;
+            wrap::wrap(&git_executable, args.as_slice())?;
             0
         }
 

@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - Added: `git branchless init` now sets `advice.detachedHead false`, to reduce the incidence of scary messages.
-- Added: aliasing `git` to `git-branchless wrap-command` improves which commands are grouped together for `git undo`, and possibly enables more features in the future.
+- Added: aliasing `git` to `git-branchless wrap` improves which commands are grouped together for `git undo`, and possibly enables more features in the future.
 - Fixed: Visible commits in the smartlog sometimes showed the reason that they were hidden, even though they were visible.
 - Fixed: The working copy was sometimes left dirty after a `git undo`, even if it was clean beforehand.
 - Fixed: `git-branchless` now supports Git v2.31.
