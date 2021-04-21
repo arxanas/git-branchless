@@ -1,4 +1,4 @@
-use branchless::testing::with_git;
+use branchless::testing::{with_git, GitRunOptions};
 
 /// Remove some of the output from `git rebase`, as it seems to be
 /// non-deterministic as to whether or not it appears.
@@ -193,6 +193,30 @@ fn test_restack_amended_master() -> anyhow::Result<()> {
             O 51452b55 (master) create test2.txt
             "###);
         }
+
+        Ok(())
+    })
+}
+
+#[test]
+fn test_restack_aborts_during_rebase_conflict() -> anyhow::Result<()> {
+    with_git(|git| {
+        git.init_repo()?;
+        git.run(&["branch", "foo"])?;
+        git.commit_file("test1", 1)?;
+        git.commit_file("test2", 2)?;
+        git.run(&["prev"])?;
+
+        git.write_file("test2", "conflicting test2 contents")?;
+        git.run(&["add", "."])?;
+        git.run(&["commit", "--amend", "-m", "amend test1 with test2 conflict"])?;
+        git.run_with_options(
+            &["restack"],
+            &GitRunOptions {
+                expected_exit_code: 1,
+                ..Default::default()
+            },
+        )?;
 
         Ok(())
     })

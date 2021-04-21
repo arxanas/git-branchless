@@ -140,6 +140,7 @@ fn restack_commits(
                 out,
                 "branchless: resolve rebase, then run 'git restack' again"
             )?;
+            return Ok(result);
         }
 
         // Repeat until we reach a fixed point.

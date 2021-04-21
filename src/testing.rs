@@ -241,6 +241,13 @@ impl<'a> Git<'a> {
         self.init_repo_with_options(&Default::default())
     }
 
+    /// Write the provided contents to the provided file in the repository root.
+    pub fn write_file(&self, name: &str, contents: &str) -> anyhow::Result<()> {
+        let file_path = self.repo_path.join(format!("{}.txt", name));
+        std::fs::write(&file_path, contents)?;
+        Ok(())
+    }
+
     /// Commit a file with default contents. The `time` argument is used to set
     /// the commit timestamp, which is factored into the commit hash.
     #[context(
@@ -255,8 +262,7 @@ impl<'a> Git<'a> {
         time: isize,
         contents: &str,
     ) -> anyhow::Result<git2::Oid> {
-        let file_path = self.repo_path.join(format!("{}.txt", name));
-        std::fs::write(&file_path, contents)?;
+        self.write_file(name, contents)?;
         self.run(&["add", "."])?;
         self.run_with_options(
             &["commit", "-m", &format!("create {}.txt", name)],
