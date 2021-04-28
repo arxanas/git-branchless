@@ -51,10 +51,22 @@ use crate::util::{
 ///   without any user intervention.
 #[context("Determining if rebase is underway")]
 fn is_rebase_underway(repo: &git2::Repository) -> anyhow::Result<bool> {
-    let result = ["rebase-apply", "rebase-merge"]
-        .iter()
-        .any(|subdir| repo.path().join(subdir).exists());
-    Ok(result)
+    match repo.state() {
+        git2::RepositoryState::Rebase
+        | git2::RepositoryState::RebaseInteractive
+        | git2::RepositoryState::RebaseMerge => Ok(true),
+
+        // Possibly some of these states should also be treated as `true`?
+        git2::RepositoryState::Clean
+        | git2::RepositoryState::Merge
+        | git2::RepositoryState::Revert
+        | git2::RepositoryState::RevertSequence
+        | git2::RepositoryState::CherryPick
+        | git2::RepositoryState::CherryPickSequence
+        | git2::RepositoryState::Bisect
+        | git2::RepositoryState::ApplyMailbox
+        | git2::RepositoryState::ApplyMailboxOrRebase => Ok(false),
+    }
 }
 
 /// Handle Git's `post-rewrite` hook.
