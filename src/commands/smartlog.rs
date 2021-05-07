@@ -123,9 +123,9 @@ fn get_child_output(
         .children
         .iter()
         .filter(|child_oid| graph.contains_key(child_oid))
-        .cloned()
+        .copied()
         .collect();
-    children.sort_by_key(|child| graph[child].commit.time());
+    children.sort_by_key(|child_oid| (graph[child_oid].commit.time(), child_oid.to_string()));
     for (child_idx, child_oid) in children.iter().enumerate() {
         if root_oids.contains(child_oid) {
             // Will be rendered by the parent.

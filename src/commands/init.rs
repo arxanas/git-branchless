@@ -212,6 +212,7 @@ fn install_aliases(
     install_alias(out, &mut config, "next", "next")?;
     install_alias(out, &mut config, "restack", "restack")?;
     install_alias(out, &mut config, "undo", "undo")?;
+    install_alias(out, &mut config, "move", "move")?;
 
     let version_str = run_git_silent(repo, git_executable, None, &["version"])
         .with_context(|| "Determining Git version")?;

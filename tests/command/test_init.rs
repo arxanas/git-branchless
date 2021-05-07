@@ -69,6 +69,7 @@ fn test_old_git_version_warning() -> anyhow::Result<()> {
             Installing alias (non-global): git next -> git branchless next
             Installing alias (non-global): git restack -> git branchless restack
             Installing alias (non-global): git undo -> git branchless undo
+            Installing alias (non-global): git move -> git branchless move
             Warning: the branchless workflow's `git undo` command requires Git
             v2.29 or later, but your Git version is: <git version output>
 

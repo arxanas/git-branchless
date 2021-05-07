@@ -68,8 +68,17 @@ enum Opts {
         oldest: bool,
 
         /// When encountering multiple next commits, choose the newest.
-        #[structopt(short = "n", long = "--newest", conflicts_with("oldest"))]
+        #[structopt(short = "-n", long = "--newest", conflicts_with("oldest"))]
         newest: bool,
+    },
+
+    /// Move a commit or sub-tree from one location to another.
+    Move {
+        #[structopt(short = "-s", long = "--source")]
+        source: Option<String>,
+
+        #[structopt(short = "-d", long = "--dest")]
+        dest: Option<String>,
     },
 
     /// Fix up commits abandoned by a previous rewrite operation.
@@ -164,6 +173,10 @@ fn main() -> anyhow::Result<()> {
                 num_commits,
                 towards,
             )?
+        }
+
+        Opts::Move { source, dest } => {
+            branchless::commands::r#move::r#move(&mut stdout, &mut stderr, source, dest)?
         }
 
         Opts::Restack => {

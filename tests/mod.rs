@@ -7,6 +7,7 @@ mod core {
 mod command {
     mod test_hide;
     mod test_init;
+    mod test_move;
     mod test_navigation;
     mod test_restack;
     mod test_smartlog;
