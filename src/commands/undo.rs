@@ -56,13 +56,13 @@ fn render_cursor_smartlog(
         merge_base_db,
         &graph,
         &HeadOid(head_oid),
-        &[
-            &CommitOidProvider::new(true)?,
-            &RelativeTimeProvider::new(&repo, SystemTime::now())?,
-            &HiddenExplanationProvider::new(&graph, &event_replayer, event_cursor)?,
-            &BranchesProvider::new(&repo, &branch_oid_to_names)?,
-            &DifferentialRevisionProvider::new(&repo)?,
-            &CommitMessageProvider::new()?,
+        &mut [
+            &mut CommitOidProvider::new(true)?,
+            &mut RelativeTimeProvider::new(&repo, SystemTime::now())?,
+            &mut HiddenExplanationProvider::new(&graph, &event_replayer, event_cursor)?,
+            &mut BranchesProvider::new(&repo, &branch_oid_to_names)?,
+            &mut DifferentialRevisionProvider::new(&repo)?,
+            &mut CommitMessageProvider::new()?,
         ],
     )?;
     let result = String::from_utf8(out)?;
@@ -81,9 +81,9 @@ fn describe_event(repo: &git2::Repository, event: &Event) -> anyhow::Result<Stri
         match repo.find_commit(oid) {
             Ok(commit) => render_commit_metadata(
                 &commit,
-                &[
-                    &CommitOidProvider::new(true)?,
-                    &CommitMessageProvider::new()?,
+                &mut [
+                    &mut CommitOidProvider::new(true)?,
+                    &mut CommitMessageProvider::new()?,
                 ],
             ),
             Err(_) => Ok(format!(

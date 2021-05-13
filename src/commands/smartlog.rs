@@ -80,7 +80,7 @@ fn get_child_output(
     glyphs: &Glyphs,
     graph: &CommitGraph,
     root_oids: &[git2::Oid],
-    commit_metadata_providers: &[&dyn CommitMetadataProvider],
+    commit_metadata_providers: &mut [&mut dyn CommitMetadataProvider],
     head_oid: &HeadOid,
     current_oid: git2::Oid,
     last_child_line_char: Option<&str>,
@@ -171,7 +171,7 @@ fn get_child_output(
 fn get_output(
     glyphs: &Glyphs,
     graph: &CommitGraph,
-    commit_metadata_providers: &[&dyn CommitMetadataProvider],
+    commit_metadata_providers: &mut [&mut dyn CommitMetadataProvider],
     head_oid: &HeadOid,
     root_oids: &[git2::Oid],
 ) -> anyhow::Result<Vec<String>> {
@@ -239,7 +239,7 @@ pub fn render_graph(
     merge_base_db: &MergeBaseDb,
     graph: &CommitGraph,
     head_oid: &HeadOid,
-    commit_metadata_providers: &[&dyn CommitMetadataProvider],
+    commit_metadata_providers: &mut [&mut dyn CommitMetadataProvider],
 ) -> anyhow::Result<()> {
     let root_oids = split_commit_graph_by_roots(repo, merge_base_db, graph);
     let lines = get_output(
@@ -285,17 +285,17 @@ pub fn smartlog(out: &mut impl Write) -> anyhow::Result<()> {
         &merge_base_db,
         &graph,
         &HeadOid(head_oid),
-        &[
-            &CommitOidProvider::new(true)?,
-            &RelativeTimeProvider::new(&repo, SystemTime::now())?,
-            &HiddenExplanationProvider::new(
+        &mut [
+            &mut CommitOidProvider::new(true)?,
+            &mut RelativeTimeProvider::new(&repo, SystemTime::now())?,
+            &mut HiddenExplanationProvider::new(
                 &graph,
                 &event_replayer,
                 event_replayer.make_default_cursor(),
             )?,
-            &BranchesProvider::new(&repo, &branch_oid_to_names)?,
-            &DifferentialRevisionProvider::new(&repo)?,
-            &CommitMessageProvider::new()?,
+            &mut BranchesProvider::new(&repo, &branch_oid_to_names)?,
+            &mut DifferentialRevisionProvider::new(&repo)?,
+            &mut CommitMessageProvider::new()?,
         ],
     )?;
 

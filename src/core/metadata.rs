@@ -29,18 +29,20 @@ pub trait CommitMetadataProvider {
     ///
     /// A return value of `None` indicates that this commit metadata provider was
     /// inapplicable for the provided commit.
-    fn describe_commit(&self, commit: &git2::Commit) -> anyhow::Result<Option<String>>;
+    fn describe_commit(&mut self, commit: &git2::Commit) -> anyhow::Result<Option<String>>;
 }
 
 /// Get the complete description for a given commit.
 #[context("Rendering commit metadata for commit {:?}", commit.id())]
 pub fn render_commit_metadata(
     commit: &git2::Commit,
-    commit_metadata_providers: &[&dyn CommitMetadataProvider],
+    commit_metadata_providers: &mut [&mut dyn CommitMetadataProvider],
 ) -> anyhow::Result<String> {
     let descriptions = commit_metadata_providers
-        .iter()
-        .filter_map(|provider| provider.describe_commit(commit).transpose())
+        .iter_mut()
+        .filter_map(|provider: &mut &mut dyn CommitMetadataProvider| {
+            provider.describe_commit(commit).transpose()
+        })
         .collect::<anyhow::Result<Vec<_>>>()?;
     let result = descriptions.join(" ");
     Ok(result)
@@ -60,7 +62,7 @@ impl CommitOidProvider {
 
 impl CommitMetadataProvider for CommitOidProvider {
     #[context("Providing OID metadata for commit {:?}", commit.id())]
-    fn describe_commit(&self, commit: &git2::Commit) -> anyhow::Result<Option<String>> {
+    fn describe_commit(&mut self, commit: &git2::Commit) -> anyhow::Result<Option<String>> {
         let oid = commit.id();
         let oid = &oid.to_string()[..8];
         let oid = if console::user_attended() && self.use_color {
@@ -84,7 +86,7 @@ impl CommitMessageProvider {
 
 impl CommitMetadataProvider for CommitMessageProvider {
     #[context("Providing message metadata for commit {:?}", commit.id())]
-    fn describe_commit(&self, commit: &git2::Commit) -> anyhow::Result<Option<String>> {
+    fn describe_commit(&mut self, commit: &git2::Commit) -> anyhow::Result<Option<String>> {
         Ok(commit.summary().map(|summary| summary.to_owned()))
     }
 }
@@ -112,7 +114,7 @@ impl<'a> HiddenExplanationProvider<'a> {
 }
 
 impl<'a> CommitMetadataProvider for HiddenExplanationProvider<'a> {
-    fn describe_commit(&self, commit: &git2::Commit) -> anyhow::Result<Option<String>> {
+    fn describe_commit(&mut self, commit: &git2::Commit) -> anyhow::Result<Option<String>> {
         let event = self
             .event_replayer
             .get_cursor_commit_latest_event(self.event_cursor, commit.id());
@@ -172,7 +174,7 @@ impl<'a> BranchesProvider<'a> {
 
 impl<'a> CommitMetadataProvider for BranchesProvider<'a> {
     #[context("Providing branch metadata for commit {:?}", commit.id())]
-    fn describe_commit(&self, commit: &git2::Commit) -> anyhow::Result<Option<String>> {
+    fn describe_commit(&mut self, commit: &git2::Commit) -> anyhow::Result<Option<String>> {
         if !self.is_enabled {
             return Ok(None);
         }
@@ -231,7 +233,7 @@ $",
 
 impl CommitMetadataProvider for DifferentialRevisionProvider {
     #[context("Providing Differential revision metadata for commit {:?}", commit.id())]
-    fn describe_commit(&self, commit: &git2::Commit) -> anyhow::Result<Option<String>> {
+    fn describe_commit(&mut self, commit: &git2::Commit) -> anyhow::Result<Option<String>> {
         if !self.is_enabled {
             return Ok(None);
         }
@@ -308,7 +310,7 @@ impl RelativeTimeProvider {
 
 impl CommitMetadataProvider for RelativeTimeProvider {
     #[context("Providing relative time metadata for commit {:?}", commit.id())]
-    fn describe_commit(&self, commit: &git2::Commit) -> anyhow::Result<Option<String>> {
+    fn describe_commit(&mut self, commit: &git2::Commit) -> anyhow::Result<Option<String>> {
         if !self.is_enabled {
             return Ok(None);
         }

@@ -12,7 +12,9 @@ use crate::core::eventlog::{CommitVisibility, Event};
 use crate::core::eventlog::{EventLogDb, EventReplayer};
 use crate::core::graph::{make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid, Node};
 use crate::core::mergebase::MergeBaseDb;
-use crate::core::metadata::{render_commit_metadata, CommitMessageProvider, CommitOidProvider};
+use crate::core::metadata::{
+    render_commit_metadata, CommitMessageProvider, CommitMetadataProvider, CommitOidProvider,
+};
 use crate::util::{
     get_branch_oid_to_names, get_db_conn, get_head_oid, get_main_branch_oid, get_repo,
 };
@@ -153,9 +155,9 @@ pub fn hide(out: &mut impl Write, hashes: Vec<String>, recursive: bool) -> anyho
         let hidden_commit_text = {
             render_commit_metadata(
                 &commit,
-                &[
-                    &CommitOidProvider::new(true)?,
-                    &CommitMessageProvider::new()?,
+                &mut [
+                    &mut CommitOidProvider::new(true)? as &mut dyn CommitMetadataProvider,
+                    &mut CommitMessageProvider::new()?,
                 ],
             )?
         };
@@ -170,7 +172,7 @@ pub fn hide(out: &mut impl Write, hashes: Vec<String>, recursive: bool) -> anyho
         }
 
         let commit_target_oid =
-            render_commit_metadata(&commit, &[&CommitOidProvider::new(false)?])?;
+            render_commit_metadata(&commit, &mut [&mut CommitOidProvider::new(false)?])?;
         writeln!(
             out,
             "To unhide this commit, run: git unhide {}",
@@ -232,9 +234,9 @@ pub fn unhide(out: &mut impl Write, hashes: Vec<String>, recursive: bool) -> any
         let unhidden_commit_text = {
             render_commit_metadata(
                 &commit,
-                &[
-                    &CommitOidProvider::new(true)?,
-                    &CommitMessageProvider::new()?,
+                &mut [
+                    &mut CommitOidProvider::new(true)?,
+                    &mut CommitMessageProvider::new()?,
                 ],
             )?
         };
@@ -246,7 +248,7 @@ pub fn unhide(out: &mut impl Write, hashes: Vec<String>, recursive: bool) -> any
         }
 
         let commit_target_oid =
-            render_commit_metadata(&commit, &[&CommitOidProvider::new(false)?])?;
+            render_commit_metadata(&commit, &mut [&mut CommitOidProvider::new(false)?])?;
         writeln!(
             out,
             "To hide this commit, run: git hide {}",

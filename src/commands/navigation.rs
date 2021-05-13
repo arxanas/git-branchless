@@ -122,9 +122,9 @@ fn advance_towards_own_commit(
 
                     let commit_text = render_commit_metadata(
                         &repo.find_commit(*child_oid)?,
-                        &[
-                            &CommitOidProvider::new(true)?,
-                            &CommitMessageProvider::new()?,
+                        &mut [
+                            &mut CommitOidProvider::new(true)?,
+                            &mut CommitMessageProvider::new()?,
                         ],
                     )?;
                     writeln!(
