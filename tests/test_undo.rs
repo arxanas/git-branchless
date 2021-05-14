@@ -1,5 +1,3 @@
-use std::borrow::Borrow;
-use std::cell::RefCell;
 use std::convert::Infallible;
 
 use std::rc::Rc;
@@ -8,108 +6,14 @@ use branchless::commands::undo::testing::{select_past_event, undo_events};
 use branchless::core::eventlog::{EventCursor, EventLogDb, EventReplayer};
 use branchless::core::formatting::Glyphs;
 use branchless::core::mergebase::MergeBaseDb;
+use branchless::core::tui::testing::{
+    screen_to_string, CursiveTestingBackend, CursiveTestingEvent,
+};
 use branchless::testing::{with_git, Git};
 use branchless::util::{get_db_conn, GitExecutable};
 
-use cursive::backend::Backend;
 use cursive::event::Key;
-use cursive::theme::Color;
 use cursive::CursiveRunnable;
-
-type Screen = Vec<Vec<char>>;
-
-#[derive(Clone, Debug)]
-enum CursiveTestingEvent {
-    Event(cursive::event::Event),
-    TakeScreenshot(Rc<RefCell<Screen>>),
-}
-
-#[derive(Debug)]
-struct CursiveTestingBackend {
-    events: Vec<CursiveTestingEvent>,
-    event_index: usize,
-    just_emitted_event: bool,
-    screen: RefCell<Screen>,
-    screenshots: Vec<Screen>,
-}
-
-impl<'screenshot> CursiveTestingBackend {
-    fn init(events: Vec<CursiveTestingEvent>) -> Box<dyn Backend> {
-        Box::new(CursiveTestingBackend {
-            events,
-            event_index: 0,
-            just_emitted_event: false,
-            screen: RefCell::new(vec![vec![' '; 120]; 24]),
-            screenshots: Vec::new(),
-        })
-    }
-}
-
-impl Backend for CursiveTestingBackend {
-    fn poll_event(&mut self) -> Option<cursive::event::Event> {
-        // Cursive will poll all available events. We only want it to
-        // process events one at a time, so return `None` after each event.
-        if self.just_emitted_event {
-            self.just_emitted_event = false;
-            return None;
-        }
-
-        let event_index = self.event_index;
-        self.event_index += 1;
-        match self.events.get(event_index)?.to_owned() {
-            CursiveTestingEvent::TakeScreenshot(screen_target) => {
-                let mut screen_target = (*screen_target).borrow_mut();
-                *screen_target = self.screen.borrow().clone();
-                self.poll_event()
-            }
-            CursiveTestingEvent::Event(event) => {
-                self.just_emitted_event = true;
-                Some(event.to_owned())
-            }
-        }
-    }
-
-    fn refresh(&mut self) {}
-
-    fn has_colors(&self) -> bool {
-        false
-    }
-
-    fn screen_size(&self) -> cursive::Vec2 {
-        let screen = self.screen.borrow();
-        (screen[0].len(), screen.len()).into()
-    }
-
-    fn print_at(&self, pos: cursive::Vec2, text: &str) {
-        for (i, c) in text.char_indices() {
-            let mut screen = self.screen.borrow_mut();
-            let screen_width = screen[0].len();
-            if pos.x + i < screen_width {
-                screen[pos.y][pos.x + i] = c;
-            } else {
-                // Indicate that the screen was overfull.
-                screen[pos.y][screen_width - 1] = '$';
-            }
-        }
-    }
-
-    fn clear(&self, _color: Color) {
-        let mut screen = self.screen.borrow_mut();
-        for i in 0..screen.len() {
-            for j in 0..screen[i].len() {
-                screen[i][j] = ' ';
-            }
-        }
-    }
-
-    fn set_color(&self, colors: cursive::theme::ColorPair) -> cursive::theme::ColorPair {
-        colors
-    }
-
-    fn set_effect(&self, _effect: cursive::theme::Effect) {}
-
-    fn unset_effect(&self, _effect: cursive::theme::Effect) {}
-}
 
 fn run_select_past_event(
     repo: &git2::Repository,
@@ -169,21 +73,6 @@ fn run_undo_events(git: &Git, event_cursor: EventCursor) -> anyhow::Result<(Stri
     let err = console::strip_ansi_codes(&err).to_string();
     let err = trim_lines(err);
     Ok((out, err))
-}
-
-fn screen_to_string(screen: &Rc<RefCell<Screen>>) -> String {
-    let screen = Rc::borrow(screen);
-    let screen = RefCell::borrow(screen);
-    screen
-        .iter()
-        .map(|row| {
-            let line: String = row.iter().collect();
-            let line = console::strip_ansi_codes(&line);
-            line.trim().to_owned() + "\n"
-        })
-        .collect::<String>()
-        .trim()
-        .to_owned()
 }
 
 fn trim_lines(output: String) -> String {
