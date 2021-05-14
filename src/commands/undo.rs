@@ -10,10 +10,7 @@ use std::time::SystemTime;
 
 use anyhow::Context;
 use cursive::event::Key;
-use cursive::traits::Nameable;
-use cursive::views::{
-    Dialog, EditView, LinearLayout, NamedView, OnEventView, ScrollView, TextView,
-};
+use cursive::views::{Dialog, EditView, LinearLayout, OnEventView, ScrollView, TextView};
 use cursive::{Cursive, CursiveRunnable, CursiveRunner};
 
 use crate::commands::smartlog::render_graph;
@@ -25,7 +22,8 @@ use crate::core::metadata::{
     render_commit_metadata, BranchesProvider, CommitMessageProvider, CommitOidProvider,
     DifferentialRevisionProvider, HiddenExplanationProvider, RelativeTimeProvider,
 };
-use crate::core::tui::with_siv;
+use crate::core::tui::{with_siv, SingletonView};
+use crate::declare_views;
 use crate::util::{get_db_conn, get_repo, run_git, GitExecutable};
 
 fn render_cursor_smartlog(
@@ -311,10 +309,11 @@ fn select_past_event(
             siv.step();
         }
 
-        type SmartlogView = ScrollView<TextView>;
-        const SMARTLOG_VIEW_NAME: &str = "smartlog-view";
-        type InfoView = TextView;
-        const INFO_VIEW_NAME: &str = "info-view";
+        declare_views! {
+            SmartlogView => ScrollView<TextView>,
+            InfoView => TextView,
+        }
+
         let redraw = |siv: &mut Cursive,
                       event_replayer: &mut EventReplayer,
                       event_cursor: EventCursor|
@@ -326,8 +325,7 @@ fn select_past_event(
                 &event_replayer,
                 event_cursor,
             )?;
-            siv.find_name::<SmartlogView>(SMARTLOG_VIEW_NAME)
-                .unwrap()
+            SmartlogView::find(siv)
                 .get_inner_mut()
                 .set_content(smartlog);
 
@@ -361,9 +359,7 @@ fn select_past_event(
                         )
                 }
             };
-            siv.find_name::<InfoView>(INFO_VIEW_NAME)
-                .unwrap()
-                .set_content(info_view_contents);
+            InfoView::find(siv).set_content(info_view_contents);
             Ok(())
         };
 
@@ -377,9 +373,8 @@ fn select_past_event(
             }
 
             Ok(Message::Init) => {
-                let smartlog_view: NamedView<SmartlogView> =
-                    ScrollView::new(TextView::new("")).with_name(SMARTLOG_VIEW_NAME);
-                let info_view: NamedView<InfoView> = TextView::new("").with_name(INFO_VIEW_NAME);
+                let smartlog_view: SmartlogView = ScrollView::new(TextView::new("")).into();
+                let info_view: InfoView = TextView::new("").into();
                 siv.add_layer(
                     LinearLayout::vertical()
                         .child(smartlog_view)
