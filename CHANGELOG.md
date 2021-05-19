@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed: The working copy was sometimes left dirty after a `git undo`, even if it was clean beforehand.
 - Fixed: `git-branchless` now supports Git v2.31.
 - Fixed: `git restack` now doesn't infinite-loop on certain rebase conflict scenarios.
+- Fixed: `git smartlog` now doesn't crash for some cases of hidden merge commits.
 
 ## [0.3.1] - 2021-04-15
 
