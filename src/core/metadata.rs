@@ -130,17 +130,14 @@ impl<'a> CommitMetadataProvider for HiddenExplanationProvider<'a> {
                     self.event_cursor,
                     commit.id(),
                 );
-                match rewrite_target {
-                    Some(rewritten_oid) => Some(
-                        style(format!(
-                            "(rewritten as {})",
-                            &rewritten_oid.to_string()[..8]
-                        ))
-                        .dim()
-                        .to_string(),
-                    ),
-                    None => None,
-                }
+                rewrite_target.map(|rewritten_oid| {
+                    style(format!(
+                        "(rewritten as {})",
+                        &rewritten_oid.to_string()[..8]
+                    ))
+                    .dim()
+                    .to_string()
+                })
             }
 
             Event::HideEvent { .. } => Some(style("(manually hidden)").dim().to_string()),

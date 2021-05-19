@@ -793,10 +793,7 @@ impl EventReplayer {
                 new_ref: None,
                 message,
             } => {
-                let old_ref = match self.ref_locations.get(&ref_name) {
-                    Some(current_ref_location) => Some(current_ref_location.clone()),
-                    None => None,
-                };
+                let old_ref = self.ref_locations.get(&ref_name).cloned();
                 Event::RefUpdateEvent {
                     timestamp,
                     event_tx_id,
@@ -936,10 +933,8 @@ impl EventReplayer {
     }
 
     fn get_event_tx_id_before_cursor(&self, cursor: EventCursor) -> Option<EventTransactionId> {
-        match self.get_event_before_cursor(cursor) {
-            None => None,
-            Some((_event_id, event)) => Some(event.get_event_tx_id()),
-        }
+        self.get_event_before_cursor(cursor)
+            .map(|(_event_id, event)| event.get_event_tx_id())
     }
 
     /// The event cursor may not be between two events with different transaction
