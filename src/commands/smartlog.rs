@@ -7,10 +7,13 @@ use std::cmp::Ordering;
 use std::io::Write;
 use std::time::SystemTime;
 
+use cursive::theme::Effect;
+use cursive::utils::markup::StyledString;
 use fn_error_context::context;
 
 use crate::core::eventlog::{EventLogDb, EventReplayer};
-use crate::core::formatting::Glyphs;
+use crate::core::formatting::set_effect;
+use crate::core::formatting::{write_styled_string_ansi, Glyphs, StyledStringBuilder};
 use crate::core::graph::{make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid};
 use crate::core::mergebase::MergeBaseDb;
 use crate::core::metadata::{
@@ -84,7 +87,7 @@ fn get_child_output(
     head_oid: &HeadOid,
     current_oid: git2::Oid,
     last_child_line_char: Option<&str>,
-) -> anyhow::Result<Vec<String>> {
+) -> anyhow::Result<Vec<StyledString>> {
     let current_node = &graph[&current_oid];
     let is_head = {
         let HeadOid(head_oid) = head_oid;
@@ -103,14 +106,16 @@ fn get_child_output(
         (true, true, true) => glyphs.commit_main_head,
     };
 
-    let first_line = if is_head {
-        format!(
-            "{} {}",
-            console::style(cursor).bold().to_string(),
-            console::style(text).bold().to_string(),
-        )
-    } else {
-        format!("{} {}", cursor, text)
+    let first_line = {
+        let mut first_line = StyledString::new();
+        first_line.append_plain(cursor);
+        first_line.append_plain(" ");
+        first_line.append(text);
+        if is_head {
+            set_effect(first_line, Effect::Bold)
+        } else {
+            first_line
+        }
     };
 
     let mut lines = vec![first_line];
@@ -128,13 +133,19 @@ fn get_child_output(
         }
 
         if child_idx == children.len() - 1 {
-            match last_child_line_char {
-                Some(_) => lines.push(format!("{}{}", glyphs.line_with_offshoot, glyphs.slash)),
+            let line = match last_child_line_char {
+                Some(_) => {
+                    StyledString::plain(format!("{}{}", glyphs.line_with_offshoot, glyphs.slash))
+                }
 
-                None => lines.push(glyphs.line.to_string()),
-            }
+                None => StyledString::plain(glyphs.line.to_string()),
+            };
+            lines.push(line)
         } else {
-            lines.push(format!("{}{}", glyphs.line_with_offshoot, glyphs.slash))
+            lines.push(StyledString::plain(format!(
+                "{}{}",
+                glyphs.line_with_offshoot, glyphs.slash
+            )))
         }
 
         let child_output = get_child_output(
@@ -147,16 +158,21 @@ fn get_child_output(
             None,
         )?;
         for child_line in child_output {
-            if child_idx == children.len() - 1 {
+            let line = if child_idx == children.len() - 1 {
                 match last_child_line_char {
-                    Some(last_child_line_char) => {
-                        lines.push(format!("{} {}", last_child_line_char, child_line))
-                    }
-                    None => lines.push(child_line),
+                    Some(last_child_line_char) => StyledStringBuilder::new()
+                        .append_plain(format!("{} ", last_child_line_char))
+                        .append(child_line)
+                        .build(),
+                    None => child_line,
                 }
             } else {
-                lines.push(format!("{} {}", glyphs.line, child_line))
-            }
+                StyledStringBuilder::new()
+                    .append_plain(format!("{} ", glyphs.line))
+                    .append(child_line)
+                    .build()
+            };
+            lines.push(line)
         }
     }
     Ok(lines)
@@ -174,7 +190,7 @@ fn get_output(
     commit_metadata_providers: &mut [&mut dyn CommitMetadataProvider],
     head_oid: &HeadOid,
     root_oids: &[git2::Oid],
-) -> anyhow::Result<Vec<String>> {
+) -> anyhow::Result<Vec<StyledString>> {
     let mut lines = Vec::new();
 
     // Determine if the provided OID has the provided parent OID as a parent.
@@ -192,15 +208,16 @@ fn get_output(
     for (root_idx, root_oid) in root_oids.iter().enumerate() {
         let root_node = &graph[root_oid];
         if root_node.commit.parent_count() > 0 {
-            if root_idx > 0 && has_real_parent(*root_oid, root_oids[root_idx - 1]) {
-                lines.push(glyphs.line.to_owned())
+            let line = if root_idx > 0 && has_real_parent(*root_oid, root_oids[root_idx - 1]) {
+                StyledString::plain(glyphs.line.to_owned())
             } else {
-                lines.push(glyphs.vertical_ellipsis.to_owned())
-            }
+                StyledString::plain(glyphs.vertical_ellipsis.to_owned())
+            };
+            lines.push(line);
         } else if root_idx > 0 {
             // Pathological case: multiple topologically-unrelated roots.
             // Separate them with a newline.
-            lines.push(String::new())
+            lines.push(StyledString::new());
         }
 
         let last_child_line_char = {
@@ -233,14 +250,13 @@ fn get_output(
 
 /// Render the smartlog graph and write it to the provided stream.
 pub fn render_graph(
-    out: &mut impl Write,
     glyphs: &Glyphs,
     repo: &git2::Repository,
     merge_base_db: &MergeBaseDb,
     graph: &CommitGraph,
     head_oid: &HeadOid,
     commit_metadata_providers: &mut [&mut dyn CommitMetadataProvider],
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Vec<StyledString>> {
     let root_oids = split_commit_graph_by_roots(repo, merge_base_db, graph);
     let lines = get_output(
         glyphs,
@@ -249,11 +265,7 @@ pub fn render_graph(
         head_oid,
         &root_oids,
     )?;
-
-    for line in lines {
-        writeln!(out, "{}", line)?;
-    }
-    Ok(())
+    Ok(lines)
 }
 
 /// Display a nice graph of commits you've recently worked on.
@@ -278,8 +290,7 @@ pub fn smartlog(out: &mut impl Write) -> anyhow::Result<()> {
         true,
     )?;
 
-    render_graph(
-        out,
+    let lines = render_graph(
         &glyphs,
         &repo,
         &merge_base_db,
@@ -298,6 +309,10 @@ pub fn smartlog(out: &mut impl Write) -> anyhow::Result<()> {
             &mut CommitMessageProvider::new()?,
         ],
     )?;
+    for line in lines {
+        write_styled_string_ansi(out, &glyphs, line)?;
+        writeln!(out)?;
+    }
 
     Ok(())
 }

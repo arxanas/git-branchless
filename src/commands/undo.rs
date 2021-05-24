@@ -10,12 +10,13 @@ use std::time::SystemTime;
 
 use anyhow::Context;
 use cursive::event::Key;
+use cursive::utils::markup::StyledString;
 use cursive::views::{Dialog, EditView, LinearLayout, OnEventView, ScrollView, TextView};
 use cursive::{Cursive, CursiveRunnable, CursiveRunner};
 
 use crate::commands::smartlog::render_graph;
 use crate::core::eventlog::{Event, EventCursor, EventLogDb, EventReplayer, EventTransactionId};
-use crate::core::formatting::{Glyphs, Pluralize};
+use crate::core::formatting::{write_styled_string_ansi, Glyphs, Pluralize, StyledStringBuilder};
 use crate::core::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
 use crate::core::mergebase::MergeBaseDb;
 use crate::core::metadata::{
@@ -32,7 +33,7 @@ fn render_cursor_smartlog(
     merge_base_db: &MergeBaseDb,
     event_replayer: &EventReplayer,
     event_cursor: EventCursor,
-) -> anyhow::Result<String> {
+) -> anyhow::Result<Vec<StyledString>> {
     let head_oid = event_replayer.get_cursor_head_oid(event_cursor);
     let main_branch_oid = event_replayer.get_cursor_main_branch_oid(event_cursor, repo)?;
     let branch_oid_to_names = event_replayer.get_cursor_branch_oid_to_names(event_cursor, repo)?;
@@ -46,9 +47,7 @@ fn render_cursor_smartlog(
         &BranchOids(branch_oid_to_names.keys().copied().collect()),
         true,
     )?;
-    let mut out = Vec::new();
-    render_graph(
-        &mut out,
+    let result = render_graph(
         glyphs,
         repo,
         merge_base_db,
@@ -63,7 +62,6 @@ fn render_cursor_smartlog(
             &mut CommitMessageProvider::new()?,
         ],
     )?;
-    let result = String::from_utf8(out)?;
     Ok(result)
 }
 
@@ -74,8 +72,8 @@ fn render_ref_name(ref_name: &str) -> String {
     }
 }
 
-fn describe_event(repo: &git2::Repository, event: &Event) -> anyhow::Result<String> {
-    let render_commit = |oid: git2::Oid| -> anyhow::Result<String> {
+fn describe_event(repo: &git2::Repository, event: &Event) -> anyhow::Result<Vec<StyledString>> {
+    let render_commit = |oid: git2::Oid| -> anyhow::Result<StyledString> {
         match repo.find_commit(oid) {
             Ok(commit) => render_commit_metadata(
                 &commit,
@@ -84,10 +82,10 @@ fn describe_event(repo: &git2::Repository, event: &Event) -> anyhow::Result<Stri
                     &mut CommitMessageProvider::new()?,
                 ],
             ),
-            Err(_) => Ok(format!(
+            Err(_) => Ok(StyledString::plain(format!(
                 "<unavailable: {} (possibly GC'ed)>",
                 oid.to_string()
-            )),
+            ))),
         }
     };
     let result = match event {
@@ -96,7 +94,13 @@ fn describe_event(repo: &git2::Repository, event: &Event) -> anyhow::Result<Stri
             event_tx_id: _,
             commit_oid,
         } => {
-            format!("Commit {}\n", render_commit(*commit_oid)?)
+            vec![
+                StyledStringBuilder::new()
+                    .append_plain("Commit ")
+                    .append(render_commit(*commit_oid)?)
+                    .build(),
+                StyledString::new(),
+            ]
         }
 
         Event::HideEvent {
@@ -104,7 +108,13 @@ fn describe_event(repo: &git2::Repository, event: &Event) -> anyhow::Result<Stri
             event_tx_id: _,
             commit_oid,
         } => {
-            format!("Hide commit {}\n", render_commit(*commit_oid)?)
+            vec![
+                StyledStringBuilder::new()
+                    .append_plain("Hide commit ")
+                    .append(render_commit(*commit_oid)?)
+                    .build(),
+                StyledString::new(),
+            ]
         }
 
         Event::UnhideEvent {
@@ -112,7 +122,13 @@ fn describe_event(repo: &git2::Repository, event: &Event) -> anyhow::Result<Stri
             event_tx_id: _,
             commit_oid,
         } => {
-            format!("Unhide commit {}\n", render_commit(*commit_oid)?)
+            vec![
+                StyledStringBuilder::new()
+                    .append_plain("Unhide commit ")
+                    .append(render_commit(*commit_oid)?)
+                    .build(),
+                StyledString::new(),
+            ]
         }
 
         Event::RefUpdateEvent {
@@ -124,7 +140,13 @@ fn describe_event(repo: &git2::Repository, event: &Event) -> anyhow::Result<Stri
             message: _,
         } if ref_name == "HEAD" => {
             // Not sure if this can happen. When a repo is created, maybe?
-            format!("Check out to {}\n", render_commit(new_ref.parse()?)?)
+            vec![
+                StyledStringBuilder::new()
+                    .append_plain("Check out to ")
+                    .append(render_commit(new_ref.parse()?)?)
+                    .build(),
+                StyledString::new(),
+            ]
         }
 
         Event::RefUpdateEvent {
@@ -135,13 +157,16 @@ fn describe_event(repo: &git2::Repository, event: &Event) -> anyhow::Result<Stri
             new_ref: Some(new_ref),
             message: _,
         } if ref_name == "HEAD" => {
-            format!(
-                "\
-Check out from {}
-            to {}",
-                render_commit(old_ref.parse()?)?,
-                render_commit(new_ref.parse()?)?
-            )
+            vec![
+                StyledStringBuilder::new()
+                    .append_plain("Check out from ")
+                    .append(render_commit(old_ref.parse()?)?)
+                    .build(),
+                StyledStringBuilder::new()
+                    .append_plain("            to ")
+                    .append(render_commit(new_ref.parse()?)?)
+                    .build(),
+            ]
         }
 
         Event::RefUpdateEvent {
@@ -152,13 +177,17 @@ Check out from {}
             new_ref: None,
             message: _,
         } => {
-            format!(
-                "\
-Empty event for {}
-This event should not appear. This is a (benign) bug -- please report it.
-",
-                render_ref_name(ref_name)
-            )
+            vec![
+                StyledStringBuilder::new()
+                    .append_plain("Empty event for ")
+                    .append_plain(render_ref_name(ref_name))
+                    .build(),
+                StyledStringBuilder::new()
+                    .append_plain("This event should not appear. ")
+                    .append_plain("This is a (benign) bug -- ")
+                    .append_plain("please report it.")
+                    .build(),
+            ]
         }
 
         Event::RefUpdateEvent {
@@ -169,11 +198,15 @@ This event should not appear. This is a (benign) bug -- please report it.
             new_ref: Some(new_ref),
             message: _,
         } => {
-            format!(
-                "Create {} at {}\n",
-                render_ref_name(ref_name),
-                render_commit(new_ref.parse()?)?
-            )
+            vec![
+                StyledStringBuilder::new()
+                    .append_plain("Create ")
+                    .append_plain(render_ref_name(ref_name))
+                    .append_plain(" at ")
+                    .append(render_commit(new_ref.parse()?)?)
+                    .build(),
+                StyledString::new(),
+            ]
         }
 
         Event::RefUpdateEvent {
@@ -184,11 +217,15 @@ This event should not appear. This is a (benign) bug -- please report it.
             new_ref: None,
             message: _,
         } => {
-            format!(
-                "Delete {} at {}\n",
-                render_ref_name(ref_name),
-                render_commit(old_ref.parse()?)?
-            )
+            vec![
+                StyledStringBuilder::new()
+                    .append_plain("Delete ")
+                    .append_plain(render_ref_name(ref_name))
+                    .append_plain(" at ")
+                    .append(render_commit(old_ref.parse()?)?)
+                    .build(),
+                StyledString::new(),
+            ]
         }
 
         Event::RefUpdateEvent {
@@ -200,15 +237,20 @@ This event should not appear. This is a (benign) bug -- please report it.
             message: _,
         } => {
             let ref_name = render_ref_name(ref_name);
-            format!(
-                "\
-Move {} from {}
-     {}   to {}",
-                ref_name,
-                render_commit(old_ref.parse()?)?,
-                " ".repeat(ref_name.len()),
-                render_commit(new_ref.parse()?)?,
-            )
+            vec![
+                StyledStringBuilder::new()
+                    .append_plain("Move ")
+                    .append_plain(ref_name.clone())
+                    .append_plain(" from ")
+                    .append(render_commit(old_ref.parse()?)?)
+                    .build(),
+                StyledStringBuilder::new()
+                    .append_plain("     ")
+                    .append_plain(" ".repeat(ref_name.len()))
+                    .append_plain("   to ")
+                    .append(render_commit(new_ref.parse()?)?)
+                    .build(),
+            ]
         }
 
         Event::RewriteEvent {
@@ -217,35 +259,43 @@ Move {} from {}
             old_commit_oid,
             new_commit_oid,
         } => {
-            format!(
-                "\
-Rewrite commit {}
-            as {}",
-                render_commit(*old_commit_oid)?,
-                render_commit(*new_commit_oid)?
-            )
+            vec![
+                StyledStringBuilder::new()
+                    .append_plain("Rewrite commit ")
+                    .append(render_commit(*old_commit_oid)?)
+                    .build(),
+                StyledStringBuilder::new()
+                    .append_plain("           as ")
+                    .append(render_commit(*new_commit_oid)?)
+                    .build(),
+            ]
         }
     };
     Ok(result)
 }
 
 fn describe_events_numbered(
-    out: &mut impl Write,
     repo: &git2::Repository,
     events: &[Event],
-) -> Result<(), anyhow::Error> {
+) -> Result<Vec<StyledString>, anyhow::Error> {
+    let mut lines = Vec::new();
     for (i, event) in (1..).zip(events) {
         let num_header = format!("{}. ", i);
-        for (j, line) in (0..).zip(describe_event(&repo, &event)?.split('\n')) {
-            if j == 0 {
-                write!(out, "{}", num_header)?;
+        for (j, event_line) in (0..).zip(describe_event(&repo, &event)?) {
+            let prefix = if j == 0 {
+                num_header.clone()
             } else {
-                write!(out, "{}", " ".repeat(num_header.len()))?;
-            }
-            writeln!(out, "{}", line)?;
+                " ".repeat(num_header.len())
+            };
+            lines.push(
+                StyledStringBuilder::new()
+                    .append_plain(prefix)
+                    .append(event_line)
+                    .build(),
+            );
         }
     }
-    Ok(())
+    Ok(lines)
 }
 
 fn select_past_event(
@@ -327,16 +377,17 @@ fn select_past_event(
             )?;
             SmartlogView::find(siv)
                 .get_inner_mut()
-                .set_content(smartlog);
+                .set_content(StyledStringBuilder::from_lines(smartlog));
 
             let event = event_replayer.get_tx_events_before_cursor(event_cursor);
             let info_view_contents = match event {
-                None => "There are no previous available events.".to_owned(),
+                None => vec![StyledString::plain(
+                    "There are no previous available events.",
+                )],
                 Some((event_id, events)) => {
                     let event_description = {
-                        let mut out = Vec::new();
-                        describe_events_numbered(&mut out, repo, &events)?;
-                        String::from_utf8(out)?
+                        let lines = describe_events_numbered(repo, &events)?;
+                        StyledStringBuilder::from_lines(lines)
                     };
                     let relative_time_provider = RelativeTimeProvider::new(repo, now)?;
                     let relative_time = if relative_time_provider.is_enabled() {
@@ -350,16 +401,21 @@ fn select_past_event(
                     } else {
                         String::new()
                     };
-                    format!(
-                            "Repo after transaction {event_tx_id} (event {event_id}){relative_time}. Press 'h' for help, 'q' to quit.\n{event_description}\n",
-                            event_tx_id = events[0].get_event_tx_id().to_string(),
-                            event_id = event_id,
-                            relative_time = relative_time,
-                            event_description = event_description,
-                        )
+                    vec![
+                        StyledStringBuilder::new()
+                            .append_plain("Repo after transaction ")
+                            .append_plain(events[0].get_event_tx_id().to_string())
+                            .append_plain(" (event ")
+                            .append_plain(event_id.to_string())
+                            .append_plain(")")
+                            .append_plain(relative_time)
+                            .append_plain(". Press 'h' for help, 'q' to quit.")
+                            .build(),
+                        event_description,
+                    ]
                 }
             };
-            InfoView::find(siv).set_content(info_view_contents);
+            InfoView::find(siv).set_content(StyledStringBuilder::from_lines(info_view_contents));
             Ok(())
         };
 
@@ -551,6 +607,7 @@ fn undo_events(
     in_: &mut impl Read,
     out: &mut impl Write,
     err: &mut impl Write,
+    glyphs: &Glyphs,
     repo: &git2::Repository,
     git_executable: &GitExecutable,
     event_log_db: &mut EventLogDb,
@@ -595,7 +652,11 @@ fn undo_events(
     }
 
     writeln!(out, "Will apply these actions:")?;
-    describe_events_numbered(out, &repo, &inverse_events)?;
+    let events = describe_events_numbered(&repo, &inverse_events)?;
+    for line in events {
+        write_styled_string_ansi(out, &glyphs, line)?;
+        writeln!(out)?;
+    }
 
     let confirmed = {
         write!(out, "Confirm? [yN] ")?;
@@ -737,6 +798,7 @@ pub fn undo(
         in_,
         out,
         err,
+        &glyphs,
         &repo,
         &git_executable,
         &mut event_log_db,
@@ -771,6 +833,7 @@ pub mod testing {
         in_: &mut impl Read,
         out: &mut impl Write,
         err: &mut impl Write,
+        glyphs: &Glyphs,
         repo: &git2::Repository,
         git_executable: &GitExecutable,
         event_log_db: &mut EventLogDb,
@@ -781,7 +844,8 @@ pub mod testing {
             in_,
             out,
             err,
-            &repo,
+            glyphs,
+            repo,
             git_executable,
             event_log_db,
             event_replayer,

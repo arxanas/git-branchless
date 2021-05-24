@@ -37,6 +37,7 @@ fn run_select_past_event(
 }
 
 fn run_undo_events(git: &Git, event_cursor: EventCursor) -> anyhow::Result<(String, String)> {
+    let glyphs = Glyphs::text();
     let repo = git.get_repo()?;
     let conn = get_db_conn(&repo)?;
     let mut event_log_db: EventLogDb = EventLogDb::new(&conn)?;
@@ -56,6 +57,7 @@ fn run_undo_events(git: &Git, event_cursor: EventCursor) -> anyhow::Result<(Stri
         &mut in_,
         &mut out,
         &mut err,
+        &glyphs,
         &repo,
         &GitExecutable(git.git_executable.clone()),
         &mut event_log_db,
@@ -66,11 +68,9 @@ fn run_undo_events(git: &Git, event_cursor: EventCursor) -> anyhow::Result<(Stri
 
     let out = String::from_utf8(out)?;
     let out = git.preprocess_stdout(out)?;
-    let out = console::strip_ansi_codes(&out).to_string();
     let out = trim_lines(out);
     let err = String::from_utf8(err)?;
     let err = git.preprocess_stdout(err)?;
-    let err = console::strip_ansi_codes(&err).to_string();
     let err = trim_lines(err);
     Ok((out, err))
 }

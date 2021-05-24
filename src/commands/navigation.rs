@@ -7,7 +7,7 @@ use log::warn;
 
 use crate::commands::smartlog::smartlog;
 use crate::core::eventlog::{EventLogDb, EventReplayer};
-use crate::core::formatting::Glyphs;
+use crate::core::formatting::{write_styled_string_ansi, Glyphs};
 use crate::core::graph::{
     find_path_to_merge_base, make_graph, BranchOids, HeadOid, MainBranchOid, Node,
 };
@@ -127,11 +127,9 @@ fn advance_towards_own_commit(
                             &mut CommitMessageProvider::new()?,
                         ],
                     )?;
-                    writeln!(
-                        out,
-                        "  {} {}{}",
-                        glyphs.bullet_point, commit_text, descriptor
-                    )?;
+                    write!(out, "  {} ", glyphs.bullet_point,)?;
+                    write_styled_string_ansi(out, &glyphs, commit_text)?;
+                    writeln!(out, "{}", descriptor)?;
                 }
                 writeln!(out, "(Pass --oldest (-o) or --newest (-n) to select between ambiguous next commits)")?;
                 return Ok(None);

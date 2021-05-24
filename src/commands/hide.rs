@@ -10,6 +10,7 @@ use git2::ErrorCode;
 
 use crate::core::eventlog::{CommitVisibility, Event};
 use crate::core::eventlog::{EventLogDb, EventReplayer};
+use crate::core::formatting::{write_styled_string_ansi, Glyphs};
 use crate::core::graph::{make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid, Node};
 use crate::core::mergebase::MergeBaseDb;
 use crate::core::metadata::{
@@ -116,6 +117,7 @@ fn recurse_on_commits<'repo, F: Fn(&Node) -> bool>(
 /// Returns: exit code (0 denotes successful exit).
 pub fn hide(out: &mut impl Write, hashes: Vec<String>, recursive: bool) -> anyhow::Result<isize> {
     let now = SystemTime::now();
+    let glyphs = Glyphs::detect();
     let repo = get_repo()?;
     let conn = get_db_conn(&repo)?;
     let mut event_log_db = EventLogDb::new(&conn)?;
@@ -161,7 +163,9 @@ pub fn hide(out: &mut impl Write, hashes: Vec<String>, recursive: bool) -> anyho
                 ],
             )?
         };
-        writeln!(out, "Hid commit: {}", hidden_commit_text)?;
+        write!(out, "Hid commit: ")?;
+        write_styled_string_ansi(out, &glyphs, hidden_commit_text)?;
+        writeln!(out)?;
         if let Some(CommitVisibility::Hidden) =
             event_replayer.get_cursor_commit_visibility(cursor, commit.id())
         {
@@ -173,11 +177,9 @@ pub fn hide(out: &mut impl Write, hashes: Vec<String>, recursive: bool) -> anyho
 
         let commit_target_oid =
             render_commit_metadata(&commit, &mut [&mut CommitOidProvider::new(false)?])?;
-        writeln!(
-            out,
-            "To unhide this commit, run: git unhide {}",
-            commit_target_oid
-        )?;
+        write!(out, "To unhide this commit, run: git unhide ")?;
+        write_styled_string_ansi(out, &glyphs, commit_target_oid)?;
+        writeln!(out)?;
     }
 
     Ok(0)
@@ -195,6 +197,7 @@ pub fn hide(out: &mut impl Write, hashes: Vec<String>, recursive: bool) -> anyho
 /// Returns: exit code (0 denotes successful exit).
 pub fn unhide(out: &mut impl Write, hashes: Vec<String>, recursive: bool) -> anyhow::Result<isize> {
     let now = SystemTime::now();
+    let glyphs = Glyphs::detect();
     let repo = get_repo()?;
     let conn = get_db_conn(&repo)?;
     let mut event_log_db = EventLogDb::new(&conn)?;
@@ -240,7 +243,9 @@ pub fn unhide(out: &mut impl Write, hashes: Vec<String>, recursive: bool) -> any
                 ],
             )?
         };
-        writeln!(out, "Unhid commit: {}", unhidden_commit_text)?;
+        write!(out, "Unhid commit: ")?;
+        write_styled_string_ansi(out, &glyphs, unhidden_commit_text)?;
+        writeln!(out)?;
         if let Some(CommitVisibility::Visible) =
             event_replayer.get_cursor_commit_visibility(cursor, commit.id())
         {
@@ -249,11 +254,9 @@ pub fn unhide(out: &mut impl Write, hashes: Vec<String>, recursive: bool) -> any
 
         let commit_target_oid =
             render_commit_metadata(&commit, &mut [&mut CommitOidProvider::new(false)?])?;
-        writeln!(
-            out,
-            "To hide this commit, run: git hide {}",
-            commit_target_oid
-        )?;
+        write!(out, "To hide this commit, run: git hide ")?;
+        write_styled_string_ansi(out, &glyphs, commit_target_oid)?;
+        writeln!(out)?;
     }
 
     Ok(0)

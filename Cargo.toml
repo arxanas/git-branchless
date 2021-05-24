@@ -20,7 +20,7 @@ name = "branchless"
 anyhow = "1.0.38"
 assert_cmd = "1.0.3"
 console = "0.14.0"
-cursive = {version = "0.16.3", features = ["crossterm-backend"]}
+cursive = {git = "https://github.com/arxanas/cursive", branch = "git-branchless", features = ["crossterm-backend"]}
 fn-error-context = "0.1.1"
 git2 = {version = "0.13.17", default-features = false}
 lazy_static = "1.4.0"

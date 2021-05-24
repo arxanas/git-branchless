@@ -219,7 +219,6 @@ pub mod testing {
             .iter()
             .map(|row| {
                 let line: String = row.iter().collect();
-                let line = console::strip_ansi_codes(&line);
                 line.trim().to_owned() + "\n"
             })
             .collect::<String>()
