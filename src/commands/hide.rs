@@ -5,9 +5,6 @@ use std::collections::HashSet;
 use std::io::Write;
 use std::time::SystemTime;
 
-use fn_error_context::context;
-use git2::ErrorCode;
-
 use crate::core::eventlog::{CommitVisibility, Event};
 use crate::core::eventlog::{EventLogDb, EventReplayer};
 use crate::core::formatting::{write_styled_string_ansi, Glyphs};
@@ -16,36 +13,11 @@ use crate::core::mergebase::MergeBaseDb;
 use crate::core::metadata::{
     render_commit_metadata, CommitMessageProvider, CommitMetadataProvider, CommitOidProvider,
 };
+use crate::util::resolve_commits;
+use crate::util::ResolveCommitsResult;
 use crate::util::{
     get_branch_oid_to_names, get_db_conn, get_head_oid, get_main_branch_oid, get_repo,
 };
-
-enum ProcessHashesResult<'repo> {
-    Ok { commits: Vec<git2::Commit<'repo>> },
-    CommitNotFound { hash: String },
-}
-
-#[context("Processing hashes")]
-fn process_hashes(
-    repo: &git2::Repository,
-    hashes: Vec<String>,
-) -> anyhow::Result<ProcessHashesResult> {
-    let mut commits = Vec::new();
-    for hash in hashes {
-        let commit = match repo.revparse_single(&hash) {
-            Ok(commit) => match commit.into_commit() {
-                Ok(commit) => commit,
-                Err(_) => return Ok(ProcessHashesResult::CommitNotFound { hash }),
-            },
-            Err(err) if err.code() == ErrorCode::NotFound => {
-                return Ok(ProcessHashesResult::CommitNotFound { hash })
-            }
-            Err(err) => return Err(err.into()),
-        };
-        commits.push(commit)
-    }
-    Ok(ProcessHashesResult::Ok { commits })
-}
 
 fn recurse_on_commits_helper<
     'repo,
@@ -124,10 +96,10 @@ pub fn hide(out: &mut impl Write, hashes: Vec<String>, recursive: bool) -> anyho
     let event_replayer = EventReplayer::from_event_log_db(&event_log_db)?;
     let merge_base_db = MergeBaseDb::new(&conn)?;
 
-    let commits = process_hashes(&repo, hashes)?;
+    let commits = resolve_commits(&repo, hashes)?;
     let commits = match commits {
-        ProcessHashesResult::Ok { commits } => commits,
-        ProcessHashesResult::CommitNotFound { hash } => {
+        ResolveCommitsResult::Ok { commits } => commits,
+        ResolveCommitsResult::CommitNotFound { commit: hash } => {
             writeln!(out, "Commit not found: {}", hash)?;
             return Ok(1);
         }
@@ -204,10 +176,10 @@ pub fn unhide(out: &mut impl Write, hashes: Vec<String>, recursive: bool) -> any
     let event_replayer = EventReplayer::from_event_log_db(&event_log_db)?;
     let merge_base_db = MergeBaseDb::new(&conn)?;
 
-    let commits = process_hashes(&repo, hashes)?;
+    let commits = resolve_commits(&repo, hashes)?;
     let commits = match commits {
-        ProcessHashesResult::Ok { commits } => commits,
-        ProcessHashesResult::CommitNotFound { hash } => {
+        ResolveCommitsResult::Ok { commits } => commits,
+        ResolveCommitsResult::CommitNotFound { commit: hash } => {
             writeln!(out, "Commit not found: {}", hash)?;
             return Ok(1);
         }
