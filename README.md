@@ -12,6 +12,7 @@
 - [About](#about)
 - [Installation](#installation)
 - [Status](#status)
+- [Related work](#related-work)
 
 ## Demos
 ### Repair
