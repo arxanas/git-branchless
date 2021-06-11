@@ -120,3 +120,17 @@ Short version: run `cargo install git-branchless`, then run `git branchless init
 `git-branchless` follows [semantic versioning](https://semver.org/). New 0.x.y versions, and new major versions after reaching 1.0.0, may change the on-disk format in a backward-incompatible way.
 
 To be notified about new versions, select Watch » Custom » Releases in Github's notifications menu at the top of the page. Or use [GitPunch](https://gitpunch.com/) to deliver notifications by email.
+
+## Related work
+
+See the [Architecture page](https://github.com/arxanas/git-branchless/wiki/Architecture) for work related to the implementation of `git-branchless`.
+
+Alternative tools:
+
+* [`~krobelus/git-branchless`](https://git.sr.ht/~krobelus/git-branchless/): A tool with the same name, but the opposite workflow. Rather than making many commits without branches attached to them, you make all of your commits to one branch, and then automatically split them up later based on their topic.
+* [Stacked Git](https://stacked-git.github.io/): This tool lets you efficiently manage a stack of patches alongside your regular work. In comparison, `git-branchless` encourages that you commit all of your work directly and manipulate those commits directly.
+
+Complementary tools:
+
+* [`git-absorb`](https://github.com/tummychow/git-absorb)/[`git-autofixup`](https://github.com/torbiak/git-autofixup): These tools let you take your current changes, at the top of a stack, and intelligently "absorb" them into previous related changes in the same stack.
+* [`git-revise`](https://git-revise.readthedocs.io/en/latest/man.html): This tool lets you "efficiently update, split, and rearrange git commits" without touching the working copy.
