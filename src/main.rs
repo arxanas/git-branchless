@@ -79,6 +79,9 @@ enum Opts {
 
         #[structopt(short = "-d", long = "--dest")]
         dest: Option<String>,
+
+        #[structopt(long = "--on-disk")]
+        force_on_disk: bool,
     },
 
     /// Fix up commits abandoned by a previous rewrite operation.
@@ -175,9 +178,17 @@ fn main() -> anyhow::Result<()> {
             )?
         }
 
-        Opts::Move { source, dest } => {
-            branchless::commands::r#move::r#move(&mut stdout, &mut stderr, source, dest)?
-        }
+        Opts::Move {
+            source,
+            dest,
+            force_on_disk,
+        } => branchless::commands::r#move::r#move(
+            &mut stdout,
+            &mut stderr,
+            source,
+            dest,
+            force_on_disk,
+        )?,
 
         Opts::Restack => {
             branchless::commands::restack::restack(&mut stdout, &mut stderr, &git_executable)?
