@@ -73,13 +73,22 @@ enum Opts {
     },
 
     /// Move a commit or sub-tree from one location to another.
+    ///
+    /// The `post-commit` hook, if any, will not be called if `git move`
+    /// succeeds with an in-memory rebase. To force a `post-commit` hook to be
+    /// called, pass `--on-disk`.
     Move {
+        /// The source commit to move. This commit, and all of its descendants,
+        /// will be moved.
         #[structopt(short = "-s", long = "--source")]
         source: Option<String>,
 
+        /// The destination commit to move all source commits onto.
         #[structopt(short = "-d", long = "--dest")]
         dest: Option<String>,
 
+        /// Skip attempting to use an in-memory rebase, and try an
+        /// on-disk rebase directly.
         #[structopt(long = "--on-disk")]
         force_on_disk: bool,
     },
@@ -185,6 +194,7 @@ fn main() -> anyhow::Result<()> {
         } => branchless::commands::r#move::r#move(
             &mut stdout,
             &mut stderr,
+            &git_executable,
             source,
             dest,
             force_on_disk,

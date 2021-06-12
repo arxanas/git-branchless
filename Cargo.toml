@@ -31,6 +31,9 @@ simple_logger = "1.11.0"
 structopt = "0.3.21"
 tempfile = "3.2.0"
 
+[patch.crates-io]
+git2 = {git = "https://github.com/arxanas/git2-rs", branch = "apply-to-tree", default-features = false}
+
 [dev-dependencies]
 clippy = "0.0.302"
 insta = "1.7.0"

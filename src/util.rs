@@ -153,7 +153,7 @@ pub struct GitExecutable<'path>(pub &'path Path);
 ///
 /// Returns: The exit code of Git (non-zero signifies error).
 #[context("Running Git ({:?}) with args: {:?}", git_executable, args)]
-#[must_use]
+#[must_use = "The return code for `run_git` must be checked"]
 pub fn run_git<S: AsRef<str> + std::fmt::Debug>(
     out: &mut impl Write,
     err: &mut impl Write,
