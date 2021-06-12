@@ -16,8 +16,10 @@ use fn_error_context::context;
 use crate::core::eventlog::EventTransactionId;
 use crate::core::eventlog::BRANCHLESS_TRANSACTION_ID_ENV_VAR;
 use crate::core::eventlog::{EventLogDb, EventReplayer};
+use crate::core::graph::find_path_to_merge_base;
 use crate::core::graph::{make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid};
 use crate::core::mergebase::MergeBaseDb;
+use crate::util::get_main_branch_oid;
 use crate::util::{
     get_branch_oid_to_names, get_db_conn, get_head_oid, get_repo, resolve_commits, run_git,
     wrap_git_error, GitExecutable, ResolveCommitsResult,
@@ -34,6 +36,7 @@ fn make_label_name(repo: &git2::Repository, mut preferred_name: String) -> anyho
     }
 }
 
+#[derive(Debug)]
 enum RebaseCommand {
     Label { label_name: String },
     Reset { label_name: String },
@@ -66,7 +69,10 @@ fn plan_rebase_current(
     let current_node = match graph.get(&current_oid) {
         Some(current_node) => current_node,
         None => {
-            anyhow::bail!(format!("Commit {} could not be found. `git move` cannot currently move between commits which are not shown in the smartlog.", current_oid.to_string()))
+            anyhow::bail!(format!(
+                "BUG: commit {} could not be found in the commit graph",
+                current_oid.to_string()
+            ))
         }
     };
 
@@ -102,15 +108,47 @@ fn plan_rebase_current(
 
 fn make_rebase_plan(
     repo: &git2::Repository,
+    merge_base_db: &MergeBaseDb,
     graph: &CommitGraph,
-    source: git2::Oid,
+    main_branch_oid: &MainBranchOid,
+    source_oid: git2::Oid,
 ) -> anyhow::Result<Vec<RebaseCommand>> {
     let label_name = make_label_name(&repo, "onto".to_string())?;
-    let result = vec![RebaseCommand::Label {
+    let (source_oid, mut rebase_plan) = {
+        let MainBranchOid(main_branch_oid) = main_branch_oid;
+        let merge_base_oid =
+            merge_base_db.get_merge_base_oid(&repo, *main_branch_oid, source_oid)?;
+        if merge_base_oid == Some(source_oid) {
+            // In this case, the `source` OID is an ancestor of the main branch.
+            // This means that the user is trying to rewrite public history,
+            // which is typically not recommended, but let's try to do it
+            // anyways.
+            let path =
+                find_path_to_merge_base(&repo, &merge_base_db, *main_branch_oid, source_oid)?
+                    .unwrap_or_default();
+            let rebase_plan: Vec<RebaseCommand> = path
+                .into_iter()
+                // Skip the first element, which is the main branch OID, since
+                // it'll be picked as part of the recursive rebase plan below.
+                .skip(1)
+                // Reverse the path, since it goes from main branch OID to
+                // source OID, but we want a path from source OID to main branch
+                // OID.
+                .rev()
+                .map(|main_branch_commit| RebaseCommand::Pick {
+                    commit_oid: main_branch_commit.id(),
+                })
+                .collect();
+            (*main_branch_oid, rebase_plan)
+        } else {
+            (source_oid, Vec::new())
+        }
+    };
+    rebase_plan.push(RebaseCommand::Label {
         label_name: label_name.clone(),
-    }];
-    let result = plan_rebase_current(repo, graph, source, &label_name, result)?;
-    Ok(result)
+    });
+    let rebase_plan = plan_rebase_current(repo, graph, source_oid, &label_name, rebase_plan)?;
+    Ok(rebase_plan)
 }
 
 enum RebaseInMemoryResult {
@@ -348,7 +386,9 @@ fn move_subtree(
     err: &mut impl Write,
     git_executable: &GitExecutable,
     repo: &git2::Repository,
+    merge_base_db: &MergeBaseDb,
     graph: &CommitGraph,
+    main_branch_oid: &MainBranchOid,
     event_tx_id: EventTransactionId,
     source: git2::Oid,
     dest: git2::Oid,
@@ -356,7 +396,7 @@ fn move_subtree(
 ) -> anyhow::Result<isize> {
     // Make the rebase plan here so that it doesn't potentially fail after the
     // rebase has been initialized.
-    let rebase_plan = make_rebase_plan(&repo, &graph, source)?;
+    let rebase_plan = make_rebase_plan(repo, merge_base_db, graph, main_branch_oid, source)?;
 
     if !force_on_disk {
         writeln!(out, "Attempting rebase in-memory...")?;
@@ -434,6 +474,7 @@ pub fn r#move(
         }
     };
 
+    let main_branch_oid = get_main_branch_oid(&repo)?;
     let branch_oid_to_names = get_branch_oid_to_names(&repo)?;
     let conn = get_db_conn(&repo)?;
     let merge_base_db = MergeBaseDb::new(&conn)?;
@@ -445,12 +486,8 @@ pub fn r#move(
         &merge_base_db,
         &event_replayer,
         event_cursor,
-        &HeadOid(head_oid),
-        // We need to make sure that all the descendants of the source commit
-        // are available in the commit graph. To do so, we pretend that it's the
-        // main branch OID. This ensures that there's a path from every node in
-        // the commit graph to the source node.
-        &MainBranchOid(source_oid),
+        &HeadOid(Some(source_oid)),
+        &MainBranchOid(main_branch_oid),
         &BranchOids(branch_oid_to_names.keys().copied().collect()),
         true,
     )?;
@@ -462,7 +499,9 @@ pub fn r#move(
         err,
         git_executable,
         &repo,
+        &merge_base_db,
         &graph,
+        &MainBranchOid(main_branch_oid),
         event_tx_id,
         source_oid,
         dest_oid,
