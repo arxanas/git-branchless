@@ -1,5 +1,5 @@
 use branchless::{
-    testing::{with_git, Git},
+    testing::{with_git, Git, GitRunOptions},
     util::GitVersion,
 };
 
@@ -82,8 +82,8 @@ fn test_move_stick_in_memory() -> anyhow::Result<()> {
             ])?;
             insta::assert_snapshot!(stdout, @r###"
             Attempting rebase in-memory...
-            Rebase in-memory (1/2): create test3.txt
-            Rebase in-memory (2/2): create test4.txt
+            Rebase in-memory (1/2): 70deb1e2 create test3.txt
+            Rebase in-memory (2/2): 355e173b create test4.txt
             branchless: processing 2 rewritten commits
             In-memory rebase succeeded.
             "###);
@@ -282,3 +282,66 @@ fn test_move_with_source_not_in_smartlog_in_memory() -> anyhow::Result<()> {
         Ok(())
     })
 }
+
+#[test]
+fn test_move_merge_conflict() -> anyhow::Result<()> {
+    with_git(|git| {
+        if has_git_v2_24_bug(&git)? {
+            return Ok(());
+        }
+
+        git.init_repo()?;
+        let base_oid = git.commit_file("test1", 1)?;
+        git.detach_head()?;
+        let other_oid = git.commit_file_with_contents("conflict", 2, "conflict 1\n")?;
+        git.run(&["checkout", &base_oid.to_string()])?;
+        git.commit_file_with_contents("conflict", 2, "conflict 2\n")?;
+
+        {
+            let (stdout, _stderr) = git.run_with_options(
+                &["move", "-s", &other_oid.to_string()],
+                &GitRunOptions {
+                    expected_exit_code: 1,
+                    ..Default::default()
+                },
+            )?;
+            insta::assert_snapshot!(stdout, @r###"
+            Attempting rebase in-memory...
+            Rebase in-memory (1/1): e85d25c7 create conflict.txt
+            Merge conflict, falling back to rebase on-disk. The conflicting commit was: e85d25c7 create conflict.txt
+            branchless: <git-executable> rebase --continue
+            CONFLICT (add/add): Merge conflict in conflict.txt
+            Auto-merging conflict.txt
+            "###);
+        }
+
+        git.resolve_file("conflict", "resolved")?;
+        {
+            let (stdout, _stderr) = git.run(&["rebase", "--continue"])?;
+            insta::assert_snapshot!(stdout, @r###"
+            [detached HEAD 244e2bd] create conflict.txt
+             1 file changed, 1 insertion(+), 1 deletion(-)
+            "###);
+        }
+
+        {
+            let (stdout, _stderr) = git.run(&["smartlog"])?;
+            insta::assert_snapshot!(stdout, @r###"
+            :
+            O 62fc20d2 (master) create test1.txt
+            |
+            o 202143f2 create conflict.txt
+            |
+            @ 244e2bd1 create conflict.txt
+            "###);
+        }
+
+        Ok(())
+    })
+}
+
+// TODO: add -b/--base option
+// TODO: implement restack in terms of move
+// TODO: if on a rewritten commit before rebase, check out the new commit afterwards.
+// TODO: move branches after in-memory rebase. Make sure to call reference-transaction hook.
+// TODO: don't re-apply already-applied commits

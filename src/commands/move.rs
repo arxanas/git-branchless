@@ -11,14 +11,20 @@ use std::process::Stdio;
 use std::time::SystemTime;
 
 use anyhow::Context;
+use cursive::utils::markup::StyledString;
 use fn_error_context::context;
 
 use crate::core::eventlog::EventTransactionId;
 use crate::core::eventlog::BRANCHLESS_TRANSACTION_ID_ENV_VAR;
 use crate::core::eventlog::{EventLogDb, EventReplayer};
+use crate::core::formatting::write_styled_string_ansi;
+use crate::core::formatting::Glyphs;
 use crate::core::graph::find_path_to_merge_base;
 use crate::core::graph::{make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid};
 use crate::core::mergebase::MergeBaseDb;
+use crate::core::metadata::render_commit_metadata;
+use crate::core::metadata::CommitMessageProvider;
+use crate::core::metadata::CommitOidProvider;
 use crate::util::get_main_branch_oid;
 use crate::util::{
     get_branch_oid_to_names, get_db_conn, get_head_oid, get_repo, resolve_commits, run_git,
@@ -165,6 +171,7 @@ enum RebaseInMemoryResult {
 
 fn rebase_in_memory(
     out: &mut impl Write,
+    glyphs: &Glyphs,
     repo: &git2::Repository,
     rebase_plan: &[RebaseCommand],
     dest: git2::Oid,
@@ -201,61 +208,21 @@ fn rebase_in_memory(
                     .find_commit(*commit_oid)
                     .with_context(|| format!("Finding commit to apply by OID: {:?}", commit_oid))?;
                 i += 1;
-                writeln!(
+                write!(out, "Rebase in-memory ({}/{}): ", i, num_picks,)?;
+                write_styled_string_ansi(
                     out,
-                    "Rebase in-memory ({}/{}): {}",
-                    i,
-                    num_picks,
-                    commit_to_apply
-                        .summary()
-                        .unwrap_or("<no summary available>")
+                    glyphs,
+                    friendly_describe_commit(repo, *commit_oid)?,
                 )?;
-
-                let commit_to_apply_tree = commit_to_apply.tree().with_context(|| {
-                    format!(
-                        "Getting tree for commit to apply: {}",
-                        commit_oid.to_string()
-                    )
-                })?;
-                let diff = match commit_to_apply.parent_count() {
-                    0 => repo
-                        .diff_tree_to_tree(None, Some(&commit_to_apply_tree), None)
-                        .with_context(|| "Diffing commit with no parents")?,
-                    1 => {
-                        let parent_commit = commit_to_apply.parent(0).with_context(|| {
-                            format!(
-                                "Getting parent commit for commit: {}",
-                                current_oid.to_string()
-                            )
-                        })?;
-                        let parent_commit_tree = parent_commit.tree().with_context(|| {
-                            format!(
-                                "Getting tree for parent commit: {}",
-                                parent_commit.id().to_string()
-                            )
-                        })?;
-                        repo.diff_tree_to_tree(
-                            Some(&parent_commit_tree),
-                            Some(&commit_to_apply_tree),
-                            None,
-                        )
-                        .with_context(|| {
-                            format!("Diffing commit against parent: {}", current_oid.to_string(),)
-                        })?
-                    }
-                    _ => {
-                        return Ok(RebaseInMemoryResult::CannotRebaseMergeCommit {
-                            commit_oid: *commit_oid,
-                        });
-                    }
+                writeln!(out)?;
+                if commit_to_apply.parent_count() > 1 {
+                    return Ok(RebaseInMemoryResult::CannotRebaseMergeCommit {
+                        commit_oid: *commit_oid,
+                    });
                 };
-                let current_commit_tree = current_commit.tree().with_context(|| {
-                    format!(
-                        "Getting tree for current commit: {}",
-                        current_oid.to_string()
-                    )
-                })?;
-                let mut rebased_index = repo.apply_to_tree(&current_commit_tree, &diff, None)?;
+
+                let mut rebased_index =
+                    repo.cherrypick_commit(&commit_to_apply, &current_commit, 0, None)?;
                 if rebased_index.has_conflicts() {
                     return Ok(RebaseInMemoryResult::MergeConflict {
                         commit_oid: *commit_oid,
@@ -285,7 +252,6 @@ fn rebase_in_memory(
                         &[&current_commit],
                     )
                     .with_context(|| "Applying rebased commit")?;
-
                 rewritten_oids.push((*commit_oid, rebased_commit_oid));
                 current_oid = rebased_commit_oid;
             }
@@ -380,10 +346,29 @@ fn rebase_on_disk(
     Ok(result)
 }
 
+#[context("Describing commit {}", commit_oid.to_string())]
+fn friendly_describe_commit(
+    repo: &git2::Repository,
+    commit_oid: git2::Oid,
+) -> anyhow::Result<StyledString> {
+    let commit = repo
+        .find_commit(commit_oid)
+        .with_context(|| "Looking up commit to describe")?;
+    let description = render_commit_metadata(
+        &commit,
+        &mut [
+            &mut CommitOidProvider::new(true)?,
+            &mut CommitMessageProvider::new()?,
+        ],
+    )?;
+    Ok(description)
+}
+
 #[context("Moving subtree from {} to {}", source.to_string(), dest.to_string())]
 fn move_subtree(
     out: &mut impl Write,
     err: &mut impl Write,
+    glyphs: &Glyphs,
     git_executable: &GitExecutable,
     repo: &git2::Repository,
     merge_base_db: &MergeBaseDb,
@@ -400,25 +385,28 @@ fn move_subtree(
 
     if !force_on_disk {
         writeln!(out, "Attempting rebase in-memory...")?;
-        match rebase_in_memory(out, &repo, &rebase_plan, dest)? {
+        match rebase_in_memory(out, glyphs, &repo, &rebase_plan, dest)? {
             RebaseInMemoryResult::Succeeded { rewritten_oids } => {
                 post_rebase_in_memory(&repo, &rewritten_oids, event_tx_id)?;
                 writeln!(out, "In-memory rebase succeeded.")?;
                 return Ok(0);
             }
             RebaseInMemoryResult::CannotRebaseMergeCommit { commit_oid } => {
-                writeln!(
+                write!(
                     out,
-                    "Merge commits cannot be rebased in-memory. The commit was: {}",
-                    commit_oid.to_string()
+                    "Merge commits currently can't be rebased with `git move`. The merge commit was: ",
                 )?;
+                write_styled_string_ansi(out, glyphs, friendly_describe_commit(repo, commit_oid)?)?;
+                writeln!(out)?;
+                return Ok(1);
             }
             RebaseInMemoryResult::MergeConflict { commit_oid } => {
-                writeln!(
+                write!(
                     out,
-                    "Merge conflict, falling back to rebase on-disk. The conflicting commit was: {}",
-                    commit_oid.to_string()
+                    "Merge conflict, falling back to rebase on-disk. The conflicting commit was: "
                 )?;
+                write_styled_string_ansi(out, glyphs, friendly_describe_commit(repo, commit_oid)?)?;
+                writeln!(out)?;
             }
         }
     }
@@ -492,11 +480,13 @@ pub fn r#move(
         true,
     )?;
 
+    let glyphs = Glyphs::detect();
     let now = SystemTime::now();
     let event_tx_id = event_log_db.make_transaction_id(now, "move")?;
     let result = move_subtree(
         out,
         err,
+        &glyphs,
         git_executable,
         &repo,
         &merge_base_db,

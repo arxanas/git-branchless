@@ -489,7 +489,7 @@ dependencies = [
 [[package]]
 name = "git2"
 version = "0.13.20"
-source = "git+https://github.com/arxanas/git2-rs?branch=apply-to-tree#159413b2568040f08a06148b3a9fcfd5e5d139d9"
+source = "git+https://github.com/arxanas/git2-rs?branch=git-branchless#1d9fa7a4556e744237fa57fbb63a85aded9dbb1c"
 dependencies = [
  "bitflags",
  "libc",
@@ -605,7 +605,7 @@ checksum = "12b8adadd720df158f4d70dfe7ccc6adb0472d7c55ca83445f6a5ab3e36f8fb6"
 [[package]]
 name = "libgit2-sys"
 version = "0.12.21+1.1.0"
-source = "git+https://github.com/arxanas/git2-rs?branch=apply-to-tree#159413b2568040f08a06148b3a9fcfd5e5d139d9"
+source = "git+https://github.com/arxanas/git2-rs?branch=git-branchless#1d9fa7a4556e744237fa57fbb63a85aded9dbb1c"
 dependencies = [
  "cc",
  "libc",
@@ -679,9 +679,9 @@ checksum = "b16bd47d9e329435e309c58469fe0791c2d0d1ba96ec0954152a5ae2b04387dc"
 
 [[package]]
 name = "mio"
-version = "0.7.12"
+version = "0.7.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84f7475b9d5f08bf64b8d9ef6ca9776a138a8f49681a26c0cfb19639376502f9"
+checksum = "cf80d3e903b34e0bd7282b218398aec54e082c840d9baf8339e0080a0c542956"
 dependencies = [
  "libc",
  "log",
@@ -784,9 +784,9 @@ dependencies = [
 
 [[package]]
 name = "once_cell"
-version = "1.7.2"
+version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af8b08b04175473088b46763e51ee54da5f9a164bc162f615b91bc179dbf15a3"
+checksum = "692fcb63b64b1758029e0a96ee63e049ce8c5948587f2f7208df04625e5f6b56"
 
 [[package]]
 name = "owning_ref"
