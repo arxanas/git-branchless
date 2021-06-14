@@ -13,6 +13,7 @@ use std::time::SystemTime;
 use anyhow::Context;
 use cursive::utils::markup::StyledString;
 use fn_error_context::context;
+use indicatif::{ProgressBar, ProgressStyle};
 
 use crate::core::eventlog::EventTransactionId;
 use crate::core::eventlog::BRANCHLESS_TRANSACTION_ID_ENV_VAR;
@@ -170,7 +171,6 @@ enum RebaseInMemoryResult {
 }
 
 fn rebase_in_memory(
-    out: &mut impl Write,
     glyphs: &Glyphs,
     repo: &git2::Repository,
     rebase_plan: &[RebaseCommand],
@@ -208,27 +208,46 @@ fn rebase_in_memory(
                     .find_commit(*commit_oid)
                     .with_context(|| format!("Finding commit to apply by OID: {:?}", commit_oid))?;
                 i += 1;
-                write!(out, "Rebase in-memory ({}/{}): ", i, num_picks,)?;
-                write_styled_string_ansi(
-                    out,
-                    glyphs,
-                    friendly_describe_commit(repo, *commit_oid)?,
-                )?;
-                writeln!(out)?;
+
+                let commit_description = {
+                    let mut description = Vec::new();
+                    write_styled_string_ansi(
+                        &mut description,
+                        glyphs,
+                        friendly_describe_commit(repo, *commit_oid)?,
+                    )?;
+                    String::from_utf8(description)?
+                };
+                let template = format!("[{}/{}] {{spinner}} {{wide_msg}}", i, num_picks);
+                let progress = ProgressBar::new_spinner();
+                progress.set_style(ProgressStyle::default_spinner().template(&template.trim()));
+                progress.set_message("Starting");
+                progress.enable_steady_tick(100);
+
                 if commit_to_apply.parent_count() > 1 {
                     return Ok(RebaseInMemoryResult::CannotRebaseMergeCommit {
                         commit_oid: *commit_oid,
                     });
                 };
 
+                progress.set_message(format!("Applying patch for commit: {}", commit_description));
                 let mut rebased_index =
                     repo.cherrypick_commit(&commit_to_apply, &current_commit, 0, None)?;
+
+                progress.set_message(format!(
+                    "Checking for merge conflicts: {}",
+                    commit_description
+                ));
                 if rebased_index.has_conflicts() {
                     return Ok(RebaseInMemoryResult::MergeConflict {
                         commit_oid: *commit_oid,
                     });
                 }
 
+                progress.set_message(format!(
+                    "Writing commit data to disk: {}",
+                    commit_description
+                ));
                 let commit_tree_oid = rebased_index
                     .write_tree_to(repo)
                     .with_context(|| "Converting index to tree")?;
@@ -242,6 +261,8 @@ fn rebase_in_memory(
                         commit_oid
                     ),
                 };
+
+                progress.set_message(format!("Committing to repository: {}", commit_description));
                 let rebased_commit_oid = repo
                     .commit(
                         None,
@@ -254,6 +275,17 @@ fn rebase_in_memory(
                     .with_context(|| "Applying rebased commit")?;
                 rewritten_oids.push((*commit_oid, rebased_commit_oid));
                 current_oid = rebased_commit_oid;
+
+                let commit_description = {
+                    let mut description = Vec::new();
+                    write_styled_string_ansi(
+                        &mut description,
+                        glyphs,
+                        friendly_describe_commit(repo, rebased_commit_oid)?,
+                    )?;
+                    String::from_utf8(description)?
+                };
+                progress.finish_with_message(format!("Committed as: {}", commit_description));
             }
         }
     }
@@ -308,6 +340,10 @@ fn rebase_on_disk(
     dest: git2::Oid,
     event_tx_id: EventTransactionId,
 ) -> anyhow::Result<isize> {
+    let progress = ProgressBar::new_spinner();
+    progress.enable_steady_tick(100);
+    progress.set_message("Initializing rebase");
+
     // Attempt to initialize a new rebase. However, `git2` doesn't support the
     // commands we need (`label` and `reset`), so we won't be using it for the
     // actual rebase process.
@@ -335,6 +371,7 @@ fn rebase_on_disk(
     std::fs::write(end_file.as_path(), format!("{}\n", rebase_plan.len()))
         .with_context(|| format!("Writing `end` to: {:?}", end_file.as_path()))?;
 
+    progress.set_message("Calling Git for on-disk rebase");
     let result = run_git(
         out,
         err,
@@ -385,7 +422,7 @@ fn move_subtree(
 
     if !force_on_disk {
         writeln!(out, "Attempting rebase in-memory...")?;
-        match rebase_in_memory(out, glyphs, &repo, &rebase_plan, dest)? {
+        match rebase_in_memory(glyphs, &repo, &rebase_plan, dest)? {
             RebaseInMemoryResult::Succeeded { rewritten_oids } => {
                 post_rebase_in_memory(&repo, &rewritten_oids, event_tx_id)?;
                 writeln!(out, "In-memory rebase succeeded.")?;

@@ -23,6 +23,7 @@ console = "0.14.0"
 cursive = {version = "0.17.0-alpha.0", features = ["crossterm-backend"]}
 fn-error-context = "0.1.1"
 git2 = {version = "0.13.17", default-features = false}
+indicatif = "0.16.2"
 lazy_static = "1.4.0"
 log = "0.4.14"
 regex = "1.4.4"

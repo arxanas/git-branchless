@@ -82,8 +82,6 @@ fn test_move_stick_in_memory() -> anyhow::Result<()> {
             ])?;
             insta::assert_snapshot!(stdout, @r###"
             Attempting rebase in-memory...
-            Rebase in-memory (1/2): 70deb1e2 create test3.txt
-            Rebase in-memory (2/2): 355e173b create test4.txt
             branchless: processing 2 rewritten commits
             In-memory rebase succeeded.
             "###);
@@ -307,7 +305,6 @@ fn test_move_merge_conflict() -> anyhow::Result<()> {
             )?;
             insta::assert_snapshot!(stdout, @r###"
             Attempting rebase in-memory...
-            Rebase in-memory (1/1): e85d25c7 create conflict.txt
             Merge conflict, falling back to rebase on-disk. The conflicting commit was: e85d25c7 create conflict.txt
             branchless: <git-executable> rebase --continue
             CONFLICT (add/add): Merge conflict in conflict.txt
