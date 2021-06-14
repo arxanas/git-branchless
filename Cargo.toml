@@ -20,7 +20,7 @@ name = "branchless"
 anyhow = "1.0.38"
 assert_cmd = "1.0.3"
 console = "0.14.0"
-cursive = {version = "0.16.3", features = ["crossterm-backend"]}
+cursive = {version = "0.17.0-alpha.0", features = ["crossterm-backend"]}
 fn-error-context = "0.1.1"
 git2 = {version = "0.13.17", default-features = false}
 lazy_static = "1.4.0"
@@ -30,11 +30,6 @@ rusqlite = "0.24.2"
 simple_logger = "1.11.0"
 structopt = "0.3.21"
 tempfile = "3.2.0"
-
-[patch.crates-io]
-cursive = {git = "https://github.com/arxanas/cursive", branch = "git-branchless", features = ["crossterm-backend"]}
-cursive_core = {version = "0.2.2", git = "https://github.com/arxanas/cursive", branch = "git-branchless", features = ["crossterm-backend"]}
-git2 = {git = "https://github.com/arxanas/git2-rs", branch = "git-branchless", default-features = false}
 
 [dev-dependencies]
 clippy = "0.0.302"

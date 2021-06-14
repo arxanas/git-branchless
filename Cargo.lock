@@ -255,8 +255,9 @@ dependencies = [
 
 [[package]]
 name = "cursive"
-version = "0.16.3"
-source = "git+https://github.com/arxanas/cursive?branch=git-branchless#8e86506ebcc3dfe0c1af76e905c9685f530297df"
+version = "0.17.0-alpha.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c114844e97b4e07aaae55a252a692df0cf1392dd977aa1368209bd388b11d1a2"
 dependencies = [
  "ahash 0.7.4",
  "cfg-if",
@@ -276,8 +277,9 @@ dependencies = [
 
 [[package]]
 name = "cursive_core"
-version = "0.2.2"
-source = "git+https://github.com/arxanas/cursive?branch=git-branchless#8e86506ebcc3dfe0c1af76e905c9685f530297df"
+version = "0.3.0-alpha.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ca3dea03bedd9310bd302c0160059b09b718f0a4601924693dcc18564b0c6204"
 dependencies = [
  "ahash 0.7.4",
  "chrono",
@@ -489,7 +491,8 @@ dependencies = [
 [[package]]
 name = "git2"
 version = "0.13.20"
-source = "git+https://github.com/arxanas/git2-rs?branch=git-branchless#1d9fa7a4556e744237fa57fbb63a85aded9dbb1c"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d9831e983241f8c5591ed53f17d874833e2fa82cac2625f3888c50cbfe136cba"
 dependencies = [
  "bitflags",
  "libc",
@@ -605,7 +608,8 @@ checksum = "12b8adadd720df158f4d70dfe7ccc6adb0472d7c55ca83445f6a5ab3e36f8fb6"
 [[package]]
 name = "libgit2-sys"
 version = "0.12.21+1.1.0"
-source = "git+https://github.com/arxanas/git2-rs?branch=git-branchless#1d9fa7a4556e744237fa57fbb63a85aded9dbb1c"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "86271bacd72b2b9e854c3dcfb82efd538f15f870e4c11af66900effb462f6825"
 dependencies = [
  "cc",
  "libc",
