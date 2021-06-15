@@ -337,7 +337,42 @@ fn test_move_merge_conflict() -> anyhow::Result<()> {
     })
 }
 
-// TODO: add -b/--base option
+#[test]
+fn test_move_base() -> anyhow::Result<()> {
+    with_git(|git| {
+        git.init_repo()?;
+        git.commit_file("test1", 1)?;
+        git.detach_head()?;
+        git.commit_file("test2", 2)?;
+        let test3_oid = git.commit_file("test3", 3)?;
+        git.run(&["checkout", "master"])?;
+        git.commit_file("test4", 4)?;
+
+        {
+            let (stdout, _stderr) = git.run(&["move", "--base", &test3_oid.to_string()])?;
+            insta::assert_snapshot!(stdout, @r###"
+            Attempting rebase in-memory...
+            branchless: processing 2 rewritten commits
+            In-memory rebase succeeded.
+            "###);
+        }
+
+        {
+            let (stdout, _stderr) = git.run(&["smartlog"])?;
+            insta::assert_snapshot!(stdout, @r###"
+            :
+            @ bf0d52a6 (master) create test4.txt
+            |
+            o 44352d00 create test2.txt
+            |
+            o cf5eb244 create test3.txt
+            "###);
+        }
+
+        Ok(())
+    })
+}
+
 // TODO: implement restack in terms of move
 // TODO: if on a rewritten commit before rebase, check out the new commit afterwards.
 // TODO: move branches after in-memory rebase. Make sure to call reference-transaction hook.

@@ -437,22 +437,49 @@ fn move_subtree(
     Ok(result)
 }
 
+fn resolve_base_commit(graph: &CommitGraph, oid: git2::Oid) -> git2::Oid {
+    let node = &graph[&oid];
+    if node.is_main {
+        oid
+    } else {
+        match node.parent {
+            Some(parent_oid) => {
+                if graph[&parent_oid].is_main {
+                    oid
+                } else {
+                    resolve_base_commit(graph, parent_oid)
+                }
+            }
+            None => oid,
+        }
+    }
+}
+
 /// Move a subtree from one place to another.
 pub fn r#move(
     git_executable: &GitExecutable,
     source: Option<String>,
     dest: Option<String>,
+    base: Option<String>,
     force_on_disk: bool,
 ) -> anyhow::Result<isize> {
     let repo = get_repo()?;
     let head_oid = get_head_oid(&repo)?;
-    let source = match source {
-        Some(source) => source,
-        None => head_oid
+    let (source, should_resolve_base_commit) = match (source, base) {
+        (Some(_), Some(_)) => {
+            println!("The --source and --base options cannot both be provided.");
+            return Ok(1);
+        }
+        (Some(source), None) => (source, false),
+        (None, Some(base)) => (base, true),
+        (None, None) => {
+            let source_oid = head_oid
             .expect(
-                "No --source argument was provided, and no OID for HEAD is available as a default",
+                "No --source or --base argument was provided, and no OID for HEAD is available as a default",
             )
-            .to_string(),
+            .to_string();
+            (source_oid, false)
+        }
     };
     let dest = match dest {
         Some(dest) => dest,
@@ -490,6 +517,12 @@ pub fn r#move(
         &BranchOids(branch_oid_to_names.keys().copied().collect()),
         true,
     )?;
+
+    let source_oid = if should_resolve_base_commit {
+        resolve_base_commit(&graph, source_oid)
+    } else {
+        source_oid
+    };
 
     let glyphs = Glyphs::detect();
     let now = SystemTime::now();

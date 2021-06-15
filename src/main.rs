@@ -71,18 +71,25 @@ enum Opts {
         newest: bool,
     },
 
-    /// Move a commit or sub-tree from one location to another.
+    /// Move a subtree of commits from one location to another.
     ///
-    /// The `post-commit` hook, if any, will not be called if `git move`
-    /// succeeds with an in-memory rebase. To force a `post-commit` hook to be
-    /// called, pass `--on-disk`.
+    /// By default, `git move` attempts to rebase all commits in-memory. If you
+    /// want to force an on-disk rebase, pass the `--on-disk` flag. Note that
+    /// `post-commit` hooks are not called during in-memory rebases.
     Move {
         /// The source commit to move. This commit, and all of its descendants,
-        /// will be moved.
+        /// will be moved. If not provided, defaults to the current commit.
         #[structopt(short = "-s", long = "--source")]
         source: Option<String>,
 
-        /// The destination commit to move all source commits onto.
+        /// A commit inside a subtree to move. The entire subtree, starting from
+        /// the main branch, will be moved, not just the commits descending from
+        /// this commit.
+        #[structopt(short = "-b", long = "--base", conflicts_with = "source")]
+        base: Option<String>,
+
+        /// The destination commit to move all source commits onto. If not
+        /// provided, defaults to the current commit.
         #[structopt(short = "-d", long = "--dest")]
         dest: Option<String>,
 
@@ -175,8 +182,15 @@ fn main() -> anyhow::Result<()> {
         Opts::Move {
             source,
             dest,
+            base,
             force_on_disk,
-        } => branchless::commands::r#move::r#move(&git_executable, source, dest, force_on_disk)?,
+        } => branchless::commands::r#move::r#move(
+            &git_executable,
+            source,
+            dest,
+            base,
+            force_on_disk,
+        )?,
 
         Opts::Restack => branchless::commands::restack::restack(&git_executable)?,
 
