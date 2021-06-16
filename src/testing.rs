@@ -16,16 +16,16 @@ const DUMMY_EMAIL: &str = "test@example.com";
 const DUMMY_DATE: &str = "Wed 29 Oct 12:34:56 2020 PDT";
 
 /// Wrapper around the Git executable, for testing.
-#[derive(Debug)]
-pub struct Git<'a> {
+#[derive(Clone, Debug)]
+pub struct Git {
     /// The path to the repository on disk. The directory itself must exist,
     /// although it might not have a `.git` folder in it. (Use `Git::init_repo`
     /// to initialize it.)
-    pub repo_path: &'a Path,
+    pub repo_path: PathBuf,
 
     /// The path to the Git executable on disk. This is important since we test
     /// against multiple Git versions.
-    pub git_executable: &'a Path,
+    pub git_executable: PathBuf,
 }
 
 /// Options for `Git::init_repo_with_options`.
@@ -69,9 +69,9 @@ impl Default for GitRunOptions {
     }
 }
 
-impl<'a> Git<'a> {
+impl Git {
     /// Constructor.
-    pub fn new(repo_path: &'a Path, git_executable: &'a GitExecutable) -> Self {
+    pub fn new(repo_path: PathBuf, git_executable: GitExecutable) -> Self {
         let GitExecutable(git_executable) = git_executable;
         Git {
             repo_path,
@@ -124,10 +124,11 @@ impl<'a> Git<'a> {
             expected_exit_code,
         } = options;
 
+        let default_path = Path::new("/usr/bin/git");
         let git_executable = if !use_system_git {
-            self.git_executable
+            &self.git_executable
         } else {
-            Path::new("/usr/bin/git")
+            default_path
         };
 
         // Required for determinism, as these values will be baked into the commit
@@ -342,7 +343,7 @@ pub fn get_git_executable() -> anyhow::Result<PathBuf> {
 pub fn with_git(f: fn(Git) -> anyhow::Result<()>) -> anyhow::Result<()> {
     let repo_dir = tempfile::tempdir()?;
     let git_executable = get_git_executable()?;
-    let git_executable = GitExecutable(&git_executable);
-    let git = Git::new(Path::new(repo_dir.path()), &git_executable);
+    let git_executable = GitExecutable(git_executable);
+    let git = Git::new(repo_dir.path().to_path_buf(), git_executable);
     f(git)
 }

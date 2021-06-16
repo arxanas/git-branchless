@@ -55,7 +55,6 @@
 //! o def003 Commit 3
 //! ```
 
-use std::io::Write;
 use std::time::SystemTime;
 
 use anyhow::Context;
@@ -75,8 +74,6 @@ use crate::util::{
 
 #[context("Restacking commits")]
 fn restack_commits(
-    out: &mut impl Write,
-    err: &mut impl Write,
     repo: &git2::Repository,
     git_executable: &GitExecutable,
     merge_base_db: &MergeBaseDb,
@@ -134,19 +131,14 @@ fn restack_commits(
             }
             args
         };
-        let result = run_git(out, err, git_executable, Some(event_tx_id), &args)?;
+        let result = run_git(git_executable, Some(event_tx_id), &args)?;
         if result != 0 {
-            writeln!(
-                out,
-                "branchless: resolve rebase, then run 'git restack' again"
-            )?;
+            println!("branchless: resolve rebase, then run 'git restack' again");
             return Ok(result);
         }
 
         // Repeat until we reach a fixed point.
         return restack_commits(
-            out,
-            err,
             repo,
             git_executable,
             merge_base_db,
@@ -155,14 +147,12 @@ fn restack_commits(
         );
     }
 
-    writeln!(out, "branchless: no more abandoned commits to restack")?;
+    println!("branchless: no more abandoned commits to restack");
     Ok(0)
 }
 
 #[context("Restacking branches")]
 fn restack_branches(
-    out: &mut impl Write,
-    err: &mut impl Write,
     repo: &git2::Repository,
     git_executable: &GitExecutable,
     merge_base_db: &MergeBaseDb,
@@ -220,13 +210,11 @@ fn restack_branches(
             None => anyhow::bail!("Invalid UTF-8 branch name: {:?}", branch.name_bytes()?),
         };
         let args = ["branch", "-f", branch_name, &new_oid];
-        let result = run_git(out, err, git_executable, Some(event_tx_id), &args)?;
+        let result = run_git(git_executable, Some(event_tx_id), &args)?;
         if result != 0 {
             return Ok(result);
         } else {
             return restack_branches(
-                out,
-                err,
                 repo,
                 git_executable,
                 merge_base_db,
@@ -236,7 +224,7 @@ fn restack_branches(
         }
     }
 
-    writeln!(out, "branchless: no more abandoned branches to restack")?;
+    println!("branchless: no more abandoned branches to restack");
     Ok(0)
 }
 
@@ -249,11 +237,7 @@ fn restack_branches(
 ///
 /// Returns: Exit code (0 denotes successful exit).
 #[context("Restacking commits and branches")]
-pub fn restack(
-    out: &mut impl Write,
-    err: &mut impl Write,
-    git_executable: &GitExecutable,
-) -> anyhow::Result<isize> {
+pub fn restack(git_executable: &GitExecutable) -> anyhow::Result<isize> {
     let repo = get_repo()?;
     let conn = get_db_conn(&repo)?;
     let merge_base_db = MergeBaseDb::new(&conn)?;
@@ -262,8 +246,6 @@ pub fn restack(
     let head_oid = get_head_oid(&repo)?;
 
     let result = restack_commits(
-        out,
-        err,
         &repo,
         &git_executable,
         &merge_base_db,
@@ -275,8 +257,6 @@ pub fn restack(
     }
 
     let result = restack_branches(
-        out,
-        err,
         &repo,
         &git_executable,
         &merge_base_db,
@@ -289,8 +269,6 @@ pub fn restack(
 
     let result = match head_oid {
         Some(head_oid) => run_git(
-            out,
-            err,
             &git_executable,
             Some(event_tx_id),
             &["checkout", &head_oid.to_string()],
@@ -298,6 +276,6 @@ pub fn restack(
         None => result,
     };
 
-    smartlog(out)?;
+    smartlog()?;
     Ok(result)
 }

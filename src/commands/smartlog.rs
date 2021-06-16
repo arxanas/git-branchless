@@ -4,7 +4,6 @@
 //! log; see the `eventlog` module.
 
 use std::cmp::Ordering;
-use std::io::Write;
 use std::time::SystemTime;
 
 use cursive::theme::Effect;
@@ -13,7 +12,7 @@ use fn_error_context::context;
 
 use crate::core::eventlog::{EventLogDb, EventReplayer};
 use crate::core::formatting::set_effect;
-use crate::core::formatting::{write_styled_string_ansi, Glyphs, StyledStringBuilder};
+use crate::core::formatting::{printable_styled_string, Glyphs, StyledStringBuilder};
 use crate::core::graph::{make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid};
 use crate::core::mergebase::MergeBaseDb;
 use crate::core::metadata::{
@@ -269,7 +268,7 @@ pub fn render_graph(
 }
 
 /// Display a nice graph of commits you've recently worked on.
-pub fn smartlog(out: &mut impl Write) -> anyhow::Result<()> {
+pub fn smartlog() -> anyhow::Result<()> {
     let glyphs = Glyphs::detect();
     let repo = get_repo()?;
     let conn = get_db_conn(&repo)?;
@@ -310,8 +309,7 @@ pub fn smartlog(out: &mut impl Write) -> anyhow::Result<()> {
         ],
     )?;
     for line in lines {
-        write_styled_string_ansi(out, &glyphs, line)?;
-        writeln!(out)?;
+        println!("{}", printable_styled_string(&glyphs, line)?);
     }
 
     Ok(())

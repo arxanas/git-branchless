@@ -1,5 +1,4 @@
 use std::convert::TryInto;
-use std::io::{stderr, stdin, stdout};
 use std::path::Path;
 
 use anyhow::Context;
@@ -134,38 +133,30 @@ fn main() -> anyhow::Result<()> {
         .with_context(|| "Initializing logging")?;
 
     let opts = Opts::from_args();
-    let mut stdin = stdin();
-    let mut stdout = stdout();
-    let mut stderr = stderr();
     let git_executable = std::env::var("PATH_TO_GIT").unwrap_or_else(|_| "git".to_string());
     let git_executable = Path::new(&git_executable);
-    let git_executable = GitExecutable(&git_executable);
+    let git_executable = GitExecutable(git_executable.to_path_buf());
 
     let exit_code = match opts {
         Opts::Init => {
-            branchless::commands::init::init(&mut stdout, &git_executable)?;
+            branchless::commands::init::init(&git_executable)?;
             0
         }
 
         Opts::Smartlog => {
-            branchless::commands::smartlog::smartlog(&mut stdout)?;
+            branchless::commands::smartlog::smartlog()?;
             0
         }
 
-        Opts::Hide { commits, recursive } => {
-            branchless::commands::hide::hide(&mut stdout, commits, recursive)?
-        }
+        Opts::Hide { commits, recursive } => branchless::commands::hide::hide(commits, recursive)?,
 
         Opts::Unhide { commits, recursive } => {
-            branchless::commands::hide::unhide(&mut stdout, commits, recursive)?
+            branchless::commands::hide::unhide(commits, recursive)?
         }
 
-        Opts::Prev { num_commits } => branchless::commands::navigation::prev(
-            &mut stdout,
-            &mut stderr,
-            &&git_executable,
-            num_commits,
-        )?,
+        Opts::Prev { num_commits } => {
+            branchless::commands::navigation::prev(&&git_executable, num_commits)?
+        }
 
         Opts::Next {
             num_commits,
@@ -178,38 +169,21 @@ fn main() -> anyhow::Result<()> {
                 (false, true) => Some(branchless::commands::navigation::Towards::Newest),
                 (true, true) => anyhow::bail!("Both --oldest and --newest were set"),
             };
-            branchless::commands::navigation::next(
-                &mut stdout,
-                &mut stderr,
-                &git_executable,
-                num_commits,
-                towards,
-            )?
+            branchless::commands::navigation::next(&git_executable, num_commits, towards)?
         }
 
         Opts::Move {
             source,
             dest,
             force_on_disk,
-        } => branchless::commands::r#move::r#move(
-            &mut stdout,
-            &mut stderr,
-            &git_executable,
-            source,
-            dest,
-            force_on_disk,
-        )?,
+        } => branchless::commands::r#move::r#move(&git_executable, source, dest, force_on_disk)?,
 
-        Opts::Restack => {
-            branchless::commands::restack::restack(&mut stdout, &mut stderr, &git_executable)?
-        }
+        Opts::Restack => branchless::commands::restack::restack(&git_executable)?,
 
-        Opts::Undo => {
-            branchless::commands::undo::undo(&mut stdin, &mut stdout, &mut stderr, &git_executable)?
-        }
+        Opts::Undo => branchless::commands::undo::undo(&git_executable)?,
 
         Opts::Gc | Opts::HookPreAutoGc => {
-            branchless::commands::gc::gc(&mut stdout)?;
+            branchless::commands::gc::gc()?;
             0
         }
 
@@ -221,7 +195,7 @@ fn main() -> anyhow::Result<()> {
         }
 
         Opts::HookPostRewrite { rewrite_type } => {
-            branchless::commands::hooks::hook_post_rewrite(&mut stdout, &rewrite_type)?;
+            branchless::commands::hooks::hook_post_rewrite(&rewrite_type)?;
             0
         }
 
@@ -231,7 +205,6 @@ fn main() -> anyhow::Result<()> {
             is_branch_checkout,
         } => {
             branchless::commands::hooks::hook_post_checkout(
-                &mut stdout,
                 &previous_commit,
                 &current_commit,
                 is_branch_checkout,
@@ -240,15 +213,12 @@ fn main() -> anyhow::Result<()> {
         }
 
         Opts::HookPostCommit => {
-            branchless::commands::hooks::hook_post_commit(&mut stdout)?;
+            branchless::commands::hooks::hook_post_commit()?;
             0
         }
 
         Opts::HookReferenceTransaction { transaction_state } => {
-            branchless::commands::hooks::hook_reference_transaction(
-                &mut stdout,
-                &transaction_state,
-            )?;
+            branchless::commands::hooks::hook_reference_transaction(&transaction_state)?;
             0
         }
     };

@@ -1,13 +1,12 @@
 //! Convenience commands to help the user move through a stack of commits.
 
 use std::collections::HashMap;
-use std::io::Write;
 
 use log::warn;
 
 use crate::commands::smartlog::smartlog;
 use crate::core::eventlog::{EventLogDb, EventReplayer};
-use crate::core::formatting::{write_styled_string_ansi, Glyphs};
+use crate::core::formatting::{printable_styled_string, Glyphs};
 use crate::core::graph::{
     find_path_to_merge_base, make_graph, BranchOids, HeadOid, MainBranchOid, Node,
 };
@@ -19,17 +18,10 @@ use crate::util::{
 };
 
 /// Go back a certain number of commits.
-pub fn prev(
-    out: &mut impl Write,
-    err: &mut impl Write,
-    git_executable: &GitExecutable,
-    num_commits: Option<isize>,
-) -> anyhow::Result<isize> {
+pub fn prev(git_executable: &GitExecutable, num_commits: Option<isize>) -> anyhow::Result<isize> {
     let exit_code = match num_commits {
-        None => run_git(out, err, git_executable, None, &["checkout", "HEAD^"])?,
+        None => run_git(git_executable, None, &["checkout", "HEAD^"])?,
         Some(num_commits) => run_git(
-            out,
-            err,
             git_executable,
             None,
             &["checkout", &format!("HEAD~{}", num_commits)],
@@ -38,7 +30,7 @@ pub fn prev(
     if exit_code != 0 {
         return Ok(exit_code);
     }
-    smartlog(out)?;
+    smartlog()?;
     Ok(0)
 }
 
@@ -83,7 +75,6 @@ fn advance_towards_main_branch(
 }
 
 fn advance_towards_own_commit(
-    out: &mut impl Write,
     glyphs: &Glyphs,
     repo: &git2::Repository,
     graph: &HashMap<git2::Oid, Node>,
@@ -105,11 +96,10 @@ fn advance_towards_own_commit(
             (Some(Towards::Newest), [.., newest_child_oid]) => *newest_child_oid,
             (Some(Towards::Oldest), [oldest_child_oid, ..]) => *oldest_child_oid,
             (None, [_, _, ..]) => {
-                writeln!(
-                    out,
+                println!(
                     "Found multiple possible next commits to go to after traversing {} children:",
                     i
-                )?;
+                );
 
                 for (j, child_oid) in (0..).zip(children.iter()) {
                     let descriptor = if j == 0 {
@@ -127,11 +117,14 @@ fn advance_towards_own_commit(
                             &mut CommitMessageProvider::new()?,
                         ],
                     )?;
-                    write!(out, "  {} ", glyphs.bullet_point,)?;
-                    write_styled_string_ansi(out, &glyphs, commit_text)?;
-                    writeln!(out, "{}", descriptor)?;
+                    println!(
+                        "  {} {}{}",
+                        glyphs.bullet_point,
+                        printable_styled_string(&glyphs, commit_text)?,
+                        descriptor
+                    );
                 }
-                writeln!(out, "(Pass --oldest (-o) or --newest (-n) to select between ambiguous next commits)")?;
+                println!("(Pass --oldest (-o) or --newest (-n) to select between ambiguous next commits)");
                 return Ok(None);
             }
         };
@@ -141,8 +134,6 @@ fn advance_towards_own_commit(
 
 /// Go forward a certain number of commits.
 pub fn next(
-    out: &mut impl Write,
-    err: &mut impl Write,
     git_executable: &GitExecutable,
     num_commits: Option<isize>,
     towards: Option<Towards>,
@@ -180,23 +171,14 @@ pub fn next(
         &MainBranchOid(main_branch_oid),
     )?;
     let num_commits = num_commits - num_commits_traversed_towards_main_branch;
-    let current_oid = advance_towards_own_commit(
-        out,
-        &glyphs,
-        &repo,
-        &graph,
-        current_oid,
-        num_commits,
-        towards,
-    )?;
+    let current_oid =
+        advance_towards_own_commit(&glyphs, &repo, &graph, current_oid, num_commits, towards)?;
     let current_oid = match current_oid {
         None => return Ok(1),
         Some(current_oid) => current_oid,
     };
 
     let result = run_git(
-        out,
-        err,
         git_executable,
         None,
         &["checkout", &current_oid.to_string()],
@@ -205,6 +187,6 @@ pub fn next(
         return Ok(result);
     }
 
-    smartlog(out)?;
+    smartlog()?;
     Ok(0)
 }

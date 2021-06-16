@@ -9,8 +9,6 @@
 //! garbage collection doesn't collect commits which branchless thinks are still
 //! visible.
 
-use std::io::Write;
-
 use anyhow::Context;
 use fn_error_context::context;
 
@@ -82,7 +80,7 @@ pub fn mark_commit_reachable(repo: &git2::Repository, commit_oid: git2::Oid) -> 
 ///
 /// Frees any references to commits which are no longer visible in the smartlog.
 #[context("Running garbage-collection")]
-pub fn gc(out: &mut impl Write) -> anyhow::Result<()> {
+pub fn gc() -> anyhow::Result<()> {
     let repo = get_repo()?;
     let conn = get_db_conn(&repo)?;
     let merge_base_db = MergeBaseDb::new(&conn)?;
@@ -103,7 +101,7 @@ pub fn gc(out: &mut impl Write) -> anyhow::Result<()> {
         true,
     )?;
 
-    writeln!(out, "branchless: collecting garbage")?;
+    println!("branchless: collecting garbage");
     let dangling_references = find_dangling_references(&repo, &graph)?;
     for mut reference in dangling_references.into_iter() {
         reference

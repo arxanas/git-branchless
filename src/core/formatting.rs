@@ -4,8 +4,6 @@
 //! "TTY"). In the case of interactive output, we render with prettier non-ASCII
 //! characters and with colors, using shell-specific escape codes.
 
-use std::io::Write;
-
 use cursive::theme::{Effect, Style};
 use cursive::utils::markup::StyledString;
 use cursive::utils::span::Span;
@@ -294,22 +292,23 @@ fn render_style_as_ansi(content: &str, style: Style) -> anyhow::Result<String> {
 
 /// Write the provided string to `out`, using ANSI escape codfes as necessary to
 /// style it.
-pub fn write_styled_string_ansi(
-    out: &mut impl Write,
-    glyphs: &Glyphs,
-    string: StyledString,
-) -> anyhow::Result<()> {
-    for Span {
-        content,
-        attr,
-        width: _,
-    } in string.spans()
-    {
-        if glyphs.should_write_ansi_escape_codes {
-            write!(out, "{}", render_style_as_ansi(content, *attr)?)?;
-        } else {
-            write!(out, "{}", content)?;
-        }
-    }
-    Ok(())
+///
+/// TODO: return something that implements `Display` instead of a `String`.
+pub fn printable_styled_string(glyphs: &Glyphs, string: StyledString) -> anyhow::Result<String> {
+    let result = string
+        .spans()
+        .map(|span| {
+            let Span {
+                content,
+                attr,
+                width: _,
+            } = span;
+            if glyphs.should_write_ansi_escape_codes {
+                Ok(render_style_as_ansi(content, *attr)?)
+            } else {
+                Ok(content.to_string())
+            }
+        })
+        .collect::<anyhow::Result<String>>()?;
+    Ok(result)
 }

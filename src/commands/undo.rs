@@ -4,7 +4,7 @@
 //! time and inverting them.
 
 use std::convert::TryInto;
-use std::io::{BufRead, BufReader, Read, Write};
+use std::io::{stdin, stdout, BufRead, BufReader, Read, Write};
 use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
 use std::time::SystemTime;
 
@@ -16,7 +16,7 @@ use cursive::{Cursive, CursiveRunnable, CursiveRunner};
 
 use crate::commands::smartlog::render_graph;
 use crate::core::eventlog::{Event, EventCursor, EventLogDb, EventReplayer, EventTransactionId};
-use crate::core::formatting::{write_styled_string_ansi, Glyphs, Pluralize, StyledStringBuilder};
+use crate::core::formatting::{printable_styled_string, Glyphs, Pluralize, StyledStringBuilder};
 use crate::core::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
 use crate::core::mergebase::MergeBaseDb;
 use crate::core::metadata::{
@@ -606,7 +606,6 @@ fn optimize_inverse_events(events: Vec<Event>) -> Vec<Event> {
 fn undo_events(
     in_: &mut impl Read,
     out: &mut impl Write,
-    err: &mut impl Write,
     glyphs: &Glyphs,
     repo: &git2::Repository,
     git_executable: &GitExecutable,
@@ -654,8 +653,7 @@ fn undo_events(
     writeln!(out, "Will apply these actions:")?;
     let events = describe_events_numbered(&repo, &inverse_events)?;
     for line in events {
-        write_styled_string_ansi(out, &glyphs, line)?;
-        writeln!(out)?;
+        writeln!(out, "{}", printable_styled_string(&glyphs, line)?)?;
     }
 
     let confirmed = {
@@ -698,8 +696,6 @@ fn undo_events(
                 // dirty working copy). The `Git` command will update the event
                 // log appropriately, as it will invoke our hooks.
                 run_git(
-                    out,
-                    err,
                     git_executable,
                     Some(event_tx_id),
                     &["checkout", "--detach", &new_ref],
@@ -771,12 +767,7 @@ fn undo_events(
 }
 
 /// Restore the repository to a previous state interactively.
-pub fn undo(
-    in_: &mut impl Read,
-    out: &mut impl Write,
-    err: &mut impl Write,
-    git_executable: &GitExecutable,
-) -> anyhow::Result<isize> {
+pub fn undo(git_executable: &GitExecutable) -> anyhow::Result<isize> {
     let glyphs = Glyphs::detect();
     let repo = get_repo()?;
     let conn = get_db_conn(&repo)?;
@@ -795,9 +786,8 @@ pub fn undo(
     };
 
     let result = undo_events(
-        in_,
-        out,
-        err,
+        &mut stdin(),
+        &mut stdout().lock(),
         &glyphs,
         &repo,
         &git_executable,
@@ -832,7 +822,6 @@ pub mod testing {
     pub fn undo_events(
         in_: &mut impl Read,
         out: &mut impl Write,
-        err: &mut impl Write,
         glyphs: &Glyphs,
         repo: &git2::Repository,
         git_executable: &GitExecutable,
@@ -843,7 +832,6 @@ pub mod testing {
         super::undo_events(
             in_,
             out,
-            err,
             glyphs,
             repo,
             git_executable,

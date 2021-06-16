@@ -304,22 +304,24 @@ fn test_custom_main_branch() -> anyhow::Result<()> {
 #[test]
 fn test_main_remote_branch() -> anyhow::Result<()> {
     let git_executable = get_git_executable()?;
-    let git_executable = GitExecutable(&git_executable);
+    let git_executable = GitExecutable(git_executable);
     let temp_dir = tempfile::tempdir()?;
     let original_repo_path = temp_dir.path().join("original");
     std::fs::create_dir(&original_repo_path)?;
+    let original_repo = Git::new(original_repo_path, git_executable.clone());
     let cloned_repo_path = temp_dir.path().join("cloned");
+    let cloned_repo = Git::new(cloned_repo_path, git_executable);
 
     {
-        std::env::set_current_dir(&original_repo_path)?;
-        let git = Git::new(&original_repo_path, &git_executable);
+        std::env::set_current_dir(&original_repo.repo_path)?;
+        let git = original_repo.clone();
         git.init_repo()?;
         git.commit_file("test1", 1)?;
         git.run_with_options(
             &[
                 "clone",
-                original_repo_path.to_str().unwrap(),
-                cloned_repo_path.to_str().unwrap(),
+                original_repo.repo_path.to_str().unwrap(),
+                cloned_repo.repo_path.to_str().unwrap(),
             ],
             &GitRunOptions {
                 use_system_git: true,
@@ -329,8 +331,8 @@ fn test_main_remote_branch() -> anyhow::Result<()> {
     }
 
     {
-        std::env::set_current_dir(&cloned_repo_path)?;
-        let git = Git::new(&cloned_repo_path, &git_executable);
+        std::env::set_current_dir(&cloned_repo.repo_path)?;
+        let git = cloned_repo.clone();
         git.init_repo_with_options(&GitInitOptions {
             make_initial_commit: false,
             ..Default::default()
@@ -346,14 +348,14 @@ fn test_main_remote_branch() -> anyhow::Result<()> {
     }
 
     {
-        std::env::set_current_dir(&original_repo_path)?;
-        let git = Git::new(&original_repo_path, &git_executable);
+        std::env::set_current_dir(&original_repo.repo_path)?;
+        let git = original_repo.clone();
         git.commit_file("test2", 2)?;
     }
 
     {
-        std::env::set_current_dir(&cloned_repo_path)?;
-        let git = Git::new(&cloned_repo_path, &git_executable);
+        std::env::set_current_dir(&cloned_repo.repo_path)?;
+        let git = cloned_repo.clone();
         git.run_with_options(
             &["fetch"],
             &GitRunOptions {

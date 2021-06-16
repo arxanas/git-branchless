@@ -36,7 +36,7 @@ fn run_select_past_event(
     )
 }
 
-fn run_undo_events(git: &Git, event_cursor: EventCursor) -> anyhow::Result<(String, String)> {
+fn run_undo_events(git: &Git, event_cursor: EventCursor) -> anyhow::Result<String> {
     let glyphs = Glyphs::text();
     let repo = git.get_repo()?;
     let conn = get_db_conn(&repo)?;
@@ -45,7 +45,6 @@ fn run_undo_events(git: &Git, event_cursor: EventCursor) -> anyhow::Result<(Stri
     let input = "y";
     let mut in_ = input.as_bytes();
     let mut out = Vec::new();
-    let mut err = Vec::new();
 
     // Ensure that nested calls to `git` are run under the correct environment.
     // (Normally, the user will be running `git undo` from the correct directory
@@ -56,7 +55,6 @@ fn run_undo_events(git: &Git, event_cursor: EventCursor) -> anyhow::Result<(Stri
     let result = undo_events(
         &mut in_,
         &mut out,
-        &mut err,
         &glyphs,
         &repo,
         &GitExecutable(git.git_executable.clone()),
@@ -69,10 +67,7 @@ fn run_undo_events(git: &Git, event_cursor: EventCursor) -> anyhow::Result<(Stri
     let out = String::from_utf8(out)?;
     let out = git.preprocess_stdout(out)?;
     let out = trim_lines(out);
-    let err = String::from_utf8(err)?;
-    let err = git.preprocess_stdout(err)?;
-    let err = trim_lines(err);
-    Ok((out, err))
+    Ok(out)
 }
 
 fn trim_lines(output: String) -> String {
@@ -259,8 +254,7 @@ fn test_undo_hide() -> anyhow::Result<()> {
         let event_cursor = event_cursor.unwrap();
 
         {
-            let (stdout, stderr) = run_undo_events(&git, event_cursor)?;
-            insta::assert_snapshot!(stderr, @"");
+            let stdout = run_undo_events(&git, event_cursor)?;
             insta::assert_snapshot!(stdout, @r###"
             Will apply these actions:
             1. Create branch test1 at 62fc20d2 create test1.txt
@@ -316,7 +310,7 @@ fn test_undo_move_refs() -> anyhow::Result<()> {
         let event_cursor = event_cursor.unwrap();
 
         {
-            let (stdout, _stderr) = run_undo_events(&git, event_cursor)?;
+            let stdout = run_undo_events(&git, event_cursor)?;
             insta::assert_snapshot!(stdout, @r###"
             Will apply these actions:
             1. Check out from 96d1c37a create test2.txt
@@ -325,8 +319,7 @@ fn test_undo_move_refs() -> anyhow::Result<()> {
 
             3. Move branch master from 96d1c37a create test2.txt
                                     to 62fc20d2 create test1.txt
-            Confirm? [yN] branchless: <git-executable> checkout --detach 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
-            Applied 3 inverse events.
+            Confirm? [yN] Applied 3 inverse events.
             "###);
         }
 
@@ -435,7 +428,7 @@ fn test_undo_doesnt_make_working_dir_dirty() -> anyhow::Result<()> {
             assert_eq!(stdout, "");
         }
         {
-            let (stdout, stderr) = run_undo_events(&git, event_cursor)?;
+            let stdout = run_undo_events(&git, event_cursor)?;
             insta::assert_snapshot!(stdout, @r###"
             Will apply these actions:
             1. Check out from 62fc20d2 create test1.txt
@@ -448,13 +441,7 @@ fn test_undo_doesnt_make_working_dir_dirty() -> anyhow::Result<()> {
                                     to f777ecc9 create initial.txt
             5. Delete branch foo at f777ecc9 create initial.txt
 
-            Confirm? [yN] branchless: <git-executable> checkout --detach f777ecc9b0db5ed372b2615695191a8a17f79f24
-            Applied 5 inverse events.
-            "###);
-            insta::assert_snapshot!(stderr, @r###"
-            branchless: processing 1 update to a branch/ref
-            HEAD is now at f777ecc create initial.txt
-            branchless: processing checkout
+            Confirm? [yN] Applied 5 inverse events.
             "###);
         }
         {

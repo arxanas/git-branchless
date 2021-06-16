@@ -18,7 +18,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use crate::core::eventlog::EventTransactionId;
 use crate::core::eventlog::BRANCHLESS_TRANSACTION_ID_ENV_VAR;
 use crate::core::eventlog::{EventLogDb, EventReplayer};
-use crate::core::formatting::write_styled_string_ansi;
+use crate::core::formatting::printable_styled_string;
 use crate::core::formatting::Glyphs;
 use crate::core::graph::find_path_to_merge_base;
 use crate::core::graph::{make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid};
@@ -209,15 +209,8 @@ fn rebase_in_memory(
                     .with_context(|| format!("Finding commit to apply by OID: {:?}", commit_oid))?;
                 i += 1;
 
-                let commit_description = {
-                    let mut description = Vec::new();
-                    write_styled_string_ansi(
-                        &mut description,
-                        glyphs,
-                        friendly_describe_commit(repo, *commit_oid)?,
-                    )?;
-                    String::from_utf8(description)?
-                };
+                let commit_description =
+                    printable_styled_string(glyphs, friendly_describe_commit(repo, *commit_oid)?)?;
                 let template = format!("[{}/{}] {{spinner}} {{wide_msg}}", i, num_picks);
                 let progress = ProgressBar::new_spinner();
                 progress.set_style(ProgressStyle::default_spinner().template(&template.trim()));
@@ -276,15 +269,10 @@ fn rebase_in_memory(
                 rewritten_oids.push((*commit_oid, rebased_commit_oid));
                 current_oid = rebased_commit_oid;
 
-                let commit_description = {
-                    let mut description = Vec::new();
-                    write_styled_string_ansi(
-                        &mut description,
-                        glyphs,
-                        friendly_describe_commit(repo, rebased_commit_oid)?,
-                    )?;
-                    String::from_utf8(description)?
-                };
+                let commit_description = printable_styled_string(
+                    glyphs,
+                    friendly_describe_commit(repo, rebased_commit_oid)?,
+                )?;
                 progress.finish_with_message(format!("Committed as: {}", commit_description));
             }
         }
@@ -331,8 +319,6 @@ fn post_rebase_in_memory(
 
 #[context("Rebasing on disk from {} to {}", source.to_string(), dest.to_string())]
 fn rebase_on_disk(
-    out: &mut impl Write,
-    err: &mut impl Write,
     git_executable: &GitExecutable,
     repo: &git2::Repository,
     rebase_plan: &[RebaseCommand],
@@ -373,8 +359,6 @@ fn rebase_on_disk(
 
     progress.set_message("Calling Git for on-disk rebase");
     let result = run_git(
-        out,
-        err,
         &git_executable,
         Some(event_tx_id),
         &["rebase", "--continue"],
@@ -403,8 +387,6 @@ fn friendly_describe_commit(
 
 #[context("Moving subtree from {} to {}", source.to_string(), dest.to_string())]
 fn move_subtree(
-    out: &mut impl Write,
-    err: &mut impl Write,
     glyphs: &Glyphs,
     git_executable: &GitExecutable,
     repo: &git2::Repository,
@@ -421,36 +403,30 @@ fn move_subtree(
     let rebase_plan = make_rebase_plan(repo, merge_base_db, graph, main_branch_oid, source)?;
 
     if !force_on_disk {
-        writeln!(out, "Attempting rebase in-memory...")?;
+        println!("Attempting rebase in-memory...");
         match rebase_in_memory(glyphs, &repo, &rebase_plan, dest)? {
             RebaseInMemoryResult::Succeeded { rewritten_oids } => {
                 post_rebase_in_memory(&repo, &rewritten_oids, event_tx_id)?;
-                writeln!(out, "In-memory rebase succeeded.")?;
+                println!("In-memory rebase succeeded.");
                 return Ok(0);
             }
             RebaseInMemoryResult::CannotRebaseMergeCommit { commit_oid } => {
-                write!(
-                    out,
-                    "Merge commits currently can't be rebased with `git move`. The merge commit was: ",
-                )?;
-                write_styled_string_ansi(out, glyphs, friendly_describe_commit(repo, commit_oid)?)?;
-                writeln!(out)?;
+                println!(
+                    "Merge commits currently can't be rebased with `git move`. The merge commit was: {}",
+                    printable_styled_string(glyphs, friendly_describe_commit(repo, commit_oid)?)?
+                );
                 return Ok(1);
             }
             RebaseInMemoryResult::MergeConflict { commit_oid } => {
-                write!(
-                    out,
-                    "Merge conflict, falling back to rebase on-disk. The conflicting commit was: "
-                )?;
-                write_styled_string_ansi(out, glyphs, friendly_describe_commit(repo, commit_oid)?)?;
-                writeln!(out)?;
+                println!(
+                    "Merge conflict, falling back to rebase on-disk. The conflicting commit was: {}",
+                    printable_styled_string(glyphs, friendly_describe_commit(repo, commit_oid)?)?,
+                );
             }
         }
     }
 
     let result = rebase_on_disk(
-        out,
-        err,
         git_executable,
         repo,
         &rebase_plan,
@@ -463,8 +439,6 @@ fn move_subtree(
 
 /// Move a subtree from one place to another.
 pub fn r#move(
-    out: &mut impl Write,
-    err: &mut impl Write,
     git_executable: &GitExecutable,
     source: Option<String>,
     dest: Option<String>,
@@ -494,7 +468,7 @@ pub fn r#move(
             _ => anyhow::bail!("Unexpected number of returns values from resolve_commits"),
         },
         ResolveCommitsResult::CommitNotFound { commit } => {
-            writeln!(out, "Commit not found: {}", commit)?;
+            println!("Commit not found: {}", commit);
             return Ok(1);
         }
     };
@@ -521,8 +495,6 @@ pub fn r#move(
     let now = SystemTime::now();
     let event_tx_id = event_log_db.make_transaction_id(now, "move")?;
     let result = move_subtree(
-        out,
-        err,
         &glyphs,
         git_executable,
         &repo,

@@ -1,6 +1,5 @@
 //! Install any hooks, aliases, etc. to set up `git-branchless` in this repo.
 
-use std::io::Write;
 use std::path::PathBuf;
 
 use anyhow::Context;
@@ -113,22 +112,16 @@ fn update_hook_contents(hook: &Hook, hook_contents: &str) -> anyhow::Result<()> 
 }
 
 #[context("Installing hook of type: {:?}", hook_type)]
-fn install_hook(
-    out: &mut impl Write,
-    repo: &git2::Repository,
-    hook_type: &str,
-    hook_script: &str,
-) -> anyhow::Result<()> {
-    writeln!(out, "Installing hook: {}", hook_type)?;
+fn install_hook(repo: &git2::Repository, hook_type: &str, hook_script: &str) -> anyhow::Result<()> {
+    println!("Installing hook: {}", hook_type);
     let hook = determine_hook_path(repo, hook_type)?;
     update_hook_contents(&hook, hook_script)?;
     Ok(())
 }
 
 #[context("Installing all hooks")]
-fn install_hooks(out: &mut impl Write, repo: &git2::Repository) -> anyhow::Result<()> {
+fn install_hooks(repo: &git2::Repository) -> anyhow::Result<()> {
     install_hook(
-        out,
         repo,
         "post-commit",
         r#"
@@ -136,7 +129,6 @@ git branchless hook-post-commit "$@"
 "#,
     )?;
     install_hook(
-        out,
         repo,
         "post-rewrite",
         r#"
@@ -144,7 +136,6 @@ git branchless hook-post-rewrite "$@"
 "#,
     )?;
     install_hook(
-        out,
         repo,
         "post-checkout",
         r#"
@@ -152,7 +143,6 @@ git branchless hook-post-checkout "$@"
 "#,
     )?;
     install_hook(
-        out,
         repo,
         "pre-auto-gc",
         r#"
@@ -160,7 +150,6 @@ git branchless hook-pre-auto-gc "$@"
 "#,
     )?;
     install_hook(
-        out,
         repo,
         "reference-transaction",
         r#"
@@ -177,17 +166,11 @@ git branchless hook-reference-transaction "$@" || (
 }
 
 #[context("Installing alias: git {:?} -> git branchless {:?}", from, to)]
-fn install_alias(
-    out: &mut impl Write,
-    config: &mut git2::Config,
-    from: &str,
-    to: &str,
-) -> anyhow::Result<()> {
-    writeln!(
-        out,
+fn install_alias(config: &mut git2::Config, from: &str, to: &str) -> anyhow::Result<()> {
+    println!(
         "Installing alias (non-global): git {} -> git branchless {}",
         from, to
-    )?;
+    );
     config
         .set_str(
             format!("alias.{}", from).as_str(),
@@ -199,20 +182,19 @@ fn install_alias(
 
 #[context("Installing all aliases")]
 fn install_aliases(
-    out: &mut impl Write,
     repo: &mut git2::Repository,
     git_executable: &GitExecutable,
 ) -> anyhow::Result<()> {
     let mut config = repo.config().with_context(|| "Getting repo config")?;
-    install_alias(out, &mut config, "smartlog", "smartlog")?;
-    install_alias(out, &mut config, "sl", "smartlog")?;
-    install_alias(out, &mut config, "hide", "hide")?;
-    install_alias(out, &mut config, "unhide", "unhide")?;
-    install_alias(out, &mut config, "prev", "prev")?;
-    install_alias(out, &mut config, "next", "next")?;
-    install_alias(out, &mut config, "restack", "restack")?;
-    install_alias(out, &mut config, "undo", "undo")?;
-    install_alias(out, &mut config, "move", "move")?;
+    install_alias(&mut config, "smartlog", "smartlog")?;
+    install_alias(&mut config, "sl", "smartlog")?;
+    install_alias(&mut config, "hide", "hide")?;
+    install_alias(&mut config, "unhide", "unhide")?;
+    install_alias(&mut config, "prev", "prev")?;
+    install_alias(&mut config, "next", "next")?;
+    install_alias(&mut config, "restack", "restack")?;
+    install_alias(&mut config, "undo", "undo")?;
+    install_alias(&mut config, "move", "move")?;
 
     let version_str = run_git_silent(repo, git_executable, None, &["version"])
         .with_context(|| "Determining Git version")?;
@@ -221,8 +203,7 @@ fn install_aliases(
         .parse()
         .with_context(|| format!("Parsing Git version string: {}", version_str))?;
     if version < GitVersion(2, 29, 0) {
-        write!(
-            out,
+        print!(
             "\
 {warning_str}: the branchless workflow's `git undo` command requires Git
 v2.29 or later, but your Git version is: {version_str}
@@ -238,28 +219,23 @@ the branchless workflow will work properly.
 ",
             warning_str = style("Warning").yellow().bold(),
             version_str = version_str,
-        )?;
+        );
     }
 
     Ok(())
 }
 
 #[context("Setting config {}", name)]
-fn set_config(
-    out: &mut impl Write,
-    config: &mut git2::Config,
-    name: &str,
-    value: bool,
-) -> anyhow::Result<()> {
-    writeln!(out, "Setting config (non-global): {} = {}", name, value)?;
+fn set_config(config: &mut git2::Config, name: &str, value: bool) -> anyhow::Result<()> {
+    println!("Setting config (non-global): {} = {}", name, value);
     config.set_bool(name, value)?;
     Ok(())
 }
 
 #[context("Setting all configs")]
-fn set_configs(out: &mut impl Write, repo: &mut git2::Repository) -> anyhow::Result<()> {
+fn set_configs(repo: &mut git2::Repository) -> anyhow::Result<()> {
     let mut config = repo.config().with_context(|| "Getting repo config")?;
-    set_config(out, &mut config, "advice.detachedHead", false)?;
+    set_config(&mut config, "advice.detachedHead", false)?;
     Ok(())
 }
 
@@ -269,11 +245,11 @@ fn set_configs(out: &mut impl Write, repo: &mut git2::Repository) -> anyhow::Res
 /// * `out`: The output stream to write to.
 /// * `git_executable`: The path to the `git` executable on disk.
 #[context("Initializing git-branchless for repo")]
-pub fn init(out: &mut impl Write, git_executable: &GitExecutable) -> anyhow::Result<()> {
+pub fn init(git_executable: &GitExecutable) -> anyhow::Result<()> {
     let mut repo = get_repo()?;
-    install_hooks(out, &repo)?;
-    set_configs(out, &mut repo)?;
-    install_aliases(out, &mut repo, git_executable)?;
+    install_hooks(&repo)?;
+    set_configs(&mut repo)?;
+    install_aliases(&mut repo, git_executable)?;
     Ok(())
 }
 

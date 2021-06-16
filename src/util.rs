@@ -2,8 +2,8 @@
 
 use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
-use std::io::Write;
-use std::path::Path;
+use std::io::{stderr, stdout, Write};
+use std::path::PathBuf;
 use std::process::Command;
 use std::str::FromStr;
 
@@ -135,8 +135,8 @@ pub fn get_db_conn(repo: &git2::Repository) -> anyhow::Result<rusqlite::Connecti
 }
 
 /// Path to the `git` executable on disk to be executed.
-#[derive(Debug)]
-pub struct GitExecutable<'path>(pub &'path Path);
+#[derive(Clone, Debug)]
+pub struct GitExecutable(pub PathBuf);
 
 /// Run Git in a subprocess, and inform the user.
 ///
@@ -155,24 +155,21 @@ pub struct GitExecutable<'path>(pub &'path Path);
 #[context("Running Git ({:?}) with args: {:?}", git_executable, args)]
 #[must_use = "The return code for `run_git` must be checked"]
 pub fn run_git<S: AsRef<str> + std::fmt::Debug>(
-    out: &mut impl Write,
-    err: &mut impl Write,
     git_executable: &GitExecutable,
     event_tx_id: Option<EventTransactionId>,
     args: &[S],
 ) -> anyhow::Result<isize> {
     let GitExecutable(git_executable) = git_executable;
-    writeln!(
-        out,
+    println!(
         "branchless: {} {}",
         git_executable.to_string_lossy(),
         args.iter()
             .map(|arg| arg.as_ref())
             .collect::<Vec<_>>()
             .join(" ")
-    )?;
-    out.flush()?;
-    err.flush()?;
+    );
+    stdout().flush()?;
+    stderr().flush()?;
 
     let mut command = Command::new(git_executable);
     command.args(args.iter().map(|arg| arg.as_ref()));
@@ -185,8 +182,8 @@ pub fn run_git<S: AsRef<str> + std::fmt::Debug>(
             git_executable, args
         )
     })?;
-    out.write_all(&result.stdout)?;
-    err.write_all(&result.stderr)?;
+    stdout().write_all(&result.stdout)?;
+    stderr().write_all(&result.stderr)?;
 
     // On Unix, if the child process was terminated by a signal, we need to call
     // some Unix-specific functions to access the signal that terminated it. For
