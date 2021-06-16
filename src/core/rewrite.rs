@@ -147,7 +147,7 @@ impl ToString for RebaseCommand {
     }
 }
 
-fn plan_rebase_current(
+fn make_rebase_plan_for_current_commit(
     repo: &git2::Repository,
     graph: &CommitGraph,
     current_oid: git2::Oid,
@@ -179,7 +179,13 @@ fn plan_rebase_current(
     match children.as_slice() {
         [] => Ok(acc),
         [only_child_oid] => {
-            let acc = plan_rebase_current(repo, &graph, *only_child_oid, current_label, acc)?;
+            let acc = make_rebase_plan_for_current_commit(
+                repo,
+                &graph,
+                *only_child_oid,
+                current_label,
+                acc,
+            )?;
             Ok(acc)
         }
         children => {
@@ -190,7 +196,8 @@ fn plan_rebase_current(
                 label_name: label_name.clone(),
             });
             for child_oid in children {
-                acc = plan_rebase_current(repo, graph, *child_oid, &label_name, acc)?;
+                acc =
+                    make_rebase_plan_for_current_commit(repo, graph, *child_oid, &label_name, acc)?;
                 acc.push(RebaseCommand::Reset {
                     label_name: label_name.clone(),
                 });
@@ -243,7 +250,8 @@ pub fn make_rebase_plan(
     commands.push(RebaseCommand::Label {
         label_name: label_name.clone(),
     });
-    let commands = plan_rebase_current(repo, graph, source_oid, &label_name, commands)?;
+    let commands =
+        make_rebase_plan_for_current_commit(repo, graph, source_oid, &label_name, commands)?;
     Ok(RebasePlan { commands })
 }
 
@@ -259,14 +267,14 @@ enum RebaseInMemoryResult {
     },
 }
 
-#[context("Rebasing in memory onto to {}", dest.to_string())]
+#[context("Rebasing in memory onto to {}", dest_oid.to_string())]
 fn rebase_in_memory(
     glyphs: &Glyphs,
     repo: &git2::Repository,
     rebase_plan: &RebasePlan,
-    dest: git2::Oid,
+    dest_oid: git2::Oid,
 ) -> anyhow::Result<RebaseInMemoryResult> {
-    let mut current_oid = dest;
+    let mut current_oid = dest_oid;
     let mut labels: HashMap<String, git2::Oid> = HashMap::new();
     let mut rewritten_oids = Vec::new();
 
@@ -408,13 +416,13 @@ fn post_rebase_in_memory(
     Ok(())
 }
 
-#[context("Rebasing on disk from {} to {}", source.to_string(), dest.to_string())]
+#[context("Rebasing on disk from {} to {}", source_oid.to_string(), dest_oid.to_string())]
 fn rebase_on_disk(
     git_executable: &GitExecutable,
     repo: &git2::Repository,
     rebase_plan: &RebasePlan,
-    source: git2::Oid,
-    dest: git2::Oid,
+    source_oid: git2::Oid,
+    dest_oid: git2::Oid,
     event_tx_id: EventTransactionId,
 ) -> anyhow::Result<isize> {
     let progress = ProgressBar::new_spinner();
@@ -429,8 +437,8 @@ fn rebase_on_disk(
             None,
             // TODO: if the target was a branch, do we need to use an annotated
             // commit which was instantiated from the branch?
-            Some(&repo.find_annotated_commit(source)?),
-            Some(&repo.find_annotated_commit(dest)?),
+            Some(&repo.find_annotated_commit(source_oid)?),
+            Some(&repo.find_annotated_commit(dest_oid)?),
             None,
         )
         .with_context(|| "Setting up rebase to write `git-rebase-todo`")?;
