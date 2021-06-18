@@ -72,35 +72,35 @@ pub fn get_branch_oid_to_names(
     let mut result = HashMap::new();
     for branch_info in branches {
         let branch_info = branch_info.with_context(|| "Iterating over branches")?;
-        match branch_info {
+        let branch = match branch_info {
             (branch, git2::BranchType::Remote) => anyhow::bail!(
                 "Unexpectedly got a remote branch in local branch iterator: {:?}",
                 branch.name()
             ),
-            (branch, git2::BranchType::Local) => {
-                let reference = branch.into_reference();
-                match reference.name() {
-                    None => warn!(
-                        "Could not decode branch name, skipping: {:?}",
-                        reference.name_bytes()
-                    ),
-                    Some(reference_name) => {
-                        let reference_name = match reference_name.strip_prefix("refs/heads/") {
-                            Some(reference_name) => reference_name,
-                            None => reference_name,
-                        };
-                        let commit = reference.peel_to_commit().with_context(|| {
-                            format!("Peeling branch into commit: {}", reference_name)
-                        })?;
-                        let branch_oid = commit.id();
-                        result
-                            .entry(branch_oid)
-                            .or_insert_with(HashSet::new)
-                            .insert(reference_name.to_owned());
-                    }
-                }
+            (branch, git2::BranchType::Local) => branch,
+        };
+
+        let reference = branch.into_reference();
+        let reference_name = match reference.shorthand() {
+            None => {
+                warn!(
+                    "Could not decode branch name, skipping: {:?}",
+                    reference.name_bytes()
+                );
+                continue;
             }
-        }
+            Some(reference_name) => reference_name,
+        };
+
+        let branch_oid = reference
+            .resolve()
+            .with_context(|| format!("Resolving branch into commit: {}", reference_name))?
+            .target()
+            .unwrap();
+        result
+            .entry(branch_oid)
+            .or_insert_with(HashSet::new)
+            .insert(reference_name.to_owned());
     }
 
     // The main branch may be a remote branch, in which case it won't be
