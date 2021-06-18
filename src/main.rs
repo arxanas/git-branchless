@@ -1,5 +1,5 @@
 use std::convert::TryInto;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::Context;
 use branchless::commands::wrap;
@@ -110,6 +110,9 @@ enum Opts {
 
     /// Wrap a Git command inside a branchless transaction.
     Wrap {
+        #[structopt(long = "--git-executable")]
+        git_executable: Option<PathBuf>,
+
         #[structopt(subcommand)]
         command: WrappedCommand,
     },
@@ -202,8 +205,13 @@ fn main() -> anyhow::Result<()> {
         }
 
         Opts::Wrap {
+            git_executable: explicit_git_executable,
             command: WrappedCommand::WrappedCommand(args),
         } => {
+            let git_executable = match explicit_git_executable {
+                Some(path) => GitExecutable(path),
+                None => git_executable,
+            };
             wrap::wrap(&git_executable, args.as_slice())?;
             0
         }

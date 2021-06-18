@@ -231,4 +231,21 @@ mod tests {
             Ok(())
         })
     }
+
+    #[test]
+    fn test_wrap_explicit_git_executable() -> anyhow::Result<()> {
+        with_git(|git| {
+            git.init_repo()?;
+            let (stdout, _stderr) = git.run(&[
+                "branchless",
+                "wrap",
+                "--git-executable",
+                "/bin/echo",
+                "hello",
+                "world",
+            ])?;
+            assert_eq!(stdout, "hello world\n");
+            Ok(())
+        })
+    }
 }
