@@ -83,6 +83,7 @@ fn test_move_stick_in_memory() -> anyhow::Result<()> {
             insta::assert_snapshot!(stdout, @r###"
             Attempting rebase in-memory...
             branchless: processing 2 rewritten commits
+            branchless: <git-executable> checkout a248207402822b7396cabe0f1011d8a7ce7daf1b
             In-memory rebase succeeded.
             "###);
         }
@@ -95,13 +96,9 @@ fn test_move_stick_in_memory() -> anyhow::Result<()> {
             |\
             | o 4838e49b create test3.txt
             | |
-            | o a2482074 create test4.txt
+            | @ a2482074 create test4.txt
             |
             O 96d1c37a (master) create test2.txt
-            |
-            x 70deb1e2 (rewritten as 4838e49b) create test3.txt
-            |
-            % 355e173b (rewritten as a2482074) create test4.txt
             "###);
         }
 
@@ -188,13 +185,9 @@ fn test_move_tree_in_memory() -> anyhow::Result<()> {
             | |\
             | | o a2482074 create test4.txt
             | |
-            | o b1f9efa0 create test5.txt
+            | @ b1f9efa0 create test5.txt
             |
             O 96d1c37a (master) create test2.txt
-            |
-            x 70deb1e2 (rewritten as 4838e49b) create test3.txt
-            |
-            % 9ea1b368 (rewritten as b1f9efa0) create test5.txt
             "###);
         }
 
@@ -269,11 +262,11 @@ fn test_move_with_source_not_in_smartlog_in_memory() -> anyhow::Result<()> {
             |\
             : o 4838e49b create test3.txt
             : |
-            : o a2482074 create test4.txt
+            : @ a2482074 create test4.txt
             :
             X 70deb1e2 (rewritten as 4838e49b) create test3.txt
             |
-            % 355e173b (rewritten as a2482074) (master) create test4.txt
+            X 355e173b (rewritten as a2482074) (master) create test4.txt
             "###);
         }
 
@@ -366,6 +359,38 @@ fn test_move_base() -> anyhow::Result<()> {
             o 44352d00 create test2.txt
             |
             o cf5eb244 create test3.txt
+            "###);
+        }
+
+        Ok(())
+    })
+}
+
+#[test]
+fn test_move_checkout_new_head() -> anyhow::Result<()> {
+    with_git(|git| {
+        git.init_repo()?;
+        git.commit_file("test1", 1)?;
+        git.run(&["prev"])?;
+        git.commit_file("test2", 2)?;
+
+        {
+            let (stdout, _stderr) = git.run(&["move", "-d", "master"])?;
+            insta::assert_snapshot!(stdout, @r###"
+            Attempting rebase in-memory...
+            branchless: processing 1 rewritten commit
+            branchless: <git-executable> checkout 96d1c37a3d4363611c49f7e52186e189a04c531f
+            In-memory rebase succeeded.
+            "###);
+        }
+
+        {
+            let (stdout, _stderr) = git.run(&["smartlog"])?;
+            insta::assert_snapshot!(stdout, @r###"
+            :
+            O 62fc20d2 (master) create test1.txt
+            |
+            @ 96d1c37a create test2.txt
             "###);
         }
 

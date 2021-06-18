@@ -381,10 +381,11 @@ fn rebase_in_memory(
 }
 
 fn post_rebase_in_memory(
+    git_executable: &GitExecutable,
     repo: &git2::Repository,
     rewritten_oids: &[(git2::Oid, git2::Oid)],
     event_tx_id: EventTransactionId,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<isize> {
     let post_rewrite_hook_path = repo
         .config()?
         .get_path("core.hooksPath")
@@ -413,7 +414,25 @@ fn post_rebase_in_memory(
 
     // TODO: move any affected branches, to match the behavior of `git rebase`.
 
-    Ok(())
+    let head_oid = repo.head()?.peel_to_commit()?.id();
+    if let Some(new_head_oid) = rewritten_oids.iter().find_map(|(old_oid, new_oid)| {
+        if *old_oid == head_oid {
+            Some(new_oid)
+        } else {
+            None
+        }
+    }) {
+        let result = run_git(
+            git_executable,
+            Some(event_tx_id),
+            &["checkout", &new_head_oid.to_string()],
+        )?;
+        if result != 0 {
+            return Ok(result);
+        }
+    }
+
+    Ok(0)
 }
 
 #[context("Rebasing on disk from {} to {}", source_oid.to_string(), dest_oid.to_string())]
@@ -504,7 +523,7 @@ pub fn execute_rebase_plan(
         println!("Attempting rebase in-memory...");
         match rebase_in_memory(glyphs, &repo, &rebase_plan, dest_oid)? {
             RebaseInMemoryResult::Succeeded { rewritten_oids } => {
-                post_rebase_in_memory(&repo, &rewritten_oids, event_tx_id)?;
+                post_rebase_in_memory(git_executable, repo, &rewritten_oids, event_tx_id)?;
                 println!("In-memory rebase succeeded.");
                 return Ok(0);
             }
