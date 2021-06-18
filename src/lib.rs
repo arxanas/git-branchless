@@ -37,7 +37,7 @@
 //!     branchless workflow.
 
 #![warn(clippy::all, missing_docs)]
-#![allow(clippy::clippy::too_many_arguments)]
+#![allow(clippy::too_many_arguments)]
 
 pub mod commands;
 pub mod core;
