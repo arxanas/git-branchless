@@ -374,3 +374,10 @@ pub fn resolve_commits(
     }
     Ok(ResolveCommitsResult::Ok { commits })
 }
+
+/// Get the reference corresponding to `HEAD`. Don't use
+/// `git2::Repository::head` because that resolves the reference before
+/// returning it.
+pub fn get_repo_head(repo: &git2::Repository) -> anyhow::Result<git2::Reference> {
+    repo.find_reference("HEAD").map_err(wrap_git_error)
+}

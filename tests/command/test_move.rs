@@ -1,7 +1,5 @@
-use branchless::{
-    testing::{with_git, Git, GitRunOptions},
-    util::GitVersion,
-};
+use branchless::testing::{with_git, Git, GitRunOptions};
+use branchless::util::GitVersion;
 
 /// Git v2.24 produces this message on `git move` tests:
 ///
@@ -247,26 +245,32 @@ fn test_move_with_source_not_in_smartlog_in_memory() -> anyhow::Result<()> {
         let test3_oid = git.commit_file("test3", 3)?;
         git.commit_file("test4", 4)?;
 
-        git.run(&[
-            "move",
-            "-s",
-            &test3_oid.to_string(),
-            "-d",
-            &test1_oid.to_string(),
-        ])?;
+        {
+            let (stdout, _stderr) = git.run(&[
+                "move",
+                "-s",
+                &test3_oid.to_string(),
+                "-d",
+                &test1_oid.to_string(),
+            ])?;
+            insta::assert_snapshot!(stdout, @r###"
+            Attempting rebase in-memory...
+            branchless: processing 1 update to a branch/ref
+            branchless: processing 2 rewritten commits
+            branchless: <git-executable> checkout master
+            In-memory rebase succeeded.
+            "###);
+        }
+
         {
             let (stdout, _stderr) = git.run(&["smartlog"])?;
             insta::assert_snapshot!(stdout, @r###"
             :
             O 62fc20d2 create test1.txt
             |\
-            : o 4838e49b create test3.txt
-            : |
-            : @ a2482074 create test4.txt
+            : o 96d1c37a create test2.txt
             :
-            X 70deb1e2 (rewritten as 4838e49b) create test3.txt
-            |
-            X 355e173b (rewritten as a2482074) (master) create test4.txt
+            @ a2482074 (master) create test4.txt
             "###);
         }
 
@@ -398,7 +402,44 @@ fn test_move_checkout_new_head() -> anyhow::Result<()> {
     })
 }
 
+#[test]
+fn test_move_branch() -> anyhow::Result<()> {
+    with_git(|git| {
+        git.init_repo()?;
+        git.detach_head()?;
+        git.commit_file("test1", 1)?;
+        let test2_oid = git.commit_file("test2", 2)?;
+        git.run(&["checkout", "master"])?;
+
+        git.commit_file("test3", 3)?;
+
+        {
+            let (stdout, _stderr) = git.run(&["move", "-d", &test2_oid.to_string()])?;
+            insta::assert_snapshot!(stdout, @r###"
+            Attempting rebase in-memory...
+            branchless: processing 1 update to a branch/ref
+            branchless: processing 1 rewritten commit
+            branchless: <git-executable> checkout master
+            In-memory rebase succeeded.
+            "###);
+        }
+
+        {
+            let (stdout, _stderr) = git.run(&["smartlog"])?;
+            insta::assert_snapshot!(stdout, @r###"
+            :
+            @ 70deb1e2 (master) create test3.txt
+            "###);
+        }
+
+        {
+            let (stdout, _stderr) = git.run(&["branch", "--show-current"])?;
+            assert_eq!(stdout, "master\n");
+        }
+
+        Ok(())
+    })
+}
+
 // TODO: implement restack in terms of move
-// TODO: if on a rewritten commit before rebase, check out the new commit afterwards.
-// TODO: move branches after in-memory rebase. Make sure to call reference-transaction hook.
 // TODO: don't re-apply already-applied commits

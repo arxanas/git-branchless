@@ -9,7 +9,9 @@ use fn_error_context::context;
 use indicatif::{ProgressBar, ProgressStyle};
 
 use crate::core::formatting::printable_styled_string;
-use crate::util::{run_git, run_hook, wrap_git_error, GitExecutable};
+use crate::util::{
+    get_branch_oid_to_names, get_repo_head, run_git, run_hook, wrap_git_error, GitExecutable,
+};
 
 use super::eventlog::{Event, EventCursor, EventReplayer, EventTransactionId};
 use super::formatting::Glyphs;
@@ -376,32 +378,126 @@ fn rebase_in_memory(
     Ok(RebaseInMemoryResult::Succeeded { rewritten_oids })
 }
 
+fn move_branches<'a>(
+    repo: &'a git2::Repository,
+    event_tx_id: EventTransactionId,
+    rewritten_oids_map: &'a HashMap<git2::Oid, git2::Oid>,
+) -> anyhow::Result<()> {
+    // let mut branch_oid_to_names: HashMap<git2::Oid, HashSet<String>> = HashMap::new();
+    // for branch in repo.branches(None)? {
+    //     let (branch, _branch_type) = branch?;
+    //     let branch = branch.into_reference();
+    //     let branch_name = match branch.name() {
+    //         Some(branch_name) => branch_name,
+    //         None => anyhow::bail!(
+    //             "Failed to look up branch name for branch: {:?}",
+    //             branch.name_bytes()
+    //         ),
+    //     };
+    //     let branch_oid = branch.peel_to_commit()?.id();
+    //     branch_oid_to_names
+    //         .entry(branch_oid)
+    //         .or_insert_with(HashSet::new)
+    //         .insert(branch_name.to_owned());
+    // }
+    let branch_oid_to_names = get_branch_oid_to_names(repo)?;
+
+    // We may experience an error in the case of a branch move. Ideally, we
+    // would use `git2::Transaction::commit`, which stops the transaction at the
+    // first error, but we don't know which references we successfully committed
+    // in that case. Instead, we just do things non-atomically and record which
+    // ones succeeded. See https://github.com/libgit2/libgit2/issues/5918
+    let mut branch_moves: Vec<(git2::Oid, git2::Oid, &str)> = Vec::new();
+    let mut branch_move_err: Option<anyhow::Error> = None;
+    'outer: for (old_oid, names) in branch_oid_to_names.iter() {
+        let new_oid = match rewritten_oids_map.get(&old_oid) {
+            Some(new_oid) => new_oid,
+            None => continue,
+        };
+        let new_commit = match repo.find_commit(*new_oid) {
+            Ok(commit) => commit,
+            Err(err) => {
+                branch_move_err = Some(err.into());
+                break 'outer;
+            }
+        };
+
+        let mut names: Vec<_> = names.iter().collect();
+        // Sort for determinism in tests.
+        names.sort_unstable();
+        for name in names {
+            if let Err(err) = repo.branch(name, &new_commit, true) {
+                branch_move_err = Some(err.into());
+                break 'outer;
+            }
+            branch_moves.push((*old_oid, *new_oid, name))
+        }
+    }
+
+    let branch_moves_stdin: String = branch_moves
+        .into_iter()
+        .map(|(old_oid, new_oid, name)| {
+            format!("{} {} {}\n", old_oid.to_string(), new_oid.to_string(), name)
+        })
+        .collect();
+    run_hook(
+        repo,
+        "reference-transaction",
+        event_tx_id,
+        &["committed"],
+        Some(branch_moves_stdin),
+    )?;
+    match branch_move_err {
+        Some(err) => Err(err),
+        None => Ok(()),
+    }
+}
+
 fn post_rebase_in_memory(
     git_executable: &GitExecutable,
     repo: &git2::Repository,
     rewritten_oids: &[(git2::Oid, git2::Oid)],
     event_tx_id: EventTransactionId,
 ) -> anyhow::Result<isize> {
-    let stdin = rewritten_oids
+    // Note that if an OID has been mapped to multiple other OIDs, then the last
+    // mapping wins. (This corresponds to the last applied rebase operation.)
+    let rewritten_oids_map: HashMap<git2::Oid, git2::Oid> =
+        rewritten_oids.iter().copied().collect();
+
+    let head = get_repo_head(repo)?;
+    let head_branch = head
+        .symbolic_target()
+        .and_then(|s| s.strip_prefix("refs/heads/"));
+    let head_oid = head.peel_to_commit()?.id();
+    // Avoid moving the branch which HEAD points to, or else the index will show
+    // a lot of changes in the working copy.
+    repo.set_head_detached(head_oid)?;
+
+    move_branches(repo, event_tx_id, &rewritten_oids_map)?;
+
+    // Call the `post-rewrite` hook only after moving branches so that we don't
+    // produce a spurious abandoned-branch warning.
+    let post_rewrite_stdin: String = rewritten_oids
         .iter()
         .map(|(old_oid, new_oid)| format!("{} {}\n", old_oid.to_string(), new_oid.to_string()))
-        .collect::<String>();
-    run_hook(repo, "post-rewrite", event_tx_id, &["rebase"], Some(stdin))?;
+        .collect();
+    run_hook(
+        repo,
+        "post-rewrite",
+        event_tx_id,
+        &["rebase"],
+        Some(post_rewrite_stdin),
+    )?;
 
-    // TODO: move any affected branches, to match the behavior of `git rebase`.
-
-    let head_oid = repo.head()?.peel_to_commit()?.id();
-    if let Some(new_head_oid) = rewritten_oids.iter().find_map(|(old_oid, new_oid)| {
-        if *old_oid == head_oid {
-            Some(new_oid)
-        } else {
-            None
-        }
-    }) {
+    if let Some(new_head_oid) = rewritten_oids_map.get(&head_oid) {
+        let head_target = match head_branch {
+            Some(head_branch) => head_branch.to_string(),
+            None => new_head_oid.to_string(),
+        };
         let result = run_git(
             git_executable,
             Some(event_tx_id),
-            &["checkout", &new_head_oid.to_string()],
+            &["checkout", &head_target],
         )?;
         if result != 0 {
             return Ok(result);
