@@ -2,8 +2,6 @@
 //! specifics on commit rewriting.
 
 use std::collections::{HashMap, HashSet};
-use std::io::Write;
-use std::process::{Command, ExitStatus, Stdio};
 
 use anyhow::Context;
 use cursive::utils::markup::StyledString;
@@ -11,11 +9,9 @@ use fn_error_context::context;
 use indicatif::{ProgressBar, ProgressStyle};
 
 use crate::core::formatting::printable_styled_string;
-use crate::util::{run_git, wrap_git_error, GitExecutable};
+use crate::util::{run_git, run_hook, wrap_git_error, GitExecutable};
 
-use super::eventlog::{
-    Event, EventCursor, EventReplayer, EventTransactionId, BRANCHLESS_TRANSACTION_ID_ENV_VAR,
-};
+use super::eventlog::{Event, EventCursor, EventReplayer, EventTransactionId};
 use super::formatting::Glyphs;
 use super::graph::{find_path_to_merge_base, CommitGraph, MainBranchOid};
 use super::mergebase::MergeBaseDb;
@@ -386,31 +382,11 @@ fn post_rebase_in_memory(
     rewritten_oids: &[(git2::Oid, git2::Oid)],
     event_tx_id: EventTransactionId,
 ) -> anyhow::Result<isize> {
-    let post_rewrite_hook_path = repo
-        .config()?
-        .get_path("core.hooksPath")
-        .unwrap_or_else(|_| repo.path().join("hooks"))
-        .join("post-rewrite");
-    if post_rewrite_hook_path.exists() {
-        let mut child = Command::new(post_rewrite_hook_path.as_path())
-            .arg("rebase")
-            .env(BRANCHLESS_TRANSACTION_ID_ENV_VAR, event_tx_id.to_string())
-            .stdin(Stdio::piped())
-            .spawn()
-            .with_context(|| {
-                format!(
-                    "Invoking post-rewrite hook at: {:?}",
-                    post_rewrite_hook_path.as_path()
-                )
-            })?;
-
-        let stdin = child.stdin.as_mut().unwrap();
-        for (old_oid, new_oid) in rewritten_oids {
-            writeln!(stdin, "{} {}", old_oid.to_string(), new_oid.to_string())?;
-        }
-
-        let _ignored: ExitStatus = child.wait()?;
-    }
+    let stdin = rewritten_oids
+        .iter()
+        .map(|(old_oid, new_oid)| format!("{} {}\n", old_oid.to_string(), new_oid.to_string()))
+        .collect::<String>();
+    run_hook(repo, "post-rewrite", event_tx_id, &["rebase"], Some(stdin))?;
 
     // TODO: move any affected branches, to match the behavior of `git rebase`.
 

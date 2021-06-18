@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
 use std::io::{stderr, stdout, Write};
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Command, ExitStatus, Stdio};
 use std::str::FromStr;
 
 use anyhow::Context;
@@ -245,6 +245,42 @@ pub fn run_git_silent<S: AsRef<str> + std::fmt::Debug>(
         )
     })?;
     Ok(result)
+}
+
+/// Run a provided Git hook if it exists for the repository.
+///
+/// See the man page for `githooks(5)` for more detail on Git hooks.
+#[context("Running Git hook: {}", hook_name)]
+pub fn run_hook(
+    repo: &git2::Repository,
+    hook_name: &str,
+    event_tx_id: EventTransactionId,
+    args: &[impl AsRef<str>],
+    stdin: Option<String>,
+) -> anyhow::Result<()> {
+    let hook_path = repo
+        .config()?
+        .get_path("core.hooksPath")
+        .unwrap_or_else(|_| repo.path().join("hooks"))
+        .join(hook_name);
+    if hook_path.exists() {
+        let mut child = Command::new(hook_path.as_path())
+            .args(args.iter().map(|arg| arg.as_ref()).collect::<Vec<_>>())
+            .env(BRANCHLESS_TRANSACTION_ID_ENV_VAR, event_tx_id.to_string())
+            .stdin(Stdio::piped())
+            .spawn()
+            .with_context(|| {
+                format!("Invoking {} hook at: {:?}", hook_name, hook_path.as_path())
+            })?;
+
+        if let Some(stdin) = stdin {
+            write!(child.stdin.as_mut().unwrap(), "{}", stdin)
+                .with_context(|| "Writing hook process stdin")?;
+        }
+
+        let _ignored: ExitStatus = child.wait()?;
+    }
+    Ok(())
 }
 
 /// The parsed version of Git.
