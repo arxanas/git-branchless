@@ -20,14 +20,14 @@ name = "branchless"
 anyhow = "1.0.38"
 assert_cmd = "1.0.3"
 console = "0.14.0"
-cursive = {version = "0.17.0-alpha.0", features = ["crossterm-backend"]}
+cursive = {version = "0.17.0-alpha.0", default-features = false, features = ["crossterm-backend"]}
 fn-error-context = "0.1.1"
 git2 = {version = "0.13.17", default-features = false}
 indicatif = "0.16.2"
 lazy_static = "1.4.0"
 log = "0.4.14"
 regex = "1.4.4"
-rusqlite = "0.24.2"
+rusqlite = { version = "0.24.2", features = ["bundled"] }
 simple_logger = "1.11.0"
 structopt = "0.3.21"
 tempfile = "3.2.0"
