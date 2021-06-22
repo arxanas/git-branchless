@@ -240,7 +240,11 @@ mod tests {
                 "branchless",
                 "wrap",
                 "--git-executable",
-                "/bin/echo",
+                if cfg!(target_os = "windows") {
+                    "echo"
+                } else {
+                    "/bin/echo"
+                },
                 "hello",
                 "world",
             ])?;
