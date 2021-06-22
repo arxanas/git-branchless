@@ -99,16 +99,18 @@ impl Git {
             .git_executable
             .parent()
             .expect("Unable to find git path parent");
-        vec![
-            // For Git to be able to launch `git-branchless`.
-            branchless_path,
-            // For our hooks to be able to call back into `git`.
-            git_path,
-        ]
-        .iter()
-        .map(|path| path.to_str().expect("Unable to decode path component"))
-        .collect::<Vec<_>>()
-        .join(":")
+        std::env::join_paths(vec![
+                // For Git to be able to launch `git-branchless`.
+                branchless_path,
+                // For our hooks to be able to call back into `git`.
+                git_path,
+            ]
+            .iter()
+            .map(|path| path.to_str().expect("Unable to decode path component")),
+        )
+        .expect("joining paths")
+        .to_string_lossy()
+        .to_string()
     }
 
     /// Run a Git command.
