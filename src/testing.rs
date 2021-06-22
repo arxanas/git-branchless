@@ -126,7 +126,11 @@ impl Git {
             expected_exit_code,
         } = options;
 
-        let default_path = Path::new("/usr/bin/git");
+        let default_path = if cfg!(target_os = "windows") {
+            Path::new("C:\\Program Files\\Git\\bin\\git.exe")
+        } else {
+            Path::new("/usr/bin/git")
+        };
         let git_executable = if !use_system_git {
             &self.git_executable
         } else {
