@@ -6,6 +6,8 @@ fn preprocess_stderr(stderr: String) -> String {
         // Interactive progress displays may update the same line multiple times
         // with a carriage return before emitting the final newline.
         .replace("\r", "\n")
+        // Window pseudo console may emit EL 'Erase in Line' VT sequences.
+        .replace("\x1b[K", "")
         .lines()
         .filter(|line| {
             !line.chars().all(|c| c.is_whitespace()) && !line.starts_with("branchless: processing")
