@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::str::FromStr;
 
-use crate::util::{wrap_git_error, GitExecutable, GitVersion};
+use crate::util::{get_sh, wrap_git_error, GitExecutable, GitVersion};
 use anyhow::Context;
 use fn_error_context::context;
 
@@ -99,11 +99,16 @@ impl Git {
             .git_executable
             .parent()
             .expect("Unable to find git path parent");
-        std::env::join_paths(vec![
+        let bash = get_sh().expect("bash missing?");
+        let bash_path = bash.parent().unwrap();
+        std::env::join_paths(
+            vec![
                 // For Git to be able to launch `git-branchless`.
                 branchless_path,
                 // For our hooks to be able to call back into `git`.
                 git_path,
+                // For branchless to manually invoke bash when needed.
+                bash_path,
             ]
             .iter()
             .map(|path| path.to_str().expect("Unable to decode path component")),

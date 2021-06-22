@@ -1,4 +1,6 @@
+use anyhow::Context;
 use branchless::testing::with_git;
+use branchless::util::get_sh;
 use std::process::Command;
 
 fn preprocess_stderr(stderr: String) -> String {
@@ -166,8 +168,11 @@ fn test_pre_auto_gc() -> anyhow::Result<()> {
         // `pre-auto-gc` hook to be invoked at all. We'll just invoke the hook
         // directly to make sure that it's installed properly.
         std::env::set_current_dir(&git.repo_path)?;
-        let hook_path = git.repo_path.join(".git").join("hooks").join("pre-auto-gc");
-        let output = Command::new(hook_path)
+        let output = Command::new(get_sh().context("bash needed to run pre-auto-gc")?)
+            .arg("-c")
+            // Always use a unix style path here, as we are handing it to bash (even on Windows).
+            .arg("./.git/hooks/pre-auto-gc")
+            .current_dir(&git.repo_path)
             .env("PATH", git.get_path_for_env())
             .output()?;
 
