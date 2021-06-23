@@ -23,7 +23,7 @@ To release a new version:
 
 * Update the version string in `Cargo.toml`.
 * Update `CHANGELOG.md` and add a new header for the about-to-be-released version. Make sure to keep an empty `[Unreleased]` section header at the top.
-* Commit the `CHANGELOG.md` change with a message like `docs: release version v1.2.3`.
+* Commit the above changes with a message like `docs: release version v1.2.3`.
 * Tag the previous commit with the version number (`git tag v1.2.3`).
 * Push the commit to Github.
 * Run `cargo publish` to publish the code to `crates.io`.
