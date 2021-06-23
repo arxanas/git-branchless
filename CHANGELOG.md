@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.2] - 2021-06-23
+
 `git-branchless` now runs on Windows! Big thanks to @waych for their efforts.
 
 As a result of this work, `git-branchless` also includes its own build of SQLite, which should make it easier for users to install (#17).

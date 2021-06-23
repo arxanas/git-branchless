@@ -9,7 +9,7 @@ keywords = ["cli", "git"]
 license = "Apache-2.0"
 name = "git-branchless"
 repository = "https://github.com/arxanas/git-branchless"
-version = "0.3.1"
+version = "0.3.2"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -27,7 +27,7 @@ indicatif = "0.16.2"
 lazy_static = "1.4.0"
 log = "0.4.14"
 regex = "1.4.4"
-rusqlite = { version = "0.24.2", features = ["bundled"] }
+rusqlite = {version = "0.24.2", features = ["bundled"]}
 simple_logger = "1.11.0"
 structopt = "0.3.21"
 tempfile = "3.2.0"
