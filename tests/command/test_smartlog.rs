@@ -2,7 +2,7 @@ use branchless::testing::{get_git_executable, with_git, Git, GitInitOptions, Git
 use branchless::util::GitExecutable;
 
 #[test]
-fn test_init() -> anyhow::Result<()> {
+fn test_init_smartlog() -> anyhow::Result<()> {
     with_git(|git| {
         git.init_repo()?;
 
@@ -282,7 +282,7 @@ fn test_custom_main_branch() -> anyhow::Result<()> {
     with_git(|git| {
         git.init_repo()?;
         git.run(&["branch", "-m", "master", "main"])?;
-        git.run(&["config", "branchless.mainBranch", "main"])?;
+        git.run(&["config", "branchless.core.mainBranch", "main"])?;
         git.commit_file("test1", 1)?;
         git.detach_head()?;
         git.commit_file("test2", 2)?;

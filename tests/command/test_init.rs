@@ -1,5 +1,8 @@
 use anyhow::Context;
-use branchless::util::GitVersion;
+use branchless::{
+    testing::{with_git, GitInitOptions},
+    util::GitVersion,
+};
 
 #[test]
 fn test_hook_installed() -> anyhow::Result<()> {
@@ -80,6 +83,43 @@ fn test_old_git_version_warning() -> anyhow::Result<()> {
 
             This only applies to the `git undo` command. Other commands which are part of
             the branchless workflow will work properly.
+            "###);
+        }
+
+        Ok(())
+    })
+}
+
+#[test]
+fn test_init_basic() -> anyhow::Result<()> {
+    with_git(|git| {
+        if !git.supports_reference_transactions()? {
+            return Ok(());
+        }
+
+        git.init_repo_with_options(&GitInitOptions {
+            run_branchless_init: false,
+            ..Default::default()
+        })?;
+
+        {
+            let (stdout, _stderr) = git.run(&["branchless", "init"])?;
+            insta::assert_snapshot!(stdout, @r###"
+            Installing hook: post-commit
+            Installing hook: post-rewrite
+            Installing hook: post-checkout
+            Installing hook: pre-auto-gc
+            Installing hook: reference-transaction
+            Setting config (non-global): advice.detachedHead = false
+            Installing alias (non-global): git smartlog -> git branchless smartlog
+            Installing alias (non-global): git sl -> git branchless smartlog
+            Installing alias (non-global): git hide -> git branchless hide
+            Installing alias (non-global): git unhide -> git branchless unhide
+            Installing alias (non-global): git prev -> git branchless prev
+            Installing alias (non-global): git next -> git branchless next
+            Installing alias (non-global): git restack -> git branchless restack
+            Installing alias (non-global): git undo -> git branchless undo
+            Installing alias (non-global): git move -> git branchless move
             "###);
         }
 
