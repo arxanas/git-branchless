@@ -52,6 +52,18 @@ fn run_undo_events(git: &Git, event_cursor: EventCursor) -> anyhow::Result<Strin
     std::env::set_current_dir(repo.workdir().unwrap())?;
     std::env::set_var("PATH", git.get_path_for_env());
 
+    // Normally, we want to inherit the user's environment when running external
+    // Git commands. However, for testing, we may have inherited variables which
+    // affect the execution of Git. In particular, `GIT_INDEX_FILE` is set to
+    // `.git/index` normally (which works for the test), but can be set to an
+    // absolute path when running `git commit -a`, and having these tests run as
+    // part of a commit hook.
+    for (env_var_name, _) in std::env::vars() {
+        if env_var_name.starts_with("GIT_") {
+            std::env::remove_var(env_var_name);
+        }
+    }
+
     let result = undo_events(
         &mut in_,
         &mut out,
