@@ -34,12 +34,16 @@ pub struct GitInitOptions {
     /// If `true`, then `init_repo_with_options` makes an initial commit with
     /// some content.
     pub make_initial_commit: bool,
+
+    /// If `true`, run `git branchless init` as part of initialization process.
+    pub run_branchless_init: bool,
 }
 
 impl Default for GitInitOptions {
     fn default() -> Self {
         GitInitOptions {
             make_initial_commit: true,
+            run_branchless_init: true,
         }
     }
 }
@@ -220,7 +224,9 @@ impl Git {
         // Non-deterministic metadata (depends on current time).
         self.run(&["config", "branchless.commitMetadata.relativeTime", "false"])?;
 
-        self.run(&["branchless", "init"])?;
+        if options.run_branchless_init {
+            self.run(&["branchless", "init"])?;
+        }
 
         Ok(())
     }
