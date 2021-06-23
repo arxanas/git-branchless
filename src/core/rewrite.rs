@@ -383,23 +383,6 @@ fn move_branches<'a>(
     event_tx_id: EventTransactionId,
     rewritten_oids_map: &'a HashMap<git2::Oid, git2::Oid>,
 ) -> anyhow::Result<()> {
-    // let mut branch_oid_to_names: HashMap<git2::Oid, HashSet<String>> = HashMap::new();
-    // for branch in repo.branches(None)? {
-    //     let (branch, _branch_type) = branch?;
-    //     let branch = branch.into_reference();
-    //     let branch_name = match branch.name() {
-    //         Some(branch_name) => branch_name,
-    //         None => anyhow::bail!(
-    //             "Failed to look up branch name for branch: {:?}",
-    //             branch.name_bytes()
-    //         ),
-    //     };
-    //     let branch_oid = branch.peel_to_commit()?.id();
-    //     branch_oid_to_names
-    //         .entry(branch_oid)
-    //         .or_insert_with(HashSet::new)
-    //         .insert(branch_name.to_owned());
-    // }
     let branch_oid_to_names = get_branch_oid_to_names(repo)?;
 
     // We may experience an error in the case of a branch move. Ideally, we
