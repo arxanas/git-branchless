@@ -25,9 +25,17 @@ pub fn get_core_hooks_path(repo: &git2::Repository) -> anyhow::Result<PathBuf> {
 ///
 /// Returns: The name of the main branch for the repository.
 pub fn get_main_branch_name(repo: &git2::Repository) -> anyhow::Result<String> {
-    get_config(repo)?
-        .get_string("branchless.mainBranch")
-        .or_else(|_| Ok(String::from("master")))
+    let config = get_config(repo)?;
+    let main_branch_name =
+        config
+            .get_string("branchless.core.mainBranch")
+            .or_else(|_| -> anyhow::Result<String> {
+                // Deprecated; use `branchless.core.mainBranch` instead.
+                config
+                    .get_string("branchless.mainBranch")
+                    .or_else(|_| Ok(String::from("master")))
+            })?;
+    Ok(main_branch_name)
 }
 
 /// If `true`, when restacking a commit, do not update its timestamp to the

@@ -1,7 +1,6 @@
 use anyhow::Context;
 use branchless::util::GitVersion;
 
-#[cfg(test)]
 #[test]
 fn test_hook_installed() -> anyhow::Result<()> {
     branchless::testing::with_git(|git| {
