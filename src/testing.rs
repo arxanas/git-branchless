@@ -3,8 +3,9 @@
 //! This is inside `src` rather than `tests` since we use this code in some unit
 //! tests.
 
+use std::io::Write;
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::str::FromStr;
 
 use crate::util::{get_sh, wrap_git_error, GitExecutable, GitVersion};
@@ -57,6 +58,9 @@ pub struct GitRunOptions {
 
     /// The exit code that `Git` should return.
     pub expected_exit_code: i32,
+
+    /// The input to write to the child process's stdin.
+    pub input: Option<String>,
 }
 
 impl Default for GitRunOptions {
@@ -64,6 +68,7 @@ impl Default for GitRunOptions {
         GitRunOptions {
             time: 0,
             expected_exit_code: 0,
+            input: None,
         }
     }
 }
@@ -127,6 +132,7 @@ impl Git {
         let GitRunOptions {
             time,
             expected_exit_code,
+            input,
         } = options;
 
         // Required for determinism, as these values will be baked into the commit
@@ -164,15 +170,34 @@ impl Git {
         let mut command = Command::new(&self.git_executable);
         command.args(&args).env_clear().envs(env.iter().copied());
 
-        let result = command.output().with_context(|| {
-            format!(
-                "Running git
-                Executable: {:?}
-                Args: {:?}
-                Env: <not shown>",
-                &self.git_executable, &args
-            )
-        })?;
+        let result = if let Some(input) = input {
+            let mut child = command
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()?;
+            write!(child.stdin.take().unwrap(), "{}", &input)?;
+            child.wait_with_output().with_context(|| {
+                format!(
+                    "Running git
+                    Executable: {:?}
+                    Args: {:?}
+                    Stdin: {:?}
+                    Env: <not shown>",
+                    &self.git_executable, &args, input
+                )
+            })?
+        } else {
+            command.output().with_context(|| {
+                format!(
+                    "Running git
+                    Executable: {:?}
+                    Args: {:?}
+                    Env: <not shown>",
+                    &self.git_executable, &args
+                )
+            })?
+        };
 
         let exit_code = result
             .status

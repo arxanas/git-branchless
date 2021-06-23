@@ -332,7 +332,7 @@ fn test_main_remote_branch() -> anyhow::Result<()> {
             ..Default::default()
         })?;
         git.detach_head()?;
-        git.run(&["config", "branchless.mainBranch", "origin/master"])?;
+        git.run(&["config", "branchless.core.mainBranch", "origin/master"])?;
         git.run(&["branch", "-d", "master"])?;
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"

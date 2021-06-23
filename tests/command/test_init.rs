@@ -1,6 +1,6 @@
 use anyhow::Context;
 use branchless::{
-    testing::{with_git, GitInitOptions},
+    testing::{with_git, GitInitOptions, GitRunOptions},
     util::GitVersion,
 };
 
@@ -57,12 +57,15 @@ fn test_old_git_version_warning() -> anyhow::Result<()> {
             let (version_str, _stderr) = git.run(&["version"])?;
             let stdout = stdout.replace(version_str.trim(), "<git version output>");
             insta::assert_snapshot!(stdout, @r###"
+            Auto-detected your main branch as: master
+            If this is incorrect, run: git config branchless.core.mainBranch <branch>
+            Setting config (non-global): branchless.core.mainBranch = master
+            Setting config (non-global): advice.detachedHead = false
             Installing hook: post-commit
             Installing hook: post-rewrite
             Installing hook: post-checkout
             Installing hook: pre-auto-gc
             Installing hook: reference-transaction
-            Setting config (non-global): advice.detachedHead = false
             Installing alias (non-global): git smartlog -> git branchless smartlog
             Installing alias (non-global): git sl -> git branchless smartlog
             Installing alias (non-global): git hide -> git branchless hide
@@ -105,12 +108,15 @@ fn test_init_basic() -> anyhow::Result<()> {
         {
             let (stdout, _stderr) = git.run(&["branchless", "init"])?;
             insta::assert_snapshot!(stdout, @r###"
+            Auto-detected your main branch as: master
+            If this is incorrect, run: git config branchless.core.mainBranch <branch>
+            Setting config (non-global): branchless.core.mainBranch = master
+            Setting config (non-global): advice.detachedHead = false
             Installing hook: post-commit
             Installing hook: post-rewrite
             Installing hook: post-checkout
             Installing hook: pre-auto-gc
             Installing hook: reference-transaction
-            Setting config (non-global): advice.detachedHead = false
             Installing alias (non-global): git smartlog -> git branchless smartlog
             Installing alias (non-global): git sl -> git branchless smartlog
             Installing alias (non-global): git hide -> git branchless hide
@@ -121,6 +127,62 @@ fn test_init_basic() -> anyhow::Result<()> {
             Installing alias (non-global): git undo -> git branchless undo
             Installing alias (non-global): git move -> git branchless move
             "###);
+        }
+
+        Ok(())
+    })
+}
+
+#[test]
+fn test_init_prompt_for_main_branch() -> anyhow::Result<()> {
+    with_git(|git| {
+        if !git.supports_reference_transactions()? {
+            return Ok(());
+        }
+
+        git.init_repo_with_options(&GitInitOptions {
+            run_branchless_init: false,
+            ..Default::default()
+        })?;
+
+        git.run(&["branch", "-m", "master", "bespoke"])?;
+
+        {
+            let (stdout, stderr) = git.run_with_options(
+                &["branchless", "init"],
+                &GitRunOptions {
+                    input: Some("bespoke\n".to_string()),
+                    ..Default::default()
+                },
+            )?;
+            insta::assert_snapshot!(stderr, @"");
+            insta::assert_snapshot!(stdout, @r###"
+            Your main branch name could not be auto-detected.
+            Examples of a main branch: master, main, trunk, etc.
+            See https://github.com/arxanas/git-branchless/wiki/Concepts#main-branch
+            Enter the name of your main branch: Setting config (non-global): branchless.core.mainBranch = bespoke
+            Setting config (non-global): advice.detachedHead = false
+            Installing hook: post-commit
+            Installing hook: post-rewrite
+            Installing hook: post-checkout
+            Installing hook: pre-auto-gc
+            Installing hook: reference-transaction
+            Installing alias (non-global): git smartlog -> git branchless smartlog
+            Installing alias (non-global): git sl -> git branchless smartlog
+            Installing alias (non-global): git hide -> git branchless hide
+            Installing alias (non-global): git unhide -> git branchless unhide
+            Installing alias (non-global): git prev -> git branchless prev
+            Installing alias (non-global): git next -> git branchless next
+            Installing alias (non-global): git restack -> git branchless restack
+            Installing alias (non-global): git undo -> git branchless undo
+            Installing alias (non-global): git move -> git branchless move
+            "###);
+        }
+
+        {
+            let (stdout, _stderr) = git.run(&["smartlog"])?;
+            insta::assert_snapshot!(stdout, @"@ f777ecc9 (bespoke) create initial.txt
+");
         }
 
         Ok(())
