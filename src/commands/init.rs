@@ -1,5 +1,7 @@
 //! Install any hooks, aliases, etc. to set up `git-branchless` in this repo.
 
+use std::fmt::Display;
+use std::io::{stdin, stdout, BufRead, BufReader, Write};
 use std::path::PathBuf;
 
 use anyhow::Context;
@@ -180,21 +182,44 @@ fn install_alias(config: &mut git2::Config, from: &str, to: &str) -> anyhow::Res
     Ok(())
 }
 
+fn detect_main_branch_name(repo: &git2::Repository) -> Option<String> {
+    [
+        "master",
+        "main",
+        "mainline",
+        "devel",
+        "develop",
+        "development",
+        "trunk",
+    ]
+    .iter()
+    .find_map(|branch_name| {
+        if repo
+            .find_branch(branch_name, git2::BranchType::Local)
+            .is_ok()
+        {
+            Some(branch_name.to_string())
+        } else {
+            None
+        }
+    })
+}
+
 #[context("Installing all aliases")]
 fn install_aliases(
     repo: &mut git2::Repository,
+    config: &mut git2::Config,
     git_executable: &GitExecutable,
 ) -> anyhow::Result<()> {
-    let mut config = repo.config().with_context(|| "Getting repo config")?;
-    install_alias(&mut config, "smartlog", "smartlog")?;
-    install_alias(&mut config, "sl", "smartlog")?;
-    install_alias(&mut config, "hide", "hide")?;
-    install_alias(&mut config, "unhide", "unhide")?;
-    install_alias(&mut config, "prev", "prev")?;
-    install_alias(&mut config, "next", "next")?;
-    install_alias(&mut config, "restack", "restack")?;
-    install_alias(&mut config, "undo", "undo")?;
-    install_alias(&mut config, "move", "move")?;
+    install_alias(config, "smartlog", "smartlog")?;
+    install_alias(config, "sl", "smartlog")?;
+    install_alias(config, "hide", "hide")?;
+    install_alias(config, "unhide", "unhide")?;
+    install_alias(config, "prev", "prev")?;
+    install_alias(config, "next", "next")?;
+    install_alias(config, "restack", "restack")?;
+    install_alias(config, "undo", "undo")?;
+    install_alias(config, "move", "move")?;
 
     let version_str = run_git_silent(repo, git_executable, None, &["version"])
         .with_context(|| "Determining Git version")?;
@@ -225,17 +250,66 @@ the branchless workflow will work properly.
     Ok(())
 }
 
+#[derive(Debug)]
+enum ConfigValue {
+    Bool(bool),
+    String(String),
+}
+
+impl Display for ConfigValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ConfigValue::Bool(value) => write!(f, "{}", value),
+            ConfigValue::String(value) => write!(f, "{}", value),
+        }
+    }
+}
+
 #[context("Setting config {}", name)]
-fn set_config(config: &mut git2::Config, name: &str, value: bool) -> anyhow::Result<()> {
+fn set_config(config: &mut git2::Config, name: &str, value: ConfigValue) -> anyhow::Result<()> {
     println!("Setting config (non-global): {} = {}", name, value);
-    config.set_bool(name, value)?;
+    match value {
+        ConfigValue::Bool(value) => config.set_bool(name, value)?,
+        ConfigValue::String(value) => config.set_str(name, &value)?,
+    }
     Ok(())
 }
 
 #[context("Setting all configs")]
-fn set_configs(repo: &mut git2::Repository) -> anyhow::Result<()> {
-    let mut config = repo.config().with_context(|| "Getting repo config")?;
-    set_config(&mut config, "advice.detachedHead", false)?;
+fn set_configs(
+    r#in: &mut impl BufRead,
+    repo: &git2::Repository,
+    config: &mut git2::Config,
+) -> anyhow::Result<()> {
+    let main_branch_name = match detect_main_branch_name(repo) {
+        Some(main_branch_name) => {
+            println!(
+                "Auto-detected your main branch as: {}",
+                console::style(&main_branch_name).bold()
+            );
+            println!("If this is incorrect, run: git config branchless.core.mainBranch <branch>");
+            main_branch_name
+        }
+        None => {
+            println!("Your main branch name could not be auto-detected.");
+            println!("Examples of a main branch: master, main, trunk, etc.");
+            println!("See https://github.com/arxanas/git-branchless/wiki/Concepts#main-branch");
+            print!("Enter the name of your main branch: ");
+            stdout().flush()?;
+            let mut input = String::new();
+            r#in.read_line(&mut input)?;
+            match input.trim() {
+                "" => anyhow::bail!("No main branch name provided"),
+                main_branch_name => main_branch_name.to_string(),
+            }
+        }
+    };
+    set_config(
+        config,
+        "branchless.core.mainBranch",
+        ConfigValue::String(main_branch_name),
+    )?;
+    set_config(config, "advice.detachedHead", ConfigValue::Bool(false))?;
     Ok(())
 }
 
@@ -246,10 +320,12 @@ fn set_configs(repo: &mut git2::Repository) -> anyhow::Result<()> {
 /// * `git_executable`: The path to the `git` executable on disk.
 #[context("Initializing git-branchless for repo")]
 pub fn init(git_executable: &GitExecutable) -> anyhow::Result<()> {
+    let mut in_ = BufReader::new(stdin());
     let mut repo = get_repo()?;
+    let mut config = repo.config().with_context(|| "Getting repo config")?;
+    set_configs(&mut in_, &repo, &mut config)?;
     install_hooks(&repo)?;
-    set_configs(&mut repo)?;
-    install_aliases(&mut repo, git_executable)?;
+    install_aliases(&mut repo, &mut config, git_executable)?;
     Ok(())
 }
 
