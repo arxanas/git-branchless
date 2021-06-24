@@ -3,7 +3,7 @@
 //! This is inside `src` rather than `tests` since we use this code in some unit
 //! tests.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::Command;
 use std::str::FromStr;
 
@@ -53,10 +53,6 @@ pub struct GitRunOptions {
 
     /// The exit code that `Git` should return.
     pub expected_exit_code: i32,
-
-    /// If `true`, use the system installation of `git` for this command, rather
-    /// than the version under test.
-    pub use_system_git: bool,
 }
 
 impl Default for GitRunOptions {
@@ -64,7 +60,6 @@ impl Default for GitRunOptions {
         GitRunOptions {
             time: 0,
             expected_exit_code: 0,
-            use_system_git: false,
         }
     }
 }
@@ -126,21 +121,9 @@ impl Git {
         options: &GitRunOptions,
     ) -> anyhow::Result<(String, String)> {
         let GitRunOptions {
-            use_system_git,
             time,
             expected_exit_code,
         } = options;
-
-        let default_path = if cfg!(target_os = "windows") {
-            Path::new("C:\\Program Files\\Git\\bin\\git.exe")
-        } else {
-            Path::new("/usr/bin/git")
-        };
-        let git_executable = if !use_system_git {
-            &self.git_executable
-        } else {
-            default_path
-        };
 
         // Required for determinism, as these values will be baked into the commit
         // hash.
@@ -166,14 +149,15 @@ impl Git {
             ("GIT_EDITOR", ":"),
             (
                 "PATH_TO_GIT",
-                git_executable
+                &self
+                    .git_executable
                     .to_str()
                     .expect("Could not decode `git_executable`"),
             ),
             ("PATH", &new_path),
         ];
 
-        let mut command = Command::new(&git_executable);
+        let mut command = Command::new(&self.git_executable);
         command.args(&args).env_clear().envs(env.iter().copied());
 
         let result = command.output().with_context(|| {
