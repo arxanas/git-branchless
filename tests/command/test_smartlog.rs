@@ -317,17 +317,11 @@ fn test_main_remote_branch() -> anyhow::Result<()> {
         let git = original_repo.clone();
         git.init_repo()?;
         git.commit_file("test1", 1)?;
-        git.run_with_options(
-            &[
-                "clone",
-                original_repo.repo_path.to_str().unwrap(),
-                cloned_repo.repo_path.to_str().unwrap(),
-            ],
-            &GitRunOptions {
-                use_system_git: true,
-                ..Default::default()
-            },
-        )?;
+        git.run(&[
+            "clone",
+            original_repo.repo_path.to_str().unwrap(),
+            cloned_repo.repo_path.to_str().unwrap(),
+        ])?;
     }
 
     {
@@ -356,13 +350,7 @@ fn test_main_remote_branch() -> anyhow::Result<()> {
     {
         std::env::set_current_dir(&cloned_repo.repo_path)?;
         let git = cloned_repo.clone();
-        git.run_with_options(
-            &["fetch"],
-            &GitRunOptions {
-                use_system_git: true,
-                ..Default::default()
-            },
-        )?;
+        git.run(&["fetch"])?;
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
         :
