@@ -240,15 +240,17 @@ mod tests {
                 "branchless",
                 "wrap",
                 "--git-executable",
-                if cfg!(target_os = "windows") {
-                    "echo"
-                } else {
-                    "/bin/echo"
-                },
-                "hello",
-                "world",
+                // Don't use a hardcoded executable like `echo` here (see
+                // https://github.com/arxanas/git-branchless/issues/26). We also
+                // don't want to use `git`, since that's the default value for
+                // this argument, so we wouldn't be able to tell if it was
+                // working. But we're certain to have `git-branchless` on
+                // `PATH`!
+                "git-branchless",
+                "--",
+                "--help",
             ])?;
-            assert_eq!(stdout, "hello world\n");
+            assert!(stdout.contains("Branchless workflow for Git."));
             Ok(())
         })
     }
