@@ -1,4 +1,4 @@
-name: Static Analysis
+name: Lint
 
 on: ["push", "pull_request"]
 
