@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Fixed: The version number in `git-branchless --help` was fixed at `0.2.0`. It now reflects the version of the package.
+
 ## [0.3.2] - 2021-06-23
 
 `git-branchless` now runs on Windows! Big thanks to @waych for their efforts.
