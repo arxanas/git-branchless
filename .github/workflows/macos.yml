@@ -1,6 +1,9 @@
 name: macOS
 
-on: ["push", "pull_request"]
+on:
+  schedule:
+    # Run Mondays and Thursdays at 6:40AM UTC.
+    - cron: '40 6 * * 1,4'
 
 jobs:
   run-tests:
