@@ -325,7 +325,12 @@ fn set_configs(
             main_branch_name
         }
         None => {
-            println!("Your main branch name could not be auto-detected.");
+            println!(
+                "{}",
+                console::style("Your main branch name could not be auto-detected!")
+                    .yellow()
+                    .bold()
+            );
             println!("Examples of a main branch: master, main, trunk, etc.");
             println!("See https://github.com/arxanas/git-branchless/wiki/Concepts#main-branch");
             print!("Enter the name of your main branch: ");
@@ -371,6 +376,16 @@ pub fn init(git_executable: &GitExecutable) -> anyhow::Result<()> {
     set_configs(&mut in_, &repo, &mut config)?;
     install_hooks(&repo)?;
     install_aliases(&mut repo, &mut config, git_executable)?;
+    println!(
+        "{}",
+        console::style("Successfully installed git-branchless.")
+            .green()
+            .bold()
+    );
+    println!(
+        "To uninstall, run: {}",
+        console::style("git branchless init --uninstall").bold()
+    );
     Ok(())
 }
 

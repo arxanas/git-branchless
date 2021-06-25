@@ -88,6 +88,8 @@ fn test_old_git_version_warning() -> anyhow::Result<()> {
 
             This only applies to the `git undo` command. Other commands which are part of
             the branchless workflow will work properly.
+            Successfully installed git-branchless.
+            To uninstall, run: git branchless init --uninstall
             "###);
         }
 
@@ -128,6 +130,8 @@ fn test_init_basic() -> anyhow::Result<()> {
             Installing alias (non-global): git restack -> git branchless restack
             Installing alias (non-global): git undo -> git branchless undo
             Installing alias (non-global): git move -> git branchless move
+            Successfully installed git-branchless.
+            To uninstall, run: git branchless init --uninstall
             "###);
         }
 
@@ -159,7 +163,7 @@ fn test_init_prompt_for_main_branch() -> anyhow::Result<()> {
             )?;
             insta::assert_snapshot!(stderr, @"");
             insta::assert_snapshot!(stdout, @r###"
-            Your main branch name could not be auto-detected.
+            Your main branch name could not be auto-detected!
             Examples of a main branch: master, main, trunk, etc.
             See https://github.com/arxanas/git-branchless/wiki/Concepts#main-branch
             Enter the name of your main branch: Setting config (non-global): branchless.core.mainBranch = bespoke
@@ -178,6 +182,8 @@ fn test_init_prompt_for_main_branch() -> anyhow::Result<()> {
             Installing alias (non-global): git restack -> git branchless restack
             Installing alias (non-global): git undo -> git branchless undo
             Installing alias (non-global): git move -> git branchless move
+            Successfully installed git-branchless.
+            To uninstall, run: git branchless init --uninstall
             "###);
         }
 
