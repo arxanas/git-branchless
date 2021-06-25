@@ -208,3 +208,15 @@ fn test_wrap_explicit_git_executable() -> anyhow::Result<()> {
         Ok(())
     })
 }
+
+#[test]
+fn test_wrap_without_repo() -> anyhow::Result<()> {
+    with_git(|git| {
+        let (stdout, stderr) = git.run(&["branchless", "wrap", "status"])?;
+        insta::assert_snapshot!(stderr, @"fatal: not a git repository (or any of the parent directories): .git
+");
+        insta::assert_snapshot!(stdout, @"");
+
+        Ok(())
+    })
+}

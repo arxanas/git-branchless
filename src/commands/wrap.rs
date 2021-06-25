@@ -13,23 +13,24 @@ use crate::util::{get_db_conn, get_repo, GitExecutable};
 fn pass_through_git_command<S: AsRef<str> + std::fmt::Debug>(
     git_executable: &GitExecutable,
     args: &[S],
-    event_tx_id: EventTransactionId,
+    event_tx_id: Option<EventTransactionId>,
 ) -> anyhow::Result<isize> {
     let GitExecutable(program) = git_executable;
-    let exit_status = Command::new(program)
-        .args(args.iter().map(|arg| arg.as_ref()))
-        .env(BRANCHLESS_TRANSACTION_ID_ENV_VAR, event_tx_id.to_string())
+    let mut command = Command::new(program);
+    command.args(args.iter().map(|arg| arg.as_ref()));
+    if let Some(event_tx_id) = event_tx_id {
+        command.env(BRANCHLESS_TRANSACTION_ID_ENV_VAR, event_tx_id.to_string());
+    }
+    let exit_status = command
         .status()
         .with_context(|| format!("Running program: {:?} {:?}", program, args))?;
     let exit_code = exit_status.code().unwrap_or(1).try_into()?;
     Ok(exit_code)
 }
 
-/// Run the provided Git command, but wrapped in an event transaction.
-pub fn wrap<S: AsRef<str> + std::fmt::Debug>(
-    git_executable: &GitExecutable,
+fn make_event_tx_id<S: AsRef<str> + std::fmt::Debug>(
     args: &[S],
-) -> anyhow::Result<isize> {
+) -> anyhow::Result<EventTransactionId> {
     let now = SystemTime::now();
     let repo = get_repo()?;
     let conn = get_db_conn(&repo)?;
@@ -38,6 +39,18 @@ pub fn wrap<S: AsRef<str> + std::fmt::Debug>(
         let message = args.first().map(|s| s.as_ref()).unwrap_or("wrap");
         event_log_db.make_transaction_id(now, message)?
     };
+    Ok(event_tx_id)
+}
+
+/// Run the provided Git command, but wrapped in an event transaction.
+pub fn wrap<S: AsRef<str> + std::fmt::Debug>(
+    git_executable: &GitExecutable,
+    args: &[S],
+) -> anyhow::Result<isize> {
+    // We may not be able to make an event transaction ID (such as if there is
+    // no repository in the current directory). Ignore the error in that case.
+    let event_tx_id = make_event_tx_id(args).ok();
+
     let exit_code = pass_through_git_command(git_executable, args, event_tx_id)?;
     Ok(exit_code)
 }
