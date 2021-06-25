@@ -1,7 +1,7 @@
 # Branchless workflow for Git
 
 [![Linux](https://github.com/arxanas/git-branchless/actions/workflows/linux.yml/badge.svg)](https://github.com/arxanas/git-branchless/actions/workflows/linux.yml)
-[![Windows](https://github.com/arxanas/git-branchless/actions/workflows/windows.yml/badge.svg)](https://github.com/arxanas/git-branchless/actions/worksflows/windows.yml)
+[![Windows](https://github.com/arxanas/git-branchless/actions/workflows/windows.yml/badge.svg)](https://github.com/arxanas/git-branchless/actions/workflows/windows.yml)
 [![macOS](https://github.com/arxanas/git-branchless/actions/workflows/macos.yml/badge.svg)](https://github.com/arxanas/git-branchless/actions/workflows/macos.yml)
 [![crates.io](http://meritbadge.herokuapp.com/git-branchless)](https://crates.io/crates/git-branchless)
 
