@@ -2,8 +2,8 @@ name: macOS
 
 on:
   schedule:
-    # Run Mondays and Thursdays at 6:40AM UTC.
-    - cron: "40 6 * * 1,4"
+    # Run once every day at 6:40AM UTC.
+    - cron: "40 6 * * *"
 
 jobs:
   run-tests:
