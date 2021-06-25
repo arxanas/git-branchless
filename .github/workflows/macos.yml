@@ -3,7 +3,7 @@ name: macOS
 on:
   schedule:
     # Run Mondays and Thursdays at 6:40AM UTC.
-    - cron: '40 6 * * 1,4'
+    - cron: "40 6 * * 1,4"
 
 jobs:
   run-tests:
@@ -17,5 +17,6 @@ jobs:
           toolchain: stable
       - name: Run tests
         run: |
+          export RUST_BACKTRACE=1
           export PATH_TO_GIT=$(which git)
           cargo test
