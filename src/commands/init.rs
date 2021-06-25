@@ -12,6 +12,57 @@ use log::warn;
 use crate::core::config::get_core_hooks_path;
 use crate::util::{get_repo, run_git_silent, wrap_git_error, GitExecutable, GitVersion};
 
+const ALL_HOOKS: &[(&str, &str)] = &[
+    (
+        "post-commit",
+        r#"
+git branchless hook-post-commit "$@"
+"#,
+    ),
+    (
+        "post-rewrite",
+        r#"
+git branchless hook-post-rewrite "$@"
+"#,
+    ),
+    (
+        "post-checkout",
+        r#"
+git branchless hook-post-checkout "$@"
+"#,
+    ),
+    (
+        "pre-auto-gc",
+        r#"
+git branchless hook-pre-auto-gc "$@"
+"#,
+    ),
+    (
+        "reference-transaction",
+        r#"
+# Avoid canceling the reference transaction in the case that `branchless` fails
+# for whatever reason.
+git branchless hook-reference-transaction "$@" || (
+echo 'branchless: Failed to process reference transaction!'
+echo 'branchless: Some events (e.g. branch updates) may have been lost.'
+echo 'branchless: This is a bug. Please report it.'
+)
+"#,
+    ),
+];
+
+const ALL_ALIASES: &[(&str, &str)] = &[
+    ("smartlog", "smartlog"),
+    ("sl", "smartlog"),
+    ("hide", "hide"),
+    ("unhide", "unhide"),
+    ("prev", "prev"),
+    ("next", "next"),
+    ("restack", "restack"),
+    ("undo", "undo"),
+    ("move", "move"),
+];
+
 #[derive(Debug)]
 enum Hook {
     /// Regular Git hook.
@@ -123,47 +174,9 @@ fn install_hook(repo: &git2::Repository, hook_type: &str, hook_script: &str) -> 
 
 #[context("Installing all hooks")]
 fn install_hooks(repo: &git2::Repository) -> anyhow::Result<()> {
-    install_hook(
-        repo,
-        "post-commit",
-        r#"
-git branchless hook-post-commit "$@"
-"#,
-    )?;
-    install_hook(
-        repo,
-        "post-rewrite",
-        r#"
-git branchless hook-post-rewrite "$@"
-"#,
-    )?;
-    install_hook(
-        repo,
-        "post-checkout",
-        r#"
-git branchless hook-post-checkout "$@"
-"#,
-    )?;
-    install_hook(
-        repo,
-        "pre-auto-gc",
-        r#"
-git branchless hook-pre-auto-gc "$@"
-"#,
-    )?;
-    install_hook(
-        repo,
-        "reference-transaction",
-        r#"
-# Avoid canceling the reference transaction in the case that `branchless` fails
-# for whatever reason.
-git branchless hook-reference-transaction "$@" || (
-    echo 'branchless: Failed to process reference transaction!'
-    echo 'branchless: Some events (e.g. branch updates) may have been lost.'
-    echo 'branchless: This is a bug. Please report it.'
-)
-"#,
-    )?;
+    for (hook_type, hook_script) in ALL_HOOKS {
+        install_hook(repo, hook_type, hook_script)?;
+    }
     Ok(())
 }
 
@@ -211,15 +224,9 @@ fn install_aliases(
     config: &mut git2::Config,
     git_executable: &GitExecutable,
 ) -> anyhow::Result<()> {
-    install_alias(config, "smartlog", "smartlog")?;
-    install_alias(config, "sl", "smartlog")?;
-    install_alias(config, "hide", "hide")?;
-    install_alias(config, "unhide", "unhide")?;
-    install_alias(config, "prev", "prev")?;
-    install_alias(config, "next", "next")?;
-    install_alias(config, "restack", "restack")?;
-    install_alias(config, "undo", "undo")?;
-    install_alias(config, "move", "move")?;
+    for (from, to) in ALL_ALIASES {
+        install_alias(config, from, to)?;
+    }
 
     let version_str = run_git_silent(repo, git_executable, None, &["version"])
         .with_context(|| "Determining Git version")?;
