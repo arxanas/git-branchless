@@ -1,3 +1,5 @@
+use crate::util::trim_lines;
+
 use anyhow::Context;
 use branchless::{
     testing::{with_git, GitInitOptions, GitRunOptions},
@@ -183,6 +185,39 @@ fn test_init_prompt_for_main_branch() -> anyhow::Result<()> {
             let (stdout, _stderr) = git.run(&["smartlog"])?;
             insta::assert_snapshot!(stdout, @"@ f777ecc9 (bespoke) create initial.txt
 ");
+        }
+
+        Ok(())
+    })
+}
+
+#[test]
+fn test_main_branch_not_found_error_message() -> anyhow::Result<()> {
+    with_git(|git| {
+        git.init_repo()?;
+        git.detach_head()?;
+        git.run(&["branch", "-d", "master"])?;
+
+        {
+            let (stdout, stderr) = git.run_with_options(
+                &["smartlog"],
+                &GitRunOptions {
+                    expected_exit_code: 1,
+                    ..Default::default()
+                },
+            )?;
+            insta::assert_snapshot!(trim_lines(stderr), @r###"
+            Error: Getting main branch OID for repository
+
+            Caused by:
+
+                The main branch "master" could not be found in your repository.
+                Either create it, or update the main branch setting by running:
+
+                    git config branchless.core.mainBranch <branch>
+
+            "###);
+            insta::assert_snapshot!(stdout, @"");
         }
 
         Ok(())

@@ -1,3 +1,5 @@
+mod util;
+
 mod core {
     mod test_eventlog;
     mod test_gc;

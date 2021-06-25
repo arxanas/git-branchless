@@ -54,7 +54,20 @@ pub fn get_main_branch_oid(repo: &git2::Repository) -> anyhow::Result<git2::Oid>
     let main_branch_name = get_main_branch_name(&repo)?;
     let branch = repo
         .find_branch(&main_branch_name, git2::BranchType::Local)
-        .or_else(|_| repo.find_branch(&main_branch_name, git2::BranchType::Remote))?;
+        .or_else(|_| repo.find_branch(&main_branch_name, git2::BranchType::Remote));
+    let branch = match branch {
+        Ok(branch) => branch,
+        // Drop the error trace here. It's confusing, and we don't want it to appear in the output.
+        Err(_) => anyhow::bail!(
+            r"
+The main branch {:?} could not be found in your repository.
+Either create it, or update the main branch setting by running:
+
+    git config branchless.core.mainBranch <branch>
+",
+            main_branch_name
+        ),
+    };
     let commit = branch.get().peel_to_commit()?;
     Ok(commit.id())
 }
