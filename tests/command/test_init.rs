@@ -223,3 +223,35 @@ fn test_main_branch_not_found_error_message() -> anyhow::Result<()> {
         Ok(())
     })
 }
+
+#[test]
+fn test_init_uninstall() -> anyhow::Result<()> {
+    with_git(|git| {
+        git.init_repo()?;
+
+        {
+            let (stdout, stderr) = git.run(&["branchless", "init", "--uninstall"])?;
+            insta::assert_snapshot!(stderr, @"");
+            insta::assert_snapshot!(stdout, @r###"
+            Unsetting config (non-global): branchless.core.mainBranch
+            Unsetting config (non-global): advice.detachedHead
+            Uninstalling hook: post-commit
+            Uninstalling hook: post-rewrite
+            Uninstalling hook: post-checkout
+            Uninstalling hook: pre-auto-gc
+            Uninstalling hook: reference-transaction
+            Uninstalling alias (non-global): git smartlog
+            Uninstalling alias (non-global): git sl
+            Uninstalling alias (non-global): git hide
+            Uninstalling alias (non-global): git unhide
+            Uninstalling alias (non-global): git prev
+            Uninstalling alias (non-global): git next
+            Uninstalling alias (non-global): git restack
+            Uninstalling alias (non-global): git undo
+            Uninstalling alias (non-global): git move
+            "###);
+        }
+
+        Ok(())
+    })
+}

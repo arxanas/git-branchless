@@ -166,7 +166,6 @@ fn update_hook_contents(hook: &Hook, hook_contents: &str) -> anyhow::Result<()> 
 
 #[context("Installing hook of type: {:?}", hook_type)]
 fn install_hook(repo: &git2::Repository, hook_type: &str, hook_script: &str) -> anyhow::Result<()> {
-    println!("Installing hook: {}", hook_type);
     let hook = determine_hook_path(repo, hook_type)?;
     update_hook_contents(&hook, hook_script)?;
     Ok(())
@@ -175,17 +174,30 @@ fn install_hook(repo: &git2::Repository, hook_type: &str, hook_script: &str) -> 
 #[context("Installing all hooks")]
 fn install_hooks(repo: &git2::Repository) -> anyhow::Result<()> {
     for (hook_type, hook_script) in ALL_HOOKS {
+        println!("Installing hook: {}", hook_type);
         install_hook(repo, hook_type, hook_script)?;
+    }
+    Ok(())
+}
+
+#[context("Uninstalling all hooks")]
+fn uninstall_hooks(repo: &git2::Repository) -> anyhow::Result<()> {
+    for (hook_type, _hook_script) in ALL_HOOKS {
+        println!("Uninstalling hook: {}", hook_type);
+        install_hook(
+            repo,
+            hook_type,
+            r#"
+# This hook has been uninstalled.
+# Run `git branchless init` to reinstall.
+"#,
+        )?;
     }
     Ok(())
 }
 
 #[context("Installing alias: git {:?} -> git branchless {:?}", from, to)]
 fn install_alias(config: &mut git2::Config, from: &str, to: &str) -> anyhow::Result<()> {
-    println!(
-        "Installing alias (non-global): git {} -> git branchless {}",
-        from, to
-    );
     config
         .set_str(
             format!("alias.{}", from).as_str(),
@@ -225,6 +237,10 @@ fn install_aliases(
     git_executable: &GitExecutable,
 ) -> anyhow::Result<()> {
     for (from, to) in ALL_ALIASES {
+        println!(
+            "Installing alias (non-global): git {} -> git branchless {}",
+            from, to
+        );
         install_alias(config, from, to)?;
     }
 
@@ -254,6 +270,17 @@ the branchless workflow will work properly.
         );
     }
 
+    Ok(())
+}
+
+#[context("Uninstalling all aliases")]
+fn uninstall_aliases(config: &mut git2::Config) -> anyhow::Result<()> {
+    for (from, _to) in ALL_ALIASES {
+        println!("Uninstalling alias (non-global): git {}", from);
+        config
+            .remove(&format!("alias.{}", from))
+            .with_context(|| format!("Uninstalling alias {}", from))?;
+    }
     Ok(())
 }
 
@@ -320,6 +347,17 @@ fn set_configs(
     Ok(())
 }
 
+#[context("Unsetting all configs")]
+fn unset_configs(config: &mut git2::Config) -> anyhow::Result<()> {
+    for key in ["branchless.core.mainBranch", "advice.detachedHead"] {
+        println!("Unsetting config (non-global): {}", key);
+        config
+            .remove(key)
+            .with_context(|| format!("Unsetting config {}", key))?;
+    }
+    Ok(())
+}
+
 /// Initialize `git-branchless` in the current repo.
 ///
 /// Args:
@@ -333,6 +371,17 @@ pub fn init(git_executable: &GitExecutable) -> anyhow::Result<()> {
     set_configs(&mut in_, &repo, &mut config)?;
     install_hooks(&repo)?;
     install_aliases(&mut repo, &mut config, git_executable)?;
+    Ok(())
+}
+
+/// Uninstall `git-branchless` in the current repo.
+#[context("Uninstall git-branchless for repo")]
+pub fn uninstall() -> anyhow::Result<()> {
+    let repo = get_repo()?;
+    let mut config = repo.config().with_context(|| "Getting repo config")?;
+    unset_configs(&mut config)?;
+    uninstall_hooks(&repo)?;
+    uninstall_aliases(&mut config)?;
     Ok(())
 }
 

@@ -20,7 +20,11 @@ enum WrappedCommand {
 #[structopt(version = env!("CARGO_PKG_VERSION"), author = "Waleed Khan <me@waleedkhan.name>")]
 enum Opts {
     /// Initialize the branchless workflow for this repository.
-    Init,
+    Init {
+        /// Uninstall the branchless workflow instead of initializing it.
+        #[structopt(long = "--uninstall")]
+        uninstall: bool,
+    },
 
     /// Display a nice graph of the commits you've recently worked on.
     Smartlog,
@@ -148,8 +152,13 @@ fn main() -> anyhow::Result<()> {
     let git_executable = GitExecutable(git_executable.to_path_buf());
 
     let exit_code = match opts {
-        Opts::Init => {
+        Opts::Init { uninstall: false } => {
             branchless::commands::init::init(&git_executable)?;
+            0
+        }
+
+        Opts::Init { uninstall: true } => {
+            branchless::commands::init::uninstall()?;
             0
         }
 
