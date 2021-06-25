@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - Added: `git branchless init` will attempt to detect the correct main branch name to use for the repository. If not automatically detected, it will prompt for the branch name.
+- Added: `git branchless init --uninstall` will uninstall `git-branchless` from the repository.
 - Fixed: The version number in `git-branchless --help` was fixed at `0.2.0`. It now reflects the version of the package.
 
 ## [0.3.2] - 2021-06-23
