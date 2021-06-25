@@ -55,5 +55,7 @@ jobs:
           profile: minimal
           toolchain: stable
       - name: Run Rust tests
-        run: PATH_TO_GIT="$PWD"/git cargo test
-
+        run: |
+          export RUST_BACKTRACE=1
+          export PATH_TO_GIT="$PWD"/git
+          cargo test
