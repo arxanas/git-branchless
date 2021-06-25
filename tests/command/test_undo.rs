@@ -2,6 +2,8 @@ use std::convert::Infallible;
 
 use std::rc::Rc;
 
+use crate::util::trim_lines;
+
 use branchless::commands::undo::testing::{select_past_event, undo_events};
 use branchless::core::eventlog::{EventCursor, EventLogDb, EventReplayer};
 use branchless::core::formatting::Glyphs;
@@ -80,13 +82,6 @@ fn run_undo_events(git: &Git, event_cursor: EventCursor) -> anyhow::Result<Strin
     let out = git.preprocess_stdout(out)?;
     let out = trim_lines(out);
     Ok(out)
-}
-
-fn trim_lines(output: String) -> String {
-    output
-        .lines()
-        .flat_map(|line| vec![line.trim_end(), "\n"].into_iter())
-        .collect()
 }
 
 #[test]
