@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added: `git branchless init --uninstall` will uninstall `git-branchless` from the repository.
 - Fixed: The version number in `git-branchless --help` was fixed at `0.2.0`. It now reflects the version of the package.
 - Fixed:  `git branchless wrap` no longer fails to run if there is no Git repository in the current directory.
+- Fixed: User hooks which are invoked by `git-branchless` are now invoked in the correct working directory.
 
 ## [0.3.2] - 2021-06-23
 

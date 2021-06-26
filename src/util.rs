@@ -278,31 +278,51 @@ pub fn run_git_silent<S: AsRef<str> + std::fmt::Debug>(
 /// See the man page for `githooks(5)` for more detail on Git hooks.
 #[context("Running Git hook: {}", hook_name)]
 pub fn run_hook(
+    git_run_info: &GitRunInfo,
     repo: &git2::Repository,
     hook_name: &str,
     event_tx_id: EventTransactionId,
     args: &[impl AsRef<str>],
     stdin: Option<String>,
 ) -> anyhow::Result<()> {
-    let hook_path = repo
+    let hook_dir = repo
         .config()?
         .get_path("core.hooksPath")
         .unwrap_or_else(|_| repo.path().join("hooks"));
-    if hook_path.join(hook_name).exists() {
+
+    let GitRunInfo {
+        // We're calling a Git hook, but not Git itself.
+        path_to_git: _,
+        // We always want to call the hook in the Git working copy,
+        // regardless of where the Git executable was invoked.
+        working_directory: _,
+        env,
+    } = git_run_info;
+    let path = {
+        let mut path_components: Vec<PathBuf> = vec![std::fs::canonicalize(&hook_dir)?];
+        if let Some(path) = env.get(&OsString::from("PATH")) {
+            path_components.extend(std::env::split_paths(path));
+        }
+        std::env::join_paths(path_components)?
+    };
+
+    if hook_dir.join(hook_name).exists() {
         let mut child = Command::new(get_sh().context("shell needed to run hook")?)
+            // From `githooks(5)`: Before Git invokes a hook, it changes its
+            // working directory to either $GIT_DIR in a bare repository or the
+            // root of the working tree in a non-bare repository.
+            .current_dir(repo.workdir().unwrap_or_else(|| repo.path()))
             .arg("-c")
-            // This is always passed as a current dir unix path, as `sh` is processing it as an
-            // argument, even on Windows.
-            .arg(format!("./{} \"$@\"", hook_name))
+            .arg(format!("{} \"$@\"", hook_name))
             .arg(hook_name) // "$@" expands "$1" "$2" "$3" ... but we also must specify $0.
-            .args(args.iter().map(|arg| arg.as_ref()).collect::<Vec<_>>())
+            .args(args.iter().map(|arg| arg.as_ref()))
+            .env_clear()
+            .envs(env.iter())
             .env(BRANCHLESS_TRANSACTION_ID_ENV_VAR, event_tx_id.to_string())
-            .current_dir(&hook_path)
+            .env("PATH", &path)
             .stdin(Stdio::piped())
             .spawn()
-            .with_context(|| {
-                format!("Invoking {} hook at: {:?}", hook_name, hook_path.as_path())
-            })?;
+            .with_context(|| format!("Invoking {} hook with PATH: {:?}", &hook_name, &path))?;
 
         if let Some(stdin) = stdin {
             write!(child.stdin.as_mut().unwrap(), "{}", stdin)
@@ -377,29 +397,6 @@ pub fn get_sh() -> Option<PathBuf> {
     get_from_path(exe_name)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_parse_git_version_output() {
-        assert_eq!(
-            "git version 12.34.56".parse::<GitVersion>().unwrap(),
-            GitVersion(12, 34, 56)
-        );
-        assert_eq!(
-            "git version 12.34.56\n".parse::<GitVersion>().unwrap(),
-            GitVersion(12, 34, 56)
-        );
-        assert_eq!(
-            "git version 12.34.56.78.abcdef"
-                .parse::<GitVersion>()
-                .unwrap(),
-            GitVersion(12, 34, 56)
-        );
-    }
-}
-
 /// The result of attempting to resolve commits.
 pub enum ResolveCommitsResult<'repo> {
     /// All commits were successfully resolved.
@@ -447,4 +444,73 @@ pub fn resolve_commits(
 /// returning it.
 pub fn get_repo_head(repo: &git2::Repository) -> anyhow::Result<git2::Reference> {
     repo.find_reference("HEAD").map_err(wrap_git_error)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::testing::with_git;
+
+    use super::*;
+
+    #[test]
+    fn test_parse_git_version_output() {
+        assert_eq!(
+            "git version 12.34.56".parse::<GitVersion>().unwrap(),
+            GitVersion(12, 34, 56)
+        );
+        assert_eq!(
+            "git version 12.34.56\n".parse::<GitVersion>().unwrap(),
+            GitVersion(12, 34, 56)
+        );
+        assert_eq!(
+            "git version 12.34.56.78.abcdef"
+                .parse::<GitVersion>()
+                .unwrap(),
+            GitVersion(12, 34, 56)
+        );
+    }
+
+    #[test]
+    fn test_hook_working_dir() -> anyhow::Result<()> {
+        with_git(|git| {
+            if !git.supports_reference_transactions()? {
+                return Ok(());
+            }
+
+            git.init_repo()?;
+            git.commit_file("test1", 1)?;
+
+            std::fs::write(
+                git.repo_path
+                    .join(".git")
+                    .join("hooks")
+                    .join("post-rewrite"),
+                r#"
+#!/bin/sh
+# This won't work unless we're running the hook in the Git working copy.
+echo "Contents of test1.txt:"
+cat test1.txt
+"#,
+            )?;
+
+            {
+                // Trigger the `post-rewrite` hook that we wrote above.
+                let (stdout, stderr) = git.run(&["commit", "--amend", "-m", "foo"])?;
+                insta::assert_snapshot!(stderr, @r###"
+                branchless: processing 2 updates to branches/refs
+                branchless: processing commit
+                Contents of test1.txt:
+                test1 contents
+                "###);
+                insta::assert_snapshot!(stdout, @r###"
+                [master f23bf8f] foo
+                 Date: Thu Oct 29 12:34:56 2020 -0100
+                 1 file changed, 1 insertion(+)
+                 create mode 100644 test1.txt
+                "###);
+            }
+
+            Ok(())
+        })
+    }
 }
