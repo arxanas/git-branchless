@@ -10,7 +10,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 
 use crate::core::formatting::printable_styled_string;
 use crate::util::{
-    get_branch_oid_to_names, get_repo_head, run_git, run_hook, wrap_git_error, GitExecutable,
+    get_branch_oid_to_names, get_repo_head, run_git, run_hook, wrap_git_error, GitRunInfo,
 };
 
 use super::eventlog::{Event, EventCursor, EventReplayer, EventTransactionId};
@@ -437,7 +437,7 @@ fn move_branches<'a>(
 }
 
 fn post_rebase_in_memory(
-    git_executable: &GitExecutable,
+    git_run_info: &GitRunInfo,
     repo: &git2::Repository,
     rewritten_oids: &[(git2::Oid, git2::Oid)],
     event_tx_id: EventTransactionId,
@@ -477,11 +477,7 @@ fn post_rebase_in_memory(
             Some(head_branch) => head_branch.to_string(),
             None => new_head_oid.to_string(),
         };
-        let result = run_git(
-            git_executable,
-            Some(event_tx_id),
-            &["checkout", &head_target],
-        )?;
+        let result = run_git(git_run_info, Some(event_tx_id), &["checkout", &head_target])?;
         if result != 0 {
             return Ok(result);
         }
@@ -492,7 +488,7 @@ fn post_rebase_in_memory(
 
 #[context("Rebasing on disk from {} to {}", source_oid.to_string(), dest_oid.to_string())]
 fn rebase_on_disk(
-    git_executable: &GitExecutable,
+    git_run_info: &GitRunInfo,
     repo: &git2::Repository,
     rebase_plan: &RebasePlan,
     source_oid: git2::Oid,
@@ -535,11 +531,7 @@ fn rebase_on_disk(
     .with_context(|| format!("Writing `end` to: {:?}", end_file.as_path()))?;
 
     progress.set_message("Calling Git for on-disk rebase");
-    let result = run_git(
-        &git_executable,
-        Some(event_tx_id),
-        &["rebase", "--continue"],
-    )?;
+    let result = run_git(&git_run_info, Some(event_tx_id), &["rebase", "--continue"])?;
 
     Ok(result)
 }
@@ -566,7 +558,7 @@ fn friendly_describe_commit(
 /// success).
 pub fn execute_rebase_plan(
     glyphs: &Glyphs,
-    git_executable: &GitExecutable,
+    git_run_info: &GitRunInfo,
     repo: &git2::Repository,
     event_tx_id: EventTransactionId,
     rebase_plan: &RebasePlan,
@@ -578,7 +570,7 @@ pub fn execute_rebase_plan(
         println!("Attempting rebase in-memory...");
         match rebase_in_memory(glyphs, &repo, &rebase_plan, dest_oid)? {
             RebaseInMemoryResult::Succeeded { rewritten_oids } => {
-                post_rebase_in_memory(git_executable, repo, &rewritten_oids, event_tx_id)?;
+                post_rebase_in_memory(git_run_info, repo, &rewritten_oids, event_tx_id)?;
                 println!("In-memory rebase succeeded.");
                 return Ok(0);
             }
@@ -599,7 +591,7 @@ pub fn execute_rebase_plan(
     }
 
     let result = rebase_on_disk(
-        git_executable,
+        git_run_info,
         repo,
         &rebase_plan,
         source_oid,

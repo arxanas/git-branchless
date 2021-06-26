@@ -1,5 +1,5 @@
-use branchless::testing::{get_git_executable, with_git, Git, GitInitOptions, GitRunOptions};
-use branchless::util::GitExecutable;
+use branchless::testing::{get_path_to_git, with_git, Git, GitInitOptions, GitRunOptions};
+use branchless::util::GitRunInfo;
 
 #[test]
 fn test_init_smartlog() -> anyhow::Result<()> {
@@ -303,14 +303,14 @@ fn test_custom_main_branch() -> anyhow::Result<()> {
 
 #[test]
 fn test_main_remote_branch() -> anyhow::Result<()> {
-    let git_executable = get_git_executable()?;
-    let git_executable = GitExecutable(git_executable);
+    let path_to_git = get_path_to_git()?;
+    let git_run_info = GitRunInfo(path_to_git);
     let temp_dir = tempfile::tempdir()?;
     let original_repo_path = temp_dir.path().join("original");
     std::fs::create_dir(&original_repo_path)?;
-    let original_repo = Git::new(original_repo_path, git_executable.clone());
+    let original_repo = Git::new(original_repo_path, git_run_info.clone());
     let cloned_repo_path = temp_dir.path().join("cloned");
-    let cloned_repo = Git::new(cloned_repo_path, git_executable);
+    let cloned_repo = Git::new(cloned_repo_path, git_run_info);
 
     {
         std::env::set_current_dir(&original_repo.repo_path)?;

@@ -25,7 +25,7 @@ use crate::core::metadata::{
 };
 use crate::core::tui::{with_siv, SingletonView};
 use crate::declare_views;
-use crate::util::{get_db_conn, get_repo, run_git, GitExecutable};
+use crate::util::{get_db_conn, get_repo, run_git, GitRunInfo};
 
 fn render_cursor_smartlog(
     glyphs: &Glyphs,
@@ -608,7 +608,7 @@ fn undo_events(
     out: &mut impl Write,
     glyphs: &Glyphs,
     repo: &git2::Repository,
-    git_executable: &GitExecutable,
+    git_run_info: &GitRunInfo,
     event_log_db: &mut EventLogDb,
     event_replayer: &EventReplayer,
     event_cursor: EventCursor,
@@ -696,7 +696,7 @@ fn undo_events(
                 // dirty working copy). The `Git` command will update the event
                 // log appropriately, as it will invoke our hooks.
                 run_git(
-                    git_executable,
+                    git_run_info,
                     Some(event_tx_id),
                     &["checkout", "--detach", &new_ref],
                 )
@@ -767,7 +767,7 @@ fn undo_events(
 }
 
 /// Restore the repository to a previous state interactively.
-pub fn undo(git_executable: &GitExecutable) -> anyhow::Result<isize> {
+pub fn undo(git_run_info: &GitRunInfo) -> anyhow::Result<isize> {
     let glyphs = Glyphs::detect();
     let repo = get_repo()?;
     let conn = get_db_conn(&repo)?;
@@ -790,7 +790,7 @@ pub fn undo(git_executable: &GitExecutable) -> anyhow::Result<isize> {
         &mut stdout().lock(),
         &glyphs,
         &repo,
-        &git_executable,
+        &git_run_info,
         &mut event_log_db,
         &event_replayer,
         event_cursor,
@@ -807,7 +807,7 @@ pub mod testing {
     use crate::core::eventlog::{EventCursor, EventLogDb, EventReplayer};
     use crate::core::formatting::Glyphs;
     use crate::core::mergebase::MergeBaseDb;
-    use crate::util::GitExecutable;
+    use crate::util::GitRunInfo;
 
     pub fn select_past_event(
         siv: CursiveRunner<CursiveRunnable>,
@@ -824,7 +824,7 @@ pub mod testing {
         out: &mut impl Write,
         glyphs: &Glyphs,
         repo: &git2::Repository,
-        git_executable: &GitExecutable,
+        git_run_info: &GitRunInfo,
         event_log_db: &mut EventLogDb,
         event_replayer: &EventReplayer,
         event_cursor: EventCursor,
@@ -834,7 +834,7 @@ pub mod testing {
             out,
             glyphs,
             repo,
-            git_executable,
+            git_run_info,
             event_log_db,
             event_replayer,
             event_cursor,

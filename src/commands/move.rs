@@ -12,7 +12,7 @@ use crate::core::mergebase::MergeBaseDb;
 use crate::core::rewrite::{execute_rebase_plan, make_rebase_plan};
 use crate::util::get_main_branch_oid;
 use crate::util::{
-    get_branch_oid_to_names, get_db_conn, get_head_oid, get_repo, resolve_commits, GitExecutable,
+    get_branch_oid_to_names, get_db_conn, get_head_oid, get_repo, resolve_commits, GitRunInfo,
     ResolveCommitsResult,
 };
 
@@ -36,7 +36,7 @@ fn resolve_base_commit(graph: &CommitGraph, oid: git2::Oid) -> git2::Oid {
 
 /// Move a subtree from one place to another.
 pub fn r#move(
-    git_executable: &GitExecutable,
+    git_run_info: &GitRunInfo,
     source: Option<String>,
     dest: Option<String>,
     base: Option<String>,
@@ -115,7 +115,7 @@ pub fn r#move(
     )?;
     let result = execute_rebase_plan(
         &glyphs,
-        git_executable,
+        git_run_info,
         &repo,
         event_tx_id,
         &rebase_plan,

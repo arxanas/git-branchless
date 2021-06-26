@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::str::FromStr;
 
-use crate::util::{get_sh, wrap_git_error, GitExecutable, GitVersion};
+use crate::util::{get_sh, wrap_git_error, GitRunInfo, GitVersion};
 use anyhow::Context;
 use fn_error_context::context;
 
@@ -26,7 +26,7 @@ pub struct Git {
 
     /// The path to the Git executable on disk. This is important since we test
     /// against multiple Git versions.
-    pub git_executable: PathBuf,
+    pub path_to_git: PathBuf,
 }
 
 /// Options for `Git::init_repo_with_options`.
@@ -75,21 +75,21 @@ impl Default for GitRunOptions {
 
 impl Git {
     /// Constructor.
-    pub fn new(repo_path: PathBuf, git_executable: GitExecutable) -> Self {
-        let GitExecutable(git_executable) = git_executable;
+    pub fn new(repo_path: PathBuf, git_run_info: GitRunInfo) -> Self {
+        let GitRunInfo(path_to_git) = git_run_info;
         Git {
             repo_path,
-            git_executable,
+            path_to_git,
         }
     }
 
     /// Replace dynamic strings in the output, for testing purposes.
     pub fn preprocess_stdout(&self, stdout: String) -> anyhow::Result<String> {
-        let git_executable = self
-            .git_executable
+        let path_to_git = self
+            .path_to_git
             .to_str()
-            .ok_or_else(|| anyhow::anyhow!("Could not convert Git executable to string"))?;
-        let stdout = stdout.replace(git_executable, "<git-executable>");
+            .ok_or_else(|| anyhow::anyhow!("Could not convert path to Git to string"))?;
+        let stdout = stdout.replace(path_to_git, "<git-executable>");
         Ok(stdout)
     }
 
@@ -100,7 +100,7 @@ impl Git {
             .parent()
             .expect("Unable to find git-branchless path parent");
         let git_path = self
-            .git_executable
+            .path_to_git
             .parent()
             .expect("Unable to find git path parent");
         let bash = get_sh().expect("bash missing?");
@@ -160,14 +160,14 @@ impl Git {
             (
                 "PATH_TO_GIT",
                 &self
-                    .git_executable
+                    .path_to_git
                     .to_str()
-                    .expect("Could not decode `git_executable`"),
+                    .expect("Could not decode `path_to_git`"),
             ),
             ("PATH", &new_path),
         ];
 
-        let mut command = Command::new(&self.git_executable);
+        let mut command = Command::new(&self.path_to_git);
         command.args(&args).env_clear().envs(env.iter().copied());
 
         let result = if let Some(input) = input {
@@ -184,7 +184,7 @@ impl Git {
                     Args: {:?}
                     Stdin: {:?}
                     Env: <not shown>",
-                    &self.git_executable, &args, input
+                    &self.path_to_git, &args, input
                 )
             })?
         } else {
@@ -194,7 +194,7 @@ impl Git {
                     Executable: {:?}
                     Args: {:?}
                     Env: <not shown>",
-                    &self.git_executable, &args
+                    &self.path_to_git, &args
                 )
             })?
         };
@@ -210,7 +210,7 @@ impl Git {
                 {}
                 stderr:
                 {}",
-                &self.git_executable,
+                &self.path_to_git,
                 &args,
                 exit_code,
                 expected_exit_code,
@@ -351,19 +351,19 @@ impl Git {
 
 /// Get the path to the Git executable for testing.
 #[context("Getting the Git executable to use")]
-pub fn get_git_executable() -> anyhow::Result<PathBuf> {
-    let git_executable = std::env::var("PATH_TO_GIT").with_context(|| {
+pub fn get_path_to_git() -> anyhow::Result<PathBuf> {
+    let path_to_git = std::env::var("PATH_TO_GIT").with_context(|| {
         "No path to git set. Try running as: PATH_TO_GIT=$(which git) cargo test ..."
     })?;
-    let git_executable = PathBuf::from_str(&git_executable)?;
-    Ok(git_executable)
+    let path_to_git = PathBuf::from_str(&path_to_git)?;
+    Ok(path_to_git)
 }
 
 /// Create a temporary directory for testing and a `Git` instance to use with it.
 pub fn with_git(f: fn(Git) -> anyhow::Result<()>) -> anyhow::Result<()> {
     let repo_dir = tempfile::tempdir()?;
-    let git_executable = get_git_executable()?;
-    let git_executable = GitExecutable(git_executable);
-    let git = Git::new(repo_dir.path().to_path_buf(), git_executable);
+    let path_to_git = get_path_to_git()?;
+    let path_to_git = GitRunInfo(path_to_git);
+    let git = Git::new(repo_dir.path().to_path_buf(), path_to_git);
     f(git)
 }

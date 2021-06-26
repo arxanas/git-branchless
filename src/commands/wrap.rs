@@ -8,14 +8,14 @@ use std::time::SystemTime;
 use anyhow::Context;
 
 use crate::core::eventlog::{EventLogDb, EventTransactionId, BRANCHLESS_TRANSACTION_ID_ENV_VAR};
-use crate::util::{get_db_conn, get_repo, GitExecutable};
+use crate::util::{get_db_conn, get_repo, GitRunInfo};
 
 fn pass_through_git_command<S: AsRef<str> + std::fmt::Debug>(
-    git_executable: &GitExecutable,
+    git_run_info: &GitRunInfo,
     args: &[S],
     event_tx_id: Option<EventTransactionId>,
 ) -> anyhow::Result<isize> {
-    let GitExecutable(program) = git_executable;
+    let GitRunInfo(program) = git_run_info;
     let mut command = Command::new(program);
     command.args(args.iter().map(|arg| arg.as_ref()));
     if let Some(event_tx_id) = event_tx_id {
@@ -44,14 +44,14 @@ fn make_event_tx_id<S: AsRef<str> + std::fmt::Debug>(
 
 /// Run the provided Git command, but wrapped in an event transaction.
 pub fn wrap<S: AsRef<str> + std::fmt::Debug>(
-    git_executable: &GitExecutable,
+    git_run_info: &GitRunInfo,
     args: &[S],
 ) -> anyhow::Result<isize> {
     // We may not be able to make an event transaction ID (such as if there is
     // no repository in the current directory). Ignore the error in that case.
     let event_tx_id = make_event_tx_id(args).ok();
 
-    let exit_code = pass_through_git_command(git_executable, args, event_tx_id)?;
+    let exit_code = pass_through_git_command(git_run_info, args, event_tx_id)?;
     Ok(exit_code)
 }
 

@@ -69,13 +69,13 @@ use crate::core::mergebase::MergeBaseDb;
 use crate::core::rewrite::{find_abandoned_children, find_rewrite_target};
 use crate::util::{
     get_branch_oid_to_names, get_db_conn, get_head_oid, get_main_branch_oid, get_repo, run_git,
-    GitExecutable,
+    GitRunInfo,
 };
 
 #[context("Restacking commits")]
 fn restack_commits(
     repo: &git2::Repository,
-    git_executable: &GitExecutable,
+    git_run_info: &GitRunInfo,
     merge_base_db: &MergeBaseDb,
     event_log_db: &EventLogDb,
     event_tx_id: EventTransactionId,
@@ -131,20 +131,14 @@ fn restack_commits(
             }
             args
         };
-        let result = run_git(git_executable, Some(event_tx_id), &args)?;
+        let result = run_git(git_run_info, Some(event_tx_id), &args)?;
         if result != 0 {
             println!("branchless: resolve rebase, then run 'git restack' again");
             return Ok(result);
         }
 
         // Repeat until we reach a fixed point.
-        return restack_commits(
-            repo,
-            git_executable,
-            merge_base_db,
-            event_log_db,
-            event_tx_id,
-        );
+        return restack_commits(repo, git_run_info, merge_base_db, event_log_db, event_tx_id);
     }
 
     println!("branchless: no more abandoned commits to restack");
@@ -154,7 +148,7 @@ fn restack_commits(
 #[context("Restacking branches")]
 fn restack_branches(
     repo: &git2::Repository,
-    git_executable: &GitExecutable,
+    git_run_info: &GitRunInfo,
     merge_base_db: &MergeBaseDb,
     event_log_db: &EventLogDb,
     event_tx_id: EventTransactionId,
@@ -210,17 +204,11 @@ fn restack_branches(
             None => anyhow::bail!("Invalid UTF-8 branch name: {:?}", branch.name_bytes()?),
         };
         let args = ["branch", "-f", branch_name, &new_oid];
-        let result = run_git(git_executable, Some(event_tx_id), &args)?;
+        let result = run_git(git_run_info, Some(event_tx_id), &args)?;
         if result != 0 {
             return Ok(result);
         } else {
-            return restack_branches(
-                repo,
-                git_executable,
-                merge_base_db,
-                event_log_db,
-                event_tx_id,
-            );
+            return restack_branches(repo, git_run_info, merge_base_db, event_log_db, event_tx_id);
         }
     }
 
@@ -230,14 +218,9 @@ fn restack_branches(
 
 /// Restack all abandoned commits.
 ///
-/// Args:
-/// * `out`: The output stream to write to.
-/// * `err`: The error stream to write to.
-/// * `git_executable`: The path to the `git` executable on disk.
-///
-/// Returns: Exit code (0 denotes successful exit).
+/// Returns an exit code (0 denotes successful exit).
 #[context("Restacking commits and branches")]
-pub fn restack(git_executable: &GitExecutable) -> anyhow::Result<isize> {
+pub fn restack(git_run_info: &GitRunInfo) -> anyhow::Result<isize> {
     let repo = get_repo()?;
     let conn = get_db_conn(&repo)?;
     let merge_base_db = MergeBaseDb::new(&conn)?;
@@ -247,7 +230,7 @@ pub fn restack(git_executable: &GitExecutable) -> anyhow::Result<isize> {
 
     let result = restack_commits(
         &repo,
-        &git_executable,
+        &git_run_info,
         &merge_base_db,
         &event_log_db,
         event_tx_id,
@@ -258,7 +241,7 @@ pub fn restack(git_executable: &GitExecutable) -> anyhow::Result<isize> {
 
     let result = restack_branches(
         &repo,
-        &git_executable,
+        &git_run_info,
         &merge_base_db,
         &event_log_db,
         event_tx_id,
@@ -269,7 +252,7 @@ pub fn restack(git_executable: &GitExecutable) -> anyhow::Result<isize> {
 
     let result = match head_oid {
         Some(head_oid) => run_git(
-            &git_executable,
+            &git_run_info,
             Some(event_tx_id),
             &["checkout", &head_oid.to_string()],
         )?,

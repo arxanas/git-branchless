@@ -14,15 +14,15 @@ use crate::core::mergebase::MergeBaseDb;
 use crate::core::metadata::{render_commit_metadata, CommitMessageProvider, CommitOidProvider};
 use crate::util::{
     get_branch_oid_to_names, get_db_conn, get_head_oid, get_main_branch_oid, get_repo, run_git,
-    GitExecutable,
+    GitRunInfo,
 };
 
 /// Go back a certain number of commits.
-pub fn prev(git_executable: &GitExecutable, num_commits: Option<isize>) -> anyhow::Result<isize> {
+pub fn prev(git_run_info: &GitRunInfo, num_commits: Option<isize>) -> anyhow::Result<isize> {
     let exit_code = match num_commits {
-        None => run_git(git_executable, None, &["checkout", "HEAD^"])?,
+        None => run_git(git_run_info, None, &["checkout", "HEAD^"])?,
         Some(num_commits) => run_git(
-            git_executable,
+            git_run_info,
             None,
             &["checkout", &format!("HEAD~{}", num_commits)],
         )?,
@@ -134,7 +134,7 @@ fn advance_towards_own_commit(
 
 /// Go forward a certain number of commits.
 pub fn next(
-    git_executable: &GitExecutable,
+    git_run_info: &GitRunInfo,
     num_commits: Option<isize>,
     towards: Option<Towards>,
 ) -> anyhow::Result<isize> {
@@ -178,11 +178,7 @@ pub fn next(
         Some(current_oid) => current_oid,
     };
 
-    let result = run_git(
-        git_executable,
-        None,
-        &["checkout", &current_oid.to_string()],
-    )?;
+    let result = run_git(git_run_info, None, &["checkout", &current_oid.to_string()])?;
     if result != 0 {
         return Ok(result);
     }
