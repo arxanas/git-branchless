@@ -379,6 +379,7 @@ fn rebase_in_memory(
 }
 
 fn move_branches<'a>(
+    git_run_info: &GitRunInfo,
     repo: &'a git2::Repository,
     event_tx_id: EventTransactionId,
     rewritten_oids_map: &'a HashMap<git2::Oid, git2::Oid>,
@@ -424,6 +425,7 @@ fn move_branches<'a>(
         })
         .collect();
     run_hook(
+        git_run_info,
         repo,
         "reference-transaction",
         event_tx_id,
@@ -456,7 +458,7 @@ fn post_rebase_in_memory(
     // a lot of changes in the working copy.
     repo.set_head_detached(head_oid)?;
 
-    move_branches(repo, event_tx_id, &rewritten_oids_map)?;
+    move_branches(git_run_info, repo, event_tx_id, &rewritten_oids_map)?;
 
     // Call the `post-rewrite` hook only after moving branches so that we don't
     // produce a spurious abandoned-branch warning.
@@ -465,6 +467,7 @@ fn post_rebase_in_memory(
         .map(|(old_oid, new_oid)| format!("{} {}\n", old_oid.to_string(), new_oid.to_string()))
         .collect();
     run_hook(
+        git_run_info,
         repo,
         "post-rewrite",
         event_tx_id,

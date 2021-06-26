@@ -172,6 +172,7 @@ fn test_pre_auto_gc() -> anyhow::Result<()> {
             // Always use a unix style path here, as we are handing it to bash (even on Windows).
             .arg("./.git/hooks/pre-auto-gc")
             .current_dir(&git.repo_path)
+            .env_clear()
             .env("PATH", git.get_path_for_env())
             .output()?;
 
