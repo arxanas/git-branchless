@@ -4,6 +4,9 @@ on:
   schedule:
     # Run once every day at 6:40AM UTC.
     - cron: "40 6 * * *"
+  push:
+    branches:
+      - master
 
 jobs:
   run-tests:
