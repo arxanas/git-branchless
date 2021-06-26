@@ -3,10 +3,10 @@
 //! This is inside `src` rather than `tests` since we use this code in some unit
 //! tests.
 
+use std::ffi::{OsStr, OsString};
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
-use std::str::FromStr;
 
 use crate::util::{get_sh, wrap_git_error, GitRunInfo, GitVersion};
 use anyhow::Context;
@@ -76,7 +76,13 @@ impl Default for GitRunOptions {
 impl Git {
     /// Constructor.
     pub fn new(repo_path: PathBuf, git_run_info: GitRunInfo) -> Self {
-        let GitRunInfo(path_to_git) = git_run_info;
+        let GitRunInfo {
+            path_to_git,
+            // We pass the repo directory when calling `run`.
+            working_directory: _,
+            // We manually set the environment when calling `run`.
+            env: _,
+        } = git_run_info;
         Git {
             repo_path,
             path_to_git,
@@ -94,7 +100,7 @@ impl Git {
     }
 
     /// Get the `PATH` environment variable to use for testing.
-    pub fn get_path_for_env(&self) -> String {
+    pub fn get_path_for_env(&self) -> OsString {
         let cargo_bin_path = assert_cmd::cargo::cargo_bin("git-branchless");
         let branchless_path = cargo_bin_path
             .parent()
@@ -118,8 +124,6 @@ impl Git {
             .map(|path| path.to_str().expect("Unable to decode path component")),
         )
         .expect("joining paths")
-        .to_string_lossy()
-        .to_string()
     }
 
     /// Run a Git command.
@@ -137,7 +141,7 @@ impl Git {
 
         // Required for determinism, as these values will be baked into the commit
         // hash.
-        let date = format!("{date} -{time:0>2}", date = DUMMY_DATE, time = time);
+        let date: OsString = format!("{date} -{time:0>2}", date = DUMMY_DATE, time = time).into();
 
         let args: Vec<&str> = {
             let repo_path = self.repo_path.to_str().expect("Could not decode repo path");
@@ -146,24 +150,20 @@ impl Git {
             new_args
         };
 
+        // Fake "editor" which accepts the default contents of any commit
+        // messages. Usually, we can set this with `git commit -m`, but we have
+        // no such option for things such as `git rebase`, which may call `git
+        // commit` later as a part of their execution.
+        //
+        // ":" is understood by `git` to skip editing.
+        let git_editor = OsString::from(":");
+
         let new_path = self.get_path_for_env();
-        let env: Vec<(&str, &str)> = vec![
+        let env: Vec<(&str, &OsStr)> = vec![
             ("GIT_AUTHOR_DATE", &date),
             ("GIT_COMMITTER_DATE", &date),
-            // Fake "editor" which accepts the default contents of any commit
-            // messages. Usually, we can set this with `git commit -m`, but we have
-            // no such option for things such as `git rebase`, which may call `git
-            // commit` later as a part of their execution.
-            //
-            // ":" is understood by `git` to skip editing.
-            ("GIT_EDITOR", ":"),
-            (
-                "PATH_TO_GIT",
-                &self
-                    .path_to_git
-                    .to_str()
-                    .expect("Could not decode `path_to_git`"),
-            ),
+            ("GIT_EDITOR", &git_editor),
+            ("PATH_TO_GIT", &self.path_to_git.as_os_str()),
             ("PATH", &new_path),
         ];
 
@@ -352,10 +352,10 @@ impl Git {
 /// Get the path to the Git executable for testing.
 #[context("Getting the Git executable to use")]
 pub fn get_path_to_git() -> anyhow::Result<PathBuf> {
-    let path_to_git = std::env::var("PATH_TO_GIT").with_context(|| {
+    let path_to_git = std::env::var_os("PATH_TO_GIT").with_context(|| {
         "No path to git set. Try running as: PATH_TO_GIT=$(which git) cargo test ..."
     })?;
-    let path_to_git = PathBuf::from_str(&path_to_git)?;
+    let path_to_git = PathBuf::from(&path_to_git);
     Ok(path_to_git)
 }
 
@@ -363,7 +363,11 @@ pub fn get_path_to_git() -> anyhow::Result<PathBuf> {
 pub fn with_git(f: fn(Git) -> anyhow::Result<()>) -> anyhow::Result<()> {
     let repo_dir = tempfile::tempdir()?;
     let path_to_git = get_path_to_git()?;
-    let path_to_git = GitRunInfo(path_to_git);
+    let path_to_git = GitRunInfo {
+        path_to_git,
+        working_directory: repo_dir.path().to_path_buf(),
+        env: std::env::vars_os().collect(),
+    };
     let git = Git::new(repo_dir.path().to_path_buf(), path_to_git);
     f(git)
 }

@@ -1,5 +1,4 @@
 use std::convert::Infallible;
-
 use std::rc::Rc;
 
 use crate::util::trim_lines;
@@ -16,6 +15,7 @@ use branchless::util::{get_db_conn, GitRunInfo};
 
 use cursive::event::Key;
 use cursive::CursiveRunnable;
+use os_str_bytes::OsStrBytes;
 
 fn run_select_past_event(
     repo: &git2::Repository,
@@ -48,30 +48,31 @@ fn run_undo_events(git: &Git, event_cursor: EventCursor) -> anyhow::Result<Strin
     let mut in_ = input.as_bytes();
     let mut out = Vec::new();
 
-    // Ensure that nested calls to `git` are run under the correct environment.
-    // (Normally, the user will be running `git undo` from the correct directory
-    // already.)
-    std::env::set_current_dir(repo.workdir().unwrap())?;
-    std::env::set_var("PATH", git.get_path_for_env());
+    let git_run_info = GitRunInfo {
+        path_to_git: git.path_to_git.clone(),
 
-    // Normally, we want to inherit the user's environment when running external
-    // Git commands. However, for testing, we may have inherited variables which
-    // affect the execution of Git. In particular, `GIT_INDEX_FILE` is set to
-    // `.git/index` normally (which works for the test), but can be set to an
-    // absolute path when running `git commit -a`, and having these tests run as
-    // part of a commit hook.
-    for (env_var_name, _) in std::env::vars() {
-        if env_var_name.starts_with("GIT_") {
-            std::env::remove_var(env_var_name);
-        }
-    }
+        // Ensure that nested calls to `git` are run under the correct environment.
+        // (Normally, the user will be running `git undo` from the correct directory
+        // already.)
+        working_directory: repo.workdir().unwrap().to_path_buf(),
+
+        // Normally, we want to inherit the user's environment when running external
+        // Git commands. However, for testing, we may have inherited variables which
+        // affect the execution of Git. In particular, `GIT_INDEX_FILE` is set to
+        // `.git/index` normally (which works for the test), but can be set to an
+        // absolute path when running `git commit -a`, and having these tests run as
+        // part of a commit hook.
+        env: std::env::vars_os()
+            .filter(|(k, _v)| !k.to_raw_bytes().starts_with(b"GIT_"))
+            .collect(),
+    };
 
     let result = undo_events(
         &mut in_,
         &mut out,
         &glyphs,
         &repo,
-        &GitRunInfo(git.path_to_git.clone()),
+        &git_run_info,
         &mut event_log_db,
         &event_replayer,
         event_cursor,
