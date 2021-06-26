@@ -378,9 +378,20 @@ pub fn make_graph<'repo>(
     Ok(graph)
 }
 
-#[test]
-fn test_find_path_to_merge_base_stop_early() -> anyhow::Result<()> {
-    crate::testing::with_git(|git| {
+#[cfg(test)]
+
+mod tests {
+    use super::*;
+
+    use std::collections::HashSet;
+
+    use crate::core::mergebase::MergeBaseDb;
+    use crate::testing::make_git;
+
+    #[test]
+    fn test_find_path_to_merge_base_stop_early() -> anyhow::Result<()> {
+        let git = make_git()?;
+
         git.init_repo()?;
         let test1_oid = git.commit_file("test1", 1)?;
         let test2_oid = git.commit_file("test2", 2)?;
@@ -404,5 +415,5 @@ fn test_find_path_to_merge_base_stop_early() -> anyhow::Result<()> {
         assert!(!seen_oids.contains(&test1_oid));
 
         Ok(())
-    })
+    }
 }

@@ -1,4 +1,4 @@
-use branchless::testing::{with_git, Git, GitRunOptions};
+use branchless::testing::{make_git, Git, GitRunOptions};
 use branchless::util::GitVersion;
 
 /// Git v2.24 produces this message on `git move` tests:
@@ -16,30 +16,31 @@ fn has_git_v2_24_bug(git: &Git) -> anyhow::Result<bool> {
 
 #[test]
 fn test_move_stick_on_disk() -> anyhow::Result<()> {
-    with_git(|git| {
-        if has_git_v2_24_bug(&git)? {
-            return Ok(());
-        }
+    let git = make_git()?;
 
-        git.init_repo()?;
-        let test1_oid = git.commit_file("test1", 1)?;
-        git.commit_file("test2", 2)?;
+    if has_git_v2_24_bug(&git)? {
+        return Ok(());
+    }
 
-        git.detach_head()?;
-        let test3_oid = git.commit_file("test3", 3)?;
-        git.commit_file("test4", 4)?;
+    git.init_repo()?;
+    let test1_oid = git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
 
-        git.run(&[
-            "move",
-            "--on-disk",
-            "-s",
-            &test3_oid.to_string(),
-            "-d",
-            &test1_oid.to_string(),
-        ])?;
-        {
-            let (stdout, _stderr) = git.run(&["smartlog"])?;
-            insta::assert_snapshot!(stdout, @r###"
+    git.detach_head()?;
+    let test3_oid = git.commit_file("test3", 3)?;
+    git.commit_file("test4", 4)?;
+
+    git.run(&[
+        "move",
+        "--on-disk",
+        "-s",
+        &test3_oid.to_string(),
+        "-d",
+        &test1_oid.to_string(),
+    ])?;
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
             :
             O 62fc20d2 create test1.txt
             |\
@@ -49,46 +50,46 @@ fn test_move_stick_on_disk() -> anyhow::Result<()> {
             |
             O 96d1c37a (master) create test2.txt
             "###);
-        }
+    }
 
-        Ok(())
-    })
+    Ok(())
 }
 
 #[test]
 fn test_move_stick_in_memory() -> anyhow::Result<()> {
-    with_git(|git| {
-        if has_git_v2_24_bug(&git)? {
-            return Ok(());
-        }
+    let git = make_git()?;
 
-        git.init_repo()?;
-        let test1_oid = git.commit_file("test1", 1)?;
-        git.commit_file("test2", 2)?;
+    if has_git_v2_24_bug(&git)? {
+        return Ok(());
+    }
 
-        git.detach_head()?;
-        let test3_oid = git.commit_file("test3", 3)?;
-        git.commit_file("test4", 4)?;
+    git.init_repo()?;
+    let test1_oid = git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
 
-        {
-            let (stdout, _stderr) = git.run(&[
-                "move",
-                "-s",
-                &test3_oid.to_string(),
-                "-d",
-                &test1_oid.to_string(),
-            ])?;
-            insta::assert_snapshot!(stdout, @r###"
+    git.detach_head()?;
+    let test3_oid = git.commit_file("test3", 3)?;
+    git.commit_file("test4", 4)?;
+
+    {
+        let (stdout, _stderr) = git.run(&[
+            "move",
+            "-s",
+            &test3_oid.to_string(),
+            "-d",
+            &test1_oid.to_string(),
+        ])?;
+        insta::assert_snapshot!(stdout, @r###"
             Attempting rebase in-memory...
             branchless: processing 2 rewritten commits
             branchless: <git-executable> checkout a248207402822b7396cabe0f1011d8a7ce7daf1b
             In-memory rebase succeeded.
             "###);
-        }
+    }
 
-        {
-            let (stdout, _stderr) = git.run(&["smartlog"])?;
-            insta::assert_snapshot!(stdout, @r###"
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
             :
             O 62fc20d2 create test1.txt
             |\
@@ -98,40 +99,40 @@ fn test_move_stick_in_memory() -> anyhow::Result<()> {
             |
             O 96d1c37a (master) create test2.txt
             "###);
-        }
+    }
 
-        Ok(())
-    })
+    Ok(())
 }
 
 #[test]
 fn test_move_tree_on_disk() -> anyhow::Result<()> {
-    with_git(|git| {
-        if has_git_v2_24_bug(&git)? {
-            return Ok(());
-        }
+    let git = make_git()?;
 
-        git.init_repo()?;
-        let test1_oid = git.commit_file("test1", 1)?;
-        git.commit_file("test2", 2)?;
+    if has_git_v2_24_bug(&git)? {
+        return Ok(());
+    }
 
-        git.detach_head()?;
-        let test3_oid = git.commit_file("test3", 3)?;
-        git.commit_file("test4", 4)?;
-        git.run(&["checkout", &test3_oid.to_string()])?;
-        git.commit_file("test5", 5)?;
+    git.init_repo()?;
+    let test1_oid = git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
 
-        git.run(&[
-            "move",
-            "--on-disk",
-            "-s",
-            &test3_oid.to_string(),
-            "-d",
-            &test1_oid.to_string(),
-        ])?;
-        {
-            let (stdout, _stderr) = git.run(&["smartlog"])?;
-            insta::assert_snapshot!(stdout, @r###"
+    git.detach_head()?;
+    let test3_oid = git.commit_file("test3", 3)?;
+    git.commit_file("test4", 4)?;
+    git.run(&["checkout", &test3_oid.to_string()])?;
+    git.commit_file("test5", 5)?;
+
+    git.run(&[
+        "move",
+        "--on-disk",
+        "-s",
+        &test3_oid.to_string(),
+        "-d",
+        &test1_oid.to_string(),
+    ])?;
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
             :
             O 62fc20d2 create test1.txt
             |\
@@ -143,39 +144,39 @@ fn test_move_tree_on_disk() -> anyhow::Result<()> {
             |
             O 96d1c37a (master) create test2.txt
             "###);
-        }
+    }
 
-        Ok(())
-    })
+    Ok(())
 }
 
 #[test]
 fn test_move_tree_in_memory() -> anyhow::Result<()> {
-    with_git(|git| {
-        if has_git_v2_24_bug(&git)? {
-            return Ok(());
-        }
+    let git = make_git()?;
 
-        git.init_repo()?;
-        let test1_oid = git.commit_file("test1", 1)?;
-        git.commit_file("test2", 2)?;
+    if has_git_v2_24_bug(&git)? {
+        return Ok(());
+    }
 
-        git.detach_head()?;
-        let test3_oid = git.commit_file("test3", 3)?;
-        git.commit_file("test4", 4)?;
-        git.run(&["checkout", &test3_oid.to_string()])?;
-        git.commit_file("test5", 5)?;
+    git.init_repo()?;
+    let test1_oid = git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
 
-        git.run(&[
-            "move",
-            "-s",
-            &test3_oid.to_string(),
-            "-d",
-            &test1_oid.to_string(),
-        ])?;
-        {
-            let (stdout, _stderr) = git.run(&["smartlog"])?;
-            insta::assert_snapshot!(stdout, @r###"
+    git.detach_head()?;
+    let test3_oid = git.commit_file("test3", 3)?;
+    git.commit_file("test4", 4)?;
+    git.run(&["checkout", &test3_oid.to_string()])?;
+    git.commit_file("test5", 5)?;
+
+    git.run(&[
+        "move",
+        "-s",
+        &test3_oid.to_string(),
+        "-d",
+        &test1_oid.to_string(),
+    ])?;
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
             :
             O 62fc20d2 create test1.txt
             |\
@@ -187,37 +188,37 @@ fn test_move_tree_in_memory() -> anyhow::Result<()> {
             |
             O 96d1c37a (master) create test2.txt
             "###);
-        }
+    }
 
-        Ok(())
-    })
+    Ok(())
 }
 
 #[test]
 fn test_move_with_source_not_in_smartlog_on_disk() -> anyhow::Result<()> {
-    with_git(|git| {
-        if has_git_v2_24_bug(&git)? {
-            return Ok(());
-        }
+    let git = make_git()?;
 
-        git.init_repo()?;
-        let test1_oid = git.commit_file("test1", 1)?;
-        git.commit_file("test2", 2)?;
+    if has_git_v2_24_bug(&git)? {
+        return Ok(());
+    }
 
-        let test3_oid = git.commit_file("test3", 3)?;
-        git.commit_file("test4", 4)?;
+    git.init_repo()?;
+    let test1_oid = git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
 
-        git.run(&[
-            "move",
-            "--on-disk",
-            "-s",
-            &test3_oid.to_string(),
-            "-d",
-            &test1_oid.to_string(),
-        ])?;
-        {
-            let (stdout, _stderr) = git.run(&["smartlog"])?;
-            insta::assert_snapshot!(stdout, @r###"
+    let test3_oid = git.commit_file("test3", 3)?;
+    git.commit_file("test4", 4)?;
+
+    git.run(&[
+        "move",
+        "--on-disk",
+        "-s",
+        &test3_oid.to_string(),
+        "-d",
+        &test1_oid.to_string(),
+    ])?;
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
             :
             O 62fc20d2 create test1.txt
             |\
@@ -225,46 +226,46 @@ fn test_move_with_source_not_in_smartlog_on_disk() -> anyhow::Result<()> {
             :
             @ 5bb72580 (master) create test4.txt
             "###);
-        }
+    }
 
-        Ok(())
-    })
+    Ok(())
 }
 
 #[test]
 fn test_move_with_source_not_in_smartlog_in_memory() -> anyhow::Result<()> {
-    with_git(|git| {
-        if has_git_v2_24_bug(&git)? {
-            return Ok(());
-        }
+    let git = make_git()?;
 
-        git.init_repo()?;
-        let test1_oid = git.commit_file("test1", 1)?;
-        git.commit_file("test2", 2)?;
+    if has_git_v2_24_bug(&git)? {
+        return Ok(());
+    }
 
-        let test3_oid = git.commit_file("test3", 3)?;
-        git.commit_file("test4", 4)?;
+    git.init_repo()?;
+    let test1_oid = git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
 
-        {
-            let (stdout, _stderr) = git.run(&[
-                "move",
-                "-s",
-                &test3_oid.to_string(),
-                "-d",
-                &test1_oid.to_string(),
-            ])?;
-            insta::assert_snapshot!(stdout, @r###"
+    let test3_oid = git.commit_file("test3", 3)?;
+    git.commit_file("test4", 4)?;
+
+    {
+        let (stdout, _stderr) = git.run(&[
+            "move",
+            "-s",
+            &test3_oid.to_string(),
+            "-d",
+            &test1_oid.to_string(),
+        ])?;
+        insta::assert_snapshot!(stdout, @r###"
             Attempting rebase in-memory...
             branchless: processing 1 update to a branch/ref
             branchless: processing 2 rewritten commits
             branchless: <git-executable> checkout master
             In-memory rebase succeeded.
             "###);
-        }
+    }
 
-        {
-            let (stdout, _stderr) = git.run(&["smartlog"])?;
-            insta::assert_snapshot!(stdout, @r###"
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
             :
             O 62fc20d2 create test1.txt
             |\
@@ -272,55 +273,55 @@ fn test_move_with_source_not_in_smartlog_in_memory() -> anyhow::Result<()> {
             :
             @ a2482074 (master) create test4.txt
             "###);
-        }
+    }
 
-        Ok(())
-    })
+    Ok(())
 }
 
 #[test]
 fn test_move_merge_conflict() -> anyhow::Result<()> {
-    with_git(|git| {
-        if has_git_v2_24_bug(&git)? {
-            return Ok(());
-        }
+    let git = make_git()?;
 
-        git.init_repo()?;
-        let base_oid = git.commit_file("test1", 1)?;
-        git.detach_head()?;
-        let other_oid = git.commit_file_with_contents("conflict", 2, "conflict 1\n")?;
-        git.run(&["checkout", &base_oid.to_string()])?;
-        git.commit_file_with_contents("conflict", 2, "conflict 2\n")?;
+    if has_git_v2_24_bug(&git)? {
+        return Ok(());
+    }
 
-        {
-            let (stdout, _stderr) = git.run_with_options(
-                &["move", "-s", &other_oid.to_string()],
-                &GitRunOptions {
-                    expected_exit_code: 1,
-                    ..Default::default()
-                },
-            )?;
-            insta::assert_snapshot!(stdout, @r###"
+    git.init_repo()?;
+    let base_oid = git.commit_file("test1", 1)?;
+    git.detach_head()?;
+    let other_oid = git.commit_file_with_contents("conflict", 2, "conflict 1\n")?;
+    git.run(&["checkout", &base_oid.to_string()])?;
+    git.commit_file_with_contents("conflict", 2, "conflict 2\n")?;
+
+    {
+        let (stdout, _stderr) = git.run_with_options(
+            &["move", "-s", &other_oid.to_string()],
+            &GitRunOptions {
+                expected_exit_code: 1,
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stdout, @r###"
             Attempting rebase in-memory...
             Merge conflict, falling back to rebase on-disk. The conflicting commit was: e85d25c7 create conflict.txt
             branchless: <git-executable> rebase --continue
             CONFLICT (add/add): Merge conflict in conflict.txt
             Auto-merging conflict.txt
             "###);
-        }
+    }
 
-        git.resolve_file("conflict", "resolved")?;
-        {
-            let (stdout, _stderr) = git.run(&["rebase", "--continue"])?;
-            insta::assert_snapshot!(stdout, @r###"
+    git.resolve_file("conflict", "resolved")?;
+    {
+        let (stdout, _stderr) = git.run(&["rebase", "--continue"])?;
+        insta::assert_snapshot!(stdout, @r###"
             [detached HEAD 244e2bd] create conflict.txt
              1 file changed, 1 insertion(+), 1 deletion(-)
             "###);
-        }
+    }
 
-        {
-            let (stdout, _stderr) = git.run(&["smartlog"])?;
-            insta::assert_snapshot!(stdout, @r###"
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
             :
             O 62fc20d2 (master) create test1.txt
             |
@@ -328,35 +329,35 @@ fn test_move_merge_conflict() -> anyhow::Result<()> {
             |
             @ 244e2bd1 create conflict.txt
             "###);
-        }
+    }
 
-        Ok(())
-    })
+    Ok(())
 }
 
 #[test]
 fn test_move_base() -> anyhow::Result<()> {
-    with_git(|git| {
-        git.init_repo()?;
-        git.commit_file("test1", 1)?;
-        git.detach_head()?;
-        git.commit_file("test2", 2)?;
-        let test3_oid = git.commit_file("test3", 3)?;
-        git.run(&["checkout", "master"])?;
-        git.commit_file("test4", 4)?;
+    let git = make_git()?;
 
-        {
-            let (stdout, _stderr) = git.run(&["move", "--base", &test3_oid.to_string()])?;
-            insta::assert_snapshot!(stdout, @r###"
+    git.init_repo()?;
+    git.commit_file("test1", 1)?;
+    git.detach_head()?;
+    git.commit_file("test2", 2)?;
+    let test3_oid = git.commit_file("test3", 3)?;
+    git.run(&["checkout", "master"])?;
+    git.commit_file("test4", 4)?;
+
+    {
+        let (stdout, _stderr) = git.run(&["move", "--base", &test3_oid.to_string()])?;
+        insta::assert_snapshot!(stdout, @r###"
             Attempting rebase in-memory...
             branchless: processing 2 rewritten commits
             In-memory rebase succeeded.
             "###);
-        }
+    }
 
-        {
-            let (stdout, _stderr) = git.run(&["smartlog"])?;
-            insta::assert_snapshot!(stdout, @r###"
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
             :
             @ bf0d52a6 (master) create test4.txt
             |
@@ -364,81 +365,80 @@ fn test_move_base() -> anyhow::Result<()> {
             |
             o cf5eb244 create test3.txt
             "###);
-        }
+    }
 
-        Ok(())
-    })
+    Ok(())
 }
 
 #[test]
 fn test_move_checkout_new_head() -> anyhow::Result<()> {
-    with_git(|git| {
-        git.init_repo()?;
-        git.commit_file("test1", 1)?;
-        git.run(&["prev"])?;
-        git.commit_file("test2", 2)?;
+    let git = make_git()?;
 
-        {
-            let (stdout, _stderr) = git.run(&["move", "-d", "master"])?;
-            insta::assert_snapshot!(stdout, @r###"
+    git.init_repo()?;
+    git.commit_file("test1", 1)?;
+    git.run(&["prev"])?;
+    git.commit_file("test2", 2)?;
+
+    {
+        let (stdout, _stderr) = git.run(&["move", "-d", "master"])?;
+        insta::assert_snapshot!(stdout, @r###"
             Attempting rebase in-memory...
             branchless: processing 1 rewritten commit
             branchless: <git-executable> checkout 96d1c37a3d4363611c49f7e52186e189a04c531f
             In-memory rebase succeeded.
             "###);
-        }
+    }
 
-        {
-            let (stdout, _stderr) = git.run(&["smartlog"])?;
-            insta::assert_snapshot!(stdout, @r###"
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
             :
             O 62fc20d2 (master) create test1.txt
             |
             @ 96d1c37a create test2.txt
             "###);
-        }
+    }
 
-        Ok(())
-    })
+    Ok(())
 }
 
 #[test]
 fn test_move_branch() -> anyhow::Result<()> {
-    with_git(|git| {
-        git.init_repo()?;
-        git.detach_head()?;
-        git.commit_file("test1", 1)?;
-        let test2_oid = git.commit_file("test2", 2)?;
-        git.run(&["checkout", "master"])?;
+    let git = make_git()?;
 
-        git.commit_file("test3", 3)?;
+    git.init_repo()?;
+    git.detach_head()?;
+    git.commit_file("test1", 1)?;
+    let test2_oid = git.commit_file("test2", 2)?;
+    git.run(&["checkout", "master"])?;
 
-        {
-            let (stdout, _stderr) = git.run(&["move", "-d", &test2_oid.to_string()])?;
-            insta::assert_snapshot!(stdout, @r###"
+    git.commit_file("test3", 3)?;
+
+    {
+        let (stdout, _stderr) = git.run(&["move", "-d", &test2_oid.to_string()])?;
+        insta::assert_snapshot!(stdout, @r###"
             Attempting rebase in-memory...
             branchless: processing 1 update to a branch/ref
             branchless: processing 1 rewritten commit
             branchless: <git-executable> checkout master
             In-memory rebase succeeded.
             "###);
-        }
+    }
 
-        {
-            let (stdout, _stderr) = git.run(&["smartlog"])?;
-            insta::assert_snapshot!(stdout, @r###"
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
             :
             @ 70deb1e2 (master) create test3.txt
             "###);
-        }
+    }
 
-        {
-            let (stdout, _stderr) = git.run(&["branch", "--show-current"])?;
-            assert_eq!(stdout, "master\n");
-        }
+    {
+        let (stdout, _stderr) = git.run(&["branch", "--show-current"])?;
+        assert_eq!(stdout, "master\n");
+    }
 
-        Ok(())
-    })
+    Ok(())
 }
 
 // TODO: implement restack in terms of move

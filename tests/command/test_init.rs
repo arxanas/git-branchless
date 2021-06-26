@@ -2,63 +2,64 @@ use crate::util::trim_lines;
 
 use anyhow::Context;
 use branchless::{
-    testing::{with_git, GitInitOptions, GitRunOptions},
+    testing::{make_git, GitInitOptions, GitRunOptions},
     util::GitVersion,
 };
 
 #[test]
 fn test_hook_installed() -> anyhow::Result<()> {
-    branchless::testing::with_git(|git| {
-        git.init_repo()?;
-        let hook_path = git.repo_path.join(".git").join("hooks").join("post-commit");
-        assert!(hook_path.exists());
+    let git = make_git()?;
 
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let metadata = std::fs::metadata(&hook_path)
-                .with_context(|| format!("Reading hook permissions for {:?}", &hook_path))?;
-            let mode = metadata.permissions().mode();
-            assert!(mode & 0o111 == 0o111);
-        }
+    git.init_repo()?;
+    let hook_path = git.repo_path.join(".git").join("hooks").join("post-commit");
+    assert!(hook_path.exists());
 
-        Ok(())
-    })
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let metadata = std::fs::metadata(&hook_path)
+            .with_context(|| format!("Reading hook permissions for {:?}", &hook_path))?;
+        let mode = metadata.permissions().mode();
+        assert!(mode & 0o111 == 0o111);
+    }
+
+    Ok(())
 }
 
 #[test]
 fn test_alias_installed() -> anyhow::Result<()> {
-    branchless::testing::with_git(|git| {
-        git.init_repo()?;
+    let git = make_git()?;
 
-        {
-            let (stdout, _stderr) = git.run(&["smartlog"])?;
-            insta::assert_snapshot!(stdout, @r###"
+    git.init_repo()?;
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
 @ f777ecc9 (master) create initial.txt
 "###);
-        }
+    }
 
-        {
-            let (stdout, _stderr) = git.run(&["sl"])?;
-            insta::assert_snapshot!(stdout, @r###"
+    {
+        let (stdout, _stderr) = git.run(&["sl"])?;
+        insta::assert_snapshot!(stdout, @r###"
 @ f777ecc9 (master) create initial.txt
 "###);
-        }
+    }
 
-        Ok(())
-    })
+    Ok(())
 }
 
 #[test]
 fn test_old_git_version_warning() -> anyhow::Result<()> {
-    branchless::testing::with_git(|git| {
-        git.init_repo()?;
-        let version = git.get_version()?;
-        if version < GitVersion(2, 29, 0) {
-            let (stdout, _stderr) = git.run(&["branchless", "init"])?;
-            let (version_str, _stderr) = git.run(&["version"])?;
-            let stdout = stdout.replace(version_str.trim(), "<git version output>");
-            insta::assert_snapshot!(stdout, @r###"
+    let git = make_git()?;
+
+    git.init_repo()?;
+    let version = git.get_version()?;
+    if version < GitVersion(2, 29, 0) {
+        let (stdout, _stderr) = git.run(&["branchless", "init"])?;
+        let (version_str, _stderr) = git.run(&["version"])?;
+        let stdout = stdout.replace(version_str.trim(), "<git version output>");
+        insta::assert_snapshot!(stdout, @r###"
             Auto-detected your main branch as: master
             If this is incorrect, run: git config branchless.core.mainBranch <branch>
             Setting config (non-global): branchless.core.mainBranch = master
@@ -91,27 +92,27 @@ fn test_old_git_version_warning() -> anyhow::Result<()> {
             Successfully installed git-branchless.
             To uninstall, run: git branchless init --uninstall
             "###);
-        }
+    }
 
-        Ok(())
-    })
+    Ok(())
 }
 
 #[test]
 fn test_init_basic() -> anyhow::Result<()> {
-    with_git(|git| {
-        if !git.supports_reference_transactions()? {
-            return Ok(());
-        }
+    let git = make_git()?;
 
-        git.init_repo_with_options(&GitInitOptions {
-            run_branchless_init: false,
-            ..Default::default()
-        })?;
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
 
-        {
-            let (stdout, _stderr) = git.run(&["branchless", "init"])?;
-            insta::assert_snapshot!(stdout, @r###"
+    git.init_repo_with_options(&GitInitOptions {
+        run_branchless_init: false,
+        ..Default::default()
+    })?;
+
+    {
+        let (stdout, _stderr) = git.run(&["branchless", "init"])?;
+        insta::assert_snapshot!(stdout, @r###"
             Auto-detected your main branch as: master
             If this is incorrect, run: git config branchless.core.mainBranch <branch>
             Setting config (non-global): branchless.core.mainBranch = master
@@ -133,36 +134,36 @@ fn test_init_basic() -> anyhow::Result<()> {
             Successfully installed git-branchless.
             To uninstall, run: git branchless init --uninstall
             "###);
-        }
+    }
 
-        Ok(())
-    })
+    Ok(())
 }
 
 #[test]
 fn test_init_prompt_for_main_branch() -> anyhow::Result<()> {
-    with_git(|git| {
-        if !git.supports_reference_transactions()? {
-            return Ok(());
-        }
+    let git = make_git()?;
 
-        git.init_repo_with_options(&GitInitOptions {
-            run_branchless_init: false,
-            ..Default::default()
-        })?;
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
 
-        git.run(&["branch", "-m", "master", "bespoke"])?;
+    git.init_repo_with_options(&GitInitOptions {
+        run_branchless_init: false,
+        ..Default::default()
+    })?;
 
-        {
-            let (stdout, stderr) = git.run_with_options(
-                &["branchless", "init"],
-                &GitRunOptions {
-                    input: Some("bespoke\n".to_string()),
-                    ..Default::default()
-                },
-            )?;
-            insta::assert_snapshot!(stderr, @"");
-            insta::assert_snapshot!(stdout, @r###"
+    git.run(&["branch", "-m", "master", "bespoke"])?;
+
+    {
+        let (stdout, stderr) = git.run_with_options(
+            &["branchless", "init"],
+            &GitRunOptions {
+                input: Some("bespoke\n".to_string()),
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stderr, @"");
+        insta::assert_snapshot!(stdout, @r###"
             Your main branch name could not be auto-detected!
             Examples of a main branch: master, main, trunk, etc.
             See https://github.com/arxanas/git-branchless/wiki/Concepts#main-branch
@@ -185,34 +186,34 @@ fn test_init_prompt_for_main_branch() -> anyhow::Result<()> {
             Successfully installed git-branchless.
             To uninstall, run: git branchless init --uninstall
             "###);
-        }
+    }
 
-        {
-            let (stdout, _stderr) = git.run(&["smartlog"])?;
-            insta::assert_snapshot!(stdout, @"@ f777ecc9 (bespoke) create initial.txt
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @"@ f777ecc9 (bespoke) create initial.txt
 ");
-        }
+    }
 
-        Ok(())
-    })
+    Ok(())
 }
 
 #[test]
 fn test_main_branch_not_found_error_message() -> anyhow::Result<()> {
-    with_git(|git| {
-        git.init_repo()?;
-        git.detach_head()?;
-        git.run(&["branch", "-d", "master"])?;
+    let git = make_git()?;
 
-        {
-            let (stdout, stderr) = git.run_with_options(
-                &["smartlog"],
-                &GitRunOptions {
-                    expected_exit_code: 1,
-                    ..Default::default()
-                },
-            )?;
-            insta::assert_snapshot!(trim_lines(stderr), @r###"
+    git.init_repo()?;
+    git.detach_head()?;
+    git.run(&["branch", "-d", "master"])?;
+
+    {
+        let (stdout, stderr) = git.run_with_options(
+            &["smartlog"],
+            &GitRunOptions {
+                expected_exit_code: 1,
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(trim_lines(stderr), @r###"
             Error: Getting main branch OID for repository
 
             Caused by:
@@ -223,22 +224,22 @@ fn test_main_branch_not_found_error_message() -> anyhow::Result<()> {
                     git config branchless.core.mainBranch <branch>
 
             "###);
-            insta::assert_snapshot!(stdout, @"");
-        }
+        insta::assert_snapshot!(stdout, @"");
+    }
 
-        Ok(())
-    })
+    Ok(())
 }
 
 #[test]
 fn test_init_uninstall() -> anyhow::Result<()> {
-    with_git(|git| {
-        git.init_repo()?;
+    let git = make_git()?;
 
-        {
-            let (stdout, stderr) = git.run(&["branchless", "init", "--uninstall"])?;
-            insta::assert_snapshot!(stderr, @"");
-            insta::assert_snapshot!(stdout, @r###"
+    git.init_repo()?;
+
+    {
+        let (stdout, stderr) = git.run(&["branchless", "init", "--uninstall"])?;
+        insta::assert_snapshot!(stderr, @"");
+        insta::assert_snapshot!(stdout, @r###"
             Unsetting config (non-global): branchless.core.mainBranch
             Unsetting config (non-global): advice.detachedHead
             Uninstalling hook: post-commit
@@ -256,8 +257,7 @@ fn test_init_uninstall() -> anyhow::Result<()> {
             Uninstalling alias (non-global): git undo
             Uninstalling alias (non-global): git move
             "###);
-        }
+    }
 
-        Ok(())
-    })
+    Ok(())
 }
