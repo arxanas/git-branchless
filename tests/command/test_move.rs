@@ -441,5 +441,64 @@ fn test_move_branch() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[test]
+fn test_move_base_onto_head() -> anyhow::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+
+    git.init_repo()?;
+    git.commit_file("test1", 1)?;
+    git.detach_head()?;
+    git.commit_file("test2", 2)?;
+    git.commit_file("test3", 3)?;
+
+    {
+        // Codifying current behavior -- we attempt to apply the commits again,
+        // which is probably not intuitive.
+        let (stdout, stderr) = git.run(&["move", "-b", "HEAD"])?;
+        insta::assert_snapshot!(stderr, @r###"
+        Previous HEAD position was 70deb1e create test3.txt
+        branchless: processing 1 update to a branch/ref
+        HEAD is now at a45568b create test3.txt
+        branchless: processing checkout
+        "###);
+        insta::assert_snapshot!(stdout, @r###"
+        Attempting rebase in-memory...
+        branchless: processing 2 rewritten commits
+        branchless: This operation abandoned 1 commit!
+        branchless: Consider running one of the following:
+        branchless:   - git restack: re-apply the abandoned commits/branches
+        branchless:     (this is most likely what you want to do)
+        branchless:   - git smartlog: assess the situation
+        branchless:   - git hide [<commit>...]: hide the commits from the smartlog
+        branchless:   - git undo: undo the operation
+        branchless:   - git config branchless.restack.warnAbandoned false: suppress this message
+        branchless: <git-executable> checkout a45568bde9ac0b74d3bc890d11cacc789dc15294
+        In-memory rebase succeeded.
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d2 (master) create test1.txt
+        |
+        x 96d1c37a (rewritten as 5e95ed7c) create test2.txt
+        |
+        x 70deb1e2 (rewritten as a45568bd) create test3.txt
+        |
+        o 5e95ed7c create test2.txt
+        |
+        @ a45568bd create test3.txt
+        "###);
+    }
+
+    Ok(())
+}
+
 // TODO: implement restack in terms of move
 // TODO: don't re-apply already-applied commits
