@@ -485,12 +485,11 @@ mod tests {
                     .join(".git")
                     .join("hooks")
                     .join("post-rewrite"),
-                r#"
-#!/bin/sh
-# This won't work unless we're running the hook in the Git working copy.
-echo "Contents of test1.txt:"
-cat test1.txt
-"#,
+                r#"#!/bin/sh
+                   # This won't work unless we're running the hook in the Git working copy.
+                   echo "Contents of test1.txt:"
+                   cat test1.txt
+                   "#,
             )?;
 
             {
