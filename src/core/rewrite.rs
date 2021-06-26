@@ -609,7 +609,7 @@ mod tests {
     use crate::core::eventlog::EventLogDb;
     use crate::core::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
     use crate::core::mergebase::MergeBaseDb;
-    use crate::testing::{with_git, Git, GitRunOptions};
+    use crate::testing::{make_git, Git, GitRunOptions};
     use crate::util::{get_branch_oid_to_names, get_db_conn, get_head_oid, get_main_branch_oid};
 
     use super::*;
@@ -641,44 +641,44 @@ mod tests {
 
     #[test]
     fn test_find_rewrite_target() -> anyhow::Result<()> {
-        with_git(|git| {
-            git.init_repo()?;
-            let commit_time = 1;
-            let old_oid = git.commit_file("test1", commit_time)?;
+        let git = make_git()?;
 
-            {
-                git.run(&["commit", "--amend", "-m", "test1 amended once"])?;
-                let new_oid: git2::Oid = {
-                    let (stdout, _stderr) = git.run(&["rev-parse", "HEAD"])?;
-                    stdout.trim().parse()?
-                };
-                let rewrite_target = find_rewrite_target_helper(&git, old_oid)?;
-                assert_eq!(rewrite_target, Some(new_oid));
-            }
+        git.init_repo()?;
+        let commit_time = 1;
+        let old_oid = git.commit_file("test1", commit_time)?;
 
-            {
-                git.run(&["commit", "--amend", "-m", "test1 amended twice"])?;
-                let new_oid: git2::Oid = {
-                    let (stdout, _stderr) = git.run(&["rev-parse", "HEAD"])?;
-                    stdout.trim().parse()?
-                };
-                let rewrite_target = find_rewrite_target_helper(&git, old_oid)?;
-                assert_eq!(rewrite_target, Some(new_oid));
-            }
+        {
+            git.run(&["commit", "--amend", "-m", "test1 amended once"])?;
+            let new_oid: git2::Oid = {
+                let (stdout, _stderr) = git.run(&["rev-parse", "HEAD"])?;
+                stdout.trim().parse()?
+            };
+            let rewrite_target = find_rewrite_target_helper(&git, old_oid)?;
+            assert_eq!(rewrite_target, Some(new_oid));
+        }
 
-            {
-                git.run_with_options(
-                    &["commit", "--amend", "-m", "create test1.txt"],
-                    &GitRunOptions {
-                        time: commit_time,
-                        ..Default::default()
-                    },
-                )?;
-                let rewrite_target = find_rewrite_target_helper(&git, old_oid)?;
-                assert_eq!(rewrite_target, None);
-            }
+        {
+            git.run(&["commit", "--amend", "-m", "test1 amended twice"])?;
+            let new_oid: git2::Oid = {
+                let (stdout, _stderr) = git.run(&["rev-parse", "HEAD"])?;
+                stdout.trim().parse()?
+            };
+            let rewrite_target = find_rewrite_target_helper(&git, old_oid)?;
+            assert_eq!(rewrite_target, Some(new_oid));
+        }
 
-            Ok(())
-        })
+        {
+            git.run_with_options(
+                &["commit", "--amend", "-m", "create test1.txt"],
+                &GitRunOptions {
+                    time: commit_time,
+                    ..Default::default()
+                },
+            )?;
+            let rewrite_target = find_rewrite_target_helper(&git, old_oid)?;
+            assert_eq!(rewrite_target, None);
+        }
+
+        Ok(())
     }
 }

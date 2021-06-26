@@ -1253,7 +1253,7 @@ pub mod testing {
 mod tests {
     use super::*;
 
-    use crate::testing::with_git;
+    use crate::testing::make_git;
     use crate::util::get_db_conn;
     use testing::make_dummy_transaction_id;
 
@@ -1294,19 +1294,20 @@ mod tests {
 
     #[test]
     fn test_different_event_transaction_ids() -> anyhow::Result<()> {
-        with_git(|git| {
-            git.init_repo()?;
-            git.commit_file("test1", 1)?;
-            git.run(&["hide", "HEAD"])?;
+        let git = make_git()?;
 
-            let repo = git.get_repo()?;
-            let conn = get_db_conn(&repo)?;
-            let event_log_db = EventLogDb::new(&conn)?;
-            let events = event_log_db.get_events()?;
-            let event_tx_ids: Vec<EventTransactionId> =
-                events.iter().map(|event| event.get_event_tx_id()).collect();
-            if git.supports_reference_transactions()? {
-                insta::assert_debug_snapshot!(event_tx_ids, @r###"
+        git.init_repo()?;
+        git.commit_file("test1", 1)?;
+        git.run(&["hide", "HEAD"])?;
+
+        let repo = git.get_repo()?;
+        let conn = get_db_conn(&repo)?;
+        let event_log_db = EventLogDb::new(&conn)?;
+        let events = event_log_db.get_events()?;
+        let event_tx_ids: Vec<EventTransactionId> =
+            events.iter().map(|event| event.get_event_tx_id()).collect();
+        if git.supports_reference_transactions()? {
+            insta::assert_debug_snapshot!(event_tx_ids, @r###"
                 [
                     EventTransactionId(
                         1,
@@ -1322,8 +1323,8 @@ mod tests {
                     ),
                 ]
                 "###);
-            } else {
-                insta::assert_debug_snapshot!(event_tx_ids, @r###"
+        } else {
+            insta::assert_debug_snapshot!(event_tx_ids, @r###"
                 [
                     EventTransactionId(
                         1,
@@ -1333,9 +1334,8 @@ mod tests {
                     ),
                 ]
                 "###);
-            }
-            Ok(())
-        })
+        }
+        Ok(())
     }
 
     #[test]

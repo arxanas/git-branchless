@@ -382,7 +382,7 @@ pub fn hook_reference_transaction(transaction_state: &str) -> anyhow::Result<()>
 
 #[cfg(test)]
 mod tests {
-    use crate::testing::{with_git, GitRunOptions};
+    use crate::testing::{make_git, GitRunOptions};
 
     use super::*;
 
@@ -417,24 +417,24 @@ mod tests {
 
     #[test]
     fn test_is_rebase_underway() -> anyhow::Result<()> {
-        with_git(|git| {
-            git.init_repo()?;
-            let repo = git.get_repo()?;
-            assert!(!is_rebase_underway(&repo)?);
+        let git = make_git()?;
 
-            let oid1 = git.commit_file_with_contents("test", 1, "foo")?;
-            git.run(&["checkout", "HEAD^"])?;
-            git.commit_file_with_contents("test", 1, "bar")?;
-            git.run_with_options(
-                &["rebase", &oid1.to_string()],
-                &GitRunOptions {
-                    expected_exit_code: 1,
-                    ..Default::default()
-                },
-            )?;
-            assert!(is_rebase_underway(&repo)?);
+        git.init_repo()?;
+        let repo = git.get_repo()?;
+        assert!(!is_rebase_underway(&repo)?);
 
-            Ok(())
-        })
+        let oid1 = git.commit_file_with_contents("test", 1, "foo")?;
+        git.run(&["checkout", "HEAD^"])?;
+        git.commit_file_with_contents("test", 1, "bar")?;
+        git.run_with_options(
+            &["rebase", &oid1.to_string()],
+            &GitRunOptions {
+                expected_exit_code: 1,
+                ..Default::default()
+            },
+        )?;
+        assert!(is_rebase_underway(&repo)?);
+
+        Ok(())
     }
 }

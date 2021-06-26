@@ -10,7 +10,7 @@ use branchless::core::mergebase::MergeBaseDb;
 use branchless::core::tui::testing::{
     screen_to_string, CursiveTestingBackend, CursiveTestingEvent,
 };
-use branchless::testing::{with_git, Git};
+use branchless::testing::{make_git, Git};
 use branchless::util::{get_db_conn, GitRunInfo};
 
 use cursive::event::Key;
@@ -87,20 +87,21 @@ fn run_undo_events(git: &Git, event_cursor: EventCursor) -> anyhow::Result<Strin
 
 #[test]
 fn test_undo_help() -> anyhow::Result<()> {
-    with_git(|git| {
-        git.init_repo()?;
+    let git = make_git()?;
 
-        {
-            let screenshot1 = Default::default();
-            run_select_past_event(
-                &git.get_repo()?,
-                vec![
-                    CursiveTestingEvent::Event('h'.into()),
-                    CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot1)),
-                    CursiveTestingEvent::Event('q'.into()),
-                ],
-            )?;
-            insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
+    git.init_repo()?;
+
+    {
+        let screenshot1 = Default::default();
+        run_select_past_event(
+            &git.get_repo()?,
+            vec![
+                CursiveTestingEvent::Event('h'.into()),
+                CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot1)),
+                CursiveTestingEvent::Event('q'.into()),
+            ],
+        )?;
+        insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
             ┌───────────────────────────────────────────┤─How to use ├───────────────────────────────────────────┐
             │ Use `git undo` to view and revert to previous states of the repository.                            │
             │                                                                                                    │
@@ -115,44 +116,44 @@ fn test_undo_help() -> anyhow::Result<()> {
             │                                                                                            <Close> │
             └────────────────────────────────────────────────────────────────────────────────────────────────────┘
             "###);
-        }
+    }
 
-        Ok(())
-    })
+    Ok(())
 }
 
 #[test]
 fn test_undo_navigate() -> anyhow::Result<()> {
-    with_git(|git| {
-        if !git.supports_reference_transactions()? {
-            return Ok(());
-        }
+    let git = make_git()?;
 
-        git.init_repo()?;
-        git.commit_file("test1", 1)?;
-        git.commit_file("test2", 2)?;
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
 
-        {
-            let screenshot1 = Default::default();
-            let screenshot2 = Default::default();
-            let event_cursor = run_select_past_event(
-                &git.get_repo()?,
-                vec![
-                    CursiveTestingEvent::Event('p'.into()),
-                    CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot1)),
-                    CursiveTestingEvent::Event('n'.into()),
-                    CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot2)),
-                    CursiveTestingEvent::Event(Key::Enter.into()),
-                ],
-            )?;
-            insta::assert_debug_snapshot!(event_cursor, @r###"
+    git.init_repo()?;
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+
+    {
+        let screenshot1 = Default::default();
+        let screenshot2 = Default::default();
+        let event_cursor = run_select_past_event(
+            &git.get_repo()?,
+            vec![
+                CursiveTestingEvent::Event('p'.into()),
+                CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot1)),
+                CursiveTestingEvent::Event('n'.into()),
+                CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot2)),
+                CursiveTestingEvent::Event(Key::Enter.into()),
+            ],
+        )?;
+        insta::assert_debug_snapshot!(event_cursor, @r###"
             Some(
                 EventCursor {
                     event_id: 6,
                 },
             )
             "###);
-            insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
+        insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
             :
             @ 96d1c37a (master) create test2.txt
             Repo after transaction 3 (event 4). Press 'h' for help, 'q' to quit.
@@ -161,50 +162,50 @@ fn test_undo_navigate() -> anyhow::Result<()> {
             2. Move branch master from 62fc20d2 create test1.txt
             to 96d1c37a create test2.txt
             "###);
-            insta::assert_snapshot!(screen_to_string(&screenshot2), @r###"
+        insta::assert_snapshot!(screen_to_string(&screenshot2), @r###"
             :
             @ 96d1c37a (master) create test2.txt
             Repo after transaction 4 (event 6). Press 'h' for help, 'q' to quit.
             1. Commit 96d1c37a create test2.txt
             "###);
-        };
+    };
 
-        Ok(())
-    })
+    Ok(())
 }
 
 #[test]
 fn test_go_to_event() -> anyhow::Result<()> {
-    with_git(|git| {
-        if !git.supports_reference_transactions()? {
-            return Ok(());
-        }
+    let git = make_git()?;
 
-        git.init_repo()?;
-        git.commit_file("test1", 1)?;
-        git.commit_file("test2", 2)?;
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
 
-        let screenshot1 = Default::default();
-        let screenshot2 = Default::default();
-        run_select_past_event(
-            &git.get_repo()?,
-            vec![
-                CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot1)),
-                CursiveTestingEvent::Event('g'.into()),
-                CursiveTestingEvent::Event('1'.into()),
-                CursiveTestingEvent::Event(Key::Enter.into()),
-                CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot2)),
-                CursiveTestingEvent::Event('q'.into()),
-            ],
-        )?;
+    git.init_repo()?;
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
 
-        insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
+    let screenshot1 = Default::default();
+    let screenshot2 = Default::default();
+    run_select_past_event(
+        &git.get_repo()?,
+        vec![
+            CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot1)),
+            CursiveTestingEvent::Event('g'.into()),
+            CursiveTestingEvent::Event('1'.into()),
+            CursiveTestingEvent::Event(Key::Enter.into()),
+            CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot2)),
+            CursiveTestingEvent::Event('q'.into()),
+        ],
+    )?;
+
+    insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
         :
         @ 96d1c37a (master) create test2.txt
         Repo after transaction 4 (event 6). Press 'h' for help, 'q' to quit.
         1. Commit 96d1c37a create test2.txt
         "###);
-        insta::assert_snapshot!(screen_to_string(&screenshot2), @r###"
+    insta::assert_snapshot!(screen_to_string(&screenshot2), @r###"
         :
         @ 62fc20d2 create test1.txt
         |
@@ -214,56 +215,56 @@ fn test_go_to_event() -> anyhow::Result<()> {
         to 62fc20d2 create test1.txt
         "###);
 
-        Ok(())
-    })
+    Ok(())
 }
 
 #[test]
 fn test_undo_hide() -> anyhow::Result<()> {
-    with_git(|git| {
-        if !git.supports_reference_transactions()? {
-            return Ok(());
-        }
+    let git = make_git()?;
 
-        git.init_repo()?;
-        git.run(&["checkout", "-b", "test1"])?;
-        git.commit_file("test1", 1)?;
-        git.run(&["checkout", "HEAD^"])?;
-        git.commit_file("test2", 2)?;
-        git.run(&["hide", "test1"])?;
-        git.run(&["branch", "-D", "test1"])?;
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
 
-        {
-            let (stdout, stderr) = git.run(&["smartlog"])?;
-            insta::assert_snapshot!(stderr, @"");
-            insta::assert_snapshot!(stdout, @r###"
+    git.init_repo()?;
+    git.run(&["checkout", "-b", "test1"])?;
+    git.commit_file("test1", 1)?;
+    git.run(&["checkout", "HEAD^"])?;
+    git.commit_file("test2", 2)?;
+    git.run(&["hide", "test1"])?;
+    git.run(&["branch", "-D", "test1"])?;
+
+    {
+        let (stdout, stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stderr, @"");
+        insta::assert_snapshot!(stdout, @r###"
             O f777ecc9 (master) create initial.txt
             |
             @ fe65c1fe create test2.txt
             "###);
-        }
+    }
 
-        let event_cursor = run_select_past_event(
-            &git.get_repo()?,
-            vec![
-                CursiveTestingEvent::Event('p'.into()),
-                CursiveTestingEvent::Event('p'.into()),
-                CursiveTestingEvent::Event(Key::Enter.into()),
-                CursiveTestingEvent::Event('y'.into()),
-            ],
-        )?;
-        insta::assert_debug_snapshot!(event_cursor, @r###"
+    let event_cursor = run_select_past_event(
+        &git.get_repo()?,
+        vec![
+            CursiveTestingEvent::Event('p'.into()),
+            CursiveTestingEvent::Event('p'.into()),
+            CursiveTestingEvent::Event(Key::Enter.into()),
+            CursiveTestingEvent::Event('y'.into()),
+        ],
+    )?;
+    insta::assert_debug_snapshot!(event_cursor, @r###"
         Some(
             EventCursor {
                 event_id: 9,
             },
         )
         "###);
-        let event_cursor = event_cursor.unwrap();
+    let event_cursor = event_cursor.unwrap();
 
-        {
-            let stdout = run_undo_events(&git, event_cursor)?;
-            insta::assert_snapshot!(stdout, @r###"
+    {
+        let stdout = run_undo_events(&git, event_cursor)?;
+        insta::assert_snapshot!(stdout, @r###"
             Will apply these actions:
             1. Create branch test1 at 62fc20d2 create test1.txt
 
@@ -271,55 +272,55 @@ fn test_undo_hide() -> anyhow::Result<()> {
 
             Confirm? [yN] Applied 2 inverse events.
             "###);
-        }
+    }
 
-        {
-            let (stdout, _stderr) = git.run(&["smartlog"])?;
-            insta::assert_snapshot!(stdout, @r###"
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
             O f777ecc9 (master) create initial.txt
             |\
             | o 62fc20d2 (test1) create test1.txt
             |
             @ fe65c1fe create test2.txt
             "###);
-        }
+    }
 
-        Ok(())
-    })
+    Ok(())
 }
 
 #[test]
 fn test_undo_move_refs() -> anyhow::Result<()> {
-    with_git(|git| {
-        if !git.supports_reference_transactions()? {
-            return Ok(());
-        }
+    let git = make_git()?;
 
-        git.init_repo()?;
-        git.commit_file("test1", 1)?;
-        git.commit_file("test2", 2)?;
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
 
-        let event_cursor = run_select_past_event(
-            &git.get_repo()?,
-            vec![
-                CursiveTestingEvent::Event('p'.into()),
-                CursiveTestingEvent::Event('p'.into()),
-                CursiveTestingEvent::Event(Key::Enter.into()),
-                CursiveTestingEvent::Event('y'.into()),
-            ],
-        )?;
-        insta::assert_debug_snapshot!(event_cursor, @r###"
+    git.init_repo()?;
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+
+    let event_cursor = run_select_past_event(
+        &git.get_repo()?,
+        vec![
+            CursiveTestingEvent::Event('p'.into()),
+            CursiveTestingEvent::Event('p'.into()),
+            CursiveTestingEvent::Event(Key::Enter.into()),
+            CursiveTestingEvent::Event('y'.into()),
+        ],
+    )?;
+    insta::assert_debug_snapshot!(event_cursor, @r###"
         Some(
             EventCursor {
                 event_id: 3,
             },
         )
         "###);
-        let event_cursor = event_cursor.unwrap();
+    let event_cursor = event_cursor.unwrap();
 
-        {
-            let stdout = run_undo_events(&git, event_cursor)?;
-            insta::assert_snapshot!(stdout, @r###"
+    {
+        let stdout = run_undo_events(&git, event_cursor)?;
+        insta::assert_snapshot!(stdout, @r###"
             Will apply these actions:
             1. Check out from 96d1c37a create test2.txt
                            to 62fc20d2 create test1.txt
@@ -329,115 +330,115 @@ fn test_undo_move_refs() -> anyhow::Result<()> {
                                     to 62fc20d2 create test1.txt
             Confirm? [yN] Applied 3 inverse events.
             "###);
-        }
+    }
 
-        {
-            let (stdout, _stderr) = git.run(&["smartlog"])?;
-            insta::assert_snapshot!(stdout, @r###"
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
             :
             @ 62fc20d2 (master) create test1.txt
             "###);
-        }
+    }
 
-        Ok(())
-    })
+    Ok(())
 }
 
 #[test]
 fn test_historical_smartlog_visibility() -> anyhow::Result<()> {
-    with_git(|git| {
-        git.init_repo()?;
-        git.commit_file("test1", 1)?;
-        git.run(&["hide", "HEAD"])?;
+    let git = make_git()?;
 
-        let screenshot1 = Default::default();
-        let screenshot2 = Default::default();
-        run_select_past_event(
-            &git.get_repo()?,
-            vec![
-                CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot1)),
-                CursiveTestingEvent::Event('p'.into()),
-                CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot2)),
-                CursiveTestingEvent::Event('q'.into()),
-            ],
-        )?;
+    git.init_repo()?;
+    git.commit_file("test1", 1)?;
+    git.run(&["hide", "HEAD"])?;
 
-        if git.supports_reference_transactions()? {
-            insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
+    let screenshot1 = Default::default();
+    let screenshot2 = Default::default();
+    run_select_past_event(
+        &git.get_repo()?,
+        vec![
+            CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot1)),
+            CursiveTestingEvent::Event('p'.into()),
+            CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot2)),
+            CursiveTestingEvent::Event('q'.into()),
+        ],
+    )?;
+
+    if git.supports_reference_transactions()? {
+        insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
         :
         % 62fc20d2 (manually hidden) (master) create test1.txt
         Repo after transaction 3 (event 4). Press 'h' for help, 'q' to quit.
         1. Hide commit 62fc20d2 create test1.txt
         "###);
-            insta::assert_snapshot!(screen_to_string(&screenshot2), @r###"
+        insta::assert_snapshot!(screen_to_string(&screenshot2), @r###"
         :
         @ 62fc20d2 (master) create test1.txt
         Repo after transaction 2 (event 3). Press 'h' for help, 'q' to quit.
         1. Commit 62fc20d2 create test1.txt
         "###);
-        } else {
-            insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
+    } else {
+        insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
             :
             % 62fc20d2 (manually hidden) (master) create test1.txt
             Repo after transaction 2 (event 2). Press 'h' for help, 'q' to quit.
             1. Hide commit 62fc20d2 create test1.txt
             "###);
-            insta::assert_snapshot!(screen_to_string(&screenshot2), @r###"
+        insta::assert_snapshot!(screen_to_string(&screenshot2), @r###"
             :
             @ 62fc20d2 (master) create test1.txt
             Repo after transaction 1 (event 1). Press 'h' for help, 'q' to quit.
             1. Commit 62fc20d2 create test1.txt
             "###);
-        }
+    }
 
-        Ok(())
-    })
+    Ok(())
 }
 
 #[test]
 fn test_undo_doesnt_make_working_dir_dirty() -> anyhow::Result<()> {
-    with_git(|git| {
-        if !git.supports_reference_transactions()? {
-            return Ok(());
-        }
+    let git = make_git()?;
 
-        git.init_repo()?;
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
 
-        // Modify a reference.
-        git.run(&["branch", "foo"])?;
-        // Make a change that causes a checkout.
-        git.commit_file("test1", 1)?;
-        // Modify a reference.
-        git.run(&["branch", "bar"])?;
+    git.init_repo()?;
 
-        let screenshot1 = Default::default();
-        let event_cursor = run_select_past_event(
-            &git.get_repo()?,
-            vec![
-                CursiveTestingEvent::Event('p'.into()),
-                CursiveTestingEvent::Event('p'.into()),
-                CursiveTestingEvent::Event('p'.into()),
-                CursiveTestingEvent::Event('p'.into()),
-                CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot1)),
-                CursiveTestingEvent::Event(Key::Enter.into()),
-            ],
-        )?;
-        insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
+    // Modify a reference.
+    git.run(&["branch", "foo"])?;
+    // Make a change that causes a checkout.
+    git.commit_file("test1", 1)?;
+    // Modify a reference.
+    git.run(&["branch", "bar"])?;
+
+    let screenshot1 = Default::default();
+    let event_cursor = run_select_past_event(
+        &git.get_repo()?,
+        vec![
+            CursiveTestingEvent::Event('p'.into()),
+            CursiveTestingEvent::Event('p'.into()),
+            CursiveTestingEvent::Event('p'.into()),
+            CursiveTestingEvent::Event('p'.into()),
+            CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot1)),
+            CursiveTestingEvent::Event(Key::Enter.into()),
+        ],
+    )?;
+    insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
         :
         O 62fc20d2 (master) create test1.txt
         There are no previous available events.
         "###);
 
-        // If there are no dirty files in the repository prior to the `undo`,
-        // then there should still be no dirty files after the `undo`.
-        let event_cursor = event_cursor.expect("Should have an event cursor to undo");
-        {
-            let (stdout, _stderr) = git.run(&["status", "--porcelain"])?;
-            assert_eq!(stdout, "");
-        }
-        {
-            let stdout = run_undo_events(&git, event_cursor)?;
-            insta::assert_snapshot!(stdout, @r###"
+    // If there are no dirty files in the repository prior to the `undo`,
+    // then there should still be no dirty files after the `undo`.
+    let event_cursor = event_cursor.expect("Should have an event cursor to undo");
+    {
+        let (stdout, _stderr) = git.run(&["status", "--porcelain"])?;
+        assert_eq!(stdout, "");
+    }
+    {
+        let stdout = run_undo_events(&git, event_cursor)?;
+        insta::assert_snapshot!(stdout, @r###"
             Will apply these actions:
             1. Check out from 62fc20d2 create test1.txt
                            to f777ecc9 create initial.txt
@@ -451,12 +452,11 @@ fn test_undo_doesnt_make_working_dir_dirty() -> anyhow::Result<()> {
 
             Confirm? [yN] Applied 5 inverse events.
             "###);
-        }
-        {
-            let (stdout, _stderr) = git.run(&["status", "--porcelain"])?;
-            assert_eq!(stdout, "");
-        }
+    }
+    {
+        let (stdout, _stderr) = git.run(&["status", "--porcelain"])?;
+        assert_eq!(stdout, "");
+    }
 
-        Ok(())
-    })
+    Ok(())
 }

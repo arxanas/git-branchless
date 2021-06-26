@@ -5,12 +5,14 @@
 
 use std::ffi::{OsStr, OsString};
 use std::io::Write;
+use std::ops::Deref;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
 use crate::util::{get_sh, wrap_git_error, GitRunInfo, GitVersion};
 use anyhow::Context;
 use fn_error_context::context;
+use tempfile::TempDir;
 
 const DUMMY_NAME: &str = "Testy McTestface";
 const DUMMY_EMAIL: &str = "test@example.com";
@@ -359,8 +361,22 @@ pub fn get_path_to_git() -> anyhow::Result<PathBuf> {
     Ok(path_to_git)
 }
 
+/// Wrapper around a `Git` instance which cleans up the repository once dropped.
+pub struct GitWrapper {
+    _repo_dir: TempDir,
+    git: Git,
+}
+
+impl Deref for GitWrapper {
+    type Target = Git;
+
+    fn deref(&self) -> &Self::Target {
+        &self.git
+    }
+}
+
 /// Create a temporary directory for testing and a `Git` instance to use with it.
-pub fn with_git(f: fn(Git) -> anyhow::Result<()>) -> anyhow::Result<()> {
+pub fn make_git() -> anyhow::Result<GitWrapper> {
     let repo_dir = tempfile::tempdir()?;
     let path_to_git = get_path_to_git()?;
     let path_to_git = GitRunInfo {
@@ -369,5 +385,8 @@ pub fn with_git(f: fn(Git) -> anyhow::Result<()>) -> anyhow::Result<()> {
         env: std::env::vars_os().collect(),
     };
     let git = Git::new(repo_dir.path().to_path_buf(), path_to_git);
-    f(git)
+    Ok(GitWrapper {
+        _repo_dir: repo_dir,
+        git,
+    })
 }

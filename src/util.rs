@@ -448,7 +448,7 @@ pub fn get_repo_head(repo: &git2::Repository) -> anyhow::Result<git2::Reference>
 
 #[cfg(test)]
 mod tests {
-    use crate::testing::with_git;
+    use crate::testing::make_git;
 
     use super::*;
 
@@ -472,44 +472,44 @@ mod tests {
 
     #[test]
     fn test_hook_working_dir() -> anyhow::Result<()> {
-        with_git(|git| {
-            if !git.supports_reference_transactions()? {
-                return Ok(());
-            }
+        let git = make_git()?;
 
-            git.init_repo()?;
-            git.commit_file("test1", 1)?;
+        if !git.supports_reference_transactions()? {
+            return Ok(());
+        }
 
-            std::fs::write(
-                git.repo_path
-                    .join(".git")
-                    .join("hooks")
-                    .join("post-rewrite"),
-                r#"#!/bin/sh
+        git.init_repo()?;
+        git.commit_file("test1", 1)?;
+
+        std::fs::write(
+            git.repo_path
+                .join(".git")
+                .join("hooks")
+                .join("post-rewrite"),
+            r#"#!/bin/sh
                    # This won't work unless we're running the hook in the Git working copy.
                    echo "Contents of test1.txt:"
                    cat test1.txt
                    "#,
-            )?;
+        )?;
 
-            {
-                // Trigger the `post-rewrite` hook that we wrote above.
-                let (stdout, stderr) = git.run(&["commit", "--amend", "-m", "foo"])?;
-                insta::assert_snapshot!(stderr, @r###"
+        {
+            // Trigger the `post-rewrite` hook that we wrote above.
+            let (stdout, stderr) = git.run(&["commit", "--amend", "-m", "foo"])?;
+            insta::assert_snapshot!(stderr, @r###"
                 branchless: processing 2 updates to branches/refs
                 branchless: processing commit
                 Contents of test1.txt:
                 test1 contents
                 "###);
-                insta::assert_snapshot!(stdout, @r###"
+            insta::assert_snapshot!(stdout, @r###"
                 [master f23bf8f] foo
                  Date: Thu Oct 29 12:34:56 2020 -0100
                  1 file changed, 1 insertion(+)
                  create mode 100644 test1.txt
                 "###);
-            }
+        }
 
-            Ok(())
-        })
+        Ok(())
     }
 }

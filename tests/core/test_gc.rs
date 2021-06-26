@@ -1,47 +1,49 @@
+use branchless::testing::make_git;
+
 #[test]
 fn test_gc() -> anyhow::Result<()> {
-    branchless::testing::with_git(|git| {
-        git.init_repo()?;
-        git.detach_head()?;
-        git.commit_file("test1", 1)?;
-        git.run(&["checkout", "HEAD^"])?;
+    let git = make_git()?;
 
-        {
-            let repo = git.get_repo()?;
-            assert!(matches!(repo.revparse_single("62fc20d2"), Ok(_)));
-        }
+    git.init_repo()?;
+    git.detach_head()?;
+    git.commit_file("test1", 1)?;
+    git.run(&["checkout", "HEAD^"])?;
 
-        git.run(&["gc", "--prune=now"])?;
-        {
-            let (stdout, _stderr) = git.run(&["smartlog"])?;
-            insta::assert_snapshot!(stdout, @r###"
+    {
+        let repo = git.get_repo()?;
+        assert!(matches!(repo.revparse_single("62fc20d2"), Ok(_)));
+    }
+
+    git.run(&["gc", "--prune=now"])?;
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
 @ f777ecc9 (master) create initial.txt
 |
 o 62fc20d2 create test1.txt
 "###);
-        }
+    }
 
-        git.run(&["hide", "62fc20d2"])?;
-        {
-            let (stdout, _stderr) = git.run(&["branchless", "gc"])?;
-            insta::assert_snapshot!(stdout, @r###"
+    git.run(&["hide", "62fc20d2"])?;
+    {
+        let (stdout, _stderr) = git.run(&["branchless", "gc"])?;
+        insta::assert_snapshot!(stdout, @r###"
 branchless: collecting garbage
 "###);
-        }
+    }
 
-        git.run(&["gc", "--prune=now"])?;
-        {
-            let (stdout, _stderr) = git.run(&["smartlog"])?;
-            insta::assert_snapshot!(stdout, @r###"
+    git.run(&["gc", "--prune=now"])?;
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
 @ f777ecc9 (master) create initial.txt
 "###);
-        }
+    }
 
-        {
-            let repo = git.get_repo()?;
-            assert!(matches!(repo.revparse_single("62fc20d2"), Err(_)));
-        }
+    {
+        let repo = git.get_repo()?;
+        assert!(matches!(repo.revparse_single("62fc20d2"), Err(_)));
+    }
 
-        Ok(())
-    })
+    Ok(())
 }

@@ -66,34 +66,35 @@ pub fn wrap<S: AsRef<str> + std::fmt::Debug>(
 mod tests {
     use crate::core::eventlog::testing::{get_event_replayer_events, redact_event_timestamp};
     use crate::core::eventlog::{Event, EventLogDb, EventReplayer};
-    use crate::testing::with_git;
+    use crate::testing::make_git;
     use crate::util::get_db_conn;
 
     #[test]
     fn test_wrap_rebase_in_transaction() -> anyhow::Result<()> {
-        with_git(|git| {
-            if !git.supports_reference_transactions()? {
-                return Ok(());
-            }
+        let git = make_git()?;
 
-            git.init_repo()?;
-            git.run(&["checkout", "-b", "foo"])?;
-            git.commit_file("test1", 1)?;
-            git.commit_file("test2", 2)?;
-            git.run(&["checkout", "master"])?;
+        if !git.supports_reference_transactions()? {
+            return Ok(());
+        }
 
-            git.run(&["branchless", "wrap", "rebase", "foo"])?;
+        git.init_repo()?;
+        git.run(&["checkout", "-b", "foo"])?;
+        git.commit_file("test1", 1)?;
+        git.commit_file("test2", 2)?;
+        git.run(&["checkout", "master"])?;
 
-            let repo = git.get_repo()?;
-            let conn = get_db_conn(&repo)?;
-            let event_log_db = EventLogDb::new(&conn)?;
-            let event_replayer = EventReplayer::from_event_log_db(&event_log_db)?;
-            let events: Vec<Event> = get_event_replayer_events(&event_replayer)
-                .iter()
-                .map(|event| redact_event_timestamp(event.clone()))
-                .collect();
+        git.run(&["branchless", "wrap", "rebase", "foo"])?;
 
-            insta::assert_debug_snapshot!(events, @r###"
+        let repo = git.get_repo()?;
+        let conn = get_db_conn(&repo)?;
+        let event_log_db = EventLogDb::new(&conn)?;
+        let event_replayer = EventReplayer::from_event_log_db(&event_log_db)?;
+        let events: Vec<Event> = get_event_replayer_events(&event_replayer)
+            .iter()
+            .map(|event| redact_event_timestamp(event.clone()))
+            .collect();
+
+        insta::assert_debug_snapshot!(events, @r###"
             [
                 RefUpdateEvent {
                     timestamp: 0.0,
@@ -248,30 +249,29 @@ mod tests {
             ]
             "###);
 
-            Ok(())
-        })
+        Ok(())
     }
 
     #[test]
     fn test_wrap_explicit_git_executable() -> anyhow::Result<()> {
-        with_git(|git| {
-            git.init_repo()?;
-            let (stdout, _stderr) = git.run(&[
-                "branchless",
-                "wrap",
-                "--git-executable",
-                // Don't use a hardcoded executable like `echo` here (see
-                // https://github.com/arxanas/git-branchless/issues/26). We also
-                // don't want to use `git`, since that's the default value for
-                // this argument, so we wouldn't be able to tell if it was
-                // working. But we're certain to have `git-branchless` on
-                // `PATH`!
-                "git-branchless",
-                "--",
-                "--help",
-            ])?;
-            assert!(stdout.contains("Branchless workflow for Git."));
-            Ok(())
-        })
+        let git = make_git()?;
+
+        git.init_repo()?;
+        let (stdout, _stderr) = git.run(&[
+            "branchless",
+            "wrap",
+            "--git-executable",
+            // Don't use a hardcoded executable like `echo` here (see
+            // https://github.com/arxanas/git-branchless/issues/26). We also
+            // don't want to use `git`, since that's the default value for
+            // this argument, so we wouldn't be able to tell if it was
+            // working. But we're certain to have `git-branchless` on
+            // `PATH`!
+            "git-branchless",
+            "--",
+            "--help",
+        ])?;
+        assert!(stdout.contains("Branchless workflow for Git."));
+        Ok(())
     }
 }
