@@ -1,5 +1,6 @@
 use std::convert::TryInto;
-use std::path::{Path, PathBuf};
+use std::ffi::OsString;
+use std::path::PathBuf;
 
 use anyhow::Context;
 use branchless::commands::wrap;
@@ -147,9 +148,13 @@ fn main() -> anyhow::Result<()> {
         .with_context(|| "Initializing logging")?;
 
     let opts = Opts::from_args();
-    let path_to_git = std::env::var("PATH_TO_GIT").unwrap_or_else(|_| "git".to_string());
-    let path_to_git = Path::new(&path_to_git);
-    let git_run_info = GitRunInfo(path_to_git.to_path_buf());
+    let path_to_git = std::env::var_os("PATH_TO_GIT").unwrap_or_else(|| OsString::from("git"));
+    let path_to_git = PathBuf::from(&path_to_git);
+    let git_run_info = GitRunInfo {
+        path_to_git,
+        working_directory: std::env::current_dir()?,
+        env: std::env::vars_os().collect(),
+    };
 
     let exit_code = match opts {
         Opts::Init { uninstall: false } => {
@@ -214,7 +219,10 @@ fn main() -> anyhow::Result<()> {
             command: WrappedCommand::WrappedCommand(args),
         } => {
             let git_run_info = match explicit_git_executable {
-                Some(path) => GitRunInfo(path),
+                Some(path_to_git) => GitRunInfo {
+                    path_to_git,
+                    ..git_run_info
+                },
                 None => git_run_info,
             };
             wrap::wrap(&git_run_info, args.as_slice())?;

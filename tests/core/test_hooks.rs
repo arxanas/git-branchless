@@ -167,7 +167,6 @@ fn test_pre_auto_gc() -> anyhow::Result<()> {
         // See https://stackoverflow.com/q/3433653/344643, it's hard to get the
         // `pre-auto-gc` hook to be invoked at all. We'll just invoke the hook
         // directly to make sure that it's installed properly.
-        std::env::set_current_dir(&git.repo_path)?;
         let output = Command::new(get_sh().context("bash needed to run pre-auto-gc")?)
             .arg("-c")
             // Always use a unix style path here, as we are handing it to bash (even on Windows).

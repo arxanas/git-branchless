@@ -2,7 +2,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
-use std::env;
+use std::ffi::OsString;
 use std::io::{stderr, stdout, Write};
 use std::path::PathBuf;
 use std::process::{Command, ExitStatus, Stdio};
@@ -150,7 +150,16 @@ pub fn get_db_conn(repo: &git2::Repository) -> anyhow::Result<rusqlite::Connecti
 
 /// Path to the `git` executable on disk to be executed.
 #[derive(Clone, Debug)]
-pub struct GitRunInfo(pub PathBuf);
+pub struct GitRunInfo {
+    /// The path to the Git executable on disk.
+    pub path_to_git: PathBuf,
+
+    /// The working directory that the Git executable should be run in.
+    pub working_directory: PathBuf,
+
+    /// The environment variables that should be passed to the Git process.
+    pub env: HashMap<OsString, OsString>,
+}
 
 /// Run Git in a subprocess, and inform the user.
 ///
@@ -168,7 +177,11 @@ pub fn run_git<S: AsRef<str> + std::fmt::Debug>(
     event_tx_id: Option<EventTransactionId>,
     args: &[S],
 ) -> anyhow::Result<isize> {
-    let GitRunInfo(path_to_git) = git_run_info;
+    let GitRunInfo {
+        path_to_git,
+        working_directory,
+        env,
+    } = git_run_info;
     println!(
         "branchless: {} {}",
         path_to_git.to_string_lossy(),
@@ -181,7 +194,10 @@ pub fn run_git<S: AsRef<str> + std::fmt::Debug>(
     stderr().flush()?;
 
     let mut command = Command::new(path_to_git);
+    command.current_dir(working_directory);
     command.args(args.iter().map(|arg| arg.as_ref()));
+    command.env_clear();
+    command.envs(env.iter());
     if let Some(event_tx_id) = event_tx_id {
         command.env(BRANCHLESS_TRANSACTION_ID_ENV_VAR, event_tx_id.to_string());
     }
@@ -216,7 +232,11 @@ pub fn run_git_silent<S: AsRef<str> + std::fmt::Debug>(
     event_tx_id: Option<EventTransactionId>,
     args: &[S],
 ) -> anyhow::Result<String> {
-    let GitRunInfo(path_to_git) = git_run_info;
+    let GitRunInfo {
+        path_to_git,
+        working_directory,
+        env,
+    } = git_run_info;
 
     // Technically speaking, we should be able to work with non-UTF-8 repository
     // paths. Need to make the typechecker accept it.
@@ -235,6 +255,9 @@ pub fn run_git_silent<S: AsRef<str> + std::fmt::Debug>(
     };
     let mut command = Command::new(path_to_git);
     command.args(&args);
+    command.current_dir(working_directory);
+    command.env_clear();
+    command.envs(env.iter());
     if let Some(event_tx_id) = event_tx_id {
         command.env(BRANCHLESS_TRANSACTION_ID_ENV_VAR, event_tx_id.to_string());
     }
@@ -320,8 +343,8 @@ impl FromStr for GitVersion {
 
 /// Returns a path for a given file, searching through PATH to find it.
 pub fn get_from_path(exe_name: &str) -> Option<PathBuf> {
-    env::var_os("PATH").and_then(|paths| {
-        env::split_paths(&paths).find_map(|dir| {
+    std::env::var_os("PATH").and_then(|paths| {
+        std::env::split_paths(&paths).find_map(|dir| {
             let bash_path = dir.join(exe_name);
             if bash_path.is_file() {
                 Some(bash_path)

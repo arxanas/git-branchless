@@ -304,8 +304,12 @@ fn test_custom_main_branch() -> anyhow::Result<()> {
 #[test]
 fn test_main_remote_branch() -> anyhow::Result<()> {
     let path_to_git = get_path_to_git()?;
-    let git_run_info = GitRunInfo(path_to_git);
     let temp_dir = tempfile::tempdir()?;
+    let git_run_info = GitRunInfo {
+        path_to_git,
+        working_directory: temp_dir.path().to_path_buf(),
+        env: Default::default(),
+    };
     let original_repo_path = temp_dir.path().join("original");
     std::fs::create_dir(&original_repo_path)?;
     let original_repo = Git::new(original_repo_path, git_run_info.clone());
@@ -313,7 +317,6 @@ fn test_main_remote_branch() -> anyhow::Result<()> {
     let cloned_repo = Git::new(cloned_repo_path, git_run_info);
 
     {
-        std::env::set_current_dir(&original_repo.repo_path)?;
         let git = original_repo.clone();
         git.init_repo()?;
         git.commit_file("test1", 1)?;
@@ -325,7 +328,6 @@ fn test_main_remote_branch() -> anyhow::Result<()> {
     }
 
     {
-        std::env::set_current_dir(&cloned_repo.repo_path)?;
         let git = cloned_repo.clone();
         git.init_repo_with_options(&GitInitOptions {
             make_initial_commit: false,
@@ -342,13 +344,11 @@ fn test_main_remote_branch() -> anyhow::Result<()> {
     }
 
     {
-        std::env::set_current_dir(&original_repo.repo_path)?;
         let git = original_repo.clone();
         git.commit_file("test2", 2)?;
     }
 
     {
-        std::env::set_current_dir(&cloned_repo.repo_path)?;
         let git = cloned_repo.clone();
         git.run(&["fetch"])?;
         let (stdout, _stderr) = git.run(&["smartlog"])?;

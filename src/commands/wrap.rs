@@ -15,15 +15,22 @@ fn pass_through_git_command<S: AsRef<str> + std::fmt::Debug>(
     args: &[S],
     event_tx_id: Option<EventTransactionId>,
 ) -> anyhow::Result<isize> {
-    let GitRunInfo(program) = git_run_info;
-    let mut command = Command::new(program);
+    let GitRunInfo {
+        path_to_git,
+        working_directory,
+        env,
+    } = git_run_info;
+    let mut command = Command::new(path_to_git);
+    command.current_dir(working_directory);
     command.args(args.iter().map(|arg| arg.as_ref()));
+    command.env_clear();
+    command.envs(env.iter());
     if let Some(event_tx_id) = event_tx_id {
         command.env(BRANCHLESS_TRANSACTION_ID_ENV_VAR, event_tx_id.to_string());
     }
     let exit_status = command
         .status()
-        .with_context(|| format!("Running program: {:?} {:?}", program, args))?;
+        .with_context(|| format!("Running program: {:?} {:?}", path_to_git, args))?;
     let exit_code = exit_status.code().unwrap_or(1).try_into()?;
     Ok(exit_code)
 }
