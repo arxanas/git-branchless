@@ -12,7 +12,7 @@ use branchless::core::tui::testing::{
     screen_to_string, CursiveTestingBackend, CursiveTestingEvent,
 };
 use branchless::testing::{with_git, Git};
-use branchless::util::{get_db_conn, GitExecutable};
+use branchless::util::{get_db_conn, GitRunInfo};
 
 use cursive::event::Key;
 use cursive::CursiveRunnable;
@@ -71,7 +71,7 @@ fn run_undo_events(git: &Git, event_cursor: EventCursor) -> anyhow::Result<Strin
         &mut out,
         &glyphs,
         &repo,
-        &GitExecutable(git.git_executable.clone()),
+        &GitRunInfo(git.path_to_git.clone()),
         &mut event_log_db,
         &event_replayer,
         event_cursor,

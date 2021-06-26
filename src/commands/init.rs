@@ -10,7 +10,7 @@ use fn_error_context::context;
 use log::warn;
 
 use crate::core::config::get_core_hooks_path;
-use crate::util::{get_repo, run_git_silent, wrap_git_error, GitExecutable, GitVersion};
+use crate::util::{get_repo, run_git_silent, wrap_git_error, GitRunInfo, GitVersion};
 
 const ALL_HOOKS: &[(&str, &str)] = &[
     (
@@ -234,7 +234,7 @@ fn detect_main_branch_name(repo: &git2::Repository) -> Option<String> {
 fn install_aliases(
     repo: &mut git2::Repository,
     config: &mut git2::Config,
-    git_executable: &GitExecutable,
+    git_run_info: &GitRunInfo,
 ) -> anyhow::Result<()> {
     for (from, to) in ALL_ALIASES {
         println!(
@@ -244,7 +244,7 @@ fn install_aliases(
         install_alias(config, from, to)?;
     }
 
-    let version_str = run_git_silent(repo, git_executable, None, &["version"])
+    let version_str = run_git_silent(repo, git_run_info, None, &["version"])
         .with_context(|| "Determining Git version")?;
     let version_str = version_str.trim();
     let version: GitVersion = version_str
@@ -364,18 +364,14 @@ fn unset_configs(config: &mut git2::Config) -> anyhow::Result<()> {
 }
 
 /// Initialize `git-branchless` in the current repo.
-///
-/// Args:
-/// * `out`: The output stream to write to.
-/// * `git_executable`: The path to the `git` executable on disk.
 #[context("Initializing git-branchless for repo")]
-pub fn init(git_executable: &GitExecutable) -> anyhow::Result<()> {
+pub fn init(git_run_info: &GitRunInfo) -> anyhow::Result<()> {
     let mut in_ = BufReader::new(stdin());
     let mut repo = get_repo()?;
     let mut config = repo.config().with_context(|| "Getting repo config")?;
     set_configs(&mut in_, &repo, &mut config)?;
     install_hooks(&repo)?;
-    install_aliases(&mut repo, &mut config, git_executable)?;
+    install_aliases(&mut repo, &mut config, git_run_info)?;
     println!(
         "{}",
         console::style("Successfully installed git-branchless.")

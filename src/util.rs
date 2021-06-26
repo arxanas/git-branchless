@@ -150,33 +150,28 @@ pub fn get_db_conn(repo: &git2::Repository) -> anyhow::Result<rusqlite::Connecti
 
 /// Path to the `git` executable on disk to be executed.
 #[derive(Clone, Debug)]
-pub struct GitExecutable(pub PathBuf);
+pub struct GitRunInfo(pub PathBuf);
 
 /// Run Git in a subprocess, and inform the user.
 ///
 /// This is suitable for commands which affect the working copy or should run
 /// hooks. We don't want our process to be responsible for that.
 ///
-/// Args:
-/// * `out`: The output stream to write to.
-/// * `err`: The error stream to write to.
-/// * `git_executable`: The path to the `git` executable on disk.
-/// * `event_tx_id`: The ID of the current event-log transaction, if any.
-/// * `args`: The list of arguments to pass to Git. Should not include the Git
+/// `args` contains the list of arguments to pass to Git, not including the Git
 /// executable itself.
 ///
-/// Returns: The exit code of Git (non-zero signifies error).
-#[context("Running Git ({:?}) with args: {:?}", git_executable, args)]
+/// Returns the exit code of Git (non-zero signifies error).
+#[context("Running Git ({:?}) with args: {:?}", git_run_info, args)]
 #[must_use = "The return code for `run_git` must be checked"]
 pub fn run_git<S: AsRef<str> + std::fmt::Debug>(
-    git_executable: &GitExecutable,
+    git_run_info: &GitRunInfo,
     event_tx_id: Option<EventTransactionId>,
     args: &[S],
 ) -> anyhow::Result<isize> {
-    let GitExecutable(git_executable) = git_executable;
+    let GitRunInfo(path_to_git) = git_run_info;
     println!(
         "branchless: {} {}",
-        git_executable.to_string_lossy(),
+        path_to_git.to_string_lossy(),
         args.iter()
             .map(|arg| arg.as_ref())
             .collect::<Vec<_>>()
@@ -185,7 +180,7 @@ pub fn run_git<S: AsRef<str> + std::fmt::Debug>(
     stdout().flush()?;
     stderr().flush()?;
 
-    let mut command = Command::new(git_executable);
+    let mut command = Command::new(path_to_git);
     command.args(args.iter().map(|arg| arg.as_ref()));
     if let Some(event_tx_id) = event_tx_id {
         command.env(BRANCHLESS_TRANSACTION_ID_ENV_VAR, event_tx_id.to_string());
@@ -193,7 +188,7 @@ pub fn run_git<S: AsRef<str> + std::fmt::Debug>(
     let result = command.output().with_context(|| {
         format!(
             "Waiting for Git subprocess to complete: {:?} {:?}",
-            git_executable, args
+            path_to_git, args
         )
     })?;
     stdout().write_all(&result.stdout)?;
@@ -214,20 +209,14 @@ pub fn run_git<S: AsRef<str> + std::fmt::Debug>(
 /// Whenever possible, use `git2`'s bindings to Git instead, as they're
 /// considerably more lightweight and reliable.
 ///
-/// Args:
-/// * `repo`: The Git repository.
-/// * `git_executable`: The path to the `git` executable on disk.
-/// * `event_tx_id`: The ID of the current event-log transaction, if any.
-/// * `args`: The command-line args to pass to Git.
-///
-/// Returns: the stdout of the Git invocation.
+/// Returns the stdout of the Git invocation.
 pub fn run_git_silent<S: AsRef<str> + std::fmt::Debug>(
     repo: &git2::Repository,
-    git_executable: &GitExecutable,
+    git_run_info: &GitRunInfo,
     event_tx_id: Option<EventTransactionId>,
     args: &[S],
 ) -> anyhow::Result<String> {
-    let GitExecutable(git_executable) = git_executable;
+    let GitRunInfo(path_to_git) = git_run_info;
 
     // Technically speaking, we should be able to work with non-UTF-8 repository
     // paths. Need to make the typechecker accept it.
@@ -244,18 +233,18 @@ pub fn run_git_silent<S: AsRef<str> + std::fmt::Debug>(
         result.extend(args.iter().map(|arg| arg.as_ref()));
         result
     };
-    let mut command = Command::new(git_executable);
+    let mut command = Command::new(path_to_git);
     command.args(&args);
     if let Some(event_tx_id) = event_tx_id {
         command.env(BRANCHLESS_TRANSACTION_ID_ENV_VAR, event_tx_id.to_string());
     }
     let result = command
         .output()
-        .with_context(|| format!("Spawning Git subprocess: {:?} {:?}", git_executable, args))?;
+        .with_context(|| format!("Spawning Git subprocess: {:?} {:?}", path_to_git, args))?;
     let result = String::from_utf8(result.stdout).with_context(|| {
         format!(
             "Decoding stdout from Git subprocess: {:?} {:?}",
-            git_executable, args
+            path_to_git, args
         )
     })?;
     Ok(result)

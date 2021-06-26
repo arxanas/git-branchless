@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Context;
 use branchless::commands::wrap;
-use branchless::util::GitExecutable;
+use branchless::util::GitRunInfo;
 use simple_logger::SimpleLogger;
 use structopt::StructOpt;
 
@@ -147,13 +147,13 @@ fn main() -> anyhow::Result<()> {
         .with_context(|| "Initializing logging")?;
 
     let opts = Opts::from_args();
-    let git_executable = std::env::var("PATH_TO_GIT").unwrap_or_else(|_| "git".to_string());
-    let git_executable = Path::new(&git_executable);
-    let git_executable = GitExecutable(git_executable.to_path_buf());
+    let path_to_git = std::env::var("PATH_TO_GIT").unwrap_or_else(|_| "git".to_string());
+    let path_to_git = Path::new(&path_to_git);
+    let git_run_info = GitRunInfo(path_to_git.to_path_buf());
 
     let exit_code = match opts {
         Opts::Init { uninstall: false } => {
-            branchless::commands::init::init(&git_executable)?;
+            branchless::commands::init::init(&git_run_info)?;
             0
         }
 
@@ -174,7 +174,7 @@ fn main() -> anyhow::Result<()> {
         }
 
         Opts::Prev { num_commits } => {
-            branchless::commands::navigation::prev(&&git_executable, num_commits)?
+            branchless::commands::navigation::prev(&&git_run_info, num_commits)?
         }
 
         Opts::Next {
@@ -188,7 +188,7 @@ fn main() -> anyhow::Result<()> {
                 (false, true) => Some(branchless::commands::navigation::Towards::Newest),
                 (true, true) => anyhow::bail!("Both --oldest and --newest were set"),
             };
-            branchless::commands::navigation::next(&git_executable, num_commits, towards)?
+            branchless::commands::navigation::next(&git_run_info, num_commits, towards)?
         }
 
         Opts::Move {
@@ -196,17 +196,13 @@ fn main() -> anyhow::Result<()> {
             dest,
             base,
             force_on_disk,
-        } => branchless::commands::r#move::r#move(
-            &git_executable,
-            source,
-            dest,
-            base,
-            force_on_disk,
-        )?,
+        } => {
+            branchless::commands::r#move::r#move(&git_run_info, source, dest, base, force_on_disk)?
+        }
 
-        Opts::Restack => branchless::commands::restack::restack(&git_executable)?,
+        Opts::Restack => branchless::commands::restack::restack(&git_run_info)?,
 
-        Opts::Undo => branchless::commands::undo::undo(&git_executable)?,
+        Opts::Undo => branchless::commands::undo::undo(&git_run_info)?,
 
         Opts::Gc | Opts::HookPreAutoGc => {
             branchless::commands::gc::gc()?;
@@ -217,11 +213,11 @@ fn main() -> anyhow::Result<()> {
             git_executable: explicit_git_executable,
             command: WrappedCommand::WrappedCommand(args),
         } => {
-            let git_executable = match explicit_git_executable {
-                Some(path) => GitExecutable(path),
-                None => git_executable,
+            let git_run_info = match explicit_git_executable {
+                Some(path) => GitRunInfo(path),
+                None => git_run_info,
             };
-            wrap::wrap(&git_executable, args.as_slice())?;
+            wrap::wrap(&git_run_info, args.as_slice())?;
             0
         }
 
