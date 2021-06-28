@@ -655,6 +655,17 @@ fn rebase_on_disk(
         )
     })?;
 
+    // Mark this rebase as an interactive rebase. For whatever reason, if this
+    // is not marked as an interactive rebase, then some rebase plans fail with
+    // this error:
+    //
+    // ```
+    // BUG: builtin/rebase.c:1178: Unhandled rebase type 1
+    // ```
+    let interactive_file_path = rebase_merge_dir.join("interactive");
+    std::fs::write(&interactive_file_path, "")
+        .with_context(|| format!("Writing interactive to: {:?}", &interactive_file_path))?;
+
     // `head-name` appears to be purely for UX concerns. Git will warn if the
     // file isn't found.
     let head_name_file_path = rebase_merge_dir.join("head-name");
