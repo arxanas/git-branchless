@@ -221,11 +221,12 @@ fn restack_branches(
 /// Returns an exit code (0 denotes successful exit).
 #[context("Restacking commits and branches")]
 pub fn restack(git_run_info: &GitRunInfo) -> anyhow::Result<isize> {
+    let now = SystemTime::now();
     let repo = get_repo()?;
     let conn = get_db_conn(&repo)?;
     let merge_base_db = MergeBaseDb::new(&conn)?;
     let event_log_db = EventLogDb::new(&conn)?;
-    let event_tx_id = event_log_db.make_transaction_id(SystemTime::now(), "restack")?;
+    let event_tx_id = event_log_db.make_transaction_id(now, "restack")?;
     let head_oid = get_head_oid(&repo)?;
 
     let result = restack_commits(
