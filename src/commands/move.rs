@@ -5,11 +5,12 @@
 
 use std::time::SystemTime;
 
+use crate::core::config::get_restack_preserve_timestamps;
 use crate::core::eventlog::{EventLogDb, EventReplayer};
 use crate::core::formatting::Glyphs;
 use crate::core::graph::{make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid};
 use crate::core::mergebase::MergeBaseDb;
-use crate::core::rewrite::{execute_rebase_plan, RebasePlanBuilder};
+use crate::core::rewrite::{execute_rebase_plan, ExecuteRebasePlanOptions, RebasePlanBuilder};
 use crate::util::get_main_branch_oid;
 use crate::util::{
     get_branch_oid_to_names, get_db_conn, get_head_oid, get_repo, resolve_commits, GitRunInfo,
@@ -121,14 +122,15 @@ pub fn r#move(
             println!("Nothing to do.");
             0
         }
-        Some(rebase_plan) => execute_rebase_plan(
-            &glyphs,
-            git_run_info,
-            &repo,
-            event_tx_id,
-            &rebase_plan,
-            force_on_disk,
-        )?,
+        Some(rebase_plan) => {
+            let options = ExecuteRebasePlanOptions {
+                now,
+                event_tx_id,
+                preserve_timestamps: get_restack_preserve_timestamps(&repo)?,
+                force_on_disk,
+            };
+            execute_rebase_plan(&glyphs, git_run_info, &repo, &rebase_plan, &options)?
+        }
     };
     Ok(result)
 }
