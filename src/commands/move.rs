@@ -41,6 +41,7 @@ pub fn r#move(
     source: Option<String>,
     dest: Option<String>,
     base: Option<String>,
+    force_in_memory: bool,
     force_on_disk: bool,
 ) -> anyhow::Result<isize> {
     let repo = get_repo()?;
@@ -127,6 +128,7 @@ pub fn r#move(
                 now,
                 event_tx_id,
                 preserve_timestamps: get_restack_preserve_timestamps(&repo)?,
+                force_in_memory,
                 force_on_disk,
             };
             execute_rebase_plan(&glyphs, git_run_info, &repo, &rebase_plan, &options)?
