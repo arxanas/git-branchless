@@ -2,6 +2,7 @@
 //! specifics on commit rewriting.
 
 use std::collections::{HashMap, HashSet};
+use std::convert::TryInto;
 use std::time::SystemTime;
 
 use anyhow::Context;
@@ -307,6 +308,34 @@ enum RebaseInMemoryResult {
     },
 }
 
+#[context("Updating commit timestamp")]
+fn update_signature_timestamp(
+    now: SystemTime,
+    signature: git2::Signature,
+) -> anyhow::Result<git2::Signature> {
+    let seconds: i64 = now
+        .duration_since(SystemTime::UNIX_EPOCH)?
+        .as_secs()
+        .try_into()?;
+    let time = git2::Time::new(seconds, signature.when().offset_minutes());
+    let name = match signature.name() {
+        Some(name) => name,
+        None => anyhow::bail!(
+            "Could not decode signature name: {:?}",
+            signature.name_bytes()
+        ),
+    };
+    let email = match signature.email() {
+        Some(email) => email,
+        None => anyhow::bail!(
+            "Could not decode signature email: {:?}",
+            signature.email_bytes()
+        ),
+    };
+    let signature = git2::Signature::new(name, email, &time)?;
+    Ok(signature)
+}
+
 #[context("Rebasing in memory")]
 fn rebase_in_memory(
     glyphs: &Glyphs,
@@ -315,9 +344,11 @@ fn rebase_in_memory(
     options: &ExecuteRebasePlanOptions,
 ) -> anyhow::Result<RebaseInMemoryResult> {
     let ExecuteRebasePlanOptions {
-        now: _,
+        now,
+        // Transaction ID will be passed to the `post-rewrite` hook via
+        // environment variable.
         event_tx_id: _,
-        preserve_timestamps: _,
+        preserve_timestamps,
         force_in_memory: _,
         force_on_disk: _,
     } = options;
@@ -406,11 +437,16 @@ fn rebase_in_memory(
                 };
 
                 progress.set_message(format!("Committing to repository: {}", commit_description));
+                let committer_signature = if *preserve_timestamps {
+                    commit_to_apply.committer()
+                } else {
+                    update_signature_timestamp(*now, commit_to_apply.committer())?
+                };
                 let rebased_commit_oid = repo
                     .commit(
                         None,
                         &commit_to_apply.author(),
-                        &commit_to_apply.committer(),
+                        &committer_signature,
                         commit_message,
                         &commit_tree,
                         &[&current_commit],
@@ -567,7 +603,7 @@ fn rebase_on_disk(
         // `git rebase` will make its own timestamp.
         now: _,
         event_tx_id,
-        preserve_timestamps: _,
+        preserve_timestamps,
         force_in_memory: _,
         force_on_disk: _,
     } = options;
@@ -663,6 +699,12 @@ fn rebase_on_disk(
         format!("{}\n", rebase_plan.commands.len()),
     )
     .with_context(|| format!("Writing `end` to: {:?}", end_file_path.as_path()))?;
+
+    if *preserve_timestamps {
+        let cdate_is_adate_file_path = rebase_merge_dir.join("cdate_is_adate");
+        std::fs::write(&cdate_is_adate_file_path, "")
+            .with_context(|| "Writing `cdate_is_adate` option file")?;
+    }
 
     progress.set_message("Calling Git for on-disk rebase");
     let result = run_git(&git_run_info, Some(*event_tx_id), &["rebase", "--continue"])?;
