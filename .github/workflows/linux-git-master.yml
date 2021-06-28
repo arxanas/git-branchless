@@ -1,0 +1,37 @@
+name: Linux (Git master)
+
+on:
+  schedule:
+    # Run once every day at 6:40AM UTC.
+    - cron: "40 6 * * *"
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+jobs:
+  run-tests:
+    runs-on: ubuntu-latest
+  steps:
+    - uses: actions/checkout@v2
+      with:
+        path: git-master
+        repository: git/git
+    - name: Build Git
+      run: |
+        sudo apt-get update --fix-missing
+        # List of dependencies from https://git-scm.com/book/en/v2/Getting-Started-Installing-Git
+        sudo apt-get install dh-autoreconf libcurl4-gnutls-dev libexpat1-dev gettext libz-dev libssl-dev
+        cd git-master
+        make
+    - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+    - name: Run Rust tests
+      run: |
+        export RUST_BACKTRACE=1
+        export PATH_TO_GIT=../git-master/git
+        cd git-branchless
+        cargo test
