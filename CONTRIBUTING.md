@@ -2,9 +2,9 @@ Welcome to `git-branchless`! Please review the [code of conduct](/CODE_OF_CONDUC
 
 # Bugs and feature requests
 
-You can report bugs and make feature requests in the [Github issue tracker](https://github.com/arxanas/git-branchless/issues). There is no formal issue template at this time. For bugs, please provide a [Short, Self-Contained, Correct Example](http://sscce.org/).
+You can report bugs in the [Github issue tracker](https://github.com/arxanas/git-branchless/issues). There is no formal issue template at this time. For bugs, please provide a [Short, Self-Contained, Correct Example](http://sscce.org/).
 
-When filing an issue, please also refer to the [Known issues](https://github.com/arxanas/git-branchless/issues/1), [Enhancements](https://github.com/arxanas/git-branchless/issues/2), and [Possible new commands](https://github.com/arxanas/git-branchless/issues/3) issues. If your issue is there, you should still file a new issue, to indicate that the problem is affecting an actual person. Just make sure to add a link in your newly-filed issue to the appropriate aforementioned issue. (It will show up as "mentioned", for the convenience of future readers who want to see the status.)
+For feature requests, workflow questions, and other open-ended topics, [start a discussion](https://github.com/arxanas/git-branchless/discussions).
 
 # Development
 
