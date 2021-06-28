@@ -318,6 +318,7 @@ fn rebase_in_memory(
         now: _,
         event_tx_id: _,
         preserve_timestamps: _,
+        force_in_memory: _,
         force_on_disk: _,
     } = options;
 
@@ -500,6 +501,7 @@ fn post_rebase_in_memory(
         now: _,
         event_tx_id,
         preserve_timestamps: _,
+        force_in_memory: _,
         force_on_disk: _,
     } = options;
 
@@ -566,6 +568,7 @@ fn rebase_on_disk(
         now: _,
         event_tx_id,
         preserve_timestamps: _,
+        force_in_memory: _,
         force_on_disk: _,
     } = options;
 
@@ -699,6 +702,9 @@ pub struct ExecuteRebasePlanOptions {
     /// to the current time.
     pub preserve_timestamps: bool,
 
+    /// Force an in-memory rebase (as opposed to an on-disk rebase).
+    pub force_in_memory: bool,
+
     /// Force an on-disk rebase (as opposed to an in-memory rebase).
     pub force_on_disk: bool,
 }
@@ -716,6 +722,7 @@ pub fn execute_rebase_plan(
         now: _,
         event_tx_id: _,
         preserve_timestamps: _,
+        force_in_memory,
         force_on_disk,
     } = options;
 
@@ -735,16 +742,34 @@ pub fn execute_rebase_plan(
                 return Ok(1);
             }
             RebaseInMemoryResult::MergeConflict { commit_oid } => {
-                println!(
-                    "Merge conflict, falling back to rebase on-disk. The conflicting commit was: {}",
-                    printable_styled_string(glyphs, friendly_describe_commit(repo, commit_oid)?)?,
-                );
+                if *force_in_memory {
+                    println!(
+                        "Merge conflict. The conflicting commit was: {}",
+                        printable_styled_string(
+                            glyphs,
+                            friendly_describe_commit(repo, commit_oid)?
+                        )?,
+                    );
+                    println!("Aborting since an in-memory rebase was requested.");
+                    return Ok(1);
+                } else {
+                    println!(
+                        "Merge conflict, falling back to rebase on-disk. The conflicting commit was: {}",
+                        printable_styled_string(glyphs, friendly_describe_commit(repo, commit_oid)?)?,
+                    );
+                }
             }
         }
     }
 
-    let result = rebase_on_disk(git_run_info, repo, &rebase_plan, &options)?;
-    Ok(result)
+    if !force_in_memory {
+        let result = rebase_on_disk(git_run_info, repo, &rebase_plan, &options)?;
+        return Ok(result);
+    }
+
+    anyhow::bail!(
+        "Both force_in_memory and force_on_disk were requested, but these options conflict"
+    )
 }
 
 #[cfg(test)]

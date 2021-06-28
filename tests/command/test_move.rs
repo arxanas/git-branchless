@@ -500,5 +500,37 @@ fn test_move_base_onto_head() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[test]
+fn test_move_force_in_memory() -> anyhow::Result<()> {
+    let git = make_git()?;
+
+    git.init_repo()?;
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+    git.run(&["checkout", "HEAD~"])?;
+
+    git.write_file("test2", "conflicting contents")?;
+    git.run(&["add", "."])?;
+    git.run(&["commit", "-m", "conflicting test2"])?;
+
+    {
+        let (stdout, stderr) = git.run_with_options(
+            &["move", "-d", "master", "--in-memory"],
+            &GitRunOptions {
+                expected_exit_code: 1,
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stderr, @"");
+        insta::assert_snapshot!(stdout, @r###"
+        Attempting rebase in-memory...
+        Merge conflict. The conflicting commit was: 081b474b conflicting test2
+        Aborting since an in-memory rebase was requested.
+        "###);
+    }
+
+    Ok(())
+}
+
 // TODO: implement restack in terms of move
 // TODO: don't re-apply already-applied commits

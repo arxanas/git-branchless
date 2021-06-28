@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Added: `git move` now supports forcing an in-memory rebase with the `--in-memory` flag.
+
 ## [0.3.3] - 2021-06-27
 
 This release primarily improves the new user experience.

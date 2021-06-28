@@ -98,6 +98,11 @@ enum Opts {
         #[structopt(short = "-d", long = "--dest")]
         dest: Option<String>,
 
+        /// Only attempt to perform an in-memory rebase. If it fails, do not
+        /// attempt an on-disk rebase.
+        #[structopt(long = "--in-memory", conflicts_with = "force_on_disk")]
+        force_in_memory: bool,
+
         /// Skip attempting to use an in-memory rebase, and try an
         /// on-disk rebase directly.
         #[structopt(long = "--on-disk")]
@@ -200,10 +205,16 @@ fn main() -> anyhow::Result<()> {
             source,
             dest,
             base,
+            force_in_memory,
             force_on_disk,
-        } => {
-            branchless::commands::r#move::r#move(&git_run_info, source, dest, base, force_on_disk)?
-        }
+        } => branchless::commands::r#move::r#move(
+            &git_run_info,
+            source,
+            dest,
+            base,
+            force_in_memory,
+            force_on_disk,
+        )?,
 
         Opts::Restack => branchless::commands::restack::restack(&git_run_info)?,
 
