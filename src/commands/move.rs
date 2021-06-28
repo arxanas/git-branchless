@@ -9,7 +9,7 @@ use crate::core::eventlog::{EventLogDb, EventReplayer};
 use crate::core::formatting::Glyphs;
 use crate::core::graph::{make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid};
 use crate::core::mergebase::MergeBaseDb;
-use crate::core::rewrite::{execute_rebase_plan, make_rebase_plan};
+use crate::core::rewrite::{execute_rebase_plan, RebasePlanBuilder};
 use crate::util::get_main_branch_oid;
 use crate::util::{
     get_branch_oid_to_names, get_db_conn, get_head_oid, get_repo, resolve_commits, GitRunInfo,
@@ -106,22 +106,29 @@ pub fn r#move(
     let glyphs = Glyphs::detect();
     let now = SystemTime::now();
     let event_tx_id = event_log_db.make_transaction_id(now, "move")?;
-    let rebase_plan = make_rebase_plan(
-        &repo,
-        &merge_base_db,
-        &graph,
-        &MainBranchOid(main_branch_oid),
-        source_oid,
-    )?;
-    let result = execute_rebase_plan(
-        &glyphs,
-        git_run_info,
-        &repo,
-        event_tx_id,
-        &rebase_plan,
-        source_oid,
-        dest_oid,
-        force_on_disk,
-    )?;
+    let rebase_plan = {
+        let mut builder = RebasePlanBuilder::new(
+            &repo,
+            &graph,
+            &merge_base_db,
+            &MainBranchOid(main_branch_oid),
+        );
+        builder.move_subtree(source_oid, dest_oid)?;
+        builder.build()
+    };
+    let result = match rebase_plan {
+        None => {
+            println!("Nothing to do.");
+            0
+        }
+        Some(rebase_plan) => execute_rebase_plan(
+            &glyphs,
+            git_run_info,
+            &repo,
+            event_tx_id,
+            &rebase_plan,
+            force_on_disk,
+        )?,
+    };
     Ok(result)
 }
