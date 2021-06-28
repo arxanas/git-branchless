@@ -55,6 +55,7 @@
 //! o def003 Commit 3
 //! ```
 
+use std::collections::HashMap;
 use std::time::SystemTime;
 
 use anyhow::Context;
@@ -68,8 +69,8 @@ use crate::core::formatting::Glyphs;
 use crate::core::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
 use crate::core::mergebase::MergeBaseDb;
 use crate::core::rewrite::{
-    execute_rebase_plan, find_abandoned_children, find_rewrite_target, ExecuteRebasePlanOptions,
-    RebasePlanBuilder,
+    execute_rebase_plan, find_abandoned_children, find_rewrite_target, move_branches,
+    ExecuteRebasePlanOptions, RebasePlanBuilder,
 };
 use crate::util::{
     get_branch_oid_to_names, get_db_conn, get_head_oid, get_main_branch_oid, get_repo, run_git,
@@ -169,6 +170,7 @@ fn restack_branches(
         true,
     )?;
 
+    let mut rewritten_oids = HashMap::new();
     for branch_info in repo
         .branches(Some(git2::BranchType::Local))
         .with_context(|| "Iterating over local branches")?
@@ -188,32 +190,22 @@ fn restack_branches(
             continue;
         }
 
-        let new_oid = match find_rewrite_target(
+        if let Some(new_oid) = find_rewrite_target(
             &graph,
             &event_replayer,
             event_replayer.make_default_cursor(),
             branch_target,
         ) {
-            Some(new_oid) => new_oid.to_string(),
-            None => continue,
+            rewritten_oids.insert(branch_target, new_oid);
         };
-        let branch_name = match branch
-            .name()
-            .with_context(|| "Converting branch name to string")?
-        {
-            Some(branch_name) => branch_name,
-            None => anyhow::bail!("Invalid UTF-8 branch name: {:?}", branch.name_bytes()?),
-        };
-        let args = ["branch", "-f", branch_name, &new_oid];
-        let result = run_git(git_run_info, Some(options.event_tx_id), &args)?;
-        if result != 0 {
-            return Ok(result);
-        } else {
-            return restack_branches(repo, git_run_info, merge_base_db, event_log_db, options);
-        }
     }
 
-    println!("branchless: no more abandoned branches to restack");
+    if rewritten_oids.is_empty() {
+        println!("No abandoned branches to restack.");
+    } else {
+        move_branches(git_run_info, repo, options.event_tx_id, &rewritten_oids)?;
+        println!("Finished restacking branches.");
+    }
     Ok(0)
 }
 

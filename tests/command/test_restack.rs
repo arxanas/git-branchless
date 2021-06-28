@@ -49,7 +49,7 @@ fn test_restack_amended_commit() -> anyhow::Result<()> {
         insta::assert_snapshot!(stdout, @r###"
         branchless: <git-executable> rebase --continue
         Finished restacking commits.
-        branchless: no more abandoned branches to restack
+        No abandoned branches to restack.
         branchless: <git-executable> checkout 024c35ce32dae6b12e981963465ee8a62b7eff9b
         O f777ecc9 (master) create initial.txt
         |
@@ -90,7 +90,7 @@ fn test_restack_consecutive_rewrites() -> anyhow::Result<()> {
         insta::assert_snapshot!(stdout, @r###"
         branchless: <git-executable> rebase --continue
         Finished restacking commits.
-        branchless: no more abandoned branches to restack
+        No abandoned branches to restack.
         branchless: <git-executable> checkout 662b451fb905b92404787e024af717ced49e3045
         O f777ecc9 (master) create initial.txt
         |
@@ -122,8 +122,8 @@ fn test_move_abandoned_branch() -> anyhow::Result<()> {
         let stdout = remove_rebase_lines(stdout);
         insta::assert_snapshot!(stdout, @r###"
         No abandoned commits to restack.
-        branchless: <git-executable> branch -f master 662b451fb905b92404787e024af717ced49e3045
-        branchless: no more abandoned branches to restack
+        branchless: processing 1 update to a branch/ref
+        Finished restacking branches.
         branchless: <git-executable> checkout 662b451fb905b92404787e024af717ced49e3045
         :
         @ 662b451f (master) amend test1.txt v2
@@ -165,8 +165,8 @@ fn test_amended_initial_commit() -> anyhow::Result<()> {
         insta::assert_snapshot!(stdout, @r###"
         branchless: <git-executable> rebase --continue
         Finished restacking commits.
-        branchless: <git-executable> branch -f master 6d85943be6d6e5941d5479f1059d02ebf1c8e307
-        branchless: no more abandoned branches to restack
+        branchless: processing 1 update to a branch/ref
+        Finished restacking branches.
         branchless: <git-executable> checkout 9a9f929a0d4f052ff5d58bedd97b2f761120f8ed
         @ 9a9f929a new initial commit
         |
@@ -200,8 +200,8 @@ fn test_restack_amended_master() -> anyhow::Result<()> {
         insta::assert_snapshot!(stdout, @r###"
         branchless: <git-executable> rebase --continue
         Finished restacking commits.
-        branchless: <git-executable> branch -f master 51452b55e09488387e59770a9f44d999eba27864
-        branchless: no more abandoned branches to restack
+        branchless: processing 1 update to a branch/ref
+        Finished restacking branches.
         branchless: <git-executable> checkout ae94dc2a748bc0965c88fcf3edac2e30074ff7e2
         :
         @ ae94dc2a amended test1

@@ -467,7 +467,10 @@ fn rebase_in_memory(
     Ok(RebaseInMemoryResult::Succeeded { rewritten_oids })
 }
 
-fn move_branches<'a>(
+/// Given a list of rewritten OIDs, move the branches attached to those OIDs
+/// from their old commits to their new commits. Invoke the
+/// `reference-transaction` hook when done.
+pub fn move_branches<'a>(
     git_run_info: &GitRunInfo,
     repo: &'a git2::Repository,
     event_tx_id: EventTransactionId,
