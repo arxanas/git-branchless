@@ -118,13 +118,12 @@ fn get_child_output(
     };
 
     let mut lines = vec![first_line];
-    let mut children: Vec<_> = current_node
+    let children: Vec<_> = current_node
         .children
         .iter()
         .filter(|child_oid| graph.contains_key(child_oid))
         .copied()
         .collect();
-    children.sort_by_key(|child_oid| (graph[child_oid].commit.time(), child_oid.to_string()));
     for (child_idx, child_oid) in children.iter().enumerate() {
         if root_oids.contains(child_oid) {
             // Will be rendered by the parent.
