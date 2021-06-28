@@ -1,29 +1,10 @@
-use branchless::testing::{make_git, Git, GitRunOptions};
-use branchless::util::GitVersion;
-
-/// Git v2.24 produces this message on `git move` tests:
-///
-/// ```text
-/// BUG: builtin/rebase.c:1172: Unhandled rebase type 1
-/// ```
-///
-/// I don't know why. `git rebase` in v2.24 supports the `--preserve-merges`
-/// option, so we should be able to generate our rebase plans.
-fn has_git_v2_24_bug(git: &Git) -> anyhow::Result<bool> {
-    let GitVersion(major, minor, _patch) = git.get_version()?;
-    Ok((major, minor) <= (2, 24))
-}
+use branchless::testing::{make_git, GitRunOptions};
 
 #[test]
 fn test_move_stick_on_disk() -> anyhow::Result<()> {
     let git = make_git()?;
 
-    if has_git_v2_24_bug(&git)? {
-        return Ok(());
-    }
-
     git.init_repo()?;
-    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
 
     let test1_oid = git.commit_file("test1", 1)?;
     git.commit_file("test2", 2)?;
@@ -46,9 +27,9 @@ fn test_move_stick_on_disk() -> anyhow::Result<()> {
         :
         O 62fc20d2 create test1.txt
         |\
-        | o 4838e49b create test3.txt
+        | o cade1d30 create test3.txt
         | |
-        | @ a2482074 create test4.txt
+        | @ 5bb72580 create test4.txt
         |
         O 96d1c37a (master) create test2.txt
         "###);
@@ -60,10 +41,6 @@ fn test_move_stick_on_disk() -> anyhow::Result<()> {
 #[test]
 fn test_move_stick_in_memory() -> anyhow::Result<()> {
     let git = make_git()?;
-
-    if has_git_v2_24_bug(&git)? {
-        return Ok(());
-    }
 
     git.init_repo()?;
     git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
@@ -84,11 +61,11 @@ fn test_move_stick_in_memory() -> anyhow::Result<()> {
             &test1_oid.to_string(),
         ])?;
         insta::assert_snapshot!(stdout, @r###"
-            Attempting rebase in-memory...
-            branchless: processing 2 rewritten commits
-            branchless: <git-executable> checkout a248207402822b7396cabe0f1011d8a7ce7daf1b
-            In-memory rebase succeeded.
-            "###);
+        Attempting rebase in-memory...
+        branchless: processing 2 rewritten commits
+        branchless: <git-executable> checkout a248207402822b7396cabe0f1011d8a7ce7daf1b
+        In-memory rebase succeeded.
+        "###);
     }
 
     {
@@ -112,12 +89,7 @@ fn test_move_stick_in_memory() -> anyhow::Result<()> {
 fn test_move_tree_on_disk() -> anyhow::Result<()> {
     let git = make_git()?;
 
-    if has_git_v2_24_bug(&git)? {
-        return Ok(());
-    }
-
     git.init_repo()?;
-    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
 
     let test1_oid = git.commit_file("test1", 1)?;
     git.commit_file("test2", 2)?;
@@ -142,11 +114,11 @@ fn test_move_tree_on_disk() -> anyhow::Result<()> {
         :
         O 62fc20d2 create test1.txt
         |\
-        | @ 4838e49b create test3.txt
+        | @ cade1d30 create test3.txt
         | |\
-        | | o a2482074 create test4.txt
+        | | o 5bb72580 create test4.txt
         | |
-        | o b1f9efa0 create test5.txt
+        | o df755ed1 create test5.txt
         |
         O 96d1c37a (master) create test2.txt
         "###);
@@ -158,10 +130,6 @@ fn test_move_tree_on_disk() -> anyhow::Result<()> {
 #[test]
 fn test_move_tree_in_memory() -> anyhow::Result<()> {
     let git = make_git()?;
-
-    if has_git_v2_24_bug(&git)? {
-        return Ok(());
-    }
 
     git.init_repo()?;
     git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
@@ -185,17 +153,17 @@ fn test_move_tree_in_memory() -> anyhow::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
-            :
-            O 62fc20d2 create test1.txt
-            |\
-            | o 4838e49b create test3.txt
-            | |\
-            | | o a2482074 create test4.txt
-            | |
-            | @ b1f9efa0 create test5.txt
-            |
-            O 96d1c37a (master) create test2.txt
-            "###);
+        :
+        O 62fc20d2 create test1.txt
+        |\
+        | o 4838e49b create test3.txt
+        | |\
+        | | o a2482074 create test4.txt
+        | |
+        | @ b1f9efa0 create test5.txt
+        |
+        O 96d1c37a (master) create test2.txt
+        "###);
     }
 
     Ok(())
@@ -205,12 +173,7 @@ fn test_move_tree_in_memory() -> anyhow::Result<()> {
 fn test_move_with_source_not_in_smartlog_on_disk() -> anyhow::Result<()> {
     let git = make_git()?;
 
-    if has_git_v2_24_bug(&git)? {
-        return Ok(());
-    }
-
     git.init_repo()?;
-    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
 
     let test1_oid = git.commit_file("test1", 1)?;
     git.commit_file("test2", 2)?;
@@ -234,7 +197,7 @@ fn test_move_with_source_not_in_smartlog_on_disk() -> anyhow::Result<()> {
         |\
         : o 96d1c37a create test2.txt
         :
-        @ a2482074 (master) create test4.txt
+        @ 5bb72580 (master) create test4.txt
         "###);
     }
 
@@ -244,10 +207,6 @@ fn test_move_with_source_not_in_smartlog_on_disk() -> anyhow::Result<()> {
 #[test]
 fn test_move_with_source_not_in_smartlog_in_memory() -> anyhow::Result<()> {
     let git = make_git()?;
-
-    if has_git_v2_24_bug(&git)? {
-        return Ok(());
-    }
 
     git.init_repo()?;
     git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
@@ -278,13 +237,13 @@ fn test_move_with_source_not_in_smartlog_in_memory() -> anyhow::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
-            :
-            O 62fc20d2 create test1.txt
-            |\
-            : o 96d1c37a create test2.txt
-            :
-            @ a2482074 (master) create test4.txt
-            "###);
+        :
+        O 62fc20d2 create test1.txt
+        |\
+        : o 96d1c37a create test2.txt
+        :
+        @ a2482074 (master) create test4.txt
+        "###);
     }
 
     Ok(())
@@ -294,12 +253,7 @@ fn test_move_with_source_not_in_smartlog_in_memory() -> anyhow::Result<()> {
 fn test_move_merge_conflict() -> anyhow::Result<()> {
     let git = make_git()?;
 
-    if has_git_v2_24_bug(&git)? {
-        return Ok(());
-    }
-
     git.init_repo()?;
-    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
 
     let base_oid = git.commit_file("test1", 1)?;
     git.detach_head()?;
@@ -328,7 +282,7 @@ fn test_move_merge_conflict() -> anyhow::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["rebase", "--continue"])?;
         insta::assert_snapshot!(stdout, @r###"
-        [detached HEAD 42951b5] create conflict.txt
+        [detached HEAD 244e2bd] create conflict.txt
          1 file changed, 1 insertion(+), 1 deletion(-)
         "###);
     }
@@ -341,7 +295,7 @@ fn test_move_merge_conflict() -> anyhow::Result<()> {
         |
         o 202143f2 create conflict.txt
         |
-        @ 42951b5f create conflict.txt
+        @ 244e2bd1 create conflict.txt
         "###);
     }
 
