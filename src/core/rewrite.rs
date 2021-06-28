@@ -110,17 +110,6 @@ pub fn find_abandoned_children(
     Some((rewritten_oid, visible_children_oids))
 }
 
-fn make_label_name(repo: &git2::Repository, mut preferred_name: String) -> anyhow::Result<String> {
-    match repo.find_reference(&format!("refs/rewritten/{}", preferred_name)) {
-        Err(err) if err.code() == git2::ErrorCode::NotFound => Ok(preferred_name),
-        Ok(_) => {
-            preferred_name.push('\'');
-            make_label_name(repo, preferred_name)
-        }
-        Err(err) => Err(wrap_git_error(err)),
-    }
-}
-
 #[derive(Debug)]
 enum RebaseCommand {
     Label { label_name: String },
@@ -132,6 +121,7 @@ enum RebaseCommand {
 /// operation.
 #[derive(Debug)]
 pub struct RebasePlan {
+    first_dest_oid: git2::Oid,
     commands: Vec<RebaseCommand>,
 }
 
@@ -145,106 +135,173 @@ impl ToString for RebaseCommand {
     }
 }
 
-fn make_rebase_plan_for_current_commit(
-    repo: &git2::Repository,
-    graph: &CommitGraph,
-    current_oid: git2::Oid,
-    current_label: &str,
-    mut acc: Vec<RebaseCommand>,
-) -> anyhow::Result<Vec<RebaseCommand>> {
-    let acc = {
-        acc.push(RebaseCommand::Pick {
-            commit_oid: current_oid,
-        });
-        acc
-    };
-    let current_node = match graph.get(&current_oid) {
-        Some(current_node) => current_node,
-        None => {
-            anyhow::bail!(format!(
-                "BUG: commit {} could not be found in the commit graph",
-                current_oid.to_string()
-            ))
-        }
-    };
+/// Builder for a rebase plan. Unlike regular Git rebases, a `git-branchless`
+/// rebase plan can move multiple unrelated subtrees to unrelated destinations.
+pub struct RebasePlanBuilder<'repo> {
+    repo: &'repo git2::Repository,
+    graph: &'repo CommitGraph<'repo>,
+    merge_base_db: &'repo MergeBaseDb<'repo>,
+    main_branch_oid: git2::Oid,
 
-    match current_node.children.as_slice() {
-        [] => Ok(acc),
-        [only_child_oid] => {
-            let acc = make_rebase_plan_for_current_commit(
-                repo,
-                &graph,
-                *only_child_oid,
-                current_label,
-                acc,
-            )?;
-            Ok(acc)
-        }
-        children => {
-            let command_num = acc.len();
-            let label_name = make_label_name(repo, format!("label-{}", command_num))?;
-            let mut acc = acc;
-            acc.push(RebaseCommand::Label {
-                label_name: label_name.clone(),
-            });
-            for child_oid in children {
-                acc =
-                    make_rebase_plan_for_current_commit(repo, graph, *child_oid, &label_name, acc)?;
-                acc.push(RebaseCommand::Reset {
-                    label_name: label_name.clone(),
-                });
-            }
-            Ok(acc)
-        }
-    }
+    first_dest_oid: Option<git2::Oid>,
+    commands: Vec<RebaseCommand>,
+    used_labels: HashSet<String>,
 }
 
-/// Generate a sequence of rebase steps that cause the subtree at `source_oid`
-/// to be rebased on top of the commit at `main_branch_oid`.
-pub fn make_rebase_plan(
-    repo: &git2::Repository,
-    merge_base_db: &MergeBaseDb,
-    graph: &CommitGraph,
-    main_branch_oid: &MainBranchOid,
-    source_oid: git2::Oid,
-) -> anyhow::Result<RebasePlan> {
-    let label_name = make_label_name(&repo, "onto".to_string())?;
-    let (source_oid, mut commands) = {
+impl<'repo> RebasePlanBuilder<'repo> {
+    /// Constructor.
+    pub fn new(
+        repo: &'repo git2::Repository,
+        graph: &'repo CommitGraph,
+        merge_base_db: &'repo MergeBaseDb,
+        main_branch_oid: &MainBranchOid,
+    ) -> Self {
         let MainBranchOid(main_branch_oid) = main_branch_oid;
-        let merge_base_oid =
-            merge_base_db.get_merge_base_oid(&repo, *main_branch_oid, source_oid)?;
-        if merge_base_oid == Some(source_oid) {
-            // In this case, the `source` OID is an ancestor of the main branch.
-            // This means that the user is trying to rewrite public history,
-            // which is typically not recommended, but let's try to do it
-            // anyways.
-            let path =
-                find_path_to_merge_base(&repo, &merge_base_db, *main_branch_oid, source_oid)?
-                    .unwrap_or_default();
-            let commands: Vec<RebaseCommand> = path
-                .into_iter()
-                // Skip the first element, which is the main branch OID, since
-                // it'll be picked as part of the recursive rebase plan below.
-                .skip(1)
-                // Reverse the path, since it goes from main branch OID to
-                // source OID, but we want a path from source OID to main branch
-                // OID.
-                .rev()
-                .map(|main_branch_commit| RebaseCommand::Pick {
-                    commit_oid: main_branch_commit.id(),
-                })
-                .collect();
-            (*main_branch_oid, commands)
-        } else {
-            (source_oid, Vec::new())
+        RebasePlanBuilder {
+            repo,
+            graph,
+            merge_base_db,
+            main_branch_oid: *main_branch_oid,
+            first_dest_oid: Default::default(),
+            commands: Default::default(),
+            used_labels: Default::default(),
         }
-    };
-    commands.push(RebaseCommand::Label {
-        label_name: label_name.clone(),
-    });
-    let commands =
-        make_rebase_plan_for_current_commit(repo, graph, source_oid, &label_name, commands)?;
-    Ok(RebasePlan { commands })
+    }
+
+    fn make_label_name(&mut self, preferred_name: impl Into<String>) -> anyhow::Result<String> {
+        let mut preferred_name = preferred_name.into();
+        match self
+            .repo
+            .find_reference(&format!("refs/rewritten/{}", preferred_name))
+        {
+            Err(err) if err.code() == git2::ErrorCode::NotFound => {
+                if !self.used_labels.contains(&preferred_name) {
+                    self.used_labels.insert(preferred_name.clone());
+                    return Ok(preferred_name);
+                }
+            }
+            Ok(_) => {}
+            Err(err) => return Err(wrap_git_error(err)),
+        }
+        preferred_name.push('\'');
+        self.make_label_name(preferred_name)
+    }
+
+    fn make_rebase_plan_for_current_commit(
+        &mut self,
+        current_oid: git2::Oid,
+        current_label: &str,
+        mut acc: Vec<RebaseCommand>,
+    ) -> anyhow::Result<Vec<RebaseCommand>> {
+        let acc = {
+            acc.push(RebaseCommand::Pick {
+                commit_oid: current_oid,
+            });
+            acc
+        };
+        let current_node = match self.graph.get(&current_oid) {
+            Some(current_node) => current_node,
+            None => {
+                anyhow::bail!(format!(
+                    "BUG: commit {} could not be found in the commit graph",
+                    current_oid.to_string()
+                ))
+            }
+        };
+
+        match current_node.children.as_slice() {
+            [] => Ok(acc),
+            [only_child_oid] => {
+                let acc =
+                    self.make_rebase_plan_for_current_commit(*only_child_oid, current_label, acc)?;
+                Ok(acc)
+            }
+            children => {
+                let command_num = acc.len();
+                let label_name = self.make_label_name(format!("label-{}", command_num))?;
+                let mut acc = acc;
+                acc.push(RebaseCommand::Label {
+                    label_name: label_name.clone(),
+                });
+                for child_oid in children {
+                    acc = self.make_rebase_plan_for_current_commit(*child_oid, &label_name, acc)?;
+                    acc.push(RebaseCommand::Reset {
+                        label_name: label_name.clone(),
+                    });
+                }
+                Ok(acc)
+            }
+        }
+    }
+
+    /// Generate a sequence of rebase steps that cause the subtree at `source_oid`
+    /// to be rebased on top of `dest_oid`.
+    pub fn move_subtree(
+        &mut self,
+        source_oid: git2::Oid,
+        dest_oid: git2::Oid,
+    ) -> anyhow::Result<()> {
+        let mut commands = vec![
+            // First, move to the destination OID.
+            RebaseCommand::Reset {
+                label_name: dest_oid.to_string(),
+            },
+        ];
+
+        let label_name = self.make_label_name("subtree")?;
+        let (source_oid, main_branch_commands) = {
+            let merge_base_oid = self.merge_base_db.get_merge_base_oid(
+                self.repo,
+                self.main_branch_oid,
+                source_oid,
+            )?;
+            if merge_base_oid == Some(source_oid) {
+                // In this case, the `source` OID is an ancestor of the main branch.
+                // This means that the user is trying to rewrite public history,
+                // which is typically not recommended, but let's try to do it
+                // anyways.
+                let path = find_path_to_merge_base(
+                    &self.repo,
+                    &self.merge_base_db,
+                    self.main_branch_oid,
+                    source_oid,
+                )?
+                .unwrap_or_default();
+                let commands: Vec<RebaseCommand> = path
+                    .into_iter()
+                    // Skip the first element, which is the main branch OID, since
+                    // it'll be picked as part of the recursive rebase plan below.
+                    .skip(1)
+                    // Reverse the path, since it goes from main branch OID to
+                    // source OID, but we want a path from source OID to main branch
+                    // OID.
+                    .rev()
+                    .map(|main_branch_commit| RebaseCommand::Pick {
+                        commit_oid: main_branch_commit.id(),
+                    })
+                    .collect();
+                (self.main_branch_oid, commands)
+            } else {
+                (source_oid, Vec::new())
+            }
+        };
+        commands.extend(main_branch_commands);
+
+        let commands =
+            self.make_rebase_plan_for_current_commit(source_oid, &label_name, commands)?;
+        self.first_dest_oid.get_or_insert(dest_oid);
+        self.commands.extend(commands);
+        Ok(())
+    }
+
+    /// Create the rebase plan. Returns `None` if there were no commands in the rebase plan.
+    pub fn build(self) -> Option<RebasePlan> {
+        let first_dest_oid = self.first_dest_oid?;
+        Some(RebasePlan {
+            first_dest_oid,
+            commands: self.commands,
+        })
+    }
 }
 
 enum RebaseInMemoryResult {
@@ -259,14 +316,13 @@ enum RebaseInMemoryResult {
     },
 }
 
-#[context("Rebasing in memory onto to {}", dest_oid.to_string())]
+#[context("Rebasing in memory")]
 fn rebase_in_memory(
     glyphs: &Glyphs,
     repo: &git2::Repository,
     rebase_plan: &RebasePlan,
-    dest_oid: git2::Oid,
 ) -> anyhow::Result<RebaseInMemoryResult> {
-    let mut current_oid = dest_oid;
+    let mut current_oid = rebase_plan.first_dest_oid;
     let mut labels: HashMap<String, git2::Oid> = HashMap::new();
     let mut rewritten_oids = Vec::new();
 
@@ -288,7 +344,10 @@ fn rebase_in_memory(
             RebaseCommand::Reset { label_name } => {
                 current_oid = match labels.get(label_name) {
                     Some(oid) => *oid,
-                    None => anyhow::bail!("BUG: no associated OID for label: {}", label_name),
+                    None => match label_name.parse::<git2::Oid>() {
+                        Ok(oid) => oid,
+                        Err(_) => anyhow::bail!("BUG: no associated OID for label: {}", label_name),
+                    },
                 };
             }
             RebaseCommand::Pick { commit_oid } => {
@@ -483,49 +542,106 @@ fn post_rebase_in_memory(
     Ok(0)
 }
 
-#[context("Rebasing on disk from {} to {}", source_oid.to_string(), dest_oid.to_string())]
+/// Rebase on-disk. We don't use `git2`'s `Rebase` machinery because it ends up
+/// being too slow.
+#[context("Rebasing on disk")]
 fn rebase_on_disk(
     git_run_info: &GitRunInfo,
     repo: &git2::Repository,
     rebase_plan: &RebasePlan,
-    source_oid: git2::Oid,
-    dest_oid: git2::Oid,
     event_tx_id: EventTransactionId,
 ) -> anyhow::Result<isize> {
     let progress = ProgressBar::new_spinner();
     progress.enable_steady_tick(100);
     progress.set_message("Initializing rebase");
 
-    // Attempt to initialize a new rebase. However, `git2` doesn't support the
-    // commands we need (`label` and `reset`), so we won't be using it for the
-    // actual rebase process.
-    let _rebase: git2::Rebase = repo
-        .rebase(
-            None,
-            // TODO: if the target was a branch, do we need to use an annotated
-            // commit which was instantiated from the branch?
-            Some(&repo.find_annotated_commit(source_oid)?),
-            Some(&repo.find_annotated_commit(dest_oid)?),
-            None,
-        )
-        .with_context(|| "Setting up rebase to write `git-rebase-todo`")?;
+    let head = repo.head().with_context(|| "Getting repo `HEAD`")?;
+    let orig_head_name = head.shorthand_bytes();
 
-    let todo_file = repo.path().join("rebase-merge").join("git-rebase-todo");
+    let current_operation_type = {
+        use git2::RepositoryState::*;
+        match repo.state() {
+            Clean | Bisect => None,
+            Merge => Some("merge"),
+            Revert | RevertSequence => Some("revert"),
+            CherryPick | CherryPickSequence => Some("cherry-pick"),
+            Rebase | RebaseInteractive | RebaseMerge => Some("rebase"),
+            ApplyMailbox | ApplyMailboxOrRebase => Some("am"),
+        }
+    };
+    if let Some(current_operation_type) = current_operation_type {
+        println!(
+            "A {} operation is already in progress.",
+            current_operation_type
+        );
+        println!(
+            "Run git {0} --continue or git {0} --abort to resolve it and proceed.",
+            current_operation_type
+        );
+        return Ok(1);
+    }
+
+    let repo_head_file_path = repo.path().join("HEAD");
+    let orig_head_file_path = repo.path().join("ORIG_HEAD");
+    std::fs::copy(&repo_head_file_path, &orig_head_file_path)
+        .with_context(|| format!("Copying `HEAD` to: {:?}", &orig_head_file_path))?;
+
+    let rebase_merge_dir = repo.path().join("rebase-merge");
+    std::fs::create_dir_all(&rebase_merge_dir).with_context(|| {
+        format!(
+            "Creating rebase-merge directory at: {:?}",
+            &rebase_merge_dir
+        )
+    })?;
+
+    // `head-name` appears to be purely for UX concerns. Git will warn if the
+    // file isn't found.
+    let head_name_file_path = rebase_merge_dir.join("head-name");
+    std::fs::write(&head_name_file_path, orig_head_name)
+        .with_context(|| format!("Writing head-name to: {:?}", &head_name_file_path))?;
+
+    // Dummy `head` file. We will `reset` to the appropriate commit as soon as
+    // we start the rebase.
+    let rebase_merge_head_file_path = rebase_merge_dir.join("head");
     std::fs::write(
-        todo_file.as_path(),
+        &rebase_merge_head_file_path,
+        rebase_plan.first_dest_oid.to_string(),
+    )
+    .with_context(|| format!("Writing head to: {:?}", &rebase_merge_head_file_path))?;
+
+    // Dummy `onto` file. We may be rebasing onto a set of unrelated
+    // nodes in the same operation, so there may not be a single "onto" node to
+    // refer to.
+    let onto_file_path = rebase_merge_dir.join("onto");
+    std::fs::write(&onto_file_path, rebase_plan.first_dest_oid.to_string()).with_context(|| {
+        format!(
+            "Writing onto {:?} to: {:?}",
+            &rebase_plan.first_dest_oid, &onto_file_path
+        )
+    })?;
+
+    let todo_file_path = rebase_merge_dir.join("git-rebase-todo");
+    std::fs::write(
+        &todo_file_path,
         rebase_plan
             .commands
             .iter()
             .map(|command| format!("{}\n", command.to_string()))
             .collect::<String>(),
     )
-    .with_context(|| format!("Writing `git-rebase-todo` to: {:?}", todo_file.as_path()))?;
-    let end_file = repo.path().join("rebase-merge").join("end");
+    .with_context(|| {
+        format!(
+            "Writing `git-rebase-todo` to: {:?}",
+            todo_file_path.as_path()
+        )
+    })?;
+
+    let end_file_path = rebase_merge_dir.join("end");
     std::fs::write(
-        end_file.as_path(),
+        end_file_path.as_path(),
         format!("{}\n", rebase_plan.commands.len()),
     )
-    .with_context(|| format!("Writing `end` to: {:?}", end_file.as_path()))?;
+    .with_context(|| format!("Writing `end` to: {:?}", end_file_path.as_path()))?;
 
     progress.set_message("Calling Git for on-disk rebase");
     let result = run_git(&git_run_info, Some(event_tx_id), &["rebase", "--continue"])?;
@@ -559,13 +675,11 @@ pub fn execute_rebase_plan(
     repo: &git2::Repository,
     event_tx_id: EventTransactionId,
     rebase_plan: &RebasePlan,
-    source_oid: git2::Oid,
-    dest_oid: git2::Oid,
     force_on_disk: bool,
 ) -> anyhow::Result<isize> {
     if !force_on_disk {
         println!("Attempting rebase in-memory...");
-        match rebase_in_memory(glyphs, &repo, &rebase_plan, dest_oid)? {
+        match rebase_in_memory(glyphs, &repo, &rebase_plan)? {
             RebaseInMemoryResult::Succeeded { rewritten_oids } => {
                 post_rebase_in_memory(git_run_info, repo, &rewritten_oids, event_tx_id)?;
                 println!("In-memory rebase succeeded.");
@@ -587,14 +701,7 @@ pub fn execute_rebase_plan(
         }
     }
 
-    let result = rebase_on_disk(
-        git_run_info,
-        repo,
-        &rebase_plan,
-        source_oid,
-        dest_oid,
-        event_tx_id,
-    )?;
+    let result = rebase_on_disk(git_run_info, repo, &rebase_plan, event_tx_id)?;
     Ok(result)
 }
 
