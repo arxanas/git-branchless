@@ -2,6 +2,7 @@
 //! specifics on commit rewriting.
 
 use std::collections::{HashMap, HashSet};
+use std::time::SystemTime;
 
 use anyhow::Context;
 use cursive::utils::markup::StyledString;
@@ -311,7 +312,15 @@ fn rebase_in_memory(
     glyphs: &Glyphs,
     repo: &git2::Repository,
     rebase_plan: &RebasePlan,
+    options: &ExecuteRebasePlanOptions,
 ) -> anyhow::Result<RebaseInMemoryResult> {
+    let ExecuteRebasePlanOptions {
+        now: _,
+        event_tx_id: _,
+        preserve_timestamps: _,
+        force_on_disk: _,
+    } = options;
+
     let mut current_oid = rebase_plan.first_dest_oid;
     let mut labels: HashMap<String, git2::Oid> = HashMap::new();
     let mut rewritten_oids = Vec::new();
@@ -485,8 +494,15 @@ fn post_rebase_in_memory(
     git_run_info: &GitRunInfo,
     repo: &git2::Repository,
     rewritten_oids: &[(git2::Oid, git2::Oid)],
-    event_tx_id: EventTransactionId,
+    options: &ExecuteRebasePlanOptions,
 ) -> anyhow::Result<isize> {
+    let ExecuteRebasePlanOptions {
+        now: _,
+        event_tx_id,
+        preserve_timestamps: _,
+        force_on_disk: _,
+    } = options;
+
     // Note that if an OID has been mapped to multiple other OIDs, then the last
     // mapping wins. (This corresponds to the last applied rebase operation.)
     let rewritten_oids_map: HashMap<git2::Oid, git2::Oid> =
@@ -501,7 +517,7 @@ fn post_rebase_in_memory(
     // a lot of changes in the working copy.
     repo.set_head_detached(head_oid)?;
 
-    move_branches(git_run_info, repo, event_tx_id, &rewritten_oids_map)?;
+    move_branches(git_run_info, repo, *event_tx_id, &rewritten_oids_map)?;
 
     // Call the `post-rewrite` hook only after moving branches so that we don't
     // produce a spurious abandoned-branch warning.
@@ -513,7 +529,7 @@ fn post_rebase_in_memory(
         git_run_info,
         repo,
         "post-rewrite",
-        event_tx_id,
+        *event_tx_id,
         &["rebase"],
         Some(post_rewrite_stdin),
     )?;
@@ -523,7 +539,11 @@ fn post_rebase_in_memory(
             Some(head_branch) => head_branch.to_string(),
             None => new_head_oid.to_string(),
         };
-        let result = run_git(git_run_info, Some(event_tx_id), &["checkout", &head_target])?;
+        let result = run_git(
+            git_run_info,
+            Some(*event_tx_id),
+            &["checkout", &head_target],
+        )?;
         if result != 0 {
             return Ok(result);
         }
@@ -539,8 +559,16 @@ fn rebase_on_disk(
     git_run_info: &GitRunInfo,
     repo: &git2::Repository,
     rebase_plan: &RebasePlan,
-    event_tx_id: EventTransactionId,
+    options: &ExecuteRebasePlanOptions,
 ) -> anyhow::Result<isize> {
+    let ExecuteRebasePlanOptions {
+        // `git rebase` will make its own timestamp.
+        now: _,
+        event_tx_id,
+        preserve_timestamps: _,
+        force_on_disk: _,
+    } = options;
+
     let progress = ProgressBar::new_spinner();
     progress.enable_steady_tick(100);
     progress.set_message("Initializing rebase");
@@ -634,7 +662,7 @@ fn rebase_on_disk(
     .with_context(|| format!("Writing `end` to: {:?}", end_file_path.as_path()))?;
 
     progress.set_message("Calling Git for on-disk rebase");
-    let result = run_git(&git_run_info, Some(event_tx_id), &["rebase", "--continue"])?;
+    let result = run_git(&git_run_info, Some(*event_tx_id), &["rebase", "--continue"])?;
 
     Ok(result)
 }
@@ -657,21 +685,45 @@ fn friendly_describe_commit(
     Ok(description)
 }
 
+/// Options to use when executing a `RebasePlan`.
+#[derive(Clone, Debug)]
+pub struct ExecuteRebasePlanOptions {
+    /// The time which should be recorded for this event.
+    pub now: SystemTime,
+
+    /// The transaction ID for this event.
+    pub event_tx_id: EventTransactionId,
+
+    /// If `true`, any rewritten commits will keep the same authored and
+    /// committed timestamps. If `false`, the committed timestamps will be updated
+    /// to the current time.
+    pub preserve_timestamps: bool,
+
+    /// Force an on-disk rebase (as opposed to an in-memory rebase).
+    pub force_on_disk: bool,
+}
+
 /// Execute the provided rebase plan. Returns the exit status (zero indicates
 /// success).
 pub fn execute_rebase_plan(
     glyphs: &Glyphs,
     git_run_info: &GitRunInfo,
     repo: &git2::Repository,
-    event_tx_id: EventTransactionId,
     rebase_plan: &RebasePlan,
-    force_on_disk: bool,
+    options: &ExecuteRebasePlanOptions,
 ) -> anyhow::Result<isize> {
+    let ExecuteRebasePlanOptions {
+        now: _,
+        event_tx_id: _,
+        preserve_timestamps: _,
+        force_on_disk,
+    } = options;
+
     if !force_on_disk {
         println!("Attempting rebase in-memory...");
-        match rebase_in_memory(glyphs, &repo, &rebase_plan)? {
+        match rebase_in_memory(glyphs, &repo, &rebase_plan, &options)? {
             RebaseInMemoryResult::Succeeded { rewritten_oids } => {
-                post_rebase_in_memory(git_run_info, repo, &rewritten_oids, event_tx_id)?;
+                post_rebase_in_memory(git_run_info, repo, &rewritten_oids, &options)?;
                 println!("In-memory rebase succeeded.");
                 return Ok(0);
             }
@@ -691,7 +743,7 @@ pub fn execute_rebase_plan(
         }
     }
 
-    let result = rebase_on_disk(git_run_info, repo, &rebase_plan, event_tx_id)?;
+    let result = rebase_on_disk(git_run_info, repo, &rebase_plan, &options)?;
     Ok(result)
 }
 
