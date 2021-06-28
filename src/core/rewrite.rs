@@ -9,9 +9,7 @@ use fn_error_context::context;
 use indicatif::{ProgressBar, ProgressStyle};
 
 use crate::core::formatting::printable_styled_string;
-use crate::util::{
-    get_branch_oid_to_names, get_repo_head, run_git, run_hook, wrap_git_error, GitRunInfo,
-};
+use crate::util::{get_branch_oid_to_names, get_repo_head, run_git, run_hook, GitRunInfo};
 
 use super::eventlog::{Event, EventCursor, EventReplayer, EventTransactionId};
 use super::formatting::Glyphs;
@@ -170,21 +168,13 @@ impl<'repo> RebasePlanBuilder<'repo> {
 
     fn make_label_name(&mut self, preferred_name: impl Into<String>) -> anyhow::Result<String> {
         let mut preferred_name = preferred_name.into();
-        match self
-            .repo
-            .find_reference(&format!("refs/rewritten/{}", preferred_name))
-        {
-            Err(err) if err.code() == git2::ErrorCode::NotFound => {
-                if !self.used_labels.contains(&preferred_name) {
-                    self.used_labels.insert(preferred_name.clone());
-                    return Ok(preferred_name);
-                }
-            }
-            Ok(_) => {}
-            Err(err) => return Err(wrap_git_error(err)),
+        if !self.used_labels.contains(&preferred_name) {
+            self.used_labels.insert(preferred_name.clone());
+            Ok(preferred_name)
+        } else {
+            preferred_name.push('\'');
+            self.make_label_name(preferred_name)
         }
-        preferred_name.push('\'');
-        self.make_label_name(preferred_name)
     }
 
     fn make_rebase_plan_for_current_commit(
