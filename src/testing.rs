@@ -336,6 +336,32 @@ impl Git {
         Ok(version >= GitVersion(2, 29, 0))
     }
 
+    /// Determine if the `--committer-date-is-author-date` option to `git rebase
+    /// -i` is respected.
+    ///
+    /// This affects whether we can rely on the timestamps being preserved
+    /// during a rebase when `branchless.restack.preserveTimestamps` is set.
+    pub fn supports_committer_date_is_author_date(&self) -> anyhow::Result<bool> {
+        // The `--committer-date-is-author-date` option was previously passed
+        // only to the `am` rebase back-end, until Git v2.29, when it became
+        // available for merge back-end rebases as well.
+        //
+        // See https://git-scm.com/docs/git-rebase/2.28.0
+        //
+        // > These flags are passed to git am to easily change the dates of the
+        // > rebased commits (see git-am[1]).
+        // >
+        // > See also INCOMPATIBLE OPTIONS below.
+        //
+        // See https://git-scm.com/docs/git-rebase/2.29.0
+        //
+        // > Instead of using the current time as the committer date, use the
+        // > author date of the commit being rebased as the committer date. This
+        // > option implies --force-rebase.
+        let version = self.get_version()?;
+        Ok(version >= GitVersion(2, 29, 0))
+    }
+
     /// Resolve a file during a merge or rebase conflict with the provided
     /// contents.
     #[context("Resolving file {:?} with contents: {:?}", name, contents)]

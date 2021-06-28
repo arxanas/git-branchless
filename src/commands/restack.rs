@@ -63,10 +63,14 @@ use log::info;
 
 use crate::commands::smartlog::smartlog;
 use crate::core::config::get_restack_preserve_timestamps;
-use crate::core::eventlog::{EventLogDb, EventReplayer, EventTransactionId};
+use crate::core::eventlog::{EventLogDb, EventReplayer};
+use crate::core::formatting::Glyphs;
 use crate::core::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
 use crate::core::mergebase::MergeBaseDb;
-use crate::core::rewrite::{find_abandoned_children, find_rewrite_target};
+use crate::core::rewrite::{
+    execute_rebase_plan, find_abandoned_children, find_rewrite_target, ExecuteRebasePlanOptions,
+    RebasePlanBuilder,
+};
 use crate::util::{
     get_branch_oid_to_names, get_db_conn, get_head_oid, get_main_branch_oid, get_repo, run_git,
     GitRunInfo,
@@ -74,13 +78,15 @@ use crate::util::{
 
 #[context("Restacking commits")]
 fn restack_commits(
+    glyphs: &Glyphs,
     repo: &git2::Repository,
     git_run_info: &GitRunInfo,
     merge_base_db: &MergeBaseDb,
     event_log_db: &EventLogDb,
-    event_tx_id: EventTransactionId,
+    options: &ExecuteRebasePlanOptions,
 ) -> anyhow::Result<isize> {
     let event_replayer = EventReplayer::from_event_log_db(event_log_db)?;
+    let event_cursor = event_replayer.make_default_cursor();
     let head_oid = get_head_oid(repo)?;
     let main_branch_oid = get_main_branch_oid(repo)?;
     let branch_oid_to_names = get_branch_oid_to_names(repo)?;
@@ -88,61 +94,56 @@ fn restack_commits(
         repo,
         merge_base_db,
         &event_replayer,
-        event_replayer.make_default_cursor(),
+        event_cursor,
         &HeadOid(head_oid),
         &MainBranchOid(main_branch_oid),
         &BranchOids(branch_oid_to_names.keys().copied().collect()),
         true,
     )?;
-    let preserve_timestamps = get_restack_preserve_timestamps(&repo)?;
 
-    for original_oid in graph.keys() {
-        let (rewritten_oid, abandoned_child_oids) = match find_abandoned_children(
-            &graph,
-            &event_replayer,
-            event_replayer.make_default_cursor(),
-            *original_oid,
-        ) {
-            Some(result) => result,
-            None => continue,
-        };
-
-        // Pick an arbitrary abandoned child. We'll rewrite it and then repeat,
-        // and next time, it won't be considered abandoned because it's been
-        // rewritten.
-        let abandoned_child_oid = match abandoned_child_oids.first() {
-            Some(abandoned_child_oid) => abandoned_child_oid,
-            None => continue,
-        };
-
-        let original_oid = original_oid.to_string();
-        let abandoned_child_oid = abandoned_child_oid.to_string();
-        let rewritten_oid = rewritten_oid.to_string();
-        let args = {
-            let mut args = vec![
-                "rebase",
-                &original_oid,
-                &abandoned_child_oid,
-                "--onto",
-                &rewritten_oid,
-            ];
-            if preserve_timestamps {
-                args.push("--committer-date-is-author-date");
-            }
-            args
-        };
-        let result = run_git(git_run_info, Some(event_tx_id), &args)?;
-        if result != 0 {
-            println!("branchless: resolve rebase, then run 'git restack' again");
-            return Ok(result);
-        }
-
-        // Repeat until we reach a fixed point.
-        return restack_commits(repo, git_run_info, merge_base_db, event_log_db, event_tx_id);
+    struct RebaseInfo {
+        dest_oid: git2::Oid,
+        abandoned_child_oids: Vec<git2::Oid>,
     }
+    let rebases: Vec<RebaseInfo> = graph
+        .keys()
+        .copied()
+        .filter_map(|original_oid| {
+            find_abandoned_children(&graph, &event_replayer, event_cursor, original_oid).map(
+                |(rewritten_oid, abandoned_child_oids)| RebaseInfo {
+                    dest_oid: rewritten_oid,
+                    abandoned_child_oids,
+                },
+            )
+        })
+        .collect();
 
-    println!("branchless: no more abandoned commits to restack");
-    Ok(0)
+    let rebase_plan = {
+        let mut builder =
+            RebasePlanBuilder::new(repo, &graph, merge_base_db, &MainBranchOid(main_branch_oid));
+        for RebaseInfo {
+            dest_oid,
+            abandoned_child_oids,
+        } in rebases
+        {
+            for child_oid in abandoned_child_oids {
+                builder.move_subtree(child_oid, dest_oid)?;
+            }
+        }
+        builder.build()
+    };
+
+    match rebase_plan {
+        None => {
+            println!("No abandoned commits to restack.");
+            Ok(0)
+        }
+        Some(rebase_plan) => {
+            let exit_code = execute_rebase_plan(glyphs, git_run_info, repo, &rebase_plan, options)?;
+            println!("Finished restacking commits.");
+            Ok(exit_code)
+        }
+    }
 }
 
 #[context("Restacking branches")]
@@ -151,7 +152,7 @@ fn restack_branches(
     git_run_info: &GitRunInfo,
     merge_base_db: &MergeBaseDb,
     event_log_db: &EventLogDb,
-    event_tx_id: EventTransactionId,
+    options: &ExecuteRebasePlanOptions,
 ) -> anyhow::Result<isize> {
     let event_replayer = EventReplayer::from_event_log_db(event_log_db)?;
     let head_oid = get_head_oid(repo)?;
@@ -204,11 +205,11 @@ fn restack_branches(
             None => anyhow::bail!("Invalid UTF-8 branch name: {:?}", branch.name_bytes()?),
         };
         let args = ["branch", "-f", branch_name, &new_oid];
-        let result = run_git(git_run_info, Some(event_tx_id), &args)?;
+        let result = run_git(git_run_info, Some(options.event_tx_id), &args)?;
         if result != 0 {
             return Ok(result);
         } else {
-            return restack_branches(repo, git_run_info, merge_base_db, event_log_db, event_tx_id);
+            return restack_branches(repo, git_run_info, merge_base_db, event_log_db, options);
         }
     }
 
@@ -222,6 +223,7 @@ fn restack_branches(
 #[context("Restacking commits and branches")]
 pub fn restack(git_run_info: &GitRunInfo) -> anyhow::Result<isize> {
     let now = SystemTime::now();
+    let glyphs = Glyphs::detect();
     let repo = get_repo()?;
     let conn = get_db_conn(&repo)?;
     let merge_base_db = MergeBaseDb::new(&conn)?;
@@ -229,12 +231,22 @@ pub fn restack(git_run_info: &GitRunInfo) -> anyhow::Result<isize> {
     let event_tx_id = event_log_db.make_transaction_id(now, "restack")?;
     let head_oid = get_head_oid(&repo)?;
 
+    let options = ExecuteRebasePlanOptions {
+        now,
+        event_tx_id,
+        preserve_timestamps: get_restack_preserve_timestamps(&repo)?,
+        force_in_memory: false,
+        // Use on-disk rebases only until `git move` is stabilized.
+        force_on_disk: true,
+    };
+
     let result = restack_commits(
+        &glyphs,
         &repo,
         &git_run_info,
         &merge_base_db,
         &event_log_db,
-        event_tx_id,
+        &options,
     )?;
     if result != 0 {
         return Ok(result);
@@ -245,7 +257,7 @@ pub fn restack(git_run_info: &GitRunInfo) -> anyhow::Result<isize> {
         &git_run_info,
         &merge_base_db,
         &event_log_db,
-        event_tx_id,
+        &options,
     )?;
     if result != 0 {
         return Ok(result);
