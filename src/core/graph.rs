@@ -40,7 +40,7 @@ pub struct Node<'repo> {
     pub parent: Option<git2::Oid>,
 
     /// The OIDs of the children nodes in the smartlog commit graph.
-    pub children: HashSet<git2::Oid>,
+    pub children: Vec<git2::Oid>,
 
     /// Indicates that this is a commit to the main branch.
     ///
@@ -219,7 +219,7 @@ fn walk_from_commits<'repo>(
                 Node {
                     commit: current_commit.clone(),
                     parent: None,
-                    children: HashSet::new(),
+                    children: Vec::new(),
                     is_main,
                     is_visible,
                     event,
@@ -247,14 +247,23 @@ fn walk_from_commits<'repo>(
         .collect();
     for (child_oid, parent_oid) in links.iter() {
         graph.get_mut(child_oid).unwrap().parent = Some(*parent_oid);
-        graph
-            .get_mut(parent_oid)
-            .unwrap()
-            .children
-            .insert(*child_oid);
+        graph.get_mut(parent_oid).unwrap().children.push(*child_oid);
     }
 
     Ok(graph)
+}
+
+/// Sort children nodes of the commit graph in a standard order, for determinism
+/// in output.
+fn sort_children(graph: &mut CommitGraph) {
+    let commit_times: HashMap<git2::Oid, git2::Time> = graph
+        .iter()
+        .map(|(oid, node)| (*oid, node.commit.time()))
+        .collect();
+    for node in graph.values_mut() {
+        node.children
+            .sort_by_key(|child_oid| (commit_times[child_oid], child_oid.to_string()));
+    }
 }
 
 fn should_hide(
@@ -323,7 +332,17 @@ fn do_remove_commits(graph: &mut CommitGraph, head_oid: &HeadOid, branch_oids: &
         graph.remove(&oid);
         match parent_oid {
             Some(parent_oid) if graph.contains_key(&parent_oid) => {
-                graph.get_mut(&parent_oid).unwrap().children.remove(&oid);
+                let children = &mut graph.get_mut(&parent_oid).unwrap().children;
+                *children = children
+                    .iter()
+                    .filter_map(|child_oid| {
+                        if *child_oid != oid {
+                            Some(*child_oid)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
             }
             _ => {}
         }
@@ -372,6 +391,7 @@ pub fn make_graph<'repo>(
         main_branch_oid,
         commit_oids,
     )?;
+    sort_children(&mut graph);
     if remove_commits {
         do_remove_commits(&mut graph, head_oid, branch_oids);
     }

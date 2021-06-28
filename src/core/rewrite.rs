@@ -168,13 +168,7 @@ fn make_rebase_plan_for_current_commit(
         }
     };
 
-    let children = {
-        // Sort for determinism.
-        let mut children = current_node.children.iter().copied().collect::<Vec<_>>();
-        children.sort_by_key(|child_oid| (graph[child_oid].commit.time(), child_oid.to_string()));
-        children
-    };
-    match children.as_slice() {
+    match current_node.children.as_slice() {
         [] => Ok(acc),
         [only_child_oid] => {
             let acc = make_rebase_plan_for_current_commit(

@@ -84,9 +84,8 @@ fn advance_towards_own_commit(
 ) -> anyhow::Result<Option<git2::Oid>> {
     let mut current_oid = current_oid;
     for i in 0..num_commits {
-        let mut children: Vec<git2::Oid> = graph[&current_oid].children.iter().copied().collect();
-        children.sort_by_key(|child_oid| graph[child_oid].commit.time());
-        current_oid = match (towards, &children.as_slice()) {
+        let children = &graph[&current_oid].children;
+        current_oid = match (towards, children.as_slice()) {
             (_, []) => {
                 // It would also make sense to issue an error here, rather than
                 // silently stop going forward commits.
