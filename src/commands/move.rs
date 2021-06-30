@@ -14,8 +14,7 @@ use crate::core::repo::Repo;
 use crate::core::rewrite::{execute_rebase_plan, ExecuteRebasePlanOptions, RebasePlanBuilder};
 use crate::util::get_main_branch_oid;
 use crate::util::{
-    get_branch_oid_to_names, get_db_conn, get_head_oid, resolve_commits, GitRunInfo,
-    ResolveCommitsResult,
+    get_branch_oid_to_names, get_db_conn, resolve_commits, GitRunInfo, ResolveCommitsResult,
 };
 
 fn resolve_base_commit(graph: &CommitGraph, oid: git2::Oid) -> git2::Oid {
@@ -46,7 +45,7 @@ pub fn r#move(
     force_on_disk: bool,
 ) -> anyhow::Result<isize> {
     let repo = Repo::from_current_dir()?;
-    let head_oid = get_head_oid(&repo)?;
+    let head_oid = repo.get_head_oid()?;
     let (source, should_resolve_base_commit) = match (source, base) {
         (Some(_), Some(_)) => {
             println!("The --source and --base options cannot both be provided.");

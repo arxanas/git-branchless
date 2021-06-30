@@ -21,28 +21,6 @@ pub fn wrap_git_error(error: git2::Error) -> anyhow::Error {
     anyhow::anyhow!("Git error {:?}: {}", error.code(), error.message())
 }
 
-/// Get the OID for the repository's `HEAD` reference.
-///
-/// Args:
-/// * `repo`: The Git repository.
-///
-/// Returns: The OID for the repository's `HEAD` reference.
-#[context("Getting HEAD OID for repository")]
-pub fn get_head_oid(repo: &git2::Repository) -> anyhow::Result<Option<git2::Oid>> {
-    let head_ref = match repo.head() {
-        Ok(head_ref) => Ok(head_ref),
-        Err(err)
-            if err.code() == git2::ErrorCode::NotFound
-                || err.code() == git2::ErrorCode::UnbornBranch =>
-        {
-            return Ok(None)
-        }
-        Err(err) => Err(err),
-    }?;
-    let head_commit = head_ref.peel_to_commit()?;
-    Ok(Some(head_commit.id()))
-}
-
 /// Get the OID corresponding to the main branch.
 ///
 /// Args:

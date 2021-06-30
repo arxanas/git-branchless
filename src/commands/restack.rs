@@ -73,14 +73,12 @@ use crate::core::rewrite::{
     execute_rebase_plan, find_abandoned_children, find_rewrite_target, move_branches,
     ExecuteRebasePlanOptions, RebasePlanBuilder,
 };
-use crate::util::{
-    get_branch_oid_to_names, get_db_conn, get_head_oid, get_main_branch_oid, run_git, GitRunInfo,
-};
+use crate::util::{get_branch_oid_to_names, get_db_conn, get_main_branch_oid, run_git, GitRunInfo};
 
 #[context("Restacking commits")]
 fn restack_commits(
     glyphs: &Glyphs,
-    repo: &git2::Repository,
+    repo: &Repo,
     git_run_info: &GitRunInfo,
     merge_base_db: &MergeBaseDb,
     event_log_db: &EventLogDb,
@@ -88,7 +86,7 @@ fn restack_commits(
 ) -> anyhow::Result<isize> {
     let event_replayer = EventReplayer::from_event_log_db(event_log_db)?;
     let event_cursor = event_replayer.make_default_cursor();
-    let head_oid = get_head_oid(repo)?;
+    let head_oid = repo.get_head_oid()?;
     let main_branch_oid = get_main_branch_oid(repo)?;
     let branch_oid_to_names = get_branch_oid_to_names(repo)?;
     let graph = make_graph(
@@ -149,14 +147,14 @@ fn restack_commits(
 
 #[context("Restacking branches")]
 fn restack_branches(
-    repo: &git2::Repository,
+    repo: &Repo,
     git_run_info: &GitRunInfo,
     merge_base_db: &MergeBaseDb,
     event_log_db: &EventLogDb,
     options: &ExecuteRebasePlanOptions,
 ) -> anyhow::Result<isize> {
     let event_replayer = EventReplayer::from_event_log_db(event_log_db)?;
-    let head_oid = get_head_oid(repo)?;
+    let head_oid = repo.get_head_oid()?;
     let main_branch_oid = get_main_branch_oid(repo)?;
     let branch_oid_to_names = get_branch_oid_to_names(repo)?;
     let graph = make_graph(
@@ -221,7 +219,7 @@ pub fn restack(git_run_info: &GitRunInfo) -> anyhow::Result<isize> {
     let merge_base_db = MergeBaseDb::new(&conn)?;
     let event_log_db = EventLogDb::new(&conn)?;
     let event_tx_id = event_log_db.make_transaction_id(now, "restack")?;
-    let head_oid = get_head_oid(&repo)?;
+    let head_oid = repo.get_head_oid()?;
 
     let options = ExecuteRebasePlanOptions {
         now,

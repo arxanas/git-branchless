@@ -9,7 +9,8 @@ use std::ops::Deref;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
-use crate::util::{get_sh, wrap_git_error, GitRunInfo, GitVersion};
+use crate::core::repo::Repo;
+use crate::util::{get_sh, GitRunInfo, GitVersion};
 use anyhow::Context;
 use fn_error_context::context;
 use tempfile::TempDir;
@@ -317,8 +318,8 @@ impl Git {
 
     /// Get a `git2::Repository` object for this repository.
     #[context("Getting the `git2::Repository` object for {:?}", self)]
-    pub fn get_repo(&self) -> anyhow::Result<git2::Repository> {
-        git2::Repository::open(&self.repo_path).map_err(wrap_git_error)
+    pub fn get_repo(&self) -> anyhow::Result<Repo> {
+        Repo::from_dir(&self.repo_path)
     }
 
     /// Get the version of the Git executable.

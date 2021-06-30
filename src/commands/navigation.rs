@@ -13,9 +13,7 @@ use crate::core::graph::{
 use crate::core::mergebase::MergeBaseDb;
 use crate::core::metadata::{render_commit_metadata, CommitMessageProvider, CommitOidProvider};
 use crate::core::repo::Repo;
-use crate::util::{
-    get_branch_oid_to_names, get_db_conn, get_head_oid, get_main_branch_oid, run_git, GitRunInfo,
-};
+use crate::util::{get_branch_oid_to_names, get_db_conn, get_main_branch_oid, run_git, GitRunInfo};
 
 /// Go back a certain number of commits.
 pub fn prev(git_run_info: &GitRunInfo, num_commits: Option<isize>) -> anyhow::Result<isize> {
@@ -144,7 +142,7 @@ pub fn next(
     let event_log_db = EventLogDb::new(&conn)?;
     let event_replayer = EventReplayer::from_event_log_db(&event_log_db)?;
 
-    let head_oid = match get_head_oid(&repo)? {
+    let head_oid = match repo.get_head_oid()? {
         Some(head_oid) => head_oid,
         None => anyhow::bail!("No HEAD present; cannot calculate next commit"),
     };
