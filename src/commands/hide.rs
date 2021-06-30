@@ -15,7 +15,7 @@ use crate::core::metadata::{
 use crate::core::repo::Repo;
 use crate::util::resolve_commits;
 use crate::util::ResolveCommitsResult;
-use crate::util::{get_branch_oid_to_names, get_db_conn, get_head_oid, get_main_branch_oid};
+use crate::util::{get_branch_oid_to_names, get_db_conn, get_main_branch_oid};
 
 fn recurse_on_commits_helper<
     'repo,
@@ -40,13 +40,13 @@ fn recurse_on_commits_helper<
 }
 
 fn recurse_on_commits<'repo, F: Fn(&Node) -> bool>(
-    repo: &'repo git2::Repository,
+    repo: &'repo Repo,
     merge_base_db: &MergeBaseDb,
     event_replayer: &EventReplayer,
     commits: Vec<git2::Commit<'repo>>,
     condition: F,
 ) -> anyhow::Result<Vec<git2::Commit<'repo>>> {
-    let head_oid = get_head_oid(repo)?;
+    let head_oid = repo.get_head_oid()?;
     let main_branch_oid = get_main_branch_oid(repo)?;
     let branch_oid_to_names = get_branch_oid_to_names(repo)?;
     let graph = make_graph(

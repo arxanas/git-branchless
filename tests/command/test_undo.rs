@@ -94,7 +94,7 @@ fn test_undo_help() -> anyhow::Result<()> {
     {
         let screenshot1 = Default::default();
         run_select_past_event(
-            &git.get_repo()?,
+            &*(git.get_repo()?),
             vec![
                 CursiveTestingEvent::Event('h'.into()),
                 CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot1)),
@@ -137,7 +137,7 @@ fn test_undo_navigate() -> anyhow::Result<()> {
         let screenshot1 = Default::default();
         let screenshot2 = Default::default();
         let event_cursor = run_select_past_event(
-            &git.get_repo()?,
+            &*(git.get_repo()?),
             vec![
                 CursiveTestingEvent::Event('p'.into()),
                 CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot1)),
@@ -188,7 +188,7 @@ fn test_go_to_event() -> anyhow::Result<()> {
     let screenshot1 = Default::default();
     let screenshot2 = Default::default();
     run_select_past_event(
-        &git.get_repo()?,
+        &*(git.get_repo()?),
         vec![
             CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot1)),
             CursiveTestingEvent::Event('g'.into()),
@@ -245,7 +245,7 @@ fn test_undo_hide() -> anyhow::Result<()> {
     }
 
     let event_cursor = run_select_past_event(
-        &git.get_repo()?,
+        &*(git.get_repo()?),
         vec![
             CursiveTestingEvent::Event('p'.into()),
             CursiveTestingEvent::Event('p'.into()),
@@ -301,7 +301,7 @@ fn test_undo_move_refs() -> anyhow::Result<()> {
     git.commit_file("test2", 2)?;
 
     let event_cursor = run_select_past_event(
-        &git.get_repo()?,
+        &*(git.get_repo()?),
         vec![
             CursiveTestingEvent::Event('p'.into()),
             CursiveTestingEvent::Event('p'.into()),
@@ -354,7 +354,7 @@ fn test_historical_smartlog_visibility() -> anyhow::Result<()> {
     let screenshot1 = Default::default();
     let screenshot2 = Default::default();
     run_select_past_event(
-        &git.get_repo()?,
+        &*(git.get_repo()?),
         vec![
             CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot1)),
             CursiveTestingEvent::Event('p'.into()),
@@ -413,7 +413,7 @@ fn test_undo_doesnt_make_working_dir_dirty() -> anyhow::Result<()> {
 
     let screenshot1 = Default::default();
     let event_cursor = run_select_past_event(
-        &git.get_repo()?,
+        &*(git.get_repo()?),
         vec![
             CursiveTestingEvent::Event('p'.into()),
             CursiveTestingEvent::Event('p'.into()),

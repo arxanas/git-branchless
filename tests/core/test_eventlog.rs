@@ -19,7 +19,7 @@ fn test_git_v2_31_events() -> anyhow::Result<()> {
     git.run(&["hide", "test1"])?;
     git.run(&["branch", "-D", "test1"])?;
 
-    let conn = get_db_conn(&git.get_repo()?)?;
+    let conn = get_db_conn(&*(git.get_repo()?))?;
     let event_log_db = EventLogDb::new(&conn)?;
     let event_replayer = EventReplayer::from_event_log_db(&event_log_db)?;
     let events: Vec<Event> = get_event_replayer_events(&event_replayer)

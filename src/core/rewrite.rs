@@ -841,7 +841,7 @@ mod tests {
     use crate::core::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
     use crate::core::mergebase::MergeBaseDb;
     use crate::testing::{make_git, Git, GitRunOptions};
-    use crate::util::{get_branch_oid_to_names, get_db_conn, get_head_oid, get_main_branch_oid};
+    use crate::util::{get_branch_oid_to_names, get_db_conn, get_main_branch_oid};
 
     use super::*;
 
@@ -852,7 +852,7 @@ mod tests {
         let event_log_db = EventLogDb::new(&conn)?;
         let event_replayer = EventReplayer::from_event_log_db(&event_log_db)?;
         let event_cursor = event_replayer.make_default_cursor();
-        let head_oid = get_head_oid(&repo)?;
+        let head_oid = repo.get_head_oid()?;
         let main_branch_oid = get_main_branch_oid(&repo)?;
         let branch_oid_to_names = get_branch_oid_to_names(&repo)?;
         let graph = make_graph(
