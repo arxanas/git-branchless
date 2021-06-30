@@ -12,11 +12,10 @@ use crate::core::mergebase::MergeBaseDb;
 use crate::core::metadata::{
     render_commit_metadata, CommitMessageProvider, CommitMetadataProvider, CommitOidProvider,
 };
+use crate::core::repo::Repo;
 use crate::util::resolve_commits;
 use crate::util::ResolveCommitsResult;
-use crate::util::{
-    get_branch_oid_to_names, get_db_conn, get_head_oid, get_main_branch_oid, get_repo,
-};
+use crate::util::{get_branch_oid_to_names, get_db_conn, get_head_oid, get_main_branch_oid};
 
 fn recurse_on_commits_helper<
     'repo,
@@ -89,7 +88,7 @@ fn recurse_on_commits<'repo, F: Fn(&Node) -> bool>(
 pub fn hide(hashes: Vec<String>, recursive: bool) -> anyhow::Result<isize> {
     let now = SystemTime::now();
     let glyphs = Glyphs::detect();
-    let repo = get_repo()?;
+    let repo = Repo::from_current_dir()?;
     let conn = get_db_conn(&repo)?;
     let mut event_log_db = EventLogDb::new(&conn)?;
     let event_replayer = EventReplayer::from_event_log_db(&event_log_db)?;
@@ -168,7 +167,7 @@ pub fn hide(hashes: Vec<String>, recursive: bool) -> anyhow::Result<isize> {
 pub fn unhide(hashes: Vec<String>, recursive: bool) -> anyhow::Result<isize> {
     let now = SystemTime::now();
     let glyphs = Glyphs::detect();
-    let repo = get_repo()?;
+    let repo = Repo::from_current_dir()?;
     let conn = get_db_conn(&repo)?;
     let mut event_log_db = EventLogDb::new(&conn)?;
     let event_replayer = EventReplayer::from_event_log_db(&event_log_db)?;

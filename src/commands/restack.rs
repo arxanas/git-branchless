@@ -68,13 +68,13 @@ use crate::core::eventlog::{EventLogDb, EventReplayer};
 use crate::core::formatting::Glyphs;
 use crate::core::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
 use crate::core::mergebase::MergeBaseDb;
+use crate::core::repo::Repo;
 use crate::core::rewrite::{
     execute_rebase_plan, find_abandoned_children, find_rewrite_target, move_branches,
     ExecuteRebasePlanOptions, RebasePlanBuilder,
 };
 use crate::util::{
-    get_branch_oid_to_names, get_db_conn, get_head_oid, get_main_branch_oid, get_repo, run_git,
-    GitRunInfo,
+    get_branch_oid_to_names, get_db_conn, get_head_oid, get_main_branch_oid, run_git, GitRunInfo,
 };
 
 #[context("Restacking commits")]
@@ -216,7 +216,7 @@ fn restack_branches(
 pub fn restack(git_run_info: &GitRunInfo) -> anyhow::Result<isize> {
     let now = SystemTime::now();
     let glyphs = Glyphs::detect();
-    let repo = get_repo()?;
+    let repo = Repo::from_current_dir()?;
     let conn = get_db_conn(&repo)?;
     let merge_base_db = MergeBaseDb::new(&conn)?;
     let event_log_db = EventLogDb::new(&conn)?;

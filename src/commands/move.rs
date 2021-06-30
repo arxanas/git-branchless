@@ -10,10 +10,11 @@ use crate::core::eventlog::{EventLogDb, EventReplayer};
 use crate::core::formatting::Glyphs;
 use crate::core::graph::{make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid};
 use crate::core::mergebase::MergeBaseDb;
+use crate::core::repo::Repo;
 use crate::core::rewrite::{execute_rebase_plan, ExecuteRebasePlanOptions, RebasePlanBuilder};
 use crate::util::get_main_branch_oid;
 use crate::util::{
-    get_branch_oid_to_names, get_db_conn, get_head_oid, get_repo, resolve_commits, GitRunInfo,
+    get_branch_oid_to_names, get_db_conn, get_head_oid, resolve_commits, GitRunInfo,
     ResolveCommitsResult,
 };
 
@@ -44,7 +45,7 @@ pub fn r#move(
     force_in_memory: bool,
     force_on_disk: bool,
 ) -> anyhow::Result<isize> {
-    let repo = get_repo()?;
+    let repo = Repo::from_current_dir()?;
     let head_oid = get_head_oid(&repo)?;
     let (source, should_resolve_base_commit) = match (source, base) {
         (Some(_), Some(_)) => {

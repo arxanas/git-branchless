@@ -15,9 +15,8 @@ use fn_error_context::context;
 use crate::core::eventlog::{is_gc_ref, EventLogDb, EventReplayer};
 use crate::core::graph::{make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid};
 use crate::core::mergebase::MergeBaseDb;
-use crate::util::{
-    get_branch_oid_to_names, get_db_conn, get_head_oid, get_main_branch_oid, get_repo,
-};
+use crate::core::repo::Repo;
+use crate::util::{get_branch_oid_to_names, get_db_conn, get_head_oid, get_main_branch_oid};
 
 fn find_dangling_references<'repo>(
     repo: &'repo git2::Repository,
@@ -81,7 +80,7 @@ pub fn mark_commit_reachable(repo: &git2::Repository, commit_oid: git2::Oid) -> 
 /// Frees any references to commits which are no longer visible in the smartlog.
 #[context("Running garbage-collection")]
 pub fn gc() -> anyhow::Result<()> {
-    let repo = get_repo()?;
+    let repo = Repo::from_current_dir()?;
     let conn = get_db_conn(&repo)?;
     let merge_base_db = MergeBaseDb::new(&conn)?;
     let event_log_db = EventLogDb::new(&conn)?;

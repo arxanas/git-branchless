@@ -24,10 +24,9 @@ use crate::core::eventlog::{
 use crate::core::formatting::Pluralize;
 use crate::core::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
 use crate::core::mergebase::MergeBaseDb;
+use crate::core::repo::Repo;
 use crate::core::rewrite::find_abandoned_children;
-use crate::util::{
-    get_branch_oid_to_names, get_db_conn, get_head_oid, get_main_branch_oid, get_repo,
-};
+use crate::util::{get_branch_oid_to_names, get_db_conn, get_head_oid, get_main_branch_oid};
 
 /// Detect if an interactive rebase has started but not completed.
 ///
@@ -77,7 +76,7 @@ pub fn hook_post_rewrite(rewrite_type: &str) -> anyhow::Result<()> {
     let now = SystemTime::now();
     let timestamp = now.duration_since(SystemTime::UNIX_EPOCH)?.as_secs_f64();
 
-    let repo = get_repo()?;
+    let repo = Repo::from_current_dir()?;
     let conn = get_db_conn(&repo)?;
     let mut event_log_db = EventLogDb::new(&conn)?;
     let event_tx_id = event_log_db.make_transaction_id(now, "hook-post-rewrite")?;
@@ -253,7 +252,7 @@ pub fn hook_post_checkout(
     let timestamp = now.duration_since(SystemTime::UNIX_EPOCH)?;
     println!("branchless: processing checkout");
 
-    let repo = get_repo()?;
+    let repo = Repo::from_current_dir()?;
     let conn = get_db_conn(&repo)?;
     let mut event_log_db = EventLogDb::new(&conn)?;
     let event_tx_id = event_log_db.make_transaction_id(now, "hook-post-checkout")?;
@@ -275,7 +274,7 @@ pub fn hook_post_commit() -> anyhow::Result<()> {
     println!("branchless: processing commit");
 
     let now = SystemTime::now();
-    let repo = get_repo()?;
+    let repo = Repo::from_current_dir()?;
     let conn = get_db_conn(&repo)?;
     let mut event_log_db = EventLogDb::new(&conn)?;
 
@@ -340,7 +339,7 @@ pub fn hook_reference_transaction(transaction_state: &str) -> anyhow::Result<()>
     }
     let now = SystemTime::now();
 
-    let repo = get_repo()?;
+    let repo = Repo::from_current_dir()?;
     let conn = get_db_conn(&repo)?;
     let mut event_log_db = EventLogDb::new(&conn)?;
     let event_tx_id = event_log_db.make_transaction_id(now, "reference-transaction")?;

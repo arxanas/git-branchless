@@ -9,6 +9,13 @@
 //! codebase.
 //! - To collect some different helper Git functions.
 
+use std::path::Path;
+
+use anyhow::Context;
+use fn_error_context::context;
+
+use crate::util::wrap_git_error;
+
 /// Wrapper around `git2::Repository`.
 pub struct Repo {
     repo: git2::Repository,
@@ -34,4 +41,17 @@ impl From<git2::Repository> for Repo {
     }
 }
 
-impl Repo {}
+impl Repo {
+    #[context("Getting Git repository for directory: {:?}", &path)]
+    fn from_dir(path: &Path) -> anyhow::Result<Self> {
+        let repository = git2::Repository::discover(path).map_err(wrap_git_error)?;
+        Ok(repository.into())
+    }
+
+    /// Get the Git repository associated with the current directory.
+    #[context("Getting Git repository for current directory")]
+    pub fn from_current_dir() -> anyhow::Result<Self> {
+        let path = std::env::current_dir().with_context(|| "Getting working directory")?;
+        Repo::from_dir(&path)
+    }
+}

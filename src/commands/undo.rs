@@ -23,9 +23,10 @@ use crate::core::metadata::{
     render_commit_metadata, BranchesProvider, CommitMessageProvider, CommitOidProvider,
     DifferentialRevisionProvider, HiddenExplanationProvider, RelativeTimeProvider,
 };
+use crate::core::repo::Repo;
 use crate::core::tui::{with_siv, SingletonView};
 use crate::declare_views;
-use crate::util::{get_db_conn, get_repo, run_git, GitRunInfo};
+use crate::util::{get_db_conn, run_git, GitRunInfo};
 
 fn render_cursor_smartlog(
     glyphs: &Glyphs,
@@ -769,7 +770,7 @@ fn undo_events(
 /// Restore the repository to a previous state interactively.
 pub fn undo(git_run_info: &GitRunInfo) -> anyhow::Result<isize> {
     let glyphs = Glyphs::detect();
-    let repo = get_repo()?;
+    let repo = Repo::from_current_dir()?;
     let conn = get_db_conn(&repo)?;
     let merge_base_db = MergeBaseDb::new(&conn)?;
     let mut event_log_db = EventLogDb::new(&conn)?;
