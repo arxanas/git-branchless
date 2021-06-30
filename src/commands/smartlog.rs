@@ -21,7 +21,7 @@ use crate::core::metadata::{
     RelativeTimeProvider,
 };
 use crate::core::repo::Repo;
-use crate::util::{get_branch_oid_to_names, get_db_conn};
+use crate::util::get_db_conn;
 
 /// Split fully-independent subgraphs into multiple graphs.
 ///
@@ -275,7 +275,7 @@ pub fn smartlog() -> anyhow::Result<()> {
     let event_replayer = EventReplayer::from_event_log_db(&event_log_db)?;
     let head_oid = repo.get_head_oid()?;
     let main_branch_oid = repo.get_main_branch_oid()?;
-    let branch_oid_to_names = get_branch_oid_to_names(&repo)?;
+    let branch_oid_to_names = repo.get_branch_oid_to_names()?;
     let graph = make_graph(
         &repo,
         &merge_base_db,

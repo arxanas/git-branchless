@@ -73,7 +73,7 @@ use crate::core::rewrite::{
     execute_rebase_plan, find_abandoned_children, find_rewrite_target, move_branches,
     ExecuteRebasePlanOptions, RebasePlanBuilder,
 };
-use crate::util::{get_branch_oid_to_names, get_db_conn, run_git, GitRunInfo};
+use crate::util::{get_db_conn, run_git, GitRunInfo};
 
 #[context("Restacking commits")]
 fn restack_commits(
@@ -88,7 +88,7 @@ fn restack_commits(
     let event_cursor = event_replayer.make_default_cursor();
     let head_oid = repo.get_head_oid()?;
     let main_branch_oid = repo.get_main_branch_oid()?;
-    let branch_oid_to_names = get_branch_oid_to_names(repo)?;
+    let branch_oid_to_names = repo.get_branch_oid_to_names()?;
     let graph = make_graph(
         repo,
         merge_base_db,
@@ -156,7 +156,7 @@ fn restack_branches(
     let event_replayer = EventReplayer::from_event_log_db(event_log_db)?;
     let head_oid = repo.get_head_oid()?;
     let main_branch_oid = repo.get_main_branch_oid()?;
-    let branch_oid_to_names = get_branch_oid_to_names(repo)?;
+    let branch_oid_to_names = repo.get_branch_oid_to_names()?;
     let graph = make_graph(
         repo,
         merge_base_db,
