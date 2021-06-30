@@ -15,48 +15,18 @@ use log::warn;
 
 use crate::core::config::get_main_branch_name;
 use crate::core::eventlog::{EventTransactionId, BRANCHLESS_TRANSACTION_ID_ENV_VAR};
+use crate::core::repo::Repo;
 
 /// Convert a `git2::Error` into an `anyhow::Error` with an auto-generated message.
 pub fn wrap_git_error(error: git2::Error) -> anyhow::Error {
     anyhow::anyhow!("Git error {:?}: {}", error.code(), error.message())
 }
 
-/// Get the OID corresponding to the main branch.
-///
-/// Args:
-/// * `repo`: The Git repository.
-///
-/// Returns: The OID corresponding to the main branch.
-#[context("Getting main branch OID for repository")]
-pub fn get_main_branch_oid(repo: &git2::Repository) -> anyhow::Result<git2::Oid> {
-    let main_branch_name = get_main_branch_name(&repo)?;
-    let branch = repo
-        .find_branch(&main_branch_name, git2::BranchType::Local)
-        .or_else(|_| repo.find_branch(&main_branch_name, git2::BranchType::Remote));
-    let branch = match branch {
-        Ok(branch) => branch,
-        // Drop the error trace here. It's confusing, and we don't want it to appear in the output.
-        Err(_) => anyhow::bail!(
-            r"
-The main branch {:?} could not be found in your repository.
-Either create it, or update the main branch setting by running:
-
-    git config branchless.core.mainBranch <branch>
-",
-            main_branch_name
-        ),
-    };
-    let commit = branch.get().peel_to_commit()?;
-    Ok(commit.id())
-}
-
 /// Get a mapping from OID to the names of branches which point to that OID.
 ///
 /// The returned branch names do not include the `refs/heads/` prefix.
 #[context("Getting branch-OID-to-names map for repository")]
-pub fn get_branch_oid_to_names(
-    repo: &git2::Repository,
-) -> anyhow::Result<HashMap<git2::Oid, HashSet<String>>> {
+pub fn get_branch_oid_to_names(repo: &Repo) -> anyhow::Result<HashMap<git2::Oid, HashSet<String>>> {
     let branches = repo
         .branches(Some(git2::BranchType::Local))
         .with_context(|| "Reading branches")?;
@@ -98,7 +68,7 @@ pub fn get_branch_oid_to_names(
     // The main branch may be a remote branch, in which case it won't be
     // returned in the iteration above.
     let main_branch_name = get_main_branch_name(repo)?;
-    let main_branch_oid = get_main_branch_oid(repo)?;
+    let main_branch_oid = repo.get_main_branch_oid()?;
     result
         .entry(main_branch_oid)
         .or_insert_with(HashSet::new)

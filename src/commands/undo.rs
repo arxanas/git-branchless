@@ -30,7 +30,7 @@ use crate::util::{get_db_conn, run_git, GitRunInfo};
 
 fn render_cursor_smartlog(
     glyphs: &Glyphs,
-    repo: &git2::Repository,
+    repo: &Repo,
     merge_base_db: &MergeBaseDb,
     event_replayer: &EventReplayer,
     event_cursor: EventCursor,
@@ -302,7 +302,7 @@ fn describe_events_numbered(
 fn select_past_event(
     mut siv: CursiveRunner<CursiveRunnable>,
     glyphs: &Glyphs,
-    repo: &git2::Repository,
+    repo: &Repo,
     merge_base_db: &MergeBaseDb,
     event_replayer: &mut EventReplayer,
 ) -> anyhow::Result<Option<EventCursor>> {
@@ -808,12 +808,13 @@ pub mod testing {
     use crate::core::eventlog::{EventCursor, EventLogDb, EventReplayer};
     use crate::core::formatting::Glyphs;
     use crate::core::mergebase::MergeBaseDb;
+    use crate::core::repo::Repo;
     use crate::util::GitRunInfo;
 
     pub fn select_past_event(
         siv: CursiveRunner<CursiveRunnable>,
         glyphs: &Glyphs,
-        repo: &git2::Repository,
+        repo: &Repo,
         merge_base_db: &MergeBaseDb,
         event_replayer: &mut EventReplayer,
     ) -> anyhow::Result<Option<EventCursor>> {

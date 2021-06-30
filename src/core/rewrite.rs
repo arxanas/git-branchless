@@ -19,6 +19,7 @@ use super::formatting::Glyphs;
 use super::graph::{find_path_to_merge_base, CommitGraph, MainBranchOid};
 use super::mergebase::MergeBaseDb;
 use super::metadata::{render_commit_metadata, CommitMessageProvider, CommitOidProvider};
+use super::repo::Repo;
 
 /// For a rewritten commit, find the newest version of the commit.
 ///
@@ -473,7 +474,7 @@ fn rebase_in_memory(
 /// `reference-transaction` hook when done.
 pub fn move_branches<'a>(
     git_run_info: &GitRunInfo,
-    repo: &'a git2::Repository,
+    repo: &'a Repo,
     event_tx_id: EventTransactionId,
     rewritten_oids_map: &'a HashMap<git2::Oid, git2::Oid>,
 ) -> anyhow::Result<()> {
@@ -533,7 +534,7 @@ pub fn move_branches<'a>(
 
 fn post_rebase_in_memory(
     git_run_info: &GitRunInfo,
-    repo: &git2::Repository,
+    repo: &Repo,
     rewritten_oids: &[(git2::Oid, git2::Oid)],
     options: &ExecuteRebasePlanOptions,
 ) -> anyhow::Result<isize> {
@@ -777,7 +778,7 @@ pub struct ExecuteRebasePlanOptions {
 pub fn execute_rebase_plan(
     glyphs: &Glyphs,
     git_run_info: &GitRunInfo,
-    repo: &git2::Repository,
+    repo: &Repo,
     rebase_plan: &RebasePlan,
     options: &ExecuteRebasePlanOptions,
 ) -> anyhow::Result<isize> {
@@ -841,7 +842,7 @@ mod tests {
     use crate::core::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
     use crate::core::mergebase::MergeBaseDb;
     use crate::testing::{make_git, Git, GitRunOptions};
-    use crate::util::{get_branch_oid_to_names, get_db_conn, get_main_branch_oid};
+    use crate::util::{get_branch_oid_to_names, get_db_conn};
 
     use super::*;
 
@@ -853,7 +854,7 @@ mod tests {
         let event_replayer = EventReplayer::from_event_log_db(&event_log_db)?;
         let event_cursor = event_replayer.make_default_cursor();
         let head_oid = repo.get_head_oid()?;
-        let main_branch_oid = get_main_branch_oid(&repo)?;
+        let main_branch_oid = repo.get_main_branch_oid()?;
         let branch_oid_to_names = get_branch_oid_to_names(&repo)?;
         let graph = make_graph(
             &repo,

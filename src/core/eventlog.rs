@@ -16,7 +16,9 @@ use fn_error_context::context;
 use log::warn;
 
 use crate::core::config::get_main_branch_name;
-use crate::util::{get_main_branch_oid, wrap_git_error};
+use crate::util::wrap_git_error;
+
+use super::repo::Repo;
 
 /// When this environment variable is set, we reuse the ID for the transaction
 /// which the caller has already started.
@@ -1092,7 +1094,7 @@ impl EventReplayer {
     pub fn get_cursor_main_branch_oid(
         &self,
         cursor: EventCursor,
-        repo: &git2::Repository,
+        repo: &Repo,
     ) -> anyhow::Result<git2::Oid> {
         let main_branch_name = get_main_branch_name(&repo)?;
         let main_branch_oid = self.get_cursor_branch_oid(cursor, &main_branch_name)?;
@@ -1101,7 +1103,7 @@ impl EventReplayer {
             None => {
                 // Assume the main branch just hasn't been observed moving yet,
                 // so its value at the current time is fine to use.
-                get_main_branch_oid(&repo)
+                repo.get_main_branch_oid()
             }
         }
     }
@@ -1119,7 +1121,7 @@ impl EventReplayer {
     pub fn get_cursor_branch_oid_to_names(
         &self,
         cursor: EventCursor,
-        repo: &git2::Repository,
+        repo: &Repo,
     ) -> anyhow::Result<HashMap<git2::Oid, HashSet<String>>> {
         let mut ref_name_to_oid: HashMap<&String, git2::Oid> = HashMap::new();
         let cursor_event_id: usize = cursor.event_id.try_into().unwrap();

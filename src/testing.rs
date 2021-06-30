@@ -93,12 +93,21 @@ impl Git {
     }
 
     /// Replace dynamic strings in the output, for testing purposes.
-    pub fn preprocess_stdout(&self, stdout: String) -> anyhow::Result<String> {
+    pub fn preprocess_output(&self, stdout: String) -> anyhow::Result<String> {
         let path_to_git = self
             .path_to_git
             .to_str()
             .ok_or_else(|| anyhow::anyhow!("Could not convert path to Git to string"))?;
         let stdout = stdout.replace(path_to_git, "<git-executable>");
+
+        // NB: tests which run on Windows are unlikely to succeed due to this
+        // `canonicalize` call.
+        let repo_path = std::fs::canonicalize(&self.repo_path)?;
+
+        let repo_path = repo_path
+            .to_str()
+            .ok_or_else(|| anyhow::anyhow!("Could not convert repo path to string"))?;
+        let stdout = stdout.replace(&repo_path, "<repo-path>");
         Ok(stdout)
     }
 
@@ -224,8 +233,9 @@ impl Git {
             result
         };
         let stdout = String::from_utf8(result.stdout)?;
-        let stdout = self.preprocess_stdout(stdout)?;
+        let stdout = self.preprocess_output(stdout)?;
         let stderr = String::from_utf8(result.stderr)?;
+        let stderr = self.preprocess_output(stderr)?;
         Ok((stdout, stderr))
     }
 

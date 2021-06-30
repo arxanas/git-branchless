@@ -12,7 +12,6 @@ use crate::core::graph::{make_graph, BranchOids, CommitGraph, HeadOid, MainBranc
 use crate::core::mergebase::MergeBaseDb;
 use crate::core::repo::Repo;
 use crate::core::rewrite::{execute_rebase_plan, ExecuteRebasePlanOptions, RebasePlanBuilder};
-use crate::util::get_main_branch_oid;
 use crate::util::{
     get_branch_oid_to_names, get_db_conn, resolve_commits, GitRunInfo, ResolveCommitsResult,
 };
@@ -81,7 +80,7 @@ pub fn r#move(
         }
     };
 
-    let main_branch_oid = get_main_branch_oid(&repo)?;
+    let main_branch_oid = repo.get_main_branch_oid()?;
     let branch_oid_to_names = get_branch_oid_to_names(&repo)?;
     let conn = get_db_conn(&repo)?;
     let merge_base_db = MergeBaseDb::new(&conn)?;

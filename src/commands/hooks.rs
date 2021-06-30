@@ -26,7 +26,7 @@ use crate::core::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
 use crate::core::mergebase::MergeBaseDb;
 use crate::core::repo::Repo;
 use crate::core::rewrite::find_abandoned_children;
-use crate::util::{get_branch_oid_to_names, get_db_conn, get_main_branch_oid};
+use crate::util::{get_branch_oid_to_names, get_db_conn};
 
 /// Detect if an interactive rebase has started but not completed.
 ///
@@ -133,7 +133,7 @@ pub fn hook_post_rewrite(rewrite_type: &str) -> anyhow::Result<()> {
     let merge_base_db = MergeBaseDb::new(&conn)?;
     let event_replayer = EventReplayer::from_event_log_db(&event_log_db)?;
     let head_oid = repo.get_head_oid()?;
-    let main_branch_oid = get_main_branch_oid(&repo)?;
+    let main_branch_oid = repo.get_main_branch_oid()?;
     let branch_oid_to_names = get_branch_oid_to_names(&repo)?;
     let graph = make_graph(
         &repo,

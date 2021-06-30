@@ -16,7 +16,7 @@ use crate::core::eventlog::{is_gc_ref, EventLogDb, EventReplayer};
 use crate::core::graph::{make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid};
 use crate::core::mergebase::MergeBaseDb;
 use crate::core::repo::Repo;
-use crate::util::{get_branch_oid_to_names, get_db_conn, get_main_branch_oid};
+use crate::util::{get_branch_oid_to_names, get_db_conn};
 
 fn find_dangling_references<'repo>(
     repo: &'repo git2::Repository,
@@ -86,7 +86,7 @@ pub fn gc() -> anyhow::Result<()> {
     let event_log_db = EventLogDb::new(&conn)?;
     let event_replayer = EventReplayer::from_event_log_db(&event_log_db)?;
     let head_oid = repo.get_head_oid()?;
-    let main_branch_oid = get_main_branch_oid(&repo)?;
+    let main_branch_oid = repo.get_main_branch_oid()?;
     let branch_oid_to_names = get_branch_oid_to_names(&repo)?;
 
     let graph = make_graph(
