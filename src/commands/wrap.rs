@@ -8,7 +8,8 @@ use std::time::SystemTime;
 use anyhow::Context;
 
 use crate::core::eventlog::{EventLogDb, EventTransactionId, BRANCHLESS_TRANSACTION_ID_ENV_VAR};
-use crate::util::{get_db_conn, get_repo, GitRunInfo};
+use crate::core::repo::Repo;
+use crate::util::{get_db_conn, GitRunInfo};
 
 fn pass_through_git_command<S: AsRef<str> + std::fmt::Debug>(
     git_run_info: &GitRunInfo,
@@ -39,7 +40,7 @@ fn make_event_tx_id<S: AsRef<str> + std::fmt::Debug>(
     args: &[S],
 ) -> anyhow::Result<EventTransactionId> {
     let now = SystemTime::now();
-    let repo = get_repo()?;
+    let repo = Repo::from_current_dir()?;
     let conn = get_db_conn(&repo)?;
     let event_log_db = EventLogDb::new(&conn)?;
     let event_tx_id = {

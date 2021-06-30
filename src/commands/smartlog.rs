@@ -20,9 +20,8 @@ use crate::core::metadata::{
     CommitOidProvider, DifferentialRevisionProvider, HiddenExplanationProvider,
     RelativeTimeProvider,
 };
-use crate::util::{
-    get_branch_oid_to_names, get_db_conn, get_head_oid, get_main_branch_oid, get_repo,
-};
+use crate::core::repo::Repo;
+use crate::util::{get_branch_oid_to_names, get_db_conn, get_head_oid, get_main_branch_oid};
 
 /// Split fully-independent subgraphs into multiple graphs.
 ///
@@ -269,7 +268,7 @@ pub fn render_graph(
 /// Display a nice graph of commits you've recently worked on.
 pub fn smartlog() -> anyhow::Result<()> {
     let glyphs = Glyphs::detect();
-    let repo = get_repo()?;
+    let repo = Repo::from_current_dir()?;
     let conn = get_db_conn(&repo)?;
     let merge_base_db = MergeBaseDb::new(&conn)?;
     let event_log_db = EventLogDb::new(&conn)?;

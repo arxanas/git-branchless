@@ -10,7 +10,8 @@ use fn_error_context::context;
 use log::warn;
 
 use crate::core::config::get_core_hooks_path;
-use crate::util::{get_repo, run_git_silent, wrap_git_error, GitRunInfo, GitVersion};
+use crate::core::repo::Repo;
+use crate::util::{run_git_silent, wrap_git_error, GitRunInfo, GitVersion};
 
 const ALL_HOOKS: &[(&str, &str)] = &[
     (
@@ -367,7 +368,7 @@ fn unset_configs(config: &mut git2::Config) -> anyhow::Result<()> {
 #[context("Initializing git-branchless for repo")]
 pub fn init(git_run_info: &GitRunInfo) -> anyhow::Result<()> {
     let mut in_ = BufReader::new(stdin());
-    let mut repo = get_repo()?;
+    let mut repo = Repo::from_current_dir()?;
     let mut config = repo.config().with_context(|| "Getting repo config")?;
     set_configs(&mut in_, &repo, &mut config)?;
     install_hooks(&repo)?;
@@ -388,7 +389,7 @@ pub fn init(git_run_info: &GitRunInfo) -> anyhow::Result<()> {
 /// Uninstall `git-branchless` in the current repo.
 #[context("Uninstall git-branchless for repo")]
 pub fn uninstall() -> anyhow::Result<()> {
-    let repo = get_repo()?;
+    let repo = Repo::from_current_dir()?;
     let mut config = repo.config().with_context(|| "Getting repo config")?;
     unset_configs(&mut config)?;
     uninstall_hooks(&repo)?;
