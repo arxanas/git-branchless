@@ -7,6 +7,7 @@ use branchless::commands::undo::testing::{select_past_event, undo_events};
 use branchless::core::eventlog::{EventCursor, EventLogDb, EventReplayer};
 use branchless::core::formatting::Glyphs;
 use branchless::core::mergebase::MergeBaseDb;
+use branchless::core::repo::Repo;
 use branchless::core::tui::testing::{
     screen_to_string, CursiveTestingBackend, CursiveTestingEvent,
 };
@@ -18,11 +19,11 @@ use cursive::CursiveRunnable;
 use os_str_bytes::OsStrBytes;
 
 fn run_select_past_event(
-    repo: &git2::Repository,
+    repo: &Repo,
     events: Vec<CursiveTestingEvent>,
 ) -> anyhow::Result<Option<EventCursor>> {
     let glyphs = Glyphs::text();
-    let conn = get_db_conn(&repo)?;
+    let conn = get_db_conn(repo)?;
     let merge_base_db = MergeBaseDb::new(&conn)?;
     let event_log_db: EventLogDb = EventLogDb::new(&conn)?;
     let mut event_replayer = EventReplayer::from_event_log_db(&event_log_db)?;
@@ -32,7 +33,7 @@ fn run_select_past_event(
     select_past_event(
         siv.into_runner(),
         &glyphs,
-        &repo,
+        repo,
         &merge_base_db,
         &mut event_replayer,
     )
@@ -80,7 +81,7 @@ fn run_undo_events(git: &Git, event_cursor: EventCursor) -> anyhow::Result<Strin
     assert_eq!(result, 0);
 
     let out = String::from_utf8(out)?;
-    let out = git.preprocess_stdout(out)?;
+    let out = git.preprocess_output(out)?;
     let out = trim_lines(out);
     Ok(out)
 }
@@ -94,7 +95,7 @@ fn test_undo_help() -> anyhow::Result<()> {
     {
         let screenshot1 = Default::default();
         run_select_past_event(
-            &*(git.get_repo()?),
+            &git.get_repo()?,
             vec![
                 CursiveTestingEvent::Event('h'.into()),
                 CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot1)),
@@ -137,7 +138,7 @@ fn test_undo_navigate() -> anyhow::Result<()> {
         let screenshot1 = Default::default();
         let screenshot2 = Default::default();
         let event_cursor = run_select_past_event(
-            &*(git.get_repo()?),
+            &git.get_repo()?,
             vec![
                 CursiveTestingEvent::Event('p'.into()),
                 CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot1)),
@@ -188,7 +189,7 @@ fn test_go_to_event() -> anyhow::Result<()> {
     let screenshot1 = Default::default();
     let screenshot2 = Default::default();
     run_select_past_event(
-        &*(git.get_repo()?),
+        &git.get_repo()?,
         vec![
             CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot1)),
             CursiveTestingEvent::Event('g'.into()),
@@ -245,7 +246,7 @@ fn test_undo_hide() -> anyhow::Result<()> {
     }
 
     let event_cursor = run_select_past_event(
-        &*(git.get_repo()?),
+        &git.get_repo()?,
         vec![
             CursiveTestingEvent::Event('p'.into()),
             CursiveTestingEvent::Event('p'.into()),
@@ -301,7 +302,7 @@ fn test_undo_move_refs() -> anyhow::Result<()> {
     git.commit_file("test2", 2)?;
 
     let event_cursor = run_select_past_event(
-        &*(git.get_repo()?),
+        &git.get_repo()?,
         vec![
             CursiveTestingEvent::Event('p'.into()),
             CursiveTestingEvent::Event('p'.into()),
@@ -354,7 +355,7 @@ fn test_historical_smartlog_visibility() -> anyhow::Result<()> {
     let screenshot1 = Default::default();
     let screenshot2 = Default::default();
     run_select_past_event(
-        &*(git.get_repo()?),
+        &git.get_repo()?,
         vec![
             CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot1)),
             CursiveTestingEvent::Event('p'.into()),
@@ -413,7 +414,7 @@ fn test_undo_doesnt_make_working_dir_dirty() -> anyhow::Result<()> {
 
     let screenshot1 = Default::default();
     let event_cursor = run_select_past_event(
-        &*(git.get_repo()?),
+        &git.get_repo()?,
         vec![
             CursiveTestingEvent::Event('p'.into()),
             CursiveTestingEvent::Event('p'.into()),

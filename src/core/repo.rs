@@ -15,6 +15,7 @@ use std::path::Path;
 use anyhow::Context;
 use fn_error_context::context;
 
+use crate::core::config::get_main_branch_name;
 use crate::util::wrap_git_error;
 
 /// Wrapper around `git2::Repository`.
@@ -84,5 +85,33 @@ impl Repo {
         }?;
         let head_commit = head_ref.peel_to_commit()?;
         Ok(Some(head_commit.id()))
+    }
+
+    /// Get the OID corresponding to the main branch.
+    #[context("Getting main branch OID for repository at: {:?}", self.repo.path())]
+    pub fn get_main_branch_oid(&self) -> anyhow::Result<git2::Oid> {
+        let main_branch_name = get_main_branch_name(&self.repo)?;
+        let branch = self
+            .repo
+            .find_branch(&main_branch_name, git2::BranchType::Local)
+            .or_else(|_| {
+                self.repo
+                    .find_branch(&main_branch_name, git2::BranchType::Remote)
+            });
+        let branch = match branch {
+            Ok(branch) => branch,
+            // Drop the error trace here. It's confusing, and we don't want it to appear in the output.
+            Err(_) => anyhow::bail!(
+                r"
+The main branch {:?} could not be found in your repository.
+Either create it, or update the main branch setting by running:
+
+    git config branchless.core.mainBranch <branch>
+",
+                main_branch_name
+            ),
+        };
+        let commit = branch.get().peel_to_commit()?;
+        Ok(commit.id())
     }
 }

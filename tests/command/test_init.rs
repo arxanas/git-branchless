@@ -197,6 +197,7 @@ fn test_init_prompt_for_main_branch() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(unix)]
 #[test]
 fn test_main_branch_not_found_error_message() -> anyhow::Result<()> {
     let git = make_git()?;
@@ -214,16 +215,16 @@ fn test_main_branch_not_found_error_message() -> anyhow::Result<()> {
             },
         )?;
         insta::assert_snapshot!(trim_lines(stderr), @r###"
-            Error: Getting main branch OID for repository
+        Error: Getting main branch OID for repository at: "<repo-path>/.git/"
 
-            Caused by:
+        Caused by:
 
-                The main branch "master" could not be found in your repository.
-                Either create it, or update the main branch setting by running:
+            The main branch "master" could not be found in your repository.
+            Either create it, or update the main branch setting by running:
 
-                    git config branchless.core.mainBranch <branch>
+                git config branchless.core.mainBranch <branch>
 
-            "###);
+        "###);
         insta::assert_snapshot!(stdout, @"");
     }
 
