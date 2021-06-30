@@ -3,7 +3,7 @@
 [![Linux](https://github.com/arxanas/git-branchless/actions/workflows/linux.yml/badge.svg)](https://github.com/arxanas/git-branchless/actions/workflows/linux.yml)
 [![Windows](https://github.com/arxanas/git-branchless/actions/workflows/windows.yml/badge.svg)](https://github.com/arxanas/git-branchless/actions/workflows/windows.yml)
 [![macOS](https://github.com/arxanas/git-branchless/actions/workflows/macos.yml/badge.svg)](https://github.com/arxanas/git-branchless/actions/workflows/macos.yml)
-[![crates.io](http://meritbadge.herokuapp.com/git-branchless)](https://crates.io/crates/git-branchless)
+[![crates.io](https://img.shields.io/crates/v/git-branchless)](https://crates.io/crates/git-branchless)
 
 `git-branchless` is a suite of tools to help you **visualize**, **navigate**, **manipulate**, and **repair** your commit history. It's based off of the branchless Mercurial workflows at large companies such as Google and Facebook.
 
