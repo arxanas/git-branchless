@@ -15,6 +15,7 @@ use log::warn;
 
 use crate::core::config::get_main_branch_name;
 use crate::core::eventlog::{EventTransactionId, BRANCHLESS_TRANSACTION_ID_ENV_VAR};
+use crate::core::repo::Repo;
 
 /// Convert a `git2::Error` into an `anyhow::Error` with an auto-generated message.
 pub fn wrap_git_error(error: git2::Error) -> anyhow::Error {
@@ -131,10 +132,10 @@ pub fn get_branch_oid_to_names(
 
 /// Get the git repository associated with the current directory.
 #[context("Getting `git2::Repository` for repo")]
-pub fn get_repo() -> anyhow::Result<git2::Repository> {
+pub fn get_repo() -> anyhow::Result<Repo> {
     let path = std::env::current_dir().with_context(|| "Getting working directory")?;
     let repository = git2::Repository::discover(path).map_err(wrap_git_error)?;
-    Ok(repository)
+    Ok(repository.into())
 }
 
 /// Get the connection to the SQLite database for this repository.
