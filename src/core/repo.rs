@@ -10,6 +10,7 @@
 //! - To collect some different helper Git functions.
 
 use std::borrow::{Borrow, BorrowMut};
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use anyhow::Context;
@@ -113,5 +114,61 @@ Either create it, or update the main branch setting by running:
         };
         let commit = branch.get().peel_to_commit()?;
         Ok(commit.id())
+    }
+
+    /// Get a mapping from OID to the names of branches which point to that OID.
+    ///
+    /// The returned branch names do not include the `refs/heads/` prefix.
+    #[context("Getting branch-OID-to-names map for repository at: {:?}", self.repo.path())]
+    pub fn get_branch_oid_to_names(&self) -> anyhow::Result<HashMap<git2::Oid, HashSet<String>>> {
+        let branches = self
+            .repo
+            .branches(Some(git2::BranchType::Local))
+            .with_context(|| "Reading branches")?;
+
+        let mut result = HashMap::new();
+        for branch_info in branches {
+            let branch_info = branch_info.with_context(|| "Iterating over branches")?;
+            let branch = match branch_info {
+                (branch, git2::BranchType::Remote) => anyhow::bail!(
+                    "Unexpectedly got a remote branch in local branch iterator: {:?}",
+                    branch.name()
+                ),
+                (branch, git2::BranchType::Local) => branch,
+            };
+
+            let reference = branch.into_reference();
+            let reference_name = match reference.shorthand() {
+                None => {
+                    log::warn!(
+                        "Could not decode branch name, skipping: {:?}",
+                        reference.name_bytes()
+                    );
+                    continue;
+                }
+                Some(reference_name) => reference_name,
+            };
+
+            let branch_oid = reference
+                .resolve()
+                .with_context(|| format!("Resolving branch into commit: {}", reference_name))?
+                .target()
+                .unwrap();
+            result
+                .entry(branch_oid)
+                .or_insert_with(HashSet::new)
+                .insert(reference_name.to_owned());
+        }
+
+        // The main branch may be a remote branch, in which case it won't be
+        // returned in the iteration above.
+        let main_branch_name = get_main_branch_name(&self.repo)?;
+        let main_branch_oid = self.get_main_branch_oid()?;
+        result
+            .entry(main_branch_oid)
+            .or_insert_with(HashSet::new)
+            .insert(main_branch_name);
+
+        Ok(result)
     }
 }

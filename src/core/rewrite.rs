@@ -12,7 +12,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 
 use crate::commands::gc::mark_commit_reachable;
 use crate::core::formatting::printable_styled_string;
-use crate::util::{get_branch_oid_to_names, get_repo_head, run_git, run_hook, GitRunInfo};
+use crate::util::{get_repo_head, run_git, run_hook, GitRunInfo};
 
 use super::eventlog::{Event, EventCursor, EventReplayer, EventTransactionId};
 use super::formatting::Glyphs;
@@ -478,7 +478,7 @@ pub fn move_branches<'a>(
     event_tx_id: EventTransactionId,
     rewritten_oids_map: &'a HashMap<git2::Oid, git2::Oid>,
 ) -> anyhow::Result<()> {
-    let branch_oid_to_names = get_branch_oid_to_names(repo)?;
+    let branch_oid_to_names = repo.get_branch_oid_to_names()?;
 
     // We may experience an error in the case of a branch move. Ideally, we
     // would use `git2::Transaction::commit`, which stops the transaction at the
@@ -842,7 +842,7 @@ mod tests {
     use crate::core::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
     use crate::core::mergebase::MergeBaseDb;
     use crate::testing::{make_git, Git, GitRunOptions};
-    use crate::util::{get_branch_oid_to_names, get_db_conn};
+    use crate::util::get_db_conn;
 
     use super::*;
 
@@ -855,7 +855,7 @@ mod tests {
         let event_cursor = event_replayer.make_default_cursor();
         let head_oid = repo.get_head_oid()?;
         let main_branch_oid = repo.get_main_branch_oid()?;
-        let branch_oid_to_names = get_branch_oid_to_names(&repo)?;
+        let branch_oid_to_names = repo.get_branch_oid_to_names()?;
         let graph = make_graph(
             &repo,
             &merge_base_db,

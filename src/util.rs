@@ -1,6 +1,6 @@
 //! Utility functions.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::convert::TryInto;
 use std::ffi::OsString;
 use std::io::{stderr, stdout, Write};
@@ -11,70 +11,12 @@ use std::str::FromStr;
 use anyhow::Context;
 use fn_error_context::context;
 use git2::ErrorCode;
-use log::warn;
 
-use crate::core::config::get_main_branch_name;
 use crate::core::eventlog::{EventTransactionId, BRANCHLESS_TRANSACTION_ID_ENV_VAR};
-use crate::core::repo::Repo;
 
 /// Convert a `git2::Error` into an `anyhow::Error` with an auto-generated message.
 pub fn wrap_git_error(error: git2::Error) -> anyhow::Error {
     anyhow::anyhow!("Git error {:?}: {}", error.code(), error.message())
-}
-
-/// Get a mapping from OID to the names of branches which point to that OID.
-///
-/// The returned branch names do not include the `refs/heads/` prefix.
-#[context("Getting branch-OID-to-names map for repository")]
-pub fn get_branch_oid_to_names(repo: &Repo) -> anyhow::Result<HashMap<git2::Oid, HashSet<String>>> {
-    let branches = repo
-        .branches(Some(git2::BranchType::Local))
-        .with_context(|| "Reading branches")?;
-
-    let mut result = HashMap::new();
-    for branch_info in branches {
-        let branch_info = branch_info.with_context(|| "Iterating over branches")?;
-        let branch = match branch_info {
-            (branch, git2::BranchType::Remote) => anyhow::bail!(
-                "Unexpectedly got a remote branch in local branch iterator: {:?}",
-                branch.name()
-            ),
-            (branch, git2::BranchType::Local) => branch,
-        };
-
-        let reference = branch.into_reference();
-        let reference_name = match reference.shorthand() {
-            None => {
-                warn!(
-                    "Could not decode branch name, skipping: {:?}",
-                    reference.name_bytes()
-                );
-                continue;
-            }
-            Some(reference_name) => reference_name,
-        };
-
-        let branch_oid = reference
-            .resolve()
-            .with_context(|| format!("Resolving branch into commit: {}", reference_name))?
-            .target()
-            .unwrap();
-        result
-            .entry(branch_oid)
-            .or_insert_with(HashSet::new)
-            .insert(reference_name.to_owned());
-    }
-
-    // The main branch may be a remote branch, in which case it won't be
-    // returned in the iteration above.
-    let main_branch_name = get_main_branch_name(repo)?;
-    let main_branch_oid = repo.get_main_branch_oid()?;
-    result
-        .entry(main_branch_oid)
-        .or_insert_with(HashSet::new)
-        .insert(main_branch_name);
-
-    Ok(result)
 }
 
 /// Get the connection to the SQLite database for this repository.
