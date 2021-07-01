@@ -26,7 +26,7 @@ use crate::core::metadata::{
 use crate::core::repo::Repo;
 use crate::core::tui::{with_siv, SingletonView};
 use crate::declare_views;
-use crate::util::{get_db_conn, run_git, GitRunInfo};
+use crate::util::{run_git, GitRunInfo};
 
 fn render_cursor_smartlog(
     glyphs: &Glyphs,
@@ -771,7 +771,7 @@ fn undo_events(
 pub fn undo(git_run_info: &GitRunInfo) -> anyhow::Result<isize> {
     let glyphs = Glyphs::detect();
     let repo = Repo::from_current_dir()?;
-    let conn = get_db_conn(&repo)?;
+    let conn = repo.get_db_conn()?;
     let merge_base_db = MergeBaseDb::new(&conn)?;
     let mut event_log_db = EventLogDb::new(&conn)?;
     let mut event_replayer = EventReplayer::from_event_log_db(&event_log_db)?;

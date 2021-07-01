@@ -1,7 +1,6 @@
 use branchless::core::eventlog::testing::{get_event_replayer_events, redact_event_timestamp};
 use branchless::core::eventlog::{Event, EventLogDb, EventReplayer};
 use branchless::testing::{make_git, GitRunOptions};
-use branchless::util::get_db_conn;
 
 #[test]
 fn test_wrap_rebase_in_transaction() -> anyhow::Result<()> {
@@ -20,7 +19,7 @@ fn test_wrap_rebase_in_transaction() -> anyhow::Result<()> {
     git.run(&["branchless", "wrap", "rebase", "foo"])?;
 
     let repo = git.get_repo()?;
-    let conn = get_db_conn(&repo)?;
+    let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
     let event_replayer = EventReplayer::from_event_log_db(&event_log_db)?;
     let events: Vec<Event> = get_event_replayer_events(&event_replayer)

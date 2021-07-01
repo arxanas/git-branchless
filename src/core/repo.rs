@@ -71,6 +71,17 @@ impl Repo {
         Repo::from_dir(&path)
     }
 
+    /// Get the connection to the SQLite database for this repository.
+    #[context("Getting connection to SQLite database for repo")]
+    pub fn get_db_conn(&self) -> anyhow::Result<rusqlite::Connection> {
+        let dir = self.repo.path().join("branchless");
+        std::fs::create_dir_all(&dir).with_context(|| "Creating .git/branchless dir")?;
+        let path = dir.join("db.sqlite3");
+        let conn = rusqlite::Connection::open(&path)
+            .with_context(|| format!("Opening database connection at {:?}", &path))?;
+        Ok(conn)
+    }
+
     /// Get the OID for the repository's `HEAD` reference.
     #[context("Getting HEAD OID for repository at : {:?}", self.repo.path())]
     pub fn get_head_oid(&self) -> anyhow::Result<Option<git2::Oid>> {

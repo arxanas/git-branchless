@@ -19,17 +19,6 @@ pub fn wrap_git_error(error: git2::Error) -> anyhow::Error {
     anyhow::anyhow!("Git error {:?}: {}", error.code(), error.message())
 }
 
-/// Get the connection to the SQLite database for this repository.
-#[context("Getting connection to SQLite database for repo")]
-pub fn get_db_conn(repo: &git2::Repository) -> anyhow::Result<rusqlite::Connection> {
-    let dir = repo.path().join("branchless");
-    std::fs::create_dir_all(&dir).with_context(|| "Creating .git/branchless dir")?;
-    let path = dir.join("db.sqlite3");
-    let conn = rusqlite::Connection::open(&path)
-        .with_context(|| format!("Opening database connection at {:?}", &path))?;
-    Ok(conn)
-}
-
 /// Path to the `git` executable on disk to be executed.
 #[derive(Clone, Debug)]
 pub struct GitRunInfo {

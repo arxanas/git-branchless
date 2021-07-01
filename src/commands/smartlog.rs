@@ -21,7 +21,6 @@ use crate::core::metadata::{
     RelativeTimeProvider,
 };
 use crate::core::repo::Repo;
-use crate::util::get_db_conn;
 
 /// Split fully-independent subgraphs into multiple graphs.
 ///
@@ -269,7 +268,7 @@ pub fn render_graph(
 pub fn smartlog() -> anyhow::Result<()> {
     let glyphs = Glyphs::detect();
     let repo = Repo::from_current_dir()?;
-    let conn = get_db_conn(&repo)?;
+    let conn = repo.get_db_conn()?;
     let merge_base_db = MergeBaseDb::new(&conn)?;
     let event_log_db = EventLogDb::new(&conn)?;
     let event_replayer = EventReplayer::from_event_log_db(&event_log_db)?;

@@ -73,7 +73,7 @@ use crate::core::rewrite::{
     execute_rebase_plan, find_abandoned_children, find_rewrite_target, move_branches,
     ExecuteRebasePlanOptions, RebasePlanBuilder,
 };
-use crate::util::{get_db_conn, run_git, GitRunInfo};
+use crate::util::{run_git, GitRunInfo};
 
 #[context("Restacking commits")]
 fn restack_commits(
@@ -215,7 +215,7 @@ pub fn restack(git_run_info: &GitRunInfo) -> anyhow::Result<isize> {
     let now = SystemTime::now();
     let glyphs = Glyphs::detect();
     let repo = Repo::from_current_dir()?;
-    let conn = get_db_conn(&repo)?;
+    let conn = repo.get_db_conn()?;
     let merge_base_db = MergeBaseDb::new(&conn)?;
     let event_log_db = EventLogDb::new(&conn)?;
     let event_tx_id = event_log_db.make_transaction_id(now, "restack")?;

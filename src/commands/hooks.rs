@@ -26,7 +26,6 @@ use crate::core::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
 use crate::core::mergebase::MergeBaseDb;
 use crate::core::repo::Repo;
 use crate::core::rewrite::find_abandoned_children;
-use crate::util::get_db_conn;
 
 /// Detect if an interactive rebase has started but not completed.
 ///
@@ -77,7 +76,7 @@ pub fn hook_post_rewrite(rewrite_type: &str) -> anyhow::Result<()> {
     let timestamp = now.duration_since(SystemTime::UNIX_EPOCH)?.as_secs_f64();
 
     let repo = Repo::from_current_dir()?;
-    let conn = get_db_conn(&repo)?;
+    let conn = repo.get_db_conn()?;
     let mut event_log_db = EventLogDb::new(&conn)?;
     let event_tx_id = event_log_db.make_transaction_id(now, "hook-post-rewrite")?;
 
@@ -253,7 +252,7 @@ pub fn hook_post_checkout(
     println!("branchless: processing checkout");
 
     let repo = Repo::from_current_dir()?;
-    let conn = get_db_conn(&repo)?;
+    let conn = repo.get_db_conn()?;
     let mut event_log_db = EventLogDb::new(&conn)?;
     let event_tx_id = event_log_db.make_transaction_id(now, "hook-post-checkout")?;
     event_log_db.add_events(vec![Event::RefUpdateEvent {
@@ -275,7 +274,7 @@ pub fn hook_post_commit() -> anyhow::Result<()> {
 
     let now = SystemTime::now();
     let repo = Repo::from_current_dir()?;
-    let conn = get_db_conn(&repo)?;
+    let conn = repo.get_db_conn()?;
     let mut event_log_db = EventLogDb::new(&conn)?;
 
     let commit = repo
@@ -340,7 +339,7 @@ pub fn hook_reference_transaction(transaction_state: &str) -> anyhow::Result<()>
     let now = SystemTime::now();
 
     let repo = Repo::from_current_dir()?;
-    let conn = get_db_conn(&repo)?;
+    let conn = repo.get_db_conn()?;
     let mut event_log_db = EventLogDb::new(&conn)?;
     let event_tx_id = event_log_db.make_transaction_id(now, "reference-transaction")?;
 

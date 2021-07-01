@@ -16,7 +16,6 @@ use crate::core::eventlog::{is_gc_ref, EventLogDb, EventReplayer};
 use crate::core::graph::{make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid};
 use crate::core::mergebase::MergeBaseDb;
 use crate::core::repo::Repo;
-use crate::util::get_db_conn;
 
 fn find_dangling_references<'repo>(
     repo: &'repo git2::Repository,
@@ -81,7 +80,7 @@ pub fn mark_commit_reachable(repo: &git2::Repository, commit_oid: git2::Oid) -> 
 #[context("Running garbage-collection")]
 pub fn gc() -> anyhow::Result<()> {
     let repo = Repo::from_current_dir()?;
-    let conn = get_db_conn(&repo)?;
+    let conn = repo.get_db_conn()?;
     let merge_base_db = MergeBaseDb::new(&conn)?;
     let event_log_db = EventLogDb::new(&conn)?;
     let event_replayer = EventReplayer::from_event_log_db(&event_log_db)?;
