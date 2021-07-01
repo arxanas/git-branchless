@@ -842,13 +842,12 @@ mod tests {
     use crate::core::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
     use crate::core::mergebase::MergeBaseDb;
     use crate::testing::{make_git, Git, GitRunOptions};
-    use crate::util::get_db_conn;
 
     use super::*;
 
     fn find_rewrite_target_helper(git: &Git, oid: git2::Oid) -> anyhow::Result<Option<git2::Oid>> {
         let repo = git.get_repo()?;
-        let conn = get_db_conn(&repo)?;
+        let conn = repo.get_db_conn()?;
         let merge_base_db = MergeBaseDb::new(&conn)?;
         let event_log_db = EventLogDb::new(&conn)?;
         let event_replayer = EventReplayer::from_event_log_db(&event_log_db)?;

@@ -419,7 +419,7 @@ mod tests {
         let test3_oid = git.commit_file("test3", 3)?;
 
         let repo = git.get_repo()?;
-        let conn = crate::util::get_db_conn(&repo)?;
+        let conn = repo.get_db_conn()?;
         let merge_base_db = MergeBaseDb::new(&conn)?;
 
         let mut seen_oids = HashSet::new();

@@ -9,7 +9,7 @@ use anyhow::Context;
 
 use crate::core::eventlog::{EventLogDb, EventTransactionId, BRANCHLESS_TRANSACTION_ID_ENV_VAR};
 use crate::core::repo::Repo;
-use crate::util::{get_db_conn, GitRunInfo};
+use crate::util::{GitRunInfo};
 
 fn pass_through_git_command<S: AsRef<str> + std::fmt::Debug>(
     git_run_info: &GitRunInfo,
@@ -41,7 +41,7 @@ fn make_event_tx_id<S: AsRef<str> + std::fmt::Debug>(
 ) -> anyhow::Result<EventTransactionId> {
     let now = SystemTime::now();
     let repo = Repo::from_current_dir()?;
-    let conn = get_db_conn(&repo)?;
+    let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
     let event_tx_id = {
         let message = args.first().map(|s| s.as_ref()).unwrap_or("wrap");
@@ -68,7 +68,6 @@ mod tests {
     use crate::core::eventlog::testing::{get_event_replayer_events, redact_event_timestamp};
     use crate::core::eventlog::{Event, EventLogDb, EventReplayer};
     use crate::testing::make_git;
-    use crate::util::get_db_conn;
 
     #[test]
     fn test_wrap_rebase_in_transaction() -> anyhow::Result<()> {
@@ -87,7 +86,7 @@ mod tests {
         git.run(&["branchless", "wrap", "rebase", "foo"])?;
 
         let repo = git.get_repo()?;
-        let conn = get_db_conn(&repo)?;
+        let conn = repo.get_db_conn()?;
         let event_log_db = EventLogDb::new(&conn)?;
         let event_replayer = EventReplayer::from_event_log_db(&event_log_db)?;
         let events: Vec<Event> = get_event_replayer_events(&event_replayer)

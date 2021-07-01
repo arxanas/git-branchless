@@ -1256,7 +1256,6 @@ mod tests {
     use super::*;
 
     use crate::testing::make_git;
-    use crate::util::get_db_conn;
     use testing::make_dummy_transaction_id;
 
     #[test]
@@ -1303,7 +1302,7 @@ mod tests {
         git.run(&["hide", "HEAD"])?;
 
         let repo = git.get_repo()?;
-        let conn = get_db_conn(&repo)?;
+        let conn = repo.get_db_conn()?;
         let event_log_db = EventLogDb::new(&conn)?;
         let events = event_log_db.get_events()?;
         let event_tx_ids: Vec<EventTransactionId> =

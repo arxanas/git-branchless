@@ -13,7 +13,7 @@ use crate::core::graph::{
 use crate::core::mergebase::MergeBaseDb;
 use crate::core::metadata::{render_commit_metadata, CommitMessageProvider, CommitOidProvider};
 use crate::core::repo::Repo;
-use crate::util::{get_db_conn, run_git, GitRunInfo};
+use crate::util::{run_git, GitRunInfo};
 
 /// Go back a certain number of commits.
 pub fn prev(git_run_info: &GitRunInfo, num_commits: Option<isize>) -> anyhow::Result<isize> {
@@ -137,7 +137,7 @@ pub fn next(
 ) -> anyhow::Result<isize> {
     let glyphs = Glyphs::detect();
     let repo = Repo::from_current_dir()?;
-    let conn = get_db_conn(&repo)?;
+    let conn = repo.get_db_conn()?;
     let merge_base_db = MergeBaseDb::new(&conn)?;
     let event_log_db = EventLogDb::new(&conn)?;
     let event_replayer = EventReplayer::from_event_log_db(&event_log_db)?;

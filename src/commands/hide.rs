@@ -13,7 +13,6 @@ use crate::core::metadata::{
     render_commit_metadata, CommitMessageProvider, CommitMetadataProvider, CommitOidProvider,
 };
 use crate::core::repo::Repo;
-use crate::util::get_db_conn;
 use crate::util::resolve_commits;
 use crate::util::ResolveCommitsResult;
 
@@ -89,7 +88,7 @@ pub fn hide(hashes: Vec<String>, recursive: bool) -> anyhow::Result<isize> {
     let now = SystemTime::now();
     let glyphs = Glyphs::detect();
     let repo = Repo::from_current_dir()?;
-    let conn = get_db_conn(&repo)?;
+    let conn = repo.get_db_conn()?;
     let mut event_log_db = EventLogDb::new(&conn)?;
     let event_replayer = EventReplayer::from_event_log_db(&event_log_db)?;
     let merge_base_db = MergeBaseDb::new(&conn)?;
@@ -168,7 +167,7 @@ pub fn unhide(hashes: Vec<String>, recursive: bool) -> anyhow::Result<isize> {
     let now = SystemTime::now();
     let glyphs = Glyphs::detect();
     let repo = Repo::from_current_dir()?;
-    let conn = get_db_conn(&repo)?;
+    let conn = repo.get_db_conn()?;
     let mut event_log_db = EventLogDb::new(&conn)?;
     let event_replayer = EventReplayer::from_event_log_db(&event_log_db)?;
     let merge_base_db = MergeBaseDb::new(&conn)?;

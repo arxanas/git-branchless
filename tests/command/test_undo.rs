@@ -12,7 +12,7 @@ use branchless::core::tui::testing::{
     screen_to_string, CursiveTestingBackend, CursiveTestingEvent,
 };
 use branchless::testing::{make_git, Git};
-use branchless::util::{get_db_conn, GitRunInfo};
+use branchless::util::GitRunInfo;
 
 use cursive::event::Key;
 use cursive::CursiveRunnable;
@@ -23,7 +23,7 @@ fn run_select_past_event(
     events: Vec<CursiveTestingEvent>,
 ) -> anyhow::Result<Option<EventCursor>> {
     let glyphs = Glyphs::text();
-    let conn = get_db_conn(repo)?;
+    let conn = repo.get_db_conn()?;
     let merge_base_db = MergeBaseDb::new(&conn)?;
     let event_log_db: EventLogDb = EventLogDb::new(&conn)?;
     let mut event_replayer = EventReplayer::from_event_log_db(&event_log_db)?;
@@ -42,7 +42,7 @@ fn run_select_past_event(
 fn run_undo_events(git: &Git, event_cursor: EventCursor) -> anyhow::Result<String> {
     let glyphs = Glyphs::text();
     let repo = git.get_repo()?;
-    let conn = get_db_conn(&repo)?;
+    let conn = repo.get_db_conn()?;
     let mut event_log_db: EventLogDb = EventLogDb::new(&conn)?;
     let event_replayer = EventReplayer::from_event_log_db(&event_log_db)?;
     let input = "y";
