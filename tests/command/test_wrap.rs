@@ -1,6 +1,6 @@
 use branchless::core::eventlog::testing::{get_event_replayer_events, redact_event_timestamp};
 use branchless::core::eventlog::{Event, EventLogDb, EventReplayer};
-use branchless::testing::make_git;
+use branchless::testing::{make_git, GitRunOptions};
 use branchless::util::get_db_conn;
 
 #[test]
@@ -213,10 +213,31 @@ fn test_wrap_explicit_git_executable() -> anyhow::Result<()> {
 fn test_wrap_without_repo() -> anyhow::Result<()> {
     let git = make_git()?;
 
-    let (stdout, stderr) = git.run(&["branchless", "wrap", "status"])?;
+    let (stdout, stderr) = git.run_with_options(
+        &["branchless", "wrap", "status"],
+        &GitRunOptions {
+            expected_exit_code: 128,
+            ..Default::default()
+        },
+    )?;
     insta::assert_snapshot!(stderr, @"fatal: not a git repository (or any of the parent directories): .git
 ");
     insta::assert_snapshot!(stdout, @"");
+
+    Ok(())
+}
+
+#[test]
+fn test_wrap_exit_code() -> anyhow::Result<()> {
+    let git = make_git()?;
+
+    git.run_with_options(
+        &["branchless", "wrap", "check-ref-format", ".."],
+        &GitRunOptions {
+            expected_exit_code: 1,
+            ..Default::default()
+        },
+    )?;
 
     Ok(())
 }
