@@ -13,17 +13,14 @@ use crate::core::graph::{
 use crate::core::mergebase::MergeBaseDb;
 use crate::core::metadata::{render_commit_metadata, CommitMessageProvider, CommitOidProvider};
 use crate::git::{GitRunInfo, Repo};
-use crate::util::run_git;
 
 /// Go back a certain number of commits.
 pub fn prev(git_run_info: &GitRunInfo, num_commits: Option<isize>) -> anyhow::Result<isize> {
     let exit_code = match num_commits {
-        None => run_git(git_run_info, None, &["checkout", "HEAD^"])?,
-        Some(num_commits) => run_git(
-            git_run_info,
-            None,
-            &["checkout", &format!("HEAD~{}", num_commits)],
-        )?,
+        None => git_run_info.run(None, &["checkout", "HEAD^"])?,
+        Some(num_commits) => {
+            git_run_info.run(None, &["checkout", &format!("HEAD~{}", num_commits)])?
+        }
     };
     if exit_code != 0 {
         return Ok(exit_code);
@@ -175,7 +172,7 @@ pub fn next(
         Some(current_oid) => current_oid,
     };
 
-    let result = run_git(git_run_info, None, &["checkout", &current_oid.to_string()])?;
+    let result = git_run_info.run(None, &["checkout", &current_oid.to_string()])?;
     if result != 0 {
         return Ok(result);
     }
