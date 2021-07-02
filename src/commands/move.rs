@@ -42,7 +42,7 @@ pub fn r#move(
     force_on_disk: bool,
 ) -> anyhow::Result<isize> {
     let repo = Repo::from_current_dir()?;
-    let head_oid = repo.get_head_oid()?;
+    let head_oid = repo.get_head_info()?.oid;
     let (source, should_resolve_base_commit) = match (source, base) {
         (Some(_), Some(_)) => {
             println!("The --source and --base options cannot both be provided.");
