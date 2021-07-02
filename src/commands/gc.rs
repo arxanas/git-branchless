@@ -15,7 +15,7 @@ use fn_error_context::context;
 use crate::core::eventlog::{is_gc_ref, EventLogDb, EventReplayer};
 use crate::core::graph::{make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid};
 use crate::core::mergebase::MergeBaseDb;
-use crate::core::repo::Repo;
+use crate::git::Repo;
 
 fn find_dangling_references<'repo>(
     repo: &'repo git2::Repository,

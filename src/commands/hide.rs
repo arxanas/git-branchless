@@ -12,7 +12,7 @@ use crate::core::mergebase::MergeBaseDb;
 use crate::core::metadata::{
     render_commit_metadata, CommitMessageProvider, CommitMetadataProvider, CommitOidProvider,
 };
-use crate::core::repo::Repo;
+use crate::git::Repo;
 use crate::util::resolve_commits;
 use crate::util::ResolveCommitsResult;
 

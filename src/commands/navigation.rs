@@ -12,7 +12,7 @@ use crate::core::graph::{
 };
 use crate::core::mergebase::MergeBaseDb;
 use crate::core::metadata::{render_commit_metadata, CommitMessageProvider, CommitOidProvider};
-use crate::core::repo::Repo;
+use crate::git::Repo;
 use crate::util::{run_git, GitRunInfo};
 
 /// Go back a certain number of commits.

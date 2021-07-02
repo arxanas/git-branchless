@@ -7,10 +7,10 @@ use branchless::commands::undo::testing::{select_past_event, undo_events};
 use branchless::core::eventlog::{EventCursor, EventLogDb, EventReplayer};
 use branchless::core::formatting::Glyphs;
 use branchless::core::mergebase::MergeBaseDb;
-use branchless::core::repo::Repo;
 use branchless::core::tui::testing::{
     screen_to_string, CursiveTestingBackend, CursiveTestingEvent,
 };
+use branchless::git::Repo;
 use branchless::testing::{make_git, Git};
 use branchless::util::GitRunInfo;
 

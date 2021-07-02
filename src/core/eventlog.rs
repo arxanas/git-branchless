@@ -16,9 +16,8 @@ use fn_error_context::context;
 use log::warn;
 
 use crate::core::config::get_main_branch_name;
+use crate::git::Repo;
 use crate::util::wrap_git_error;
-
-use super::repo::Repo;
 
 /// When this environment variable is set, we reuse the ID for the transaction
 /// which the caller has already started.
