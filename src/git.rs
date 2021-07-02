@@ -3,5 +3,5 @@
 mod repo;
 mod run;
 
-pub use repo::Repo;
+pub use repo::{GitVersion, Repo};
 pub use run::GitRunInfo;
