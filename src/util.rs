@@ -201,19 +201,20 @@ pub fn run_git<S: AsRef<str> + std::fmt::Debug>(
     if let Some(event_tx_id) = event_tx_id {
         command.env(BRANCHLESS_TRANSACTION_ID_ENV_VAR, event_tx_id.to_string());
     }
-    let result = command.output().with_context(|| {
+    let mut child = command
+        .spawn()
+        .with_context(|| format!("Spawning Git subrocess: {:?} {:?}", path_to_git, args))?;
+    let exit_status = child.wait().with_context(|| {
         format!(
             "Waiting for Git subprocess to complete: {:?} {:?}",
             path_to_git, args
         )
     })?;
-    stdout().write_all(&result.stdout)?;
-    stderr().write_all(&result.stderr)?;
 
     // On Unix, if the child process was terminated by a signal, we need to call
     // some Unix-specific functions to access the signal that terminated it. For
     // simplicity, just return `1` in those cases.
-    let exit_code = result.status.code().unwrap_or(1);
+    let exit_code = exit_status.code().unwrap_or(1);
     let exit_code = exit_code
         .try_into()
         .with_context(|| format!("Converting exit code {} from i32 to isize", exit_code))?;
