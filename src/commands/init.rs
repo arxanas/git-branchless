@@ -73,8 +73,8 @@ enum Hook {
 }
 
 #[context("Determining hook path")]
-fn determine_hook_path(repo: &git2::Repository, hook_type: &str) -> anyhow::Result<Hook> {
-    let multi_hooks_path = repo.path().join("hooks_multi");
+fn determine_hook_path(repo: &Repo, hook_type: &str) -> anyhow::Result<Hook> {
+    let multi_hooks_path = repo.get_path().join("hooks_multi");
     let hook = if multi_hooks_path.exists() {
         let path = multi_hooks_path
             .join(format!("{}.d", hook_type))
@@ -165,14 +165,14 @@ fn update_hook_contents(hook: &Hook, hook_contents: &str) -> anyhow::Result<()> 
 }
 
 #[context("Installing hook of type: {:?}", hook_type)]
-fn install_hook(repo: &git2::Repository, hook_type: &str, hook_script: &str) -> anyhow::Result<()> {
+fn install_hook(repo: &Repo, hook_type: &str, hook_script: &str) -> anyhow::Result<()> {
     let hook = determine_hook_path(repo, hook_type)?;
     update_hook_contents(&hook, hook_script)?;
     Ok(())
 }
 
 #[context("Installing all hooks")]
-fn install_hooks(repo: &git2::Repository) -> anyhow::Result<()> {
+fn install_hooks(repo: &Repo) -> anyhow::Result<()> {
     for (hook_type, hook_script) in ALL_HOOKS {
         println!("Installing hook: {}", hook_type);
         install_hook(repo, hook_type, hook_script)?;
@@ -181,7 +181,7 @@ fn install_hooks(repo: &git2::Repository) -> anyhow::Result<()> {
 }
 
 #[context("Uninstalling all hooks")]
-fn uninstall_hooks(repo: &git2::Repository) -> anyhow::Result<()> {
+fn uninstall_hooks(repo: &Repo) -> anyhow::Result<()> {
     for (hook_type, _hook_script) in ALL_HOOKS {
         println!("Uninstalling hook: {}", hook_type);
         install_hook(
@@ -207,8 +207,9 @@ fn install_alias(config: &mut git2::Config, from: &str, to: &str) -> anyhow::Res
     Ok(())
 }
 
-fn detect_main_branch_name(repo: &git2::Repository) -> Option<String> {
-    [
+#[context("Detecting main branch name for repository at: {:?}", repo.get_path())]
+fn detect_main_branch_name(repo: &Repo) -> anyhow::Result<Option<String>> {
+    for branch_name in [
         "master",
         "main",
         "mainline",
@@ -216,23 +217,20 @@ fn detect_main_branch_name(repo: &git2::Repository) -> Option<String> {
         "develop",
         "development",
         "trunk",
-    ]
-    .iter()
-    .find_map(|branch_name| {
+    ] {
         if repo
-            .find_branch(branch_name, git2::BranchType::Local)
-            .is_ok()
+            .find_branch(branch_name, git2::BranchType::Local)?
+            .is_some()
         {
-            Some(branch_name.to_string())
-        } else {
-            None
+            return Ok(Some(branch_name.to_string()));
         }
-    })
+    }
+    Ok(None)
 }
 
 #[context("Installing all aliases")]
 fn install_aliases(
-    repo: &mut git2::Repository,
+    repo: &mut Repo,
     config: &mut git2::Config,
     git_run_info: &GitRunInfo,
 ) -> anyhow::Result<()> {
@@ -313,10 +311,10 @@ fn set_config(config: &mut git2::Config, name: &str, value: ConfigValue) -> anyh
 #[context("Setting all configs")]
 fn set_configs(
     r#in: &mut impl BufRead,
-    repo: &git2::Repository,
+    repo: &Repo,
     config: &mut git2::Config,
 ) -> anyhow::Result<()> {
-    let main_branch_name = match detect_main_branch_name(repo) {
+    let main_branch_name = match detect_main_branch_name(repo)? {
         Some(main_branch_name) => {
             println!(
                 "Auto-detected your main branch as: {}",

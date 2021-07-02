@@ -2,6 +2,8 @@
 
 use std::collections::HashMap;
 
+use cursive::theme::BaseColor;
+use cursive::utils::markup::StyledString;
 use log::warn;
 
 use crate::commands::smartlog::smartlog;
@@ -42,7 +44,7 @@ pub enum Towards {
 }
 
 fn advance_towards_main_branch(
-    repo: &git2::Repository,
+    repo: &Repo,
     merge_base_db: &MergeBaseDb,
     graph: &HashMap<git2::Oid, Node>,
     current_oid: git2::Oid,
@@ -71,7 +73,7 @@ fn advance_towards_main_branch(
 
 fn advance_towards_own_commit(
     glyphs: &Glyphs,
-    repo: &git2::Repository,
+    repo: &Repo,
     graph: &HashMap<git2::Oid, Node>,
     current_oid: git2::Oid,
     num_commits: isize,
@@ -104,13 +106,22 @@ fn advance_towards_own_commit(
                         ""
                     };
 
-                    let commit_text = render_commit_metadata(
-                        &repo.find_commit(*child_oid)?,
-                        &mut [
-                            &mut CommitOidProvider::new(true)?,
-                            &mut CommitMessageProvider::new()?,
-                        ],
-                    )?;
+                    let commit_text = match &repo.find_commit(*child_oid)? {
+                        Some(commit) => render_commit_metadata(
+                            commit,
+                            &mut [
+                                &mut CommitOidProvider::new(true)?,
+                                &mut CommitMessageProvider::new()?,
+                            ],
+                        )?,
+                        None => {
+                            log::warn!("BUG: could not find commit with OID: {:?}", child_oid);
+                            StyledString::styled(
+                                "<unable to read commit data>",
+                                BaseColor::Red.light(),
+                            )
+                        }
+                    };
                     println!(
                         "  {} {}{}",
                         glyphs.bullet_point,

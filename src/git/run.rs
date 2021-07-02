@@ -9,6 +9,7 @@ use anyhow::Context;
 use fn_error_context::context;
 
 use crate::core::eventlog::{EventTransactionId, BRANCHLESS_TRANSACTION_ID_ENV_VAR};
+use crate::git::repo::Repo;
 use crate::util::get_sh;
 
 /// Path to the `git` executable on disk to be executed.
@@ -93,7 +94,7 @@ impl GitRunInfo {
     /// Returns the stdout of the Git invocation.
     pub fn run_silent<S: AsRef<str> + std::fmt::Debug>(
         &self,
-        repo: &git2::Repository,
+        repo: &Repo,
         event_tx_id: Option<EventTransactionId>,
         args: &[S],
     ) -> anyhow::Result<String> {
@@ -105,7 +106,7 @@ impl GitRunInfo {
 
         // Technically speaking, we should be able to work with non-UTF-8 repository
         // paths. Need to make the typechecker accept it.
-        let repo_path = repo.path();
+        let repo_path = repo.get_path();
         let repo_path = repo_path.to_str().ok_or_else(|| {
             anyhow::anyhow!(
                 "Path to Git repo could not be converted to UTF-8 string: {:?}",
@@ -144,7 +145,7 @@ impl GitRunInfo {
     #[context("Running Git hook: {}", hook_name)]
     pub fn run_hook(
         &self,
-        repo: &git2::Repository,
+        repo: &Repo,
         hook_name: &str,
         event_tx_id: EventTransactionId,
         args: &[impl AsRef<str>],
@@ -153,7 +154,7 @@ impl GitRunInfo {
         let hook_dir = repo
             .config()?
             .get_path("core.hooksPath")
-            .unwrap_or_else(|_| repo.path().join("hooks"));
+            .unwrap_or_else(|_| repo.get_path().join("hooks"));
 
         let GitRunInfo {
             // We're calling a Git hook, but not Git itself.
@@ -176,7 +177,10 @@ impl GitRunInfo {
                 // From `githooks(5)`: Before Git invokes a hook, it changes its
                 // working directory to either $GIT_DIR in a bare repository or the
                 // root of the working tree in a non-bare repository.
-                .current_dir(repo.workdir().unwrap_or_else(|| repo.path()))
+                .current_dir(
+                    repo.get_working_copy_path()
+                        .unwrap_or_else(|| repo.get_path()),
+                )
                 .arg("-c")
                 .arg(format!("{} \"$@\"", hook_name))
                 .arg(hook_name) // "$@" expands "$1" "$2" "$3" ... but we also must specify $0.

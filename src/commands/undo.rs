@@ -72,17 +72,17 @@ fn render_ref_name(ref_name: &str) -> String {
     }
 }
 
-fn describe_event(repo: &git2::Repository, event: &Event) -> anyhow::Result<Vec<StyledString>> {
+fn describe_event(repo: &Repo, event: &Event) -> anyhow::Result<Vec<StyledString>> {
     let render_commit = |oid: git2::Oid| -> anyhow::Result<StyledString> {
-        match repo.find_commit(oid) {
-            Ok(commit) => render_commit_metadata(
+        match repo.find_commit(oid)? {
+            Some(commit) => render_commit_metadata(
                 &commit,
                 &mut [
                     &mut CommitOidProvider::new(true)?,
                     &mut CommitMessageProvider::new()?,
                 ],
             ),
-            Err(_) => Ok(StyledString::plain(format!(
+            None => Ok(StyledString::plain(format!(
                 "<unavailable: {} (possibly GC'ed)>",
                 oid.to_string()
             ))),
@@ -275,7 +275,7 @@ fn describe_event(repo: &git2::Repository, event: &Event) -> anyhow::Result<Vec<
 }
 
 fn describe_events_numbered(
-    repo: &git2::Repository,
+    repo: &Repo,
     events: &[Event],
 ) -> Result<Vec<StyledString>, anyhow::Error> {
     let mut lines = Vec::new();
@@ -607,7 +607,7 @@ fn undo_events(
     in_: &mut impl Read,
     out: &mut impl Write,
     glyphs: &Glyphs,
-    repo: &git2::Repository,
+    repo: &Repo,
     git_run_info: &GitRunInfo,
     event_log_db: &mut EventLogDb,
     event_replayer: &EventReplayer,
@@ -716,13 +716,13 @@ fn undo_events(
                 old_ref: Some(_),
                 new_ref: None,
                 message: _,
-            } => match repo.find_reference(&ref_name) {
-                Ok(mut reference) => {
+            } => match repo.find_reference(&ref_name)? {
+                Some(mut reference) => {
                     reference
                         .delete()
                         .with_context(|| format!("Deleting reference: {}", ref_name))?;
                 }
-                Err(_) => {
+                None => {
                     writeln!(
                         out,
                         "Reference {} did not exist, not deleting it.",
@@ -820,7 +820,7 @@ pub mod testing {
         in_: &mut impl Read,
         out: &mut impl Write,
         glyphs: &Glyphs,
-        repo: &git2::Repository,
+        repo: &Repo,
         git_run_info: &GitRunInfo,
         event_log_db: &mut EventLogDb,
         event_replayer: &EventReplayer,

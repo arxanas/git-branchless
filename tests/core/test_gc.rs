@@ -42,7 +42,7 @@ branchless: collecting garbage
 
     {
         let repo = git.get_repo()?;
-        assert!(matches!(repo.revparse_single("62fc20d2"), Err(_)));
+        assert!(repo.revparse_single("62fc20d2")?.is_none())
     }
 
     Ok(())

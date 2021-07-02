@@ -54,7 +54,7 @@ fn run_undo_events(git: &Git, event_cursor: EventCursor) -> anyhow::Result<Strin
         // Ensure that nested calls to `git` are run under the correct environment.
         // (Normally, the user will be running `git undo` from the correct directory
         // already.)
-        working_directory: repo.workdir().unwrap().to_path_buf(),
+        working_directory: repo.get_working_copy_path().unwrap().to_path_buf(),
 
         // Normally, we want to inherit the user's environment when running external
         // Git commands. However, for testing, we may have inherited variables which

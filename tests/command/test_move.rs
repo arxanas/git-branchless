@@ -524,9 +524,17 @@ fn test_rebase_in_memory_updates_committer_timestamp() -> anyhow::Result<()> {
     git.run(&["checkout", "HEAD~"])?;
     git.commit_file("test3", 3)?;
 
-    let original_committer_timestamp = repo.head()?.peel_to_commit()?.committer().when();
+    let original_committer_timestamp = repo
+        .find_commit(repo.get_head_info()?.oid.unwrap())?
+        .unwrap()
+        .committer()
+        .when();
     git.run(&["move", "-d", "master"])?;
-    let updated_committer_timestamp = repo.head()?.peel_to_commit()?.committer().when();
+    let updated_committer_timestamp = repo
+        .find_commit(repo.get_head_info()?.oid.unwrap())?
+        .unwrap()
+        .committer()
+        .when();
 
     println!(
         "original_committer_timestamp: {:?} {:?}",

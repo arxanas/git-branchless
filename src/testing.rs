@@ -307,7 +307,10 @@ impl Git {
         )?;
 
         let repo = self.get_repo()?;
-        let oid = repo.head()?.peel_to_commit()?.id();
+        let oid = repo
+            .get_head_info()?
+            .oid
+            .expect("Could not find OID for just-created commit");
         Ok(oid)
     }
 
@@ -326,8 +329,8 @@ impl Git {
         Ok(())
     }
 
-    /// Get a `git2::Repository` object for this repository.
-    #[context("Getting the `git2::Repository` object for {:?}", self)]
+    /// Get a `Repo` object for this repository.
+    #[context("Getting the `Repo` object for {:?}", self)]
     pub fn get_repo(&self) -> anyhow::Result<Repo> {
         Repo::from_dir(&self.repo_path)
     }

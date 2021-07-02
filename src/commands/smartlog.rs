@@ -30,7 +30,7 @@ use crate::git::Repo;
 /// Returns the list such that the topologically-earlier subgraphs are first in
 /// the list (i.e. those that would be rendered at the bottom of the smartlog).
 fn split_commit_graph_by_roots(
-    repo: &git2::Repository,
+    repo: &Repo,
     merge_base_db: &MergeBaseDb,
     graph: &CommitGraph,
 ) -> Vec<git2::Oid> {
@@ -46,8 +46,8 @@ fn split_commit_graph_by_roots(
         let rhs_commit = repo.find_commit(*rhs_oid);
 
         let (lhs_commit, rhs_commit) = match (lhs_commit, rhs_commit) {
-            (Err(_), Err(_)) | (Err(_), Ok(_)) | (Ok(_), Err(_)) => return lhs_oid.cmp(&rhs_oid),
-            (Ok(lhs_commit), Ok(rhs_commit)) => (lhs_commit, rhs_commit),
+            (Ok(Some(lhs_commit)), Ok(Some(rhs_commit))) => (lhs_commit, rhs_commit),
+            _ => return lhs_oid.cmp(&rhs_oid),
         };
 
         let merge_base_oid = merge_base_db.get_merge_base_oid(repo, *lhs_oid, *rhs_oid);
@@ -247,7 +247,7 @@ fn get_output(
 /// Render the smartlog graph and write it to the provided stream.
 pub fn render_graph(
     glyphs: &Glyphs,
-    repo: &git2::Repository,
+    repo: &Repo,
     merge_base_db: &MergeBaseDb,
     graph: &CommitGraph,
     head_oid: &HeadOid,

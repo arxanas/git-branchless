@@ -19,6 +19,7 @@ use crate::core::config::{
     get_commit_metadata_branches, get_commit_metadata_differential_revision,
     get_commit_metadata_relative_time,
 };
+use crate::git::Repo;
 
 use super::eventlog::{Event, EventCursor, EventReplayer};
 use super::formatting::StyledStringBuilder;
@@ -164,7 +165,7 @@ pub struct BranchesProvider<'a> {
 impl<'a> BranchesProvider<'a> {
     /// Constructor.
     pub fn new(
-        repo: &git2::Repository,
+        repo: &Repo,
         branch_oid_to_names: &'a HashMap<git2::Oid, HashSet<String>>,
     ) -> anyhow::Result<Self> {
         let is_enabled = get_commit_metadata_branches(repo)?;
@@ -211,7 +212,7 @@ pub struct DifferentialRevisionProvider {
 
 impl DifferentialRevisionProvider {
     /// Constructor.
-    pub fn new(repo: &git2::Repository) -> anyhow::Result<Self> {
+    pub fn new(repo: &Repo) -> anyhow::Result<Self> {
         let is_enabled = get_commit_metadata_differential_revision(repo)?;
         Ok(DifferentialRevisionProvider { is_enabled })
     }
@@ -265,7 +266,7 @@ pub struct RelativeTimeProvider {
 
 impl RelativeTimeProvider {
     /// Constructor.
-    pub fn new(repo: &git2::Repository, now: SystemTime) -> anyhow::Result<Self> {
+    pub fn new(repo: &Repo, now: SystemTime) -> anyhow::Result<Self> {
         let is_enabled = get_commit_metadata_relative_time(repo)?;
         Ok(RelativeTimeProvider { is_enabled, now })
     }

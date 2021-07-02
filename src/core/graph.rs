@@ -9,6 +9,7 @@ use log::warn;
 
 use crate::core::eventlog::{CommitVisibility, Event, EventCursor, EventReplayer};
 use crate::core::mergebase::MergeBaseDb;
+use crate::git::Repo;
 
 /// The OID of the repo's HEAD reference.
 #[derive(Debug)]
@@ -80,7 +81,7 @@ pub struct Node<'repo> {
 pub type CommitGraph<'repo> = HashMap<git2::Oid, Node<'repo>>;
 
 fn find_path_to_merge_base_internal<'repo>(
-    repo: &'repo git2::Repository,
+    repo: &'repo Repo,
     merge_base_db: &MergeBaseDb,
     commit_oid: git2::Oid,
     target_oid: git2::Oid,
@@ -88,7 +89,11 @@ fn find_path_to_merge_base_internal<'repo>(
 ) -> anyhow::Result<Option<Vec<git2::Commit<'repo>>>> {
     let mut queue = VecDeque::new();
     visited_commit_callback(commit_oid);
-    queue.push_back(vec![repo.find_commit(commit_oid)?]);
+    let first_commit = match repo.find_commit(commit_oid)? {
+        Some(commit) => commit,
+        None => anyhow::bail!("Unable to find commit with OID: {:?}", commit_oid),
+    };
+    queue.push_back(vec![first_commit]);
     let merge_base_oid = merge_base_db.get_merge_base_oid(repo, commit_oid, target_oid)?;
     while let Some(path) = queue.pop_front() {
         let last_commit = path
@@ -133,7 +138,7 @@ fn find_path_to_merge_base_internal<'repo>(
 /// If there is no such path, returns `None`.
 #[context("Finding path from {:?} to {:?}", commit_oid, target_oid)]
 pub fn find_path_to_merge_base<'repo>(
-    repo: &'repo git2::Repository,
+    repo: &'repo Repo,
     merge_base_db: &MergeBaseDb,
     commit_oid: git2::Oid,
     target_oid: git2::Oid,
@@ -149,7 +154,7 @@ pub fn find_path_to_merge_base<'repo>(
 /// for this commit since the main branch).
 #[context("Walking from commits: {:?}", commit_oids)]
 fn walk_from_commits<'repo>(
-    repo: &'repo git2::Repository,
+    repo: &'repo Repo,
     merge_base_db: &MergeBaseDb,
     event_replayer: &EventReplayer,
     event_cursor: EventCursor,
@@ -159,12 +164,12 @@ fn walk_from_commits<'repo>(
     let mut graph: CommitGraph = Default::default();
 
     for commit_oid in &commit_oids.0 {
-        let commit = repo.find_commit(*commit_oid);
+        let commit = repo.find_commit(*commit_oid)?;
         let current_commit = match commit {
-            Ok(commit) => commit,
+            Some(commit) => commit,
 
             // Commit may have been garbage-collected.
-            Err(_) => continue,
+            None => continue,
         };
 
         let merge_base_oid =
@@ -365,7 +370,7 @@ fn do_remove_commits(graph: &mut CommitGraph, head_oid: &HeadOid, branch_oids: &
 /// Returns: A tuple of the head OID and the commit graph.
 #[context("Creating commit graph")]
 pub fn make_graph<'repo>(
-    repo: &'repo git2::Repository,
+    repo: &'repo Repo,
     merge_base_db: &MergeBaseDb,
     event_replayer: &EventReplayer,
     event_cursor: EventCursor,
@@ -459,21 +464,15 @@ pub enum ResolveCommitsResult<'repo> {
 /// - Short OIDs.
 /// - Reference names.
 #[context("Resolving commits")]
-pub fn resolve_commits(
-    repo: &git2::Repository,
-    hashes: Vec<String>,
-) -> anyhow::Result<ResolveCommitsResult> {
+pub fn resolve_commits(repo: &Repo, hashes: Vec<String>) -> anyhow::Result<ResolveCommitsResult> {
     let mut commits = Vec::new();
     for hash in hashes {
-        let commit = match repo.revparse_single(&hash) {
-            Ok(commit) => match commit.into_commit() {
+        let commit = match repo.revparse_single(&hash)? {
+            Some(object) => match object.into_commit() {
                 Ok(commit) => commit,
                 Err(_) => return Ok(ResolveCommitsResult::CommitNotFound { commit: hash }),
             },
-            Err(err) if err.code() == git2::ErrorCode::NotFound => {
-                return Ok(ResolveCommitsResult::CommitNotFound { commit: hash })
-            }
-            Err(err) => return Err(err.into()),
+            None => return Ok(ResolveCommitsResult::CommitNotFound { commit: hash }),
         };
         commits.push(commit)
     }

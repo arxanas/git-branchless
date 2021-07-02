@@ -27,46 +27,6 @@ use crate::core::mergebase::MergeBaseDb;
 use crate::core::rewrite::find_abandoned_children;
 use crate::git::Repo;
 
-/// Detect if an interactive rebase has started but not completed.
-///
-/// Git will send us spurious `post-rewrite` events marked as `amend` during an
-/// interactive rebase, indicating that some of the commits have been rewritten
-/// as part of the rebase plan, but not all of them. This function attempts to
-/// detect when an interactive rebase is underway, and if the current
-/// `post-rewrite` event is spurious.
-///
-/// There are two practical issues for users as a result of this Git behavior:
-///
-///   * During an interactive rebase, we may see many "processing 1 rewritten
-///   commit" messages, and then a final "processing X rewritten commits" message
-///   once the rebase has concluded. This is potentially confusing for users, since
-///   the operation logically only rewrote the commits once, but we displayed the
-///   message multiple times.
-///
-///   * During an interactive rebase, we may warn about abandoned commits, when the
-///   next operation in the rebase plan fixes up the abandoned commit. This can
-///   happen even if no conflict occurred and the rebase completed successfully
-///   without any user intervention.
-#[context("Determining if rebase is underway")]
-fn is_rebase_underway(repo: &git2::Repository) -> anyhow::Result<bool> {
-    match repo.state() {
-        git2::RepositoryState::Rebase
-        | git2::RepositoryState::RebaseInteractive
-        | git2::RepositoryState::RebaseMerge => Ok(true),
-
-        // Possibly some of these states should also be treated as `true`?
-        git2::RepositoryState::Clean
-        | git2::RepositoryState::Merge
-        | git2::RepositoryState::Revert
-        | git2::RepositoryState::RevertSequence
-        | git2::RepositoryState::CherryPick
-        | git2::RepositoryState::CherryPickSequence
-        | git2::RepositoryState::Bisect
-        | git2::RepositoryState::ApplyMailbox
-        | git2::RepositoryState::ApplyMailboxOrRebase => Ok(false),
-    }
-}
-
 /// Handle Git's `post-rewrite` hook.
 ///
 /// See the man-page for `githooks(5)`.
@@ -111,7 +71,7 @@ pub fn hook_post_rewrite(rewrite_type: &str) -> anyhow::Result<()> {
         (old_commits, events)
     };
 
-    let is_spurious_event = rewrite_type == "amend" && is_rebase_underway(&repo)?;
+    let is_spurious_event = rewrite_type == "amend" && repo.is_rebase_underway()?;
     if !is_spurious_event {
         let message_rewritten_commits = Pluralize {
             amount: events.len().try_into()?,
@@ -277,12 +237,25 @@ pub fn hook_post_commit() -> anyhow::Result<()> {
     let conn = repo.get_db_conn()?;
     let mut event_log_db = EventLogDb::new(&conn)?;
 
-    let commit = repo
-        .head()
-        .with_context(|| "Getting repo HEAD")?
-        .peel_to_commit()
-        .with_context(|| "Getting HEAD commit")?;
-    mark_commit_reachable(&repo, commit.id())
+    let commit_oid = match repo.get_head_info()?.oid {
+        Some(commit_oid) => commit_oid,
+        None => {
+            // A strange situation, but technically possible.
+            log::warn!("`post-commit` hook called, but could not determine the OID of `HEAD`");
+            return Ok(());
+        }
+    };
+
+    let commit = match repo.find_commit(commit_oid)? {
+        Some(commit) => commit,
+        None => {
+            anyhow::bail!(
+                "BUG: Attempted to look up current `HEAD` commit, but it could not be found: {:?}",
+                commit_oid
+            )
+        }
+    };
+    mark_commit_reachable(&repo, commit_oid)
         .with_context(|| "Marking commit as reachable for GC purposes")?;
 
     let timestamp = commit.time().seconds() as f64;
@@ -419,7 +392,7 @@ mod tests {
 
         git.init_repo()?;
         let repo = git.get_repo()?;
-        assert!(!is_rebase_underway(&repo)?);
+        assert!(!repo.is_rebase_underway()?);
 
         let oid1 = git.commit_file_with_contents("test", 1, "foo")?;
         git.run(&["checkout", "HEAD^"])?;
@@ -431,7 +404,7 @@ mod tests {
                 ..Default::default()
             },
         )?;
-        assert!(is_rebase_underway(&repo)?);
+        assert!(repo.is_rebase_underway()?);
 
         Ok(())
     }

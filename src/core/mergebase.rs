@@ -18,7 +18,7 @@ use anyhow::Context;
 use fn_error_context::context;
 use rusqlite::OptionalExtension;
 
-use crate::git::wrap_git_error;
+use crate::git::Repo;
 
 /// On-disk cache for merge-base queries.
 pub struct MergeBaseDb<'conn> {
@@ -65,7 +65,7 @@ impl<'conn> MergeBaseDb<'conn> {
     #[context("Querying for merge-base of OIDs {:?} and {:?}", lhs_oid, rhs_oid)]
     pub fn get_merge_base_oid(
         &self,
-        repo: &git2::Repository,
+        repo: &Repo,
         lhs_oid: git2::Oid,
         rhs_oid: git2::Oid,
     ) -> anyhow::Result<Option<git2::Oid>> {
@@ -106,17 +106,7 @@ WHERE lhs_oid = :lhs_oid
 
             // Not cached.
             None => {
-                let merge_base_oid = match repo.merge_base(lhs_oid, rhs_oid) {
-                    Ok(merge_base_oid) => Ok(Some(merge_base_oid)),
-                    Err(err) => {
-                        if err.code() == git2::ErrorCode::NotFound {
-                            Ok(None)
-                        } else {
-                            Err(wrap_git_error(err))
-                        }
-                    }
-                }
-                .context("Querying Git repository for merge-base OID")?;
+                let merge_base_oid = repo.merge_base(lhs_oid, rhs_oid)?;
 
                 // Cache computed merge-base OID.
                 self.conn
