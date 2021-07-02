@@ -721,7 +721,8 @@ fn rebase_on_disk(
             .with_context(|| "Writing `cdate_is_adate` option file")?;
     }
 
-    progress.finish_with_message("Calling Git for on-disk rebase");
+    progress.finish_and_clear();
+    println!("Calling Git for on-disk rebase...");
     let result = run_git(&git_run_info, Some(*event_tx_id), &["rebase", "--continue"])?;
 
     Ok(result)

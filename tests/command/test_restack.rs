@@ -47,6 +47,7 @@ fn test_restack_amended_commit() -> anyhow::Result<()> {
         let (stdout, _stderr) = git.run(&["restack"])?;
         let stdout = remove_rebase_lines(stdout);
         insta::assert_snapshot!(stdout, @r###"
+        Calling Git for on-disk rebase...
         branchless: <git-executable> rebase --continue
         Finished restacking commits.
         No abandoned branches to restack.
@@ -88,6 +89,7 @@ fn test_restack_consecutive_rewrites() -> anyhow::Result<()> {
         let stdout = remove_rebase_lines(stdout);
 
         insta::assert_snapshot!(stdout, @r###"
+        Calling Git for on-disk rebase...
         branchless: <git-executable> rebase --continue
         Finished restacking commits.
         No abandoned branches to restack.
@@ -163,6 +165,7 @@ fn test_amended_initial_commit() -> anyhow::Result<()> {
         let (stdout, _stderr) = git.run(&["restack"])?;
         let stdout = remove_rebase_lines(stdout);
         insta::assert_snapshot!(stdout, @r###"
+        Calling Git for on-disk rebase...
         branchless: <git-executable> rebase --continue
         Finished restacking commits.
         branchless: processing 1 update to a branch/ref
@@ -198,6 +201,7 @@ fn test_restack_amended_master() -> anyhow::Result<()> {
         let (stdout, _stderr) = git.run(&["restack"])?;
         let stdout = remove_rebase_lines(stdout);
         insta::assert_snapshot!(stdout, @r###"
+        Calling Git for on-disk rebase...
         branchless: <git-executable> rebase --continue
         Finished restacking commits.
         branchless: processing 1 update to a branch/ref

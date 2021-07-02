@@ -270,12 +270,13 @@ fn test_move_merge_conflict() -> anyhow::Result<()> {
             },
         )?;
         insta::assert_snapshot!(stdout, @r###"
-            Attempting rebase in-memory...
-            Merge conflict, falling back to rebase on-disk. The conflicting commit was: e85d25c7 create conflict.txt
-            branchless: <git-executable> rebase --continue
-            CONFLICT (add/add): Merge conflict in conflict.txt
-            Auto-merging conflict.txt
-            "###);
+        Attempting rebase in-memory...
+        Merge conflict, falling back to rebase on-disk. The conflicting commit was: e85d25c7 create conflict.txt
+        Calling Git for on-disk rebase...
+        branchless: <git-executable> rebase --continue
+        CONFLICT (add/add): Merge conflict in conflict.txt
+        Auto-merging conflict.txt
+        "###);
     }
 
     git.resolve_file("conflict", "resolved")?;
