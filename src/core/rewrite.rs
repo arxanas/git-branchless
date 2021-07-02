@@ -13,7 +13,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use crate::commands::gc::mark_commit_reachable;
 use crate::core::formatting::printable_styled_string;
 use crate::git::{GitRunInfo, Repo};
-use crate::util::{run_git, run_hook};
+use crate::util::run_hook;
 
 use super::eventlog::{Event, EventCursor, EventReplayer, EventTransactionId};
 use super::formatting::Glyphs;
@@ -585,11 +585,7 @@ fn post_rebase_in_memory(
                 Some(head_branch) => head_branch.to_string(),
                 None => new_head_oid.to_string(),
             };
-            let result = run_git(
-                git_run_info,
-                Some(*event_tx_id),
-                &["checkout", &head_target],
-            )?;
+            let result = git_run_info.run(Some(*event_tx_id), &["checkout", &head_target])?;
             if result != 0 {
                 return Ok(result);
             }
@@ -729,8 +725,7 @@ fn rebase_on_disk(
 
     progress.finish_and_clear();
     println!("Calling Git for on-disk rebase...");
-    let result = run_git(&git_run_info, Some(*event_tx_id), &["rebase", "--continue"])?;
-
+    let result = git_run_info.run(Some(*event_tx_id), &["rebase", "--continue"])?;
     Ok(result)
 }
 

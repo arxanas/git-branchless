@@ -73,7 +73,6 @@ use crate::core::rewrite::{
     ExecuteRebasePlanOptions, RebasePlanBuilder,
 };
 use crate::git::{GitRunInfo, Repo};
-use crate::util::run_git;
 
 #[context("Restacking commits")]
 fn restack_commits(
@@ -254,11 +253,9 @@ pub fn restack(git_run_info: &GitRunInfo) -> anyhow::Result<isize> {
     }
 
     let result = match head_oid {
-        Some(head_oid) => run_git(
-            &git_run_info,
-            Some(event_tx_id),
-            &["checkout", &head_oid.to_string()],
-        )?,
+        Some(head_oid) => {
+            git_run_info.run(Some(event_tx_id), &["checkout", &head_oid.to_string()])?
+        }
         None => result,
     };
 

@@ -26,7 +26,6 @@ use crate::core::metadata::{
 use crate::core::tui::{with_siv, SingletonView};
 use crate::declare_views;
 use crate::git::{GitRunInfo, Repo};
-use crate::util::run_git;
 
 fn render_cursor_smartlog(
     glyphs: &Glyphs,
@@ -696,12 +695,9 @@ fn undo_events(
                 // this case, rather than just update `HEAD` (and be left with a
                 // dirty working copy). The `Git` command will update the event
                 // log appropriately, as it will invoke our hooks.
-                run_git(
-                    git_run_info,
-                    Some(event_tx_id),
-                    &["checkout", "--detach", &new_ref],
-                )
-                .with_context(|| "Updating to previous HEAD location")?;
+                git_run_info
+                    .run(Some(event_tx_id), &["checkout", "--detach", &new_ref])
+                    .with_context(|| "Updating to previous HEAD location")?;
             }
             Event::RefUpdateEvent {
                 timestamp: _,
