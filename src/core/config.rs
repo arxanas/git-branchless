@@ -8,7 +8,7 @@ use crate::git::Repo;
 
 #[context("Getting repo configuration")]
 fn get_config(repo: &Repo) -> anyhow::Result<git2::Config> {
-    let result = repo.config()?;
+    let result = repo.get_config()?;
     Ok(result)
 }
 

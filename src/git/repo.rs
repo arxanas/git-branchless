@@ -138,7 +138,7 @@ impl Repo {
 
     /// Get the configuration object for the repository.
     #[context("Looking up config for repo at: {:?}", self.get_path())]
-    pub fn config(&self) -> anyhow::Result<git2::Config> {
+    pub fn get_config(&self) -> anyhow::Result<git2::Config> {
         self.inner.config().map_err(wrap_git_error)
     }
 
@@ -326,7 +326,11 @@ Either create it, or update the main branch setting by running:
         "Looking up merge-base between {:?} and {:?} for repository at: {:?}",
         lhs, rhs, self.get_path()
     )]
-    pub fn merge_base(&self, lhs: git2::Oid, rhs: git2::Oid) -> anyhow::Result<Option<git2::Oid>> {
+    pub fn find_merge_base(
+        &self,
+        lhs: git2::Oid,
+        rhs: git2::Oid,
+    ) -> anyhow::Result<Option<git2::Oid>> {
         match self.inner.merge_base(lhs, rhs) {
             Ok(merge_base) => Ok(Some(merge_base)),
             Err(err) if err.code() == git2::ErrorCode::NotFound => Ok(None),
@@ -345,7 +349,7 @@ Either create it, or update the main branch setting by running:
 
     /// Find all references in the repository.
     #[context("Looking up all references in repository at: {:?}", self.get_path())]
-    pub fn references(&self) -> anyhow::Result<git2::References> {
+    pub fn get_all_references(&self) -> anyhow::Result<git2::References> {
         self.inner.references().map_err(wrap_git_error)
     }
 
@@ -357,7 +361,7 @@ Either create it, or update the main branch setting by running:
         force,
         log_message
     )]
-    pub fn reference(
+    pub fn create_reference(
         &self,
         name: &str,
         oid: git2::Oid,
@@ -381,7 +385,7 @@ Either create it, or update the main branch setting by running:
 
     /// Get all local branches in the repository.
     #[context("Looking up all local branches for repository at: {:?}", self.get_path())]
-    pub fn get_local_branches(&self) -> anyhow::Result<git2::Branches> {
+    pub fn get_all_local_branches(&self) -> anyhow::Result<git2::Branches> {
         self.inner
             .branches(Some(git2::BranchType::Local))
             .map_err(wrap_git_error)
@@ -403,7 +407,7 @@ Either create it, or update the main branch setting by running:
 
     /// Create a new branch or update an existing branch.
     #[context("Creating branch {:?} for repository at: {:?}", branch_name, self.get_path())]
-    pub fn branch(
+    pub fn create_branch(
         &self,
         branch_name: &str,
         target: &git2::Commit,
@@ -426,7 +430,7 @@ Either create it, or update the main branch setting by running:
 
     /// Create a new commit.
     #[context("Making commit {:?} for repository at: {:?}", message, self.get_path())]
-    pub fn commit(
+    pub fn create_commit(
         &self,
         update_ref: Option<&str>,
         author: &git2::Signature,
@@ -470,7 +474,7 @@ Either create it, or update the main branch setting by running:
     /// Write the provided in-memory index as a tree into Git`s object database.
     /// There must be no merge conflicts in the index.
     #[context("Writing index file to disk for repository at: {:?}", self.get_path())]
-    pub fn write_index_tree(&self, index: &mut git2::Index) -> anyhow::Result<git2::Oid> {
+    pub fn write_index_to_tree(&self, index: &mut git2::Index) -> anyhow::Result<git2::Oid> {
         index.write_tree_to(&self.inner).map_err(wrap_git_error)
     }
 }

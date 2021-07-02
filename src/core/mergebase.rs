@@ -106,7 +106,7 @@ WHERE lhs_oid = :lhs_oid
 
             // Not cached.
             None => {
-                let merge_base_oid = repo.merge_base(lhs_oid, rhs_oid)?;
+                let merge_base_oid = repo.find_merge_base(lhs_oid, rhs_oid)?;
 
                 // Cache computed merge-base OID.
                 self.conn

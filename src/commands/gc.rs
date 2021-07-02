@@ -22,7 +22,7 @@ fn find_dangling_references<'repo>(
     graph: &CommitGraph,
 ) -> anyhow::Result<Vec<git2::Reference<'repo>>> {
     let references = repo
-        .references()
+        .get_all_references()
         .with_context(|| "Getting repo references")?;
 
     let mut result = Vec::new();
@@ -64,7 +64,7 @@ pub fn mark_commit_reachable(repo: &Repo, commit_oid: git2::Oid) -> anyhow::Resu
         git2::Reference::is_valid_name(&ref_name),
         format!("Invalid ref name to mark commit as reachable: {}", ref_name)
     );
-    repo.reference(
+    repo.create_reference(
         &ref_name,
         commit_oid,
         true,
