@@ -139,7 +139,7 @@ impl ToString for RebaseCommand {
 /// Builder for a rebase plan. Unlike regular Git rebases, a `git-branchless`
 /// rebase plan can move multiple unrelated subtrees to unrelated destinations.
 pub struct RebasePlanBuilder<'repo> {
-    repo: &'repo git2::Repository,
+    repo: &'repo Repo,
     graph: &'repo CommitGraph<'repo>,
     merge_base_db: &'repo MergeBaseDb<'repo>,
     main_branch_oid: git2::Oid,
@@ -152,7 +152,7 @@ pub struct RebasePlanBuilder<'repo> {
 impl<'repo> RebasePlanBuilder<'repo> {
     /// Constructor.
     pub fn new(
-        repo: &'repo git2::Repository,
+        repo: &'repo Repo,
         graph: &'repo CommitGraph,
         merge_base_db: &'repo MergeBaseDb,
         main_branch_oid: &MainBranchOid,
@@ -340,7 +340,7 @@ fn update_signature_timestamp(
 #[context("Rebasing in memory")]
 fn rebase_in_memory(
     glyphs: &Glyphs,
-    repo: &git2::Repository,
+    repo: &Repo,
     rebase_plan: &RebasePlan,
     options: &ExecuteRebasePlanOptions,
 ) -> anyhow::Result<RebaseInMemoryResult> {
@@ -386,9 +386,21 @@ fn rebase_in_memory(
                 let current_commit = repo
                     .find_commit(current_oid)
                     .with_context(|| format!("Finding current commit by OID: {:?}", current_oid))?;
+                let current_commit = match current_commit {
+                    Some(commit) => commit,
+                    None => {
+                        anyhow::bail!("Unable to find current commit with OID: {:?}", current_oid)
+                    }
+                };
                 let commit_to_apply = repo
                     .find_commit(*commit_oid)
                     .with_context(|| format!("Finding commit to apply by OID: {:?}", commit_oid))?;
+                let commit_to_apply = match commit_to_apply {
+                    Some(commit) => commit,
+                    None => {
+                        anyhow::bail!("Unable to find commit to apply with OID: {:?}", current_oid)
+                    }
+                };
                 i += 1;
 
                 let commit_description =
@@ -423,12 +435,16 @@ fn rebase_in_memory(
                     "Writing commit data to disk: {}",
                     commit_description
                 ));
-                let commit_tree_oid = rebased_index
-                    .write_tree_to(repo)
+                let commit_tree_oid = repo
+                    .write_index_tree(&mut rebased_index)
                     .with_context(|| "Converting index to tree")?;
-                let commit_tree = repo
-                    .find_tree(commit_tree_oid)
-                    .with_context(|| "Looking up freshly-written tree")?;
+                let commit_tree = match repo.find_tree(commit_tree_oid)? {
+                    Some(tree) => tree,
+                    None => anyhow::bail!(
+                        "Could not find freshly-written tree for OID: {:?}",
+                        commit_tree_oid
+                    ),
+                };
                 let commit_message = match commit_to_apply.message_raw() {
                     Some(message) => message,
                     None => anyhow::bail!(
@@ -492,9 +508,17 @@ pub fn move_branches<'a>(
             None => continue,
         };
         let new_commit = match repo.find_commit(*new_oid) {
-            Ok(commit) => commit,
+            Ok(Some(commit)) => commit,
+            Ok(None) => {
+                branch_move_err = Some(anyhow::anyhow!(
+                    "Could not find newly-rewritten commit with old OID: {:?}, new OID: {:?}",
+                    old_oid,
+                    new_oid
+                ));
+                break 'outer;
+            }
             Err(err) => {
-                branch_move_err = Some(err.into());
+                branch_move_err = Some(err);
                 break 'outer;
             }
         };
@@ -504,7 +528,7 @@ pub fn move_branches<'a>(
         names.sort_unstable();
         for name in names {
             if let Err(err) = repo.branch(name, &new_commit, true) {
-                branch_move_err = Some(err.into());
+                branch_move_err = Some(err);
                 break 'outer;
             }
             branch_moves.push((*old_oid, *new_oid, name))
@@ -554,10 +578,10 @@ fn post_rebase_in_memory(
     }
 
     let head_info = repo.get_head_info()?;
-    if let Some(head_oid) = head_info.oid {
+    if head_info.oid.is_some() {
         // Avoid moving the branch which HEAD points to, or else the index will show
         // a lot of changes in the working copy.
-        repo.set_head_detached(head_oid)?;
+        head_info.detach_head()?;
     }
 
     move_branches(git_run_info, repo, *event_tx_id, &rewritten_oids_map)?;
@@ -578,7 +602,7 @@ fn post_rebase_in_memory(
 
     if let Some(head_oid) = head_info.oid {
         if let Some(new_head_oid) = rewritten_oids_map.get(&head_oid) {
-            let head_target = match head_info.branch_name() {
+            let head_target = match head_info.get_branch_name() {
                 Some(head_branch) => head_branch.to_string(),
                 None => new_head_oid.to_string(),
             };
@@ -597,7 +621,7 @@ fn post_rebase_in_memory(
 #[context("Rebasing on disk")]
 fn rebase_on_disk(
     git_run_info: &GitRunInfo,
-    repo: &git2::Repository,
+    repo: &Repo,
     rebase_plan: &RebasePlan,
     options: &ExecuteRebasePlanOptions,
 ) -> anyhow::Result<isize> {
@@ -614,20 +638,9 @@ fn rebase_on_disk(
     progress.enable_steady_tick(100);
     progress.set_message("Initializing rebase");
 
-    let head = repo.head().with_context(|| "Getting repo `HEAD`")?;
-    let orig_head_name = head.shorthand_bytes();
+    let head_info = repo.get_head_info()?;
 
-    let current_operation_type = {
-        use git2::RepositoryState::*;
-        match repo.state() {
-            Clean | Bisect => None,
-            Merge => Some("merge"),
-            Revert | RevertSequence => Some("revert"),
-            CherryPick | CherryPickSequence => Some("cherry-pick"),
-            Rebase | RebaseInteractive | RebaseMerge => Some("rebase"),
-            ApplyMailbox | ApplyMailboxOrRebase => Some("am"),
-        }
-    };
+    let current_operation_type = repo.get_current_operation_type();
     if let Some(current_operation_type) = current_operation_type {
         progress.finish_and_clear();
         println!(
@@ -641,12 +654,7 @@ fn rebase_on_disk(
         return Ok(1);
     }
 
-    let repo_head_file_path = repo.path().join("HEAD");
-    let orig_head_file_path = repo.path().join("ORIG_HEAD");
-    std::fs::copy(&repo_head_file_path, &orig_head_file_path)
-        .with_context(|| format!("Copying `HEAD` to: {:?}", &orig_head_file_path))?;
-
-    let rebase_merge_dir = repo.path().join("rebase-merge");
+    let rebase_merge_dir = repo.get_path().join("rebase-merge");
     std::fs::create_dir_all(&rebase_merge_dir).with_context(|| {
         format!(
             "Creating rebase-merge directory at: {:?}",
@@ -665,20 +673,29 @@ fn rebase_on_disk(
     std::fs::write(&interactive_file_path, "")
         .with_context(|| format!("Writing interactive to: {:?}", &interactive_file_path))?;
 
-    // `head-name` appears to be purely for UX concerns. Git will warn if the
-    // file isn't found.
-    let head_name_file_path = rebase_merge_dir.join("head-name");
-    std::fs::write(&head_name_file_path, orig_head_name)
+    if head_info.oid.is_some() {
+        let repo_head_file_path = repo.get_path().join("HEAD");
+        let orig_head_file_path = repo.get_path().join("ORIG_HEAD");
+        std::fs::copy(&repo_head_file_path, &orig_head_file_path)
+            .with_context(|| format!("Copying `HEAD` to: {:?}", &orig_head_file_path))?;
+        // `head-name` appears to be purely for UX concerns. Git will warn if the
+        // file isn't found.
+        let head_name_file_path = rebase_merge_dir.join("head-name");
+        std::fs::write(
+            &head_name_file_path,
+            head_info.get_branch_name().unwrap_or("detached HEAD"),
+        )
         .with_context(|| format!("Writing head-name to: {:?}", &head_name_file_path))?;
 
-    // Dummy `head` file. We will `reset` to the appropriate commit as soon as
-    // we start the rebase.
-    let rebase_merge_head_file_path = rebase_merge_dir.join("head");
-    std::fs::write(
-        &rebase_merge_head_file_path,
-        rebase_plan.first_dest_oid.to_string(),
-    )
-    .with_context(|| format!("Writing head to: {:?}", &rebase_merge_head_file_path))?;
+        // Dummy `head` file. We will `reset` to the appropriate commit as soon as
+        // we start the rebase.
+        let rebase_merge_head_file_path = rebase_merge_dir.join("head");
+        std::fs::write(
+            &rebase_merge_head_file_path,
+            rebase_plan.first_dest_oid.to_string(),
+        )
+        .with_context(|| format!("Writing head to: {:?}", &rebase_merge_head_file_path))?;
+    }
 
     // Dummy `onto` file. We may be rebasing onto a set of unrelated
     // nodes in the same operation, so there may not be a single "onto" node to
@@ -727,13 +744,14 @@ fn rebase_on_disk(
 }
 
 #[context("Describing commit {}", commit_oid.to_string())]
-fn friendly_describe_commit(
-    repo: &git2::Repository,
-    commit_oid: git2::Oid,
-) -> anyhow::Result<StyledString> {
+fn friendly_describe_commit(repo: &Repo, commit_oid: git2::Oid) -> anyhow::Result<StyledString> {
     let commit = repo
         .find_commit(commit_oid)
         .with_context(|| "Looking up commit to describe")?;
+    let commit = match commit {
+        Some(commit) => commit,
+        None => anyhow::bail!("Could not find commit with OID: {:?}", commit_oid),
+    };
     let description = render_commit_metadata(
         &commit,
         &mut [

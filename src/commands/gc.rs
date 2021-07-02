@@ -18,7 +18,7 @@ use crate::core::mergebase::MergeBaseDb;
 use crate::git::Repo;
 
 fn find_dangling_references<'repo>(
-    repo: &'repo git2::Repository,
+    repo: &'repo Repo,
     graph: &CommitGraph,
 ) -> anyhow::Result<Vec<git2::Reference<'repo>>> {
     let references = repo
@@ -58,7 +58,7 @@ fn find_dangling_references<'repo>(
 /// * `repo`: The Git repository.
 /// * `commit_oid`: The commit OID to mark as reachable.
 #[context("Marking commit reachable: {:?}", commit_oid)]
-pub fn mark_commit_reachable(repo: &git2::Repository, commit_oid: git2::Oid) -> anyhow::Result<()> {
+pub fn mark_commit_reachable(repo: &Repo, commit_oid: git2::Oid) -> anyhow::Result<()> {
     let ref_name = format!("refs/branchless/{}", commit_oid.to_string());
     anyhow::ensure!(
         git2::Reference::is_valid_name(&ref_name),
