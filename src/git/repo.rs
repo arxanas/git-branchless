@@ -395,10 +395,18 @@ Either create it, or update the main branch setting by running:
 
     /// Get all local branches in the repository.
     #[context("Looking up all local branches for repository at: {:?}", self.get_path())]
-    pub fn get_all_local_branches(&self) -> anyhow::Result<git2::Branches> {
-        self.inner
+    pub fn get_all_local_branches(&self) -> anyhow::Result<Vec<git2::Branch>> {
+        let mut all_branches = Vec::new();
+        for branch in self
+            .inner
             .branches(Some(git2::BranchType::Local))
             .map_err(wrap_git_error)
+            .with_context(|| "Iterating over all local branches")?
+        {
+            let (branch, _branch_type) = branch.with_context(|| "Accessing individual branch")?;
+            all_branches.push(branch);
+        }
+        Ok(all_branches)
     }
 
     /// Look up the branch with the given name. Returns `None` if not found.

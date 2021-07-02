@@ -58,7 +58,6 @@
 use std::collections::HashMap;
 use std::time::SystemTime;
 
-use anyhow::Context;
 use fn_error_context::context;
 use log::info;
 
@@ -168,8 +167,7 @@ fn restack_branches(
     )?;
 
     let mut rewritten_oids = HashMap::new();
-    for branch_info in repo.get_all_local_branches()? {
-        let (branch, _branch_type) = branch_info.with_context(|| "Getting branch info")?;
+    for branch in repo.get_all_local_branches()? {
         let branch_target = match branch.get().target() {
             Some(branch_target) => branch_target,
             None => {
