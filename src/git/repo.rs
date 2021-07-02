@@ -18,7 +18,11 @@ use anyhow::Context;
 use fn_error_context::context;
 
 use crate::core::config::get_main_branch_name;
-use crate::util::wrap_git_error;
+
+/// Convert a `git2::Error` into an `anyhow::Error` with an auto-generated message.
+pub fn wrap_git_error(error: git2::Error) -> anyhow::Error {
+    anyhow::anyhow!("Git error {:?}: {}", error.code(), error.message())
+}
 
 /// Wrapper around `git2::Repository`.
 pub struct Repo {

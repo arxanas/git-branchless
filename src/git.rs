@@ -3,5 +3,5 @@
 mod repo;
 mod run;
 
-pub use repo::{GitVersion, Repo};
+pub use repo::{wrap_git_error, GitVersion, Repo};
 pub use run::GitRunInfo;
