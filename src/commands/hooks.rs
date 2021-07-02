@@ -24,8 +24,8 @@ use crate::core::eventlog::{
 use crate::core::formatting::Pluralize;
 use crate::core::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
 use crate::core::mergebase::MergeBaseDb;
-use crate::core::repo::Repo;
 use crate::core::rewrite::find_abandoned_children;
+use crate::git::Repo;
 
 /// Detect if an interactive rebase has started but not completed.
 ///

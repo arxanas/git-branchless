@@ -20,7 +20,7 @@ use crate::core::metadata::{
     CommitOidProvider, DifferentialRevisionProvider, HiddenExplanationProvider,
     RelativeTimeProvider,
 };
-use crate::core::repo::Repo;
+use crate::git::Repo;
 
 /// Split fully-independent subgraphs into multiple graphs.
 ///

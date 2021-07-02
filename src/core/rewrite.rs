@@ -12,6 +12,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 
 use crate::commands::gc::mark_commit_reachable;
 use crate::core::formatting::printable_styled_string;
+use crate::git::Repo;
 use crate::util::{run_git, run_hook, GitRunInfo};
 
 use super::eventlog::{Event, EventCursor, EventReplayer, EventTransactionId};
@@ -19,7 +20,6 @@ use super::formatting::Glyphs;
 use super::graph::{find_path_to_merge_base, CommitGraph, MainBranchOid};
 use super::mergebase::MergeBaseDb;
 use super::metadata::{render_commit_metadata, CommitMessageProvider, CommitOidProvider};
-use super::repo::Repo;
 
 /// For a rewritten commit, find the newest version of the commit.
 ///

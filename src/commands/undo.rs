@@ -23,9 +23,9 @@ use crate::core::metadata::{
     render_commit_metadata, BranchesProvider, CommitMessageProvider, CommitOidProvider,
     DifferentialRevisionProvider, HiddenExplanationProvider, RelativeTimeProvider,
 };
-use crate::core::repo::Repo;
 use crate::core::tui::{with_siv, SingletonView};
 use crate::declare_views;
+use crate::git::Repo;
 use crate::util::{run_git, GitRunInfo};
 
 fn render_cursor_smartlog(
@@ -808,7 +808,7 @@ pub mod testing {
     use crate::core::eventlog::{EventCursor, EventLogDb, EventReplayer};
     use crate::core::formatting::Glyphs;
     use crate::core::mergebase::MergeBaseDb;
-    use crate::core::repo::Repo;
+    use crate::git::Repo;
     use crate::util::GitRunInfo;
 
     pub fn select_past_event(

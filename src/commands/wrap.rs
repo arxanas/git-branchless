@@ -8,8 +8,8 @@ use std::time::SystemTime;
 use anyhow::Context;
 
 use crate::core::eventlog::{EventLogDb, EventTransactionId, BRANCHLESS_TRANSACTION_ID_ENV_VAR};
-use crate::core::repo::Repo;
-use crate::util::{GitRunInfo};
+use crate::git::Repo;
+use crate::util::GitRunInfo;
 
 fn pass_through_git_command<S: AsRef<str> + std::fmt::Debug>(
     git_run_info: &GitRunInfo,

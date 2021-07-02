@@ -9,7 +9,7 @@ use std::ops::Deref;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
-use crate::core::repo::Repo;
+use crate::git::Repo;
 use crate::util::{get_sh, GitRunInfo, GitVersion};
 use anyhow::Context;
 use fn_error_context::context;

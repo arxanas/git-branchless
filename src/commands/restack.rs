@@ -68,11 +68,11 @@ use crate::core::eventlog::{EventLogDb, EventReplayer};
 use crate::core::formatting::Glyphs;
 use crate::core::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
 use crate::core::mergebase::MergeBaseDb;
-use crate::core::repo::Repo;
 use crate::core::rewrite::{
     execute_rebase_plan, find_abandoned_children, find_rewrite_target, move_branches,
     ExecuteRebasePlanOptions, RebasePlanBuilder,
 };
+use crate::git::Repo;
 use crate::util::{run_git, GitRunInfo};
 
 #[context("Restacking commits")]
