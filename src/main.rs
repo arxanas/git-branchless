@@ -236,8 +236,8 @@ fn main() -> anyhow::Result<()> {
                 },
                 None => git_run_info,
             };
-            wrap::wrap(&git_run_info, args.as_slice())?;
-            0
+            let exit_code = wrap::wrap(&git_run_info, args.as_slice())?;
+            exit_code
         }
 
         Opts::HookPostRewrite { rewrite_type } => {
