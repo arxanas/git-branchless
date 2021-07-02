@@ -45,7 +45,7 @@ fn recurse_on_commits<'repo, F: Fn(&Node) -> bool>(
     commits: Vec<git2::Commit<'repo>>,
     condition: F,
 ) -> anyhow::Result<Vec<git2::Commit<'repo>>> {
-    let head_oid = repo.get_head_oid()?;
+    let head_oid = repo.get_head_info()?.oid;
     let main_branch_oid = repo.get_main_branch_oid()?;
     let branch_oid_to_names = repo.get_branch_oid_to_names()?;
     let graph = make_graph(

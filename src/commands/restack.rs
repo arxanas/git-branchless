@@ -86,7 +86,7 @@ fn restack_commits(
 ) -> anyhow::Result<isize> {
     let event_replayer = EventReplayer::from_event_log_db(event_log_db)?;
     let event_cursor = event_replayer.make_default_cursor();
-    let head_oid = repo.get_head_oid()?;
+    let head_oid = repo.get_head_info()?.oid;
     let main_branch_oid = repo.get_main_branch_oid()?;
     let branch_oid_to_names = repo.get_branch_oid_to_names()?;
     let graph = make_graph(
@@ -154,7 +154,7 @@ fn restack_branches(
     options: &ExecuteRebasePlanOptions,
 ) -> anyhow::Result<isize> {
     let event_replayer = EventReplayer::from_event_log_db(event_log_db)?;
-    let head_oid = repo.get_head_oid()?;
+    let head_oid = repo.get_head_info()?.oid;
     let main_branch_oid = repo.get_main_branch_oid()?;
     let branch_oid_to_names = repo.get_branch_oid_to_names()?;
     let graph = make_graph(
@@ -219,7 +219,7 @@ pub fn restack(git_run_info: &GitRunInfo) -> anyhow::Result<isize> {
     let merge_base_db = MergeBaseDb::new(&conn)?;
     let event_log_db = EventLogDb::new(&conn)?;
     let event_tx_id = event_log_db.make_transaction_id(now, "restack")?;
-    let head_oid = repo.get_head_oid()?;
+    let head_oid = repo.get_head_info()?.oid;
 
     let options = ExecuteRebasePlanOptions {
         now,

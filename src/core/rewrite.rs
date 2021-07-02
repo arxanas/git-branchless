@@ -12,7 +12,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 
 use crate::commands::gc::mark_commit_reachable;
 use crate::core::formatting::printable_styled_string;
-use crate::util::{get_repo_head, run_git, run_hook, GitRunInfo};
+use crate::util::{run_git, run_hook, GitRunInfo};
 
 use super::eventlog::{Event, EventCursor, EventReplayer, EventTransactionId};
 use super::formatting::Glyphs;
@@ -555,14 +555,12 @@ fn post_rebase_in_memory(
         mark_commit_reachable(repo, *new_oid)?;
     }
 
-    let head = get_repo_head(repo)?;
-    let head_branch = head
-        .symbolic_target()
-        .and_then(|s| s.strip_prefix("refs/heads/"));
-    let head_oid = head.peel_to_commit()?.id();
-    // Avoid moving the branch which HEAD points to, or else the index will show
-    // a lot of changes in the working copy.
-    repo.set_head_detached(head_oid)?;
+    let head_info = repo.get_head_info()?;
+    if let Some(head_oid) = head_info.oid {
+        // Avoid moving the branch which HEAD points to, or else the index will show
+        // a lot of changes in the working copy.
+        repo.set_head_detached(head_oid)?;
+    }
 
     move_branches(git_run_info, repo, *event_tx_id, &rewritten_oids_map)?;
 
@@ -581,18 +579,20 @@ fn post_rebase_in_memory(
         Some(post_rewrite_stdin),
     )?;
 
-    if let Some(new_head_oid) = rewritten_oids_map.get(&head_oid) {
-        let head_target = match head_branch {
-            Some(head_branch) => head_branch.to_string(),
-            None => new_head_oid.to_string(),
-        };
-        let result = run_git(
-            git_run_info,
-            Some(*event_tx_id),
-            &["checkout", &head_target],
-        )?;
-        if result != 0 {
-            return Ok(result);
+    if let Some(head_oid) = head_info.oid {
+        if let Some(new_head_oid) = rewritten_oids_map.get(&head_oid) {
+            let head_target = match head_info.branch_name() {
+                Some(head_branch) => head_branch.to_string(),
+                None => new_head_oid.to_string(),
+            };
+            let result = run_git(
+                git_run_info,
+                Some(*event_tx_id),
+                &["checkout", &head_target],
+            )?;
+            if result != 0 {
+                return Ok(result);
+            }
         }
     }
 
@@ -852,7 +852,7 @@ mod tests {
         let event_log_db = EventLogDb::new(&conn)?;
         let event_replayer = EventReplayer::from_event_log_db(&event_log_db)?;
         let event_cursor = event_replayer.make_default_cursor();
-        let head_oid = repo.get_head_oid()?;
+        let head_oid = repo.get_head_info()?.oid;
         let main_branch_oid = repo.get_main_branch_oid()?;
         let branch_oid_to_names = repo.get_branch_oid_to_names()?;
         let graph = make_graph(

@@ -142,7 +142,7 @@ pub fn next(
     let event_log_db = EventLogDb::new(&conn)?;
     let event_replayer = EventReplayer::from_event_log_db(&event_log_db)?;
 
-    let head_oid = match repo.get_head_oid()? {
+    let head_oid = match repo.get_head_info()?.oid {
         Some(head_oid) => head_oid,
         None => anyhow::bail!("No HEAD present; cannot calculate next commit"),
     };

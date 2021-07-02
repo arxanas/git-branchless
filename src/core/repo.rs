@@ -56,6 +56,45 @@ impl From<git2::Repository> for Repo {
     }
 }
 
+/// Information about the current `HEAD` of the repository.
+///
+/// `HEAD` is typically a symbolic reference, which means that it's a reference
+/// that points to another reference. Usually, the other reference is a branch.
+/// In this way, you can check out a branch and move the branch (e.g. by
+/// committing) and `HEAD` is also effectively updated (you can traverse the
+/// pointed-to reference and get the current commit OID).
+///
+/// There are a couple of interesting edge cases to worry about:
+///
+/// - `HEAD` is detached. This means that it's pointing directly to a commit and
+/// is not a symbolic reference for the time being. This is uncommon in normal
+/// Git usage, but very common in `git-branchless` usage.
+/// - `HEAD` is unborn. This means that it doesn't even exist yet. This happens
+/// when a repository has been freshly initialized, but no commits have been
+/// made, for example.
+pub struct HeadInfo {
+    /// The OID of the commit that `HEAD` points to. If `HEAD` is unborn, then
+    /// this is `None`.
+    pub oid: Option<git2::Oid>,
+
+    /// The name of the reference that `HEAD` points to symbolically. If `HEAD`
+    /// is detached, then this is `None`.
+    reference_name: Option<String>,
+}
+
+impl HeadInfo {
+    /// Get the name of the branch, if any. Returns `None` if `HEAD` is
+    /// detached.  The `refs/heads/` prefix, if any, is stripped.
+    pub fn branch_name(&self) -> Option<&str> {
+        self.reference_name
+            .as_ref()
+            .map(|name| match name.strip_prefix("refs/heads/") {
+                Some(branch_name) => branch_name,
+                None => &name,
+            })
+    }
+}
+
 impl Repo {
     /// Get the Git repository associated with the given directory.
     #[context("Getting Git repository for directory: {:?}", &path)]
@@ -83,20 +122,38 @@ impl Repo {
     }
 
     /// Get the OID for the repository's `HEAD` reference.
-    #[context("Getting HEAD OID for repository at : {:?}", self.repo.path())]
-    pub fn get_head_oid(&self) -> anyhow::Result<Option<git2::Oid>> {
-        let head_ref = match self.repo.head() {
-            Ok(head_ref) => Ok(head_ref),
-            Err(err)
-                if err.code() == git2::ErrorCode::NotFound
-                    || err.code() == git2::ErrorCode::UnbornBranch =>
-            {
-                return Ok(None)
+    #[context("Getting `HEAD` info for repository at: {:?}", self.repo.path())]
+    pub fn get_head_info(&self) -> anyhow::Result<HeadInfo> {
+        let head_reference = match self.repo.find_reference("HEAD") {
+            Err(err) if err.code() == git2::ErrorCode::NotFound => None,
+            Err(err) => return Err(wrap_git_error(err)),
+            Ok(result) => Some(result),
+        };
+        let (head_oid, reference_name) = match &head_reference {
+            Some(head_reference) => {
+                let head_oid = head_reference
+                    .peel_to_commit()
+                    .with_context(|| "Resolving `HEAD` reference")?
+                    .id();
+                let reference_name = match head_reference.kind() {
+                    Some(git2::ReferenceType::Direct) => None,
+                    Some(git2::ReferenceType::Symbolic) => match head_reference.symbolic_target() {
+                        Some(name) => Some(name.to_string()),
+                        None => anyhow::bail!(
+                            "`HEAD` reference was resolved to OID: {:?}, but its name could not be decoded: {:?}",
+                            head_oid, head_reference.name_bytes()
+                        ),
+                    }
+                    None => anyhow::bail!("Unknown `HEAD` reference type")
+                };
+                (Some(head_oid), reference_name)
             }
-            Err(err) => Err(err),
-        }?;
-        let head_commit = head_ref.peel_to_commit()?;
-        Ok(Some(head_commit.id()))
+            None => (None, None),
+        };
+        Ok(HeadInfo {
+            oid: head_oid,
+            reference_name,
+        })
     }
 
     /// Get the OID corresponding to the main branch.
