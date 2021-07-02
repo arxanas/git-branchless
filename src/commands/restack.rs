@@ -72,8 +72,8 @@ use crate::core::rewrite::{
     execute_rebase_plan, find_abandoned_children, find_rewrite_target, move_branches,
     ExecuteRebasePlanOptions, RebasePlanBuilder,
 };
-use crate::git::Repo;
-use crate::util::{run_git, GitRunInfo};
+use crate::git::{GitRunInfo, Repo};
+use crate::util::run_git;
 
 #[context("Restacking commits")]
 fn restack_commits(

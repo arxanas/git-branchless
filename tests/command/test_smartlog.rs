@@ -1,5 +1,5 @@
+use branchless::git::GitRunInfo;
 use branchless::testing::{get_path_to_git, make_git, Git, GitInitOptions, GitRunOptions};
-use branchless::util::GitRunInfo;
 
 #[test]
 fn test_init_smartlog() -> anyhow::Result<()> {

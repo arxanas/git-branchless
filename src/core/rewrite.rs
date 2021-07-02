@@ -12,8 +12,8 @@ use indicatif::{ProgressBar, ProgressStyle};
 
 use crate::commands::gc::mark_commit_reachable;
 use crate::core::formatting::printable_styled_string;
-use crate::git::Repo;
-use crate::util::{run_git, run_hook, GitRunInfo};
+use crate::git::{GitRunInfo, Repo};
+use crate::util::{run_git, run_hook};
 
 use super::eventlog::{Event, EventCursor, EventReplayer, EventTransactionId};
 use super::formatting::Glyphs;

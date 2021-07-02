@@ -1,6 +1,5 @@
 //! Utility functions.
 
-use std::collections::HashMap;
 use std::convert::TryInto;
 use std::ffi::OsString;
 use std::io::{stderr, stdout, Write};
@@ -13,23 +12,11 @@ use fn_error_context::context;
 use git2::ErrorCode;
 
 use crate::core::eventlog::{EventTransactionId, BRANCHLESS_TRANSACTION_ID_ENV_VAR};
+use crate::git::GitRunInfo;
 
 /// Convert a `git2::Error` into an `anyhow::Error` with an auto-generated message.
 pub fn wrap_git_error(error: git2::Error) -> anyhow::Error {
     anyhow::anyhow!("Git error {:?}: {}", error.code(), error.message())
-}
-
-/// Path to the `git` executable on disk to be executed.
-#[derive(Clone, Debug)]
-pub struct GitRunInfo {
-    /// The path to the Git executable on disk.
-    pub path_to_git: PathBuf,
-
-    /// The working directory that the Git executable should be run in.
-    pub working_directory: PathBuf,
-
-    /// The environment variables that should be passed to the Git process.
-    pub env: HashMap<OsString, OsString>,
 }
 
 /// Run Git in a subprocess, and inform the user.

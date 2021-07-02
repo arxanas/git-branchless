@@ -10,8 +10,8 @@ use fn_error_context::context;
 use log::warn;
 
 use crate::core::config::get_core_hooks_path;
-use crate::git::Repo;
-use crate::util::{run_git_silent, wrap_git_error, GitRunInfo, GitVersion};
+use crate::git::{GitRunInfo, Repo};
+use crate::util::{run_git_silent, wrap_git_error, GitVersion};
 
 const ALL_HOOKS: &[(&str, &str)] = &[
     (

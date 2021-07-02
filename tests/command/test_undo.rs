@@ -10,9 +10,8 @@ use branchless::core::mergebase::MergeBaseDb;
 use branchless::core::tui::testing::{
     screen_to_string, CursiveTestingBackend, CursiveTestingEvent,
 };
-use branchless::git::Repo;
+use branchless::git::{GitRunInfo, Repo};
 use branchless::testing::{make_git, Git};
-use branchless::util::GitRunInfo;
 
 use cursive::event::Key;
 use cursive::CursiveRunnable;
