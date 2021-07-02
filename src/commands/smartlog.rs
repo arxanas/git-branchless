@@ -64,7 +64,7 @@ fn split_commit_graph_by_roots(
             // The commits were not orderable (pathlogical situation). Let's
             // just order them by timestamp in that case to produce a consistent
             // and reasonable guess at the intended topological ordering.
-            Some(_) | None => match lhs_commit.time().cmp(&rhs_commit.time()) {
+            Some(_) | None => match lhs_commit.get_time().cmp(&rhs_commit.get_time()) {
                 result @ Ordering::Less | result @ Ordering::Greater => result,
                 Ordering::Equal => lhs_oid.cmp(&rhs_oid),
             },
@@ -88,7 +88,7 @@ fn get_child_output(
     let current_node = &graph[&current_oid];
     let is_head = {
         let HeadOid(head_oid) = head_oid;
-        Some(current_node.commit.id()) == *head_oid
+        Some(current_node.commit.get_oid()) == *head_oid
     };
 
     let text = render_commit_metadata(&current_node.commit, commit_metadata_providers)?;
@@ -197,13 +197,14 @@ fn get_output(
     let has_real_parent = |oid: git2::Oid, parent_oid: git2::Oid| -> bool {
         graph[&oid]
             .commit
-            .parent_ids()
+            .get_parent_oids()
+            .into_iter()
             .any(|parent_oid2| parent_oid2 == parent_oid)
     };
 
     for (root_idx, root_oid) in root_oids.iter().enumerate() {
         let root_node = &graph[root_oid];
-        if root_node.commit.parent_count() > 0 {
+        if root_node.commit.get_parent_count() > 0 {
             let line = if root_idx > 0 && has_real_parent(*root_oid, root_oids[root_idx - 1]) {
                 StyledString::plain(glyphs.line.to_owned())
             } else {

@@ -62,8 +62,8 @@ fn advance_towards_main_branch(
     };
 
     for (i, commit) in (1..).zip(path.iter().rev().skip(1)) {
-        if graph.contains_key(&commit.id()) {
-            return Ok((i, commit.id()));
+        if graph.contains_key(&commit.get_oid()) {
+            return Ok((i, commit.get_oid()));
         }
     }
 

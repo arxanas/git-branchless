@@ -19,7 +19,7 @@ use crate::core::config::{
     get_commit_metadata_branches, get_commit_metadata_differential_revision,
     get_commit_metadata_relative_time,
 };
-use crate::git::Repo;
+use crate::git::{Commit, Repo};
 
 use super::eventlog::{Event, EventCursor, EventReplayer};
 use super::formatting::StyledStringBuilder;
@@ -32,13 +32,13 @@ pub trait CommitMetadataProvider {
     ///
     /// A return value of `None` indicates that this commit metadata provider was
     /// inapplicable for the provided commit.
-    fn describe_commit(&mut self, commit: &git2::Commit) -> anyhow::Result<Option<StyledString>>;
+    fn describe_commit(&mut self, commit: &Commit) -> anyhow::Result<Option<StyledString>>;
 }
 
 /// Get the complete description for a given commit.
-#[context("Rendering commit metadata for commit {:?}", commit.id())]
+#[context("Rendering commit metadata for commit {:?}", commit.get_oid())]
 pub fn render_commit_metadata(
-    commit: &git2::Commit,
+    commit: &Commit,
     commit_metadata_providers: &mut [&mut dyn CommitMetadataProvider],
 ) -> anyhow::Result<StyledString> {
     let descriptions = commit_metadata_providers
@@ -64,9 +64,9 @@ impl CommitOidProvider {
 }
 
 impl CommitMetadataProvider for CommitOidProvider {
-    #[context("Providing OID metadata for commit {:?}", commit.id())]
-    fn describe_commit(&mut self, commit: &git2::Commit) -> anyhow::Result<Option<StyledString>> {
-        let oid = commit.id();
+    #[context("Providing OID metadata for commit {:?}", commit.get_oid())]
+    fn describe_commit(&mut self, commit: &Commit) -> anyhow::Result<Option<StyledString>> {
+        let oid = commit.get_oid();
         let oid = &oid.to_string()[..8];
         let oid = if self.use_color {
             StyledString::styled(oid, BaseColor::Yellow.dark())
@@ -88,9 +88,11 @@ impl CommitMessageProvider {
 }
 
 impl CommitMetadataProvider for CommitMessageProvider {
-    #[context("Providing message metadata for commit {:?}", commit.id())]
-    fn describe_commit(&mut self, commit: &git2::Commit) -> anyhow::Result<Option<StyledString>> {
-        Ok(commit.summary().map(StyledString::plain))
+    #[context("Providing message metadata for commit {:?}", commit.get_oid())]
+    fn describe_commit(&mut self, commit: &Commit) -> anyhow::Result<Option<StyledString>> {
+        Ok(Some(StyledString::plain(
+            commit.get_summary()?.to_string_lossy(),
+        )))
     }
 }
 
@@ -117,10 +119,10 @@ impl<'a> HiddenExplanationProvider<'a> {
 }
 
 impl<'a> CommitMetadataProvider for HiddenExplanationProvider<'a> {
-    fn describe_commit(&mut self, commit: &git2::Commit) -> anyhow::Result<Option<StyledString>> {
+    fn describe_commit(&mut self, commit: &Commit) -> anyhow::Result<Option<StyledString>> {
         let event = self
             .event_replayer
-            .get_cursor_commit_latest_event(self.event_cursor, commit.id());
+            .get_cursor_commit_latest_event(self.event_cursor, commit.get_oid());
 
         let event = match event {
             Some(event) => event,
@@ -133,7 +135,7 @@ impl<'a> CommitMetadataProvider for HiddenExplanationProvider<'a> {
                     self.graph,
                     self.event_replayer,
                     self.event_cursor,
-                    commit.id(),
+                    commit.get_oid(),
                 );
                 rewrite_target.map(|rewritten_oid| {
                     StyledString::styled(
@@ -177,13 +179,13 @@ impl<'a> BranchesProvider<'a> {
 }
 
 impl<'a> CommitMetadataProvider for BranchesProvider<'a> {
-    #[context("Providing branch metadata for commit {:?}", commit.id())]
-    fn describe_commit(&mut self, commit: &git2::Commit) -> anyhow::Result<Option<StyledString>> {
+    #[context("Providing branch metadata for commit {:?}", commit.get_oid())]
+    fn describe_commit(&mut self, commit: &Commit) -> anyhow::Result<Option<StyledString>> {
         if !self.is_enabled {
             return Ok(None);
         }
 
-        let branch_names: HashSet<&str> = match self.branch_oid_to_names.get(&commit.id()) {
+        let branch_names: HashSet<&str> = match self.branch_oid_to_names.get(&commit.get_oid()) {
             Some(branch_names) => branch_names
                 .iter()
                 .map(|branch_name| branch_name.as_ref())
@@ -230,26 +232,19 @@ $",
         )
         .expect("Failed to compile DifferentialRevisionProvider regex");
     }
-    let captures = RE.captures(message)?;
+    let captures = RE.captures(&message)?;
     let diff_number = &captures["diff"];
-
-    // HACK: not sure why the matched string doesn't live as long as `message`;
-    // we should be able to return it directly here.
     Some(diff_number.to_owned())
 }
 
 impl CommitMetadataProvider for DifferentialRevisionProvider {
-    #[context("Providing Differential revision metadata for commit {:?}", commit.id())]
-    fn describe_commit(&mut self, commit: &git2::Commit) -> anyhow::Result<Option<StyledString>> {
+    #[context("Providing Differential revision metadata for commit {:?}", commit.get_oid())]
+    fn describe_commit(&mut self, commit: &Commit) -> anyhow::Result<Option<StyledString>> {
         if !self.is_enabled {
             return Ok(None);
         }
 
-        let message = match commit.message() {
-            Some(message) => message,
-            None => return Ok(None),
-        };
-        let diff_number = match extract_diff_number(message) {
+        let diff_number = match extract_diff_number(&commit.get_message_raw().to_string_lossy()) {
             Some(diff_number) => diff_number,
             None => return Ok(None),
         };
@@ -316,14 +311,14 @@ impl RelativeTimeProvider {
 }
 
 impl CommitMetadataProvider for RelativeTimeProvider {
-    #[context("Providing relative time metadata for commit {:?}", commit.id())]
-    fn describe_commit(&mut self, commit: &git2::Commit) -> anyhow::Result<Option<StyledString>> {
+    #[context("Providing relative time metadata for commit {:?}", commit.get_oid())]
+    fn describe_commit(&mut self, commit: &Commit) -> anyhow::Result<Option<StyledString>> {
         if !self.is_enabled {
             return Ok(None);
         }
 
-        let previous_time =
-            SystemTime::UNIX_EPOCH.add(Duration::from_secs(commit.time().seconds().try_into()?));
+        let previous_time = SystemTime::UNIX_EPOCH
+            .add(Duration::from_secs(commit.get_time().seconds().try_into()?));
         let description = Self::describe_time_delta(self.now, previous_time)?;
         let result = StyledString::styled(description, BaseColor::Green.dark());
         Ok(Some(result))

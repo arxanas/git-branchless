@@ -71,7 +71,7 @@ pub fn r#move(
     };
     let (source_oid, dest_oid) = match resolve_commits(&repo, vec![source, dest])? {
         ResolveCommitsResult::Ok { commits } => match &commits.as_slice() {
-            [source_commit, dest_commit] => (source_commit.id(), dest_commit.id()),
+            [source_commit, dest_commit] => (source_commit.get_oid(), dest_commit.get_oid()),
             _ => anyhow::bail!("Unexpected number of returns values from resolve_commits"),
         },
         ResolveCommitsResult::CommitNotFound { commit } => {
