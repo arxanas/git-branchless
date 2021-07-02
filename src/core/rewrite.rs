@@ -436,7 +436,7 @@ fn rebase_in_memory(
                     commit_description
                 ));
                 let commit_tree_oid = repo
-                    .write_index_tree(&mut rebased_index)
+                    .write_index_to_tree(&mut rebased_index)
                     .with_context(|| "Converting index to tree")?;
                 let commit_tree = match repo.find_tree(commit_tree_oid)? {
                     Some(tree) => tree,
@@ -460,7 +460,7 @@ fn rebase_in_memory(
                     update_signature_timestamp(*now, commit_to_apply.committer())?
                 };
                 let rebased_commit_oid = repo
-                    .commit(
+                    .create_commit(
                         None,
                         &commit_to_apply.author(),
                         &committer_signature,
@@ -527,7 +527,7 @@ pub fn move_branches<'a>(
         // Sort for determinism in tests.
         names.sort_unstable();
         for name in names {
-            if let Err(err) = repo.branch(name, &new_commit, true) {
+            if let Err(err) = repo.create_branch(name, &new_commit, true) {
                 branch_move_err = Some(err);
                 break 'outer;
             }

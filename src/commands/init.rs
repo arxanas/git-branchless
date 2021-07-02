@@ -367,7 +367,7 @@ fn unset_configs(config: &mut git2::Config) -> anyhow::Result<()> {
 pub fn init(git_run_info: &GitRunInfo) -> anyhow::Result<()> {
     let mut in_ = BufReader::new(stdin());
     let mut repo = Repo::from_current_dir()?;
-    let mut config = repo.config().with_context(|| "Getting repo config")?;
+    let mut config = repo.get_config().with_context(|| "Getting repo config")?;
     set_configs(&mut in_, &repo, &mut config)?;
     install_hooks(&repo)?;
     install_aliases(&mut repo, &mut config, git_run_info)?;
@@ -388,7 +388,7 @@ pub fn init(git_run_info: &GitRunInfo) -> anyhow::Result<()> {
 #[context("Uninstall git-branchless for repo")]
 pub fn uninstall() -> anyhow::Result<()> {
     let repo = Repo::from_current_dir()?;
-    let mut config = repo.config().with_context(|| "Getting repo config")?;
+    let mut config = repo.get_config().with_context(|| "Getting repo config")?;
     unset_configs(&mut config)?;
     uninstall_hooks(&repo)?;
     uninstall_aliases(&mut config)?;

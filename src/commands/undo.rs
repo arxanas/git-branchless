@@ -748,7 +748,7 @@ fn undo_events(
             } => {
                 // Create or update the given reference.
                 let new_ref = new_ref.parse()?;
-                repo.reference(&ref_name, new_ref, true, "branchless undo")?;
+                repo.create_reference(&ref_name, new_ref, true, "branchless undo")?;
             }
             Event::CommitEvent { .. }
             | Event::HideEvent { .. }

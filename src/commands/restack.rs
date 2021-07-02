@@ -168,7 +168,7 @@ fn restack_branches(
     )?;
 
     let mut rewritten_oids = HashMap::new();
-    for branch_info in repo.get_local_branches()? {
+    for branch_info in repo.get_all_local_branches()? {
         let (branch, _branch_type) = branch_info.with_context(|| "Getting branch info")?;
         let branch_target = match branch.get().target() {
             Some(branch_target) => branch_target,

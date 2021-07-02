@@ -152,7 +152,7 @@ impl GitRunInfo {
         stdin: Option<String>,
     ) -> anyhow::Result<()> {
         let hook_dir = repo
-            .config()?
+            .get_config()?
             .get_path("core.hooksPath")
             .unwrap_or_else(|_| repo.get_path().join("hooks"));
 
