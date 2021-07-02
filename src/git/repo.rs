@@ -349,8 +349,18 @@ Either create it, or update the main branch setting by running:
 
     /// Find all references in the repository.
     #[context("Looking up all references in repository at: {:?}", self.get_path())]
-    pub fn get_all_references(&self) -> anyhow::Result<git2::References> {
-        self.inner.references().map_err(wrap_git_error)
+    pub fn get_all_references(&self) -> anyhow::Result<Vec<git2::Reference>> {
+        let mut all_references = Vec::new();
+        for reference in self
+            .inner
+            .references()
+            .map_err(wrap_git_error)
+            .with_context(|| "Iterating through references")?
+        {
+            let reference = reference.with_context(|| "Accessing individual reference")?;
+            all_references.push(reference);
+        }
+        Ok(all_references)
     }
 
     /// Create a new reference or update an existing one.
