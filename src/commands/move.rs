@@ -8,11 +8,13 @@ use std::time::SystemTime;
 use crate::core::config::get_restack_preserve_timestamps;
 use crate::core::eventlog::{EventLogDb, EventReplayer};
 use crate::core::formatting::Glyphs;
-use crate::core::graph::{make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid};
+use crate::core::graph::{
+    make_graph, resolve_commits, BranchOids, CommitGraph, HeadOid, MainBranchOid,
+    ResolveCommitsResult,
+};
 use crate::core::mergebase::MergeBaseDb;
 use crate::core::rewrite::{execute_rebase_plan, ExecuteRebasePlanOptions, RebasePlanBuilder};
 use crate::git::{GitRunInfo, Repo};
-use crate::util::{resolve_commits, ResolveCommitsResult};
 
 fn resolve_base_commit(graph: &CommitGraph, oid: git2::Oid) -> git2::Oid {
     let node = &graph[&oid];
