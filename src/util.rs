@@ -5,11 +5,6 @@ use std::path::PathBuf;
 use fn_error_context::context;
 use git2::ErrorCode;
 
-/// Convert a `git2::Error` into an `anyhow::Error` with an auto-generated message.
-pub fn wrap_git_error(error: git2::Error) -> anyhow::Error {
-    anyhow::anyhow!("Git error {:?}: {}", error.code(), error.message())
-}
-
 /// Returns a path for a given file, searching through PATH to find it.
 pub fn get_from_path(exe_name: &str) -> Option<PathBuf> {
     std::env::var_os("PATH").and_then(|paths| {

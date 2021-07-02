@@ -18,7 +18,7 @@ use anyhow::Context;
 use fn_error_context::context;
 use rusqlite::OptionalExtension;
 
-use crate::util::wrap_git_error;
+use crate::git::wrap_git_error;
 
 /// On-disk cache for merge-base queries.
 pub struct MergeBaseDb<'conn> {
