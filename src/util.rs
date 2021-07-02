@@ -18,59 +18,6 @@ pub fn wrap_git_error(error: git2::Error) -> anyhow::Error {
     anyhow::anyhow!("Git error {:?}: {}", error.code(), error.message())
 }
 
-/// Run Git silently (don't display output to the user).
-///
-/// Whenever possible, use `git2`'s bindings to Git instead, as they're
-/// considerably more lightweight and reliable.
-///
-/// Returns the stdout of the Git invocation.
-pub fn run_git_silent<S: AsRef<str> + std::fmt::Debug>(
-    repo: &git2::Repository,
-    git_run_info: &GitRunInfo,
-    event_tx_id: Option<EventTransactionId>,
-    args: &[S],
-) -> anyhow::Result<String> {
-    let GitRunInfo {
-        path_to_git,
-        working_directory,
-        env,
-    } = git_run_info;
-
-    // Technically speaking, we should be able to work with non-UTF-8 repository
-    // paths. Need to make the typechecker accept it.
-    let repo_path = repo.path();
-    let repo_path = repo_path.to_str().ok_or_else(|| {
-        anyhow::anyhow!(
-            "Path to Git repo could not be converted to UTF-8 string: {:?}",
-            repo_path
-        )
-    })?;
-
-    let args = {
-        let mut result = vec!["-C", repo_path];
-        result.extend(args.iter().map(|arg| arg.as_ref()));
-        result
-    };
-    let mut command = Command::new(path_to_git);
-    command.args(&args);
-    command.current_dir(working_directory);
-    command.env_clear();
-    command.envs(env.iter());
-    if let Some(event_tx_id) = event_tx_id {
-        command.env(BRANCHLESS_TRANSACTION_ID_ENV_VAR, event_tx_id.to_string());
-    }
-    let result = command
-        .output()
-        .with_context(|| format!("Spawning Git subprocess: {:?} {:?}", path_to_git, args))?;
-    let result = String::from_utf8(result.stdout).with_context(|| {
-        format!(
-            "Decoding stdout from Git subprocess: {:?} {:?}",
-            path_to_git, args
-        )
-    })?;
-    Ok(result)
-}
-
 /// Run a provided Git hook if it exists for the repository.
 ///
 /// See the man page for `githooks(5)` for more detail on Git hooks.

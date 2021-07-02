@@ -11,7 +11,7 @@ use log::warn;
 
 use crate::core::config::get_core_hooks_path;
 use crate::git::{GitRunInfo, Repo};
-use crate::util::{run_git_silent, wrap_git_error, GitVersion};
+use crate::util::{wrap_git_error, GitVersion};
 
 const ALL_HOOKS: &[(&str, &str)] = &[
     (
@@ -245,7 +245,8 @@ fn install_aliases(
         install_alias(config, from, to)?;
     }
 
-    let version_str = run_git_silent(repo, git_run_info, None, &["version"])
+    let version_str = git_run_info
+        .run_silent(repo, None, &["version"])
         .with_context(|| "Determining Git version")?;
     let version_str = version_str.trim();
     let version: GitVersion = version_str
