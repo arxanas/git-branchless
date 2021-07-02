@@ -1,82 +1,14 @@
 //! Utility functions.
 
-use std::ffi::OsString;
-use std::io::Write;
 use std::path::PathBuf;
-use std::process::{Command, ExitStatus, Stdio};
 use std::str::FromStr;
 
-use anyhow::Context;
 use fn_error_context::context;
 use git2::ErrorCode;
-
-use crate::core::eventlog::{EventTransactionId, BRANCHLESS_TRANSACTION_ID_ENV_VAR};
-use crate::git::GitRunInfo;
 
 /// Convert a `git2::Error` into an `anyhow::Error` with an auto-generated message.
 pub fn wrap_git_error(error: git2::Error) -> anyhow::Error {
     anyhow::anyhow!("Git error {:?}: {}", error.code(), error.message())
-}
-
-/// Run a provided Git hook if it exists for the repository.
-///
-/// See the man page for `githooks(5)` for more detail on Git hooks.
-#[context("Running Git hook: {}", hook_name)]
-pub fn run_hook(
-    git_run_info: &GitRunInfo,
-    repo: &git2::Repository,
-    hook_name: &str,
-    event_tx_id: EventTransactionId,
-    args: &[impl AsRef<str>],
-    stdin: Option<String>,
-) -> anyhow::Result<()> {
-    let hook_dir = repo
-        .config()?
-        .get_path("core.hooksPath")
-        .unwrap_or_else(|_| repo.path().join("hooks"));
-
-    let GitRunInfo {
-        // We're calling a Git hook, but not Git itself.
-        path_to_git: _,
-        // We always want to call the hook in the Git working copy,
-        // regardless of where the Git executable was invoked.
-        working_directory: _,
-        env,
-    } = git_run_info;
-    let path = {
-        let mut path_components: Vec<PathBuf> = vec![std::fs::canonicalize(&hook_dir)?];
-        if let Some(path) = env.get(&OsString::from("PATH")) {
-            path_components.extend(std::env::split_paths(path));
-        }
-        std::env::join_paths(path_components)?
-    };
-
-    if hook_dir.join(hook_name).exists() {
-        let mut child = Command::new(get_sh().context("shell needed to run hook")?)
-            // From `githooks(5)`: Before Git invokes a hook, it changes its
-            // working directory to either $GIT_DIR in a bare repository or the
-            // root of the working tree in a non-bare repository.
-            .current_dir(repo.workdir().unwrap_or_else(|| repo.path()))
-            .arg("-c")
-            .arg(format!("{} \"$@\"", hook_name))
-            .arg(hook_name) // "$@" expands "$1" "$2" "$3" ... but we also must specify $0.
-            .args(args.iter().map(|arg| arg.as_ref()))
-            .env_clear()
-            .envs(env.iter())
-            .env(BRANCHLESS_TRANSACTION_ID_ENV_VAR, event_tx_id.to_string())
-            .env("PATH", &path)
-            .stdin(Stdio::piped())
-            .spawn()
-            .with_context(|| format!("Invoking {} hook with PATH: {:?}", &hook_name, &path))?;
-
-        if let Some(stdin) = stdin {
-            write!(child.stdin.as_mut().unwrap(), "{}", stdin)
-                .with_context(|| "Writing hook process stdin")?;
-        }
-
-        let _ignored: ExitStatus = child.wait()?;
-    }
-    Ok(())
 }
 
 /// The parsed version of Git.
