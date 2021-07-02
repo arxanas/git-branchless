@@ -9,12 +9,14 @@
 
 use std::collections::HashSet;
 use std::convert::TryInto;
-use std::io::{stdin, BufRead};
+use std::ffi::{OsStr, OsString};
+use std::io::{stdin, BufRead, Cursor};
 use std::time::SystemTime;
 
 use anyhow::Context;
 use console::style;
 use fn_error_context::context;
+use os_str_bytes::OsStringBytes;
 
 use crate::commands::gc::mark_commit_reachable;
 use crate::core::config::{get_restack_warn_abandoned, RESTACK_WARN_ABANDONED_CONFIG_KEY};
@@ -107,7 +109,7 @@ pub fn hook_post_rewrite(rewrite_type: &str) -> anyhow::Result<()> {
 
     let (all_abandoned_children, all_abandoned_branches) = {
         let mut all_abandoned_children: HashSet<git2::Oid> = HashSet::new();
-        let mut all_abandoned_branches: HashSet<&str> = HashSet::new();
+        let mut all_abandoned_branches: HashSet<&OsStr> = HashSet::new();
         for old_commit_oid in old_commits {
             let abandoned_result = find_abandoned_children(
                 &graph,
@@ -121,7 +123,7 @@ pub fn hook_post_rewrite(rewrite_type: &str) -> anyhow::Result<()> {
             };
             all_abandoned_children.extend(abandoned_children.iter());
             if let Some(branch_names) = branch_oid_to_names.get(&old_commit_oid) {
-                all_abandoned_branches.extend(branch_names.iter().map(String::as_str));
+                all_abandoned_branches.extend(branch_names.iter().map(OsString::as_os_str));
             }
         }
         (all_abandoned_children, all_abandoned_branches)
@@ -150,8 +152,10 @@ pub fn hook_post_rewrite(rewrite_type: &str) -> anyhow::Result<()> {
                 }
                 .to_string();
 
-                let mut all_abandoned_branches: Vec<&str> =
-                    all_abandoned_branches.iter().copied().collect();
+                let mut all_abandoned_branches: Vec<String> = all_abandoned_branches
+                    .iter()
+                    .map(|branch_name| branch_name.to_string_lossy().to_string())
+                    .collect();
                 all_abandoned_branches.sort_unstable();
                 let abandoned_branches_list = all_abandoned_branches.join(", ");
                 warning_items.push(format!(
@@ -218,9 +222,9 @@ pub fn hook_post_checkout(
     event_log_db.add_events(vec![Event::RefUpdateEvent {
         timestamp: timestamp.as_secs_f64(),
         event_tx_id,
-        old_ref: Some(String::from(previous_head_ref)),
-        new_ref: Some(String::from(current_head_ref)),
-        ref_name: String::from("HEAD"),
+        old_ref: Some(OsString::from(previous_head_ref)),
+        new_ref: Some(OsString::from(current_head_ref)),
+        ref_name: OsString::from("HEAD"),
         message: None,
     }])?;
     Ok(())
@@ -270,11 +274,22 @@ pub fn hook_post_commit() -> anyhow::Result<()> {
 }
 
 fn parse_reference_transaction_line(
-    line: &str,
+    line: &[u8],
     now: SystemTime,
     event_tx_id: EventTransactionId,
 ) -> anyhow::Result<Option<Event>> {
-    match *line.split(' ').collect::<Vec<_>>().as_slice() {
+    let cursor = Cursor::new(line);
+    let fields = {
+        let mut fields = Vec::new();
+        for field in cursor.split(b' ') {
+            let field = field.with_context(|| "Reading reference-transaction field")?;
+            let field = OsString::from_raw_vec(field)
+                .with_context(|| "Decoding reference-transaction field")?;
+            fields.push(field);
+        }
+        fields
+    };
+    match fields.as_slice() {
         [old_value, new_value, ref_name] => {
             if !should_ignore_ref_updates(ref_name) {
                 let timestamp = now
@@ -283,9 +298,9 @@ fn parse_reference_transaction_line(
                 Ok(Some(Event::RefUpdateEvent {
                     timestamp: timestamp.as_secs_f64(),
                     event_tx_id,
-                    ref_name: String::from(ref_name),
-                    old_ref: Some(String::from(old_value)),
-                    new_ref: Some(String::from(new_value)),
+                    ref_name: ref_name.clone(),
+                    old_ref: Some(old_value.clone()),
+                    new_ref: Some(new_value.clone()),
                     message: None,
                 }))
             } else {
@@ -294,7 +309,7 @@ fn parse_reference_transaction_line(
         }
         _ => {
             anyhow::bail!(
-                "Unexpected number of fields in reference-transaction line: {}",
+                "Unexpected number of fields in reference-transaction line: {:?}",
                 &line
             )
         }
@@ -318,13 +333,13 @@ pub fn hook_reference_transaction(transaction_state: &str) -> anyhow::Result<()>
 
     let events: Vec<Event> = stdin()
         .lock()
-        .lines()
+        .split(b'\n')
         .filter_map(|line| {
             let line = match line {
                 Ok(line) => line,
                 Err(_) => return None,
             };
-            match parse_reference_transaction_line(&line, now, event_tx_id) {
+            match parse_reference_transaction_line(line.as_slice(), now, event_tx_id) {
                 Ok(event) => event,
                 Err(err) => {
                     log::error!("Could not parse reference-transaction-line: {:?}", err);
@@ -359,29 +374,29 @@ mod tests {
 
     #[test]
     fn test_parse_reference_transaction_line() -> anyhow::Result<()> {
-        let line = "123abc 456def mybranch";
+        let line = b"123abc 456def mybranch";
         let timestamp = SystemTime::UNIX_EPOCH;
         let event_tx_id = crate::core::eventlog::testing::make_dummy_transaction_id(789);
         assert_eq!(
-            parse_reference_transaction_line(&line, timestamp, event_tx_id)?,
+            parse_reference_transaction_line(line, timestamp, event_tx_id)?,
             Some(Event::RefUpdateEvent {
                 timestamp: 0.0,
                 event_tx_id,
-                old_ref: Some(String::from("123abc")),
-                new_ref: Some(String::from("456def")),
-                ref_name: String::from("mybranch"),
+                old_ref: Some(OsString::from("123abc")),
+                new_ref: Some(OsString::from("456def")),
+                ref_name: OsString::from("mybranch"),
                 message: None,
             })
         );
 
-        let line = "123abc 456def ORIG_HEAD";
+        let line = b"123abc 456def ORIG_HEAD";
         assert_eq!(
-            parse_reference_transaction_line(&line, timestamp, event_tx_id)?,
+            parse_reference_transaction_line(line, timestamp, event_tx_id)?,
             None
         );
 
-        let line = "there are not three fields here";
-        assert!(parse_reference_transaction_line(&line, timestamp, event_tx_id).is_err());
+        let line = b"there are not three fields here";
+        assert!(parse_reference_transaction_line(line, timestamp, event_tx_id).is_err());
 
         Ok(())
     }

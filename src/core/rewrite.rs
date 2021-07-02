@@ -3,12 +3,14 @@
 
 use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
+use std::ffi::{OsStr, OsString};
 use std::time::SystemTime;
 
 use anyhow::Context;
 use cursive::utils::markup::StyledString;
 use fn_error_context::context;
 use indicatif::{ProgressBar, ProgressStyle};
+use os_str_bytes::OsStrBytes;
 
 use crate::commands::gc::mark_commit_reachable;
 use crate::core::formatting::printable_styled_string;
@@ -446,7 +448,8 @@ fn rebase_in_memory(
                         commit_tree_oid
                     ),
                 };
-                let commit_message = match commit_to_apply.get_message_raw().to_str() {
+                let commit_message = commit_to_apply.get_message_raw()?;
+                let commit_message = match commit_message.to_str() {
                     Some(message) => message,
                     None => anyhow::bail!(
                         "Could not decode commit message for commit: {:?}",
@@ -501,7 +504,7 @@ pub fn move_branches<'a>(
     // first error, but we don't know which references we successfully committed
     // in that case. Instead, we just do things non-atomically and record which
     // ones succeeded. See https://github.com/libgit2/libgit2/issues/5918
-    let mut branch_moves: Vec<(git2::Oid, git2::Oid, &str)> = Vec::new();
+    let mut branch_moves: Vec<(git2::Oid, git2::Oid, &OsStr)> = Vec::new();
     let mut branch_move_err: Option<anyhow::Error> = None;
     'outer: for (old_oid, names) in branch_oid_to_names.iter() {
         let new_oid = match rewritten_oids_map.get(&old_oid) {
@@ -536,12 +539,22 @@ pub fn move_branches<'a>(
         }
     }
 
-    let branch_moves_stdin: String = branch_moves
+    let branch_moves_stdin: Vec<u8> = branch_moves
         .into_iter()
-        .map(|(old_oid, new_oid, name)| {
-            format!("{} {} {}\n", old_oid.to_string(), new_oid.to_string(), name)
+        .flat_map(|(old_oid, new_oid, name)| {
+            let mut line = Vec::new();
+            line.extend(old_oid.to_string().as_bytes());
+            line.push(b' ');
+            line.extend(new_oid.to_string().as_bytes());
+            line.push(b' ');
+            line.extend(name.to_raw_bytes().iter());
+            line.push(b'\n');
+            line
         })
         .collect();
+    let branch_moves_stdin = OsStrBytes::from_raw_bytes(branch_moves_stdin)
+        .with_context(|| "Encoding branch moves stdin")?;
+    let branch_moves_stdin = OsString::from(branch_moves_stdin);
     git_run_info.run_hook(
         repo,
         "reference-transaction",
@@ -593,6 +606,7 @@ fn post_rebase_in_memory(
         .iter()
         .map(|(old_oid, new_oid)| format!("{} {}\n", old_oid.to_string(), new_oid.to_string()))
         .collect();
+    let post_rewrite_stdin = OsString::from(post_rewrite_stdin);
     git_run_info.run_hook(
         repo,
         "post-rewrite",

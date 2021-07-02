@@ -10,13 +10,13 @@
 //! - To collect some different helper Git functions.
 
 use std::collections::{HashMap, HashSet};
-use std::ffi::OsStr;
-use std::os::unix::prelude::OsStrExt;
+use std::ffi::{OsStr, OsString};
 use std::path::Path;
 use std::str::FromStr;
 
 use anyhow::Context;
 use fn_error_context::context;
+use os_str_bytes::OsStringBytes;
 
 use crate::core::config::get_main_branch_name;
 
@@ -225,13 +225,13 @@ Either create it, or update the main branch setting by running:
     ///
     /// The returned branch names do not include the `refs/heads/` prefix.
     #[context("Getting branch-OID-to-names map for repository at: {:?}", self.get_path())]
-    pub fn get_branch_oid_to_names(&self) -> anyhow::Result<HashMap<git2::Oid, HashSet<String>>> {
+    pub fn get_branch_oid_to_names(&self) -> anyhow::Result<HashMap<git2::Oid, HashSet<OsString>>> {
         let branches = self
             .inner
             .branches(Some(git2::BranchType::Local))
             .with_context(|| "Reading branches")?;
 
-        let mut result = HashMap::new();
+        let mut result: HashMap<git2::Oid, HashSet<OsString>> = HashMap::new();
         for branch_info in branches {
             let branch_info = branch_info.with_context(|| "Iterating over branches")?;
             let branch = match branch_info {
@@ -262,7 +262,7 @@ Either create it, or update the main branch setting by running:
             result
                 .entry(branch_oid)
                 .or_insert_with(HashSet::new)
-                .insert(reference_name.to_owned());
+                .insert(OsString::from(reference_name.to_owned()));
         }
 
         // The main branch may be a remote branch, in which case it won't be
@@ -272,7 +272,7 @@ Either create it, or update the main branch setting by running:
         result
             .entry(main_branch_oid)
             .or_insert_with(HashSet::new)
-            .insert(main_branch_name);
+            .insert(OsString::from(main_branch_name));
 
         Ok(result)
     }
@@ -356,7 +356,7 @@ Either create it, or update the main branch setting by running:
 
     /// Find all references in the repository.
     #[context("Looking up all references in repository at: {:?}", self.get_path())]
-    pub fn get_all_references(&self) -> anyhow::Result<Vec<git2::Reference>> {
+    pub fn get_all_references(&self) -> anyhow::Result<Vec<Reference>> {
         let mut all_references = Vec::new();
         for reference in self
             .inner
@@ -365,7 +365,7 @@ Either create it, or update the main branch setting by running:
             .with_context(|| "Iterating through references")?
         {
             let reference = reference.with_context(|| "Accessing individual reference")?;
-            all_references.push(reference);
+            all_references.push(Reference { inner: reference });
         }
         Ok(all_references)
     }
@@ -380,21 +380,37 @@ Either create it, or update the main branch setting by running:
     )]
     pub fn create_reference(
         &self,
-        name: &str,
+        name: &OsStr,
         oid: git2::Oid,
         force: bool,
         log_message: &str,
-    ) -> anyhow::Result<git2::Reference> {
-        self.inner
+    ) -> anyhow::Result<Reference> {
+        let name = match name.to_str() {
+            Some(name) => name,
+            None => anyhow::bail!(
+                "Reference name is not a UTF-8 string (libgit2 limitation): {:?}",
+                name
+            ),
+        };
+        let reference = self
+            .inner
             .reference(name, oid, force, log_message)
-            .map_err(wrap_git_error)
+            .map_err(wrap_git_error)?;
+        Ok(Reference { inner: reference })
     }
 
     /// Look up a reference with the given name. Returns `None` if not found.
     #[context("Looking up reference {:?} in repository at: {:?}", name, self.get_path())]
-    pub fn find_reference(&self, name: &str) -> anyhow::Result<Option<git2::Reference>> {
+    pub fn find_reference(&self, name: &OsStr) -> anyhow::Result<Option<Reference>> {
+        let name = match name.to_str() {
+            Some(name) => name,
+            None => anyhow::bail!(
+                "Reference name is not a UTF-8 string (libgit2 limitation): {:?}",
+                name
+            ),
+        };
         match self.inner.find_reference(name) {
-            Ok(reference) => Ok(Some(reference)),
+            Ok(reference) => Ok(Some(Reference { inner: reference })),
             Err(err) if err.code() == git2::ErrorCode::NotFound => Ok(None),
             Err(err) => Err(wrap_git_error(err)),
         }
@@ -431,15 +447,22 @@ Either create it, or update the main branch setting by running:
     }
 
     /// Create a new branch or update an existing branch.
-    #[context("Creating branch {:?} for repository at: {:?}", branch_name, self.get_path())]
+    #[context("Creating branch {:?} for repository at: {:?}", name, self.get_path())]
     pub fn create_branch(
         &self,
-        branch_name: &str,
+        name: &OsStr,
         target: &Commit,
         force: bool,
     ) -> anyhow::Result<git2::Branch> {
+        let name = match name.to_str() {
+            Some(name) => name,
+            None => anyhow::bail!(
+                "Branch name is not a UTF-8 string (libgit2 limitation): {:?}",
+                name
+            ),
+        };
         self.inner
-            .branch(branch_name, &target.inner, force)
+            .branch(name, &target.inner, force)
             .map_err(wrap_git_error)
     }
 
@@ -556,21 +579,23 @@ impl<'repo> Commit<'repo> {
     }
 
     /// Get the summary (first line) of the commit message.
-    pub fn get_summary(&self) -> anyhow::Result<&OsStr> {
+    pub fn get_summary(&self) -> anyhow::Result<OsString> {
         match self.inner.summary_bytes() {
-            Some(summary) => Ok(&OsStr::from_bytes(summary)),
+            Some(summary) => Ok(OsString::from_raw_vec(summary.into())?),
             None => anyhow::bail!("Could not read summary for commit: {:?}", self.get_oid()),
         }
     }
 
     /// Get the commit message with some whitespace trimmed.
-    pub fn get_message_pretty(&self) -> &OsStr {
-        OsStr::from_bytes(self.inner.message_bytes())
+    pub fn get_message_pretty(&self) -> anyhow::Result<OsString> {
+        let message = OsString::from_raw_vec(self.inner.message_bytes().into())?;
+        Ok(message)
     }
 
     /// Get the commit message, without any whitespace trimmed.
-    pub fn get_message_raw(&self) -> &OsStr {
-        OsStr::from_bytes(self.inner.message_raw_bytes())
+    pub fn get_message_raw(&self) -> anyhow::Result<OsString> {
+        let message = OsString::from_raw_vec(self.inner.message_raw_bytes().into())?;
+        Ok(message)
     }
 
     /// Get the author of this commit.
@@ -581,6 +606,61 @@ impl<'repo> Commit<'repo> {
     /// Get the committer of this commit.
     pub fn get_committer(&self) -> git2::Signature {
         self.inner.committer()
+    }
+}
+
+/// Represents a reference to an object.
+pub struct Reference<'repo> {
+    inner: git2::Reference<'repo>,
+}
+
+impl<'repo> Reference<'repo> {
+    /// Determine if the given name is a valid name for a reference.
+    pub fn is_valid_name(name: &str) -> bool {
+        git2::Reference::is_valid_name(name)
+    }
+
+    /// Given a reference name which is an OID, convert the string into an `Oid`
+    /// object.
+    #[context("Converting reference name to OID: {:?}", ref_name)]
+    pub fn name_to_oid(ref_name: &OsStr) -> anyhow::Result<git2::Oid> {
+        let ref_name = match ref_name.to_str() {
+            Some(ref_name) => ref_name,
+            None => anyhow::bail!("Could not decode reference name as OID: {:?}", ref_name),
+        };
+        let oid = ref_name
+            .parse()
+            .with_context(|| format!("Parsing reference name as OID: {:?}", ref_name))?;
+        Ok(oid)
+    }
+
+    /// Get the name of this reference.
+    #[context("Getting name of reference: {:?}", self.inner.name_bytes())]
+    pub fn get_name(&self) -> anyhow::Result<OsString> {
+        let name = OsStringBytes::from_raw_vec(self.inner.name_bytes().into())
+            .with_context(|| format!("Decoding reference name: {:?}", self.inner.name_bytes()))?;
+        Ok(name)
+    }
+
+    /// Get the commit object pointed to by this reference. Returns `None` if
+    /// the object pointed to by the reference is a different kind of object.
+    #[context("Finding commit object pointed to by reference: {:?}", self.inner.name())]
+    pub fn peel_to_commit(&self) -> anyhow::Result<Option<Commit<'repo>>> {
+        let object = self.inner.peel(git2::ObjectType::Commit)?;
+        match object.into_commit() {
+            Ok(commit) => Ok(Some(Commit { inner: commit })),
+            Err(_) => Ok(None),
+        }
+    }
+
+    /// Delete the reference.
+    #[context("Deleting reference: {:?}", self.inner.name())]
+    pub fn delete(&mut self) -> anyhow::Result<()> {
+        let reference_name = self.get_name()?;
+        self.inner
+            .delete()
+            .with_context(|| format!("Deleting reference: {:?}", reference_name))?;
+        Ok(())
     }
 }
 
