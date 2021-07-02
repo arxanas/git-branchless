@@ -437,3 +437,45 @@ mod tests {
         Ok(())
     }
 }
+
+/// The result of attempting to resolve commits.
+pub enum ResolveCommitsResult<'repo> {
+    /// All commits were successfully resolved.
+    Ok {
+        /// The commits.
+        commits: Vec<git2::Commit<'repo>>,
+    },
+
+    /// The first commit which couldn't be resolved.
+    CommitNotFound {
+        /// The identifier of the commit, as provided by the user.
+        commit: String,
+    },
+}
+
+/// Parse strings which refer to commits, such as:
+///
+/// - Full OIDs.
+/// - Short OIDs.
+/// - Reference names.
+#[context("Resolving commits")]
+pub fn resolve_commits(
+    repo: &git2::Repository,
+    hashes: Vec<String>,
+) -> anyhow::Result<ResolveCommitsResult> {
+    let mut commits = Vec::new();
+    for hash in hashes {
+        let commit = match repo.revparse_single(&hash) {
+            Ok(commit) => match commit.into_commit() {
+                Ok(commit) => commit,
+                Err(_) => return Ok(ResolveCommitsResult::CommitNotFound { commit: hash }),
+            },
+            Err(err) if err.code() == git2::ErrorCode::NotFound => {
+                return Ok(ResolveCommitsResult::CommitNotFound { commit: hash })
+            }
+            Err(err) => return Err(err.into()),
+        };
+        commits.push(commit)
+    }
+    Ok(ResolveCommitsResult::Ok { commits })
+}

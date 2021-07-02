@@ -7,14 +7,15 @@ use std::time::SystemTime;
 use crate::core::eventlog::{CommitVisibility, Event};
 use crate::core::eventlog::{EventLogDb, EventReplayer};
 use crate::core::formatting::{printable_styled_string, Glyphs};
-use crate::core::graph::{make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid, Node};
+use crate::core::graph::{
+    make_graph, resolve_commits, BranchOids, CommitGraph, HeadOid, MainBranchOid, Node,
+    ResolveCommitsResult,
+};
 use crate::core::mergebase::MergeBaseDb;
 use crate::core::metadata::{
     render_commit_metadata, CommitMessageProvider, CommitMetadataProvider, CommitOidProvider,
 };
 use crate::git::Repo;
-use crate::util::resolve_commits;
-use crate::util::ResolveCommitsResult;
 
 fn recurse_on_commits_helper<
     'repo,
