@@ -13,7 +13,6 @@ use indicatif::{ProgressBar, ProgressStyle};
 use crate::commands::gc::mark_commit_reachable;
 use crate::core::formatting::printable_styled_string;
 use crate::git::{GitRunInfo, Repo};
-use crate::util::run_hook;
 
 use super::eventlog::{Event, EventCursor, EventReplayer, EventTransactionId};
 use super::formatting::Glyphs;
@@ -518,8 +517,7 @@ pub fn move_branches<'a>(
             format!("{} {} {}\n", old_oid.to_string(), new_oid.to_string(), name)
         })
         .collect();
-    run_hook(
-        git_run_info,
+    git_run_info.run_hook(
         repo,
         "reference-transaction",
         event_tx_id,
@@ -570,8 +568,7 @@ fn post_rebase_in_memory(
         .iter()
         .map(|(old_oid, new_oid)| format!("{} {}\n", old_oid.to_string(), new_oid.to_string()))
         .collect();
-    run_hook(
-        git_run_info,
+    git_run_info.run_hook(
         repo,
         "post-rewrite",
         *event_tx_id,
