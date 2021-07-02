@@ -21,13 +21,8 @@ fn find_dangling_references<'repo>(
     repo: &'repo Repo,
     graph: &CommitGraph,
 ) -> anyhow::Result<Vec<git2::Reference<'repo>>> {
-    let references = repo
-        .get_all_references()
-        .with_context(|| "Getting repo references")?;
-
     let mut result = Vec::new();
-    for reference in references {
-        let reference = reference.with_context(|| "Reading reference info")?;
+    for reference in repo.get_all_references()? {
         let reference_name = match reference.name() {
             Some(name) => name.to_owned(),
             None => continue,
