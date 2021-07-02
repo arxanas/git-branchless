@@ -10,6 +10,8 @@
 //! - To collect some different helper Git functions.
 
 use std::collections::{HashMap, HashSet};
+use std::ffi::OsStr;
+use std::os::unix::prelude::OsStrExt;
 use std::path::Path;
 use std::str::FromStr;
 
@@ -68,6 +70,8 @@ impl<'repo> HeadInfo<'repo> {
             })
     }
 
+    /// Detach `HEAD` by making it point directly to its current OID, rather
+    /// than to a branch. If `HEAD` is already detached, this has no effect.
     pub fn detach_head(&self) -> anyhow::Result<()> {
         match self.oid {
             Some(oid) => self
@@ -339,9 +343,12 @@ Either create it, or update the main branch setting by running:
     }
 
     /// Attempt to parse the user-provided object descriptor.
-    pub fn revparse_single(&self, spec: &str) -> anyhow::Result<Option<git2::Object>> {
+    pub fn revparse_single_commit(&self, spec: &str) -> anyhow::Result<Option<Commit>> {
         match self.inner.revparse_single(spec) {
-            Ok(object) => Ok(Some(object)),
+            Ok(object) => match object.into_commit() {
+                Ok(commit) => Ok(Some(Commit { inner: commit })),
+                Err(_) => Ok(None),
+            },
             Err(err) if err.code() == git2::ErrorCode::NotFound => Ok(None),
             Err(err) => Err(wrap_git_error(err)),
         }
@@ -428,19 +435,19 @@ Either create it, or update the main branch setting by running:
     pub fn create_branch(
         &self,
         branch_name: &str,
-        target: &git2::Commit,
+        target: &Commit,
         force: bool,
     ) -> anyhow::Result<git2::Branch> {
         self.inner
-            .branch(branch_name, target, force)
+            .branch(branch_name, &target.inner, force)
             .map_err(wrap_git_error)
     }
 
     /// Look up a commit with the given OID. Returns `None` if not found.
     #[context("Looking up commit {:?} for repository at: {:?}", oid, self.get_path())]
-    pub fn find_commit(&self, oid: git2::Oid) -> anyhow::Result<Option<git2::Commit>> {
+    pub fn find_commit(&self, oid: git2::Oid) -> anyhow::Result<Option<Commit>> {
         match self.inner.find_commit(oid) {
-            Ok(commit) => Ok(Some(commit)),
+            Ok(commit) => Ok(Some(Commit { inner: commit })),
             Err(err) if err.code() == git2::ErrorCode::NotFound => Ok(None),
             Err(err) => Err(wrap_git_error(err)),
         }
@@ -455,10 +462,21 @@ Either create it, or update the main branch setting by running:
         committer: &git2::Signature,
         message: &str,
         tree: &git2::Tree,
-        parents: &[&git2::Commit],
+        parents: &[&Commit],
     ) -> anyhow::Result<git2::Oid> {
+        let parents = parents
+            .iter()
+            .map(|commit| &commit.inner)
+            .collect::<Vec<_>>();
         self.inner
-            .commit(update_ref, author, committer, message, tree, parents)
+            .commit(
+                update_ref,
+                author,
+                committer,
+                message,
+                tree,
+                parents.as_slice(),
+            )
             .map_err(wrap_git_error)
     }
 
@@ -469,13 +487,18 @@ Either create it, or update the main branch setting by running:
     )]
     pub fn cherrypick_commit(
         &self,
-        cherrypick_commit: &git2::Commit,
-        our_commit: &git2::Commit,
+        cherrypick_commit: &Commit,
+        our_commit: &Commit,
         mainline: u32,
         options: Option<&git2::MergeOptions>,
     ) -> anyhow::Result<git2::Index> {
         self.inner
-            .cherrypick_commit(cherrypick_commit, our_commit, mainline, options)
+            .cherrypick_commit(
+                &cherrypick_commit.inner,
+                &our_commit.inner,
+                mainline,
+                options,
+            )
             .map_err(wrap_git_error)
     }
 
@@ -494,6 +517,70 @@ Either create it, or update the main branch setting by running:
     #[context("Writing index file to disk for repository at: {:?}", self.get_path())]
     pub fn write_index_to_tree(&self, index: &mut git2::Index) -> anyhow::Result<git2::Oid> {
         index.write_tree_to(&self.inner).map_err(wrap_git_error)
+    }
+}
+
+/// Represents a commit object in the Git object database.
+#[derive(Clone, Debug)]
+pub struct Commit<'repo> {
+    inner: git2::Commit<'repo>,
+}
+
+impl<'repo> Commit<'repo> {
+    /// Get the object ID of the commit.
+    pub fn get_oid(&self) -> git2::Oid {
+        self.inner.id()
+    }
+
+    /// Get the object IDs of the parents of this commit.
+    pub fn get_parent_oids(&self) -> Vec<git2::Oid> {
+        self.inner.parent_ids().collect()
+    }
+
+    /// Get the number of parents of this commit.
+    pub fn get_parent_count(&self) -> usize {
+        self.inner.parent_count()
+    }
+
+    /// Get the parent commits of this commit.
+    pub fn get_parents(&self) -> Vec<Commit<'repo>> {
+        self.inner
+            .parents()
+            .map(|commit| Commit { inner: commit })
+            .collect()
+    }
+
+    /// Get the commit time of this commit.
+    pub fn get_time(&self) -> git2::Time {
+        self.inner.time()
+    }
+
+    /// Get the summary (first line) of the commit message.
+    pub fn get_summary(&self) -> anyhow::Result<&OsStr> {
+        match self.inner.summary_bytes() {
+            Some(summary) => Ok(&OsStr::from_bytes(summary)),
+            None => anyhow::bail!("Could not read summary for commit: {:?}", self.get_oid()),
+        }
+    }
+
+    /// Get the commit message with some whitespace trimmed.
+    pub fn get_message_pretty(&self) -> &OsStr {
+        OsStr::from_bytes(self.inner.message_bytes())
+    }
+
+    /// Get the commit message, without any whitespace trimmed.
+    pub fn get_message_raw(&self) -> &OsStr {
+        OsStr::from_bytes(self.inner.message_raw_bytes())
+    }
+
+    /// Get the author of this commit.
+    pub fn get_author(&self) -> git2::Signature {
+        self.inner.author()
+    }
+
+    /// Get the committer of this commit.
+    pub fn get_committer(&self) -> git2::Signature {
+        self.inner.committer()
     }
 }
 

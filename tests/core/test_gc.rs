@@ -11,7 +11,7 @@ fn test_gc() -> anyhow::Result<()> {
 
     {
         let repo = git.get_repo()?;
-        assert!(matches!(repo.revparse_single("62fc20d2"), Ok(_)));
+        assert!(matches!(repo.revparse_single_commit("62fc20d2"), Ok(_)));
     }
 
     git.run(&["gc", "--prune=now"])?;
@@ -42,7 +42,7 @@ branchless: collecting garbage
 
     {
         let repo = git.get_repo()?;
-        assert!(repo.revparse_single("62fc20d2")?.is_none())
+        assert!(repo.revparse_single_commit("62fc20d2")?.is_none())
     }
 
     Ok(())

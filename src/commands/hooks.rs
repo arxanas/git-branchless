@@ -258,12 +258,12 @@ pub fn hook_post_commit() -> anyhow::Result<()> {
     mark_commit_reachable(&repo, commit_oid)
         .with_context(|| "Marking commit as reachable for GC purposes")?;
 
-    let timestamp = commit.time().seconds() as f64;
+    let timestamp = commit.get_time().seconds() as f64;
     let event_tx_id = event_log_db.make_transaction_id(now, "hook-post-commit")?;
     event_log_db.add_events(vec![Event::CommitEvent {
         timestamp,
         event_tx_id,
-        commit_oid: commit.id(),
+        commit_oid: commit.get_oid(),
     }])?;
 
     Ok(())

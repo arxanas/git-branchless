@@ -9,7 +9,7 @@ use log::warn;
 
 use crate::core::eventlog::{CommitVisibility, Event, EventCursor, EventReplayer};
 use crate::core::mergebase::MergeBaseDb;
-use crate::git::Repo;
+use crate::git::{Commit, Repo};
 
 /// The OID of the repo's HEAD reference.
 #[derive(Debug)]
@@ -32,7 +32,7 @@ pub struct CommitOids(pub HashSet<git2::Oid>);
 #[derive(Debug)]
 pub struct Node<'repo> {
     /// The underlying commit object.
-    pub commit: git2::Commit<'repo>,
+    pub commit: Commit<'repo>,
 
     /// The OID of the parent node in the smartlog commit graph.
     ///
@@ -86,7 +86,7 @@ fn find_path_to_merge_base_internal<'repo>(
     commit_oid: git2::Oid,
     target_oid: git2::Oid,
     mut visited_commit_callback: impl FnMut(git2::Oid),
-) -> anyhow::Result<Option<Vec<git2::Commit<'repo>>>> {
+) -> anyhow::Result<Option<Vec<Commit<'repo>>>> {
     let mut queue = VecDeque::new();
     visited_commit_callback(commit_oid);
     let first_commit = match repo.find_commit(commit_oid)? {
@@ -99,10 +99,10 @@ fn find_path_to_merge_base_internal<'repo>(
         let last_commit = path
             .last()
             .expect("find_path_to_merge_base: empty path in queue");
-        if last_commit.id() == target_oid {
+        if last_commit.get_oid() == target_oid {
             return Ok(Some(path));
         }
-        if Some(last_commit.id()) == merge_base_oid {
+        if Some(last_commit.get_oid()) == merge_base_oid {
             // We've hit the common ancestor of these two commits without
             // finding a path between them. That means it's impossible to find a
             // path between them by traversing more ancestors. Possibly the
@@ -111,8 +111,8 @@ fn find_path_to_merge_base_internal<'repo>(
             continue;
         }
 
-        for parent in last_commit.parents() {
-            visited_commit_callback(parent.id());
+        for parent in last_commit.get_parents() {
+            visited_commit_callback(parent.get_oid());
             let mut new_path = path.clone();
             new_path.push(parent);
             queue.push_back(new_path);
@@ -142,7 +142,7 @@ pub fn find_path_to_merge_base<'repo>(
     merge_base_db: &MergeBaseDb,
     commit_oid: git2::Oid,
     target_oid: git2::Oid,
-) -> anyhow::Result<Option<Vec<git2::Commit<'repo>>>> {
+) -> anyhow::Result<Option<Vec<Commit<'repo>>>> {
     find_path_to_merge_base_internal(repo, merge_base_db, commit_oid, target_oid, |_commit| {})
 }
 
@@ -173,7 +173,7 @@ fn walk_from_commits<'repo>(
         };
 
         let merge_base_oid =
-            merge_base_db.get_merge_base_oid(repo, current_commit.id(), main_branch_oid.0)?;
+            merge_base_db.get_merge_base_oid(repo, current_commit.get_oid(), main_branch_oid.0)?;
         let path_to_merge_base = match merge_base_oid {
             // Occasionally we may find a commit that has no merge-base with the
             // main branch. For example: a rewritten initial commit. This is
@@ -184,12 +184,15 @@ fn walk_from_commits<'repo>(
                 let path_to_merge_base = find_path_to_merge_base(
                     repo,
                     merge_base_db,
-                    current_commit.id(),
+                    current_commit.get_oid(),
                     merge_base_oid,
                 )?;
                 match path_to_merge_base {
                     None => {
-                        warn!("No path to merge-base for commit {}", current_commit.id());
+                        warn!(
+                            "No path to merge-base for commit {}",
+                            current_commit.get_oid()
+                        );
                         continue;
                     }
                     Some(path_to_merge_base) => path_to_merge_base,
@@ -198,29 +201,29 @@ fn walk_from_commits<'repo>(
         };
 
         for current_commit in path_to_merge_base.iter() {
-            if graph.contains_key(&current_commit.id()) {
+            if graph.contains_key(&current_commit.get_oid()) {
                 // This commit (and all of its parents!) should be in the graph
                 // already, so no need to continue this iteration.
                 break;
             }
 
             let visibility =
-                event_replayer.get_cursor_commit_visibility(event_cursor, current_commit.id());
+                event_replayer.get_cursor_commit_visibility(event_cursor, current_commit.get_oid());
             let is_visible = match visibility {
                 Some(CommitVisibility::Visible) | None => true,
                 Some(CommitVisibility::Hidden) => false,
             };
 
             let is_main = match merge_base_oid {
-                Some(merge_base_oid) => (current_commit.id() == merge_base_oid),
+                Some(merge_base_oid) => (current_commit.get_oid() == merge_base_oid),
                 None => false,
             };
 
             let event = event_replayer
-                .get_cursor_commit_latest_event(event_cursor, current_commit.id())
+                .get_cursor_commit_latest_event(event_cursor, current_commit.get_oid())
                 .cloned();
             graph.insert(
-                current_commit.id(),
+                current_commit.get_oid(),
                 Node {
                     commit: current_commit.clone(),
                     parent: None,
@@ -245,7 +248,8 @@ fn walk_from_commits<'repo>(
         .filter(|(_child_oid, node)| !node.is_main)
         .flat_map(|(child_oid, node)| {
             node.commit
-                .parent_ids()
+                .get_parent_oids()
+                .into_iter()
                 .filter(|parent_oid| graph.contains_key(parent_oid))
                 .map(move |parent_oid| (*child_oid, parent_oid))
         })
@@ -263,7 +267,7 @@ fn walk_from_commits<'repo>(
 fn sort_children(graph: &mut CommitGraph) {
     let commit_times: HashMap<git2::Oid, git2::Time> = graph
         .iter()
-        .map(|(oid, node)| (*oid, node.commit.time()))
+        .map(|(oid, node)| (*oid, node.commit.get_time()))
         .collect();
     for node in graph.values_mut() {
         node.children
@@ -448,7 +452,7 @@ pub enum ResolveCommitsResult<'repo> {
     /// All commits were successfully resolved.
     Ok {
         /// The commits.
-        commits: Vec<git2::Commit<'repo>>,
+        commits: Vec<Commit<'repo>>,
     },
 
     /// The first commit which couldn't be resolved.
@@ -467,11 +471,8 @@ pub enum ResolveCommitsResult<'repo> {
 pub fn resolve_commits(repo: &Repo, hashes: Vec<String>) -> anyhow::Result<ResolveCommitsResult> {
     let mut commits = Vec::new();
     for hash in hashes {
-        let commit = match repo.revparse_single(&hash)? {
-            Some(object) => match object.into_commit() {
-                Ok(commit) => commit,
-                Err(_) => return Ok(ResolveCommitsResult::CommitNotFound { commit: hash }),
-            },
+        let commit = match repo.revparse_single_commit(&hash)? {
+            Some(commit) => commit,
             None => return Ok(ResolveCommitsResult::CommitNotFound { commit: hash }),
         };
         commits.push(commit)

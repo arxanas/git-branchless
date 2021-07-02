@@ -15,7 +15,7 @@ use crate::core::mergebase::MergeBaseDb;
 use crate::core::metadata::{
     render_commit_metadata, CommitMessageProvider, CommitMetadataProvider, CommitOidProvider,
 };
-use crate::git::Repo;
+use crate::git::{Commit, Repo};
 
 fn recurse_on_commits_helper<
     'repo,
@@ -25,10 +25,10 @@ fn recurse_on_commits_helper<
 >(
     graph: &'graph CommitGraph<'repo>,
     condition: &Condition,
-    commit: &git2::Commit<'repo>,
+    commit: &Commit<'repo>,
     callback: &mut Callback,
 ) {
-    let node = &graph[&commit.id()];
+    let node = &graph[&commit.get_oid()];
     if condition(node) {
         callback(node);
     };
@@ -43,9 +43,9 @@ fn recurse_on_commits<'repo, F: Fn(&Node) -> bool>(
     repo: &'repo Repo,
     merge_base_db: &MergeBaseDb,
     event_replayer: &EventReplayer,
-    commits: Vec<git2::Commit<'repo>>,
+    commits: Vec<Commit<'repo>>,
     condition: F,
-) -> anyhow::Result<Vec<git2::Commit<'repo>>> {
+) -> anyhow::Result<Vec<Commit<'repo>>> {
     let head_oid = repo.get_head_info()?.oid;
     let main_branch_oid = repo.get_main_branch_oid()?;
     let branch_oid_to_names = repo.get_branch_oid_to_names()?;
@@ -61,13 +61,13 @@ fn recurse_on_commits<'repo, F: Fn(&Node) -> bool>(
     )?;
 
     // Maintain ordering, since it's likely to be meaningful.
-    let mut result: Vec<git2::Commit<'repo>> = Vec::new();
+    let mut result: Vec<Commit<'repo>> = Vec::new();
     let mut seen_oids = HashSet::new();
     for commit in commits {
         recurse_on_commits_helper(&graph, &condition, &commit, &mut |child_node| {
             let child_commit = &child_node.commit;
-            if !seen_oids.contains(&child_commit.id()) {
-                seen_oids.insert(child_commit.id());
+            if !seen_oids.contains(&child_commit.get_oid()) {
+                seen_oids.insert(child_commit.get_oid());
                 result.push(child_commit.clone());
             }
         });
@@ -117,7 +117,7 @@ pub fn hide(hashes: Vec<String>, recursive: bool) -> anyhow::Result<isize> {
         .map(|commit| Event::HideEvent {
             timestamp,
             event_tx_id,
-            commit_oid: commit.id(),
+            commit_oid: commit.get_oid(),
         })
         .collect();
     event_log_db.add_events(events)?;
@@ -138,7 +138,7 @@ pub fn hide(hashes: Vec<String>, recursive: bool) -> anyhow::Result<isize> {
             printable_styled_string(&glyphs, hidden_commit_text)?
         );
         if let Some(CommitVisibility::Hidden) =
-            event_replayer.get_cursor_commit_visibility(cursor, commit.id())
+            event_replayer.get_cursor_commit_visibility(cursor, commit.get_oid())
         {
             println!("(It was already hidden, so this operation had no effect.)");
         }
@@ -196,7 +196,7 @@ pub fn unhide(hashes: Vec<String>, recursive: bool) -> anyhow::Result<isize> {
         .map(|commit| Event::UnhideEvent {
             timestamp,
             event_tx_id,
-            commit_oid: commit.id(),
+            commit_oid: commit.get_oid(),
         })
         .collect();
     event_log_db.add_events(events)?;
@@ -217,7 +217,7 @@ pub fn unhide(hashes: Vec<String>, recursive: bool) -> anyhow::Result<isize> {
             printable_styled_string(&glyphs, unhidden_commit_text)?
         );
         if let Some(CommitVisibility::Visible) =
-            event_replayer.get_cursor_commit_visibility(cursor, commit.id())
+            event_replayer.get_cursor_commit_visibility(cursor, commit.get_oid())
         {
             println!("(It was not hidden, so this operation had no effect.)");
         }

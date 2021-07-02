@@ -527,13 +527,13 @@ fn test_rebase_in_memory_updates_committer_timestamp() -> anyhow::Result<()> {
     let original_committer_timestamp = repo
         .find_commit(repo.get_head_info()?.oid.unwrap())?
         .unwrap()
-        .committer()
+        .get_committer()
         .when();
     git.run(&["move", "-d", "master"])?;
     let updated_committer_timestamp = repo
         .find_commit(repo.get_head_info()?.oid.unwrap())?
         .unwrap()
-        .committer()
+        .get_committer()
         .when();
 
     println!(

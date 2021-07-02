@@ -91,7 +91,8 @@ pub fn find_abandoned_children(
                 None
             } else if possible_child_node
                 .commit
-                .parent_ids()
+                .get_parent_oids()
+                .into_iter()
                 .any(|parent_oid| parent_oid == oid)
             {
                 Some(possible_child_oid)
@@ -270,7 +271,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
                     // OID.
                     .rev()
                     .map(|main_branch_commit| RebaseCommand::Pick {
-                        commit_oid: main_branch_commit.id(),
+                        commit_oid: main_branch_commit.get_oid(),
                     })
                     .collect();
                 (self.main_branch_oid, commands)
@@ -411,7 +412,7 @@ fn rebase_in_memory(
                 progress.set_message("Starting");
                 progress.enable_steady_tick(100);
 
-                if commit_to_apply.parent_count() > 1 {
+                if commit_to_apply.get_parent_count() > 1 {
                     return Ok(RebaseInMemoryResult::CannotRebaseMergeCommit {
                         commit_oid: *commit_oid,
                     });
@@ -445,7 +446,7 @@ fn rebase_in_memory(
                         commit_tree_oid
                     ),
                 };
-                let commit_message = match commit_to_apply.message_raw() {
+                let commit_message = match commit_to_apply.get_message_raw().to_str() {
                     Some(message) => message,
                     None => anyhow::bail!(
                         "Could not decode commit message for commit: {:?}",
@@ -455,14 +456,14 @@ fn rebase_in_memory(
 
                 progress.set_message(format!("Committing to repository: {}", commit_description));
                 let committer_signature = if *preserve_timestamps {
-                    commit_to_apply.committer()
+                    commit_to_apply.get_committer()
                 } else {
-                    update_signature_timestamp(*now, commit_to_apply.committer())?
+                    update_signature_timestamp(*now, commit_to_apply.get_committer())?
                 };
                 let rebased_commit_oid = repo
                     .create_commit(
                         None,
-                        &commit_to_apply.author(),
+                        &commit_to_apply.get_author(),
                         &committer_signature,
                         commit_message,
                         &commit_tree,
