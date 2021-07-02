@@ -272,3 +272,26 @@ Either create it, or update the main branch setting by running:
         Ok(result)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_git_version_output() {
+        assert_eq!(
+            "git version 12.34.56".parse::<GitVersion>().unwrap(),
+            GitVersion(12, 34, 56)
+        );
+        assert_eq!(
+            "git version 12.34.56\n".parse::<GitVersion>().unwrap(),
+            GitVersion(12, 34, 56)
+        );
+        assert_eq!(
+            "git version 12.34.56.78.abcdef"
+                .parse::<GitVersion>()
+                .unwrap(),
+            GitVersion(12, 34, 56)
+        );
+    }
+}
