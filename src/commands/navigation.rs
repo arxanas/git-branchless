@@ -12,8 +12,8 @@ use crate::core::graph::{
 };
 use crate::core::mergebase::MergeBaseDb;
 use crate::core::metadata::{render_commit_metadata, CommitMessageProvider, CommitOidProvider};
-use crate::git::Repo;
-use crate::util::{run_git, GitRunInfo};
+use crate::git::{GitRunInfo, Repo};
+use crate::util::run_git;
 
 /// Go back a certain number of commits.
 pub fn prev(git_run_info: &GitRunInfo, num_commits: Option<isize>) -> anyhow::Result<isize> {

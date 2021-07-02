@@ -25,8 +25,8 @@ use crate::core::metadata::{
 };
 use crate::core::tui::{with_siv, SingletonView};
 use crate::declare_views;
-use crate::git::Repo;
-use crate::util::{run_git, GitRunInfo};
+use crate::git::{GitRunInfo, Repo};
+use crate::util::run_git;
 
 fn render_cursor_smartlog(
     glyphs: &Glyphs,
@@ -808,8 +808,7 @@ pub mod testing {
     use crate::core::eventlog::{EventCursor, EventLogDb, EventReplayer};
     use crate::core::formatting::Glyphs;
     use crate::core::mergebase::MergeBaseDb;
-    use crate::git::Repo;
-    use crate::util::GitRunInfo;
+    use crate::git::{GitRunInfo, Repo};
 
     pub fn select_past_event(
         siv: CursiveRunner<CursiveRunnable>,

@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use anyhow::Context;
 use branchless::commands::wrap;
-use branchless::util::GitRunInfo;
+use branchless::git::GitRunInfo;
 use simple_logger::SimpleLogger;
 use structopt::StructOpt;
 

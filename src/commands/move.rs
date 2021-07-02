@@ -11,8 +11,8 @@ use crate::core::formatting::Glyphs;
 use crate::core::graph::{make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid};
 use crate::core::mergebase::MergeBaseDb;
 use crate::core::rewrite::{execute_rebase_plan, ExecuteRebasePlanOptions, RebasePlanBuilder};
-use crate::git::Repo;
-use crate::util::{resolve_commits, GitRunInfo, ResolveCommitsResult};
+use crate::git::{GitRunInfo, Repo};
+use crate::util::{resolve_commits, ResolveCommitsResult};
 
 fn resolve_base_commit(graph: &CommitGraph, oid: git2::Oid) -> git2::Oid {
     let node = &graph[&oid];
