@@ -1,12 +1,13 @@
 use std::collections::HashMap;
 use std::convert::TryInto;
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::io::{stderr, stdout, Write};
 use std::path::PathBuf;
 use std::process::{Command, ExitStatus, Stdio};
 
 use anyhow::Context;
 use fn_error_context::context;
+use os_str_bytes::OsStrBytes;
 
 use crate::core::eventlog::{EventTransactionId, BRANCHLESS_TRANSACTION_ID_ENV_VAR};
 use crate::git::repo::Repo;
@@ -37,7 +38,7 @@ impl GitRunInfo {
     /// Returns the exit code of Git (non-zero signifies error).
     #[context("Running Git ({:?}) with args: {:?}", &self, args)]
     #[must_use = "The return code for `run_git` must be checked"]
-    pub fn run<S: AsRef<str> + std::fmt::Debug>(
+    pub fn run<S: AsRef<OsStr> + std::fmt::Debug>(
         &self,
         event_tx_id: Option<EventTransactionId>,
         args: &[S],
@@ -51,7 +52,7 @@ impl GitRunInfo {
             "branchless: {} {}",
             path_to_git.to_string_lossy(),
             args.iter()
-                .map(|arg| arg.as_ref())
+                .map(|arg| arg.as_ref().to_string_lossy().to_string())
                 .collect::<Vec<_>>()
                 .join(" ")
         );
@@ -149,7 +150,7 @@ impl GitRunInfo {
         hook_name: &str,
         event_tx_id: EventTransactionId,
         args: &[impl AsRef<str>],
-        stdin: Option<String>,
+        stdin: Option<OsString>,
     ) -> anyhow::Result<()> {
         let hook_dir = repo
             .get_config()?
@@ -194,7 +195,11 @@ impl GitRunInfo {
                 .with_context(|| format!("Invoking {} hook with PATH: {:?}", &hook_name, &path))?;
 
             if let Some(stdin) = stdin {
-                write!(child.stdin.as_mut().unwrap(), "{}", stdin)
+                child
+                    .stdin
+                    .as_mut()
+                    .unwrap()
+                    .write_all(&stdin.to_raw_bytes())
                     .with_context(|| "Writing hook process stdin")?;
             }
 

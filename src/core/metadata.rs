@@ -6,6 +6,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
+use std::ffi::{OsStr, OsString};
 use std::ops::Add;
 use std::time::{Duration, SystemTime};
 
@@ -161,14 +162,14 @@ impl<'a> CommitMetadataProvider for HiddenExplanationProvider<'a> {
 /// Display branches that point to a given commit.
 pub struct BranchesProvider<'a> {
     is_enabled: bool,
-    branch_oid_to_names: &'a HashMap<git2::Oid, HashSet<String>>,
+    branch_oid_to_names: &'a HashMap<git2::Oid, HashSet<OsString>>,
 }
 
 impl<'a> BranchesProvider<'a> {
     /// Constructor.
     pub fn new(
         repo: &Repo,
-        branch_oid_to_names: &'a HashMap<git2::Oid, HashSet<String>>,
+        branch_oid_to_names: &'a HashMap<git2::Oid, HashSet<OsString>>,
     ) -> anyhow::Result<Self> {
         let is_enabled = get_commit_metadata_branches(repo)?;
         Ok(BranchesProvider {
@@ -185,10 +186,10 @@ impl<'a> CommitMetadataProvider for BranchesProvider<'a> {
             return Ok(None);
         }
 
-        let branch_names: HashSet<&str> = match self.branch_oid_to_names.get(&commit.get_oid()) {
+        let branch_names: HashSet<&OsStr> = match self.branch_oid_to_names.get(&commit.get_oid()) {
             Some(branch_names) => branch_names
                 .iter()
-                .map(|branch_name| branch_name.as_ref())
+                .map(|branch_name| branch_name.as_os_str())
                 .collect(),
             None => HashSet::new(),
         };
@@ -196,7 +197,10 @@ impl<'a> CommitMetadataProvider for BranchesProvider<'a> {
         if branch_names.is_empty() {
             Ok(None)
         } else {
-            let mut branch_names: Vec<&str> = branch_names.into_iter().collect();
+            let mut branch_names: Vec<String> = branch_names
+                .into_iter()
+                .map(|branch_name| branch_name.to_string_lossy().to_string())
+                .collect();
             branch_names.sort_unstable();
             let result = StyledString::styled(
                 format!("({})", branch_names.join(", ")),
@@ -244,7 +248,7 @@ impl CommitMetadataProvider for DifferentialRevisionProvider {
             return Ok(None);
         }
 
-        let diff_number = match extract_diff_number(&commit.get_message_raw().to_string_lossy()) {
+        let diff_number = match extract_diff_number(&commit.get_message_raw()?.to_string_lossy()) {
             Some(diff_number) => diff_number,
             None => return Ok(None),
         };

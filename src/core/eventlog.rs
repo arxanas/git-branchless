@@ -8,15 +8,18 @@
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::convert::{TryFrom, TryInto};
+use std::ffi::{OsStr, OsString};
+
 use std::str::FromStr;
 use std::time::{Duration, SystemTime};
 
 use anyhow::Context;
 use fn_error_context::context;
 use log::warn;
+use os_str_bytes::{OsStrBytes, OsStringBytes};
 
 use crate::core::config::get_main_branch_name;
-use crate::git::{wrap_git_error, Repo};
+use crate::git::{wrap_git_error, Reference, Repo};
 
 /// When this environment variable is set, we reuse the ID for the transaction
 /// which the caller has already started.
@@ -27,10 +30,10 @@ struct Row {
     timestamp: f64,
     type_: String,
     event_tx_id: isize,
-    ref1: Option<String>,
-    ref2: Option<String>,
-    ref_name: Option<String>,
-    message: Option<String>,
+    ref1: Option<OsString>,
+    ref2: Option<OsString>,
+    ref_name: Option<OsString>,
+    message: Option<OsString>,
 }
 
 /// The ID associated with the transactions that created an event.
@@ -106,13 +109,13 @@ pub enum Event {
         /// The full name of the reference that was updated.
         ///
         /// For example, `HEAD` or `refs/heads/master`.
-        ref_name: String,
+        ref_name: OsString,
 
         /// The old referent.
         ///
         /// May be an OID (in the case of a direct reference) or another
         /// reference name (in the case of a symbolic reference).
-        old_ref: Option<String>,
+        old_ref: Option<OsString>,
 
         /// The updated referent.
         ///
@@ -120,10 +123,10 @@ pub enum Event {
         ///
         /// May be an OID (in the case of a direct reference) or another
         /// reference name (in the case of a symbolic reference).
-        new_ref: Option<String>,
+        new_ref: Option<OsString>,
 
         /// A message associated with the rewrite, if any.
-        message: Option<String>,
+        message: Option<OsString>,
     },
 
     /// Indicate that the user made a commit.
@@ -208,8 +211,8 @@ impl From<Event> for Row {
                 timestamp,
                 event_tx_id,
                 type_: String::from("rewrite"),
-                ref1: Some(old_commit_oid.to_string()),
-                ref2: Some(new_commit_oid.to_string()),
+                ref1: Some(old_commit_oid.to_string().into()),
+                ref2: Some(new_commit_oid.to_string().into()),
                 ref_name: None,
                 message: None,
             },
@@ -239,7 +242,7 @@ impl From<Event> for Row {
                 timestamp,
                 event_tx_id,
                 type_: String::from("commit"),
-                ref1: Some(commit_oid.to_string()),
+                ref1: Some(commit_oid.to_string().into()),
                 ref2: None,
                 ref_name: None,
                 message: None,
@@ -253,7 +256,7 @@ impl From<Event> for Row {
                 timestamp,
                 event_tx_id,
                 type_: String::from("hide"),
-                ref1: Some(commit_oid.to_string()),
+                ref1: Some(commit_oid.to_string().into()),
                 ref2: None,
                 ref_name: None,
                 message: None,
@@ -267,7 +270,7 @@ impl From<Event> for Row {
                 timestamp,
                 event_tx_id,
                 type_: String::from("unhide"),
-                ref1: Some(commit_oid.to_string()),
+                ref1: Some(commit_oid.to_string().into()),
                 ref2: None,
                 ref_name: None,
                 message: None,
@@ -292,12 +295,15 @@ impl TryFrom<Row> for Event {
         } = row;
         let event_tx_id = EventTransactionId(event_tx_id);
 
-        let get_oid = |oid: &Option<String>, oid_name: &str| -> anyhow::Result<git2::Oid> {
+        let get_oid = |oid: &Option<OsString>, oid_name: &str| -> anyhow::Result<git2::Oid> {
             match oid {
-                Some(oid) => {
-                    let oid = git2::Oid::from_str(&oid).map_err(wrap_git_error)?;
-                    Ok(oid)
-                }
+                Some(oid) => match oid.to_str() {
+                    Some(oid) => {
+                        let oid = git2::Oid::from_str(&oid).map_err(wrap_git_error)?;
+                        Ok(oid)
+                    }
+                    None => anyhow::bail!("Invalid OID for reference name: {:?}", oid),
+                },
                 None => Err(anyhow::anyhow!(
                     "OID '{}' was `None` for event type '{}'",
                     oid_name,
@@ -433,6 +439,15 @@ impl<'conn> EventLogDb<'conn> {
                 ref_name,
                 message,
             } = Row::from(event);
+
+            // FIXME: it would be ideal to use BLOBs to store the reference
+            // names instead of TEXT, so that we can represent esoteric
+            // reference names (which are derived from path names).
+            let ref1 = ref1.map(|x| x.to_string_lossy().into_owned());
+            let ref2 = ref2.map(|x| x.to_string_lossy().into_owned());
+            let ref_name = ref_name.map(|x| x.to_string_lossy().into_owned());
+            let message = message.map(|x| x.to_string_lossy().into_owned());
+
             tx.execute_named(
                 "
 INSERT INTO event_log VALUES (
@@ -464,6 +479,7 @@ INSERT INTO event_log VALUES (
     ///
     /// Returns: All the events in the database, ordered from oldest to newest.
     #[context("Querying events from `EventLogDb`")]
+
     pub fn get_events(&self) -> anyhow::Result<Vec<Event>> {
         let mut stmt = self.conn.prepare(
             "
@@ -484,17 +500,18 @@ ORDER BY rowid ASC
 
                 // A ref name corresponding to commit hash `0` indicates that
                 // there was no old/new ref at all (i.e. it was created or deleted).
-                let old_ref = old_ref.filter(|old_ref| *old_ref != git2::Oid::zero().to_string());
-                let new_ref = new_ref.filter(|new_ref| *new_ref != git2::Oid::zero().to_string());
+                let zero_oid = git2::Oid::zero().to_string();
+                let old_ref = old_ref.filter(|old_ref| *old_ref != zero_oid);
+                let new_ref = new_ref.filter(|new_ref| *new_ref != zero_oid);
 
                 Ok(Row {
                     timestamp,
                     event_tx_id,
                     type_,
-                    ref_name,
-                    ref1: old_ref,
-                    ref2: new_ref,
-                    message,
+                    ref_name: ref_name.map(OsString::from),
+                    ref1: old_ref.map(OsString::from),
+                    ref2: new_ref.map(OsString::from),
+                    message: message.map(OsString::from),
                 })
             })?
             .collect();
@@ -560,8 +577,11 @@ ORDER BY rowid ASC
 /// Returns: Whether or not the given reference is used internally to keep the
 /// commit alive, so that it's not collected by Git's garbage collection
 /// mechanism.
-pub fn is_gc_ref(ref_name: &str) -> bool {
-    ref_name.starts_with("refs/branchless/")
+pub fn is_gc_ref(ref_name: &OsStr) -> bool {
+    match ref_name.to_str() {
+        None => false,
+        Some(ref_name) => ref_name.starts_with("refs/branchless/"),
+    }
 }
 
 /// Determines whether or not updates to the given reference should be ignored.
@@ -570,14 +590,14 @@ pub fn is_gc_ref(ref_name: &str) -> bool {
 /// * `ref_name`: The name of the reference to check.
 ///
 /// Returns: Whether or not updates to the given reference should be ignored.
-pub fn should_ignore_ref_updates(ref_name: &str) -> bool {
+pub fn should_ignore_ref_updates(ref_name: &OsStr) -> bool {
     if is_gc_ref(ref_name) {
         return true;
     }
 
     matches!(
-        ref_name,
-        "ORIG_HEAD" | "CHERRY_PICK" | "REBASE_HEAD" | "CHERRY_PICK_HEAD" | "FETCH_HEAD"
+        ref_name.to_str(),
+        Some("ORIG_HEAD" | "CHERRY_PICK" | "REBASE_HEAD" | "CHERRY_PICK_HEAD" | "FETCH_HEAD")
     )
 }
 
@@ -639,7 +659,7 @@ pub struct EventReplayer {
     ///
     /// If an entry is not present, it was either never observed, or it most
     /// recently changed to point to the zero hash (i.e. it was deleted).
-    ref_locations: HashMap<String, String>,
+    ref_locations: HashMap<OsString, OsString>,
 }
 
 impl EventReplayer {
@@ -1025,7 +1045,7 @@ impl EventReplayer {
                         ref_name,
                         new_ref: Some(new_ref),
                         ..
-                    } if ref_name == "HEAD" => match git2::Oid::from_str(&new_ref) {
+                    } if ref_name == "HEAD" => match Reference::name_to_oid(&new_ref) {
                         Ok(oid) => Some(oid),
                         Err(_) => {
                             warn!(
@@ -1056,7 +1076,7 @@ impl EventReplayer {
         branch_name: &str,
     ) -> anyhow::Result<Option<git2::Oid>> {
         let cursor_event_id: usize = cursor.event_id.try_into().unwrap();
-        let target_ref_name = format!("refs/heads/{}", branch_name);
+        let target_ref_name = OsString::from(format!("refs/heads/{}", branch_name));
         let oid = self.events[0..cursor_event_id]
             .iter()
             .rev()
@@ -1070,7 +1090,7 @@ impl EventReplayer {
             });
         match oid {
             Some(oid) => {
-                let oid = git2::Oid::from_str(&oid)?;
+                let oid = Reference::name_to_oid(oid)?;
                 Ok(Some(oid))
             }
             None => Ok(None),
@@ -1120,8 +1140,8 @@ impl EventReplayer {
         &self,
         cursor: EventCursor,
         repo: &Repo,
-    ) -> anyhow::Result<HashMap<git2::Oid, HashSet<String>>> {
-        let mut ref_name_to_oid: HashMap<&String, git2::Oid> = HashMap::new();
+    ) -> anyhow::Result<HashMap<git2::Oid, HashSet<OsString>>> {
+        let mut ref_name_to_oid: HashMap<&OsString, git2::Oid> = HashMap::new();
         let cursor_event_id: usize = cursor.event_id.try_into().unwrap();
         for event in self.events[..cursor_event_id].iter() {
             match event {
@@ -1130,7 +1150,7 @@ impl EventReplayer {
                     ref_name,
                     ..
                 } => {
-                    if let Ok(oid) = git2::Oid::from_str(new_ref) {
+                    if let Ok(oid) = Reference::name_to_oid(new_ref) {
                         ref_name_to_oid.insert(ref_name, oid);
                     }
                 }
@@ -1145,15 +1165,15 @@ impl EventReplayer {
             }
         }
 
-        let mut result: HashMap<git2::Oid, HashSet<String>> = HashMap::new();
+        let mut result: HashMap<git2::Oid, HashSet<OsString>> = HashMap::new();
         for (ref_name, ref_oid) in ref_name_to_oid.iter() {
-            match ref_name.strip_prefix("refs/heads/") {
+            match ref_name.to_raw_bytes().strip_prefix(b"refs/heads/") {
                 None => {}
                 Some(branch_name) => {
                     result
                         .entry(*ref_oid)
                         .or_insert_with(HashSet::new)
-                        .insert(String::from(branch_name));
+                        .insert(OsString::from_raw_vec(branch_name.into())?);
                 }
             }
         }
@@ -1163,7 +1183,7 @@ impl EventReplayer {
         result
             .entry(main_branch_oid)
             .or_insert_with(HashSet::new)
-            .insert(main_branch_name);
+            .insert(main_branch_name.into());
         Ok(result)
     }
 
@@ -1269,15 +1289,15 @@ mod tests {
         replayer.process_event(&Event::RefUpdateEvent {
             timestamp: 0.0,
             event_tx_id,
-            ref_name: String::from("ORIG_HEAD"),
-            old_ref: Some(String::from("abc")),
-            new_ref: Some(String::from("def")),
+            ref_name: OsString::from("ORIG_HEAD"),
+            old_ref: Some(OsString::from("abc")),
+            new_ref: Some(OsString::from("def")),
             message: None,
         });
         replayer.process_event(&Event::RefUpdateEvent {
             timestamp: 0.0,
             event_tx_id,
-            ref_name: String::from("CHERRY_PICK_HEAD"),
+            ref_name: OsString::from("CHERRY_PICK_HEAD"),
             old_ref: None,
             new_ref: None,
             message: None,

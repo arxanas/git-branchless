@@ -9,33 +9,29 @@
 //! garbage collection doesn't collect commits which branchless thinks are still
 //! visible.
 
+use std::ffi::OsStr;
+
 use anyhow::Context;
 use fn_error_context::context;
 
 use crate::core::eventlog::{is_gc_ref, EventLogDb, EventReplayer};
 use crate::core::graph::{make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid};
 use crate::core::mergebase::MergeBaseDb;
-use crate::git::Repo;
+use crate::git::{Reference, Repo};
 
 fn find_dangling_references<'repo>(
     repo: &'repo Repo,
     graph: &CommitGraph,
-) -> anyhow::Result<Vec<git2::Reference<'repo>>> {
+) -> anyhow::Result<Vec<Reference<'repo>>> {
     let mut result = Vec::new();
     for reference in repo.get_all_references()? {
-        let reference_name = match reference.name() {
-            Some(name) => name.to_owned(),
-            None => continue,
-        };
-        let resolved_reference = reference
-            .resolve()
-            .with_context(|| format!("Resolving reference: {}", reference_name))?;
+        let reference_name = reference.get_name()?;
 
         // The graph only contains commits, so we don't need to handle the
         // case of the reference not peeling to a valid commit. (It might be
         // a reference to a different kind of object.)
-        if let Ok(commit) = resolved_reference.peel_to_commit() {
-            if is_gc_ref(&reference_name) && !graph.contains_key(&commit.id()) {
+        if let Some(commit) = reference.peel_to_commit()? {
+            if is_gc_ref(&reference_name) && !graph.contains_key(&commit.get_oid()) {
                 result.push(reference)
             }
         }
@@ -56,11 +52,11 @@ fn find_dangling_references<'repo>(
 pub fn mark_commit_reachable(repo: &Repo, commit_oid: git2::Oid) -> anyhow::Result<()> {
     let ref_name = format!("refs/branchless/{}", commit_oid.to_string());
     anyhow::ensure!(
-        git2::Reference::is_valid_name(&ref_name),
+        Reference::is_valid_name(&ref_name),
         format!("Invalid ref name to mark commit as reachable: {}", ref_name)
     );
     repo.create_reference(
-        &ref_name,
+        OsStr::new(&ref_name),
         commit_oid,
         true,
         "branchless: marking commit as reachable",
@@ -99,7 +95,7 @@ pub fn gc() -> anyhow::Result<()> {
     for mut reference in dangling_references.into_iter() {
         reference
             .delete()
-            .with_context(|| format!("Deleting reference {:?}", reference.name()))?;
+            .with_context(|| format!("Deleting reference {:?}", reference.get_name()))?;
     }
     Ok(())
 }

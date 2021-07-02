@@ -4,6 +4,7 @@
 //! time and inverting them.
 
 use std::convert::TryInto;
+use std::ffi::OsStr;
 use std::io::{stdin, stdout, BufRead, BufReader, Read, Write};
 use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
 use std::time::SystemTime;
@@ -25,7 +26,7 @@ use crate::core::metadata::{
 };
 use crate::core::tui::{with_siv, SingletonView};
 use crate::declare_views;
-use crate::git::{GitRunInfo, Repo};
+use crate::git::{GitRunInfo, Reference, Repo};
 
 fn render_cursor_smartlog(
     glyphs: &Glyphs,
@@ -65,7 +66,8 @@ fn render_cursor_smartlog(
     Ok(result)
 }
 
-fn render_ref_name(ref_name: &str) -> String {
+fn render_ref_name(ref_name: &OsStr) -> String {
+    let ref_name = ref_name.to_string_lossy();
     match ref_name.strip_prefix("refs/heads/") {
         Some(branch_name) => format!("branch {}", branch_name),
         None => format!("ref {}", ref_name),
@@ -143,7 +145,7 @@ fn describe_event(repo: &Repo, event: &Event) -> anyhow::Result<Vec<StyledString
             vec![
                 StyledStringBuilder::new()
                     .append_plain("Check out to ")
-                    .append(render_commit(new_ref.parse()?)?)
+                    .append(render_commit(new_ref.to_string_lossy().parse()?)?)
                     .build(),
                 StyledString::new(),
             ]
@@ -160,11 +162,11 @@ fn describe_event(repo: &Repo, event: &Event) -> anyhow::Result<Vec<StyledString
             vec![
                 StyledStringBuilder::new()
                     .append_plain("Check out from ")
-                    .append(render_commit(old_ref.parse()?)?)
+                    .append(render_commit(Reference::name_to_oid(old_ref)?)?)
                     .build(),
                 StyledStringBuilder::new()
                     .append_plain("            to ")
-                    .append(render_commit(new_ref.parse()?)?)
+                    .append(render_commit(Reference::name_to_oid(new_ref)?)?)
                     .build(),
             ]
         }
@@ -203,7 +205,7 @@ fn describe_event(repo: &Repo, event: &Event) -> anyhow::Result<Vec<StyledString
                     .append_plain("Create ")
                     .append_plain(render_ref_name(ref_name))
                     .append_plain(" at ")
-                    .append(render_commit(new_ref.parse()?)?)
+                    .append(render_commit(Reference::name_to_oid(new_ref)?)?)
                     .build(),
                 StyledString::new(),
             ]
@@ -222,7 +224,7 @@ fn describe_event(repo: &Repo, event: &Event) -> anyhow::Result<Vec<StyledString
                     .append_plain("Delete ")
                     .append_plain(render_ref_name(ref_name))
                     .append_plain(" at ")
-                    .append(render_commit(old_ref.parse()?)?)
+                    .append(render_commit(Reference::name_to_oid(old_ref)?)?)
                     .build(),
                 StyledString::new(),
             ]
@@ -242,13 +244,13 @@ fn describe_event(repo: &Repo, event: &Event) -> anyhow::Result<Vec<StyledString
                     .append_plain("Move ")
                     .append_plain(ref_name.clone())
                     .append_plain(" from ")
-                    .append(render_commit(old_ref.parse()?)?)
+                    .append(render_commit(Reference::name_to_oid(old_ref)?)?)
                     .build(),
                 StyledStringBuilder::new()
                     .append_plain("     ")
                     .append_plain(" ".repeat(ref_name.len()))
                     .append_plain("   to ")
-                    .append(render_commit(new_ref.parse()?)?)
+                    .append(render_commit(Reference::name_to_oid(new_ref)?)?)
                     .build(),
             ]
         }
@@ -696,7 +698,14 @@ fn undo_events(
                 // dirty working copy). The `Git` command will update the event
                 // log appropriately, as it will invoke our hooks.
                 git_run_info
-                    .run(Some(event_tx_id), &["checkout", "--detach", &new_ref])
+                    .run(
+                        Some(event_tx_id),
+                        &[
+                            OsStr::new("checkout"),
+                            OsStr::new("--detach"),
+                            new_ref.as_os_str(),
+                        ],
+                    )
                     .with_context(|| "Updating to previous HEAD location")?;
             }
             Event::RefUpdateEvent {
@@ -720,13 +729,13 @@ fn undo_events(
                 Some(mut reference) => {
                     reference
                         .delete()
-                        .with_context(|| format!("Deleting reference: {}", ref_name))?;
+                        .with_context(|| "Applying `RefUpdateEvent`")?;
                 }
                 None => {
                     writeln!(
                         out,
                         "Reference {} did not exist, not deleting it.",
-                        ref_name
+                        ref_name.to_string_lossy()
                     )?;
                 }
             },
@@ -747,7 +756,7 @@ fn undo_events(
                 message: _,
             } => {
                 // Create or update the given reference.
-                let new_ref = new_ref.parse()?;
+                let new_ref = Reference::name_to_oid(&new_ref)?;
                 repo.create_reference(&ref_name, new_ref, true, "branchless undo")?;
             }
             Event::CommitEvent { .. }
@@ -852,7 +861,7 @@ mod tests {
             Event::RefUpdateEvent {
                 timestamp: 1.0,
                 event_tx_id,
-                ref_name: "HEAD".to_owned(),
+                ref_name: "HEAD".into(),
                 old_ref: Some("1".parse()?),
                 new_ref: Some("2".parse()?),
                 message: None,
@@ -860,7 +869,7 @@ mod tests {
             Event::RefUpdateEvent {
                 timestamp: 2.0,
                 event_tx_id,
-                ref_name: "HEAD".to_owned(),
+                ref_name: "HEAD".into(),
                 old_ref: Some("1".parse()?),
                 new_ref: Some("3".parse()?),
                 message: None,
@@ -869,7 +878,7 @@ mod tests {
         let expected = vec![Event::RefUpdateEvent {
             timestamp: 2.0,
             event_tx_id,
-            ref_name: "HEAD".to_owned(),
+            ref_name: "HEAD".into(),
             old_ref: Some("1".parse()?),
             new_ref: Some("3".parse()?),
             message: None,
