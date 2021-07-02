@@ -1,7 +1,6 @@
 //! Utility functions.
 
 use std::path::PathBuf;
-use std::str::FromStr;
 
 use fn_error_context::context;
 use git2::ErrorCode;
@@ -9,33 +8,6 @@ use git2::ErrorCode;
 /// Convert a `git2::Error` into an `anyhow::Error` with an auto-generated message.
 pub fn wrap_git_error(error: git2::Error) -> anyhow::Error {
     anyhow::anyhow!("Git error {:?}: {}", error.code(), error.message())
-}
-
-/// The parsed version of Git.
-#[derive(Debug, PartialEq, PartialOrd, Eq)]
-pub struct GitVersion(pub isize, pub isize, pub isize);
-
-impl FromStr for GitVersion {
-    type Err = anyhow::Error;
-
-    #[context("Parsing Git version from string: {:?}", output)]
-    fn from_str(output: &str) -> anyhow::Result<GitVersion> {
-        let output = output.trim();
-        let words = output.split(' ').collect::<Vec<&str>>();
-        let version_str = match &words.as_slice() {
-            [_git, _version, version_str, ..] => version_str,
-            _ => anyhow::bail!("Could not parse Git version output: {:?}", output),
-        };
-        match version_str.split('.').collect::<Vec<&str>>().as_slice() {
-            [major, minor, patch, ..] => {
-                let major = major.parse()?;
-                let minor = minor.parse()?;
-                let patch = patch.parse()?;
-                Ok(GitVersion(major, minor, patch))
-            }
-            _ => anyhow::bail!("Could not parse Git version string: {}", version_str),
-        }
-    }
 }
 
 /// Returns a path for a given file, searching through PATH to find it.
@@ -118,9 +90,8 @@ pub fn resolve_commits(
 
 #[cfg(test)]
 mod tests {
+    use crate::git::GitVersion;
     use crate::testing::make_git;
-
-    use super::*;
 
     #[test]
     fn test_parse_git_version_output() {

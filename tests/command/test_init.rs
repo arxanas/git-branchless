@@ -1,10 +1,8 @@
 use crate::util::trim_lines;
 
 use anyhow::Context;
-use branchless::{
-    testing::{make_git, GitInitOptions, GitRunOptions},
-    util::GitVersion,
-};
+use branchless::git::GitVersion;
+use branchless::testing::{make_git, GitInitOptions, GitRunOptions};
 
 #[test]
 fn test_hook_installed() -> anyhow::Result<()> {

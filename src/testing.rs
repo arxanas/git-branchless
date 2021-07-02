@@ -9,8 +9,8 @@ use std::ops::Deref;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
-use crate::git::{GitRunInfo, Repo};
-use crate::util::{get_sh, GitVersion};
+use crate::git::{GitRunInfo, GitVersion, Repo};
+use crate::util::get_sh;
 use anyhow::Context;
 use fn_error_context::context;
 use tempfile::TempDir;
