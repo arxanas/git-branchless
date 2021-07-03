@@ -115,8 +115,9 @@ pub fn find_abandoned_children(
 
 #[derive(Debug)]
 enum RebaseCommand {
-    Label { label_name: String },
-    Reset { label_name: String },
+    CreateLabel { label_name: String },
+    ResetToLabel { label_name: String },
+    ResetToOid { commit_oid: Oid },
     Pick { commit_oid: Oid },
 }
 
@@ -131,8 +132,9 @@ pub struct RebasePlan {
 impl ToString for RebaseCommand {
     fn to_string(&self) -> String {
         match self {
-            RebaseCommand::Label { label_name } => format!("label {}", label_name),
-            RebaseCommand::Reset { label_name } => format!("reset {}", label_name),
+            RebaseCommand::CreateLabel { label_name } => format!("label {}", label_name),
+            RebaseCommand::ResetToLabel { label_name } => format!("reset {}", label_name),
+            RebaseCommand::ResetToOid { commit_oid: oid } => format!("reset {}", oid),
             RebaseCommand::Pick { commit_oid } => format!("pick {}", commit_oid),
         }
     }
@@ -215,12 +217,12 @@ impl<'repo> RebasePlanBuilder<'repo> {
                 let command_num = acc.len();
                 let label_name = self.make_label_name(format!("label-{}", command_num))?;
                 let mut acc = acc;
-                acc.push(RebaseCommand::Label {
+                acc.push(RebaseCommand::CreateLabel {
                     label_name: label_name.clone(),
                 });
                 for child_oid in children {
                     acc = self.make_rebase_plan_for_current_commit(*child_oid, &label_name, acc)?;
-                    acc.push(RebaseCommand::Reset {
+                    acc.push(RebaseCommand::ResetToLabel {
                         label_name: label_name.clone(),
                     });
                 }
@@ -234,8 +236,8 @@ impl<'repo> RebasePlanBuilder<'repo> {
     pub fn move_subtree(&mut self, source_oid: Oid, dest_oid: Oid) -> anyhow::Result<()> {
         let mut commands = vec![
             // First, move to the destination OID.
-            RebaseCommand::Reset {
-                label_name: dest_oid.to_string(),
+            RebaseCommand::ResetToOid {
+                commit_oid: dest_oid,
             },
         ];
 
@@ -327,24 +329,26 @@ fn rebase_in_memory(
         .commands
         .iter()
         .filter(|command| match command {
-            RebaseCommand::Label { .. } | RebaseCommand::Reset { .. } => false,
+            RebaseCommand::CreateLabel { .. }
+            | RebaseCommand::ResetToLabel { .. }
+            | RebaseCommand::ResetToOid { .. } => false,
             RebaseCommand::Pick { .. } => true,
         })
         .count();
 
     for command in rebase_plan.commands.iter() {
         match command {
-            RebaseCommand::Label { label_name } => {
+            RebaseCommand::CreateLabel { label_name } => {
                 labels.insert(label_name.clone(), current_oid);
             }
-            RebaseCommand::Reset { label_name } => {
+            RebaseCommand::ResetToLabel { label_name } => {
                 current_oid = match labels.get(label_name) {
                     Some(oid) => *oid,
-                    None => match label_name.parse::<Oid>() {
-                        Ok(oid) => oid,
-                        Err(_) => anyhow::bail!("BUG: no associated OID for label: {}", label_name),
-                    },
+                    None => anyhow::bail!("BUG: no associated OID for label: {}", label_name),
                 };
+            }
+            RebaseCommand::ResetToOid { commit_oid } => {
+                current_oid = *commit_oid;
             }
             RebaseCommand::Pick { commit_oid } => {
                 let current_commit = repo
