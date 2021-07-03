@@ -2,7 +2,6 @@
 //! specifics on commit rewriting.
 
 use std::collections::{HashMap, HashSet};
-use std::convert::TryInto;
 use std::ffi::{OsStr, OsString};
 use std::time::SystemTime;
 
@@ -312,34 +311,6 @@ enum RebaseInMemoryResult {
     },
 }
 
-#[context("Updating commit timestamp")]
-fn update_signature_timestamp(
-    now: SystemTime,
-    signature: git2::Signature,
-) -> anyhow::Result<git2::Signature> {
-    let seconds: i64 = now
-        .duration_since(SystemTime::UNIX_EPOCH)?
-        .as_secs()
-        .try_into()?;
-    let time = git2::Time::new(seconds, signature.when().offset_minutes());
-    let name = match signature.name() {
-        Some(name) => name,
-        None => anyhow::bail!(
-            "Could not decode signature name: {:?}",
-            signature.name_bytes()
-        ),
-    };
-    let email = match signature.email() {
-        Some(email) => email,
-        None => anyhow::bail!(
-            "Could not decode signature email: {:?}",
-            signature.email_bytes()
-        ),
-    };
-    let signature = git2::Signature::new(name, email, &time)?;
-    Ok(signature)
-}
-
 #[context("Rebasing in memory")]
 fn rebase_in_memory(
     glyphs: &Glyphs,
@@ -461,7 +432,7 @@ fn rebase_in_memory(
                 let committer_signature = if *preserve_timestamps {
                     commit_to_apply.get_committer()
                 } else {
-                    update_signature_timestamp(*now, commit_to_apply.get_committer())?
+                    commit_to_apply.get_committer().update_timestamp(*now)?
                 };
                 let rebased_commit_oid = repo
                     .create_commit(
