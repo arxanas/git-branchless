@@ -10,8 +10,9 @@
 //! - To collect some different helper Git functions.
 
 use std::collections::{HashMap, HashSet};
-use std::convert::TryInto;
+use std::convert::{TryFrom, TryInto};
 use std::ffi::{OsStr, OsString};
+use std::fmt::Display;
 use std::path::Path;
 use std::str::FromStr;
 use std::time::SystemTime;
@@ -32,6 +33,65 @@ pub fn wrap_git_error(error: git2::Error) -> anyhow::Error {
 /// Wrapper around `git2::Repository`.
 pub struct Repo {
     inner: git2::Repository,
+}
+
+/// Represents the ID of a Git object.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Oid {
+    inner: git2::Oid,
+}
+
+impl Oid {
+    /// Get the "zero" OID, generally representing a deleted or non-existent
+    /// object.
+    pub fn zero() -> Self {
+        Oid {
+            inner: git2::Oid::zero(),
+        }
+    }
+}
+
+impl std::fmt::Debug for Oid {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.inner)
+    }
+}
+
+impl Display for Oid {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.inner)
+    }
+}
+
+impl FromStr for Oid {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.parse() {
+            Ok(oid) => Ok(Oid { inner: oid }),
+            Err(err) => Err(wrap_git_error(err))
+                .with_context(|| format!("Could not parse OID from string: {:?}", s)),
+        }
+    }
+}
+
+impl TryFrom<&OsStr> for Oid {
+    type Error = anyhow::Error;
+
+    fn try_from(value: &OsStr) -> Result<Self, Self::Error> {
+        match value.to_str() {
+            None => anyhow::bail!("OID value was not a simple ASCII value: {:?}", value),
+            Some(value) => value.parse(),
+        }
+    }
+}
+
+impl TryFrom<OsString> for Oid {
+    type Error = anyhow::Error;
+
+    fn try_from(value: OsString) -> Result<Self, Self::Error> {
+        Oid::try_from(value.as_os_str())
+    }
 }
 
 /// Information about the current `HEAD` of the repository.
@@ -55,7 +115,7 @@ pub struct HeadInfo<'repo> {
 
     /// The OID of the commit that `HEAD` points to. If `HEAD` is unborn, then
     /// this is `None`.
-    pub oid: Option<git2::Oid>,
+    pub oid: Option<Oid>,
 
     /// The name of the reference that `HEAD` points to symbolically. If `HEAD`
     /// is detached, then this is `None`.
@@ -81,7 +141,7 @@ impl<'repo> HeadInfo<'repo> {
             Some(oid) => self
                 .repo
                 .inner
-                .set_head_detached(oid)
+                .set_head_detached(oid.inner)
                 .map_err(wrap_git_error),
             None => {
                 log::warn!("Attempted to detach `HEAD` while `HEAD` is unborn");
@@ -197,14 +257,14 @@ impl Repo {
         };
         Ok(HeadInfo {
             repo: self,
-            oid: head_oid,
+            oid: head_oid.map(|oid| Oid { inner: oid }),
             reference_name,
         })
     }
 
     /// Get the OID corresponding to the main branch.
     #[context("Getting main branch OID for repository at: {:?}", self.get_path())]
-    pub fn get_main_branch_oid(&self) -> anyhow::Result<git2::Oid> {
+    pub fn get_main_branch_oid(&self) -> anyhow::Result<Oid> {
         let main_branch_name = get_main_branch_name(self)?;
         let branch = self
             .inner
@@ -227,20 +287,20 @@ Either create it, or update the main branch setting by running:
             ),
         };
         let commit = branch.get().peel_to_commit()?;
-        Ok(commit.id())
+        Ok(Oid { inner: commit.id() })
     }
 
     /// Get a mapping from OID to the names of branches which point to that OID.
     ///
     /// The returned branch names do not include the `refs/heads/` prefix.
     #[context("Getting branch-OID-to-names map for repository at: {:?}", self.get_path())]
-    pub fn get_branch_oid_to_names(&self) -> anyhow::Result<HashMap<git2::Oid, HashSet<OsString>>> {
+    pub fn get_branch_oid_to_names(&self) -> anyhow::Result<HashMap<Oid, HashSet<OsString>>> {
         let branches = self
             .inner
             .branches(Some(git2::BranchType::Local))
             .with_context(|| "Reading branches")?;
 
-        let mut result: HashMap<git2::Oid, HashSet<OsString>> = HashMap::new();
+        let mut result: HashMap<Oid, HashSet<OsString>> = HashMap::new();
         for branch_info in branches {
             let branch_info = branch_info.with_context(|| "Iterating over branches")?;
             let branch = match branch_info {
@@ -269,7 +329,7 @@ Either create it, or update the main branch setting by running:
                 .target()
                 .unwrap();
             result
-                .entry(branch_oid)
+                .entry(Oid { inner: branch_oid })
                 .or_insert_with(HashSet::new)
                 .insert(OsString::from(reference_name.to_owned()));
         }
@@ -339,13 +399,9 @@ Either create it, or update the main branch setting by running:
         "Looking up merge-base between {:?} and {:?} for repository at: {:?}",
         lhs, rhs, self.get_path()
     )]
-    pub fn find_merge_base(
-        &self,
-        lhs: git2::Oid,
-        rhs: git2::Oid,
-    ) -> anyhow::Result<Option<git2::Oid>> {
-        match self.inner.merge_base(lhs, rhs) {
-            Ok(merge_base) => Ok(Some(merge_base)),
+    pub fn find_merge_base(&self, lhs: Oid, rhs: Oid) -> anyhow::Result<Option<Oid>> {
+        match self.inner.merge_base(lhs.inner, rhs.inner) {
+            Ok(merge_base) => Ok(Some(Oid { inner: merge_base })),
             Err(err) if err.code() == git2::ErrorCode::NotFound => Ok(None),
             Err(err) => Err(wrap_git_error(err)),
         }
@@ -390,7 +446,7 @@ Either create it, or update the main branch setting by running:
     pub fn create_reference(
         &self,
         name: &OsStr,
-        oid: git2::Oid,
+        oid: Oid,
         force: bool,
         log_message: &str,
     ) -> anyhow::Result<Reference> {
@@ -403,7 +459,7 @@ Either create it, or update the main branch setting by running:
         };
         let reference = self
             .inner
-            .reference(name, oid, force, log_message)
+            .reference(name, oid.inner, force, log_message)
             .map_err(wrap_git_error)?;
         Ok(Reference { inner: reference })
     }
@@ -477,8 +533,8 @@ Either create it, or update the main branch setting by running:
 
     /// Look up a commit with the given OID. Returns `None` if not found.
     #[context("Looking up commit {:?} for repository at: {:?}", oid, self.get_path())]
-    pub fn find_commit(&self, oid: git2::Oid) -> anyhow::Result<Option<Commit>> {
-        match self.inner.find_commit(oid) {
+    pub fn find_commit(&self, oid: Oid) -> anyhow::Result<Option<Commit>> {
+        match self.inner.find_commit(oid.inner) {
             Ok(commit) => Ok(Some(Commit { inner: commit })),
             Err(err) if err.code() == git2::ErrorCode::NotFound => Ok(None),
             Err(err) => Err(wrap_git_error(err)),
@@ -495,12 +551,13 @@ Either create it, or update the main branch setting by running:
         message: &str,
         tree: &git2::Tree,
         parents: &[&Commit],
-    ) -> anyhow::Result<git2::Oid> {
+    ) -> anyhow::Result<Oid> {
         let parents = parents
             .iter()
             .map(|commit| &commit.inner)
             .collect::<Vec<_>>();
-        self.inner
+        let oid = self
+            .inner
             .commit(
                 update_ref,
                 &author.inner,
@@ -509,7 +566,8 @@ Either create it, or update the main branch setting by running:
                 tree,
                 parents.as_slice(),
             )
-            .map_err(wrap_git_error)
+            .map_err(wrap_git_error)?;
+        Ok(Oid { inner: oid })
     }
 
     /// Cherry-pick a commit in memory and return the resulting index.
@@ -536,8 +594,8 @@ Either create it, or update the main branch setting by running:
 
     /// Look up the tree with the given OID. Returns `None` if not found.
     #[context("Looking up tree {:?} for repository at: {:?}", oid, self.get_path())]
-    pub fn find_tree(&self, oid: git2::Oid) -> anyhow::Result<Option<git2::Tree>> {
-        match self.inner.find_tree(oid) {
+    pub fn find_tree(&self, oid: Oid) -> anyhow::Result<Option<git2::Tree>> {
+        match self.inner.find_tree(oid.inner) {
             Ok(tree) => Ok(Some(tree)),
             Err(err) if err.code() == git2::ErrorCode::NotFound => Ok(None),
             Err(err) => Err(wrap_git_error(err)),
@@ -547,8 +605,9 @@ Either create it, or update the main branch setting by running:
     /// Write the provided in-memory index as a tree into Git`s object database.
     /// There must be no merge conflicts in the index.
     #[context("Writing index file to disk for repository at: {:?}", self.get_path())]
-    pub fn write_index_to_tree(&self, index: &mut git2::Index) -> anyhow::Result<git2::Oid> {
-        index.write_tree_to(&self.inner).map_err(wrap_git_error)
+    pub fn write_index_to_tree(&self, index: &mut git2::Index) -> anyhow::Result<Oid> {
+        let oid = index.write_tree_to(&self.inner).map_err(wrap_git_error)?;
+        Ok(Oid { inner: oid })
     }
 }
 
@@ -598,13 +657,18 @@ pub struct Commit<'repo> {
 
 impl<'repo> Commit<'repo> {
     /// Get the object ID of the commit.
-    pub fn get_oid(&self) -> git2::Oid {
-        self.inner.id()
+    pub fn get_oid(&self) -> Oid {
+        Oid {
+            inner: self.inner.id(),
+        }
     }
 
     /// Get the object IDs of the parents of this commit.
-    pub fn get_parent_oids(&self) -> Vec<git2::Oid> {
-        self.inner.parent_ids().collect()
+    pub fn get_parent_oids(&self) -> Vec<Oid> {
+        self.inner
+            .parent_ids()
+            .map(|oid| Oid { inner: oid })
+            .collect()
     }
 
     /// Get the number of parents of this commit.
@@ -674,15 +738,8 @@ impl<'repo> Reference<'repo> {
     /// Given a reference name which is an OID, convert the string into an `Oid`
     /// object.
     #[context("Converting reference name to OID: {:?}", ref_name)]
-    pub fn name_to_oid(ref_name: &OsStr) -> anyhow::Result<git2::Oid> {
-        let ref_name = match ref_name.to_str() {
-            Some(ref_name) => ref_name,
-            None => anyhow::bail!("Could not decode reference name as OID: {:?}", ref_name),
-        };
-        let oid = ref_name
-            .parse()
-            .with_context(|| format!("Parsing reference name as OID: {:?}", ref_name))?;
-        Ok(oid)
+    pub fn name_to_oid(ref_name: &OsStr) -> anyhow::Result<Oid> {
+        ref_name.try_into()
     }
 
     /// Get the name of this reference.
@@ -725,8 +782,8 @@ type BranchType = git2::BranchType;
 impl<'repo> Branch<'repo> {
     /// Get the OID pointed to by the branch. Returns `None` if the branch is
     /// not a direct reference (which is unusual).
-    pub fn get_oid(&self) -> anyhow::Result<Option<git2::Oid>> {
-        Ok(self.inner.get().target())
+    pub fn get_oid(&self) -> anyhow::Result<Option<Oid>> {
+        Ok(self.inner.get().target().map(|oid| Oid { inner: oid }))
     }
 
     /// Get the name of the branch.

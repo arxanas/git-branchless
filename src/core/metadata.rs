@@ -20,7 +20,7 @@ use crate::core::config::{
     get_commit_metadata_branches, get_commit_metadata_differential_revision,
     get_commit_metadata_relative_time,
 };
-use crate::git::{Commit, Repo};
+use crate::git::{Commit, Oid, Repo};
 
 use super::eventlog::{Event, EventCursor, EventReplayer};
 use super::formatting::StyledStringBuilder;
@@ -162,14 +162,14 @@ impl<'a> CommitMetadataProvider for HiddenExplanationProvider<'a> {
 /// Display branches that point to a given commit.
 pub struct BranchesProvider<'a> {
     is_enabled: bool,
-    branch_oid_to_names: &'a HashMap<git2::Oid, HashSet<OsString>>,
+    branch_oid_to_names: &'a HashMap<Oid, HashSet<OsString>>,
 }
 
 impl<'a> BranchesProvider<'a> {
     /// Constructor.
     pub fn new(
         repo: &Repo,
-        branch_oid_to_names: &'a HashMap<git2::Oid, HashSet<OsString>>,
+        branch_oid_to_names: &'a HashMap<Oid, HashSet<OsString>>,
     ) -> anyhow::Result<Self> {
         let is_enabled = get_commit_metadata_branches(repo)?;
         Ok(BranchesProvider {

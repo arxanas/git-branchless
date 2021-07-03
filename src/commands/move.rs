@@ -14,9 +14,9 @@ use crate::core::graph::{
 };
 use crate::core::mergebase::MergeBaseDb;
 use crate::core::rewrite::{execute_rebase_plan, ExecuteRebasePlanOptions, RebasePlanBuilder};
-use crate::git::{GitRunInfo, Repo};
+use crate::git::{GitRunInfo, Oid, Repo};
 
-fn resolve_base_commit(graph: &CommitGraph, oid: git2::Oid) -> git2::Oid {
+fn resolve_base_commit(graph: &CommitGraph, oid: Oid) -> Oid {
     let node = &graph[&oid];
     if node.is_main {
         oid
