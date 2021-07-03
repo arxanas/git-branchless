@@ -59,7 +59,6 @@ use std::collections::HashMap;
 use std::time::SystemTime;
 
 use fn_error_context::context;
-use log::info;
 
 use crate::commands::smartlog::smartlog;
 use crate::core::config::get_restack_preserve_timestamps;
@@ -168,12 +167,12 @@ fn restack_branches(
 
     let mut rewritten_oids = HashMap::new();
     for branch in repo.get_all_local_branches()? {
-        let branch_target = match branch.get().target() {
+        let branch_target = match branch.get_oid()? {
             Some(branch_target) => branch_target,
             None => {
-                info!(
+                log::warn!(
                     "Branch {:?} was not a direct reference, could not resolve target",
-                    branch.name()
+                    branch.get_name()
                 );
                 continue;
             }

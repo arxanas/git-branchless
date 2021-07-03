@@ -427,7 +427,7 @@ Either create it, or update the main branch setting by running:
 
     /// Get all local branches in the repository.
     #[context("Looking up all local branches for repository at: {:?}", self.get_path())]
-    pub fn get_all_local_branches(&self) -> anyhow::Result<Vec<git2::Branch>> {
+    pub fn get_all_local_branches(&self) -> anyhow::Result<Vec<Branch>> {
         let mut all_branches = Vec::new();
         for branch in self
             .inner
@@ -436,7 +436,7 @@ Either create it, or update the main branch setting by running:
             .with_context(|| "Iterating over all local branches")?
         {
             let (branch, _branch_type) = branch.with_context(|| "Accessing individual branch")?;
-            all_branches.push(branch);
+            all_branches.push(Branch { inner: branch });
         }
         Ok(all_branches)
     }
@@ -446,10 +446,10 @@ Either create it, or update the main branch setting by running:
     pub fn find_branch(
         &self,
         name: &str,
-        branch_type: git2::BranchType,
-    ) -> anyhow::Result<Option<git2::Branch>> {
+        branch_type: BranchType,
+    ) -> anyhow::Result<Option<Branch>> {
         match self.inner.find_branch(name, branch_type) {
-            Ok(branch) => Ok(Some(branch)),
+            Ok(branch) => Ok(Some(Branch { inner: branch })),
             Err(err) if err.code() == git2::ErrorCode::NotFound => Ok(None),
             Err(err) => Err(wrap_git_error(err)),
         }
@@ -712,6 +712,34 @@ impl<'repo> Reference<'repo> {
             .delete()
             .with_context(|| format!("Deleting reference: {:?}", reference_name))?;
         Ok(())
+    }
+}
+
+/// Represents a Git branch.
+pub struct Branch<'repo> {
+    inner: git2::Branch<'repo>,
+}
+
+type BranchType = git2::BranchType;
+
+impl<'repo> Branch<'repo> {
+    /// Get the OID pointed to by the branch. Returns `None` if the branch is
+    /// not a direct reference (which is unusual).
+    pub fn get_oid(&self) -> anyhow::Result<Option<git2::Oid>> {
+        Ok(self.inner.get().target())
+    }
+
+    /// Get the name of the branch.
+    pub fn get_name(&self) -> anyhow::Result<OsString> {
+        let name = OsStringBytes::from_raw_vec(self.inner.name_bytes()?.into())?;
+        Ok(name)
+    }
+
+    /// Convert the branch into its underlying `Reference`.
+    pub fn into_reference(self) -> Reference<'repo> {
+        Reference {
+            inner: self.inner.into_reference(),
+        }
     }
 }
 
