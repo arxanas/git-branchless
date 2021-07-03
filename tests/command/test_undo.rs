@@ -25,7 +25,7 @@ fn run_select_past_event(
     let conn = repo.get_db_conn()?;
     let merge_base_db = MergeBaseDb::new(&conn)?;
     let event_log_db: EventLogDb = EventLogDb::new(&conn)?;
-    let mut event_replayer = EventReplayer::from_event_log_db(&event_log_db)?;
+    let mut event_replayer = EventReplayer::from_event_log_db(&repo, &event_log_db)?;
     let siv = CursiveRunnable::new::<Infallible, _>(move || {
         Ok(CursiveTestingBackend::init(events.clone()))
     });
@@ -43,7 +43,7 @@ fn run_undo_events(git: &Git, event_cursor: EventCursor) -> anyhow::Result<Strin
     let repo = git.get_repo()?;
     let conn = repo.get_db_conn()?;
     let mut event_log_db: EventLogDb = EventLogDb::new(&conn)?;
-    let event_replayer = EventReplayer::from_event_log_db(&event_log_db)?;
+    let event_replayer = EventReplayer::from_event_log_db(&repo, &event_log_db)?;
     let input = "y";
     let mut in_ = input.as_bytes();
     let mut out = Vec::new();

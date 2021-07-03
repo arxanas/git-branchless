@@ -20,7 +20,7 @@ use crate::core::config::{
     get_commit_metadata_branches, get_commit_metadata_differential_revision,
     get_commit_metadata_relative_time,
 };
-use crate::git::{Commit, Oid, Repo};
+use crate::git::{Branch, CategorizedBranchName, Commit, Oid, Repo};
 
 use super::eventlog::{Event, EventCursor, EventReplayer};
 use super::formatting::StyledStringBuilder;
@@ -199,7 +199,15 @@ impl<'a> CommitMetadataProvider for BranchesProvider<'a> {
         } else {
             let mut branch_names: Vec<String> = branch_names
                 .into_iter()
-                .map(|branch_name| branch_name.to_string_lossy().to_string())
+                .map(
+                    |branch_name| match Branch::categorize_by_prefix(branch_name) {
+                        CategorizedBranchName::LocalBranch { prefix: _, suffix } => suffix,
+                        CategorizedBranchName::RemoteBranch { prefix: _, suffix } => {
+                            format!("remote {}", suffix)
+                        }
+                        CategorizedBranchName::OtherRef { suffix } => format!("ref {}", suffix),
+                    },
+                )
                 .collect();
             branch_names.sort_unstable();
             let result = StyledString::styled(

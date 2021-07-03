@@ -91,7 +91,7 @@ pub fn hide(hashes: Vec<String>, recursive: bool) -> anyhow::Result<isize> {
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
     let mut event_log_db = EventLogDb::new(&conn)?;
-    let event_replayer = EventReplayer::from_event_log_db(&event_log_db)?;
+    let event_replayer = EventReplayer::from_event_log_db(&repo, &event_log_db)?;
     let merge_base_db = MergeBaseDb::new(&conn)?;
 
     let commits = resolve_commits(&repo, hashes)?;
@@ -170,7 +170,7 @@ pub fn unhide(hashes: Vec<String>, recursive: bool) -> anyhow::Result<isize> {
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
     let mut event_log_db = EventLogDb::new(&conn)?;
-    let event_replayer = EventReplayer::from_event_log_db(&event_log_db)?;
+    let event_replayer = EventReplayer::from_event_log_db(&repo, &event_log_db)?;
     let merge_base_db = MergeBaseDb::new(&conn)?;
 
     let commits = resolve_commits(&repo, hashes)?;

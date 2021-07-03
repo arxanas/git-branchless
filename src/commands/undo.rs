@@ -66,14 +66,6 @@ fn render_cursor_smartlog(
     Ok(result)
 }
 
-fn render_ref_name(ref_name: &OsStr) -> String {
-    let ref_name = ref_name.to_string_lossy();
-    match ref_name.strip_prefix("refs/heads/") {
-        Some(branch_name) => format!("branch {}", branch_name),
-        None => format!("ref {}", ref_name),
-    }
-}
-
 fn describe_event(repo: &Repo, event: &Event) -> anyhow::Result<Vec<StyledString>> {
     let render_commit = |oid: Oid| -> anyhow::Result<StyledString> {
         match repo.find_commit(oid)? {
@@ -182,7 +174,7 @@ fn describe_event(repo: &Repo, event: &Event) -> anyhow::Result<Vec<StyledString
             vec![
                 StyledStringBuilder::new()
                     .append_plain("Empty event for ")
-                    .append_plain(render_ref_name(ref_name))
+                    .append_plain(Reference::friendly_describe_reference_name(ref_name))
                     .build(),
                 StyledStringBuilder::new()
                     .append_plain("This event should not appear. ")
@@ -203,7 +195,7 @@ fn describe_event(repo: &Repo, event: &Event) -> anyhow::Result<Vec<StyledString
             vec![
                 StyledStringBuilder::new()
                     .append_plain("Create ")
-                    .append_plain(render_ref_name(ref_name))
+                    .append_plain(Reference::friendly_describe_reference_name(ref_name))
                     .append_plain(" at ")
                     .append(render_commit(Reference::name_to_oid(new_ref)?)?)
                     .build(),
@@ -222,7 +214,7 @@ fn describe_event(repo: &Repo, event: &Event) -> anyhow::Result<Vec<StyledString
             vec![
                 StyledStringBuilder::new()
                     .append_plain("Delete ")
-                    .append_plain(render_ref_name(ref_name))
+                    .append_plain(Reference::friendly_describe_reference_name(ref_name))
                     .append_plain(" at ")
                     .append(render_commit(Reference::name_to_oid(old_ref)?)?)
                     .build(),
@@ -238,7 +230,7 @@ fn describe_event(repo: &Repo, event: &Event) -> anyhow::Result<Vec<StyledString
             new_ref: Some(new_ref),
             message: _,
         } => {
-            let ref_name = render_ref_name(ref_name);
+            let ref_name = Reference::friendly_describe_reference_name(ref_name);
             vec![
                 StyledStringBuilder::new()
                     .append_plain("Move ")
@@ -779,7 +771,7 @@ pub fn undo(git_run_info: &GitRunInfo) -> anyhow::Result<isize> {
     let conn = repo.get_db_conn()?;
     let merge_base_db = MergeBaseDb::new(&conn)?;
     let mut event_log_db = EventLogDb::new(&conn)?;
-    let mut event_replayer = EventReplayer::from_event_log_db(&event_log_db)?;
+    let mut event_replayer = EventReplayer::from_event_log_db(&repo, &event_log_db)?;
 
     let event_cursor = {
         let result = with_siv(|siv| {
