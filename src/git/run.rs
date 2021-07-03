@@ -9,6 +9,7 @@ use anyhow::Context;
 use fn_error_context::context;
 use os_str_bytes::OsStrBytes;
 
+use crate::core::config::get_core_hooks_path;
 use crate::core::eventlog::{EventTransactionId, BRANCHLESS_TRANSACTION_ID_ENV_VAR};
 use crate::git::repo::Repo;
 use crate::util::get_sh;
@@ -152,10 +153,7 @@ impl GitRunInfo {
         args: &[impl AsRef<str>],
         stdin: Option<OsString>,
     ) -> anyhow::Result<()> {
-        let hook_dir = repo
-            .get_config()?
-            .get_path("core.hooksPath")
-            .unwrap_or_else(|_| repo.get_path().join("hooks"));
+        let hook_dir = get_core_hooks_path(repo)?;
 
         let GitRunInfo {
             // We're calling a Git hook, but not Git itself.

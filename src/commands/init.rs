@@ -1,6 +1,5 @@
 //! Install any hooks, aliases, etc. to set up `git-branchless` in this repo.
 
-use std::fmt::Display;
 use std::io::{stdin, stdout, BufRead, BufReader, Write};
 use std::path::PathBuf;
 
@@ -10,7 +9,7 @@ use fn_error_context::context;
 use log::warn;
 
 use crate::core::config::get_core_hooks_path;
-use crate::git::{wrap_git_error, GitRunInfo, GitVersion, Repo};
+use crate::git::{Config, ConfigValue, GitRunInfo, GitVersion, Repo};
 
 const ALL_HOOKS: &[(&str, &str)] = &[
     (
@@ -197,13 +196,8 @@ fn uninstall_hooks(repo: &Repo) -> anyhow::Result<()> {
 }
 
 #[context("Installing alias: git {:?} -> git branchless {:?}", from, to)]
-fn install_alias(config: &mut git2::Config, from: &str, to: &str) -> anyhow::Result<()> {
-    config
-        .set_str(
-            format!("alias.{}", from).as_str(),
-            format!("branchless {}", to).as_str(),
-        )
-        .map_err(wrap_git_error)?;
+fn install_alias(config: &mut Config, from: &str, to: &str) -> anyhow::Result<()> {
+    config.set(format!("alias.{}", from), format!("branchless {}", to))?;
     Ok(())
 }
 
@@ -231,7 +225,7 @@ fn detect_main_branch_name(repo: &Repo) -> anyhow::Result<Option<String>> {
 #[context("Installing all aliases")]
 fn install_aliases(
     repo: &mut Repo,
-    config: &mut git2::Config,
+    config: &mut Config,
     git_run_info: &GitRunInfo,
 ) -> anyhow::Result<()> {
     for (from, to) in ALL_ALIASES {
@@ -273,7 +267,7 @@ the branchless workflow will work properly.
 }
 
 #[context("Uninstalling all aliases")]
-fn uninstall_aliases(config: &mut git2::Config) -> anyhow::Result<()> {
+fn uninstall_aliases(config: &mut Config) -> anyhow::Result<()> {
     for (from, _to) in ALL_ALIASES {
         println!("Uninstalling alias (non-global): git {}", from);
         config
@@ -283,37 +277,20 @@ fn uninstall_aliases(config: &mut git2::Config) -> anyhow::Result<()> {
     Ok(())
 }
 
-#[derive(Debug)]
-enum ConfigValue {
-    Bool(bool),
-    String(String),
-}
-
-impl Display for ConfigValue {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ConfigValue::Bool(value) => write!(f, "{}", value),
-            ConfigValue::String(value) => write!(f, "{}", value),
-        }
-    }
-}
-
 #[context("Setting config {}", name)]
-fn set_config(config: &mut git2::Config, name: &str, value: ConfigValue) -> anyhow::Result<()> {
+fn set_config(
+    config: &mut Config,
+    name: &str,
+    value: impl Into<ConfigValue>,
+) -> anyhow::Result<()> {
+    let value = value.into();
     println!("Setting config (non-global): {} = {}", name, value);
-    match value {
-        ConfigValue::Bool(value) => config.set_bool(name, value)?,
-        ConfigValue::String(value) => config.set_str(name, &value)?,
-    }
+    config.set(name, value)?;
     Ok(())
 }
 
 #[context("Setting all configs")]
-fn set_configs(
-    r#in: &mut impl BufRead,
-    repo: &Repo,
-    config: &mut git2::Config,
-) -> anyhow::Result<()> {
+fn set_configs(r#in: &mut impl BufRead, repo: &Repo, config: &mut Config) -> anyhow::Result<()> {
     let main_branch_name = match detect_main_branch_name(repo)? {
         Some(main_branch_name) => {
             println!(
@@ -342,17 +319,13 @@ fn set_configs(
             }
         }
     };
-    set_config(
-        config,
-        "branchless.core.mainBranch",
-        ConfigValue::String(main_branch_name),
-    )?;
-    set_config(config, "advice.detachedHead", ConfigValue::Bool(false))?;
+    set_config(config, "branchless.core.mainBranch", main_branch_name)?;
+    set_config(config, "advice.detachedHead", false)?;
     Ok(())
 }
 
 #[context("Unsetting all configs")]
-fn unset_configs(config: &mut git2::Config) -> anyhow::Result<()> {
+fn unset_configs(config: &mut Config) -> anyhow::Result<()> {
     for key in ["branchless.core.mainBranch", "advice.detachedHead"] {
         println!("Unsetting config (non-global): {}", key);
         config
@@ -367,7 +340,7 @@ fn unset_configs(config: &mut git2::Config) -> anyhow::Result<()> {
 pub fn init(git_run_info: &GitRunInfo) -> anyhow::Result<()> {
     let mut in_ = BufReader::new(stdin());
     let mut repo = Repo::from_current_dir()?;
-    let mut config = repo.get_config().with_context(|| "Getting repo config")?;
+    let mut config = repo.get_config()?;
     set_configs(&mut in_, &repo, &mut config)?;
     install_hooks(&repo)?;
     install_aliases(&mut repo, &mut config, git_run_info)?;
