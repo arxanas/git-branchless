@@ -10,9 +10,11 @@
 //! - To collect some different helper Git functions.
 
 use std::collections::{HashMap, HashSet};
+use std::convert::TryInto;
 use std::ffi::{OsStr, OsString};
 use std::path::Path;
 use std::str::FromStr;
+use std::time::SystemTime;
 
 use anyhow::Context;
 use fn_error_context::context;
@@ -488,8 +490,8 @@ Either create it, or update the main branch setting by running:
     pub fn create_commit(
         &self,
         update_ref: Option<&str>,
-        author: &git2::Signature,
-        committer: &git2::Signature,
+        author: &Signature,
+        committer: &Signature,
         message: &str,
         tree: &git2::Tree,
         parents: &[&Commit],
@@ -501,8 +503,8 @@ Either create it, or update the main branch setting by running:
         self.inner
             .commit(
                 update_ref,
-                author,
-                committer,
+                &author.inner,
+                &committer.inner,
                 message,
                 tree,
                 parents.as_slice(),
@@ -547,6 +549,44 @@ Either create it, or update the main branch setting by running:
     #[context("Writing index file to disk for repository at: {:?}", self.get_path())]
     pub fn write_index_to_tree(&self, index: &mut git2::Index) -> anyhow::Result<git2::Oid> {
         index.write_tree_to(&self.inner).map_err(wrap_git_error)
+    }
+}
+
+/// The signature of a commit, identifying who it was made by and when it was made.
+pub struct Signature<'repo> {
+    inner: git2::Signature<'repo>,
+}
+
+impl<'repo> Signature<'repo> {
+    /// Update the timestamp of this signature to a new time.
+    #[context("Updating commit timestamp")]
+    pub fn update_timestamp(self, now: SystemTime) -> anyhow::Result<Signature<'repo>> {
+        let seconds: i64 = now
+            .duration_since(SystemTime::UNIX_EPOCH)?
+            .as_secs()
+            .try_into()?;
+        let time = git2::Time::new(seconds, self.inner.when().offset_minutes());
+        let name = match self.inner.name() {
+            Some(name) => name,
+            None => anyhow::bail!(
+                "Could not decode signature name: {:?}",
+                self.inner.name_bytes()
+            ),
+        };
+        let email = match self.inner.email() {
+            Some(email) => email,
+            None => anyhow::bail!(
+                "Could not decode signature email: {:?}",
+                self.inner.email_bytes()
+            ),
+        };
+        let signature = git2::Signature::new(name, email, &time)?;
+        Ok(Signature { inner: signature })
+    }
+
+    /// Get the time when this signature was applied.
+    pub fn get_time(&self) -> git2::Time {
+        self.inner.when()
     }
 }
 
@@ -606,13 +646,17 @@ impl<'repo> Commit<'repo> {
     }
 
     /// Get the author of this commit.
-    pub fn get_author(&self) -> git2::Signature {
-        self.inner.author()
+    pub fn get_author(&self) -> Signature {
+        Signature {
+            inner: self.inner.author(),
+        }
     }
 
     /// Get the committer of this commit.
-    pub fn get_committer(&self) -> git2::Signature {
-        self.inner.committer()
+    pub fn get_committer(&self) -> Signature {
+        Signature {
+            inner: self.inner.committer(),
+        }
     }
 }
 
