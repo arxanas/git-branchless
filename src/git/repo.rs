@@ -20,6 +20,8 @@ use os_str_bytes::OsStringBytes;
 
 use crate::core::config::get_main_branch_name;
 
+use super::Config;
+
 /// Convert a `git2::Error` into an `anyhow::Error` with an auto-generated message.
 pub fn wrap_git_error(error: git2::Error) -> anyhow::Error {
     anyhow::anyhow!("Git error {:?}: {}", error.code(), error.message())
@@ -142,8 +144,13 @@ impl Repo {
 
     /// Get the configuration object for the repository.
     #[context("Looking up config for repo at: {:?}", self.get_path())]
-    pub fn get_config(&self) -> anyhow::Result<git2::Config> {
-        self.inner.config().map_err(wrap_git_error)
+    pub fn get_config(&self) -> anyhow::Result<Config> {
+        let config = self
+            .inner
+            .config()
+            .map_err(wrap_git_error)
+            .with_context(|| "Creating `git2::Config` object")?;
+        Ok(config.into())
     }
 
     /// Get the connection to the SQLite database for this repository.
