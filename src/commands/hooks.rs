@@ -27,7 +27,7 @@ use crate::core::formatting::Pluralize;
 use crate::core::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
 use crate::core::mergebase::MergeBaseDb;
 use crate::core::rewrite::find_abandoned_children;
-use crate::git::Repo;
+use crate::git::{Oid, Repo};
 
 /// Handle Git's `post-rewrite` hook.
 ///
@@ -50,14 +50,8 @@ pub fn hook_post_rewrite(rewrite_type: &str) -> anyhow::Result<()> {
             let line = line.trim();
             match *line.split(' ').collect::<Vec<_>>().as_slice() {
                 [old_commit_oid, new_commit_oid, ..] => {
-                    let old_commit_oid =
-                        git2::Oid::from_str(old_commit_oid).with_context(|| {
-                            format!("Could not convert {:?} to OID", old_commit_oid)
-                        })?;
-                    let new_commit_oid =
-                        git2::Oid::from_str(new_commit_oid).with_context(|| {
-                            format!("Could not convert {:?} to OID", new_commit_oid)
-                        })?;
+                    let old_commit_oid: Oid = old_commit_oid.parse()?;
+                    let new_commit_oid: Oid = new_commit_oid.parse()?;
 
                     old_commits.push(old_commit_oid);
                     events.push(Event::RewriteEvent {
@@ -108,7 +102,7 @@ pub fn hook_post_rewrite(rewrite_type: &str) -> anyhow::Result<()> {
     )?;
 
     let (all_abandoned_children, all_abandoned_branches) = {
-        let mut all_abandoned_children: HashSet<git2::Oid> = HashSet::new();
+        let mut all_abandoned_children: HashSet<Oid> = HashSet::new();
         let mut all_abandoned_branches: HashSet<&OsStr> = HashSet::new();
         for old_commit_oid in old_commits {
             let abandoned_result = find_abandoned_children(

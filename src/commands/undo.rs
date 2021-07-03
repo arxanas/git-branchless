@@ -26,7 +26,7 @@ use crate::core::metadata::{
 };
 use crate::core::tui::{with_siv, SingletonView};
 use crate::declare_views;
-use crate::git::{GitRunInfo, Reference, Repo};
+use crate::git::{GitRunInfo, Oid, Reference, Repo};
 
 fn render_cursor_smartlog(
     glyphs: &Glyphs,
@@ -75,7 +75,7 @@ fn render_ref_name(ref_name: &OsStr) -> String {
 }
 
 fn describe_event(repo: &Repo, event: &Event) -> anyhow::Result<Vec<StyledString>> {
-    let render_commit = |oid: git2::Oid| -> anyhow::Result<StyledString> {
+    let render_commit = |oid: Oid| -> anyhow::Result<StyledString> {
         match repo.find_commit(oid)? {
             Some(commit) => render_commit_metadata(
                 &commit,

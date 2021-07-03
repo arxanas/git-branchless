@@ -19,7 +19,7 @@ use log::warn;
 use os_str_bytes::{OsStrBytes, OsStringBytes};
 
 use crate::core::config::get_main_branch_name;
-use crate::git::{wrap_git_error, Reference, Repo};
+use crate::git::{Oid, Reference, Repo};
 
 /// When this environment variable is set, we reuse the ID for the transaction
 /// which the caller has already started.
@@ -88,10 +88,10 @@ pub enum Event {
         event_tx_id: EventTransactionId,
 
         /// The OID of the commit before the rewrite.
-        old_commit_oid: git2::Oid,
+        old_commit_oid: Oid,
 
         /// The OID of the commit after the rewrite.
-        new_commit_oid: git2::Oid,
+        new_commit_oid: Oid,
     },
 
     /// Indicates that a reference was updated.
@@ -140,7 +140,7 @@ pub enum Event {
         event_tx_id: EventTransactionId,
 
         /// The new commit OID.
-        commit_oid: git2::Oid,
+        commit_oid: Oid,
     },
 
     /// Indicates that a commit was explicitly hidden by the user.
@@ -155,7 +155,7 @@ pub enum Event {
         event_tx_id: EventTransactionId,
 
         /// The OID of the commit that was hidden.
-        commit_oid: git2::Oid,
+        commit_oid: Oid,
     },
 
     /// Indicates that a commit was explicitly un-hidden by the user.
@@ -170,7 +170,7 @@ pub enum Event {
         event_tx_id: EventTransactionId,
 
         /// The OID of the commit that was unhidden.
-        commit_oid: git2::Oid,
+        commit_oid: Oid,
     },
 }
 
@@ -295,14 +295,14 @@ impl TryFrom<Row> for Event {
         } = row;
         let event_tx_id = EventTransactionId(event_tx_id);
 
-        let get_oid = |oid: &Option<OsString>, oid_name: &str| -> anyhow::Result<git2::Oid> {
-            match oid {
-                Some(oid) => match oid.to_str() {
-                    Some(oid) => {
-                        let oid = git2::Oid::from_str(&oid).map_err(wrap_git_error)?;
+        let get_oid = |oid_str: &Option<OsString>, oid_name: &str| -> anyhow::Result<Oid> {
+            match oid_str {
+                Some(oid_str) => match oid_str.to_str() {
+                    Some(oid_str) => {
+                        let oid: Oid = oid_str.parse()?;
                         Ok(oid)
                     }
-                    None => anyhow::bail!("Invalid OID for reference name: {:?}", oid),
+                    None => anyhow::bail!("Invalid OID for reference name: {:?}", oid_str),
                 },
                 None => Err(anyhow::anyhow!(
                     "OID '{}' was `None` for event type '{}'",
@@ -500,7 +500,7 @@ ORDER BY rowid ASC
 
                 // A ref name corresponding to commit hash `0` indicates that
                 // there was no old/new ref at all (i.e. it was created or deleted).
-                let zero_oid = git2::Oid::zero().to_string();
+                let zero_oid = Oid::zero().to_string();
                 let old_ref = old_ref.filter(|old_ref| *old_ref != zero_oid);
                 let new_ref = new_ref.filter(|new_ref| *new_ref != zero_oid);
 
@@ -652,7 +652,7 @@ pub struct EventReplayer {
     events: Vec<Event>,
 
     /// The events that have affected each commit.
-    commit_history: HashMap<git2::Oid, Vec<EventInfo>>,
+    commit_history: HashMap<Oid, Vec<EventInfo>>,
 
     /// Map from ref names to ref locations (an OID or another ref name). Works
     /// around https://github.com/arxanas/git-branchless/issues/7.
@@ -856,7 +856,7 @@ impl EventReplayer {
         }
     }
 
-    fn get_cursor_commit_history(&self, cursor: EventCursor, oid: git2::Oid) -> Vec<&EventInfo> {
+    fn get_cursor_commit_history(&self, cursor: EventCursor, oid: Oid) -> Vec<&EventInfo> {
         match self.commit_history.get(&oid) {
             None => vec![],
             Some(history) => history
@@ -877,7 +877,7 @@ impl EventReplayer {
     pub fn get_cursor_commit_visibility(
         &self,
         cursor: EventCursor,
-        oid: git2::Oid,
+        oid: Oid,
     ) -> Option<CommitVisibility> {
         let history = self.get_cursor_commit_history(cursor, oid);
         let event_info = *history.last()?;
@@ -895,11 +895,7 @@ impl EventReplayer {
     ///
     /// Returns: The most recent event that affected that commit. If this commit
     /// was not observed by the replayer, returns `None`.
-    pub fn get_cursor_commit_latest_event(
-        &self,
-        cursor: EventCursor,
-        oid: git2::Oid,
-    ) -> Option<&Event> {
+    pub fn get_cursor_commit_latest_event(&self, cursor: EventCursor, oid: Oid) -> Option<&Event> {
         let history = self.get_cursor_commit_history(cursor, oid);
         let event_info = *history.last()?;
         Some(&event_info.event)
@@ -909,7 +905,7 @@ impl EventReplayer {
     ///
     /// Returns: The set of OIDs referring to commits which are thought to be
     /// active due to user action.
-    pub fn get_cursor_active_oids(&self, cursor: EventCursor) -> HashSet<git2::Oid> {
+    pub fn get_cursor_active_oids(&self, cursor: EventCursor) -> HashSet<Oid> {
         self.commit_history
             .iter()
             .filter_map(|(oid, history)| {
@@ -1034,7 +1030,7 @@ impl EventReplayer {
     ///
     /// Returns: The OID pointed to by `HEAD` at that time, or `None` if `HEAD`
     /// was never observed.
-    pub fn get_cursor_head_oid(&self, cursor: EventCursor) -> Option<git2::Oid> {
+    pub fn get_cursor_head_oid(&self, cursor: EventCursor) -> Option<Oid> {
         let cursor_event_id: usize = cursor.event_id.try_into().unwrap();
         self.events[0..cursor_event_id]
             .iter()
@@ -1074,7 +1070,7 @@ impl EventReplayer {
         &self,
         cursor: EventCursor,
         branch_name: &str,
-    ) -> anyhow::Result<Option<git2::Oid>> {
+    ) -> anyhow::Result<Option<Oid>> {
         let cursor_event_id: usize = cursor.event_id.try_into().unwrap();
         let target_ref_name = OsString::from(format!("refs/heads/{}", branch_name));
         let oid = self.events[0..cursor_event_id]
@@ -1113,7 +1109,7 @@ impl EventReplayer {
         &self,
         cursor: EventCursor,
         repo: &Repo,
-    ) -> anyhow::Result<git2::Oid> {
+    ) -> anyhow::Result<Oid> {
         let main_branch_name = get_main_branch_name(&repo)?;
         let main_branch_oid = self.get_cursor_branch_oid(cursor, &main_branch_name)?;
         match main_branch_oid {
@@ -1140,8 +1136,8 @@ impl EventReplayer {
         &self,
         cursor: EventCursor,
         repo: &Repo,
-    ) -> anyhow::Result<HashMap<git2::Oid, HashSet<OsString>>> {
-        let mut ref_name_to_oid: HashMap<&OsString, git2::Oid> = HashMap::new();
+    ) -> anyhow::Result<HashMap<Oid, HashSet<OsString>>> {
+        let mut ref_name_to_oid: HashMap<&OsString, Oid> = HashMap::new();
         let cursor_event_id: usize = cursor.event_id.try_into().unwrap();
         for event in self.events[..cursor_event_id].iter() {
             match event {
@@ -1165,7 +1161,7 @@ impl EventReplayer {
             }
         }
 
-        let mut result: HashMap<git2::Oid, HashSet<OsString>> = HashMap::new();
+        let mut result: HashMap<Oid, HashSet<OsString>> = HashMap::new();
         for (ref_name, ref_oid) in ref_name_to_oid.iter() {
             match ref_name.to_raw_bytes().strip_prefix(b"refs/heads/") {
                 None => {}
@@ -1282,7 +1278,7 @@ mod tests {
         let meaningful_event = Event::CommitEvent {
             timestamp: 0.0,
             event_tx_id,
-            commit_oid: git2::Oid::from_str("abc")?,
+            commit_oid: Oid::from_str("abc")?,
         };
         let mut replayer = EventReplayer::new();
         replayer.process_event(&meaningful_event);
@@ -1365,7 +1361,7 @@ mod tests {
             event_replayer.process_event(&Event::UnhideEvent {
                 timestamp,
                 event_tx_id: EventTransactionId(*event_tx_id),
-                commit_oid: git2::Oid::zero(),
+                commit_oid: Oid::zero(),
             });
         }
 

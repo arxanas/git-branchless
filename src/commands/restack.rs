@@ -70,7 +70,7 @@ use crate::core::rewrite::{
     execute_rebase_plan, find_abandoned_children, find_rewrite_target, move_branches,
     ExecuteRebasePlanOptions, RebasePlanBuilder,
 };
-use crate::git::{GitRunInfo, Repo};
+use crate::git::{GitRunInfo, Oid, Repo};
 
 #[context("Restacking commits")]
 fn restack_commits(
@@ -98,8 +98,8 @@ fn restack_commits(
     )?;
 
     struct RebaseInfo {
-        dest_oid: git2::Oid,
-        abandoned_child_oids: Vec<git2::Oid>,
+        dest_oid: Oid,
+        abandoned_child_oids: Vec<Oid>,
     }
     let rebases: Vec<RebaseInfo> = graph
         .keys()

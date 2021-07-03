@@ -14,7 +14,7 @@ use crate::core::graph::{
 };
 use crate::core::mergebase::MergeBaseDb;
 use crate::core::metadata::{render_commit_metadata, CommitMessageProvider, CommitOidProvider};
-use crate::git::{GitRunInfo, Repo};
+use crate::git::{GitRunInfo, Oid, Repo};
 
 /// Go back a certain number of commits.
 pub fn prev(git_run_info: &GitRunInfo, num_commits: Option<isize>) -> anyhow::Result<isize> {
@@ -46,10 +46,10 @@ pub enum Towards {
 fn advance_towards_main_branch(
     repo: &Repo,
     merge_base_db: &MergeBaseDb,
-    graph: &HashMap<git2::Oid, Node>,
-    current_oid: git2::Oid,
+    graph: &HashMap<Oid, Node>,
+    current_oid: Oid,
     main_branch_oid: &MainBranchOid,
-) -> anyhow::Result<(isize, git2::Oid)> {
+) -> anyhow::Result<(isize, Oid)> {
     let MainBranchOid(main_branch_oid) = main_branch_oid;
     let path = find_path_to_merge_base(repo, merge_base_db, *main_branch_oid, current_oid)?;
     let path = match path {
@@ -74,11 +74,11 @@ fn advance_towards_main_branch(
 fn advance_towards_own_commit(
     glyphs: &Glyphs,
     repo: &Repo,
-    graph: &HashMap<git2::Oid, Node>,
-    current_oid: git2::Oid,
+    graph: &HashMap<Oid, Node>,
+    current_oid: Oid,
     num_commits: isize,
     towards: Option<Towards>,
-) -> anyhow::Result<Option<git2::Oid>> {
+) -> anyhow::Result<Option<Oid>> {
     let mut current_oid = current_oid;
     for i in 0..num_commits {
         let children = &graph[&current_oid].children;

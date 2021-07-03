@@ -13,7 +13,7 @@ use os_str_bytes::OsStrBytes;
 
 use crate::commands::gc::mark_commit_reachable;
 use crate::core::formatting::printable_styled_string;
-use crate::git::{GitRunInfo, Repo};
+use crate::git::{GitRunInfo, Oid, Repo};
 
 use super::eventlog::{Event, EventCursor, EventReplayer, EventTransactionId};
 use super::formatting::Glyphs;
@@ -33,8 +33,8 @@ pub fn find_rewrite_target(
     graph: &CommitGraph,
     event_replayer: &EventReplayer,
     event_cursor: EventCursor,
-    oid: git2::Oid,
-) -> Option<git2::Oid> {
+    oid: Oid,
+) -> Option<Oid> {
     let event = event_replayer.get_cursor_commit_latest_event(event_cursor, oid);
     let event = match event {
         Some(event) => event,
@@ -74,8 +74,8 @@ pub fn find_abandoned_children(
     graph: &CommitGraph,
     event_replayer: &EventReplayer,
     event_cursor: EventCursor,
-    oid: git2::Oid,
-) -> Option<(git2::Oid, Vec<git2::Oid>)> {
+    oid: Oid,
+) -> Option<(Oid, Vec<Oid>)> {
     let rewritten_oid = find_rewrite_target(graph, event_replayer, event_cursor, oid)?;
 
     // Adjacent main branch commits are not linked in the commit graph, but if
@@ -83,7 +83,7 @@ pub fn find_abandoned_children(
     // subsequent main branch commits. Find the real set of children commits so
     // that we can do this.
     let mut real_children_oids = graph[&oid].children.clone();
-    let additional_children_oids: HashSet<git2::Oid> = graph
+    let additional_children_oids: HashSet<Oid> = graph
         .iter()
         .filter_map(|(possible_child_oid, possible_child_node)| {
             if real_children_oids.contains(possible_child_oid) {
@@ -117,14 +117,14 @@ pub fn find_abandoned_children(
 enum RebaseCommand {
     Label { label_name: String },
     Reset { label_name: String },
-    Pick { commit_oid: git2::Oid },
+    Pick { commit_oid: Oid },
 }
 
 /// Represents a sequence of commands that can be executed to carry out a rebase
 /// operation.
 #[derive(Debug)]
 pub struct RebasePlan {
-    first_dest_oid: git2::Oid,
+    first_dest_oid: Oid,
     commands: Vec<RebaseCommand>,
 }
 
@@ -144,9 +144,9 @@ pub struct RebasePlanBuilder<'repo> {
     repo: &'repo Repo,
     graph: &'repo CommitGraph<'repo>,
     merge_base_db: &'repo MergeBaseDb<'repo>,
-    main_branch_oid: git2::Oid,
+    main_branch_oid: Oid,
 
-    first_dest_oid: Option<git2::Oid>,
+    first_dest_oid: Option<Oid>,
     commands: Vec<RebaseCommand>,
     used_labels: HashSet<String>,
 }
@@ -184,7 +184,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
 
     fn make_rebase_plan_for_current_commit(
         &mut self,
-        current_oid: git2::Oid,
+        current_oid: Oid,
         current_label: &str,
         mut acc: Vec<RebaseCommand>,
     ) -> anyhow::Result<Vec<RebaseCommand>> {
@@ -231,11 +231,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
 
     /// Generate a sequence of rebase steps that cause the subtree at `source_oid`
     /// to be rebased on top of `dest_oid`.
-    pub fn move_subtree(
-        &mut self,
-        source_oid: git2::Oid,
-        dest_oid: git2::Oid,
-    ) -> anyhow::Result<()> {
+    pub fn move_subtree(&mut self, source_oid: Oid, dest_oid: Oid) -> anyhow::Result<()> {
         let mut commands = vec![
             // First, move to the destination OID.
             RebaseCommand::Reset {
@@ -300,15 +296,9 @@ impl<'repo> RebasePlanBuilder<'repo> {
 }
 
 enum RebaseInMemoryResult {
-    Succeeded {
-        rewritten_oids: Vec<(git2::Oid, git2::Oid)>,
-    },
-    CannotRebaseMergeCommit {
-        commit_oid: git2::Oid,
-    },
-    MergeConflict {
-        commit_oid: git2::Oid,
-    },
+    Succeeded { rewritten_oids: Vec<(Oid, Oid)> },
+    CannotRebaseMergeCommit { commit_oid: Oid },
+    MergeConflict { commit_oid: Oid },
 }
 
 #[context("Rebasing in memory")]
@@ -329,7 +319,7 @@ fn rebase_in_memory(
     } = options;
 
     let mut current_oid = rebase_plan.first_dest_oid;
-    let mut labels: HashMap<String, git2::Oid> = HashMap::new();
+    let mut labels: HashMap<String, Oid> = HashMap::new();
     let mut rewritten_oids = Vec::new();
 
     let mut i = 0;
@@ -350,7 +340,7 @@ fn rebase_in_memory(
             RebaseCommand::Reset { label_name } => {
                 current_oid = match labels.get(label_name) {
                     Some(oid) => *oid,
-                    None => match label_name.parse::<git2::Oid>() {
+                    None => match label_name.parse::<Oid>() {
                         Ok(oid) => oid,
                         Err(_) => anyhow::bail!("BUG: no associated OID for label: {}", label_name),
                     },
@@ -466,7 +456,7 @@ pub fn move_branches<'a>(
     git_run_info: &GitRunInfo,
     repo: &'a Repo,
     event_tx_id: EventTransactionId,
-    rewritten_oids_map: &'a HashMap<git2::Oid, git2::Oid>,
+    rewritten_oids_map: &'a HashMap<Oid, Oid>,
 ) -> anyhow::Result<()> {
     let branch_oid_to_names = repo.get_branch_oid_to_names()?;
 
@@ -475,7 +465,7 @@ pub fn move_branches<'a>(
     // first error, but we don't know which references we successfully committed
     // in that case. Instead, we just do things non-atomically and record which
     // ones succeeded. See https://github.com/libgit2/libgit2/issues/5918
-    let mut branch_moves: Vec<(git2::Oid, git2::Oid, &OsStr)> = Vec::new();
+    let mut branch_moves: Vec<(Oid, Oid, &OsStr)> = Vec::new();
     let mut branch_move_err: Option<anyhow::Error> = None;
     'outer: for (old_oid, names) in branch_oid_to_names.iter() {
         let new_oid = match rewritten_oids_map.get(&old_oid) {
@@ -542,7 +532,7 @@ pub fn move_branches<'a>(
 fn post_rebase_in_memory(
     git_run_info: &GitRunInfo,
     repo: &Repo,
-    rewritten_oids: &[(git2::Oid, git2::Oid)],
+    rewritten_oids: &[(Oid, Oid)],
     options: &ExecuteRebasePlanOptions,
 ) -> anyhow::Result<isize> {
     let ExecuteRebasePlanOptions {
@@ -555,8 +545,7 @@ fn post_rebase_in_memory(
 
     // Note that if an OID has been mapped to multiple other OIDs, then the last
     // mapping wins. (This corresponds to the last applied rebase operation.)
-    let rewritten_oids_map: HashMap<git2::Oid, git2::Oid> =
-        rewritten_oids.iter().copied().collect();
+    let rewritten_oids_map: HashMap<Oid, Oid> = rewritten_oids.iter().copied().collect();
 
     for new_oid in rewritten_oids_map.values() {
         mark_commit_reachable(repo, *new_oid)?;
@@ -730,7 +719,7 @@ fn rebase_on_disk(
 }
 
 #[context("Describing commit {}", commit_oid.to_string())]
-fn friendly_describe_commit(repo: &Repo, commit_oid: git2::Oid) -> anyhow::Result<StyledString> {
+fn friendly_describe_commit(repo: &Repo, commit_oid: Oid) -> anyhow::Result<StyledString> {
     let commit = repo
         .find_commit(commit_oid)
         .with_context(|| "Looking up commit to describe")?;
@@ -841,7 +830,7 @@ mod tests {
 
     use super::*;
 
-    fn find_rewrite_target_helper(git: &Git, oid: git2::Oid) -> anyhow::Result<Option<git2::Oid>> {
+    fn find_rewrite_target_helper(git: &Git, oid: Oid) -> anyhow::Result<Option<Oid>> {
         let repo = git.get_repo()?;
         let conn = repo.get_db_conn()?;
         let merge_base_db = MergeBaseDb::new(&conn)?;
@@ -876,7 +865,7 @@ mod tests {
 
         {
             git.run(&["commit", "--amend", "-m", "test1 amended once"])?;
-            let new_oid: git2::Oid = {
+            let new_oid: Oid = {
                 let (stdout, _stderr) = git.run(&["rev-parse", "HEAD"])?;
                 stdout.trim().parse()?
             };
@@ -886,7 +875,7 @@ mod tests {
 
         {
             git.run(&["commit", "--amend", "-m", "test1 amended twice"])?;
-            let new_oid: git2::Oid = {
+            let new_oid: Oid = {
                 let (stdout, _stderr) = git.run(&["rev-parse", "HEAD"])?;
                 stdout.trim().parse()?
             };
