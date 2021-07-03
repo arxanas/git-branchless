@@ -10,6 +10,7 @@ use cursive::utils::markup::StyledString;
 use fn_error_context::context;
 use indicatif::{ProgressBar, ProgressStyle};
 
+use crate::commands::gc::mark_commit_reachable;
 use crate::core::formatting::printable_styled_string;
 use crate::util::{get_branch_oid_to_names, get_repo_head, run_git, run_hook, GitRunInfo};
 
@@ -548,6 +549,10 @@ fn post_rebase_in_memory(
     // mapping wins. (This corresponds to the last applied rebase operation.)
     let rewritten_oids_map: HashMap<git2::Oid, git2::Oid> =
         rewritten_oids.iter().copied().collect();
+
+    for new_oid in rewritten_oids_map.values() {
+        mark_commit_reachable(repo, *new_oid)?;
+    }
 
     let head = get_repo_head(repo)?;
     let head_branch = head
