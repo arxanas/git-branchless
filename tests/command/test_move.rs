@@ -55,12 +55,29 @@ fn test_move_stick_in_memory() -> anyhow::Result<()> {
     {
         let (stdout, _stderr) = git.run(&[
             "move",
+            "--debug-dump-rebase-plan",
             "-s",
             &test3_oid.to_string(),
             "-d",
             &test1_oid.to_string(),
         ])?;
         insta::assert_snapshot!(stdout, @r###"
+        Rebase plan: Some(
+            RebasePlan {
+                first_dest_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
+                commands: [
+                    ResetToOid {
+                        commit_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
+                    },
+                    Pick {
+                        commit_oid: 70deb1e28791d8e7dd5a1f0c871a51b91282562f,
+                    },
+                    Pick {
+                        commit_oid: 355e173bf9c5d2efac2e451da0cdad3fb82b869a,
+                    },
+                ],
+            },
+        )
         Attempting rebase in-memory...
         branchless: processing 2 rewritten commits
         branchless: <git-executable> checkout a248207402822b7396cabe0f1011d8a7ce7daf1b
@@ -220,12 +237,29 @@ fn test_move_with_source_not_in_smartlog_in_memory() -> anyhow::Result<()> {
     {
         let (stdout, _stderr) = git.run(&[
             "move",
+            "--debug-dump-rebase-plan",
             "-s",
             &test3_oid.to_string(),
             "-d",
             &test1_oid.to_string(),
         ])?;
         insta::assert_snapshot!(stdout, @r###"
+        Rebase plan: Some(
+            RebasePlan {
+                first_dest_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
+                commands: [
+                    ResetToOid {
+                        commit_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
+                    },
+                    Pick {
+                        commit_oid: 70deb1e28791d8e7dd5a1f0c871a51b91282562f,
+                    },
+                    Pick {
+                        commit_oid: 355e173bf9c5d2efac2e451da0cdad3fb82b869a,
+                    },
+                ],
+            },
+        )
         Attempting rebase in-memory...
         branchless: processing 1 update: branch master
         branchless: processing 2 rewritten commits
@@ -263,13 +297,31 @@ fn test_move_merge_conflict() -> anyhow::Result<()> {
 
     {
         let (stdout, _stderr) = git.run_with_options(
-            &["move", "-s", &other_oid.to_string()],
+            &[
+                "move",
+                "--debug-dump-rebase-plan",
+                "-s",
+                &other_oid.to_string(),
+            ],
             &GitRunOptions {
                 expected_exit_code: 1,
                 ..Default::default()
             },
         )?;
         insta::assert_snapshot!(stdout, @r###"
+        Rebase plan: Some(
+            RebasePlan {
+                first_dest_oid: 202143f2fdfc785285ab097422f6a695ff1d93cb,
+                commands: [
+                    ResetToOid {
+                        commit_oid: 202143f2fdfc785285ab097422f6a695ff1d93cb,
+                    },
+                    Pick {
+                        commit_oid: e85d25c772a05b5c73ea8ec43881c12bbf588848,
+                    },
+                ],
+            },
+        )
         Attempting rebase in-memory...
         Merge conflict, falling back to rebase on-disk. The conflicting commit was: e85d25c7 create conflict.txt
         Calling Git for on-disk rebase...
@@ -318,12 +370,33 @@ fn test_move_base() -> anyhow::Result<()> {
     git.commit_file("test4", 4)?;
 
     {
-        let (stdout, _stderr) = git.run(&["move", "--base", &test3_oid.to_string()])?;
+        let (stdout, _stderr) = git.run(&[
+            "move",
+            "--debug-dump-rebase-plan",
+            "--base",
+            &test3_oid.to_string(),
+        ])?;
         insta::assert_snapshot!(stdout, @r###"
-            Attempting rebase in-memory...
-            branchless: processing 2 rewritten commits
-            In-memory rebase succeeded.
-            "###);
+        Rebase plan: Some(
+            RebasePlan {
+                first_dest_oid: bf0d52a607f693201512a43b6b5a70b2a275e0ad,
+                commands: [
+                    ResetToOid {
+                        commit_oid: bf0d52a607f693201512a43b6b5a70b2a275e0ad,
+                    },
+                    Pick {
+                        commit_oid: 96d1c37a3d4363611c49f7e52186e189a04c531f,
+                    },
+                    Pick {
+                        commit_oid: 70deb1e28791d8e7dd5a1f0c871a51b91282562f,
+                    },
+                ],
+            },
+        )
+        Attempting rebase in-memory...
+        branchless: processing 2 rewritten commits
+        In-memory rebase succeeded.
+        "###);
     }
 
     {
@@ -353,13 +426,26 @@ fn test_move_checkout_new_head() -> anyhow::Result<()> {
     git.commit_file("test2", 2)?;
 
     {
-        let (stdout, _stderr) = git.run(&["move", "-d", "master"])?;
+        let (stdout, _stderr) = git.run(&["move", "--debug-dump-rebase-plan", "-d", "master"])?;
         insta::assert_snapshot!(stdout, @r###"
-            Attempting rebase in-memory...
-            branchless: processing 1 rewritten commit
-            branchless: <git-executable> checkout 96d1c37a3d4363611c49f7e52186e189a04c531f
-            In-memory rebase succeeded.
-            "###);
+        Rebase plan: Some(
+            RebasePlan {
+                first_dest_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
+                commands: [
+                    ResetToOid {
+                        commit_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
+                    },
+                    Pick {
+                        commit_oid: fe65c1fe15584744e649b2c79d4cf9b0d878f92e,
+                    },
+                ],
+            },
+        )
+        Attempting rebase in-memory...
+        branchless: processing 1 rewritten commit
+        branchless: <git-executable> checkout 96d1c37a3d4363611c49f7e52186e189a04c531f
+        In-memory rebase succeeded.
+        "###);
     }
 
     {
@@ -390,8 +476,26 @@ fn test_move_branch() -> anyhow::Result<()> {
     git.commit_file("test3", 3)?;
 
     {
-        let (stdout, _stderr) = git.run(&["move", "-d", &test2_oid.to_string()])?;
+        let (stdout, _stderr) = git.run(&[
+            "move",
+            "--debug-dump-rebase-plan",
+            "-d",
+            &test2_oid.to_string(),
+        ])?;
         insta::assert_snapshot!(stdout, @r###"
+        Rebase plan: Some(
+            RebasePlan {
+                first_dest_oid: 96d1c37a3d4363611c49f7e52186e189a04c531f,
+                commands: [
+                    ResetToOid {
+                        commit_oid: 96d1c37a3d4363611c49f7e52186e189a04c531f,
+                    },
+                    Pick {
+                        commit_oid: 98b9119d16974f372e76cb64a3b77c528fc0b18b,
+                    },
+                ],
+            },
+        )
         Attempting rebase in-memory...
         branchless: processing 1 update: branch master
         branchless: processing 1 rewritten commit
@@ -433,28 +537,19 @@ fn test_move_base_onto_head() -> anyhow::Result<()> {
     git.commit_file("test3", 3)?;
 
     {
-        // Codifying current behavior -- we attempt to apply the commits again,
-        // which is probably not intuitive.
-        let (stdout, stderr) = git.run(&["move", "-b", "HEAD"])?;
-        insta::assert_snapshot!(stderr, @r###"
-        Previous HEAD position was 70deb1e create test3.txt
-        branchless: processing 1 update: ref HEAD
-        HEAD is now at a45568b create test3.txt
-        branchless: processing checkout
-        "###);
+        let (stdout, stderr) = git.run_with_options(
+            &["move", "--debug-dump-rebase-plan", "-b", "HEAD"],
+            &GitRunOptions {
+                expected_exit_code: 1,
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
-        Attempting rebase in-memory...
-        branchless: processing 2 rewritten commits
-        branchless: This operation abandoned 1 commit!
-        branchless: Consider running one of the following:
-        branchless:   - git restack: re-apply the abandoned commits/branches
-        branchless:     (this is most likely what you want to do)
-        branchless:   - git smartlog: assess the situation
-        branchless:   - git hide [<commit>...]: hide the commits from the smartlog
-        branchless:   - git undo: undo the operation
-        branchless:   - git config branchless.restack.warnAbandoned false: suppress this message
-        branchless: <git-executable> checkout a45568bde9ac0b74d3bc890d11cacc789dc15294
-        In-memory rebase succeeded.
+        This operation failed because it would introduce a cycle:
+        ,-> 70deb1e2 create test3.txt
+        |   96d1c37a create test2.txt
+        `-- 70deb1e2 create test3.txt
         "###);
     }
 
@@ -464,13 +559,9 @@ fn test_move_base_onto_head() -> anyhow::Result<()> {
         :
         O 62fc20d2 (master) create test1.txt
         |
-        x 96d1c37a (rewritten as 5e95ed7c) create test2.txt
+        o 96d1c37a create test2.txt
         |
-        x 70deb1e2 (rewritten as a45568bd) create test3.txt
-        |
-        o 5e95ed7c create test2.txt
-        |
-        @ a45568bd create test3.txt
+        @ 70deb1e2 create test3.txt
         "###);
     }
 
@@ -567,7 +658,13 @@ fn test_move_in_memory_gc() -> anyhow::Result<()> {
     git.commit_file("test2", 2)?;
 
     {
-        let (stdout, stderr) = git.run(&["move", "-d", "master", "--in-memory"])?;
+        let (stdout, stderr) = git.run(&[
+            "move",
+            "--debug-dump-rebase-plan",
+            "-d",
+            "master",
+            "--in-memory",
+        ])?;
         insta::assert_snapshot!(stderr, @r###"
         Previous HEAD position was 96d1c37 create test2.txt
         branchless: processing 1 update: ref HEAD
@@ -575,6 +672,19 @@ fn test_move_in_memory_gc() -> anyhow::Result<()> {
         branchless: processing checkout
         "###);
         insta::assert_snapshot!(stdout, @r###"
+        Rebase plan: Some(
+            RebasePlan {
+                first_dest_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
+                commands: [
+                    ResetToOid {
+                        commit_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
+                    },
+                    Pick {
+                        commit_oid: 96d1c37a3d4363611c49f7e52186e189a04c531f,
+                    },
+                ],
+            },
+        )
         Attempting rebase in-memory...
         branchless: processing 1 rewritten commit
         branchless: <git-executable> checkout fe65c1fe15584744e649b2c79d4cf9b0d878f92e

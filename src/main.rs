@@ -107,10 +107,30 @@ enum Opts {
         /// on-disk rebase directly.
         #[structopt(long = "--on-disk")]
         force_on_disk: bool,
+
+        /// Debugging option. Print the constraints used to create the rebase
+        /// plan before executing it.
+        #[structopt(long = "--debug-dump-rebase-constraints")]
+        dump_rebase_constraints: bool,
+
+        /// Debugging option. Print the rebase plan that will be executed before
+        /// executing it.
+        #[structopt(long = "--debug-dump-rebase-plan")]
+        dump_rebase_plan: bool,
     },
 
     /// Fix up commits abandoned by a previous rewrite operation.
-    Restack,
+    Restack {
+        /// Debugging option. Print the constraints used to create the rebase
+        /// plan before executing it.
+        #[structopt(long = "--debug-dump-rebase-constraints")]
+        dump_rebase_constraints: bool,
+
+        /// Debugging option. Print the rebase plan that will be executed before
+        /// executing it.
+        #[structopt(long = "--debug-dump-rebase-plan")]
+        dump_rebase_plan: bool,
+    },
 
     /// Browse or return to a previous state of the repository.
     Undo,
@@ -207,6 +227,8 @@ fn main() -> anyhow::Result<()> {
             base,
             force_in_memory,
             force_on_disk,
+            dump_rebase_constraints,
+            dump_rebase_plan,
         } => branchless::commands::r#move::r#move(
             &git_run_info,
             source,
@@ -214,9 +236,18 @@ fn main() -> anyhow::Result<()> {
             base,
             force_in_memory,
             force_on_disk,
+            dump_rebase_constraints,
+            dump_rebase_plan,
         )?,
 
-        Opts::Restack => branchless::commands::restack::restack(&git_run_info)?,
+        Opts::Restack {
+            dump_rebase_constraints,
+            dump_rebase_plan,
+        } => branchless::commands::restack::restack(
+            &git_run_info,
+            dump_rebase_constraints,
+            dump_rebase_plan,
+        )?,
 
         Opts::Undo => branchless::commands::undo::undo(&git_run_info)?,
 

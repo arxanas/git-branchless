@@ -86,6 +86,21 @@ pub struct Glyphs {
 
     /// Bullet-point character for a list of newline-separated items.
     pub bullet_point: &'static str,
+
+    /// Arrow character used when printing a commit cycle.
+    pub cycle_arrow: &'static str,
+
+    /// Horizontal line character used when printing a commit cycle.
+    pub cycle_horizontal_line: &'static str,
+
+    /// Vertical line character used when printing a commit cycle.
+    pub cycle_vertical_line: &'static str,
+
+    /// Corner at the upper left of the arrow used when printing a commit cycle.
+    pub cycle_upper_left_corner: &'static str,
+
+    /// Corner at the lower left of the arrow used when printing a commit cycle.
+    pub cycle_lower_left_corner: &'static str,
 }
 
 impl Glyphs {
@@ -115,11 +130,16 @@ impl Glyphs {
             commit_main_hidden: "X",
             commit_main_hidden_head: "%",
             bullet_point: "-",
+            cycle_arrow: ">",
+            cycle_horizontal_line: "-",
+            cycle_vertical_line: "|",
+            cycle_upper_left_corner: ",",
+            cycle_lower_left_corner: "`",
         }
     }
 
     /// Glyphs used for output to a TTY.
-    fn pretty() -> Self {
+    pub fn pretty() -> Self {
         Glyphs {
             should_write_ansi_escape_codes: true,
             line: "┃",
@@ -135,6 +155,11 @@ impl Glyphs {
             commit_main_hidden: "✕",
             commit_main_hidden_head: "❖",
             bullet_point: "•",
+            cycle_arrow: "→",
+            cycle_horizontal_line: "─",
+            cycle_vertical_line: "│",
+            cycle_upper_left_corner: "┌",
+            cycle_lower_left_corner: "└",
         }
     }
 }
