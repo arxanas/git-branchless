@@ -3,11 +3,13 @@
 
 use std::collections::{HashMap, HashSet};
 use std::ffi::{OsStr, OsString};
+use std::io::Write;
 use std::time::SystemTime;
 
 use anyhow::Context;
 use fn_error_context::context;
 use indicatif::{ProgressBar, ProgressStyle};
+use itertools::Itertools;
 use os_str_bytes::OsStrBytes;
 
 use crate::commands::gc::mark_commit_reachable;
@@ -146,9 +148,84 @@ pub struct RebasePlanBuilder<'repo> {
     merge_base_db: &'repo MergeBaseDb<'repo>,
     main_branch_oid: Oid,
 
-    first_dest_oid: Option<Oid>,
-    commands: Vec<RebaseCommand>,
+    /// There is a mapping from from `x` to `y` if `x` must be applied before
+    /// `y`.
+    constraints: HashMap<Oid, HashSet<Oid>>,
     used_labels: HashSet<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+struct Constraint {
+    parent_oid: Oid,
+    child_oid: Oid,
+}
+
+/// Options used to build a rebase plan.
+pub struct BuildRebasePlanOptions {
+    /// Print the rebase constraints for debugging.
+    pub dump_rebase_constraints: bool,
+
+    /// Print the rebase plan for debugging.
+    pub dump_rebase_plan: bool,
+}
+
+/// An error caused when attempting to build a rebase plan.
+pub enum BuildRebasePlanError {
+    /// There was a cycle in the requested graph to be built.
+    ConstraintCycle {
+        /// The OIDs of the commits in the cycle. The first and the last OIDs are the same.
+        cycle_oids: Vec<Oid>,
+    },
+}
+
+impl BuildRebasePlanError {
+    /// Write the error message to `out`.
+    pub fn describe(
+        &self,
+        out: &mut impl Write,
+        glyphs: &Glyphs,
+        repo: &Repo,
+    ) -> anyhow::Result<()> {
+        match self {
+            BuildRebasePlanError::ConstraintCycle { cycle_oids } => {
+                writeln!(
+                    out,
+                    "This operation failed because it would introduce a cycle:"
+                )?;
+
+                let num_cycle_commits = cycle_oids.len();
+                for (i, oid) in cycle_oids.iter().enumerate() {
+                    let (char1, char2, char3) = if i == 0 {
+                        (
+                            glyphs.cycle_upper_left_corner,
+                            glyphs.cycle_horizontal_line,
+                            glyphs.cycle_arrow,
+                        )
+                    } else if i + 1 == num_cycle_commits {
+                        (
+                            glyphs.cycle_lower_left_corner,
+                            glyphs.cycle_horizontal_line,
+                            glyphs.cycle_horizontal_line,
+                        )
+                    } else {
+                        (glyphs.cycle_vertical_line, " ", " ")
+                    };
+                    writeln!(
+                        out,
+                        "{}{}{} {}",
+                        char1,
+                        char2,
+                        char3,
+                        printable_styled_string(
+                            &glyphs,
+                            repo.friendly_describe_commit_from_oid(*oid)?
+                        )?,
+                    )?;
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 impl<'repo> RebasePlanBuilder<'repo> {
@@ -165,17 +242,16 @@ impl<'repo> RebasePlanBuilder<'repo> {
             graph,
             merge_base_db,
             main_branch_oid: *main_branch_oid,
-            first_dest_oid: Default::default(),
-            commands: Default::default(),
+            constraints: Default::default(),
             used_labels: Default::default(),
         }
     }
 
-    fn make_label_name(&mut self, preferred_name: impl Into<String>) -> anyhow::Result<String> {
+    fn make_label_name(&mut self, preferred_name: impl Into<String>) -> String {
         let mut preferred_name = preferred_name.into();
         if !self.used_labels.contains(&preferred_name) {
             self.used_labels.insert(preferred_name.clone());
-            Ok(preferred_name)
+            preferred_name
         } else {
             preferred_name.push('\'');
             self.make_label_name(preferred_name)
@@ -185,7 +261,6 @@ impl<'repo> RebasePlanBuilder<'repo> {
     fn make_rebase_plan_for_current_commit(
         &mut self,
         current_oid: Oid,
-        current_label: &str,
         mut acc: Vec<RebaseCommand>,
     ) -> anyhow::Result<Vec<RebaseCommand>> {
         let acc = {
@@ -194,32 +269,33 @@ impl<'repo> RebasePlanBuilder<'repo> {
             });
             acc
         };
-        let current_node = match self.graph.get(&current_oid) {
-            Some(current_node) => current_node,
-            None => {
-                anyhow::bail!(format!(
-                    "BUG: commit {} could not be found in the commit graph",
-                    current_oid.to_string()
-                ))
-            }
+        let child_nodes: Vec<Oid> = {
+            let mut child_nodes: Vec<Oid> = self
+                .constraints
+                .entry(current_oid)
+                .or_default()
+                .iter()
+                .copied()
+                .collect();
+            child_nodes.sort_unstable();
+            child_nodes
         };
 
-        match current_node.children.as_slice() {
+        match child_nodes.as_slice() {
             [] => Ok(acc),
             [only_child_oid] => {
-                let acc =
-                    self.make_rebase_plan_for_current_commit(*only_child_oid, current_label, acc)?;
+                let acc = self.make_rebase_plan_for_current_commit(*only_child_oid, acc)?;
                 Ok(acc)
             }
             children => {
                 let command_num = acc.len();
-                let label_name = self.make_label_name(format!("label-{}", command_num))?;
+                let label_name = self.make_label_name(format!("label-{}", command_num));
                 let mut acc = acc;
                 acc.push(RebaseCommand::CreateLabel {
                     label_name: label_name.clone(),
                 });
                 for child_oid in children {
-                    acc = self.make_rebase_plan_for_current_commit(*child_oid, &label_name, acc)?;
+                    acc = self.make_rebase_plan_for_current_commit(*child_oid, acc)?;
                     acc.push(RebaseCommand::ResetToLabel {
                         label_name: label_name.clone(),
                     });
@@ -232,66 +308,270 @@ impl<'repo> RebasePlanBuilder<'repo> {
     /// Generate a sequence of rebase steps that cause the subtree at `source_oid`
     /// to be rebased on top of `dest_oid`.
     pub fn move_subtree(&mut self, source_oid: Oid, dest_oid: Oid) -> anyhow::Result<()> {
-        let mut commands = vec![
-            // First, move to the destination OID.
-            RebaseCommand::ResetToOid {
-                commit_oid: dest_oid,
-            },
-        ];
-
-        let label_name = self.make_label_name("subtree")?;
-        let (source_oid, main_branch_commands) = {
-            let merge_base_oid = self.merge_base_db.get_merge_base_oid(
-                self.repo,
-                self.main_branch_oid,
-                source_oid,
-            )?;
-            if merge_base_oid == Some(source_oid) {
-                // In this case, the `source` OID is an ancestor of the main branch.
-                // This means that the user is trying to rewrite public history,
-                // which is typically not recommended, but let's try to do it
-                // anyways.
-                let path = find_path_to_merge_base(
-                    &self.repo,
-                    &self.merge_base_db,
-                    self.main_branch_oid,
-                    source_oid,
-                )?
-                .unwrap_or_default();
-                let commands: Vec<RebaseCommand> = path
-                    .into_iter()
-                    // Skip the first element, which is the main branch OID, since
-                    // it'll be picked as part of the recursive rebase plan below.
-                    .skip(1)
-                    // Reverse the path, since it goes from main branch OID to
-                    // source OID, but we want a path from source OID to main branch
-                    // OID.
-                    .rev()
-                    .map(|main_branch_commit| RebaseCommand::Pick {
-                        commit_oid: main_branch_commit.get_oid(),
-                    })
-                    .collect();
-                (self.main_branch_oid, commands)
-            } else {
-                (source_oid, Vec::new())
-            }
-        };
-        commands.extend(main_branch_commands);
-
-        let commands =
-            self.make_rebase_plan_for_current_commit(source_oid, &label_name, commands)?;
-        self.first_dest_oid.get_or_insert(dest_oid);
-        self.commands.extend(commands);
+        self.constraints
+            .entry(dest_oid)
+            .or_default()
+            .insert(source_oid);
         Ok(())
     }
 
+    #[context("Collecting descendants of commit: {:?}", current_oid)]
+    fn collect_descendants(
+        &self,
+        acc: &mut Vec<Constraint>,
+        current_oid: Oid,
+    ) -> anyhow::Result<()> {
+        // FIXME: O(n^2) algorithm.
+        for (child_oid, node) in self.graph {
+            if node.commit.get_parent_oids().contains(&current_oid) {
+                acc.push(Constraint {
+                    parent_oid: current_oid,
+                    child_oid: *child_oid,
+                });
+                self.collect_descendants(acc, *child_oid)?;
+            }
+        }
+
+        // Calculate the commits along the main branch to be moved if this is a
+        // constraint for a main branch commit.
+        //
+        // FIXME: The below logic is not quite correct when it comes to
+        // multi-parent commits. It's possible to have a topology where there
+        // are multiple paths to a main branch node:
+        //
+        // ```text
+        // O main node
+        // |\
+        // | o some node
+        // | |
+        // o some other node
+        // | |
+        // |/
+        // o visible node
+        // ```
+        //
+        // In this case, `find_path_to_merge_base` will only find the shortest
+        // path and move those commits. In principle, it should be possible to
+        // find all paths to the main node. The difficulty is that one has to be
+        // careful not to "overshoot" the main node and traverse history all the
+        // way to the initial commit for performance reasons. Example:
+        //
+        // ```text
+        // o initial commit
+        // :
+        // : one million commits...
+        // :
+        // o some ancestor node of the main node
+        // |\
+        // | |
+        // O main node
+        // | |
+        // | o some node
+        // | |
+        // o some other node
+        // | |
+        // |/
+        // o visible node
+        // ```
+        //
+        // The above case can be handled by calculating all the merge-bases with
+        // the main branch whenever we find a multi-parent commit. The below
+        // case is even trickier:
+        //
+        //
+        // ```text
+        // o initial commit
+        // |\
+        // : :
+        // : : one million commits...
+        // : :
+        // | |
+        // O main node
+        // | |
+        // | o some node
+        // | |
+        // o some other node
+        // | |
+        // |/
+        // o visible node
+        // ```
+        //
+        // Even determining the merge-bases with main of the parent nodes could
+        // take ages to complete. This could potentially be either by limiting
+        // the traversal to a certain amount and giving up, or leveraging `git
+        // commit-graph`: https://git-scm.com/docs/commit-graph. (I believe that
+        // `libgit2` does not currently have support for commit graphs.)
+        let is_main = match self.graph.get(&current_oid) {
+            Some(node) => node.is_main,
+            None => true,
+        };
+        if is_main {
+            // This must be a main branch commit. We need to collect its
+            // descendants, which don't appear in the commit graph.
+            let path = find_path_to_merge_base(
+                self.repo,
+                self.merge_base_db,
+                self.main_branch_oid,
+                current_oid,
+            )?;
+            if let Some(path) = path {
+                let mut parent_oid = current_oid;
+                for child_commit in path
+                    .into_iter()
+                    // Start from the node and traverse children towards the main branch.
+                    .rev()
+                    // Skip the starting node itself, as it already has a constraint.
+                    .skip(1)
+                {
+                    let child_oid = child_commit.get_oid();
+                    acc.push(Constraint {
+                        parent_oid,
+                        child_oid,
+                    });
+                    // We've hit a node that is in the graph, so further
+                    // constraints should be added by the above code path.
+                    if self.graph.contains_key(&child_oid) {
+                        break;
+                    }
+                    parent_oid = child_oid;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Add additional edges to the constraint graph for each descendant commit
+    /// of a referred-to commit. This adds enough information to the constraint
+    /// graph that it now represents the actual end-state commit graph that we
+    /// want to create, not just a list of constraints.
+    fn add_descendant_constraints(&mut self) -> anyhow::Result<()> {
+        let all_descendants_of_constrained_nodes = {
+            let mut acc = Vec::new();
+            for parent_oid in self.constraints.values().flatten().cloned() {
+                self.collect_descendants(&mut acc, parent_oid)?;
+            }
+            acc
+        };
+        for Constraint {
+            parent_oid,
+            child_oid,
+        } in all_descendants_of_constrained_nodes
+        {
+            self.constraints
+                .entry(parent_oid)
+                .or_default()
+                .insert(child_oid);
+        }
+        Ok(())
+    }
+
+    fn check_for_cycles_helper(
+        &self,
+        path: &mut Vec<Oid>,
+        current_oid: Oid,
+    ) -> Result<(), BuildRebasePlanError> {
+        if path.contains(&current_oid) {
+            path.push(current_oid);
+            return Err(BuildRebasePlanError::ConstraintCycle {
+                cycle_oids: path.clone(),
+            });
+        }
+
+        path.push(current_oid);
+        if let Some(child_oids) = self.constraints.get(&current_oid) {
+            for child_oid in child_oids.iter().sorted() {
+                self.check_for_cycles_helper(path, *child_oid)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn check_for_cycles(&self) -> Result<(), BuildRebasePlanError> {
+        // FIXME: O(n^2) algorithm.
+        for oid in self.constraints.keys().sorted() {
+            self.check_for_cycles_helper(&mut Vec::new(), *oid)?;
+        }
+        Ok(())
+    }
+
+    fn find_roots(&self) -> Vec<Constraint> {
+        let unconstrained_nodes = {
+            let mut unconstrained_nodes: HashSet<Oid> = self.constraints.keys().copied().collect();
+            for child_oid in self.constraints.values().flatten().copied() {
+                unconstrained_nodes.remove(&child_oid);
+            }
+            unconstrained_nodes
+        };
+        let mut root_edges: Vec<Constraint> = unconstrained_nodes
+            .into_iter()
+            .flat_map(|unconstrained_oid| {
+                self.constraints[&unconstrained_oid]
+                    .iter()
+                    .copied()
+                    .map(move |child_oid| Constraint {
+                        parent_oid: unconstrained_oid,
+                        child_oid,
+                    })
+            })
+            .collect();
+        root_edges.sort_unstable();
+        root_edges
+    }
+
+    fn get_constraints_sorted_for_debug(&self) -> Vec<(&Oid, Vec<&Oid>)> {
+        self.constraints
+            .iter()
+            .map(|(k, v)| (k, v.iter().sorted().collect::<Vec<_>>()))
+            .sorted()
+            .collect::<Vec<_>>()
+    }
+
     /// Create the rebase plan. Returns `None` if there were no commands in the rebase plan.
-    pub fn build(self) -> Option<RebasePlan> {
-        let first_dest_oid = self.first_dest_oid?;
-        Some(RebasePlan {
+    pub fn build(
+        mut self,
+        options: &BuildRebasePlanOptions,
+    ) -> anyhow::Result<Result<Option<RebasePlan>, BuildRebasePlanError>> {
+        if options.dump_rebase_constraints {
+            println!(
+                "Rebase constraints before adding descendants: {:#?}",
+                self.get_constraints_sorted_for_debug()
+            );
+        }
+        self.add_descendant_constraints()?;
+        if options.dump_rebase_constraints {
+            println!(
+                "Rebase constraints after adding descendants: {:#?}",
+                self.get_constraints_sorted_for_debug(),
+            );
+        }
+
+        if let Err(err) = self.check_for_cycles() {
+            return Ok(Err(err));
+        }
+
+        let roots = self.find_roots();
+        let mut acc = Vec::new();
+        let mut first_dest_oid = None;
+        for Constraint {
+            parent_oid,
+            child_oid,
+        } in roots
+        {
+            first_dest_oid.get_or_insert(parent_oid);
+            acc.push(RebaseCommand::ResetToOid {
+                commit_oid: parent_oid,
+            });
+            acc = self.make_rebase_plan_for_current_commit(child_oid, acc)?;
+        }
+
+        let rebase_plan = first_dest_oid.map(|first_dest_oid| RebasePlan {
             first_dest_oid,
-            commands: self.commands,
-        })
+            commands: acc,
+        });
+        if options.dump_rebase_plan {
+            println!("Rebase plan: {:#?}", rebase_plan);
+        }
+        Ok(Ok(rebase_plan))
     }
 }
 

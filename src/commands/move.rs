@@ -3,6 +3,7 @@
 //! Under the hood, this makes use of Git's advanced rebase functionality, which
 //! is also used to preserve merge commits using the `--rebase-merges` option.
 
+use std::io::stdout;
 use std::time::SystemTime;
 
 use crate::core::config::get_restack_preserve_timestamps;
@@ -13,7 +14,9 @@ use crate::core::graph::{
     ResolveCommitsResult,
 };
 use crate::core::mergebase::MergeBaseDb;
-use crate::core::rewrite::{execute_rebase_plan, ExecuteRebasePlanOptions, RebasePlanBuilder};
+use crate::core::rewrite::{
+    execute_rebase_plan, BuildRebasePlanOptions, ExecuteRebasePlanOptions, RebasePlanBuilder,
+};
 use crate::git::{GitRunInfo, Oid, Repo};
 
 fn resolve_base_commit(graph: &CommitGraph, oid: Oid) -> Oid {
@@ -42,6 +45,8 @@ pub fn r#move(
     base: Option<String>,
     force_in_memory: bool,
     force_on_disk: bool,
+    dump_rebase_constraints: bool,
+    dump_rebase_plan: bool,
 ) -> anyhow::Result<isize> {
     let repo = Repo::from_current_dir()?;
     let head_oid = repo.get_head_info()?.oid;
@@ -115,14 +120,17 @@ pub fn r#move(
             &MainBranchOid(main_branch_oid),
         );
         builder.move_subtree(source_oid, dest_oid)?;
-        builder.build()
+        builder.build(&BuildRebasePlanOptions {
+            dump_rebase_constraints,
+            dump_rebase_plan,
+        })?
     };
     let result = match rebase_plan {
-        None => {
+        Ok(None) => {
             println!("Nothing to do.");
             0
         }
-        Some(rebase_plan) => {
+        Ok(Some(rebase_plan)) => {
             let options = ExecuteRebasePlanOptions {
                 now,
                 event_tx_id,
@@ -131,6 +139,10 @@ pub fn r#move(
                 force_on_disk,
             };
             execute_rebase_plan(&glyphs, git_run_info, &repo, &rebase_plan, &options)?
+        }
+        Err(err) => {
+            err.describe(&mut stdout(), &glyphs, &repo)?;
+            1
         }
     };
     Ok(result)

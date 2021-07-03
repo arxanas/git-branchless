@@ -240,3 +240,43 @@ fn test_restack_aborts_during_rebase_conflict() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_restack_multiple_amended() -> anyhow::Result<()> {
+    let git = make_git()?;
+
+    git.init_repo()?;
+    git.detach_head()?;
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+    git.commit_file("test3", 3)?;
+    git.commit_file("test4", 4)?;
+
+    git.run(&["checkout", "HEAD~"])?;
+    git.run(&["commit", "--amend", "-m", "test3 amended"])?;
+    git.run(&["checkout", "HEAD~"])?;
+    git.run(&["commit", "--amend", "-m", "test2 amended"])?;
+    git.run(&["checkout", "HEAD~"])?;
+
+    {
+        let (stdout, _stderr) = git.run(&["restack"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        Calling Git for on-disk rebase...
+        branchless: <git-executable> rebase --continue
+        Finished restacking commits.
+        No abandoned branches to restack.
+        branchless: <git-executable> checkout 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
+        O f777ecc9 (master) create initial.txt
+        |
+        @ 62fc20d2 create test1.txt
+        |
+        o 22f39285 test2 amended
+        |
+        o 2fdee375 test3 amended
+        |
+        o c2dfde02 create test4.txt
+        "###);
+    }
+
+    Ok(())
+}

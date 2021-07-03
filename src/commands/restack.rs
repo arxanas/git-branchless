@@ -56,6 +56,7 @@
 //! ```
 
 use std::collections::HashMap;
+use std::io::stdout;
 use std::time::SystemTime;
 
 use fn_error_context::context;
@@ -68,7 +69,7 @@ use crate::core::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
 use crate::core::mergebase::MergeBaseDb;
 use crate::core::rewrite::{
     execute_rebase_plan, find_abandoned_children, find_rewrite_target, move_branches,
-    ExecuteRebasePlanOptions, RebasePlanBuilder,
+    BuildRebasePlanOptions, ExecuteRebasePlanOptions, RebasePlanBuilder,
 };
 use crate::git::{GitRunInfo, Oid, Repo};
 
@@ -79,7 +80,8 @@ fn restack_commits(
     git_run_info: &GitRunInfo,
     merge_base_db: &MergeBaseDb,
     event_log_db: &EventLogDb,
-    options: &ExecuteRebasePlanOptions,
+    build_options: &BuildRebasePlanOptions,
+    execute_options: &ExecuteRebasePlanOptions,
 ) -> anyhow::Result<isize> {
     let event_replayer = EventReplayer::from_event_log_db(repo, event_log_db)?;
     let event_cursor = event_replayer.make_default_cursor();
@@ -126,18 +128,23 @@ fn restack_commits(
                 builder.move_subtree(child_oid, dest_oid)?;
             }
         }
-        builder.build()
+        builder.build(build_options)?
     };
 
     match rebase_plan {
-        None => {
+        Ok(None) => {
             println!("No abandoned commits to restack.");
             Ok(0)
         }
-        Some(rebase_plan) => {
-            let exit_code = execute_rebase_plan(glyphs, git_run_info, repo, &rebase_plan, options)?;
+        Ok(Some(rebase_plan)) => {
+            let exit_code =
+                execute_rebase_plan(glyphs, git_run_info, repo, &rebase_plan, execute_options)?;
             println!("Finished restacking commits.");
             Ok(exit_code)
+        }
+        Err(err) => {
+            err.describe(&mut stdout(), glyphs, repo)?;
+            Ok(1)
         }
     }
 }
@@ -204,7 +211,11 @@ fn restack_branches(
 ///
 /// Returns an exit code (0 denotes successful exit).
 #[context("Restacking commits and branches")]
-pub fn restack(git_run_info: &GitRunInfo) -> anyhow::Result<isize> {
+pub fn restack(
+    git_run_info: &GitRunInfo,
+    dump_rebase_constraints: bool,
+    dump_rebase_plan: bool,
+) -> anyhow::Result<isize> {
     let now = SystemTime::now();
     let glyphs = Glyphs::detect();
     let repo = Repo::from_current_dir()?;
@@ -214,7 +225,11 @@ pub fn restack(git_run_info: &GitRunInfo) -> anyhow::Result<isize> {
     let event_tx_id = event_log_db.make_transaction_id(now, "restack")?;
     let head_oid = repo.get_head_info()?.oid;
 
-    let options = ExecuteRebasePlanOptions {
+    let build_options = BuildRebasePlanOptions {
+        dump_rebase_constraints,
+        dump_rebase_plan,
+    };
+    let execute_options = ExecuteRebasePlanOptions {
         now,
         event_tx_id,
         preserve_timestamps: get_restack_preserve_timestamps(&repo)?,
@@ -229,7 +244,8 @@ pub fn restack(git_run_info: &GitRunInfo) -> anyhow::Result<isize> {
         &git_run_info,
         &merge_base_db,
         &event_log_db,
-        &options,
+        &build_options,
+        &execute_options,
     )?;
     if result != 0 {
         return Ok(result);
@@ -240,7 +256,7 @@ pub fn restack(git_run_info: &GitRunInfo) -> anyhow::Result<isize> {
         &git_run_info,
         &merge_base_db,
         &event_log_db,
-        &options,
+        &execute_options,
     )?;
     if result != 0 {
         return Ok(result);
