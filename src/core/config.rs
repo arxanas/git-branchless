@@ -10,12 +10,7 @@ pub fn get_core_hooks_path(repo: &Repo) -> anyhow::Result<PathBuf> {
         .get_or_else("core.hooksPath", || repo.get_path().join("hooks"))
 }
 
-/// Get the name of the main branch for the repository.
-///
-/// Args:
-/// * `repo`: The Git repository.
-///
-/// Returns: The name of the main branch for the repository.
+/// Get the configured name of the main branch.
 pub fn get_main_branch_name(repo: &Repo) -> anyhow::Result<String> {
     let config = repo.get_config()?;
     let main_branch_name: Option<String> = config.get("branchless.core.mainBranch")?;

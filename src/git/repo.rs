@@ -262,37 +262,44 @@ impl Repo {
         })
     }
 
-    /// Get the OID corresponding to the main branch.
-    #[context("Getting main branch OID for repository at: {:?}", self.get_path())]
-    pub fn get_main_branch_oid(&self) -> anyhow::Result<Oid> {
+    /// Get the `Reference` for the main branch for the repository.
+    pub fn get_main_branch_reference(&self) -> anyhow::Result<Reference> {
         let main_branch_name = get_main_branch_name(self)?;
-        let branch = self
-            .inner
-            .find_branch(&main_branch_name, git2::BranchType::Local)
-            .or_else(|_| {
-                self.inner
-                    .find_branch(&main_branch_name, git2::BranchType::Remote)
-            });
-        let branch = match branch {
-            Ok(branch) => branch,
-            // Drop the error trace here. It's confusing, and we don't want it to appear in the output.
-            Err(_) => anyhow::bail!(
-                r"
+        match self.find_branch(&main_branch_name, git2::BranchType::Local)? {
+            Some(branch) => Ok(branch.into_reference()),
+            None => match self.find_branch(&main_branch_name, git2::BranchType::Remote)? {
+                Some(branch) => Ok(branch.into_reference()),
+                None => anyhow::bail!(
+                    r"
 The main branch {:?} could not be found in your repository.
 Either create it, or update the main branch setting by running:
 
     git config branchless.core.mainBranch <branch>
 ",
-                main_branch_name
+                    get_main_branch_name(self)?,
+                ),
+            },
+        }
+    }
+
+    /// Get the OID corresponding to the main branch.
+    #[context("Getting main branch OID for repository at: {:?}", self.get_path())]
+    pub fn get_main_branch_oid(&self) -> anyhow::Result<Oid> {
+        let main_branch_reference = self.get_main_branch_reference()?;
+        let commit = main_branch_reference.peel_to_commit()?;
+        match commit {
+            Some(commit) => Ok(commit.get_oid()),
+            None => anyhow::bail!(
+                "Could not find commit pointed to by main branch: {:?}",
+                main_branch_reference.get_name()?
             ),
-        };
-        let commit = branch.get().peel_to_commit()?;
-        Ok(Oid { inner: commit.id() })
+        }
     }
 
     /// Get a mapping from OID to the names of branches which point to that OID.
     ///
-    /// The returned branch names do not include the `refs/heads/` prefix.
+    /// The returned branch names include the `refs/heads/` prefix, so it must
+    /// be stripped if desired.
     #[context("Getting branch-OID-to-names map for repository at: {:?}", self.get_path())]
     pub fn get_branch_oid_to_names(&self) -> anyhow::Result<HashMap<Oid, HashSet<OsString>>> {
         let branches = self
@@ -312,7 +319,7 @@ Either create it, or update the main branch setting by running:
             };
 
             let reference = branch.into_reference();
-            let reference_name = match reference.shorthand() {
+            let reference_name = match reference.name() {
                 None => {
                     log::warn!(
                         "Could not decode branch name, skipping: {:?}",
@@ -336,12 +343,12 @@ Either create it, or update the main branch setting by running:
 
         // The main branch may be a remote branch, in which case it won't be
         // returned in the iteration above.
-        let main_branch_name = get_main_branch_name(&self)?;
+        let main_branch_name = self.get_main_branch_reference()?.get_name()?;
         let main_branch_oid = self.get_main_branch_oid()?;
         result
             .entry(main_branch_oid)
             .or_insert_with(HashSet::new)
-            .insert(OsString::from(main_branch_name));
+            .insert(main_branch_name);
 
         Ok(result)
     }
@@ -735,6 +742,19 @@ impl<'repo> Reference<'repo> {
         git2::Reference::is_valid_name(name)
     }
 
+    /// Distinguish between a branch and a reference for display purposes.
+    pub fn friendly_describe_reference_name(reference_name: &OsStr) -> String {
+        match Branch::categorize_by_prefix(reference_name) {
+            CategorizedBranchName::LocalBranch { prefix: _, suffix } => {
+                format!("branch {}", suffix)
+            }
+            CategorizedBranchName::RemoteBranch { prefix: _, suffix } => {
+                format!("remote branch {}", suffix)
+            }
+            CategorizedBranchName::OtherRef { suffix } => format!("ref {}", suffix),
+        }
+    }
+
     /// Given a reference name which is an OID, convert the string into an `Oid`
     /// object.
     #[context("Converting reference name to OID: {:?}", ref_name)]
@@ -779,6 +799,36 @@ pub struct Branch<'repo> {
 
 type BranchType = git2::BranchType;
 
+/// Determine what kind of branch a reference is, given its name. The returned
+/// `suffix` value is converted to a `String` to be rendered to the screen, so
+/// it may have lost some information if the reference name had unusual
+/// characters.
+pub enum CategorizedBranchName {
+    /// The reference represents a local branch.
+    LocalBranch {
+        /// The string `refs/heads/`.
+        prefix: &'static str,
+
+        /// The part of the reference name after `refs/heads/.
+        suffix: String,
+    },
+
+    /// The reference represents a remote branch.
+    RemoteBranch {
+        /// The string `refs/remotes/`.
+        prefix: &'static str,
+
+        /// The part of the reference name after `refs/remotes/`.
+        suffix: String,
+    },
+
+    /// Some other kind of reference which isn't a branch at awe.
+    OtherRef {
+        /// The full name of the reference.
+        suffix: String,
+    },
+}
+
 impl<'repo> Branch<'repo> {
     /// Get the OID pointed to by the branch. Returns `None` if the branch is
     /// not a direct reference (which is unusual).
@@ -786,16 +836,30 @@ impl<'repo> Branch<'repo> {
         Ok(self.inner.get().target().map(|oid| Oid { inner: oid }))
     }
 
-    /// Get the name of the branch.
-    pub fn get_name(&self) -> anyhow::Result<OsString> {
-        let name = OsStringBytes::from_raw_vec(self.inner.name_bytes()?.into())?;
-        Ok(name)
-    }
-
     /// Convert the branch into its underlying `Reference`.
     pub fn into_reference(self) -> Reference<'repo> {
         Reference {
             inner: self.inner.into_reference(),
+        }
+    }
+
+    /// Categorize and render the given branch name.
+    pub fn categorize_by_prefix(branch_name: &OsStr) -> CategorizedBranchName {
+        let branch_name = branch_name.to_string_lossy();
+        match branch_name.strip_prefix("refs/heads/") {
+            Some(branch_name) => CategorizedBranchName::LocalBranch {
+                prefix: "refs/heads/",
+                suffix: branch_name.to_string(),
+            },
+            None => match branch_name.strip_prefix("refs/remotes/") {
+                Some(branch_name) => CategorizedBranchName::RemoteBranch {
+                    prefix: "refs/remotes/",
+                    suffix: branch_name.to_string(),
+                },
+                None => CategorizedBranchName::OtherRef {
+                    suffix: branch_name.into_owned(),
+                },
+            },
         }
     }
 }

@@ -81,7 +81,7 @@ fn restack_commits(
     event_log_db: &EventLogDb,
     options: &ExecuteRebasePlanOptions,
 ) -> anyhow::Result<isize> {
-    let event_replayer = EventReplayer::from_event_log_db(event_log_db)?;
+    let event_replayer = EventReplayer::from_event_log_db(repo, event_log_db)?;
     let event_cursor = event_replayer.make_default_cursor();
     let head_oid = repo.get_head_info()?.oid;
     let main_branch_oid = repo.get_main_branch_oid()?;
@@ -150,7 +150,7 @@ fn restack_branches(
     event_log_db: &EventLogDb,
     options: &ExecuteRebasePlanOptions,
 ) -> anyhow::Result<isize> {
-    let event_replayer = EventReplayer::from_event_log_db(event_log_db)?;
+    let event_replayer = EventReplayer::from_event_log_db(repo, event_log_db)?;
     let head_oid = repo.get_head_info()?.oid;
     let main_branch_oid = repo.get_main_branch_oid()?;
     let branch_oid_to_names = repo.get_branch_oid_to_names()?;
@@ -172,7 +172,7 @@ fn restack_branches(
             None => {
                 log::warn!(
                     "Branch {:?} was not a direct reference, could not resolve target",
-                    branch.get_name()
+                    branch.into_reference().get_name()
                 );
                 continue;
             }

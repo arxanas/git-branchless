@@ -27,7 +27,7 @@ use crate::core::formatting::Pluralize;
 use crate::core::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
 use crate::core::mergebase::MergeBaseDb;
 use crate::core::rewrite::find_abandoned_children;
-use crate::git::{Oid, Repo};
+use crate::git::{Branch, CategorizedBranchName, Oid, Reference, Repo};
 
 /// Handle Git's `post-rewrite` hook.
 ///
@@ -86,7 +86,7 @@ pub fn hook_post_rewrite(rewrite_type: &str) -> anyhow::Result<()> {
     }
 
     let merge_base_db = MergeBaseDb::new(&conn)?;
-    let event_replayer = EventReplayer::from_event_log_db(&event_log_db)?;
+    let event_replayer = EventReplayer::from_event_log_db(&repo, &event_log_db)?;
     let head_oid = repo.get_head_info()?.oid;
     let main_branch_oid = repo.get_main_branch_oid()?;
     let branch_oid_to_names = repo.get_branch_oid_to_names()?;
@@ -148,7 +148,13 @@ pub fn hook_post_rewrite(rewrite_type: &str) -> anyhow::Result<()> {
 
                 let mut all_abandoned_branches: Vec<String> = all_abandoned_branches
                     .iter()
-                    .map(|branch_name| branch_name.to_string_lossy().to_string())
+                    .map(
+                        |branch_name| match Branch::categorize_by_prefix(branch_name) {
+                            CategorizedBranchName::LocalBranch { prefix: _, suffix } => suffix,
+                            CategorizedBranchName::RemoteBranch { prefix: _, suffix } => suffix,
+                            CategorizedBranchName::OtherRef { suffix } => suffix,
+                        },
+                    )
                     .collect();
                 all_abandoned_branches.sort_unstable();
                 let abandoned_branches_list = all_abandoned_branches.join(", ");
@@ -360,7 +366,9 @@ pub fn hook_reference_transaction(transaction_state: &str) -> anyhow::Result<()>
                 .iter()
                 .filter_map(|event| {
                     match event {
-                        Event::RefUpdateEvent { ref_name, .. } => Some(ref_name.to_string_lossy()),
+                        Event::RefUpdateEvent { ref_name, .. } => {
+                            Some(Reference::friendly_describe_reference_name(ref_name))
+                        }
                         Event::RewriteEvent { .. }
                         | Event::CommitEvent { .. }
                         | Event::HideEvent { .. }
@@ -385,7 +393,7 @@ mod tests {
 
     #[test]
     fn test_parse_reference_transaction_line() -> anyhow::Result<()> {
-        let line = b"123abc 456def mybranch";
+        let line = b"123abc 456def refs/heads/mybranch";
         let timestamp = SystemTime::UNIX_EPOCH;
         let event_tx_id = crate::core::eventlog::testing::make_dummy_transaction_id(789);
         assert_eq!(
@@ -395,7 +403,7 @@ mod tests {
                 event_tx_id,
                 old_ref: Some(OsString::from("123abc")),
                 new_ref: Some(OsString::from("456def")),
-                ref_name: OsString::from("mybranch"),
+                ref_name: OsString::from("refs/heads/mybranch"),
                 message: None,
             })
         );

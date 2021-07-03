@@ -16,10 +16,8 @@ use std::time::{Duration, SystemTime};
 use anyhow::Context;
 use fn_error_context::context;
 use log::warn;
-use os_str_bytes::{OsStrBytes, OsStringBytes};
 
-use crate::core::config::get_main_branch_name;
-use crate::git::{Oid, Reference, Repo};
+use crate::git::{Branch, CategorizedBranchName, Oid, Reference, Repo};
 
 /// When this environment variable is set, we reuse the ID for the transaction
 /// which the caller has already started.
@@ -651,6 +649,9 @@ pub struct EventReplayer {
     /// The list of observed events.
     events: Vec<Event>,
 
+    /// The name of the reference representing the main branch.
+    main_branch_reference_name: OsString,
+
     /// The events that have affected each commit.
     commit_history: HashMap<Oid, Vec<EventInfo>>,
 
@@ -663,10 +664,11 @@ pub struct EventReplayer {
 }
 
 impl EventReplayer {
-    fn new() -> Self {
+    fn new(main_branch_reference_name: impl Into<OsString>) -> Self {
         EventReplayer {
             id_counter: 0,
             events: vec![],
+            main_branch_reference_name: main_branch_reference_name.into(),
             commit_history: HashMap::new(),
             ref_locations: HashMap::new(),
         }
@@ -678,8 +680,9 @@ impl EventReplayer {
     /// * `event_log_db`: The database to query events from.
     ///
     /// Returns: The constructed replayer.
-    pub fn from_event_log_db(event_log_db: &EventLogDb) -> anyhow::Result<Self> {
-        let mut result = EventReplayer::new();
+    pub fn from_event_log_db(repo: &Repo, event_log_db: &EventLogDb) -> anyhow::Result<Self> {
+        let main_branch_reference_name = repo.get_main_branch_reference()?.get_name()?;
+        let mut result = EventReplayer::new(main_branch_reference_name);
         for event in event_log_db.get_events()? {
             result.process_event(&event);
         }
@@ -1069,10 +1072,9 @@ impl EventReplayer {
     fn get_cursor_branch_oid(
         &self,
         cursor: EventCursor,
-        branch_name: &str,
+        reference_name: &OsStr,
     ) -> anyhow::Result<Option<Oid>> {
         let cursor_event_id: usize = cursor.event_id.try_into().unwrap();
-        let target_ref_name = OsString::from(format!("refs/heads/{}", branch_name));
         let oid = self.events[0..cursor_event_id]
             .iter()
             .rev()
@@ -1081,7 +1083,7 @@ impl EventReplayer {
                     ref_name,
                     new_ref: Some(new_ref),
                     ..
-                } if *ref_name == target_ref_name => Some(new_ref),
+                } if *ref_name == reference_name => Some(new_ref),
                 _ => None,
             });
         match oid {
@@ -1093,7 +1095,7 @@ impl EventReplayer {
         }
     }
 
-    /// Get the OID of the main branch at the cursor's point in
+    /// Get the OID of the main branch at the cursor's point in time.
     ///
     /// Note that this doesn't handle the case of the user having changed their
     /// main branch configuration. That is, if it was previously `master`, and
@@ -1110,8 +1112,8 @@ impl EventReplayer {
         cursor: EventCursor,
         repo: &Repo,
     ) -> anyhow::Result<Oid> {
-        let main_branch_name = get_main_branch_name(&repo)?;
-        let main_branch_oid = self.get_cursor_branch_oid(cursor, &main_branch_name)?;
+        let main_branch_reference_name = repo.get_main_branch_reference()?.get_name()?;
+        let main_branch_oid = self.get_cursor_branch_oid(cursor, &main_branch_reference_name)?;
         match main_branch_oid {
             Some(main_branch_oid) => Ok(main_branch_oid),
             None => {
@@ -1163,23 +1165,21 @@ impl EventReplayer {
 
         let mut result: HashMap<Oid, HashSet<OsString>> = HashMap::new();
         for (ref_name, ref_oid) in ref_name_to_oid.iter() {
-            match ref_name.to_raw_bytes().strip_prefix(b"refs/heads/") {
-                None => {}
-                Some(branch_name) => {
-                    result
-                        .entry(*ref_oid)
-                        .or_insert_with(HashSet::new)
-                        .insert(OsString::from_raw_vec(branch_name.into())?);
-                }
+            if let CategorizedBranchName::LocalBranch { .. } =
+                Branch::categorize_by_prefix(ref_name)
+            {
+                result
+                    .entry(*ref_oid)
+                    .or_insert_with(HashSet::new)
+                    .insert((*ref_name).clone());
             }
         }
 
-        let main_branch_name = get_main_branch_name(&repo)?;
         let main_branch_oid = self.get_cursor_main_branch_oid(cursor, repo)?;
         result
             .entry(main_branch_oid)
             .or_insert_with(HashSet::new)
-            .insert(main_branch_name.into());
+            .insert(self.main_branch_reference_name.clone());
         Ok(result)
     }
 
@@ -1280,7 +1280,7 @@ mod tests {
             event_tx_id,
             commit_oid: Oid::from_str("abc")?,
         };
-        let mut replayer = EventReplayer::new();
+        let mut replayer = EventReplayer::new("refs/heads/master");
         replayer.process_event(&meaningful_event);
         replayer.process_event(&Event::RefUpdateEvent {
             timestamp: 0.0,
@@ -1355,7 +1355,7 @@ mod tests {
 
     #[test]
     fn test_advance_cursor_by_transaction() -> anyhow::Result<()> {
-        let mut event_replayer = EventReplayer::new();
+        let mut event_replayer = EventReplayer::new("refs/heads/master");
         for (timestamp, event_tx_id) in (0..).zip(&[1, 1, 2, 2, 3, 4]) {
             let timestamp: f64 = timestamp.try_into()?;
             event_replayer.process_event(&Event::UnhideEvent {

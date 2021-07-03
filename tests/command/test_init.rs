@@ -213,14 +213,11 @@ fn test_main_branch_not_found_error_message() -> anyhow::Result<()> {
             },
         )?;
         insta::assert_snapshot!(trim_lines(stderr), @r###"
-        Error: Getting main branch OID for repository at: "<repo-path>/.git/"
+        Error:
+        The main branch "master" could not be found in your repository.
+        Either create it, or update the main branch setting by running:
 
-        Caused by:
-
-            The main branch "master" could not be found in your repository.
-            Either create it, or update the main branch setting by running:
-
-                git config branchless.core.mainBranch <branch>
+            git config branchless.core.mainBranch <branch>
 
         "###);
         insta::assert_snapshot!(stdout, @"");

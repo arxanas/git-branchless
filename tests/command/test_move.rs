@@ -227,7 +227,7 @@ fn test_move_with_source_not_in_smartlog_in_memory() -> anyhow::Result<()> {
         ])?;
         insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
-        branchless: processing 1 update to a branch/ref (master)
+        branchless: processing 1 update to a branch/ref (branch master)
         branchless: processing 2 rewritten commits
         branchless: <git-executable> checkout master
         In-memory rebase succeeded.
@@ -393,7 +393,7 @@ fn test_move_branch() -> anyhow::Result<()> {
         let (stdout, _stderr) = git.run(&["move", "-d", &test2_oid.to_string()])?;
         insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
-        branchless: processing 1 update to a branch/ref (master)
+        branchless: processing 1 update to a branch/ref (branch master)
         branchless: processing 1 rewritten commit
         branchless: <git-executable> checkout master
         In-memory rebase succeeded.
@@ -438,7 +438,7 @@ fn test_move_base_onto_head() -> anyhow::Result<()> {
         let (stdout, stderr) = git.run(&["move", "-b", "HEAD"])?;
         insta::assert_snapshot!(stderr, @r###"
         Previous HEAD position was 70deb1e create test3.txt
-        branchless: processing 1 update to a branch/ref (HEAD)
+        branchless: processing 1 update to a branch/ref (ref HEAD)
         HEAD is now at a45568b create test3.txt
         branchless: processing checkout
         "###);
@@ -570,7 +570,7 @@ fn test_move_in_memory_gc() -> anyhow::Result<()> {
         let (stdout, stderr) = git.run(&["move", "-d", "master", "--in-memory"])?;
         insta::assert_snapshot!(stderr, @r###"
         Previous HEAD position was 96d1c37 create test2.txt
-        branchless: processing 1 update to a branch/ref (HEAD)
+        branchless: processing 1 update to a branch/ref (ref HEAD)
         HEAD is now at fe65c1f create test2.txt
         branchless: processing checkout
         "###);

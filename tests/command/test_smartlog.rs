@@ -339,7 +339,7 @@ fn test_main_remote_branch() -> anyhow::Result<()> {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
         :
-        @ 62fc20d2 (origin/master) create test1.txt
+        @ 62fc20d2 (remote origin/master) create test1.txt
         "###);
     }
 
@@ -356,7 +356,7 @@ fn test_main_remote_branch() -> anyhow::Result<()> {
         :
         @ 62fc20d2 create test1.txt
         |
-        O 96d1c37a (origin/master) create test2.txt
+        O 96d1c37a (remote origin/master) create test2.txt
         "###);
     }
 

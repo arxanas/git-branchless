@@ -148,7 +148,7 @@ pub fn next(
     let conn = repo.get_db_conn()?;
     let merge_base_db = MergeBaseDb::new(&conn)?;
     let event_log_db = EventLogDb::new(&conn)?;
-    let event_replayer = EventReplayer::from_event_log_db(&event_log_db)?;
+    let event_replayer = EventReplayer::from_event_log_db(&repo, &event_log_db)?;
 
     let head_oid = match repo.get_head_info()?.oid {
         Some(head_oid) => head_oid,

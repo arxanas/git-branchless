@@ -67,15 +67,15 @@ fn test_abandoned_branch_message() -> anyhow::Result<()> {
         let (_stdout, stderr) = git.run(&["commit", "--amend", "-m", "amend test1"])?;
         let stderr = preprocess_stderr(stderr);
         insta::assert_snapshot!(stderr, @r###"
-            branchless: This operation abandoned 2 branches (abc, master)!
-            branchless: Consider running one of the following:
-            branchless:   - git restack: re-apply the abandoned commits/branches
-            branchless:     (this is most likely what you want to do)
-            branchless:   - git smartlog: assess the situation
-            branchless:   - git hide [<commit>...]: hide the commits from the smartlog
-            branchless:   - git undo: undo the operation
-            branchless:   - git config branchless.restack.warnAbandoned false: suppress this message
-            "###);
+        branchless: This operation abandoned 2 branches (abc, master)!
+        branchless: Consider running one of the following:
+        branchless:   - git restack: re-apply the abandoned commits/branches
+        branchless:     (this is most likely what you want to do)
+        branchless:   - git smartlog: assess the situation
+        branchless:   - git hide [<commit>...]: hide the commits from the smartlog
+        branchless:   - git undo: undo the operation
+        branchless:   - git config branchless.restack.warnAbandoned false: suppress this message
+        "###);
     }
 
     Ok(())

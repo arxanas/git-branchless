@@ -492,7 +492,9 @@ pub fn move_branches<'a>(
         // Sort for determinism in tests.
         names.sort_unstable();
         for name in names {
-            if let Err(err) = repo.create_branch(name, &new_commit, true) {
+            if let Err(err) =
+                repo.create_reference(name, new_commit.get_oid(), true, "move branches")
+            {
                 branch_move_err = Some(err);
                 break 'outer;
             }
@@ -835,7 +837,7 @@ mod tests {
         let conn = repo.get_db_conn()?;
         let merge_base_db = MergeBaseDb::new(&conn)?;
         let event_log_db = EventLogDb::new(&conn)?;
-        let event_replayer = EventReplayer::from_event_log_db(&event_log_db)?;
+        let event_replayer = EventReplayer::from_event_log_db(&repo, &event_log_db)?;
         let event_cursor = event_replayer.make_default_cursor();
         let head_oid = repo.get_head_info()?.oid;
         let main_branch_oid = repo.get_main_branch_oid()?;

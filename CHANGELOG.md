@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed: The output of `git` subcommands is streamed to stdout, rather than accumulated and dumped at the end.
 - Fixed: Commits rebased in-memory by `git move` are now marked as reachable by the Git garbage collector, so that they aren't collected prematurely.
 - Fixed: `git-branchless wrap` correctly relays the exit code of its subprocess.
+- Fixed: Some restack and move operations incorrectly created branches without the necessary `refs/heads/` prefix, which means they weren't considered local branches by Git.
 
 ## [0.3.3] - 2021-06-27
 
