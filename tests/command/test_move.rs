@@ -543,5 +543,67 @@ fn test_rebase_in_memory_updates_committer_timestamp() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[test]
+fn test_move_in_memory_gc() -> anyhow::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+
+    git.init_repo()?;
+    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
+
+    git.detach_head()?;
+    let test1_oid = git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+
+    {
+        let (stdout, stderr) = git.run(&["move", "-d", "master", "--in-memory"])?;
+        insta::assert_snapshot!(stderr, @r###"
+        Previous HEAD position was 96d1c37 create test2.txt
+        branchless: processing 1 update to a branch/ref
+        HEAD is now at fe65c1f create test2.txt
+        branchless: processing checkout
+        "###);
+        insta::assert_snapshot!(stdout, @r###"
+        Attempting rebase in-memory...
+        branchless: processing 1 rewritten commit
+        branchless: <git-executable> checkout fe65c1fe15584744e649b2c79d4cf9b0d878f92e
+        In-memory rebase succeeded.
+        "###);
+    }
+
+    git.run(&["checkout", &test1_oid.to_string()])?;
+
+    {
+        let (stdout, stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stderr, @"");
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc9 (master) create initial.txt
+        |\
+        | @ 62fc20d2 create test1.txt
+        |
+        o fe65c1fe create test2.txt
+        "###);
+    }
+
+    git.run(&["gc", "--prune=now"])?;
+
+    {
+        let (stdout, stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stderr, @"");
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc9 (master) create initial.txt
+        |\
+        | @ 62fc20d2 create test1.txt
+        |
+        o fe65c1fe create test2.txt
+        "###);
+    }
+
+    Ok(())
+}
+
 // TODO: implement restack in terms of move
 // TODO: don't re-apply already-applied commits
