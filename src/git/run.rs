@@ -238,11 +238,11 @@ mod tests {
             // Trigger the `post-rewrite` hook that we wrote above.
             let (stdout, stderr) = git.run(&["commit", "--amend", "-m", "foo"])?;
             insta::assert_snapshot!(stderr, @r###"
-                branchless: processing 2 updates to branches/refs
-                branchless: processing commit
-                Contents of test1.txt:
-                test1 contents
-                "###);
+            branchless: processing 2 updates to branches/refs (HEAD, refs/heads/master)
+            branchless: processing commit
+            Contents of test1.txt:
+            test1 contents
+            "###);
             insta::assert_snapshot!(stdout, @r###"
                 [master f23bf8f] foo
                  Date: Thu Oct 29 12:34:56 2020 -0100
