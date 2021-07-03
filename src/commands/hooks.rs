@@ -352,8 +352,25 @@ pub fn hook_reference_transaction(transaction_state: &str) -> anyhow::Result<()>
         plural: "updates to branches/refs",
     };
     println!(
-        "branchless: processing {}",
-        num_reference_updates.to_string()
+        "branchless: processing {} {}",
+        num_reference_updates.to_string(),
+        console::style(format!(
+            "({})",
+            events
+                .iter()
+                .filter_map(|event| {
+                    match event {
+                        Event::RefUpdateEvent { ref_name, .. } => Some(ref_name.to_string_lossy()),
+                        Event::RewriteEvent { .. }
+                        | Event::CommitEvent { .. }
+                        | Event::HideEvent { .. }
+                        | Event::UnhideEvent { .. } => None,
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(", ")
+        ))
+        .green(),
     );
     event_log_db.add_events(events)?;
 
