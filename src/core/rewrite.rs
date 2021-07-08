@@ -6,7 +6,6 @@ use std::ffi::{OsStr, OsString};
 use std::time::SystemTime;
 
 use anyhow::Context;
-use cursive::utils::markup::StyledString;
 use fn_error_context::context;
 use indicatif::{ProgressBar, ProgressStyle};
 use os_str_bytes::OsStrBytes;
@@ -19,7 +18,6 @@ use super::eventlog::{Event, EventCursor, EventReplayer, EventTransactionId};
 use super::formatting::Glyphs;
 use super::graph::{find_path_to_merge_base, CommitGraph, MainBranchOid};
 use super::mergebase::MergeBaseDb;
-use super::metadata::{render_commit_metadata, CommitMessageProvider, CommitOidProvider};
 
 /// For a rewritten commit, find the newest version of the commit.
 ///
@@ -372,7 +370,7 @@ fn rebase_in_memory(
                 i += 1;
 
                 let commit_description =
-                    printable_styled_string(glyphs, friendly_describe_commit(repo, *commit_oid)?)?;
+                    printable_styled_string(glyphs, commit_to_apply.friendly_describe()?)?;
                 let template = format!("[{}/{}] {{spinner}} {{wide_msg}}", i, num_picks);
                 let progress = ProgressBar::new_spinner();
                 progress.set_style(ProgressStyle::default_spinner().template(&template.trim()));
@@ -443,7 +441,7 @@ fn rebase_in_memory(
 
                 let commit_description = printable_styled_string(
                     glyphs,
-                    friendly_describe_commit(repo, rebased_commit_oid)?,
+                    repo.friendly_describe_commit_from_oid(rebased_commit_oid)?,
                 )?;
                 progress.finish_with_message(format!("Committed as: {}", commit_description));
             }
@@ -724,25 +722,6 @@ fn rebase_on_disk(
     Ok(result)
 }
 
-#[context("Describing commit {}", commit_oid.to_string())]
-fn friendly_describe_commit(repo: &Repo, commit_oid: Oid) -> anyhow::Result<StyledString> {
-    let commit = repo
-        .find_commit(commit_oid)
-        .with_context(|| "Looking up commit to describe")?;
-    let commit = match commit {
-        Some(commit) => commit,
-        None => anyhow::bail!("Could not find commit with OID: {:?}", commit_oid),
-    };
-    let description = render_commit_metadata(
-        &commit,
-        &mut [
-            &mut CommitOidProvider::new(true)?,
-            &mut CommitMessageProvider::new()?,
-        ],
-    )?;
-    Ok(description)
-}
-
 /// Options to use when executing a `RebasePlan`.
 #[derive(Clone, Debug)]
 pub struct ExecuteRebasePlanOptions {
@@ -792,7 +771,7 @@ pub fn execute_rebase_plan(
             RebaseInMemoryResult::CannotRebaseMergeCommit { commit_oid } => {
                 println!(
                     "Merge commits currently can't be rebased with `git move`. The merge commit was: {}",
-                    printable_styled_string(glyphs, friendly_describe_commit(repo, commit_oid)?)?
+                    printable_styled_string(glyphs, repo.friendly_describe_commit_from_oid(commit_oid)?)?,
                 );
                 return Ok(1);
             }
@@ -802,7 +781,7 @@ pub fn execute_rebase_plan(
                         "Merge conflict. The conflicting commit was: {}",
                         printable_styled_string(
                             glyphs,
-                            friendly_describe_commit(repo, commit_oid)?
+                            repo.friendly_describe_commit_from_oid(commit_oid)?,
                         )?,
                     );
                     println!("Aborting since an in-memory rebase was requested.");
@@ -810,7 +789,7 @@ pub fn execute_rebase_plan(
                 } else {
                     println!(
                         "Merge conflict, falling back to rebase on-disk. The conflicting commit was: {}",
-                        printable_styled_string(glyphs, friendly_describe_commit(repo, commit_oid)?)?,
+                        printable_styled_string(glyphs, repo.friendly_describe_commit_from_oid(commit_oid)?)?,
                     );
                 }
             }

@@ -12,9 +12,7 @@ use crate::core::graph::{
     ResolveCommitsResult,
 };
 use crate::core::mergebase::MergeBaseDb;
-use crate::core::metadata::{
-    render_commit_metadata, CommitMessageProvider, CommitMetadataProvider, CommitOidProvider,
-};
+use crate::core::metadata::{render_commit_metadata, CommitOidProvider};
 use crate::git::{Commit, Repo};
 
 fn recurse_on_commits_helper<
@@ -124,18 +122,9 @@ pub fn hide(hashes: Vec<String>, recursive: bool) -> anyhow::Result<isize> {
 
     let cursor = event_replayer.make_default_cursor();
     for commit in commits {
-        let hidden_commit_text = {
-            render_commit_metadata(
-                &commit,
-                &mut [
-                    &mut CommitOidProvider::new(true)? as &mut dyn CommitMetadataProvider,
-                    &mut CommitMessageProvider::new()?,
-                ],
-            )?
-        };
         println!(
             "Hid commit: {}",
-            printable_styled_string(&glyphs, hidden_commit_text)?
+            printable_styled_string(&glyphs, commit.friendly_describe()?)?
         );
         if let Some(CommitVisibility::Hidden) =
             event_replayer.get_cursor_commit_visibility(cursor, commit.get_oid())
@@ -203,18 +192,9 @@ pub fn unhide(hashes: Vec<String>, recursive: bool) -> anyhow::Result<isize> {
 
     let cursor = event_replayer.make_default_cursor();
     for commit in commits {
-        let unhidden_commit_text = {
-            render_commit_metadata(
-                &commit,
-                &mut [
-                    &mut CommitOidProvider::new(true)?,
-                    &mut CommitMessageProvider::new()?,
-                ],
-            )?
-        };
         println!(
             "Unhid commit: {}",
-            printable_styled_string(&glyphs, unhidden_commit_text)?
+            printable_styled_string(&glyphs, commit.friendly_describe()?)?,
         );
         if let Some(CommitVisibility::Visible) =
             event_replayer.get_cursor_commit_visibility(cursor, commit.get_oid())

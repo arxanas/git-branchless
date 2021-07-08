@@ -2,8 +2,6 @@
 
 use std::collections::HashMap;
 
-use cursive::theme::BaseColor;
-use cursive::utils::markup::StyledString;
 use log::warn;
 
 use crate::commands::smartlog::smartlog;
@@ -13,7 +11,6 @@ use crate::core::graph::{
     find_path_to_merge_base, make_graph, BranchOids, HeadOid, MainBranchOid, Node,
 };
 use crate::core::mergebase::MergeBaseDb;
-use crate::core::metadata::{render_commit_metadata, CommitMessageProvider, CommitOidProvider};
 use crate::git::{GitRunInfo, Oid, Repo};
 
 /// Go back a certain number of commits.
@@ -106,26 +103,13 @@ fn advance_towards_own_commit(
                         ""
                     };
 
-                    let commit_text = match &repo.find_commit(*child_oid)? {
-                        Some(commit) => render_commit_metadata(
-                            commit,
-                            &mut [
-                                &mut CommitOidProvider::new(true)?,
-                                &mut CommitMessageProvider::new()?,
-                            ],
-                        )?,
-                        None => {
-                            log::warn!("BUG: could not find commit with OID: {:?}", child_oid);
-                            StyledString::styled(
-                                "<unable to read commit data>",
-                                BaseColor::Red.light(),
-                            )
-                        }
-                    };
                     println!(
                         "  {} {}{}",
                         glyphs.bullet_point,
-                        printable_styled_string(&glyphs, commit_text)?,
+                        printable_styled_string(
+                            &glyphs,
+                            repo.friendly_describe_commit_from_oid(*child_oid)?
+                        )?,
                         descriptor
                     );
                 }

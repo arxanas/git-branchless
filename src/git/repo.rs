@@ -18,10 +18,13 @@ use std::str::FromStr;
 use std::time::SystemTime;
 
 use anyhow::Context;
+use cursive::theme::BaseColor;
+use cursive::utils::markup::StyledString;
 use fn_error_context::context;
 use os_str_bytes::OsStringBytes;
 
 use crate::core::config::get_main_branch_name;
+use crate::core::metadata::{render_commit_metadata, CommitMessageProvider, CommitOidProvider};
 
 use super::Config;
 
@@ -548,6 +551,18 @@ Either create it, or update the main branch setting by running:
         }
     }
 
+    /// Look up the commit with the given OID and render a friendly description
+    /// of it, or render an error message if not found.
+    pub fn friendly_describe_commit_from_oid(&self, oid: Oid) -> anyhow::Result<StyledString> {
+        match self.find_commit(oid)? {
+            Some(commit) => Ok(commit.friendly_describe()?),
+            None => Ok(StyledString::styled(
+                format!("<commit not found: {:?}>", oid),
+                BaseColor::Red.light(),
+            )),
+        }
+    }
+
     /// Create a new commit.
     #[context("Making commit {:?} for repository at: {:?}", message, self.get_path())]
     pub fn create_commit(
@@ -728,6 +743,20 @@ impl<'repo> Commit<'repo> {
         Signature {
             inner: self.inner.committer(),
         }
+    }
+
+    /// Print a one-line description of this commit containing its OID and
+    /// summary.
+    #[context("Describing commit {}", self.get_oid())]
+    pub fn friendly_describe(&self) -> anyhow::Result<StyledString> {
+        let description = render_commit_metadata(
+            self,
+            &mut [
+                &mut CommitOidProvider::new(true)?,
+                &mut CommitMessageProvider::new()?,
+            ],
+        )?;
+        Ok(description)
     }
 }
 
