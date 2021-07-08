@@ -23,7 +23,7 @@ use crate::core::config::{get_restack_warn_abandoned, RESTACK_WARN_ABANDONED_CON
 use crate::core::eventlog::{
     should_ignore_ref_updates, Event, EventLogDb, EventReplayer, EventTransactionId,
 };
-use crate::core::formatting::Pluralize;
+use crate::core::formatting::{printable_styled_string, Glyphs, Pluralize};
 use crate::core::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
 use crate::core::mergebase::MergeBaseDb;
 use crate::core::rewrite::find_abandoned_children;
@@ -234,9 +234,8 @@ pub fn hook_post_checkout(
 ///
 /// See the man-page for `githooks(5)`.
 pub fn hook_post_commit() -> anyhow::Result<()> {
-    println!("branchless: processing commit");
-
     let now = SystemTime::now();
+    let glyphs = Glyphs::detect();
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
     let mut event_log_db = EventLogDb::new(&conn)?;
@@ -269,6 +268,10 @@ pub fn hook_post_commit() -> anyhow::Result<()> {
         event_tx_id,
         commit_oid: commit.get_oid(),
     }])?;
+    println!(
+        "branchless: processed commit: {}",
+        printable_styled_string(&glyphs, commit.friendly_describe()?)?,
+    );
 
     Ok(())
 }
@@ -354,31 +357,28 @@ pub fn hook_reference_transaction(transaction_state: &str) -> anyhow::Result<()>
 
     let num_reference_updates = Pluralize {
         amount: events.len().try_into()?,
-        singular: "update to a branch/ref",
-        plural: "updates to branches/refs",
+        singular: "update",
+        plural: "updates",
     };
     println!(
-        "branchless: processing {} {}",
+        "branchless: processing {}: {}",
         num_reference_updates.to_string(),
-        console::style(format!(
-            "({})",
-            events
-                .iter()
-                .filter_map(|event| {
-                    match event {
-                        Event::RefUpdateEvent { ref_name, .. } => {
-                            Some(Reference::friendly_describe_reference_name(ref_name))
-                        }
-                        Event::RewriteEvent { .. }
-                        | Event::CommitEvent { .. }
-                        | Event::HideEvent { .. }
-                        | Event::UnhideEvent { .. } => None,
+        events
+            .iter()
+            .filter_map(|event| {
+                match event {
+                    Event::RefUpdateEvent { ref_name, .. } => {
+                        Some(Reference::friendly_describe_reference_name(ref_name))
                     }
-                })
-                .collect::<Vec<_>>()
-                .join(", ")
-        ))
-        .green(),
+                    Event::RewriteEvent { .. }
+                    | Event::CommitEvent { .. }
+                    | Event::HideEvent { .. }
+                    | Event::UnhideEvent { .. } => None,
+                }
+            })
+            .map(|description| format!("{}", console::style(description).green()))
+            .collect::<Vec<_>>()
+            .join(", ")
     );
     event_log_db.add_events(events)?;
 

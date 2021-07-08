@@ -17,8 +17,8 @@ fn test_abandoned_commit_message() -> anyhow::Result<()> {
     {
         let (_stdout, stderr) = git.run(&["commit", "--amend", "-m", "amend test1"])?;
         insta::assert_snapshot!(stderr, @r###"
-        branchless: processing 2 updates to branches/refs (ref HEAD, branch master)
-        branchless: processing commit
+        branchless: processing 2 updates: ref HEAD, branch master
+        branchless: processed commit: 9e8dbe91 amend test1
         branchless: processing 1 rewritten commit
         "###);
     }
@@ -30,8 +30,8 @@ fn test_abandoned_commit_message() -> anyhow::Result<()> {
     {
         let (_stdout, stderr) = git.run(&["commit", "--amend", "-m", "amend test1 again"])?;
         insta::assert_snapshot!(stderr, @r###"
-        branchless: processing 1 update to a branch/ref (ref HEAD)
-        branchless: processing commit
+        branchless: processing 1 update: ref HEAD
+        branchless: processed commit: c1e22fd6 amend test1 again
         branchless: processing 1 rewritten commit
         branchless: This operation abandoned 1 commit and 1 branch (master)!
         branchless: Consider running one of the following:
@@ -63,8 +63,8 @@ fn test_abandoned_branch_message() -> anyhow::Result<()> {
     {
         let (_stdout, stderr) = git.run(&["commit", "--amend", "-m", "amend test1"])?;
         insta::assert_snapshot!(stderr, @r###"
-        branchless: processing 1 update to a branch/ref (ref HEAD)
-        branchless: processing commit
+        branchless: processing 1 update: ref HEAD
+        branchless: processed commit: 9e8dbe91 amend test1
         branchless: processing 1 rewritten commit
         branchless: This operation abandoned 2 branches (abc, master)!
         branchless: Consider running one of the following:
@@ -99,10 +99,10 @@ fn test_fixup_no_abandoned_commit_message() -> anyhow::Result<()> {
     {
         let (_stdout, stderr) = git.run(&["rebase", "-i", "master", "--autosquash"])?;
         insta::assert_snapshot!(stderr, @r###"
-        branchless: processing 1 update to a branch/ref (ref HEAD)
-        branchless: processing commit
-        branchless: processing 1 update to a branch/ref (ref HEAD)
-        branchless: processing commit
+        branchless: processing 1 update: ref HEAD
+        branchless: processed commit: a84541d7 # This is a combination of 2 commits. # This is the 1st commit message:
+        branchless: processing 1 update: ref HEAD
+        branchless: processed commit: 7f023a10 create test1.txt
         branchless: processing 3 rewritten commits
         Successfully rebased and updated detached HEAD.
         "###);
@@ -128,8 +128,8 @@ fn test_rebase_individual_commit() -> anyhow::Result<()> {
     {
         let (_stdout, stderr) = git.run(&["rebase", "master", "HEAD^"])?;
         insta::assert_snapshot!(stderr, @r###"
-        branchless: processing 1 update to a branch/ref (ref HEAD)
-        branchless: processing commit
+        branchless: processing 1 update: ref HEAD
+        branchless: processed commit: f8d9985b create test2.txt
         branchless: processing 1 rewritten commit
         branchless: This operation abandoned 1 commit!
         branchless: Consider running one of the following:
