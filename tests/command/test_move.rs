@@ -227,7 +227,7 @@ fn test_move_with_source_not_in_smartlog_in_memory() -> anyhow::Result<()> {
         ])?;
         insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
-        branchless: processing 1 update to a branch/ref (branch master)
+        branchless: processing 1 update: branch master
         branchless: processing 2 rewritten commits
         branchless: <git-executable> checkout master
         In-memory rebase succeeded.
@@ -393,7 +393,7 @@ fn test_move_branch() -> anyhow::Result<()> {
         let (stdout, _stderr) = git.run(&["move", "-d", &test2_oid.to_string()])?;
         insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
-        branchless: processing 1 update to a branch/ref (branch master)
+        branchless: processing 1 update: branch master
         branchless: processing 1 rewritten commit
         branchless: <git-executable> checkout master
         In-memory rebase succeeded.
@@ -438,7 +438,7 @@ fn test_move_base_onto_head() -> anyhow::Result<()> {
         let (stdout, stderr) = git.run(&["move", "-b", "HEAD"])?;
         insta::assert_snapshot!(stderr, @r###"
         Previous HEAD position was 70deb1e create test3.txt
-        branchless: processing 1 update to a branch/ref (ref HEAD)
+        branchless: processing 1 update: ref HEAD
         HEAD is now at a45568b create test3.txt
         branchless: processing checkout
         "###);
@@ -570,7 +570,7 @@ fn test_move_in_memory_gc() -> anyhow::Result<()> {
         let (stdout, stderr) = git.run(&["move", "-d", "master", "--in-memory"])?;
         insta::assert_snapshot!(stderr, @r###"
         Previous HEAD position was 96d1c37 create test2.txt
-        branchless: processing 1 update to a branch/ref (ref HEAD)
+        branchless: processing 1 update: ref HEAD
         HEAD is now at fe65c1f create test2.txt
         branchless: processing checkout
         "###);
@@ -613,5 +613,88 @@ fn test_move_in_memory_gc() -> anyhow::Result<()> {
     Ok(())
 }
 
-// TODO: implement restack in terms of move
+#[test]
+fn test_move_main_branch_commits() -> anyhow::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+
+    git.init_repo()?;
+    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
+
+    let test1_oid = git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+    let test3_oid = git.commit_file("test3", 3)?;
+    git.commit_file("test4", 4)?;
+    git.commit_file("test5", 5)?;
+
+    {
+        let (stdout, _stderr) = git.run(&[
+            "move",
+            "-s",
+            &test3_oid.to_string(),
+            "-d",
+            &test1_oid.to_string(),
+        ])?;
+        insta::assert_snapshot!(stdout, @r###"
+        Attempting rebase in-memory...
+        branchless: processing 1 update: branch master
+        branchless: processing 3 rewritten commits
+        branchless: <git-executable> checkout master
+        In-memory rebase succeeded.
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d2 create test1.txt
+        |\
+        : o 96d1c37a create test2.txt
+        :
+        @ 566e4341 (master) create test5.txt
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["log"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        commit 566e4341a4a9a930fc2bf7ccdfa168e9f266c34a
+        Author: Testy McTestface <test@example.com>
+        Date:   Thu Oct 29 12:34:56 2020 -0500
+
+            create test5.txt
+
+        commit a248207402822b7396cabe0f1011d8a7ce7daf1b
+        Author: Testy McTestface <test@example.com>
+        Date:   Thu Oct 29 12:34:56 2020 -0400
+
+            create test4.txt
+
+        commit 4838e49b08954becdd17c0900c1179c2c654c627
+        Author: Testy McTestface <test@example.com>
+        Date:   Thu Oct 29 12:34:56 2020 -0300
+
+            create test3.txt
+
+        commit 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
+        Author: Testy McTestface <test@example.com>
+        Date:   Thu Oct 29 12:34:56 2020 -0100
+
+            create test1.txt
+
+        commit f777ecc9b0db5ed372b2615695191a8a17f79f24
+        Author: Testy McTestface <test@example.com>
+        Date:   Thu Oct 29 12:34:56 2020 +0000
+
+            create initial.txt
+        "###);
+    }
+
+    Ok(())
+}
+
 // TODO: don't re-apply already-applied commits

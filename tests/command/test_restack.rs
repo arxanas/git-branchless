@@ -124,7 +124,7 @@ fn test_move_abandoned_branch() -> anyhow::Result<()> {
         let stdout = remove_rebase_lines(stdout);
         insta::assert_snapshot!(stdout, @r###"
         No abandoned commits to restack.
-        branchless: processing 1 update to a branch/ref (branch master)
+        branchless: processing 1 update: branch master
         Finished restacking branches.
         branchless: <git-executable> checkout 662b451fb905b92404787e024af717ced49e3045
         :
@@ -168,7 +168,7 @@ fn test_amended_initial_commit() -> anyhow::Result<()> {
         Calling Git for on-disk rebase...
         branchless: <git-executable> rebase --continue
         Finished restacking commits.
-        branchless: processing 1 update to a branch/ref (branch master)
+        branchless: processing 1 update: branch master
         Finished restacking branches.
         branchless: <git-executable> checkout 9a9f929a0d4f052ff5d58bedd97b2f761120f8ed
         @ 9a9f929a new initial commit
@@ -204,7 +204,7 @@ fn test_restack_amended_master() -> anyhow::Result<()> {
         Calling Git for on-disk rebase...
         branchless: <git-executable> rebase --continue
         Finished restacking commits.
-        branchless: processing 1 update to a branch/ref (branch master)
+        branchless: processing 1 update: branch master
         Finished restacking branches.
         branchless: <git-executable> checkout ae94dc2a748bc0965c88fcf3edac2e30074ff7e2
         :
