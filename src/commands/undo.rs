@@ -21,12 +21,12 @@ use crate::core::formatting::{printable_styled_string, Glyphs, Pluralize, Styled
 use crate::core::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
 use crate::core::mergebase::MergeBaseDb;
 use crate::core::metadata::{
-    render_commit_metadata, BranchesProvider, CommitMessageProvider, CommitOidProvider,
-    DifferentialRevisionProvider, HiddenExplanationProvider, RelativeTimeProvider,
+    BranchesProvider, CommitMessageProvider, CommitOidProvider, DifferentialRevisionProvider,
+    HiddenExplanationProvider, RelativeTimeProvider,
 };
 use crate::core::tui::{with_siv, SingletonView};
 use crate::declare_views;
-use crate::git::{GitRunInfo, Oid, Reference, Repo};
+use crate::git::{GitRunInfo, Reference, Repo};
 
 fn render_cursor_smartlog(
     glyphs: &Glyphs,
@@ -67,21 +67,6 @@ fn render_cursor_smartlog(
 }
 
 fn describe_event(repo: &Repo, event: &Event) -> anyhow::Result<Vec<StyledString>> {
-    let render_commit = |oid: Oid| -> anyhow::Result<StyledString> {
-        match repo.find_commit(oid)? {
-            Some(commit) => render_commit_metadata(
-                &commit,
-                &mut [
-                    &mut CommitOidProvider::new(true)?,
-                    &mut CommitMessageProvider::new()?,
-                ],
-            ),
-            None => Ok(StyledString::plain(format!(
-                "<unavailable: {} (possibly GC'ed)>",
-                oid.to_string()
-            ))),
-        }
-    };
     let result = match event {
         Event::CommitEvent {
             timestamp: _,
@@ -91,7 +76,7 @@ fn describe_event(repo: &Repo, event: &Event) -> anyhow::Result<Vec<StyledString
             vec![
                 StyledStringBuilder::new()
                     .append_plain("Commit ")
-                    .append(render_commit(*commit_oid)?)
+                    .append(repo.friendly_describe_commit_from_oid(*commit_oid)?)
                     .build(),
                 StyledString::new(),
             ]
@@ -105,7 +90,7 @@ fn describe_event(repo: &Repo, event: &Event) -> anyhow::Result<Vec<StyledString
             vec![
                 StyledStringBuilder::new()
                     .append_plain("Hide commit ")
-                    .append(render_commit(*commit_oid)?)
+                    .append(repo.friendly_describe_commit_from_oid(*commit_oid)?)
                     .build(),
                 StyledString::new(),
             ]
@@ -119,7 +104,7 @@ fn describe_event(repo: &Repo, event: &Event) -> anyhow::Result<Vec<StyledString
             vec![
                 StyledStringBuilder::new()
                     .append_plain("Unhide commit ")
-                    .append(render_commit(*commit_oid)?)
+                    .append(repo.friendly_describe_commit_from_oid(*commit_oid)?)
                     .build(),
                 StyledString::new(),
             ]
@@ -137,7 +122,9 @@ fn describe_event(repo: &Repo, event: &Event) -> anyhow::Result<Vec<StyledString
             vec![
                 StyledStringBuilder::new()
                     .append_plain("Check out to ")
-                    .append(render_commit(new_ref.to_string_lossy().parse()?)?)
+                    .append(
+                        repo.friendly_describe_commit_from_oid(new_ref.to_string_lossy().parse()?)?,
+                    )
                     .build(),
                 StyledString::new(),
             ]
@@ -154,11 +141,15 @@ fn describe_event(repo: &Repo, event: &Event) -> anyhow::Result<Vec<StyledString
             vec![
                 StyledStringBuilder::new()
                     .append_plain("Check out from ")
-                    .append(render_commit(Reference::name_to_oid(old_ref)?)?)
+                    .append(
+                        repo.friendly_describe_commit_from_oid(Reference::name_to_oid(old_ref)?)?,
+                    )
                     .build(),
                 StyledStringBuilder::new()
                     .append_plain("            to ")
-                    .append(render_commit(Reference::name_to_oid(new_ref)?)?)
+                    .append(
+                        repo.friendly_describe_commit_from_oid(Reference::name_to_oid(new_ref)?)?,
+                    )
                     .build(),
             ]
         }
@@ -197,7 +188,9 @@ fn describe_event(repo: &Repo, event: &Event) -> anyhow::Result<Vec<StyledString
                     .append_plain("Create ")
                     .append_plain(Reference::friendly_describe_reference_name(ref_name))
                     .append_plain(" at ")
-                    .append(render_commit(Reference::name_to_oid(new_ref)?)?)
+                    .append(
+                        repo.friendly_describe_commit_from_oid(Reference::name_to_oid(new_ref)?)?,
+                    )
                     .build(),
                 StyledString::new(),
             ]
@@ -216,7 +209,9 @@ fn describe_event(repo: &Repo, event: &Event) -> anyhow::Result<Vec<StyledString
                     .append_plain("Delete ")
                     .append_plain(Reference::friendly_describe_reference_name(ref_name))
                     .append_plain(" at ")
-                    .append(render_commit(Reference::name_to_oid(old_ref)?)?)
+                    .append(
+                        repo.friendly_describe_commit_from_oid(Reference::name_to_oid(old_ref)?)?,
+                    )
                     .build(),
                 StyledString::new(),
             ]
@@ -236,13 +231,17 @@ fn describe_event(repo: &Repo, event: &Event) -> anyhow::Result<Vec<StyledString
                     .append_plain("Move ")
                     .append_plain(ref_name.clone())
                     .append_plain(" from ")
-                    .append(render_commit(Reference::name_to_oid(old_ref)?)?)
+                    .append(
+                        repo.friendly_describe_commit_from_oid(Reference::name_to_oid(old_ref)?)?,
+                    )
                     .build(),
                 StyledStringBuilder::new()
                     .append_plain("     ")
                     .append_plain(" ".repeat(ref_name.len()))
                     .append_plain("   to ")
-                    .append(render_commit(Reference::name_to_oid(new_ref)?)?)
+                    .append(
+                        repo.friendly_describe_commit_from_oid(Reference::name_to_oid(new_ref)?)?,
+                    )
                     .build(),
             ]
         }
@@ -256,11 +255,11 @@ fn describe_event(repo: &Repo, event: &Event) -> anyhow::Result<Vec<StyledString
             vec![
                 StyledStringBuilder::new()
                     .append_plain("Rewrite commit ")
-                    .append(render_commit(*old_commit_oid)?)
+                    .append(repo.friendly_describe_commit_from_oid(*old_commit_oid)?)
                     .build(),
                 StyledStringBuilder::new()
                     .append_plain("           as ")
-                    .append(render_commit(*new_commit_oid)?)
+                    .append(repo.friendly_describe_commit_from_oid(*new_commit_oid)?)
                     .build(),
             ]
         }
