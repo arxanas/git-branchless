@@ -3,33 +3,24 @@ use branchless::testing::make_git;
 use branchless::util::get_sh;
 use std::process::Command;
 
-fn preprocess_stderr(stderr: String) -> String {
-    stderr
-        // Interactive progress displays may update the same line multiple times
-        // with a carriage return before emitting the final newline.
-        .replace("\r", "\n")
-        // Window pseudo console may emit EL 'Erase in Line' VT sequences.
-        .replace("\x1b[K", "")
-        .lines()
-        .filter(|line| {
-            !line.chars().all(|c| c.is_whitespace()) && !line.starts_with("branchless: processing")
-        })
-        .map(|line| line.to_owned() + "\n")
-        .collect::<Vec<_>>()
-        .join("")
-}
-
 #[test]
 fn test_abandoned_commit_message() -> anyhow::Result<()> {
     let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
 
     git.init_repo()?;
     git.commit_file("test1", 1)?;
 
     {
         let (_stdout, stderr) = git.run(&["commit", "--amend", "-m", "amend test1"])?;
-        let stderr = preprocess_stderr(stderr);
-        assert_eq!(stderr, "");
+        insta::assert_snapshot!(stderr, @r###"
+        branchless: processing 2 updates to branches/refs (ref HEAD, branch master)
+        branchless: processing commit
+        branchless: processing 1 rewritten commit
+        "###);
     }
 
     git.commit_file("test2", 2)?;
@@ -38,17 +29,19 @@ fn test_abandoned_commit_message() -> anyhow::Result<()> {
 
     {
         let (_stdout, stderr) = git.run(&["commit", "--amend", "-m", "amend test1 again"])?;
-        let stderr = preprocess_stderr(stderr);
         insta::assert_snapshot!(stderr, @r###"
-            branchless: This operation abandoned 1 commit and 1 branch (master)!
-            branchless: Consider running one of the following:
-            branchless:   - git restack: re-apply the abandoned commits/branches
-            branchless:     (this is most likely what you want to do)
-            branchless:   - git smartlog: assess the situation
-            branchless:   - git hide [<commit>...]: hide the commits from the smartlog
-            branchless:   - git undo: undo the operation
-            branchless:   - git config branchless.restack.warnAbandoned false: suppress this message
-            "###);
+        branchless: processing 1 update to a branch/ref (ref HEAD)
+        branchless: processing commit
+        branchless: processing 1 rewritten commit
+        branchless: This operation abandoned 1 commit and 1 branch (master)!
+        branchless: Consider running one of the following:
+        branchless:   - git restack: re-apply the abandoned commits/branches
+        branchless:     (this is most likely what you want to do)
+        branchless:   - git smartlog: assess the situation
+        branchless:   - git hide [<commit>...]: hide the commits from the smartlog
+        branchless:   - git undo: undo the operation
+        branchless:   - git config branchless.restack.warnAbandoned false: suppress this message
+        "###);
     }
 
     Ok(())
@@ -58,6 +51,10 @@ fn test_abandoned_commit_message() -> anyhow::Result<()> {
 fn test_abandoned_branch_message() -> anyhow::Result<()> {
     let git = make_git()?;
 
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+
     git.init_repo()?;
     git.commit_file("test1", 1)?;
     git.run(&["branch", "abc"])?;
@@ -65,8 +62,10 @@ fn test_abandoned_branch_message() -> anyhow::Result<()> {
 
     {
         let (_stdout, stderr) = git.run(&["commit", "--amend", "-m", "amend test1"])?;
-        let stderr = preprocess_stderr(stderr);
         insta::assert_snapshot!(stderr, @r###"
+        branchless: processing 1 update to a branch/ref (ref HEAD)
+        branchless: processing commit
+        branchless: processing 1 rewritten commit
         branchless: This operation abandoned 2 branches (abc, master)!
         branchless: Consider running one of the following:
         branchless:   - git restack: re-apply the abandoned commits/branches
@@ -85,6 +84,10 @@ fn test_abandoned_branch_message() -> anyhow::Result<()> {
 fn test_fixup_no_abandoned_commit_message() -> anyhow::Result<()> {
     let git = make_git()?;
 
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+
     git.init_repo()?;
     git.detach_head()?;
     git.commit_file("test1", 1)?;
@@ -95,12 +98,14 @@ fn test_fixup_no_abandoned_commit_message() -> anyhow::Result<()> {
 
     {
         let (_stdout, stderr) = git.run(&["rebase", "-i", "master", "--autosquash"])?;
-        let stderr = preprocess_stderr(stderr);
         insta::assert_snapshot!(stderr, @r###"
-            Rebasing (2/3)
-            Rebasing (3/3)
-            Successfully rebased and updated detached HEAD.
-            "###);
+        branchless: processing 1 update to a branch/ref (ref HEAD)
+        branchless: processing commit
+        branchless: processing 1 update to a branch/ref (ref HEAD)
+        branchless: processing commit
+        branchless: processing 3 rewritten commits
+        Successfully rebased and updated detached HEAD.
+        "###);
     }
 
     Ok(())
@@ -122,19 +127,20 @@ fn test_rebase_individual_commit() -> anyhow::Result<()> {
 
     {
         let (_stdout, stderr) = git.run(&["rebase", "master", "HEAD^"])?;
-        let stderr = preprocess_stderr(stderr);
         insta::assert_snapshot!(stderr, @r###"
-            Rebasing (1/1)
-            branchless: This operation abandoned 1 commit!
-            branchless: Consider running one of the following:
-            branchless:   - git restack: re-apply the abandoned commits/branches
-            branchless:     (this is most likely what you want to do)
-            branchless:   - git smartlog: assess the situation
-            branchless:   - git hide [<commit>...]: hide the commits from the smartlog
-            branchless:   - git undo: undo the operation
-            branchless:   - git config branchless.restack.warnAbandoned false: suppress this message
-            Successfully rebased and updated detached HEAD.
-            "###);
+        branchless: processing 1 update to a branch/ref (ref HEAD)
+        branchless: processing commit
+        branchless: processing 1 rewritten commit
+        branchless: This operation abandoned 1 commit!
+        branchless: Consider running one of the following:
+        branchless:   - git restack: re-apply the abandoned commits/branches
+        branchless:     (this is most likely what you want to do)
+        branchless:   - git smartlog: assess the situation
+        branchless:   - git hide [<commit>...]: hide the commits from the smartlog
+        branchless:   - git undo: undo the operation
+        branchless:   - git config branchless.restack.warnAbandoned false: suppress this message
+        Successfully rebased and updated detached HEAD.
+        "###);
     }
 
     Ok(())
@@ -151,7 +157,6 @@ fn test_interactive_rebase_noop() -> anyhow::Result<()> {
 
     {
         let (_stdout, stderr) = git.run(&["rebase", "-i", "master"])?;
-        let stderr = preprocess_stderr(stderr);
         insta::assert_snapshot!(stderr, @"Successfully rebased and updated detached HEAD.
 ");
     }
