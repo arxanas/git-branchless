@@ -11,8 +11,11 @@ use std::process::{Command, Stdio};
 
 use crate::git::{GitRunInfo, GitVersion, Oid, Repo};
 use crate::util::get_sh;
+
 use anyhow::Context;
 use fn_error_context::context;
+use lazy_static::lazy_static;
+use regex::{Captures, Regex};
 use tempfile::TempDir;
 
 const DUMMY_NAME: &str = "Testy McTestface";
@@ -98,7 +101,7 @@ impl Git {
             .path_to_git
             .to_str()
             .ok_or_else(|| anyhow::anyhow!("Could not convert path to Git to string"))?;
-        let stdout = stdout.replace(path_to_git, "<git-executable>");
+        let output = stdout.replace(path_to_git, "<git-executable>");
 
         // NB: tests which run on Windows are unlikely to succeed due to this
         // `canonicalize` call.
@@ -107,8 +110,28 @@ impl Git {
         let repo_path = repo_path
             .to_str()
             .ok_or_else(|| anyhow::anyhow!("Could not convert repo path to string"))?;
-        let stdout = stdout.replace(&repo_path, "<repo-path>");
-        Ok(stdout)
+        let output = output.replace(&repo_path, "<repo-path>");
+
+        lazy_static! {
+            // Simulate clearing the terminal line by searching for the
+            // appropriate sequences of characters and removing the line
+            // preceding them.
+            //
+            // - `\r`: Interactive progress displays may update the same line
+            // multiple times with a carriage return before emitting the final
+            // newline.
+            // - `\x1B[K`: Window pseudo console may emit EL 'Erase in Line' VT
+            // sequences.
+            static ref CLEAR_LINE_RE: Regex = Regex::new(r"(^|\n).*(\r|\x1B\[K)").unwrap();
+        }
+        let output = CLEAR_LINE_RE
+            .replace_all(&output, |captures: &Captures| {
+                // Restore the leading newline, if any.
+                captures[1].to_string()
+            })
+            .into_owned();
+
+        Ok(output)
     }
 
     /// Get the `PATH` environment variable to use for testing.
