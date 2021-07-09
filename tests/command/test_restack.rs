@@ -136,6 +136,103 @@ fn test_move_abandoned_branch() -> anyhow::Result<()> {
 }
 
 #[test]
+fn test_restack_after_move_on_disk() -> anyhow::Result<()> {
+    let git = make_git()?;
+
+    git.init_repo()?;
+    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
+
+    let test1_oid = git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+    git.detach_head()?;
+    git.commit_file("test3", 3)?;
+    git.run(&["branch", "foo"])?;
+    git.commit_file("test4", 4)?;
+    git.commit_file("test5", 5)?;
+    git.run(&["branch", "bar"])?;
+
+    {
+        let (stdout, stderr) = git.run(&[
+            "move",
+            "--on-disk",
+            "-s",
+            "foo",
+            "-d",
+            &test1_oid.to_string(),
+        ])?;
+        let stderr = remove_rebase_lines(stderr);
+        insta::assert_snapshot!(stderr, @r###"
+        branchless: processing 1 update: ref HEAD
+        branchless: processing 1 update: ref HEAD
+        branchless: processed commit: 4838e49b create test3.txt
+        branchless: processing 1 update: ref HEAD
+        branchless: processed commit: a2482074 create test4.txt
+        branchless: processing 1 update: ref HEAD
+        branchless: processed commit: 566e4341 create test5.txt
+        branchless: processing 3 rewritten commits
+        branchless: This operation abandoned 2 branches (bar, foo)!
+        branchless: Consider running one of the following:
+        branchless:   - git restack: re-apply the abandoned commits/branches
+        branchless:     (this is most likely what you want to do)
+        branchless:   - git smartlog: assess the situation
+        branchless:   - git hide [<commit>...]: hide the commits from the smartlog
+        branchless:   - git undo: undo the operation
+        branchless:   - git config branchless.restack.warnAbandoned false: suppress this message
+        Successfully rebased and updated detached HEAD.
+        "###);
+        let stdout = remove_rebase_lines(stdout);
+        insta::assert_snapshot!(stdout, @r###"
+        Calling Git for on-disk rebase...
+        branchless: <git-executable> rebase --continue
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d2 create test1.txt
+        |\
+        | o 4838e49b create test3.txt
+        | |
+        | o a2482074 create test4.txt
+        | |
+        | @ 566e4341 create test5.txt
+        |
+        O 96d1c37a (master) create test2.txt
+        |
+        x 70deb1e2 (rewritten as 4838e49b) (foo) create test3.txt
+        |
+        x 355e173b (rewritten as a2482074) create test4.txt
+        |
+        x f81d55c0 (rewritten as 566e4341) (bar) create test5.txt
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["restack"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        No abandoned commits to restack.
+        branchless: processing 2 updates: branch bar, branch foo
+        Finished restacking branches.
+        branchless: <git-executable> checkout 566e4341a4a9a930fc2bf7ccdfa168e9f266c34a
+        :
+        O 62fc20d2 create test1.txt
+        |\
+        | o 4838e49b (foo) create test3.txt
+        | |
+        | o a2482074 create test4.txt
+        | |
+        | @ 566e4341 (bar) create test5.txt
+        |
+        O 96d1c37a (master) create test2.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_amended_initial_commit() -> anyhow::Result<()> {
     let git = make_git()?;
 
