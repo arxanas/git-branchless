@@ -16,6 +16,7 @@ use std::time::SystemTime;
 use anyhow::Context;
 use console::style;
 use fn_error_context::context;
+use itertools::Itertools;
 use os_str_bytes::OsStringBytes;
 
 use crate::commands::gc::mark_commit_reachable;
@@ -377,6 +378,7 @@ pub fn hook_reference_transaction(transaction_state: &str) -> anyhow::Result<()>
                 }
             })
             .map(|description| format!("{}", console::style(description).green()))
+            .sorted()
             .collect::<Vec<_>>()
             .join(", ")
     );

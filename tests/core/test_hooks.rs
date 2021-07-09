@@ -17,7 +17,7 @@ fn test_abandoned_commit_message() -> anyhow::Result<()> {
     {
         let (_stdout, stderr) = git.run(&["commit", "--amend", "-m", "amend test1"])?;
         insta::assert_snapshot!(stderr, @r###"
-        branchless: processing 2 updates: ref HEAD, branch master
+        branchless: processing 2 updates: branch master, ref HEAD
         branchless: processed commit: 9e8dbe91 amend test1
         branchless: processing 1 rewritten commit
         "###);
