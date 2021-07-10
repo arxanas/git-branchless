@@ -949,4 +949,51 @@ fn test_move_branches_after_move_on_disk() -> anyhow::Result<()> {
     Ok(())
 }
 
-// TODO: don't re-apply already-applied commits
+#[test]
+fn test_move_no_reapply_upstream_commits_in_memory() -> anyhow::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+
+    git.init_repo()?;
+    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
+
+    git.detach_head()?;
+    let test1_oid = git.commit_file("test1", 1)?;
+    git.run(&["branch", "should-be-deleted"])?;
+    let test2_oid = git.commit_file("test2", 2)?;
+    git.run(&["checkout", "master"])?;
+    git.run(&["cherry-pick", &test1_oid.to_string()])?;
+    git.run(&["checkout", &test2_oid.to_string()])?;
+
+    {
+        let (stdout, stderr) = git.run(&["move", "--in-memory", "-b", "HEAD", "-d", "master"])?;
+        insta::assert_snapshot!(stderr, @r###"
+        Previous HEAD position was 96d1c37 create test2.txt
+        branchless: processing 1 update: ref HEAD
+        HEAD is now at fa46633 create test2.txt
+        branchless: processing checkout
+        "###);
+        insta::assert_snapshot!(stdout, @r###"
+        Attempting rebase in-memory...
+        branchless: processing 1 update: branch should-be-deleted
+        branchless: processing 2 rewritten commits
+        branchless: <git-executable> checkout fa46633239bfa767036e41a77b67258286e4ddb9
+        In-memory rebase succeeded.
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 047b7ad7 (master) create test1.txt
+        |
+        @ fa466332 create test2.txt
+        "###);
+    }
+
+    Ok(())
+}

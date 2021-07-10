@@ -750,14 +750,34 @@ fn rebase_in_memory(
                         &[&current_commit],
                     )
                     .with_context(|| "Applying rebased commit")?;
-                rewritten_oids.push((*commit_oid, MaybeZeroOid::NonZero(rebased_commit_oid)));
-                current_oid = rebased_commit_oid;
 
+                let rebased_commit = match repo
+                    .find_commit(rebased_commit_oid)
+                    .with_context(|| "Looking up just-rebased commit")?
+                {
+                    Some(commit) => commit,
+                    None => {
+                        anyhow::bail!(
+                            "Could not find just-rebased commit: {:?}",
+                            rebased_commit_oid
+                        )
+                    }
+                };
                 let commit_description = printable_styled_string(
                     glyphs,
                     repo.friendly_describe_commit_from_oid(rebased_commit_oid)?,
                 )?;
-                progress.finish_with_message(format!("Committed as: {}", commit_description));
+                if rebased_commit.is_empty() {
+                    rewritten_oids.push((*commit_oid, MaybeZeroOid::Zero));
+                    progress.finish_with_message(format!(
+                        "Skipped now-empty commit: {}",
+                        commit_description
+                    ));
+                } else {
+                    rewritten_oids.push((*commit_oid, MaybeZeroOid::NonZero(rebased_commit_oid)));
+                    current_oid = rebased_commit_oid;
+                    progress.finish_with_message(format!("Committed as: {}", commit_description));
+                }
             }
             RebaseCommand::RegisterExtraPostRewriteHook => {
                 // Do nothing. We'll carry out post-rebase operations after the
@@ -785,44 +805,65 @@ pub fn move_branches<'a>(
     // first error, but we don't know which references we successfully committed
     // in that case. Instead, we just do things non-atomically and record which
     // ones succeeded. See https://github.com/libgit2/libgit2/issues/5918
-    let mut branch_moves: Vec<(NonZeroOid, NonZeroOid, &OsStr)> = Vec::new();
+    let mut branch_moves: Vec<(NonZeroOid, MaybeZeroOid, &OsStr)> = Vec::new();
     let mut branch_move_err: Option<anyhow::Error> = None;
     'outer: for (old_oid, names) in branch_oid_to_names.iter() {
         let new_oid = match rewritten_oids_map.get(&old_oid) {
             Some(new_oid) => new_oid,
             None => continue,
         };
-        let new_oid = match new_oid {
-            MaybeZeroOid::NonZero(new_oid) => new_oid,
-            MaybeZeroOid::Zero => todo!("handle branch deletions"),
-        };
-        let new_commit = match repo.find_commit(*new_oid) {
-            Ok(Some(commit)) => commit,
-            Ok(None) => {
-                branch_move_err = Some(anyhow::anyhow!(
-                    "Could not find newly-rewritten commit with old OID: {:?}, new OID: {:?}",
-                    old_oid,
-                    new_oid
-                ));
-                break 'outer;
-            }
-            Err(err) => {
-                branch_move_err = Some(err);
-                break 'outer;
-            }
-        };
-
         let mut names: Vec<_> = names.iter().collect();
         // Sort for determinism in tests.
         names.sort_unstable();
-        for name in names {
-            if let Err(err) =
-                repo.create_reference(name, new_commit.get_oid(), true, "move branches")
-            {
-                branch_move_err = Some(err);
-                break 'outer;
+        match new_oid {
+            MaybeZeroOid::NonZero(new_oid) => {
+                let new_commit = match repo.find_commit(*new_oid) {
+                    Ok(Some(commit)) => commit,
+                    Ok(None) => {
+                        branch_move_err = Some(anyhow::anyhow!(
+                            "Could not find newly-rewritten commit with old OID: {:?}, new OID: {:?}",
+                            old_oid,
+                            new_oid
+                        ));
+                        break 'outer;
+                    }
+                    Err(err) => {
+                        branch_move_err = Some(err);
+                        break 'outer;
+                    }
+                };
+
+                for name in names {
+                    if let Err(err) =
+                        repo.create_reference(name, new_commit.get_oid(), true, "move branches")
+                    {
+                        branch_move_err = Some(err);
+                        break 'outer;
+                    }
+                    branch_moves.push((*old_oid, MaybeZeroOid::NonZero(*new_oid), name));
+                }
             }
-            branch_moves.push((*old_oid, *new_oid, name))
+
+            MaybeZeroOid::Zero => {
+                for name in names {
+                    match repo.find_reference(name) {
+                        Ok(Some(mut reference)) => {
+                            if let Err(err) = reference.delete() {
+                                branch_move_err = Some(err);
+                                break 'outer;
+                            }
+                        }
+                        Ok(None) => {
+                            log::warn!("Reference not found, not deleting: {:?}", name)
+                        }
+                        Err(err) => {
+                            branch_move_err = Some(err);
+                            break 'outer;
+                        }
+                    };
+                    branch_moves.push((*old_oid, MaybeZeroOid::Zero, name));
+                }
+            }
         }
     }
 
@@ -908,7 +949,10 @@ fn post_rebase_in_memory(
         if let Some(new_head_oid) = rewritten_oids_map.get(&head_oid) {
             let head_target = match head_info.get_branch_name() {
                 Some(head_branch) => head_branch.to_string(),
-                None => new_head_oid.to_string(),
+                None => match new_head_oid {
+                    MaybeZeroOid::NonZero(new_head_oid) => new_head_oid.to_string(),
+                    MaybeZeroOid::Zero => format!("{}^", head_oid.to_string()),
+                },
             };
             let result = git_run_info.run(Some(*event_tx_id), &["checkout", &head_target])?;
             if result != 0 {
