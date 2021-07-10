@@ -866,6 +866,16 @@ impl<'repo> Commit<'repo> {
         )?;
         Ok(description)
     }
+
+    /// Determine if the current commit is empty (has no changes compared to its
+    /// parent).
+    pub fn is_empty(&self) -> bool {
+        match self.get_parents().as_slice() {
+            [] => false,
+            [parent_commit] => self.inner.tree_id() == parent_commit.inner.tree_id(),
+            _ => false,
+        }
+    }
 }
 
 /// Represents a reference to an object.
