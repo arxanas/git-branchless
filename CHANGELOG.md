@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added: `git move` now supports forcing an in-memory rebase with the `--in-memory` flag.
 - Added: The `reference-transaction` hook prints out which references were updated.
+- Added: `git restack` can now accept a list of commit hashes whose descendants should be restacked, rather than restacking every abandoned commit indiscriminately.
 - Fixed: `git move` preserves committer timestamps when `branchless.restack.preserveTimestamps` is set. The configuration key may change in the future.
 - Changed: More of the Git hooks installed by `git-branchless` display the affected objects, rather than just the number of affected objects.
 - Fixed: The output of `git` subcommands is streamed to stdout, rather than accumulated and dumped at the end.

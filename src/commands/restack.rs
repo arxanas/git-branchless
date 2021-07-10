@@ -55,7 +55,7 @@
 //! o def003 Commit 3
 //! ```
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::stdout;
 use std::time::SystemTime;
 
@@ -65,7 +65,9 @@ use crate::commands::smartlog::smartlog;
 use crate::core::config::get_restack_preserve_timestamps;
 use crate::core::eventlog::{EventLogDb, EventReplayer};
 use crate::core::formatting::Glyphs;
-use crate::core::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
+use crate::core::graph::{
+    make_graph, resolve_commits, BranchOids, HeadOid, MainBranchOid, ResolveCommitsResult,
+};
 use crate::core::mergebase::MergeBaseDb;
 use crate::core::rewrite::{
     execute_rebase_plan, find_abandoned_children, find_rewrite_target, move_branches,
@@ -80,6 +82,7 @@ fn restack_commits(
     git_run_info: &GitRunInfo,
     merge_base_db: &MergeBaseDb,
     event_log_db: &EventLogDb,
+    commits: Option<impl IntoIterator<Item = Oid>>,
     build_options: &BuildRebasePlanOptions,
     execute_options: &ExecuteRebasePlanOptions,
 ) -> anyhow::Result<isize> {
@@ -103,9 +106,12 @@ fn restack_commits(
         dest_oid: Oid,
         abandoned_child_oids: Vec<Oid>,
     }
-    let rebases: Vec<RebaseInfo> = graph
-        .keys()
-        .copied()
+    let commits: HashSet<Oid> = match commits {
+        Some(commits) => commits.into_iter().collect(),
+        None => graph.keys().copied().collect(),
+    };
+    let rebases: Vec<RebaseInfo> = commits
+        .into_iter()
         .filter_map(|original_oid| {
             find_abandoned_children(&graph, &event_replayer, event_cursor, original_oid).map(
                 |(rewritten_oid, abandoned_child_oids)| RebaseInfo {
@@ -213,6 +219,7 @@ fn restack_branches(
 #[context("Restacking commits and branches")]
 pub fn restack(
     git_run_info: &GitRunInfo,
+    commits: Vec<String>,
     dump_rebase_constraints: bool,
     dump_rebase_plan: bool,
 ) -> anyhow::Result<isize> {
@@ -224,6 +231,19 @@ pub fn restack(
     let event_log_db = EventLogDb::new(&conn)?;
     let event_tx_id = event_log_db.make_transaction_id(now, "restack")?;
     let head_oid = repo.get_head_info()?.oid;
+
+    let commits = match resolve_commits(&repo, commits)? {
+        ResolveCommitsResult::Ok { commits } => commits,
+        ResolveCommitsResult::CommitNotFound { commit } => {
+            println!("Commit not found: {}", commit);
+            return Ok(1);
+        }
+    };
+    let commits: Option<HashSet<Oid>> = if commits.is_empty() {
+        None
+    } else {
+        Some(commits.into_iter().map(|commit| commit.get_oid()).collect())
+    };
 
     let build_options = BuildRebasePlanOptions {
         dump_rebase_constraints,
@@ -244,6 +264,7 @@ pub fn restack(
         &git_run_info,
         &merge_base_db,
         &event_log_db,
+        commits,
         &build_options,
         &execute_options,
     )?;
