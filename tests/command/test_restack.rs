@@ -280,3 +280,83 @@ fn test_restack_multiple_amended() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_restack_single_of_many_commits() -> anyhow::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+
+    git.init_repo()?;
+    let test1_oid = git.commit_file("test1", 1)?;
+    git.detach_head()?;
+    let test2_oid = git.commit_file("test2", 2)?;
+    git.commit_file("test3", 3)?;
+    git.run(&["checkout", &test1_oid.to_string()])?;
+    let test4_oid = git.commit_file("test4", 4)?;
+    git.commit_file("test5", 5)?;
+
+    git.run(&["checkout", &test2_oid.to_string()])?;
+    git.run(&["commit", "--amend", "-m", "updated test2"])?;
+
+    git.run(&["checkout", &test4_oid.to_string()])?;
+    git.run(&["commit", "--amend", "-m", "updated test4"])?;
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d2 (master) create test1.txt
+        |\
+        | @ 3bd716d5 updated test4
+        |\
+        | o 7357d2b7 updated test2
+        |\
+        | x 96d1c37a (rewritten as 7357d2b7) create test2.txt
+        | |
+        | o 70deb1e2 create test3.txt
+        |
+        x bf0d52a6 (rewritten as 3bd716d5) create test4.txt
+        |
+        o 848121cb create test5.txt
+        "###);
+    }
+
+    {
+        let (stdout, stderr) = git.run(&["restack", &test2_oid.to_string()])?;
+        insta::assert_snapshot!(stderr, @r###"
+        branchless: processing 1 update: ref HEAD
+        branchless: processing 1 update: ref HEAD
+        branchless: processed commit: bb7d4b2a create test3.txt
+        branchless: processing 1 rewritten commit
+        Successfully rebased and updated detached HEAD.
+        Previous HEAD position was bb7d4b2 create test3.txt
+        branchless: processing 1 update: ref HEAD
+        HEAD is now at 3bd716d updated test4
+        branchless: processing checkout
+        "###);
+        insta::assert_snapshot!(stdout, @r###"
+        Calling Git for on-disk rebase...
+        branchless: <git-executable> rebase --continue
+        Finished restacking commits.
+        No abandoned branches to restack.
+        branchless: <git-executable> checkout 3bd716d57489779ab1daf446f80e66e90b56ead7
+        :
+        O 62fc20d2 (master) create test1.txt
+        |\
+        | @ 3bd716d5 updated test4
+        |\
+        | o 7357d2b7 updated test2
+        | |
+        | o bb7d4b2a create test3.txt
+        |
+        x bf0d52a6 (rewritten as 3bd716d5) create test4.txt
+        |
+        o 848121cb create test5.txt
+        "###);
+    }
+
+    Ok(())
+}

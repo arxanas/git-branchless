@@ -121,6 +121,10 @@ enum Opts {
 
     /// Fix up commits abandoned by a previous rewrite operation.
     Restack {
+        /// The IDs of the abandoned commits whose descendants should be
+        /// restacked. If not provided, all abandoned commits are restacked.
+        commits: Vec<String>,
+
         /// Debugging option. Print the constraints used to create the rebase
         /// plan before executing it.
         #[structopt(long = "--debug-dump-rebase-constraints")]
@@ -241,10 +245,12 @@ fn main() -> anyhow::Result<()> {
         )?,
 
         Opts::Restack {
+            commits,
             dump_rebase_constraints,
             dump_rebase_plan,
         } => branchless::commands::restack::restack(
             &git_run_info,
+            commits,
             dump_rebase_constraints,
             dump_rebase_plan,
         )?,
