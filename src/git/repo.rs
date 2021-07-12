@@ -21,7 +21,7 @@ use anyhow::Context;
 use cursive::theme::BaseColor;
 use cursive::utils::markup::StyledString;
 use fn_error_context::context;
-use os_str_bytes::OsStringBytes;
+use os_str_bytes::{OsStrBytes, OsStringBytes};
 
 use crate::core::config::get_main_branch_name;
 use crate::core::metadata::{render_commit_metadata, CommitMessageProvider, CommitOidProvider};
@@ -771,19 +771,6 @@ impl<'repo> Reference<'repo> {
         git2::Reference::is_valid_name(name)
     }
 
-    /// Distinguish between a branch and a reference for display purposes.
-    pub fn friendly_describe_reference_name(reference_name: &OsStr) -> String {
-        match Branch::categorize_by_prefix(reference_name) {
-            CategorizedBranchName::LocalBranch { prefix: _, suffix } => {
-                format!("branch {}", suffix)
-            }
-            CategorizedBranchName::RemoteBranch { prefix: _, suffix } => {
-                format!("remote branch {}", suffix)
-            }
-            CategorizedBranchName::OtherRef { suffix } => format!("ref {}", suffix),
-        }
-    }
-
     /// Given a reference name which is an OID, convert the string into an `Oid`
     /// object.
     #[context("Converting reference name to OID: {:?}", ref_name)]
@@ -821,41 +808,124 @@ impl<'repo> Reference<'repo> {
     }
 }
 
-/// Represents a Git branch.
-pub struct Branch<'repo> {
-    inner: git2::Branch<'repo>,
-}
-
-type BranchType = git2::BranchType;
-
 /// Determine what kind of branch a reference is, given its name. The returned
 /// `suffix` value is converted to a `String` to be rendered to the screen, so
 /// it may have lost some information if the reference name had unusual
 /// characters.
-pub enum CategorizedBranchName {
+#[derive(Debug)]
+pub enum CategorizedReferenceName<'a> {
     /// The reference represents a local branch.
     LocalBranch {
+        /// The full name of the reference.
+        name: &'a OsStr,
+
         /// The string `refs/heads/`.
         prefix: &'static str,
-
-        /// The part of the reference name after `refs/heads/.
-        suffix: String,
     },
 
     /// The reference represents a remote branch.
     RemoteBranch {
+        /// The full name of the reference.
+        name: &'a OsStr,
+
         /// The string `refs/remotes/`.
         prefix: &'static str,
-
-        /// The part of the reference name after `refs/remotes/`.
-        suffix: String,
     },
 
-    /// Some other kind of reference which isn't a branch at awe.
+    /// Some other kind of reference which isn't a branch at all.
     OtherRef {
         /// The full name of the reference.
-        suffix: String,
+        name: &'a OsStr,
     },
+}
+
+impl<'a> CategorizedReferenceName<'a> {
+    /// Categorize the provided reference name.
+    pub fn new(name: &'a OsStr) -> Self {
+        let bytes = name.to_raw_bytes();
+        if bytes.starts_with(b"refs/heads/") {
+            Self::LocalBranch {
+                name,
+                prefix: "refs/heads/",
+            }
+        } else if bytes.starts_with(b"refs/remotes/") {
+            Self::RemoteBranch {
+                name,
+                prefix: "refs/remotes/",
+            }
+        } else {
+            Self::OtherRef { name }
+        }
+    }
+
+    /// Remove the prefix from the reference name. May raise an error if the
+    /// result couldn't be encoded as an `OsString` (probably shouldn't
+    /// happen?).
+    #[context("Removing prefix from reference name: {:?}", self)]
+    pub fn remove_prefix(&self) -> anyhow::Result<OsString> {
+        let (name, prefix): (_, &'static str) = match self {
+            Self::LocalBranch { name, prefix } => (name, prefix),
+            Self::RemoteBranch { name, prefix } => (name, prefix),
+            Self::OtherRef { name } => (name, ""),
+        };
+        let bytes = name.to_raw_bytes();
+        let bytes = match bytes.strip_prefix(prefix.as_bytes()) {
+            Some(bytes) => Vec::from(bytes),
+            None => Vec::from(bytes),
+        };
+        let result = OsString::from_raw_vec(bytes)?;
+        Ok(result)
+    }
+
+    /// Render the full name of the reference, including its prefix, lossily as
+    /// a `String`.
+    pub fn render_full(&self) -> String {
+        let name = match self {
+            Self::LocalBranch { name, prefix: _ } => name,
+            Self::RemoteBranch { name, prefix: _ } => name,
+            Self::OtherRef { name } => name,
+        };
+        name.to_string_lossy().into_owned()
+    }
+
+    /// Render only the suffix of the reference name lossily as a `String`. The
+    /// caller will usually check the type of reference and add additional
+    /// information to the reference name.
+    pub fn render_suffix(&self) -> String {
+        let (name, prefix): (_, &'static str) = match self {
+            Self::LocalBranch { name, prefix } => (name, prefix),
+            Self::RemoteBranch { name, prefix } => (name, prefix),
+            Self::OtherRef { name } => (name, ""),
+        };
+        let name = name.to_string_lossy();
+        match name.strip_prefix(prefix) {
+            Some(name) => name.to_string(),
+            None => name.into_owned(),
+        }
+    }
+
+    /// Render the reference name lossily, and prepend a helpful string like
+    /// `branch` to the description.
+    pub fn friendly_describe(&self) -> String {
+        let name = self.render_suffix();
+        let name = match self {
+            CategorizedReferenceName::LocalBranch { .. } => {
+                format!("branch {}", name)
+            }
+            CategorizedReferenceName::RemoteBranch { .. } => {
+                format!("remote branch {}", name)
+            }
+            CategorizedReferenceName::OtherRef { .. } => format!("ref {}", name),
+        };
+        name
+    }
+}
+
+type BranchType = git2::BranchType;
+
+/// Represents a Git branch.
+pub struct Branch<'repo> {
+    inner: git2::Branch<'repo>,
 }
 
 impl<'repo> Branch<'repo> {
@@ -869,26 +939,6 @@ impl<'repo> Branch<'repo> {
     pub fn into_reference(self) -> Reference<'repo> {
         Reference {
             inner: self.inner.into_reference(),
-        }
-    }
-
-    /// Categorize and render the given branch name.
-    pub fn categorize_by_prefix(branch_name: &OsStr) -> CategorizedBranchName {
-        let branch_name = branch_name.to_string_lossy();
-        match branch_name.strip_prefix("refs/heads/") {
-            Some(branch_name) => CategorizedBranchName::LocalBranch {
-                prefix: "refs/heads/",
-                suffix: branch_name.to_string(),
-            },
-            None => match branch_name.strip_prefix("refs/remotes/") {
-                Some(branch_name) => CategorizedBranchName::RemoteBranch {
-                    prefix: "refs/remotes/",
-                    suffix: branch_name.to_string(),
-                },
-                None => CategorizedBranchName::OtherRef {
-                    suffix: branch_name.into_owned(),
-                },
-            },
         }
     }
 }

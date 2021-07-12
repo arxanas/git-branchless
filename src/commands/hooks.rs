@@ -28,7 +28,7 @@ use crate::core::formatting::{printable_styled_string, Glyphs, Pluralize};
 use crate::core::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
 use crate::core::mergebase::MergeBaseDb;
 use crate::core::rewrite::find_abandoned_children;
-use crate::git::{Branch, CategorizedBranchName, Oid, Reference, Repo};
+use crate::git::{CategorizedReferenceName, Oid, Repo};
 
 /// Handle Git's `post-rewrite` hook.
 ///
@@ -149,13 +149,7 @@ pub fn hook_post_rewrite(rewrite_type: &str) -> anyhow::Result<()> {
 
                 let mut all_abandoned_branches: Vec<String> = all_abandoned_branches
                     .iter()
-                    .map(
-                        |branch_name| match Branch::categorize_by_prefix(branch_name) {
-                            CategorizedBranchName::LocalBranch { prefix: _, suffix } => suffix,
-                            CategorizedBranchName::RemoteBranch { prefix: _, suffix } => suffix,
-                            CategorizedBranchName::OtherRef { suffix } => suffix,
-                        },
-                    )
+                    .map(|branch_name| CategorizedReferenceName::new(branch_name).render_suffix())
                     .collect();
                 all_abandoned_branches.sort_unstable();
                 let abandoned_branches_list = all_abandoned_branches.join(", ");
@@ -369,7 +363,7 @@ pub fn hook_reference_transaction(transaction_state: &str) -> anyhow::Result<()>
             .filter_map(|event| {
                 match event {
                     Event::RefUpdateEvent { ref_name, .. } => {
-                        Some(Reference::friendly_describe_reference_name(ref_name))
+                        Some(CategorizedReferenceName::new(ref_name).friendly_describe())
                     }
                     Event::RewriteEvent { .. }
                     | Event::CommitEvent { .. }

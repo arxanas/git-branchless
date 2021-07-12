@@ -17,7 +17,7 @@ use anyhow::Context;
 use fn_error_context::context;
 use log::warn;
 
-use crate::git::{Branch, CategorizedBranchName, Oid, Reference, Repo};
+use crate::git::{CategorizedReferenceName, Oid, Reference, Repo};
 
 /// When this environment variable is set, we reuse the ID for the transaction
 /// which the caller has already started.
@@ -1165,8 +1165,8 @@ impl EventReplayer {
 
         let mut result: HashMap<Oid, HashSet<OsString>> = HashMap::new();
         for (ref_name, ref_oid) in ref_name_to_oid.iter() {
-            if let CategorizedBranchName::LocalBranch { .. } =
-                Branch::categorize_by_prefix(ref_name)
+            if let CategorizedReferenceName::LocalBranch { .. } =
+                CategorizedReferenceName::new(ref_name)
             {
                 result
                     .entry(*ref_oid)

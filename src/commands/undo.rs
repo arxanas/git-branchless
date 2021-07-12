@@ -26,7 +26,7 @@ use crate::core::metadata::{
 };
 use crate::core::tui::{with_siv, SingletonView};
 use crate::declare_views;
-use crate::git::{GitRunInfo, Reference, Repo};
+use crate::git::{CategorizedReferenceName, GitRunInfo, Reference, Repo};
 
 fn render_cursor_smartlog(
     glyphs: &Glyphs,
@@ -165,7 +165,7 @@ fn describe_event(repo: &Repo, event: &Event) -> anyhow::Result<Vec<StyledString
             vec![
                 StyledStringBuilder::new()
                     .append_plain("Empty event for ")
-                    .append_plain(Reference::friendly_describe_reference_name(ref_name))
+                    .append_plain(CategorizedReferenceName::new(ref_name).render_full())
                     .build(),
                 StyledStringBuilder::new()
                     .append_plain("This event should not appear. ")
@@ -186,7 +186,7 @@ fn describe_event(repo: &Repo, event: &Event) -> anyhow::Result<Vec<StyledString
             vec![
                 StyledStringBuilder::new()
                     .append_plain("Create ")
-                    .append_plain(Reference::friendly_describe_reference_name(ref_name))
+                    .append_plain(CategorizedReferenceName::new(ref_name).friendly_describe())
                     .append_plain(" at ")
                     .append(
                         repo.friendly_describe_commit_from_oid(Reference::name_to_oid(new_ref)?)?,
@@ -207,7 +207,7 @@ fn describe_event(repo: &Repo, event: &Event) -> anyhow::Result<Vec<StyledString
             vec![
                 StyledStringBuilder::new()
                     .append_plain("Delete ")
-                    .append_plain(Reference::friendly_describe_reference_name(ref_name))
+                    .append_plain(CategorizedReferenceName::new(ref_name).friendly_describe())
                     .append_plain(" at ")
                     .append(
                         repo.friendly_describe_commit_from_oid(Reference::name_to_oid(old_ref)?)?,
@@ -225,7 +225,7 @@ fn describe_event(repo: &Repo, event: &Event) -> anyhow::Result<Vec<StyledString
             new_ref: Some(new_ref),
             message: _,
         } => {
-            let ref_name = Reference::friendly_describe_reference_name(ref_name);
+            let ref_name = CategorizedReferenceName::new(ref_name).friendly_describe();
             vec![
                 StyledStringBuilder::new()
                     .append_plain("Move ")

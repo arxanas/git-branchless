@@ -20,7 +20,7 @@ use crate::core::config::{
     get_commit_metadata_branches, get_commit_metadata_differential_revision,
     get_commit_metadata_relative_time,
 };
-use crate::git::{Branch, CategorizedBranchName, Commit, Oid, Repo};
+use crate::git::{CategorizedReferenceName, Commit, Oid, Repo};
 
 use super::eventlog::{Event, EventCursor, EventReplayer};
 use super::formatting::StyledStringBuilder;
@@ -200,12 +200,16 @@ impl<'a> CommitMetadataProvider for BranchesProvider<'a> {
             let mut branch_names: Vec<String> = branch_names
                 .into_iter()
                 .map(
-                    |branch_name| match Branch::categorize_by_prefix(branch_name) {
-                        CategorizedBranchName::LocalBranch { prefix: _, suffix } => suffix,
-                        CategorizedBranchName::RemoteBranch { prefix: _, suffix } => {
-                            format!("remote {}", suffix)
+                    |branch_name| match CategorizedReferenceName::new(branch_name) {
+                        reference_name @ CategorizedReferenceName::LocalBranch { .. } => {
+                            reference_name.render_suffix()
                         }
-                        CategorizedBranchName::OtherRef { suffix } => format!("ref {}", suffix),
+                        reference_name @ CategorizedReferenceName::RemoteBranch { .. } => {
+                            format!("remote {}", reference_name.render_suffix())
+                        }
+                        reference_name @ CategorizedReferenceName::OtherRef { .. } => {
+                            format!("ref {}", reference_name.render_suffix())
+                        }
                     },
                 )
                 .collect();
