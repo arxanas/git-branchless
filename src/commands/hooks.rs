@@ -193,6 +193,15 @@ branchless:   - {config_command}: suppress this message
     Ok(())
 }
 
+/// For rebases, register that extra cleanup actions should be taken when the
+/// rebase finishes and calls the post-rewrite hook. We don't want to change the
+/// behavior of `git rebase` itself, except when called via `git-branchless`, so
+/// that the user's expectations aren't unexpectedly subverted.
+pub fn hook_register_extra_post_rewrite_hook() -> anyhow::Result<()> {
+    // TODO
+    Ok(())
+}
+
 /// Handle Git's `post-checkout` hook.
 ///
 /// See the man-page for `githooks(5)`.

@@ -162,6 +162,7 @@ fn test_restack_after_move_on_disk() -> anyhow::Result<()> {
         ])?;
         let stderr = remove_rebase_lines(stderr);
         insta::assert_snapshot!(stderr, @r###"
+        Executing: git branchless hook-register-extra-post-rewrite-hook
         branchless: processing 1 update: ref HEAD
         branchless: processing 1 update: ref HEAD
         branchless: processed commit: 4838e49b create test3.txt
@@ -424,6 +425,7 @@ fn test_restack_single_of_many_commits() -> anyhow::Result<()> {
     {
         let (stdout, stderr) = git.run(&["restack", &test2_oid.to_string()])?;
         insta::assert_snapshot!(stderr, @r###"
+        Executing: git branchless hook-register-extra-post-rewrite-hook
         branchless: processing 1 update: ref HEAD
         branchless: processing 1 update: ref HEAD
         branchless: processed commit: bb7d4b2a create test3.txt

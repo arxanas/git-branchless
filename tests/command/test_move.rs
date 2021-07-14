@@ -66,6 +66,7 @@ fn test_move_stick_in_memory() -> anyhow::Result<()> {
             RebasePlan {
                 first_dest_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
                 commands: [
+                    RegisterExtraPostRewriteHook,
                     ResetToOid {
                         commit_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
                     },
@@ -248,6 +249,7 @@ fn test_move_with_source_not_in_smartlog_in_memory() -> anyhow::Result<()> {
             RebasePlan {
                 first_dest_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
                 commands: [
+                    RegisterExtraPostRewriteHook,
                     ResetToOid {
                         commit_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
                     },
@@ -313,6 +315,7 @@ fn test_move_merge_conflict() -> anyhow::Result<()> {
             RebasePlan {
                 first_dest_oid: 202143f2fdfc785285ab097422f6a695ff1d93cb,
                 commands: [
+                    RegisterExtraPostRewriteHook,
                     ResetToOid {
                         commit_oid: 202143f2fdfc785285ab097422f6a695ff1d93cb,
                     },
@@ -381,6 +384,7 @@ fn test_move_base() -> anyhow::Result<()> {
             RebasePlan {
                 first_dest_oid: bf0d52a607f693201512a43b6b5a70b2a275e0ad,
                 commands: [
+                    RegisterExtraPostRewriteHook,
                     ResetToOid {
                         commit_oid: bf0d52a607f693201512a43b6b5a70b2a275e0ad,
                     },
@@ -432,6 +436,7 @@ fn test_move_checkout_new_head() -> anyhow::Result<()> {
             RebasePlan {
                 first_dest_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
                 commands: [
+                    RegisterExtraPostRewriteHook,
                     ResetToOid {
                         commit_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
                     },
@@ -487,6 +492,7 @@ fn test_move_branch() -> anyhow::Result<()> {
             RebasePlan {
                 first_dest_oid: 96d1c37a3d4363611c49f7e52186e189a04c531f,
                 commands: [
+                    RegisterExtraPostRewriteHook,
                     ResetToOid {
                         commit_oid: 96d1c37a3d4363611c49f7e52186e189a04c531f,
                     },
@@ -676,6 +682,7 @@ fn test_move_in_memory_gc() -> anyhow::Result<()> {
             RebasePlan {
                 first_dest_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
                 commands: [
+                    RegisterExtraPostRewriteHook,
                     ResetToOid {
                         commit_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
                     },
