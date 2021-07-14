@@ -82,12 +82,26 @@ pub fn hook_post_rewrite(rewrite_type: &str) -> anyhow::Result<()> {
     event_log_db.add_events(events)?;
 
     let should_check_abandoned_commits = get_restack_warn_abandoned(&repo)?;
-    if is_spurious_event || !should_check_abandoned_commits {
-        return Ok(());
+    if should_check_abandoned_commits && !is_spurious_event {
+        let merge_base_db = MergeBaseDb::new(&conn)?;
+        warn_abandoned(&repo, &merge_base_db, &event_log_db, &old_commits)?;
     }
 
-    let merge_base_db = MergeBaseDb::new(&conn)?;
-    let event_replayer = EventReplayer::from_event_log_db(&repo, &event_log_db)?;
+    Ok(())
+}
+
+#[context("Warning about abandoned commits/branches")]
+fn warn_abandoned(
+    repo: &Repo,
+    merge_base_db: &MergeBaseDb,
+    event_log_db: &EventLogDb,
+    old_commits: &[Oid],
+) -> anyhow::Result<()> {
+    // The caller will have added events to the event log database, so make sure
+    // to construct a fresh `EventReplayer` here.
+    let event_replayer = EventReplayer::from_event_log_db(repo, event_log_db)?;
+    let event_cursor = event_replayer.make_default_cursor();
+
     let head_oid = repo.get_head_info()?.oid;
     let main_branch_oid = repo.get_main_branch_oid()?;
     let branch_oid_to_names = repo.get_branch_oid_to_names()?;
@@ -95,7 +109,7 @@ pub fn hook_post_rewrite(rewrite_type: &str) -> anyhow::Result<()> {
         &repo,
         &merge_base_db,
         &event_replayer,
-        event_replayer.make_default_cursor(),
+        event_cursor,
         &HeadOid(head_oid),
         &MainBranchOid(main_branch_oid),
         &BranchOids(branch_oid_to_names.keys().copied().collect()),
@@ -110,14 +124,14 @@ pub fn hook_post_rewrite(rewrite_type: &str) -> anyhow::Result<()> {
                 &graph,
                 &event_replayer,
                 event_replayer.make_default_cursor(),
-                old_commit_oid,
+                *old_commit_oid,
             );
             let (_rewritten_oid, abandoned_children) = match abandoned_result {
                 Some(abandoned_result) => abandoned_result,
                 None => continue,
             };
             all_abandoned_children.extend(abandoned_children.iter());
-            if let Some(branch_names) = branch_oid_to_names.get(&old_commit_oid) {
+            if let Some(branch_names) = branch_oid_to_names.get(old_commit_oid) {
                 all_abandoned_branches.extend(branch_names.iter().map(OsString::as_os_str));
             }
         }
@@ -190,6 +204,7 @@ branchless:   - {config_command}: suppress this message
             .bold(),
         );
     }
+
     Ok(())
 }
 
