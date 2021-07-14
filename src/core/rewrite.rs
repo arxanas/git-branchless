@@ -922,11 +922,11 @@ fn rebase_on_disk(
         return Ok(1);
     }
 
-    let rebase_merge_dir = repo.get_path().join("rebase-merge");
-    std::fs::create_dir_all(&rebase_merge_dir).with_context(|| {
+    let rebase_state_dir = repo.get_rebase_state_dir_path();
+    std::fs::create_dir_all(&rebase_state_dir).with_context(|| {
         format!(
-            "Creating rebase-merge directory at: {:?}",
-            &rebase_merge_dir
+            "Creating rebase state directory at: {:?}",
+            &rebase_state_dir
         )
     })?;
 
@@ -937,7 +937,7 @@ fn rebase_on_disk(
     // ```
     // BUG: builtin/rebase.c:1178: Unhandled rebase type 1
     // ```
-    let interactive_file_path = rebase_merge_dir.join("interactive");
+    let interactive_file_path = rebase_state_dir.join("interactive");
     std::fs::write(&interactive_file_path, "")
         .with_context(|| format!("Writing interactive to: {:?}", &interactive_file_path))?;
 
@@ -948,7 +948,7 @@ fn rebase_on_disk(
             .with_context(|| format!("Copying `HEAD` to: {:?}", &orig_head_file_path))?;
         // `head-name` appears to be purely for UX concerns. Git will warn if the
         // file isn't found.
-        let head_name_file_path = rebase_merge_dir.join("head-name");
+        let head_name_file_path = rebase_state_dir.join("head-name");
         std::fs::write(
             &head_name_file_path,
             head_info.get_branch_name().unwrap_or("detached HEAD"),
@@ -957,7 +957,7 @@ fn rebase_on_disk(
 
         // Dummy `head` file. We will `reset` to the appropriate commit as soon as
         // we start the rebase.
-        let rebase_merge_head_file_path = rebase_merge_dir.join("head");
+        let rebase_merge_head_file_path = rebase_state_dir.join("head");
         std::fs::write(
             &rebase_merge_head_file_path,
             rebase_plan.first_dest_oid.to_string(),
@@ -968,7 +968,7 @@ fn rebase_on_disk(
     // Dummy `onto` file. We may be rebasing onto a set of unrelated
     // nodes in the same operation, so there may not be a single "onto" node to
     // refer to.
-    let onto_file_path = rebase_merge_dir.join("onto");
+    let onto_file_path = rebase_state_dir.join("onto");
     std::fs::write(&onto_file_path, rebase_plan.first_dest_oid.to_string()).with_context(|| {
         format!(
             "Writing onto {:?} to: {:?}",
@@ -976,7 +976,7 @@ fn rebase_on_disk(
         )
     })?;
 
-    let todo_file_path = rebase_merge_dir.join("git-rebase-todo");
+    let todo_file_path = rebase_state_dir.join("git-rebase-todo");
     std::fs::write(
         &todo_file_path,
         rebase_plan
@@ -992,7 +992,7 @@ fn rebase_on_disk(
         )
     })?;
 
-    let end_file_path = rebase_merge_dir.join("end");
+    let end_file_path = rebase_state_dir.join("end");
     std::fs::write(
         end_file_path.as_path(),
         format!("{}\n", rebase_plan.commands.len()),
@@ -1000,7 +1000,7 @@ fn rebase_on_disk(
     .with_context(|| format!("Writing `end` to: {:?}", end_file_path.as_path()))?;
 
     if *preserve_timestamps {
-        let cdate_is_adate_file_path = rebase_merge_dir.join("cdate_is_adate");
+        let cdate_is_adate_file_path = rebase_state_dir.join("cdate_is_adate");
         std::fs::write(&cdate_is_adate_file_path, "")
             .with_context(|| "Writing `cdate_is_adate` option file")?;
     }

@@ -13,7 +13,7 @@ use std::collections::{HashMap, HashSet};
 use std::convert::{TryFrom, TryInto};
 use std::ffi::{OsStr, OsString};
 use std::fmt::Display;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::SystemTime;
 
@@ -199,6 +199,12 @@ impl Repo {
     /// Get the path to the `.git` directory for the repository.
     pub fn get_path(&self) -> &Path {
         self.inner.path()
+    }
+
+    /// Get the path to the directory inside the `.git` directory which contains
+    /// state used for the current rebase (if any).
+    pub fn get_rebase_state_dir_path(&self) -> PathBuf {
+        self.inner.path().join("rebase-merge")
     }
 
     /// Get the path to the working copy for this repository. If the repository

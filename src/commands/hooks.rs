@@ -213,7 +213,11 @@ branchless:   - {config_command}: suppress this message
 /// behavior of `git rebase` itself, except when called via `git-branchless`, so
 /// that the user's expectations aren't unexpectedly subverted.
 pub fn hook_register_extra_post_rewrite_hook() -> anyhow::Result<()> {
-    // TODO
+    let repo = Repo::from_current_dir()?;
+    let file_name = repo
+        .get_rebase_state_dir_path()
+        .join(EXTRA_POST_REWRITE_FILE_NAME);
+    File::create(file_name).with_context(|| "Registering extra post-rewrite hook")?;
     Ok(())
 }
 
