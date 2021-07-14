@@ -119,6 +119,7 @@ enum RebaseCommand {
     ResetToLabel { label_name: String },
     ResetToOid { commit_oid: Oid },
     Pick { commit_oid: Oid },
+    RegisterExtraPostRewriteHook,
 }
 
 /// Represents a sequence of commands that can be executed to carry out a rebase
@@ -136,6 +137,9 @@ impl ToString for RebaseCommand {
             RebaseCommand::ResetToLabel { label_name } => format!("reset {}", label_name),
             RebaseCommand::ResetToOid { commit_oid: oid } => format!("reset {}", oid),
             RebaseCommand::Pick { commit_oid } => format!("pick {}", commit_oid),
+            RebaseCommand::RegisterExtraPostRewriteHook => {
+                "exec git branchless hook-register-extra-post-rewrite-hook".to_string()
+            }
         }
     }
 }
@@ -550,7 +554,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
         }
 
         let roots = self.find_roots();
-        let mut acc = Vec::new();
+        let mut acc = vec![RebaseCommand::RegisterExtraPostRewriteHook];
         let mut first_dest_oid = None;
         for Constraint {
             parent_oid,
@@ -609,7 +613,8 @@ fn rebase_in_memory(
         .filter(|command| match command {
             RebaseCommand::CreateLabel { .. }
             | RebaseCommand::ResetToLabel { .. }
-            | RebaseCommand::ResetToOid { .. } => false,
+            | RebaseCommand::ResetToOid { .. }
+            | RebaseCommand::RegisterExtraPostRewriteHook => false,
             RebaseCommand::Pick { .. } => true,
         })
         .count();
@@ -724,6 +729,10 @@ fn rebase_in_memory(
                     repo.friendly_describe_commit_from_oid(rebased_commit_oid)?,
                 )?;
                 progress.finish_with_message(format!("Committed as: {}", commit_description));
+            }
+            RebaseCommand::RegisterExtraPostRewriteHook => {
+                // Do nothing. We'll carry out post-rebase operations after the
+                // in-memory rebase completes.
             }
         }
     }

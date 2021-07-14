@@ -158,6 +158,9 @@ enum Opts {
     HookPostRewrite { rewrite_type: String },
 
     /// Internal use.
+    HookRegisterExtraPostRewriteHook,
+
+    /// Internal use.
     HookPostCheckout {
         previous_commit: String,
         current_commit: String,
@@ -279,6 +282,11 @@ fn main() -> anyhow::Result<()> {
 
         Opts::HookPostRewrite { rewrite_type } => {
             branchless::commands::hooks::hook_post_rewrite(&rewrite_type)?;
+            0
+        }
+
+        Opts::HookRegisterExtraPostRewriteHook => {
+            branchless::commands::hooks::hook_register_extra_post_rewrite_hook()?;
             0
         }
 
