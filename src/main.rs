@@ -281,7 +281,7 @@ fn main() -> anyhow::Result<()> {
         }
 
         Opts::HookPostRewrite { rewrite_type } => {
-            branchless::commands::hooks::hook_post_rewrite(&rewrite_type)?;
+            branchless::commands::hooks::hook_post_rewrite(&git_run_info, &rewrite_type)?;
             0
         }
 
