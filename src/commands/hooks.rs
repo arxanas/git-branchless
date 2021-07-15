@@ -7,9 +7,10 @@
 //! The hooks are installed by the `branchless init` command. This module
 //! contains the implementations for the hooks.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
 use std::ffi::{OsStr, OsString};
+use std::fs::File;
 use std::io::{stdin, BufRead, Cursor};
 use std::time::SystemTime;
 
@@ -27,14 +28,16 @@ use crate::core::eventlog::{
 use crate::core::formatting::{printable_styled_string, Glyphs, Pluralize};
 use crate::core::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
 use crate::core::mergebase::MergeBaseDb;
-use crate::core::rewrite::find_abandoned_children;
-use crate::git::{CategorizedReferenceName, Oid, Repo};
+use crate::core::rewrite::{find_abandoned_children, move_branches};
+use crate::git::{CategorizedReferenceName, GitRunInfo, Oid, Repo};
+
+const EXTRA_POST_REWRITE_FILE_NAME: &str = "branchless_do_extra_post_rewrite";
 
 /// Handle Git's `post-rewrite` hook.
 ///
 /// See the man-page for `githooks(5)`.
 #[context("Processing post-rewrite hook")]
-pub fn hook_post_rewrite(rewrite_type: &str) -> anyhow::Result<()> {
+pub fn hook_post_rewrite(git_run_info: &GitRunInfo, rewrite_type: &str) -> anyhow::Result<()> {
     let now = SystemTime::now();
     let timestamp = now.duration_since(SystemTime::UNIX_EPOCH)?.as_secs_f64();
 
@@ -43,8 +46,8 @@ pub fn hook_post_rewrite(rewrite_type: &str) -> anyhow::Result<()> {
     let mut event_log_db = EventLogDb::new(&conn)?;
     let event_tx_id = event_log_db.make_transaction_id(now, "hook-post-rewrite")?;
 
-    let (old_commits, events) = {
-        let mut old_commits = Vec::new();
+    let (rewritten_oids, events) = {
+        let mut rewritten_oids = HashMap::new();
         let mut events = Vec::new();
         for line in stdin().lock().lines() {
             let line = line?;
@@ -54,7 +57,7 @@ pub fn hook_post_rewrite(rewrite_type: &str) -> anyhow::Result<()> {
                     let old_commit_oid: Oid = old_commit_oid.parse()?;
                     let new_commit_oid: Oid = new_commit_oid.parse()?;
 
-                    old_commits.push(old_commit_oid);
+                    rewritten_oids.insert(old_commit_oid, new_commit_oid);
                     events.push(Event::RewriteEvent {
                         timestamp,
                         event_tx_id,
@@ -65,7 +68,7 @@ pub fn hook_post_rewrite(rewrite_type: &str) -> anyhow::Result<()> {
                 _ => anyhow::bail!("Invalid rewrite line: {:?}", &line),
             }
         }
-        (old_commits, events)
+        (rewritten_oids, events)
     };
 
     let is_spurious_event = rewrite_type == "amend" && repo.is_rebase_underway()?;
@@ -81,10 +84,23 @@ pub fn hook_post_rewrite(rewrite_type: &str) -> anyhow::Result<()> {
 
     event_log_db.add_events(events)?;
 
+    if repo
+        .get_rebase_state_dir_path()
+        .join(EXTRA_POST_REWRITE_FILE_NAME)
+        .exists()
+    {
+        move_branches(git_run_info, &repo, event_tx_id, &rewritten_oids)?;
+    }
+
     let should_check_abandoned_commits = get_restack_warn_abandoned(&repo)?;
     if should_check_abandoned_commits && !is_spurious_event {
         let merge_base_db = MergeBaseDb::new(&conn)?;
-        warn_abandoned(&repo, &merge_base_db, &event_log_db, &old_commits)?;
+        warn_abandoned(
+            &repo,
+            &merge_base_db,
+            &event_log_db,
+            rewritten_oids.keys().copied(),
+        )?;
     }
 
     Ok(())
@@ -95,7 +111,7 @@ fn warn_abandoned(
     repo: &Repo,
     merge_base_db: &MergeBaseDb,
     event_log_db: &EventLogDb,
-    old_commits: &[Oid],
+    old_commit_oids: impl IntoIterator<Item = Oid>,
 ) -> anyhow::Result<()> {
     // The caller will have added events to the event log database, so make sure
     // to construct a fresh `EventReplayer` here.
@@ -119,19 +135,19 @@ fn warn_abandoned(
     let (all_abandoned_children, all_abandoned_branches) = {
         let mut all_abandoned_children: HashSet<Oid> = HashSet::new();
         let mut all_abandoned_branches: HashSet<&OsStr> = HashSet::new();
-        for old_commit_oid in old_commits {
+        for old_commit_oid in old_commit_oids {
             let abandoned_result = find_abandoned_children(
                 &graph,
                 &event_replayer,
                 event_replayer.make_default_cursor(),
-                *old_commit_oid,
+                old_commit_oid,
             );
             let (_rewritten_oid, abandoned_children) = match abandoned_result {
                 Some(abandoned_result) => abandoned_result,
                 None => continue,
             };
             all_abandoned_children.extend(abandoned_children.iter());
-            if let Some(branch_names) = branch_oid_to_names.get(old_commit_oid) {
+            if let Some(branch_names) = branch_oid_to_names.get(&old_commit_oid) {
                 all_abandoned_branches.extend(branch_names.iter().map(OsString::as_os_str));
             }
         }
