@@ -14,7 +14,7 @@ use os_str_bytes::OsStrBytes;
 
 use crate::commands::gc::mark_commit_reachable;
 use crate::core::formatting::printable_styled_string;
-use crate::git::{GitRunInfo, Oid, Repo};
+use crate::git::{GitRunInfo, MaybeZeroOid, NonZeroOid, Repo};
 
 use super::eventlog::{Event, EventCursor, EventReplayer, EventTransactionId};
 use super::formatting::Glyphs;
@@ -33,8 +33,8 @@ pub fn find_rewrite_target(
     graph: &CommitGraph,
     event_replayer: &EventReplayer,
     event_cursor: EventCursor,
-    oid: Oid,
-) -> Option<Oid> {
+    oid: NonZeroOid,
+) -> Option<MaybeZeroOid> {
     let event = event_replayer.get_cursor_commit_latest_event(event_cursor, oid);
     let event = match event {
         Some(event) => event,
@@ -44,22 +44,37 @@ pub fn find_rewrite_target(
         Event::RewriteEvent {
             timestamp: _,
             event_tx_id: _,
-            old_commit_oid,
+            old_commit_oid: MaybeZeroOid::NonZero(old_commit_oid),
             new_commit_oid,
         } => {
-            if *old_commit_oid == oid && *new_commit_oid != oid {
-                let possible_newer_oid =
-                    find_rewrite_target(graph, event_replayer, event_cursor, *new_commit_oid);
-                match possible_newer_oid {
-                    Some(newer_commit_oid) => Some(newer_commit_oid),
-                    None => Some(*new_commit_oid),
+            if *old_commit_oid == oid && *new_commit_oid != MaybeZeroOid::NonZero(oid) {
+                match new_commit_oid {
+                    MaybeZeroOid::Zero => Some(MaybeZeroOid::Zero),
+                    MaybeZeroOid::NonZero(new_commit_oid) => {
+                        let possible_newer_oid = find_rewrite_target(
+                            graph,
+                            event_replayer,
+                            event_cursor,
+                            *new_commit_oid,
+                        );
+                        match possible_newer_oid {
+                            Some(newer_commit_oid) => Some(newer_commit_oid),
+                            None => Some(MaybeZeroOid::NonZero(*new_commit_oid)),
+                        }
+                    }
                 }
             } else {
                 None
             }
         }
 
-        Event::RefUpdateEvent { .. }
+        Event::RewriteEvent {
+            timestamp: _,
+            event_tx_id: _,
+            old_commit_oid: MaybeZeroOid::Zero,
+            new_commit_oid: _,
+        }
+        | Event::RefUpdateEvent { .. }
         | Event::CommitEvent { .. }
         | Event::HideEvent { .. }
         | Event::UnhideEvent { .. } => None,
@@ -74,16 +89,19 @@ pub fn find_abandoned_children(
     graph: &CommitGraph,
     event_replayer: &EventReplayer,
     event_cursor: EventCursor,
-    oid: Oid,
-) -> Option<(Oid, Vec<Oid>)> {
-    let rewritten_oid = find_rewrite_target(graph, event_replayer, event_cursor, oid)?;
+    oid: NonZeroOid,
+) -> Option<(NonZeroOid, Vec<NonZeroOid>)> {
+    let rewritten_oid = match find_rewrite_target(graph, event_replayer, event_cursor, oid)? {
+        MaybeZeroOid::NonZero(rewritten_oid) => rewritten_oid,
+        MaybeZeroOid::Zero => oid,
+    };
 
     // Adjacent main branch commits are not linked in the commit graph, but if
     // the user rewrote a main branch commit, then we may need to restack
     // subsequent main branch commits. Find the real set of children commits so
     // that we can do this.
     let mut real_children_oids = graph[&oid].children.clone();
-    let additional_children_oids: HashSet<Oid> = graph
+    let additional_children_oids: HashSet<NonZeroOid> = graph
         .iter()
         .filter_map(|(possible_child_oid, possible_child_node)| {
             if real_children_oids.contains(possible_child_oid) {
@@ -117,8 +135,8 @@ pub fn find_abandoned_children(
 enum RebaseCommand {
     CreateLabel { label_name: String },
     ResetToLabel { label_name: String },
-    ResetToOid { commit_oid: Oid },
-    Pick { commit_oid: Oid },
+    ResetToOid { commit_oid: NonZeroOid },
+    Pick { commit_oid: NonZeroOid },
     RegisterExtraPostRewriteHook,
 }
 
@@ -126,7 +144,7 @@ enum RebaseCommand {
 /// operation.
 #[derive(Debug)]
 pub struct RebasePlan {
-    first_dest_oid: Oid,
+    first_dest_oid: NonZeroOid,
     commands: Vec<RebaseCommand>,
 }
 
@@ -150,18 +168,18 @@ pub struct RebasePlanBuilder<'repo> {
     repo: &'repo Repo,
     graph: &'repo CommitGraph<'repo>,
     merge_base_db: &'repo MergeBaseDb<'repo>,
-    main_branch_oid: Oid,
+    main_branch_oid: NonZeroOid,
 
     /// There is a mapping from from `x` to `y` if `x` must be applied before
     /// `y`.
-    constraints: HashMap<Oid, HashSet<Oid>>,
+    constraints: HashMap<NonZeroOid, HashSet<NonZeroOid>>,
     used_labels: HashSet<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 struct Constraint {
-    parent_oid: Oid,
-    child_oid: Oid,
+    parent_oid: NonZeroOid,
+    child_oid: NonZeroOid,
 }
 
 /// Options used to build a rebase plan.
@@ -178,7 +196,7 @@ pub enum BuildRebasePlanError {
     /// There was a cycle in the requested graph to be built.
     ConstraintCycle {
         /// The OIDs of the commits in the cycle. The first and the last OIDs are the same.
-        cycle_oids: Vec<Oid>,
+        cycle_oids: Vec<NonZeroOid>,
     },
 }
 
@@ -264,7 +282,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
 
     fn make_rebase_plan_for_current_commit(
         &mut self,
-        current_oid: Oid,
+        current_oid: NonZeroOid,
         mut acc: Vec<RebaseCommand>,
     ) -> anyhow::Result<Vec<RebaseCommand>> {
         let acc = {
@@ -273,8 +291,8 @@ impl<'repo> RebasePlanBuilder<'repo> {
             });
             acc
         };
-        let child_nodes: Vec<Oid> = {
-            let mut child_nodes: Vec<Oid> = self
+        let child_nodes: Vec<NonZeroOid> = {
+            let mut child_nodes: Vec<NonZeroOid> = self
                 .constraints
                 .entry(current_oid)
                 .or_default()
@@ -311,7 +329,11 @@ impl<'repo> RebasePlanBuilder<'repo> {
 
     /// Generate a sequence of rebase steps that cause the subtree at `source_oid`
     /// to be rebased on top of `dest_oid`.
-    pub fn move_subtree(&mut self, source_oid: Oid, dest_oid: Oid) -> anyhow::Result<()> {
+    pub fn move_subtree(
+        &mut self,
+        source_oid: NonZeroOid,
+        dest_oid: NonZeroOid,
+    ) -> anyhow::Result<()> {
         self.constraints
             .entry(dest_oid)
             .or_default()
@@ -323,7 +345,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
     fn collect_descendants(
         &self,
         acc: &mut Vec<Constraint>,
-        current_oid: Oid,
+        current_oid: NonZeroOid,
     ) -> anyhow::Result<()> {
         // FIXME: O(n^2) algorithm.
         for (child_oid, node) in self.graph {
@@ -471,8 +493,8 @@ impl<'repo> RebasePlanBuilder<'repo> {
 
     fn check_for_cycles_helper(
         &self,
-        path: &mut Vec<Oid>,
-        current_oid: Oid,
+        path: &mut Vec<NonZeroOid>,
+        current_oid: NonZeroOid,
     ) -> Result<(), BuildRebasePlanError> {
         if path.contains(&current_oid) {
             path.push(current_oid);
@@ -500,7 +522,8 @@ impl<'repo> RebasePlanBuilder<'repo> {
 
     fn find_roots(&self) -> Vec<Constraint> {
         let unconstrained_nodes = {
-            let mut unconstrained_nodes: HashSet<Oid> = self.constraints.keys().copied().collect();
+            let mut unconstrained_nodes: HashSet<NonZeroOid> =
+                self.constraints.keys().copied().collect();
             for child_oid in self.constraints.values().flatten().copied() {
                 unconstrained_nodes.remove(&child_oid);
             }
@@ -522,7 +545,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
         root_edges
     }
 
-    fn get_constraints_sorted_for_debug(&self) -> Vec<(&Oid, Vec<&Oid>)> {
+    fn get_constraints_sorted_for_debug(&self) -> Vec<(&NonZeroOid, Vec<&NonZeroOid>)> {
         self.constraints
             .iter()
             .map(|(k, v)| (k, v.iter().sorted().collect::<Vec<_>>()))
@@ -580,9 +603,15 @@ impl<'repo> RebasePlanBuilder<'repo> {
 }
 
 enum RebaseInMemoryResult {
-    Succeeded { rewritten_oids: Vec<(Oid, Oid)> },
-    CannotRebaseMergeCommit { commit_oid: Oid },
-    MergeConflict { commit_oid: Oid },
+    Succeeded {
+        rewritten_oids: Vec<(NonZeroOid, MaybeZeroOid)>,
+    },
+    CannotRebaseMergeCommit {
+        commit_oid: NonZeroOid,
+    },
+    MergeConflict {
+        commit_oid: NonZeroOid,
+    },
 }
 
 #[context("Rebasing in memory")]
@@ -603,8 +632,8 @@ fn rebase_in_memory(
     } = options;
 
     let mut current_oid = rebase_plan.first_dest_oid;
-    let mut labels: HashMap<String, Oid> = HashMap::new();
-    let mut rewritten_oids = Vec::new();
+    let mut labels: HashMap<String, NonZeroOid> = HashMap::new();
+    let mut rewritten_oids: Vec<(NonZeroOid, MaybeZeroOid)> = Vec::new();
 
     let mut i = 0;
     let num_picks = rebase_plan
@@ -721,7 +750,7 @@ fn rebase_in_memory(
                         &[&current_commit],
                     )
                     .with_context(|| "Applying rebased commit")?;
-                rewritten_oids.push((*commit_oid, rebased_commit_oid));
+                rewritten_oids.push((*commit_oid, MaybeZeroOid::NonZero(rebased_commit_oid)));
                 current_oid = rebased_commit_oid;
 
                 let commit_description = printable_styled_string(
@@ -747,7 +776,7 @@ pub fn move_branches<'a>(
     git_run_info: &GitRunInfo,
     repo: &'a Repo,
     event_tx_id: EventTransactionId,
-    rewritten_oids_map: &'a HashMap<Oid, Oid>,
+    rewritten_oids_map: &'a HashMap<NonZeroOid, MaybeZeroOid>,
 ) -> anyhow::Result<()> {
     let branch_oid_to_names = repo.get_branch_oid_to_names()?;
 
@@ -756,12 +785,16 @@ pub fn move_branches<'a>(
     // first error, but we don't know which references we successfully committed
     // in that case. Instead, we just do things non-atomically and record which
     // ones succeeded. See https://github.com/libgit2/libgit2/issues/5918
-    let mut branch_moves: Vec<(Oid, Oid, &OsStr)> = Vec::new();
+    let mut branch_moves: Vec<(NonZeroOid, NonZeroOid, &OsStr)> = Vec::new();
     let mut branch_move_err: Option<anyhow::Error> = None;
     'outer: for (old_oid, names) in branch_oid_to_names.iter() {
         let new_oid = match rewritten_oids_map.get(&old_oid) {
             Some(new_oid) => new_oid,
             None => continue,
+        };
+        let new_oid = match new_oid {
+            MaybeZeroOid::NonZero(new_oid) => new_oid,
+            MaybeZeroOid::Zero => todo!("handle branch deletions"),
         };
         let new_commit = match repo.find_commit(*new_oid) {
             Ok(Some(commit)) => commit,
@@ -825,7 +858,7 @@ pub fn move_branches<'a>(
 fn post_rebase_in_memory(
     git_run_info: &GitRunInfo,
     repo: &Repo,
-    rewritten_oids: &[(Oid, Oid)],
+    rewritten_oids: &[(NonZeroOid, MaybeZeroOid)],
     options: &ExecuteRebasePlanOptions,
 ) -> anyhow::Result<isize> {
     let ExecuteRebasePlanOptions {
@@ -838,10 +871,13 @@ fn post_rebase_in_memory(
 
     // Note that if an OID has been mapped to multiple other OIDs, then the last
     // mapping wins. (This corresponds to the last applied rebase operation.)
-    let rewritten_oids_map: HashMap<Oid, Oid> = rewritten_oids.iter().copied().collect();
+    let rewritten_oids_map: HashMap<NonZeroOid, MaybeZeroOid> =
+        rewritten_oids.iter().copied().collect();
 
     for new_oid in rewritten_oids_map.values() {
-        mark_commit_reachable(repo, *new_oid)?;
+        if let MaybeZeroOid::NonZero(new_oid) = new_oid {
+            mark_commit_reachable(repo, *new_oid)?;
+        }
     }
 
     let head_info = repo.get_head_info()?;
@@ -1104,7 +1140,10 @@ mod tests {
 
     use super::*;
 
-    fn find_rewrite_target_helper(git: &Git, oid: Oid) -> anyhow::Result<Option<Oid>> {
+    fn find_rewrite_target_helper(
+        git: &Git,
+        oid: NonZeroOid,
+    ) -> anyhow::Result<Option<MaybeZeroOid>> {
         let repo = git.get_repo()?;
         let conn = repo.get_db_conn()?;
         let merge_base_db = MergeBaseDb::new(&conn)?;
@@ -1139,7 +1178,7 @@ mod tests {
 
         {
             git.run(&["commit", "--amend", "-m", "test1 amended once"])?;
-            let new_oid: Oid = {
+            let new_oid: MaybeZeroOid = {
                 let (stdout, _stderr) = git.run(&["rev-parse", "HEAD"])?;
                 stdout.trim().parse()?
             };
@@ -1149,7 +1188,7 @@ mod tests {
 
         {
             git.run(&["commit", "--amend", "-m", "test1 amended twice"])?;
-            let new_oid: Oid = {
+            let new_oid: MaybeZeroOid = {
                 let (stdout, _stderr) = git.run(&["rev-parse", "HEAD"])?;
                 stdout.trim().parse()?
             };

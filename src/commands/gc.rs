@@ -17,7 +17,7 @@ use fn_error_context::context;
 use crate::core::eventlog::{is_gc_ref, EventLogDb, EventReplayer};
 use crate::core::graph::{make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid};
 use crate::core::mergebase::MergeBaseDb;
-use crate::git::{Oid, Reference, Repo};
+use crate::git::{NonZeroOid, Reference, Repo};
 
 fn find_dangling_references<'repo>(
     repo: &'repo Repo,
@@ -49,7 +49,7 @@ fn find_dangling_references<'repo>(
 /// * `repo`: The Git repository.
 /// * `commit_oid`: The commit OID to mark as reachable.
 #[context("Marking commit reachable: {:?}", commit_oid)]
-pub fn mark_commit_reachable(repo: &Repo, commit_oid: Oid) -> anyhow::Result<()> {
+pub fn mark_commit_reachable(repo: &Repo, commit_oid: NonZeroOid) -> anyhow::Result<()> {
     let ref_name = format!("refs/branchless/{}", commit_oid.to_string());
     anyhow::ensure!(
         Reference::is_valid_name(&ref_name),

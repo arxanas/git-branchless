@@ -64,17 +64,25 @@ fn test_move_stick_in_memory() -> anyhow::Result<()> {
         insta::assert_snapshot!(stdout, @r###"
         Rebase plan: Some(
             RebasePlan {
-                first_dest_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
+                first_dest_oid: NonZeroOid {
+                    inner: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
+                },
                 commands: [
                     RegisterExtraPostRewriteHook,
                     ResetToOid {
-                        commit_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
+                        commit_oid: NonZeroOid {
+                            inner: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
+                        },
                     },
                     Pick {
-                        commit_oid: 70deb1e28791d8e7dd5a1f0c871a51b91282562f,
+                        commit_oid: NonZeroOid {
+                            inner: 70deb1e28791d8e7dd5a1f0c871a51b91282562f,
+                        },
                     },
                     Pick {
-                        commit_oid: 355e173bf9c5d2efac2e451da0cdad3fb82b869a,
+                        commit_oid: NonZeroOid {
+                            inner: 355e173bf9c5d2efac2e451da0cdad3fb82b869a,
+                        },
                     },
                 ],
             },
@@ -247,17 +255,25 @@ fn test_move_with_source_not_in_smartlog_in_memory() -> anyhow::Result<()> {
         insta::assert_snapshot!(stdout, @r###"
         Rebase plan: Some(
             RebasePlan {
-                first_dest_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
+                first_dest_oid: NonZeroOid {
+                    inner: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
+                },
                 commands: [
                     RegisterExtraPostRewriteHook,
                     ResetToOid {
-                        commit_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
+                        commit_oid: NonZeroOid {
+                            inner: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
+                        },
                     },
                     Pick {
-                        commit_oid: 70deb1e28791d8e7dd5a1f0c871a51b91282562f,
+                        commit_oid: NonZeroOid {
+                            inner: 70deb1e28791d8e7dd5a1f0c871a51b91282562f,
+                        },
                     },
                     Pick {
-                        commit_oid: 355e173bf9c5d2efac2e451da0cdad3fb82b869a,
+                        commit_oid: NonZeroOid {
+                            inner: 355e173bf9c5d2efac2e451da0cdad3fb82b869a,
+                        },
                     },
                 ],
             },
@@ -313,14 +329,20 @@ fn test_move_merge_conflict() -> anyhow::Result<()> {
         insta::assert_snapshot!(stdout, @r###"
         Rebase plan: Some(
             RebasePlan {
-                first_dest_oid: 202143f2fdfc785285ab097422f6a695ff1d93cb,
+                first_dest_oid: NonZeroOid {
+                    inner: 202143f2fdfc785285ab097422f6a695ff1d93cb,
+                },
                 commands: [
                     RegisterExtraPostRewriteHook,
                     ResetToOid {
-                        commit_oid: 202143f2fdfc785285ab097422f6a695ff1d93cb,
+                        commit_oid: NonZeroOid {
+                            inner: 202143f2fdfc785285ab097422f6a695ff1d93cb,
+                        },
                     },
                     Pick {
-                        commit_oid: e85d25c772a05b5c73ea8ec43881c12bbf588848,
+                        commit_oid: NonZeroOid {
+                            inner: e85d25c772a05b5c73ea8ec43881c12bbf588848,
+                        },
                     },
                 ],
             },
@@ -382,17 +404,25 @@ fn test_move_base() -> anyhow::Result<()> {
         insta::assert_snapshot!(stdout, @r###"
         Rebase plan: Some(
             RebasePlan {
-                first_dest_oid: bf0d52a607f693201512a43b6b5a70b2a275e0ad,
+                first_dest_oid: NonZeroOid {
+                    inner: bf0d52a607f693201512a43b6b5a70b2a275e0ad,
+                },
                 commands: [
                     RegisterExtraPostRewriteHook,
                     ResetToOid {
-                        commit_oid: bf0d52a607f693201512a43b6b5a70b2a275e0ad,
+                        commit_oid: NonZeroOid {
+                            inner: bf0d52a607f693201512a43b6b5a70b2a275e0ad,
+                        },
                     },
                     Pick {
-                        commit_oid: 96d1c37a3d4363611c49f7e52186e189a04c531f,
+                        commit_oid: NonZeroOid {
+                            inner: 96d1c37a3d4363611c49f7e52186e189a04c531f,
+                        },
                     },
                     Pick {
-                        commit_oid: 70deb1e28791d8e7dd5a1f0c871a51b91282562f,
+                        commit_oid: NonZeroOid {
+                            inner: 70deb1e28791d8e7dd5a1f0c871a51b91282562f,
+                        },
                     },
                 ],
             },
@@ -434,14 +464,20 @@ fn test_move_checkout_new_head() -> anyhow::Result<()> {
         insta::assert_snapshot!(stdout, @r###"
         Rebase plan: Some(
             RebasePlan {
-                first_dest_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
+                first_dest_oid: NonZeroOid {
+                    inner: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
+                },
                 commands: [
                     RegisterExtraPostRewriteHook,
                     ResetToOid {
-                        commit_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
+                        commit_oid: NonZeroOid {
+                            inner: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
+                        },
                     },
                     Pick {
-                        commit_oid: fe65c1fe15584744e649b2c79d4cf9b0d878f92e,
+                        commit_oid: NonZeroOid {
+                            inner: fe65c1fe15584744e649b2c79d4cf9b0d878f92e,
+                        },
                     },
                 ],
             },
@@ -490,14 +526,20 @@ fn test_move_branch() -> anyhow::Result<()> {
         insta::assert_snapshot!(stdout, @r###"
         Rebase plan: Some(
             RebasePlan {
-                first_dest_oid: 96d1c37a3d4363611c49f7e52186e189a04c531f,
+                first_dest_oid: NonZeroOid {
+                    inner: 96d1c37a3d4363611c49f7e52186e189a04c531f,
+                },
                 commands: [
                     RegisterExtraPostRewriteHook,
                     ResetToOid {
-                        commit_oid: 96d1c37a3d4363611c49f7e52186e189a04c531f,
+                        commit_oid: NonZeroOid {
+                            inner: 96d1c37a3d4363611c49f7e52186e189a04c531f,
+                        },
                     },
                     Pick {
-                        commit_oid: 98b9119d16974f372e76cb64a3b77c528fc0b18b,
+                        commit_oid: NonZeroOid {
+                            inner: 98b9119d16974f372e76cb64a3b77c528fc0b18b,
+                        },
                     },
                 ],
             },
@@ -680,14 +722,20 @@ fn test_move_in_memory_gc() -> anyhow::Result<()> {
         insta::assert_snapshot!(stdout, @r###"
         Rebase plan: Some(
             RebasePlan {
-                first_dest_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
+                first_dest_oid: NonZeroOid {
+                    inner: f777ecc9b0db5ed372b2615695191a8a17f79f24,
+                },
                 commands: [
                     RegisterExtraPostRewriteHook,
                     ResetToOid {
-                        commit_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
+                        commit_oid: NonZeroOid {
+                            inner: f777ecc9b0db5ed372b2615695191a8a17f79f24,
+                        },
                     },
                     Pick {
-                        commit_oid: 96d1c37a3d4363611c49f7e52186e189a04c531f,
+                        commit_oid: NonZeroOid {
+                            inner: 96d1c37a3d4363611c49f7e52186e189a04c531f,
+                        },
                     },
                 ],
             },

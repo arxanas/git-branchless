@@ -4,7 +4,7 @@
 //! time and inverting them.
 
 use std::convert::TryInto;
-use std::ffi::OsStr;
+use std::ffi::{OsStr, OsString};
 use std::io::{stdin, stdout, BufRead, BufReader, Read, Write};
 use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
 use std::time::SystemTime;
@@ -26,7 +26,7 @@ use crate::core::metadata::{
 };
 use crate::core::tui::{with_siv, SingletonView};
 use crate::declare_views;
-use crate::git::{CategorizedReferenceName, GitRunInfo, Reference, Repo};
+use crate::git::{CategorizedReferenceName, GitRunInfo, MaybeZeroOid, Repo};
 
 fn render_cursor_smartlog(
     glyphs: &Glyphs,
@@ -86,6 +86,12 @@ fn describe_event(repo: &Repo, event: &Event) -> anyhow::Result<Vec<StyledString
             timestamp: _,
             event_tx_id: _,
             commit_oid,
+        }
+        | Event::RewriteEvent {
+            timestamp: _,
+            event_tx_id: _,
+            old_commit_oid: MaybeZeroOid::NonZero(commit_oid),
+            new_commit_oid: MaybeZeroOid::Zero,
         } => {
             vec![
                 StyledStringBuilder::new()
@@ -100,6 +106,12 @@ fn describe_event(repo: &Repo, event: &Event) -> anyhow::Result<Vec<StyledString
             timestamp: _,
             event_tx_id: _,
             commit_oid,
+        }
+        | Event::RewriteEvent {
+            timestamp: _,
+            event_tx_id: _,
+            old_commit_oid: MaybeZeroOid::Zero,
+            new_commit_oid: MaybeZeroOid::NonZero(commit_oid),
         } => {
             vec![
                 StyledStringBuilder::new()
@@ -114,17 +126,15 @@ fn describe_event(repo: &Repo, event: &Event) -> anyhow::Result<Vec<StyledString
             timestamp: _,
             event_tx_id: _,
             ref_name,
-            old_ref: None,
-            new_ref: Some(new_ref),
+            old_oid: MaybeZeroOid::Zero,
+            new_oid: MaybeZeroOid::NonZero(new_oid),
             message: _,
         } if ref_name == "HEAD" => {
             // Not sure if this can happen. When a repo is created, maybe?
             vec![
                 StyledStringBuilder::new()
                     .append_plain("Check out to ")
-                    .append(
-                        repo.friendly_describe_commit_from_oid(new_ref.to_string_lossy().parse()?)?,
-                    )
+                    .append(repo.friendly_describe_commit_from_oid(*new_oid)?)
                     .build(),
                 StyledString::new(),
             ]
@@ -134,22 +144,18 @@ fn describe_event(repo: &Repo, event: &Event) -> anyhow::Result<Vec<StyledString
             timestamp: _,
             event_tx_id: _,
             ref_name,
-            old_ref: Some(old_ref),
-            new_ref: Some(new_ref),
+            old_oid: MaybeZeroOid::NonZero(old_oid),
+            new_oid: MaybeZeroOid::NonZero(new_oid),
             message: _,
         } if ref_name == "HEAD" => {
             vec![
                 StyledStringBuilder::new()
                     .append_plain("Check out from ")
-                    .append(
-                        repo.friendly_describe_commit_from_oid(Reference::name_to_oid(old_ref)?)?,
-                    )
+                    .append(repo.friendly_describe_commit_from_oid(*old_oid)?)
                     .build(),
                 StyledStringBuilder::new()
                     .append_plain("            to ")
-                    .append(
-                        repo.friendly_describe_commit_from_oid(Reference::name_to_oid(new_ref)?)?,
-                    )
+                    .append(repo.friendly_describe_commit_from_oid(*new_oid)?)
                     .build(),
             ]
         }
@@ -158,8 +164,8 @@ fn describe_event(repo: &Repo, event: &Event) -> anyhow::Result<Vec<StyledString
             timestamp: _,
             event_tx_id: _,
             ref_name,
-            old_ref: None,
-            new_ref: None,
+            old_oid: MaybeZeroOid::Zero,
+            new_oid: MaybeZeroOid::Zero,
             message: _,
         } => {
             vec![
@@ -179,8 +185,8 @@ fn describe_event(repo: &Repo, event: &Event) -> anyhow::Result<Vec<StyledString
             timestamp: _,
             event_tx_id: _,
             ref_name,
-            old_ref: None,
-            new_ref: Some(new_ref),
+            old_oid: MaybeZeroOid::Zero,
+            new_oid: MaybeZeroOid::NonZero(new_oid),
             message: _,
         } => {
             vec![
@@ -188,9 +194,7 @@ fn describe_event(repo: &Repo, event: &Event) -> anyhow::Result<Vec<StyledString
                     .append_plain("Create ")
                     .append_plain(CategorizedReferenceName::new(ref_name).friendly_describe())
                     .append_plain(" at ")
-                    .append(
-                        repo.friendly_describe_commit_from_oid(Reference::name_to_oid(new_ref)?)?,
-                    )
+                    .append(repo.friendly_describe_commit_from_oid(*new_oid)?)
                     .build(),
                 StyledString::new(),
             ]
@@ -200,8 +204,8 @@ fn describe_event(repo: &Repo, event: &Event) -> anyhow::Result<Vec<StyledString
             timestamp: _,
             event_tx_id: _,
             ref_name,
-            old_ref: Some(old_ref),
-            new_ref: None,
+            old_oid: MaybeZeroOid::NonZero(old_oid),
+            new_oid: MaybeZeroOid::Zero,
             message: _,
         } => {
             vec![
@@ -209,9 +213,7 @@ fn describe_event(repo: &Repo, event: &Event) -> anyhow::Result<Vec<StyledString
                     .append_plain("Delete ")
                     .append_plain(CategorizedReferenceName::new(ref_name).friendly_describe())
                     .append_plain(" at ")
-                    .append(
-                        repo.friendly_describe_commit_from_oid(Reference::name_to_oid(old_ref)?)?,
-                    )
+                    .append(repo.friendly_describe_commit_from_oid(*old_oid)?)
                     .build(),
                 StyledString::new(),
             ]
@@ -221,8 +223,8 @@ fn describe_event(repo: &Repo, event: &Event) -> anyhow::Result<Vec<StyledString
             timestamp: _,
             event_tx_id: _,
             ref_name,
-            old_ref: Some(old_ref),
-            new_ref: Some(new_ref),
+            old_oid: MaybeZeroOid::NonZero(old_oid),
+            new_oid: MaybeZeroOid::NonZero(new_oid),
             message: _,
         } => {
             let ref_name = CategorizedReferenceName::new(ref_name).friendly_describe();
@@ -231,17 +233,13 @@ fn describe_event(repo: &Repo, event: &Event) -> anyhow::Result<Vec<StyledString
                     .append_plain("Move ")
                     .append_plain(ref_name.clone())
                     .append_plain(" from ")
-                    .append(
-                        repo.friendly_describe_commit_from_oid(Reference::name_to_oid(old_ref)?)?,
-                    )
+                    .append(repo.friendly_describe_commit_from_oid(*old_oid)?)
                     .build(),
                 StyledStringBuilder::new()
                     .append_plain("     ")
                     .append_plain(" ".repeat(ref_name.len()))
                     .append_plain("   to ")
-                    .append(
-                        repo.friendly_describe_commit_from_oid(Reference::name_to_oid(new_ref)?)?,
-                    )
+                    .append(repo.friendly_describe_commit_from_oid(*new_oid)?)
                     .build(),
             ]
         }
@@ -249,8 +247,8 @@ fn describe_event(repo: &Repo, event: &Event) -> anyhow::Result<Vec<StyledString
         Event::RewriteEvent {
             timestamp: _,
             event_tx_id: _,
-            old_commit_oid,
-            new_commit_oid,
+            old_commit_oid: MaybeZeroOid::NonZero(old_commit_oid),
+            new_commit_oid: MaybeZeroOid::NonZero(new_commit_oid),
         } => {
             vec![
                 StyledStringBuilder::new()
@@ -260,6 +258,24 @@ fn describe_event(repo: &Repo, event: &Event) -> anyhow::Result<Vec<StyledString
                 StyledStringBuilder::new()
                     .append_plain("           as ")
                     .append(repo.friendly_describe_commit_from_oid(*new_commit_oid)?)
+                    .build(),
+            ]
+        }
+
+        Event::RewriteEvent {
+            timestamp: _,
+            event_tx_id: _,
+            old_commit_oid: MaybeZeroOid::Zero,
+            new_commit_oid: MaybeZeroOid::Zero,
+        } => {
+            vec![
+                StyledStringBuilder::new()
+                    .append_plain("Empty rewrite event.")
+                    .build(),
+                StyledStringBuilder::new()
+                    .append_plain("This event should not appear. ")
+                    .append_plain("This is a (benign) bug -- ")
+                    .append_plain("please report it.")
                     .build(),
             ]
         }
@@ -561,15 +577,15 @@ fn inverse_event(
             timestamp: _,
             event_tx_id: _,
             ref_name,
-            old_ref,
-            new_ref,
+            old_oid: old_ref,
+            new_oid: new_ref,
             message: _,
         } => Event::RefUpdateEvent {
             timestamp,
             event_tx_id,
             ref_name,
-            old_ref: new_ref,
-            new_ref: old_ref,
+            old_oid: new_ref,
+            new_oid: old_ref,
             message: None,
         },
     };
@@ -619,8 +635,8 @@ fn undo_events(
                     timestamp: _,
                     event_tx_id: _,
                     ref_name,
-                    old_ref: None,
-                    new_ref: _,
+                    old_oid: MaybeZeroOid::Zero,
+                    new_oid: _,
                     message: _,
                 } if ref_name == "HEAD"
             )
@@ -680,10 +696,11 @@ fn undo_events(
                 timestamp: _,
                 event_tx_id: _,
                 ref_name,
-                old_ref: _,
-                new_ref: Some(new_ref),
+                old_oid: _,
+                new_oid: MaybeZeroOid::NonZero(new_ref),
                 message: _,
             } if ref_name == "HEAD" => {
+                let target_oid: OsString = new_ref.to_string().into();
                 // Most likely the user wanted to perform an actual checkout in
                 // this case, rather than just update `HEAD` (and be left with a
                 // dirty working copy). The `Git` command will update the event
@@ -694,7 +711,7 @@ fn undo_events(
                         &[
                             OsStr::new("checkout"),
                             OsStr::new("--detach"),
-                            new_ref.as_os_str(),
+                            target_oid.as_os_str(),
                         ],
                     )
                     .with_context(|| "Updating to previous HEAD location")?;
@@ -703,8 +720,8 @@ fn undo_events(
                 timestamp: _,
                 event_tx_id: _,
                 ref_name: _,
-                old_ref: None,
-                new_ref: None,
+                old_oid: MaybeZeroOid::Zero,
+                new_oid: MaybeZeroOid::Zero,
                 message: _,
             } => {
                 // Do nothing.
@@ -713,8 +730,8 @@ fn undo_events(
                 timestamp: _,
                 event_tx_id: _,
                 ref_name,
-                old_ref: Some(_),
-                new_ref: None,
+                old_oid: MaybeZeroOid::NonZero(_),
+                new_oid: MaybeZeroOid::Zero,
                 message: _,
             } => match repo.find_reference(&ref_name)? {
                 Some(mut reference) => {
@@ -734,21 +751,20 @@ fn undo_events(
                 timestamp: _,
                 event_tx_id: _,
                 ref_name,
-                old_ref: None,
-                new_ref: Some(new_ref),
+                old_oid: MaybeZeroOid::Zero,
+                new_oid: MaybeZeroOid::NonZero(new_oid),
                 message: _,
             }
             | Event::RefUpdateEvent {
                 timestamp: _,
                 event_tx_id: _,
                 ref_name,
-                old_ref: Some(_),
-                new_ref: Some(new_ref),
+                old_oid: MaybeZeroOid::NonZero(_),
+                new_oid: MaybeZeroOid::NonZero(new_oid),
                 message: _,
             } => {
                 // Create or update the given reference.
-                let new_ref = Reference::name_to_oid(&new_ref)?;
-                repo.create_reference(&ref_name, new_ref, true, "branchless undo")?;
+                repo.create_reference(&ref_name, new_oid, true, "branchless undo")?;
             }
             Event::CommitEvent { .. }
             | Event::HideEvent { .. }
@@ -853,16 +869,16 @@ mod tests {
                 timestamp: 1.0,
                 event_tx_id,
                 ref_name: "HEAD".into(),
-                old_ref: Some("1".parse()?),
-                new_ref: Some("2".parse()?),
+                old_oid: MaybeZeroOid::NonZero("1".parse()?),
+                new_oid: MaybeZeroOid::NonZero("2".parse()?),
                 message: None,
             },
             Event::RefUpdateEvent {
                 timestamp: 2.0,
                 event_tx_id,
                 ref_name: "HEAD".into(),
-                old_ref: Some("1".parse()?),
-                new_ref: Some("3".parse()?),
+                old_oid: MaybeZeroOid::NonZero("1".parse()?),
+                new_oid: MaybeZeroOid::NonZero("3".parse()?),
                 message: None,
             },
         ];
@@ -870,8 +886,8 @@ mod tests {
             timestamp: 2.0,
             event_tx_id,
             ref_name: "HEAD".into(),
-            old_ref: Some("1".parse()?),
-            new_ref: Some("3".parse()?),
+            old_oid: MaybeZeroOid::NonZero("1".parse()?),
+            new_oid: MaybeZeroOid::NonZero("3".parse()?),
             message: None,
         }];
         assert_eq!(optimize_inverse_events(input), expected);

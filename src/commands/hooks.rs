@@ -29,7 +29,7 @@ use crate::core::formatting::{printable_styled_string, Glyphs, Pluralize};
 use crate::core::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
 use crate::core::mergebase::MergeBaseDb;
 use crate::core::rewrite::{find_abandoned_children, move_branches};
-use crate::git::{CategorizedReferenceName, GitRunInfo, Oid, Repo};
+use crate::git::{CategorizedReferenceName, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo};
 
 const EXTRA_POST_REWRITE_FILE_NAME: &str = "branchless_do_extra_post_rewrite";
 
@@ -54,14 +54,14 @@ pub fn hook_post_rewrite(git_run_info: &GitRunInfo, rewrite_type: &str) -> anyho
             let line = line.trim();
             match *line.split(' ').collect::<Vec<_>>().as_slice() {
                 [old_commit_oid, new_commit_oid, ..] => {
-                    let old_commit_oid: Oid = old_commit_oid.parse()?;
-                    let new_commit_oid: Oid = new_commit_oid.parse()?;
+                    let old_commit_oid: NonZeroOid = old_commit_oid.parse()?;
+                    let new_commit_oid: MaybeZeroOid = new_commit_oid.parse()?;
 
                     rewritten_oids.insert(old_commit_oid, new_commit_oid);
                     events.push(Event::RewriteEvent {
                         timestamp,
                         event_tx_id,
-                        old_commit_oid,
+                        old_commit_oid: old_commit_oid.into(),
                         new_commit_oid,
                     })
                 }
@@ -111,7 +111,7 @@ fn warn_abandoned(
     repo: &Repo,
     merge_base_db: &MergeBaseDb,
     event_log_db: &EventLogDb,
-    old_commit_oids: impl IntoIterator<Item = Oid>,
+    old_commit_oids: impl IntoIterator<Item = NonZeroOid>,
 ) -> anyhow::Result<()> {
     // The caller will have added events to the event log database, so make sure
     // to construct a fresh `EventReplayer` here.
@@ -133,7 +133,7 @@ fn warn_abandoned(
     )?;
 
     let (all_abandoned_children, all_abandoned_branches) = {
-        let mut all_abandoned_children: HashSet<Oid> = HashSet::new();
+        let mut all_abandoned_children: HashSet<NonZeroOid> = HashSet::new();
         let mut all_abandoned_branches: HashSet<&OsStr> = HashSet::new();
         for old_commit_oid in old_commit_oids {
             let abandoned_result = find_abandoned_children(
@@ -242,8 +242,8 @@ pub fn hook_register_extra_post_rewrite_hook() -> anyhow::Result<()> {
 /// See the man-page for `githooks(5)`.
 #[context("Processing post-checkout hook")]
 pub fn hook_post_checkout(
-    previous_head_ref: &str,
-    current_head_ref: &str,
+    previous_head_oid: &str,
+    current_head_oid: &str,
     is_branch_checkout: isize,
 ) -> anyhow::Result<()> {
     if is_branch_checkout == 0 {
@@ -261,8 +261,11 @@ pub fn hook_post_checkout(
     event_log_db.add_events(vec![Event::RefUpdateEvent {
         timestamp: timestamp.as_secs_f64(),
         event_tx_id,
-        old_ref: Some(OsString::from(previous_head_ref)),
-        new_ref: Some(OsString::from(current_head_ref)),
+        old_oid: previous_head_oid.parse()?,
+        new_oid: {
+            let oid: MaybeZeroOid = current_head_oid.parse()?;
+            oid
+        },
         ref_name: OsString::from("HEAD"),
         message: None,
     }])?;
@@ -341,8 +344,11 @@ fn parse_reference_transaction_line(
                     timestamp: timestamp.as_secs_f64(),
                     event_tx_id,
                     ref_name: ref_name.clone(),
-                    old_ref: Some(old_value.clone()),
-                    new_ref: Some(new_value.clone()),
+                    old_oid: old_value.as_os_str().try_into()?,
+                    new_oid: {
+                        let oid: MaybeZeroOid = new_value.as_os_str().try_into()?;
+                        oid
+                    },
                     message: None,
                 }))
             } else {
@@ -441,8 +447,11 @@ mod tests {
             Some(Event::RefUpdateEvent {
                 timestamp: 0.0,
                 event_tx_id,
-                old_ref: Some(OsString::from("123abc")),
-                new_ref: Some(OsString::from("456def")),
+                old_oid: "123abc".parse()?,
+                new_oid: {
+                    let oid: MaybeZeroOid = "456def".parse()?;
+                    oid.into()
+                },
                 ref_name: OsString::from("refs/heads/mybranch"),
                 message: None,
             })

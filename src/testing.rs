@@ -9,7 +9,7 @@ use std::ops::Deref;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
-use crate::git::{GitRunInfo, GitVersion, Oid, Repo};
+use crate::git::{GitRunInfo, GitVersion, NonZeroOid, Repo};
 use crate::util::get_sh;
 
 use anyhow::Context;
@@ -318,7 +318,7 @@ impl Git {
         name: &str,
         time: isize,
         contents: &str,
-    ) -> anyhow::Result<Oid> {
+    ) -> anyhow::Result<NonZeroOid> {
         self.write_file(name, contents)?;
         self.run(&["add", "."])?;
         self.run_with_options(
@@ -339,7 +339,7 @@ impl Git {
 
     /// Commit a file with default contents. The `time` argument is used to set
     /// the commit timestamp, which is factored into the commit hash.
-    pub fn commit_file(&self, name: &str, time: isize) -> anyhow::Result<Oid> {
+    pub fn commit_file(&self, name: &str, time: isize) -> anyhow::Result<NonZeroOid> {
         self.commit_file_with_contents(name, time, &format!("{} contents\n", name))
     }
 

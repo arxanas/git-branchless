@@ -17,9 +17,9 @@ use crate::core::mergebase::MergeBaseDb;
 use crate::core::rewrite::{
     execute_rebase_plan, BuildRebasePlanOptions, ExecuteRebasePlanOptions, RebasePlanBuilder,
 };
-use crate::git::{GitRunInfo, Oid, Repo};
+use crate::git::{GitRunInfo, NonZeroOid, Repo};
 
-fn resolve_base_commit(graph: &CommitGraph, oid: Oid) -> Oid {
+fn resolve_base_commit(graph: &CommitGraph, oid: NonZeroOid) -> NonZeroOid {
     let node = &graph[&oid];
     if node.is_main {
         oid
@@ -58,21 +58,25 @@ pub fn r#move(
         (Some(source), None) => (source, false),
         (None, Some(base)) => (base, true),
         (None, None) => {
-            let source_oid = head_oid
-            .expect(
-                "No --source or --base argument was provided, and no OID for HEAD is available as a default",
-            )
-            .to_string();
-            (source_oid, false)
+            let source_oid = match head_oid {
+                Some(oid) => oid,
+                None => {
+                    println!("No --source or --base argument was provided, and no OID for HEAD is available as a default");
+                    return Ok(1);
+                }
+            };
+            (source_oid.to_string(), false)
         }
     };
     let dest = match dest {
         Some(dest) => dest,
-        None => head_oid
-            .expect(
-                "No --dest argument was provided, and no OID for HEAD is available as a default",
-            )
-            .to_string(),
+        None => match head_oid {
+            Some(oid) => oid.to_string(),
+            None => {
+                println!("No --dest argument was provided, and no OID for HEAD is available as a default");
+                return Ok(1);
+            }
+        },
     };
     let (source_oid, dest_oid) = match resolve_commits(&repo, vec![source, dest])? {
         ResolveCommitsResult::Ok { commits } => match &commits.as_slice() {

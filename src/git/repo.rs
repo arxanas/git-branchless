@@ -39,46 +39,115 @@ pub struct Repo {
 }
 
 /// Represents the ID of a Git object.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Oid {
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+pub struct NonZeroOid {
     inner: git2::Oid,
 }
 
-impl Oid {
-    /// Get the "zero" OID, generally representing a deleted or non-existent
-    /// object.
-    pub fn zero() -> Self {
-        Oid {
-            inner: git2::Oid::zero(),
-        }
-    }
-}
-
-impl std::fmt::Debug for Oid {
+impl Display for NonZeroOid {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self.inner)
     }
 }
 
-impl Display for Oid {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.inner)
+impl TryFrom<MaybeZeroOid> for NonZeroOid {
+    type Error = anyhow::Error;
+
+    fn try_from(value: MaybeZeroOid) -> Result<Self, Self::Error> {
+        match value {
+            MaybeZeroOid::NonZero(non_zero_oid) => Ok(non_zero_oid),
+            MaybeZeroOid::Zero => anyhow::bail!("Expected a non-zero OID"),
+        }
     }
 }
 
-impl FromStr for Oid {
+impl TryFrom<OsString> for NonZeroOid {
+    type Error = anyhow::Error;
+
+    fn try_from(value: OsString) -> Result<Self, Self::Error> {
+        let value: &OsStr = &value;
+        value.try_into()
+    }
+}
+
+impl TryFrom<&OsStr> for NonZeroOid {
+    type Error = anyhow::Error;
+
+    fn try_from(value: &OsStr) -> Result<Self, Self::Error> {
+        let oid: MaybeZeroOid = value.try_into()?;
+        match oid {
+            MaybeZeroOid::Zero => anyhow::bail!("OID was zero, but expected to be non-zero"),
+            MaybeZeroOid::NonZero(oid) => Ok(oid),
+        }
+    }
+}
+
+impl FromStr for NonZeroOid {
+    type Err = anyhow::Error;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let oid: MaybeZeroOid = value.parse()?;
+        match oid {
+            MaybeZeroOid::NonZero(non_zero_oid) => Ok(non_zero_oid),
+            MaybeZeroOid::Zero => anyhow::bail!("Expected a non-zero OID, but got: {:?}", value),
+        }
+    }
+}
+
+fn make_non_zero_oid(oid: git2::Oid) -> NonZeroOid {
+    assert_ne!(oid, git2::Oid::zero());
+    NonZeroOid { inner: oid }
+}
+
+/// Represents an OID which may be zero or non-zero. This exists because Git
+/// often represents the absence of an object using the zero OID. We want to
+/// statically check for those cases by using a more descriptive type.
+///
+/// This type is isomorphic to `Option<NonZeroOid>`. It should be used primarily
+/// when converting to and from string representations of OID values.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum MaybeZeroOid {
+    /// The zero OID (i.e. 40 `0`s).
+    Zero,
+
+    /// A non-zero OID.
+    NonZero(NonZeroOid),
+}
+
+impl std::fmt::Debug for MaybeZeroOid {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self)
+    }
+}
+
+impl Display for MaybeZeroOid {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let zero = git2::Oid::zero();
+        write!(
+            f,
+            "{:?}",
+            match self {
+                MaybeZeroOid::NonZero(NonZeroOid { inner }) => inner,
+                MaybeZeroOid::Zero => &zero,
+            }
+        )
+    }
+}
+
+impl FromStr for MaybeZeroOid {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.parse() {
-            Ok(oid) => Ok(Oid { inner: oid }),
+            Ok(oid) if oid == git2::Oid::zero() => Ok(MaybeZeroOid::Zero),
+            Ok(oid) => Ok(MaybeZeroOid::NonZero(NonZeroOid { inner: oid })),
             Err(err) => Err(wrap_git_error(err))
                 .with_context(|| format!("Could not parse OID from string: {:?}", s)),
         }
     }
 }
 
-impl TryFrom<&OsStr> for Oid {
+impl TryFrom<&OsStr> for MaybeZeroOid {
     type Error = anyhow::Error;
 
     fn try_from(value: &OsStr) -> Result<Self, Self::Error> {
@@ -89,11 +158,35 @@ impl TryFrom<&OsStr> for Oid {
     }
 }
 
-impl TryFrom<OsString> for Oid {
+impl TryFrom<OsString> for MaybeZeroOid {
     type Error = anyhow::Error;
 
     fn try_from(value: OsString) -> Result<Self, Self::Error> {
-        Oid::try_from(value.as_os_str())
+        MaybeZeroOid::try_from(value.as_os_str())
+    }
+}
+
+impl From<NonZeroOid> for MaybeZeroOid {
+    fn from(oid: NonZeroOid) -> Self {
+        Self::NonZero(oid)
+    }
+}
+
+impl From<Option<NonZeroOid>> for MaybeZeroOid {
+    fn from(oid: Option<NonZeroOid>) -> Self {
+        match oid {
+            Some(oid) => MaybeZeroOid::NonZero(oid),
+            None => MaybeZeroOid::Zero,
+        }
+    }
+}
+
+impl From<MaybeZeroOid> for Option<NonZeroOid> {
+    fn from(oid: MaybeZeroOid) -> Self {
+        match oid {
+            MaybeZeroOid::Zero => None,
+            MaybeZeroOid::NonZero(oid) => Some(oid),
+        }
     }
 }
 
@@ -118,7 +211,7 @@ pub struct HeadInfo<'repo> {
 
     /// The OID of the commit that `HEAD` points to. If `HEAD` is unborn, then
     /// this is `None`.
-    pub oid: Option<Oid>,
+    pub oid: Option<NonZeroOid>,
 
     /// The name of the reference that `HEAD` points to symbolically. If `HEAD`
     /// is detached, then this is `None`.
@@ -260,13 +353,16 @@ impl Repo {
                     }
                     None => anyhow::bail!("Unknown `HEAD` reference type")
                 };
-                (Some(head_oid), reference_name)
+                (
+                    MaybeZeroOid::NonZero(make_non_zero_oid(head_oid)),
+                    reference_name,
+                )
             }
-            None => (None, None),
+            None => (MaybeZeroOid::Zero, None),
         };
         Ok(HeadInfo {
             repo: self,
-            oid: head_oid.map(|oid| Oid { inner: oid }),
+            oid: head_oid.into(),
             reference_name,
         })
     }
@@ -293,7 +389,7 @@ Either create it, or update the main branch setting by running:
 
     /// Get the OID corresponding to the main branch.
     #[context("Getting main branch OID for repository at: {:?}", self.get_path())]
-    pub fn get_main_branch_oid(&self) -> anyhow::Result<Oid> {
+    pub fn get_main_branch_oid(&self) -> anyhow::Result<NonZeroOid> {
         let main_branch_reference = self.get_main_branch_reference()?;
         let commit = main_branch_reference.peel_to_commit()?;
         match commit {
@@ -310,13 +406,15 @@ Either create it, or update the main branch setting by running:
     /// The returned branch names include the `refs/heads/` prefix, so it must
     /// be stripped if desired.
     #[context("Getting branch-OID-to-names map for repository at: {:?}", self.get_path())]
-    pub fn get_branch_oid_to_names(&self) -> anyhow::Result<HashMap<Oid, HashSet<OsString>>> {
+    pub fn get_branch_oid_to_names(
+        &self,
+    ) -> anyhow::Result<HashMap<NonZeroOid, HashSet<OsString>>> {
         let branches = self
             .inner
             .branches(Some(git2::BranchType::Local))
             .with_context(|| "Reading branches")?;
 
-        let mut result: HashMap<Oid, HashSet<OsString>> = HashMap::new();
+        let mut result: HashMap<NonZeroOid, HashSet<OsString>> = HashMap::new();
         for branch_info in branches {
             let branch_info = branch_info.with_context(|| "Iterating over branches")?;
             let branch = match branch_info {
@@ -345,7 +443,7 @@ Either create it, or update the main branch setting by running:
                 .target()
                 .unwrap();
             result
-                .entry(Oid { inner: branch_oid })
+                .entry(make_non_zero_oid(branch_oid))
                 .or_insert_with(HashSet::new)
                 .insert(OsString::from(reference_name.to_owned()));
         }
@@ -415,9 +513,13 @@ Either create it, or update the main branch setting by running:
         "Looking up merge-base between {:?} and {:?} for repository at: {:?}",
         lhs, rhs, self.get_path()
     )]
-    pub fn find_merge_base(&self, lhs: Oid, rhs: Oid) -> anyhow::Result<Option<Oid>> {
+    pub fn find_merge_base(
+        &self,
+        lhs: NonZeroOid,
+        rhs: NonZeroOid,
+    ) -> anyhow::Result<Option<NonZeroOid>> {
         match self.inner.merge_base(lhs.inner, rhs.inner) {
-            Ok(merge_base) => Ok(Some(Oid { inner: merge_base })),
+            Ok(merge_base_oid) => Ok(Some(make_non_zero_oid(merge_base_oid))),
             Err(err) if err.code() == git2::ErrorCode::NotFound => Ok(None),
             Err(err) => Err(wrap_git_error(err)),
         }
@@ -462,7 +564,7 @@ Either create it, or update the main branch setting by running:
     pub fn create_reference(
         &self,
         name: &OsStr,
-        oid: Oid,
+        oid: NonZeroOid,
         force: bool,
         log_message: &str,
     ) -> anyhow::Result<Reference> {
@@ -549,7 +651,7 @@ Either create it, or update the main branch setting by running:
 
     /// Look up a commit with the given OID. Returns `None` if not found.
     #[context("Looking up commit {:?} for repository at: {:?}", oid, self.get_path())]
-    pub fn find_commit(&self, oid: Oid) -> anyhow::Result<Option<Commit>> {
+    pub fn find_commit(&self, oid: NonZeroOid) -> anyhow::Result<Option<Commit>> {
         match self.inner.find_commit(oid.inner) {
             Ok(commit) => Ok(Some(Commit { inner: commit })),
             Err(err) if err.code() == git2::ErrorCode::NotFound => Ok(None),
@@ -559,7 +661,10 @@ Either create it, or update the main branch setting by running:
 
     /// Look up the commit with the given OID and render a friendly description
     /// of it, or render an error message if not found.
-    pub fn friendly_describe_commit_from_oid(&self, oid: Oid) -> anyhow::Result<StyledString> {
+    pub fn friendly_describe_commit_from_oid(
+        &self,
+        oid: NonZeroOid,
+    ) -> anyhow::Result<StyledString> {
         match self.find_commit(oid)? {
             Some(commit) => Ok(commit.friendly_describe()?),
             None => Ok(StyledString::styled(
@@ -579,7 +684,7 @@ Either create it, or update the main branch setting by running:
         message: &str,
         tree: &git2::Tree,
         parents: &[&Commit],
-    ) -> anyhow::Result<Oid> {
+    ) -> anyhow::Result<NonZeroOid> {
         let parents = parents
             .iter()
             .map(|commit| &commit.inner)
@@ -595,7 +700,7 @@ Either create it, or update the main branch setting by running:
                 parents.as_slice(),
             )
             .map_err(wrap_git_error)?;
-        Ok(Oid { inner: oid })
+        Ok(make_non_zero_oid(oid))
     }
 
     /// Cherry-pick a commit in memory and return the resulting index.
@@ -622,7 +727,7 @@ Either create it, or update the main branch setting by running:
 
     /// Look up the tree with the given OID. Returns `None` if not found.
     #[context("Looking up tree {:?} for repository at: {:?}", oid, self.get_path())]
-    pub fn find_tree(&self, oid: Oid) -> anyhow::Result<Option<git2::Tree>> {
+    pub fn find_tree(&self, oid: NonZeroOid) -> anyhow::Result<Option<git2::Tree>> {
         match self.inner.find_tree(oid.inner) {
             Ok(tree) => Ok(Some(tree)),
             Err(err) if err.code() == git2::ErrorCode::NotFound => Ok(None),
@@ -633,9 +738,9 @@ Either create it, or update the main branch setting by running:
     /// Write the provided in-memory index as a tree into Git`s object database.
     /// There must be no merge conflicts in the index.
     #[context("Writing index file to disk for repository at: {:?}", self.get_path())]
-    pub fn write_index_to_tree(&self, index: &mut git2::Index) -> anyhow::Result<Oid> {
+    pub fn write_index_to_tree(&self, index: &mut git2::Index) -> anyhow::Result<NonZeroOid> {
         let oid = index.write_tree_to(&self.inner).map_err(wrap_git_error)?;
-        Ok(Oid { inner: oid })
+        Ok(make_non_zero_oid(oid))
     }
 }
 
@@ -685,18 +790,15 @@ pub struct Commit<'repo> {
 
 impl<'repo> Commit<'repo> {
     /// Get the object ID of the commit.
-    pub fn get_oid(&self) -> Oid {
-        Oid {
+    pub fn get_oid(&self) -> NonZeroOid {
+        NonZeroOid {
             inner: self.inner.id(),
         }
     }
 
     /// Get the object IDs of the parents of this commit.
-    pub fn get_parent_oids(&self) -> Vec<Oid> {
-        self.inner
-            .parent_ids()
-            .map(|oid| Oid { inner: oid })
-            .collect()
+    pub fn get_parent_oids(&self) -> Vec<NonZeroOid> {
+        self.inner.parent_ids().map(make_non_zero_oid).collect()
     }
 
     /// Get the number of parents of this commit.
@@ -778,10 +880,14 @@ impl<'repo> Reference<'repo> {
     }
 
     /// Given a reference name which is an OID, convert the string into an `Oid`
-    /// object.
+    /// object. If the `Oid` was zero, returns `None`.
     #[context("Converting reference name to OID: {:?}", ref_name)]
-    pub fn name_to_oid(ref_name: &OsStr) -> anyhow::Result<Oid> {
-        ref_name.try_into()
+    pub fn name_to_oid(ref_name: &OsStr) -> anyhow::Result<Option<NonZeroOid>> {
+        let oid: MaybeZeroOid = ref_name.try_into()?;
+        match oid {
+            MaybeZeroOid::NonZero(oid) => Ok(Some(oid)),
+            MaybeZeroOid::Zero => Ok(None),
+        }
     }
 
     /// Get the name of this reference.
@@ -937,8 +1043,8 @@ pub struct Branch<'repo> {
 impl<'repo> Branch<'repo> {
     /// Get the OID pointed to by the branch. Returns `None` if the branch is
     /// not a direct reference (which is unusual).
-    pub fn get_oid(&self) -> anyhow::Result<Option<Oid>> {
-        Ok(self.inner.get().target().map(|oid| Oid { inner: oid }))
+    pub fn get_oid(&self) -> anyhow::Result<Option<NonZeroOid>> {
+        Ok(self.inner.get().target().map(make_non_zero_oid))
     }
 
     /// Convert the branch into its underlying `Reference`.

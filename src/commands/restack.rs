@@ -73,7 +73,7 @@ use crate::core::rewrite::{
     execute_rebase_plan, find_abandoned_children, find_rewrite_target, move_branches,
     BuildRebasePlanOptions, ExecuteRebasePlanOptions, RebasePlanBuilder,
 };
-use crate::git::{GitRunInfo, Oid, Repo};
+use crate::git::{GitRunInfo, NonZeroOid, Repo};
 
 #[context("Restacking commits")]
 fn restack_commits(
@@ -82,7 +82,7 @@ fn restack_commits(
     git_run_info: &GitRunInfo,
     merge_base_db: &MergeBaseDb,
     event_log_db: &EventLogDb,
-    commits: Option<impl IntoIterator<Item = Oid>>,
+    commits: Option<impl IntoIterator<Item = NonZeroOid>>,
     build_options: &BuildRebasePlanOptions,
     execute_options: &ExecuteRebasePlanOptions,
 ) -> anyhow::Result<isize> {
@@ -103,10 +103,10 @@ fn restack_commits(
     )?;
 
     struct RebaseInfo {
-        dest_oid: Oid,
-        abandoned_child_oids: Vec<Oid>,
+        dest_oid: NonZeroOid,
+        abandoned_child_oids: Vec<NonZeroOid>,
     }
-    let commits: HashSet<Oid> = match commits {
+    let commits: HashSet<NonZeroOid> = match commits {
         Some(commits) => commits.into_iter().collect(),
         None => graph.keys().copied().collect(),
     };
@@ -239,7 +239,7 @@ pub fn restack(
             return Ok(1);
         }
     };
-    let commits: Option<HashSet<Oid>> = if commits.is_empty() {
+    let commits: Option<HashSet<NonZeroOid>> = if commits.is_empty() {
         None
     } else {
         Some(commits.into_iter().map(|commit| commit.get_oid()).collect())
