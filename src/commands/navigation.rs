@@ -1,17 +1,15 @@
 //! Convenience commands to help the user move through a stack of commits.
 
-use std::collections::HashMap;
-
 use log::warn;
 
 use crate::commands::smartlog::smartlog;
 use crate::core::eventlog::{EventLogDb, EventReplayer};
 use crate::core::formatting::{printable_styled_string, Glyphs};
 use crate::core::graph::{
-    find_path_to_merge_base, make_graph, BranchOids, HeadOid, MainBranchOid, Node,
+    find_path_to_merge_base, make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid,
 };
 use crate::core::mergebase::MergeBaseDb;
-use crate::git::{GitRunInfo, Oid, Repo};
+use crate::git::{GitRunInfo, NonZeroOid, Repo};
 
 /// Go back a certain number of commits.
 pub fn prev(git_run_info: &GitRunInfo, num_commits: Option<isize>) -> anyhow::Result<isize> {
@@ -43,10 +41,10 @@ pub enum Towards {
 fn advance_towards_main_branch(
     repo: &Repo,
     merge_base_db: &MergeBaseDb,
-    graph: &HashMap<Oid, Node>,
-    current_oid: Oid,
+    graph: &CommitGraph,
+    current_oid: NonZeroOid,
     main_branch_oid: &MainBranchOid,
-) -> anyhow::Result<(isize, Oid)> {
+) -> anyhow::Result<(isize, NonZeroOid)> {
     let MainBranchOid(main_branch_oid) = main_branch_oid;
     let path = find_path_to_merge_base(repo, merge_base_db, *main_branch_oid, current_oid)?;
     let path = match path {
@@ -71,11 +69,11 @@ fn advance_towards_main_branch(
 fn advance_towards_own_commit(
     glyphs: &Glyphs,
     repo: &Repo,
-    graph: &HashMap<Oid, Node>,
-    current_oid: Oid,
+    graph: &CommitGraph,
+    current_oid: NonZeroOid,
     num_commits: isize,
     towards: Option<Towards>,
-) -> anyhow::Result<Option<Oid>> {
+) -> anyhow::Result<Option<NonZeroOid>> {
     let mut current_oid = current_oid;
     for i in 0..num_commits {
         let children = &graph[&current_oid].children;

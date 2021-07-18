@@ -15,15 +15,15 @@ use std::time::{Duration, SystemTime};
 
 use anyhow::Context;
 use fn_error_context::context;
-use log::warn;
 
-use crate::git::{CategorizedReferenceName, Oid, Reference, Repo};
+use crate::git::{CategorizedReferenceName, MaybeZeroOid, NonZeroOid, Repo};
 
 /// When this environment variable is set, we reuse the ID for the transaction
 /// which the caller has already started.
 pub const BRANCHLESS_TRANSACTION_ID_ENV_VAR: &str = "BRANCHLESS_TRANSACTION_ID";
 
 // Wrapper around the row stored directly in the database.
+#[derive(Clone, Debug)]
 struct Row {
     timestamp: f64,
     type_: String,
@@ -86,10 +86,10 @@ pub enum Event {
         event_tx_id: EventTransactionId,
 
         /// The OID of the commit before the rewrite.
-        old_commit_oid: Oid,
+        old_commit_oid: MaybeZeroOid,
 
         /// The OID of the commit after the rewrite.
-        new_commit_oid: Oid,
+        new_commit_oid: MaybeZeroOid,
     },
 
     /// Indicates that a reference was updated.
@@ -109,19 +109,11 @@ pub enum Event {
         /// For example, `HEAD` or `refs/heads/master`.
         ref_name: OsString,
 
-        /// The old referent.
-        ///
-        /// May be an OID (in the case of a direct reference) or another
-        /// reference name (in the case of a symbolic reference).
-        old_ref: Option<OsString>,
+        /// The old referent OID.
+        old_oid: MaybeZeroOid,
 
-        /// The updated referent.
-        ///
-        /// This may not be different from the old referent.
-        ///
-        /// May be an OID (in the case of a direct reference) or another
-        /// reference name (in the case of a symbolic reference).
-        new_ref: Option<OsString>,
+        /// The updated referent OID.
+        new_oid: MaybeZeroOid,
 
         /// A message associated with the rewrite, if any.
         message: Option<OsString>,
@@ -138,7 +130,7 @@ pub enum Event {
         event_tx_id: EventTransactionId,
 
         /// The new commit OID.
-        commit_oid: Oid,
+        commit_oid: NonZeroOid,
     },
 
     /// Indicates that a commit was explicitly hidden by the user.
@@ -153,7 +145,7 @@ pub enum Event {
         event_tx_id: EventTransactionId,
 
         /// The OID of the commit that was hidden.
-        commit_oid: Oid,
+        commit_oid: NonZeroOid,
     },
 
     /// Indicates that a commit was explicitly un-hidden by the user.
@@ -168,7 +160,7 @@ pub enum Event {
         event_tx_id: EventTransactionId,
 
         /// The OID of the commit that was unhidden.
-        commit_oid: Oid,
+        commit_oid: NonZeroOid,
     },
 }
 
@@ -219,15 +211,15 @@ impl From<Event> for Row {
                 timestamp,
                 event_tx_id: EventTransactionId(event_tx_id),
                 ref_name,
-                old_ref,
-                new_ref,
+                old_oid,
+                new_oid,
                 message,
             } => Row {
                 timestamp,
                 event_tx_id,
                 type_: String::from("ref-move"),
-                ref1: old_ref,
-                ref2: new_ref,
+                ref1: Some(old_oid.to_string().into()),
+                ref2: Some(new_oid.to_string().into()),
                 ref_name: Some(ref_name),
                 message,
             },
@@ -277,94 +269,101 @@ impl From<Event> for Row {
     }
 }
 
+fn try_from_row_helper(row: &Row) -> Result<Event, anyhow::Error> {
+    let row: Row = row.clone();
+    let Row {
+        timestamp,
+        event_tx_id,
+        type_,
+        ref_name,
+        ref1,
+        ref2,
+        message,
+    } = row;
+    let event_tx_id = EventTransactionId(event_tx_id);
+
+    let get_oid = |oid_str: &Option<OsString>, oid_name: &str| -> anyhow::Result<MaybeZeroOid> {
+        match oid_str {
+            Some(oid_str) => match oid_str.to_str() {
+                Some(oid_str) => {
+                    let oid: MaybeZeroOid = oid_str.parse()?;
+                    Ok(oid)
+                }
+                None => anyhow::bail!("Invalid OID for reference name: {:?}", oid_str),
+            },
+            None => Err(anyhow::anyhow!(
+                "OID '{}' was `None` for event type '{}'",
+                oid_name,
+                type_
+            )),
+        }
+    };
+
+    let event = match type_.as_str() {
+        "rewrite" => {
+            let old_commit_oid = get_oid(&ref1, "old commit OID")?;
+            let new_commit_oid = get_oid(&ref2, "new commit OID")?;
+            Event::RewriteEvent {
+                timestamp,
+                event_tx_id,
+                old_commit_oid,
+                new_commit_oid,
+            }
+        }
+
+        "ref-move" => {
+            let ref_name =
+                ref_name.ok_or_else(|| anyhow::anyhow!("ref-move event missing ref name"))?;
+            let ref1 = ref1.ok_or_else(|| anyhow::anyhow!("ref-move event missing ref1"))?;
+            let ref2 = ref2.ok_or_else(|| anyhow::anyhow!("ref-move event missing ref2"))?;
+            Event::RefUpdateEvent {
+                timestamp,
+                event_tx_id,
+                ref_name,
+                old_oid: ref1.try_into()?,
+                new_oid: ref2.try_into()?,
+                message,
+            }
+        }
+
+        "commit" => {
+            let commit_oid: NonZeroOid = get_oid(&ref1, "commit OID")?.try_into()?;
+            Event::CommitEvent {
+                timestamp,
+                event_tx_id,
+                commit_oid,
+            }
+        }
+
+        "hide" => {
+            let commit_oid: NonZeroOid = get_oid(&ref1, "commit OID")?.try_into()?;
+            Event::HideEvent {
+                timestamp,
+                event_tx_id,
+                commit_oid,
+            }
+        }
+
+        "unhide" => {
+            let commit_oid: NonZeroOid = get_oid(&ref1, "commit OID")?.try_into()?;
+            Event::UnhideEvent {
+                timestamp,
+                event_tx_id,
+                commit_oid,
+            }
+        }
+
+        other => anyhow::bail!("Unknown event type {}", other),
+    };
+    Ok(event)
+}
+
 impl TryFrom<Row> for Event {
     type Error = anyhow::Error;
 
-    #[context("Converting database result row into `Event`")]
+    #[context("Converting database result row into `Event`: {:?}", &row)]
     fn try_from(row: Row) -> Result<Self, Self::Error> {
-        let Row {
-            timestamp,
-            event_tx_id,
-            type_,
-            ref_name,
-            ref1,
-            ref2,
-            message,
-        } = row;
-        let event_tx_id = EventTransactionId(event_tx_id);
-
-        let get_oid = |oid_str: &Option<OsString>, oid_name: &str| -> anyhow::Result<Oid> {
-            match oid_str {
-                Some(oid_str) => match oid_str.to_str() {
-                    Some(oid_str) => {
-                        let oid: Oid = oid_str.parse()?;
-                        Ok(oid)
-                    }
-                    None => anyhow::bail!("Invalid OID for reference name: {:?}", oid_str),
-                },
-                None => Err(anyhow::anyhow!(
-                    "OID '{}' was `None` for event type '{}'",
-                    oid_name,
-                    type_
-                )),
-            }
-        };
-
-        let event = match type_.as_str() {
-            "rewrite" => {
-                let old_commit_oid = get_oid(&ref1, "old commit OID")?;
-                let new_commit_oid = get_oid(&ref2, "new commit OID")?;
-                Event::RewriteEvent {
-                    timestamp,
-                    event_tx_id,
-                    old_commit_oid,
-                    new_commit_oid,
-                }
-            }
-
-            "ref-move" => {
-                let ref_name =
-                    ref_name.ok_or_else(|| anyhow::anyhow!("ref-move event missing ref name"))?;
-                Event::RefUpdateEvent {
-                    timestamp,
-                    event_tx_id,
-                    ref_name,
-                    old_ref: ref1,
-                    new_ref: ref2,
-                    message,
-                }
-            }
-
-            "commit" => {
-                let commit_oid = get_oid(&ref1, "commit OID")?;
-                Event::CommitEvent {
-                    timestamp,
-                    event_tx_id,
-                    commit_oid,
-                }
-            }
-
-            "hide" => {
-                let commit_oid = get_oid(&ref1, "commit OID")?;
-                Event::HideEvent {
-                    timestamp,
-                    event_tx_id,
-                    commit_oid,
-                }
-            }
-
-            "unhide" => {
-                let commit_oid = get_oid(&ref1, "commit OID")?;
-                Event::UnhideEvent {
-                    timestamp,
-                    event_tx_id,
-                    commit_oid,
-                }
-            }
-
-            other => anyhow::bail!("Unknown event type {}", other),
-        };
-        Ok(event)
+        try_from_row_helper(&row)
     }
 }
 
@@ -495,12 +494,6 @@ ORDER BY rowid ASC
                 let old_ref: Option<String> = row.get("old_ref")?;
                 let new_ref: Option<String> = row.get("new_ref")?;
                 let message: Option<String> = row.get("message")?;
-
-                // A ref name corresponding to commit hash `0` indicates that
-                // there was no old/new ref at all (i.e. it was created or deleted).
-                let zero_oid = Oid::zero().to_string();
-                let old_ref = old_ref.filter(|old_ref| *old_ref != zero_oid);
-                let new_ref = new_ref.filter(|new_ref| *new_ref != zero_oid);
 
                 Ok(Row {
                     timestamp,
@@ -653,14 +646,14 @@ pub struct EventReplayer {
     main_branch_reference_name: OsString,
 
     /// The events that have affected each commit.
-    commit_history: HashMap<Oid, Vec<EventInfo>>,
+    commit_history: HashMap<NonZeroOid, Vec<EventInfo>>,
 
     /// Map from ref names to ref locations (an OID or another ref name). Works
     /// around https://github.com/arxanas/git-branchless/issues/7.
     ///
     /// If an entry is not present, it was either never observed, or it most
     /// recently changed to point to the zero hash (i.e. it was deleted).
-    ref_locations: HashMap<OsString, OsString>,
+    ref_locations: HashMap<OsString, NonZeroOid>,
 }
 
 impl EventReplayer {
@@ -724,22 +717,26 @@ impl EventReplayer {
                 old_commit_oid,
                 new_commit_oid,
             } => {
-                self.commit_history
-                    .entry(*old_commit_oid)
-                    .or_insert_with(Vec::new)
-                    .push(EventInfo {
-                        id,
-                        event: event.clone(),
-                        event_classification: EventClassification::Hide,
-                    });
-                self.commit_history
-                    .entry(*new_commit_oid)
-                    .or_insert_with(Vec::new)
-                    .push(EventInfo {
-                        id,
-                        event: event.clone(),
-                        event_classification: EventClassification::Show,
-                    });
+                if let MaybeZeroOid::NonZero(old_commit_oid) = old_commit_oid {
+                    self.commit_history
+                        .entry(*old_commit_oid)
+                        .or_insert_with(Vec::new)
+                        .push(EventInfo {
+                            id,
+                            event: event.clone(),
+                            event_classification: EventClassification::Hide,
+                        });
+                }
+                if let MaybeZeroOid::NonZero(new_commit_oid) = new_commit_oid {
+                    self.commit_history
+                        .entry(*new_commit_oid)
+                        .or_insert_with(Vec::new)
+                        .push(EventInfo {
+                            id,
+                            event: event.clone(),
+                            event_classification: EventClassification::Show,
+                        });
+                }
             }
 
             // A reference update doesn't indicate a change to a commit, so we
@@ -747,12 +744,12 @@ impl EventReplayer {
             // history later to find historical locations of references when
             // needed.
             Event::RefUpdateEvent {
-                ref_name, new_ref, ..
-            } => match new_ref {
-                Some(new_ref) => {
-                    self.ref_locations.insert(ref_name.clone(), new_ref.clone());
+                ref_name, new_oid, ..
+            } => match new_oid {
+                MaybeZeroOid::NonZero(new_oid) => {
+                    self.ref_locations.insert(ref_name.clone(), *new_oid);
                 }
-                None => {
+                MaybeZeroOid::Zero => {
                     self.ref_locations.remove(ref_name);
                 }
             },
@@ -812,17 +809,17 @@ impl EventReplayer {
                 timestamp,
                 event_tx_id,
                 ref_name,
-                old_ref: None,
-                new_ref: None,
+                old_oid: MaybeZeroOid::Zero,
+                new_oid: MaybeZeroOid::Zero,
                 message,
             } => {
-                let old_ref = self.ref_locations.get(&ref_name).cloned();
+                let old_oid: MaybeZeroOid = self.ref_locations.get(&ref_name).copied().into();
                 Event::RefUpdateEvent {
                     timestamp,
                     event_tx_id,
                     ref_name,
-                    old_ref,
-                    new_ref: None,
+                    old_oid,
+                    new_oid: MaybeZeroOid::Zero,
                     message,
                 }
             }
@@ -841,16 +838,16 @@ impl EventReplayer {
                     timestamp: _,
                     event_tx_id: _,
                     ref ref_name,
-                    old_ref: _,
-                    new_ref: None,
+                    old_oid: _,
+                    new_oid: MaybeZeroOid::Zero,
                     ref message,
                 },
                 Some(Event::RefUpdateEvent {
                     timestamp: _,
                     event_tx_id: _,
                     ref_name: last_ref_name,
-                    old_ref: _,
-                    new_ref: None,
+                    old_oid: _,
+                    new_oid: MaybeZeroOid::Zero,
                     message: last_message,
                 }),
             ) if ref_name == last_ref_name && message == last_message => None,
@@ -859,7 +856,7 @@ impl EventReplayer {
         }
     }
 
-    fn get_cursor_commit_history(&self, cursor: EventCursor, oid: Oid) -> Vec<&EventInfo> {
+    fn get_cursor_commit_history(&self, cursor: EventCursor, oid: NonZeroOid) -> Vec<&EventInfo> {
         match self.commit_history.get(&oid) {
             None => vec![],
             Some(history) => history
@@ -880,7 +877,7 @@ impl EventReplayer {
     pub fn get_cursor_commit_visibility(
         &self,
         cursor: EventCursor,
-        oid: Oid,
+        oid: NonZeroOid,
     ) -> Option<CommitVisibility> {
         let history = self.get_cursor_commit_history(cursor, oid);
         let event_info = *history.last()?;
@@ -898,7 +895,11 @@ impl EventReplayer {
     ///
     /// Returns: The most recent event that affected that commit. If this commit
     /// was not observed by the replayer, returns `None`.
-    pub fn get_cursor_commit_latest_event(&self, cursor: EventCursor, oid: Oid) -> Option<&Event> {
+    pub fn get_cursor_commit_latest_event(
+        &self,
+        cursor: EventCursor,
+        oid: NonZeroOid,
+    ) -> Option<&Event> {
         let history = self.get_cursor_commit_history(cursor, oid);
         let event_info = *history.last()?;
         Some(&event_info.event)
@@ -908,7 +909,7 @@ impl EventReplayer {
     ///
     /// Returns: The set of OIDs referring to commits which are thought to be
     /// active due to user action.
-    pub fn get_cursor_active_oids(&self, cursor: EventCursor) -> HashSet<Oid> {
+    pub fn get_cursor_active_oids(&self, cursor: EventCursor) -> HashSet<NonZeroOid> {
         self.commit_history
             .iter()
             .filter_map(|(oid, history)| {
@@ -1033,7 +1034,7 @@ impl EventReplayer {
     ///
     /// Returns: The OID pointed to by `HEAD` at that time, or `None` if `HEAD`
     /// was never observed.
-    pub fn get_cursor_head_oid(&self, cursor: EventCursor) -> Option<Oid> {
+    pub fn get_cursor_head_oid(&self, cursor: EventCursor) -> Option<NonZeroOid> {
         let cursor_event_id: usize = cursor.event_id.try_into().unwrap();
         self.events[0..cursor_event_id]
             .iter()
@@ -1042,19 +1043,9 @@ impl EventReplayer {
                 match &event {
                     Event::RefUpdateEvent {
                         ref_name,
-                        new_ref: Some(new_ref),
+                        new_oid: MaybeZeroOid::NonZero(new_oid),
                         ..
-                    } if ref_name == "HEAD" => match Reference::name_to_oid(&new_ref) {
-                        Ok(oid) => Some(oid),
-                        Err(_) => {
-                            warn!(
-                                "Expected HEAD new_ref to point to an OID; \
-                                instead pointed to: {:?}",
-                                new_ref
-                            );
-                            None
-                        }
-                    },
+                    } if ref_name == "HEAD" => Some(*new_oid),
                     Event::RefUpdateEvent { .. } => None,
 
                     // Not strictly necessary, but helps to compensate in case
@@ -1073,7 +1064,7 @@ impl EventReplayer {
         &self,
         cursor: EventCursor,
         reference_name: &OsStr,
-    ) -> anyhow::Result<Option<Oid>> {
+    ) -> anyhow::Result<Option<NonZeroOid>> {
         let cursor_event_id: usize = cursor.event_id.try_into().unwrap();
         let oid = self.events[0..cursor_event_id]
             .iter()
@@ -1081,18 +1072,12 @@ impl EventReplayer {
             .find_map(|event| match &event {
                 Event::RefUpdateEvent {
                     ref_name,
-                    new_ref: Some(new_ref),
+                    new_oid: MaybeZeroOid::NonZero(new_oid),
                     ..
-                } if *ref_name == reference_name => Some(new_ref),
+                } if *ref_name == reference_name => Some(*new_oid),
                 _ => None,
             });
-        match oid {
-            Some(oid) => {
-                let oid = Reference::name_to_oid(oid)?;
-                Ok(Some(oid))
-            }
-            None => Ok(None),
-        }
+        Ok(oid)
     }
 
     /// Get the OID of the main branch at the cursor's point in time.
@@ -1111,7 +1096,7 @@ impl EventReplayer {
         &self,
         cursor: EventCursor,
         repo: &Repo,
-    ) -> anyhow::Result<Oid> {
+    ) -> anyhow::Result<NonZeroOid> {
         let main_branch_reference_name = repo.get_main_branch_reference()?.get_name()?;
         let main_branch_oid = self.get_cursor_branch_oid(cursor, &main_branch_reference_name)?;
         match main_branch_oid {
@@ -1138,22 +1123,20 @@ impl EventReplayer {
         &self,
         cursor: EventCursor,
         repo: &Repo,
-    ) -> anyhow::Result<HashMap<Oid, HashSet<OsString>>> {
-        let mut ref_name_to_oid: HashMap<&OsString, Oid> = HashMap::new();
+    ) -> anyhow::Result<HashMap<NonZeroOid, HashSet<OsString>>> {
+        let mut ref_name_to_oid: HashMap<&OsString, NonZeroOid> = HashMap::new();
         let cursor_event_id: usize = cursor.event_id.try_into().unwrap();
         for event in self.events[..cursor_event_id].iter() {
             match event {
                 Event::RefUpdateEvent {
-                    new_ref: Some(new_ref),
+                    new_oid: MaybeZeroOid::NonZero(new_oid),
                     ref_name,
                     ..
                 } => {
-                    if let Ok(oid) = Reference::name_to_oid(new_ref) {
-                        ref_name_to_oid.insert(ref_name, oid);
-                    }
+                    ref_name_to_oid.insert(ref_name, *new_oid);
                 }
                 Event::RefUpdateEvent {
-                    new_ref: None,
+                    new_oid: MaybeZeroOid::Zero,
                     ref_name,
                     ..
                 } => {
@@ -1163,7 +1146,7 @@ impl EventReplayer {
             }
         }
 
-        let mut result: HashMap<Oid, HashSet<OsString>> = HashMap::new();
+        let mut result: HashMap<NonZeroOid, HashSet<OsString>> = HashMap::new();
         for (ref_name, ref_oid) in ref_name_to_oid.iter() {
             if let CategorizedReferenceName::LocalBranch { .. } =
                 CategorizedReferenceName::new(ref_name)
@@ -1278,7 +1261,7 @@ mod tests {
         let meaningful_event = Event::CommitEvent {
             timestamp: 0.0,
             event_tx_id,
-            commit_oid: Oid::from_str("abc")?,
+            commit_oid: NonZeroOid::from_str("abc")?,
         };
         let mut replayer = EventReplayer::new("refs/heads/master");
         replayer.process_event(&meaningful_event);
@@ -1286,16 +1269,16 @@ mod tests {
             timestamp: 0.0,
             event_tx_id,
             ref_name: OsString::from("ORIG_HEAD"),
-            old_ref: Some(OsString::from("abc")),
-            new_ref: Some(OsString::from("def")),
+            old_oid: MaybeZeroOid::from_str("abc")?,
+            new_oid: MaybeZeroOid::from_str("def")?,
             message: None,
         });
         replayer.process_event(&Event::RefUpdateEvent {
             timestamp: 0.0,
             event_tx_id,
             ref_name: OsString::from("CHERRY_PICK_HEAD"),
-            old_ref: None,
-            new_ref: None,
+            old_oid: MaybeZeroOid::Zero,
+            new_oid: MaybeZeroOid::Zero,
             message: None,
         });
 
@@ -1361,7 +1344,7 @@ mod tests {
             event_replayer.process_event(&Event::UnhideEvent {
                 timestamp,
                 event_tx_id: EventTransactionId(*event_tx_id),
-                commit_oid: Oid::zero(),
+                commit_oid: NonZeroOid::from_str("abc")?,
             });
         }
 

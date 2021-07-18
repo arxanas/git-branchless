@@ -18,7 +18,7 @@ use anyhow::Context;
 use fn_error_context::context;
 use rusqlite::OptionalExtension;
 
-use crate::git::{Oid, Repo};
+use crate::git::{NonZeroOid, Repo};
 
 /// On-disk cache for merge-base queries.
 pub struct MergeBaseDb<'conn> {
@@ -66,9 +66,9 @@ impl<'conn> MergeBaseDb<'conn> {
     pub fn get_merge_base_oid(
         &self,
         repo: &Repo,
-        lhs_oid: Oid,
-        rhs_oid: Oid,
-    ) -> anyhow::Result<Option<Oid>> {
+        lhs_oid: NonZeroOid,
+        rhs_oid: NonZeroOid,
+    ) -> anyhow::Result<Option<NonZeroOid>> {
         let (lhs_oid, rhs_oid) = if lhs_oid < rhs_oid {
             (lhs_oid, rhs_oid)
         } else {
@@ -96,7 +96,7 @@ WHERE lhs_oid = :lhs_oid
         match merge_base_oid {
             // Cached and non-NULL.
             Some(Some(merge_base_oid)) => {
-                let merge_base_oid: Oid =
+                let merge_base_oid: NonZeroOid =
                     merge_base_oid.parse().context("Parsing merge-base OID")?;
                 Ok(Some(merge_base_oid))
             }

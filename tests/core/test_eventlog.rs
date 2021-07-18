@@ -28,136 +28,116 @@ fn test_git_v2_31_events() -> anyhow::Result<()> {
         .map(redact_event_timestamp)
         .collect();
     insta::assert_debug_snapshot!(events, @r###"
-            [
-                RefUpdateEvent {
-                    timestamp: 0.0,
-                    event_tx_id: EventTransactionId(
-                        1,
-                    ),
-                    ref_name: "refs/heads/test1",
-                    old_ref: None,
-                    new_ref: Some(
-                        "f777ecc9b0db5ed372b2615695191a8a17f79f24",
-                    ),
-                    message: None,
-                },
-                RefUpdateEvent {
-                    timestamp: 0.0,
-                    event_tx_id: EventTransactionId(
-                        2,
-                    ),
-                    ref_name: "HEAD",
-                    old_ref: Some(
-                        "f777ecc9b0db5ed372b2615695191a8a17f79f24",
-                    ),
-                    new_ref: Some(
-                        "f777ecc9b0db5ed372b2615695191a8a17f79f24",
-                    ),
-                    message: None,
-                },
-                RefUpdateEvent {
-                    timestamp: 0.0,
-                    event_tx_id: EventTransactionId(
-                        3,
-                    ),
-                    ref_name: "HEAD",
-                    old_ref: Some(
-                        "f777ecc9b0db5ed372b2615695191a8a17f79f24",
-                    ),
-                    new_ref: Some(
-                        "62fc20d2a290daea0d52bdc2ed2ad4be6491010e",
-                    ),
-                    message: None,
-                },
-                RefUpdateEvent {
-                    timestamp: 0.0,
-                    event_tx_id: EventTransactionId(
-                        3,
-                    ),
-                    ref_name: "refs/heads/test1",
-                    old_ref: Some(
-                        "f777ecc9b0db5ed372b2615695191a8a17f79f24",
-                    ),
-                    new_ref: Some(
-                        "62fc20d2a290daea0d52bdc2ed2ad4be6491010e",
-                    ),
-                    message: None,
-                },
-                CommitEvent {
-                    timestamp: 0.0,
-                    event_tx_id: EventTransactionId(
-                        4,
-                    ),
-                    commit_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
-                },
-                RefUpdateEvent {
-                    timestamp: 0.0,
-                    event_tx_id: EventTransactionId(
-                        5,
-                    ),
-                    ref_name: "HEAD",
-                    old_ref: None,
-                    new_ref: Some(
-                        "f777ecc9b0db5ed372b2615695191a8a17f79f24",
-                    ),
-                    message: None,
-                },
-                RefUpdateEvent {
-                    timestamp: 0.0,
-                    event_tx_id: EventTransactionId(
-                        6,
-                    ),
-                    ref_name: "HEAD",
-                    old_ref: Some(
-                        "62fc20d2a290daea0d52bdc2ed2ad4be6491010e",
-                    ),
-                    new_ref: Some(
-                        "f777ecc9b0db5ed372b2615695191a8a17f79f24",
-                    ),
-                    message: None,
-                },
-                RefUpdateEvent {
-                    timestamp: 0.0,
-                    event_tx_id: EventTransactionId(
-                        7,
-                    ),
-                    ref_name: "HEAD",
-                    old_ref: Some(
-                        "f777ecc9b0db5ed372b2615695191a8a17f79f24",
-                    ),
-                    new_ref: Some(
-                        "fe65c1fe15584744e649b2c79d4cf9b0d878f92e",
-                    ),
-                    message: None,
-                },
-                CommitEvent {
-                    timestamp: 0.0,
-                    event_tx_id: EventTransactionId(
-                        8,
-                    ),
-                    commit_oid: fe65c1fe15584744e649b2c79d4cf9b0d878f92e,
-                },
-                HideEvent {
-                    timestamp: 0.0,
-                    event_tx_id: EventTransactionId(
-                        9,
-                    ),
-                    commit_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
-                },
-                RefUpdateEvent {
-                    timestamp: 0.0,
-                    event_tx_id: EventTransactionId(
-                        10,
-                    ),
-                    ref_name: "refs/heads/test1",
-                    old_ref: Some(
-                        "62fc20d2a290daea0d52bdc2ed2ad4be6491010e",
-                    ),
-                    new_ref: None,
-                    message: None,
-                },
-            ]
-            "###);
+    [
+        RefUpdateEvent {
+            timestamp: 0.0,
+            event_tx_id: EventTransactionId(
+                1,
+            ),
+            ref_name: "refs/heads/test1",
+            old_oid: 0000000000000000000000000000000000000000,
+            new_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
+            message: None,
+        },
+        RefUpdateEvent {
+            timestamp: 0.0,
+            event_tx_id: EventTransactionId(
+                2,
+            ),
+            ref_name: "HEAD",
+            old_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
+            new_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
+            message: None,
+        },
+        RefUpdateEvent {
+            timestamp: 0.0,
+            event_tx_id: EventTransactionId(
+                3,
+            ),
+            ref_name: "HEAD",
+            old_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
+            new_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
+            message: None,
+        },
+        RefUpdateEvent {
+            timestamp: 0.0,
+            event_tx_id: EventTransactionId(
+                3,
+            ),
+            ref_name: "refs/heads/test1",
+            old_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
+            new_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
+            message: None,
+        },
+        CommitEvent {
+            timestamp: 0.0,
+            event_tx_id: EventTransactionId(
+                4,
+            ),
+            commit_oid: NonZeroOid {
+                inner: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
+            },
+        },
+        RefUpdateEvent {
+            timestamp: 0.0,
+            event_tx_id: EventTransactionId(
+                5,
+            ),
+            ref_name: "HEAD",
+            old_oid: 0000000000000000000000000000000000000000,
+            new_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
+            message: None,
+        },
+        RefUpdateEvent {
+            timestamp: 0.0,
+            event_tx_id: EventTransactionId(
+                6,
+            ),
+            ref_name: "HEAD",
+            old_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
+            new_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
+            message: None,
+        },
+        RefUpdateEvent {
+            timestamp: 0.0,
+            event_tx_id: EventTransactionId(
+                7,
+            ),
+            ref_name: "HEAD",
+            old_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
+            new_oid: fe65c1fe15584744e649b2c79d4cf9b0d878f92e,
+            message: None,
+        },
+        CommitEvent {
+            timestamp: 0.0,
+            event_tx_id: EventTransactionId(
+                8,
+            ),
+            commit_oid: NonZeroOid {
+                inner: fe65c1fe15584744e649b2c79d4cf9b0d878f92e,
+            },
+        },
+        HideEvent {
+            timestamp: 0.0,
+            event_tx_id: EventTransactionId(
+                9,
+            ),
+            commit_oid: NonZeroOid {
+                inner: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
+            },
+        },
+        RefUpdateEvent {
+            timestamp: 0.0,
+            event_tx_id: EventTransactionId(
+                10,
+            ),
+            ref_name: "refs/heads/test1",
+            old_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
+            new_oid: 0000000000000000000000000000000000000000,
+            message: None,
+        },
+    ]
+    "###);
 
     Ok(())
 }

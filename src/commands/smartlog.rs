@@ -20,7 +20,7 @@ use crate::core::metadata::{
     CommitOidProvider, DifferentialRevisionProvider, HiddenExplanationProvider,
     RelativeTimeProvider,
 };
-use crate::git::{Oid, Repo};
+use crate::git::{NonZeroOid, Repo};
 
 /// Split fully-independent subgraphs into multiple graphs.
 ///
@@ -33,15 +33,15 @@ fn split_commit_graph_by_roots(
     repo: &Repo,
     merge_base_db: &MergeBaseDb,
     graph: &CommitGraph,
-) -> Vec<Oid> {
-    let mut root_commit_oids: Vec<Oid> = graph
+) -> Vec<NonZeroOid> {
+    let mut root_commit_oids: Vec<NonZeroOid> = graph
         .iter()
         .filter(|(_oid, node)| node.parent.is_none())
         .map(|(oid, _node)| oid)
         .copied()
         .collect();
 
-    let compare = |lhs_oid: &Oid, rhs_oid: &Oid| -> Ordering {
+    let compare = |lhs_oid: &NonZeroOid, rhs_oid: &NonZeroOid| -> Ordering {
         let lhs_commit = repo.find_commit(*lhs_oid);
         let rhs_commit = repo.find_commit(*rhs_oid);
 
@@ -79,10 +79,10 @@ fn split_commit_graph_by_roots(
 fn get_child_output(
     glyphs: &Glyphs,
     graph: &CommitGraph,
-    root_oids: &[Oid],
+    root_oids: &[NonZeroOid],
     commit_metadata_providers: &mut [&mut dyn CommitMetadataProvider],
     head_oid: &HeadOid,
-    current_oid: Oid,
+    current_oid: NonZeroOid,
     last_child_line_char: Option<&str>,
 ) -> anyhow::Result<Vec<StyledString>> {
     let current_node = &graph[&current_oid];
@@ -185,7 +185,7 @@ fn get_output(
     graph: &CommitGraph,
     commit_metadata_providers: &mut [&mut dyn CommitMetadataProvider],
     head_oid: &HeadOid,
-    root_oids: &[Oid],
+    root_oids: &[NonZeroOid],
 ) -> anyhow::Result<Vec<StyledString>> {
     let mut lines = Vec::new();
 
@@ -194,7 +194,7 @@ fn get_output(
     // This returns `True` in strictly more cases than checking `graph`,
     // since there may be links between adjacent main branch commits which
     // are not reflected in `graph`.
-    let has_real_parent = |oid: Oid, parent_oid: Oid| -> bool {
+    let has_real_parent = |oid: NonZeroOid, parent_oid: NonZeroOid| -> bool {
         graph[&oid]
             .commit
             .get_parent_oids()

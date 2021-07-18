@@ -9,24 +9,24 @@ use log::warn;
 
 use crate::core::eventlog::{CommitVisibility, Event, EventCursor, EventReplayer};
 use crate::core::mergebase::MergeBaseDb;
-use crate::git::{Commit, Oid, Repo};
+use crate::git::{Commit, NonZeroOid, Repo};
 
 /// The OID of the repo's HEAD reference.
 #[derive(Debug)]
-pub struct HeadOid(pub Option<Oid>);
+pub struct HeadOid(pub Option<NonZeroOid>);
 
 /// The OID that the repo's main branch points to.
 #[derive(Debug)]
-pub struct MainBranchOid(pub Oid);
+pub struct MainBranchOid(pub NonZeroOid);
 
 /// The OIDs of any branches whose pointed-to commits should be included in the
 /// commit graph.
 #[derive(Debug)]
-pub struct BranchOids(pub HashSet<Oid>);
+pub struct BranchOids(pub HashSet<NonZeroOid>);
 
 /// The OIDs of any visible commits that should be included in the commit graph.
 #[derive(Debug)]
-pub struct CommitOids(pub HashSet<Oid>);
+pub struct CommitOids(pub HashSet<NonZeroOid>);
 
 /// Node contained in the smartlog commit graph.
 #[derive(Debug)]
@@ -38,10 +38,10 @@ pub struct Node<'repo> {
     ///
     /// This is different from inspecting `commit.parents()`, since the smartlog
     /// will hide most nodes from the commit graph, including parent nodes.
-    pub parent: Option<Oid>,
+    pub parent: Option<NonZeroOid>,
 
     /// The OIDs of the children nodes in the smartlog commit graph.
-    pub children: Vec<Oid>,
+    pub children: Vec<NonZeroOid>,
 
     /// Indicates that this is a commit to the main branch.
     ///
@@ -78,14 +78,14 @@ pub struct Node<'repo> {
 }
 
 /// Graph of commits that the user is working on.
-pub type CommitGraph<'repo> = HashMap<Oid, Node<'repo>>;
+pub type CommitGraph<'repo> = HashMap<NonZeroOid, Node<'repo>>;
 
 fn find_path_to_merge_base_internal<'repo>(
     repo: &'repo Repo,
     merge_base_db: &MergeBaseDb,
-    commit_oid: Oid,
-    target_oid: Oid,
-    mut visited_commit_callback: impl FnMut(Oid),
+    commit_oid: NonZeroOid,
+    target_oid: NonZeroOid,
+    mut visited_commit_callback: impl FnMut(NonZeroOid),
 ) -> anyhow::Result<Option<Vec<Commit<'repo>>>> {
     let mut queue = VecDeque::new();
     visited_commit_callback(commit_oid);
@@ -140,8 +140,8 @@ fn find_path_to_merge_base_internal<'repo>(
 pub fn find_path_to_merge_base<'repo>(
     repo: &'repo Repo,
     merge_base_db: &MergeBaseDb,
-    commit_oid: Oid,
-    target_oid: Oid,
+    commit_oid: NonZeroOid,
+    target_oid: NonZeroOid,
 ) -> anyhow::Result<Option<Vec<Commit<'repo>>>> {
     find_path_to_merge_base_internal(repo, merge_base_db, commit_oid, target_oid, |_commit| {})
 }
@@ -243,7 +243,7 @@ fn walk_from_commits<'repo>(
     }
 
     // Find immediate parent-child links.
-    let links: Vec<(Oid, Oid)> = graph
+    let links: Vec<(NonZeroOid, NonZeroOid)> = graph
         .iter()
         .filter(|(_child_oid, node)| !node.is_main)
         .flat_map(|(child_oid, node)| {
@@ -265,7 +265,7 @@ fn walk_from_commits<'repo>(
 /// Sort children nodes of the commit graph in a standard order, for determinism
 /// in output.
 fn sort_children(graph: &mut CommitGraph) {
-    let commit_times: HashMap<Oid, git2::Time> = graph
+    let commit_times: HashMap<NonZeroOid, git2::Time> = graph
         .iter()
         .map(|(oid, node)| (*oid, node.commit.get_time()))
         .collect();
@@ -276,10 +276,10 @@ fn sort_children(graph: &mut CommitGraph) {
 }
 
 fn should_hide(
-    cache: &mut HashMap<Oid, bool>,
+    cache: &mut HashMap<NonZeroOid, bool>,
     graph: &CommitGraph,
-    unhideable_oids: &HashSet<Oid>,
-    oid: &Oid,
+    unhideable_oids: &HashSet<NonZeroOid>,
+    oid: &NonZeroOid,
 ) -> bool {
     let result = {
         match cache.get(oid) {
@@ -328,7 +328,7 @@ fn do_remove_commits(graph: &mut CommitGraph, head_oid: &HeadOid, branch_oids: &
     }
 
     let mut cache = HashMap::new();
-    let all_oids_to_hide: HashSet<Oid> = graph
+    let all_oids_to_hide: HashSet<NonZeroOid> = graph
         .keys()
         .filter(|oid| should_hide(&mut cache, graph, &unhideable_oids, oid))
         .cloned()
@@ -383,7 +383,7 @@ pub fn make_graph<'repo>(
     branch_oids: &BranchOids,
     remove_commits: bool,
 ) -> anyhow::Result<CommitGraph<'repo>> {
-    let mut commit_oids: HashSet<Oid> = event_replayer
+    let mut commit_oids: HashSet<NonZeroOid> = event_replayer
         .get_cursor_active_oids(event_cursor)
         .into_iter()
         .collect();
