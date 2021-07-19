@@ -1068,10 +1068,10 @@ fn test_move_no_reapply_upstream_commits_on_disk() -> anyhow::Result<()> {
     let test2_oid = git.commit_file("test2", 2)?;
     git.run(&["checkout", "master"])?;
     git.run(&["cherry-pick", &test1_oid.to_string()])?;
-    git.run(&["checkout", &test2_oid.to_string()])?;
+    // git.run(&["checkout", &test2_oid.to_string()])?;
 
     {
-        let (stdout, stderr) = git.run(&["move", "--on-disk", "-b", "HEAD", "-d", "master"])?;
+        let (stdout, stderr) = git.run(&["move", "--on-disk", "-b", &test2_oid.to_string()])?;
         insta::assert_snapshot!(stderr, @r###"
         Executing: git branchless hook-register-extra-post-rewrite-hook
         branchless: processing 1 update: ref HEAD
@@ -1083,7 +1083,7 @@ fn test_move_no_reapply_upstream_commits_on_disk() -> anyhow::Result<()> {
         Executing: git branchless hook-detect-empty-commit 96d1c37a3d4363611c49f7e52186e189a04c531f
         branchless: processing 4 rewritten commits
         branchless: processing 1 update: branch should-be-deleted
-        Successfully rebased and updated detached HEAD.
+        Successfully rebased and updated master.
         "###);
         insta::assert_snapshot!(stdout, @r###"
         Calling Git for on-disk rebase...

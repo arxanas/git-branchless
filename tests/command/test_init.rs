@@ -214,7 +214,9 @@ fn test_main_branch_not_found_error_message() -> anyhow::Result<()> {
         )?;
         insta::assert_snapshot!(trim_lines(stderr), @r###"
         Error:
-        The main branch "master" could not be found in your repository.
+        The main branch "master" could not be found in your repository
+        at path: "<repo-path>/.git/".
+        These branches exist: []
         Either create it, or update the main branch setting by running:
 
             git config branchless.core.mainBranch <branch>

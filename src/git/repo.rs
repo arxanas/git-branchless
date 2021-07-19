@@ -231,7 +231,7 @@ impl<'repo> HeadInfo<'repo> {
     }
 
     /// Detach `HEAD` by making it point directly to its current OID, rather
-    /// than to a branch. If `HEAD` is already detached, this has no effect.
+    /// than to a branch. If `HEAD` is already detached, logs a warning.
     pub fn detach_head(&self) -> anyhow::Result<()> {
         match self.oid {
             Some(oid) => self
@@ -384,12 +384,22 @@ impl Repo {
                 Some(branch) => Ok(branch.into_reference()),
                 None => anyhow::bail!(
                     r"
-The main branch {:?} could not be found in your repository.
+The main branch {:?} could not be found in your repository
+at path: {:?}.
+These branches exist: {:?}
 Either create it, or update the main branch setting by running:
 
     git config branchless.core.mainBranch <branch>
 ",
                     get_main_branch_name(self)?,
+                    self.get_path(),
+                    self.get_all_local_branches()?
+                        .into_iter()
+                        .map(|branch| branch
+                            .into_reference()
+                            .get_name()
+                            .map(|s| format!("{:?}", s)))
+                        .collect::<anyhow::Result<Vec<String>>>()?
                 ),
             },
         }
