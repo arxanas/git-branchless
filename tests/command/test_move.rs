@@ -79,7 +79,17 @@ fn test_move_stick_in_memory() -> anyhow::Result<()> {
                             inner: 70deb1e28791d8e7dd5a1f0c871a51b91282562f,
                         },
                     },
+                    DetectEmptyCommit {
+                        commit_oid: NonZeroOid {
+                            inner: 70deb1e28791d8e7dd5a1f0c871a51b91282562f,
+                        },
+                    },
                     Pick {
+                        commit_oid: NonZeroOid {
+                            inner: 355e173bf9c5d2efac2e451da0cdad3fb82b869a,
+                        },
+                    },
+                    DetectEmptyCommit {
                         commit_oid: NonZeroOid {
                             inner: 355e173bf9c5d2efac2e451da0cdad3fb82b869a,
                         },
@@ -270,7 +280,17 @@ fn test_move_with_source_not_in_smartlog_in_memory() -> anyhow::Result<()> {
                             inner: 70deb1e28791d8e7dd5a1f0c871a51b91282562f,
                         },
                     },
+                    DetectEmptyCommit {
+                        commit_oid: NonZeroOid {
+                            inner: 70deb1e28791d8e7dd5a1f0c871a51b91282562f,
+                        },
+                    },
                     Pick {
+                        commit_oid: NonZeroOid {
+                            inner: 355e173bf9c5d2efac2e451da0cdad3fb82b869a,
+                        },
+                    },
+                    DetectEmptyCommit {
                         commit_oid: NonZeroOid {
                             inner: 355e173bf9c5d2efac2e451da0cdad3fb82b869a,
                         },
@@ -340,6 +360,11 @@ fn test_move_merge_conflict() -> anyhow::Result<()> {
                         },
                     },
                     Pick {
+                        commit_oid: NonZeroOid {
+                            inner: e85d25c772a05b5c73ea8ec43881c12bbf588848,
+                        },
+                    },
+                    DetectEmptyCommit {
                         commit_oid: NonZeroOid {
                             inner: e85d25c772a05b5c73ea8ec43881c12bbf588848,
                         },
@@ -419,7 +444,17 @@ fn test_move_base() -> anyhow::Result<()> {
                             inner: 96d1c37a3d4363611c49f7e52186e189a04c531f,
                         },
                     },
+                    DetectEmptyCommit {
+                        commit_oid: NonZeroOid {
+                            inner: 96d1c37a3d4363611c49f7e52186e189a04c531f,
+                        },
+                    },
                     Pick {
+                        commit_oid: NonZeroOid {
+                            inner: 70deb1e28791d8e7dd5a1f0c871a51b91282562f,
+                        },
+                    },
+                    DetectEmptyCommit {
                         commit_oid: NonZeroOid {
                             inner: 70deb1e28791d8e7dd5a1f0c871a51b91282562f,
                         },
@@ -475,6 +510,11 @@ fn test_move_checkout_new_head() -> anyhow::Result<()> {
                         },
                     },
                     Pick {
+                        commit_oid: NonZeroOid {
+                            inner: fe65c1fe15584744e649b2c79d4cf9b0d878f92e,
+                        },
+                    },
+                    DetectEmptyCommit {
                         commit_oid: NonZeroOid {
                             inner: fe65c1fe15584744e649b2c79d4cf9b0d878f92e,
                         },
@@ -537,6 +577,11 @@ fn test_move_branch() -> anyhow::Result<()> {
                         },
                     },
                     Pick {
+                        commit_oid: NonZeroOid {
+                            inner: 98b9119d16974f372e76cb64a3b77c528fc0b18b,
+                        },
+                    },
+                    DetectEmptyCommit {
                         commit_oid: NonZeroOid {
                             inner: 98b9119d16974f372e76cb64a3b77c528fc0b18b,
                         },
@@ -737,6 +782,11 @@ fn test_move_in_memory_gc() -> anyhow::Result<()> {
                             inner: 96d1c37a3d4363611c49f7e52186e189a04c531f,
                         },
                     },
+                    DetectEmptyCommit {
+                        commit_oid: NonZeroOid {
+                            inner: 96d1c37a3d4363611c49f7e52186e189a04c531f,
+                        },
+                    },
                 ],
             },
         )
@@ -896,10 +946,13 @@ fn test_move_branches_after_move_on_disk() -> anyhow::Result<()> {
         branchless: processing 1 update: ref HEAD
         branchless: processing 1 update: ref HEAD
         branchless: processed commit: 4838e49b create test3.txt
+        Executing: git branchless hook-detect-empty-commit 70deb1e28791d8e7dd5a1f0c871a51b91282562f
         branchless: processing 1 update: ref HEAD
         branchless: processed commit: a2482074 create test4.txt
+        Executing: git branchless hook-detect-empty-commit 355e173bf9c5d2efac2e451da0cdad3fb82b869a
         branchless: processing 1 update: ref HEAD
         branchless: processed commit: 566e4341 create test5.txt
+        Executing: git branchless hook-detect-empty-commit f81d55c0d520ff8d02ef9294d95156dcb78a5255
         branchless: processing 3 rewritten commits
         branchless: processing 2 updates: branch bar, branch foo
         Successfully rebased and updated detached HEAD.
@@ -982,6 +1035,60 @@ fn test_move_no_reapply_upstream_commits_in_memory() -> anyhow::Result<()> {
         branchless: processing 2 rewritten commits
         branchless: <git-executable> checkout fa46633239bfa767036e41a77b67258286e4ddb9
         In-memory rebase succeeded.
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 047b7ad7 (master) create test1.txt
+        |
+        @ fa466332 create test2.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_move_no_reapply_upstream_commits_on_disk() -> anyhow::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+
+    git.init_repo()?;
+    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
+
+    git.detach_head()?;
+    let test1_oid = git.commit_file("test1", 1)?;
+    git.run(&["branch", "should-be-deleted"])?;
+    let test2_oid = git.commit_file("test2", 2)?;
+    git.run(&["checkout", "master"])?;
+    git.run(&["cherry-pick", &test1_oid.to_string()])?;
+    git.run(&["checkout", &test2_oid.to_string()])?;
+
+    {
+        let (stdout, stderr) = git.run(&["move", "--on-disk", "-b", "HEAD", "-d", "master"])?;
+        insta::assert_snapshot!(stderr, @r###"
+        Executing: git branchless hook-register-extra-post-rewrite-hook
+        branchless: processing 1 update: ref HEAD
+        branchless: processing 1 update: ref HEAD
+        branchless: processed commit: cfea32a9 create test1.txt
+        Executing: git branchless hook-detect-empty-commit 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
+        branchless: processing 1 update: ref HEAD
+        branchless: processed commit: fa466332 create test2.txt
+        Executing: git branchless hook-detect-empty-commit 96d1c37a3d4363611c49f7e52186e189a04c531f
+        branchless: processing 4 rewritten commits
+        branchless: processing 1 update: branch should-be-deleted
+        Successfully rebased and updated detached HEAD.
+        "###);
+        insta::assert_snapshot!(stdout, @r###"
+        Calling Git for on-disk rebase...
+        branchless: <git-executable> rebase --continue
+        Skipping empty commit: cfea32a9 create test1.txt
         "###);
     }
 

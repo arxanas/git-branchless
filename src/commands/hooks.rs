@@ -10,8 +10,8 @@
 use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
 use std::ffi::{OsStr, OsString};
-use std::fs::File;
-use std::io::{stdin, BufRead, Cursor};
+use std::fs::{File, OpenOptions};
+use std::io::{stdin, BufRead, Cursor, Write};
 use std::time::SystemTime;
 
 use anyhow::Context;
@@ -234,6 +234,52 @@ pub fn hook_register_extra_post_rewrite_hook() -> anyhow::Result<()> {
         .get_rebase_state_dir_path()
         .join(EXTRA_POST_REWRITE_FILE_NAME);
     File::create(file_name).with_context(|| "Registering extra post-rewrite hook")?;
+    Ok(())
+}
+
+/// For rebases, detect empty commits (which have probably been applied
+/// upstream) and write them to the `rewritten-list` file, so that they're later
+/// passed to the `post-rewrite` hook.
+pub fn hook_drop_commit_if_empty(old_commit_oid: String) -> anyhow::Result<()> {
+    let old_commit_oid: NonZeroOid = old_commit_oid.parse()?;
+
+    let glyphs = Glyphs::detect();
+    let repo = Repo::from_current_dir()?;
+    let head_info = repo.get_head_info()?;
+    let head_oid = match head_info.oid {
+        Some(head_oid) => head_oid,
+        None => return Ok(()),
+    };
+    let head_commit = match repo.find_commit(head_oid)? {
+        Some(head_commit) => head_commit,
+        None => return Ok(()),
+    };
+
+    if !head_commit.is_empty() {
+        return Ok(());
+    }
+
+    let only_parent_oid = match head_commit.get_parent_oids().as_slice() {
+        [] => return Ok(()),
+        [only_parent_oid] => *only_parent_oid,
+        _ => return Ok(()),
+    };
+    println!(
+        "Skipping empty commit: {}",
+        printable_styled_string(&glyphs, head_commit.friendly_describe()?)?
+    );
+    repo.set_head(only_parent_oid)?;
+
+    let rewritten_oids_file_path = repo.get_rebase_state_dir_path().join("rewritten-list");
+    let mut file = OpenOptions::new()
+        .append(true)
+        .open(&rewritten_oids_file_path)?;
+    file.write_all(format!("{} {}\n", old_commit_oid, MaybeZeroOid::Zero).as_bytes())?;
+    // NB: from the user's perspective, they don't need to know about the empty
+    // commit that was created. It might be better to edit the `rewritten-list`
+    // and remove the entry which rewrote the old commit into the current `HEAD`
+    // commit, rather than hiding the newly created `HEAD` commit.
+    file.write_all(format!("{} {}\n", head_commit.get_oid(), MaybeZeroOid::Zero).as_bytes())?;
     Ok(())
 }
 

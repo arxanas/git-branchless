@@ -10,13 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added: `git move` now supports forcing an in-memory rebase with the `--in-memory` flag.
 - Added: The `reference-transaction` hook prints out which references were updated.
 - Added: `git restack` can now accept a list of commit hashes whose descendants should be restacked, rather than restacking every abandoned commit indiscriminately.
-- Fixed: `git move` preserves committer timestamps when `branchless.restack.preserveTimestamps` is set. The configuration key may change in the future.
+- Added: `git move` will skip applying commits which have already been applied upstream, and delete their corresponding branches.
 - Changed: More of the Git hooks installed by `git-branchless` display the affected objects, rather than just the number of affected objects.
 - Fixed: The output of `git` subcommands is streamed to stdout, rather than accumulated and dumped at the end.
 - Fixed: Commits rebased in-memory by `git move` are now marked as reachable by the Git garbage collector, so that they aren't collected prematurely.
 - Fixed: `git-branchless wrap` correctly relays the exit code of its subprocess.
 - Fixed: Some restack and move operations incorrectly created branches without the necessary `refs/heads/` prefix, which means they weren't considered local branches by Git.
 - Fixed: Some restack and move operations didn't relocate all commits and branches correctly, due to the experimental `git move` backend. The backend has been changed to use a constraint-solving approach rather than a greedy approach to fix this.
+- Fixed: `git move` preserves committer timestamps when `branchless.restack.preserveTimestamps` is set. The configuration key may change in the future.
 
 ## [0.3.3] - 2021-06-27
 
