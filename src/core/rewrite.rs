@@ -1107,6 +1107,13 @@ fn rebase_on_disk(
             .with_context(|| "Writing `cdate_is_adate` option file")?;
     }
 
+    // Make sure we don't move around the current branch unintentionally. If it
+    // actually needs to be moved, then it will be moved as part of the
+    // post-rebase operations.
+    if head_info.oid.is_some() {
+        head_info.detach_head()?;
+    }
+
     progress.finish_and_clear();
     println!("Calling Git for on-disk rebase...");
     let result = git_run_info.run(Some(*event_tx_id), &["rebase", "--continue"])?;
