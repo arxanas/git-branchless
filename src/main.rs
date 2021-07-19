@@ -161,6 +161,9 @@ enum Opts {
     HookRegisterExtraPostRewriteHook,
 
     /// Internal use.
+    HookDetectEmptyCommit { old_commit_oid: String },
+
+    /// Internal use.
     HookPostCheckout {
         previous_commit: String,
         current_commit: String,
@@ -287,6 +290,11 @@ fn main() -> anyhow::Result<()> {
 
         Opts::HookRegisterExtraPostRewriteHook => {
             branchless::commands::hooks::hook_register_extra_post_rewrite_hook()?;
+            0
+        }
+
+        Opts::HookDetectEmptyCommit { old_commit_oid } => {
+            branchless::commands::hooks::hook_drop_commit_if_empty(old_commit_oid)?;
             0
         }
 

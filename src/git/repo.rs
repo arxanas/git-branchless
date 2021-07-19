@@ -367,6 +367,14 @@ impl Repo {
         })
     }
 
+    /// Set the `HEAD` reference directly to the provided `oid`. Does not touch
+    /// the working copy.
+    #[context("Setting `HEAD` to: {:?}", oid)]
+    pub fn set_head(&self, oid: NonZeroOid) -> anyhow::Result<()> {
+        self.inner.set_head_detached(oid.inner)?;
+        Ok(())
+    }
+
     /// Get the `Reference` for the main branch for the repository.
     pub fn get_main_branch_reference(&self) -> anyhow::Result<Reference> {
         let main_branch_name = get_main_branch_name(self)?;

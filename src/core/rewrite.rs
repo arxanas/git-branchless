@@ -138,6 +138,7 @@ enum RebaseCommand {
     ResetToOid { commit_oid: NonZeroOid },
     Pick { commit_oid: NonZeroOid },
     RegisterExtraPostRewriteHook,
+    DetectEmptyCommit { commit_oid: NonZeroOid },
 }
 
 /// Represents a sequence of commands that can be executed to carry out a rebase
@@ -157,6 +158,12 @@ impl ToString for RebaseCommand {
             RebaseCommand::Pick { commit_oid } => format!("pick {}", commit_oid),
             RebaseCommand::RegisterExtraPostRewriteHook => {
                 "exec git branchless hook-register-extra-post-rewrite-hook".to_string()
+            }
+            RebaseCommand::DetectEmptyCommit { commit_oid } => {
+                format!(
+                    "exec git branchless hook-detect-empty-commit {}",
+                    commit_oid
+                )
             }
         }
     }
@@ -287,6 +294,9 @@ impl<'repo> RebasePlanBuilder<'repo> {
     ) -> anyhow::Result<Vec<RebaseCommand>> {
         let acc = {
             acc.push(RebaseCommand::Pick {
+                commit_oid: current_oid,
+            });
+            acc.push(RebaseCommand::DetectEmptyCommit {
                 commit_oid: current_oid,
             });
             acc
@@ -643,7 +653,8 @@ fn rebase_in_memory(
             RebaseCommand::CreateLabel { .. }
             | RebaseCommand::ResetToLabel { .. }
             | RebaseCommand::ResetToOid { .. }
-            | RebaseCommand::RegisterExtraPostRewriteHook => false,
+            | RebaseCommand::RegisterExtraPostRewriteHook
+            | RebaseCommand::DetectEmptyCommit { .. } => false,
             RebaseCommand::Pick { .. } => true,
         })
         .count();
@@ -779,7 +790,8 @@ fn rebase_in_memory(
                     progress.finish_with_message(format!("Committed as: {}", commit_description));
                 }
             }
-            RebaseCommand::RegisterExtraPostRewriteHook => {
+            RebaseCommand::RegisterExtraPostRewriteHook
+            | RebaseCommand::DetectEmptyCommit { .. } => {
                 // Do nothing. We'll carry out post-rebase operations after the
                 // in-memory rebase completes.
             }
@@ -1078,6 +1090,16 @@ fn rebase_on_disk(
         format!("{}\n", rebase_plan.commands.len()),
     )
     .with_context(|| format!("Writing `end` to: {:?}", end_file_path.as_path()))?;
+
+    // Corresponds to the `--empty=keep` flag. We'll drop the commits later once
+    // we find out that they're empty.
+    let keep_redundant_commits_file_path = rebase_state_dir.join("keep_redundant_commits");
+    std::fs::write(&keep_redundant_commits_file_path, "").with_context(|| {
+        format!(
+            "Writing `keep_redundant_commits` to: {:?}",
+            &keep_redundant_commits_file_path
+        )
+    })?;
 
     if *preserve_timestamps {
         let cdate_is_adate_file_path = rebase_state_dir.join("cdate_is_adate");
