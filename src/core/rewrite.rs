@@ -14,7 +14,7 @@ use os_str_bytes::OsStrBytes;
 
 use crate::commands::gc::mark_commit_reachable;
 use crate::core::formatting::printable_styled_string;
-use crate::git::{GitRunInfo, MaybeZeroOid, NonZeroOid, Repo};
+use crate::git::{GitRunInfo, MaybeZeroOid, NonZeroOid, PatchId, Repo};
 
 use super::eventlog::{Event, EventCursor, EventReplayer, EventTransactionId};
 use super::formatting::Glyphs;
@@ -131,14 +131,34 @@ pub fn find_abandoned_children(
     Some((rewritten_oid, visible_children_oids))
 }
 
+/// A command that can be applied for either in-memory or on-disk rebases.
 #[derive(Debug)]
 enum RebaseCommand {
+    /// Create a label (a reference stored in `refs/rewritten/`) pointing to the
+    /// current rebase head for later use.
     CreateLabel { label_name: String },
+
+    /// Move the rebase head to the provided label.
     ResetToLabel { label_name: String },
+
+    /// Move the rebase head to the provided commit.
     ResetToOid { commit_oid: NonZeroOid },
+
+    /// Apply the provided commit on top of the rebase head, and update the
+    /// rebase head to point to the newly-applied commit.
     Pick { commit_oid: NonZeroOid },
+
+    /// On-disk rebases only. Register that we want to run cleanup at the end of
+    /// the rebase, during the `post-rewrite` hook.
     RegisterExtraPostRewriteHook,
+
+    /// Determine if the current commit is empty. If so, reset the rebase head
+    /// to its parent and record that it was empty in the `rewritten-list`.
     DetectEmptyCommit { commit_oid: NonZeroOid },
+
+    /// The commit that would have been applied to the rebase head was already
+    /// applied upstream. Skip it and record it in the `rewritten-list`.
+    SkipUpstreamAppliedCommit { commit_oid: NonZeroOid },
 }
 
 /// Represents a sequence of commands that can be executed to carry out a rebase
@@ -162,6 +182,12 @@ impl ToString for RebaseCommand {
             RebaseCommand::DetectEmptyCommit { commit_oid } => {
                 format!(
                     "exec git branchless hook-detect-empty-commit {}",
+                    commit_oid
+                )
+            }
+            RebaseCommand::SkipUpstreamAppliedCommit { commit_oid } => {
+                format!(
+                    "exec git branchless hook-skip-upstream-applied-commit {}",
                     commit_oid
                 )
             }
@@ -290,15 +316,33 @@ impl<'repo> RebasePlanBuilder<'repo> {
     fn make_rebase_plan_for_current_commit(
         &mut self,
         current_oid: NonZeroOid,
+        upstream_patch_ids: &HashSet<PatchId>,
         mut acc: Vec<RebaseCommand>,
     ) -> anyhow::Result<Vec<RebaseCommand>> {
         let acc = {
-            acc.push(RebaseCommand::Pick {
-                commit_oid: current_oid,
-            });
-            acc.push(RebaseCommand::DetectEmptyCommit {
-                commit_oid: current_oid,
-            });
+            let current_patch_id = match self.repo.find_commit(current_oid)? {
+                None => {
+                    log::warn!("Could not find commit: {:?}", current_oid);
+                    None
+                }
+                Some(commit) => self.repo.get_patch_id(&commit)?,
+            };
+            let patch_already_applied_upstream = match current_patch_id {
+                Some(current_patch_id) => upstream_patch_ids.contains(&current_patch_id),
+                None => false,
+            };
+            if patch_already_applied_upstream {
+                acc.push(RebaseCommand::SkipUpstreamAppliedCommit {
+                    commit_oid: current_oid,
+                });
+            } else {
+                acc.push(RebaseCommand::Pick {
+                    commit_oid: current_oid,
+                });
+                acc.push(RebaseCommand::DetectEmptyCommit {
+                    commit_oid: current_oid,
+                });
+            }
             acc
         };
         let child_nodes: Vec<NonZeroOid> = {
@@ -316,7 +360,11 @@ impl<'repo> RebasePlanBuilder<'repo> {
         match child_nodes.as_slice() {
             [] => Ok(acc),
             [only_child_oid] => {
-                let acc = self.make_rebase_plan_for_current_commit(*only_child_oid, acc)?;
+                let acc = self.make_rebase_plan_for_current_commit(
+                    *only_child_oid,
+                    upstream_patch_ids,
+                    acc,
+                )?;
                 Ok(acc)
             }
             children => {
@@ -327,7 +375,11 @@ impl<'repo> RebasePlanBuilder<'repo> {
                     label_name: label_name.clone(),
                 });
                 for child_oid in children {
-                    acc = self.make_rebase_plan_for_current_commit(*child_oid, acc)?;
+                    acc = self.make_rebase_plan_for_current_commit(
+                        *child_oid,
+                        upstream_patch_ids,
+                        acc,
+                    )?;
                     acc.push(RebaseCommand::ResetToLabel {
                         label_name: label_name.clone(),
                     });
@@ -598,7 +650,9 @@ impl<'repo> RebasePlanBuilder<'repo> {
             acc.push(RebaseCommand::ResetToOid {
                 commit_oid: parent_oid,
             });
-            acc = self.make_rebase_plan_for_current_commit(child_oid, acc)?;
+
+            let upstream_patch_ids = self.get_upstream_patch_ids(child_oid, parent_oid)?;
+            acc = self.make_rebase_plan_for_current_commit(child_oid, &upstream_patch_ids, acc)?;
         }
 
         let rebase_plan = first_dest_oid.map(|first_dest_oid| RebasePlan {
@@ -609,6 +663,42 @@ impl<'repo> RebasePlanBuilder<'repo> {
             println!("Rebase plan: {:#?}", rebase_plan);
         }
         Ok(Ok(rebase_plan))
+    }
+
+    #[context(
+        "Getting upstream patch IDs for current commit: {:?} being rebased on top of commit: {:?}",
+        current_oid,
+        dest_oid
+    )]
+    fn get_upstream_patch_ids(
+        &self,
+        current_oid: NonZeroOid,
+        dest_oid: NonZeroOid,
+    ) -> anyhow::Result<HashSet<PatchId>> {
+        let merge_base_oid =
+            self.merge_base_db
+                .get_merge_base_oid(self.repo, dest_oid, current_oid)?;
+        let merge_base_oid = match merge_base_oid {
+            None => return Ok(HashSet::new()),
+            Some(merge_base_oid) => merge_base_oid,
+        };
+
+        let path =
+            find_path_to_merge_base(self.repo, self.merge_base_db, dest_oid, merge_base_oid)?;
+        let path = match path {
+            None => return Ok(HashSet::new()),
+            Some(path) => path,
+        };
+
+        // FIXME: we may recalculate common patch IDs many times, should be
+        // cached.
+        let mut result = HashSet::new();
+        for commit in path {
+            if let Some(patch_id) = self.repo.get_patch_id(&commit)? {
+                result.insert(patch_id);
+            }
+        }
+        Ok(result)
     }
 }
 
@@ -655,7 +745,7 @@ fn rebase_in_memory(
             | RebaseCommand::ResetToOid { .. }
             | RebaseCommand::RegisterExtraPostRewriteHook
             | RebaseCommand::DetectEmptyCommit { .. } => false,
-            RebaseCommand::Pick { .. } => true,
+            RebaseCommand::Pick { .. } | RebaseCommand::SkipUpstreamAppliedCommit { .. } => true,
         })
         .count();
 
@@ -664,15 +754,18 @@ fn rebase_in_memory(
             RebaseCommand::CreateLabel { label_name } => {
                 labels.insert(label_name.clone(), current_oid);
             }
+
             RebaseCommand::ResetToLabel { label_name } => {
                 current_oid = match labels.get(label_name) {
                     Some(oid) => *oid,
                     None => anyhow::bail!("BUG: no associated OID for label: {}", label_name),
                 };
             }
+
             RebaseCommand::ResetToOid { commit_oid } => {
                 current_oid = *commit_oid;
             }
+
             RebaseCommand::Pick { commit_oid } => {
                 let current_commit = repo
                     .find_commit(current_oid)
@@ -785,8 +878,8 @@ fn rebase_in_memory(
                     rewritten_oids.push((*commit_oid, MaybeZeroOid::Zero));
                     progress.finish_and_clear();
                     println!(
-                        "{} Skipped now-empty commit: {}",
-                        commit_num, commit_description
+                        "[{}/{}] Skipped now-empty commit: {}",
+                        i, num_picks, commit_description
                     );
                 } else {
                     rewritten_oids.push((*commit_oid, MaybeZeroOid::NonZero(rebased_commit_oid)));
@@ -795,6 +888,29 @@ fn rebase_in_memory(
                     println!("{} Committed as: {}", commit_num, commit_description);
                 }
             }
+
+            RebaseCommand::SkipUpstreamAppliedCommit { commit_oid } => {
+                let progress = ProgressBar::new_spinner();
+                i += 1;
+                let commit_num = format!("[{}/{}]", i, num_picks);
+                let progress_template = format!("{} {{spinner}} {{wide_msg}}", commit_num);
+                progress.set_style(
+                    ProgressStyle::default_spinner().template(&progress_template.trim()),
+                );
+                let commit = match repo.find_commit(*commit_oid)? {
+                    Some(commit) => commit,
+                    None => anyhow::bail!("Could not find commit: {:?}", commit_oid),
+                };
+                let commit_description = commit.friendly_describe()?;
+                let commit_description = printable_styled_string(glyphs, commit_description)?;
+                rewritten_oids.push((*commit_oid, MaybeZeroOid::Zero));
+                progress.finish_and_clear();
+                println!(
+                    "{} Skipped commit (was already applied upstream): {}",
+                    commit_num, commit_description
+                );
+            }
+
             RebaseCommand::RegisterExtraPostRewriteHook
             | RebaseCommand::DetectEmptyCommit { .. } => {
                 // Do nothing. We'll carry out post-rebase operations after the

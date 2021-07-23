@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use anyhow::Context;
 use branchless::commands::wrap;
-use branchless::git::GitRunInfo;
+use branchless::git::{GitRunInfo, NonZeroOid};
 use simple_logger::SimpleLogger;
 use structopt::StructOpt;
 
@@ -161,7 +161,10 @@ enum Opts {
     HookRegisterExtraPostRewriteHook,
 
     /// Internal use.
-    HookDetectEmptyCommit { old_commit_oid: String },
+    HookDetectEmptyCommit { old_commit_oid: NonZeroOid },
+
+    /// Internal use.
+    HookSkipUpstreamAppliedCommit { commit_oid: NonZeroOid },
 
     /// Internal use.
     HookPostCheckout {
@@ -295,6 +298,11 @@ fn main() -> anyhow::Result<()> {
 
         Opts::HookDetectEmptyCommit { old_commit_oid } => {
             branchless::commands::hooks::hook_drop_commit_if_empty(old_commit_oid)?;
+            0
+        }
+
+        Opts::HookSkipUpstreamAppliedCommit { commit_oid } => {
+            branchless::commands::hooks::hook_skip_upstream_applied_commit(commit_oid)?;
             0
         }
 
