@@ -10,8 +10,8 @@
 use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
 use std::ffi::{OsStr, OsString};
-use std::fs::{File, OpenOptions};
-use std::io::{stdin, BufRead, Cursor, Write};
+use std::fs::File;
+use std::io::{stdin, BufRead, Cursor};
 use std::time::SystemTime;
 
 use anyhow::Context;
@@ -74,7 +74,7 @@ pub fn hook_post_rewrite(git_run_info: &GitRunInfo, rewrite_type: &str) -> anyho
     let is_spurious_event = rewrite_type == "amend" && repo.is_rebase_underway()?;
     if !is_spurious_event {
         let message_rewritten_commits = Pluralize {
-            amount: events.len().try_into()?,
+            amount: rewritten_oids.len().try_into()?,
             singular: "rewritten commit",
             plural: "rewritten commits",
         }
@@ -240,9 +240,7 @@ pub fn hook_register_extra_post_rewrite_hook() -> anyhow::Result<()> {
 /// For rebases, detect empty commits (which have probably been applied
 /// upstream) and write them to the `rewritten-list` file, so that they're later
 /// passed to the `post-rewrite` hook.
-pub fn hook_drop_commit_if_empty(old_commit_oid: String) -> anyhow::Result<()> {
-    let old_commit_oid: NonZeroOid = old_commit_oid.parse()?;
-
+pub fn hook_drop_commit_if_empty(old_commit_oid: NonZeroOid) -> anyhow::Result<()> {
     let glyphs = Glyphs::detect();
     let repo = Repo::from_current_dir()?;
     let head_info = repo.get_head_info()?;
@@ -259,27 +257,40 @@ pub fn hook_drop_commit_if_empty(old_commit_oid: String) -> anyhow::Result<()> {
         return Ok(());
     }
 
-    let only_parent_oid = match head_commit.get_parent_oids().as_slice() {
-        [] => return Ok(()),
-        [only_parent_oid] => *only_parent_oid,
-        _ => return Ok(()),
+    let only_parent_oid = match head_commit.get_only_parent_oid() {
+        Some(only_parent_oid) => only_parent_oid,
+        None => return Ok(()),
     };
     println!(
-        "Skipping empty commit: {}",
+        "Skipped now-empty commit: {}",
         printable_styled_string(&glyphs, head_commit.friendly_describe()?)?
     );
     repo.set_head(only_parent_oid)?;
+    repo.add_rewritten_list_entries(&[
+        (old_commit_oid, MaybeZeroOid::Zero),
+        // NB: from the user's perspective, they don't need to know about the empty
+        // commit that was created. It might be better to edit the `rewritten-list`
+        // and remove the entry which rewrote the old commit into the current `HEAD`
+        // commit, rather than hiding the newly created `HEAD` commit.
+        (head_commit.get_oid(), MaybeZeroOid::Zero),
+    ])?;
+    Ok(())
+}
 
-    let rewritten_oids_file_path = repo.get_rebase_state_dir_path().join("rewritten-list");
-    let mut file = OpenOptions::new()
-        .append(true)
-        .open(&rewritten_oids_file_path)?;
-    file.write_all(format!("{} {}\n", old_commit_oid, MaybeZeroOid::Zero).as_bytes())?;
-    // NB: from the user's perspective, they don't need to know about the empty
-    // commit that was created. It might be better to edit the `rewritten-list`
-    // and remove the entry which rewrote the old commit into the current `HEAD`
-    // commit, rather than hiding the newly created `HEAD` commit.
-    file.write_all(format!("{} {}\n", head_commit.get_oid(), MaybeZeroOid::Zero).as_bytes())?;
+/// For rebases, if a commit is known to have been applied upstream, skip it
+/// without attempting to apply it.
+pub fn hook_skip_upstream_applied_commit(commit_oid: NonZeroOid) -> anyhow::Result<()> {
+    let glyphs = Glyphs::detect();
+    let repo = Repo::from_current_dir()?;
+    let commit = match repo.find_commit(commit_oid)? {
+        Some(commit) => commit,
+        None => anyhow::bail!("Could not find commit: {:?}", commit_oid),
+    };
+    println!(
+        "Skipping commit (was already applied upstream): {}",
+        printable_styled_string(&glyphs, commit.friendly_describe()?)?
+    );
+    repo.add_rewritten_list_entries(&[(commit_oid, MaybeZeroOid::Zero)])?;
     Ok(())
 }
 

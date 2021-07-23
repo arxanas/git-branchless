@@ -13,6 +13,8 @@ use std::collections::{HashMap, HashSet};
 use std::convert::{TryFrom, TryInto};
 use std::ffi::{OsStr, OsString};
 use std::fmt::Display;
+use std::fs::OpenOptions;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::SystemTime;
@@ -525,6 +527,31 @@ Either create it, or update the main branch setting by running:
         }
     }
 
+    /// Add entries to the `rewritten-list` during a rebase operation. These
+    /// entries will be forwarded to the `post-rewrite` hook when the operation
+    /// completes.
+    ///
+    /// Fails if no on-disk rebase operation is underway.
+    #[context("Adding entries to rewritten list: {:?}", entries)]
+    pub fn add_rewritten_list_entries(
+        &self,
+        entries: &[(NonZeroOid, MaybeZeroOid)],
+    ) -> anyhow::Result<()> {
+        let rewritten_oids_file_path = self.get_rebase_state_dir_path().join("rewritten-list");
+        let mut file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&rewritten_oids_file_path)
+            .with_context(|| {
+                format!("Opening rewritten-list at: {:?}", &rewritten_oids_file_path)
+            })?;
+        for (old_commit_oid, new_commit_oid) in entries {
+            file.write_all(format!("{} {}\n", old_commit_oid, new_commit_oid).as_bytes())?;
+        }
+        file.flush()?;
+        Ok(())
+    }
+
     /// Find the merge-base between two commits. Returns `None` if a merge-base
     /// could not be found.
     #[context(
@@ -540,6 +567,33 @@ Either create it, or update the main branch setting by running:
             Ok(merge_base_oid) => Ok(Some(make_non_zero_oid(merge_base_oid))),
             Err(err) if err.code() == git2::ErrorCode::NotFound => Ok(None),
             Err(err) => Err(wrap_git_error(err)),
+        }
+    }
+
+    /// Get the patch ID for this commit.
+    pub fn get_patch_id(&self, commit: &Commit) -> anyhow::Result<Option<PatchId>> {
+        match commit.get_only_parent() {
+            None => Ok(None),
+            Some(only_parent) => {
+                let parent_tree = only_parent.get_tree()?;
+                let current_tree = commit.get_tree()?;
+                let diff = self
+                    .inner
+                    .diff_tree_to_tree(Some(&parent_tree.inner), Some(&current_tree.inner), None)
+                    .with_context(|| {
+                        format!(
+                            "Calculating diff between: {:?} and {:?}",
+                            commit, only_parent
+                        )
+                    })?;
+                let patch_id = diff.patchid(None).with_context(|| {
+                    format!(
+                        "Computing patch ID between: {:?} and {:?}",
+                        commit, only_parent
+                    )
+                })?;
+                Ok(Some(PatchId { patch_id }))
+            }
         }
     }
 
@@ -800,6 +854,18 @@ impl<'repo> Signature<'repo> {
     }
 }
 
+/// A tree object. Contains a mapping from name to OID.
+pub struct Tree<'repo> {
+    inner: git2::Tree<'repo>,
+}
+
+/// A checksum of the diff induced by a given commit, used for duplicate commit
+/// detection.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct PatchId {
+    patch_id: git2::Oid,
+}
+
 /// Represents a commit object in the Git object database.
 #[derive(Clone, Debug)]
 pub struct Commit<'repo> {
@@ -819,6 +885,15 @@ impl<'repo> Commit<'repo> {
         self.inner.parent_ids().map(make_non_zero_oid).collect()
     }
 
+    /// Get the parent OID of this commit if there is exactly one parent, or
+    /// `None` otherwise.
+    pub fn get_only_parent_oid(&self) -> Option<NonZeroOid> {
+        match self.get_parent_oids().as_slice() {
+            [] | [_, _, ..] => None,
+            [only_parent_oid] => Some(*only_parent_oid),
+        }
+    }
+
     /// Get the number of parents of this commit.
     pub fn get_parent_count(&self) -> usize {
         self.inner.parent_count()
@@ -830,6 +905,15 @@ impl<'repo> Commit<'repo> {
             .parents()
             .map(|commit| Commit { inner: commit })
             .collect()
+    }
+
+    /// Get the parent of this commit if there is exactly one parent, or `None`
+    /// otherwise.
+    pub fn get_only_parent(&self) -> Option<Commit<'repo>> {
+        match self.get_parents().as_slice() {
+            [] | [_, _, ..] => None,
+            [only_parent] => Some(only_parent.clone()),
+        }
     }
 
     /// Get the commit time of this commit.
@@ -869,6 +953,15 @@ impl<'repo> Commit<'repo> {
         Signature {
             inner: self.inner.committer(),
         }
+    }
+
+    /// Get the `Tree` object associated with this commit.
+    pub fn get_tree(&self) -> anyhow::Result<Tree> {
+        let tree = self
+            .inner
+            .tree()
+            .with_context(|| format!("Getting tree object for commit: {:?}", self.get_oid()))?;
+        Ok(Tree { inner: tree })
     }
 
     /// Print a one-line description of this commit containing its OID and

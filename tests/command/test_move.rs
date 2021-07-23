@@ -1043,7 +1043,7 @@ fn test_move_no_reapply_upstream_commits_in_memory() -> anyhow::Result<()> {
         "###);
         insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
-        [1/2] Skipped now-empty commit: cfea32a9 create test1.txt
+        [1/2] Skipped commit (was already applied upstream): 62fc20d2 create test1.txt
         [2/2] Committed as: fa466332 create test2.txt
         branchless: processing 1 update: branch should-be-deleted
         branchless: processing 2 rewritten commits
@@ -1059,6 +1059,69 @@ fn test_move_no_reapply_upstream_commits_in_memory() -> anyhow::Result<()> {
         O 047b7ad7 (master) create test1.txt
         |
         @ fa466332 create test2.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_move_no_reapply_squashed_commits_in_memory() -> anyhow::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+
+    git.init_repo()?;
+    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
+
+    git.detach_head()?;
+    let test1_oid = git.commit_file("test1", 1)?;
+    let test2_oid = git.commit_file("test2", 2)?;
+
+    git.run(&["checkout", "master"])?;
+    git.run(&["cherry-pick", "--no-commit", &test1_oid.to_string()])?;
+    git.run(&["cherry-pick", "--no-commit", &test2_oid.to_string()])?;
+    git.run(&["commit", "-m", "squashed test1 and test2"])?;
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc9 create initial.txt
+        |\
+        | o 62fc20d2 create test1.txt
+        | |
+        | o 96d1c37a create test2.txt
+        |
+        @ de4a1fe8 (master) squashed test1 and test2
+        "###);
+    }
+
+    {
+        let (stdout, stderr) = git.run(&[
+            "move",
+            "--in-memory",
+            "-b",
+            &test2_oid.to_string(),
+            "-d",
+            "master",
+        ])?;
+        insta::assert_snapshot!(stderr, @"");
+        insta::assert_snapshot!(stdout, @r###"
+        Attempting rebase in-memory...
+        [1/2] Skipped now-empty commit: e7bcdd60 create test1.txt
+        [2/2] Skipped now-empty commit: 12d361aa create test2.txt
+        branchless: processing 2 rewritten commits
+        In-memory rebase succeeded.
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        @ de4a1fe8 (master) squashed test1 and test2
         "###);
     }
 
@@ -1082,27 +1145,24 @@ fn test_move_no_reapply_upstream_commits_on_disk() -> anyhow::Result<()> {
     let test2_oid = git.commit_file("test2", 2)?;
     git.run(&["checkout", "master"])?;
     git.run(&["cherry-pick", &test1_oid.to_string()])?;
-    // git.run(&["checkout", &test2_oid.to_string()])?;
 
     {
         let (stdout, stderr) = git.run(&["move", "--on-disk", "-b", &test2_oid.to_string()])?;
         insta::assert_snapshot!(stderr, @r###"
         Executing: git branchless hook-register-extra-post-rewrite-hook
         branchless: processing 1 update: ref HEAD
-        branchless: processing 1 update: ref HEAD
-        branchless: processed commit: cfea32a9 create test1.txt
-        Executing: git branchless hook-detect-empty-commit 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
+        Executing: git branchless hook-skip-upstream-applied-commit 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
         branchless: processing 1 update: ref HEAD
         branchless: processed commit: fa466332 create test2.txt
         Executing: git branchless hook-detect-empty-commit 96d1c37a3d4363611c49f7e52186e189a04c531f
-        branchless: processing 4 rewritten commits
+        branchless: processing 2 rewritten commits
         branchless: processing 1 update: branch should-be-deleted
         Successfully rebased and updated master.
         "###);
         insta::assert_snapshot!(stdout, @r###"
         Calling Git for on-disk rebase...
         branchless: <git-executable> rebase --continue
-        Skipping empty commit: cfea32a9 create test1.txt
+        Skipping commit (was already applied upstream): 62fc20d2 create test1.txt
         "###);
     }
 
@@ -1113,6 +1173,79 @@ fn test_move_no_reapply_upstream_commits_on_disk() -> anyhow::Result<()> {
         O 047b7ad7 (master) create test1.txt
         |
         @ fa466332 create test2.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_move_no_reapply_squashed_commits_on_disk() -> anyhow::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+
+    git.init_repo()?;
+    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
+
+    git.detach_head()?;
+    let test1_oid = git.commit_file("test1", 1)?;
+    let test2_oid = git.commit_file("test2", 2)?;
+
+    git.run(&["checkout", "master"])?;
+    git.run(&["cherry-pick", "--no-commit", &test1_oid.to_string()])?;
+    git.run(&["cherry-pick", "--no-commit", &test2_oid.to_string()])?;
+    git.run(&["commit", "-m", "squashed test1 and test2"])?;
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc9 create initial.txt
+        |\
+        | o 62fc20d2 create test1.txt
+        | |
+        | o 96d1c37a create test2.txt
+        |
+        @ de4a1fe8 (master) squashed test1 and test2
+        "###);
+    }
+
+    {
+        let (stdout, stderr) = git.run(&[
+            "move",
+            "--on-disk",
+            "-b",
+            &test2_oid.to_string(),
+            "-d",
+            "master",
+        ])?;
+        insta::assert_snapshot!(stderr, @r###"
+        Executing: git branchless hook-register-extra-post-rewrite-hook
+        branchless: processing 1 update: ref HEAD
+        branchless: processing 1 update: ref HEAD
+        branchless: processed commit: e7bcdd60 create test1.txt
+        Executing: git branchless hook-detect-empty-commit 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
+        branchless: processing 1 update: ref HEAD
+        branchless: processed commit: 12d361aa create test2.txt
+        Executing: git branchless hook-detect-empty-commit 96d1c37a3d4363611c49f7e52186e189a04c531f
+        branchless: processing 4 rewritten commits
+        Successfully rebased and updated master.
+        "###);
+        insta::assert_snapshot!(stdout, @r###"
+        Calling Git for on-disk rebase...
+        branchless: <git-executable> rebase --continue
+        Skipped now-empty commit: e7bcdd60 create test1.txt
+        Skipped now-empty commit: 12d361aa create test2.txt
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        @ de4a1fe8 (master) squashed test1 and test2
         "###);
     }
 
