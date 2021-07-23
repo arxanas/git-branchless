@@ -98,6 +98,8 @@ fn test_move_stick_in_memory() -> anyhow::Result<()> {
             },
         )
         Attempting rebase in-memory...
+        [1/2] Committed as: 4838e49b create test3.txt
+        [2/2] Committed as: a2482074 create test4.txt
         branchless: processing 2 rewritten commits
         branchless: <git-executable> checkout a248207402822b7396cabe0f1011d8a7ce7daf1b
         In-memory rebase succeeded.
@@ -299,6 +301,8 @@ fn test_move_with_source_not_in_smartlog_in_memory() -> anyhow::Result<()> {
             },
         )
         Attempting rebase in-memory...
+        [1/2] Committed as: 4838e49b create test3.txt
+        [2/2] Committed as: a2482074 create test4.txt
         branchless: processing 1 update: branch master
         branchless: processing 2 rewritten commits
         branchless: <git-executable> checkout master
@@ -463,6 +467,8 @@ fn test_move_base() -> anyhow::Result<()> {
             },
         )
         Attempting rebase in-memory...
+        [1/2] Committed as: 44352d00 create test2.txt
+        [2/2] Committed as: cf5eb244 create test3.txt
         branchless: processing 2 rewritten commits
         In-memory rebase succeeded.
         "###);
@@ -523,6 +529,7 @@ fn test_move_checkout_new_head() -> anyhow::Result<()> {
             },
         )
         Attempting rebase in-memory...
+        [1/1] Committed as: 96d1c37a create test2.txt
         branchless: processing 1 rewritten commit
         branchless: <git-executable> checkout 96d1c37a3d4363611c49f7e52186e189a04c531f
         In-memory rebase succeeded.
@@ -590,6 +597,7 @@ fn test_move_branch() -> anyhow::Result<()> {
             },
         )
         Attempting rebase in-memory...
+        [1/1] Committed as: 70deb1e2 create test3.txt
         branchless: processing 1 update: branch master
         branchless: processing 1 rewritten commit
         branchless: <git-executable> checkout master
@@ -791,6 +799,7 @@ fn test_move_in_memory_gc() -> anyhow::Result<()> {
             },
         )
         Attempting rebase in-memory...
+        [1/1] Committed as: fe65c1fe create test2.txt
         branchless: processing 1 rewritten commit
         branchless: <git-executable> checkout fe65c1fe15584744e649b2c79d4cf9b0d878f92e
         In-memory rebase succeeded.
@@ -855,6 +864,9 @@ fn test_move_main_branch_commits() -> anyhow::Result<()> {
         ])?;
         insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
+        [1/3] Committed as: 4838e49b create test3.txt
+        [2/3] Committed as: a2482074 create test4.txt
+        [3/3] Committed as: 566e4341 create test5.txt
         branchless: processing 1 update: branch master
         branchless: processing 3 rewritten commits
         branchless: <git-executable> checkout master
@@ -1031,6 +1043,8 @@ fn test_move_no_reapply_upstream_commits_in_memory() -> anyhow::Result<()> {
         "###);
         insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
+        [1/2] Skipped now-empty commit: cfea32a9 create test1.txt
+        [2/2] Committed as: fa466332 create test2.txt
         branchless: processing 1 update: branch should-be-deleted
         branchless: processing 2 rewritten commits
         branchless: <git-executable> checkout fa46633239bfa767036e41a77b67258286e4ddb9

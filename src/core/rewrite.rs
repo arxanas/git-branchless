@@ -696,9 +696,12 @@ fn rebase_in_memory(
 
                 let commit_description =
                     printable_styled_string(glyphs, commit_to_apply.friendly_describe()?)?;
-                let template = format!("[{}/{}] {{spinner}} {{wide_msg}}", i, num_picks);
+                let commit_num = format!("[{}/{}]", i, num_picks);
+                let progress_template = format!("{} {{spinner}} {{wide_msg}}", commit_num);
                 let progress = ProgressBar::new_spinner();
-                progress.set_style(ProgressStyle::default_spinner().template(&template.trim()));
+                progress.set_style(
+                    ProgressStyle::default_spinner().template(&progress_template.trim()),
+                );
                 progress.set_message("Starting");
                 progress.enable_steady_tick(100);
 
@@ -780,14 +783,16 @@ fn rebase_in_memory(
                 )?;
                 if rebased_commit.is_empty() {
                     rewritten_oids.push((*commit_oid, MaybeZeroOid::Zero));
-                    progress.finish_with_message(format!(
-                        "Skipped now-empty commit: {}",
-                        commit_description
-                    ));
+                    progress.finish_and_clear();
+                    println!(
+                        "{} Skipped now-empty commit: {}",
+                        commit_num, commit_description
+                    );
                 } else {
                     rewritten_oids.push((*commit_oid, MaybeZeroOid::NonZero(rebased_commit_oid)));
                     current_oid = rebased_commit_oid;
-                    progress.finish_with_message(format!("Committed as: {}", commit_description));
+                    progress.finish_and_clear();
+                    println!("{} Committed as: {}", commit_num, commit_description);
                 }
             }
             RebaseCommand::RegisterExtraPostRewriteHook
