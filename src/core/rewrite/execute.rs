@@ -137,6 +137,13 @@ mod in_memory {
     pub enum RebaseInMemoryResult {
         Succeeded {
             rewritten_oids: Vec<(NonZeroOid, MaybeZeroOid)>,
+
+            /// The new OID that `HEAD` should point to, based on the rebase.
+            ///
+            /// - This is only `None` if `HEAD` was unborn.
+            /// - This doesn't capture if `HEAD` was pointing to a branch. The
+            /// caller will need to figure that out.
+            new_head_oid: Option<NonZeroOid>,
         },
         CannotRebaseMergeCommit {
             commit_oid: NonZeroOid,
@@ -166,6 +173,19 @@ mod in_memory {
         let mut current_oid = rebase_plan.first_dest_oid;
         let mut labels: HashMap<String, NonZeroOid> = HashMap::new();
         let mut rewritten_oids: Vec<(NonZeroOid, MaybeZeroOid)> = Vec::new();
+
+        // Normally, we can determine the new `HEAD` OID by looking at the
+        // rewritten commits. However, if `HEAD` pointed to a commit that was
+        // skipped, then the rewritten OID is zero. In that case, we need to
+        // delete the branch (responsibility of the caller) and choose a
+        // different `HEAD` OID.
+        let head_oid = repo.get_head_info()?.oid;
+        let mut skipped_head_new_oid = None;
+        let mut maybe_set_skipped_head_new_oid = |skipped_head_oid, current_oid| {
+            if Some(skipped_head_oid) == head_oid {
+                skipped_head_new_oid.get_or_insert(current_oid);
+            }
+        };
 
         let mut i = 0;
         let num_picks = rebase_plan
@@ -318,6 +338,8 @@ mod in_memory {
                     )?;
                     if rebased_commit.is_empty() {
                         rewritten_oids.push((*commit_oid, MaybeZeroOid::Zero));
+                        maybe_set_skipped_head_new_oid(*commit_oid, current_oid);
+
                         progress.finish_and_clear();
                         println!(
                             "[{}/{}] Skipped now-empty commit: {}",
@@ -327,6 +349,7 @@ mod in_memory {
                         rewritten_oids
                             .push((*commit_oid, MaybeZeroOid::NonZero(rebased_commit_oid)));
                         current_oid = rebased_commit_oid;
+
                         progress.finish_and_clear();
                         println!("{} Committed as: {}", commit_num, commit_description);
                     }
@@ -344,10 +367,13 @@ mod in_memory {
                         Some(commit) => commit,
                         None => anyhow::bail!("Could not find commit: {:?}", commit_oid),
                     };
+
+                    rewritten_oids.push((*commit_oid, MaybeZeroOid::Zero));
+                    maybe_set_skipped_head_new_oid(*commit_oid, current_oid);
+
+                    progress.finish_and_clear();
                     let commit_description = commit.friendly_describe()?;
                     let commit_description = printable_styled_string(glyphs, commit_description)?;
-                    rewritten_oids.push((*commit_oid, MaybeZeroOid::Zero));
-                    progress.finish_and_clear();
                     println!(
                         "{} Skipped commit (was already applied upstream): {}",
                         commit_num, commit_description
@@ -362,13 +388,57 @@ mod in_memory {
             }
         }
 
-        Ok(RebaseInMemoryResult::Succeeded { rewritten_oids })
+        let new_head_oid: Option<NonZeroOid> = match head_oid {
+            None => {
+                // `HEAD` is unborn, so keep it that way.
+                None
+            }
+            Some(head_oid) => {
+                let new_head_oid = rewritten_oids.iter().find_map(|(source_oid, dest_oid)| {
+                    if *source_oid == head_oid {
+                        Some(*dest_oid)
+                    } else {
+                        None
+                    }
+                });
+                match new_head_oid {
+                    Some(MaybeZeroOid::NonZero(new_head_oid)) => {
+                        // `HEAD` was rewritten to this OID.
+                        Some(new_head_oid)
+                    }
+                    Some(MaybeZeroOid::Zero) => {
+                        // `HEAD` was rewritten, but its associated commit was
+                        // skipped. Use whatever saved new `HEAD` OID we have.
+                        let new_head_oid = match skipped_head_new_oid {
+                            Some(new_head_oid) => new_head_oid,
+                            None => {
+                                log::warn!(
+                                    "`HEAD` OID {:?} was rewritten to 0, but no skipped `HEAD` OID was set",
+                                    head_oid
+                                );
+                                head_oid
+                            }
+                        };
+                        Some(new_head_oid)
+                    }
+                    None => {
+                        // The `HEAD` OID was not rewritten, so use its current value.
+                        Some(head_oid)
+                    }
+                }
+            }
+        };
+        Ok(RebaseInMemoryResult::Succeeded {
+            rewritten_oids,
+            new_head_oid,
+        })
     }
 
     pub fn post_rebase_in_memory(
         git_run_info: &GitRunInfo,
         repo: &Repo,
         rewritten_oids: &[(NonZeroOid, MaybeZeroOid)],
+        new_head_oid: Option<NonZeroOid>,
         options: &ExecuteRebasePlanOptions,
     ) -> anyhow::Result<isize> {
         let ExecuteRebasePlanOptions {
@@ -414,20 +484,52 @@ mod in_memory {
             Some(post_rewrite_stdin),
         )?;
 
-        if let Some(head_oid) = head_info.oid {
-            if let Some(new_head_oid) = rewritten_oids_map.get(&head_oid) {
-                let head_target = match head_info.get_branch_name() {
-                    Some(head_branch) => head_branch.to_string(),
-                    None => match new_head_oid {
-                        MaybeZeroOid::NonZero(new_head_oid) => new_head_oid.to_string(),
-                        MaybeZeroOid::Zero => format!("{}^", head_oid.to_string()),
-                    },
-                };
-                let result = git_run_info.run(Some(*event_tx_id), &["checkout", &head_target])?;
-                if result != 0 {
-                    return Ok(result);
-                }
+        let (previous_head_oid, new_head_oid) = match head_info.oid {
+            None => {
+                // `HEAD` was unborn, so don't check anything out.
+                return Ok(0);
             }
+            Some(previous_head_oid) => {
+                let new_head_oid = match new_head_oid {
+                    Some(new_head_oid) => new_head_oid,
+                    None => anyhow::bail!(
+                        "`None` provided for `new_head_oid`,
+                        but it should have been `Some`
+                        because the previous `HEAD` OID was not `None`: {:?}",
+                        previous_head_oid
+                    ),
+                };
+                (previous_head_oid, new_head_oid)
+            }
+        };
+        let head_target = match (
+            head_info.get_branch_name(),
+            rewritten_oids_map.get(&previous_head_oid),
+        ) {
+            (Some(head_branch), Some(MaybeZeroOid::NonZero(_))) => {
+                // The `HEAD` branch has been moved above. Check it out now.
+                head_branch.to_string()
+            }
+            (Some(_), Some(MaybeZeroOid::Zero)) => {
+                // The `HEAD` branch was deleted, so check out whatever the
+                // caller says is the new appropriate `HEAD` OID.
+                new_head_oid.to_string()
+            }
+            (Some(head_branch), None) => {
+                // The `HEAD` commit was not rewritten, but we detached it
+                // from its branch, so check its branch out again.
+                head_branch.to_string()
+            }
+            (None, _) => {
+                // We don't have to worry about a branch, so just use whatever
+                // we've been told is the new `HEAD` OID.
+                new_head_oid.to_string()
+            }
+        };
+
+        let result = git_run_info.run(Some(*event_tx_id), &["checkout", &head_target])?;
+        if result != 0 {
+            return Ok(result);
         }
 
         Ok(0)
@@ -440,7 +542,7 @@ mod on_disk {
     use indicatif::ProgressBar;
 
     use crate::core::rewrite::plan::RebasePlan;
-    use crate::git::{GitRunInfo, Repo};
+    use crate::git::{GitRunInfo, MaybeZeroOid, Repo};
 
     use super::ExecuteRebasePlanOptions;
 
@@ -506,6 +608,25 @@ mod on_disk {
             let orig_head_file_path = repo.get_path().join("ORIG_HEAD");
             std::fs::copy(&repo_head_file_path, &orig_head_file_path)
                 .with_context(|| format!("Copying `HEAD` to: {:?}", &orig_head_file_path))?;
+
+            // Confusingly, there is also a file at
+            // `.git/rebase-merge/orig-head` (different from `.git/ORIG_HEAD`),
+            // which stores only the OID of the original `HEAD` commit.
+            //
+            // It's used by Git to rebase the originally-checked out branch.
+            // However, we don't use it for that purpose; instead, we use it to
+            // decide what commit we need to check out after the rebase
+            // operation has completed successfully.
+            let rebase_orig_head_oid: MaybeZeroOid = head_info.oid.into();
+            let rebase_orig_head_file_path = rebase_state_dir.join("orig-head");
+            std::fs::write(
+                &rebase_orig_head_file_path,
+                rebase_orig_head_oid.to_string(),
+            )
+            .with_context(|| {
+                format!("Writing `orig-head` to: {:?}", &rebase_orig_head_file_path)
+            })?;
+
             // `head-name` appears to be purely for UX concerns. Git will warn if the
             // file isn't found.
             let head_name_file_path = rebase_state_dir.join("head-name");
@@ -633,8 +754,11 @@ pub fn execute_rebase_plan(
         use in_memory::*;
         println!("Attempting rebase in-memory...");
         match rebase_in_memory(glyphs, &repo, &rebase_plan, &options)? {
-            RebaseInMemoryResult::Succeeded { rewritten_oids } => {
-                post_rebase_in_memory(git_run_info, repo, &rewritten_oids, &options)?;
+            RebaseInMemoryResult::Succeeded {
+                rewritten_oids,
+                new_head_oid,
+            } => {
+                post_rebase_in_memory(git_run_info, repo, &rewritten_oids, new_head_oid, &options)?;
                 println!("In-memory rebase succeeded.");
                 return Ok(0);
             }

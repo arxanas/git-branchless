@@ -9,6 +9,7 @@
 //! codebase.
 //! - To collect some different helper Git functions.
 
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::convert::{TryFrom, TryInto};
 use std::ffi::{OsStr, OsString};
@@ -145,6 +146,16 @@ impl FromStr for MaybeZeroOid {
             Ok(oid) => Ok(MaybeZeroOid::NonZero(NonZeroOid { inner: oid })),
             Err(err) => Err(wrap_git_error(err))
                 .with_context(|| format!("Could not parse OID from string: {:?}", s)),
+        }
+    }
+}
+
+impl From<git2::Oid> for MaybeZeroOid {
+    fn from(oid: git2::Oid) -> Self {
+        if oid.is_zero() {
+            Self::Zero
+        } else {
+            Self::NonZero(make_non_zero_oid(oid))
         }
     }
 }
@@ -989,6 +1000,22 @@ impl<'repo> Commit<'repo> {
     }
 }
 
+/// The target of a reference.
+pub enum ReferenceTarget<'a> {
+    /// The reference points directly to an object. This is the case for most
+    /// references, such as branches.
+    Direct {
+        /// The OID of the pointed-to object.
+        oid: MaybeZeroOid,
+    },
+
+    /// The reference points to another reference with the given name.
+    Symbolic {
+        /// The name of the pointed-to reference.
+        reference_name: Cow<'a, OsStr>,
+    },
+}
+
 /// Represents a reference to an object.
 pub struct Reference<'repo> {
     inner: git2::Reference<'repo>,
@@ -1019,11 +1046,36 @@ impl<'repo> Reference<'repo> {
         Ok(name)
     }
 
+    /// Get the target of this reference.
+    #[context("Getting target of reference: {:?}", self.inner.name_bytes())]
+    pub fn get_target(&self) -> anyhow::Result<ReferenceTarget> {
+        match self.inner.symbolic_target_bytes() {
+            Some(reference_name) => Ok(ReferenceTarget::Symbolic {
+                reference_name: OsStr::from_raw_bytes(reference_name).with_context(|| {
+                    format!("Decoding symbolic reference target: {:?}", reference_name)
+                })?,
+            }),
+            None => Ok(ReferenceTarget::Direct {
+                oid: match self.inner.target() {
+                    Some(oid) => oid.into(),
+                    None => anyhow::bail!(
+                        "Could not get direct reference target for: {:?}",
+                        self.get_name()?
+                    ),
+                },
+            }),
+        }
+    }
+
     /// Get the commit object pointed to by this reference. Returns `None` if
     /// the object pointed to by the reference is a different kind of object.
     #[context("Finding commit object pointed to by reference: {:?}", self.inner.name())]
     pub fn peel_to_commit(&self) -> anyhow::Result<Option<Commit<'repo>>> {
-        let object = self.inner.peel(git2::ObjectType::Commit)?;
+        let object = match self.inner.peel(git2::ObjectType::Commit) {
+            Ok(object) => object,
+            Err(err) if err.code() == git2::ErrorCode::NotFound => return Ok(None),
+            Err(err) => return Err(err.into()),
+        };
         match object.into_commit() {
             Ok(commit) => Ok(Some(Commit { inner: commit })),
             Err(_) => Ok(None),

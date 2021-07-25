@@ -331,8 +331,12 @@ fn test_restack_single_of_many_commits() -> anyhow::Result<()> {
         branchless: processed commit: bb7d4b2a create test3.txt
         Executing: git branchless hook-detect-empty-commit 70deb1e28791d8e7dd5a1f0c871a51b91282562f
         branchless: processing 1 rewritten commit
-        Successfully rebased and updated detached HEAD.
+        branchless: <git-executable> checkout 3bd716d57489779ab1daf446f80e66e90b56ead7
         Previous HEAD position was bb7d4b2 create test3.txt
+        branchless: processing 1 update: ref HEAD
+        HEAD is now at 3bd716d updated test4
+        branchless: processing checkout
+        Successfully rebased and updated detached HEAD.
         branchless: processing 1 update: ref HEAD
         HEAD is now at 3bd716d updated test4
         branchless: processing checkout
