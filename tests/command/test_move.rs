@@ -152,11 +152,11 @@ fn test_move_tree_on_disk() -> anyhow::Result<()> {
         :
         O 62fc20d2 create test1.txt
         |\
-        | @ cade1d30 create test3.txt
+        | o cade1d30 create test3.txt
         | |\
         | | o 5bb72580 create test4.txt
         | |
-        | o df755ed1 create test5.txt
+        | @ df755ed1 create test5.txt
         |
         O 96d1c37a (master) create test2.txt
         "###);
@@ -400,9 +400,9 @@ fn test_move_merge_conflict() -> anyhow::Result<()> {
         :
         O 62fc20d2 (master) create test1.txt
         |
-        o 202143f2 create conflict.txt
+        @ 202143f2 create conflict.txt
         |
-        @ 244e2bd1 create conflict.txt
+        o 244e2bd1 create conflict.txt
         "###);
     }
 
@@ -470,6 +470,7 @@ fn test_move_base() -> anyhow::Result<()> {
         [1/2] Committed as: 44352d00 create test2.txt
         [2/2] Committed as: cf5eb244 create test3.txt
         branchless: processing 2 rewritten commits
+        branchless: <git-executable> checkout master
         In-memory rebase succeeded.
         "###);
     }
@@ -967,6 +968,10 @@ fn test_move_branches_after_move_on_disk() -> anyhow::Result<()> {
         Executing: git branchless hook-detect-empty-commit f81d55c0d520ff8d02ef9294d95156dcb78a5255
         branchless: processing 3 rewritten commits
         branchless: processing 2 updates: branch bar, branch foo
+        branchless: <git-executable> checkout 566e4341a4a9a930fc2bf7ccdfa168e9f266c34a
+        branchless: processing 1 update: ref HEAD
+        HEAD is now at 566e434 create test5.txt
+        branchless: processing checkout
         Successfully rebased and updated detached HEAD.
         "###);
         insta::assert_snapshot!(stdout, @r###"
@@ -1107,12 +1112,16 @@ fn test_move_no_reapply_squashed_commits_in_memory() -> anyhow::Result<()> {
             "-d",
             "master",
         ])?;
-        insta::assert_snapshot!(stderr, @"");
+        insta::assert_snapshot!(stderr, @r###"
+        Switched to branch 'master'
+        branchless: processing checkout
+        "###);
         insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
         [1/2] Skipped now-empty commit: e7bcdd60 create test1.txt
         [2/2] Skipped now-empty commit: 12d361aa create test2.txt
         branchless: processing 2 rewritten commits
+        branchless: <git-executable> checkout master
         In-memory rebase succeeded.
         "###);
     }
@@ -1157,6 +1166,11 @@ fn test_move_no_reapply_upstream_commits_on_disk() -> anyhow::Result<()> {
         Executing: git branchless hook-detect-empty-commit 96d1c37a3d4363611c49f7e52186e189a04c531f
         branchless: processing 2 rewritten commits
         branchless: processing 1 update: branch should-be-deleted
+        branchless: <git-executable> checkout refs/heads/master
+        Previous HEAD position was fa46633 create test2.txt
+        branchless: processing 1 update: ref HEAD
+        HEAD is now at 047b7ad create test1.txt
+        branchless: processing checkout
         Successfully rebased and updated master.
         "###);
         insta::assert_snapshot!(stdout, @r###"
@@ -1170,9 +1184,9 @@ fn test_move_no_reapply_upstream_commits_on_disk() -> anyhow::Result<()> {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
         :
-        O 047b7ad7 (master) create test1.txt
+        @ 047b7ad7 (master) create test1.txt
         |
-        @ fa466332 create test2.txt
+        o fa466332 create test2.txt
         "###);
     }
 
@@ -1231,6 +1245,10 @@ fn test_move_no_reapply_squashed_commits_on_disk() -> anyhow::Result<()> {
         branchless: processed commit: 12d361aa create test2.txt
         Executing: git branchless hook-detect-empty-commit 96d1c37a3d4363611c49f7e52186e189a04c531f
         branchless: processing 4 rewritten commits
+        branchless: <git-executable> checkout refs/heads/master
+        branchless: processing 1 update: ref HEAD
+        HEAD is now at de4a1fe squashed test1 and test2
+        branchless: processing checkout
         Successfully rebased and updated master.
         "###);
         insta::assert_snapshot!(stdout, @r###"
@@ -1246,6 +1264,157 @@ fn test_move_no_reapply_squashed_commits_on_disk() -> anyhow::Result<()> {
         insta::assert_snapshot!(stdout, @r###"
         :
         @ de4a1fe8 (master) squashed test1 and test2
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_move_delete_checked_out_branch_in_memory() -> anyhow::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+
+    git.init_repo()?;
+    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
+
+    git.run(&["checkout", "-b", "work"])?;
+    let test1_oid = git.commit_file("test1", 1)?;
+    let test2_oid = git.commit_file("test2", 2)?;
+    git.run(&["checkout", "-b", "more-work"])?;
+    git.commit_file("test3", 2)?;
+    git.run(&["checkout", "master"])?;
+    git.run(&[
+        "cherry-pick",
+        &test1_oid.to_string(),
+        &test2_oid.to_string(),
+    ])?;
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc9 create initial.txt
+        |\
+        : o 62fc20d2 create test1.txt
+        : |
+        : o 96d1c37a (work) create test2.txt
+        : |
+        : o ffcba554 (more-work) create test3.txt
+        :
+        @ 91c5ce63 (master) create test2.txt
+        "###);
+    }
+
+    {
+        git.run(&["checkout", "work"])?;
+        let (stdout, stderr) = git.run(&["move", "--in-memory", "-b", "HEAD", "-d", "master"])?;
+        insta::assert_snapshot!(stderr, @r###"
+        Previous HEAD position was 96d1c37 create test2.txt
+        branchless: processing 1 update: ref HEAD
+        HEAD is now at 91c5ce6 create test2.txt
+        branchless: processing checkout
+        "###);
+        insta::assert_snapshot!(stdout, @r###"
+        Attempting rebase in-memory...
+        [1/3] Skipped commit (was already applied upstream): 62fc20d2 create test1.txt
+        [2/3] Skipped commit (was already applied upstream): 96d1c37a create test2.txt
+        [3/3] Committed as: 012efd6e create test3.txt
+        branchless: processing 2 updates: branch more-work, branch work
+        branchless: processing 3 rewritten commits
+        branchless: <git-executable> checkout 91c5ce63686889388daec1120bf57bea8a744bc2
+        In-memory rebase succeeded.
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        @ 91c5ce63 (master) create test2.txt
+        |
+        o 012efd6e (more-work) create test3.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_move_delete_checked_out_branch_on_disk() -> anyhow::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+
+    git.init_repo()?;
+    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
+
+    git.run(&["checkout", "-b", "work"])?;
+    let test1_oid = git.commit_file("test1", 1)?;
+    let test2_oid = git.commit_file("test2", 2)?;
+    git.run(&["checkout", "-b", "more-work"])?;
+    git.commit_file("test3", 2)?;
+    git.run(&["checkout", "master"])?;
+    git.run(&[
+        "cherry-pick",
+        &test1_oid.to_string(),
+        &test2_oid.to_string(),
+    ])?;
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc9 create initial.txt
+        |\
+        : o 62fc20d2 create test1.txt
+        : |
+        : o 96d1c37a (work) create test2.txt
+        : |
+        : o ffcba554 (more-work) create test3.txt
+        :
+        @ 91c5ce63 (master) create test2.txt
+        "###);
+    }
+
+    {
+        git.run(&["checkout", "work"])?;
+        let (stdout, stderr) = git.run(&["move", "--on-disk", "-b", "HEAD", "-d", "master"])?;
+        insta::assert_snapshot!(stderr, @r###"
+        Executing: git branchless hook-register-extra-post-rewrite-hook
+        branchless: processing 1 update: ref HEAD
+        Executing: git branchless hook-skip-upstream-applied-commit 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
+        Executing: git branchless hook-skip-upstream-applied-commit 96d1c37a3d4363611c49f7e52186e189a04c531f
+        branchless: processing 1 update: ref HEAD
+        branchless: processed commit: 012efd6e create test3.txt
+        Executing: git branchless hook-detect-empty-commit ffcba554683d83de283de084a7d3896e332bbcdb
+        branchless: processing 3 rewritten commits
+        branchless: processing 2 updates: branch more-work, branch work
+        branchless: <git-executable> checkout 91c5ce63686889388daec1120bf57bea8a744bc2
+        Previous HEAD position was 012efd6 create test3.txt
+        branchless: processing 1 update: ref HEAD
+        HEAD is now at 91c5ce6 create test2.txt
+        branchless: processing checkout
+        Successfully rebased and updated work.
+        "###);
+        insta::assert_snapshot!(stdout, @r###"
+        Calling Git for on-disk rebase...
+        branchless: <git-executable> rebase --continue
+        Skipping commit (was already applied upstream): 62fc20d2 create test1.txt
+        Skipping commit (was already applied upstream): 96d1c37a create test2.txt
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        @ 91c5ce63 (master) create test2.txt
+        |
+        o 012efd6e (more-work) create test3.txt
         "###);
     }
 

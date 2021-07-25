@@ -12,11 +12,13 @@ use console::style;
 use fn_error_context::context;
 
 use crate::core::config::{get_restack_warn_abandoned, RESTACK_WARN_ABANDONED_CONFIG_KEY};
-use crate::core::eventlog::{Event, EventLogDb, EventReplayer};
+use crate::core::eventlog::{Event, EventLogDb, EventReplayer, EventTransactionId};
 use crate::core::formatting::{printable_styled_string, Glyphs, Pluralize};
 use crate::core::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
 use crate::core::mergebase::MergeBaseDb;
-use crate::git::{CategorizedReferenceName, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo};
+use crate::git::{
+    CategorizedReferenceName, GitRunInfo, MaybeZeroOid, NonZeroOid, ReferenceTarget, Repo,
+};
 
 use super::{find_abandoned_children, move_branches};
 
@@ -77,6 +79,7 @@ pub fn hook_post_rewrite(git_run_info: &GitRunInfo, rewrite_type: &str) -> anyho
         .exists()
     {
         move_branches(git_run_info, &repo, event_tx_id, &rewritten_oids)?;
+        check_out_new_head(&git_run_info, &repo, event_tx_id, &rewritten_oids)?;
     }
 
     let should_check_abandoned_commits = get_restack_warn_abandoned(&repo)?;
@@ -88,6 +91,73 @@ pub fn hook_post_rewrite(git_run_info: &GitRunInfo, rewrite_type: &str) -> anyho
             &event_log_db,
             rewritten_oids.keys().copied(),
         )?;
+    }
+
+    Ok(())
+}
+
+#[context("Checking out rewritten `HEAD` if necessary")]
+fn check_out_new_head(
+    git_run_info: &GitRunInfo,
+    repo: &Repo,
+    event_tx_id: EventTransactionId,
+    rewritten_oids: &HashMap<NonZeroOid, MaybeZeroOid>,
+) -> anyhow::Result<()> {
+    let checkout_target: Option<OsString> =
+        match repo.find_reference(&OsString::from("ORIG_HEAD"))? {
+            None => None,
+            Some(orig_head_reference) => match orig_head_reference.get_target()? {
+                ReferenceTarget::Direct {
+                    oid: MaybeZeroOid::Zero,
+                } => {
+                    // `HEAD` was unborn, so keep it that way.
+                    None
+                }
+                ReferenceTarget::Direct {
+                    oid: MaybeZeroOid::NonZero(oid),
+                } => match rewritten_oids.get(&oid) {
+                    Some(MaybeZeroOid::NonZero(oid)) => {
+                        // This OID was rewritten, so check out the new version of the commit.
+                        Some(OsString::from(oid.to_string()))
+                    }
+                    Some(MaybeZeroOid::Zero) => {
+                        // The commit was skipped. Get the new location for `HEAD`.
+                        get_updated_head_oid(&repo)?.map(|oid| oid.to_string().into())
+                    }
+                    None => {
+                        // This OID was not rewritten, so check it out again.
+                        Some(OsString::from(oid.to_string()))
+                    }
+                },
+                ReferenceTarget::Symbolic { reference_name } => {
+                    match repo.find_reference(&reference_name)? {
+                        Some(reference) => {
+                            // The branch may have been moved above, but
+                            // regardless, we check it again out here.
+                            Some(reference.get_name()?)
+                        }
+                        None => {
+                            // The branch was deleted because it pointed to
+                            // a skipped commit. Get the new location for
+                            // `HEAD`.
+                            get_updated_head_oid(&repo)?.map(|oid| oid.to_string().into())
+                        }
+                    }
+                }
+            },
+        };
+
+    if let Some(checkout_target) = checkout_target {
+        let exit_code = git_run_info.run(
+            Some(event_tx_id),
+            &[&OsString::from("checkout"), &checkout_target],
+        )?;
+        if exit_code != 0 {
+            anyhow::bail!(
+                "Failed to check out previous HEAD location: {:?}",
+                &checkout_target
+            );
+        }
     }
 
     Ok(())
@@ -213,6 +283,51 @@ branchless:   - {config_command}: suppress this message
 
 const EXTRA_POST_REWRITE_FILE_NAME: &str = "branchless_do_extra_post_rewrite";
 
+/// Git stores a file called `orig-head` in the rebase state directory. This is
+/// either a branch or an OID which is to be returned to after the rebase has
+/// concluded, or if the rebase is aborted.
+///
+/// In order to handle the case of a commit being skipped and its corresponding
+/// branch being deleted, we need to store our own copy of the original `HEAD`
+/// OID, and then replace it once the rebase is about to conclude. We can't do
+/// it earlier, because if the user aborts the rebase after the commit has been
+/// skipped, then they would be returned to the wrong commit.
+const UPDATED_HEAD_FILE_NAME: &str = "branchless_updated_head";
+
+fn get_original_head_oid(repo: &Repo) -> anyhow::Result<MaybeZeroOid> {
+    let original_head_oid_file_path = repo.get_rebase_state_dir_path().join("orig-head");
+    let original_head_oid_file_contents = std::fs::read_to_string(&original_head_oid_file_path)
+        .with_context(|| {
+            format!(
+                "Reading `orig-head` from: {:?}",
+                &original_head_oid_file_path
+            )
+        })?;
+    let oid: MaybeZeroOid = original_head_oid_file_contents.parse()?;
+    Ok(oid)
+}
+
+#[context("Writing updated `HEAD` to repo at path: {:?}", repo.get_path())]
+fn save_updated_head_oid(repo: &Repo, updated_head_oid: NonZeroOid) -> anyhow::Result<()> {
+    let dest_file_name = repo
+        .get_rebase_state_dir_path()
+        .join(UPDATED_HEAD_FILE_NAME);
+    std::fs::write(dest_file_name, updated_head_oid.to_string())?;
+    Ok(())
+}
+
+#[context("Reading updated `HEAD` from repo at path: {:?}", repo.get_path())]
+fn get_updated_head_oid(repo: &Repo) -> anyhow::Result<Option<NonZeroOid>> {
+    let source_file_name = repo
+        .get_rebase_state_dir_path()
+        .join(UPDATED_HEAD_FILE_NAME);
+    match std::fs::read_to_string(source_file_name) {
+        Ok(result) => Ok(Some(result.parse()?)),
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(err) => Err(err.into()),
+    }
+}
+
 /// For rebases, register that extra cleanup actions should be taken when the
 /// rebase finishes and calls the post-rewrite hook. We don't want to change the
 /// behavior of `git rebase` itself, except when called via `git-branchless`, so
@@ -255,6 +370,10 @@ pub fn hook_drop_commit_if_empty(old_commit_oid: NonZeroOid) -> anyhow::Result<(
         printable_styled_string(&glyphs, head_commit.friendly_describe()?)?
     );
     repo.set_head(only_parent_oid)?;
+
+    if old_commit_oid == head_oid {
+        save_updated_head_oid(&repo, only_parent_oid)?;
+    }
     repo.add_rewritten_list_entries(&[
         (old_commit_oid, MaybeZeroOid::Zero),
         // NB: from the user's perspective, they don't need to know about the empty
@@ -263,6 +382,7 @@ pub fn hook_drop_commit_if_empty(old_commit_oid: NonZeroOid) -> anyhow::Result<(
         // commit, rather than hiding the newly created `HEAD` commit.
         (head_commit.get_oid(), MaybeZeroOid::Zero),
     ])?;
+
     Ok(())
 }
 
@@ -279,6 +399,15 @@ pub fn hook_skip_upstream_applied_commit(commit_oid: NonZeroOid) -> anyhow::Resu
         "Skipping commit (was already applied upstream): {}",
         printable_styled_string(&glyphs, commit.friendly_describe()?)?
     );
+
+    let original_head_oid = get_original_head_oid(&repo)?;
+    if MaybeZeroOid::NonZero(commit_oid) == original_head_oid {
+        let current_head_oid = repo.get_head_info()?.oid;
+        if let Some(current_head_oid) = current_head_oid {
+            save_updated_head_oid(&repo, current_head_oid)?;
+        }
+    }
     repo.add_rewritten_list_entries(&[(commit_oid, MaybeZeroOid::Zero)])?;
+
     Ok(())
 }
