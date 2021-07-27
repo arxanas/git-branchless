@@ -155,7 +155,7 @@ impl Glyphs {
             commit_main_hidden: "✕",
             commit_main_hidden_head: "❖",
             bullet_point: "•",
-            cycle_arrow: "→",
+            cycle_arrow: "ᐅ",
             cycle_horizontal_line: "─",
             cycle_vertical_line: "│",
             cycle_upper_left_corner: "┌",
