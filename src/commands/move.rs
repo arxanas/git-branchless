@@ -69,7 +69,7 @@ pub fn r#move(
                     return Ok(1);
                 }
             };
-            (source_oid.to_string(), false)
+            (source_oid.to_string(), true)
         }
     };
     let dest = match dest {

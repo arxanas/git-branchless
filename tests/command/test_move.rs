@@ -817,6 +817,8 @@ fn test_move_in_memory_gc() -> anyhow::Result<()> {
         let (stdout, stderr) = git.run(&[
             "move",
             "--debug-dump-rebase-plan",
+            "-s",
+            "HEAD",
             "-d",
             "master",
             "--in-memory",
