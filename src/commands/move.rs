@@ -19,17 +19,21 @@ use crate::core::rewrite::{
 };
 use crate::git::{GitRunInfo, NonZeroOid, Repo};
 
-fn resolve_base_commit(graph: &CommitGraph, oid: NonZeroOid) -> NonZeroOid {
+fn resolve_base_commit(
+    graph: &CommitGraph,
+    merge_base_oid: Option<NonZeroOid>,
+    oid: NonZeroOid,
+) -> NonZeroOid {
     let node = &graph[&oid];
     if node.is_main {
         oid
     } else {
         match node.parent {
             Some(parent_oid) => {
-                if graph[&parent_oid].is_main {
+                if graph[&parent_oid].is_main || Some(parent_oid) == merge_base_oid {
                     oid
                 } else {
-                    resolve_base_commit(graph, parent_oid)
+                    resolve_base_commit(graph, merge_base_oid, parent_oid)
                 }
             }
             None => oid,
@@ -108,7 +112,8 @@ pub fn r#move(
     )?;
 
     let source_oid = if should_resolve_base_commit {
-        resolve_base_commit(&graph, source_oid)
+        let merge_base_oid = merge_base_db.get_merge_base_oid(&repo, source_oid, dest_oid)?;
+        resolve_base_commit(&graph, merge_base_oid, source_oid)
     } else {
         source_oid
     };

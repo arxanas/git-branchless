@@ -491,6 +491,60 @@ fn test_move_base() -> anyhow::Result<()> {
 }
 
 #[test]
+fn test_move_base_shared() -> anyhow::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+
+    git.init_repo()?;
+    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
+
+    git.detach_head()?;
+    git.commit_file("test1", 1)?;
+    let test2_oid = git.commit_file("test2", 2)?;
+    git.run(&["checkout", "HEAD~"])?;
+    git.commit_file("test3", 3)?;
+    git.commit_file("test4", 4)?;
+
+    {
+        let (stdout, stderr) = git.run(&["move", "-b", "HEAD", "-d", &test2_oid.to_string()])?;
+        insta::assert_snapshot!(stderr, @r###"
+        Previous HEAD position was a248207 create test4.txt
+        branchless: processing 1 update: ref HEAD
+        HEAD is now at 355e173 create test4.txt
+        branchless: processing checkout
+        "###);
+        insta::assert_snapshot!(stdout, @r###"
+        Attempting rebase in-memory...
+        [1/2] Committed as: 70deb1e2 create test3.txt
+        [2/2] Committed as: 355e173b create test4.txt
+        branchless: processing 2 rewritten commits
+        branchless: <git-executable> checkout 355e173bf9c5d2efac2e451da0cdad3fb82b869a
+        In-memory rebase succeeded.
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc9 (master) create initial.txt
+        |
+        o 62fc20d2 create test1.txt
+        |
+        o 96d1c37a create test2.txt
+        |
+        o 70deb1e2 create test3.txt
+        |
+        @ 355e173b create test4.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_move_checkout_new_head() -> anyhow::Result<()> {
     let git = make_git()?;
 
