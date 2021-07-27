@@ -78,12 +78,16 @@ enum Opts {
 
     /// Move a subtree of commits from one location to another.
     ///
+    /// By default, `git move` tries to move the entire current stack if you
+    /// don't pass a `--source` or `--base` option (equivalent to writing
+    /// `--base HEAD`).
+    ///
     /// By default, `git move` attempts to rebase all commits in-memory. If you
     /// want to force an on-disk rebase, pass the `--on-disk` flag. Note that
     /// `post-commit` hooks are not called during in-memory rebases.
     Move {
         /// The source commit to move. This commit, and all of its descendants,
-        /// will be moved. If not provided, defaults to the current commit.
+        /// will be moved.
         #[structopt(short = "-s", long = "--source")]
         source: Option<String>,
 

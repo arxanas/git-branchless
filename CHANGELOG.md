@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added: `git restack` can now accept a list of commit hashes whose descendants should be restacked, rather than restacking every abandoned commit indiscriminately.
 - Added: `git move` will skip applying commits which have already been applied upstream, and delete their corresponding branches.
 - Changed: More of the Git hooks installed by `git-branchless` display the affected objects, rather than just the number of affected objects.
+- Changed: `git move` with no `--source` or `--base` option now defaults to `--base HEAD` rather than `--source HEAD`.
 - Fixed: The output of `git` subcommands is streamed to stdout, rather than accumulated and dumped at the end.
 - Fixed: Commits rebased in-memory by `git move` are now marked as reachable by the Git garbage collector, so that they aren't collected prematurely.
 - Fixed: `git-branchless wrap` correctly relays the exit code of its subprocess.
