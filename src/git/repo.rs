@@ -36,11 +36,6 @@ pub fn wrap_git_error(error: git2::Error) -> anyhow::Error {
     anyhow::anyhow!("Git error {:?}: {}", error.code(), error.message())
 }
 
-/// Wrapper around `git2::Repository`.
-pub struct Repo {
-    inner: git2::Repository,
-}
-
 /// Represents the ID of a Git object.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
 pub struct NonZeroOid {
@@ -269,6 +264,11 @@ impl FromStr for GitVersion {
             _ => anyhow::bail!("Could not parse Git version string: {}", version_str),
         }
     }
+}
+
+/// Wrapper around `git2::Repository`.
+pub struct Repo {
+    inner: git2::Repository,
 }
 
 impl Repo {
