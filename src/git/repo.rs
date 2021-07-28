@@ -30,6 +30,8 @@ use crate::core::metadata::{render_commit_metadata, CommitMessageProvider, Commi
 use crate::git::config::Config;
 use crate::git::oid::{make_non_zero_oid, MaybeZeroOid, NonZeroOid};
 
+use super::GitRunInfo;
+
 /// Convert a `git2::Error` into an `anyhow::Error` with an auto-generated message.
 pub(super) fn wrap_git_error(error: git2::Error) -> anyhow::Error {
     anyhow::anyhow!("Git error {:?}: {}", error.code(), error.message())
@@ -468,6 +470,22 @@ Either create it, or update the main branch setting by running:
             all_references.push(Reference { inner: reference });
         }
         Ok(all_references)
+    }
+
+    /// Check if the repository has staged or unstaged changes. Untracked files
+    /// are not included. This operation may take a while.
+    #[context("Checking for changed files for repository at: {:?}", self.get_path())]
+    pub fn has_changed_files(&self, git_run_info: &GitRunInfo) -> anyhow::Result<bool> {
+        let exit_code = git_run_info.run(
+            // This is not a mutating operation, so we don't need a transaction ID.
+            None,
+            &["diff", "--quiet"],
+        )?;
+        if exit_code == 0 {
+            Ok(false)
+        } else {
+            Ok(true)
+        }
     }
 
     /// Create a new reference or update an existing one.

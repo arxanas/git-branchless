@@ -546,15 +546,23 @@ mod on_disk {
 
     use super::ExecuteRebasePlanOptions;
 
+    pub enum Error {
+        ChangedFilesInRepository,
+        OperationAlreadyInProgress { operation_type: String },
+    }
+
     /// Rebase on-disk. We don't use `git2`'s `Rebase` machinery because it ends up
     /// being too slow.
+    ///
+    /// Note that this calls `git rebase`, which may fail (e.g. if there are
+    /// merge conflicts). The exit code is then propagated to the caller.
     #[context("Rebasing on disk")]
     pub fn rebase_on_disk(
         git_run_info: &GitRunInfo,
         repo: &Repo,
         rebase_plan: &RebasePlan,
         options: &ExecuteRebasePlanOptions,
-    ) -> anyhow::Result<isize> {
+    ) -> anyhow::Result<Result<isize, Error>> {
         let ExecuteRebasePlanOptions {
             // `git rebase` will make its own timestamp.
             now: _,
@@ -573,15 +581,13 @@ mod on_disk {
         let current_operation_type = repo.get_current_operation_type();
         if let Some(current_operation_type) = current_operation_type {
             progress.finish_and_clear();
-            println!(
-                "A {} operation is already in progress.",
-                current_operation_type
-            );
-            println!(
-                "Run git {0} --continue or git {0} --abort to resolve it and proceed.",
-                current_operation_type
-            );
-            return Ok(1);
+            return Ok(Err(Error::OperationAlreadyInProgress {
+                operation_type: current_operation_type.to_string(),
+            }));
+        }
+
+        if repo.has_changed_files(git_run_info)? {
+            return Ok(Err(Error::ChangedFilesInRepository));
         }
 
         let rebase_state_dir = repo.get_rebase_state_dir_path();
@@ -707,8 +713,8 @@ mod on_disk {
 
         progress.finish_and_clear();
         println!("Calling Git for on-disk rebase...");
-        let result = git_run_info.run(Some(*event_tx_id), &["rebase", "--continue"])?;
-        Ok(result)
+        let exit_code = git_run_info.run(Some(*event_tx_id), &["rebase", "--continue"])?;
+        Ok(Ok(exit_code))
     }
 }
 
@@ -792,8 +798,27 @@ pub fn execute_rebase_plan(
 
     if !force_in_memory {
         use on_disk::*;
-        let result = rebase_on_disk(git_run_info, repo, &rebase_plan, &options)?;
-        return Ok(result);
+        match rebase_on_disk(git_run_info, repo, &rebase_plan, &options)? {
+            Ok(exit_code) => return Ok(exit_code),
+            Err(Error::ChangedFilesInRepository) => {
+                print!(
+                    "\
+This operation would modify the working copy, but you have uncommitted changes
+in your working copy which might be overwritten as a result.
+Commit your changes and then try again.
+"
+                );
+                return Ok(1);
+            }
+            Err(Error::OperationAlreadyInProgress { operation_type }) => {
+                println!("A {} operation is already in progress.", operation_type);
+                println!(
+                    "Run git {0} --continue or git {0} --abort to resolve it and proceed.",
+                    operation_type
+                );
+                return Ok(1);
+            }
+        }
     }
 
     anyhow::bail!(

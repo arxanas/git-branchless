@@ -378,6 +378,7 @@ fn test_move_merge_conflict() -> anyhow::Result<()> {
         )
         Attempting rebase in-memory...
         Merge conflict, falling back to rebase on-disk. The conflicting commit was: e85d25c7 create conflict.txt
+        branchless: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: <git-executable> rebase --continue
         CONFLICT (add/add): Merge conflict in conflict.txt
@@ -1031,6 +1032,7 @@ fn test_move_branches_after_move_on_disk() -> anyhow::Result<()> {
         Successfully rebased and updated detached HEAD.
         "###);
         insta::assert_snapshot!(stdout, @r###"
+        branchless: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: <git-executable> rebase --continue
         "###);
@@ -1230,6 +1232,7 @@ fn test_move_no_reapply_upstream_commits_on_disk() -> anyhow::Result<()> {
         Successfully rebased and updated master.
         "###);
         insta::assert_snapshot!(stdout, @r###"
+        branchless: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: <git-executable> rebase --continue
         Skipping commit (was already applied upstream): 62fc20d2 create test1.txt
@@ -1308,6 +1311,7 @@ fn test_move_no_reapply_squashed_commits_on_disk() -> anyhow::Result<()> {
         Successfully rebased and updated master.
         "###);
         insta::assert_snapshot!(stdout, @r###"
+        branchless: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: <git-executable> rebase --continue
         Skipped now-empty commit: e7bcdd60 create test1.txt
@@ -1457,6 +1461,7 @@ fn test_move_delete_checked_out_branch_on_disk() -> anyhow::Result<()> {
         Successfully rebased and updated work.
         "###);
         insta::assert_snapshot!(stdout, @r###"
+        branchless: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: <git-executable> rebase --continue
         Skipping commit (was already applied upstream): 62fc20d2 create test1.txt
@@ -1471,6 +1476,39 @@ fn test_move_delete_checked_out_branch_on_disk() -> anyhow::Result<()> {
         @ 91c5ce63 (master) create test2.txt
         |
         o 012efd6e (more-work) create test3.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_move_on_disk_with_unstaged_changes() -> anyhow::Result<()> {
+    let git = make_git()?;
+
+    git.init_repo()?;
+    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
+
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+    git.run(&["checkout", "HEAD~"])?;
+    git.commit_file("test3", 3)?;
+
+    {
+        git.write_file("test3", "new contents")?;
+        let (stdout, stderr) = git.run_with_options(
+            &["move", "--on-disk", "-d", "master"],
+            &GitRunOptions {
+                expected_exit_code: 1,
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stderr, @"");
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: <git-executable> diff --quiet
+        This operation would modify the working copy, but you have uncommitted changes
+        in your working copy which might be overwritten as a result.
+        Commit your changes and then try again.
         "###);
     }
 
