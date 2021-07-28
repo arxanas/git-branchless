@@ -464,7 +464,7 @@ mod in_memory {
         if head_info.oid.is_some() {
             // Avoid moving the branch which HEAD points to, or else the index will show
             // a lot of changes in the working copy.
-            head_info.detach_head()?;
+            repo.detach_head(&head_info)?;
         }
 
         move_branches(git_run_info, repo, *event_tx_id, &rewritten_oids_map)?;
@@ -702,7 +702,7 @@ mod on_disk {
         // actually needs to be moved, then it will be moved as part of the
         // post-rebase operations.
         if head_info.oid.is_some() {
-            head_info.detach_head()?;
+            repo.detach_head(&head_info)?;
         }
 
         progress.finish_and_clear();
