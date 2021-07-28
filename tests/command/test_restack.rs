@@ -47,6 +47,7 @@ fn test_restack_amended_commit() -> anyhow::Result<()> {
         let (stdout, _stderr) = git.run(&["restack"])?;
         let stdout = remove_rebase_lines(stdout);
         insta::assert_snapshot!(stdout, @r###"
+        branchless: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: <git-executable> rebase --continue
         Finished restacking commits.
@@ -89,6 +90,7 @@ fn test_restack_consecutive_rewrites() -> anyhow::Result<()> {
         let stdout = remove_rebase_lines(stdout);
 
         insta::assert_snapshot!(stdout, @r###"
+        branchless: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: <git-executable> rebase --continue
         Finished restacking commits.
@@ -165,6 +167,7 @@ fn test_amended_initial_commit() -> anyhow::Result<()> {
         let (stdout, _stderr) = git.run(&["restack"])?;
         let stdout = remove_rebase_lines(stdout);
         insta::assert_snapshot!(stdout, @r###"
+        branchless: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: <git-executable> rebase --continue
         Finished restacking commits.
@@ -200,6 +203,7 @@ fn test_restack_amended_master() -> anyhow::Result<()> {
         let (stdout, _stderr) = git.run(&["restack"])?;
         let stdout = remove_rebase_lines(stdout);
         insta::assert_snapshot!(stdout, @r###"
+        branchless: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: <git-executable> rebase --continue
         Finished restacking commits.
@@ -259,6 +263,7 @@ fn test_restack_multiple_amended() -> anyhow::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["restack"])?;
         insta::assert_snapshot!(stdout, @r###"
+        branchless: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: <git-executable> rebase --continue
         Finished restacking commits.
@@ -342,6 +347,7 @@ fn test_restack_single_of_many_commits() -> anyhow::Result<()> {
         branchless: processing checkout
         "###);
         insta::assert_snapshot!(stdout, @r###"
+        branchless: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: <git-executable> rebase --continue
         Finished restacking commits.
