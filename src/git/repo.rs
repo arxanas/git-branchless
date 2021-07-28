@@ -203,7 +203,9 @@ impl From<MaybeZeroOid> for Option<NonZeroOid> {
     }
 }
 
-/// Information about the current `HEAD` of the repository.
+/// A snapshot of information about the current `HEAD` of the repository. If
+/// `HEAD` is updated after a `HeadInfo` value is obtained, then it is not
+/// reflected in the value.
 ///
 /// `HEAD` is typically a symbolic reference, which means that it's a reference
 /// that points to another reference. Usually, the other reference is a branch.
@@ -219,9 +221,7 @@ impl From<MaybeZeroOid> for Option<NonZeroOid> {
 /// - `HEAD` is unborn. This means that it doesn't even exist yet. This happens
 /// when a repository has been freshly initialized, but no commits have been
 /// made, for example.
-pub struct HeadInfo<'repo> {
-    repo: &'repo Repo,
-
+pub struct HeadInfo {
     /// The OID of the commit that `HEAD` points to. If `HEAD` is unborn, then
     /// this is `None`.
     pub oid: Option<NonZeroOid>,
@@ -231,7 +231,7 @@ pub struct HeadInfo<'repo> {
     reference_name: Option<String>,
 }
 
-impl<'repo> HeadInfo<'repo> {
+impl HeadInfo {
     /// Get the name of the branch, if any. Returns `None` if `HEAD` is
     /// detached.  The `refs/heads/` prefix, if any, is stripped.
     pub fn get_branch_name(&self) -> Option<&str> {
@@ -241,22 +241,6 @@ impl<'repo> HeadInfo<'repo> {
                 Some(branch_name) => branch_name,
                 None => &name,
             })
-    }
-
-    /// Detach `HEAD` by making it point directly to its current OID, rather
-    /// than to a branch. If `HEAD` is already detached, logs a warning.
-    pub fn detach_head(&self) -> anyhow::Result<()> {
-        match self.oid {
-            Some(oid) => self
-                .repo
-                .inner
-                .set_head_detached(oid.inner)
-                .map_err(wrap_git_error),
-            None => {
-                log::warn!("Attempted to detach `HEAD` while `HEAD` is unborn");
-                Ok(())
-            }
-        }
     }
 }
 
@@ -374,7 +358,6 @@ impl Repo {
             None => (MaybeZeroOid::Zero, None),
         };
         Ok(HeadInfo {
-            repo: self,
             oid: head_oid.into(),
             reference_name,
         })
@@ -386,6 +369,21 @@ impl Repo {
     pub fn set_head(&self, oid: NonZeroOid) -> anyhow::Result<()> {
         self.inner.set_head_detached(oid.inner)?;
         Ok(())
+    }
+
+    /// Detach `HEAD` by making it point directly to its current OID, rather
+    /// than to a branch. If `HEAD` is already detached, logs a warning.
+    pub fn detach_head(&self, head_info: &HeadInfo) -> anyhow::Result<()> {
+        match head_info.oid {
+            Some(oid) => self
+                .inner
+                .set_head_detached(oid.inner)
+                .map_err(wrap_git_error),
+            None => {
+                log::warn!("Attempted to detach `HEAD` while `HEAD` is unborn");
+                Ok(())
+            }
+        }
     }
 
     /// Get the `Reference` for the main branch for the repository.
