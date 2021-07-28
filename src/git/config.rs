@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use anyhow::Context;
 use fn_error_context::context;
 
-use super::wrap_git_error;
+use super::repo::wrap_git_error;
 
 /// Wrapper around the config values stored on disk for Git.
 pub struct Config {
