@@ -87,7 +87,7 @@ impl FromStr for GitVersion {
     #[context("Parsing Git version from string: {:?}", output)]
     fn from_str(output: &str) -> anyhow::Result<GitVersion> {
         let output = output.trim();
-        let words = output.split(' ').collect::<Vec<&str>>();
+        let words = output.split(&[' ', '-'][..]).collect::<Vec<&str>>();
         let version_str = match &words.as_slice() {
             [_git, _version, version_str, ..] => version_str,
             _ => anyhow::bail!("Could not parse Git version output: {:?}", output),
@@ -1100,5 +1100,11 @@ mod tests {
                 .unwrap(),
             GitVersion(12, 34, 56)
         );
+
+        // See https://github.com/arxanas/git-branchless/issues/69
+        assert_eq!(
+            "git version 2.33.0-rc0".parse::<GitVersion>().unwrap(),
+            GitVersion(2, 33, 0)
+        )
     }
 }
