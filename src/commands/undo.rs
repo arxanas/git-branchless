@@ -9,11 +9,11 @@ use std::io::{stdin, stdout, BufRead, BufReader, Read, Write};
 use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
 use std::time::SystemTime;
 
-use anyhow::Context;
 use cursive::event::Key;
 use cursive::utils::markup::StyledString;
 use cursive::views::{Dialog, EditView, LinearLayout, OnEventView, ScrollView, TextView};
 use cursive::{Cursive, CursiveRunnable, CursiveRunner};
+use eyre::Context;
 
 use crate::commands::smartlog::render_graph;
 use crate::core::eventlog::{Event, EventCursor, EventLogDb, EventReplayer, EventTransactionId};
@@ -34,7 +34,7 @@ fn render_cursor_smartlog(
     merge_base_db: &MergeBaseDb,
     event_replayer: &EventReplayer,
     event_cursor: EventCursor,
-) -> anyhow::Result<Vec<StyledString>> {
+) -> eyre::Result<Vec<StyledString>> {
     let head_oid = event_replayer.get_cursor_head_oid(event_cursor);
     let main_branch_oid = event_replayer.get_cursor_main_branch_oid(event_cursor, repo)?;
     let branch_oid_to_names = event_replayer.get_cursor_branch_oid_to_names(event_cursor, repo)?;
@@ -66,7 +66,7 @@ fn render_cursor_smartlog(
     Ok(result)
 }
 
-fn describe_event(repo: &Repo, event: &Event) -> anyhow::Result<Vec<StyledString>> {
+fn describe_event(repo: &Repo, event: &Event) -> eyre::Result<Vec<StyledString>> {
     let result = match event {
         Event::CommitEvent {
             timestamp: _,
@@ -286,7 +286,7 @@ fn describe_event(repo: &Repo, event: &Event) -> anyhow::Result<Vec<StyledString
 fn describe_events_numbered(
     repo: &Repo,
     events: &[Event],
-) -> Result<Vec<StyledString>, anyhow::Error> {
+) -> Result<Vec<StyledString>, eyre::Error> {
     let mut lines = Vec::new();
     for (i, event) in (1..).zip(events) {
         let num_header = format!("{}. ", i);
@@ -313,7 +313,7 @@ fn select_past_event(
     repo: &Repo,
     merge_base_db: &MergeBaseDb,
     event_replayer: &mut EventReplayer,
-) -> anyhow::Result<Option<EventCursor>> {
+) -> eyre::Result<Option<EventCursor>> {
     #[derive(Clone, Copy, Debug)]
     enum Message {
         Init,
@@ -376,7 +376,7 @@ fn select_past_event(
         let redraw = |siv: &mut Cursive,
                       event_replayer: &mut EventReplayer,
                       event_cursor: EventCursor|
-         -> anyhow::Result<()> {
+         -> eyre::Result<()> {
             let smartlog = render_cursor_smartlog(
                 &glyphs,
                 &repo,
@@ -533,7 +533,7 @@ fn inverse_event(
     event: Event,
     now: SystemTime,
     event_tx_id: EventTransactionId,
-) -> anyhow::Result<Event> {
+) -> eyre::Result<Event> {
     let timestamp = now.duration_since(SystemTime::UNIX_EPOCH)?.as_secs_f64();
     let inverse_event = match event {
         Event::CommitEvent {
@@ -621,7 +621,7 @@ fn undo_events(
     event_log_db: &mut EventLogDb,
     event_replayer: &EventReplayer,
     event_cursor: EventCursor,
-) -> anyhow::Result<isize> {
+) -> eyre::Result<isize> {
     let now = SystemTime::now();
     let event_tx_id = event_log_db.make_transaction_id(now, "undo")?;
     let inverse_events: Vec<Event> = event_replayer
@@ -642,7 +642,7 @@ fn undo_events(
             )
         })
         .map(|event| inverse_event(event.clone(), now, event_tx_id))
-        .collect::<anyhow::Result<Vec<Event>>>()?;
+        .collect::<eyre::Result<Vec<Event>>>()?;
     let mut inverse_events = optimize_inverse_events(inverse_events);
 
     // Move any checkout operations to be first. Otherwise, we have the risk
@@ -714,7 +714,7 @@ fn undo_events(
                             target_oid.as_os_str(),
                         ],
                     )
-                    .with_context(|| "Updating to previous HEAD location")?;
+                    .wrap_err_with(|| "Updating to previous HEAD location")?;
             }
             Event::RefUpdateEvent {
                 timestamp: _,
@@ -737,7 +737,7 @@ fn undo_events(
                 Some(mut reference) => {
                     reference
                         .delete()
-                        .with_context(|| "Applying `RefUpdateEvent`")?;
+                        .wrap_err_with(|| "Applying `RefUpdateEvent`")?;
                 }
                 None => {
                     writeln!(
@@ -780,7 +780,7 @@ fn undo_events(
 }
 
 /// Restore the repository to a previous state interactively.
-pub fn undo(git_run_info: &GitRunInfo) -> anyhow::Result<isize> {
+pub fn undo(git_run_info: &GitRunInfo) -> eyre::Result<isize> {
     let glyphs = Glyphs::detect();
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
@@ -828,7 +828,7 @@ pub mod testing {
         repo: &Repo,
         merge_base_db: &MergeBaseDb,
         event_replayer: &mut EventReplayer,
-    ) -> anyhow::Result<Option<EventCursor>> {
+    ) -> eyre::Result<Option<EventCursor>> {
         super::select_past_event(siv, glyphs, repo, merge_base_db, event_replayer)
     }
 
@@ -841,7 +841,7 @@ pub mod testing {
         event_log_db: &mut EventLogDb,
         event_replayer: &EventReplayer,
         event_cursor: EventCursor,
-    ) -> anyhow::Result<isize> {
+    ) -> eyre::Result<isize> {
         super::undo_events(
             in_,
             out,
@@ -862,7 +862,7 @@ mod tests {
     use crate::core::eventlog::testing::make_dummy_transaction_id;
 
     #[test]
-    fn test_optimize_inverse_events() -> anyhow::Result<()> {
+    fn test_optimize_inverse_events() -> eyre::Result<()> {
         let event_tx_id = make_dummy_transaction_id(123);
         let input = vec![
             Event::RefUpdateEvent {

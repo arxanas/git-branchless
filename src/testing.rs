@@ -12,7 +12,8 @@ use std::process::{Command, Stdio};
 use crate::git::{GitRunInfo, GitVersion, NonZeroOid, Repo};
 use crate::util::get_sh;
 
-use anyhow::Context;
+use color_eyre::Help;
+use eyre::{eyre, Context};
 use lazy_static::lazy_static;
 use regex::{Captures, Regex};
 use tempfile::TempDir;
@@ -96,11 +97,11 @@ impl Git {
     }
 
     /// Replace dynamic strings in the output, for testing purposes.
-    pub fn preprocess_output(&self, stdout: String) -> anyhow::Result<String> {
+    pub fn preprocess_output(&self, stdout: String) -> eyre::Result<String> {
         let path_to_git = self
             .path_to_git
             .to_str()
-            .ok_or_else(|| anyhow::anyhow!("Could not convert path to Git to string"))?;
+            .ok_or_else(|| eyre::eyre!("Could not convert path to Git to string"))?;
         let output = stdout.replace(path_to_git, "<git-executable>");
 
         // NB: tests which run on Windows are unlikely to succeed due to this
@@ -109,7 +110,7 @@ impl Git {
 
         let repo_path = repo_path
             .to_str()
-            .ok_or_else(|| anyhow::anyhow!("Could not convert repo path to string"))?;
+            .ok_or_else(|| eyre::eyre!("Could not convert repo path to string"))?;
         let output = output.replace(&repo_path, "<repo-path>");
 
         lazy_static! {
@@ -167,7 +168,7 @@ impl Git {
         &self,
         args: &[S],
         options: &GitRunOptions,
-    ) -> anyhow::Result<(String, String)> {
+    ) -> eyre::Result<(String, String)> {
         let GitRunOptions {
             time,
             expected_exit_code,
@@ -212,7 +213,7 @@ impl Git {
                 .stderr(Stdio::piped())
                 .spawn()?;
             write!(child.stdin.take().unwrap(), "{}", &input)?;
-            child.wait_with_output().with_context(|| {
+            child.wait_with_output().wrap_err_with(|| {
                 format!(
                     "Running git
                     Executable: {:?}
@@ -223,7 +224,7 @@ impl Git {
                 )
             })?
         } else {
-            command.output().with_context(|| {
+            command.output().wrap_err_with(|| {
                 format!(
                     "Running git
                     Executable: {:?}
@@ -239,7 +240,7 @@ impl Git {
             .code()
             .expect("Failed to read exit code from Git process");
         let result = if exit_code != *expected_exit_code {
-            anyhow::bail!(
+            eyre::bail!(
                 "Git command {:?} {:?} exited with unexpected code {} (expected {})
                 stdout:
                 {}
@@ -266,14 +267,14 @@ impl Git {
     pub fn run<S: AsRef<str> + std::fmt::Debug>(
         &self,
         args: &[S],
-    ) -> anyhow::Result<(String, String)> {
+    ) -> eyre::Result<(String, String)> {
         self.run_with_options(args, &Default::default())
     }
 
     /// Set up a Git repo in the directory and initialize git-branchless to work
     /// with it.
     #[instrument]
-    pub fn init_repo_with_options(&self, options: &GitInitOptions) -> anyhow::Result<()> {
+    pub fn init_repo_with_options(&self, options: &GitInitOptions) -> eyre::Result<()> {
         self.run(&["init"])?;
         self.run(&["config", "user.name", DUMMY_NAME])?;
         self.run(&["config", "user.email", DUMMY_EMAIL])?;
@@ -294,12 +295,12 @@ impl Git {
 
     /// Set up a Git repo in the directory and initialize git-branchless to work
     /// with it.
-    pub fn init_repo(&self) -> anyhow::Result<()> {
+    pub fn init_repo(&self) -> eyre::Result<()> {
         self.init_repo_with_options(&Default::default())
     }
 
     /// Write the provided contents to the provided file in the repository root.
-    pub fn write_file(&self, name: &str, contents: &str) -> anyhow::Result<()> {
+    pub fn write_file(&self, name: &str, contents: &str) -> eyre::Result<()> {
         let file_path = self.repo_path.join(format!("{}.txt", name));
         std::fs::write(&file_path, contents)?;
         Ok(())
@@ -313,7 +314,7 @@ impl Git {
         name: &str,
         time: isize,
         contents: &str,
-    ) -> anyhow::Result<NonZeroOid> {
+    ) -> eyre::Result<NonZeroOid> {
         self.write_file(name, contents)?;
         self.run(&["add", "."])?;
         self.run_with_options(
@@ -334,7 +335,7 @@ impl Git {
 
     /// Commit a file with default contents. The `time` argument is used to set
     /// the commit timestamp, which is factored into the commit hash.
-    pub fn commit_file(&self, name: &str, time: isize) -> anyhow::Result<NonZeroOid> {
+    pub fn commit_file(&self, name: &str, time: isize) -> eyre::Result<NonZeroOid> {
         self.commit_file_with_contents(name, time, &format!("{} contents\n", name))
     }
 
@@ -342,20 +343,20 @@ impl Git {
     /// checked out, and therefore that future commit operations don't move any
     /// branches.
     #[instrument]
-    pub fn detach_head(&self) -> anyhow::Result<()> {
+    pub fn detach_head(&self) -> eyre::Result<()> {
         self.run(&["checkout", "--detach"])?;
         Ok(())
     }
 
     /// Get a `Repo` object for this repository.
     #[instrument]
-    pub fn get_repo(&self) -> anyhow::Result<Repo> {
+    pub fn get_repo(&self) -> eyre::Result<Repo> {
         Repo::from_dir(&self.repo_path)
     }
 
     /// Get the version of the Git executable.
     #[instrument]
-    pub fn get_version(&self) -> anyhow::Result<GitVersion> {
+    pub fn get_version(&self) -> eyre::Result<GitVersion> {
         let (version_str, _stderr) = self.run(&["version"])?;
         version_str.parse()
     }
@@ -363,7 +364,7 @@ impl Git {
     /// Determine if the Git executable supports the `reference-transaction`
     /// hook.
     #[instrument]
-    pub fn supports_reference_transactions(&self) -> anyhow::Result<bool> {
+    pub fn supports_reference_transactions(&self) -> eyre::Result<bool> {
         let version = self.get_version()?;
         Ok(version >= GitVersion(2, 29, 0))
     }
@@ -373,7 +374,7 @@ impl Git {
     ///
     /// This affects whether we can rely on the timestamps being preserved
     /// during a rebase when `branchless.restack.preserveTimestamps` is set.
-    pub fn supports_committer_date_is_author_date(&self) -> anyhow::Result<bool> {
+    pub fn supports_committer_date_is_author_date(&self) -> eyre::Result<bool> {
         // The `--committer-date-is-author-date` option was previously passed
         // only to the `am` rebase back-end, until Git v2.29, when it became
         // available for merge back-end rebases as well.
@@ -397,11 +398,11 @@ impl Git {
     /// Resolve a file during a merge or rebase conflict with the provided
     /// contents.
     #[instrument]
-    pub fn resolve_file(&self, name: &str, contents: &str) -> anyhow::Result<()> {
+    pub fn resolve_file(&self, name: &str, contents: &str) -> eyre::Result<()> {
         let file_path = self.repo_path.join(format!("{}.txt", name));
         std::fs::write(&file_path, contents)?;
         let file_path = match file_path.to_str() {
-            None => anyhow::bail!("Could not convert file path to string: {:?}", file_path),
+            None => eyre::bail!("Could not convert file path to string: {:?}", file_path),
             Some(file_path) => file_path,
         };
         self.run(&["add", file_path])?;
@@ -411,10 +412,12 @@ impl Git {
 
 /// Get the path to the Git executable for testing.
 #[instrument]
-pub fn get_path_to_git() -> anyhow::Result<PathBuf> {
-    let path_to_git = std::env::var_os("PATH_TO_GIT").with_context(|| {
-        "No path to git set. Try running as: PATH_TO_GIT=$(which git) cargo test ..."
-    })?;
+pub fn get_path_to_git() -> eyre::Result<PathBuf> {
+    let path_to_git = std::env::var_os("PATH_TO_GIT")
+        .ok_or_else(|| eyre!("Could not get path to Git executable"))
+        .suggestion(
+            "No path to git set. Try running as: PATH_TO_GIT=$(which git) cargo test ...",
+        )?;
     let path_to_git = PathBuf::from(&path_to_git);
     Ok(path_to_git)
 }
@@ -434,7 +437,7 @@ impl Deref for GitWrapper {
 }
 
 /// Create a temporary directory for testing and a `Git` instance to use with it.
-pub fn make_git() -> anyhow::Result<GitWrapper> {
+pub fn make_git() -> eyre::Result<GitWrapper> {
     let repo_dir = tempfile::tempdir()?;
     let path_to_git = get_path_to_git()?;
     let path_to_git = GitRunInfo {

@@ -1,7 +1,7 @@
 use branchless::testing::{make_git, GitRunOptions};
 
 #[test]
-fn test_prev() -> anyhow::Result<()> {
+fn test_prev() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -35,7 +35,7 @@ fn test_prev() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_prev_multiple() -> anyhow::Result<()> {
+fn test_prev_multiple() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -56,7 +56,7 @@ fn test_prev_multiple() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_next_multiple() -> anyhow::Result<()> {
+fn test_next_multiple() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -81,7 +81,7 @@ fn test_next_multiple() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_next_ambiguous() -> anyhow::Result<()> {
+fn test_next_ambiguous() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -145,7 +145,7 @@ fn test_next_ambiguous() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_next_on_master() -> anyhow::Result<()> {
+fn test_next_on_master() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -170,7 +170,7 @@ fn test_next_on_master() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_next_on_master2() -> anyhow::Result<()> {
+fn test_next_on_master2() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;

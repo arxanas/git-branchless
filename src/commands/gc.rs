@@ -11,7 +11,7 @@
 
 use std::ffi::OsStr;
 
-use anyhow::Context;
+use eyre::Context;
 use tracing::instrument;
 
 use crate::core::eventlog::{is_gc_ref, EventLogDb, EventReplayer};
@@ -22,7 +22,7 @@ use crate::git::{NonZeroOid, Reference, Repo};
 fn find_dangling_references<'repo>(
     repo: &'repo Repo,
     graph: &CommitGraph,
-) -> anyhow::Result<Vec<Reference<'repo>>> {
+) -> eyre::Result<Vec<Reference<'repo>>> {
     let mut result = Vec::new();
     for reference in repo.get_all_references()? {
         let reference_name = reference.get_name()?;
@@ -49,9 +49,9 @@ fn find_dangling_references<'repo>(
 /// * `repo`: The Git repository.
 /// * `commit_oid`: The commit OID to mark as reachable.
 #[instrument]
-pub fn mark_commit_reachable(repo: &Repo, commit_oid: NonZeroOid) -> anyhow::Result<()> {
+pub fn mark_commit_reachable(repo: &Repo, commit_oid: NonZeroOid) -> eyre::Result<()> {
     let ref_name = format!("refs/branchless/{}", commit_oid.to_string());
-    anyhow::ensure!(
+    eyre::ensure!(
         Reference::is_valid_name(&ref_name),
         format!("Invalid ref name to mark commit as reachable: {}", ref_name)
     );
@@ -61,7 +61,7 @@ pub fn mark_commit_reachable(repo: &Repo, commit_oid: NonZeroOid) -> anyhow::Res
         true,
         "branchless: marking commit as reachable",
     )
-    .with_context(|| format!("Creating reference {}", ref_name))?;
+    .wrap_err_with(|| format!("Creating reference {}", ref_name))?;
     Ok(())
 }
 
@@ -69,7 +69,7 @@ pub fn mark_commit_reachable(repo: &Repo, commit_oid: NonZeroOid) -> anyhow::Res
 ///
 /// Frees any references to commits which are no longer visible in the smartlog.
 #[instrument]
-pub fn gc() -> anyhow::Result<()> {
+pub fn gc() -> eyre::Result<()> {
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
     let merge_base_db = MergeBaseDb::new(&conn)?;
@@ -95,7 +95,7 @@ pub fn gc() -> anyhow::Result<()> {
     for mut reference in dangling_references.into_iter() {
         reference
             .delete()
-            .with_context(|| format!("Deleting reference {:?}", reference.get_name()))?;
+            .wrap_err_with(|| format!("Deleting reference {:?}", reference.get_name()))?;
     }
     Ok(())
 }

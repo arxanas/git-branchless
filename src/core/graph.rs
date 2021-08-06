@@ -85,12 +85,12 @@ fn find_path_to_merge_base_internal<'repo>(
     commit_oid: NonZeroOid,
     target_oid: NonZeroOid,
     mut visited_commit_callback: impl FnMut(NonZeroOid),
-) -> anyhow::Result<Option<Vec<Commit<'repo>>>> {
+) -> eyre::Result<Option<Vec<Commit<'repo>>>> {
     let mut queue = VecDeque::new();
     visited_commit_callback(commit_oid);
     let first_commit = match repo.find_commit(commit_oid)? {
         Some(commit) => commit,
-        None => anyhow::bail!("Unable to find commit with OID: {:?}", commit_oid),
+        None => eyre::bail!("Unable to find commit with OID: {:?}", commit_oid),
     };
     queue.push_back(vec![first_commit]);
     let merge_base_oid = merge_base_db.get_merge_base_oid(repo, commit_oid, target_oid)?;
@@ -141,7 +141,7 @@ pub fn find_path_to_merge_base<'repo>(
     merge_base_db: &MergeBaseDb,
     commit_oid: NonZeroOid,
     target_oid: NonZeroOid,
-) -> anyhow::Result<Option<Vec<Commit<'repo>>>> {
+) -> eyre::Result<Option<Vec<Commit<'repo>>>> {
     find_path_to_merge_base_internal(repo, merge_base_db, commit_oid, target_oid, |_commit| {})
 }
 
@@ -159,7 +159,7 @@ fn walk_from_commits<'repo>(
     event_cursor: EventCursor,
     main_branch_oid: &MainBranchOid,
     commit_oids: &CommitOids,
-) -> anyhow::Result<CommitGraph<'repo>> {
+) -> eyre::Result<CommitGraph<'repo>> {
     let mut graph: CommitGraph = Default::default();
 
     for commit_oid in &commit_oids.0 {
@@ -381,7 +381,7 @@ pub fn make_graph<'repo>(
     main_branch_oid: &MainBranchOid,
     branch_oids: &BranchOids,
     remove_commits: bool,
-) -> anyhow::Result<CommitGraph<'repo>> {
+) -> eyre::Result<CommitGraph<'repo>> {
     let mut commit_oids: HashSet<NonZeroOid> = event_replayer
         .get_cursor_active_oids(event_cursor)
         .into_iter()
@@ -417,7 +417,7 @@ mod tests {
     use crate::testing::make_git;
 
     #[test]
-    fn test_find_path_to_merge_base_stop_early() -> anyhow::Result<()> {
+    fn test_find_path_to_merge_base_stop_early() -> eyre::Result<()> {
         let git = make_git()?;
 
         git.init_repo()?;
@@ -467,7 +467,7 @@ pub enum ResolveCommitsResult<'repo> {
 /// - Short OIDs.
 /// - Reference names.
 #[instrument]
-pub fn resolve_commits(repo: &Repo, hashes: Vec<String>) -> anyhow::Result<ResolveCommitsResult> {
+pub fn resolve_commits(repo: &Repo, hashes: Vec<String>) -> eyre::Result<ResolveCommitsResult> {
     let mut commits = Vec::new();
     for hash in hashes {
         let commit = match repo.revparse_single_commit(&hash)? {

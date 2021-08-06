@@ -1,7 +1,7 @@
 use branchless::testing::{make_git, GitRunOptions};
 
 #[test]
-fn test_hide_commit() -> anyhow::Result<()> {
+fn test_hide_commit() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -43,7 +43,7 @@ fn test_hide_commit() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_hide_bad_commit() -> anyhow::Result<()> {
+fn test_hide_bad_commit() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -63,7 +63,7 @@ fn test_hide_bad_commit() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_hide_already_hidden_commit() -> anyhow::Result<()> {
+fn test_hide_already_hidden_commit() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -84,7 +84,7 @@ fn test_hide_already_hidden_commit() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_hide_current_commit() -> anyhow::Result<()> {
+fn test_hide_current_commit() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -105,7 +105,7 @@ fn test_hide_current_commit() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_hidden_commit_with_head_as_child() -> anyhow::Result<()> {
+fn test_hidden_commit_with_head_as_child() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -133,7 +133,7 @@ fn test_hidden_commit_with_head_as_child() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_hide_master_commit_with_hidden_children() -> anyhow::Result<()> {
+fn test_hide_master_commit_with_hidden_children() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -158,7 +158,7 @@ fn test_hide_master_commit_with_hidden_children() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_branches_always_visible() -> anyhow::Result<()> {
+fn test_branches_always_visible() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -191,7 +191,7 @@ fn test_branches_always_visible() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_unhide() -> anyhow::Result<()> {
+fn test_unhide() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -242,7 +242,7 @@ fn test_unhide() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_hide_recursive() -> anyhow::Result<()> {
+fn test_hide_recursive() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;

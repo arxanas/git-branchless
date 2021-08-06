@@ -3,8 +3,8 @@
 use std::io::{stdin, stdout, BufRead, BufReader, Write};
 use std::path::PathBuf;
 
-use anyhow::Context;
 use console::style;
+use eyre::Context;
 use tracing::{instrument, warn};
 
 use crate::core::config::get_core_hooks_path;
@@ -71,7 +71,7 @@ enum Hook {
 }
 
 #[instrument]
-fn determine_hook_path(repo: &Repo, hook_type: &str) -> anyhow::Result<Hook> {
+fn determine_hook_path(repo: &Repo, hook_type: &str) -> eyre::Result<Hook> {
     let multi_hooks_path = repo.get_path().join("hooks_multi");
     let hook = if multi_hooks_path.exists() {
         let path = multi_hooks_path
@@ -115,7 +115,7 @@ fn update_between_lines(lines: &str, updated_lines: &str) -> String {
 }
 
 #[instrument]
-fn update_hook_contents(hook: &Hook, hook_contents: &str) -> anyhow::Result<()> {
+fn update_hook_contents(hook: &Hook, hook_contents: &str) -> eyre::Result<()> {
     let (hook_path, hook_contents) = match hook {
         Hook::RegularHook { path } => match std::fs::read_to_string(path) {
             Ok(lines) => {
@@ -130,7 +130,7 @@ fn update_hook_contents(hook: &Hook, hook_contents: &str) -> anyhow::Result<()> 
                 (path, hook_contents)
             }
             Err(other) => {
-                return Err(anyhow::anyhow!(other));
+                return Err(eyre::eyre!(other));
             }
         },
         Hook::MultiHook { path } => (path, format!("{}\n{}", SHEBANG, hook_contents)),
@@ -138,39 +138,39 @@ fn update_hook_contents(hook: &Hook, hook_contents: &str) -> anyhow::Result<()> 
 
     let hook_dir = hook_path
         .parent()
-        .ok_or_else(|| anyhow::anyhow!("No parent for dir {:?}", hook_path))?;
+        .ok_or_else(|| eyre::eyre!("No parent for dir {:?}", hook_path))?;
     std::fs::create_dir_all(hook_dir)
-        .with_context(|| format!("Creating hook dir {:?}", hook_path))?;
+        .wrap_err_with(|| format!("Creating hook dir {:?}", hook_path))?;
     std::fs::write(hook_path, hook_contents)
-        .with_context(|| format!("Writing hook contents to {:?}", hook_path))?;
+        .wrap_err_with(|| format!("Writing hook contents to {:?}", hook_path))?;
 
     // Setting hook file as executable only supported on Unix systems.
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         let metadata = std::fs::metadata(hook_path)
-            .with_context(|| format!("Reading hook permissions for {:?}", hook_path))?;
+            .wrap_err_with(|| format!("Reading hook permissions for {:?}", hook_path))?;
         let mut permissions = metadata.permissions();
         let mode = permissions.mode();
         // Set execute bits.
         let mode = mode | 0o111;
         permissions.set_mode(mode);
         std::fs::set_permissions(hook_path, permissions)
-            .with_context(|| format!("Marking {:?} as executable", hook_path))?;
+            .wrap_err_with(|| format!("Marking {:?} as executable", hook_path))?;
     }
 
     Ok(())
 }
 
 #[instrument]
-fn install_hook(repo: &Repo, hook_type: &str, hook_script: &str) -> anyhow::Result<()> {
+fn install_hook(repo: &Repo, hook_type: &str, hook_script: &str) -> eyre::Result<()> {
     let hook = determine_hook_path(repo, hook_type)?;
     update_hook_contents(&hook, hook_script)?;
     Ok(())
 }
 
 #[instrument]
-fn install_hooks(repo: &Repo) -> anyhow::Result<()> {
+fn install_hooks(repo: &Repo) -> eyre::Result<()> {
     for (hook_type, hook_script) in ALL_HOOKS {
         println!("Installing hook: {}", hook_type);
         install_hook(repo, hook_type, hook_script)?;
@@ -179,7 +179,7 @@ fn install_hooks(repo: &Repo) -> anyhow::Result<()> {
 }
 
 #[instrument]
-fn uninstall_hooks(repo: &Repo) -> anyhow::Result<()> {
+fn uninstall_hooks(repo: &Repo) -> eyre::Result<()> {
     for (hook_type, _hook_script) in ALL_HOOKS {
         println!("Uninstalling hook: {}", hook_type);
         install_hook(
@@ -195,13 +195,13 @@ fn uninstall_hooks(repo: &Repo) -> anyhow::Result<()> {
 }
 
 #[instrument]
-fn install_alias(config: &mut Config, from: &str, to: &str) -> anyhow::Result<()> {
+fn install_alias(config: &mut Config, from: &str, to: &str) -> eyre::Result<()> {
     config.set(format!("alias.{}", from), format!("branchless {}", to))?;
     Ok(())
 }
 
 #[instrument]
-fn detect_main_branch_name(repo: &Repo) -> anyhow::Result<Option<String>> {
+fn detect_main_branch_name(repo: &Repo) -> eyre::Result<Option<String>> {
     for branch_name in [
         "master",
         "main",
@@ -226,7 +226,7 @@ fn install_aliases(
     repo: &mut Repo,
     config: &mut Config,
     git_run_info: &GitRunInfo,
-) -> anyhow::Result<()> {
+) -> eyre::Result<()> {
     for (from, to) in ALL_ALIASES {
         println!(
             "Installing alias (non-global): git {} -> git branchless {}",
@@ -237,11 +237,11 @@ fn install_aliases(
 
     let version_str = git_run_info
         .run_silent(repo, None, &["version"])
-        .with_context(|| "Determining Git version")?;
+        .wrap_err_with(|| "Determining Git version")?;
     let version_str = version_str.trim();
     let version: GitVersion = version_str
         .parse()
-        .with_context(|| format!("Parsing Git version string: {}", version_str))?;
+        .wrap_err_with(|| format!("Parsing Git version string: {}", version_str))?;
     if version < GitVersion(2, 29, 0) {
         print!(
             "\
@@ -266,22 +266,18 @@ the branchless workflow will work properly.
 }
 
 #[instrument]
-fn uninstall_aliases(config: &mut Config) -> anyhow::Result<()> {
+fn uninstall_aliases(config: &mut Config) -> eyre::Result<()> {
     for (from, _to) in ALL_ALIASES {
         println!("Uninstalling alias (non-global): git {}", from);
         config
             .remove(&format!("alias.{}", from))
-            .with_context(|| format!("Uninstalling alias {}", from))?;
+            .wrap_err_with(|| format!("Uninstalling alias {}", from))?;
     }
     Ok(())
 }
 
 #[instrument(skip(value))]
-fn set_config(
-    config: &mut Config,
-    name: &str,
-    value: impl Into<ConfigValue>,
-) -> anyhow::Result<()> {
+fn set_config(config: &mut Config, name: &str, value: impl Into<ConfigValue>) -> eyre::Result<()> {
     let value = value.into();
     println!("Setting config (non-global): {} = {}", name, value);
     config.set(name, value)?;
@@ -289,7 +285,7 @@ fn set_config(
 }
 
 #[instrument(skip(r#in))]
-fn set_configs(r#in: &mut impl BufRead, repo: &Repo, config: &mut Config) -> anyhow::Result<()> {
+fn set_configs(r#in: &mut impl BufRead, repo: &Repo, config: &mut Config) -> eyre::Result<()> {
     let main_branch_name = match detect_main_branch_name(repo)? {
         Some(main_branch_name) => {
             println!(
@@ -313,7 +309,7 @@ fn set_configs(r#in: &mut impl BufRead, repo: &Repo, config: &mut Config) -> any
             let mut input = String::new();
             r#in.read_line(&mut input)?;
             match input.trim() {
-                "" => anyhow::bail!("No main branch name provided"),
+                "" => eyre::bail!("No main branch name provided"),
                 main_branch_name => main_branch_name.to_string(),
             }
         }
@@ -324,19 +320,19 @@ fn set_configs(r#in: &mut impl BufRead, repo: &Repo, config: &mut Config) -> any
 }
 
 #[instrument]
-fn unset_configs(config: &mut Config) -> anyhow::Result<()> {
+fn unset_configs(config: &mut Config) -> eyre::Result<()> {
     for key in ["branchless.core.mainBranch", "advice.detachedHead"] {
         println!("Unsetting config (non-global): {}", key);
         config
             .remove(key)
-            .with_context(|| format!("Unsetting config {}", key))?;
+            .wrap_err_with(|| format!("Unsetting config {}", key))?;
     }
     Ok(())
 }
 
 /// Initialize `git-branchless` in the current repo.
 #[instrument]
-pub fn init(git_run_info: &GitRunInfo) -> anyhow::Result<()> {
+pub fn init(git_run_info: &GitRunInfo) -> eyre::Result<()> {
     let mut in_ = BufReader::new(stdin());
     let mut repo = Repo::from_current_dir()?;
     let mut config = repo.get_config()?;
@@ -358,9 +354,9 @@ pub fn init(git_run_info: &GitRunInfo) -> anyhow::Result<()> {
 
 /// Uninstall `git-branchless` in the current repo.
 #[instrument]
-pub fn uninstall() -> anyhow::Result<()> {
+pub fn uninstall() -> eyre::Result<()> {
     let repo = Repo::from_current_dir()?;
-    let mut config = repo.get_config().with_context(|| "Getting repo config")?;
+    let mut config = repo.get_config().wrap_err_with(|| "Getting repo config")?;
     unset_configs(&mut config)?;
     uninstall_hooks(&repo)?;
     uninstall_aliases(&mut config)?;

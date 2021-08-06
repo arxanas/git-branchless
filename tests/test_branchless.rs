@@ -1,7 +1,7 @@
 use branchless::testing::make_git;
 
 #[test]
-fn test_commands() -> anyhow::Result<()> {
+fn test_commands() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;

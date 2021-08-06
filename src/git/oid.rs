@@ -3,7 +3,7 @@ use std::ffi::{OsStr, OsString};
 use std::fmt::Display;
 use std::str::FromStr;
 
-use anyhow::Context;
+use eyre::Context;
 
 use crate::git::repo::wrap_git_error;
 
@@ -20,18 +20,18 @@ impl Display for NonZeroOid {
 }
 
 impl TryFrom<MaybeZeroOid> for NonZeroOid {
-    type Error = anyhow::Error;
+    type Error = eyre::Error;
 
     fn try_from(value: MaybeZeroOid) -> Result<Self, Self::Error> {
         match value {
             MaybeZeroOid::NonZero(non_zero_oid) => Ok(non_zero_oid),
-            MaybeZeroOid::Zero => anyhow::bail!("Expected a non-zero OID"),
+            MaybeZeroOid::Zero => eyre::bail!("Expected a non-zero OID"),
         }
     }
 }
 
 impl TryFrom<OsString> for NonZeroOid {
-    type Error = anyhow::Error;
+    type Error = eyre::Error;
 
     fn try_from(value: OsString) -> Result<Self, Self::Error> {
         let value: &OsStr = &value;
@@ -40,25 +40,25 @@ impl TryFrom<OsString> for NonZeroOid {
 }
 
 impl TryFrom<&OsStr> for NonZeroOid {
-    type Error = anyhow::Error;
+    type Error = eyre::Error;
 
     fn try_from(value: &OsStr) -> Result<Self, Self::Error> {
         let oid: MaybeZeroOid = value.try_into()?;
         match oid {
-            MaybeZeroOid::Zero => anyhow::bail!("OID was zero, but expected to be non-zero"),
+            MaybeZeroOid::Zero => eyre::bail!("OID was zero, but expected to be non-zero"),
             MaybeZeroOid::NonZero(oid) => Ok(oid),
         }
     }
 }
 
 impl FromStr for NonZeroOid {
-    type Err = anyhow::Error;
+    type Err = eyre::Error;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         let oid: MaybeZeroOid = value.parse()?;
         match oid {
             MaybeZeroOid::NonZero(non_zero_oid) => Ok(non_zero_oid),
-            MaybeZeroOid::Zero => anyhow::bail!("Expected a non-zero OID, but got: {:?}", value),
+            MaybeZeroOid::Zero => eyre::bail!("Expected a non-zero OID, but got: {:?}", value),
         }
     }
 }
@@ -104,14 +104,14 @@ impl Display for MaybeZeroOid {
 }
 
 impl FromStr for MaybeZeroOid {
-    type Err = anyhow::Error;
+    type Err = eyre::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.parse() {
             Ok(oid) if oid == git2::Oid::zero() => Ok(MaybeZeroOid::Zero),
             Ok(oid) => Ok(MaybeZeroOid::NonZero(NonZeroOid { inner: oid })),
             Err(err) => Err(wrap_git_error(err))
-                .with_context(|| format!("Could not parse OID from string: {:?}", s)),
+                .wrap_err_with(|| format!("Could not parse OID from string: {:?}", s)),
         }
     }
 }
@@ -127,18 +127,18 @@ impl From<git2::Oid> for MaybeZeroOid {
 }
 
 impl TryFrom<&OsStr> for MaybeZeroOid {
-    type Error = anyhow::Error;
+    type Error = eyre::Error;
 
     fn try_from(value: &OsStr) -> Result<Self, Self::Error> {
         match value.to_str() {
-            None => anyhow::bail!("OID value was not a simple ASCII value: {:?}", value),
+            None => eyre::bail!("OID value was not a simple ASCII value: {:?}", value),
             Some(value) => value.parse(),
         }
     }
 }
 
 impl TryFrom<OsString> for MaybeZeroOid {
-    type Error = anyhow::Error;
+    type Error = eyre::Error;
 
     fn try_from(value: OsString) -> Result<Self, Self::Error> {
         MaybeZeroOid::try_from(value.as_os_str())

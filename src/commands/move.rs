@@ -51,7 +51,7 @@ pub fn r#move(
     force_on_disk: bool,
     dump_rebase_constraints: bool,
     dump_rebase_plan: bool,
-) -> anyhow::Result<isize> {
+) -> eyre::Result<isize> {
     let repo = Repo::from_current_dir()?;
     let head_oid = repo.get_head_info()?.oid;
     let (source, should_resolve_base_commit) = match (source, base) {
@@ -85,7 +85,7 @@ pub fn r#move(
     let (source_oid, dest_oid) = match resolve_commits(&repo, vec![source, dest])? {
         ResolveCommitsResult::Ok { commits } => match &commits.as_slice() {
             [source_commit, dest_commit] => (source_commit.get_oid(), dest_commit.get_oid()),
-            _ => anyhow::bail!("Unexpected number of returns values from resolve_commits"),
+            _ => eyre::bail!("Unexpected number of returns values from resolve_commits"),
         },
         ResolveCommitsResult::CommitNotFound { commit } => {
             println!("Commit not found: {}", commit);

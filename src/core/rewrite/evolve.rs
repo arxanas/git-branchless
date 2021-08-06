@@ -126,7 +126,7 @@ mod tests {
     fn find_rewrite_target_helper(
         git: &Git,
         oid: NonZeroOid,
-    ) -> anyhow::Result<Option<MaybeZeroOid>> {
+    ) -> eyre::Result<Option<MaybeZeroOid>> {
         let repo = git.get_repo()?;
         let conn = repo.get_db_conn()?;
         let merge_base_db = MergeBaseDb::new(&conn)?;
@@ -152,7 +152,7 @@ mod tests {
     }
 
     #[test]
-    fn test_find_rewrite_target() -> anyhow::Result<()> {
+    fn test_find_rewrite_target() -> eyre::Result<()> {
         let git = make_git()?;
 
         git.init_repo()?;

@@ -14,7 +14,7 @@
 //! take a while. It can also happen when simply checking out an old commit to
 //! examine it.
 
-use anyhow::Context;
+use eyre::Context;
 use rusqlite::OptionalExtension;
 use tracing::instrument;
 
@@ -32,7 +32,7 @@ impl std::fmt::Debug for MergeBaseDb<'_> {
 }
 
 #[instrument]
-fn init_tables(conn: &rusqlite::Connection) -> anyhow::Result<()> {
+fn init_tables(conn: &rusqlite::Connection) -> eyre::Result<()> {
     conn.execute(
         "
 CREATE TABLE IF NOT EXISTS merge_base_oids (
@@ -44,15 +44,15 @@ CREATE TABLE IF NOT EXISTS merge_base_oids (
 ",
         rusqlite::params![],
     )
-    .context("Creating tables")?;
+    .wrap_err("Creating tables")?;
     Ok(())
 }
 
 impl<'conn> MergeBaseDb<'conn> {
     /// Constructor.
     #[instrument]
-    pub fn new(conn: &'conn rusqlite::Connection) -> anyhow::Result<Self> {
-        init_tables(&conn).context("Initializing tables")?;
+    pub fn new(conn: &'conn rusqlite::Connection) -> eyre::Result<Self> {
+        init_tables(&conn).wrap_err("Initializing tables")?;
         Ok(MergeBaseDb { conn })
     }
 
@@ -74,7 +74,7 @@ impl<'conn> MergeBaseDb<'conn> {
         repo: &Repo,
         lhs_oid: NonZeroOid,
         rhs_oid: NonZeroOid,
-    ) -> anyhow::Result<Option<NonZeroOid>> {
+    ) -> eyre::Result<Option<NonZeroOid>> {
         let (lhs_oid, rhs_oid) = if lhs_oid < rhs_oid {
             (lhs_oid, rhs_oid)
         } else {
@@ -97,13 +97,13 @@ WHERE lhs_oid = :lhs_oid
                 |row| row.get("merge_base_oid"),
             )
             .optional()
-            .context("Querying merge-base DB")?;
+            .wrap_err("Querying merge-base DB")?;
 
         match merge_base_oid {
             // Cached and non-NULL.
             Some(Some(merge_base_oid)) => {
                 let merge_base_oid: NonZeroOid =
-                    merge_base_oid.parse().context("Parsing merge-base OID")?;
+                    merge_base_oid.parse().wrap_err("Parsing merge-base OID")?;
                 Ok(Some(merge_base_oid))
             }
 
@@ -129,7 +129,7 @@ INSERT INTO merge_base_oids VALUES (
                             ":merge_base_oid": &merge_base_oid.map(|oid| oid.to_string()),
                         },
                     )
-                    .context("Caching merge-base OID")?;
+                    .wrap_err("Caching merge-base OID")?;
 
                 Ok(merge_base_oid)
             }

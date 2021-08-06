@@ -3,9 +3,9 @@ use cursive::theme::{Color, PaletteColor};
 use cursive::{Cursive, CursiveRunnable, CursiveRunner};
 
 /// Create an instance of a `CursiveRunner`, and clean it up afterward.
-pub(crate) fn with_siv<T, F: FnOnce(CursiveRunner<CursiveRunnable>) -> anyhow::Result<T>>(
+pub(crate) fn with_siv<T, F: FnOnce(CursiveRunner<CursiveRunnable>) -> eyre::Result<T>>(
     f: F,
-) -> anyhow::Result<T> {
+) -> eyre::Result<T> {
     // I tried these back-ends:
     //
     // * `ncurses`/`pancurses`: Doesn't render ANSI escape codes. (NB: the fact

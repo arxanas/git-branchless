@@ -268,7 +268,7 @@ impl From<StyledStringBuilder> for StyledString {
     }
 }
 
-fn render_style_as_ansi(content: &str, style: Style) -> anyhow::Result<String> {
+fn render_style_as_ansi(content: &str, style: Style) -> eyre::Result<String> {
     let Style { effects, color } = style;
     let output = {
         use console::style;
@@ -276,10 +276,10 @@ fn render_style_as_ansi(content: &str, style: Style) -> anyhow::Result<String> {
         let output = content.to_string();
         match color.front {
             ColorType::Palette(_) => {
-                anyhow::bail!("Not implemented: using cursive palette colors")
+                eyre::bail!("Not implemented: using cursive palette colors")
             }
             ColorType::Color(Color::Rgb(..)) | ColorType::Color(Color::RgbLowRes(..)) => {
-                anyhow::bail!("Not implemented: using raw RGB colors")
+                eyre::bail!("Not implemented: using raw RGB colors")
             }
             ColorType::InheritParent | ColorType::Color(Color::TerminalDefault) => style(output),
             ColorType::Color(Color::Light(color)) => match color {
@@ -314,7 +314,7 @@ fn render_style_as_ansi(content: &str, style: Style) -> anyhow::Result<String> {
                 Effect::Reverse => output.reverse(),
                 Effect::Bold => output.bold(),
                 Effect::Italic => output.italic(),
-                Effect::Strikethrough => anyhow::bail!("Not implemented: Effect::Strikethrough"),
+                Effect::Strikethrough => eyre::bail!("Not implemented: Effect::Strikethrough"),
                 Effect::Underline => output.underlined(),
                 Effect::Blink => output.blink(),
             };
@@ -329,7 +329,7 @@ fn render_style_as_ansi(content: &str, style: Style) -> anyhow::Result<String> {
 /// style it.
 ///
 /// TODO: return something that implements `Display` instead of a `String`.
-pub fn printable_styled_string(glyphs: &Glyphs, string: StyledString) -> anyhow::Result<String> {
+pub fn printable_styled_string(glyphs: &Glyphs, string: StyledString) -> eyre::Result<String> {
     let result = string
         .spans()
         .map(|span| {
@@ -344,6 +344,6 @@ pub fn printable_styled_string(glyphs: &Glyphs, string: StyledString) -> anyhow:
                 Ok(content.to_string())
             }
         })
-        .collect::<anyhow::Result<String>>()?;
+        .collect::<eyre::Result<String>>()?;
     Ok(result)
 }

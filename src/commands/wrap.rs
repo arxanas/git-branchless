@@ -5,7 +5,7 @@ use std::convert::TryInto;
 use std::process::Command;
 use std::time::SystemTime;
 
-use anyhow::Context;
+use eyre::Context;
 
 use crate::core::eventlog::{EventLogDb, EventTransactionId, BRANCHLESS_TRANSACTION_ID_ENV_VAR};
 use crate::git::{GitRunInfo, Repo};
@@ -14,7 +14,7 @@ fn pass_through_git_command<S: AsRef<str> + std::fmt::Debug>(
     git_run_info: &GitRunInfo,
     args: &[S],
     event_tx_id: Option<EventTransactionId>,
-) -> anyhow::Result<isize> {
+) -> eyre::Result<isize> {
     let GitRunInfo {
         path_to_git,
         working_directory,
@@ -30,14 +30,14 @@ fn pass_through_git_command<S: AsRef<str> + std::fmt::Debug>(
     }
     let exit_status = command
         .status()
-        .with_context(|| format!("Running program: {:?} {:?}", path_to_git, args))?;
+        .wrap_err_with(|| format!("Running program: {:?} {:?}", path_to_git, args))?;
     let exit_code = exit_status.code().unwrap_or(1).try_into()?;
     Ok(exit_code)
 }
 
 fn make_event_tx_id<S: AsRef<str> + std::fmt::Debug>(
     args: &[S],
-) -> anyhow::Result<EventTransactionId> {
+) -> eyre::Result<EventTransactionId> {
     let now = SystemTime::now();
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
@@ -53,7 +53,7 @@ fn make_event_tx_id<S: AsRef<str> + std::fmt::Debug>(
 pub fn wrap<S: AsRef<str> + std::fmt::Debug>(
     git_run_info: &GitRunInfo,
     args: &[S],
-) -> anyhow::Result<isize> {
+) -> eyre::Result<isize> {
     // We may not be able to make an event transaction ID (such as if there is
     // no repository in the current directory). Ignore the error in that case.
     let event_tx_id = make_event_tx_id(args).ok();
@@ -69,7 +69,7 @@ mod tests {
     use crate::testing::make_git;
 
     #[test]
-    fn test_wrap_rebase_in_transaction() -> anyhow::Result<()> {
+    fn test_wrap_rebase_in_transaction() -> eyre::Result<()> {
         let git = make_git()?;
 
         if !git.supports_reference_transactions()? {
@@ -220,7 +220,7 @@ mod tests {
     }
 
     #[test]
-    fn test_wrap_explicit_git_executable() -> anyhow::Result<()> {
+    fn test_wrap_explicit_git_executable() -> eyre::Result<()> {
         let git = make_git()?;
 
         git.init_repo()?;

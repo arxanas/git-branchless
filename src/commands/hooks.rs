@@ -12,7 +12,7 @@ use std::ffi::OsString;
 use std::io::{stdin, BufRead, Cursor};
 use std::time::SystemTime;
 
-use anyhow::Context;
+use eyre::Context;
 use itertools::Itertools;
 use os_str_bytes::OsStringBytes;
 use tracing::{error, instrument, warn};
@@ -35,7 +35,7 @@ pub fn hook_post_checkout(
     previous_head_oid: &str,
     current_head_oid: &str,
     is_branch_checkout: isize,
-) -> anyhow::Result<()> {
+) -> eyre::Result<()> {
     if is_branch_checkout == 0 {
         return Ok(());
     }
@@ -65,7 +65,7 @@ pub fn hook_post_checkout(
 /// Handle Git's `post-commit` hook.
 ///
 /// See the man-page for `githooks(5)`.
-pub fn hook_post_commit() -> anyhow::Result<()> {
+pub fn hook_post_commit() -> eyre::Result<()> {
     let now = SystemTime::now();
     let glyphs = Glyphs::detect();
     let repo = Repo::from_current_dir()?;
@@ -84,14 +84,14 @@ pub fn hook_post_commit() -> anyhow::Result<()> {
     let commit = match repo.find_commit(commit_oid)? {
         Some(commit) => commit,
         None => {
-            anyhow::bail!(
+            eyre::bail!(
                 "BUG: Attempted to look up current `HEAD` commit, but it could not be found: {:?}",
                 commit_oid
             )
         }
     };
     mark_commit_reachable(&repo, commit_oid)
-        .with_context(|| "Marking commit as reachable for GC purposes")?;
+        .wrap_err_with(|| "Marking commit as reachable for GC purposes")?;
 
     let timestamp = commit.get_time().seconds() as f64;
     let event_tx_id = event_log_db.make_transaction_id(now, "hook-post-commit")?;
@@ -112,14 +112,14 @@ fn parse_reference_transaction_line(
     line: &[u8],
     now: SystemTime,
     event_tx_id: EventTransactionId,
-) -> anyhow::Result<Option<Event>> {
+) -> eyre::Result<Option<Event>> {
     let cursor = Cursor::new(line);
     let fields = {
         let mut fields = Vec::new();
         for field in cursor.split(b' ') {
-            let field = field.with_context(|| "Reading reference-transaction field")?;
+            let field = field.wrap_err_with(|| "Reading reference-transaction field")?;
             let field = OsString::from_raw_vec(field)
-                .with_context(|| "Decoding reference-transaction field")?;
+                .wrap_err_with(|| "Decoding reference-transaction field")?;
             fields.push(field);
         }
         fields
@@ -129,7 +129,7 @@ fn parse_reference_transaction_line(
             if !should_ignore_ref_updates(ref_name) {
                 let timestamp = now
                     .duration_since(SystemTime::UNIX_EPOCH)
-                    .with_context(|| "Processing timestamp")?;
+                    .wrap_err_with(|| "Processing timestamp")?;
                 Ok(Some(Event::RefUpdateEvent {
                     timestamp: timestamp.as_secs_f64(),
                     event_tx_id,
@@ -146,7 +146,7 @@ fn parse_reference_transaction_line(
             }
         }
         _ => {
-            anyhow::bail!(
+            eyre::bail!(
                 "Unexpected number of fields in reference-transaction line: {:?}",
                 &line
             )
@@ -158,7 +158,7 @@ fn parse_reference_transaction_line(
 ///
 /// See the man-page for `githooks(5)`.
 #[instrument]
-pub fn hook_reference_transaction(transaction_state: &str) -> anyhow::Result<()> {
+pub fn hook_reference_transaction(transaction_state: &str) -> eyre::Result<()> {
     if transaction_state != "committed" {
         return Ok(());
     }
@@ -228,7 +228,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_reference_transaction_line() -> anyhow::Result<()> {
+    fn test_parse_reference_transaction_line() -> eyre::Result<()> {
         let line = b"123abc 456def refs/heads/mybranch";
         let timestamp = SystemTime::UNIX_EPOCH;
         let event_tx_id = crate::core::eventlog::testing::make_dummy_transaction_id(789);
@@ -260,7 +260,7 @@ mod tests {
     }
 
     #[test]
-    fn test_is_rebase_underway() -> anyhow::Result<()> {
+    fn test_is_rebase_underway() -> eyre::Result<()> {
         let git = make_git()?;
 
         git.init_repo()?;

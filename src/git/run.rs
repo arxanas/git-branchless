@@ -5,7 +5,7 @@ use std::io::{stderr, stdout, Write};
 use std::path::PathBuf;
 use std::process::{Command, ExitStatus, Stdio};
 
-use anyhow::Context;
+use eyre::{eyre, Context};
 use os_str_bytes::OsStrBytes;
 use tracing::instrument;
 
@@ -43,7 +43,7 @@ impl GitRunInfo {
         &self,
         event_tx_id: Option<EventTransactionId>,
         args: &[S],
-    ) -> anyhow::Result<isize> {
+    ) -> eyre::Result<isize> {
         let GitRunInfo {
             path_to_git,
             working_directory,
@@ -70,8 +70,8 @@ impl GitRunInfo {
         }
         let mut child = command
             .spawn()
-            .with_context(|| format!("Spawning Git subrocess: {:?} {:?}", path_to_git, args))?;
-        let exit_status = child.wait().with_context(|| {
+            .wrap_err_with(|| format!("Spawning Git subrocess: {:?} {:?}", path_to_git, args))?;
+        let exit_status = child.wait().wrap_err_with(|| {
             format!(
                 "Waiting for Git subprocess to complete: {:?} {:?}",
                 path_to_git, args
@@ -84,7 +84,7 @@ impl GitRunInfo {
         let exit_code = exit_status.code().unwrap_or(1);
         let exit_code = exit_code
             .try_into()
-            .with_context(|| format!("Converting exit code {} from i32 to isize", exit_code))?;
+            .wrap_err_with(|| format!("Converting exit code {} from i32 to isize", exit_code))?;
         Ok(exit_code)
     }
 
@@ -99,7 +99,7 @@ impl GitRunInfo {
         repo: &Repo,
         event_tx_id: Option<EventTransactionId>,
         args: &[S],
-    ) -> anyhow::Result<String> {
+    ) -> eyre::Result<String> {
         let GitRunInfo {
             path_to_git,
             working_directory,
@@ -110,7 +110,7 @@ impl GitRunInfo {
         // paths. Need to make the typechecker accept it.
         let repo_path = repo.get_path();
         let repo_path = repo_path.to_str().ok_or_else(|| {
-            anyhow::anyhow!(
+            eyre::eyre!(
                 "Path to Git repo could not be converted to UTF-8 string: {:?}",
                 repo_path
             )
@@ -131,8 +131,8 @@ impl GitRunInfo {
         }
         let result = command
             .output()
-            .with_context(|| format!("Spawning Git subprocess: {:?} {:?}", path_to_git, args))?;
-        let result = String::from_utf8(result.stdout).with_context(|| {
+            .wrap_err_with(|| format!("Spawning Git subprocess: {:?} {:?}", path_to_git, args))?;
+        let result = String::from_utf8(result.stdout).wrap_err_with(|| {
             format!(
                 "Decoding stdout from Git subprocess: {:?} {:?}",
                 path_to_git, args
@@ -152,7 +152,7 @@ impl GitRunInfo {
         event_tx_id: EventTransactionId,
         args: &[S],
         stdin: Option<OsString>,
-    ) -> anyhow::Result<()> {
+    ) -> eyre::Result<()> {
         let hook_dir = get_core_hooks_path(repo)?;
 
         let GitRunInfo {
@@ -172,7 +172,7 @@ impl GitRunInfo {
         };
 
         if hook_dir.join(hook_name).exists() {
-            let mut child = Command::new(get_sh().context("shell needed to run hook")?)
+            let mut child = Command::new(get_sh().ok_or_else(|| eyre!("could not get sh"))?)
                 // From `githooks(5)`: Before Git invokes a hook, it changes its
                 // working directory to either $GIT_DIR in a bare repository or the
                 // root of the working tree in a non-bare repository.
@@ -190,7 +190,7 @@ impl GitRunInfo {
                 .env("PATH", &path)
                 .stdin(Stdio::piped())
                 .spawn()
-                .with_context(|| format!("Invoking {} hook with PATH: {:?}", &hook_name, &path))?;
+                .wrap_err_with(|| format!("Invoking {} hook with PATH: {:?}", &hook_name, &path))?;
 
             if let Some(stdin) = stdin {
                 child
@@ -198,7 +198,7 @@ impl GitRunInfo {
                     .as_mut()
                     .unwrap()
                     .write_all(&stdin.to_raw_bytes())
-                    .with_context(|| "Writing hook process stdin")?;
+                    .wrap_err_with(|| "Writing hook process stdin")?;
             }
 
             let _ignored: ExitStatus = child.wait()?;
@@ -212,7 +212,7 @@ mod tests {
     use crate::testing::make_git;
 
     #[test]
-    fn test_hook_working_dir() -> anyhow::Result<()> {
+    fn test_hook_working_dir() -> eyre::Result<()> {
         let git = make_git()?;
 
         if !git.supports_reference_transactions()? {

@@ -33,7 +33,7 @@ pub trait CommitMetadataProvider {
     ///
     /// A return value of `None` indicates that this commit metadata provider was
     /// inapplicable for the provided commit.
-    fn describe_commit(&mut self, commit: &Commit) -> anyhow::Result<Option<StyledString>>;
+    fn describe_commit(&mut self, commit: &Commit) -> eyre::Result<Option<StyledString>>;
 }
 
 /// Get the complete description for a given commit.
@@ -41,13 +41,13 @@ pub trait CommitMetadataProvider {
 pub fn render_commit_metadata(
     commit: &Commit,
     commit_metadata_providers: &mut [&mut dyn CommitMetadataProvider],
-) -> anyhow::Result<StyledString> {
+) -> eyre::Result<StyledString> {
     let descriptions = commit_metadata_providers
         .iter_mut()
         .filter_map(|provider: &mut &mut dyn CommitMetadataProvider| {
             provider.describe_commit(commit).transpose()
         })
-        .collect::<anyhow::Result<Vec<_>>>()?;
+        .collect::<eyre::Result<Vec<_>>>()?;
     let result = StyledStringBuilder::join(" ", descriptions);
     Ok(result)
 }
@@ -60,14 +60,14 @@ pub struct CommitOidProvider {
 
 impl CommitOidProvider {
     /// Constructor.
-    pub fn new(use_color: bool) -> anyhow::Result<Self> {
+    pub fn new(use_color: bool) -> eyre::Result<Self> {
         Ok(CommitOidProvider { use_color })
     }
 }
 
 impl CommitMetadataProvider for CommitOidProvider {
     #[instrument]
-    fn describe_commit(&mut self, commit: &Commit) -> anyhow::Result<Option<StyledString>> {
+    fn describe_commit(&mut self, commit: &Commit) -> eyre::Result<Option<StyledString>> {
         let oid = commit.get_oid();
         let oid = &oid.to_string()[..8];
         let oid = if self.use_color {
@@ -85,14 +85,14 @@ pub struct CommitMessageProvider;
 
 impl CommitMessageProvider {
     /// Constructor.
-    pub fn new() -> anyhow::Result<Self> {
+    pub fn new() -> eyre::Result<Self> {
         Ok(CommitMessageProvider)
     }
 }
 
 impl CommitMetadataProvider for CommitMessageProvider {
     #[instrument]
-    fn describe_commit(&mut self, commit: &Commit) -> anyhow::Result<Option<StyledString>> {
+    fn describe_commit(&mut self, commit: &Commit) -> eyre::Result<Option<StyledString>> {
         Ok(Some(StyledString::plain(
             commit.get_summary()?.to_string_lossy(),
         )))
@@ -112,7 +112,7 @@ impl<'a> HiddenExplanationProvider<'a> {
         graph: &'a CommitGraph,
         event_replayer: &'a EventReplayer,
         event_cursor: EventCursor,
-    ) -> anyhow::Result<Self> {
+    ) -> eyre::Result<Self> {
         Ok(HiddenExplanationProvider {
             graph,
             event_replayer,
@@ -122,7 +122,7 @@ impl<'a> HiddenExplanationProvider<'a> {
 }
 
 impl<'a> CommitMetadataProvider for HiddenExplanationProvider<'a> {
-    fn describe_commit(&mut self, commit: &Commit) -> anyhow::Result<Option<StyledString>> {
+    fn describe_commit(&mut self, commit: &Commit) -> eyre::Result<Option<StyledString>> {
         let event = self
             .event_replayer
             .get_cursor_commit_latest_event(self.event_cursor, commit.get_oid());
@@ -173,7 +173,7 @@ impl<'a> BranchesProvider<'a> {
     pub fn new(
         repo: &Repo,
         branch_oid_to_names: &'a HashMap<NonZeroOid, HashSet<OsString>>,
-    ) -> anyhow::Result<Self> {
+    ) -> eyre::Result<Self> {
         let is_enabled = get_commit_metadata_branches(repo)?;
         Ok(BranchesProvider {
             is_enabled,
@@ -184,7 +184,7 @@ impl<'a> BranchesProvider<'a> {
 
 impl<'a> CommitMetadataProvider for BranchesProvider<'a> {
     #[instrument]
-    fn describe_commit(&mut self, commit: &Commit) -> anyhow::Result<Option<StyledString>> {
+    fn describe_commit(&mut self, commit: &Commit) -> eyre::Result<Option<StyledString>> {
         if !self.is_enabled {
             return Ok(None);
         }
@@ -234,7 +234,7 @@ pub struct DifferentialRevisionProvider {
 
 impl DifferentialRevisionProvider {
     /// Constructor.
-    pub fn new(repo: &Repo) -> anyhow::Result<Self> {
+    pub fn new(repo: &Repo) -> eyre::Result<Self> {
         let is_enabled = get_commit_metadata_differential_revision(repo)?;
         Ok(DifferentialRevisionProvider { is_enabled })
     }
@@ -259,7 +259,7 @@ $",
 
 impl CommitMetadataProvider for DifferentialRevisionProvider {
     #[instrument]
-    fn describe_commit(&mut self, commit: &Commit) -> anyhow::Result<Option<StyledString>> {
+    fn describe_commit(&mut self, commit: &Commit) -> eyre::Result<Option<StyledString>> {
         if !self.is_enabled {
             return Ok(None);
         }
@@ -282,7 +282,7 @@ pub struct RelativeTimeProvider {
 
 impl RelativeTimeProvider {
     /// Constructor.
-    pub fn new(repo: &Repo, now: SystemTime) -> anyhow::Result<Self> {
+    pub fn new(repo: &Repo, now: SystemTime) -> eyre::Result<Self> {
         let is_enabled = get_commit_metadata_relative_time(repo)?;
         Ok(RelativeTimeProvider { is_enabled, now })
     }
@@ -294,10 +294,7 @@ impl RelativeTimeProvider {
     }
 
     /// Describe a relative time delta, e.g. "3d ago".
-    pub fn describe_time_delta(
-        now: SystemTime,
-        previous_time: SystemTime,
-    ) -> anyhow::Result<String> {
+    pub fn describe_time_delta(now: SystemTime, previous_time: SystemTime) -> eyre::Result<String> {
         let mut delta: i64 = if previous_time < now {
             let delta = now.duration_since(previous_time)?;
             delta.as_secs().try_into()?
@@ -333,7 +330,7 @@ impl RelativeTimeProvider {
 
 impl CommitMetadataProvider for RelativeTimeProvider {
     #[instrument]
-    fn describe_commit(&mut self, commit: &Commit) -> anyhow::Result<Option<StyledString>> {
+    fn describe_commit(&mut self, commit: &Commit) -> eyre::Result<Option<StyledString>> {
         if !self.is_enabled {
             return Ok(None);
         }
@@ -353,7 +350,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_extract_diff_number() -> anyhow::Result<()> {
+    fn test_extract_diff_number() -> eyre::Result<()> {
         let message = "\
 This is a message
 
@@ -373,7 +370,7 @@ Differential Revision: phabricator.com/D123";
     }
 
     #[test]
-    fn test_describe_time_delta() -> anyhow::Result<()> {
+    fn test_describe_time_delta() -> eyre::Result<()> {
         let test_cases: Vec<(isize, &str)> = vec![
             // Could improve formatting for times in the past.
             (-100000, "-100000s"),

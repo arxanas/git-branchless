@@ -11,7 +11,7 @@ fn remove_rebase_lines(output: String) -> String {
 }
 
 #[test]
-fn test_restack_amended_commit() -> anyhow::Result<()> {
+fn test_restack_amended_commit() -> eyre::Result<()> {
     let git = make_git()?;
 
     if !git.supports_committer_date_is_author_date()? {
@@ -67,7 +67,7 @@ fn test_restack_amended_commit() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_restack_consecutive_rewrites() -> anyhow::Result<()> {
+fn test_restack_consecutive_rewrites() -> eyre::Result<()> {
     let git = make_git()?;
 
     if !git.supports_committer_date_is_author_date()? {
@@ -110,7 +110,7 @@ fn test_restack_consecutive_rewrites() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_move_abandoned_branch() -> anyhow::Result<()> {
+fn test_move_abandoned_branch() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -138,7 +138,7 @@ fn test_move_abandoned_branch() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_amended_initial_commit() -> anyhow::Result<()> {
+fn test_amended_initial_commit() -> eyre::Result<()> {
     let git = make_git()?;
 
     if !git.supports_committer_date_is_author_date()? {
@@ -183,7 +183,7 @@ fn test_amended_initial_commit() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_restack_amended_master() -> anyhow::Result<()> {
+fn test_restack_amended_master() -> eyre::Result<()> {
     let git = make_git()?;
 
     if !git.supports_committer_date_is_author_date()? {
@@ -220,7 +220,7 @@ fn test_restack_amended_master() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_restack_aborts_during_rebase_conflict() -> anyhow::Result<()> {
+fn test_restack_aborts_during_rebase_conflict() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -244,7 +244,7 @@ fn test_restack_aborts_during_rebase_conflict() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_restack_multiple_amended() -> anyhow::Result<()> {
+fn test_restack_multiple_amended() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -285,7 +285,7 @@ fn test_restack_multiple_amended() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_restack_single_of_many_commits() -> anyhow::Result<()> {
+fn test_restack_single_of_many_commits() -> eyre::Result<()> {
     let git = make_git()?;
 
     if !git.supports_reference_transactions()? {

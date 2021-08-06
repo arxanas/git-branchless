@@ -7,8 +7,8 @@ use std::fs::File;
 use std::io::{stdin, BufRead};
 use std::time::SystemTime;
 
-use anyhow::Context;
 use console::style;
+use eyre::Context;
 use tracing::instrument;
 
 use crate::core::config::{get_restack_warn_abandoned, RESTACK_WARN_ABANDONED_CONFIG_KEY};
@@ -26,7 +26,7 @@ use super::{find_abandoned_children, move_branches};
 ///
 /// See the man-page for `githooks(5)`.
 #[instrument]
-pub fn hook_post_rewrite(git_run_info: &GitRunInfo, rewrite_type: &str) -> anyhow::Result<()> {
+pub fn hook_post_rewrite(git_run_info: &GitRunInfo, rewrite_type: &str) -> eyre::Result<()> {
     let now = SystemTime::now();
     let timestamp = now.duration_since(SystemTime::UNIX_EPOCH)?.as_secs_f64();
 
@@ -54,7 +54,7 @@ pub fn hook_post_rewrite(git_run_info: &GitRunInfo, rewrite_type: &str) -> anyho
                         new_commit_oid,
                     })
                 }
-                _ => anyhow::bail!("Invalid rewrite line: {:?}", &line),
+                _ => eyre::bail!("Invalid rewrite line: {:?}", &line),
             }
         }
         (rewritten_oids, events)
@@ -102,7 +102,7 @@ fn check_out_new_head(
     repo: &Repo,
     event_tx_id: EventTransactionId,
     rewritten_oids: &HashMap<NonZeroOid, MaybeZeroOid>,
-) -> anyhow::Result<()> {
+) -> eyre::Result<()> {
     let checkout_target: Option<OsString> =
         match repo.find_reference(&OsString::from("ORIG_HEAD"))? {
             None => None,
@@ -153,7 +153,7 @@ fn check_out_new_head(
             &[&OsString::from("checkout"), &checkout_target],
         )?;
         if exit_code != 0 {
-            anyhow::bail!(
+            eyre::bail!(
                 "Failed to check out previous HEAD location: {:?}",
                 &checkout_target
             );
@@ -169,7 +169,7 @@ fn warn_abandoned(
     merge_base_db: &MergeBaseDb,
     event_log_db: &EventLogDb,
     old_commit_oids: impl IntoIterator<Item = NonZeroOid>,
-) -> anyhow::Result<()> {
+) -> eyre::Result<()> {
     // The caller will have added events to the event log database, so make sure
     // to construct a fresh `EventReplayer` here.
     let event_replayer = EventReplayer::from_event_log_db(repo, event_log_db)?;
@@ -294,10 +294,10 @@ const EXTRA_POST_REWRITE_FILE_NAME: &str = "branchless_do_extra_post_rewrite";
 /// skipped, then they would be returned to the wrong commit.
 const UPDATED_HEAD_FILE_NAME: &str = "branchless_updated_head";
 
-fn get_original_head_oid(repo: &Repo) -> anyhow::Result<MaybeZeroOid> {
+fn get_original_head_oid(repo: &Repo) -> eyre::Result<MaybeZeroOid> {
     let original_head_oid_file_path = repo.get_rebase_state_dir_path().join("orig-head");
     let original_head_oid_file_contents = std::fs::read_to_string(&original_head_oid_file_path)
-        .with_context(|| {
+        .wrap_err_with(|| {
             format!(
                 "Reading `orig-head` from: {:?}",
                 &original_head_oid_file_path
@@ -308,7 +308,7 @@ fn get_original_head_oid(repo: &Repo) -> anyhow::Result<MaybeZeroOid> {
 }
 
 #[instrument]
-fn save_updated_head_oid(repo: &Repo, updated_head_oid: NonZeroOid) -> anyhow::Result<()> {
+fn save_updated_head_oid(repo: &Repo, updated_head_oid: NonZeroOid) -> eyre::Result<()> {
     let dest_file_name = repo
         .get_rebase_state_dir_path()
         .join(UPDATED_HEAD_FILE_NAME);
@@ -317,7 +317,7 @@ fn save_updated_head_oid(repo: &Repo, updated_head_oid: NonZeroOid) -> anyhow::R
 }
 
 #[instrument]
-fn get_updated_head_oid(repo: &Repo) -> anyhow::Result<Option<NonZeroOid>> {
+fn get_updated_head_oid(repo: &Repo) -> eyre::Result<Option<NonZeroOid>> {
     let source_file_name = repo
         .get_rebase_state_dir_path()
         .join(UPDATED_HEAD_FILE_NAME);
@@ -332,19 +332,19 @@ fn get_updated_head_oid(repo: &Repo) -> anyhow::Result<Option<NonZeroOid>> {
 /// rebase finishes and calls the post-rewrite hook. We don't want to change the
 /// behavior of `git rebase` itself, except when called via `git-branchless`, so
 /// that the user's expectations aren't unexpectedly subverted.
-pub fn hook_register_extra_post_rewrite_hook() -> anyhow::Result<()> {
+pub fn hook_register_extra_post_rewrite_hook() -> eyre::Result<()> {
     let repo = Repo::from_current_dir()?;
     let file_name = repo
         .get_rebase_state_dir_path()
         .join(EXTRA_POST_REWRITE_FILE_NAME);
-    File::create(file_name).with_context(|| "Registering extra post-rewrite hook")?;
+    File::create(file_name).wrap_err_with(|| "Registering extra post-rewrite hook")?;
     Ok(())
 }
 
 /// For rebases, detect empty commits (which have probably been applied
 /// upstream) and write them to the `rewritten-list` file, so that they're later
 /// passed to the `post-rewrite` hook.
-pub fn hook_drop_commit_if_empty(old_commit_oid: NonZeroOid) -> anyhow::Result<()> {
+pub fn hook_drop_commit_if_empty(old_commit_oid: NonZeroOid) -> eyre::Result<()> {
     let glyphs = Glyphs::detect();
     let repo = Repo::from_current_dir()?;
     let head_info = repo.get_head_info()?;
@@ -388,12 +388,12 @@ pub fn hook_drop_commit_if_empty(old_commit_oid: NonZeroOid) -> anyhow::Result<(
 
 /// For rebases, if a commit is known to have been applied upstream, skip it
 /// without attempting to apply it.
-pub fn hook_skip_upstream_applied_commit(commit_oid: NonZeroOid) -> anyhow::Result<()> {
+pub fn hook_skip_upstream_applied_commit(commit_oid: NonZeroOid) -> eyre::Result<()> {
     let glyphs = Glyphs::detect();
     let repo = Repo::from_current_dir()?;
     let commit = match repo.find_commit(commit_oid)? {
         Some(commit) => commit,
-        None => anyhow::bail!("Could not find commit: {:?}", commit_oid),
+        None => eyre::bail!("Could not find commit: {:?}", commit_oid),
     };
     println!(
         "Skipping commit (was already applied upstream): {}",
