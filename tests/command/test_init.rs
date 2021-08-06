@@ -1,3 +1,5 @@
+use regex::Regex;
+
 use crate::util::trim_lines;
 
 use branchless::git::GitVersion;
@@ -204,36 +206,39 @@ fn test_main_branch_not_found_error_message() -> eyre::Result<()> {
     git.detach_head()?;
     git.run(&["branch", "-d", "master"])?;
 
-    {
-        let (stdout, stderr) = git.run_with_options(
-            &["smartlog"],
-            &GitRunOptions {
-                expected_exit_code: 1,
-                ..Default::default()
-            },
-        )?;
-        insta::assert_snapshot!(trim_lines(stderr), @r###"
-        Error:
-           0: [91mCould not find repository main branch[0m
+    let (stdout, stderr) = git.run_with_options(
+        &["smartlog"],
+        &GitRunOptions {
+            expected_exit_code: 1,
+            ..Default::default()
+        },
+    )?;
 
-        Location:
-           [35msrc/git/repo.rs[0m:[35m264[0m
+    let location_trace_re = Regex::new(r"[^ .]+\.rs:[0-9]+")?;
+    let stderr = trim_lines(stderr);
+    let stderr = console::strip_ansi_codes(&stderr);
+    let stderr = location_trace_re.replace_all(&stderr, "some/file/path.rs:123");
+    insta::assert_snapshot!(stderr, @r###"
+    Error:
+       0: Could not find repository main branch
 
-        [96mSuggestion[0m:
-        The main branch "master" could not be found in your repository
-        at path: "<repo-path>/.git/".
-        These branches exist: []
-        Either create it, or update the main branch setting by running:
+    Location:
+       some/file/path.rs:123
 
-            git config branchless.core.mainBranch <branch>
+    Suggestion:
+    The main branch "master" could not be found in your repository
+    at path: "<repo-path>/.git/".
+    These branches exist: []
+    Either create it, or update the main branch setting by running:
+
+        git config branchless.core.mainBranch <branch>
 
 
-        Backtrace omitted.
-        Run with RUST_BACKTRACE=1 environment variable to display it.
-        Run with RUST_BACKTRACE=full to include source snippets.
-        "###);
-        insta::assert_snapshot!(stdout, @"");
-    }
+    Backtrace omitted.
+    Run with RUST_BACKTRACE=1 environment variable to display it.
+    Run with RUST_BACKTRACE=full to include source snippets.
+    "###);
+    insta::assert_snapshot!(stdout, @"");
 
     Ok(())
 }
