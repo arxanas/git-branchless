@@ -1,6 +1,6 @@
 //! Operations on the Git repository. This module exists for a few reasons:
 //!
-//! - To ensure that every call to a Git operation has an associated `context`
+//! - To ensure that every call to a Git operation has an associated `wrap_err`
 //! for use with `Try`.
 //! - To improve the interface in some cases. In particular, some operations in
 //! `git2` return an `Error` with code `ENOTFOUND`, but we should really return
@@ -19,9 +19,10 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::SystemTime;
 
-use anyhow::Context;
+use color_eyre::Help;
 use cursive::theme::BaseColor;
 use cursive::utils::markup::StyledString;
+use eyre::{eyre, Context};
 use os_str_bytes::{OsStrBytes, OsStringBytes};
 use tracing::{instrument, warn};
 
@@ -32,9 +33,9 @@ use crate::git::oid::{make_non_zero_oid, MaybeZeroOid, NonZeroOid};
 
 use super::GitRunInfo;
 
-/// Convert a `git2::Error` into an `anyhow::Error` with an auto-generated message.
-pub(super) fn wrap_git_error(error: git2::Error) -> anyhow::Error {
-    anyhow::anyhow!("Git error {:?}: {}", error.code(), error.message())
+/// Convert a `git2::Error` into an `eyre::Error` with an auto-generated message.
+pub(super) fn wrap_git_error(error: git2::Error) -> eyre::Error {
+    eyre::eyre!("Git error {:?}: {}", error.code(), error.message())
 }
 /// A snapshot of information about the current `HEAD` of the repository. If
 /// `HEAD` is updated after a `HeadInfo` value is obtained, then it is not
@@ -82,15 +83,15 @@ impl HeadInfo {
 pub struct GitVersion(pub isize, pub isize, pub isize);
 
 impl FromStr for GitVersion {
-    type Err = anyhow::Error;
+    type Err = eyre::Error;
 
     #[instrument]
-    fn from_str(output: &str) -> anyhow::Result<GitVersion> {
+    fn from_str(output: &str) -> eyre::Result<GitVersion> {
         let output = output.trim();
         let words = output.split(&[' ', '-'][..]).collect::<Vec<&str>>();
         let version_str = match &words.as_slice() {
             [_git, _version, version_str, ..] => version_str,
-            _ => anyhow::bail!("Could not parse Git version output: {:?}", output),
+            _ => eyre::bail!("Could not parse Git version output: {:?}", output),
         };
         match version_str.split('.').collect::<Vec<&str>>().as_slice() {
             [major, minor, patch, ..] => {
@@ -99,7 +100,7 @@ impl FromStr for GitVersion {
                 let patch = patch.parse()?;
                 Ok(GitVersion(major, minor, patch))
             }
-            _ => anyhow::bail!("Could not parse Git version string: {}", version_str),
+            _ => eyre::bail!("Could not parse Git version string: {}", version_str),
         }
     }
 }
@@ -118,15 +119,15 @@ impl std::fmt::Debug for Repo {
 impl Repo {
     /// Get the Git repository associated with the given directory.
     #[instrument]
-    pub fn from_dir(path: &Path) -> anyhow::Result<Self> {
+    pub fn from_dir(path: &Path) -> eyre::Result<Self> {
         let repo = git2::Repository::discover(path).map_err(wrap_git_error)?;
         Ok(Repo { inner: repo })
     }
 
     /// Get the Git repository associated with the current directory.
     #[instrument]
-    pub fn from_current_dir() -> anyhow::Result<Self> {
-        let path = std::env::current_dir().with_context(|| "Getting working directory")?;
+    pub fn from_current_dir() -> eyre::Result<Self> {
+        let path = std::env::current_dir().wrap_err_with(|| "Getting working directory")?;
         Repo::from_dir(&path)
     }
 
@@ -149,29 +150,29 @@ impl Repo {
 
     /// Get the configuration object for the repository.
     #[instrument]
-    pub fn get_config(&self) -> anyhow::Result<Config> {
+    pub fn get_config(&self) -> eyre::Result<Config> {
         let config = self
             .inner
             .config()
             .map_err(wrap_git_error)
-            .with_context(|| "Creating `git2::Config` object")?;
+            .wrap_err_with(|| "Creating `git2::Config` object")?;
         Ok(config.into())
     }
 
     /// Get the connection to the SQLite database for this repository.
     #[instrument]
-    pub fn get_db_conn(&self) -> anyhow::Result<rusqlite::Connection> {
+    pub fn get_db_conn(&self) -> eyre::Result<rusqlite::Connection> {
         let dir = self.inner.path().join("branchless");
-        std::fs::create_dir_all(&dir).with_context(|| "Creating .git/branchless dir")?;
+        std::fs::create_dir_all(&dir).wrap_err_with(|| "Creating .git/branchless dir")?;
         let path = dir.join("db.sqlite3");
         let conn = rusqlite::Connection::open(&path)
-            .with_context(|| format!("Opening database connection at {:?}", &path))?;
+            .wrap_err_with(|| format!("Opening database connection at {:?}", &path))?;
         Ok(conn)
     }
 
     /// Get the OID for the repository's `HEAD` reference.
     #[instrument]
-    pub fn get_head_info(&self) -> anyhow::Result<HeadInfo> {
+    pub fn get_head_info(&self) -> eyre::Result<HeadInfo> {
         let head_reference = match self.inner.find_reference("HEAD") {
             Err(err) if err.code() == git2::ErrorCode::NotFound => None,
             Err(err) => return Err(wrap_git_error(err)),
@@ -181,18 +182,18 @@ impl Repo {
             Some(head_reference) => {
                 let head_oid = head_reference
                     .peel_to_commit()
-                    .with_context(|| "Resolving `HEAD` reference")?
+                    .wrap_err_with(|| "Resolving `HEAD` reference")?
                     .id();
                 let reference_name = match head_reference.kind() {
                     Some(git2::ReferenceType::Direct) => None,
                     Some(git2::ReferenceType::Symbolic) => match head_reference.symbolic_target() {
                         Some(name) => Some(name.to_string()),
-                        None => anyhow::bail!(
+                        None => eyre::bail!(
                             "`HEAD` reference was resolved to OID: {:?}, but its name could not be decoded: {:?}",
                             head_oid, head_reference.name_bytes()
                         ),
                     }
-                    None => anyhow::bail!("Unknown `HEAD` reference type")
+                    None => eyre::bail!("Unknown `HEAD` reference type")
                 };
                 (
                     MaybeZeroOid::NonZero(make_non_zero_oid(head_oid)),
@@ -210,14 +211,14 @@ impl Repo {
     /// Set the `HEAD` reference directly to the provided `oid`. Does not touch
     /// the working copy.
     #[instrument]
-    pub fn set_head(&self, oid: NonZeroOid) -> anyhow::Result<()> {
+    pub fn set_head(&self, oid: NonZeroOid) -> eyre::Result<()> {
         self.inner.set_head_detached(oid.inner)?;
         Ok(())
     }
 
     /// Detach `HEAD` by making it point directly to its current OID, rather
     /// than to a branch. If `HEAD` is already detached, logs a warning.
-    pub fn detach_head(&self, head_info: &HeadInfo) -> anyhow::Result<()> {
+    pub fn detach_head(&self, head_info: &HeadInfo) -> eyre::Result<()> {
         match head_info.oid {
             Some(oid) => self
                 .inner
@@ -231,14 +232,15 @@ impl Repo {
     }
 
     /// Get the `Reference` for the main branch for the repository.
-    pub fn get_main_branch_reference(&self) -> anyhow::Result<Reference> {
+    pub fn get_main_branch_reference(&self) -> eyre::Result<Reference> {
         let main_branch_name = get_main_branch_name(self)?;
         match self.find_branch(&main_branch_name, git2::BranchType::Local)? {
             Some(branch) => Ok(branch.into_reference()),
             None => match self.find_branch(&main_branch_name, git2::BranchType::Remote)? {
                 Some(branch) => Ok(branch.into_reference()),
-                None => anyhow::bail!(
-                    r"
+                None => {
+                    let suggestion = format!(
+                        r"
 The main branch {:?} could not be found in your repository
 at path: {:?}.
 These branches exist: {:?}
@@ -246,28 +248,33 @@ Either create it, or update the main branch setting by running:
 
     git config branchless.core.mainBranch <branch>
 ",
-                    get_main_branch_name(self)?,
-                    self.get_path(),
-                    self.get_all_local_branches()?
-                        .into_iter()
-                        .map(|branch| branch
-                            .into_reference()
-                            .get_name()
-                            .map(|s| format!("{:?}", s)))
-                        .collect::<anyhow::Result<Vec<String>>>()?
-                ),
+                        get_main_branch_name(self)?,
+                        self.get_path(),
+                        self.get_all_local_branches()?
+                            .into_iter()
+                            .map(|branch| {
+                                branch
+                                    .into_reference()
+                                    .get_name()
+                                    .map(|s| format!("{:?}", s))
+                            })
+                            .collect::<eyre::Result<Vec<String>>>()?,
+                    );
+                    Err(eyre!("Could not find repository main branch")
+                        .with_suggestion(|| suggestion))
+                }
             },
         }
     }
 
     /// Get the OID corresponding to the main branch.
     #[instrument]
-    pub fn get_main_branch_oid(&self) -> anyhow::Result<NonZeroOid> {
+    pub fn get_main_branch_oid(&self) -> eyre::Result<NonZeroOid> {
         let main_branch_reference = self.get_main_branch_reference()?;
         let commit = main_branch_reference.peel_to_commit()?;
         match commit {
             Some(commit) => Ok(commit.get_oid()),
-            None => anyhow::bail!(
+            None => eyre::bail!(
                 "Could not find commit pointed to by main branch: {:?}",
                 main_branch_reference.get_name()?
             ),
@@ -279,19 +286,17 @@ Either create it, or update the main branch setting by running:
     /// The returned branch names include the `refs/heads/` prefix, so it must
     /// be stripped if desired.
     #[instrument]
-    pub fn get_branch_oid_to_names(
-        &self,
-    ) -> anyhow::Result<HashMap<NonZeroOid, HashSet<OsString>>> {
+    pub fn get_branch_oid_to_names(&self) -> eyre::Result<HashMap<NonZeroOid, HashSet<OsString>>> {
         let branches = self
             .inner
             .branches(Some(git2::BranchType::Local))
-            .with_context(|| "Reading branches")?;
+            .wrap_err_with(|| "Reading branches")?;
 
         let mut result: HashMap<NonZeroOid, HashSet<OsString>> = HashMap::new();
         for branch_info in branches {
-            let branch_info = branch_info.with_context(|| "Iterating over branches")?;
+            let branch_info = branch_info.wrap_err_with(|| "Iterating over branches")?;
             let branch = match branch_info {
-                (branch, git2::BranchType::Remote) => anyhow::bail!(
+                (branch, git2::BranchType::Remote) => eyre::bail!(
                     "Unexpectedly got a remote branch in local branch iterator: {:?}",
                     branch.name()
                 ),
@@ -312,7 +317,7 @@ Either create it, or update the main branch setting by running:
 
             let branch_oid = reference
                 .resolve()
-                .with_context(|| format!("Resolving branch into commit: {}", reference_name))?
+                .wrap_err_with(|| format!("Resolving branch into commit: {}", reference_name))?
                 .target()
                 .unwrap();
             result
@@ -354,7 +359,7 @@ Either create it, or update the main branch setting by running:
     ///   happen even if no conflict occurred and the rebase completed successfully
     ///   without any user intervention.
     #[instrument]
-    pub fn is_rebase_underway(&self) -> anyhow::Result<bool> {
+    pub fn is_rebase_underway(&self) -> eyre::Result<bool> {
         use git2::RepositoryState::*;
         match self.inner.state() {
             Rebase | RebaseInteractive | RebaseMerge => Ok(true),
@@ -389,13 +394,13 @@ Either create it, or update the main branch setting by running:
     pub fn add_rewritten_list_entries(
         &self,
         entries: &[(NonZeroOid, MaybeZeroOid)],
-    ) -> anyhow::Result<()> {
+    ) -> eyre::Result<()> {
         let rewritten_oids_file_path = self.get_rebase_state_dir_path().join("rewritten-list");
         let mut file = OpenOptions::new()
             .create(true)
             .append(true)
             .open(&rewritten_oids_file_path)
-            .with_context(|| {
+            .wrap_err_with(|| {
                 format!("Opening rewritten-list at: {:?}", &rewritten_oids_file_path)
             })?;
         for (old_commit_oid, new_commit_oid) in entries {
@@ -412,7 +417,7 @@ Either create it, or update the main branch setting by running:
         &self,
         lhs: NonZeroOid,
         rhs: NonZeroOid,
-    ) -> anyhow::Result<Option<NonZeroOid>> {
+    ) -> eyre::Result<Option<NonZeroOid>> {
         match self.inner.merge_base(lhs.inner, rhs.inner) {
             Ok(merge_base_oid) => Ok(Some(make_non_zero_oid(merge_base_oid))),
             Err(err) if err.code() == git2::ErrorCode::NotFound => Ok(None),
@@ -421,7 +426,7 @@ Either create it, or update the main branch setting by running:
     }
 
     /// Get the patch ID for this commit.
-    pub fn get_patch_id(&self, commit: &Commit) -> anyhow::Result<Option<PatchId>> {
+    pub fn get_patch_id(&self, commit: &Commit) -> eyre::Result<Option<PatchId>> {
         match commit.get_only_parent() {
             None => Ok(None),
             Some(only_parent) => {
@@ -430,13 +435,13 @@ Either create it, or update the main branch setting by running:
                 let diff = self
                     .inner
                     .diff_tree_to_tree(Some(&parent_tree.inner), Some(&current_tree.inner), None)
-                    .with_context(|| {
+                    .wrap_err_with(|| {
                         format!(
                             "Calculating diff between: {:?} and {:?}",
                             commit, only_parent
                         )
                     })?;
-                let patch_id = diff.patchid(None).with_context(|| {
+                let patch_id = diff.patchid(None).wrap_err_with(|| {
                     format!(
                         "Computing patch ID between: {:?} and {:?}",
                         commit, only_parent
@@ -448,7 +453,7 @@ Either create it, or update the main branch setting by running:
     }
 
     /// Attempt to parse the user-provided object descriptor.
-    pub fn revparse_single_commit(&self, spec: &str) -> anyhow::Result<Option<Commit>> {
+    pub fn revparse_single_commit(&self, spec: &str) -> eyre::Result<Option<Commit>> {
         match self.inner.revparse_single(spec) {
             Ok(object) => match object.into_commit() {
                 Ok(commit) => Ok(Some(Commit { inner: commit })),
@@ -461,15 +466,15 @@ Either create it, or update the main branch setting by running:
 
     /// Find all references in the repository.
     #[instrument]
-    pub fn get_all_references(&self) -> anyhow::Result<Vec<Reference>> {
+    pub fn get_all_references(&self) -> eyre::Result<Vec<Reference>> {
         let mut all_references = Vec::new();
         for reference in self
             .inner
             .references()
             .map_err(wrap_git_error)
-            .with_context(|| "Iterating through references")?
+            .wrap_err_with(|| "Iterating through references")?
         {
-            let reference = reference.with_context(|| "Accessing individual reference")?;
+            let reference = reference.wrap_err_with(|| "Accessing individual reference")?;
             all_references.push(Reference { inner: reference });
         }
         Ok(all_references)
@@ -478,7 +483,7 @@ Either create it, or update the main branch setting by running:
     /// Check if the repository has staged or unstaged changes. Untracked files
     /// are not included. This operation may take a while.
     #[instrument]
-    pub fn has_changed_files(&self, git_run_info: &GitRunInfo) -> anyhow::Result<bool> {
+    pub fn has_changed_files(&self, git_run_info: &GitRunInfo) -> eyre::Result<bool> {
         let exit_code = git_run_info.run(
             // This is not a mutating operation, so we don't need a transaction ID.
             None,
@@ -499,10 +504,10 @@ Either create it, or update the main branch setting by running:
         oid: NonZeroOid,
         force: bool,
         log_message: &str,
-    ) -> anyhow::Result<Reference> {
+    ) -> eyre::Result<Reference> {
         let name = match name.to_str() {
             Some(name) => name,
-            None => anyhow::bail!(
+            None => eyre::bail!(
                 "Reference name is not a UTF-8 string (libgit2 limitation): {:?}",
                 name
             ),
@@ -516,10 +521,10 @@ Either create it, or update the main branch setting by running:
 
     /// Look up a reference with the given name. Returns `None` if not found.
     #[instrument]
-    pub fn find_reference(&self, name: &OsStr) -> anyhow::Result<Option<Reference>> {
+    pub fn find_reference(&self, name: &OsStr) -> eyre::Result<Option<Reference>> {
         let name = match name.to_str() {
             Some(name) => name,
-            None => anyhow::bail!(
+            None => eyre::bail!(
                 "Reference name is not a UTF-8 string (libgit2 limitation): {:?}",
                 name
             ),
@@ -533,15 +538,15 @@ Either create it, or update the main branch setting by running:
 
     /// Get all local branches in the repository.
     #[instrument]
-    pub fn get_all_local_branches(&self) -> anyhow::Result<Vec<Branch>> {
+    pub fn get_all_local_branches(&self) -> eyre::Result<Vec<Branch>> {
         let mut all_branches = Vec::new();
         for branch in self
             .inner
             .branches(Some(git2::BranchType::Local))
             .map_err(wrap_git_error)
-            .with_context(|| "Iterating over all local branches")?
+            .wrap_err_with(|| "Iterating over all local branches")?
         {
-            let (branch, _branch_type) = branch.with_context(|| "Accessing individual branch")?;
+            let (branch, _branch_type) = branch.wrap_err_with(|| "Accessing individual branch")?;
             all_branches.push(Branch { inner: branch });
         }
         Ok(all_branches)
@@ -549,11 +554,7 @@ Either create it, or update the main branch setting by running:
 
     /// Look up the branch with the given name. Returns `None` if not found.
     #[instrument]
-    pub fn find_branch(
-        &self,
-        name: &str,
-        branch_type: BranchType,
-    ) -> anyhow::Result<Option<Branch>> {
+    pub fn find_branch(&self, name: &str, branch_type: BranchType) -> eyre::Result<Option<Branch>> {
         match self.inner.find_branch(name, branch_type) {
             Ok(branch) => Ok(Some(Branch { inner: branch })),
             Err(err) if err.code() == git2::ErrorCode::NotFound => Ok(None),
@@ -568,10 +569,10 @@ Either create it, or update the main branch setting by running:
         name: &OsStr,
         target: &Commit,
         force: bool,
-    ) -> anyhow::Result<git2::Branch> {
+    ) -> eyre::Result<git2::Branch> {
         let name = match name.to_str() {
             Some(name) => name,
-            None => anyhow::bail!(
+            None => eyre::bail!(
                 "Branch name is not a UTF-8 string (libgit2 limitation): {:?}",
                 name
             ),
@@ -583,7 +584,7 @@ Either create it, or update the main branch setting by running:
 
     /// Look up a commit with the given OID. Returns `None` if not found.
     #[instrument]
-    pub fn find_commit(&self, oid: NonZeroOid) -> anyhow::Result<Option<Commit>> {
+    pub fn find_commit(&self, oid: NonZeroOid) -> eyre::Result<Option<Commit>> {
         match self.inner.find_commit(oid.inner) {
             Ok(commit) => Ok(Some(Commit { inner: commit })),
             Err(err) if err.code() == git2::ErrorCode::NotFound => Ok(None),
@@ -593,10 +594,7 @@ Either create it, or update the main branch setting by running:
 
     /// Look up the commit with the given OID and render a friendly description
     /// of it, or render an error message if not found.
-    pub fn friendly_describe_commit_from_oid(
-        &self,
-        oid: NonZeroOid,
-    ) -> anyhow::Result<StyledString> {
+    pub fn friendly_describe_commit_from_oid(&self, oid: NonZeroOid) -> eyre::Result<StyledString> {
         match self.find_commit(oid)? {
             Some(commit) => Ok(commit.friendly_describe()?),
             None => Ok(StyledString::styled(
@@ -616,7 +614,7 @@ Either create it, or update the main branch setting by running:
         message: &str,
         tree: &git2::Tree,
         parents: &[&Commit],
-    ) -> anyhow::Result<NonZeroOid> {
+    ) -> eyre::Result<NonZeroOid> {
         let parents = parents
             .iter()
             .map(|commit| &commit.inner)
@@ -642,7 +640,7 @@ Either create it, or update the main branch setting by running:
         cherrypick_commit: &Commit,
         our_commit: &Commit,
         mainline: u32,
-    ) -> anyhow::Result<Index> {
+    ) -> eyre::Result<Index> {
         let index = self
             .inner
             .cherrypick_commit(&cherrypick_commit.inner, &our_commit.inner, mainline, None)
@@ -652,7 +650,7 @@ Either create it, or update the main branch setting by running:
 
     /// Look up the tree with the given OID. Returns `None` if not found.
     #[instrument]
-    pub fn find_tree(&self, oid: NonZeroOid) -> anyhow::Result<Option<git2::Tree>> {
+    pub fn find_tree(&self, oid: NonZeroOid) -> eyre::Result<Option<git2::Tree>> {
         match self.inner.find_tree(oid.inner) {
             Ok(tree) => Ok(Some(tree)),
             Err(err) if err.code() == git2::ErrorCode::NotFound => Ok(None),
@@ -663,7 +661,7 @@ Either create it, or update the main branch setting by running:
     /// Write the provided in-memory index as a tree into Git`s object database.
     /// There must be no merge conflicts in the index.
     #[instrument]
-    pub fn write_index_to_tree(&self, index: &mut Index) -> anyhow::Result<NonZeroOid> {
+    pub fn write_index_to_tree(&self, index: &mut Index) -> eyre::Result<NonZeroOid> {
         let oid = index
             .inner
             .write_tree_to(&self.inner)
@@ -686,7 +684,7 @@ impl std::fmt::Debug for Signature<'_> {
 impl<'repo> Signature<'repo> {
     /// Update the timestamp of this signature to a new time.
     #[instrument]
-    pub fn update_timestamp(self, now: SystemTime) -> anyhow::Result<Signature<'repo>> {
+    pub fn update_timestamp(self, now: SystemTime) -> eyre::Result<Signature<'repo>> {
         let seconds: i64 = now
             .duration_since(SystemTime::UNIX_EPOCH)?
             .as_secs()
@@ -694,14 +692,14 @@ impl<'repo> Signature<'repo> {
         let time = git2::Time::new(seconds, self.inner.when().offset_minutes());
         let name = match self.inner.name() {
             Some(name) => name,
-            None => anyhow::bail!(
+            None => eyre::bail!(
                 "Could not decode signature name: {:?}",
                 self.inner.name_bytes()
             ),
         };
         let email = match self.inner.email() {
             Some(email) => email,
-            None => anyhow::bail!(
+            None => eyre::bail!(
                 "Could not decode signature email: {:?}",
                 self.inner.email_bytes()
             ),
@@ -800,21 +798,21 @@ impl<'repo> Commit<'repo> {
     }
 
     /// Get the summary (first line) of the commit message.
-    pub fn get_summary(&self) -> anyhow::Result<OsString> {
+    pub fn get_summary(&self) -> eyre::Result<OsString> {
         match self.inner.summary_bytes() {
             Some(summary) => Ok(OsString::from_raw_vec(summary.into())?),
-            None => anyhow::bail!("Could not read summary for commit: {:?}", self.get_oid()),
+            None => eyre::bail!("Could not read summary for commit: {:?}", self.get_oid()),
         }
     }
 
     /// Get the commit message with some whitespace trimmed.
-    pub fn get_message_pretty(&self) -> anyhow::Result<OsString> {
+    pub fn get_message_pretty(&self) -> eyre::Result<OsString> {
         let message = OsString::from_raw_vec(self.inner.message_bytes().into())?;
         Ok(message)
     }
 
     /// Get the commit message, without any whitespace trimmed.
-    pub fn get_message_raw(&self) -> anyhow::Result<OsString> {
+    pub fn get_message_raw(&self) -> eyre::Result<OsString> {
         let message = OsString::from_raw_vec(self.inner.message_raw_bytes().into())?;
         Ok(message)
     }
@@ -834,18 +832,18 @@ impl<'repo> Commit<'repo> {
     }
 
     /// Get the `Tree` object associated with this commit.
-    pub fn get_tree(&self) -> anyhow::Result<Tree> {
+    pub fn get_tree(&self) -> eyre::Result<Tree> {
         let tree = self
             .inner
             .tree()
-            .with_context(|| format!("Getting tree object for commit: {:?}", self.get_oid()))?;
+            .wrap_err_with(|| format!("Getting tree object for commit: {:?}", self.get_oid()))?;
         Ok(Tree { inner: tree })
     }
 
     /// Print a one-line description of this commit containing its OID and
     /// summary.
     #[instrument]
-    pub fn friendly_describe(&self) -> anyhow::Result<StyledString> {
+    pub fn friendly_describe(&self) -> eyre::Result<StyledString> {
         let description = render_commit_metadata(
             self,
             &mut [
@@ -906,7 +904,7 @@ impl<'repo> Reference<'repo> {
     /// Given a reference name which is an OID, convert the string into an `Oid`
     /// object. If the `Oid` was zero, returns `None`.
     #[instrument]
-    pub fn name_to_oid(ref_name: &OsStr) -> anyhow::Result<Option<NonZeroOid>> {
+    pub fn name_to_oid(ref_name: &OsStr) -> eyre::Result<Option<NonZeroOid>> {
         let oid: MaybeZeroOid = ref_name.try_into()?;
         match oid {
             MaybeZeroOid::NonZero(oid) => Ok(Some(oid)),
@@ -916,25 +914,25 @@ impl<'repo> Reference<'repo> {
 
     /// Get the name of this reference.
     #[instrument]
-    pub fn get_name(&self) -> anyhow::Result<OsString> {
+    pub fn get_name(&self) -> eyre::Result<OsString> {
         let name = OsStringBytes::from_raw_vec(self.inner.name_bytes().into())
-            .with_context(|| format!("Decoding reference name: {:?}", self.inner.name_bytes()))?;
+            .wrap_err_with(|| format!("Decoding reference name: {:?}", self.inner.name_bytes()))?;
         Ok(name)
     }
 
     /// Get the target of this reference.
     #[instrument]
-    pub fn get_target(&self) -> anyhow::Result<ReferenceTarget> {
+    pub fn get_target(&self) -> eyre::Result<ReferenceTarget> {
         match self.inner.symbolic_target_bytes() {
             Some(reference_name) => Ok(ReferenceTarget::Symbolic {
-                reference_name: OsStr::from_raw_bytes(reference_name).with_context(|| {
+                reference_name: OsStr::from_raw_bytes(reference_name).wrap_err_with(|| {
                     format!("Decoding symbolic reference target: {:?}", reference_name)
                 })?,
             }),
             None => Ok(ReferenceTarget::Direct {
                 oid: match self.inner.target() {
                     Some(oid) => oid.into(),
-                    None => anyhow::bail!(
+                    None => eyre::bail!(
                         "Could not get direct reference target for: {:?}",
                         self.get_name()?
                     ),
@@ -946,7 +944,7 @@ impl<'repo> Reference<'repo> {
     /// Get the commit object pointed to by this reference. Returns `None` if
     /// the object pointed to by the reference is a different kind of object.
     #[instrument]
-    pub fn peel_to_commit(&self) -> anyhow::Result<Option<Commit<'repo>>> {
+    pub fn peel_to_commit(&self) -> eyre::Result<Option<Commit<'repo>>> {
         let object = match self.inner.peel(git2::ObjectType::Commit) {
             Ok(object) => object,
             Err(err) if err.code() == git2::ErrorCode::NotFound => return Ok(None),
@@ -960,11 +958,11 @@ impl<'repo> Reference<'repo> {
 
     /// Delete the reference.
     #[instrument]
-    pub fn delete(&mut self) -> anyhow::Result<()> {
+    pub fn delete(&mut self) -> eyre::Result<()> {
         let reference_name = self.get_name()?;
         self.inner
             .delete()
-            .with_context(|| format!("Deleting reference: {:?}", reference_name))?;
+            .wrap_err_with(|| format!("Deleting reference: {:?}", reference_name))?;
         Ok(())
     }
 }
@@ -1023,7 +1021,7 @@ impl<'a> CategorizedReferenceName<'a> {
     /// result couldn't be encoded as an `OsString` (probably shouldn't
     /// happen?).
     #[instrument]
-    pub fn remove_prefix(&self) -> anyhow::Result<OsString> {
+    pub fn remove_prefix(&self) -> eyre::Result<OsString> {
         let (name, prefix): (_, &'static str) = match self {
             Self::LocalBranch { name, prefix } => (name, prefix),
             Self::RemoteBranch { name, prefix } => (name, prefix),
@@ -1092,7 +1090,7 @@ pub struct Branch<'repo> {
 impl<'repo> Branch<'repo> {
     /// Get the OID pointed to by the branch. Returns `None` if the branch is
     /// not a direct reference (which is unusual).
-    pub fn get_oid(&self) -> anyhow::Result<Option<NonZeroOid>> {
+    pub fn get_oid(&self) -> eyre::Result<Option<NonZeroOid>> {
         Ok(self.inner.get().target().map(make_non_zero_oid))
     }
 

@@ -20,7 +20,7 @@ use os_str_bytes::OsStrBytes;
 fn run_select_past_event(
     repo: &Repo,
     events: Vec<CursiveTestingEvent>,
-) -> anyhow::Result<Option<EventCursor>> {
+) -> eyre::Result<Option<EventCursor>> {
     let glyphs = Glyphs::text();
     let conn = repo.get_db_conn()?;
     let merge_base_db = MergeBaseDb::new(&conn)?;
@@ -38,7 +38,7 @@ fn run_select_past_event(
     )
 }
 
-fn run_undo_events(git: &Git, event_cursor: EventCursor) -> anyhow::Result<String> {
+fn run_undo_events(git: &Git, event_cursor: EventCursor) -> eyre::Result<String> {
     let glyphs = Glyphs::text();
     let repo = git.get_repo()?;
     let conn = repo.get_db_conn()?;
@@ -86,7 +86,7 @@ fn run_undo_events(git: &Git, event_cursor: EventCursor) -> anyhow::Result<Strin
 }
 
 #[test]
-fn test_undo_help() -> anyhow::Result<()> {
+fn test_undo_help() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -122,7 +122,7 @@ fn test_undo_help() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_undo_navigate() -> anyhow::Result<()> {
+fn test_undo_navigate() -> eyre::Result<()> {
     let git = make_git()?;
 
     if !git.supports_reference_transactions()? {
@@ -174,7 +174,7 @@ fn test_undo_navigate() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_go_to_event() -> anyhow::Result<()> {
+fn test_go_to_event() -> eyre::Result<()> {
     let git = make_git()?;
 
     if !git.supports_reference_transactions()? {
@@ -219,7 +219,7 @@ fn test_go_to_event() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_undo_hide() -> anyhow::Result<()> {
+fn test_undo_hide() -> eyre::Result<()> {
     let git = make_git()?;
 
     if !git.supports_reference_transactions()? {
@@ -289,7 +289,7 @@ fn test_undo_hide() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_undo_move_refs() -> anyhow::Result<()> {
+fn test_undo_move_refs() -> eyre::Result<()> {
     let git = make_git()?;
 
     if !git.supports_reference_transactions()? {
@@ -344,7 +344,7 @@ fn test_undo_move_refs() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_historical_smartlog_visibility() -> anyhow::Result<()> {
+fn test_historical_smartlog_visibility() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -395,7 +395,7 @@ fn test_historical_smartlog_visibility() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_undo_doesnt_make_working_dir_dirty() -> anyhow::Result<()> {
+fn test_undo_doesnt_make_working_dir_dirty() -> eyre::Result<()> {
     let git = make_git()?;
 
     if !git.supports_reference_transactions()? {

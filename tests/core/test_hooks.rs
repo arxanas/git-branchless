@@ -1,10 +1,10 @@
-use anyhow::Context;
 use branchless::testing::make_git;
 use branchless::util::get_sh;
+use eyre::{eyre, Context};
 use std::process::Command;
 
 #[test]
-fn test_abandoned_commit_message() -> anyhow::Result<()> {
+fn test_abandoned_commit_message() -> eyre::Result<()> {
     let git = make_git()?;
 
     if !git.supports_reference_transactions()? {
@@ -48,7 +48,7 @@ fn test_abandoned_commit_message() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_abandoned_branch_message() -> anyhow::Result<()> {
+fn test_abandoned_branch_message() -> eyre::Result<()> {
     let git = make_git()?;
 
     if !git.supports_reference_transactions()? {
@@ -81,7 +81,7 @@ fn test_abandoned_branch_message() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_fixup_no_abandoned_commit_message() -> anyhow::Result<()> {
+fn test_fixup_no_abandoned_commit_message() -> eyre::Result<()> {
     let git = make_git()?;
 
     if !git.supports_reference_transactions()? {
@@ -112,7 +112,7 @@ fn test_fixup_no_abandoned_commit_message() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_rebase_individual_commit() -> anyhow::Result<()> {
+fn test_rebase_individual_commit() -> eyre::Result<()> {
     let git = make_git()?;
 
     if !git.supports_reference_transactions()? {
@@ -147,7 +147,7 @@ fn test_rebase_individual_commit() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_interactive_rebase_noop() -> anyhow::Result<()> {
+fn test_interactive_rebase_noop() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -165,7 +165,7 @@ fn test_interactive_rebase_noop() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_pre_auto_gc() -> anyhow::Result<()> {
+fn test_pre_auto_gc() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -173,14 +173,18 @@ fn test_pre_auto_gc() -> anyhow::Result<()> {
     // See https://stackoverflow.com/q/3433653/344643, it's hard to get the
     // `pre-auto-gc` hook to be invoked at all. We'll just invoke the hook
     // directly to make sure that it's installed properly.
-    let output = Command::new(get_sh().context("bash needed to run pre-auto-gc")?)
-        .arg("-c")
-        // Always use a unix style path here, as we are handing it to bash (even on Windows).
-        .arg("./.git/hooks/pre-auto-gc")
-        .current_dir(&git.repo_path)
-        .env_clear()
-        .env("PATH", git.get_path_for_env())
-        .output()?;
+    let output = Command::new(
+        get_sh()
+            .ok_or_else(|| eyre!("Could not get sh"))
+            .wrap_err("bash needed to run pre-auto-gc")?,
+    )
+    .arg("-c")
+    // Always use a unix style path here, as we are handing it to bash (even on Windows).
+    .arg("./.git/hooks/pre-auto-gc")
+    .current_dir(&git.repo_path)
+    .env_clear()
+    .env("PATH", git.get_path_for_env())
+    .output()?;
 
     let stdout = String::from_utf8(output.stdout)?;
     let stderr = String::from_utf8(output.stderr)?;

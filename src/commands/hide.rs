@@ -43,7 +43,7 @@ fn recurse_on_commits<'repo, F: Fn(&Node) -> bool>(
     event_replayer: &EventReplayer,
     commits: Vec<Commit<'repo>>,
     condition: F,
-) -> anyhow::Result<Vec<Commit<'repo>>> {
+) -> eyre::Result<Vec<Commit<'repo>>> {
     let head_oid = repo.get_head_info()?.oid;
     let main_branch_oid = repo.get_main_branch_oid()?;
     let branch_oid_to_names = repo.get_branch_oid_to_names()?;
@@ -83,7 +83,7 @@ fn recurse_on_commits<'repo, F: Fn(&Node) -> bool>(
 ///   commits as well.
 ///
 /// Returns: exit code (0 denotes successful exit).
-pub fn hide(hashes: Vec<String>, recursive: bool) -> anyhow::Result<isize> {
+pub fn hide(hashes: Vec<String>, recursive: bool) -> eyre::Result<isize> {
     let now = SystemTime::now();
     let glyphs = Glyphs::detect();
     let repo = Repo::from_current_dir()?;
@@ -153,7 +153,7 @@ pub fn hide(hashes: Vec<String>, recursive: bool) -> anyhow::Result<isize> {
 ///   commits as well.
 ///
 /// Returns: exit code (0 denotes successful exit).
-pub fn unhide(hashes: Vec<String>, recursive: bool) -> anyhow::Result<isize> {
+pub fn unhide(hashes: Vec<String>, recursive: bool) -> eyre::Result<isize> {
     let now = SystemTime::now();
     let glyphs = Glyphs::detect();
     let repo = Repo::from_current_dir()?;

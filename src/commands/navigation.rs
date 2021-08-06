@@ -12,7 +12,7 @@ use crate::core::mergebase::MergeBaseDb;
 use crate::git::{GitRunInfo, NonZeroOid, Repo};
 
 /// Go back a certain number of commits.
-pub fn prev(git_run_info: &GitRunInfo, num_commits: Option<isize>) -> anyhow::Result<isize> {
+pub fn prev(git_run_info: &GitRunInfo, num_commits: Option<isize>) -> eyre::Result<isize> {
     let exit_code = match num_commits {
         None => git_run_info.run(None, &["checkout", "HEAD^"])?,
         Some(num_commits) => {
@@ -44,7 +44,7 @@ fn advance_towards_main_branch(
     graph: &CommitGraph,
     current_oid: NonZeroOid,
     main_branch_oid: &MainBranchOid,
-) -> anyhow::Result<(isize, NonZeroOid)> {
+) -> eyre::Result<(isize, NonZeroOid)> {
     let MainBranchOid(main_branch_oid) = main_branch_oid;
     let path = find_path_to_merge_base(repo, merge_base_db, *main_branch_oid, current_oid)?;
     let path = match path {
@@ -73,7 +73,7 @@ fn advance_towards_own_commit(
     current_oid: NonZeroOid,
     num_commits: isize,
     towards: Option<Towards>,
-) -> anyhow::Result<Option<NonZeroOid>> {
+) -> eyre::Result<Option<NonZeroOid>> {
     let mut current_oid = current_oid;
     for i in 0..num_commits {
         let children = &graph[&current_oid].children;
@@ -124,7 +124,7 @@ pub fn next(
     git_run_info: &GitRunInfo,
     num_commits: Option<isize>,
     towards: Option<Towards>,
-) -> anyhow::Result<isize> {
+) -> eyre::Result<isize> {
     let glyphs = Glyphs::detect();
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
@@ -134,7 +134,7 @@ pub fn next(
 
     let head_oid = match repo.get_head_info()?.oid {
         Some(head_oid) => head_oid,
-        None => anyhow::bail!("No HEAD present; cannot calculate next commit"),
+        None => eyre::bail!("No HEAD present; cannot calculate next commit"),
     };
     let main_branch_oid = repo.get_main_branch_oid()?;
     let branch_oid_to_names = repo.get_branch_oid_to_names()?;

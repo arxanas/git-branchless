@@ -2,7 +2,7 @@ use branchless::git::GitRunInfo;
 use branchless::testing::{get_path_to_git, make_git, Git, GitInitOptions, GitRunOptions};
 
 #[test]
-fn test_init_smartlog() -> anyhow::Result<()> {
+fn test_init_smartlog() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -17,7 +17,7 @@ fn test_init_smartlog() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_show_reachable_commit() -> anyhow::Result<()> {
+fn test_show_reachable_commit() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -37,7 +37,7 @@ fn test_show_reachable_commit() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_tree() -> anyhow::Result<()> {
+fn test_tree() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -62,7 +62,7 @@ fn test_tree() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_rebase() -> anyhow::Result<()> {
+fn test_rebase() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -88,7 +88,7 @@ fn test_rebase() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_sequential_master_commits() -> anyhow::Result<()> {
+fn test_sequential_master_commits() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -108,7 +108,7 @@ fn test_sequential_master_commits() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_merge_commit() -> anyhow::Result<()> {
+fn test_merge_commit() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -147,7 +147,7 @@ fn test_merge_commit() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_rebase_conflict() -> anyhow::Result<()> {
+fn test_rebase_conflict() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -182,7 +182,7 @@ fn test_rebase_conflict() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_non_adjacent_commits() -> anyhow::Result<()> {
+fn test_non_adjacent_commits() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -211,7 +211,7 @@ fn test_non_adjacent_commits() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_non_adjacent_commits2() -> anyhow::Result<()> {
+fn test_non_adjacent_commits2() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -243,7 +243,7 @@ fn test_non_adjacent_commits2() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_non_adjacent_commits3() -> anyhow::Result<()> {
+fn test_non_adjacent_commits3() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -278,7 +278,7 @@ fn test_non_adjacent_commits3() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_custom_main_branch() -> anyhow::Result<()> {
+fn test_custom_main_branch() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -302,7 +302,7 @@ fn test_custom_main_branch() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_main_remote_branch() -> anyhow::Result<()> {
+fn test_main_remote_branch() -> eyre::Result<()> {
     let path_to_git = get_path_to_git()?;
     let temp_dir = tempfile::tempdir()?;
     let git_run_info = GitRunInfo {
@@ -364,7 +364,7 @@ fn test_main_remote_branch() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_show_rewritten_commit_hash() -> anyhow::Result<()> {
+fn test_show_rewritten_commit_hash() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;

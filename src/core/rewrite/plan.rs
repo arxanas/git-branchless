@@ -120,7 +120,7 @@ impl BuildRebasePlanError {
         out: &mut impl Write,
         glyphs: &Glyphs,
         repo: &Repo,
-    ) -> anyhow::Result<()> {
+    ) -> eyre::Result<()> {
         match self {
             BuildRebasePlanError::ConstraintCycle { cycle_oids } => {
                 writeln!(
@@ -198,7 +198,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
         current_oid: NonZeroOid,
         upstream_patch_ids: &HashSet<PatchId>,
         mut acc: Vec<RebaseCommand>,
-    ) -> anyhow::Result<Vec<RebaseCommand>> {
+    ) -> eyre::Result<Vec<RebaseCommand>> {
         let acc = {
             let current_patch_id = match self.repo.find_commit(current_oid)? {
                 None => {
@@ -275,7 +275,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
         &mut self,
         source_oid: NonZeroOid,
         dest_oid: NonZeroOid,
-    ) -> anyhow::Result<()> {
+    ) -> eyre::Result<()> {
         self.constraints
             .entry(dest_oid)
             .or_default()
@@ -288,7 +288,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
         &self,
         acc: &mut Vec<Constraint>,
         current_oid: NonZeroOid,
-    ) -> anyhow::Result<()> {
+    ) -> eyre::Result<()> {
         // FIXME: O(n^2) algorithm.
         for (child_oid, node) in self.graph {
             if node.commit.get_parent_oids().contains(&current_oid) {
@@ -412,7 +412,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
     /// of a referred-to commit. This adds enough information to the constraint
     /// graph that it now represents the actual end-state commit graph that we
     /// want to create, not just a list of constraints.
-    fn add_descendant_constraints(&mut self) -> anyhow::Result<()> {
+    fn add_descendant_constraints(&mut self) -> eyre::Result<()> {
         let all_descendants_of_constrained_nodes = {
             let mut acc = Vec::new();
             for parent_oid in self.constraints.values().flatten().cloned() {
@@ -499,7 +499,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
     pub fn build(
         mut self,
         options: &BuildRebasePlanOptions,
-    ) -> anyhow::Result<Result<Option<RebasePlan>, BuildRebasePlanError>> {
+    ) -> eyre::Result<Result<Option<RebasePlan>, BuildRebasePlanError>> {
         if options.dump_rebase_constraints {
             println!(
                 "Rebase constraints before adding descendants: {:#?}",
@@ -550,7 +550,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
         &self,
         current_oid: NonZeroOid,
         dest_oid: NonZeroOid,
-    ) -> anyhow::Result<HashSet<PatchId>> {
+    ) -> eyre::Result<HashSet<PatchId>> {
         let merge_base_oid =
             self.merge_base_db
                 .get_merge_base_oid(self.repo, dest_oid, current_oid)?;

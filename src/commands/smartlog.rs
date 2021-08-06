@@ -84,7 +84,7 @@ fn get_child_output(
     head_oid: &HeadOid,
     current_oid: NonZeroOid,
     last_child_line_char: Option<&str>,
-) -> anyhow::Result<Vec<StyledString>> {
+) -> eyre::Result<Vec<StyledString>> {
     let current_node = &graph[&current_oid];
     let is_head = {
         let HeadOid(head_oid) = head_oid;
@@ -182,7 +182,7 @@ fn get_output(
     commit_metadata_providers: &mut [&mut dyn CommitMetadataProvider],
     head_oid: &HeadOid,
     root_oids: &[NonZeroOid],
-) -> anyhow::Result<Vec<StyledString>> {
+) -> eyre::Result<Vec<StyledString>> {
     let mut lines = Vec::new();
 
     // Determine if the provided OID has the provided parent OID as a parent.
@@ -249,7 +249,7 @@ pub fn render_graph(
     graph: &CommitGraph,
     head_oid: &HeadOid,
     commit_metadata_providers: &mut [&mut dyn CommitMetadataProvider],
-) -> anyhow::Result<Vec<StyledString>> {
+) -> eyre::Result<Vec<StyledString>> {
     let root_oids = split_commit_graph_by_roots(repo, merge_base_db, graph);
     let lines = get_output(
         glyphs,
@@ -262,7 +262,7 @@ pub fn render_graph(
 }
 
 /// Display a nice graph of commits you've recently worked on.
-pub fn smartlog() -> anyhow::Result<()> {
+pub fn smartlog() -> eyre::Result<()> {
     let glyphs = Glyphs::detect();
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;

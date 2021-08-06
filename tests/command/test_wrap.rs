@@ -3,7 +3,7 @@ use branchless::core::eventlog::{Event, EventLogDb, EventReplayer};
 use branchless::testing::{make_git, GitRunOptions};
 
 #[test]
-fn test_wrap_rebase_in_transaction() -> anyhow::Result<()> {
+fn test_wrap_rebase_in_transaction() -> eyre::Result<()> {
     let git = make_git()?;
 
     if !git.supports_reference_transactions()? {
@@ -154,7 +154,7 @@ fn test_wrap_rebase_in_transaction() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_wrap_explicit_git_executable() -> anyhow::Result<()> {
+fn test_wrap_explicit_git_executable() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -177,7 +177,7 @@ fn test_wrap_explicit_git_executable() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_wrap_without_repo() -> anyhow::Result<()> {
+fn test_wrap_without_repo() -> eyre::Result<()> {
     let git = make_git()?;
 
     let (stdout, stderr) = git.run_with_options(
@@ -195,7 +195,7 @@ fn test_wrap_without_repo() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_wrap_exit_code() -> anyhow::Result<()> {
+fn test_wrap_exit_code() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.run_with_options(

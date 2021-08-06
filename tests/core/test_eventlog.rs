@@ -3,7 +3,7 @@ use branchless::core::eventlog::{Event, EventLogDb, EventReplayer};
 use branchless::testing::make_git;
 
 #[test]
-fn test_git_v2_31_events() -> anyhow::Result<()> {
+fn test_git_v2_31_events() -> eyre::Result<()> {
     let git = make_git()?;
 
     if !git.supports_reference_transactions()? {

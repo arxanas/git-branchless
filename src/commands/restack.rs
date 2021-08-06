@@ -85,7 +85,7 @@ fn restack_commits(
     commits: Option<impl IntoIterator<Item = NonZeroOid>>,
     build_options: &BuildRebasePlanOptions,
     execute_options: &ExecuteRebasePlanOptions,
-) -> anyhow::Result<isize> {
+) -> eyre::Result<isize> {
     let event_replayer = EventReplayer::from_event_log_db(repo, event_log_db)?;
     let event_cursor = event_replayer.make_default_cursor();
     let head_oid = repo.get_head_info()?.oid;
@@ -162,7 +162,7 @@ fn restack_branches(
     merge_base_db: &MergeBaseDb,
     event_log_db: &EventLogDb,
     options: &ExecuteRebasePlanOptions,
-) -> anyhow::Result<isize> {
+) -> eyre::Result<isize> {
     let event_replayer = EventReplayer::from_event_log_db(repo, event_log_db)?;
     let head_oid = repo.get_head_info()?.oid;
     let main_branch_oid = repo.get_main_branch_oid()?;
@@ -222,7 +222,7 @@ pub fn restack(
     commits: Vec<String>,
     dump_rebase_constraints: bool,
     dump_rebase_plan: bool,
-) -> anyhow::Result<isize> {
+) -> eyre::Result<isize> {
     let now = SystemTime::now();
     let glyphs = Glyphs::detect();
     let repo = Repo::from_current_dir()?;

@@ -13,7 +13,7 @@ use std::ffi::{OsStr, OsString};
 use std::str::FromStr;
 use std::time::{Duration, SystemTime};
 
-use anyhow::Context;
+use eyre::Context;
 use tracing::instrument;
 
 use crate::git::{CategorizedReferenceName, MaybeZeroOid, NonZeroOid, Repo};
@@ -269,7 +269,7 @@ impl From<Event> for Row {
     }
 }
 
-fn try_from_row_helper(row: &Row) -> Result<Event, anyhow::Error> {
+fn try_from_row_helper(row: &Row) -> Result<Event, eyre::Error> {
     let row: Row = row.clone();
     let Row {
         timestamp,
@@ -282,16 +282,16 @@ fn try_from_row_helper(row: &Row) -> Result<Event, anyhow::Error> {
     } = row;
     let event_tx_id = EventTransactionId(event_tx_id);
 
-    let get_oid = |oid_str: &Option<OsString>, oid_name: &str| -> anyhow::Result<MaybeZeroOid> {
+    let get_oid = |oid_str: &Option<OsString>, oid_name: &str| -> eyre::Result<MaybeZeroOid> {
         match oid_str {
             Some(oid_str) => match oid_str.to_str() {
                 Some(oid_str) => {
                     let oid: MaybeZeroOid = oid_str.parse()?;
                     Ok(oid)
                 }
-                None => anyhow::bail!("Invalid OID for reference name: {:?}", oid_str),
+                None => eyre::bail!("Invalid OID for reference name: {:?}", oid_str),
             },
-            None => Err(anyhow::anyhow!(
+            None => Err(eyre::eyre!(
                 "OID '{}' was `None` for event type '{}'",
                 oid_name,
                 type_
@@ -313,9 +313,9 @@ fn try_from_row_helper(row: &Row) -> Result<Event, anyhow::Error> {
 
         "ref-move" => {
             let ref_name =
-                ref_name.ok_or_else(|| anyhow::anyhow!("ref-move event missing ref name"))?;
-            let ref1 = ref1.ok_or_else(|| anyhow::anyhow!("ref-move event missing ref1"))?;
-            let ref2 = ref2.ok_or_else(|| anyhow::anyhow!("ref-move event missing ref2"))?;
+                ref_name.ok_or_else(|| eyre::eyre!("ref-move event missing ref name"))?;
+            let ref1 = ref1.ok_or_else(|| eyre::eyre!("ref-move event missing ref1"))?;
+            let ref2 = ref2.ok_or_else(|| eyre::eyre!("ref-move event missing ref2"))?;
             Event::RefUpdateEvent {
                 timestamp,
                 event_tx_id,
@@ -353,13 +353,13 @@ fn try_from_row_helper(row: &Row) -> Result<Event, anyhow::Error> {
             }
         }
 
-        other => anyhow::bail!("Unknown event type {}", other),
+        other => eyre::bail!("Unknown event type {}", other),
     };
     Ok(event)
 }
 
 impl TryFrom<Row> for Event {
-    type Error = anyhow::Error;
+    type Error = eyre::Error;
 
     #[instrument]
     fn try_from(row: Row) -> Result<Self, Self::Error> {
@@ -379,7 +379,7 @@ impl std::fmt::Debug for EventLogDb<'_> {
 }
 
 #[instrument]
-fn init_tables(conn: &rusqlite::Connection) -> anyhow::Result<()> {
+fn init_tables(conn: &rusqlite::Connection) -> eyre::Result<()> {
     conn.execute(
         "
 CREATE TABLE IF NOT EXISTS event_log (
@@ -394,7 +394,7 @@ CREATE TABLE IF NOT EXISTS event_log (
 ",
         rusqlite::params![],
     )
-    .context("Creating `event_log` table")?;
+    .wrap_err("Creating `event_log` table")?;
 
     conn.execute(
         "
@@ -412,7 +412,7 @@ CREATE TABLE IF NOT EXISTS event_transactions (
 ",
         rusqlite::params![],
     )
-    .context("Creating `event_transactions` table")?;
+    .wrap_err("Creating `event_transactions` table")?;
 
     Ok(())
 }
@@ -420,7 +420,7 @@ CREATE TABLE IF NOT EXISTS event_transactions (
 impl<'conn> EventLogDb<'conn> {
     /// Constructor.
     #[instrument]
-    pub fn new(conn: &'conn rusqlite::Connection) -> anyhow::Result<Self> {
+    pub fn new(conn: &'conn rusqlite::Connection) -> eyre::Result<Self> {
         init_tables(&conn)?;
         Ok(EventLogDb { conn })
     }
@@ -430,7 +430,7 @@ impl<'conn> EventLogDb<'conn> {
     /// Args:
     /// * events: The events to add.
     #[instrument]
-    pub fn add_events(&mut self, events: Vec<Event>) -> anyhow::Result<()> {
+    pub fn add_events(&mut self, events: Vec<Event>) -> eyre::Result<()> {
         let tx = self.conn.unchecked_transaction()?;
         for event in events {
             let Row {
@@ -483,7 +483,7 @@ INSERT INTO event_log VALUES (
     /// Returns: All the events in the database, ordered from oldest to newest.
     #[instrument]
 
-    pub fn get_events(&self) -> anyhow::Result<Vec<Event>> {
+    pub fn get_events(&self) -> eyre::Result<Vec<Event>> {
         let mut stmt = self.conn.prepare(
             "
 SELECT timestamp, type, event_tx_id, old_ref, new_ref, ref_name, message
@@ -523,7 +523,7 @@ ORDER BY rowid ASC
         &self,
         now: SystemTime,
         message: impl AsRef<str>,
-    ) -> anyhow::Result<EventTransactionId> {
+    ) -> eyre::Result<EventTransactionId> {
         if let Ok(transaction_id) = std::env::var(BRANCHLESS_TRANSACTION_ID_ENV_VAR) {
             if let Ok(transaction_id) = transaction_id.parse::<EventTransactionId>() {
                 return Ok(transaction_id);
@@ -534,7 +534,7 @@ ORDER BY rowid ASC
 
         let timestamp = now
             .duration_since(SystemTime::UNIX_EPOCH)
-            .with_context(|| format!("Calculating event transaction timestamp: {:?}", &now))?
+            .wrap_err_with(|| format!("Calculating event transaction timestamp: {:?}", &now))?
             .as_secs_f64();
         self.conn
             .execute_named(
@@ -549,7 +549,7 @@ ORDER BY rowid ASC
                     ":message": message.as_ref(),
                 },
             )
-            .with_context(|| {
+            .wrap_err_with(|| {
                 format!(
                     "Creating event transaction (now: {:?}, message: {:?})",
                     &now,
@@ -679,7 +679,7 @@ impl EventReplayer {
     /// * `event_log_db`: The database to query events from.
     ///
     /// Returns: The constructed replayer.
-    pub fn from_event_log_db(repo: &Repo, event_log_db: &EventLogDb) -> anyhow::Result<Self> {
+    pub fn from_event_log_db(repo: &Repo, event_log_db: &EventLogDb) -> eyre::Result<Self> {
         let main_branch_reference_name = repo.get_main_branch_reference()?.get_name()?;
         let mut result = EventReplayer::new(main_branch_reference_name);
         for event in event_log_db.get_events()? {
@@ -1070,7 +1070,7 @@ impl EventReplayer {
         &self,
         cursor: EventCursor,
         reference_name: &OsStr,
-    ) -> anyhow::Result<Option<NonZeroOid>> {
+    ) -> eyre::Result<Option<NonZeroOid>> {
         let cursor_event_id: usize = cursor.event_id.try_into().unwrap();
         let oid = self.events[0..cursor_event_id]
             .iter()
@@ -1102,7 +1102,7 @@ impl EventReplayer {
         &self,
         cursor: EventCursor,
         repo: &Repo,
-    ) -> anyhow::Result<NonZeroOid> {
+    ) -> eyre::Result<NonZeroOid> {
         let main_branch_reference_name = repo.get_main_branch_reference()?.get_name()?;
         let main_branch_oid = self.get_cursor_branch_oid(cursor, &main_branch_reference_name)?;
         match main_branch_oid {
@@ -1129,7 +1129,7 @@ impl EventReplayer {
         &self,
         cursor: EventCursor,
         repo: &Repo,
-    ) -> anyhow::Result<HashMap<NonZeroOid, HashSet<OsString>>> {
+    ) -> eyre::Result<HashMap<NonZeroOid, HashSet<OsString>>> {
         let mut ref_name_to_oid: HashMap<&OsString, NonZeroOid> = HashMap::new();
         let cursor_event_id: usize = cursor.event_id.try_into().unwrap();
         for event in self.events[..cursor_event_id].iter() {
@@ -1262,7 +1262,7 @@ mod tests {
     use testing::make_dummy_transaction_id;
 
     #[test]
-    fn test_drop_non_meaningful_events() -> anyhow::Result<()> {
+    fn test_drop_non_meaningful_events() -> eyre::Result<()> {
         let event_tx_id = make_dummy_transaction_id(123);
         let meaningful_event = Event::CommitEvent {
             timestamp: 0.0,
@@ -1297,7 +1297,7 @@ mod tests {
     }
 
     #[test]
-    fn test_different_event_transaction_ids() -> anyhow::Result<()> {
+    fn test_different_event_transaction_ids() -> eyre::Result<()> {
         let git = make_git()?;
 
         git.init_repo()?;
@@ -1343,7 +1343,7 @@ mod tests {
     }
 
     #[test]
-    fn test_advance_cursor_by_transaction() -> anyhow::Result<()> {
+    fn test_advance_cursor_by_transaction() -> eyre::Result<()> {
         let mut event_replayer = EventReplayer::new("refs/heads/master");
         for (timestamp, event_tx_id) in (0..).zip(&[1, 1, 2, 2, 3, 4]) {
             let timestamp: f64 = timestamp.try_into()?;

@@ -1,11 +1,11 @@
 use crate::util::trim_lines;
 
-use anyhow::Context;
 use branchless::git::GitVersion;
 use branchless::testing::{make_git, GitInitOptions, GitRunOptions};
+use eyre::Context;
 
 #[test]
-fn test_hook_installed() -> anyhow::Result<()> {
+fn test_hook_installed() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -16,7 +16,7 @@ fn test_hook_installed() -> anyhow::Result<()> {
     {
         use std::os::unix::fs::PermissionsExt;
         let metadata = std::fs::metadata(&hook_path)
-            .with_context(|| format!("Reading hook permissions for {:?}", &hook_path))?;
+            .wrap_err_with(|| format!("Reading hook permissions for {:?}", &hook_path))?;
         let mode = metadata.permissions().mode();
         assert!(mode & 0o111 == 0o111);
     }
@@ -25,7 +25,7 @@ fn test_hook_installed() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_alias_installed() -> anyhow::Result<()> {
+fn test_alias_installed() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -48,7 +48,7 @@ fn test_alias_installed() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_old_git_version_warning() -> anyhow::Result<()> {
+fn test_old_git_version_warning() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -96,7 +96,7 @@ fn test_old_git_version_warning() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_init_basic() -> anyhow::Result<()> {
+fn test_init_basic() -> eyre::Result<()> {
     let git = make_git()?;
 
     if !git.supports_reference_transactions()? {
@@ -138,7 +138,7 @@ fn test_init_basic() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_init_prompt_for_main_branch() -> anyhow::Result<()> {
+fn test_init_prompt_for_main_branch() -> eyre::Result<()> {
     let git = make_git()?;
 
     if !git.supports_reference_transactions()? {
@@ -197,7 +197,7 @@ fn test_init_prompt_for_main_branch() -> anyhow::Result<()> {
 
 #[cfg(unix)]
 #[test]
-fn test_main_branch_not_found_error_message() -> anyhow::Result<()> {
+fn test_main_branch_not_found_error_message() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -214,6 +214,12 @@ fn test_main_branch_not_found_error_message() -> anyhow::Result<()> {
         )?;
         insta::assert_snapshot!(trim_lines(stderr), @r###"
         Error:
+           0: [91mCould not find repository main branch[0m
+
+        Location:
+           [35msrc/git/repo.rs[0m:[35m263[0m
+
+        [96mSuggestion[0m:
         The main branch "master" could not be found in your repository
         at path: "<repo-path>/.git/".
         These branches exist: []
@@ -221,6 +227,10 @@ fn test_main_branch_not_found_error_message() -> anyhow::Result<()> {
 
             git config branchless.core.mainBranch <branch>
 
+
+        Backtrace omitted.
+        Run with RUST_BACKTRACE=1 environment variable to display it.
+        Run with RUST_BACKTRACE=full to include source snippets.
         "###);
         insta::assert_snapshot!(stdout, @"");
     }
@@ -229,7 +239,7 @@ fn test_main_branch_not_found_error_message() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_init_uninstall() -> anyhow::Result<()> {
+fn test_init_uninstall() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;

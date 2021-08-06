@@ -1,7 +1,7 @@
 use branchless::testing::{make_git, GitRunOptions};
 
 #[test]
-fn test_move_stick_on_disk() -> anyhow::Result<()> {
+fn test_move_stick_on_disk() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -39,7 +39,7 @@ fn test_move_stick_on_disk() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_move_stick_in_memory() -> anyhow::Result<()> {
+fn test_move_stick_in_memory() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -124,7 +124,7 @@ fn test_move_stick_in_memory() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_move_tree_on_disk() -> anyhow::Result<()> {
+fn test_move_tree_on_disk() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -166,7 +166,7 @@ fn test_move_tree_on_disk() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_move_tree_in_memory() -> anyhow::Result<()> {
+fn test_move_tree_in_memory() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -208,7 +208,7 @@ fn test_move_tree_in_memory() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_move_with_source_not_in_smartlog_on_disk() -> anyhow::Result<()> {
+fn test_move_with_source_not_in_smartlog_on_disk() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -243,7 +243,7 @@ fn test_move_with_source_not_in_smartlog_on_disk() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_move_with_source_not_in_smartlog_in_memory() -> anyhow::Result<()> {
+fn test_move_with_source_not_in_smartlog_in_memory() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -326,7 +326,7 @@ fn test_move_with_source_not_in_smartlog_in_memory() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_move_merge_conflict() -> anyhow::Result<()> {
+fn test_move_merge_conflict() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -411,7 +411,7 @@ fn test_move_merge_conflict() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_move_base() -> anyhow::Result<()> {
+fn test_move_base() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -492,7 +492,7 @@ fn test_move_base() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_move_base_shared() -> anyhow::Result<()> {
+fn test_move_base_shared() -> eyre::Result<()> {
     let git = make_git()?;
 
     if !git.supports_reference_transactions()? {
@@ -546,7 +546,7 @@ fn test_move_base_shared() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_move_checkout_new_head() -> anyhow::Result<()> {
+fn test_move_checkout_new_head() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -606,7 +606,7 @@ fn test_move_checkout_new_head() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_move_branch() -> anyhow::Result<()> {
+fn test_move_branch() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -678,7 +678,7 @@ fn test_move_branch() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_move_base_onto_head() -> anyhow::Result<()> {
+fn test_move_base_onto_head() -> eyre::Result<()> {
     let git = make_git()?;
 
     if !git.supports_reference_transactions()? {
@@ -726,7 +726,7 @@ fn test_move_base_onto_head() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_move_force_in_memory() -> anyhow::Result<()> {
+fn test_move_force_in_memory() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -760,7 +760,7 @@ fn test_move_force_in_memory() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_rebase_in_memory_updates_committer_timestamp() -> anyhow::Result<()> {
+fn test_rebase_in_memory_updates_committer_timestamp() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -800,7 +800,7 @@ fn test_rebase_in_memory_updates_committer_timestamp() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_move_in_memory_gc() -> anyhow::Result<()> {
+fn test_move_in_memory_gc() -> eyre::Result<()> {
     let git = make_git()?;
 
     if !git.supports_reference_transactions()? {
@@ -896,7 +896,7 @@ fn test_move_in_memory_gc() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_move_main_branch_commits() -> anyhow::Result<()> {
+fn test_move_main_branch_commits() -> eyre::Result<()> {
     let git = make_git()?;
 
     if !git.supports_reference_transactions()? {
@@ -983,7 +983,7 @@ fn test_move_main_branch_commits() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_move_branches_after_move_on_disk() -> anyhow::Result<()> {
+fn test_move_branches_after_move_on_disk() -> eyre::Result<()> {
     let git = make_git()?;
 
     if !git.supports_reference_transactions()? {
@@ -1078,7 +1078,7 @@ fn test_move_branches_after_move_on_disk() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_move_no_reapply_upstream_commits_in_memory() -> anyhow::Result<()> {
+fn test_move_no_reapply_upstream_commits_in_memory() -> eyre::Result<()> {
     let git = make_git()?;
 
     if !git.supports_reference_transactions()? {
@@ -1129,7 +1129,7 @@ fn test_move_no_reapply_upstream_commits_in_memory() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_move_no_reapply_squashed_commits_in_memory() -> anyhow::Result<()> {
+fn test_move_no_reapply_squashed_commits_in_memory() -> eyre::Result<()> {
     let git = make_git()?;
 
     if !git.supports_reference_transactions()? {
@@ -1196,7 +1196,7 @@ fn test_move_no_reapply_squashed_commits_in_memory() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_move_no_reapply_upstream_commits_on_disk() -> anyhow::Result<()> {
+fn test_move_no_reapply_upstream_commits_on_disk() -> eyre::Result<()> {
     let git = make_git()?;
 
     if !git.supports_reference_transactions()? {
@@ -1253,7 +1253,7 @@ fn test_move_no_reapply_upstream_commits_on_disk() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_move_no_reapply_squashed_commits_on_disk() -> anyhow::Result<()> {
+fn test_move_no_reapply_squashed_commits_on_disk() -> eyre::Result<()> {
     let git = make_git()?;
 
     if !git.supports_reference_transactions()? {
@@ -1331,7 +1331,7 @@ fn test_move_no_reapply_squashed_commits_on_disk() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_move_delete_checked_out_branch_in_memory() -> anyhow::Result<()> {
+fn test_move_delete_checked_out_branch_in_memory() -> eyre::Result<()> {
     let git = make_git()?;
 
     if !git.supports_reference_transactions()? {
@@ -1403,7 +1403,7 @@ fn test_move_delete_checked_out_branch_in_memory() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_move_delete_checked_out_branch_on_disk() -> anyhow::Result<()> {
+fn test_move_delete_checked_out_branch_on_disk() -> eyre::Result<()> {
     let git = make_git()?;
 
     if !git.supports_reference_transactions()? {
@@ -1483,7 +1483,7 @@ fn test_move_delete_checked_out_branch_on_disk() -> anyhow::Result<()> {
 }
 
 #[test]
-fn test_move_on_disk_with_unstaged_changes() -> anyhow::Result<()> {
+fn test_move_on_disk_with_unstaged_changes() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;

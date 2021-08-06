@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::ffi::{OsStr, OsString};
 use std::time::SystemTime;
 
-use anyhow::Context;
+use eyre::Context;
 use os_str_bytes::OsStrBytes;
 use tracing::warn;
 
@@ -20,7 +20,7 @@ pub fn move_branches<'a>(
     repo: &'a Repo,
     event_tx_id: EventTransactionId,
     rewritten_oids_map: &'a HashMap<NonZeroOid, MaybeZeroOid>,
-) -> anyhow::Result<()> {
+) -> eyre::Result<()> {
     let branch_oid_to_names = repo.get_branch_oid_to_names()?;
 
     // We may experience an error in the case of a branch move. Ideally, we
@@ -29,7 +29,7 @@ pub fn move_branches<'a>(
     // in that case. Instead, we just do things non-atomically and record which
     // ones succeeded. See https://github.com/libgit2/libgit2/issues/5918
     let mut branch_moves: Vec<(NonZeroOid, MaybeZeroOid, &OsStr)> = Vec::new();
-    let mut branch_move_err: Option<anyhow::Error> = None;
+    let mut branch_move_err: Option<eyre::Error> = None;
     'outer: for (old_oid, names) in branch_oid_to_names.iter() {
         let new_oid = match rewritten_oids_map.get(&old_oid) {
             Some(new_oid) => new_oid,
@@ -43,7 +43,7 @@ pub fn move_branches<'a>(
                 let new_commit = match repo.find_commit(*new_oid) {
                     Ok(Some(commit)) => commit,
                     Ok(None) => {
-                        branch_move_err = Some(anyhow::anyhow!(
+                        branch_move_err = Some(eyre::eyre!(
                             "Could not find newly-rewritten commit with old OID: {:?}, new OID: {:?}",
                             old_oid,
                             new_oid
@@ -104,7 +104,7 @@ pub fn move_branches<'a>(
         })
         .collect();
     let branch_moves_stdin = OsStrBytes::from_raw_bytes(branch_moves_stdin)
-        .with_context(|| "Encoding branch moves stdin")?;
+        .wrap_err_with(|| "Encoding branch moves stdin")?;
     let branch_moves_stdin = OsString::from(branch_moves_stdin);
     git_run_info.run_hook(
         repo,
@@ -123,7 +123,7 @@ mod in_memory {
     use std::collections::HashMap;
     use std::ffi::OsString;
 
-    use anyhow::Context;
+    use eyre::Context;
     use indicatif::{ProgressBar, ProgressStyle};
     use tracing::{instrument, warn};
 
@@ -160,7 +160,7 @@ mod in_memory {
         repo: &Repo,
         rebase_plan: &RebasePlan,
         options: &ExecuteRebasePlanOptions,
-    ) -> anyhow::Result<RebaseInMemoryResult> {
+    ) -> eyre::Result<RebaseInMemoryResult> {
         let ExecuteRebasePlanOptions {
             now,
             // Transaction ID will be passed to the `post-rewrite` hook via
@@ -213,7 +213,7 @@ mod in_memory {
                 RebaseCommand::ResetToLabel { label_name } => {
                     current_oid = match labels.get(label_name) {
                         Some(oid) => *oid,
-                        None => anyhow::bail!("BUG: no associated OID for label: {}", label_name),
+                        None => eyre::bail!("BUG: no associated OID for label: {}", label_name),
                     };
                 }
 
@@ -222,25 +222,22 @@ mod in_memory {
                 }
 
                 RebaseCommand::Pick { commit_oid } => {
-                    let current_commit = repo.find_commit(current_oid).with_context(|| {
+                    let current_commit = repo.find_commit(current_oid).wrap_err_with(|| {
                         format!("Finding current commit by OID: {:?}", current_oid)
                     })?;
                     let current_commit = match current_commit {
                         Some(commit) => commit,
                         None => {
-                            anyhow::bail!(
-                                "Unable to find current commit with OID: {:?}",
-                                current_oid
-                            )
+                            eyre::bail!("Unable to find current commit with OID: {:?}", current_oid)
                         }
                     };
-                    let commit_to_apply = repo.find_commit(*commit_oid).with_context(|| {
+                    let commit_to_apply = repo.find_commit(*commit_oid).wrap_err_with(|| {
                         format!("Finding commit to apply by OID: {:?}", commit_oid)
                     })?;
                     let commit_to_apply = match commit_to_apply {
                         Some(commit) => commit,
                         None => {
-                            anyhow::bail!(
+                            eyre::bail!(
                                 "Unable to find commit to apply with OID: {:?}",
                                 current_oid
                             )
@@ -286,10 +283,10 @@ mod in_memory {
                     ));
                     let commit_tree_oid = repo
                         .write_index_to_tree(&mut rebased_index)
-                        .with_context(|| "Converting index to tree")?;
+                        .wrap_err_with(|| "Converting index to tree")?;
                     let commit_tree = match repo.find_tree(commit_tree_oid)? {
                         Some(tree) => tree,
-                        None => anyhow::bail!(
+                        None => eyre::bail!(
                             "Could not find freshly-written tree for OID: {:?}",
                             commit_tree_oid
                         ),
@@ -297,7 +294,7 @@ mod in_memory {
                     let commit_message = commit_to_apply.get_message_raw()?;
                     let commit_message = match commit_message.to_str() {
                         Some(message) => message,
-                        None => anyhow::bail!(
+                        None => eyre::bail!(
                             "Could not decode commit message for commit: {:?}",
                             commit_oid
                         ),
@@ -319,15 +316,15 @@ mod in_memory {
                             &commit_tree,
                             &[&current_commit],
                         )
-                        .with_context(|| "Applying rebased commit")?;
+                        .wrap_err_with(|| "Applying rebased commit")?;
 
                     let rebased_commit = match repo
                         .find_commit(rebased_commit_oid)
-                        .with_context(|| "Looking up just-rebased commit")?
+                        .wrap_err_with(|| "Looking up just-rebased commit")?
                     {
                         Some(commit) => commit,
                         None => {
-                            anyhow::bail!(
+                            eyre::bail!(
                                 "Could not find just-rebased commit: {:?}",
                                 rebased_commit_oid
                             )
@@ -366,7 +363,7 @@ mod in_memory {
                     );
                     let commit = match repo.find_commit(*commit_oid)? {
                         Some(commit) => commit,
-                        None => anyhow::bail!("Could not find commit: {:?}", commit_oid),
+                        None => eyre::bail!("Could not find commit: {:?}", commit_oid),
                     };
 
                     rewritten_oids.push((*commit_oid, MaybeZeroOid::Zero));
@@ -441,7 +438,7 @@ mod in_memory {
         rewritten_oids: &[(NonZeroOid, MaybeZeroOid)],
         new_head_oid: Option<NonZeroOid>,
         options: &ExecuteRebasePlanOptions,
-    ) -> anyhow::Result<isize> {
+    ) -> eyre::Result<isize> {
         let ExecuteRebasePlanOptions {
             now: _,
             event_tx_id,
@@ -493,7 +490,7 @@ mod in_memory {
             Some(previous_head_oid) => {
                 let new_head_oid = match new_head_oid {
                     Some(new_head_oid) => new_head_oid,
-                    None => anyhow::bail!(
+                    None => eyre::bail!(
                         "`None` provided for `new_head_oid`,
                         but it should have been `Some`
                         because the previous `HEAD` OID was not `None`: {:?}",
@@ -538,7 +535,7 @@ mod in_memory {
 }
 
 mod on_disk {
-    use anyhow::Context;
+    use eyre::Context;
     use indicatif::ProgressBar;
     use tracing::instrument;
 
@@ -563,7 +560,7 @@ mod on_disk {
         repo: &Repo,
         rebase_plan: &RebasePlan,
         options: &ExecuteRebasePlanOptions,
-    ) -> anyhow::Result<Result<isize, Error>> {
+    ) -> eyre::Result<Result<isize, Error>> {
         let ExecuteRebasePlanOptions {
             // `git rebase` will make its own timestamp.
             now: _,
@@ -592,7 +589,7 @@ mod on_disk {
         }
 
         let rebase_state_dir = repo.get_rebase_state_dir_path();
-        std::fs::create_dir_all(&rebase_state_dir).with_context(|| {
+        std::fs::create_dir_all(&rebase_state_dir).wrap_err_with(|| {
             format!(
                 "Creating rebase state directory at: {:?}",
                 &rebase_state_dir
@@ -608,13 +605,13 @@ mod on_disk {
         // ```
         let interactive_file_path = rebase_state_dir.join("interactive");
         std::fs::write(&interactive_file_path, "")
-            .with_context(|| format!("Writing interactive to: {:?}", &interactive_file_path))?;
+            .wrap_err_with(|| format!("Writing interactive to: {:?}", &interactive_file_path))?;
 
         if head_info.oid.is_some() {
             let repo_head_file_path = repo.get_path().join("HEAD");
             let orig_head_file_path = repo.get_path().join("ORIG_HEAD");
             std::fs::copy(&repo_head_file_path, &orig_head_file_path)
-                .with_context(|| format!("Copying `HEAD` to: {:?}", &orig_head_file_path))?;
+                .wrap_err_with(|| format!("Copying `HEAD` to: {:?}", &orig_head_file_path))?;
 
             // Confusingly, there is also a file at
             // `.git/rebase-merge/orig-head` (different from `.git/ORIG_HEAD`),
@@ -630,7 +627,7 @@ mod on_disk {
                 &rebase_orig_head_file_path,
                 rebase_orig_head_oid.to_string(),
             )
-            .with_context(|| {
+            .wrap_err_with(|| {
                 format!("Writing `orig-head` to: {:?}", &rebase_orig_head_file_path)
             })?;
 
@@ -641,7 +638,7 @@ mod on_disk {
                 &head_name_file_path,
                 head_info.get_branch_name().unwrap_or("detached HEAD"),
             )
-            .with_context(|| format!("Writing head-name to: {:?}", &head_name_file_path))?;
+            .wrap_err_with(|| format!("Writing head-name to: {:?}", &head_name_file_path))?;
 
             // Dummy `head` file. We will `reset` to the appropriate commit as soon as
             // we start the rebase.
@@ -650,14 +647,14 @@ mod on_disk {
                 &rebase_merge_head_file_path,
                 rebase_plan.first_dest_oid.to_string(),
             )
-            .with_context(|| format!("Writing head to: {:?}", &rebase_merge_head_file_path))?;
+            .wrap_err_with(|| format!("Writing head to: {:?}", &rebase_merge_head_file_path))?;
         }
 
         // Dummy `onto` file. We may be rebasing onto a set of unrelated
         // nodes in the same operation, so there may not be a single "onto" node to
         // refer to.
         let onto_file_path = rebase_state_dir.join("onto");
-        std::fs::write(&onto_file_path, rebase_plan.first_dest_oid.to_string()).with_context(
+        std::fs::write(&onto_file_path, rebase_plan.first_dest_oid.to_string()).wrap_err_with(
             || {
                 format!(
                     "Writing onto {:?} to: {:?}",
@@ -675,7 +672,7 @@ mod on_disk {
                 .map(|command| format!("{}\n", command.to_string()))
                 .collect::<String>(),
         )
-        .with_context(|| {
+        .wrap_err_with(|| {
             format!(
                 "Writing `git-rebase-todo` to: {:?}",
                 todo_file_path.as_path()
@@ -687,12 +684,12 @@ mod on_disk {
             end_file_path.as_path(),
             format!("{}\n", rebase_plan.commands.len()),
         )
-        .with_context(|| format!("Writing `end` to: {:?}", end_file_path.as_path()))?;
+        .wrap_err_with(|| format!("Writing `end` to: {:?}", end_file_path.as_path()))?;
 
         // Corresponds to the `--empty=keep` flag. We'll drop the commits later once
         // we find out that they're empty.
         let keep_redundant_commits_file_path = rebase_state_dir.join("keep_redundant_commits");
-        std::fs::write(&keep_redundant_commits_file_path, "").with_context(|| {
+        std::fs::write(&keep_redundant_commits_file_path, "").wrap_err_with(|| {
             format!(
                 "Writing `keep_redundant_commits` to: {:?}",
                 &keep_redundant_commits_file_path
@@ -702,7 +699,7 @@ mod on_disk {
         if *preserve_timestamps {
             let cdate_is_adate_file_path = rebase_state_dir.join("cdate_is_adate");
             std::fs::write(&cdate_is_adate_file_path, "")
-                .with_context(|| "Writing `cdate_is_adate` option file")?;
+                .wrap_err_with(|| "Writing `cdate_is_adate` option file")?;
         }
 
         // Make sure we don't move around the current branch unintentionally. If it
@@ -748,7 +745,7 @@ pub fn execute_rebase_plan(
     repo: &Repo,
     rebase_plan: &RebasePlan,
     options: &ExecuteRebasePlanOptions,
-) -> anyhow::Result<isize> {
+) -> eyre::Result<isize> {
     let ExecuteRebasePlanOptions {
         now: _,
         event_tx_id: _,
@@ -822,7 +819,5 @@ Commit your changes and then try again.
         }
     }
 
-    anyhow::bail!(
-        "Both force_in_memory and force_on_disk were requested, but these options conflict"
-    )
+    eyre::bail!("Both force_in_memory and force_on_disk were requested, but these options conflict")
 }

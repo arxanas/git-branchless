@@ -2,10 +2,8 @@ use std::convert::TryInto;
 use std::ffi::OsString;
 use std::path::PathBuf;
 
-use anyhow::Context;
 use branchless::commands::wrap;
 use branchless::git::{GitRunInfo, NonZeroOid};
-use simple_logger::SimpleLogger;
 use structopt::StructOpt;
 
 #[derive(StructOpt)]
@@ -184,10 +182,8 @@ enum Opts {
     HookReferenceTransaction { transaction_state: String },
 }
 
-fn main() -> anyhow::Result<()> {
-    SimpleLogger::new()
-        .init()
-        .with_context(|| "Initializing logging")?;
+fn main() -> eyre::Result<()> {
+    color_eyre::install()?;
 
     let opts = Opts::from_args();
     let path_to_git = std::env::var_os("PATH_TO_GIT").unwrap_or_else(|| OsString::from("git"));
@@ -233,7 +229,7 @@ fn main() -> anyhow::Result<()> {
                 (false, false) => None,
                 (true, false) => Some(branchless::commands::navigation::Towards::Oldest),
                 (false, true) => Some(branchless::commands::navigation::Towards::Newest),
-                (true, true) => anyhow::bail!("Both --oldest and --newest were set"),
+                (true, true) => eyre::bail!("Both --oldest and --newest were set"),
             };
             branchless::commands::navigation::next(&git_run_info, num_commits, towards)?
         }
