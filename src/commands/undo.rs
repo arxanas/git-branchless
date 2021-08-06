@@ -19,7 +19,7 @@ use tracing::instrument;
 
 use crate::commands::smartlog::render_graph;
 use crate::core::eventlog::{Event, EventCursor, EventLogDb, EventReplayer, EventTransactionId};
-use crate::core::formatting::{printable_styled_string, Glyphs, Pluralize, StyledStringBuilder};
+use crate::core::formatting::{printable_styled_string, Pluralize, StyledStringBuilder};
 use crate::core::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
 use crate::core::mergebase::MergeBaseDb;
 use crate::core::metadata::{
@@ -31,7 +31,7 @@ use crate::git::{CategorizedReferenceName, GitRunInfo, MaybeZeroOid, Repo};
 use crate::tui::{with_siv, Output, SingletonView};
 
 fn render_cursor_smartlog(
-    glyphs: &Glyphs,
+    output: &Output,
     repo: &Repo,
     merge_base_db: &MergeBaseDb,
     event_replayer: &EventReplayer,
@@ -41,6 +41,7 @@ fn render_cursor_smartlog(
     let main_branch_oid = event_replayer.get_cursor_main_branch_oid(event_cursor, repo)?;
     let branch_oid_to_names = event_replayer.get_cursor_branch_oid_to_names(event_cursor, repo)?;
     let graph = make_graph(
+        output,
         repo,
         merge_base_db,
         event_replayer,
@@ -51,7 +52,7 @@ fn render_cursor_smartlog(
         true,
     )?;
     let result = render_graph(
-        glyphs,
+        output,
         repo,
         merge_base_db,
         &graph,
@@ -312,7 +313,7 @@ fn describe_events_numbered(
 #[instrument(skip(siv))]
 fn select_past_event(
     mut siv: CursiveRunner<CursiveRunnable>,
-    glyphs: &Glyphs,
+    output: &Output,
     repo: &Repo,
     merge_base_db: &MergeBaseDb,
     event_replayer: &mut EventReplayer,
@@ -381,7 +382,7 @@ fn select_past_event(
                       event_cursor: EventCursor|
          -> eyre::Result<()> {
             let smartlog = render_cursor_smartlog(
-                &glyphs,
+                output,
                 &repo,
                 &merge_base_db,
                 &event_replayer,
@@ -797,13 +798,7 @@ pub fn undo(output: &mut Output, git_run_info: &GitRunInfo) -> eyre::Result<isiz
 
     let event_cursor = {
         let result = with_siv(|siv| {
-            select_past_event(
-                siv,
-                &output.get_glyphs(),
-                &repo,
-                &merge_base_db,
-                &mut event_replayer,
-            )
+            select_past_event(siv, output, &repo, &merge_base_db, &mut event_replayer)
         })?;
         match result {
             Some(event_cursor) => event_cursor,
@@ -830,19 +825,18 @@ pub mod testing {
     use cursive::{CursiveRunnable, CursiveRunner};
 
     use crate::core::eventlog::{EventCursor, EventLogDb, EventReplayer};
-    use crate::core::formatting::Glyphs;
     use crate::core::mergebase::MergeBaseDb;
     use crate::git::{GitRunInfo, Repo};
     use crate::tui::Output;
 
     pub fn select_past_event(
         siv: CursiveRunner<CursiveRunnable>,
-        glyphs: &Glyphs,
+        output: &Output,
         repo: &Repo,
         merge_base_db: &MergeBaseDb,
         event_replayer: &mut EventReplayer,
     ) -> eyre::Result<Option<EventCursor>> {
-        super::select_past_event(siv, glyphs, repo, merge_base_db, event_replayer)
+        super::select_past_event(siv, output, repo, merge_base_db, event_replayer)
     }
 
     pub fn undo_events(

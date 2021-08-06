@@ -92,6 +92,7 @@ fn restack_commits(
     let main_branch_oid = repo.get_main_branch_oid()?;
     let branch_oid_to_names = repo.get_branch_oid_to_names()?;
     let graph = make_graph(
+        output,
         repo,
         merge_base_db,
         &event_replayer,
@@ -169,6 +170,7 @@ fn restack_branches(
     let main_branch_oid = repo.get_main_branch_oid()?;
     let branch_oid_to_names = repo.get_branch_oid_to_names()?;
     let graph = make_graph(
+        output,
         repo,
         merge_base_db,
         &event_replayer,

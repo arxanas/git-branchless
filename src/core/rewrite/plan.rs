@@ -8,7 +8,7 @@ use crate::core::formatting::printable_styled_string;
 use crate::core::graph::{find_path_to_merge_base, CommitGraph, MainBranchOid};
 use crate::core::mergebase::MergeBaseDb;
 use crate::git::{NonZeroOid, PatchId, Repo};
-use crate::tui::Output;
+use crate::tui::{OperationType, Output};
 
 /// A command that can be applied for either in-memory or on-disk rebases.
 #[derive(Debug)]
@@ -283,6 +283,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
     #[instrument]
     fn collect_descendants(
         &self,
+        output: &mut Output,
         acc: &mut Vec<Constraint>,
         current_oid: NonZeroOid,
     ) -> eyre::Result<()> {
@@ -293,7 +294,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
                     parent_oid: current_oid,
                     child_oid: *child_oid,
                 });
-                self.collect_descendants(acc, *child_oid)?;
+                self.collect_descendants(output, acc, *child_oid)?;
             }
         }
 
@@ -374,6 +375,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
             // This must be a main branch commit. We need to collect its
             // descendants, which don't appear in the commit graph.
             let path = find_path_to_merge_base(
+                output,
                 self.repo,
                 self.merge_base_db,
                 self.main_branch_oid,
@@ -409,11 +411,11 @@ impl<'repo> RebasePlanBuilder<'repo> {
     /// of a referred-to commit. This adds enough information to the constraint
     /// graph that it now represents the actual end-state commit graph that we
     /// want to create, not just a list of constraints.
-    fn add_descendant_constraints(&mut self) -> eyre::Result<()> {
+    fn add_descendant_constraints(&mut self, output: &mut Output) -> eyre::Result<()> {
         let all_descendants_of_constrained_nodes = {
             let mut acc = Vec::new();
             for parent_oid in self.constraints.values().flatten().cloned() {
-                self.collect_descendants(&mut acc, parent_oid)?;
+                self.collect_descendants(output, &mut acc, parent_oid)?;
             }
             acc
         };
@@ -451,7 +453,9 @@ impl<'repo> RebasePlanBuilder<'repo> {
         Ok(())
     }
 
-    fn check_for_cycles(&self) -> Result<(), BuildRebasePlanError> {
+    fn check_for_cycles(&self, output: &Output) -> Result<(), BuildRebasePlanError> {
+        let _progress = output.start_operation(OperationType::CheckForCycles);
+
         // FIXME: O(n^2) algorithm.
         for oid in self.constraints.keys().sorted() {
             self.check_for_cycles_helper(&mut Vec::new(), *oid)?;
@@ -498,6 +502,10 @@ impl<'repo> RebasePlanBuilder<'repo> {
         output: &mut Output,
         options: &BuildRebasePlanOptions,
     ) -> eyre::Result<Result<Option<RebasePlan>, BuildRebasePlanError>> {
+        let _progress = output.start_operation(OperationType::BuildRebasePlan);
+        let mut output = output.clone();
+        let output = &mut output;
+
         if options.dump_rebase_constraints {
             writeln!(
                 output,
@@ -505,7 +513,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
                 self.get_constraints_sorted_for_debug()
             )?;
         }
-        self.add_descendant_constraints()?;
+        self.add_descendant_constraints(output)?;
         if options.dump_rebase_constraints {
             writeln!(
                 output,
@@ -514,7 +522,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
             )?;
         }
 
-        if let Err(err) = self.check_for_cycles() {
+        if let Err(err) = self.check_for_cycles(output) {
             return Ok(Err(err));
         }
 
@@ -531,7 +539,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
                 commit_oid: parent_oid,
             });
 
-            let upstream_patch_ids = self.get_upstream_patch_ids(child_oid, parent_oid)?;
+            let upstream_patch_ids = self.get_upstream_patch_ids(output, child_oid, parent_oid)?;
             acc = self.make_rebase_plan_for_current_commit(child_oid, &upstream_patch_ids, acc)?;
         }
 
@@ -548,19 +556,27 @@ impl<'repo> RebasePlanBuilder<'repo> {
     #[instrument]
     fn get_upstream_patch_ids(
         &self,
+        output: &mut Output,
         current_oid: NonZeroOid,
         dest_oid: NonZeroOid,
     ) -> eyre::Result<HashSet<PatchId>> {
+        let progress = output.start_operation(OperationType::GetUpstreamPatchIds);
+
         let merge_base_oid =
             self.merge_base_db
-                .get_merge_base_oid(self.repo, dest_oid, current_oid)?;
+                .get_merge_base_oid(output, self.repo, dest_oid, current_oid)?;
         let merge_base_oid = match merge_base_oid {
             None => return Ok(HashSet::new()),
             Some(merge_base_oid) => merge_base_oid,
         };
 
-        let path =
-            find_path_to_merge_base(self.repo, self.merge_base_db, dest_oid, merge_base_oid)?;
+        let path = find_path_to_merge_base(
+            output,
+            self.repo,
+            self.merge_base_db,
+            dest_oid,
+            merge_base_oid,
+        )?;
         let path = match path {
             None => return Ok(HashSet::new()),
             Some(path) => path,
@@ -568,11 +584,13 @@ impl<'repo> RebasePlanBuilder<'repo> {
 
         // FIXME: we may recalculate common patch IDs many times, should be
         // cached.
+        progress.notify_progress(0, path.len());
         let mut result = HashSet::new();
-        for commit in path {
+        for (i, commit) in path.iter().enumerate() {
             if let Some(patch_id) = self.repo.get_patch_id(&commit)? {
                 result.insert(patch_id);
             }
+            progress.notify_progress(i, path.len());
         }
         Ok(result)
     }

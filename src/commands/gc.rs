@@ -82,6 +82,7 @@ pub fn gc(output: &mut Output) -> eyre::Result<()> {
     let branch_oid_to_names = repo.get_branch_oid_to_names()?;
 
     let graph = make_graph(
+        output,
         &repo,
         &merge_base_db,
         &event_replayer,
