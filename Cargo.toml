@@ -36,5 +36,4 @@ tempfile = "3.2.0"
 
 [dev-dependencies]
 clippy = "0.0.302"
-gag = "1.0.0"
 insta = "1.7.0"
