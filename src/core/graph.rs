@@ -4,8 +4,7 @@
 
 use std::collections::{HashMap, HashSet, VecDeque};
 
-use fn_error_context::context;
-use tracing::warn;
+use tracing::{instrument, warn};
 
 use crate::core::eventlog::{CommitVisibility, Event, EventCursor, EventReplayer};
 use crate::core::mergebase::MergeBaseDb;
@@ -136,7 +135,7 @@ fn find_path_to_merge_base_internal<'repo>(
 /// Returns: A path of commits from `commit_oid` through parents to `target_oid`.
 /// The path includes `commit_oid` at the beginning and `target_oid` at the end.
 /// If there is no such path, returns `None`.
-#[context("Finding path from {:?} to {:?}", commit_oid, target_oid)]
+#[instrument]
 pub fn find_path_to_merge_base<'repo>(
     repo: &'repo Repo,
     merge_base_db: &MergeBaseDb,
@@ -152,7 +151,7 @@ pub fn find_path_to_merge_base<'repo>(
 /// between it and the main branch, those intermediate commits should be shown
 /// (or else you won't get a good idea of the line of development that happened
 /// for this commit since the main branch).
-#[context("Walking from commits: {:?}", commit_oids)]
+#[instrument]
 fn walk_from_commits<'repo>(
     repo: &'repo Repo,
     merge_base_db: &MergeBaseDb,
@@ -372,7 +371,7 @@ fn do_remove_commits(graph: &mut CommitGraph, head_oid: &HeadOid, branch_oids: &
 /// be set to `True` for most display-related purposes.
 ///
 /// Returns: A tuple of the head OID and the commit graph.
-#[context("Creating commit graph")]
+#[instrument]
 pub fn make_graph<'repo>(
     repo: &'repo Repo,
     merge_base_db: &MergeBaseDb,
@@ -467,7 +466,7 @@ pub enum ResolveCommitsResult<'repo> {
 /// - Full OIDs.
 /// - Short OIDs.
 /// - Reference names.
-#[context("Resolving commits")]
+#[instrument]
 pub fn resolve_commits(repo: &Repo, hashes: Vec<String>) -> anyhow::Result<ResolveCommitsResult> {
     let mut commits = Vec::new();
     for hash in hashes {

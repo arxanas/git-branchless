@@ -6,8 +6,8 @@ use std::path::PathBuf;
 use std::process::{Command, ExitStatus, Stdio};
 
 use anyhow::Context;
-use fn_error_context::context;
 use os_str_bytes::OsStrBytes;
+use tracing::instrument;
 
 use crate::core::config::get_core_hooks_path;
 use crate::core::eventlog::{EventTransactionId, BRANCHLESS_TRANSACTION_ID_ENV_VAR};
@@ -37,7 +37,7 @@ impl GitRunInfo {
     /// executable itself.
     ///
     /// Returns the exit code of Git (non-zero signifies error).
-    #[context("Running Git ({:?}) with args: {:?}", &self, args)]
+    #[instrument]
     #[must_use = "The return code for `run_git` must be checked"]
     pub fn run<S: AsRef<OsStr> + std::fmt::Debug>(
         &self,
@@ -144,13 +144,13 @@ impl GitRunInfo {
     /// Run a provided Git hook if it exists for the repository.
     ///
     /// See the man page for `githooks(5)` for more detail on Git hooks.
-    #[context("Running Git hook: {}", hook_name)]
-    pub fn run_hook(
+    #[instrument]
+    pub fn run_hook<S: AsRef<str> + std::fmt::Debug>(
         &self,
         repo: &Repo,
         hook_name: &str,
         event_tx_id: EventTransactionId,
-        args: &[impl AsRef<str>],
+        args: &[S],
         stdin: Option<OsString>,
     ) -> anyhow::Result<()> {
         let hook_dir = get_core_hooks_path(repo)?;

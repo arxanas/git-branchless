@@ -13,10 +13,9 @@ use std::io::{stdin, BufRead, Cursor};
 use std::time::SystemTime;
 
 use anyhow::Context;
-use fn_error_context::context;
 use itertools::Itertools;
 use os_str_bytes::OsStringBytes;
-use tracing::{error, warn};
+use tracing::{error, instrument, warn};
 
 use crate::commands::gc::mark_commit_reachable;
 use crate::core::eventlog::{should_ignore_ref_updates, Event, EventLogDb, EventTransactionId};
@@ -31,7 +30,7 @@ pub use crate::core::rewrite::hooks::{
 /// Handle Git's `post-checkout` hook.
 ///
 /// See the man-page for `githooks(5)`.
-#[context("Processing post-checkout hook")]
+#[instrument]
 pub fn hook_post_checkout(
     previous_head_oid: &str,
     current_head_oid: &str,
@@ -158,7 +157,7 @@ fn parse_reference_transaction_line(
 /// Handle Git's `reference-transaction` hook.
 ///
 /// See the man-page for `githooks(5)`.
-#[context("Processing reference-transaction hook")]
+#[instrument]
 pub fn hook_reference_transaction(transaction_state: &str) -> anyhow::Result<()> {
     if transaction_state != "committed" {
         return Ok(());

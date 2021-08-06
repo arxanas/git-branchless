@@ -2,7 +2,7 @@ use std::fmt::Display;
 use std::path::PathBuf;
 
 use anyhow::Context;
-use fn_error_context::context;
+use tracing::instrument;
 
 use super::repo::wrap_git_error;
 
@@ -17,12 +17,20 @@ impl From<git2::Config> for Config {
     }
 }
 
+impl std::fmt::Debug for Config {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<Git repository config>")
+    }
+}
+
+#[derive(Debug)]
 enum ConfigValueInner {
     String(String),
     Bool(bool),
 }
 
 /// A wrapper around a possible value that can be set for a config key.
+#[derive(Debug)]
 pub struct ConfigValue {
     inner: ConfigValueInner,
 }
@@ -112,8 +120,12 @@ impl GetConfigValue<PathBuf> for PathBuf {
 }
 
 impl Config {
-    #[context("Setting config {} = {}", key.as_ref(), &value)]
-    fn set_internal(&mut self, key: impl AsRef<str>, value: ConfigValue) -> anyhow::Result<()> {
+    #[instrument(fields(key = key.as_ref()))]
+    fn set_internal<S: AsRef<str> + std::fmt::Debug>(
+        &mut self,
+        key: S,
+        value: ConfigValue,
+    ) -> anyhow::Result<()> {
         match &value.inner {
             ConfigValueInner::String(value) => self
                 .inner
@@ -127,9 +139,9 @@ impl Config {
     }
 
     /// Set the given config key to the given value.
-    pub fn set(
+    pub fn set<S: AsRef<str> + std::fmt::Debug>(
         &mut self,
-        key: impl AsRef<str>,
+        key: S,
         value: impl Into<ConfigValue>,
     ) -> anyhow::Result<()> {
         let value = value.into();
@@ -165,7 +177,7 @@ impl Config {
     }
 
     /// Remove the given key from the configuration.
-    #[context("Removing config key: {:?}", key.as_ref())]
+    #[instrument(fields(key = key.as_ref()))]
     pub fn remove(&mut self, key: impl AsRef<str>) -> anyhow::Result<()> {
         self.inner
             .remove(key.as_ref())

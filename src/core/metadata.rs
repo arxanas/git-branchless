@@ -12,9 +12,9 @@ use std::time::{Duration, SystemTime};
 
 use cursive::theme::BaseColor;
 use cursive::utils::markup::StyledString;
-use fn_error_context::context;
 use lazy_static::lazy_static;
 use regex::Regex;
+use tracing::instrument;
 
 use crate::core::config::{
     get_commit_metadata_branches, get_commit_metadata_differential_revision,
@@ -37,7 +37,7 @@ pub trait CommitMetadataProvider {
 }
 
 /// Get the complete description for a given commit.
-#[context("Rendering commit metadata for commit {:?}", commit.get_oid())]
+#[instrument(skip(commit_metadata_providers))]
 pub fn render_commit_metadata(
     commit: &Commit,
     commit_metadata_providers: &mut [&mut dyn CommitMetadataProvider],
@@ -53,6 +53,7 @@ pub fn render_commit_metadata(
 }
 
 /// Display an abbreviated commit hash.
+#[derive(Debug)]
 pub struct CommitOidProvider {
     use_color: bool,
 }
@@ -65,7 +66,7 @@ impl CommitOidProvider {
 }
 
 impl CommitMetadataProvider for CommitOidProvider {
-    #[context("Providing OID metadata for commit {:?}", commit.get_oid())]
+    #[instrument]
     fn describe_commit(&mut self, commit: &Commit) -> anyhow::Result<Option<StyledString>> {
         let oid = commit.get_oid();
         let oid = &oid.to_string()[..8];
@@ -79,6 +80,7 @@ impl CommitMetadataProvider for CommitOidProvider {
 }
 
 /// Display the first line of the commit message.
+#[derive(Debug)]
 pub struct CommitMessageProvider;
 
 impl CommitMessageProvider {
@@ -89,7 +91,7 @@ impl CommitMessageProvider {
 }
 
 impl CommitMetadataProvider for CommitMessageProvider {
-    #[context("Providing message metadata for commit {:?}", commit.get_oid())]
+    #[instrument]
     fn describe_commit(&mut self, commit: &Commit) -> anyhow::Result<Option<StyledString>> {
         Ok(Some(StyledString::plain(
             commit.get_summary()?.to_string_lossy(),
@@ -160,6 +162,7 @@ impl<'a> CommitMetadataProvider for HiddenExplanationProvider<'a> {
 }
 
 /// Display branches that point to a given commit.
+#[derive(Debug)]
 pub struct BranchesProvider<'a> {
     is_enabled: bool,
     branch_oid_to_names: &'a HashMap<NonZeroOid, HashSet<OsString>>,
@@ -180,7 +183,7 @@ impl<'a> BranchesProvider<'a> {
 }
 
 impl<'a> CommitMetadataProvider for BranchesProvider<'a> {
-    #[context("Providing branch metadata for commit {:?}", commit.get_oid())]
+    #[instrument]
     fn describe_commit(&mut self, commit: &Commit) -> anyhow::Result<Option<StyledString>> {
         if !self.is_enabled {
             return Ok(None);
@@ -224,6 +227,7 @@ impl<'a> CommitMetadataProvider for BranchesProvider<'a> {
 }
 
 /// Display the associated Phabricator revision for a given commit.
+#[derive(Debug)]
 pub struct DifferentialRevisionProvider {
     is_enabled: bool,
 }
@@ -254,7 +258,7 @@ $",
 }
 
 impl CommitMetadataProvider for DifferentialRevisionProvider {
-    #[context("Providing Differential revision metadata for commit {:?}", commit.get_oid())]
+    #[instrument]
     fn describe_commit(&mut self, commit: &Commit) -> anyhow::Result<Option<StyledString>> {
         if !self.is_enabled {
             return Ok(None);
@@ -270,6 +274,7 @@ impl CommitMetadataProvider for DifferentialRevisionProvider {
 }
 
 /// Display how long ago the given commit was committed.
+#[derive(Debug)]
 pub struct RelativeTimeProvider {
     is_enabled: bool,
     now: SystemTime,
@@ -327,7 +332,7 @@ impl RelativeTimeProvider {
 }
 
 impl CommitMetadataProvider for RelativeTimeProvider {
-    #[context("Providing relative time metadata for commit {:?}", commit.get_oid())]
+    #[instrument]
     fn describe_commit(&mut self, commit: &Commit) -> anyhow::Result<Option<StyledString>> {
         if !self.is_enabled {
             return Ok(None);

@@ -5,8 +5,7 @@ use std::path::PathBuf;
 
 use anyhow::Context;
 use console::style;
-use fn_error_context::context;
-use tracing::warn;
+use tracing::{instrument, warn};
 
 use crate::core::config::get_core_hooks_path;
 use crate::git::{Config, ConfigValue, GitRunInfo, GitVersion, Repo};
@@ -71,7 +70,7 @@ enum Hook {
     MultiHook { path: PathBuf },
 }
 
-#[context("Determining hook path")]
+#[instrument]
 fn determine_hook_path(repo: &Repo, hook_type: &str) -> anyhow::Result<Hook> {
     let multi_hooks_path = repo.get_path().join("hooks_multi");
     let hook = if multi_hooks_path.exists() {
@@ -115,7 +114,7 @@ fn update_between_lines(lines: &str, updated_lines: &str) -> String {
     new_lines
 }
 
-#[context("Updating hook contents: {:?}", hook)]
+#[instrument]
 fn update_hook_contents(hook: &Hook, hook_contents: &str) -> anyhow::Result<()> {
     let (hook_path, hook_contents) = match hook {
         Hook::RegularHook { path } => match std::fs::read_to_string(path) {
@@ -163,14 +162,14 @@ fn update_hook_contents(hook: &Hook, hook_contents: &str) -> anyhow::Result<()> 
     Ok(())
 }
 
-#[context("Installing hook of type: {:?}", hook_type)]
+#[instrument]
 fn install_hook(repo: &Repo, hook_type: &str, hook_script: &str) -> anyhow::Result<()> {
     let hook = determine_hook_path(repo, hook_type)?;
     update_hook_contents(&hook, hook_script)?;
     Ok(())
 }
 
-#[context("Installing all hooks")]
+#[instrument]
 fn install_hooks(repo: &Repo) -> anyhow::Result<()> {
     for (hook_type, hook_script) in ALL_HOOKS {
         println!("Installing hook: {}", hook_type);
@@ -179,7 +178,7 @@ fn install_hooks(repo: &Repo) -> anyhow::Result<()> {
     Ok(())
 }
 
-#[context("Uninstalling all hooks")]
+#[instrument]
 fn uninstall_hooks(repo: &Repo) -> anyhow::Result<()> {
     for (hook_type, _hook_script) in ALL_HOOKS {
         println!("Uninstalling hook: {}", hook_type);
@@ -195,13 +194,13 @@ fn uninstall_hooks(repo: &Repo) -> anyhow::Result<()> {
     Ok(())
 }
 
-#[context("Installing alias: git {:?} -> git branchless {:?}", from, to)]
+#[instrument]
 fn install_alias(config: &mut Config, from: &str, to: &str) -> anyhow::Result<()> {
     config.set(format!("alias.{}", from), format!("branchless {}", to))?;
     Ok(())
 }
 
-#[context("Detecting main branch name for repository at: {:?}", repo.get_path())]
+#[instrument]
 fn detect_main_branch_name(repo: &Repo) -> anyhow::Result<Option<String>> {
     for branch_name in [
         "master",
@@ -222,7 +221,7 @@ fn detect_main_branch_name(repo: &Repo) -> anyhow::Result<Option<String>> {
     Ok(None)
 }
 
-#[context("Installing all aliases")]
+#[instrument]
 fn install_aliases(
     repo: &mut Repo,
     config: &mut Config,
@@ -266,7 +265,7 @@ the branchless workflow will work properly.
     Ok(())
 }
 
-#[context("Uninstalling all aliases")]
+#[instrument]
 fn uninstall_aliases(config: &mut Config) -> anyhow::Result<()> {
     for (from, _to) in ALL_ALIASES {
         println!("Uninstalling alias (non-global): git {}", from);
@@ -277,7 +276,7 @@ fn uninstall_aliases(config: &mut Config) -> anyhow::Result<()> {
     Ok(())
 }
 
-#[context("Setting config {}", name)]
+#[instrument(skip(value))]
 fn set_config(
     config: &mut Config,
     name: &str,
@@ -289,7 +288,7 @@ fn set_config(
     Ok(())
 }
 
-#[context("Setting all configs")]
+#[instrument(skip(r#in))]
 fn set_configs(r#in: &mut impl BufRead, repo: &Repo, config: &mut Config) -> anyhow::Result<()> {
     let main_branch_name = match detect_main_branch_name(repo)? {
         Some(main_branch_name) => {
@@ -324,7 +323,7 @@ fn set_configs(r#in: &mut impl BufRead, repo: &Repo, config: &mut Config) -> any
     Ok(())
 }
 
-#[context("Unsetting all configs")]
+#[instrument]
 fn unset_configs(config: &mut Config) -> anyhow::Result<()> {
     for key in ["branchless.core.mainBranch", "advice.detachedHead"] {
         println!("Unsetting config (non-global): {}", key);
@@ -336,7 +335,7 @@ fn unset_configs(config: &mut Config) -> anyhow::Result<()> {
 }
 
 /// Initialize `git-branchless` in the current repo.
-#[context("Initializing git-branchless for repo")]
+#[instrument]
 pub fn init(git_run_info: &GitRunInfo) -> anyhow::Result<()> {
     let mut in_ = BufReader::new(stdin());
     let mut repo = Repo::from_current_dir()?;
@@ -358,7 +357,7 @@ pub fn init(git_run_info: &GitRunInfo) -> anyhow::Result<()> {
 }
 
 /// Uninstall `git-branchless` in the current repo.
-#[context("Uninstall git-branchless for repo")]
+#[instrument]
 pub fn uninstall() -> anyhow::Result<()> {
     let repo = Repo::from_current_dir()?;
     let mut config = repo.get_config().with_context(|| "Getting repo config")?;

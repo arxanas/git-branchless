@@ -1,9 +1,8 @@
 use std::collections::{HashMap, HashSet};
 use std::io::Write;
 
-use fn_error_context::context;
 use itertools::Itertools;
-use tracing::warn;
+use tracing::{instrument, warn};
 
 use crate::core::formatting::{printable_styled_string, Glyphs};
 use crate::core::graph::{find_path_to_merge_base, CommitGraph, MainBranchOid};
@@ -76,6 +75,7 @@ impl ToString for RebaseCommand {
 
 /// Builder for a rebase plan. Unlike regular Git rebases, a `git-branchless`
 /// rebase plan can move multiple unrelated subtrees to unrelated destinations.
+#[derive(Debug)]
 pub struct RebasePlanBuilder<'repo> {
     repo: &'repo Repo,
     graph: &'repo CommitGraph<'repo>,
@@ -95,6 +95,7 @@ struct Constraint {
 }
 
 /// Options used to build a rebase plan.
+#[derive(Debug)]
 pub struct BuildRebasePlanOptions {
     /// Print the rebase constraints for debugging.
     pub dump_rebase_constraints: bool,
@@ -282,7 +283,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
         Ok(())
     }
 
-    #[context("Collecting descendants of commit: {:?}", current_oid)]
+    #[instrument]
     fn collect_descendants(
         &self,
         acc: &mut Vec<Constraint>,
@@ -544,11 +545,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
         Ok(Ok(rebase_plan))
     }
 
-    #[context(
-        "Getting upstream patch IDs for current commit: {:?} being rebased on top of commit: {:?}",
-        current_oid,
-        dest_oid
-    )]
+    #[instrument]
     fn get_upstream_patch_ids(
         &self,
         current_oid: NonZeroOid,

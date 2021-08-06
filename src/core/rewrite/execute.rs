@@ -124,9 +124,8 @@ mod in_memory {
     use std::ffi::OsString;
 
     use anyhow::Context;
-    use fn_error_context::context;
     use indicatif::{ProgressBar, ProgressStyle};
-    use tracing::warn;
+    use tracing::{instrument, warn};
 
     use crate::commands::gc::mark_commit_reachable;
     use crate::core::formatting::{printable_styled_string, Glyphs};
@@ -155,7 +154,7 @@ mod in_memory {
         },
     }
 
-    #[context("Rebasing in memory")]
+    #[instrument]
     pub fn rebase_in_memory(
         glyphs: &Glyphs,
         repo: &Repo,
@@ -269,7 +268,7 @@ mod in_memory {
                     progress
                         .set_message(format!("Applying patch for commit: {}", commit_description));
                     let mut rebased_index =
-                        repo.cherrypick_commit(&commit_to_apply, &current_commit, 0, None)?;
+                        repo.cherrypick_commit(&commit_to_apply, &current_commit, 0)?;
 
                     progress.set_message(format!(
                         "Checking for merge conflicts: {}",
@@ -540,8 +539,8 @@ mod in_memory {
 
 mod on_disk {
     use anyhow::Context;
-    use fn_error_context::context;
     use indicatif::ProgressBar;
+    use tracing::instrument;
 
     use crate::core::rewrite::plan::RebasePlan;
     use crate::git::{GitRunInfo, MaybeZeroOid, Repo};
@@ -558,7 +557,7 @@ mod on_disk {
     ///
     /// Note that this calls `git rebase`, which may fail (e.g. if there are
     /// merge conflicts). The exit code is then propagated to the caller.
-    #[context("Rebasing on disk")]
+    #[instrument]
     pub fn rebase_on_disk(
         git_run_info: &GitRunInfo,
         repo: &Repo,

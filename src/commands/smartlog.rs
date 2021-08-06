@@ -8,7 +8,7 @@ use std::time::SystemTime;
 
 use cursive::theme::Effect;
 use cursive::utils::markup::StyledString;
-use fn_error_context::context;
+use tracing::instrument;
 
 use crate::core::eventlog::{EventLogDb, EventReplayer};
 use crate::core::formatting::set_effect;
@@ -75,7 +75,7 @@ fn split_commit_graph_by_roots(
     root_commit_oids
 }
 
-#[context("Getting child smartlog output for OID {:?}", &current_oid)]
+#[instrument(skip(commit_metadata_providers))]
 fn get_child_output(
     glyphs: &Glyphs,
     graph: &CommitGraph,
@@ -175,11 +175,7 @@ fn get_child_output(
 }
 
 /// Render a pretty graph starting from the given root OIDs in the given graph.
-#[context(
-    "Getting smartlog output for HEAD OID {:?}, root OIDs: {:?}",
-    head_oid,
-    root_oids
-)]
+#[instrument(skip(commit_metadata_providers))]
 fn get_output(
     glyphs: &Glyphs,
     graph: &CommitGraph,
