@@ -59,8 +59,7 @@ use std::collections::{HashMap, HashSet};
 use std::io::stdout;
 use std::time::SystemTime;
 
-use fn_error_context::context;
-use tracing::warn;
+use tracing::{instrument, warn};
 
 use crate::commands::smartlog::smartlog;
 use crate::core::config::get_restack_preserve_timestamps;
@@ -76,7 +75,7 @@ use crate::core::rewrite::{
 };
 use crate::git::{GitRunInfo, NonZeroOid, Repo};
 
-#[context("Restacking commits")]
+#[instrument(skip(commits))]
 fn restack_commits(
     glyphs: &Glyphs,
     repo: &Repo,
@@ -156,7 +155,7 @@ fn restack_commits(
     }
 }
 
-#[context("Restacking branches")]
+#[instrument]
 fn restack_branches(
     repo: &Repo,
     git_run_info: &GitRunInfo,
@@ -217,7 +216,7 @@ fn restack_branches(
 /// Restack all abandoned commits.
 ///
 /// Returns an exit code (0 denotes successful exit).
-#[context("Restacking commits and branches")]
+#[instrument]
 pub fn restack(
     git_run_info: &GitRunInfo,
     commits: Vec<String>,

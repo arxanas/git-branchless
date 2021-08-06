@@ -9,7 +9,7 @@ use std::time::SystemTime;
 
 use anyhow::Context;
 use console::style;
-use fn_error_context::context;
+use tracing::instrument;
 
 use crate::core::config::{get_restack_warn_abandoned, RESTACK_WARN_ABANDONED_CONFIG_KEY};
 use crate::core::eventlog::{Event, EventLogDb, EventReplayer, EventTransactionId};
@@ -25,7 +25,7 @@ use super::{find_abandoned_children, move_branches};
 /// Handle Git's `post-rewrite` hook.
 ///
 /// See the man-page for `githooks(5)`.
-#[context("Processing post-rewrite hook")]
+#[instrument]
 pub fn hook_post_rewrite(git_run_info: &GitRunInfo, rewrite_type: &str) -> anyhow::Result<()> {
     let now = SystemTime::now();
     let timestamp = now.duration_since(SystemTime::UNIX_EPOCH)?.as_secs_f64();
@@ -96,7 +96,7 @@ pub fn hook_post_rewrite(git_run_info: &GitRunInfo, rewrite_type: &str) -> anyho
     Ok(())
 }
 
-#[context("Checking out rewritten `HEAD` if necessary")]
+#[instrument]
 fn check_out_new_head(
     git_run_info: &GitRunInfo,
     repo: &Repo,
@@ -163,7 +163,7 @@ fn check_out_new_head(
     Ok(())
 }
 
-#[context("Warning about abandoned commits/branches")]
+#[instrument(skip(old_commit_oids))]
 fn warn_abandoned(
     repo: &Repo,
     merge_base_db: &MergeBaseDb,
@@ -307,7 +307,7 @@ fn get_original_head_oid(repo: &Repo) -> anyhow::Result<MaybeZeroOid> {
     Ok(oid)
 }
 
-#[context("Writing updated `HEAD` to repo at path: {:?}", repo.get_path())]
+#[instrument]
 fn save_updated_head_oid(repo: &Repo, updated_head_oid: NonZeroOid) -> anyhow::Result<()> {
     let dest_file_name = repo
         .get_rebase_state_dir_path()
@@ -316,7 +316,7 @@ fn save_updated_head_oid(repo: &Repo, updated_head_oid: NonZeroOid) -> anyhow::R
     Ok(())
 }
 
-#[context("Reading updated `HEAD` from repo at path: {:?}", repo.get_path())]
+#[instrument]
 fn get_updated_head_oid(repo: &Repo) -> anyhow::Result<Option<NonZeroOid>> {
     let source_file_name = repo
         .get_rebase_state_dir_path()

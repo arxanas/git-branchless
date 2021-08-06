@@ -12,7 +12,7 @@
 use std::ffi::OsStr;
 
 use anyhow::Context;
-use fn_error_context::context;
+use tracing::instrument;
 
 use crate::core::eventlog::{is_gc_ref, EventLogDb, EventReplayer};
 use crate::core::graph::{make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid};
@@ -48,7 +48,7 @@ fn find_dangling_references<'repo>(
 /// Args:
 /// * `repo`: The Git repository.
 /// * `commit_oid`: The commit OID to mark as reachable.
-#[context("Marking commit reachable: {:?}", commit_oid)]
+#[instrument]
 pub fn mark_commit_reachable(repo: &Repo, commit_oid: NonZeroOid) -> anyhow::Result<()> {
     let ref_name = format!("refs/branchless/{}", commit_oid.to_string());
     anyhow::ensure!(
@@ -68,7 +68,7 @@ pub fn mark_commit_reachable(repo: &Repo, commit_oid: NonZeroOid) -> anyhow::Res
 /// Run branchless's garbage collection.
 ///
 /// Frees any references to commits which are no longer visible in the smartlog.
-#[context("Running garbage-collection")]
+#[instrument]
 pub fn gc() -> anyhow::Result<()> {
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;

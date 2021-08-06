@@ -424,17 +424,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7360491ce676a36bf9bb3c56c1aa791658183a54d2744120f27285738d90465a"
 
 [[package]]
-name = "fn-error-context"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7dbe237cce37ed07377a50ccd977c78ee936f0f64b731caaab25ea5553b2d149"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "fnv"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -481,7 +470,6 @@ dependencies = [
  "clippy",
  "console",
  "cursive",
- "fn-error-context",
  "git2",
  "indicatif",
  "insta",

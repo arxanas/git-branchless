@@ -164,6 +164,16 @@ impl Glyphs {
     }
 }
 
+impl std::fmt::Debug for Glyphs {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "<Glyphs pretty={:?}>",
+            self.should_write_ansi_escape_codes
+        )
+    }
+}
+
 /// Helper to build `StyledString`s by combining multiple strings (both regular
 /// `String`s and `StyledString`s).
 pub struct StyledStringBuilder {

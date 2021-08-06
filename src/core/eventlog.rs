@@ -14,7 +14,7 @@ use std::str::FromStr;
 use std::time::{Duration, SystemTime};
 
 use anyhow::Context;
-use fn_error_context::context;
+use tracing::instrument;
 
 use crate::git::{CategorizedReferenceName, MaybeZeroOid, NonZeroOid, Repo};
 
@@ -361,7 +361,7 @@ fn try_from_row_helper(row: &Row) -> Result<Event, anyhow::Error> {
 impl TryFrom<Row> for Event {
     type Error = anyhow::Error;
 
-    #[context("Converting database result row into `Event`: {:?}", &row)]
+    #[instrument]
     fn try_from(row: Row) -> Result<Self, Self::Error> {
         try_from_row_helper(&row)
     }
@@ -372,7 +372,13 @@ pub struct EventLogDb<'conn> {
     conn: &'conn rusqlite::Connection,
 }
 
-#[context("Initializing `EventLogDb` tables")]
+impl std::fmt::Debug for EventLogDb<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<EventLogDb>")
+    }
+}
+
+#[instrument]
 fn init_tables(conn: &rusqlite::Connection) -> anyhow::Result<()> {
     conn.execute(
         "
@@ -413,7 +419,7 @@ CREATE TABLE IF NOT EXISTS event_transactions (
 
 impl<'conn> EventLogDb<'conn> {
     /// Constructor.
-    #[context("Constructing `EventLogDb`")]
+    #[instrument]
     pub fn new(conn: &'conn rusqlite::Connection) -> anyhow::Result<Self> {
         init_tables(&conn)?;
         Ok(EventLogDb { conn })
@@ -423,7 +429,7 @@ impl<'conn> EventLogDb<'conn> {
     ///
     /// Args:
     /// * events: The events to add.
-    #[context("Adding events to event-log")]
+    #[instrument]
     pub fn add_events(&mut self, events: Vec<Event>) -> anyhow::Result<()> {
         let tx = self.conn.unchecked_transaction()?;
         for event in events {
@@ -475,7 +481,7 @@ INSERT INTO event_log VALUES (
     /// Get all the events in the database.
     ///
     /// Returns: All the events in the database, ordered from oldest to newest.
-    #[context("Querying events from `EventLogDb`")]
+    #[instrument]
 
     pub fn get_events(&self) -> anyhow::Result<Vec<Event>> {
         let mut stmt = self.conn.prepare(
@@ -512,7 +518,7 @@ ORDER BY rowid ASC
 
     /// Create a new event transaction ID to be used to insert subsequent
     /// `Event`s into the database.
-    #[context("Creating a new `EventTransactionId`")]
+    #[instrument(fields(message = message.as_ref()))]
     pub fn make_transaction_id(
         &self,
         now: SystemTime,

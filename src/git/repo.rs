@@ -22,9 +22,8 @@ use std::time::SystemTime;
 use anyhow::Context;
 use cursive::theme::BaseColor;
 use cursive::utils::markup::StyledString;
-use fn_error_context::context;
 use os_str_bytes::{OsStrBytes, OsStringBytes};
-use tracing::warn;
+use tracing::{instrument, warn};
 
 use crate::core::config::get_main_branch_name;
 use crate::core::metadata::{render_commit_metadata, CommitMessageProvider, CommitOidProvider};
@@ -85,7 +84,7 @@ pub struct GitVersion(pub isize, pub isize, pub isize);
 impl FromStr for GitVersion {
     type Err = anyhow::Error;
 
-    #[context("Parsing Git version from string: {:?}", output)]
+    #[instrument]
     fn from_str(output: &str) -> anyhow::Result<GitVersion> {
         let output = output.trim();
         let words = output.split(&[' ', '-'][..]).collect::<Vec<&str>>();
@@ -110,16 +109,22 @@ pub struct Repo {
     inner: git2::Repository,
 }
 
+impl std::fmt::Debug for Repo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<Git repository at: {:?}>", self.inner.path())
+    }
+}
+
 impl Repo {
     /// Get the Git repository associated with the given directory.
-    #[context("Getting Git repository for directory: {:?}", &path)]
+    #[instrument]
     pub fn from_dir(path: &Path) -> anyhow::Result<Self> {
         let repo = git2::Repository::discover(path).map_err(wrap_git_error)?;
         Ok(Repo { inner: repo })
     }
 
     /// Get the Git repository associated with the current directory.
-    #[context("Getting Git repository for current directory")]
+    #[instrument]
     pub fn from_current_dir() -> anyhow::Result<Self> {
         let path = std::env::current_dir().with_context(|| "Getting working directory")?;
         Repo::from_dir(&path)
@@ -143,7 +148,7 @@ impl Repo {
     }
 
     /// Get the configuration object for the repository.
-    #[context("Looking up config for repo at: {:?}", self.get_path())]
+    #[instrument]
     pub fn get_config(&self) -> anyhow::Result<Config> {
         let config = self
             .inner
@@ -154,7 +159,7 @@ impl Repo {
     }
 
     /// Get the connection to the SQLite database for this repository.
-    #[context("Getting connection to SQLite database for repository at: {:?}", self.get_path())]
+    #[instrument]
     pub fn get_db_conn(&self) -> anyhow::Result<rusqlite::Connection> {
         let dir = self.inner.path().join("branchless");
         std::fs::create_dir_all(&dir).with_context(|| "Creating .git/branchless dir")?;
@@ -165,7 +170,7 @@ impl Repo {
     }
 
     /// Get the OID for the repository's `HEAD` reference.
-    #[context("Getting `HEAD` info for repository at: {:?}", self.get_path())]
+    #[instrument]
     pub fn get_head_info(&self) -> anyhow::Result<HeadInfo> {
         let head_reference = match self.inner.find_reference("HEAD") {
             Err(err) if err.code() == git2::ErrorCode::NotFound => None,
@@ -204,7 +209,7 @@ impl Repo {
 
     /// Set the `HEAD` reference directly to the provided `oid`. Does not touch
     /// the working copy.
-    #[context("Setting `HEAD` to: {:?}", oid)]
+    #[instrument]
     pub fn set_head(&self, oid: NonZeroOid) -> anyhow::Result<()> {
         self.inner.set_head_detached(oid.inner)?;
         Ok(())
@@ -256,7 +261,7 @@ Either create it, or update the main branch setting by running:
     }
 
     /// Get the OID corresponding to the main branch.
-    #[context("Getting main branch OID for repository at: {:?}", self.get_path())]
+    #[instrument]
     pub fn get_main_branch_oid(&self) -> anyhow::Result<NonZeroOid> {
         let main_branch_reference = self.get_main_branch_reference()?;
         let commit = main_branch_reference.peel_to_commit()?;
@@ -273,7 +278,7 @@ Either create it, or update the main branch setting by running:
     ///
     /// The returned branch names include the `refs/heads/` prefix, so it must
     /// be stripped if desired.
-    #[context("Getting branch-OID-to-names map for repository at: {:?}", self.get_path())]
+    #[instrument]
     pub fn get_branch_oid_to_names(
         &self,
     ) -> anyhow::Result<HashMap<NonZeroOid, HashSet<OsString>>> {
@@ -348,7 +353,7 @@ Either create it, or update the main branch setting by running:
     ///   next operation in the rebase plan fixes up the abandoned commit. This can
     ///   happen even if no conflict occurred and the rebase completed successfully
     ///   without any user intervention.
-    #[context("Determining if rebase is underway for repository at: {:?}", self.get_path())]
+    #[instrument]
     pub fn is_rebase_underway(&self) -> anyhow::Result<bool> {
         use git2::RepositoryState::*;
         match self.inner.state() {
@@ -380,7 +385,7 @@ Either create it, or update the main branch setting by running:
     /// completes.
     ///
     /// Fails if no on-disk rebase operation is underway.
-    #[context("Adding entries to rewritten list: {:?}", entries)]
+    #[instrument]
     pub fn add_rewritten_list_entries(
         &self,
         entries: &[(NonZeroOid, MaybeZeroOid)],
@@ -402,10 +407,7 @@ Either create it, or update the main branch setting by running:
 
     /// Find the merge-base between two commits. Returns `None` if a merge-base
     /// could not be found.
-    #[context(
-        "Looking up merge-base between {:?} and {:?} for repository at: {:?}",
-        lhs, rhs, self.get_path()
-    )]
+    #[instrument]
     pub fn find_merge_base(
         &self,
         lhs: NonZeroOid,
@@ -458,7 +460,7 @@ Either create it, or update the main branch setting by running:
     }
 
     /// Find all references in the repository.
-    #[context("Looking up all references in repository at: {:?}", self.get_path())]
+    #[instrument]
     pub fn get_all_references(&self) -> anyhow::Result<Vec<Reference>> {
         let mut all_references = Vec::new();
         for reference in self
@@ -475,7 +477,7 @@ Either create it, or update the main branch setting by running:
 
     /// Check if the repository has staged or unstaged changes. Untracked files
     /// are not included. This operation may take a while.
-    #[context("Checking for changed files for repository at: {:?}", self.get_path())]
+    #[instrument]
     pub fn has_changed_files(&self, git_run_info: &GitRunInfo) -> anyhow::Result<bool> {
         let exit_code = git_run_info.run(
             // This is not a mutating operation, so we don't need a transaction ID.
@@ -490,13 +492,7 @@ Either create it, or update the main branch setting by running:
     }
 
     /// Create a new reference or update an existing one.
-    #[context(
-        "Creating new reference {:?} pointing to {:?} (force={:?}, log_message={:?})",
-        name,
-        oid,
-        force,
-        log_message
-    )]
+    #[instrument]
     pub fn create_reference(
         &self,
         name: &OsStr,
@@ -519,7 +515,7 @@ Either create it, or update the main branch setting by running:
     }
 
     /// Look up a reference with the given name. Returns `None` if not found.
-    #[context("Looking up reference {:?} in repository at: {:?}", name, self.get_path())]
+    #[instrument]
     pub fn find_reference(&self, name: &OsStr) -> anyhow::Result<Option<Reference>> {
         let name = match name.to_str() {
             Some(name) => name,
@@ -536,7 +532,7 @@ Either create it, or update the main branch setting by running:
     }
 
     /// Get all local branches in the repository.
-    #[context("Looking up all local branches for repository at: {:?}", self.get_path())]
+    #[instrument]
     pub fn get_all_local_branches(&self) -> anyhow::Result<Vec<Branch>> {
         let mut all_branches = Vec::new();
         for branch in self
@@ -552,7 +548,7 @@ Either create it, or update the main branch setting by running:
     }
 
     /// Look up the branch with the given name. Returns `None` if not found.
-    #[context("Looking up branch {:?} for repository at: {:?}", name, self.get_path())]
+    #[instrument]
     pub fn find_branch(
         &self,
         name: &str,
@@ -566,7 +562,7 @@ Either create it, or update the main branch setting by running:
     }
 
     /// Create a new branch or update an existing branch.
-    #[context("Creating branch {:?} for repository at: {:?}", name, self.get_path())]
+    #[instrument]
     pub fn create_branch(
         &self,
         name: &OsStr,
@@ -586,7 +582,7 @@ Either create it, or update the main branch setting by running:
     }
 
     /// Look up a commit with the given OID. Returns `None` if not found.
-    #[context("Looking up commit {:?} for repository at: {:?}", oid, self.get_path())]
+    #[instrument]
     pub fn find_commit(&self, oid: NonZeroOid) -> anyhow::Result<Option<Commit>> {
         match self.inner.find_commit(oid.inner) {
             Ok(commit) => Ok(Some(Commit { inner: commit })),
@@ -611,7 +607,7 @@ Either create it, or update the main branch setting by running:
     }
 
     /// Create a new commit.
-    #[context("Making commit {:?} for repository at: {:?}", message, self.get_path())]
+    #[instrument]
     pub fn create_commit(
         &self,
         update_ref: Option<&str>,
@@ -640,29 +636,22 @@ Either create it, or update the main branch setting by running:
     }
 
     /// Cherry-pick a commit in memory and return the resulting index.
-    #[context(
-        "Cherry-picking commit {:?} onto {:?} for repository at: {:?}",
-        cherrypick_commit, our_commit, self.get_path()
-    )]
+    #[instrument]
     pub fn cherrypick_commit(
         &self,
         cherrypick_commit: &Commit,
         our_commit: &Commit,
         mainline: u32,
-        options: Option<&git2::MergeOptions>,
-    ) -> anyhow::Result<git2::Index> {
-        self.inner
-            .cherrypick_commit(
-                &cherrypick_commit.inner,
-                &our_commit.inner,
-                mainline,
-                options,
-            )
-            .map_err(wrap_git_error)
+    ) -> anyhow::Result<Index> {
+        let index = self
+            .inner
+            .cherrypick_commit(&cherrypick_commit.inner, &our_commit.inner, mainline, None)
+            .map_err(wrap_git_error)?;
+        Ok(Index { inner: index })
     }
 
     /// Look up the tree with the given OID. Returns `None` if not found.
-    #[context("Looking up tree {:?} for repository at: {:?}", oid, self.get_path())]
+    #[instrument]
     pub fn find_tree(&self, oid: NonZeroOid) -> anyhow::Result<Option<git2::Tree>> {
         match self.inner.find_tree(oid.inner) {
             Ok(tree) => Ok(Some(tree)),
@@ -673,9 +662,12 @@ Either create it, or update the main branch setting by running:
 
     /// Write the provided in-memory index as a tree into Git`s object database.
     /// There must be no merge conflicts in the index.
-    #[context("Writing index file to disk for repository at: {:?}", self.get_path())]
-    pub fn write_index_to_tree(&self, index: &mut git2::Index) -> anyhow::Result<NonZeroOid> {
-        let oid = index.write_tree_to(&self.inner).map_err(wrap_git_error)?;
+    #[instrument]
+    pub fn write_index_to_tree(&self, index: &mut Index) -> anyhow::Result<NonZeroOid> {
+        let oid = index
+            .inner
+            .write_tree_to(&self.inner)
+            .map_err(wrap_git_error)?;
         Ok(make_non_zero_oid(oid))
     }
 }
@@ -685,9 +677,15 @@ pub struct Signature<'repo> {
     inner: git2::Signature<'repo>,
 }
 
+impl std::fmt::Debug for Signature<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<Signature>")
+    }
+}
+
 impl<'repo> Signature<'repo> {
     /// Update the timestamp of this signature to a new time.
-    #[context("Updating commit timestamp")]
+    #[instrument]
     pub fn update_timestamp(self, now: SystemTime) -> anyhow::Result<Signature<'repo>> {
         let seconds: i64 = now
             .duration_since(SystemTime::UNIX_EPOCH)?
@@ -721,6 +719,22 @@ impl<'repo> Signature<'repo> {
 /// A tree object. Contains a mapping from name to OID.
 pub struct Tree<'repo> {
     inner: git2::Tree<'repo>,
+}
+
+pub struct Index {
+    inner: git2::Index,
+}
+
+impl std::fmt::Debug for Index {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<Index>")
+    }
+}
+
+impl Index {
+    pub fn has_conflicts(&self) -> bool {
+        self.inner.has_conflicts()
+    }
 }
 
 /// A checksum of the diff induced by a given commit, used for duplicate commit
@@ -830,7 +844,7 @@ impl<'repo> Commit<'repo> {
 
     /// Print a one-line description of this commit containing its OID and
     /// summary.
-    #[context("Describing commit {}", self.get_oid())]
+    #[instrument]
     pub fn friendly_describe(&self) -> anyhow::Result<StyledString> {
         let description = render_commit_metadata(
             self,
@@ -874,6 +888,15 @@ pub struct Reference<'repo> {
     inner: git2::Reference<'repo>,
 }
 
+impl std::fmt::Debug for Reference<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.inner.name() {
+            Some(name) => write!(f, "<Reference name={:?}>", name),
+            None => write!(f, "<Reference name={:?}>", self.inner.name_bytes()),
+        }
+    }
+}
+
 impl<'repo> Reference<'repo> {
     /// Determine if the given name is a valid name for a reference.
     pub fn is_valid_name(name: &str) -> bool {
@@ -882,7 +905,7 @@ impl<'repo> Reference<'repo> {
 
     /// Given a reference name which is an OID, convert the string into an `Oid`
     /// object. If the `Oid` was zero, returns `None`.
-    #[context("Converting reference name to OID: {:?}", ref_name)]
+    #[instrument]
     pub fn name_to_oid(ref_name: &OsStr) -> anyhow::Result<Option<NonZeroOid>> {
         let oid: MaybeZeroOid = ref_name.try_into()?;
         match oid {
@@ -892,7 +915,7 @@ impl<'repo> Reference<'repo> {
     }
 
     /// Get the name of this reference.
-    #[context("Getting name of reference: {:?}", self.inner.name_bytes())]
+    #[instrument]
     pub fn get_name(&self) -> anyhow::Result<OsString> {
         let name = OsStringBytes::from_raw_vec(self.inner.name_bytes().into())
             .with_context(|| format!("Decoding reference name: {:?}", self.inner.name_bytes()))?;
@@ -900,7 +923,7 @@ impl<'repo> Reference<'repo> {
     }
 
     /// Get the target of this reference.
-    #[context("Getting target of reference: {:?}", self.inner.name_bytes())]
+    #[instrument]
     pub fn get_target(&self) -> anyhow::Result<ReferenceTarget> {
         match self.inner.symbolic_target_bytes() {
             Some(reference_name) => Ok(ReferenceTarget::Symbolic {
@@ -922,7 +945,7 @@ impl<'repo> Reference<'repo> {
 
     /// Get the commit object pointed to by this reference. Returns `None` if
     /// the object pointed to by the reference is a different kind of object.
-    #[context("Finding commit object pointed to by reference: {:?}", self.inner.name())]
+    #[instrument]
     pub fn peel_to_commit(&self) -> anyhow::Result<Option<Commit<'repo>>> {
         let object = match self.inner.peel(git2::ObjectType::Commit) {
             Ok(object) => object,
@@ -936,7 +959,7 @@ impl<'repo> Reference<'repo> {
     }
 
     /// Delete the reference.
-    #[context("Deleting reference: {:?}", self.inner.name())]
+    #[instrument]
     pub fn delete(&mut self) -> anyhow::Result<()> {
         let reference_name = self.get_name()?;
         self.inner
@@ -999,7 +1022,7 @@ impl<'a> CategorizedReferenceName<'a> {
     /// Remove the prefix from the reference name. May raise an error if the
     /// result couldn't be encoded as an `OsString` (probably shouldn't
     /// happen?).
-    #[context("Removing prefix from reference name: {:?}", self)]
+    #[instrument]
     pub fn remove_prefix(&self) -> anyhow::Result<OsString> {
         let (name, prefix): (_, &'static str) = match self {
             Self::LocalBranch { name, prefix } => (name, prefix),

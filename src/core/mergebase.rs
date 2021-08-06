@@ -15,8 +15,8 @@
 //! examine it.
 
 use anyhow::Context;
-use fn_error_context::context;
 use rusqlite::OptionalExtension;
+use tracing::instrument;
 
 use crate::git::{NonZeroOid, Repo};
 
@@ -25,7 +25,13 @@ pub struct MergeBaseDb<'conn> {
     conn: &'conn rusqlite::Connection,
 }
 
-#[context("Initializing tables for `MergeBaseDb`")]
+impl std::fmt::Debug for MergeBaseDb<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<MergeBaseDb>")
+    }
+}
+
+#[instrument]
 fn init_tables(conn: &rusqlite::Connection) -> anyhow::Result<()> {
     conn.execute(
         "
@@ -44,7 +50,7 @@ CREATE TABLE IF NOT EXISTS merge_base_oids (
 
 impl<'conn> MergeBaseDb<'conn> {
     /// Constructor.
-    #[context("Constructing `MergeBaseDb`")]
+    #[instrument]
     pub fn new(conn: &'conn rusqlite::Connection) -> anyhow::Result<Self> {
         init_tables(&conn).context("Initializing tables")?;
         Ok(MergeBaseDb { conn })
@@ -62,7 +68,7 @@ impl<'conn> MergeBaseDb<'conn> {
     ///
     /// Returns: The merge-base OID for these two commits. Returns `None` if no
     /// merge-base could be found.
-    #[context("Querying for merge-base of OIDs {:?} and {:?}", lhs_oid, rhs_oid)]
+    #[instrument]
     pub fn get_merge_base_oid(
         &self,
         repo: &Repo,
