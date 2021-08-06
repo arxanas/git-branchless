@@ -5,4 +5,4 @@ mod output;
 
 pub use self::cursive::testing;
 pub use self::cursive::{with_siv, SingletonView};
-pub use output::Output;
+pub use output::{OperationType, Output};

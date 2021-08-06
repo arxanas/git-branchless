@@ -42,6 +42,7 @@ fn recurse_on_commits_helper<
 }
 
 fn recurse_on_commits<'repo, F: Fn(&Node) -> bool>(
+    output: &mut Output,
     repo: &'repo Repo,
     merge_base_db: &MergeBaseDb,
     event_replayer: &EventReplayer,
@@ -52,6 +53,7 @@ fn recurse_on_commits<'repo, F: Fn(&Node) -> bool>(
     let main_branch_oid = repo.get_main_branch_oid()?;
     let branch_oid_to_names = repo.get_branch_oid_to_names()?;
     let graph = make_graph(
+        output,
         repo,
         merge_base_db,
         event_replayer,
@@ -106,9 +108,14 @@ pub fn hide(output: &mut Output, hashes: Vec<String>, recursive: bool) -> eyre::
         }
     };
     let commits = if recursive {
-        recurse_on_commits(&repo, &merge_base_db, &event_replayer, commits, |node| {
-            node.is_visible
-        })?
+        recurse_on_commits(
+            output,
+            &repo,
+            &merge_base_db,
+            &event_replayer,
+            commits,
+            |node| node.is_visible,
+        )?
     } else {
         commits
     };
@@ -182,9 +189,14 @@ pub fn unhide(output: &mut Output, hashes: Vec<String>, recursive: bool) -> eyre
         }
     };
     let commits = if recursive {
-        recurse_on_commits(&repo, &merge_base_db, &event_replayer, commits, |node| {
-            !node.is_visible
-        })?
+        recurse_on_commits(
+            output,
+            &repo,
+            &merge_base_db,
+            &event_replayer,
+            commits,
+            |node| !node.is_visible,
+        )?
     } else {
         commits
     };

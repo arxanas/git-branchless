@@ -50,6 +50,7 @@ pub enum Towards {
 
 #[instrument]
 fn advance_towards_main_branch(
+    output: &mut Output,
     repo: &Repo,
     merge_base_db: &MergeBaseDb,
     graph: &CommitGraph,
@@ -57,7 +58,7 @@ fn advance_towards_main_branch(
     main_branch_oid: &MainBranchOid,
 ) -> eyre::Result<(isize, NonZeroOid)> {
     let MainBranchOid(main_branch_oid) = main_branch_oid;
-    let path = find_path_to_merge_base(repo, merge_base_db, *main_branch_oid, current_oid)?;
+    let path = find_path_to_merge_base(output, repo, merge_base_db, *main_branch_oid, current_oid)?;
     let path = match path {
         None => return Ok((0, current_oid)),
         Some(path) if path.len() == 1 => {
@@ -155,6 +156,7 @@ pub fn next(
     let main_branch_oid = repo.get_main_branch_oid()?;
     let branch_oid_to_names = repo.get_branch_oid_to_names()?;
     let graph = make_graph(
+        output,
         &repo,
         &merge_base_db,
         &event_replayer,
@@ -167,6 +169,7 @@ pub fn next(
 
     let num_commits = num_commits.unwrap_or(1);
     let (num_commits_traversed_towards_main_branch, current_oid) = advance_towards_main_branch(
+        output,
         &repo,
         &merge_base_db,
         &graph,

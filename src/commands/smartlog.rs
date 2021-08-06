@@ -32,6 +32,7 @@ use crate::tui::Output;
 /// Returns the list such that the topologically-earlier subgraphs are first in
 /// the list (i.e. those that would be rendered at the bottom of the smartlog).
 fn split_commit_graph_by_roots(
+    output: &Output,
     repo: &Repo,
     merge_base_db: &MergeBaseDb,
     graph: &CommitGraph,
@@ -52,7 +53,7 @@ fn split_commit_graph_by_roots(
             _ => return lhs_oid.cmp(&rhs_oid),
         };
 
-        let merge_base_oid = merge_base_db.get_merge_base_oid(repo, *lhs_oid, *rhs_oid);
+        let merge_base_oid = merge_base_db.get_merge_base_oid(output, repo, *lhs_oid, *rhs_oid);
         let merge_base_oid = match merge_base_oid {
             Err(_) => return lhs_oid.cmp(&rhs_oid),
             Ok(merge_base_oid) => merge_base_oid,
@@ -246,16 +247,16 @@ fn get_output(
 /// Render the smartlog graph and write it to the provided stream.
 #[instrument(skip(commit_metadata_providers, graph))]
 pub fn render_graph(
-    glyphs: &Glyphs,
+    output: &Output,
     repo: &Repo,
     merge_base_db: &MergeBaseDb,
     graph: &CommitGraph,
     head_oid: &HeadOid,
     commit_metadata_providers: &mut [&mut dyn CommitMetadataProvider],
 ) -> eyre::Result<Vec<StyledString>> {
-    let root_oids = split_commit_graph_by_roots(repo, merge_base_db, graph);
+    let root_oids = split_commit_graph_by_roots(output, repo, merge_base_db, graph);
     let lines = get_output(
-        glyphs,
+        &output.get_glyphs(),
         graph,
         commit_metadata_providers,
         head_oid,
@@ -276,6 +277,7 @@ pub fn smartlog(output: &mut Output) -> eyre::Result<()> {
     let main_branch_oid = repo.get_main_branch_oid()?;
     let branch_oid_to_names = repo.get_branch_oid_to_names()?;
     let graph = make_graph(
+        output,
         &repo,
         &merge_base_db,
         &event_replayer,
@@ -287,7 +289,7 @@ pub fn smartlog(output: &mut Output) -> eyre::Result<()> {
     )?;
 
     let lines = render_graph(
-        &output.get_glyphs(),
+        output,
         &repo,
         &merge_base_db,
         &graph,

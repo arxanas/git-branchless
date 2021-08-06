@@ -23,6 +23,7 @@ fn run_select_past_event(
     events: Vec<CursiveTestingEvent>,
 ) -> eyre::Result<Option<EventCursor>> {
     let glyphs = Glyphs::text();
+    let output = Output::new_suppress_for_test(glyphs);
     let conn = repo.get_db_conn()?;
     let merge_base_db = MergeBaseDb::new(&conn)?;
     let event_log_db: EventLogDb = EventLogDb::new(&conn)?;
@@ -32,7 +33,7 @@ fn run_select_past_event(
     });
     select_past_event(
         siv.into_runner(),
-        &glyphs,
+        &output,
         repo,
         &merge_base_db,
         &mut event_replayer,

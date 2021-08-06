@@ -19,6 +19,7 @@ use rusqlite::OptionalExtension;
 use tracing::instrument;
 
 use crate::git::{NonZeroOid, Repo};
+use crate::tui::Output;
 
 /// On-disk cache for merge-base queries.
 pub struct MergeBaseDb<'conn> {
@@ -71,10 +72,13 @@ impl<'conn> MergeBaseDb<'conn> {
     #[instrument]
     pub fn get_merge_base_oid(
         &self,
+        output: &Output,
         repo: &Repo,
         lhs_oid: NonZeroOid,
         rhs_oid: NonZeroOid,
     ) -> eyre::Result<Option<NonZeroOid>> {
+        let _progress = output.start_operation(crate::tui::OperationType::GetMergeBase);
+
         let (lhs_oid, rhs_oid) = if lhs_oid < rhs_oid {
             (lhs_oid, rhs_oid)
         } else {

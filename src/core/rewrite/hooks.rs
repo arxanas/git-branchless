@@ -96,6 +96,7 @@ pub fn hook_post_rewrite(
     if should_check_abandoned_commits && !is_spurious_event {
         let merge_base_db = MergeBaseDb::new(&conn)?;
         warn_abandoned(
+            output,
             &repo,
             &merge_base_db,
             &event_log_db,
@@ -177,6 +178,7 @@ fn check_out_new_head(
 
 #[instrument(skip(old_commit_oids))]
 fn warn_abandoned(
+    output: &mut Output,
     repo: &Repo,
     merge_base_db: &MergeBaseDb,
     event_log_db: &EventLogDb,
@@ -191,6 +193,7 @@ fn warn_abandoned(
     let main_branch_oid = repo.get_main_branch_oid()?;
     let branch_oid_to_names = repo.get_branch_oid_to_names()?;
     let graph = make_graph(
+        output,
         &repo,
         &merge_base_db,
         &event_replayer,

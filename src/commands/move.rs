@@ -109,6 +109,7 @@ pub fn r#move(
     let event_replayer = EventReplayer::from_event_log_db(&repo, &event_log_db)?;
     let event_cursor = event_replayer.make_default_cursor();
     let graph = make_graph(
+        output,
         &repo,
         &merge_base_db,
         &event_replayer,
@@ -120,7 +121,8 @@ pub fn r#move(
     )?;
 
     let source_oid = if should_resolve_base_commit {
-        let merge_base_oid = merge_base_db.get_merge_base_oid(&repo, source_oid, dest_oid)?;
+        let merge_base_oid =
+            merge_base_db.get_merge_base_oid(output, &repo, source_oid, dest_oid)?;
         resolve_base_commit(&graph, merge_base_oid, source_oid)
     } else {
         source_oid
