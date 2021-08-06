@@ -1,6 +1,7 @@
-use std::cell::RefCell;
 use std::convert::Infallible;
+use std::mem::swap;
 use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 
 use crate::util::trim_lines;
 
@@ -46,7 +47,7 @@ fn run_undo_events(git: &Git, event_cursor: EventCursor) -> eyre::Result<String>
     let event_replayer = EventReplayer::from_event_log_db(&repo, &event_log_db)?;
     let input = "y";
     let mut in_ = input.as_bytes();
-    let out: Rc<RefCell<Vec<u8>>> = Default::default();
+    let out: Arc<Mutex<Vec<u8>>> = Default::default();
 
     let git_run_info = GitRunInfo {
         path_to_git: git.path_to_git.clone(),
@@ -69,7 +70,7 @@ fn run_undo_events(git: &Git, event_cursor: EventCursor) -> eyre::Result<String>
 
     let result = undo_events(
         &mut in_,
-        &mut Output::new_from_buffer(glyphs, &out),
+        &mut Output::new_from_buffer_for_test(glyphs, &out),
         &repo,
         &git_run_info,
         &mut event_log_db,
@@ -78,7 +79,12 @@ fn run_undo_events(git: &Git, event_cursor: EventCursor) -> eyre::Result<String>
     )?;
     assert_eq!(result, 0);
 
-    let out = out.take();
+    let out = {
+        let mut buf = out.lock().unwrap();
+        let mut result_buf = Vec::new();
+        swap(&mut *buf, &mut result_buf);
+        result_buf
+    };
     let out = String::from_utf8(out)?;
     let out = git.preprocess_output(out)?;
     let out = trim_lines(out);

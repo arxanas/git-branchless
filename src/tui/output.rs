@@ -1,18 +1,19 @@
-use std::cell::RefCell;
 use std::fmt::Write;
-use std::io::{stdout, Write as WriteIo};
-use std::rc::Rc;
+use std::io::{stderr, stdout, Write as WriteIo};
+use std::sync::{Arc, Mutex};
 
 use crate::core::formatting::Glyphs;
 
+#[derive(Clone)]
 enum OutputDest {
     Stdout,
-    Buffer(Rc<RefCell<Vec<u8>>>),
+    BufferForTest(Arc<Mutex<Vec<u8>>>),
 }
 
 /// Wrapper around output. Also manages progress indicators.
+#[derive(Clone)]
 pub struct Output {
-    glyphs: Rc<Glyphs>,
+    glyphs: Arc<Glyphs>,
     dest: OutputDest,
 }
 
@@ -30,23 +31,28 @@ impl Output {
     /// Constructor. Writes to stdout.
     pub fn new(glyphs: Glyphs) -> Self {
         Output {
-            glyphs: Rc::new(glyphs),
+            glyphs: Arc::new(glyphs),
             dest: OutputDest::Stdout,
         }
     }
 
-    /// Constructor. Writes to the provided buffer. Panics on write if the
-    /// buffer is not mutably-borrowable at runtime.
-    pub fn new_from_buffer(glyphs: Glyphs, buffer: &Rc<RefCell<Vec<u8>>>) -> Self {
+    /// Constructor. Writes to the provided buffer.
+    pub fn new_from_buffer_for_test(glyphs: Glyphs, buffer: &Arc<Mutex<Vec<u8>>>) -> Self {
         Output {
-            glyphs: Rc::new(glyphs),
-            dest: OutputDest::Buffer(Rc::clone(buffer)),
+            glyphs: Arc::new(glyphs),
+            dest: OutputDest::BufferForTest(Arc::clone(buffer)),
         }
     }
 
     /// Get the set of glyphs associated with the output.
-    pub fn get_glyphs(&self) -> Rc<Glyphs> {
-        Rc::clone(&self.glyphs)
+    pub fn get_glyphs(&self) -> Arc<Glyphs> {
+        Arc::clone(&self.glyphs)
+    }
+
+    /// Create a stream that error output can be written to, rather than regular
+    /// output.
+    pub fn into_error_stream(self) -> ErrorOutput {
+        ErrorOutput { output: self }
     }
 }
 
@@ -57,8 +63,28 @@ impl Write for Output {
                 print!("{}", s);
                 stdout().flush().unwrap();
             }
-            OutputDest::Buffer(buffer) => {
-                write!(buffer.borrow_mut(), "{}", s).unwrap();
+            OutputDest::BufferForTest(buffer) => {
+                let mut buffer = buffer.lock().unwrap();
+                write!(buffer, "{}", s).unwrap();
+            }
+        }
+        Ok(())
+    }
+}
+
+pub struct ErrorOutput {
+    output: Output,
+}
+
+impl Write for ErrorOutput {
+    fn write_str(&mut self, s: &str) -> std::fmt::Result {
+        match &self.output.dest {
+            OutputDest::Stdout => {
+                eprint!("{}", s);
+                stderr().flush().unwrap();
+            }
+            OutputDest::BufferForTest(_) => {
+                // Drop the error output, as the buffer only represents `stdout`.
             }
         }
         Ok(())
