@@ -14,7 +14,7 @@ use std::str::FromStr;
 use std::time::{Duration, SystemTime};
 
 use eyre::Context;
-use tracing::instrument;
+use tracing::{error, instrument};
 
 use crate::git::{CategorizedReferenceName, MaybeZeroOid, NonZeroOid, Repo};
 
@@ -361,9 +361,14 @@ fn try_from_row_helper(row: &Row) -> Result<Event, eyre::Error> {
 impl TryFrom<Row> for Event {
     type Error = eyre::Error;
 
-    #[instrument]
     fn try_from(row: Row) -> Result<Self, Self::Error> {
-        try_from_row_helper(&row)
+        match try_from_row_helper(&row) {
+            Ok(event) => Ok(event),
+            Err(err) => {
+                error!(?row, "Could not convert row into event");
+                Err(err)
+            }
+        }
     }
 }
 
@@ -640,7 +645,6 @@ pub struct EventCursor {
 }
 
 /// Processes events in order and determine the repo's visible commits.
-#[derive(Debug)]
 pub struct EventReplayer {
     /// Events are numbered starting from zero.
     id_counter: isize,
@@ -660,6 +664,17 @@ pub struct EventReplayer {
     /// If an entry is not present, it was either never observed, or it most
     /// recently changed to point to the zero hash (i.e. it was deleted).
     ref_locations: HashMap<OsString, NonZeroOid>,
+}
+
+impl std::fmt::Debug for EventReplayer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "<EventReplayer events.len={:?} ref_locations.len={:?}>",
+            self.events.len(),
+            self.ref_locations.len()
+        )
+    }
 }
 
 impl EventReplayer {
