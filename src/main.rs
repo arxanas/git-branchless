@@ -342,10 +342,12 @@ fn install_tracing() {
     use tracing_subscriber::prelude::*;
     use tracing_subscriber::{fmt, EnvFilter};
 
-    let fmt_layer = fmt::layer().with_target(false);
     let filter_layer = EnvFilter::try_from_default_env()
-        .or_else(|_| EnvFilter::try_new("info"))
+        .or_else(|_| EnvFilter::try_new("warn"))
         .unwrap();
+    let fmt_layer = fmt::layer()
+        .with_span_events(fmt::format::FmtSpan::CLOSE)
+        .with_target(false);
 
     tracing_subscriber::registry()
         .with(filter_layer)

@@ -15,7 +15,7 @@ use crate::git::repo::Repo;
 use crate::util::get_sh;
 
 /// Path to the `git` executable on disk to be executed.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct GitRunInfo {
     /// The path to the Git executable on disk.
     pub path_to_git: PathBuf,
@@ -25,6 +25,16 @@ pub struct GitRunInfo {
 
     /// The environment variables that should be passed to the Git process.
     pub env: HashMap<OsString, OsString>,
+}
+
+impl std::fmt::Debug for GitRunInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "<GitRunInfo path_to_git={:?} working_directory={:?} env=not shown>",
+            self.path_to_git, self.working_directory
+        )
+    }
 }
 
 impl GitRunInfo {

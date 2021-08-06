@@ -75,7 +75,7 @@ fn split_commit_graph_by_roots(
     root_commit_oids
 }
 
-#[instrument(skip(commit_metadata_providers))]
+#[instrument(skip(commit_metadata_providers, graph))]
 fn get_child_output(
     glyphs: &Glyphs,
     graph: &CommitGraph,
@@ -175,7 +175,7 @@ fn get_child_output(
 }
 
 /// Render a pretty graph starting from the given root OIDs in the given graph.
-#[instrument(skip(commit_metadata_providers))]
+#[instrument(skip(commit_metadata_providers, graph))]
 fn get_output(
     glyphs: &Glyphs,
     graph: &CommitGraph,
@@ -242,7 +242,7 @@ fn get_output(
 }
 
 /// Render the smartlog graph and write it to the provided stream.
-#[instrument(skip(commit_metadata_providers))]
+#[instrument(skip(commit_metadata_providers, graph))]
 pub fn render_graph(
     glyphs: &Glyphs,
     repo: &Repo,

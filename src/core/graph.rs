@@ -151,7 +151,7 @@ pub fn find_path_to_merge_base<'repo>(
 /// between it and the main branch, those intermediate commits should be shown
 /// (or else you won't get a good idea of the line of development that happened
 /// for this commit since the main branch).
-#[instrument]
+#[instrument(skip(commit_oids))]
 fn walk_from_commits<'repo>(
     repo: &'repo Repo,
     merge_base_db: &MergeBaseDb,
