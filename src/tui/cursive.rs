@@ -3,7 +3,7 @@ use cursive::theme::{Color, PaletteColor};
 use cursive::{Cursive, CursiveRunnable, CursiveRunner};
 
 /// Create an instance of a `CursiveRunner`, and clean it up afterward.
-pub(crate) fn with_siv<T, F: FnOnce(CursiveRunner<CursiveRunnable>) -> eyre::Result<T>>(
+pub fn with_siv<T, F: FnOnce(CursiveRunner<CursiveRunnable>) -> eyre::Result<T>>(
     f: F,
 ) -> eyre::Result<T> {
     // I tried these back-ends:
@@ -43,14 +43,13 @@ pub trait SingletonView<V> {
     fn find(siv: &mut Cursive) -> cursive::views::ViewRef<V>;
 }
 
-/// Create a set of views with unique names. See also `new_view!` and
-/// `find_view!`.
+/// Create a set of views with unique names.
 ///
 /// ```
 /// # use cursive::Cursive;
 /// # use cursive::views::{EditView, TextView};
 /// # use branchless::declare_views;
-/// # use branchless::core::tui::SingletonView;
+/// # use branchless::tui::SingletonView;
 /// # fn main() {
 /// declare_views! {
 ///     SomeDisplayView => TextView,
@@ -69,7 +68,7 @@ macro_rules! declare_views {
                 view: cursive::views::NamedView<$v>,
             }
 
-            impl $crate::core::tui::SingletonView<$v> for $k {
+            impl $crate::tui::SingletonView<$v> for $k {
                 fn find(siv: &mut Cursive) -> cursive::views::ViewRef<$v> {
                     siv.find_name::<$v>(stringify!($k)).unwrap()
                 }

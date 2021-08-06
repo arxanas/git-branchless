@@ -25,9 +25,9 @@ use crate::core::metadata::{
     BranchesProvider, CommitMessageProvider, CommitOidProvider, DifferentialRevisionProvider,
     HiddenExplanationProvider, RelativeTimeProvider,
 };
-use crate::core::tui::{with_siv, SingletonView};
 use crate::declare_views;
 use crate::git::{CategorizedReferenceName, GitRunInfo, MaybeZeroOid, Repo};
+use crate::tui::{with_siv, SingletonView};
 
 fn render_cursor_smartlog(
     glyphs: &Glyphs,
