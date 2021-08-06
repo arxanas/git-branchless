@@ -10,6 +10,7 @@
 //! visible.
 
 use std::ffi::OsStr;
+use std::fmt::Write;
 
 use eyre::Context;
 use tracing::instrument;
@@ -18,6 +19,7 @@ use crate::core::eventlog::{is_gc_ref, EventLogDb, EventReplayer};
 use crate::core::graph::{make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid};
 use crate::core::mergebase::MergeBaseDb;
 use crate::git::{NonZeroOid, Reference, Repo};
+use crate::tui::Output;
 
 fn find_dangling_references<'repo>(
     repo: &'repo Repo,
@@ -69,7 +71,7 @@ pub fn mark_commit_reachable(repo: &Repo, commit_oid: NonZeroOid) -> eyre::Resul
 ///
 /// Frees any references to commits which are no longer visible in the smartlog.
 #[instrument]
-pub fn gc() -> eyre::Result<()> {
+pub fn gc(output: &mut Output) -> eyre::Result<()> {
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
     let merge_base_db = MergeBaseDb::new(&conn)?;
@@ -90,7 +92,7 @@ pub fn gc() -> eyre::Result<()> {
         true,
     )?;
 
-    println!("branchless: collecting garbage");
+    writeln!(output, "branchless: collecting garbage")?;
     let dangling_references = find_dangling_references(&repo, &graph)?;
     for mut reference in dangling_references.into_iter() {
         reference

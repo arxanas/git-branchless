@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::ffi::{OsStr, OsString};
-use std::io::{stderr, stdout, Write};
+use std::fmt::Write;
+use std::io::{stderr, stdout, Write as WriteIo};
 use std::path::PathBuf;
 use std::process::{Command, ExitStatus, Stdio};
 
@@ -12,6 +13,7 @@ use tracing::instrument;
 use crate::core::config::get_core_hooks_path;
 use crate::core::eventlog::{EventTransactionId, BRANCHLESS_TRANSACTION_ID_ENV_VAR};
 use crate::git::repo::Repo;
+use crate::tui::Output;
 use crate::util::get_sh;
 
 /// Path to the `git` executable on disk to be executed.
@@ -51,6 +53,7 @@ impl GitRunInfo {
     #[must_use = "The return code for `run_git` must be checked"]
     pub fn run<S: AsRef<OsStr> + std::fmt::Debug>(
         &self,
+        output: &mut Output,
         event_tx_id: Option<EventTransactionId>,
         args: &[S],
     ) -> eyre::Result<isize> {
@@ -59,14 +62,15 @@ impl GitRunInfo {
             working_directory,
             env,
         } = self;
-        println!(
+        writeln!(
+            output,
             "branchless: {} {}",
             path_to_git.to_string_lossy(),
             args.iter()
                 .map(|arg| arg.as_ref().to_string_lossy().to_string())
                 .collect::<Vec<_>>()
                 .join(" ")
-        );
+        )?;
         stdout().flush()?;
         stderr().flush()?;
 

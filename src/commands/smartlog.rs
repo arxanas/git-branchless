@@ -4,6 +4,7 @@
 //! log; see the `eventlog` module.
 
 use std::cmp::Ordering;
+use std::fmt::Write;
 use std::time::SystemTime;
 
 use cursive::theme::Effect;
@@ -21,6 +22,7 @@ use crate::core::metadata::{
     RelativeTimeProvider,
 };
 use crate::git::{NonZeroOid, Repo};
+use crate::tui::Output;
 
 /// Split fully-independent subgraphs into multiple graphs.
 ///
@@ -264,8 +266,7 @@ pub fn render_graph(
 
 /// Display a nice graph of commits you've recently worked on.
 #[instrument]
-pub fn smartlog() -> eyre::Result<()> {
-    let glyphs = Glyphs::detect();
+pub fn smartlog(output: &mut Output) -> eyre::Result<()> {
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
     let merge_base_db = MergeBaseDb::new(&conn)?;
@@ -286,7 +287,7 @@ pub fn smartlog() -> eyre::Result<()> {
     )?;
 
     let lines = render_graph(
-        &glyphs,
+        &output.get_glyphs(),
         &repo,
         &merge_base_db,
         &graph,
@@ -305,7 +306,11 @@ pub fn smartlog() -> eyre::Result<()> {
         ],
     )?;
     for line in lines {
-        println!("{}", printable_styled_string(&glyphs, line)?);
+        writeln!(
+            output,
+            "{}",
+            printable_styled_string(&output.get_glyphs(), line)?
+        )?;
     }
 
     Ok(())

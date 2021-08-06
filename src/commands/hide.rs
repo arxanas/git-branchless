@@ -2,6 +2,7 @@
 //! automatically as the result of a rewrite operation).
 
 use std::collections::HashSet;
+use std::fmt::Write;
 use std::time::SystemTime;
 
 use tracing::instrument;
@@ -16,6 +17,7 @@ use crate::core::graph::{
 use crate::core::mergebase::MergeBaseDb;
 use crate::core::metadata::{render_commit_metadata, CommitOidProvider};
 use crate::git::{Commit, Repo};
+use crate::tui::Output;
 
 fn recurse_on_commits_helper<
     'repo,
@@ -86,7 +88,7 @@ fn recurse_on_commits<'repo, F: Fn(&Node) -> bool>(
 ///
 /// Returns: exit code (0 denotes successful exit).
 #[instrument]
-pub fn hide(hashes: Vec<String>, recursive: bool) -> eyre::Result<isize> {
+pub fn hide(output: &mut Output, hashes: Vec<String>, recursive: bool) -> eyre::Result<isize> {
     let now = SystemTime::now();
     let glyphs = Glyphs::detect();
     let repo = Repo::from_current_dir()?;
@@ -99,7 +101,7 @@ pub fn hide(hashes: Vec<String>, recursive: bool) -> eyre::Result<isize> {
     let commits = match commits {
         ResolveCommitsResult::Ok { commits } => commits,
         ResolveCommitsResult::CommitNotFound { commit: hash } => {
-            println!("Commit not found: {}", hash);
+            writeln!(output, "Commit not found: {}", hash)?;
             return Ok(1);
         }
     };
@@ -125,22 +127,27 @@ pub fn hide(hashes: Vec<String>, recursive: bool) -> eyre::Result<isize> {
 
     let cursor = event_replayer.make_default_cursor();
     for commit in commits {
-        println!(
+        writeln!(
+            output,
             "Hid commit: {}",
             printable_styled_string(&glyphs, commit.friendly_describe()?)?
-        );
+        )?;
         if let Some(CommitVisibility::Hidden) =
             event_replayer.get_cursor_commit_visibility(cursor, commit.get_oid())
         {
-            println!("(It was already hidden, so this operation had no effect.)");
+            writeln!(
+                output,
+                "(It was already hidden, so this operation had no effect.)"
+            )?;
         }
 
         let commit_target_oid =
             render_commit_metadata(&commit, &mut [&mut CommitOidProvider::new(false)?])?;
-        println!(
+        writeln!(
+            output,
             "To unhide this commit, run: git unhide {}",
             printable_styled_string(&glyphs, commit_target_oid)?
-        );
+        )?;
     }
 
     Ok(0)
@@ -157,7 +164,7 @@ pub fn hide(hashes: Vec<String>, recursive: bool) -> eyre::Result<isize> {
 ///
 /// Returns: exit code (0 denotes successful exit).
 #[instrument]
-pub fn unhide(hashes: Vec<String>, recursive: bool) -> eyre::Result<isize> {
+pub fn unhide(output: &mut Output, hashes: Vec<String>, recursive: bool) -> eyre::Result<isize> {
     let now = SystemTime::now();
     let glyphs = Glyphs::detect();
     let repo = Repo::from_current_dir()?;
@@ -170,7 +177,7 @@ pub fn unhide(hashes: Vec<String>, recursive: bool) -> eyre::Result<isize> {
     let commits = match commits {
         ResolveCommitsResult::Ok { commits } => commits,
         ResolveCommitsResult::CommitNotFound { commit: hash } => {
-            println!("Commit not found: {}", hash);
+            writeln!(output, "Commit not found: {}", hash)?;
             return Ok(1);
         }
     };
@@ -196,22 +203,27 @@ pub fn unhide(hashes: Vec<String>, recursive: bool) -> eyre::Result<isize> {
 
     let cursor = event_replayer.make_default_cursor();
     for commit in commits {
-        println!(
+        writeln!(
+            output,
             "Unhid commit: {}",
             printable_styled_string(&glyphs, commit.friendly_describe()?)?,
-        );
+        )?;
         if let Some(CommitVisibility::Visible) =
             event_replayer.get_cursor_commit_visibility(cursor, commit.get_oid())
         {
-            println!("(It was not hidden, so this operation had no effect.)");
+            writeln!(
+                output,
+                "(It was not hidden, so this operation had no effect.)"
+            )?;
         }
 
         let commit_target_oid =
             render_commit_metadata(&commit, &mut [&mut CommitOidProvider::new(false)?])?;
-        println!(
+        writeln!(
+            output,
             "To hide this commit, run: git hide {}",
             printable_styled_string(&glyphs, commit_target_oid)?
-        );
+        )?;
     }
 
     Ok(0)

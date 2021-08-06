@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::convert::Infallible;
 use std::rc::Rc;
 
@@ -10,6 +11,7 @@ use branchless::core::mergebase::MergeBaseDb;
 use branchless::git::{GitRunInfo, Repo};
 use branchless::testing::{make_git, Git};
 use branchless::tui::testing::{screen_to_string, CursiveTestingBackend, CursiveTestingEvent};
+use branchless::tui::Output;
 
 use cursive::event::Key;
 use cursive::CursiveRunnable;
@@ -44,7 +46,7 @@ fn run_undo_events(git: &Git, event_cursor: EventCursor) -> eyre::Result<String>
     let event_replayer = EventReplayer::from_event_log_db(&repo, &event_log_db)?;
     let input = "y";
     let mut in_ = input.as_bytes();
-    let mut out = Vec::new();
+    let out: Rc<RefCell<Vec<u8>>> = Default::default();
 
     let git_run_info = GitRunInfo {
         path_to_git: git.path_to_git.clone(),
@@ -67,8 +69,7 @@ fn run_undo_events(git: &Git, event_cursor: EventCursor) -> eyre::Result<String>
 
     let result = undo_events(
         &mut in_,
-        &mut out,
-        &glyphs,
+        &mut Output::new_from_buffer(glyphs, &out),
         &repo,
         &git_run_info,
         &mut event_log_db,
@@ -77,6 +78,7 @@ fn run_undo_events(git: &Git, event_cursor: EventCursor) -> eyre::Result<String>
     )?;
     assert_eq!(result, 0);
 
+    let out = out.take();
     let out = String::from_utf8(out)?;
     let out = git.preprocess_output(out)?;
     let out = trim_lines(out);
@@ -319,15 +321,16 @@ fn test_undo_move_refs() -> eyre::Result<()> {
     {
         let stdout = run_undo_events(&git, event_cursor)?;
         insta::assert_snapshot!(stdout, @r###"
-            Will apply these actions:
-            1. Check out from 96d1c37a create test2.txt
-                           to 62fc20d2 create test1.txt
-            2. Hide commit 96d1c37a create test2.txt
+        Will apply these actions:
+        1. Check out from 96d1c37a create test2.txt
+                       to 62fc20d2 create test1.txt
+        2. Hide commit 96d1c37a create test2.txt
 
-            3. Move branch master from 96d1c37a create test2.txt
-                                    to 62fc20d2 create test1.txt
-            Confirm? [yN] Applied 3 inverse events.
-            "###);
+        3. Move branch master from 96d1c37a create test2.txt
+                                to 62fc20d2 create test1.txt
+        Confirm? [yN] branchless: <git-executable> checkout --detach 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
+        Applied 3 inverse events.
+        "###);
     }
 
     {
@@ -437,19 +440,20 @@ fn test_undo_doesnt_make_working_dir_dirty() -> eyre::Result<()> {
     {
         let stdout = run_undo_events(&git, event_cursor)?;
         insta::assert_snapshot!(stdout, @r###"
-            Will apply these actions:
-            1. Check out from 62fc20d2 create test1.txt
-                           to f777ecc9 create initial.txt
-            2. Delete branch bar at 62fc20d2 create test1.txt
+        Will apply these actions:
+        1. Check out from 62fc20d2 create test1.txt
+                       to f777ecc9 create initial.txt
+        2. Delete branch bar at 62fc20d2 create test1.txt
 
-            3. Hide commit 62fc20d2 create test1.txt
+        3. Hide commit 62fc20d2 create test1.txt
 
-            4. Move branch master from 62fc20d2 create test1.txt
-                                    to f777ecc9 create initial.txt
-            5. Delete branch foo at f777ecc9 create initial.txt
+        4. Move branch master from 62fc20d2 create test1.txt
+                                to f777ecc9 create initial.txt
+        5. Delete branch foo at f777ecc9 create initial.txt
 
-            Confirm? [yN] Applied 5 inverse events.
-            "###);
+        Confirm? [yN] branchless: <git-executable> checkout --detach f777ecc9b0db5ed372b2615695191a8a17f79f24
+        Applied 5 inverse events.
+        "###);
     }
     {
         let (stdout, _stderr) = git.run(&["status", "--porcelain"])?;

@@ -217,7 +217,7 @@ fn test_main_branch_not_found_error_message() -> eyre::Result<()> {
            0: [91mCould not find repository main branch[0m
 
         Location:
-           [35msrc/git/repo.rs[0m:[35m263[0m
+           [35msrc/git/repo.rs[0m:[35m264[0m
 
         [96mSuggestion[0m:
         The main branch "master" could not be found in your repository
