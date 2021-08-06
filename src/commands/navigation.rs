@@ -1,29 +1,38 @@
 //! Convenience commands to help the user move through a stack of commits.
 
+use std::fmt::Write;
+
 use tracing::{instrument, warn};
 
 use crate::commands::smartlog::smartlog;
 use crate::core::eventlog::{EventLogDb, EventReplayer};
-use crate::core::formatting::{printable_styled_string, Glyphs};
+use crate::core::formatting::printable_styled_string;
 use crate::core::graph::{
     find_path_to_merge_base, make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid,
 };
 use crate::core::mergebase::MergeBaseDb;
 use crate::git::{GitRunInfo, NonZeroOid, Repo};
+use crate::tui::Output;
 
 /// Go back a certain number of commits.
 #[instrument]
-pub fn prev(git_run_info: &GitRunInfo, num_commits: Option<isize>) -> eyre::Result<isize> {
+pub fn prev(
+    output: &mut Output,
+    git_run_info: &GitRunInfo,
+    num_commits: Option<isize>,
+) -> eyre::Result<isize> {
     let exit_code = match num_commits {
-        None => git_run_info.run(None, &["checkout", "HEAD^"])?,
-        Some(num_commits) => {
-            git_run_info.run(None, &["checkout", &format!("HEAD~{}", num_commits)])?
-        }
+        None => git_run_info.run(output, None, &["checkout", "HEAD^"])?,
+        Some(num_commits) => git_run_info.run(
+            output,
+            None,
+            &["checkout", &format!("HEAD~{}", num_commits)],
+        )?,
     };
     if exit_code != 0 {
         return Ok(exit_code);
     }
-    smartlog()?;
+    smartlog(output)?;
     Ok(0)
 }
 
@@ -70,13 +79,14 @@ fn advance_towards_main_branch(
 
 #[instrument]
 fn advance_towards_own_commit(
-    glyphs: &Glyphs,
+    output: &mut Output,
     repo: &Repo,
     graph: &CommitGraph,
     current_oid: NonZeroOid,
     num_commits: isize,
     towards: Option<Towards>,
 ) -> eyre::Result<Option<NonZeroOid>> {
+    let glyphs = output.get_glyphs();
     let mut current_oid = current_oid;
     for i in 0..num_commits {
         let children = &graph[&current_oid].children;
@@ -90,10 +100,11 @@ fn advance_towards_own_commit(
             (Some(Towards::Newest), [.., newest_child_oid]) => *newest_child_oid,
             (Some(Towards::Oldest), [oldest_child_oid, ..]) => *oldest_child_oid,
             (None, [_, _, ..]) => {
-                println!(
+                writeln!(
+                    output,
                     "Found multiple possible next commits to go to after traversing {} children:",
                     i
-                );
+                )?;
 
                 for (j, child_oid) in (0..).zip(children.iter()) {
                     let descriptor = if j == 0 {
@@ -104,7 +115,8 @@ fn advance_towards_own_commit(
                         ""
                     };
 
-                    println!(
+                    writeln!(
+                        output,
                         "  {} {}{}",
                         glyphs.bullet_point,
                         printable_styled_string(
@@ -112,9 +124,9 @@ fn advance_towards_own_commit(
                             repo.friendly_describe_commit_from_oid(*child_oid)?
                         )?,
                         descriptor
-                    );
+                    )?;
                 }
-                println!("(Pass --oldest (-o) or --newest (-n) to select between ambiguous next commits)");
+                writeln!(output, "(Pass --oldest (-o) or --newest (-n) to select between ambiguous next commits)")?;
                 return Ok(None);
             }
         };
@@ -125,11 +137,11 @@ fn advance_towards_own_commit(
 /// Go forward a certain number of commits.
 #[instrument]
 pub fn next(
+    output: &mut Output,
     git_run_info: &GitRunInfo,
     num_commits: Option<isize>,
     towards: Option<Towards>,
 ) -> eyre::Result<isize> {
-    let glyphs = Glyphs::detect();
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
     let merge_base_db = MergeBaseDb::new(&conn)?;
@@ -163,17 +175,17 @@ pub fn next(
     )?;
     let num_commits = num_commits - num_commits_traversed_towards_main_branch;
     let current_oid =
-        advance_towards_own_commit(&glyphs, &repo, &graph, current_oid, num_commits, towards)?;
+        advance_towards_own_commit(output, &repo, &graph, current_oid, num_commits, towards)?;
     let current_oid = match current_oid {
         None => return Ok(1),
         Some(current_oid) => current_oid,
     };
 
-    let result = git_run_info.run(None, &["checkout", &current_oid.to_string()])?;
+    let result = git_run_info.run(output, None, &["checkout", &current_oid.to_string()])?;
     if result != 0 {
         return Ok(result);
     }
 
-    smartlog()?;
+    smartlog(output)?;
     Ok(0)
 }

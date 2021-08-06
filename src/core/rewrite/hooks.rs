@@ -3,6 +3,7 @@
 use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
 use std::ffi::{OsStr, OsString};
+use std::fmt::Write;
 use std::fs::File;
 use std::io::{stdin, BufRead};
 use std::time::SystemTime;
@@ -13,12 +14,13 @@ use tracing::instrument;
 
 use crate::core::config::{get_restack_warn_abandoned, RESTACK_WARN_ABANDONED_CONFIG_KEY};
 use crate::core::eventlog::{Event, EventLogDb, EventReplayer, EventTransactionId};
-use crate::core::formatting::{printable_styled_string, Glyphs, Pluralize};
+use crate::core::formatting::{printable_styled_string, Pluralize};
 use crate::core::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
 use crate::core::mergebase::MergeBaseDb;
 use crate::git::{
     CategorizedReferenceName, GitRunInfo, MaybeZeroOid, NonZeroOid, ReferenceTarget, Repo,
 };
+use crate::tui::Output;
 
 use super::{find_abandoned_children, move_branches};
 
@@ -26,7 +28,11 @@ use super::{find_abandoned_children, move_branches};
 ///
 /// See the man-page for `githooks(5)`.
 #[instrument]
-pub fn hook_post_rewrite(git_run_info: &GitRunInfo, rewrite_type: &str) -> eyre::Result<()> {
+pub fn hook_post_rewrite(
+    output: &mut Output,
+    git_run_info: &GitRunInfo,
+    rewrite_type: &str,
+) -> eyre::Result<()> {
     let now = SystemTime::now();
     let timestamp = now.duration_since(SystemTime::UNIX_EPOCH)?.as_secs_f64();
 
@@ -68,7 +74,11 @@ pub fn hook_post_rewrite(git_run_info: &GitRunInfo, rewrite_type: &str) -> eyre:
             plural: "rewritten commits",
         }
         .to_string();
-        println!("branchless: processing {}", message_rewritten_commits);
+        writeln!(
+            output,
+            "branchless: processing {}",
+            message_rewritten_commits
+        )?;
     }
 
     event_log_db.add_events(events)?;
@@ -79,7 +89,7 @@ pub fn hook_post_rewrite(git_run_info: &GitRunInfo, rewrite_type: &str) -> eyre:
         .exists()
     {
         move_branches(git_run_info, &repo, event_tx_id, &rewritten_oids)?;
-        check_out_new_head(&git_run_info, &repo, event_tx_id, &rewritten_oids)?;
+        check_out_new_head(output, &git_run_info, &repo, event_tx_id, &rewritten_oids)?;
     }
 
     let should_check_abandoned_commits = get_restack_warn_abandoned(&repo)?;
@@ -98,6 +108,7 @@ pub fn hook_post_rewrite(git_run_info: &GitRunInfo, rewrite_type: &str) -> eyre:
 
 #[instrument]
 fn check_out_new_head(
+    output: &mut Output,
     git_run_info: &GitRunInfo,
     repo: &Repo,
     event_tx_id: EventTransactionId,
@@ -149,6 +160,7 @@ fn check_out_new_head(
 
     if let Some(checkout_target) = checkout_target {
         let exit_code = git_run_info.run(
+            output,
             Some(event_tx_id),
             &[&OsString::from("checkout"), &checkout_target],
         )?;
@@ -344,8 +356,10 @@ pub fn hook_register_extra_post_rewrite_hook() -> eyre::Result<()> {
 /// For rebases, detect empty commits (which have probably been applied
 /// upstream) and write them to the `rewritten-list` file, so that they're later
 /// passed to the `post-rewrite` hook.
-pub fn hook_drop_commit_if_empty(old_commit_oid: NonZeroOid) -> eyre::Result<()> {
-    let glyphs = Glyphs::detect();
+pub fn hook_drop_commit_if_empty(
+    output: &mut Output,
+    old_commit_oid: NonZeroOid,
+) -> eyre::Result<()> {
     let repo = Repo::from_current_dir()?;
     let head_info = repo.get_head_info()?;
     let head_oid = match head_info.oid {
@@ -365,10 +379,11 @@ pub fn hook_drop_commit_if_empty(old_commit_oid: NonZeroOid) -> eyre::Result<()>
         Some(only_parent_oid) => only_parent_oid,
         None => return Ok(()),
     };
-    println!(
+    writeln!(
+        output,
         "Skipped now-empty commit: {}",
-        printable_styled_string(&glyphs, head_commit.friendly_describe()?)?
-    );
+        printable_styled_string(&output.get_glyphs(), head_commit.friendly_describe()?)?
+    )?;
     repo.set_head(only_parent_oid)?;
 
     if old_commit_oid == head_oid {
@@ -388,17 +403,20 @@ pub fn hook_drop_commit_if_empty(old_commit_oid: NonZeroOid) -> eyre::Result<()>
 
 /// For rebases, if a commit is known to have been applied upstream, skip it
 /// without attempting to apply it.
-pub fn hook_skip_upstream_applied_commit(commit_oid: NonZeroOid) -> eyre::Result<()> {
-    let glyphs = Glyphs::detect();
+pub fn hook_skip_upstream_applied_commit(
+    output: &mut Output,
+    commit_oid: NonZeroOid,
+) -> eyre::Result<()> {
     let repo = Repo::from_current_dir()?;
     let commit = match repo.find_commit(commit_oid)? {
         Some(commit) => commit,
         None => eyre::bail!("Could not find commit: {:?}", commit_oid),
     };
-    println!(
+    writeln!(
+        output,
         "Skipping commit (was already applied upstream): {}",
-        printable_styled_string(&glyphs, commit.friendly_describe()?)?
-    );
+        printable_styled_string(&output.get_glyphs(), commit.friendly_describe()?)?
+    )?;
 
     let original_head_oid = get_original_head_oid(&repo)?;
     if MaybeZeroOid::NonZero(commit_oid) == original_head_oid {

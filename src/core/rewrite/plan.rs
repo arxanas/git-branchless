@@ -1,13 +1,14 @@
 use std::collections::{HashMap, HashSet};
-use std::io::Write;
+use std::fmt::Write;
 
 use itertools::Itertools;
 use tracing::{instrument, warn};
 
-use crate::core::formatting::{printable_styled_string, Glyphs};
+use crate::core::formatting::printable_styled_string;
 use crate::core::graph::{find_path_to_merge_base, CommitGraph, MainBranchOid};
 use crate::core::mergebase::MergeBaseDb;
 use crate::git::{NonZeroOid, PatchId, Repo};
+use crate::tui::Output;
 
 /// A command that can be applied for either in-memory or on-disk rebases.
 #[derive(Debug)]
@@ -115,14 +116,15 @@ pub enum BuildRebasePlanError {
 
 impl BuildRebasePlanError {
     /// Write the error message to `out`.
-    pub fn describe(&self, out: &mut impl Write, glyphs: &Glyphs, repo: &Repo) -> eyre::Result<()> {
+    pub fn describe(&self, output: &mut Output, repo: &Repo) -> eyre::Result<()> {
         match self {
             BuildRebasePlanError::ConstraintCycle { cycle_oids } => {
                 writeln!(
-                    out,
+                    output,
                     "This operation failed because it would introduce a cycle:"
                 )?;
 
+                let glyphs = output.get_glyphs();
                 let num_cycle_commits = cycle_oids.len();
                 for (i, oid) in cycle_oids.iter().enumerate() {
                     let (char1, char2, char3) = if i == 0 {
@@ -141,7 +143,7 @@ impl BuildRebasePlanError {
                         (glyphs.cycle_vertical_line, " ", " ")
                     };
                     writeln!(
-                        out,
+                        output,
                         "{}{}{} {}",
                         char1,
                         char2,
@@ -493,20 +495,23 @@ impl<'repo> RebasePlanBuilder<'repo> {
     /// Create the rebase plan. Returns `None` if there were no commands in the rebase plan.
     pub fn build(
         mut self,
+        output: &mut Output,
         options: &BuildRebasePlanOptions,
     ) -> eyre::Result<Result<Option<RebasePlan>, BuildRebasePlanError>> {
         if options.dump_rebase_constraints {
-            println!(
+            writeln!(
+                output,
                 "Rebase constraints before adding descendants: {:#?}",
                 self.get_constraints_sorted_for_debug()
-            );
+            )?;
         }
         self.add_descendant_constraints()?;
         if options.dump_rebase_constraints {
-            println!(
+            writeln!(
+                output,
                 "Rebase constraints after adding descendants: {:#?}",
                 self.get_constraints_sorted_for_debug(),
-            );
+            )?;
         }
 
         if let Err(err) = self.check_for_cycles() {
@@ -535,7 +540,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
             commands: acc,
         });
         if options.dump_rebase_plan {
-            println!("Rebase plan: {:#?}", rebase_plan);
+            writeln!(output, "Rebase plan: {:#?}", rebase_plan)?;
         }
         Ok(Ok(rebase_plan))
     }

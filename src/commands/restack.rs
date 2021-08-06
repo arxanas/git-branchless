@@ -56,7 +56,7 @@
 //! ```
 
 use std::collections::{HashMap, HashSet};
-use std::io::stdout;
+use std::fmt::Write;
 use std::time::SystemTime;
 
 use tracing::{instrument, warn};
@@ -64,7 +64,6 @@ use tracing::{instrument, warn};
 use crate::commands::smartlog::smartlog;
 use crate::core::config::get_restack_preserve_timestamps;
 use crate::core::eventlog::{EventLogDb, EventReplayer};
-use crate::core::formatting::Glyphs;
 use crate::core::graph::{
     make_graph, resolve_commits, BranchOids, HeadOid, MainBranchOid, ResolveCommitsResult,
 };
@@ -74,10 +73,11 @@ use crate::core::rewrite::{
     BuildRebasePlanOptions, ExecuteRebasePlanOptions, RebasePlanBuilder,
 };
 use crate::git::{GitRunInfo, NonZeroOid, Repo};
+use crate::tui::Output;
 
 #[instrument(skip(commits))]
 fn restack_commits(
-    glyphs: &Glyphs,
+    output: &mut Output,
     repo: &Repo,
     git_run_info: &GitRunInfo,
     merge_base_db: &MergeBaseDb,
@@ -134,22 +134,22 @@ fn restack_commits(
                 builder.move_subtree(child_oid, dest_oid)?;
             }
         }
-        builder.build(build_options)?
+        builder.build(output, build_options)?
     };
 
     match rebase_plan {
         Ok(None) => {
-            println!("No abandoned commits to restack.");
+            writeln!(output, "No abandoned commits to restack.")?;
             Ok(0)
         }
         Ok(Some(rebase_plan)) => {
             let exit_code =
-                execute_rebase_plan(glyphs, git_run_info, repo, &rebase_plan, execute_options)?;
-            println!("Finished restacking commits.");
+                execute_rebase_plan(output, git_run_info, repo, &rebase_plan, execute_options)?;
+            writeln!(output, "Finished restacking commits.")?;
             Ok(exit_code)
         }
         Err(err) => {
-            err.describe(&mut stdout(), glyphs, repo)?;
+            err.describe(output, repo)?;
             Ok(1)
         }
     }
@@ -157,6 +157,7 @@ fn restack_commits(
 
 #[instrument]
 fn restack_branches(
+    output: &mut Output,
     repo: &Repo,
     git_run_info: &GitRunInfo,
     merge_base_db: &MergeBaseDb,
@@ -205,10 +206,10 @@ fn restack_branches(
     }
 
     if rewritten_oids.is_empty() {
-        println!("No abandoned branches to restack.");
+        writeln!(output, "No abandoned branches to restack.")?;
     } else {
         move_branches(git_run_info, repo, options.event_tx_id, &rewritten_oids)?;
-        println!("Finished restacking branches.");
+        writeln!(output, "Finished restacking branches.")?;
     }
     Ok(0)
 }
@@ -218,13 +219,13 @@ fn restack_branches(
 /// Returns an exit code (0 denotes successful exit).
 #[instrument]
 pub fn restack(
+    output: &mut Output,
     git_run_info: &GitRunInfo,
     commits: Vec<String>,
     dump_rebase_constraints: bool,
     dump_rebase_plan: bool,
 ) -> eyre::Result<isize> {
     let now = SystemTime::now();
-    let glyphs = Glyphs::detect();
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
     let merge_base_db = MergeBaseDb::new(&conn)?;
@@ -235,7 +236,7 @@ pub fn restack(
     let commits = match resolve_commits(&repo, commits)? {
         ResolveCommitsResult::Ok { commits } => commits,
         ResolveCommitsResult::CommitNotFound { commit } => {
-            println!("Commit not found: {}", commit);
+            writeln!(output, "Commit not found: {}", commit)?;
             return Ok(1);
         }
     };
@@ -259,7 +260,7 @@ pub fn restack(
     };
 
     let result = restack_commits(
-        &glyphs,
+        output,
         &repo,
         &git_run_info,
         &merge_base_db,
@@ -273,6 +274,7 @@ pub fn restack(
     }
 
     let result = restack_branches(
+        output,
         &repo,
         &git_run_info,
         &merge_base_db,
@@ -284,12 +286,14 @@ pub fn restack(
     }
 
     let result = match head_oid {
-        Some(head_oid) => {
-            git_run_info.run(Some(event_tx_id), &["checkout", &head_oid.to_string()])?
-        }
+        Some(head_oid) => git_run_info.run(
+            output,
+            Some(event_tx_id),
+            &["checkout", &head_oid.to_string()],
+        )?,
         None => result,
     };
 
-    smartlog()?;
+    smartlog(output)?;
     Ok(result)
 }

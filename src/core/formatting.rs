@@ -39,6 +39,7 @@ impl<'a> ToString for Pluralize<'a> {
 }
 
 /// Glyphs to use for rendering the smartlog.
+#[derive(Clone)]
 pub struct Glyphs {
     /// Whether or not ANSI escape codes should be emitted (e.g. to render
     /// color).

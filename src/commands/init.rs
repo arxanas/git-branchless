@@ -1,6 +1,7 @@
 //! Install any hooks, aliases, etc. to set up `git-branchless` in this repo.
 
-use std::io::{stdin, stdout, BufRead, BufReader, Write};
+use std::fmt::Write;
+use std::io::{stdin, stdout, BufRead, BufReader, Write as WriteIo};
 use std::path::PathBuf;
 
 use console::style;
@@ -9,6 +10,7 @@ use tracing::{instrument, warn};
 
 use crate::core::config::get_core_hooks_path;
 use crate::git::{Config, ConfigValue, GitRunInfo, GitVersion, Repo};
+use crate::tui::Output;
 
 const ALL_HOOKS: &[(&str, &str)] = &[
     (
@@ -170,18 +172,18 @@ fn install_hook(repo: &Repo, hook_type: &str, hook_script: &str) -> eyre::Result
 }
 
 #[instrument]
-fn install_hooks(repo: &Repo) -> eyre::Result<()> {
+fn install_hooks(output: &mut Output, repo: &Repo) -> eyre::Result<()> {
     for (hook_type, hook_script) in ALL_HOOKS {
-        println!("Installing hook: {}", hook_type);
+        writeln!(output, "Installing hook: {}", hook_type)?;
         install_hook(repo, hook_type, hook_script)?;
     }
     Ok(())
 }
 
 #[instrument]
-fn uninstall_hooks(repo: &Repo) -> eyre::Result<()> {
+fn uninstall_hooks(output: &mut Output, repo: &Repo) -> eyre::Result<()> {
     for (hook_type, _hook_script) in ALL_HOOKS {
-        println!("Uninstalling hook: {}", hook_type);
+        writeln!(output, "Uninstalling hook: {}", hook_type)?;
         install_hook(
             repo,
             hook_type,
@@ -223,15 +225,17 @@ fn detect_main_branch_name(repo: &Repo) -> eyre::Result<Option<String>> {
 
 #[instrument]
 fn install_aliases(
+    output: &mut Output,
     repo: &mut Repo,
     config: &mut Config,
     git_run_info: &GitRunInfo,
 ) -> eyre::Result<()> {
     for (from, to) in ALL_ALIASES {
-        println!(
+        writeln!(
+            output,
             "Installing alias (non-global): git {} -> git branchless {}",
             from, to
-        );
+        )?;
         install_alias(config, from, to)?;
     }
 
@@ -243,7 +247,8 @@ fn install_aliases(
         .parse()
         .wrap_err_with(|| format!("Parsing Git version string: {}", version_str))?;
     if version < GitVersion(2, 29, 0) {
-        print!(
+        write!(
+            output,
             "\
 {warning_str}: the branchless workflow's `git undo` command requires Git
 v2.29 or later, but your Git version is: {version_str}
@@ -259,16 +264,16 @@ the branchless workflow will work properly.
 ",
             warning_str = style("Warning").yellow().bold(),
             version_str = version_str,
-        );
+        )?;
     }
 
     Ok(())
 }
 
 #[instrument]
-fn uninstall_aliases(config: &mut Config) -> eyre::Result<()> {
+fn uninstall_aliases(output: &mut Output, config: &mut Config) -> eyre::Result<()> {
     for (from, _to) in ALL_ALIASES {
-        println!("Uninstalling alias (non-global): git {}", from);
+        writeln!(output, "Uninstalling alias (non-global): git {}", from)?;
         config
             .remove(&format!("alias.{}", from))
             .wrap_err_with(|| format!("Uninstalling alias {}", from))?;
@@ -277,34 +282,55 @@ fn uninstall_aliases(config: &mut Config) -> eyre::Result<()> {
 }
 
 #[instrument(skip(value))]
-fn set_config(config: &mut Config, name: &str, value: impl Into<ConfigValue>) -> eyre::Result<()> {
+fn set_config(
+    output: &mut Output,
+    config: &mut Config,
+    name: &str,
+    value: impl Into<ConfigValue>,
+) -> eyre::Result<()> {
     let value = value.into();
-    println!("Setting config (non-global): {} = {}", name, value);
+    writeln!(output, "Setting config (non-global): {} = {}", name, value)?;
     config.set(name, value)?;
     Ok(())
 }
 
 #[instrument(skip(r#in))]
-fn set_configs(r#in: &mut impl BufRead, repo: &Repo, config: &mut Config) -> eyre::Result<()> {
+fn set_configs(
+    r#in: &mut impl BufRead,
+    output: &mut Output,
+    repo: &Repo,
+    config: &mut Config,
+) -> eyre::Result<()> {
     let main_branch_name = match detect_main_branch_name(repo)? {
         Some(main_branch_name) => {
-            println!(
+            writeln!(
+                output,
                 "Auto-detected your main branch as: {}",
                 console::style(&main_branch_name).bold()
-            );
-            println!("If this is incorrect, run: git config branchless.core.mainBranch <branch>");
+            )?;
+            writeln!(
+                output,
+                "If this is incorrect, run: git config branchless.core.mainBranch <branch>"
+            )?;
             main_branch_name
         }
         None => {
-            println!(
+            writeln!(
+                output,
                 "{}",
                 console::style("Your main branch name could not be auto-detected!")
                     .yellow()
                     .bold()
-            );
-            println!("Examples of a main branch: master, main, trunk, etc.");
-            println!("See https://github.com/arxanas/git-branchless/wiki/Concepts#main-branch");
-            print!("Enter the name of your main branch: ");
+            )?;
+            writeln!(
+                output,
+                "Examples of a main branch: master, main, trunk, etc."
+            )?;
+            writeln!(
+                output,
+                "See https://github.com/arxanas/git-branchless/wiki/Concepts#main-branch"
+            )?;
+            write!(output, "Enter the name of your main branch: ")?;
             stdout().flush()?;
             let mut input = String::new();
             r#in.read_line(&mut input)?;
@@ -314,15 +340,20 @@ fn set_configs(r#in: &mut impl BufRead, repo: &Repo, config: &mut Config) -> eyr
             }
         }
     };
-    set_config(config, "branchless.core.mainBranch", main_branch_name)?;
-    set_config(config, "advice.detachedHead", false)?;
+    set_config(
+        output,
+        config,
+        "branchless.core.mainBranch",
+        main_branch_name,
+    )?;
+    set_config(output, config, "advice.detachedHead", false)?;
     Ok(())
 }
 
 #[instrument]
-fn unset_configs(config: &mut Config) -> eyre::Result<()> {
+fn unset_configs(output: &mut Output, config: &mut Config) -> eyre::Result<()> {
     for key in ["branchless.core.mainBranch", "advice.detachedHead"] {
-        println!("Unsetting config (non-global): {}", key);
+        writeln!(output, "Unsetting config (non-global): {}", key)?;
         config
             .remove(key)
             .wrap_err_with(|| format!("Unsetting config {}", key))?;
@@ -332,34 +363,36 @@ fn unset_configs(config: &mut Config) -> eyre::Result<()> {
 
 /// Initialize `git-branchless` in the current repo.
 #[instrument]
-pub fn init(git_run_info: &GitRunInfo) -> eyre::Result<()> {
+pub fn init(output: &mut Output, git_run_info: &GitRunInfo) -> eyre::Result<()> {
     let mut in_ = BufReader::new(stdin());
     let mut repo = Repo::from_current_dir()?;
     let mut config = repo.get_config()?;
-    set_configs(&mut in_, &repo, &mut config)?;
-    install_hooks(&repo)?;
-    install_aliases(&mut repo, &mut config, git_run_info)?;
-    println!(
+    set_configs(&mut in_, output, &repo, &mut config)?;
+    install_hooks(output, &repo)?;
+    install_aliases(output, &mut repo, &mut config, git_run_info)?;
+    writeln!(
+        output,
         "{}",
         console::style("Successfully installed git-branchless.")
             .green()
             .bold()
-    );
-    println!(
+    )?;
+    writeln!(
+        output,
         "To uninstall, run: {}",
         console::style("git branchless init --uninstall").bold()
-    );
+    )?;
     Ok(())
 }
 
 /// Uninstall `git-branchless` in the current repo.
 #[instrument]
-pub fn uninstall() -> eyre::Result<()> {
+pub fn uninstall(output: &mut Output) -> eyre::Result<()> {
     let repo = Repo::from_current_dir()?;
     let mut config = repo.get_config().wrap_err_with(|| "Getting repo config")?;
-    unset_configs(&mut config)?;
-    uninstall_hooks(&repo)?;
-    uninstall_aliases(&mut config)?;
+    unset_configs(output, &mut config)?;
+    uninstall_hooks(output, &repo)?;
+    uninstall_aliases(output, &mut config)?;
     Ok(())
 }
 

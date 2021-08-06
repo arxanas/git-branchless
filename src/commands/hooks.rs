@@ -9,6 +9,7 @@
 
 use std::convert::TryInto;
 use std::ffi::OsString;
+use std::fmt::Write;
 use std::io::{stdin, BufRead, Cursor};
 use std::time::SystemTime;
 
@@ -26,12 +27,14 @@ pub use crate::core::rewrite::hooks::{
     hook_drop_commit_if_empty, hook_post_rewrite, hook_register_extra_post_rewrite_hook,
     hook_skip_upstream_applied_commit,
 };
+use crate::tui::Output;
 
 /// Handle Git's `post-checkout` hook.
 ///
 /// See the man-page for `githooks(5)`.
 #[instrument]
 pub fn hook_post_checkout(
+    output: &mut Output,
     previous_head_oid: &str,
     current_head_oid: &str,
     is_branch_checkout: isize,
@@ -42,7 +45,7 @@ pub fn hook_post_checkout(
 
     let now = SystemTime::now();
     let timestamp = now.duration_since(SystemTime::UNIX_EPOCH)?;
-    println!("branchless: processing checkout");
+    writeln!(output, "branchless: processing checkout")?;
 
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
@@ -66,7 +69,7 @@ pub fn hook_post_checkout(
 ///
 /// See the man-page for `githooks(5)`.
 #[instrument]
-pub fn hook_post_commit() -> eyre::Result<()> {
+pub fn hook_post_commit(output: &mut Output) -> eyre::Result<()> {
     let now = SystemTime::now();
     let glyphs = Glyphs::detect();
     let repo = Repo::from_current_dir()?;
@@ -101,10 +104,11 @@ pub fn hook_post_commit() -> eyre::Result<()> {
         event_tx_id,
         commit_oid: commit.get_oid(),
     }])?;
-    println!(
+    writeln!(
+        output,
         "branchless: processed commit: {}",
         printable_styled_string(&glyphs, commit.friendly_describe()?)?,
-    );
+    )?;
 
     Ok(())
 }
@@ -160,7 +164,10 @@ fn parse_reference_transaction_line(
 ///
 /// See the man-page for `githooks(5)`.
 #[instrument]
-pub fn hook_reference_transaction(transaction_state: &str) -> eyre::Result<()> {
+pub fn hook_reference_transaction(
+    output: &mut Output,
+    transaction_state: &str,
+) -> eyre::Result<()> {
     if transaction_state != "committed" {
         return Ok(());
     }
@@ -197,7 +204,8 @@ pub fn hook_reference_transaction(transaction_state: &str) -> eyre::Result<()> {
         singular: "update",
         plural: "updates",
     };
-    println!(
+    writeln!(
+        output,
         "branchless: processing {}: {}",
         num_reference_updates.to_string(),
         events
@@ -217,7 +225,7 @@ pub fn hook_reference_transaction(transaction_state: &str) -> eyre::Result<()> {
             .sorted()
             .collect::<Vec<_>>()
             .join(", ")
-    );
+    )?;
     event_log_db.add_events(events)?;
 
     Ok(())

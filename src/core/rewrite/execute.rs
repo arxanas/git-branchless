@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::ffi::{OsStr, OsString};
+use std::fmt::Write;
 use std::time::SystemTime;
 
 use eyre::Context;
@@ -7,8 +8,9 @@ use os_str_bytes::OsStrBytes;
 use tracing::warn;
 
 use crate::core::eventlog::EventTransactionId;
-use crate::core::formatting::{printable_styled_string, Glyphs};
+use crate::core::formatting::printable_styled_string;
 use crate::git::{GitRunInfo, MaybeZeroOid, NonZeroOid, Repo};
+use crate::tui::Output;
 
 use super::plan::RebasePlan;
 
@@ -122,16 +124,18 @@ pub fn move_branches<'a>(
 mod in_memory {
     use std::collections::HashMap;
     use std::ffi::OsString;
+    use std::fmt::Write;
 
     use eyre::Context;
     use indicatif::{ProgressBar, ProgressStyle};
     use tracing::{instrument, warn};
 
     use crate::commands::gc::mark_commit_reachable;
-    use crate::core::formatting::{printable_styled_string, Glyphs};
+    use crate::core::formatting::printable_styled_string;
     use crate::core::rewrite::move_branches;
     use crate::core::rewrite::plan::{RebaseCommand, RebasePlan};
     use crate::git::{GitRunInfo, MaybeZeroOid, NonZeroOid, Repo};
+    use crate::tui::Output;
 
     use super::ExecuteRebasePlanOptions;
 
@@ -156,7 +160,7 @@ mod in_memory {
 
     #[instrument]
     pub fn rebase_in_memory(
-        glyphs: &Glyphs,
+        output: &mut Output,
         repo: &Repo,
         rebase_plan: &RebasePlan,
         options: &ExecuteRebasePlanOptions,
@@ -245,8 +249,10 @@ mod in_memory {
                     };
                     i += 1;
 
-                    let commit_description =
-                        printable_styled_string(glyphs, commit_to_apply.friendly_describe()?)?;
+                    let commit_description = printable_styled_string(
+                        &output.get_glyphs(),
+                        commit_to_apply.friendly_describe()?,
+                    )?;
                     let commit_num = format!("[{}/{}]", i, num_picks);
                     let progress_template = format!("{} {{spinner}} {{wide_msg}}", commit_num);
                     let progress = ProgressBar::new_spinner();
@@ -331,7 +337,7 @@ mod in_memory {
                         }
                     };
                     let commit_description = printable_styled_string(
-                        glyphs,
+                        &output.get_glyphs(),
                         repo.friendly_describe_commit_from_oid(rebased_commit_oid)?,
                     )?;
                     if rebased_commit.is_empty() {
@@ -339,17 +345,22 @@ mod in_memory {
                         maybe_set_skipped_head_new_oid(*commit_oid, current_oid);
 
                         progress.finish_and_clear();
-                        println!(
+                        writeln!(
+                            output,
                             "[{}/{}] Skipped now-empty commit: {}",
                             i, num_picks, commit_description
-                        );
+                        )?;
                     } else {
                         rewritten_oids
                             .push((*commit_oid, MaybeZeroOid::NonZero(rebased_commit_oid)));
                         current_oid = rebased_commit_oid;
 
                         progress.finish_and_clear();
-                        println!("{} Committed as: {}", commit_num, commit_description);
+                        writeln!(
+                            output,
+                            "{} Committed as: {}",
+                            commit_num, commit_description
+                        )?;
                     }
                 }
 
@@ -371,11 +382,13 @@ mod in_memory {
 
                     progress.finish_and_clear();
                     let commit_description = commit.friendly_describe()?;
-                    let commit_description = printable_styled_string(glyphs, commit_description)?;
-                    println!(
+                    let commit_description =
+                        printable_styled_string(&output.get_glyphs(), commit_description)?;
+                    writeln!(
+                        output,
                         "{} Skipped commit (was already applied upstream): {}",
                         commit_num, commit_description
-                    );
+                    )?;
                 }
 
                 RebaseCommand::RegisterExtraPostRewriteHook
@@ -433,6 +446,7 @@ mod in_memory {
     }
 
     pub fn post_rebase_in_memory(
+        output: &mut Output,
         git_run_info: &GitRunInfo,
         repo: &Repo,
         rewritten_oids: &[(NonZeroOid, MaybeZeroOid)],
@@ -525,7 +539,7 @@ mod in_memory {
             }
         };
 
-        let result = git_run_info.run(Some(*event_tx_id), &["checkout", &head_target])?;
+        let result = git_run_info.run(output, Some(*event_tx_id), &["checkout", &head_target])?;
         if result != 0 {
             return Ok(result);
         }
@@ -535,12 +549,15 @@ mod in_memory {
 }
 
 mod on_disk {
+    use std::fmt::Write;
+
     use eyre::Context;
     use indicatif::ProgressBar;
     use tracing::instrument;
 
     use crate::core::rewrite::plan::RebasePlan;
     use crate::git::{GitRunInfo, MaybeZeroOid, Repo};
+    use crate::tui::Output;
 
     use super::ExecuteRebasePlanOptions;
 
@@ -556,6 +573,7 @@ mod on_disk {
     /// merge conflicts). The exit code is then propagated to the caller.
     #[instrument]
     pub fn rebase_on_disk(
+        output: &mut Output,
         git_run_info: &GitRunInfo,
         repo: &Repo,
         rebase_plan: &RebasePlan,
@@ -584,7 +602,7 @@ mod on_disk {
             }));
         }
 
-        if repo.has_changed_files(git_run_info)? {
+        if repo.has_changed_files(output, git_run_info)? {
             return Ok(Err(Error::ChangedFilesInRepository));
         }
 
@@ -710,8 +728,8 @@ mod on_disk {
         }
 
         progress.finish_and_clear();
-        println!("Calling Git for on-disk rebase...");
-        let exit_code = git_run_info.run(Some(*event_tx_id), &["rebase", "--continue"])?;
+        writeln!(output, "Calling Git for on-disk rebase...")?;
+        let exit_code = git_run_info.run(output, Some(*event_tx_id), &["rebase", "--continue"])?;
         Ok(Ok(exit_code))
     }
 }
@@ -740,7 +758,7 @@ pub struct ExecuteRebasePlanOptions {
 /// Execute the provided rebase plan. Returns the exit status (zero indicates
 /// success).
 pub fn execute_rebase_plan(
-    glyphs: &Glyphs,
+    output: &mut Output,
     git_run_info: &GitRunInfo,
     repo: &Repo,
     rebase_plan: &RebasePlan,
@@ -756,39 +774,47 @@ pub fn execute_rebase_plan(
 
     if !force_on_disk {
         use in_memory::*;
-        println!("Attempting rebase in-memory...");
-        match rebase_in_memory(glyphs, &repo, &rebase_plan, &options)? {
+        writeln!(output, "Attempting rebase in-memory...")?;
+        match rebase_in_memory(output, &repo, &rebase_plan, &options)? {
             RebaseInMemoryResult::Succeeded {
                 rewritten_oids,
                 new_head_oid,
             } => {
-                post_rebase_in_memory(git_run_info, repo, &rewritten_oids, new_head_oid, &options)?;
-                println!("In-memory rebase succeeded.");
+                post_rebase_in_memory(
+                    output,
+                    git_run_info,
+                    repo,
+                    &rewritten_oids,
+                    new_head_oid,
+                    &options,
+                )?;
+                writeln!(output, "In-memory rebase succeeded.")?;
                 return Ok(0);
             }
             RebaseInMemoryResult::CannotRebaseMergeCommit { commit_oid } => {
-                println!(
+                writeln!(output,
                     "Merge commits currently can't be rebased with `git move`. The merge commit was: {}",
-                    printable_styled_string(glyphs, repo.friendly_describe_commit_from_oid(commit_oid)?)?,
-                );
+                    printable_styled_string(&output.get_glyphs(), repo.friendly_describe_commit_from_oid(commit_oid)?)?,
+                )?;
                 return Ok(1);
             }
             RebaseInMemoryResult::MergeConflict { commit_oid } => {
                 if *force_in_memory {
-                    println!(
+                    writeln!(
+                        output,
                         "Merge conflict. The conflicting commit was: {}",
                         printable_styled_string(
-                            glyphs,
+                            &output.get_glyphs(),
                             repo.friendly_describe_commit_from_oid(commit_oid)?,
                         )?,
-                    );
-                    println!("Aborting since an in-memory rebase was requested.");
+                    )?;
+                    writeln!(output, "Aborting since an in-memory rebase was requested.")?;
                     return Ok(1);
                 } else {
-                    println!(
+                    writeln!(output,
                         "Merge conflict, falling back to rebase on-disk. The conflicting commit was: {}",
-                        printable_styled_string(glyphs, repo.friendly_describe_commit_from_oid(commit_oid)?)?,
-                    );
+                        printable_styled_string(&output.get_glyphs(), repo.friendly_describe_commit_from_oid(commit_oid)?)?,
+                    )?;
                 }
             }
         }
@@ -796,24 +822,30 @@ pub fn execute_rebase_plan(
 
     if !force_in_memory {
         use on_disk::*;
-        match rebase_on_disk(git_run_info, repo, &rebase_plan, &options)? {
+        match rebase_on_disk(output, git_run_info, repo, &rebase_plan, &options)? {
             Ok(exit_code) => return Ok(exit_code),
             Err(Error::ChangedFilesInRepository) => {
-                print!(
+                write!(
+                    output,
                     "\
 This operation would modify the working copy, but you have uncommitted changes
 in your working copy which might be overwritten as a result.
 Commit your changes and then try again.
 "
-                );
+                )?;
                 return Ok(1);
             }
             Err(Error::OperationAlreadyInProgress { operation_type }) => {
-                println!("A {} operation is already in progress.", operation_type);
-                println!(
+                writeln!(
+                    output,
+                    "A {} operation is already in progress.",
+                    operation_type
+                )?;
+                writeln!(
+                    output,
                     "Run git {0} --continue or git {0} --abort to resolve it and proceed.",
                     operation_type
-                );
+                )?;
                 return Ok(1);
             }
         }

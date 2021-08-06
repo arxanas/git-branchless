@@ -30,6 +30,7 @@ use crate::core::config::get_main_branch_name;
 use crate::core::metadata::{render_commit_metadata, CommitMessageProvider, CommitOidProvider};
 use crate::git::config::Config;
 use crate::git::oid::{make_non_zero_oid, MaybeZeroOid, NonZeroOid};
+use crate::tui::Output;
 
 use super::GitRunInfo;
 
@@ -483,8 +484,13 @@ Either create it, or update the main branch setting by running:
     /// Check if the repository has staged or unstaged changes. Untracked files
     /// are not included. This operation may take a while.
     #[instrument]
-    pub fn has_changed_files(&self, git_run_info: &GitRunInfo) -> eyre::Result<bool> {
+    pub fn has_changed_files(
+        &self,
+        output: &mut Output,
+        git_run_info: &GitRunInfo,
+    ) -> eyre::Result<bool> {
         let exit_code = git_run_info.run(
+            output,
             // This is not a mutating operation, so we don't need a transaction ID.
             None,
             &["diff", "--quiet"],

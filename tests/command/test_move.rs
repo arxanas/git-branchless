@@ -784,16 +784,6 @@ fn test_rebase_in_memory_updates_committer_timestamp() -> eyre::Result<()> {
         .get_committer()
         .get_time();
 
-    println!(
-        "original_committer_timestamp: {:?} {:?}",
-        original_committer_timestamp.seconds(),
-        original_committer_timestamp.offset_minutes()
-    );
-    println!(
-        "updated_committer_timestamp: {:?} {:?}",
-        updated_committer_timestamp.seconds(),
-        updated_committer_timestamp.offset_minutes()
-    );
     assert!(original_committer_timestamp < updated_committer_timestamp);
 
     Ok(())

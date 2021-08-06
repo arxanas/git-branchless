@@ -456,7 +456,6 @@ mod tests {
             })?;
         assert!(path.is_none());
 
-        println!("Seen OIDs is {:?}", &seen_oids);
         assert!(seen_oids.contains(&test2_oid));
         assert!(!seen_oids.contains(&test3_oid));
         assert!(!seen_oids.contains(&test1_oid));

@@ -3,14 +3,13 @@
 //! Under the hood, this makes use of Git's advanced rebase functionality, which
 //! is also used to preserve merge commits using the `--rebase-merges` option.
 
-use std::io::stdout;
+use std::fmt::Write;
 use std::time::SystemTime;
 
 use tracing::instrument;
 
 use crate::core::config::get_restack_preserve_timestamps;
 use crate::core::eventlog::{EventLogDb, EventReplayer};
-use crate::core::formatting::Glyphs;
 use crate::core::graph::{
     make_graph, resolve_commits, BranchOids, CommitGraph, HeadOid, MainBranchOid,
     ResolveCommitsResult,
@@ -20,6 +19,7 @@ use crate::core::rewrite::{
     execute_rebase_plan, BuildRebasePlanOptions, ExecuteRebasePlanOptions, RebasePlanBuilder,
 };
 use crate::git::{GitRunInfo, NonZeroOid, Repo};
+use crate::tui::Output;
 
 #[instrument]
 fn resolve_base_commit(
@@ -47,6 +47,7 @@ fn resolve_base_commit(
 /// Move a subtree from one place to another.
 #[instrument]
 pub fn r#move(
+    output: &mut Output,
     git_run_info: &GitRunInfo,
     source: Option<String>,
     dest: Option<String>,
@@ -60,7 +61,10 @@ pub fn r#move(
     let head_oid = repo.get_head_info()?.oid;
     let (source, should_resolve_base_commit) = match (source, base) {
         (Some(_), Some(_)) => {
-            println!("The --source and --base options cannot both be provided.");
+            writeln!(
+                output,
+                "The --source and --base options cannot both be provided."
+            )?;
             return Ok(1);
         }
         (Some(source), None) => (source, false),
@@ -69,7 +73,7 @@ pub fn r#move(
             let source_oid = match head_oid {
                 Some(oid) => oid,
                 None => {
-                    println!("No --source or --base argument was provided, and no OID for HEAD is available as a default");
+                    writeln!(output, "No --source or --base argument was provided, and no OID for HEAD is available as a default")?;
                     return Ok(1);
                 }
             };
@@ -81,7 +85,7 @@ pub fn r#move(
         None => match head_oid {
             Some(oid) => oid.to_string(),
             None => {
-                println!("No --dest argument was provided, and no OID for HEAD is available as a default");
+                writeln!(output, "No --dest argument was provided, and no OID for HEAD is available as a default")?;
                 return Ok(1);
             }
         },
@@ -92,7 +96,7 @@ pub fn r#move(
             _ => eyre::bail!("Unexpected number of returns values from resolve_commits"),
         },
         ResolveCommitsResult::CommitNotFound { commit } => {
-            println!("Commit not found: {}", commit);
+            writeln!(output, "Commit not found: {}", commit)?;
             return Ok(1);
         }
     };
@@ -122,7 +126,6 @@ pub fn r#move(
         source_oid
     };
 
-    let glyphs = Glyphs::detect();
     let now = SystemTime::now();
     let event_tx_id = event_log_db.make_transaction_id(now, "move")?;
     let rebase_plan = {
@@ -133,14 +136,17 @@ pub fn r#move(
             &MainBranchOid(main_branch_oid),
         );
         builder.move_subtree(source_oid, dest_oid)?;
-        builder.build(&BuildRebasePlanOptions {
-            dump_rebase_constraints,
-            dump_rebase_plan,
-        })?
+        builder.build(
+            output,
+            &BuildRebasePlanOptions {
+                dump_rebase_constraints,
+                dump_rebase_plan,
+            },
+        )?
     };
     let result = match rebase_plan {
         Ok(None) => {
-            println!("Nothing to do.");
+            writeln!(output, "Nothing to do.")?;
             0
         }
         Ok(Some(rebase_plan)) => {
@@ -151,10 +157,10 @@ pub fn r#move(
                 force_in_memory,
                 force_on_disk,
             };
-            execute_rebase_plan(&glyphs, git_run_info, &repo, &rebase_plan, &options)?
+            execute_rebase_plan(output, git_run_info, &repo, &rebase_plan, &options)?
         }
         Err(err) => {
-            err.describe(&mut stdout(), &glyphs, &repo)?;
+            err.describe(output, &repo)?;
             1
         }
     };
