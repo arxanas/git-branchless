@@ -184,6 +184,7 @@ enum Opts {
 
 fn main() -> eyre::Result<()> {
     color_eyre::install()?;
+    install_tracing();
 
     let opts = Opts::from_args();
     let path_to_git = std::env::var_os("PATH_TO_GIT").unwrap_or_else(|| OsString::from("git"));
@@ -332,4 +333,23 @@ fn main() -> eyre::Result<()> {
 
     let exit_code: i32 = exit_code.try_into()?;
     std::process::exit(exit_code)
+}
+
+fn install_tracing() {
+    // From https://github.com/yaahc/color-eyre/blob/07b9f0351544e2b07fcd173dc1fc602a7fc8bb6b/examples/usage.rs
+    // Licensed under MIT.
+    use tracing_error::ErrorLayer;
+    use tracing_subscriber::prelude::*;
+    use tracing_subscriber::{fmt, EnvFilter};
+
+    let fmt_layer = fmt::layer().with_target(false);
+    let filter_layer = EnvFilter::try_from_default_env()
+        .or_else(|_| EnvFilter::try_new("info"))
+        .unwrap();
+
+    tracing_subscriber::registry()
+        .with(filter_layer)
+        .with(fmt_layer)
+        .with(ErrorLayer::default())
+        .init();
 }

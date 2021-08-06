@@ -14,6 +14,7 @@ use cursive::utils::markup::StyledString;
 use cursive::views::{Dialog, EditView, LinearLayout, OnEventView, ScrollView, TextView};
 use cursive::{Cursive, CursiveRunnable, CursiveRunner};
 use eyre::Context;
+use tracing::instrument;
 
 use crate::commands::smartlog::render_graph;
 use crate::core::eventlog::{Event, EventCursor, EventLogDb, EventReplayer, EventTransactionId};
@@ -307,6 +308,7 @@ fn describe_events_numbered(
     Ok(lines)
 }
 
+#[instrument(skip(siv))]
 fn select_past_event(
     mut siv: CursiveRunner<CursiveRunnable>,
     glyphs: &Glyphs,
@@ -612,6 +614,7 @@ fn optimize_inverse_events(events: Vec<Event>) -> Vec<Event> {
     optimized_events
 }
 
+#[instrument(skip(in_, out))]
 fn undo_events(
     in_: &mut impl Read,
     out: &mut impl Write,
@@ -780,6 +783,7 @@ fn undo_events(
 }
 
 /// Restore the repository to a previous state interactively.
+#[instrument]
 pub fn undo(git_run_info: &GitRunInfo) -> eyre::Result<isize> {
     let glyphs = Glyphs::detect();
     let repo = Repo::from_current_dir()?;

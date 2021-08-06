@@ -32,6 +32,8 @@ rusqlite = {version = "0.24.2", features = ["bundled"]}
 structopt = "0.3.21"
 tempfile = "3.2.0"
 tracing = "0.1.26"
+tracing-error = "0.1.2"
+tracing-subscriber = "0.2.19"
 
 [dev-dependencies]
 clippy = "0.0.302"
