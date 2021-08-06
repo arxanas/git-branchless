@@ -6,7 +6,7 @@ use std::path::PathBuf;
 use anyhow::Context;
 use console::style;
 use fn_error_context::context;
-use log::warn;
+use tracing::warn;
 
 use crate::core::config::get_core_hooks_path;
 use crate::git::{Config, ConfigValue, GitRunInfo, GitVersion, Repo};

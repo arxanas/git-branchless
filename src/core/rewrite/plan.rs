@@ -3,6 +3,7 @@ use std::io::Write;
 
 use fn_error_context::context;
 use itertools::Itertools;
+use tracing::warn;
 
 use crate::core::formatting::{printable_styled_string, Glyphs};
 use crate::core::graph::{find_path_to_merge_base, CommitGraph, MainBranchOid};
@@ -200,7 +201,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
         let acc = {
             let current_patch_id = match self.repo.find_commit(current_oid)? {
                 None => {
-                    log::warn!("Could not find commit: {:?}", current_oid);
+                    warn!(?current_oid, "Could not find commit");
                     None
                 }
                 Some(commit) => self.repo.get_patch_id(&commit)?,
