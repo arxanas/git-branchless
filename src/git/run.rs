@@ -2,9 +2,10 @@ use std::collections::HashMap;
 use std::convert::TryInto;
 use std::ffi::{OsStr, OsString};
 use std::fmt::Write;
-use std::io::{stderr, stdout, Write as WriteIo};
+use std::io::{stderr, stdout, BufRead, BufReader, Read, Write as WriteIo};
 use std::path::PathBuf;
 use std::process::{Command, ExitStatus, Stdio};
+use std::thread::{self, JoinHandle};
 
 use eyre::{eyre, Context};
 use os_str_bytes::OsStrBytes;
@@ -40,6 +41,27 @@ impl std::fmt::Debug for GitRunInfo {
 }
 
 impl GitRunInfo {
+    fn spawn_writer_thread<
+        InputStream: Read + Send + 'static,
+        OutputStream: Write + Send + 'static,
+    >(
+        &self,
+        stream: Option<InputStream>,
+        mut output: OutputStream,
+    ) -> JoinHandle<()> {
+        thread::spawn(move || {
+            let stream = match stream {
+                Some(stream) => stream,
+                None => return,
+            };
+            let reader = BufReader::new(stream);
+            for line in reader.lines() {
+                let line = line.expect("Reading line from subprocess");
+                writeln!(output, "{}", line).expect("Writing line from subprocess");
+            }
+        })
+    }
+
     /// Run Git in a subprocess, and inform the user.
     ///
     /// This is suitable for commands which affect the working copy or should run
@@ -82,15 +104,26 @@ impl GitRunInfo {
         if let Some(event_tx_id) = event_tx_id {
             command.env(BRANCHLESS_TRANSACTION_ID_ENV_VAR, event_tx_id.to_string());
         }
+        command.stdout(Stdio::piped());
+        command.stderr(Stdio::piped());
+
         let mut child = command
             .spawn()
-            .wrap_err_with(|| format!("Spawning Git subrocess: {:?} {:?}", path_to_git, args))?;
+            .wrap_err_with(|| format!("Spawning Git subprocess: {:?} {:?}", path_to_git, args))?;
+
+        let stdout = child.stdout.take();
+        let stdout_thread = self.spawn_writer_thread(stdout, output.clone());
+        let stderr = child.stderr.take();
+        let stderr_thread = self.spawn_writer_thread(stderr, output.clone().into_error_stream());
+
         let exit_status = child.wait().wrap_err_with(|| {
             format!(
                 "Waiting for Git subprocess to complete: {:?} {:?}",
                 path_to_git, args
             )
         })?;
+        stdout_thread.join().unwrap();
+        stderr_thread.join().unwrap();
 
         // On Unix, if the child process was terminated by a signal, we need to call
         // some Unix-specific functions to access the signal that terminated it. For
