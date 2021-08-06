@@ -115,12 +115,7 @@ pub enum BuildRebasePlanError {
 
 impl BuildRebasePlanError {
     /// Write the error message to `out`.
-    pub fn describe(
-        &self,
-        out: &mut impl Write,
-        glyphs: &Glyphs,
-        repo: &Repo,
-    ) -> eyre::Result<()> {
+    pub fn describe(&self, out: &mut impl Write, glyphs: &Glyphs, repo: &Repo) -> eyre::Result<()> {
         match self {
             BuildRebasePlanError::ConstraintCycle { cycle_oids } => {
                 writeln!(
@@ -290,7 +285,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
         current_oid: NonZeroOid,
     ) -> eyre::Result<()> {
         // FIXME: O(n^2) algorithm.
-        for (child_oid, node) in self.graph {
+        for (child_oid, node) in self.graph.iter() {
             if node.commit.get_parent_oids().contains(&current_oid) {
                 acc.push(Constraint {
                     parent_oid: current_oid,

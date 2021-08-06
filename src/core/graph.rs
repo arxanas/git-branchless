@@ -3,6 +3,8 @@
 //! This is the basic data structure that most of branchless operates on.
 
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::fmt::Debug;
+use std::ops::Deref;
 
 use tracing::{instrument, warn};
 
@@ -77,7 +79,24 @@ pub struct Node<'repo> {
 }
 
 /// Graph of commits that the user is working on.
-pub type CommitGraph<'repo> = HashMap<NonZeroOid, Node<'repo>>;
+#[derive(Default)]
+pub struct CommitGraph<'repo> {
+    nodes: HashMap<NonZeroOid, Node<'repo>>,
+}
+
+impl std::fmt::Debug for CommitGraph<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<CommitGraph len={}>", self.nodes.len())
+    }
+}
+
+impl<'repo> Deref for CommitGraph<'repo> {
+    type Target = HashMap<NonZeroOid, Node<'repo>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.nodes
+    }
+}
 
 fn find_path_to_merge_base_internal<'repo>(
     repo: &'repo Repo,
@@ -160,7 +179,7 @@ fn walk_from_commits<'repo>(
     main_branch_oid: &MainBranchOid,
     commit_oids: &CommitOids,
 ) -> eyre::Result<CommitGraph<'repo>> {
-    let mut graph: CommitGraph = Default::default();
+    let mut graph: HashMap<NonZeroOid, Node> = Default::default();
 
     for commit_oid in &commit_oids.0 {
         let commit = repo.find_commit(*commit_oid)?;
@@ -258,7 +277,7 @@ fn walk_from_commits<'repo>(
         graph.get_mut(parent_oid).unwrap().children.push(*child_oid);
     }
 
-    Ok(graph)
+    Ok(CommitGraph { nodes: graph })
 }
 
 /// Sort children nodes of the commit graph in a standard order, for determinism
@@ -268,7 +287,7 @@ fn sort_children(graph: &mut CommitGraph) {
         .iter()
         .map(|(oid, node)| (*oid, node.commit.get_time()))
         .collect();
-    for node in graph.values_mut() {
+    for node in graph.nodes.values_mut() {
         node.children
             .sort_by_key(|child_oid| (commit_times[child_oid], child_oid.to_string()));
     }
@@ -337,10 +356,10 @@ fn do_remove_commits(graph: &mut CommitGraph, head_oid: &HeadOid, branch_oids: &
     // appropriate.
     for oid in all_oids_to_hide {
         let parent_oid = graph[&oid].parent;
-        graph.remove(&oid);
+        graph.nodes.remove(&oid);
         match parent_oid {
             Some(parent_oid) if graph.contains_key(&parent_oid) => {
-                let children = &mut graph.get_mut(&parent_oid).unwrap().children;
+                let children = &mut graph.nodes.get_mut(&parent_oid).unwrap().children;
                 *children = children
                     .iter()
                     .filter_map(|child_oid| {
