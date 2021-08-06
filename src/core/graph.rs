@@ -5,7 +5,7 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 
 use fn_error_context::context;
-use log::warn;
+use tracing::warn;
 
 use crate::core::eventlog::{CommitVisibility, Event, EventCursor, EventReplayer};
 use crate::core::mergebase::MergeBaseDb;
@@ -190,8 +190,8 @@ fn walk_from_commits<'repo>(
                 match path_to_merge_base {
                     None => {
                         warn!(
-                            "No path to merge-base for commit {}",
-                            current_commit.get_oid()
+                            current_commit_oid = ?current_commit.get_oid(),
+                            "No path to merge-base for commit",
                         );
                         continue;
                     }
@@ -237,7 +237,7 @@ fn walk_from_commits<'repo>(
 
         if let Some(merge_base_oid) = merge_base_oid {
             if !graph.contains_key(&merge_base_oid) {
-                warn!("Could not find merge base OID {}", merge_base_oid);
+                warn!(?merge_base_oid, "Could not find merge base OID");
             }
         }
     }

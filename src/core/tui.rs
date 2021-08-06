@@ -32,12 +32,7 @@ pub(crate) fn with_siv<T, F: FnOnce(CursiveRunner<CursiveRunnable>) -> anyhow::R
             (PaletteColor::Primary, Color::TerminalDefault),
         ]);
     });
-    let old_max_level = log::max_level();
-    log::set_max_level(log::LevelFilter::Off);
-    let result = f(siv.into_runner());
-    log::set_max_level(old_max_level);
-    let result = result?;
-    Ok(result)
+    f(siv.into_runner())
 }
 
 /// Type-safe "singleton" view: a kind of view which is addressed by name, for

@@ -4,6 +4,7 @@ use std::time::SystemTime;
 
 use anyhow::Context;
 use os_str_bytes::OsStrBytes;
+use tracing::warn;
 
 use crate::core::eventlog::EventTransactionId;
 use crate::core::formatting::{printable_styled_string, Glyphs};
@@ -76,7 +77,7 @@ pub fn move_branches<'a>(
                             }
                         }
                         Ok(None) => {
-                            log::warn!("Reference not found, not deleting: {:?}", name)
+                            warn!(?name, "Reference not found, not deleting")
                         }
                         Err(err) => {
                             branch_move_err = Some(err);
@@ -125,6 +126,7 @@ mod in_memory {
     use anyhow::Context;
     use fn_error_context::context;
     use indicatif::{ProgressBar, ProgressStyle};
+    use tracing::warn;
 
     use crate::commands::gc::mark_commit_reachable;
     use crate::core::formatting::{printable_styled_string, Glyphs};
@@ -412,9 +414,9 @@ mod in_memory {
                         let new_head_oid = match skipped_head_new_oid {
                             Some(new_head_oid) => new_head_oid,
                             None => {
-                                log::warn!(
-                                    "`HEAD` OID {:?} was rewritten to 0, but no skipped `HEAD` OID was set",
-                                    head_oid
+                                warn!(
+                                    ?head_oid,
+                                    "`HEAD` OID was rewritten to 0, but no skipped `HEAD` OID was set",
                                 );
                                 head_oid
                             }

@@ -26,13 +26,13 @@ git2 = {version = "0.13.17", default-features = false}
 indicatif = "0.16.2"
 itertools = "0.10.1"
 lazy_static = "1.4.0"
-log = "0.4.14"
 os_str_bytes = "3.1.0"
 regex = "1.4.4"
 rusqlite = {version = "0.24.2", features = ["bundled"]}
 simple_logger = "1.11.0"
 structopt = "0.3.21"
 tempfile = "3.2.0"
+tracing = "0.1.26"
 
 [dev-dependencies]
 clippy = "0.0.302"

@@ -16,6 +16,7 @@ use anyhow::Context;
 use fn_error_context::context;
 use itertools::Itertools;
 use os_str_bytes::OsStringBytes;
+use tracing::{error, warn};
 
 use crate::commands::gc::mark_commit_reachable;
 use crate::core::eventlog::{should_ignore_ref_updates, Event, EventLogDb, EventTransactionId};
@@ -76,7 +77,7 @@ pub fn hook_post_commit() -> anyhow::Result<()> {
         Some(commit_oid) => commit_oid,
         None => {
             // A strange situation, but technically possible.
-            log::warn!("`post-commit` hook called, but could not determine the OID of `HEAD`");
+            warn!("`post-commit` hook called, but could not determine the OID of `HEAD`");
             return Ok(());
         }
     };
@@ -180,7 +181,7 @@ pub fn hook_reference_transaction(transaction_state: &str) -> anyhow::Result<()>
             match parse_reference_transaction_line(line.as_slice(), now, event_tx_id) {
                 Ok(event) => event,
                 Err(err) => {
-                    log::error!("Could not parse reference-transaction-line: {:?}", err);
+                    error!(?err, "Could not parse reference-transaction-line");
                     None
                 }
             }

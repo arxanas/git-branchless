@@ -1,6 +1,6 @@
 //! Convenience commands to help the user move through a stack of commits.
 
-use log::warn;
+use tracing::warn;
 
 use crate::commands::smartlog::smartlog;
 use crate::core::eventlog::{EventLogDb, EventReplayer};

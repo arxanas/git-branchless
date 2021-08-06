@@ -24,6 +24,7 @@ use cursive::theme::BaseColor;
 use cursive::utils::markup::StyledString;
 use fn_error_context::context;
 use os_str_bytes::{OsStrBytes, OsStringBytes};
+use tracing::warn;
 
 use crate::core::config::get_main_branch_name;
 use crate::core::metadata::{render_commit_metadata, CommitMessageProvider, CommitOidProvider};
@@ -218,7 +219,7 @@ impl Repo {
                 .set_head_detached(oid.inner)
                 .map_err(wrap_git_error),
             None => {
-                log::warn!("Attempted to detach `HEAD` while `HEAD` is unborn");
+                warn!("Attempted to detach `HEAD` while `HEAD` is unborn");
                 Ok(())
             }
         }
@@ -295,9 +296,9 @@ Either create it, or update the main branch setting by running:
             let reference = branch.into_reference();
             let reference_name = match reference.name() {
                 None => {
-                    log::warn!(
-                        "Could not decode branch name, skipping: {:?}",
-                        reference.name_bytes()
+                    warn!(
+                        reference_name = ?reference.name_bytes(),
+                        "Could not decode branch name, skipping"
                     );
                     continue;
                 }

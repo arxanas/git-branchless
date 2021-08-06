@@ -60,6 +60,7 @@ use std::io::stdout;
 use std::time::SystemTime;
 
 use fn_error_context::context;
+use tracing::warn;
 
 use crate::commands::smartlog::smartlog;
 use crate::core::config::get_restack_preserve_timestamps;
@@ -183,9 +184,9 @@ fn restack_branches(
         let branch_target = match branch.get_oid()? {
             Some(branch_target) => branch_target,
             None => {
-                log::warn!(
-                    "Branch {:?} was not a direct reference, could not resolve target",
-                    branch.into_reference().get_name()
+                warn!(
+                    branch_name = ?branch.into_reference().get_name(),
+                    "Branch was not a direct reference, could not resolve target"
                 );
                 continue;
             }
