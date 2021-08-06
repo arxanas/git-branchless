@@ -65,6 +65,7 @@ pub fn hook_post_checkout(
 /// Handle Git's `post-commit` hook.
 ///
 /// See the man-page for `githooks(5)`.
+#[instrument]
 pub fn hook_post_commit() -> eyre::Result<()> {
     let now = SystemTime::now();
     let glyphs = Glyphs::detect();
@@ -108,6 +109,7 @@ pub fn hook_post_commit() -> eyre::Result<()> {
     Ok(())
 }
 
+#[instrument]
 fn parse_reference_transaction_line(
     line: &[u8],
     now: SystemTime,

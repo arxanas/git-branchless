@@ -1,6 +1,6 @@
 //! Convenience commands to help the user move through a stack of commits.
 
-use tracing::warn;
+use tracing::{instrument, warn};
 
 use crate::commands::smartlog::smartlog;
 use crate::core::eventlog::{EventLogDb, EventReplayer};
@@ -12,6 +12,7 @@ use crate::core::mergebase::MergeBaseDb;
 use crate::git::{GitRunInfo, NonZeroOid, Repo};
 
 /// Go back a certain number of commits.
+#[instrument]
 pub fn prev(git_run_info: &GitRunInfo, num_commits: Option<isize>) -> eyre::Result<isize> {
     let exit_code = match num_commits {
         None => git_run_info.run(None, &["checkout", "HEAD^"])?,
@@ -38,6 +39,7 @@ pub enum Towards {
     Oldest,
 }
 
+#[instrument]
 fn advance_towards_main_branch(
     repo: &Repo,
     merge_base_db: &MergeBaseDb,
@@ -66,6 +68,7 @@ fn advance_towards_main_branch(
     Ok((0, current_oid))
 }
 
+#[instrument]
 fn advance_towards_own_commit(
     glyphs: &Glyphs,
     repo: &Repo,
@@ -120,6 +123,7 @@ fn advance_towards_own_commit(
 }
 
 /// Go forward a certain number of commits.
+#[instrument]
 pub fn next(
     git_run_info: &GitRunInfo,
     num_commits: Option<isize>,

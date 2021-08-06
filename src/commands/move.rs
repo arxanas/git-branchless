@@ -6,6 +6,8 @@
 use std::io::stdout;
 use std::time::SystemTime;
 
+use tracing::instrument;
+
 use crate::core::config::get_restack_preserve_timestamps;
 use crate::core::eventlog::{EventLogDb, EventReplayer};
 use crate::core::formatting::Glyphs;
@@ -19,6 +21,7 @@ use crate::core::rewrite::{
 };
 use crate::git::{GitRunInfo, NonZeroOid, Repo};
 
+#[instrument]
 fn resolve_base_commit(
     graph: &CommitGraph,
     merge_base_oid: Option<NonZeroOid>,
@@ -42,6 +45,7 @@ fn resolve_base_commit(
 }
 
 /// Move a subtree from one place to another.
+#[instrument]
 pub fn r#move(
     git_run_info: &GitRunInfo,
     source: Option<String>,

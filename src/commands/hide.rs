@@ -4,6 +4,8 @@
 use std::collections::HashSet;
 use std::time::SystemTime;
 
+use tracing::instrument;
+
 use crate::core::eventlog::{CommitVisibility, Event};
 use crate::core::eventlog::{EventLogDb, EventReplayer};
 use crate::core::formatting::{printable_styled_string, Glyphs};
@@ -83,6 +85,7 @@ fn recurse_on_commits<'repo, F: Fn(&Node) -> bool>(
 ///   commits as well.
 ///
 /// Returns: exit code (0 denotes successful exit).
+#[instrument]
 pub fn hide(hashes: Vec<String>, recursive: bool) -> eyre::Result<isize> {
     let now = SystemTime::now();
     let glyphs = Glyphs::detect();
@@ -153,6 +156,7 @@ pub fn hide(hashes: Vec<String>, recursive: bool) -> eyre::Result<isize> {
 ///   commits as well.
 ///
 /// Returns: exit code (0 denotes successful exit).
+#[instrument]
 pub fn unhide(hashes: Vec<String>, recursive: bool) -> eyre::Result<isize> {
     let now = SystemTime::now();
     let glyphs = Glyphs::detect();

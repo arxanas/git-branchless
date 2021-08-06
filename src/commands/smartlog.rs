@@ -242,6 +242,7 @@ fn get_output(
 }
 
 /// Render the smartlog graph and write it to the provided stream.
+#[instrument(skip(commit_metadata_providers))]
 pub fn render_graph(
     glyphs: &Glyphs,
     repo: &Repo,
@@ -262,6 +263,7 @@ pub fn render_graph(
 }
 
 /// Display a nice graph of commits you've recently worked on.
+#[instrument]
 pub fn smartlog() -> eyre::Result<()> {
     let glyphs = Glyphs::detect();
     let repo = Repo::from_current_dir()?;
