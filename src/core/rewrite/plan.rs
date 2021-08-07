@@ -192,6 +192,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
 
     fn make_rebase_plan_for_current_commit(
         &mut self,
+        output: &Output,
         current_oid: NonZeroOid,
         upstream_patch_ids: &HashSet<PatchId>,
         mut acc: Vec<RebaseCommand>,
@@ -202,7 +203,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
                     warn!(?current_oid, "Could not find commit");
                     None
                 }
-                Some(commit) => self.repo.get_patch_id(&commit)?,
+                Some(commit) => self.repo.get_patch_id(output, &commit)?,
             };
             let patch_already_applied_upstream = match current_patch_id {
                 Some(current_patch_id) => upstream_patch_ids.contains(&current_patch_id),
@@ -238,6 +239,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
             [] => Ok(acc),
             [only_child_oid] => {
                 let acc = self.make_rebase_plan_for_current_commit(
+                    output,
                     *only_child_oid,
                     upstream_patch_ids,
                     acc,
@@ -253,6 +255,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
                 });
                 for child_oid in children {
                     acc = self.make_rebase_plan_for_current_commit(
+                        output,
                         *child_oid,
                         upstream_patch_ids,
                         acc,
@@ -544,7 +547,12 @@ impl<'repo> RebasePlanBuilder<'repo> {
                 let mut output = output.clone();
                 self.get_upstream_patch_ids(&mut output, child_oid, parent_oid)?
             };
-            acc = self.make_rebase_plan_for_current_commit(child_oid, &upstream_patch_ids, acc)?;
+            acc = self.make_rebase_plan_for_current_commit(
+                output,
+                child_oid,
+                &upstream_patch_ids,
+                acc,
+            )?;
         }
 
         let rebase_plan = first_dest_oid.map(|first_dest_oid| RebasePlan {
@@ -590,7 +598,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
         progress.notify_progress(0, path.len());
         let mut result = HashSet::new();
         for (i, commit) in path.iter().enumerate() {
-            if let Some(patch_id) = self.repo.get_patch_id(commit)? {
+            if let Some(patch_id) = self.repo.get_patch_id(output, commit)? {
                 result.insert(patch_id);
             }
             progress.notify_progress(i, path.len());
