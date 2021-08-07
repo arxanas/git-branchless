@@ -30,7 +30,7 @@ use crate::core::config::get_main_branch_name;
 use crate::core::metadata::{render_commit_metadata, CommitMessageProvider, CommitOidProvider};
 use crate::git::config::Config;
 use crate::git::oid::{make_non_zero_oid, MaybeZeroOid, NonZeroOid};
-use crate::tui::Output;
+use crate::tui::{OperationType, Output};
 
 use super::GitRunInfo;
 
@@ -427,27 +427,36 @@ Either create it, or update the main branch setting by running:
     }
 
     /// Get the patch ID for this commit.
-    pub fn get_patch_id(&self, commit: &Commit) -> eyre::Result<Option<PatchId>> {
+    pub fn get_patch_id(&self, output: &Output, commit: &Commit) -> eyre::Result<Option<PatchId>> {
         match commit.get_only_parent() {
             None => Ok(None),
             Some(only_parent) => {
                 let parent_tree = only_parent.get_tree()?;
                 let current_tree = commit.get_tree()?;
-                let diff = self
-                    .inner
-                    .diff_tree_to_tree(Some(&parent_tree.inner), Some(&current_tree.inner), None)
-                    .wrap_err_with(|| {
+                let diff = {
+                    let _progress = output.start_operation(OperationType::CalculateDiff);
+                    self.inner
+                        .diff_tree_to_tree(
+                            Some(&parent_tree.inner),
+                            Some(&current_tree.inner),
+                            None,
+                        )
+                        .wrap_err_with(|| {
+                            format!(
+                                "Calculating diff between: {:?} and {:?}",
+                                commit, only_parent
+                            )
+                        })?
+                };
+                let patch_id = {
+                    let _progress = output.start_operation(OperationType::CalculatePatchId);
+                    diff.patchid(None).wrap_err_with(|| {
                         format!(
-                            "Calculating diff between: {:?} and {:?}",
+                            "Computing patch ID between: {:?} and {:?}",
                             commit, only_parent
                         )
-                    })?;
-                let patch_id = diff.patchid(None).wrap_err_with(|| {
-                    format!(
-                        "Computing patch ID between: {:?} and {:?}",
-                        commit, only_parent
-                    )
-                })?;
+                    })?
+                };
                 Ok(Some(PatchId { patch_id }))
             }
         }

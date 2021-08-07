@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
+use indicatif::{MultiProgress, ProgressBar, ProgressDrawTarget, ProgressStyle};
 use lazy_static::lazy_static;
 use tracing::warn;
 
@@ -17,6 +17,8 @@ use crate::core::formatting::Glyphs;
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum OperationType {
     BuildRebasePlan,
+    CalculateDiff,
+    CalculatePatchId,
     CheckForCycles,
     DetectDuplicateCommits,
     FindPathToMergeBase,
@@ -31,10 +33,12 @@ impl ToString for OperationType {
         let s = match self {
             OperationType::BuildRebasePlan => "Building rebase plan",
             OperationType::CheckForCycles => "Checking for cycles",
+            OperationType::CalculateDiff => "Computing diff",
+            OperationType::CalculatePatchId => "Hashing commit contents",
             OperationType::DetectDuplicateCommits => "Checking for duplicate commits",
             OperationType::FindPathToMergeBase => "Finding path to merge-base",
             OperationType::GetMergeBase => "Calculating merge-bases",
-            OperationType::GetUpstreamPatchIds => "Computing patch IDs",
+            OperationType::GetUpstreamPatchIds => "Enumerating patch IDs",
             OperationType::MakeGraph => "Examining local history",
             OperationType::WalkCommits => "Walking commits",
         };
@@ -121,10 +125,20 @@ impl std::fmt::Debug for Output {
 }
 
 fn spawn_progress_updater_thread(
+    multi_progress: &Arc<MultiProgress>,
     operation_states: &Arc<RwLock<HashMap<OperationType, OperationState>>>,
 ) {
+    multi_progress.set_draw_target(ProgressDrawTarget::hidden());
+    let multi_progress = Arc::downgrade(multi_progress);
     let operation_states = Arc::downgrade(operation_states);
     thread::spawn(move || {
+        // Don't start displaying progress immediately, since if the operation
+        // finishes quickly, then it will flicker annoyingly.
+        thread::sleep(Duration::from_millis(250));
+        if let Some(multi_progress) = multi_progress.upgrade() {
+            multi_progress.set_draw_target(ProgressDrawTarget::stderr());
+        }
+
         loop {
             // Drop the `Arc` after this block, before the sleep, to make sure
             // that progress bars aren't kept alive longer than they should be.
@@ -146,12 +160,13 @@ fn spawn_progress_updater_thread(
 impl Output {
     /// Constructor. Writes to stdout.
     pub fn new(glyphs: Glyphs) -> Self {
+        let multi_progress = Default::default();
         let operation_states = Default::default();
-        spawn_progress_updater_thread(&operation_states);
+        spawn_progress_updater_thread(&multi_progress, &operation_states);
         Output {
             glyphs: Arc::new(glyphs),
             dest: OutputDest::Stdout,
-            multi_progress: Default::default(),
+            multi_progress,
             nesting_level: Default::default(),
             operation_states,
         }
