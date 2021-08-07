@@ -264,7 +264,7 @@ pub fn restack(
     let result = restack_commits(
         output,
         &repo,
-        &git_run_info,
+        git_run_info,
         &merge_base_db,
         &event_log_db,
         commits,
@@ -278,7 +278,7 @@ pub fn restack(
     let result = restack_branches(
         output,
         &repo,
-        &git_run_info,
+        git_run_info,
         &merge_base_db,
         &event_log_db,
         &execute_options,

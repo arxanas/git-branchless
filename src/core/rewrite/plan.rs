@@ -539,7 +539,11 @@ impl<'repo> RebasePlanBuilder<'repo> {
                 commit_oid: parent_oid,
             });
 
-            let upstream_patch_ids = self.get_upstream_patch_ids(output, child_oid, parent_oid)?;
+            let upstream_patch_ids = {
+                let _progress = output.start_operation(OperationType::DetectDuplicateCommits);
+                let mut output = output.clone();
+                self.get_upstream_patch_ids(&mut output, child_oid, parent_oid)?
+            };
             acc = self.make_rebase_plan_for_current_commit(child_oid, &upstream_patch_ids, acc)?;
         }
 
@@ -560,8 +564,6 @@ impl<'repo> RebasePlanBuilder<'repo> {
         current_oid: NonZeroOid,
         dest_oid: NonZeroOid,
     ) -> eyre::Result<HashSet<PatchId>> {
-        let progress = output.start_operation(OperationType::GetUpstreamPatchIds);
-
         let merge_base_oid =
             self.merge_base_db
                 .get_merge_base_oid(output, self.repo, dest_oid, current_oid)?;
@@ -584,10 +586,11 @@ impl<'repo> RebasePlanBuilder<'repo> {
 
         // FIXME: we may recalculate common patch IDs many times, should be
         // cached.
+        let progress = output.start_operation(OperationType::GetUpstreamPatchIds);
         progress.notify_progress(0, path.len());
         let mut result = HashSet::new();
         for (i, commit) in path.iter().enumerate() {
-            if let Some(patch_id) = self.repo.get_patch_id(&commit)? {
+            if let Some(patch_id) = self.repo.get_patch_id(commit)? {
                 result.insert(patch_id);
             }
             progress.notify_progress(i, path.len());

@@ -18,6 +18,7 @@ use crate::core::formatting::Glyphs;
 pub enum OperationType {
     BuildRebasePlan,
     CheckForCycles,
+    DetectDuplicateCommits,
     FindPathToMergeBase,
     GetMergeBase,
     GetUpstreamPatchIds,
@@ -30,9 +31,10 @@ impl ToString for OperationType {
         let s = match self {
             OperationType::BuildRebasePlan => "Building rebase plan",
             OperationType::CheckForCycles => "Checking for cycles",
+            OperationType::DetectDuplicateCommits => "Checking for duplicate commits",
             OperationType::FindPathToMergeBase => "Finding path to merge-base",
             OperationType::GetMergeBase => "Calculating merge-bases",
-            OperationType::GetUpstreamPatchIds => "Checking for duplicate commits",
+            OperationType::GetUpstreamPatchIds => "Computing patch IDs",
             OperationType::MakeGraph => "Examining local history",
             OperationType::WalkCommits => "Walking commits",
         };

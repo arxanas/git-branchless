@@ -426,7 +426,7 @@ impl<'conn> EventLogDb<'conn> {
     /// Constructor.
     #[instrument]
     pub fn new(conn: &'conn rusqlite::Connection) -> eyre::Result<Self> {
-        init_tables(&conn)?;
+        init_tables(conn)?;
         Ok(EventLogDb { conn })
     }
 
@@ -714,7 +714,7 @@ impl EventReplayer {
     pub fn process_event(&mut self, event: &Event) {
         // Drop non-meaningful ref-update events.
         if let Event::RefUpdateEvent { ref_name, .. } = event {
-            if should_ignore_ref_updates(&ref_name) {
+            if should_ignore_ref_updates(ref_name) {
                 return;
             }
         }

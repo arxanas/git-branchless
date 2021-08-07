@@ -252,7 +252,7 @@ $",
         )
         .expect("Failed to compile DifferentialRevisionProvider regex");
     }
-    let captures = RE.captures(&message)?;
+    let captures = RE.captures(message)?;
     let diff_number = &captures["diff"];
     Some(diff_number.to_owned())
 }

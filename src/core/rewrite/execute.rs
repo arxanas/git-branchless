@@ -33,7 +33,7 @@ pub fn move_branches<'a>(
     let mut branch_moves: Vec<(NonZeroOid, MaybeZeroOid, &OsStr)> = Vec::new();
     let mut branch_move_err: Option<eyre::Error> = None;
     'outer: for (old_oid, names) in branch_oid_to_names.iter() {
-        let new_oid = match rewritten_oids_map.get(&old_oid) {
+        let new_oid = match rewritten_oids_map.get(old_oid) {
             Some(new_oid) => new_oid,
             None => continue,
         };
@@ -257,7 +257,7 @@ mod in_memory {
                     let progress_template = format!("{} {{spinner}} {{wide_msg}}", commit_num);
                     let progress = ProgressBar::new_spinner();
                     progress.set_style(
-                        ProgressStyle::default_spinner().template(&progress_template.trim()),
+                        ProgressStyle::default_spinner().template(progress_template.trim()),
                     );
                     progress.set_message("Starting");
                     progress.enable_steady_tick(100);
@@ -370,7 +370,7 @@ mod in_memory {
                     let commit_num = format!("[{}/{}]", i, num_picks);
                     let progress_template = format!("{} {{spinner}} {{wide_msg}}", commit_num);
                     progress.set_style(
-                        ProgressStyle::default_spinner().template(&progress_template.trim()),
+                        ProgressStyle::default_spinner().template(progress_template.trim()),
                     );
                     let commit = match repo.find_commit(*commit_oid)? {
                         Some(commit) => commit,
@@ -775,7 +775,7 @@ pub fn execute_rebase_plan(
     if !force_on_disk {
         use in_memory::*;
         writeln!(output, "Attempting rebase in-memory...")?;
-        match rebase_in_memory(output, &repo, &rebase_plan, &options)? {
+        match rebase_in_memory(output, repo, rebase_plan, options)? {
             RebaseInMemoryResult::Succeeded {
                 rewritten_oids,
                 new_head_oid,
@@ -786,7 +786,7 @@ pub fn execute_rebase_plan(
                     repo,
                     &rewritten_oids,
                     new_head_oid,
-                    &options,
+                    options,
                 )?;
                 writeln!(output, "In-memory rebase succeeded.")?;
                 return Ok(0);
@@ -822,7 +822,7 @@ pub fn execute_rebase_plan(
 
     if !force_in_memory {
         use on_disk::*;
-        match rebase_on_disk(output, git_run_info, repo, &rebase_plan, &options)? {
+        match rebase_on_disk(output, git_run_info, repo, rebase_plan, options)? {
             Ok(exit_code) => return Ok(exit_code),
             Err(Error::ChangedFilesInRepository) => {
                 write!(

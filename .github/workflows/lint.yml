@@ -15,9 +15,7 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          # Clippy panics on 1.54.0, see
-          # https://github.com/rust-lang/rust-clippy/issues/7523
-          toolchain: 1.53.0
+          toolchain: stable
           components: rustfmt, clippy
       - name: Run `cargo fmt`
         uses: actions-rs/cargo@v1

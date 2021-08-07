@@ -53,7 +53,7 @@ impl<'conn> MergeBaseDb<'conn> {
     /// Constructor.
     #[instrument]
     pub fn new(conn: &'conn rusqlite::Connection) -> eyre::Result<Self> {
-        init_tables(&conn).wrap_err("Initializing tables")?;
+        init_tables(conn).wrap_err("Initializing tables")?;
         Ok(MergeBaseDb { conn })
     }
 

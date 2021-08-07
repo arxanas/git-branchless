@@ -199,7 +199,7 @@ impl Git {
             ("GIT_AUTHOR_DATE", &date),
             ("GIT_COMMITTER_DATE", &date),
             ("GIT_EDITOR", &git_editor),
-            ("PATH_TO_GIT", &self.path_to_git.as_os_str()),
+            ("PATH_TO_GIT", self.path_to_git.as_os_str()),
             ("PATH", &new_path),
         ];
 

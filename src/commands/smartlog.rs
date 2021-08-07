@@ -50,12 +50,12 @@ fn split_commit_graph_by_roots(
 
         let (lhs_commit, rhs_commit) = match (lhs_commit, rhs_commit) {
             (Ok(Some(lhs_commit)), Ok(Some(rhs_commit))) => (lhs_commit, rhs_commit),
-            _ => return lhs_oid.cmp(&rhs_oid),
+            _ => return lhs_oid.cmp(rhs_oid),
         };
 
         let merge_base_oid = merge_base_db.get_merge_base_oid(output, repo, *lhs_oid, *rhs_oid);
         let merge_base_oid = match merge_base_oid {
-            Err(_) => return lhs_oid.cmp(&rhs_oid),
+            Err(_) => return lhs_oid.cmp(rhs_oid),
             Ok(merge_base_oid) => merge_base_oid,
         };
 
@@ -69,7 +69,7 @@ fn split_commit_graph_by_roots(
             // and reasonable guess at the intended topological ordering.
             Some(_) | None => match lhs_commit.get_time().cmp(&rhs_commit.get_time()) {
                 result @ Ordering::Less | result @ Ordering::Greater => result,
-                Ordering::Equal => lhs_oid.cmp(&rhs_oid),
+                Ordering::Equal => lhs_oid.cmp(rhs_oid),
             },
         }
     };
