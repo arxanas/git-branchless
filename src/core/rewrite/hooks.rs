@@ -89,7 +89,7 @@ pub fn hook_post_rewrite(
         .exists()
     {
         move_branches(git_run_info, &repo, event_tx_id, &rewritten_oids)?;
-        check_out_new_head(output, &git_run_info, &repo, event_tx_id, &rewritten_oids)?;
+        check_out_new_head(output, git_run_info, &repo, event_tx_id, &rewritten_oids)?;
     }
 
     let should_check_abandoned_commits = get_restack_warn_abandoned(&repo)?;
@@ -134,7 +134,7 @@ fn check_out_new_head(
                     }
                     Some(MaybeZeroOid::Zero) => {
                         // The commit was skipped. Get the new location for `HEAD`.
-                        get_updated_head_oid(&repo)?.map(|oid| oid.to_string().into())
+                        get_updated_head_oid(repo)?.map(|oid| oid.to_string().into())
                     }
                     None => {
                         // This OID was not rewritten, so check it out again.
@@ -152,7 +152,7 @@ fn check_out_new_head(
                             // The branch was deleted because it pointed to
                             // a skipped commit. Get the new location for
                             // `HEAD`.
-                            get_updated_head_oid(&repo)?.map(|oid| oid.to_string().into())
+                            get_updated_head_oid(repo)?.map(|oid| oid.to_string().into())
                         }
                     }
                 }
@@ -194,8 +194,8 @@ fn warn_abandoned(
     let branch_oid_to_names = repo.get_branch_oid_to_names()?;
     let graph = make_graph(
         output,
-        &repo,
-        &merge_base_db,
+        repo,
+        merge_base_db,
         &event_replayer,
         event_cursor,
         &HeadOid(head_oid),

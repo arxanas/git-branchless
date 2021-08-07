@@ -150,7 +150,7 @@ impl Config {
 
     /// Get a config key of one of various possible types.
     pub fn get<V: GetConfigValue<V>, S: AsRef<str>>(&self, key: S) -> eyre::Result<Option<V>> {
-        V::get_from_config(&self, key)
+        V::get_from_config(self, key)
     }
 
     /// Same as `get`, but uses a default value if the config key doesn't exist.

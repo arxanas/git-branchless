@@ -36,7 +36,7 @@ fn recurse_on_commits_helper<
     };
 
     for child_oid in node.children.iter() {
-        let child_commit = &graph[&child_oid].commit;
+        let child_commit = &graph[child_oid].commit;
         recurse_on_commits_helper(graph, condition, child_commit, callback)
     }
 }

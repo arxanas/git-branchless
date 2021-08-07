@@ -59,10 +59,10 @@ fn render_cursor_smartlog(
         &HeadOid(head_oid),
         &mut [
             &mut CommitOidProvider::new(true)?,
-            &mut RelativeTimeProvider::new(&repo, SystemTime::now())?,
-            &mut HiddenExplanationProvider::new(&graph, &event_replayer, event_cursor)?,
-            &mut BranchesProvider::new(&repo, &branch_oid_to_names)?,
-            &mut DifferentialRevisionProvider::new(&repo)?,
+            &mut RelativeTimeProvider::new(repo, SystemTime::now())?,
+            &mut HiddenExplanationProvider::new(&graph, event_replayer, event_cursor)?,
+            &mut BranchesProvider::new(repo, &branch_oid_to_names)?,
+            &mut DifferentialRevisionProvider::new(repo)?,
             &mut CommitMessageProvider::new()?,
         ],
     )?;
@@ -293,7 +293,7 @@ fn describe_events_numbered(
     let mut lines = Vec::new();
     for (i, event) in (1..).zip(events) {
         let num_header = format!("{}. ", i);
-        for (j, event_line) in (0..).zip(describe_event(&repo, &event)?) {
+        for (j, event_line) in (0..).zip(describe_event(repo, event)?) {
             let prefix = if j == 0 {
                 num_header.clone()
             } else {
@@ -381,13 +381,8 @@ fn select_past_event(
                       event_replayer: &mut EventReplayer,
                       event_cursor: EventCursor|
          -> eyre::Result<()> {
-            let smartlog = render_cursor_smartlog(
-                output,
-                &repo,
-                &merge_base_db,
-                &event_replayer,
-                event_cursor,
-            )?;
+            let smartlog =
+                render_cursor_smartlog(output, repo, merge_base_db, event_replayer, event_cursor)?;
             SmartlogView::find(siv)
                 .get_inner_mut()
                 .set_content(StyledStringBuilder::from_lines(smartlog));
@@ -399,7 +394,7 @@ fn select_past_event(
                 )],
                 Some((event_id, events)) => {
                     let event_description = {
-                        let lines = describe_events_numbered(repo, &events)?;
+                        let lines = describe_events_numbered(repo, events)?;
                         StyledStringBuilder::from_lines(lines)
                     };
                     let relative_time_provider = RelativeTimeProvider::new(repo, now)?;
@@ -664,7 +659,7 @@ fn undo_events(
     }
 
     writeln!(output, "Will apply these actions:")?;
-    let events = describe_events_numbered(&repo, &inverse_events)?;
+    let events = describe_events_numbered(repo, &inverse_events)?;
     for line in events {
         writeln!(
             output,
@@ -810,7 +805,7 @@ pub fn undo(output: &mut Output, git_run_info: &GitRunInfo) -> eyre::Result<isiz
         &mut stdin(),
         output,
         &repo,
-        &git_run_info,
+        git_run_info,
         &mut event_log_db,
         &event_replayer,
         event_cursor,

@@ -74,7 +74,7 @@ impl HeadInfo {
             .as_ref()
             .map(|name| match name.strip_prefix("refs/heads/") {
                 Some(branch_name) => branch_name,
-                None => &name,
+                None => name,
             })
     }
 }
