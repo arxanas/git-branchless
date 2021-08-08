@@ -29,7 +29,7 @@ use super::{find_abandoned_children, move_branches};
 /// See the man-page for `githooks(5)`.
 #[instrument]
 pub fn hook_post_rewrite(
-    output: &mut Output,
+    output: &Output,
     git_run_info: &GitRunInfo,
     rewrite_type: &str,
 ) -> eyre::Result<()> {
@@ -75,7 +75,7 @@ pub fn hook_post_rewrite(
         }
         .to_string();
         writeln!(
-            output,
+            output.get_output_stream(),
             "branchless: processing {}",
             message_rewritten_commits
         )?;
@@ -109,7 +109,7 @@ pub fn hook_post_rewrite(
 
 #[instrument]
 fn check_out_new_head(
-    output: &mut Output,
+    output: &Output,
     git_run_info: &GitRunInfo,
     repo: &Repo,
     event_tx_id: EventTransactionId,
@@ -178,7 +178,7 @@ fn check_out_new_head(
 
 #[instrument(skip(old_commit_oids))]
 fn warn_abandoned(
-    output: &mut Output,
+    output: &Output,
     repo: &Repo,
     merge_base_db: &MergeBaseDb,
     event_log_db: &EventLogDb,
@@ -359,10 +359,7 @@ pub fn hook_register_extra_post_rewrite_hook() -> eyre::Result<()> {
 /// For rebases, detect empty commits (which have probably been applied
 /// upstream) and write them to the `rewritten-list` file, so that they're later
 /// passed to the `post-rewrite` hook.
-pub fn hook_drop_commit_if_empty(
-    output: &mut Output,
-    old_commit_oid: NonZeroOid,
-) -> eyre::Result<()> {
+pub fn hook_drop_commit_if_empty(output: &Output, old_commit_oid: NonZeroOid) -> eyre::Result<()> {
     let repo = Repo::from_current_dir()?;
     let head_info = repo.get_head_info()?;
     let head_oid = match head_info.oid {
@@ -383,9 +380,9 @@ pub fn hook_drop_commit_if_empty(
         None => return Ok(()),
     };
     writeln!(
-        output,
+        output.get_output_stream(),
         "Skipped now-empty commit: {}",
-        printable_styled_string(&output.get_glyphs(), head_commit.friendly_describe()?)?
+        printable_styled_string(output.get_glyphs(), head_commit.friendly_describe()?)?
     )?;
     repo.set_head(only_parent_oid)?;
 
@@ -407,7 +404,7 @@ pub fn hook_drop_commit_if_empty(
 /// For rebases, if a commit is known to have been applied upstream, skip it
 /// without attempting to apply it.
 pub fn hook_skip_upstream_applied_commit(
-    output: &mut Output,
+    output: &Output,
     commit_oid: NonZeroOid,
 ) -> eyre::Result<()> {
     let repo = Repo::from_current_dir()?;
@@ -416,9 +413,9 @@ pub fn hook_skip_upstream_applied_commit(
         None => eyre::bail!("Could not find commit: {:?}", commit_oid),
     };
     writeln!(
-        output,
+        output.get_output_stream(),
         "Skipping commit (was already applied upstream): {}",
-        printable_styled_string(&output.get_glyphs(), commit.friendly_describe()?)?
+        printable_styled_string(output.get_glyphs(), commit.friendly_describe()?)?
     )?;
 
     let original_head_oid = get_original_head_oid(&repo)?;

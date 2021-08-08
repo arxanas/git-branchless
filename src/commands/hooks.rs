@@ -34,7 +34,7 @@ use crate::tui::Output;
 /// See the man-page for `githooks(5)`.
 #[instrument]
 pub fn hook_post_checkout(
-    output: &mut Output,
+    output: &Output,
     previous_head_oid: &str,
     current_head_oid: &str,
     is_branch_checkout: isize,
@@ -45,7 +45,10 @@ pub fn hook_post_checkout(
 
     let now = SystemTime::now();
     let timestamp = now.duration_since(SystemTime::UNIX_EPOCH)?;
-    writeln!(output, "branchless: processing checkout")?;
+    writeln!(
+        output.get_output_stream(),
+        "branchless: processing checkout"
+    )?;
 
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
@@ -69,7 +72,7 @@ pub fn hook_post_checkout(
 ///
 /// See the man-page for `githooks(5)`.
 #[instrument]
-pub fn hook_post_commit(output: &mut Output) -> eyre::Result<()> {
+pub fn hook_post_commit(output: &Output) -> eyre::Result<()> {
     let now = SystemTime::now();
     let glyphs = Glyphs::detect();
     let repo = Repo::from_current_dir()?;
@@ -105,7 +108,7 @@ pub fn hook_post_commit(output: &mut Output) -> eyre::Result<()> {
         commit_oid: commit.get_oid(),
     }])?;
     writeln!(
-        output,
+        output.get_output_stream(),
         "branchless: processed commit: {}",
         printable_styled_string(&glyphs, commit.friendly_describe()?)?,
     )?;
@@ -164,10 +167,7 @@ fn parse_reference_transaction_line(
 ///
 /// See the man-page for `githooks(5)`.
 #[instrument]
-pub fn hook_reference_transaction(
-    output: &mut Output,
-    transaction_state: &str,
-) -> eyre::Result<()> {
+pub fn hook_reference_transaction(output: &Output, transaction_state: &str) -> eyre::Result<()> {
     if transaction_state != "committed" {
         return Ok(());
     }
@@ -205,7 +205,7 @@ pub fn hook_reference_transaction(
         plural: "updates",
     };
     writeln!(
-        output,
+        output.get_output_stream(),
         "branchless: processing {}: {}",
         num_reference_updates.to_string(),
         events

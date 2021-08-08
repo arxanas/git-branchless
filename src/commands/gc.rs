@@ -71,7 +71,7 @@ pub fn mark_commit_reachable(repo: &Repo, commit_oid: NonZeroOid) -> eyre::Resul
 ///
 /// Frees any references to commits which are no longer visible in the smartlog.
 #[instrument]
-pub fn gc(output: &mut Output) -> eyre::Result<()> {
+pub fn gc(output: &Output) -> eyre::Result<()> {
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
     let merge_base_db = MergeBaseDb::new(&conn)?;
@@ -93,7 +93,7 @@ pub fn gc(output: &mut Output) -> eyre::Result<()> {
         true,
     )?;
 
-    writeln!(output, "branchless: collecting garbage")?;
+    writeln!(output.get_output_stream(), "branchless: collecting garbage")?;
     let dangling_references = find_dangling_references(&repo, &graph)?;
     for mut reference in dangling_references.into_iter() {
         reference

@@ -71,7 +71,7 @@ fn run_undo_events(git: &Git, event_cursor: EventCursor) -> eyre::Result<String>
 
     let result = undo_events(
         &mut in_,
-        &mut Output::new_from_buffer_for_test(glyphs, &out),
+        &Output::new_from_buffer_for_test(glyphs, &out),
         &repo,
         &git_run_info,
         &mut event_log_db,

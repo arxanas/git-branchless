@@ -47,7 +47,7 @@ fn resolve_base_commit(
 /// Move a subtree from one place to another.
 #[instrument]
 pub fn r#move(
-    output: &mut Output,
+    output: &Output,
     git_run_info: &GitRunInfo,
     source: Option<String>,
     dest: Option<String>,
@@ -62,7 +62,7 @@ pub fn r#move(
     let (source, should_resolve_base_commit) = match (source, base) {
         (Some(_), Some(_)) => {
             writeln!(
-                output,
+                output.get_output_stream(),
                 "The --source and --base options cannot both be provided."
             )?;
             return Ok(1);
@@ -73,7 +73,7 @@ pub fn r#move(
             let source_oid = match head_oid {
                 Some(oid) => oid,
                 None => {
-                    writeln!(output, "No --source or --base argument was provided, and no OID for HEAD is available as a default")?;
+                    writeln!(output.get_output_stream(), "No --source or --base argument was provided, and no OID for HEAD is available as a default")?;
                     return Ok(1);
                 }
             };
@@ -85,7 +85,7 @@ pub fn r#move(
         None => match head_oid {
             Some(oid) => oid.to_string(),
             None => {
-                writeln!(output, "No --dest argument was provided, and no OID for HEAD is available as a default")?;
+                writeln!(output.get_output_stream(), "No --dest argument was provided, and no OID for HEAD is available as a default")?;
                 return Ok(1);
             }
         },
@@ -96,7 +96,7 @@ pub fn r#move(
             _ => eyre::bail!("Unexpected number of returns values from resolve_commits"),
         },
         ResolveCommitsResult::CommitNotFound { commit } => {
-            writeln!(output, "Commit not found: {}", commit)?;
+            writeln!(output.get_output_stream(), "Commit not found: {}", commit)?;
             return Ok(1);
         }
     };
@@ -148,7 +148,7 @@ pub fn r#move(
     };
     let result = match rebase_plan {
         Ok(None) => {
-            writeln!(output, "Nothing to do.")?;
+            writeln!(output.get_output_stream(), "Nothing to do.")?;
             0
         }
         Ok(Some(rebase_plan)) => {

@@ -256,7 +256,7 @@ pub fn render_graph(
 ) -> eyre::Result<Vec<StyledString>> {
     let root_oids = split_commit_graph_by_roots(output, repo, merge_base_db, graph);
     let lines = get_output(
-        &output.get_glyphs(),
+        output.get_glyphs(),
         graph,
         commit_metadata_providers,
         head_oid,
@@ -267,7 +267,7 @@ pub fn render_graph(
 
 /// Display a nice graph of commits you've recently worked on.
 #[instrument]
-pub fn smartlog(output: &mut Output) -> eyre::Result<()> {
+pub fn smartlog(output: &Output) -> eyre::Result<()> {
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
     let merge_base_db = MergeBaseDb::new(&conn)?;
@@ -309,9 +309,9 @@ pub fn smartlog(output: &mut Output) -> eyre::Result<()> {
     )?;
     for line in lines {
         writeln!(
-            output,
+            output.get_output_stream(),
             "{}",
-            printable_styled_string(&output.get_glyphs(), line)?
+            printable_styled_string(output.get_glyphs(), line)?
         )?;
     }
 

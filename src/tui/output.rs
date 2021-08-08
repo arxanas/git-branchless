@@ -105,12 +105,11 @@ impl OperationState {
 }
 
 /// Wrapper around output. Also manages progress indicators.
-#[derive(Clone)]
 pub struct Output {
-    glyphs: Arc<Glyphs>,
+    glyphs: Glyphs,
     dest: OutputDest,
     multi_progress: Arc<MultiProgress>,
-    nesting_level: Arc<AtomicUsize>,
+    nesting_level: AtomicUsize,
     operation_states: Arc<RwLock<HashMap<OperationType, OperationState>>>,
 }
 
@@ -164,7 +163,7 @@ impl Output {
         let operation_states = Default::default();
         spawn_progress_updater_thread(&multi_progress, &operation_states);
         Output {
-            glyphs: Arc::new(glyphs),
+            glyphs,
             dest: OutputDest::Stdout,
             multi_progress,
             nesting_level: Default::default(),
@@ -175,7 +174,7 @@ impl Output {
     /// Constructor. Suppresses all output.
     pub fn new_suppress_for_test(glyphs: Glyphs) -> Self {
         Output {
-            glyphs: Arc::new(glyphs),
+            glyphs,
             dest: OutputDest::SuppressForTest,
             multi_progress: Default::default(),
             nesting_level: Default::default(),
@@ -186,7 +185,7 @@ impl Output {
     /// Constructor. Writes to the provided buffer.
     pub fn new_from_buffer_for_test(glyphs: Glyphs, buffer: &Arc<Mutex<Vec<u8>>>) -> Self {
         Output {
-            glyphs: Arc::new(glyphs),
+            glyphs,
             dest: OutputDest::BufferForTest(Arc::clone(buffer)),
             multi_progress: Default::default(),
             nesting_level: Default::default(),
@@ -287,18 +286,32 @@ impl Output {
     }
 
     /// Get the set of glyphs associated with the output.
-    pub fn get_glyphs(&self) -> Arc<Glyphs> {
-        Arc::clone(&self.glyphs)
+    pub fn get_glyphs(&self) -> &Glyphs {
+        &self.glyphs
+    }
+
+    /// Create a stream that can be written to. The output might go to stdout or
+    /// be rendered specially in the terminal.
+    pub fn get_output_stream(&self) -> OutputStream {
+        OutputStream {
+            dest: self.dest.clone(),
+        }
     }
 
     /// Create a stream that error output can be written to, rather than regular
     /// output.
-    pub fn into_error_stream(self) -> ErrorOutput {
-        ErrorOutput { output: self }
+    pub fn get_error_stream(&self) -> ErrorStream {
+        ErrorStream {
+            dest: self.dest.clone(),
+        }
     }
 }
 
-impl Write for Output {
+pub struct OutputStream {
+    dest: OutputDest,
+}
+
+impl Write for OutputStream {
     fn write_str(&mut self, s: &str) -> std::fmt::Result {
         match &self.dest {
             OutputDest::Stdout => {
@@ -319,13 +332,13 @@ impl Write for Output {
     }
 }
 
-pub struct ErrorOutput {
-    output: Output,
+pub struct ErrorStream {
+    dest: OutputDest,
 }
 
-impl Write for ErrorOutput {
+impl Write for ErrorStream {
     fn write_str(&mut self, s: &str) -> std::fmt::Result {
-        match &self.output.dest {
+        match &self.dest {
             OutputDest::Stdout => {
                 eprint!("{}", s);
                 stderr().flush().unwrap();
