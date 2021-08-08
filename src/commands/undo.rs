@@ -614,7 +614,7 @@ fn optimize_inverse_events(events: Vec<Event>) -> Vec<Event> {
 #[instrument(skip(in_))]
 fn undo_events(
     in_: &mut impl Read,
-    output: &mut Output,
+    output: &Output,
     repo: &Repo,
     git_run_info: &GitRunInfo,
     event_log_db: &mut EventLogDb,
@@ -654,22 +654,25 @@ fn undo_events(
     });
 
     if inverse_events.is_empty() {
-        writeln!(output, "No undo actions to apply, exiting.")?;
+        writeln!(
+            output.get_output_stream(),
+            "No undo actions to apply, exiting."
+        )?;
         return Ok(0);
     }
 
-    writeln!(output, "Will apply these actions:")?;
+    writeln!(output.get_output_stream(), "Will apply these actions:")?;
     let events = describe_events_numbered(repo, &inverse_events)?;
     for line in events {
         writeln!(
-            output,
+            output.get_output_stream(),
             "{}",
-            printable_styled_string(&output.get_glyphs(), line)?
+            printable_styled_string(output.get_glyphs(), line)?
         )?;
     }
 
     let confirmed = {
-        write!(output, "Confirm? [yN] ")?;
+        write!(output.get_output_stream(), "Confirm? [yN] ")?;
         let mut user_input = String::new();
         let mut reader = BufReader::new(in_);
         match reader.read_line(&mut user_input) {
@@ -681,7 +684,7 @@ fn undo_events(
         }
     };
     if !confirmed {
-        writeln!(output, "Aborted.")?;
+        writeln!(output.get_output_stream(), "Aborted.")?;
         return Ok(1);
     }
 
@@ -744,7 +747,7 @@ fn undo_events(
                 }
                 None => {
                     writeln!(
-                        output,
+                        output.get_output_stream(),
                         "Reference {} did not exist, not deleting it.",
                         ref_name.to_string_lossy()
                     )?;
@@ -778,13 +781,17 @@ fn undo_events(
         }
     }
 
-    writeln!(output, "Applied {}.", num_inverse_events)?;
+    writeln!(
+        output.get_output_stream(),
+        "Applied {}.",
+        num_inverse_events
+    )?;
     Ok(0)
 }
 
 /// Restore the repository to a previous state interactively.
 #[instrument]
-pub fn undo(output: &mut Output, git_run_info: &GitRunInfo) -> eyre::Result<isize> {
+pub fn undo(output: &Output, git_run_info: &GitRunInfo) -> eyre::Result<isize> {
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
     let merge_base_db = MergeBaseDb::new(&conn)?;
@@ -836,7 +843,7 @@ pub mod testing {
 
     pub fn undo_events(
         in_: &mut impl Read,
-        output: &mut Output,
+        output: &Output,
         repo: &Repo,
         git_run_info: &GitRunInfo,
         event_log_db: &mut EventLogDb,

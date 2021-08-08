@@ -495,7 +495,7 @@ Either create it, or update the main branch setting by running:
     #[instrument]
     pub fn has_changed_files(
         &self,
-        output: &mut Output,
+        output: &Output,
         git_run_info: &GitRunInfo,
     ) -> eyre::Result<bool> {
         let exit_code = git_run_info.run(

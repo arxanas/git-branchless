@@ -160,7 +160,7 @@ mod in_memory {
 
     #[instrument]
     pub fn rebase_in_memory(
-        output: &mut Output,
+        output: &Output,
         repo: &Repo,
         rebase_plan: &RebasePlan,
         options: &ExecuteRebasePlanOptions,
@@ -250,7 +250,7 @@ mod in_memory {
                     i += 1;
 
                     let commit_description = printable_styled_string(
-                        &output.get_glyphs(),
+                        output.get_glyphs(),
                         commit_to_apply.friendly_describe()?,
                     )?;
                     let commit_num = format!("[{}/{}]", i, num_picks);
@@ -337,7 +337,7 @@ mod in_memory {
                         }
                     };
                     let commit_description = printable_styled_string(
-                        &output.get_glyphs(),
+                        output.get_glyphs(),
                         repo.friendly_describe_commit_from_oid(rebased_commit_oid)?,
                     )?;
                     if rebased_commit.is_empty() {
@@ -346,9 +346,11 @@ mod in_memory {
 
                         progress.finish_and_clear();
                         writeln!(
-                            output,
+                            output.get_output_stream(),
                             "[{}/{}] Skipped now-empty commit: {}",
-                            i, num_picks, commit_description
+                            i,
+                            num_picks,
+                            commit_description
                         )?;
                     } else {
                         rewritten_oids
@@ -357,9 +359,10 @@ mod in_memory {
 
                         progress.finish_and_clear();
                         writeln!(
-                            output,
+                            output.get_output_stream(),
                             "{} Committed as: {}",
-                            commit_num, commit_description
+                            commit_num,
+                            commit_description
                         )?;
                     }
                 }
@@ -383,11 +386,12 @@ mod in_memory {
                     progress.finish_and_clear();
                     let commit_description = commit.friendly_describe()?;
                     let commit_description =
-                        printable_styled_string(&output.get_glyphs(), commit_description)?;
+                        printable_styled_string(output.get_glyphs(), commit_description)?;
                     writeln!(
-                        output,
+                        output.get_output_stream(),
                         "{} Skipped commit (was already applied upstream): {}",
-                        commit_num, commit_description
+                        commit_num,
+                        commit_description
                     )?;
                 }
 
@@ -446,7 +450,7 @@ mod in_memory {
     }
 
     pub fn post_rebase_in_memory(
-        output: &mut Output,
+        output: &Output,
         git_run_info: &GitRunInfo,
         repo: &Repo,
         rewritten_oids: &[(NonZeroOid, MaybeZeroOid)],
@@ -573,7 +577,7 @@ mod on_disk {
     /// merge conflicts). The exit code is then propagated to the caller.
     #[instrument]
     pub fn rebase_on_disk(
-        output: &mut Output,
+        output: &Output,
         git_run_info: &GitRunInfo,
         repo: &Repo,
         rebase_plan: &RebasePlan,
@@ -728,7 +732,10 @@ mod on_disk {
         }
 
         progress.finish_and_clear();
-        writeln!(output, "Calling Git for on-disk rebase...")?;
+        writeln!(
+            output.get_output_stream(),
+            "Calling Git for on-disk rebase..."
+        )?;
         let exit_code = git_run_info.run(output, Some(*event_tx_id), &["rebase", "--continue"])?;
         Ok(Ok(exit_code))
     }
@@ -758,7 +765,7 @@ pub struct ExecuteRebasePlanOptions {
 /// Execute the provided rebase plan. Returns the exit status (zero indicates
 /// success).
 pub fn execute_rebase_plan(
-    output: &mut Output,
+    output: &Output,
     git_run_info: &GitRunInfo,
     repo: &Repo,
     rebase_plan: &RebasePlan,
@@ -774,7 +781,7 @@ pub fn execute_rebase_plan(
 
     if !force_on_disk {
         use in_memory::*;
-        writeln!(output, "Attempting rebase in-memory...")?;
+        writeln!(output.get_output_stream(), "Attempting rebase in-memory...")?;
         match rebase_in_memory(output, repo, rebase_plan, options)? {
             RebaseInMemoryResult::Succeeded {
                 rewritten_oids,
@@ -788,32 +795,35 @@ pub fn execute_rebase_plan(
                     new_head_oid,
                     options,
                 )?;
-                writeln!(output, "In-memory rebase succeeded.")?;
+                writeln!(output.get_output_stream(), "In-memory rebase succeeded.")?;
                 return Ok(0);
             }
             RebaseInMemoryResult::CannotRebaseMergeCommit { commit_oid } => {
-                writeln!(output,
+                writeln!(output.get_output_stream(),
                     "Merge commits currently can't be rebased with `git move`. The merge commit was: {}",
-                    printable_styled_string(&output.get_glyphs(), repo.friendly_describe_commit_from_oid(commit_oid)?)?,
+                    printable_styled_string(output.get_glyphs(), repo.friendly_describe_commit_from_oid(commit_oid)?)?,
                 )?;
                 return Ok(1);
             }
             RebaseInMemoryResult::MergeConflict { commit_oid } => {
                 if *force_in_memory {
                     writeln!(
-                        output,
+                        output.get_output_stream(),
                         "Merge conflict. The conflicting commit was: {}",
                         printable_styled_string(
-                            &output.get_glyphs(),
+                            output.get_glyphs(),
                             repo.friendly_describe_commit_from_oid(commit_oid)?,
                         )?,
                     )?;
-                    writeln!(output, "Aborting since an in-memory rebase was requested.")?;
+                    writeln!(
+                        output.get_output_stream(),
+                        "Aborting since an in-memory rebase was requested."
+                    )?;
                     return Ok(1);
                 } else {
-                    writeln!(output,
+                    writeln!(output.get_output_stream(),
                         "Merge conflict, falling back to rebase on-disk. The conflicting commit was: {}",
-                        printable_styled_string(&output.get_glyphs(), repo.friendly_describe_commit_from_oid(commit_oid)?)?,
+                        printable_styled_string(output.get_glyphs(), repo.friendly_describe_commit_from_oid(commit_oid)?)?,
                     )?;
                 }
             }
@@ -826,7 +836,7 @@ pub fn execute_rebase_plan(
             Ok(exit_code) => return Ok(exit_code),
             Err(Error::ChangedFilesInRepository) => {
                 write!(
-                    output,
+                    output.get_output_stream(),
                     "\
 This operation would modify the working copy, but you have uncommitted changes
 in your working copy which might be overwritten as a result.
@@ -837,12 +847,12 @@ Commit your changes and then try again.
             }
             Err(Error::OperationAlreadyInProgress { operation_type }) => {
                 writeln!(
-                    output,
+                    output.get_output_stream(),
                     "A {} operation is already in progress.",
                     operation_type
                 )?;
                 writeln!(
-                    output,
+                    output.get_output_stream(),
                     "Run git {0} --continue or git {0} --abort to resolve it and proceed.",
                     operation_type
                 )?;

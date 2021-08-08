@@ -75,7 +75,7 @@ impl GitRunInfo {
     #[must_use = "The return code for `run_git` must be checked"]
     pub fn run<S: AsRef<OsStr> + std::fmt::Debug>(
         &self,
-        output: &mut Output,
+        output: &Output,
         event_tx_id: Option<EventTransactionId>,
         args: &[S],
     ) -> eyre::Result<isize> {
@@ -85,7 +85,7 @@ impl GitRunInfo {
             env,
         } = self;
         writeln!(
-            output,
+            output.get_output_stream(),
             "branchless: {} {}",
             path_to_git.to_string_lossy(),
             args.iter()
@@ -112,9 +112,9 @@ impl GitRunInfo {
             .wrap_err_with(|| format!("Spawning Git subprocess: {:?} {:?}", path_to_git, args))?;
 
         let stdout = child.stdout.take();
-        let stdout_thread = self.spawn_writer_thread(stdout, output.clone());
+        let stdout_thread = self.spawn_writer_thread(stdout, output.get_output_stream());
         let stderr = child.stderr.take();
-        let stderr_thread = self.spawn_writer_thread(stderr, output.clone().into_error_stream());
+        let stderr_thread = self.spawn_writer_thread(stderr, output.get_error_stream());
 
         let exit_status = child.wait().wrap_err_with(|| {
             format!(

@@ -17,7 +17,7 @@ use crate::tui::Output;
 /// Go back a certain number of commits.
 #[instrument]
 pub fn prev(
-    output: &mut Output,
+    output: &Output,
     git_run_info: &GitRunInfo,
     num_commits: Option<isize>,
 ) -> eyre::Result<isize> {
@@ -50,7 +50,7 @@ pub enum Towards {
 
 #[instrument]
 fn advance_towards_main_branch(
-    output: &mut Output,
+    output: &Output,
     repo: &Repo,
     merge_base_db: &MergeBaseDb,
     graph: &CommitGraph,
@@ -80,7 +80,7 @@ fn advance_towards_main_branch(
 
 #[instrument]
 fn advance_towards_own_commit(
-    output: &mut Output,
+    output: &Output,
     repo: &Repo,
     graph: &CommitGraph,
     current_oid: NonZeroOid,
@@ -102,7 +102,7 @@ fn advance_towards_own_commit(
             (Some(Towards::Oldest), [oldest_child_oid, ..]) => *oldest_child_oid,
             (None, [_, _, ..]) => {
                 writeln!(
-                    output,
+                    output.get_output_stream(),
                     "Found multiple possible next commits to go to after traversing {} children:",
                     i
                 )?;
@@ -117,17 +117,17 @@ fn advance_towards_own_commit(
                     };
 
                     writeln!(
-                        output,
+                        output.get_output_stream(),
                         "  {} {}{}",
                         glyphs.bullet_point,
                         printable_styled_string(
-                            &glyphs,
+                            glyphs,
                             repo.friendly_describe_commit_from_oid(*child_oid)?
                         )?,
                         descriptor
                     )?;
                 }
-                writeln!(output, "(Pass --oldest (-o) or --newest (-n) to select between ambiguous next commits)")?;
+                writeln!(output.get_output_stream(), "(Pass --oldest (-o) or --newest (-n) to select between ambiguous next commits)")?;
                 return Ok(None);
             }
         };
@@ -138,7 +138,7 @@ fn advance_towards_own_commit(
 /// Go forward a certain number of commits.
 #[instrument]
 pub fn next(
-    output: &mut Output,
+    output: &Output,
     git_run_info: &GitRunInfo,
     num_commits: Option<isize>,
     towards: Option<Towards>,

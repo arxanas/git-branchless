@@ -77,7 +77,7 @@ use crate::tui::Output;
 
 #[instrument(skip(commits))]
 fn restack_commits(
-    output: &mut Output,
+    output: &Output,
     repo: &Repo,
     git_run_info: &GitRunInfo,
     merge_base_db: &MergeBaseDb,
@@ -140,13 +140,16 @@ fn restack_commits(
 
     match rebase_plan {
         Ok(None) => {
-            writeln!(output, "No abandoned commits to restack.")?;
+            writeln!(
+                output.get_output_stream(),
+                "No abandoned commits to restack."
+            )?;
             Ok(0)
         }
         Ok(Some(rebase_plan)) => {
             let exit_code =
                 execute_rebase_plan(output, git_run_info, repo, &rebase_plan, execute_options)?;
-            writeln!(output, "Finished restacking commits.")?;
+            writeln!(output.get_output_stream(), "Finished restacking commits.")?;
             Ok(exit_code)
         }
         Err(err) => {
@@ -158,7 +161,7 @@ fn restack_commits(
 
 #[instrument]
 fn restack_branches(
-    output: &mut Output,
+    output: &Output,
     repo: &Repo,
     git_run_info: &GitRunInfo,
     merge_base_db: &MergeBaseDb,
@@ -208,10 +211,13 @@ fn restack_branches(
     }
 
     if rewritten_oids.is_empty() {
-        writeln!(output, "No abandoned branches to restack.")?;
+        writeln!(
+            output.get_output_stream(),
+            "No abandoned branches to restack."
+        )?;
     } else {
         move_branches(git_run_info, repo, options.event_tx_id, &rewritten_oids)?;
-        writeln!(output, "Finished restacking branches.")?;
+        writeln!(output.get_output_stream(), "Finished restacking branches.")?;
     }
     Ok(0)
 }
@@ -221,7 +227,7 @@ fn restack_branches(
 /// Returns an exit code (0 denotes successful exit).
 #[instrument]
 pub fn restack(
-    output: &mut Output,
+    output: &Output,
     git_run_info: &GitRunInfo,
     commits: Vec<String>,
     dump_rebase_constraints: bool,
@@ -238,7 +244,7 @@ pub fn restack(
     let commits = match resolve_commits(&repo, commits)? {
         ResolveCommitsResult::Ok { commits } => commits,
         ResolveCommitsResult::CommitNotFound { commit } => {
-            writeln!(output, "Commit not found: {}", commit)?;
+            writeln!(output.get_output_stream(), "Commit not found: {}", commit)?;
             return Ok(1);
         }
     };

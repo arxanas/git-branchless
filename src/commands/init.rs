@@ -172,18 +172,22 @@ fn install_hook(repo: &Repo, hook_type: &str, hook_script: &str) -> eyre::Result
 }
 
 #[instrument]
-fn install_hooks(output: &mut Output, repo: &Repo) -> eyre::Result<()> {
+fn install_hooks(output: &Output, repo: &Repo) -> eyre::Result<()> {
     for (hook_type, hook_script) in ALL_HOOKS {
-        writeln!(output, "Installing hook: {}", hook_type)?;
+        writeln!(output.get_output_stream(), "Installing hook: {}", hook_type)?;
         install_hook(repo, hook_type, hook_script)?;
     }
     Ok(())
 }
 
 #[instrument]
-fn uninstall_hooks(output: &mut Output, repo: &Repo) -> eyre::Result<()> {
+fn uninstall_hooks(output: &Output, repo: &Repo) -> eyre::Result<()> {
     for (hook_type, _hook_script) in ALL_HOOKS {
-        writeln!(output, "Uninstalling hook: {}", hook_type)?;
+        writeln!(
+            output.get_output_stream(),
+            "Uninstalling hook: {}",
+            hook_type
+        )?;
         install_hook(
             repo,
             hook_type,
@@ -225,16 +229,17 @@ fn detect_main_branch_name(repo: &Repo) -> eyre::Result<Option<String>> {
 
 #[instrument]
 fn install_aliases(
-    output: &mut Output,
+    output: &Output,
     repo: &mut Repo,
     config: &mut Config,
     git_run_info: &GitRunInfo,
 ) -> eyre::Result<()> {
     for (from, to) in ALL_ALIASES {
         writeln!(
-            output,
+            output.get_output_stream(),
             "Installing alias (non-global): git {} -> git branchless {}",
-            from, to
+            from,
+            to
         )?;
         install_alias(config, from, to)?;
     }
@@ -248,7 +253,7 @@ fn install_aliases(
         .wrap_err_with(|| format!("Parsing Git version string: {}", version_str))?;
     if version < GitVersion(2, 29, 0) {
         write!(
-            output,
+            output.get_output_stream(),
             "\
 {warning_str}: the branchless workflow's `git undo` command requires Git
 v2.29 or later, but your Git version is: {version_str}
@@ -271,9 +276,13 @@ the branchless workflow will work properly.
 }
 
 #[instrument]
-fn uninstall_aliases(output: &mut Output, config: &mut Config) -> eyre::Result<()> {
+fn uninstall_aliases(output: &Output, config: &mut Config) -> eyre::Result<()> {
     for (from, _to) in ALL_ALIASES {
-        writeln!(output, "Uninstalling alias (non-global): git {}", from)?;
+        writeln!(
+            output.get_output_stream(),
+            "Uninstalling alias (non-global): git {}",
+            from
+        )?;
         config
             .remove(&format!("alias.{}", from))
             .wrap_err_with(|| format!("Uninstalling alias {}", from))?;
@@ -283,13 +292,18 @@ fn uninstall_aliases(output: &mut Output, config: &mut Config) -> eyre::Result<(
 
 #[instrument(skip(value))]
 fn set_config(
-    output: &mut Output,
+    output: &Output,
     config: &mut Config,
     name: &str,
     value: impl Into<ConfigValue>,
 ) -> eyre::Result<()> {
     let value = value.into();
-    writeln!(output, "Setting config (non-global): {} = {}", name, value)?;
+    writeln!(
+        output.get_output_stream(),
+        "Setting config (non-global): {} = {}",
+        name,
+        value
+    )?;
     config.set(name, value)?;
     Ok(())
 }
@@ -297,40 +311,43 @@ fn set_config(
 #[instrument(skip(r#in))]
 fn set_configs(
     r#in: &mut impl BufRead,
-    output: &mut Output,
+    output: &Output,
     repo: &Repo,
     config: &mut Config,
 ) -> eyre::Result<()> {
     let main_branch_name = match detect_main_branch_name(repo)? {
         Some(main_branch_name) => {
             writeln!(
-                output,
+                output.get_output_stream(),
                 "Auto-detected your main branch as: {}",
                 console::style(&main_branch_name).bold()
             )?;
             writeln!(
-                output,
+                output.get_output_stream(),
                 "If this is incorrect, run: git config branchless.core.mainBranch <branch>"
             )?;
             main_branch_name
         }
         None => {
             writeln!(
-                output,
+                output.get_output_stream(),
                 "{}",
                 console::style("Your main branch name could not be auto-detected!")
                     .yellow()
                     .bold()
             )?;
             writeln!(
-                output,
+                output.get_output_stream(),
                 "Examples of a main branch: master, main, trunk, etc."
             )?;
             writeln!(
-                output,
+                output.get_output_stream(),
                 "See https://github.com/arxanas/git-branchless/wiki/Concepts#main-branch"
             )?;
-            write!(output, "Enter the name of your main branch: ")?;
+            write!(
+                output.get_output_stream(),
+                "Enter the name of your main branch: "
+            )?;
             stdout().flush()?;
             let mut input = String::new();
             r#in.read_line(&mut input)?;
@@ -351,9 +368,13 @@ fn set_configs(
 }
 
 #[instrument]
-fn unset_configs(output: &mut Output, config: &mut Config) -> eyre::Result<()> {
+fn unset_configs(output: &Output, config: &mut Config) -> eyre::Result<()> {
     for key in ["branchless.core.mainBranch", "advice.detachedHead"] {
-        writeln!(output, "Unsetting config (non-global): {}", key)?;
+        writeln!(
+            output.get_output_stream(),
+            "Unsetting config (non-global): {}",
+            key
+        )?;
         config
             .remove(key)
             .wrap_err_with(|| format!("Unsetting config {}", key))?;
@@ -363,7 +384,7 @@ fn unset_configs(output: &mut Output, config: &mut Config) -> eyre::Result<()> {
 
 /// Initialize `git-branchless` in the current repo.
 #[instrument]
-pub fn init(output: &mut Output, git_run_info: &GitRunInfo) -> eyre::Result<()> {
+pub fn init(output: &Output, git_run_info: &GitRunInfo) -> eyre::Result<()> {
     let mut in_ = BufReader::new(stdin());
     let mut repo = Repo::from_current_dir()?;
     let mut config = repo.get_config()?;
@@ -371,14 +392,14 @@ pub fn init(output: &mut Output, git_run_info: &GitRunInfo) -> eyre::Result<()> 
     install_hooks(output, &repo)?;
     install_aliases(output, &mut repo, &mut config, git_run_info)?;
     writeln!(
-        output,
+        output.get_output_stream(),
         "{}",
         console::style("Successfully installed git-branchless.")
             .green()
             .bold()
     )?;
     writeln!(
-        output,
+        output.get_output_stream(),
         "To uninstall, run: {}",
         console::style("git branchless init --uninstall").bold()
     )?;
@@ -387,7 +408,7 @@ pub fn init(output: &mut Output, git_run_info: &GitRunInfo) -> eyre::Result<()> 
 
 /// Uninstall `git-branchless` in the current repo.
 #[instrument]
-pub fn uninstall(output: &mut Output) -> eyre::Result<()> {
+pub fn uninstall(output: &Output) -> eyre::Result<()> {
     let repo = Repo::from_current_dir()?;
     let mut config = repo.get_config().wrap_err_with(|| "Getting repo config")?;
     unset_configs(output, &mut config)?;

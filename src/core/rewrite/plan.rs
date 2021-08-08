@@ -116,11 +116,11 @@ pub enum BuildRebasePlanError {
 
 impl BuildRebasePlanError {
     /// Write the error message to `out`.
-    pub fn describe(&self, output: &mut Output, repo: &Repo) -> eyre::Result<()> {
+    pub fn describe(&self, output: &Output, repo: &Repo) -> eyre::Result<()> {
         match self {
             BuildRebasePlanError::ConstraintCycle { cycle_oids } => {
                 writeln!(
-                    output,
+                    output.get_output_stream(),
                     "This operation failed because it would introduce a cycle:"
                 )?;
 
@@ -143,13 +143,13 @@ impl BuildRebasePlanError {
                         (glyphs.cycle_vertical_line, " ", " ")
                     };
                     writeln!(
-                        output,
+                        output.get_output_stream(),
                         "{}{}{} {}",
                         char1,
                         char2,
                         char3,
                         printable_styled_string(
-                            &glyphs,
+                            glyphs,
                             repo.friendly_describe_commit_from_oid(*oid)?
                         )?,
                     )?;
@@ -286,7 +286,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
     #[instrument]
     fn collect_descendants(
         &self,
-        output: &mut Output,
+        output: &Output,
         acc: &mut Vec<Constraint>,
         current_oid: NonZeroOid,
     ) -> eyre::Result<()> {
@@ -414,7 +414,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
     /// of a referred-to commit. This adds enough information to the constraint
     /// graph that it now represents the actual end-state commit graph that we
     /// want to create, not just a list of constraints.
-    fn add_descendant_constraints(&mut self, output: &mut Output) -> eyre::Result<()> {
+    fn add_descendant_constraints(&mut self, output: &Output) -> eyre::Result<()> {
         let all_descendants_of_constrained_nodes = {
             let mut acc = Vec::new();
             for parent_oid in self.constraints.values().flatten().cloned() {
@@ -502,16 +502,14 @@ impl<'repo> RebasePlanBuilder<'repo> {
     /// Create the rebase plan. Returns `None` if there were no commands in the rebase plan.
     pub fn build(
         mut self,
-        output: &mut Output,
+        output: &Output,
         options: &BuildRebasePlanOptions,
     ) -> eyre::Result<Result<Option<RebasePlan>, BuildRebasePlanError>> {
         let _progress = output.start_operation(OperationType::BuildRebasePlan);
-        let mut output = output.clone();
-        let output = &mut output;
 
         if options.dump_rebase_constraints {
             writeln!(
-                output,
+                output.get_output_stream(),
                 "Rebase constraints before adding descendants: {:#?}",
                 self.get_constraints_sorted_for_debug()
             )?;
@@ -519,7 +517,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
         self.add_descendant_constraints(output)?;
         if options.dump_rebase_constraints {
             writeln!(
-                output,
+                output.get_output_stream(),
                 "Rebase constraints after adding descendants: {:#?}",
                 self.get_constraints_sorted_for_debug(),
             )?;
@@ -544,8 +542,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
 
             let upstream_patch_ids = {
                 let _progress = output.start_operation(OperationType::DetectDuplicateCommits);
-                let mut output = output.clone();
-                self.get_upstream_patch_ids(&mut output, child_oid, parent_oid)?
+                self.get_upstream_patch_ids(output, child_oid, parent_oid)?
             };
             acc = self.make_rebase_plan_for_current_commit(
                 output,
@@ -560,7 +557,11 @@ impl<'repo> RebasePlanBuilder<'repo> {
             commands: acc,
         });
         if options.dump_rebase_plan {
-            writeln!(output, "Rebase plan: {:#?}", rebase_plan)?;
+            writeln!(
+                output.get_output_stream(),
+                "Rebase plan: {:#?}",
+                rebase_plan
+            )?;
         }
         Ok(Ok(rebase_plan))
     }
@@ -568,7 +569,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
     #[instrument]
     fn get_upstream_patch_ids(
         &self,
-        output: &mut Output,
+        output: &Output,
         current_oid: NonZeroOid,
         dest_oid: NonZeroOid,
     ) -> eyre::Result<HashSet<PatchId>> {
