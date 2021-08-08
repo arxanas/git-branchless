@@ -77,7 +77,7 @@ impl<'conn> MergeBaseDb<'conn> {
         lhs_oid: NonZeroOid,
         rhs_oid: NonZeroOid,
     ) -> eyre::Result<Option<NonZeroOid>> {
-        let _progress = output.start_operation(crate::tui::OperationType::GetMergeBase);
+        let (_output, _progress) = output.start_operation(crate::tui::OperationType::GetMergeBase);
 
         let (lhs_oid, rhs_oid) = if lhs_oid < rhs_oid {
             (lhs_oid, rhs_oid)

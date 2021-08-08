@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 
 use itertools::Itertools;
+use rayon::prelude::*;
 use tracing::{instrument, warn};
 
 use crate::core::formatting::printable_styled_string;
@@ -457,7 +458,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
     }
 
     fn check_for_cycles(&self, output: &Output) -> Result<(), BuildRebasePlanError> {
-        let _progress = output.start_operation(OperationType::CheckForCycles);
+        let (_output, _progress) = output.start_operation(OperationType::CheckForCycles);
 
         // FIXME: O(n^2) algorithm.
         for oid in self.constraints.keys().sorted() {
@@ -505,7 +506,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
         output: &Output,
         options: &BuildRebasePlanOptions,
     ) -> eyre::Result<Result<Option<RebasePlan>, BuildRebasePlanError>> {
-        let _progress = output.start_operation(OperationType::BuildRebasePlan);
+        let (output, _progress) = output.start_operation(OperationType::BuildRebasePlan);
 
         if options.dump_rebase_constraints {
             writeln!(
@@ -514,7 +515,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
                 self.get_constraints_sorted_for_debug()
             )?;
         }
-        self.add_descendant_constraints(output)?;
+        self.add_descendant_constraints(&output)?;
         if options.dump_rebase_constraints {
             writeln!(
                 output.get_output_stream(),
@@ -523,7 +524,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
             )?;
         }
 
-        if let Err(err) = self.check_for_cycles(output) {
+        if let Err(err) = self.check_for_cycles(&output) {
             return Ok(Err(err));
         }
 
@@ -541,11 +542,12 @@ impl<'repo> RebasePlanBuilder<'repo> {
             });
 
             let upstream_patch_ids = {
-                let _progress = output.start_operation(OperationType::DetectDuplicateCommits);
-                self.get_upstream_patch_ids(output, child_oid, parent_oid)?
+                let (output, _progress) =
+                    output.start_operation(OperationType::DetectDuplicateCommits);
+                self.get_upstream_patch_ids(&output, child_oid, parent_oid)?
             };
             acc = self.make_rebase_plan_for_current_commit(
-                output,
+                &output,
                 child_oid,
                 &upstream_patch_ids,
                 acc,
@@ -595,15 +597,31 @@ impl<'repo> RebasePlanBuilder<'repo> {
 
         // FIXME: we may recalculate common patch IDs many times, should be
         // cached.
-        let progress = output.start_operation(OperationType::GetUpstreamPatchIds);
+        let (output, progress) = output.start_operation(OperationType::GetUpstreamPatchIds);
         progress.notify_progress(0, path.len());
-        let mut result = HashSet::new();
-        for (i, commit) in path.iter().enumerate() {
-            if let Some(patch_id) = self.repo.get_patch_id(output, commit)? {
-                result.insert(patch_id);
-            }
-            progress.notify_progress(i, path.len());
-        }
+        let result: HashSet<PatchId> = path
+            .into_iter()
+            .map(|commit| {
+                // Repo is not thread-safe, so create a new copy for each
+                // thread.
+                let repo = self.repo.try_clone()?;
+                // `Commit` is not `Send`, so send an OID instead.
+                let commit_oid = commit.get_oid();
+                Ok((repo, commit_oid))
+            })
+            .collect::<eyre::Result<Vec<(Repo, NonZeroOid)>>>()?
+            .into_par_iter()
+            .map(|(repo, commit_oid)| -> eyre::Result<Option<PatchId>> {
+                progress.notify_progress_inc(1);
+                let commit = match repo.find_commit(commit_oid)? {
+                    Some(commit) => commit,
+                    None => return Ok(None),
+                };
+                let result = repo.get_patch_id(&output, &commit)?;
+                Ok(result)
+            })
+            .filter_map(|result| result.transpose())
+            .collect::<eyre::Result<HashSet<PatchId>>>()?;
         Ok(result)
     }
 }

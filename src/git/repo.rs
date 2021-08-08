@@ -113,7 +113,7 @@ pub struct Repo {
 
 impl std::fmt::Debug for Repo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<Git repository at: {:?}>", self.inner.path())
+        write!(f, "<Git repository at: {:?}>", self.get_path())
     }
 }
 
@@ -130,6 +130,13 @@ impl Repo {
     pub fn from_current_dir() -> eyre::Result<Self> {
         let path = std::env::current_dir().wrap_err_with(|| "Getting working directory")?;
         Repo::from_dir(&path)
+    }
+
+    /// Open a new copy of the repository.
+    pub fn try_clone(&self) -> eyre::Result<Self> {
+        let path = self.get_path();
+        let repo = git2::Repository::open(path)?;
+        Ok(Repo { inner: repo })
     }
 
     /// Get the path to the `.git` directory for the repository.
@@ -163,7 +170,7 @@ impl Repo {
     /// Get the connection to the SQLite database for this repository.
     #[instrument]
     pub fn get_db_conn(&self) -> eyre::Result<rusqlite::Connection> {
-        let dir = self.inner.path().join("branchless");
+        let dir = self.get_path().join("branchless");
         std::fs::create_dir_all(&dir).wrap_err_with(|| "Creating .git/branchless dir")?;
         let path = dir.join("db.sqlite3");
         let conn = rusqlite::Connection::open(&path)
@@ -449,7 +456,8 @@ Either create it, or update the main branch setting by running:
                         })?
                 };
                 let patch_id = {
-                    let _progress = output.start_operation(OperationType::CalculatePatchId);
+                    let (_output, _progress) =
+                        output.start_operation(OperationType::CalculatePatchId);
                     diff.patchid(None).wrap_err_with(|| {
                         format!(
                             "Computing patch ID between: {:?} and {:?}",

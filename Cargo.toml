@@ -27,6 +27,7 @@ indicatif = "0.17.0-beta.1"
 itertools = "0.10.1"
 lazy_static = "1.4.0"
 os_str_bytes = "3.1.0"
+rayon = "1.5.1"
 regex = "1.4.4"
 rusqlite = {version = "0.24.2", features = ["bundled"]}
 structopt = "0.3.21"
