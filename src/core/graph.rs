@@ -107,7 +107,7 @@ fn find_path_to_merge_base_internal<'repo>(
     target_oid: NonZeroOid,
     mut visited_commit_callback: impl FnMut(NonZeroOid),
 ) -> eyre::Result<Option<Vec<Commit<'repo>>>> {
-    let _progress = output.start_operation(OperationType::FindPathToMergeBase);
+    let (output, _progress) = output.start_operation(OperationType::FindPathToMergeBase);
 
     let mut queue = VecDeque::new();
     visited_commit_callback(commit_oid);
@@ -116,7 +116,7 @@ fn find_path_to_merge_base_internal<'repo>(
         None => eyre::bail!("Unable to find commit with OID: {:?}", commit_oid),
     };
     queue.push_back(vec![first_commit]);
-    let merge_base_oid = merge_base_db.get_merge_base_oid(output, repo, commit_oid, target_oid)?;
+    let merge_base_oid = merge_base_db.get_merge_base_oid(&output, repo, commit_oid, target_oid)?;
     while let Some(path) = queue.pop_front() {
         let last_commit = path
             .last()
@@ -192,7 +192,7 @@ fn walk_from_commits<'repo>(
     main_branch_oid: &MainBranchOid,
     commit_oids: &CommitOids,
 ) -> eyre::Result<CommitGraph<'repo>> {
-    let _progress = output.start_operation(OperationType::WalkCommits);
+    let (output, _progress) = output.start_operation(OperationType::WalkCommits);
 
     let mut graph: HashMap<NonZeroOid, Node> = Default::default();
 
@@ -206,7 +206,7 @@ fn walk_from_commits<'repo>(
         };
 
         let merge_base_oid = merge_base_db.get_merge_base_oid(
-            output,
+            &output,
             repo,
             current_commit.get_oid(),
             main_branch_oid.0,
@@ -219,7 +219,7 @@ fn walk_from_commits<'repo>(
             None => vec![current_commit],
             Some(merge_base_oid) => {
                 let path_to_merge_base = find_path_to_merge_base(
-                    output,
+                    &output,
                     repo,
                     merge_base_db,
                     current_commit.get_oid(),
@@ -422,7 +422,7 @@ pub fn make_graph<'repo>(
     branch_oids: &BranchOids,
     remove_commits: bool,
 ) -> eyre::Result<CommitGraph<'repo>> {
-    let _progress = output.start_operation(OperationType::MakeGraph);
+    let (output, _progress) = output.start_operation(OperationType::MakeGraph);
 
     let mut commit_oids: HashSet<NonZeroOid> = event_replayer
         .get_cursor_active_oids(event_cursor)
@@ -434,7 +434,7 @@ pub fn make_graph<'repo>(
     }
     let commit_oids = &CommitOids(commit_oids);
     let mut graph = walk_from_commits(
-        output,
+        &output,
         repo,
         merge_base_db,
         event_replayer,

@@ -2,12 +2,12 @@ use std::collections::HashMap;
 use std::convert::TryInto;
 use std::fmt::Write;
 use std::io::{stderr, stdout, Write as WriteIo};
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use indicatif::{MultiProgress, ProgressBar, ProgressDrawTarget, ProgressStyle};
+use itertools::Itertools;
 use lazy_static::lazy_static;
 use tracing::warn;
 
@@ -56,16 +56,20 @@ enum OutputDest {
 struct OperationState {
     operation_type: OperationType,
     progress_bar: ProgressBar,
-    progress: Option<(usize, usize)>,
-    start_time: Option<Instant>,
+    has_meter: bool,
+    start_times: Vec<Instant>,
     elapsed_duration: Duration,
 }
 
 impl OperationState {
     pub fn set_progress(&mut self, current: usize, total: usize) {
-        self.progress = Some((current, total));
+        self.has_meter = true;
         self.progress_bar.set_position(current.try_into().unwrap());
         self.progress_bar.set_length(total.try_into().unwrap());
+    }
+
+    pub fn inc_progress(&mut self, increment: usize) {
+        self.progress_bar.inc(increment.try_into().unwrap());
     }
 
     pub fn tick(&self) {
@@ -81,10 +85,10 @@ impl OperationState {
                 .tick_strings(&[&CHECKMARK, &CHECKMARK]);
         }
 
-        let elapsed_duration = match self.start_time {
+        let elapsed_duration = match self.start_times.iter().min() {
             None => self.elapsed_duration,
             Some(start_time) => {
-                let additional_duration = Instant::now().saturating_duration_since(start_time);
+                let additional_duration = Instant::now().saturating_duration_since(*start_time);
                 self.elapsed_duration + additional_duration
             }
         };
@@ -95,21 +99,22 @@ impl OperationState {
             elapsed_duration.as_secs_f64(),
         ));
         self.progress_bar
-            .set_style(match (self.start_time, self.progress) {
-                (None, _) => FINISHED_PROGRESS_STYLE.clone(),
-                (Some(_), None) => IN_PROGRESS_SPINNER_STYLE.clone(),
-                (Some(_), Some(_)) => IN_PROGRESS_BAR_STYLE.clone(),
+            .set_style(match (self.start_times.as_slice(), self.has_meter) {
+                ([], _) => FINISHED_PROGRESS_STYLE.clone(),
+                ([..], false) => IN_PROGRESS_SPINNER_STYLE.clone(),
+                ([..], true) => IN_PROGRESS_BAR_STYLE.clone(),
             });
         self.progress_bar.tick();
     }
 }
 
 /// Wrapper around output. Also manages progress indicators.
+#[derive(Clone)]
 pub struct Output {
     glyphs: Glyphs,
     dest: OutputDest,
     multi_progress: Arc<MultiProgress>,
-    nesting_level: AtomicUsize,
+    nesting_level: usize,
     operation_states: Arc<RwLock<HashMap<OperationType, OperationState>>>,
 }
 
@@ -212,34 +217,36 @@ impl Output {
     /// value, rather than from zero. The practical implication is that you can
     /// see the aggregate time it took to carry out sibling operations, i.e. the
     /// same operation called multiple times in a loop.
-    pub fn start_operation(&self, operation_type: OperationType) -> ProgressHandle {
+    pub fn start_operation(&self, operation_type: OperationType) -> (Output, ProgressHandle) {
         let now = Instant::now();
         let mut operation_states = self.operation_states.write().unwrap();
-        let nesting_level = self.nesting_level.fetch_add(1, Ordering::SeqCst);
 
-        let mut operation_state = operation_states.entry(operation_type).or_insert_with(|| {
+        let mut nesting_level = self.nesting_level;
+        let operation_state = operation_states.entry(operation_type).or_insert_with(|| {
             let progress_bar = self.multi_progress.add(ProgressBar::new_spinner());
+            nesting_level += 1;
             progress_bar.set_prefix("  ".repeat(nesting_level));
             let operation_state = OperationState {
                 operation_type,
                 progress_bar,
-                start_time: Some(now),
-                progress: Default::default(),
+                start_times: vec![now],
+                has_meter: false,
                 elapsed_duration: Default::default(),
             };
             operation_state.tick();
             operation_state
         });
-        let new_start_time = match operation_state.start_time {
-            Some(start_time) => start_time,
-            None => now,
-        };
-        operation_state.start_time = Some(new_start_time);
+        operation_state.start_times.push(now);
 
-        ProgressHandle {
+        let output = Self {
+            nesting_level,
+            ..self.clone()
+        };
+        let progress = ProgressHandle {
             output: self,
             operation_type,
-        }
+        };
+        (output, progress)
     }
 
     fn on_notify_progress(&self, operation_type: OperationType, current: usize, total: usize) {
@@ -253,10 +260,20 @@ impl Output {
         operation_state.tick();
     }
 
+    fn on_notify_progress_inc(&self, operation_type: OperationType, increment: usize) {
+        let mut operation_states = self.operation_states.write().unwrap();
+        let operation_state = match operation_states.get_mut(&operation_type) {
+            Some(operation_state) => operation_state,
+            None => return,
+        };
+
+        operation_state.inc_progress(increment);
+        operation_state.tick();
+    }
+
     fn on_drop_progress_handle(&self, operation_type: OperationType) {
         let now = Instant::now();
         let mut operation_states = self.operation_states.write().unwrap();
-        self.nesting_level.fetch_sub(1, Ordering::SeqCst);
 
         let operation_state = match operation_states.get_mut(&operation_type) {
             Some(operation_state) => operation_state,
@@ -265,20 +282,34 @@ impl Output {
                 return;
             }
         };
-        let start_time = match operation_state.start_time.take() {
-            Some(start_time) => start_time,
+
+        let previous_start_time = match operation_state
+            .start_times
+            .iter()
+            // Remove a maximum element each time. This means that the last
+            // element removed will be the minimum of all elements seen over
+            // time.
+            .position_max_by_key(|x| *x)
+        {
+            Some(start_time_index) => operation_state.start_times.remove(start_time_index),
             None => {
                 warn!("Progress operation ended without matching start call");
                 return;
             }
         };
-        let duration = now.saturating_duration_since(start_time);
-        operation_state.elapsed_duration += duration;
+
+        // In the event of multiple concurrent operations, we only want to add
+        // the wall-clock time to the elapsed duration.
+        operation_state.elapsed_duration += if operation_state.start_times.is_empty() {
+            now.saturating_duration_since(previous_start_time)
+        } else {
+            Duration::ZERO
+        };
 
         // Reset all elapsed times only if the root-level operation completed.
         if operation_states
             .values()
-            .all(|operation_state| operation_state.start_time.is_none())
+            .all(|operation_state| operation_state.start_times.is_empty())
         {
             self.multi_progress.clear().unwrap();
             operation_states.clear();
@@ -356,7 +387,6 @@ impl Write for ErrorStream {
     }
 }
 
-#[derive(Clone)]
 pub struct ProgressHandle<'output> {
     output: &'output Output,
     operation_type: OperationType,
@@ -372,5 +402,10 @@ impl ProgressHandle<'_> {
     pub fn notify_progress(&self, current: usize, total: usize) {
         self.output
             .on_notify_progress(self.operation_type, current, total);
+    }
+
+    pub fn notify_progress_inc(&self, increment: usize) {
+        self.output
+            .on_notify_progress_inc(self.operation_type, increment);
     }
 }
