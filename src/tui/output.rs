@@ -14,7 +14,7 @@ use tracing::warn;
 use crate::core::formatting::Glyphs;
 
 #[allow(missing_docs)]
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum OperationType {
     BuildRebasePlan,
     CalculateDiff,
@@ -46,13 +46,14 @@ impl ToString for OperationType {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum OutputDest {
     Stdout,
-    SuppressForTest,
+    Suppress,
     BufferForTest(Arc<Mutex<Vec<u8>>>),
 }
 
+#[derive(Debug)]
 struct OperationState {
     operation_type: OperationType,
     progress_bar: ProgressBar,
@@ -180,7 +181,7 @@ impl Output {
     pub fn new_suppress_for_test(glyphs: Glyphs) -> Self {
         Output {
             glyphs,
-            dest: OutputDest::SuppressForTest,
+            dest: OutputDest::Suppress,
             multi_progress: Default::default(),
             nesting_level: Default::default(),
             operation_states: Default::default(),
@@ -195,6 +196,17 @@ impl Output {
             multi_progress: Default::default(),
             nesting_level: Default::default(),
             operation_states: Default::default(),
+        }
+    }
+
+    /// Send output to an appropriate place when using a terminal user interface
+    /// (TUI), such as for `git undo`.
+    pub fn enable_tui_mode(&self) -> Self {
+        let multi_progress = Arc::clone(&self.multi_progress);
+        multi_progress.set_draw_target(ProgressDrawTarget::hidden());
+        Self {
+            dest: OutputDest::Suppress,
+            ..self.clone()
         }
     }
 
@@ -218,6 +230,15 @@ impl Output {
     /// see the aggregate time it took to carry out sibling operations, i.e. the
     /// same operation called multiple times in a loop.
     pub fn start_operation(&self, operation_type: OperationType) -> (Output, ProgressHandle) {
+        let progress = ProgressHandle {
+            output: self,
+            operation_type,
+        };
+        match self.dest {
+            OutputDest::Stdout => {}
+            OutputDest::Suppress | OutputDest::BufferForTest(_) => return (self.clone(), progress),
+        }
+
         let now = Instant::now();
         let mut operation_states = self.operation_states.write().unwrap();
 
@@ -229,7 +250,7 @@ impl Output {
             let operation_state = OperationState {
                 operation_type,
                 progress_bar,
-                start_times: vec![now],
+                start_times: Vec::new(),
                 has_meter: false,
                 elapsed_duration: Default::default(),
             };
@@ -241,10 +262,6 @@ impl Output {
         let output = Self {
             nesting_level,
             ..self.clone()
-        };
-        let progress = ProgressHandle {
-            output: self,
-            operation_type,
         };
         (output, progress)
     }
@@ -272,6 +289,11 @@ impl Output {
     }
 
     fn on_drop_progress_handle(&self, operation_type: OperationType) {
+        match self.dest {
+            OutputDest::Stdout => {}
+            OutputDest::Suppress | OutputDest::BufferForTest(_) => return,
+        }
+
         let now = Instant::now();
         let mut operation_states = self.operation_states.write().unwrap();
 
@@ -350,7 +372,7 @@ impl Write for OutputStream {
                 stdout().flush().unwrap();
             }
 
-            OutputDest::SuppressForTest => {
+            OutputDest::Suppress => {
                 // Do nothing.
             }
 
@@ -375,7 +397,7 @@ impl Write for ErrorStream {
                 stderr().flush().unwrap();
             }
 
-            OutputDest::SuppressForTest => {
+            OutputDest::Suppress => {
                 // Do nothing.
             }
 
@@ -407,5 +429,68 @@ impl ProgressHandle<'_> {
     pub fn notify_progress_inc(&self, increment: usize) {
         self.output
             .on_notify_progress_inc(self.operation_type, increment);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_output_progress() -> eyre::Result<()> {
+        let output = Output::new(Glyphs::text());
+        let (output2, progress2) = output.start_operation(OperationType::GetMergeBase);
+
+        {
+            let operation_states = output.operation_states.read().unwrap();
+            let get_merge_base_operation =
+                operation_states.get(&OperationType::GetMergeBase).unwrap();
+            assert_eq!(get_merge_base_operation.start_times.len(), 1);
+        }
+
+        std::thread::sleep(Duration::from_millis(1));
+        let (_output, progress3) = output.start_operation(OperationType::GetMergeBase);
+        let earlier_start_time = {
+            let operation_states = output.operation_states.read().unwrap();
+            let get_merge_base_operation =
+                operation_states.get(&OperationType::GetMergeBase).unwrap();
+            assert_eq!(get_merge_base_operation.start_times.len(), 2);
+            get_merge_base_operation.start_times[0]
+        };
+
+        drop(progress3);
+        {
+            let operation_states = output.operation_states.read().unwrap();
+            let get_merge_base_operation =
+                operation_states.get(&OperationType::GetMergeBase).unwrap();
+            // Ensure that we try to keep the earliest times in the list, to
+            // accurately gauge the wall-clock time.
+            assert_eq!(
+                get_merge_base_operation.start_times,
+                vec![earlier_start_time]
+            );
+        }
+
+        // Nest an operation.
+        let (_output4, progress4) = output2.start_operation(OperationType::CalculateDiff);
+        std::thread::sleep(Duration::from_millis(1));
+        drop(progress4);
+        {
+            let operation_states = output.operation_states.read().unwrap();
+            // The operation should still be present until the root-level
+            // operation has finished, even if it's not currently in progress.
+            let calculate_diff_operation =
+                operation_states.get(&OperationType::CalculateDiff).unwrap();
+            assert!(calculate_diff_operation.start_times.is_empty());
+            assert!(calculate_diff_operation.elapsed_duration >= Duration::from_millis(1));
+        }
+
+        drop(progress2);
+        {
+            let operation_states = output.operation_states.read().unwrap();
+            assert!(operation_states.is_empty());
+        }
+
+        Ok(())
     }
 }
