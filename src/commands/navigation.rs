@@ -12,19 +12,19 @@ use crate::core::graph::{
 };
 use crate::core::mergebase::MergeBaseDb;
 use crate::git::{GitRunInfo, NonZeroOid, Repo};
-use crate::tui::Output;
+use crate::tui::Effects;
 
 /// Go back a certain number of commits.
 #[instrument]
 pub fn prev(
-    output: &Output,
+    effects: &Effects,
     git_run_info: &GitRunInfo,
     num_commits: Option<isize>,
 ) -> eyre::Result<isize> {
     let exit_code = match num_commits {
-        None => git_run_info.run(output, None, &["checkout", "HEAD^"])?,
+        None => git_run_info.run(effects, None, &["checkout", "HEAD^"])?,
         Some(num_commits) => git_run_info.run(
-            output,
+            effects,
             None,
             &["checkout", &format!("HEAD~{}", num_commits)],
         )?,
@@ -32,7 +32,7 @@ pub fn prev(
     if exit_code != 0 {
         return Ok(exit_code);
     }
-    smartlog(output)?;
+    smartlog(effects)?;
     Ok(0)
 }
 
@@ -50,7 +50,7 @@ pub enum Towards {
 
 #[instrument]
 fn advance_towards_main_branch(
-    output: &Output,
+    effects: &Effects,
     repo: &Repo,
     merge_base_db: &MergeBaseDb,
     graph: &CommitGraph,
@@ -58,7 +58,8 @@ fn advance_towards_main_branch(
     main_branch_oid: &MainBranchOid,
 ) -> eyre::Result<(isize, NonZeroOid)> {
     let MainBranchOid(main_branch_oid) = main_branch_oid;
-    let path = find_path_to_merge_base(output, repo, merge_base_db, *main_branch_oid, current_oid)?;
+    let path =
+        find_path_to_merge_base(effects, repo, merge_base_db, *main_branch_oid, current_oid)?;
     let path = match path {
         None => return Ok((0, current_oid)),
         Some(path) if path.len() == 1 => {
@@ -80,14 +81,14 @@ fn advance_towards_main_branch(
 
 #[instrument]
 fn advance_towards_own_commit(
-    output: &Output,
+    effects: &Effects,
     repo: &Repo,
     graph: &CommitGraph,
     current_oid: NonZeroOid,
     num_commits: isize,
     towards: Option<Towards>,
 ) -> eyre::Result<Option<NonZeroOid>> {
-    let glyphs = output.get_glyphs();
+    let glyphs = effects.get_glyphs();
     let mut current_oid = current_oid;
     for i in 0..num_commits {
         let children = &graph[&current_oid].children;
@@ -102,7 +103,7 @@ fn advance_towards_own_commit(
             (Some(Towards::Oldest), [oldest_child_oid, ..]) => *oldest_child_oid,
             (None, [_, _, ..]) => {
                 writeln!(
-                    output.get_output_stream(),
+                    effects.get_output_stream(),
                     "Found multiple possible next commits to go to after traversing {} children:",
                     i
                 )?;
@@ -117,7 +118,7 @@ fn advance_towards_own_commit(
                     };
 
                     writeln!(
-                        output.get_output_stream(),
+                        effects.get_output_stream(),
                         "  {} {}{}",
                         glyphs.bullet_point,
                         printable_styled_string(
@@ -127,7 +128,7 @@ fn advance_towards_own_commit(
                         descriptor
                     )?;
                 }
-                writeln!(output.get_output_stream(), "(Pass --oldest (-o) or --newest (-n) to select between ambiguous next commits)")?;
+                writeln!(effects.get_output_stream(), "(Pass --oldest (-o) or --newest (-n) to select between ambiguous next commits)")?;
                 return Ok(None);
             }
         };
@@ -138,7 +139,7 @@ fn advance_towards_own_commit(
 /// Go forward a certain number of commits.
 #[instrument]
 pub fn next(
-    output: &Output,
+    effects: &Effects,
     git_run_info: &GitRunInfo,
     num_commits: Option<isize>,
     towards: Option<Towards>,
@@ -156,7 +157,7 @@ pub fn next(
     let main_branch_oid = repo.get_main_branch_oid()?;
     let branch_oid_to_names = repo.get_branch_oid_to_names()?;
     let graph = make_graph(
-        output,
+        effects,
         &repo,
         &merge_base_db,
         &event_replayer,
@@ -169,7 +170,7 @@ pub fn next(
 
     let num_commits = num_commits.unwrap_or(1);
     let (num_commits_traversed_towards_main_branch, current_oid) = advance_towards_main_branch(
-        output,
+        effects,
         &repo,
         &merge_base_db,
         &graph,
@@ -178,17 +179,17 @@ pub fn next(
     )?;
     let num_commits = num_commits - num_commits_traversed_towards_main_branch;
     let current_oid =
-        advance_towards_own_commit(output, &repo, &graph, current_oid, num_commits, towards)?;
+        advance_towards_own_commit(effects, &repo, &graph, current_oid, num_commits, towards)?;
     let current_oid = match current_oid {
         None => return Ok(1),
         Some(current_oid) => current_oid,
     };
 
-    let result = git_run_info.run(output, None, &["checkout", &current_oid.to_string()])?;
+    let result = git_run_info.run(effects, None, &["checkout", &current_oid.to_string()])?;
     if result != 0 {
         return Ok(result);
     }
 
-    smartlog(output)?;
+    smartlog(effects)?;
     Ok(0)
 }

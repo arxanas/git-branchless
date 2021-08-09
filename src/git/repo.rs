@@ -30,7 +30,7 @@ use crate::core::config::get_main_branch_name;
 use crate::core::metadata::{render_commit_metadata, CommitMessageProvider, CommitOidProvider};
 use crate::git::config::Config;
 use crate::git::oid::{make_non_zero_oid, MaybeZeroOid, NonZeroOid};
-use crate::tui::{OperationType, Output};
+use crate::tui::{Effects, OperationType};
 
 use super::GitRunInfo;
 
@@ -434,14 +434,19 @@ Either create it, or update the main branch setting by running:
     }
 
     /// Get the patch ID for this commit.
-    pub fn get_patch_id(&self, output: &Output, commit: &Commit) -> eyre::Result<Option<PatchId>> {
+    pub fn get_patch_id(
+        &self,
+        effects: &Effects,
+        commit: &Commit,
+    ) -> eyre::Result<Option<PatchId>> {
         match commit.get_only_parent() {
             None => Ok(None),
             Some(only_parent) => {
                 let parent_tree = only_parent.get_tree()?;
                 let current_tree = commit.get_tree()?;
                 let diff = {
-                    let _progress = output.start_operation(OperationType::CalculateDiff);
+                    let (_effects, _progress) =
+                        effects.start_operation(OperationType::CalculateDiff);
                     self.inner
                         .diff_tree_to_tree(
                             Some(&parent_tree.inner),
@@ -456,8 +461,8 @@ Either create it, or update the main branch setting by running:
                         })?
                 };
                 let patch_id = {
-                    let (_output, _progress) =
-                        output.start_operation(OperationType::CalculatePatchId);
+                    let (_effects, _progress) =
+                        effects.start_operation(OperationType::CalculatePatchId);
                     diff.patchid(None).wrap_err_with(|| {
                         format!(
                             "Computing patch ID between: {:?} and {:?}",
@@ -503,11 +508,11 @@ Either create it, or update the main branch setting by running:
     #[instrument]
     pub fn has_changed_files(
         &self,
-        output: &Output,
+        effects: &Effects,
         git_run_info: &GitRunInfo,
     ) -> eyre::Result<bool> {
         let exit_code = git_run_info.run(
-            output,
+            effects,
             // This is not a mutating operation, so we don't need a transaction ID.
             None,
             &["diff", "--quiet"],

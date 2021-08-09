@@ -121,7 +121,7 @@ mod tests {
     use crate::core::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
     use crate::core::mergebase::MergeBaseDb;
     use crate::testing::{make_git, Git, GitRunOptions};
-    use crate::tui::Output;
+    use crate::tui::Effects;
 
     use super::*;
 
@@ -129,7 +129,7 @@ mod tests {
         git: &Git,
         oid: NonZeroOid,
     ) -> eyre::Result<Option<MaybeZeroOid>> {
-        let output = Output::new_suppress_for_test(Glyphs::detect());
+        let effects = Effects::new_suppress_for_test(Glyphs::detect());
         let repo = git.get_repo()?;
         let conn = repo.get_db_conn()?;
         let merge_base_db = MergeBaseDb::new(&conn)?;
@@ -140,7 +140,7 @@ mod tests {
         let main_branch_oid = repo.get_main_branch_oid()?;
         let branch_oid_to_names = repo.get_branch_oid_to_names()?;
         let graph = make_graph(
-            &output,
+            &effects,
             &repo,
             &merge_base_db,
             &event_replayer,

@@ -17,7 +17,7 @@ use crate::core::graph::{
 use crate::core::mergebase::MergeBaseDb;
 use crate::core::metadata::{render_commit_metadata, CommitOidProvider};
 use crate::git::{Commit, Repo};
-use crate::tui::Output;
+use crate::tui::Effects;
 
 fn recurse_on_commits_helper<
     'repo,
@@ -42,7 +42,7 @@ fn recurse_on_commits_helper<
 }
 
 fn recurse_on_commits<'repo, F: Fn(&Node) -> bool>(
-    output: &Output,
+    effects: &Effects,
     repo: &'repo Repo,
     merge_base_db: &MergeBaseDb,
     event_replayer: &EventReplayer,
@@ -53,7 +53,7 @@ fn recurse_on_commits<'repo, F: Fn(&Node) -> bool>(
     let main_branch_oid = repo.get_main_branch_oid()?;
     let branch_oid_to_names = repo.get_branch_oid_to_names()?;
     let graph = make_graph(
-        output,
+        effects,
         repo,
         merge_base_db,
         event_replayer,
@@ -80,17 +80,8 @@ fn recurse_on_commits<'repo, F: Fn(&Node) -> bool>(
 }
 
 /// Hide the hashes provided on the command-line.
-///
-/// Args:
-/// * `out`: The output stream to write to.
-/// * `hashes`: A list of commit hashes to hide. Revs will be resolved (you can
-///   provide an abbreviated commit hash or ref name).
-/// * `recursive: If `true`, will recursively hide all children of the provided
-///   commits as well.
-///
-/// Returns: exit code (0 denotes successful exit).
 #[instrument]
-pub fn hide(output: &Output, hashes: Vec<String>, recursive: bool) -> eyre::Result<isize> {
+pub fn hide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::Result<isize> {
     let now = SystemTime::now();
     let glyphs = Glyphs::detect();
     let repo = Repo::from_current_dir()?;
@@ -103,13 +94,13 @@ pub fn hide(output: &Output, hashes: Vec<String>, recursive: bool) -> eyre::Resu
     let commits = match commits {
         ResolveCommitsResult::Ok { commits } => commits,
         ResolveCommitsResult::CommitNotFound { commit: hash } => {
-            writeln!(output.get_output_stream(), "Commit not found: {}", hash)?;
+            writeln!(effects.get_output_stream(), "Commit not found: {}", hash)?;
             return Ok(1);
         }
     };
     let commits = if recursive {
         recurse_on_commits(
-            output,
+            effects,
             &repo,
             &merge_base_db,
             &event_replayer,
@@ -135,7 +126,7 @@ pub fn hide(output: &Output, hashes: Vec<String>, recursive: bool) -> eyre::Resu
     let cursor = event_replayer.make_default_cursor();
     for commit in commits {
         writeln!(
-            output.get_output_stream(),
+            effects.get_output_stream(),
             "Hid commit: {}",
             printable_styled_string(&glyphs, commit.friendly_describe()?)?
         )?;
@@ -143,7 +134,7 @@ pub fn hide(output: &Output, hashes: Vec<String>, recursive: bool) -> eyre::Resu
             event_replayer.get_cursor_commit_visibility(cursor, commit.get_oid())
         {
             writeln!(
-                output.get_output_stream(),
+                effects.get_output_stream(),
                 "(It was already hidden, so this operation had no effect.)"
             )?;
         }
@@ -151,7 +142,7 @@ pub fn hide(output: &Output, hashes: Vec<String>, recursive: bool) -> eyre::Resu
         let commit_target_oid =
             render_commit_metadata(&commit, &mut [&mut CommitOidProvider::new(false)?])?;
         writeln!(
-            output.get_output_stream(),
+            effects.get_output_stream(),
             "To unhide this commit, run: git unhide {}",
             printable_styled_string(&glyphs, commit_target_oid)?
         )?;
@@ -161,17 +152,8 @@ pub fn hide(output: &Output, hashes: Vec<String>, recursive: bool) -> eyre::Resu
 }
 
 /// Unhide the hashes provided on the command-line.
-///
-/// Args:
-/// * `out`: The output stream to write to.
-/// * `hashes`: A list of commit hashes to unhide. Revs will be resolved (you can
-/// provide an abbreviated commit hash or ref name).
-/// * `recursive: If `true`, will recursively unhide all children of the provided
-///   commits as well.
-///
-/// Returns: exit code (0 denotes successful exit).
 #[instrument]
-pub fn unhide(output: &Output, hashes: Vec<String>, recursive: bool) -> eyre::Result<isize> {
+pub fn unhide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::Result<isize> {
     let now = SystemTime::now();
     let glyphs = Glyphs::detect();
     let repo = Repo::from_current_dir()?;
@@ -184,13 +166,13 @@ pub fn unhide(output: &Output, hashes: Vec<String>, recursive: bool) -> eyre::Re
     let commits = match commits {
         ResolveCommitsResult::Ok { commits } => commits,
         ResolveCommitsResult::CommitNotFound { commit: hash } => {
-            writeln!(output.get_output_stream(), "Commit not found: {}", hash)?;
+            writeln!(effects.get_output_stream(), "Commit not found: {}", hash)?;
             return Ok(1);
         }
     };
     let commits = if recursive {
         recurse_on_commits(
-            output,
+            effects,
             &repo,
             &merge_base_db,
             &event_replayer,
@@ -216,7 +198,7 @@ pub fn unhide(output: &Output, hashes: Vec<String>, recursive: bool) -> eyre::Re
     let cursor = event_replayer.make_default_cursor();
     for commit in commits {
         writeln!(
-            output.get_output_stream(),
+            effects.get_output_stream(),
             "Unhid commit: {}",
             printable_styled_string(&glyphs, commit.friendly_describe()?)?,
         )?;
@@ -224,7 +206,7 @@ pub fn unhide(output: &Output, hashes: Vec<String>, recursive: bool) -> eyre::Re
             event_replayer.get_cursor_commit_visibility(cursor, commit.get_oid())
         {
             writeln!(
-                output.get_output_stream(),
+                effects.get_output_stream(),
                 "(It was not hidden, so this operation had no effect.)"
             )?;
         }
@@ -232,7 +214,7 @@ pub fn unhide(output: &Output, hashes: Vec<String>, recursive: bool) -> eyre::Re
         let commit_target_oid =
             render_commit_metadata(&commit, &mut [&mut CommitOidProvider::new(false)?])?;
         writeln!(
-            output.get_output_stream(),
+            effects.get_output_stream(),
             "To hide this commit, run: git hide {}",
             printable_styled_string(&glyphs, commit_target_oid)?
         )?;

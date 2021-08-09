@@ -19,7 +19,7 @@ use crate::core::eventlog::{is_gc_ref, EventLogDb, EventReplayer};
 use crate::core::graph::{make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid};
 use crate::core::mergebase::MergeBaseDb;
 use crate::git::{NonZeroOid, Reference, Repo};
-use crate::tui::Output;
+use crate::tui::Effects;
 
 fn find_dangling_references<'repo>(
     repo: &'repo Repo,
@@ -71,7 +71,7 @@ pub fn mark_commit_reachable(repo: &Repo, commit_oid: NonZeroOid) -> eyre::Resul
 ///
 /// Frees any references to commits which are no longer visible in the smartlog.
 #[instrument]
-pub fn gc(output: &Output) -> eyre::Result<()> {
+pub fn gc(effects: &Effects) -> eyre::Result<()> {
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
     let merge_base_db = MergeBaseDb::new(&conn)?;
@@ -82,7 +82,7 @@ pub fn gc(output: &Output) -> eyre::Result<()> {
     let branch_oid_to_names = repo.get_branch_oid_to_names()?;
 
     let graph = make_graph(
-        output,
+        effects,
         &repo,
         &merge_base_db,
         &event_replayer,
@@ -93,7 +93,10 @@ pub fn gc(output: &Output) -> eyre::Result<()> {
         true,
     )?;
 
-    writeln!(output.get_output_stream(), "branchless: collecting garbage")?;
+    writeln!(
+        effects.get_output_stream(),
+        "branchless: collecting garbage"
+    )?;
     let dangling_references = find_dangling_references(&repo, &graph)?;
     for mut reference in dangling_references.into_iter() {
         reference

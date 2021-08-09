@@ -19,7 +19,7 @@ use crate::core::rewrite::{
     execute_rebase_plan, BuildRebasePlanOptions, ExecuteRebasePlanOptions, RebasePlanBuilder,
 };
 use crate::git::{GitRunInfo, NonZeroOid, Repo};
-use crate::tui::Output;
+use crate::tui::Effects;
 
 #[instrument]
 fn resolve_base_commit(
@@ -47,7 +47,7 @@ fn resolve_base_commit(
 /// Move a subtree from one place to another.
 #[instrument]
 pub fn r#move(
-    output: &Output,
+    effects: &Effects,
     git_run_info: &GitRunInfo,
     source: Option<String>,
     dest: Option<String>,
@@ -62,7 +62,7 @@ pub fn r#move(
     let (source, should_resolve_base_commit) = match (source, base) {
         (Some(_), Some(_)) => {
             writeln!(
-                output.get_output_stream(),
+                effects.get_output_stream(),
                 "The --source and --base options cannot both be provided."
             )?;
             return Ok(1);
@@ -73,7 +73,7 @@ pub fn r#move(
             let source_oid = match head_oid {
                 Some(oid) => oid,
                 None => {
-                    writeln!(output.get_output_stream(), "No --source or --base argument was provided, and no OID for HEAD is available as a default")?;
+                    writeln!(effects.get_output_stream(), "No --source or --base argument was provided, and no OID for HEAD is available as a default")?;
                     return Ok(1);
                 }
             };
@@ -85,7 +85,7 @@ pub fn r#move(
         None => match head_oid {
             Some(oid) => oid.to_string(),
             None => {
-                writeln!(output.get_output_stream(), "No --dest argument was provided, and no OID for HEAD is available as a default")?;
+                writeln!(effects.get_output_stream(), "No --dest argument was provided, and no OID for HEAD is available as a default")?;
                 return Ok(1);
             }
         },
@@ -96,7 +96,7 @@ pub fn r#move(
             _ => eyre::bail!("Unexpected number of returns values from resolve_commits"),
         },
         ResolveCommitsResult::CommitNotFound { commit } => {
-            writeln!(output.get_output_stream(), "Commit not found: {}", commit)?;
+            writeln!(effects.get_output_stream(), "Commit not found: {}", commit)?;
             return Ok(1);
         }
     };
@@ -109,7 +109,7 @@ pub fn r#move(
     let event_replayer = EventReplayer::from_event_log_db(&repo, &event_log_db)?;
     let event_cursor = event_replayer.make_default_cursor();
     let graph = make_graph(
-        output,
+        effects,
         &repo,
         &merge_base_db,
         &event_replayer,
@@ -122,7 +122,7 @@ pub fn r#move(
 
     let source_oid = if should_resolve_base_commit {
         let merge_base_oid =
-            merge_base_db.get_merge_base_oid(output, &repo, source_oid, dest_oid)?;
+            merge_base_db.get_merge_base_oid(effects, &repo, source_oid, dest_oid)?;
         resolve_base_commit(&graph, merge_base_oid, source_oid)
     } else {
         source_oid
@@ -139,7 +139,7 @@ pub fn r#move(
         );
         builder.move_subtree(source_oid, dest_oid)?;
         builder.build(
-            output,
+            effects,
             &BuildRebasePlanOptions {
                 dump_rebase_constraints,
                 dump_rebase_plan,
@@ -148,7 +148,7 @@ pub fn r#move(
     };
     let result = match rebase_plan {
         Ok(None) => {
-            writeln!(output.get_output_stream(), "Nothing to do.")?;
+            writeln!(effects.get_output_stream(), "Nothing to do.")?;
             0
         }
         Ok(Some(rebase_plan)) => {
@@ -159,10 +159,10 @@ pub fn r#move(
                 force_in_memory,
                 force_on_disk,
             };
-            execute_rebase_plan(output, git_run_info, &repo, &rebase_plan, &options)?
+            execute_rebase_plan(effects, git_run_info, &repo, &rebase_plan, &options)?
         }
         Err(err) => {
-            err.describe(output, &repo)?;
+            err.describe(effects, &repo)?;
             1
         }
     };

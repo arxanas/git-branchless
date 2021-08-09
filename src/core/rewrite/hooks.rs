@@ -20,7 +20,7 @@ use crate::core::mergebase::MergeBaseDb;
 use crate::git::{
     CategorizedReferenceName, GitRunInfo, MaybeZeroOid, NonZeroOid, ReferenceTarget, Repo,
 };
-use crate::tui::Output;
+use crate::tui::Effects;
 
 use super::{find_abandoned_children, move_branches};
 
@@ -29,7 +29,7 @@ use super::{find_abandoned_children, move_branches};
 /// See the man-page for `githooks(5)`.
 #[instrument]
 pub fn hook_post_rewrite(
-    output: &Output,
+    effects: &Effects,
     git_run_info: &GitRunInfo,
     rewrite_type: &str,
 ) -> eyre::Result<()> {
@@ -75,7 +75,7 @@ pub fn hook_post_rewrite(
         }
         .to_string();
         writeln!(
-            output.get_output_stream(),
+            effects.get_output_stream(),
             "branchless: processing {}",
             message_rewritten_commits
         )?;
@@ -89,14 +89,14 @@ pub fn hook_post_rewrite(
         .exists()
     {
         move_branches(git_run_info, &repo, event_tx_id, &rewritten_oids)?;
-        check_out_new_head(output, git_run_info, &repo, event_tx_id, &rewritten_oids)?;
+        check_out_new_head(effects, git_run_info, &repo, event_tx_id, &rewritten_oids)?;
     }
 
     let should_check_abandoned_commits = get_restack_warn_abandoned(&repo)?;
     if should_check_abandoned_commits && !is_spurious_event {
         let merge_base_db = MergeBaseDb::new(&conn)?;
         warn_abandoned(
-            output,
+            effects,
             &repo,
             &merge_base_db,
             &event_log_db,
@@ -109,7 +109,7 @@ pub fn hook_post_rewrite(
 
 #[instrument]
 fn check_out_new_head(
-    output: &Output,
+    effects: &Effects,
     git_run_info: &GitRunInfo,
     repo: &Repo,
     event_tx_id: EventTransactionId,
@@ -161,7 +161,7 @@ fn check_out_new_head(
 
     if let Some(checkout_target) = checkout_target {
         let exit_code = git_run_info.run(
-            output,
+            effects,
             Some(event_tx_id),
             &[&OsString::from("checkout"), &checkout_target],
         )?;
@@ -178,7 +178,7 @@ fn check_out_new_head(
 
 #[instrument(skip(old_commit_oids))]
 fn warn_abandoned(
-    output: &Output,
+    effects: &Effects,
     repo: &Repo,
     merge_base_db: &MergeBaseDb,
     event_log_db: &EventLogDb,
@@ -193,7 +193,7 @@ fn warn_abandoned(
     let main_branch_oid = repo.get_main_branch_oid()?;
     let branch_oid_to_names = repo.get_branch_oid_to_names()?;
     let graph = make_graph(
-        output,
+        effects,
         repo,
         merge_base_db,
         &event_replayer,
@@ -359,7 +359,10 @@ pub fn hook_register_extra_post_rewrite_hook() -> eyre::Result<()> {
 /// For rebases, detect empty commits (which have probably been applied
 /// upstream) and write them to the `rewritten-list` file, so that they're later
 /// passed to the `post-rewrite` hook.
-pub fn hook_drop_commit_if_empty(output: &Output, old_commit_oid: NonZeroOid) -> eyre::Result<()> {
+pub fn hook_drop_commit_if_empty(
+    effects: &Effects,
+    old_commit_oid: NonZeroOid,
+) -> eyre::Result<()> {
     let repo = Repo::from_current_dir()?;
     let head_info = repo.get_head_info()?;
     let head_oid = match head_info.oid {
@@ -380,9 +383,9 @@ pub fn hook_drop_commit_if_empty(output: &Output, old_commit_oid: NonZeroOid) ->
         None => return Ok(()),
     };
     writeln!(
-        output.get_output_stream(),
+        effects.get_output_stream(),
         "Skipped now-empty commit: {}",
-        printable_styled_string(output.get_glyphs(), head_commit.friendly_describe()?)?
+        printable_styled_string(effects.get_glyphs(), head_commit.friendly_describe()?)?
     )?;
     repo.set_head(only_parent_oid)?;
 
@@ -404,7 +407,7 @@ pub fn hook_drop_commit_if_empty(output: &Output, old_commit_oid: NonZeroOid) ->
 /// For rebases, if a commit is known to have been applied upstream, skip it
 /// without attempting to apply it.
 pub fn hook_skip_upstream_applied_commit(
-    output: &Output,
+    effects: &Effects,
     commit_oid: NonZeroOid,
 ) -> eyre::Result<()> {
     let repo = Repo::from_current_dir()?;
@@ -413,9 +416,9 @@ pub fn hook_skip_upstream_applied_commit(
         None => eyre::bail!("Could not find commit: {:?}", commit_oid),
     };
     writeln!(
-        output.get_output_stream(),
+        effects.get_output_stream(),
         "Skipping commit (was already applied upstream): {}",
-        printable_styled_string(output.get_glyphs(), commit.friendly_describe()?)?
+        printable_styled_string(effects.get_glyphs(), commit.friendly_describe()?)?
     )?;
 
     let original_head_oid = get_original_head_oid(&repo)?;

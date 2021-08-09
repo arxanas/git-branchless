@@ -73,11 +73,11 @@ use crate::core::rewrite::{
     BuildRebasePlanOptions, ExecuteRebasePlanOptions, RebasePlanBuilder,
 };
 use crate::git::{GitRunInfo, NonZeroOid, Repo};
-use crate::tui::Output;
+use crate::tui::Effects;
 
 #[instrument(skip(commits))]
 fn restack_commits(
-    output: &Output,
+    effects: &Effects,
     repo: &Repo,
     git_run_info: &GitRunInfo,
     merge_base_db: &MergeBaseDb,
@@ -92,7 +92,7 @@ fn restack_commits(
     let main_branch_oid = repo.get_main_branch_oid()?;
     let branch_oid_to_names = repo.get_branch_oid_to_names()?;
     let graph = make_graph(
-        output,
+        effects,
         repo,
         merge_base_db,
         &event_replayer,
@@ -135,25 +135,25 @@ fn restack_commits(
                 builder.move_subtree(child_oid, dest_oid)?;
             }
         }
-        builder.build(output, build_options)?
+        builder.build(effects, build_options)?
     };
 
     match rebase_plan {
         Ok(None) => {
             writeln!(
-                output.get_output_stream(),
+                effects.get_output_stream(),
                 "No abandoned commits to restack."
             )?;
             Ok(0)
         }
         Ok(Some(rebase_plan)) => {
             let exit_code =
-                execute_rebase_plan(output, git_run_info, repo, &rebase_plan, execute_options)?;
-            writeln!(output.get_output_stream(), "Finished restacking commits.")?;
+                execute_rebase_plan(effects, git_run_info, repo, &rebase_plan, execute_options)?;
+            writeln!(effects.get_output_stream(), "Finished restacking commits.")?;
             Ok(exit_code)
         }
         Err(err) => {
-            err.describe(output, repo)?;
+            err.describe(effects, repo)?;
             Ok(1)
         }
     }
@@ -161,7 +161,7 @@ fn restack_commits(
 
 #[instrument]
 fn restack_branches(
-    output: &Output,
+    effects: &Effects,
     repo: &Repo,
     git_run_info: &GitRunInfo,
     merge_base_db: &MergeBaseDb,
@@ -173,7 +173,7 @@ fn restack_branches(
     let main_branch_oid = repo.get_main_branch_oid()?;
     let branch_oid_to_names = repo.get_branch_oid_to_names()?;
     let graph = make_graph(
-        output,
+        effects,
         repo,
         merge_base_db,
         &event_replayer,
@@ -212,12 +212,12 @@ fn restack_branches(
 
     if rewritten_oids.is_empty() {
         writeln!(
-            output.get_output_stream(),
+            effects.get_output_stream(),
             "No abandoned branches to restack."
         )?;
     } else {
         move_branches(git_run_info, repo, options.event_tx_id, &rewritten_oids)?;
-        writeln!(output.get_output_stream(), "Finished restacking branches.")?;
+        writeln!(effects.get_output_stream(), "Finished restacking branches.")?;
     }
     Ok(0)
 }
@@ -227,7 +227,7 @@ fn restack_branches(
 /// Returns an exit code (0 denotes successful exit).
 #[instrument]
 pub fn restack(
-    output: &Output,
+    effects: &Effects,
     git_run_info: &GitRunInfo,
     commits: Vec<String>,
     dump_rebase_constraints: bool,
@@ -244,7 +244,7 @@ pub fn restack(
     let commits = match resolve_commits(&repo, commits)? {
         ResolveCommitsResult::Ok { commits } => commits,
         ResolveCommitsResult::CommitNotFound { commit } => {
-            writeln!(output.get_output_stream(), "Commit not found: {}", commit)?;
+            writeln!(effects.get_output_stream(), "Commit not found: {}", commit)?;
             return Ok(1);
         }
     };
@@ -268,7 +268,7 @@ pub fn restack(
     };
 
     let result = restack_commits(
-        output,
+        effects,
         &repo,
         git_run_info,
         &merge_base_db,
@@ -282,7 +282,7 @@ pub fn restack(
     }
 
     let result = restack_branches(
-        output,
+        effects,
         &repo,
         git_run_info,
         &merge_base_db,
@@ -295,13 +295,13 @@ pub fn restack(
 
     let result = match head_oid {
         Some(head_oid) => git_run_info.run(
-            output,
+            effects,
             Some(event_tx_id),
             &["checkout", &head_oid.to_string()],
         )?,
         None => result,
     };
 
-    smartlog(output)?;
+    smartlog(effects)?;
     Ok(result)
 }
