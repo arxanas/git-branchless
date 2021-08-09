@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use branchless::commands::wrap;
 use branchless::core::formatting::Glyphs;
 use branchless::git::{GitRunInfo, NonZeroOid};
-use branchless::tui::Output;
+use branchless::tui::Effects;
 use structopt::StructOpt;
 
 #[derive(StructOpt)]
@@ -196,34 +196,34 @@ fn main() -> eyre::Result<()> {
         working_directory: std::env::current_dir()?,
         env: std::env::vars_os().collect(),
     };
-    let output = Output::new(Glyphs::detect());
+    let effects = Effects::new(Glyphs::detect());
 
     let exit_code = match opts {
         Opts::Init { uninstall: false } => {
-            branchless::commands::init::init(&output, &git_run_info)?;
+            branchless::commands::init::init(&effects, &git_run_info)?;
             0
         }
 
         Opts::Init { uninstall: true } => {
-            branchless::commands::init::uninstall(&output)?;
+            branchless::commands::init::uninstall(&effects)?;
             0
         }
 
         Opts::Smartlog => {
-            branchless::commands::smartlog::smartlog(&output)?;
+            branchless::commands::smartlog::smartlog(&effects)?;
             0
         }
 
         Opts::Hide { commits, recursive } => {
-            branchless::commands::hide::hide(&output, commits, recursive)?
+            branchless::commands::hide::hide(&effects, commits, recursive)?
         }
 
         Opts::Unhide { commits, recursive } => {
-            branchless::commands::hide::unhide(&output, commits, recursive)?
+            branchless::commands::hide::unhide(&effects, commits, recursive)?
         }
 
         Opts::Prev { num_commits } => {
-            branchless::commands::navigation::prev(&output, &git_run_info, num_commits)?
+            branchless::commands::navigation::prev(&effects, &git_run_info, num_commits)?
         }
 
         Opts::Next {
@@ -237,7 +237,7 @@ fn main() -> eyre::Result<()> {
                 (false, true) => Some(branchless::commands::navigation::Towards::Newest),
                 (true, true) => eyre::bail!("Both --oldest and --newest were set"),
             };
-            branchless::commands::navigation::next(&output, &git_run_info, num_commits, towards)?
+            branchless::commands::navigation::next(&effects, &git_run_info, num_commits, towards)?
         }
 
         Opts::Move {
@@ -249,7 +249,7 @@ fn main() -> eyre::Result<()> {
             dump_rebase_constraints,
             dump_rebase_plan,
         } => branchless::commands::r#move::r#move(
-            &output,
+            &effects,
             &git_run_info,
             source,
             dest,
@@ -265,17 +265,17 @@ fn main() -> eyre::Result<()> {
             dump_rebase_constraints,
             dump_rebase_plan,
         } => branchless::commands::restack::restack(
-            &output,
+            &effects,
             &git_run_info,
             commits,
             dump_rebase_constraints,
             dump_rebase_plan,
         )?,
 
-        Opts::Undo => branchless::commands::undo::undo(&output, &git_run_info)?,
+        Opts::Undo => branchless::commands::undo::undo(&effects, &git_run_info)?,
 
         Opts::Gc | Opts::HookPreAutoGc => {
-            branchless::commands::gc::gc(&output)?;
+            branchless::commands::gc::gc(&effects)?;
             0
         }
 
@@ -295,7 +295,7 @@ fn main() -> eyre::Result<()> {
         }
 
         Opts::HookPostRewrite { rewrite_type } => {
-            branchless::commands::hooks::hook_post_rewrite(&output, &git_run_info, &rewrite_type)?;
+            branchless::commands::hooks::hook_post_rewrite(&effects, &git_run_info, &rewrite_type)?;
             0
         }
 
@@ -305,12 +305,12 @@ fn main() -> eyre::Result<()> {
         }
 
         Opts::HookDetectEmptyCommit { old_commit_oid } => {
-            branchless::commands::hooks::hook_drop_commit_if_empty(&output, old_commit_oid)?;
+            branchless::commands::hooks::hook_drop_commit_if_empty(&effects, old_commit_oid)?;
             0
         }
 
         Opts::HookSkipUpstreamAppliedCommit { commit_oid } => {
-            branchless::commands::hooks::hook_skip_upstream_applied_commit(&output, commit_oid)?;
+            branchless::commands::hooks::hook_skip_upstream_applied_commit(&effects, commit_oid)?;
             0
         }
 
@@ -320,7 +320,7 @@ fn main() -> eyre::Result<()> {
             is_branch_checkout,
         } => {
             branchless::commands::hooks::hook_post_checkout(
-                &output,
+                &effects,
                 &previous_commit,
                 &current_commit,
                 is_branch_checkout,
@@ -329,12 +329,12 @@ fn main() -> eyre::Result<()> {
         }
 
         Opts::HookPostCommit => {
-            branchless::commands::hooks::hook_post_commit(&output)?;
+            branchless::commands::hooks::hook_post_commit(&effects)?;
             0
         }
 
         Opts::HookReferenceTransaction { transaction_state } => {
-            branchless::commands::hooks::hook_reference_transaction(&output, &transaction_state)?;
+            branchless::commands::hooks::hook_reference_transaction(&effects, &transaction_state)?;
             0
         }
     };

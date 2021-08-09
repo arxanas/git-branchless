@@ -109,9 +109,10 @@ impl OperationState {
     }
 }
 
-/// Wrapper around output. Also manages progress indicators.
+/// Wrapper around side-effectful operations, such as output and progress
+/// indicators.
 #[derive(Clone)]
-pub struct Output {
+pub struct Effects {
     glyphs: Glyphs,
     dest: OutputDest,
     multi_progress: Arc<MultiProgress>,
@@ -119,7 +120,7 @@ pub struct Output {
     operation_states: Arc<RwLock<HashMap<OperationType, OperationState>>>,
 }
 
-impl std::fmt::Debug for Output {
+impl std::fmt::Debug for Effects {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -162,13 +163,13 @@ fn spawn_progress_updater_thread(
     });
 }
 
-impl Output {
+impl Effects {
     /// Constructor. Writes to stdout.
     pub fn new(glyphs: Glyphs) -> Self {
         let multi_progress = Default::default();
         let operation_states = Default::default();
         spawn_progress_updater_thread(&multi_progress, &operation_states);
-        Output {
+        Effects {
             glyphs,
             dest: OutputDest::Stdout,
             multi_progress,
@@ -179,7 +180,7 @@ impl Output {
 
     /// Constructor. Suppresses all output.
     pub fn new_suppress_for_test(glyphs: Glyphs) -> Self {
-        Output {
+        Effects {
             glyphs,
             dest: OutputDest::Suppress,
             multi_progress: Default::default(),
@@ -190,7 +191,7 @@ impl Output {
 
     /// Constructor. Writes to the provided buffer.
     pub fn new_from_buffer_for_test(glyphs: Glyphs, buffer: &Arc<Mutex<Vec<u8>>>) -> Self {
-        Output {
+        Effects {
             glyphs,
             dest: OutputDest::BufferForTest(Arc::clone(buffer)),
             multi_progress: Default::default(),
@@ -229,9 +230,9 @@ impl Output {
     /// value, rather than from zero. The practical implication is that you can
     /// see the aggregate time it took to carry out sibling operations, i.e. the
     /// same operation called multiple times in a loop.
-    pub fn start_operation(&self, operation_type: OperationType) -> (Output, ProgressHandle) {
+    pub fn start_operation(&self, operation_type: OperationType) -> (Effects, ProgressHandle) {
         let progress = ProgressHandle {
-            output: self,
+            effects: self,
             operation_type,
         };
         match self.dest {
@@ -259,11 +260,11 @@ impl Output {
         });
         operation_state.start_times.push(now);
 
-        let output = Self {
+        let effects = Self {
             nesting_level,
             ..self.clone()
         };
-        (output, progress)
+        (effects, progress)
     }
 
     fn on_notify_progress(&self, operation_type: OperationType, current: usize, total: usize) {
@@ -409,25 +410,25 @@ impl Write for ErrorStream {
     }
 }
 
-pub struct ProgressHandle<'output> {
-    output: &'output Output,
+pub struct ProgressHandle<'a> {
+    effects: &'a Effects,
     operation_type: OperationType,
 }
 
 impl Drop for ProgressHandle<'_> {
     fn drop(&mut self) {
-        self.output.on_drop_progress_handle(self.operation_type)
+        self.effects.on_drop_progress_handle(self.operation_type)
     }
 }
 
 impl ProgressHandle<'_> {
     pub fn notify_progress(&self, current: usize, total: usize) {
-        self.output
+        self.effects
             .on_notify_progress(self.operation_type, current, total);
     }
 
     pub fn notify_progress_inc(&self, increment: usize) {
-        self.output
+        self.effects
             .on_notify_progress_inc(self.operation_type, increment);
     }
 }
@@ -437,21 +438,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_output_progress() -> eyre::Result<()> {
-        let output = Output::new(Glyphs::text());
-        let (output2, progress2) = output.start_operation(OperationType::GetMergeBase);
+    fn test_effects_progress() -> eyre::Result<()> {
+        let effects = Effects::new(Glyphs::text());
+        let (effects2, progress2) = effects.start_operation(OperationType::GetMergeBase);
 
         {
-            let operation_states = output.operation_states.read().unwrap();
+            let operation_states = effects.operation_states.read().unwrap();
             let get_merge_base_operation =
                 operation_states.get(&OperationType::GetMergeBase).unwrap();
             assert_eq!(get_merge_base_operation.start_times.len(), 1);
         }
 
         std::thread::sleep(Duration::from_millis(1));
-        let (_output, progress3) = output.start_operation(OperationType::GetMergeBase);
+        let (_effects3, progress3) = effects.start_operation(OperationType::GetMergeBase);
         let earlier_start_time = {
-            let operation_states = output.operation_states.read().unwrap();
+            let operation_states = effects.operation_states.read().unwrap();
             let get_merge_base_operation =
                 operation_states.get(&OperationType::GetMergeBase).unwrap();
             assert_eq!(get_merge_base_operation.start_times.len(), 2);
@@ -460,7 +461,7 @@ mod tests {
 
         drop(progress3);
         {
-            let operation_states = output.operation_states.read().unwrap();
+            let operation_states = effects.operation_states.read().unwrap();
             let get_merge_base_operation =
                 operation_states.get(&OperationType::GetMergeBase).unwrap();
             // Ensure that we try to keep the earliest times in the list, to
@@ -472,11 +473,11 @@ mod tests {
         }
 
         // Nest an operation.
-        let (_output4, progress4) = output2.start_operation(OperationType::CalculateDiff);
+        let (_effects4, progress4) = effects2.start_operation(OperationType::CalculateDiff);
         std::thread::sleep(Duration::from_millis(1));
         drop(progress4);
         {
-            let operation_states = output.operation_states.read().unwrap();
+            let operation_states = effects.operation_states.read().unwrap();
             // The operation should still be present until the root-level
             // operation has finished, even if it's not currently in progress.
             let calculate_diff_operation =
@@ -487,7 +488,7 @@ mod tests {
 
         drop(progress2);
         {
-            let operation_states = output.operation_states.read().unwrap();
+            let operation_states = effects.operation_states.read().unwrap();
             assert!(operation_states.is_empty());
         }
 

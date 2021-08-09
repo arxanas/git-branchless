@@ -11,7 +11,7 @@ use tracing::{instrument, warn};
 use crate::core::eventlog::{CommitVisibility, Event, EventCursor, EventReplayer};
 use crate::core::mergebase::MergeBaseDb;
 use crate::git::{Commit, NonZeroOid, Repo};
-use crate::tui::{OperationType, Output};
+use crate::tui::{Effects, OperationType};
 
 /// The OID of the repo's HEAD reference.
 #[derive(Debug)]
@@ -100,14 +100,14 @@ impl<'repo> Deref for CommitGraph<'repo> {
 }
 
 fn find_path_to_merge_base_internal<'repo>(
-    output: &Output,
+    effects: &Effects,
     repo: &'repo Repo,
     merge_base_db: &MergeBaseDb,
     commit_oid: NonZeroOid,
     target_oid: NonZeroOid,
     mut visited_commit_callback: impl FnMut(NonZeroOid),
 ) -> eyre::Result<Option<Vec<Commit<'repo>>>> {
-    let (output, _progress) = output.start_operation(OperationType::FindPathToMergeBase);
+    let (effects, _progress) = effects.start_operation(OperationType::FindPathToMergeBase);
 
     let mut queue = VecDeque::new();
     visited_commit_callback(commit_oid);
@@ -116,7 +116,8 @@ fn find_path_to_merge_base_internal<'repo>(
         None => eyre::bail!("Unable to find commit with OID: {:?}", commit_oid),
     };
     queue.push_back(vec![first_commit]);
-    let merge_base_oid = merge_base_db.get_merge_base_oid(&output, repo, commit_oid, target_oid)?;
+    let merge_base_oid =
+        merge_base_db.get_merge_base_oid(&effects, repo, commit_oid, target_oid)?;
     while let Some(path) = queue.pop_front() {
         let last_commit = path
             .last()
@@ -160,14 +161,14 @@ fn find_path_to_merge_base_internal<'repo>(
 /// If there is no such path, returns `None`.
 #[instrument]
 pub fn find_path_to_merge_base<'repo>(
-    output: &Output,
+    effects: &Effects,
     repo: &'repo Repo,
     merge_base_db: &MergeBaseDb,
     commit_oid: NonZeroOid,
     target_oid: NonZeroOid,
 ) -> eyre::Result<Option<Vec<Commit<'repo>>>> {
     find_path_to_merge_base_internal(
-        output,
+        effects,
         repo,
         merge_base_db,
         commit_oid,
@@ -184,7 +185,7 @@ pub fn find_path_to_merge_base<'repo>(
 /// for this commit since the main branch).
 #[instrument(skip(commit_oids))]
 fn walk_from_commits<'repo>(
-    output: &Output,
+    effects: &Effects,
     repo: &'repo Repo,
     merge_base_db: &MergeBaseDb,
     event_replayer: &EventReplayer,
@@ -192,7 +193,7 @@ fn walk_from_commits<'repo>(
     main_branch_oid: &MainBranchOid,
     commit_oids: &CommitOids,
 ) -> eyre::Result<CommitGraph<'repo>> {
-    let (output, _progress) = output.start_operation(OperationType::WalkCommits);
+    let (effects, _progress) = effects.start_operation(OperationType::WalkCommits);
 
     let mut graph: HashMap<NonZeroOid, Node> = Default::default();
 
@@ -206,7 +207,7 @@ fn walk_from_commits<'repo>(
         };
 
         let merge_base_oid = merge_base_db.get_merge_base_oid(
-            &output,
+            &effects,
             repo,
             current_commit.get_oid(),
             main_branch_oid.0,
@@ -219,7 +220,7 @@ fn walk_from_commits<'repo>(
             None => vec![current_commit],
             Some(merge_base_oid) => {
                 let path_to_merge_base = find_path_to_merge_base(
-                    &output,
+                    &effects,
                     repo,
                     merge_base_db,
                     current_commit.get_oid(),
@@ -412,7 +413,7 @@ fn do_remove_commits(graph: &mut CommitGraph, head_oid: &HeadOid, branch_oids: &
 /// Returns: A tuple of the head OID and the commit graph.
 #[instrument]
 pub fn make_graph<'repo>(
-    output: &Output,
+    effects: &Effects,
     repo: &'repo Repo,
     merge_base_db: &MergeBaseDb,
     event_replayer: &EventReplayer,
@@ -422,7 +423,7 @@ pub fn make_graph<'repo>(
     branch_oids: &BranchOids,
     remove_commits: bool,
 ) -> eyre::Result<CommitGraph<'repo>> {
-    let (output, _progress) = output.start_operation(OperationType::MakeGraph);
+    let (effects, _progress) = effects.start_operation(OperationType::MakeGraph);
 
     let mut commit_oids: HashSet<NonZeroOid> = event_replayer
         .get_cursor_active_oids(event_cursor)
@@ -434,7 +435,7 @@ pub fn make_graph<'repo>(
     }
     let commit_oids = &CommitOids(commit_oids);
     let mut graph = walk_from_commits(
-        &output,
+        &effects,
         repo,
         merge_base_db,
         event_replayer,
@@ -474,10 +475,10 @@ mod tests {
         let conn = repo.get_db_conn()?;
         let merge_base_db = MergeBaseDb::new(&conn)?;
 
-        let mut output = Output::new_suppress_for_test(Glyphs::detect());
+        let mut effects = Effects::new_suppress_for_test(Glyphs::detect());
         let mut seen_oids = HashSet::new();
         let path = find_path_to_merge_base_internal(
-            &mut output,
+            &mut effects,
             &repo,
             &merge_base_db,
             test2_oid,

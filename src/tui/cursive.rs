@@ -2,11 +2,11 @@
 use cursive::theme::{Color, PaletteColor};
 use cursive::{Cursive, CursiveRunnable, CursiveRunner};
 
-use super::Output;
+use super::Effects;
 
 /// Create an instance of a `CursiveRunner`, and clean it up afterward.
-pub fn with_siv<T, F: FnOnce(Output, CursiveRunner<CursiveRunnable>) -> eyre::Result<T>>(
-    output: &Output,
+pub fn with_siv<T, F: FnOnce(Effects, CursiveRunner<CursiveRunnable>) -> eyre::Result<T>>(
+    effects: &Effects,
     f: F,
 ) -> eyre::Result<T> {
     // I tried these back-ends:
@@ -35,8 +35,8 @@ pub fn with_siv<T, F: FnOnce(Output, CursiveRunner<CursiveRunnable>) -> eyre::Re
             (PaletteColor::Primary, Color::TerminalDefault),
         ]);
     });
-    let output = output.enable_tui_mode();
-    f(output, siv.into_runner())
+    let effects = effects.enable_tui_mode();
+    f(effects, siv.into_runner())
 }
 
 /// Type-safe "singleton" view: a kind of view which is addressed by name, for

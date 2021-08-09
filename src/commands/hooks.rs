@@ -27,14 +27,14 @@ pub use crate::core::rewrite::hooks::{
     hook_drop_commit_if_empty, hook_post_rewrite, hook_register_extra_post_rewrite_hook,
     hook_skip_upstream_applied_commit,
 };
-use crate::tui::Output;
+use crate::tui::Effects;
 
 /// Handle Git's `post-checkout` hook.
 ///
 /// See the man-page for `githooks(5)`.
 #[instrument]
 pub fn hook_post_checkout(
-    output: &Output,
+    effects: &Effects,
     previous_head_oid: &str,
     current_head_oid: &str,
     is_branch_checkout: isize,
@@ -46,7 +46,7 @@ pub fn hook_post_checkout(
     let now = SystemTime::now();
     let timestamp = now.duration_since(SystemTime::UNIX_EPOCH)?;
     writeln!(
-        output.get_output_stream(),
+        effects.get_output_stream(),
         "branchless: processing checkout"
     )?;
 
@@ -72,7 +72,7 @@ pub fn hook_post_checkout(
 ///
 /// See the man-page for `githooks(5)`.
 #[instrument]
-pub fn hook_post_commit(output: &Output) -> eyre::Result<()> {
+pub fn hook_post_commit(effects: &Effects) -> eyre::Result<()> {
     let now = SystemTime::now();
     let glyphs = Glyphs::detect();
     let repo = Repo::from_current_dir()?;
@@ -108,7 +108,7 @@ pub fn hook_post_commit(output: &Output) -> eyre::Result<()> {
         commit_oid: commit.get_oid(),
     }])?;
     writeln!(
-        output.get_output_stream(),
+        effects.get_output_stream(),
         "branchless: processed commit: {}",
         printable_styled_string(&glyphs, commit.friendly_describe()?)?,
     )?;
@@ -167,7 +167,7 @@ fn parse_reference_transaction_line(
 ///
 /// See the man-page for `githooks(5)`.
 #[instrument]
-pub fn hook_reference_transaction(output: &Output, transaction_state: &str) -> eyre::Result<()> {
+pub fn hook_reference_transaction(effects: &Effects, transaction_state: &str) -> eyre::Result<()> {
     if transaction_state != "committed" {
         return Ok(());
     }
@@ -205,7 +205,7 @@ pub fn hook_reference_transaction(output: &Output, transaction_state: &str) -> e
         plural: "updates",
     };
     writeln!(
-        output.get_output_stream(),
+        effects.get_output_stream(),
         "branchless: processing {}: {}",
         num_reference_updates.to_string(),
         events

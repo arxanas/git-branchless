@@ -28,10 +28,10 @@ use crate::core::metadata::{
 };
 use crate::declare_views;
 use crate::git::{CategorizedReferenceName, GitRunInfo, MaybeZeroOid, Repo};
-use crate::tui::{with_siv, Output, SingletonView};
+use crate::tui::{with_siv, Effects, SingletonView};
 
 fn render_cursor_smartlog(
-    output: &Output,
+    effects: &Effects,
     repo: &Repo,
     merge_base_db: &MergeBaseDb,
     event_replayer: &EventReplayer,
@@ -41,7 +41,7 @@ fn render_cursor_smartlog(
     let main_branch_oid = event_replayer.get_cursor_main_branch_oid(event_cursor, repo)?;
     let branch_oid_to_names = event_replayer.get_cursor_branch_oid_to_names(event_cursor, repo)?;
     let graph = make_graph(
-        output,
+        effects,
         repo,
         merge_base_db,
         event_replayer,
@@ -52,7 +52,7 @@ fn render_cursor_smartlog(
         true,
     )?;
     let result = render_graph(
-        output,
+        effects,
         repo,
         merge_base_db,
         &graph,
@@ -313,7 +313,7 @@ fn describe_events_numbered(
 #[instrument(skip(siv))]
 fn select_past_event(
     mut siv: CursiveRunner<CursiveRunnable>,
-    output: &Output,
+    effects: &Effects,
     repo: &Repo,
     merge_base_db: &MergeBaseDb,
     event_replayer: &mut EventReplayer,
@@ -382,7 +382,7 @@ fn select_past_event(
                       event_cursor: EventCursor|
          -> eyre::Result<()> {
             let smartlog =
-                render_cursor_smartlog(output, repo, merge_base_db, event_replayer, event_cursor)?;
+                render_cursor_smartlog(effects, repo, merge_base_db, event_replayer, event_cursor)?;
             SmartlogView::find(siv)
                 .get_inner_mut()
                 .set_content(StyledStringBuilder::from_lines(smartlog));
@@ -614,7 +614,7 @@ fn optimize_inverse_events(events: Vec<Event>) -> Vec<Event> {
 #[instrument(skip(in_))]
 fn undo_events(
     in_: &mut impl Read,
-    output: &Output,
+    effects: &Effects,
     repo: &Repo,
     git_run_info: &GitRunInfo,
     event_log_db: &mut EventLogDb,
@@ -655,24 +655,24 @@ fn undo_events(
 
     if inverse_events.is_empty() {
         writeln!(
-            output.get_output_stream(),
+            effects.get_output_stream(),
             "No undo actions to apply, exiting."
         )?;
         return Ok(0);
     }
 
-    writeln!(output.get_output_stream(), "Will apply these actions:")?;
+    writeln!(effects.get_output_stream(), "Will apply these actions:")?;
     let events = describe_events_numbered(repo, &inverse_events)?;
     for line in events {
         writeln!(
-            output.get_output_stream(),
+            effects.get_output_stream(),
             "{}",
-            printable_styled_string(output.get_glyphs(), line)?
+            printable_styled_string(effects.get_glyphs(), line)?
         )?;
     }
 
     let confirmed = {
-        write!(output.get_output_stream(), "Confirm? [yN] ")?;
+        write!(effects.get_output_stream(), "Confirm? [yN] ")?;
         let mut user_input = String::new();
         let mut reader = BufReader::new(in_);
         match reader.read_line(&mut user_input) {
@@ -684,7 +684,7 @@ fn undo_events(
         }
     };
     if !confirmed {
-        writeln!(output.get_output_stream(), "Aborted.")?;
+        writeln!(effects.get_output_stream(), "Aborted.")?;
         return Ok(1);
     }
 
@@ -712,7 +712,7 @@ fn undo_events(
                 // log appropriately, as it will invoke our hooks.
                 git_run_info
                     .run(
-                        output,
+                        effects,
                         Some(event_tx_id),
                         &[
                             OsStr::new("checkout"),
@@ -747,7 +747,7 @@ fn undo_events(
                 }
                 None => {
                     writeln!(
-                        output.get_output_stream(),
+                        effects.get_output_stream(),
                         "Reference {} did not exist, not deleting it.",
                         ref_name.to_string_lossy()
                     )?;
@@ -782,7 +782,7 @@ fn undo_events(
     }
 
     writeln!(
-        output.get_output_stream(),
+        effects.get_output_stream(),
         "Applied {}.",
         num_inverse_events
     )?;
@@ -791,7 +791,7 @@ fn undo_events(
 
 /// Restore the repository to a previous state interactively.
 #[instrument]
-pub fn undo(output: &Output, git_run_info: &GitRunInfo) -> eyre::Result<isize> {
+pub fn undo(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<isize> {
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
     let merge_base_db = MergeBaseDb::new(&conn)?;
@@ -799,8 +799,8 @@ pub fn undo(output: &Output, git_run_info: &GitRunInfo) -> eyre::Result<isize> {
     let mut event_replayer = EventReplayer::from_event_log_db(&repo, &event_log_db)?;
 
     let event_cursor = {
-        let result = with_siv(output, |output, siv| {
-            select_past_event(siv, &output, &repo, &merge_base_db, &mut event_replayer)
+        let result = with_siv(effects, |effects, siv| {
+            select_past_event(siv, &effects, &repo, &merge_base_db, &mut event_replayer)
         })?;
         match result {
             Some(event_cursor) => event_cursor,
@@ -810,7 +810,7 @@ pub fn undo(output: &Output, git_run_info: &GitRunInfo) -> eyre::Result<isize> {
 
     let result = undo_events(
         &mut stdin(),
-        output,
+        effects,
         &repo,
         git_run_info,
         &mut event_log_db,
@@ -829,21 +829,21 @@ pub mod testing {
     use crate::core::eventlog::{EventCursor, EventLogDb, EventReplayer};
     use crate::core::mergebase::MergeBaseDb;
     use crate::git::{GitRunInfo, Repo};
-    use crate::tui::Output;
+    use crate::tui::Effects;
 
     pub fn select_past_event(
         siv: CursiveRunner<CursiveRunnable>,
-        output: &Output,
+        effects: &Effects,
         repo: &Repo,
         merge_base_db: &MergeBaseDb,
         event_replayer: &mut EventReplayer,
     ) -> eyre::Result<Option<EventCursor>> {
-        super::select_past_event(siv, output, repo, merge_base_db, event_replayer)
+        super::select_past_event(siv, effects, repo, merge_base_db, event_replayer)
     }
 
     pub fn undo_events(
         in_: &mut impl Read,
-        output: &Output,
+        effects: &Effects,
         repo: &Repo,
         git_run_info: &GitRunInfo,
         event_log_db: &mut EventLogDb,
@@ -852,7 +852,7 @@ pub mod testing {
     ) -> eyre::Result<isize> {
         super::undo_events(
             in_,
-            output,
+            effects,
             repo,
             git_run_info,
             event_log_db,

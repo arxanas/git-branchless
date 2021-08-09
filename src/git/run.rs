@@ -14,7 +14,7 @@ use tracing::instrument;
 use crate::core::config::get_core_hooks_path;
 use crate::core::eventlog::{EventTransactionId, BRANCHLESS_TRANSACTION_ID_ENV_VAR};
 use crate::git::repo::Repo;
-use crate::tui::Output;
+use crate::tui::Effects;
 use crate::util::get_sh;
 
 /// Path to the `git` executable on disk to be executed.
@@ -75,7 +75,7 @@ impl GitRunInfo {
     #[must_use = "The return code for `run_git` must be checked"]
     pub fn run<S: AsRef<OsStr> + std::fmt::Debug>(
         &self,
-        output: &Output,
+        effects: &Effects,
         event_tx_id: Option<EventTransactionId>,
         args: &[S],
     ) -> eyre::Result<isize> {
@@ -85,7 +85,7 @@ impl GitRunInfo {
             env,
         } = self;
         writeln!(
-            output.get_output_stream(),
+            effects.get_output_stream(),
             "branchless: {} {}",
             path_to_git.to_string_lossy(),
             args.iter()
@@ -112,9 +112,9 @@ impl GitRunInfo {
             .wrap_err_with(|| format!("Spawning Git subprocess: {:?} {:?}", path_to_git, args))?;
 
         let stdout = child.stdout.take();
-        let stdout_thread = self.spawn_writer_thread(stdout, output.get_output_stream());
+        let stdout_thread = self.spawn_writer_thread(stdout, effects.get_output_stream());
         let stderr = child.stderr.take();
-        let stderr_thread = self.spawn_writer_thread(stderr, output.get_error_stream());
+        let stderr_thread = self.spawn_writer_thread(stderr, effects.get_error_stream());
 
         let exit_status = child.wait().wrap_err_with(|| {
             format!(
