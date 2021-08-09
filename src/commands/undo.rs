@@ -799,8 +799,8 @@ pub fn undo(output: &Output, git_run_info: &GitRunInfo) -> eyre::Result<isize> {
     let mut event_replayer = EventReplayer::from_event_log_db(&repo, &event_log_db)?;
 
     let event_cursor = {
-        let result = with_siv(|siv| {
-            select_past_event(siv, output, &repo, &merge_base_db, &mut event_replayer)
+        let result = with_siv(output, |output, siv| {
+            select_past_event(siv, &output, &repo, &merge_base_db, &mut event_replayer)
         })?;
         match result {
             Some(event_cursor) => event_cursor,
