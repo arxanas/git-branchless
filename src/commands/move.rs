@@ -143,6 +143,7 @@ pub fn r#move(
             &BuildRebasePlanOptions {
                 dump_rebase_constraints,
                 dump_rebase_plan,
+                detect_duplicate_commits_via_patch_id: false,
             },
         )?
     };
