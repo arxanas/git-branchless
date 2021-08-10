@@ -29,6 +29,7 @@ pub enum OperationType {
     GetUpstreamPatchIds,
     InitializeRebase,
     MakeGraph,
+    ProcessEvents,
     WalkCommits,
 }
 
@@ -48,6 +49,7 @@ impl ToString for OperationType {
             OperationType::GetUpstreamPatchIds => "Enumerating patch IDs",
             OperationType::InitializeRebase => "Initializing rebase",
             OperationType::MakeGraph => "Examining local history",
+            OperationType::ProcessEvents => "Processing events",
             OperationType::WalkCommits => "Walking commits",
         };
         s.to_string()
@@ -283,7 +285,6 @@ impl Effects {
         };
 
         operation_state.set_progress(current, total);
-        operation_state.tick();
     }
 
     fn on_notify_progress_inc(&self, operation_type: OperationType, increment: usize) {
@@ -294,7 +295,6 @@ impl Effects {
         };
 
         operation_state.inc_progress(increment);
-        operation_state.tick();
     }
 
     fn on_drop_progress_handle(&self, operation_type: OperationType) {

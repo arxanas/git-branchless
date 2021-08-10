@@ -247,7 +247,7 @@ fn warn_abandoned(
 ) -> eyre::Result<()> {
     // The caller will have added events to the event log database, so make sure
     // to construct a fresh `EventReplayer` here.
-    let event_replayer = EventReplayer::from_event_log_db(repo, event_log_db)?;
+    let event_replayer = EventReplayer::from_event_log_db(effects, repo, event_log_db)?;
     let event_cursor = event_replayer.make_default_cursor();
 
     let head_oid = repo.get_head_info()?.oid;
