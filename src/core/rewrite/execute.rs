@@ -556,12 +556,11 @@ mod on_disk {
     use std::fmt::Write;
 
     use eyre::Context;
-    use indicatif::ProgressBar;
     use tracing::instrument;
 
     use crate::core::rewrite::plan::RebasePlan;
     use crate::git::{GitRunInfo, MaybeZeroOid, Repo};
-    use crate::tui::Effects;
+    use crate::tui::{Effects, OperationType};
 
     use super::ExecuteRebasePlanOptions;
 
@@ -570,43 +569,33 @@ mod on_disk {
         OperationAlreadyInProgress { operation_type: String },
     }
 
-    /// Rebase on-disk. We don't use `git2`'s `Rebase` machinery because it ends up
-    /// being too slow.
-    ///
-    /// Note that this calls `git rebase`, which may fail (e.g. if there are
-    /// merge conflicts). The exit code is then propagated to the caller.
-    #[instrument]
-    pub fn rebase_on_disk(
+    fn write_rebase_state_to_disk(
         effects: &Effects,
         git_run_info: &GitRunInfo,
         repo: &Repo,
         rebase_plan: &RebasePlan,
         options: &ExecuteRebasePlanOptions,
-    ) -> eyre::Result<Result<isize, Error>> {
+    ) -> eyre::Result<Result<(), Error>> {
         let ExecuteRebasePlanOptions {
-            // `git rebase` will make its own timestamp.
             now: _,
-            event_tx_id,
+            event_tx_id: _,
             preserve_timestamps,
             force_in_memory: _,
             force_on_disk: _,
         } = options;
 
-        let progress = ProgressBar::new_spinner();
-        progress.enable_steady_tick(100);
-        progress.set_message("Initializing rebase");
+        let (effects, _progress) = effects.start_operation(OperationType::InitializeRebase);
 
         let head_info = repo.get_head_info()?;
 
         let current_operation_type = repo.get_current_operation_type();
         if let Some(current_operation_type) = current_operation_type {
-            progress.finish_and_clear();
             return Ok(Err(Error::OperationAlreadyInProgress {
                 operation_type: current_operation_type.to_string(),
             }));
         }
 
-        if repo.has_changed_files(effects, git_run_info)? {
+        if repo.has_changed_files(&effects, git_run_info)? {
             return Ok(Err(Error::ChangedFilesInRepository));
         }
 
@@ -731,7 +720,36 @@ mod on_disk {
             repo.detach_head(&head_info)?;
         }
 
-        progress.finish_and_clear();
+        Ok(Ok(()))
+    }
+
+    /// Rebase on-disk. We don't use `git2`'s `Rebase` machinery because it ends up
+    /// being too slow.
+    ///
+    /// Note that this calls `git rebase`, which may fail (e.g. if there are
+    /// merge conflicts). The exit code is then propagated to the caller.
+    #[instrument]
+    pub fn rebase_on_disk(
+        effects: &Effects,
+        git_run_info: &GitRunInfo,
+        repo: &Repo,
+        rebase_plan: &RebasePlan,
+        options: &ExecuteRebasePlanOptions,
+    ) -> eyre::Result<Result<isize, Error>> {
+        let ExecuteRebasePlanOptions {
+            // `git rebase` will make its own timestamp.
+            now: _,
+            event_tx_id,
+            preserve_timestamps: _,
+            force_in_memory: _,
+            force_on_disk: _,
+        } = options;
+
+        match write_rebase_state_to_disk(effects, git_run_info, repo, rebase_plan, options)? {
+            Ok(()) => {}
+            Err(err) => return Ok(Err(err)),
+        };
+
         writeln!(
             effects.get_output_stream(),
             "Calling Git for on-disk rebase..."
