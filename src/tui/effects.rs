@@ -27,6 +27,7 @@ pub enum OperationType {
     GetTouchedPaths,
     GetMergeBase,
     GetUpstreamPatchIds,
+    InitializeRebase,
     MakeGraph,
     WalkCommits,
 }
@@ -45,6 +46,7 @@ impl ToString for OperationType {
             OperationType::GetMergeBase => "Calculating merge-bases",
             OperationType::GetTouchedPaths => "Getting touched paths",
             OperationType::GetUpstreamPatchIds => "Enumerating patch IDs",
+            OperationType::InitializeRebase => "Initializing rebase",
             OperationType::MakeGraph => "Examining local history",
             OperationType::WalkCommits => "Walking commits",
         };
