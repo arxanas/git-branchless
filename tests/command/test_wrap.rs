@@ -1,6 +1,8 @@
 use branchless::core::eventlog::testing::{get_event_replayer_events, redact_event_timestamp};
 use branchless::core::eventlog::{Event, EventLogDb, EventReplayer};
+use branchless::core::formatting::Glyphs;
 use branchless::testing::{make_git, GitRunOptions};
+use branchless::tui::Effects;
 
 #[test]
 fn test_wrap_rebase_in_transaction() -> eyre::Result<()> {
@@ -18,10 +20,11 @@ fn test_wrap_rebase_in_transaction() -> eyre::Result<()> {
 
     git.run(&["branchless", "wrap", "rebase", "foo"])?;
 
+    let effects = Effects::new_suppress_for_test(Glyphs::text());
     let repo = git.get_repo()?;
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
-    let event_replayer = EventReplayer::from_event_log_db(&repo, &event_log_db)?;
+    let event_replayer = EventReplayer::from_event_log_db(&effects, &repo, &event_log_db)?;
     let events: Vec<Event> = get_event_replayer_events(&event_replayer)
         .iter()
         .map(|event| redact_event_timestamp(event.clone()))

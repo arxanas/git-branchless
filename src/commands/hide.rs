@@ -87,7 +87,7 @@ pub fn hide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::Re
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
     let mut event_log_db = EventLogDb::new(&conn)?;
-    let event_replayer = EventReplayer::from_event_log_db(&repo, &event_log_db)?;
+    let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
     let merge_base_db = MergeBaseDb::new(&conn)?;
 
     let commits = resolve_commits(&repo, hashes)?;
@@ -159,7 +159,7 @@ pub fn unhide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
     let mut event_log_db = EventLogDb::new(&conn)?;
-    let event_replayer = EventReplayer::from_event_log_db(&repo, &event_log_db)?;
+    let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
     let merge_base_db = MergeBaseDb::new(&conn)?;
 
     let commits = resolve_commits(&repo, hashes)?;

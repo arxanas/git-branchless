@@ -17,6 +17,7 @@ use eyre::Context;
 use tracing::{error, instrument};
 
 use crate::git::{CategorizedReferenceName, MaybeZeroOid, NonZeroOid, Repo};
+use crate::tui::{Effects, OperationType};
 
 /// When this environment variable is set, we reuse the ID for the transaction
 /// which the caller has already started.
@@ -694,7 +695,13 @@ impl EventReplayer {
     /// * `event_log_db`: The database to query events from.
     ///
     /// Returns: The constructed replayer.
-    pub fn from_event_log_db(repo: &Repo, event_log_db: &EventLogDb) -> eyre::Result<Self> {
+    pub fn from_event_log_db(
+        effects: &Effects,
+        repo: &Repo,
+        event_log_db: &EventLogDb,
+    ) -> eyre::Result<Self> {
+        let (_effects, _progress) = effects.start_operation(OperationType::ProcessEvents);
+
         let main_branch_reference_name = repo.get_main_branch_reference()?.get_name()?;
         let mut result = EventReplayer::new(main_branch_reference_name);
         for event in event_log_db.get_events()? {

@@ -126,15 +126,15 @@ mod tests {
     use super::*;
 
     fn find_rewrite_target_helper(
+        effects: &Effects,
         git: &Git,
         oid: NonZeroOid,
     ) -> eyre::Result<Option<MaybeZeroOid>> {
-        let effects = Effects::new_suppress_for_test(Glyphs::detect());
         let repo = git.get_repo()?;
         let conn = repo.get_db_conn()?;
         let merge_base_db = MergeBaseDb::new(&conn)?;
         let event_log_db = EventLogDb::new(&conn)?;
-        let event_replayer = EventReplayer::from_event_log_db(&repo, &event_log_db)?;
+        let event_replayer = EventReplayer::from_event_log_db(&effects, &repo, &event_log_db)?;
         let event_cursor = event_replayer.make_default_cursor();
         let head_oid = repo.get_head_info()?.oid;
         let main_branch_oid = repo.get_main_branch_oid()?;
@@ -157,6 +157,7 @@ mod tests {
 
     #[test]
     fn test_find_rewrite_target() -> eyre::Result<()> {
+        let effects = Effects::new_suppress_for_test(Glyphs::text());
         let git = make_git()?;
 
         git.init_repo()?;
@@ -169,7 +170,7 @@ mod tests {
                 let (stdout, _stderr) = git.run(&["rev-parse", "HEAD"])?;
                 stdout.trim().parse()?
             };
-            let rewrite_target = find_rewrite_target_helper(&git, old_oid)?;
+            let rewrite_target = find_rewrite_target_helper(&effects, &git, old_oid)?;
             assert_eq!(rewrite_target, Some(new_oid));
         }
 
@@ -179,7 +180,7 @@ mod tests {
                 let (stdout, _stderr) = git.run(&["rev-parse", "HEAD"])?;
                 stdout.trim().parse()?
             };
-            let rewrite_target = find_rewrite_target_helper(&git, old_oid)?;
+            let rewrite_target = find_rewrite_target_helper(&effects, &git, old_oid)?;
             assert_eq!(rewrite_target, Some(new_oid));
         }
 
@@ -191,7 +192,7 @@ mod tests {
                     ..Default::default()
                 },
             )?;
-            let rewrite_target = find_rewrite_target_helper(&git, old_oid)?;
+            let rewrite_target = find_rewrite_target_helper(&effects, &git, old_oid)?;
             assert_eq!(rewrite_target, None);
         }
 
