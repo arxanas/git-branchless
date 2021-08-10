@@ -5,11 +5,14 @@ use std::convert::TryInto;
 use std::ffi::{OsStr, OsString};
 use std::fmt::Write;
 use std::fs::File;
-use std::io::{stdin, BufRead};
+use std::io::{stdin, BufRead, BufReader, Read, Write as WriteIo};
+use std::path::Path;
 use std::time::SystemTime;
 
 use console::style;
 use eyre::Context;
+use itertools::Itertools;
+use tempfile::NamedTempFile;
 use tracing::instrument;
 
 use crate::core::config::{get_restack_warn_abandoned, RESTACK_WARN_ABANDONED_CONFIG_KEY};
@@ -23,6 +26,72 @@ use crate::git::{
 use crate::tui::Effects;
 
 use super::{find_abandoned_children, move_branches};
+
+#[instrument(skip(stream))]
+fn read_rewritten_list_entries(
+    stream: &mut impl Read,
+) -> eyre::Result<Vec<(NonZeroOid, MaybeZeroOid)>> {
+    let mut rewritten_oids = Vec::new();
+    let reader = BufReader::new(stream);
+    for line in reader.lines() {
+        let line = line?;
+        let line = line.trim();
+        match *line.split(' ').collect::<Vec<_>>().as_slice() {
+            [old_commit_oid, new_commit_oid, ..] => {
+                let old_commit_oid: NonZeroOid = old_commit_oid.parse()?;
+                let new_commit_oid: MaybeZeroOid = new_commit_oid.parse()?;
+                rewritten_oids.push((old_commit_oid, new_commit_oid));
+            }
+            _ => eyre::bail!("Invalid rewrite line: {:?}", &line),
+        }
+    }
+    Ok(rewritten_oids)
+}
+
+#[instrument]
+fn write_rewritten_list(
+    rewritten_list_path: &Path,
+    rewritten_oids: &[(NonZeroOid, MaybeZeroOid)],
+) -> eyre::Result<()> {
+    let mut tempfile = NamedTempFile::new()?;
+    let file = tempfile.as_file_mut();
+    for (old_commit_oid, new_commit_oid) in rewritten_oids {
+        writeln!(file, "{} {}", old_commit_oid, new_commit_oid)?;
+    }
+    tempfile.persist(rewritten_list_path).wrap_err_with(|| {
+        format!(
+            "Moving new rewritten-list into place at: {:?}",
+            rewritten_list_path
+        )
+    })?;
+    Ok(())
+}
+
+#[instrument]
+fn add_rewritten_list_entries(
+    rewritten_list_path: &Path,
+    entries: &[(NonZeroOid, MaybeZeroOid)],
+) -> eyre::Result<()> {
+    let current_entries = match File::open(rewritten_list_path) {
+        Ok(mut rewritten_list_file) => read_rewritten_list_entries(&mut rewritten_list_file)?,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => Default::default(),
+        Err(err) => return Err(err.into()),
+    };
+
+    let mut entries_to_add: HashMap<NonZeroOid, MaybeZeroOid> = entries.iter().copied().collect();
+    let mut new_entries = Vec::new();
+    for (old_commit_oid, new_commit_oid) in current_entries {
+        let new_entry = match entries_to_add.remove(&old_commit_oid) {
+            Some(new_commit_oid) => (old_commit_oid, new_commit_oid),
+            None => (old_commit_oid, new_commit_oid),
+        };
+        new_entries.push(new_entry);
+    }
+    new_entries.extend(entries_to_add.into_iter());
+
+    write_rewritten_list(rewritten_list_path, new_entries.as_slice())?;
+    Ok(())
+}
 
 /// Handle Git's `post-rewrite` hook.
 ///
@@ -42,28 +111,20 @@ pub fn hook_post_rewrite(
     let event_tx_id = event_log_db.make_transaction_id(now, "hook-post-rewrite")?;
 
     let (rewritten_oids, events) = {
-        let mut rewritten_oids = HashMap::new();
-        let mut events = Vec::new();
-        for line in stdin().lock().lines() {
-            let line = line?;
-            let line = line.trim();
-            match *line.split(' ').collect::<Vec<_>>().as_slice() {
-                [old_commit_oid, new_commit_oid, ..] => {
-                    let old_commit_oid: NonZeroOid = old_commit_oid.parse()?;
-                    let new_commit_oid: MaybeZeroOid = new_commit_oid.parse()?;
-
-                    rewritten_oids.insert(old_commit_oid, new_commit_oid);
-                    events.push(Event::RewriteEvent {
-                        timestamp,
-                        event_tx_id,
-                        old_commit_oid: old_commit_oid.into(),
-                        new_commit_oid,
-                    })
-                }
-                _ => eyre::bail!("Invalid rewrite line: {:?}", &line),
-            }
-        }
-        (rewritten_oids, events)
+        let rewritten_oids = read_rewritten_list_entries(&mut stdin().lock())?;
+        let events = rewritten_oids
+            .iter()
+            .copied()
+            .map(|(old_commit_oid, new_commit_oid)| Event::RewriteEvent {
+                timestamp,
+                event_tx_id,
+                old_commit_oid: old_commit_oid.into(),
+                new_commit_oid,
+            })
+            .collect_vec();
+        let rewritten_oids_map: HashMap<NonZeroOid, MaybeZeroOid> =
+            rewritten_oids.into_iter().collect();
+        (rewritten_oids_map, events)
     };
 
     let is_spurious_event = rewrite_type == "amend" && repo.is_rebase_underway()?;
@@ -392,14 +453,13 @@ pub fn hook_drop_commit_if_empty(
     if old_commit_oid == head_oid {
         save_updated_head_oid(&repo, only_parent_oid)?;
     }
-    repo.add_rewritten_list_entries(&[
-        (old_commit_oid, MaybeZeroOid::Zero),
-        // NB: from the user's perspective, they don't need to know about the empty
-        // commit that was created. It might be better to edit the `rewritten-list`
-        // and remove the entry which rewrote the old commit into the current `HEAD`
-        // commit, rather than hiding the newly created `HEAD` commit.
-        (head_commit.get_oid(), MaybeZeroOid::Zero),
-    ])?;
+    add_rewritten_list_entries(
+        &repo.get_rebase_state_dir_path().join("rewritten-list"),
+        &[
+            (old_commit_oid, MaybeZeroOid::Zero),
+            (head_commit.get_oid(), MaybeZeroOid::Zero),
+        ],
+    )?;
 
     Ok(())
 }
@@ -428,7 +488,10 @@ pub fn hook_skip_upstream_applied_commit(
             save_updated_head_oid(&repo, current_head_oid)?;
         }
     }
-    repo.add_rewritten_list_entries(&[(commit_oid, MaybeZeroOid::Zero)])?;
+    add_rewritten_list_entries(
+        &repo.get_rebase_state_dir_path().join("rewritten-list"),
+        &[(commit_oid, MaybeZeroOid::Zero)],
+    )?;
 
     Ok(())
 }

@@ -13,8 +13,6 @@ use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
 use std::ffi::{OsStr, OsString};
-use std::fs::OpenOptions;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::SystemTime;
@@ -391,31 +389,6 @@ Either create it, or update the main branch setting by running:
             Rebase | RebaseInteractive | RebaseMerge => Some("rebase"),
             ApplyMailbox | ApplyMailboxOrRebase => Some("am"),
         }
-    }
-
-    /// Add entries to the `rewritten-list` during a rebase operation. These
-    /// entries will be forwarded to the `post-rewrite` hook when the operation
-    /// completes.
-    ///
-    /// Fails if no on-disk rebase operation is underway.
-    #[instrument]
-    pub fn add_rewritten_list_entries(
-        &self,
-        entries: &[(NonZeroOid, MaybeZeroOid)],
-    ) -> eyre::Result<()> {
-        let rewritten_oids_file_path = self.get_rebase_state_dir_path().join("rewritten-list");
-        let mut file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&rewritten_oids_file_path)
-            .wrap_err_with(|| {
-                format!("Opening rewritten-list at: {:?}", &rewritten_oids_file_path)
-            })?;
-        for (old_commit_oid, new_commit_oid) in entries {
-            file.write_all(format!("{} {}\n", old_commit_oid, new_commit_oid).as_bytes())?;
-        }
-        file.flush()?;
-        Ok(())
     }
 
     /// Find the merge-base between two commits. Returns `None` if a merge-base
