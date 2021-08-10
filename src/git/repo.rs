@@ -433,46 +433,77 @@ Either create it, or update the main branch setting by running:
         }
     }
 
+    #[instrument]
+    fn get_diff_for_commit(
+        &self,
+        effects: &Effects,
+        commit: &Commit,
+    ) -> eyre::Result<Option<git2::Diff>> {
+        let (_effects, _progress) = effects.start_operation(OperationType::CalculateDiff);
+
+        let only_parent = match commit.get_only_parent() {
+            None => return Ok(None),
+            Some(only_parent) => only_parent,
+        };
+
+        let parent_tree = only_parent.get_tree()?;
+        let current_tree = commit.get_tree()?;
+        let diff = self
+            .inner
+            .diff_tree_to_tree(Some(&parent_tree.inner), Some(&current_tree.inner), None)
+            .wrap_err_with(|| {
+                format!(
+                    "Calculating diff between: {:?} and {:?}",
+                    commit, only_parent
+                )
+            })?;
+        Ok(Some(diff))
+    }
+
+    /// Get the file paths which were added, removed, or changed by the given commit.
+    pub fn get_paths_touched_by_commit(
+        &self,
+        effects: &Effects,
+        commit: &Commit,
+    ) -> eyre::Result<Option<HashSet<PathBuf>>> {
+        let diff = match self.get_diff_for_commit(effects, commit)? {
+            None => return Ok(None),
+            Some(diff) => diff,
+        };
+
+        let mut files = HashSet::new();
+        let mut file_cb = |delta: git2::DiffDelta, _progress: f32| {
+            if let Some(old_path) = delta.old_file().path() {
+                files.insert(old_path.to_path_buf());
+            }
+            if let Some(new_path) = delta.new_file().path() {
+                files.insert(new_path.to_path_buf());
+            }
+            // Continue iteration.
+            true
+        };
+        diff.foreach(&mut file_cb, None, None, None)
+            .wrap_err_with(|| format!("Iterating over diff for commit: {:?}", commit))?;
+        Ok(Some(files))
+    }
+
     /// Get the patch ID for this commit.
+    #[instrument]
     pub fn get_patch_id(
         &self,
         effects: &Effects,
         commit: &Commit,
     ) -> eyre::Result<Option<PatchId>> {
-        match commit.get_only_parent() {
-            None => Ok(None),
-            Some(only_parent) => {
-                let parent_tree = only_parent.get_tree()?;
-                let current_tree = commit.get_tree()?;
-                let diff = {
-                    let (_effects, _progress) =
-                        effects.start_operation(OperationType::CalculateDiff);
-                    self.inner
-                        .diff_tree_to_tree(
-                            Some(&parent_tree.inner),
-                            Some(&current_tree.inner),
-                            None,
-                        )
-                        .wrap_err_with(|| {
-                            format!(
-                                "Calculating diff between: {:?} and {:?}",
-                                commit, only_parent
-                            )
-                        })?
-                };
-                let patch_id = {
-                    let (_effects, _progress) =
-                        effects.start_operation(OperationType::CalculatePatchId);
-                    diff.patchid(None).wrap_err_with(|| {
-                        format!(
-                            "Computing patch ID between: {:?} and {:?}",
-                            commit, only_parent
-                        )
-                    })?
-                };
-                Ok(Some(PatchId { patch_id }))
-            }
-        }
+        let diff = match self.get_diff_for_commit(effects, commit)? {
+            None => return Ok(None),
+            Some(diff) => diff,
+        };
+        let patch_id = {
+            let (_effects, _progress) = effects.start_operation(OperationType::CalculatePatchId);
+            diff.patchid(None)
+                .wrap_err_with(|| format!("Computing patch ID for: {:?}", commit))?
+        };
+        Ok(Some(PatchId { patch_id }))
     }
 
     /// Attempt to parse the user-provided object descriptor.
@@ -747,6 +778,16 @@ pub struct Tree<'repo> {
     inner: git2::Tree<'repo>,
 }
 
+impl Tree<'_> {
+    pub fn get_oid_for_path(&self, path: &Path) -> eyre::Result<Option<MaybeZeroOid>> {
+        match self.inner.get_path(path) {
+            Ok(entry) => Ok(Some(entry.id().into())),
+            Err(err) if err.code() == git2::ErrorCode::NotFound => Ok(None),
+            Err(err) => Err(err.into()),
+        }
+    }
+}
+
 pub struct Index {
     inner: git2::Index,
 }
@@ -889,6 +930,24 @@ impl<'repo> Commit<'repo> {
             [] => false,
             [parent_commit] => self.inner.tree_id() == parent_commit.inner.tree_id(),
             _ => false,
+        }
+    }
+
+    /// Determine if this commit added, removed, or changed the entry at the
+    /// provided file path.
+    pub fn contains_touched_path(&self, path: &Path) -> eyre::Result<Option<bool>> {
+        let parent = match self.get_only_parent() {
+            None => return Ok(None),
+            Some(parent) => parent,
+        };
+        let parent_tree = parent.get_tree()?;
+        let current_tree = self.get_tree()?;
+        let parent_oid = parent_tree.get_oid_for_path(path)?;
+        let current_oid = current_tree.get_oid_for_path(path)?;
+        match (parent_oid, current_oid) {
+            (None, None) => Ok(Some(false)),
+            (None, Some(_)) | (Some(_), None) => Ok(Some(true)),
+            (Some(parent_oid), Some(current_oid)) => Ok(Some(parent_oid != current_oid)),
         }
     }
 }

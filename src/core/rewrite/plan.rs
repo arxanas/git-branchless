@@ -1,15 +1,20 @@
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 
 use itertools::Itertools;
-use rayon::prelude::*;
+use rayon::{prelude::*, ThreadPool, ThreadPoolBuilder};
 use tracing::{instrument, warn};
 
 use crate::core::formatting::printable_styled_string;
 use crate::core::graph::{find_path_to_merge_base, CommitGraph, MainBranchOid};
 use crate::core::mergebase::MergeBaseDb;
-use crate::git::{NonZeroOid, PatchId, Repo};
+use crate::git::{Commit, NonZeroOid, PatchId, Repo};
 use crate::tui::{Effects, OperationType};
+
+thread_local! {
+    static REPO: RefCell<Option<Repo>> = Default::default();
+}
 
 /// A command that can be applied for either in-memory or on-disk rebases.
 #[derive(Debug)]
@@ -595,33 +600,135 @@ impl<'repo> RebasePlanBuilder<'repo> {
             Some(path) => path,
         };
 
+        let pool = self.make_pool(self.repo)?;
+
+        let path = {
+            let touched_commits = self
+                .constraints
+                .values()
+                .flatten()
+                .map(|oid| self.repo.find_commit(*oid))
+                .collect::<eyre::Result<Vec<_>>>()?
+                .into_iter()
+                .flatten()
+                .collect_vec();
+            self.filter_path_to_merge_base_commits(effects, &pool, path, touched_commits)?
+        };
+
         // FIXME: we may recalculate common patch IDs many times, should be
         // cached.
         let (effects, progress) = effects.start_operation(OperationType::GetUpstreamPatchIds);
         progress.notify_progress(0, path.len());
-        let result: HashSet<PatchId> = path
-            .into_iter()
-            .map(|commit| {
-                // Repo is not thread-safe, so create a new copy for each
-                // thread.
-                let repo = self.repo.try_clone()?;
-                // `Commit` is not `Send`, so send an OID instead.
-                let commit_oid = commit.get_oid();
-                Ok((repo, commit_oid))
-            })
-            .collect::<eyre::Result<Vec<(Repo, NonZeroOid)>>>()?
-            .into_par_iter()
-            .map(|(repo, commit_oid)| -> eyre::Result<Option<PatchId>> {
-                progress.notify_progress_inc(1);
-                let commit = match repo.find_commit(commit_oid)? {
-                    Some(commit) => commit,
-                    None => return Ok(None),
-                };
-                let result = repo.get_patch_id(&effects, &commit)?;
-                Ok(result)
-            })
-            .filter_map(|result| result.transpose())
-            .collect::<eyre::Result<HashSet<PatchId>>>()?;
+        let result: HashSet<PatchId> = {
+            let path_oids = path
+                .into_iter()
+                .map(|commit| commit.get_oid())
+                .collect_vec();
+
+            pool.install(|| {
+                path_oids
+                    .into_par_iter()
+                    .map(|commit_oid| -> eyre::Result<Option<PatchId>> {
+                        REPO.with(|repo| {
+                            let repo = repo.borrow();
+                            let repo = repo.as_ref().expect("Could not get thread-local repo");
+                            let commit = match repo.find_commit(commit_oid)? {
+                                Some(commit) => commit,
+                                None => return Ok(None),
+                            };
+                            let result = repo.get_patch_id(&effects, &commit)?;
+                            Ok(result)
+                        })
+                    })
+                    .inspect(|_| progress.notify_progress_inc(1))
+                    .filter_map(|result| result.transpose())
+                    .collect::<eyre::Result<HashSet<PatchId>>>()
+            })?
+        };
         Ok(result)
+    }
+
+    #[instrument]
+    fn make_pool(&self, repo: &Repo) -> eyre::Result<ThreadPool> {
+        let repo_path = repo.get_path().to_owned();
+        let pool = ThreadPoolBuilder::new()
+            .start_handler(move |_index| {
+                REPO.with(|thread_repo| -> eyre::Result<()> {
+                    let mut thread_repo = thread_repo.borrow_mut();
+                    if thread_repo.is_none() {
+                        *thread_repo = Some(Repo::from_dir(&repo_path)?);
+                    }
+                    Ok(())
+                })
+                .expect("Could not clone repo for thread");
+            })
+            .build()?;
+        Ok(pool)
+    }
+
+    fn filter_path_to_merge_base_commits(
+        &self,
+        effects: &Effects,
+        pool: &ThreadPool,
+        path: Vec<Commit<'repo>>,
+        touched_commits: Vec<Commit>,
+    ) -> eyre::Result<Vec<Commit<'repo>>> {
+        let (effects, _progress) = effects.start_operation(OperationType::FilterCommits);
+
+        let touched_paths = {
+            let (_effects, progress) = effects.start_operation(OperationType::GetTouchedPaths);
+            let mut result = HashSet::new();
+            progress.notify_progress(0, touched_commits.len());
+            for commit in touched_commits {
+                let touched_paths = self.repo.get_paths_touched_by_commit(&effects, &commit)?;
+                if let Some(touched_paths) = touched_paths {
+                    result.extend(touched_paths);
+                }
+                progress.notify_progress_inc(1);
+            }
+            result
+        };
+
+        let filtered_path = {
+            let (_effects, progress) = effects.start_operation(OperationType::CheckTouchedPaths);
+            progress.notify_progress(0, path.len());
+
+            let path = path
+                .into_iter()
+                .map(|commit| commit.get_oid())
+                .collect_vec();
+            pool.install(|| {
+                path.into_par_iter()
+                    .map(|commit_oid| {
+                        REPO.with(|repo| {
+                            let repo = repo.borrow();
+                            let repo = repo.as_ref().expect("Could not get thread-local repo");
+
+                            let commit = match repo.find_commit(commit_oid)? {
+                                Some(commit) => commit,
+                                None => return Ok(None),
+                            };
+                            for touched_path in touched_paths.iter() {
+                                if let Some(true) = commit.contains_touched_path(touched_path)? {
+                                    return Ok(Some(commit.get_oid()));
+                                }
+                            }
+                            Ok(None)
+                        })
+                    })
+                    .inspect(|_| progress.notify_progress_inc(1))
+                    .filter_map(|x| x.transpose())
+                    .collect::<eyre::Result<Vec<NonZeroOid>>>()
+            })?
+        };
+        let filtered_path = filtered_path
+            .into_iter()
+            .map(|commit_oid| match self.repo.find_commit(commit_oid)? {
+                Some(commit) => Ok(commit),
+                None => eyre::bail!("Could not find commit: {:?}", commit_oid),
+            })
+            .try_collect()?;
+
+        Ok(filtered_path)
     }
 }
