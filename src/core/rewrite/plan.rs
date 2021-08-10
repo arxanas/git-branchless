@@ -109,6 +109,11 @@ pub struct BuildRebasePlanOptions {
 
     /// Print the rebase plan for debugging.
     pub dump_rebase_plan: bool,
+
+    /// Calculate the patch ID for each upstream commit and compare them to the
+    /// patch IDs in the to-be-rebased commits. Commits which have patch IDs
+    /// which are already upstream are skipped.
+    pub detect_duplicate_commits_via_patch_id: bool,
 }
 
 /// An error caused when attempting to build a rebase plan.
@@ -511,9 +516,15 @@ impl<'repo> RebasePlanBuilder<'repo> {
         effects: &Effects,
         options: &BuildRebasePlanOptions,
     ) -> eyre::Result<Result<Option<RebasePlan>, BuildRebasePlanError>> {
+        let BuildRebasePlanOptions {
+            dump_rebase_constraints,
+            dump_rebase_plan,
+            detect_duplicate_commits_via_patch_id,
+        } = options;
+
         let (effects, _progress) = effects.start_operation(OperationType::BuildRebasePlan);
 
-        if options.dump_rebase_constraints {
+        if *dump_rebase_constraints {
             writeln!(
                 effects.get_output_stream(),
                 "Rebase constraints before adding descendants: {:#?}",
@@ -521,7 +532,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
             )?;
         }
         self.add_descendant_constraints(&effects)?;
-        if options.dump_rebase_constraints {
+        if *dump_rebase_constraints {
             writeln!(
                 effects.get_output_stream(),
                 "Rebase constraints after adding descendants: {:#?}",
@@ -546,10 +557,12 @@ impl<'repo> RebasePlanBuilder<'repo> {
                 commit_oid: parent_oid,
             });
 
-            let upstream_patch_ids = {
+            let upstream_patch_ids = if *detect_duplicate_commits_via_patch_id {
                 let (effects, _progress) =
                     effects.start_operation(OperationType::DetectDuplicateCommits);
                 self.get_upstream_patch_ids(&effects, child_oid, parent_oid)?
+            } else {
+                Default::default()
             };
             acc = self.make_rebase_plan_for_current_commit(
                 &effects,
@@ -563,7 +576,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
             first_dest_oid,
             commands: acc,
         });
-        if options.dump_rebase_plan {
+        if *dump_rebase_plan {
             writeln!(
                 effects.get_output_stream(),
                 "Rebase plan: {:#?}",

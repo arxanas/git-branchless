@@ -186,6 +186,7 @@ fn check_out_new_head(
                     // `HEAD` was unborn, so keep it that way.
                     None
                 }
+
                 ReferenceTarget::Direct {
                     oid: MaybeZeroOid::NonZero(oid),
                 } => match rewritten_oids.get(&oid) {
@@ -202,6 +203,7 @@ fn check_out_new_head(
                         Some(OsString::from(oid.to_string()))
                     }
                 },
+
                 ReferenceTarget::Symbolic { reference_name } => {
                     match repo.find_reference(&reference_name)? {
                         Some(reference) => {
@@ -450,7 +452,13 @@ pub fn hook_drop_commit_if_empty(
     )?;
     repo.set_head(only_parent_oid)?;
 
-    if old_commit_oid == head_oid {
+    let orig_head_oid = match repo.find_reference(&OsString::from("ORIG_HEAD"))? {
+        Some(orig_head_reference) => orig_head_reference
+            .peel_to_commit()?
+            .map(|orig_head_commit| orig_head_commit.get_oid()),
+        None => None,
+    };
+    if Some(old_commit_oid) == orig_head_oid {
         save_updated_head_oid(&repo, only_parent_oid)?;
     }
     add_rewritten_list_entries(
