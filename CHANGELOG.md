@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.4] - 2021-08-12
+
+- BREAKING: `git-branchless` is now licensed under the GPL-2.
 - Added: `git move` now supports forcing an in-memory rebase with the `--in-memory` flag.
 - Added: The `reference-transaction` hook prints out which references were updated.
 - Added: `git restack` can now accept a list of commit hashes whose descendants should be restacked, rather than restacking every abandoned commit indiscriminately.
