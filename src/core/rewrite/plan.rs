@@ -82,7 +82,7 @@ impl ToString for RebaseCommand {
 
 /// Builder for a rebase plan. Unlike regular Git rebases, a `git-branchless`
 /// rebase plan can move multiple unrelated subtrees to unrelated destinations.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct RebasePlanBuilder<'repo> {
     repo: &'repo Repo,
     graph: &'repo CommitGraph<'repo>,
@@ -117,6 +117,7 @@ pub struct BuildRebasePlanOptions {
 }
 
 /// An error caused when attempting to build a rebase plan.
+#[derive(Debug)]
 pub enum BuildRebasePlanError {
     /// There was a cycle in the requested graph to be built.
     ConstraintCycle {
@@ -621,10 +622,8 @@ impl<'repo> RebasePlanBuilder<'repo> {
                 .values()
                 .flatten()
                 .map(|oid| self.repo.find_commit(*oid))
-                .collect::<eyre::Result<Vec<_>>>()?
-                .into_iter()
-                .flatten()
-                .collect_vec();
+                .flatten_ok()
+                .try_collect()?;
             self.filter_path_to_merge_base_commits(effects, &pool, path, touched_commits)?
         };
 
