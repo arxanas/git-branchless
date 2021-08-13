@@ -18,6 +18,7 @@ name = "branchless"
 
 [dependencies]
 assert_cmd = "1.0.3"
+chashmap = "2.2.2"
 color-eyre = "0.5.11"
 console = "0.14.0"
 cursive = {version = "0.17.0-alpha.0", default-features = false, features = ["crossterm-backend"]}
