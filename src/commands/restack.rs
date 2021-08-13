@@ -149,7 +149,22 @@ fn restack_commits(
         Ok(Some(rebase_plan)) => {
             let exit_code =
                 execute_rebase_plan(effects, git_run_info, repo, &rebase_plan, execute_options)?;
-            writeln!(effects.get_output_stream(), "Finished restacking commits.")?;
+            match exit_code {
+                0 => {
+                    writeln!(effects.get_output_stream(), "Finished restacking commits.")?;
+                }
+                exit_code => {
+                    writeln!(
+                        effects.get_output_stream(),
+                        "Error: Could not restack commits (exit code {}).",
+                        exit_code
+                    )?;
+                    writeln!(
+                        effects.get_output_stream(),
+                        "You can resolve the error and try running `git restack` again."
+                    )?;
+                }
+            }
             Ok(exit_code)
         }
         Err(err) => {

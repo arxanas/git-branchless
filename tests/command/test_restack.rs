@@ -232,13 +232,25 @@ fn test_restack_aborts_during_rebase_conflict() -> eyre::Result<()> {
     git.write_file("test2", "conflicting test2 contents")?;
     git.run(&["add", "."])?;
     git.run(&["commit", "--amend", "-m", "amend test1 with test2 conflict"])?;
-    git.run_with_options(
-        &["restack"],
-        &GitRunOptions {
-            expected_exit_code: 1,
-            ..Default::default()
-        },
-    )?;
+
+    {
+        let (stdout, _stderr) = git.run_with_options(
+            &["restack"],
+            &GitRunOptions {
+                expected_exit_code: 1,
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: <git-executable> diff --quiet
+        Calling Git for on-disk rebase...
+        branchless: <git-executable> rebase --continue
+        CONFLICT (add/add): Merge conflict in test2.txt
+        Auto-merging test2.txt
+        Error: Could not restack commits (exit code 1).
+        You can resolve the error and try running `git restack` again.
+        "###);
+    }
 
     Ok(())
 }
