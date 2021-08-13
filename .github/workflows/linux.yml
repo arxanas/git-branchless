@@ -58,6 +58,8 @@ jobs:
         with:
           profile: minimal
           toolchain: stable
+      - name: Build benchmarks
+        run: cargo build --benches
       - name: Run Rust tests
         run: |
           export RUST_BACKTRACE=1
