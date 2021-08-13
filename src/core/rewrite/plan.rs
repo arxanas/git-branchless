@@ -1,7 +1,9 @@
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
+use std::path::PathBuf;
 
+use chashmap::CHashMap;
 use itertools::Itertools;
 use rayon::{prelude::*, ThreadPool, ThreadPoolBuilder};
 use tracing::{instrument, warn};
@@ -93,6 +95,8 @@ pub struct RebasePlanBuilder<'repo> {
     /// `y`.
     constraints: HashMap<NonZeroOid, HashSet<NonZeroOid>>,
     used_labels: HashSet<String>,
+
+    touched_paths_cache: CHashMap<NonZeroOid, Option<HashSet<PathBuf>>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -188,6 +192,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
             main_branch_oid: *main_branch_oid,
             constraints: Default::default(),
             used_labels: Default::default(),
+            touched_paths_cache: Default::default(),
         }
     }
 
@@ -687,31 +692,36 @@ impl<'repo> RebasePlanBuilder<'repo> {
     ) -> eyre::Result<Vec<Commit<'repo>>> {
         let (effects, _progress) = effects.start_operation(OperationType::FilterCommits);
 
-        let touched_paths = {
-            let (_effects, progress) = effects.start_operation(OperationType::GetTouchedPaths);
-            let mut result = HashSet::new();
-            progress.notify_progress(0, touched_commits.len());
-            for commit in touched_commits {
-                let touched_paths = self.repo.get_paths_touched_by_commit(&effects, &commit)?;
-                if let Some(touched_paths) = touched_paths {
-                    result.extend(touched_paths);
-                }
-                progress.notify_progress_inc(1);
-            }
-            result
-        };
+        let local_touched_paths: HashSet<PathBuf> = touched_commits
+            .into_iter()
+            .map(|commit| self.repo.get_paths_touched_by_commit(&commit))
+            .filter_map(|x| x.transpose())
+            .flatten_ok()
+            .try_collect()?;
 
         let filtered_path = {
-            let (_effects, progress) = effects.start_operation(OperationType::CheckTouchedPaths);
+            let (_effects, progress) = effects.start_operation(OperationType::FilterByTouchedPaths);
             progress.notify_progress(0, path.len());
 
             let path = path
                 .into_iter()
                 .map(|commit| commit.get_oid())
                 .collect_vec();
+            let touched_paths_cache = &self.touched_paths_cache;
             pool.install(|| {
                 path.into_par_iter()
                     .map(|commit_oid| {
+                        if let Some(upstream_touched_paths) = touched_paths_cache.get(&commit_oid) {
+                            if Self::is_candidate_to_check_patch_id(
+                                &*upstream_touched_paths,
+                                &local_touched_paths,
+                            ) {
+                                return Ok(Some(commit_oid));
+                            } else {
+                                return Ok(None);
+                            }
+                        }
+
                         REPO.with(|repo| {
                             let repo = repo.borrow();
                             let repo = repo.as_ref().expect("Could not get thread-local repo");
@@ -720,12 +730,18 @@ impl<'repo> RebasePlanBuilder<'repo> {
                                 Some(commit) => commit,
                                 None => return Ok(None),
                             };
-                            for touched_path in touched_paths.iter() {
-                                if let Some(true) = commit.contains_touched_path(touched_path)? {
-                                    return Ok(Some(commit.get_oid()));
-                                }
-                            }
-                            Ok(None)
+                            let upstream_touched_paths =
+                                repo.get_paths_touched_by_commit(&commit)?;
+                            let result = if Self::is_candidate_to_check_patch_id(
+                                &upstream_touched_paths,
+                                &local_touched_paths,
+                            ) {
+                                Some(commit_oid)
+                            } else {
+                                None
+                            };
+                            touched_paths_cache.insert(commit_oid, upstream_touched_paths);
+                            Ok(result)
                         })
                     })
                     .inspect(|_| progress.notify_progress_inc(1))
@@ -742,5 +758,21 @@ impl<'repo> RebasePlanBuilder<'repo> {
             .try_collect()?;
 
         Ok(filtered_path)
+    }
+
+    fn is_candidate_to_check_patch_id(
+        upstream_touched_paths: &Option<HashSet<PathBuf>>,
+        local_touched_paths: &HashSet<PathBuf>,
+    ) -> bool {
+        match upstream_touched_paths {
+            Some(upstream_touched_paths) => {
+                // This could be more specific -- we could check to see if they are
+                // exactly the same. I'm checking only if there is some intersection to
+                // make sure there's not some edge-case e.g. around renames that I've
+                // missed.
+                !local_touched_paths.is_disjoint(upstream_touched_paths)
+            }
+            None => true,
+        }
     }
 }

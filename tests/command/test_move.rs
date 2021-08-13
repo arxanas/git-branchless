@@ -1096,7 +1096,7 @@ fn test_move_no_reapply_upstream_commits_in_memory() -> eyre::Result<()> {
         "###);
         insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
-        [1/2] Skipped now-empty commit: cfea32a9 create test1.txt
+        [1/2] Skipped commit (was already applied upstream): 62fc20d2 create test1.txt
         [2/2] Committed as: fa466332 create test2.txt
         branchless: processing 1 update: branch should-be-deleted
         branchless: processing 2 rewritten commits
@@ -1208,13 +1208,11 @@ fn test_move_no_reapply_upstream_commits_on_disk() -> eyre::Result<()> {
         insta::assert_snapshot!(stderr, @r###"
         Executing: git branchless hook-register-extra-post-rewrite-hook
         branchless: processing 1 update: ref HEAD
-        branchless: processing 1 update: ref HEAD
-        branchless: processed commit: cfea32a9 create test1.txt
-        Executing: git branchless hook-detect-empty-commit 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
+        Executing: git branchless hook-skip-upstream-applied-commit 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
         branchless: processing 1 update: ref HEAD
         branchless: processed commit: fa466332 create test2.txt
         Executing: git branchless hook-detect-empty-commit 96d1c37a3d4363611c49f7e52186e189a04c531f
-        branchless: processing 3 rewritten commits
+        branchless: processing 2 rewritten commits
         branchless: processing 1 update: branch should-be-deleted
         branchless: <git-executable> checkout refs/heads/master
         Previous HEAD position was fa46633 create test2.txt
@@ -1227,7 +1225,7 @@ fn test_move_no_reapply_upstream_commits_on_disk() -> eyre::Result<()> {
         branchless: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: <git-executable> rebase --continue
-        Skipped now-empty commit: cfea32a9 create test1.txt
+        Skipping commit (was already applied upstream): 62fc20d2 create test1.txt
         "###);
     }
 
@@ -1371,8 +1369,8 @@ fn test_move_delete_checked_out_branch_in_memory() -> eyre::Result<()> {
         "###);
         insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
-        [1/3] Skipped now-empty commit: 7f36d2bb create test1.txt
-        [2/3] Skipped now-empty commit: ab82f8f3 create test2.txt
+        [1/3] Skipped commit (was already applied upstream): 62fc20d2 create test1.txt
+        [2/3] Skipped commit (was already applied upstream): 96d1c37a create test2.txt
         [3/3] Committed as: 012efd6e create test3.txt
         branchless: processing 2 updates: branch more-work, branch work
         branchless: processing 3 rewritten commits
@@ -1438,16 +1436,12 @@ fn test_move_delete_checked_out_branch_on_disk() -> eyre::Result<()> {
         insta::assert_snapshot!(stderr, @r###"
         Executing: git branchless hook-register-extra-post-rewrite-hook
         branchless: processing 1 update: ref HEAD
-        branchless: processing 1 update: ref HEAD
-        branchless: processed commit: 7f36d2bb create test1.txt
-        Executing: git branchless hook-detect-empty-commit 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
-        branchless: processing 1 update: ref HEAD
-        branchless: processed commit: ab82f8f3 create test2.txt
-        Executing: git branchless hook-detect-empty-commit 96d1c37a3d4363611c49f7e52186e189a04c531f
+        Executing: git branchless hook-skip-upstream-applied-commit 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
+        Executing: git branchless hook-skip-upstream-applied-commit 96d1c37a3d4363611c49f7e52186e189a04c531f
         branchless: processing 1 update: ref HEAD
         branchless: processed commit: 012efd6e create test3.txt
         Executing: git branchless hook-detect-empty-commit ffcba554683d83de283de084a7d3896e332bbcdb
-        branchless: processing 5 rewritten commits
+        branchless: processing 3 rewritten commits
         branchless: processing 2 updates: branch more-work, branch work
         branchless: <git-executable> checkout 91c5ce63686889388daec1120bf57bea8a744bc2
         Previous HEAD position was 012efd6 create test3.txt
@@ -1460,8 +1454,8 @@ fn test_move_delete_checked_out_branch_on_disk() -> eyre::Result<()> {
         branchless: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: <git-executable> rebase --continue
-        Skipped now-empty commit: 7f36d2bb create test1.txt
-        Skipped now-empty commit: ab82f8f3 create test2.txt
+        Skipping commit (was already applied upstream): 62fc20d2 create test1.txt
+        Skipping commit (was already applied upstream): 96d1c37a create test2.txt
         "###);
     }
 
