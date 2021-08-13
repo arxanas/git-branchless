@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Fixed: `git restack` warns if a sub-command fails (e.g. if `git rebase` fails with merge conflicts that need to be resolved).
+
 ## [0.3.4] - 2021-08-12
 
 - BREAKING: `git-branchless` is now licensed under the GPL-2.
