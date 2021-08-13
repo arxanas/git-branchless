@@ -215,17 +215,27 @@ impl<'repo> RebasePlanBuilder<'repo> {
         mut acc: Vec<RebaseCommand>,
     ) -> eyre::Result<Vec<RebaseCommand>> {
         let acc = {
-            let current_patch_id = match self.repo.find_commit(current_oid)? {
-                None => {
-                    warn!(?current_oid, "Could not find commit");
-                    None
+            let patch_already_applied_upstream = {
+                if upstream_patch_ids.is_empty() {
+                    // Save time in the common case that there are no
+                    // similar-looking upstream commits, so that we don't have
+                    // to calculate the patch ID.
+                    false
+                } else {
+                    let current_patch_id = match self.repo.find_commit(current_oid)? {
+                        None => {
+                            warn!(?current_oid, "Could not find commit");
+                            None
+                        }
+                        Some(commit) => self.repo.get_patch_id(effects, &commit)?,
+                    };
+                    match current_patch_id {
+                        Some(current_patch_id) => upstream_patch_ids.contains(&current_patch_id),
+                        None => false,
+                    }
                 }
-                Some(commit) => self.repo.get_patch_id(effects, &commit)?,
             };
-            let patch_already_applied_upstream = match current_patch_id {
-                Some(current_patch_id) => upstream_patch_ids.contains(&current_patch_id),
-                None => false,
-            };
+
             if patch_already_applied_upstream {
                 acc.push(RebaseCommand::SkipUpstreamAppliedCommit {
                     commit_oid: current_oid,
