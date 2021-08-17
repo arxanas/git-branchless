@@ -22,6 +22,7 @@ chashmap = "2.2.2"
 color-eyre = "0.5.11"
 console = "0.14.0"
 cursive = {version = "0.17.0-alpha.0", default-features = false, features = ["crossterm-backend"]}
+cursive_buffered_backend-git-branchless = "0.5.1-pre"
 eyre = "0.6.5"
 git2 = {version = "0.13.17", default-features = false}
 indicatif = "0.17.0-beta.1"

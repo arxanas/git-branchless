@@ -1,6 +1,10 @@
 //! Utilities to render an interactive text-based user interface.
+use std::io;
+
+use cursive::backends::crossterm;
 use cursive::theme::{Color, PaletteColor};
 use cursive::{Cursive, CursiveRunnable, CursiveRunner};
+use cursive_buffered_backend_git_branchless::BufferedBackend;
 
 use super::Effects;
 
@@ -9,23 +13,11 @@ pub fn with_siv<T, F: FnOnce(Effects, CursiveRunner<CursiveRunnable>) -> eyre::R
     effects: &Effects,
     f: F,
 ) -> eyre::Result<T> {
-    // I tried these back-ends:
-    //
-    // * `ncurses`/`pancurses`: Doesn't render ANSI escape codes. (NB: the fact
-    //   that we print out strings with ANSI escape codes is tech debt; we would
-    //   ideally pass around styled representations of all text, and decide how to
-    //   rendering it later.) Rendered scroll view improperly. No mouse/scrolling
-    //   support
-    // * `termion`: Renders ANSI escape codes. Has mouse/scrolling support. But
-    //   critical bug: https://github.com/gyscos/cursive/issues/563
-    // * `crossterm`: Renders ANSI escape codes. Has mouse/scrolling support.
-    //   However, has some flickering issues, particularly when scrolling. See
-    //   issue at https://github.com/gyscos/cursive/issues/142. I tried the
-    //   `cursive_buffered_backend` library, but this causes it to no longer
-    //   respect the ANSI escape codes.
-    // * `blt`: Seems to require that a certain library be present on the system
-    //   for linking.
-    let mut siv = cursive::crossterm();
+    let mut siv = CursiveRunnable::new(|| -> io::Result<_> {
+        // Use crossterm to ensure that we support Windows.
+        let crossterm_backend = crossterm::Backend::init()?;
+        Ok(Box::new(BufferedBackend::new(crossterm_backend)))
+    });
 
     siv.update_theme(|theme| {
         theme.shadow = false;

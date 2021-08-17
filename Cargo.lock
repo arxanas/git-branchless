@@ -426,7 +426,25 @@ dependencies = [
  "lazy_static",
  "libc",
  "log",
+ "maplit",
+ "ncurses",
  "signal-hook",
+ "term_size",
+ "unicode-segmentation",
+ "unicode-width",
+]
+
+[[package]]
+name = "cursive_buffered_backend-git-branchless"
+version = "0.5.1-pre"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "75b918bef08458674d669ef291ae2653c66ac99a8fdae4605ce05bbfafd3b63c"
+dependencies = [
+ "cursive",
+ "cursive_core",
+ "enumset",
+ "log",
+ "smallvec 1.6.1",
  "unicode-segmentation",
  "unicode-width",
 ]
@@ -651,6 +669,7 @@ dependencies = [
  "console",
  "criterion",
  "cursive",
+ "cursive_buffered_backend-git-branchless",
  "eyre",
  "git2",
  "indicatif",
@@ -887,6 +906,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "maplit"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3e2e65a1a2e43cfcb47a895c4c8b10d1f4a61097f9f254f183aee60cad9c651d"
+
+[[package]]
 name = "matchers"
 version = "0.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -952,6 +977,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9f1c5b025cda876f66ef43a113f91ebc9f4ccef34843000e0adf6ebbab84e21"
 dependencies = [
  "winapi",
+]
+
+[[package]]
+name = "ncurses"
+version = "5.101.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5e2c5d34d72657dc4b638a1c25d40aae81e4f1c699062f72f467237920752032"
+dependencies = [
+ "cc",
+ "libc",
+ "pkg-config",
 ]
 
 [[package]]
@@ -1680,6 +1716,16 @@ checksum = "edd106a334b7657c10b7c540a0106114feadeb4dc314513e97df481d5d966f42"
 dependencies = [
  "byteorder",
  "dirs",
+ "winapi",
+]
+
+[[package]]
+name = "term_size"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e4129646ca0ed8f45d09b929036bafad5377103edd06e50bf574b353d2b08d9"
+dependencies = [
+ "libc",
  "winapi",
 ]
 
