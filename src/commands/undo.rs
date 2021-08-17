@@ -394,10 +394,7 @@ fn select_past_event(
                     "There are no previous available events.",
                 )],
                 Some((event_id, events)) => {
-                    let event_description = {
-                        let lines = describe_events_numbered(repo, events)?;
-                        StyledStringBuilder::from_lines(lines)
-                    };
+                    let event_description_lines = describe_events_numbered(repo, events)?;
                     let relative_time_provider = RelativeTimeProvider::new(repo, now)?;
                     let relative_time = if relative_time_provider.is_enabled() {
                         format!(
@@ -410,18 +407,18 @@ fn select_past_event(
                     } else {
                         String::new()
                     };
-                    vec![
-                        StyledStringBuilder::new()
-                            .append_plain("Repo after transaction ")
-                            .append_plain(events[0].get_event_tx_id().to_string())
-                            .append_plain(" (event ")
-                            .append_plain(event_id.to_string())
-                            .append_plain(")")
-                            .append_plain(relative_time)
-                            .append_plain(". Press 'h' for help, 'q' to quit.")
-                            .build(),
-                        event_description,
-                    ]
+
+                    let mut lines = vec![StyledStringBuilder::new()
+                        .append_plain("Repo after transaction ")
+                        .append_plain(events[0].get_event_tx_id().to_string())
+                        .append_plain(" (event ")
+                        .append_plain(event_id.to_string())
+                        .append_plain(")")
+                        .append_plain(relative_time)
+                        .append_plain(". Press 'h' for help, 'q' to quit.")
+                        .build()];
+                    lines.extend(event_description_lines);
+                    lines
                 }
             };
             InfoView::find(siv).set_content(StyledStringBuilder::from_lines(info_view_contents));
