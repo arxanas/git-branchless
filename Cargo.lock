@@ -432,6 +432,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "cursive_buffered_backend"
+version = "0.6.0-alpha.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "250e76ea0201262da22fbdde6e633ae6898331c02bfbd5eae9094b8d5d5ea48d"
+dependencies = [
+ "cursive_core",
+ "enumset",
+ "log",
+ "smallvec 1.6.1",
+ "unicode-segmentation",
+ "unicode-width",
+]
+
+[[package]]
 name = "cursive_core"
 version = "0.3.0-alpha.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -651,6 +665,7 @@ dependencies = [
  "console",
  "criterion",
  "cursive",
+ "cursive_buffered_backend",
  "eyre",
  "git2",
  "indicatif",
