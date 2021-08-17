@@ -86,7 +86,7 @@ macro_rules! declare_views {
                 }
             }
 
-            impl ViewWrapper for $k {
+            impl cursive::view::ViewWrapper for $k {
                 cursive::wrap_impl!(self.view: cursive::views::NamedView<$v>);
             }
         )*

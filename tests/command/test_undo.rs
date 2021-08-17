@@ -110,20 +110,31 @@ fn test_undo_help() -> eyre::Result<()> {
             ],
         )?;
         insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
-            ┌───────────────────────────────────────────┤─How to use ├───────────────────────────────────────────┐
-            │ Use `git undo` to view and revert to previous states of the repository.                            │
-            │                                                                                                    │
-            │ h/?: Show this help.                                                                               │
-            │ q: Quit.                                                                                           │
-            │ p/n or <left>/<right>: View next/previous state.                                                   │
-            │ g: Go to a provided event ID.                                                                      │
-            │ <enter>: Revert the repository to the given state (requires confirmation).                         │
-            │                                                                                                    │
-            │ You can also copy a commit hash from the past and manually run `git unhide` or `git rebase` on it. │
-            │                                                                                                    │
-            │                                                                                            <Close> │
-            └────────────────────────────────────────────────────────────────────────────────────────────────────┘
-            "###);
+        ┌───────────────────────────────────────────────────┤─Commit graph ├───────────────────────────────────────────────────┐
+        │O f777ecc9 (master) create initial.txt                                                                                │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │        ┌───────────────────────────────────────────┤─How to use ├───────────────────────────────────────────┐        │
+        │        │ Use `git undo` to view and revert to previous states of the repository.                            │        │
+        │        │                                                                                                    │        │
+        │        │ h/?: Show this help.                                                                               │        │
+        │        │ q: Quit.                                                                                           │        │
+        │        │ p/n or <left>/<right>: View next/previous state.                                                   │        │
+        │        │ g: Go to a provided event ID.                                                                      │        │
+        │        │ <enter>: Revert the repository to the given state (requires confirmation).                         │        │
+        │        │                                                                                                    │        │
+        │        │ You can also copy a commit hash from the past and manually run `git unhide` or `git rebase` on it. │        │
+        │        │                                                                                                    │        │
+        │        │                                                                                            <Close> │        │
+        │        └────────────────────────────────────────────────────────────────────────────────────────────────────┘        │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+        ┌──────────────────────────────────────────────────────┤─Events ├──────────────────────────────────────────────────────┐
+        │There are no previous available events.                                                                               │
+        └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+        "###);
     }
 
     Ok(())
@@ -162,20 +173,57 @@ fn test_undo_navigate() -> eyre::Result<()> {
             )
             "###);
         insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
-            :
-            @ 96d1c37a (master) create test2.txt
-            Repo after transaction 3 (event 4). Press 'h' for help, 'q' to quit.
-            1. Check out from 62fc20d2 create test1.txt
-            to 96d1c37a create test2.txt
-            2. Move branch master from 62fc20d2 create test1.txt
-            to 96d1c37a create test2.txt
-            "###);
+        ┌───────────────────────────────────────────────────┤─Commit graph ├───────────────────────────────────────────────────┐
+        │:                                                                                                                     │
+        │@ 96d1c37a (master) create test2.txt                                                                                  │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+        ┌──────────────────────────────────────────────────────┤─Events ├──────────────────────────────────────────────────────┐
+        │Repo after transaction 3 (event 4). Press 'h' for help, 'q' to quit.                                                  │
+        │1. Check out from 62fc20d2 create test1.txt                                                                           │
+        │               to 96d1c37a create test2.txt                                                                           │
+        │2. Move branch master from 62fc20d2 create test1.txt                                                                  │
+        │                        to 96d1c37a create test2.txt                                                                  │
+        │                                                                                                                      │
+        └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+        "###);
         insta::assert_snapshot!(screen_to_string(&screenshot2), @r###"
-            :
-            @ 96d1c37a (master) create test2.txt
-            Repo after transaction 4 (event 6). Press 'h' for help, 'q' to quit.
-            1. Commit 96d1c37a create test2.txt
-            "###);
+        ┌───────────────────────────────────────────────────┤─Commit graph ├───────────────────────────────────────────────────┐
+        │:                                                                                                                     │
+        │@ 96d1c37a (master) create test2.txt                                                                                  │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+        ┌──────────────────────────────────────────────────────┤─Events ├──────────────────────────────────────────────────────┐
+        │Repo after transaction 4 (event 6). Press 'h' for help, 'q' to quit.                                                  │
+        │1. Commit 96d1c37a create test2.txt                                                                                   │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+        "###);
     };
 
     Ok(())
@@ -208,20 +256,57 @@ fn test_go_to_event() -> eyre::Result<()> {
     )?;
 
     insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
-        :
-        @ 96d1c37a (master) create test2.txt
-        Repo after transaction 4 (event 6). Press 'h' for help, 'q' to quit.
-        1. Commit 96d1c37a create test2.txt
-        "###);
+    ┌───────────────────────────────────────────────────┤─Commit graph ├───────────────────────────────────────────────────┐
+    │:                                                                                                                     │
+    │@ 96d1c37a (master) create test2.txt                                                                                  │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+    ┌──────────────────────────────────────────────────────┤─Events ├──────────────────────────────────────────────────────┐
+    │Repo after transaction 4 (event 6). Press 'h' for help, 'q' to quit.                                                  │
+    │1. Commit 96d1c37a create test2.txt                                                                                   │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+    "###);
     insta::assert_snapshot!(screen_to_string(&screenshot2), @r###"
-        :
-        @ 62fc20d2 create test1.txt
-        |
-        O 96d1c37a (master) create test2.txt
-        Repo after transaction 1 (event 1). Press 'h' for help, 'q' to quit.
-        1. Check out from f777ecc9 create initial.txt
-        to 62fc20d2 create test1.txt
-        "###);
+    ┌───────────────────────────────────────────────────┤─Commit graph ├───────────────────────────────────────────────────┐
+    │:                                                                                                                     │
+    │@ 62fc20d2 create test1.txt                                                                                           │
+    │|                                                                                                                     │
+    │O 96d1c37a (master) create test2.txt                                                                                  │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+    ┌──────────────────────────────────────────────────────┤─Events ├──────────────────────────────────────────────────────┐
+    │Repo after transaction 1 (event 1). Press 'h' for help, 'q' to quit.                                                  │
+    │1. Check out from f777ecc9 create initial.txt                                                                         │
+    │               to 62fc20d2 create test1.txt                                                                           │
+    │                                                                                                                      │
+    └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+    "###);
 
     Ok(())
 }
@@ -374,16 +459,56 @@ fn test_historical_smartlog_visibility() -> eyre::Result<()> {
 
     if git.supports_reference_transactions()? {
         insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
-        :
-        % 62fc20d2 (manually hidden) (master) create test1.txt
-        Repo after transaction 3 (event 4). Press 'h' for help, 'q' to quit.
-        1. Hide commit 62fc20d2 create test1.txt
+        ┌───────────────────────────────────────────────────┤─Commit graph ├───────────────────────────────────────────────────┐
+        │:                                                                                                                     │
+        │% 62fc20d2 (manually hidden) (master) create test1.txt                                                                │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+        ┌──────────────────────────────────────────────────────┤─Events ├──────────────────────────────────────────────────────┐
+        │Repo after transaction 3 (event 4). Press 'h' for help, 'q' to quit.                                                  │
+        │1. Hide commit 62fc20d2 create test1.txt                                                                              │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
         "###);
         insta::assert_snapshot!(screen_to_string(&screenshot2), @r###"
-        :
-        @ 62fc20d2 (master) create test1.txt
-        Repo after transaction 2 (event 3). Press 'h' for help, 'q' to quit.
-        1. Commit 62fc20d2 create test1.txt
+        ┌───────────────────────────────────────────────────┤─Commit graph ├───────────────────────────────────────────────────┐
+        │:                                                                                                                     │
+        │@ 62fc20d2 (master) create test1.txt                                                                                  │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+        ┌──────────────────────────────────────────────────────┤─Events ├──────────────────────────────────────────────────────┐
+        │Repo after transaction 2 (event 3). Press 'h' for help, 'q' to quit.                                                  │
+        │1. Commit 62fc20d2 create test1.txt                                                                                   │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
         "###);
     } else {
         insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
@@ -433,10 +558,31 @@ fn test_undo_doesnt_make_working_dir_dirty() -> eyre::Result<()> {
         ],
     )?;
     insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
-        :
-        O 62fc20d2 (master) create test1.txt
-        There are no previous available events.
-        "###);
+    ┌───────────────────────────────────────────────────┤─Commit graph ├───────────────────────────────────────────────────┐
+    │:                                                                                                                     │
+    │O 62fc20d2 (master) create test1.txt                                                                                  │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+    ┌──────────────────────────────────────────────────────┤─Events ├──────────────────────────────────────────────────────┐
+    │There are no previous available events.                                                                               │
+    └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+    "###);
 
     // If there are no dirty files in the repository prior to the `undo`,
     // then there should still be no dirty files after the `undo`.
