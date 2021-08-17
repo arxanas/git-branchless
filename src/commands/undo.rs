@@ -444,7 +444,7 @@ fn select_past_event(
                                 .title("Commit graph")
                                 .full_height(),
                         )
-                        .child(Panel::new(info_view).title("Events"))
+                        .child(Panel::new(ScrollView::new(info_view)).title("Events"))
                         .full_width(),
                 );
                 redraw(&mut siv, event_replayer, cursor)?;
