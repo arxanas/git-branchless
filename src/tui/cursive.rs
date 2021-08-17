@@ -78,18 +78,16 @@ macro_rules! declare_views {
                 }
             }
 
-            impl cursive::view::IntoBoxedView for $k {
-                fn into_boxed_view(self) -> Box<dyn cursive::view::View> {
-                    Box::new(self.view)
-                }
-            }
-
             impl From<$v> for $k {
                 fn from(view: $v) -> Self {
                     use cursive::view::Nameable;
                     let view = view.with_name(stringify!($k));
                     $k { view }
                 }
+            }
+
+            impl cursive::view::ViewWrapper for $k {
+                cursive::wrap_impl!(self.view: cursive::views::NamedView<$v>);
             }
         )*
     };
