@@ -11,8 +11,9 @@ use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
 use std::time::SystemTime;
 
 use cursive::event::Key;
+use cursive::traits::Boxable;
 use cursive::utils::markup::StyledString;
-use cursive::views::{Dialog, EditView, LinearLayout, OnEventView, ScrollView, TextView};
+use cursive::views::{Dialog, EditView, LinearLayout, OnEventView, Panel, ScrollView, TextView};
 use cursive::{Cursive, CursiveRunnable, CursiveRunner};
 use eyre::Context;
 use tracing::instrument;
@@ -439,10 +440,15 @@ fn select_past_event(
             Ok(Message::Init) => {
                 let smartlog_view: SmartlogView = ScrollView::new(TextView::new("")).into();
                 let info_view: InfoView = TextView::new("").into();
-                siv.add_layer(
+                siv.add_fullscreen_layer(
                     LinearLayout::vertical()
-                        .child(smartlog_view)
-                        .child(info_view),
+                        .child(
+                            Panel::new(smartlog_view)
+                                .title("Commit graph")
+                                .full_height(),
+                        )
+                        .child(Panel::new(info_view).title("Events"))
+                        .full_width(),
                 );
                 redraw(&mut siv, event_replayer, cursor)?;
             }
