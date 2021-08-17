@@ -25,6 +25,8 @@ pub fn with_siv<T, F: FnOnce(Effects, CursiveRunner<CursiveRunnable>) -> eyre::R
             (PaletteColor::Background, Color::TerminalDefault),
             (PaletteColor::View, Color::TerminalDefault),
             (PaletteColor::Primary, Color::TerminalDefault),
+            (PaletteColor::TitlePrimary, Color::TerminalDefault),
+            (PaletteColor::TitleSecondary, Color::TerminalDefault),
         ]);
     });
     let effects = effects.enable_tui_mode();
