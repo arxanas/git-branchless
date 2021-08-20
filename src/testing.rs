@@ -136,11 +136,16 @@ impl Git {
     }
 
     fn get_git_exec_path(&self) -> PathBuf {
-        let git_path = self
-            .path_to_git
-            .parent()
-            .expect("Unable to find git path parent");
-        git_path.to_path_buf()
+        match std::env::var_os("GIT_EXEC_PATH") {
+            Some(git_exec_path) => git_exec_path.into(),
+            None => {
+                let git_path = self
+                    .path_to_git
+                    .parent()
+                    .expect("Unable to find git path parent");
+                git_path.to_path_buf()
+            }
+        }
     }
 
     /// Get the `PATH` environment variable to use for testing.
