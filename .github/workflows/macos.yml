@@ -22,4 +22,5 @@ jobs:
         run: |
           export RUST_BACKTRACE=1
           export PATH_TO_GIT=$(which git)
+          export GIT_EXEC_PATH=$(git --exec-path)
           cargo test
