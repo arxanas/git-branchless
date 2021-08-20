@@ -22,7 +22,9 @@ jobs:
         id: cache-git-build
         with:
           key: ${{ runner.os }}-git-${{ matrix.git-version }}
-          path: git
+          path: |
+            git
+            git-*
       - name: Build Git ${{ matrix.git-version }}
         if: steps.cache-git-build.outputs.cache-hit != 'true'
         run: |
@@ -31,7 +33,7 @@ jobs:
           sudo apt-get install dh-autoreconf libcurl4-gnutls-dev libexpat1-dev gettext libz-dev libssl-dev
           make
       - name: Package Git
-        run: tar -czf git.tar.gz git
+        run: tar -czf git.tar.gz git git-*
       - name: "Upload artifact: git"
         uses: actions/upload-artifact@v2
         with:

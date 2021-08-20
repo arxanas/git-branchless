@@ -135,29 +135,32 @@ impl Git {
         Ok(output)
     }
 
+    fn get_git_exec_path(&self) -> PathBuf {
+        let git_path = self
+            .path_to_git
+            .parent()
+            .expect("Unable to find git path parent");
+        git_path.to_path_buf()
+    }
+
     /// Get the `PATH` environment variable to use for testing.
     pub fn get_path_for_env(&self) -> OsString {
         let cargo_bin_path = assert_cmd::cargo::cargo_bin("git-branchless");
         let branchless_path = cargo_bin_path
             .parent()
             .expect("Unable to find git-branchless path parent");
-        let git_path = self
-            .path_to_git
-            .parent()
-            .expect("Unable to find git path parent");
         let bash = get_sh().expect("bash missing?");
         let bash_path = bash.parent().unwrap();
         std::env::join_paths(
             vec![
                 // For Git to be able to launch `git-branchless`.
-                branchless_path,
+                branchless_path.as_os_str(),
                 // For our hooks to be able to call back into `git`.
-                git_path,
+                self.get_git_exec_path().as_os_str(),
                 // For branchless to manually invoke bash when needed.
-                bash_path,
+                bash_path.as_os_str(),
             ]
-            .iter()
-            .map(|path| path.to_str().expect("Unable to decode path component")),
+            .into_iter(),
         )
         .expect("joining paths")
     }
@@ -194,11 +197,13 @@ impl Git {
         // ":" is understood by `git` to skip editing.
         let git_editor = OsString::from(":");
 
+        let git_exec_path = self.get_git_exec_path();
         let new_path = self.get_path_for_env();
         let env: Vec<(&str, &OsStr)> = vec![
             ("GIT_AUTHOR_DATE", &date),
             ("GIT_COMMITTER_DATE", &date),
             ("GIT_EDITOR", &git_editor),
+            ("GIT_EXEC_PATH", git_exec_path.as_os_str()),
             ("PATH_TO_GIT", self.path_to_git.as_os_str()),
             ("PATH", &new_path),
         ];
