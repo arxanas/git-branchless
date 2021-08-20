@@ -19,6 +19,11 @@ $ PATH_TO_GIT=/path/to/dir/git cargo test  # use the `git` executable inside /pa
 
 # Maintenance
 
+TODO: update these instructions to use `cargo release`. See
+* `cargo release` page: https://github.com/sunng87/cargo-release
+* Example metadata: https://github.com/agavrilov/cursive_buffered_backend/blob/master/Cargo.toml
+* Example instructions: https://github.com/agavrilov/cursive_buffered_backend/blob/master/ReleaseInstructions.md
+
 To release a new version:
 
 * Update the version string in `Cargo.toml`.
