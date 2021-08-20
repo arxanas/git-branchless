@@ -470,3 +470,40 @@ fn test_undo_doesnt_make_working_dir_dirty() -> eyre::Result<()> {
 
     Ok(())
 }
+
+/// See https://github.com/arxanas/git-branchless/issues/57
+#[cfg(unix)]
+#[test]
+fn test_git_bisect_produces_empty_event() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    git.commit_file("test1", 1)?;
+    git.run(&["bisect", "start"])?;
+    git.run(&["bisect", "good", "HEAD^"])?;
+    git.run(&["bisect", "bad"])?;
+
+    let screenshot1 = Default::default();
+    run_select_past_event(
+        &git.get_repo()?,
+        vec![
+            CursiveTestingEvent::Event('p'.into()),
+            CursiveTestingEvent::Event('p'.into()),
+            CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot1)),
+            CursiveTestingEvent::Event(Key::Enter.into()),
+        ],
+    )?;
+    insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
+    :
+    @ 62fc20d2 (master) create test1.txt
+    Repo after transaction 3 (event 4). Press 'h' for help, 'q' to quit.
+    1. Empty event for BISECT_HEAD
+    This may be an unsupported use-case; see https://git.io/J0b7z
+    "###);
+
+    Ok(())
+}

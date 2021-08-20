@@ -70,6 +70,10 @@ fn render_cursor_smartlog(
 }
 
 fn describe_event(repo: &Repo, event: &Event) -> eyre::Result<Vec<StyledString>> {
+    // Links to https://github.com/arxanas/git-branchless/issues/57
+    const EMPTY_EVENT_MESSAGE: &str =
+        "This may be an unsupported use-case; see https://git.io/J0b7z";
+
     let result = match event {
         Event::CommitEvent {
             timestamp: _,
@@ -177,9 +181,7 @@ fn describe_event(repo: &Repo, event: &Event) -> eyre::Result<Vec<StyledString>>
                     .append_plain(CategorizedReferenceName::new(ref_name).render_full())
                     .build(),
                 StyledStringBuilder::new()
-                    .append_plain("This event should not appear. ")
-                    .append_plain("This is a (benign) bug -- ")
-                    .append_plain("please report it.")
+                    .append_plain(EMPTY_EVENT_MESSAGE)
                     .build(),
             ]
         }
@@ -276,9 +278,7 @@ fn describe_event(repo: &Repo, event: &Event) -> eyre::Result<Vec<StyledString>>
                     .append_plain("Empty rewrite event.")
                     .build(),
                 StyledStringBuilder::new()
-                    .append_plain("This event should not appear. ")
-                    .append_plain("This is a (benign) bug -- ")
-                    .append_plain("please report it.")
+                    .append_plain(EMPTY_EVENT_MESSAGE)
                     .build(),
             ]
         }
