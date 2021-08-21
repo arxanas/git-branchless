@@ -30,6 +30,7 @@ pub enum OperationType {
     InitializeRebase,
     MakeGraph,
     ProcessEvents,
+    UpdateCommitGraph,
     WalkCommits,
 }
 
@@ -50,6 +51,7 @@ impl ToString for OperationType {
             OperationType::InitializeRebase => "Initializing rebase",
             OperationType::MakeGraph => "Examining local history",
             OperationType::ProcessEvents => "Processing events",
+            OperationType::UpdateCommitGraph => "Updating commit graph",
             OperationType::WalkCommits => "Walking commits",
         };
         s.to_string()
