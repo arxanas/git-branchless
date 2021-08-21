@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Changed (#63): The UI for `git undo` has been changed in various ways. Thanks to @chapati23 for their feedback. You can leave your own feedback here: https://github.com/arxanas/git-branchless/discussions
 - Fixed: `git restack` warns if a sub-command fails (e.g. if `git rebase` fails with merge conflicts that need to be resolved).
-- Fixed (#57): `git undo` shows an informative link when dealing with empty events, rather than warning about a bug.
+- Fixed (#57): `git undo` shows an informative link when dealing with empty events, rather than warning about a bug. Thanks to @waych for reporting.
 - Fixed: Flickering in `git undo`'s rendering has been reduced.
 
 ## [0.3.4] - 2021-08-12
