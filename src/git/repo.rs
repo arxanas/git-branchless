@@ -170,6 +170,14 @@ impl Repo {
         Ok(config.into())
     }
 
+    /// Get the directory where the DAG for the repository is stored.
+    #[instrument]
+    pub fn get_dag_dir(&self) -> eyre::Result<PathBuf> {
+        let path = self.get_path().join("branchless").join("dag");
+        std::fs::create_dir_all(&path).wrap_err_with(|| "Creating .git/branchless/dag dir")?;
+        Ok(path)
+    }
+
     /// Get the connection to the SQLite database for this repository.
     #[instrument]
     pub fn get_db_conn(&self) -> eyre::Result<rusqlite::Connection> {

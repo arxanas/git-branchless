@@ -13,6 +13,13 @@ pub struct NonZeroOid {
     pub(super) inner: git2::Oid,
 }
 
+impl NonZeroOid {
+    /// Convert this OID into its raw 20-byte slice.
+    pub fn as_bytes(&self) -> &[u8] {
+        self.inner.as_bytes()
+    }
+}
+
 impl Display for NonZeroOid {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{:?}", self.inner)
@@ -81,6 +88,14 @@ pub enum MaybeZeroOid {
 
     /// A non-zero OID.
     NonZero(NonZeroOid),
+}
+
+impl MaybeZeroOid {
+    /// Construct an OID from a raw 20-byte slice.
+    pub fn from_bytes(bytes: &[u8]) -> eyre::Result<Self> {
+        let oid = git2::Oid::from_bytes(bytes)?;
+        Ok(oid.into())
+    }
 }
 
 impl std::fmt::Debug for MaybeZeroOid {
