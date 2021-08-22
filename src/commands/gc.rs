@@ -17,7 +17,7 @@ use tracing::instrument;
 
 use crate::core::eventlog::{is_gc_ref, EventLogDb, EventReplayer};
 use crate::core::graph::{make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid};
-use crate::core::mergebase::MergeBaseDb;
+use crate::core::mergebase::SqliteMergeBaseDb;
 use crate::git::{NonZeroOid, Reference, Repo};
 use crate::tui::Effects;
 
@@ -74,7 +74,7 @@ pub fn mark_commit_reachable(repo: &Repo, commit_oid: NonZeroOid) -> eyre::Resul
 pub fn gc(effects: &Effects) -> eyre::Result<()> {
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
-    let merge_base_db = MergeBaseDb::new(&conn)?;
+    let merge_base_db = SqliteMergeBaseDb::new(&conn)?;
     let event_log_db = EventLogDb::new(&conn)?;
     let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
     let head_oid = repo.get_head_info()?.oid;

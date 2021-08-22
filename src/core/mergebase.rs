@@ -21,14 +21,26 @@ use tracing::instrument;
 use crate::git::{NonZeroOid, Repo};
 use crate::tui::Effects;
 
+/// Service that can answer merge-base queries.
+pub trait MergeBaseDb: std::fmt::Debug + Sized {
+    /// Get an arbitrary merge-base between two commits.
+    fn get_merge_base_oid(
+        &self,
+        effects: &Effects,
+        repo: &Repo,
+        lhs_oid: NonZeroOid,
+        rhs_oid: NonZeroOid,
+    ) -> eyre::Result<Option<NonZeroOid>>;
+}
+
 /// On-disk cache for merge-base queries.
-pub struct MergeBaseDb<'conn> {
+pub struct SqliteMergeBaseDb<'conn> {
     conn: &'conn rusqlite::Connection,
 }
 
-impl std::fmt::Debug for MergeBaseDb<'_> {
+impl std::fmt::Debug for SqliteMergeBaseDb<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<MergeBaseDb>")
+        write!(f, "<SqliteMergeBaseDb>")
     }
 }
 
@@ -49,14 +61,16 @@ CREATE TABLE IF NOT EXISTS merge_base_oids (
     Ok(())
 }
 
-impl<'conn> MergeBaseDb<'conn> {
+impl<'conn> SqliteMergeBaseDb<'conn> {
     /// Constructor.
     #[instrument]
     pub fn new(conn: &'conn rusqlite::Connection) -> eyre::Result<Self> {
         init_tables(conn).wrap_err("Initializing tables")?;
-        Ok(MergeBaseDb { conn })
+        Ok(SqliteMergeBaseDb { conn })
     }
+}
 
+impl MergeBaseDb for SqliteMergeBaseDb<'_> {
     /// Get the merge-base for two given commits.
     ///
     /// If the query is already in the cache, return the cached result. If
@@ -70,7 +84,7 @@ impl<'conn> MergeBaseDb<'conn> {
     /// Returns: The merge-base OID for these two commits. Returns `None` if no
     /// merge-base could be found.
     #[instrument]
-    pub fn get_merge_base_oid(
+    fn get_merge_base_oid(
         &self,
         effects: &Effects,
         repo: &Repo,

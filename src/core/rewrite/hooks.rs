@@ -19,7 +19,7 @@ use crate::core::config::{get_restack_warn_abandoned, RESTACK_WARN_ABANDONED_CON
 use crate::core::eventlog::{Event, EventLogDb, EventReplayer, EventTransactionId};
 use crate::core::formatting::{printable_styled_string, Pluralize};
 use crate::core::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
-use crate::core::mergebase::MergeBaseDb;
+use crate::core::mergebase::{MergeBaseDb, SqliteMergeBaseDb};
 use crate::git::{
     CategorizedReferenceName, GitRunInfo, MaybeZeroOid, NonZeroOid, ReferenceTarget, Repo,
 };
@@ -155,7 +155,7 @@ pub fn hook_post_rewrite(
 
     let should_check_abandoned_commits = get_restack_warn_abandoned(&repo)?;
     if should_check_abandoned_commits && !is_spurious_event {
-        let merge_base_db = MergeBaseDb::new(&conn)?;
+        let merge_base_db = SqliteMergeBaseDb::new(&conn)?;
         warn_abandoned(
             effects,
             &repo,
@@ -243,7 +243,7 @@ fn check_out_new_head(
 fn warn_abandoned(
     effects: &Effects,
     repo: &Repo,
-    merge_base_db: &MergeBaseDb,
+    merge_base_db: &impl MergeBaseDb,
     event_log_db: &EventLogDb,
     old_commit_oids: impl IntoIterator<Item = NonZeroOid>,
 ) -> eyre::Result<()> {

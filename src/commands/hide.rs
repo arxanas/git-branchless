@@ -14,7 +14,7 @@ use crate::core::graph::{
     make_graph, resolve_commits, BranchOids, CommitGraph, HeadOid, MainBranchOid, Node,
     ResolveCommitsResult,
 };
-use crate::core::mergebase::MergeBaseDb;
+use crate::core::mergebase::{MergeBaseDb, SqliteMergeBaseDb};
 use crate::core::metadata::{render_commit_metadata, CommitOidProvider};
 use crate::git::{Commit, Repo};
 use crate::tui::Effects;
@@ -44,7 +44,7 @@ fn recurse_on_commits_helper<
 fn recurse_on_commits<'repo, F: Fn(&Node) -> bool>(
     effects: &Effects,
     repo: &'repo Repo,
-    merge_base_db: &MergeBaseDb,
+    merge_base_db: &impl MergeBaseDb,
     event_replayer: &EventReplayer,
     commits: Vec<Commit<'repo>>,
     condition: F,
@@ -88,7 +88,7 @@ pub fn hide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::Re
     let conn = repo.get_db_conn()?;
     let mut event_log_db = EventLogDb::new(&conn)?;
     let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
-    let merge_base_db = MergeBaseDb::new(&conn)?;
+    let merge_base_db = SqliteMergeBaseDb::new(&conn)?;
 
     let commits = resolve_commits(&repo, hashes)?;
     let commits = match commits {
@@ -160,7 +160,7 @@ pub fn unhide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::
     let conn = repo.get_db_conn()?;
     let mut event_log_db = EventLogDb::new(&conn)?;
     let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
-    let merge_base_db = MergeBaseDb::new(&conn)?;
+    let merge_base_db = SqliteMergeBaseDb::new(&conn)?;
 
     let commits = resolve_commits(&repo, hashes)?;
     let commits = match commits {

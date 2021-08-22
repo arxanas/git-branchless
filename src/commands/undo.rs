@@ -22,7 +22,7 @@ use crate::commands::smartlog::render_graph;
 use crate::core::eventlog::{Event, EventCursor, EventLogDb, EventReplayer, EventTransactionId};
 use crate::core::formatting::{printable_styled_string, Pluralize, StyledStringBuilder};
 use crate::core::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
-use crate::core::mergebase::MergeBaseDb;
+use crate::core::mergebase::{MergeBaseDb, SqliteMergeBaseDb};
 use crate::core::metadata::{
     BranchesProvider, CommitMessageProvider, CommitOidProvider, DifferentialRevisionProvider,
     HiddenExplanationProvider, RelativeTimeProvider,
@@ -34,7 +34,7 @@ use crate::tui::{with_siv, Effects, SingletonView};
 fn render_cursor_smartlog(
     effects: &Effects,
     repo: &Repo,
-    merge_base_db: &MergeBaseDb,
+    merge_base_db: &impl MergeBaseDb,
     event_replayer: &EventReplayer,
     event_cursor: EventCursor,
 ) -> eyre::Result<Vec<StyledString>> {
@@ -316,7 +316,7 @@ fn select_past_event(
     mut siv: CursiveRunner<CursiveRunnable>,
     effects: &Effects,
     repo: &Repo,
-    merge_base_db: &MergeBaseDb,
+    merge_base_db: &impl MergeBaseDb,
     event_replayer: &mut EventReplayer,
 ) -> eyre::Result<Option<EventCursor>> {
     #[derive(Clone, Copy, Debug)]
@@ -797,7 +797,7 @@ fn undo_events(
 pub fn undo(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<isize> {
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
-    let merge_base_db = MergeBaseDb::new(&conn)?;
+    let merge_base_db = SqliteMergeBaseDb::new(&conn)?;
     let mut event_log_db = EventLogDb::new(&conn)?;
     let mut event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
 
@@ -838,7 +838,7 @@ pub mod testing {
         siv: CursiveRunner<CursiveRunnable>,
         effects: &Effects,
         repo: &Repo,
-        merge_base_db: &MergeBaseDb,
+        merge_base_db: &impl MergeBaseDb,
         event_replayer: &mut EventReplayer,
     ) -> eyre::Result<Option<EventCursor>> {
         super::select_past_event(siv, effects, repo, merge_base_db, event_replayer)

@@ -15,7 +15,7 @@ use crate::core::eventlog::{EventLogDb, EventReplayer};
 use crate::core::formatting::set_effect;
 use crate::core::formatting::{printable_styled_string, Glyphs, StyledStringBuilder};
 use crate::core::graph::{make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid};
-use crate::core::mergebase::MergeBaseDb;
+use crate::core::mergebase::{MergeBaseDb, SqliteMergeBaseDb};
 use crate::core::metadata::{
     render_commit_metadata, BranchesProvider, CommitMessageProvider, CommitMetadataProvider,
     CommitOidProvider, DifferentialRevisionProvider, HiddenExplanationProvider,
@@ -34,7 +34,7 @@ use crate::tui::Effects;
 fn split_commit_graph_by_roots(
     effects: &Effects,
     repo: &Repo,
-    merge_base_db: &MergeBaseDb,
+    merge_base_db: &impl MergeBaseDb,
     graph: &CommitGraph,
 ) -> Vec<NonZeroOid> {
     let mut root_commit_oids: Vec<NonZeroOid> = graph
@@ -249,7 +249,7 @@ fn get_output(
 pub fn render_graph(
     effects: &Effects,
     repo: &Repo,
-    merge_base_db: &MergeBaseDb,
+    merge_base_db: &impl MergeBaseDb,
     graph: &CommitGraph,
     head_oid: &HeadOid,
     commit_metadata_providers: &mut [&mut dyn CommitMetadataProvider],
@@ -270,7 +270,7 @@ pub fn render_graph(
 pub fn smartlog(effects: &Effects) -> eyre::Result<()> {
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
-    let merge_base_db = MergeBaseDb::new(&conn)?;
+    let merge_base_db = SqliteMergeBaseDb::new(&conn)?;
     let event_log_db = EventLogDb::new(&conn)?;
     let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
     let head_oid = repo.get_head_info()?.oid;

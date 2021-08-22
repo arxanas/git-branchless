@@ -10,7 +10,7 @@ use crate::core::formatting::printable_styled_string;
 use crate::core::graph::{
     find_path_to_merge_base, make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid,
 };
-use crate::core::mergebase::MergeBaseDb;
+use crate::core::mergebase::{MergeBaseDb, SqliteMergeBaseDb};
 use crate::git::{GitRunInfo, NonZeroOid, Repo};
 use crate::tui::Effects;
 
@@ -52,7 +52,7 @@ pub enum Towards {
 fn advance_towards_main_branch(
     effects: &Effects,
     repo: &Repo,
-    merge_base_db: &MergeBaseDb,
+    merge_base_db: &impl MergeBaseDb,
     graph: &CommitGraph,
     current_oid: NonZeroOid,
     main_branch_oid: &MainBranchOid,
@@ -146,7 +146,7 @@ pub fn next(
 ) -> eyre::Result<isize> {
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
-    let merge_base_db = MergeBaseDb::new(&conn)?;
+    let merge_base_db = SqliteMergeBaseDb::new(&conn)?;
     let event_log_db = EventLogDb::new(&conn)?;
     let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
 
