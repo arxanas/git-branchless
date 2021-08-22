@@ -84,11 +84,11 @@ impl ToString for RebaseCommand {
 
 /// Builder for a rebase plan. Unlike regular Git rebases, a `git-branchless`
 /// rebase plan can move multiple unrelated subtrees to unrelated destinations.
-#[derive(Clone, Debug)]
-pub struct RebasePlanBuilder<'repo> {
+#[derive(Debug)]
+pub struct RebasePlanBuilder<'repo, M: MergeBaseDb + 'repo> {
     repo: &'repo Repo,
     graph: &'repo CommitGraph<'repo>,
-    merge_base_db: &'repo MergeBaseDb<'repo>,
+    merge_base_db: &'repo M,
     main_branch_oid: NonZeroOid,
 
     /// There is a mapping from from `x` to `y` if `x` must be applied before
@@ -97,6 +97,20 @@ pub struct RebasePlanBuilder<'repo> {
     used_labels: HashSet<String>,
 
     touched_paths_cache: CHashMap<NonZeroOid, Option<HashSet<PathBuf>>>,
+}
+
+impl<'repo, M: MergeBaseDb + 'repo> Clone for RebasePlanBuilder<'repo, M> {
+    fn clone(&self) -> Self {
+        Self {
+            repo: self.repo,
+            graph: self.graph,
+            merge_base_db: self.merge_base_db,
+            main_branch_oid: self.main_branch_oid,
+            constraints: self.constraints.clone(),
+            used_labels: self.used_labels.clone(),
+            touched_paths_cache: self.touched_paths_cache.clone(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -176,12 +190,12 @@ impl BuildRebasePlanError {
     }
 }
 
-impl<'repo> RebasePlanBuilder<'repo> {
+impl<'repo, M: MergeBaseDb + 'repo> RebasePlanBuilder<'repo, M> {
     /// Constructor.
     pub fn new(
         repo: &'repo Repo,
         graph: &'repo CommitGraph,
-        merge_base_db: &'repo MergeBaseDb,
+        merge_base_db: &'repo M,
         main_branch_oid: &MainBranchOid,
     ) -> Self {
         let MainBranchOid(main_branch_oid) = main_branch_oid;

@@ -67,7 +67,7 @@ use crate::core::eventlog::{EventLogDb, EventReplayer};
 use crate::core::graph::{
     make_graph, resolve_commits, BranchOids, HeadOid, MainBranchOid, ResolveCommitsResult,
 };
-use crate::core::mergebase::MergeBaseDb;
+use crate::core::mergebase::{MergeBaseDb, SqliteMergeBaseDb};
 use crate::core::rewrite::{
     execute_rebase_plan, find_abandoned_children, find_rewrite_target, move_branches,
     BuildRebasePlanOptions, ExecuteRebasePlanOptions, RebasePlanBuilder,
@@ -80,7 +80,7 @@ fn restack_commits(
     effects: &Effects,
     repo: &Repo,
     git_run_info: &GitRunInfo,
-    merge_base_db: &MergeBaseDb,
+    merge_base_db: &impl MergeBaseDb,
     event_log_db: &EventLogDb,
     commits: Option<impl IntoIterator<Item = NonZeroOid>>,
     build_options: &BuildRebasePlanOptions,
@@ -179,7 +179,7 @@ fn restack_branches(
     effects: &Effects,
     repo: &Repo,
     git_run_info: &GitRunInfo,
-    merge_base_db: &MergeBaseDb,
+    merge_base_db: &impl MergeBaseDb,
     event_log_db: &EventLogDb,
     options: &ExecuteRebasePlanOptions,
 ) -> eyre::Result<isize> {
@@ -251,7 +251,7 @@ pub fn restack(
     let now = SystemTime::now();
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
-    let merge_base_db = MergeBaseDb::new(&conn)?;
+    let merge_base_db = SqliteMergeBaseDb::new(&conn)?;
     let event_log_db = EventLogDb::new(&conn)?;
     let event_tx_id = event_log_db.make_transaction_id(now, "restack")?;
     let head_oid = repo.get_head_info()?.oid;

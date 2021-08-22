@@ -119,7 +119,7 @@ mod tests {
     use crate::core::eventlog::EventLogDb;
     use crate::core::formatting::Glyphs;
     use crate::core::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
-    use crate::core::mergebase::MergeBaseDb;
+    use crate::core::mergebase::SqliteMergeBaseDb;
     use crate::testing::{make_git, Git, GitRunOptions};
     use crate::tui::Effects;
 
@@ -132,7 +132,7 @@ mod tests {
     ) -> eyre::Result<Option<MaybeZeroOid>> {
         let repo = git.get_repo()?;
         let conn = repo.get_db_conn()?;
-        let merge_base_db = MergeBaseDb::new(&conn)?;
+        let merge_base_db = SqliteMergeBaseDb::new(&conn)?;
         let event_log_db = EventLogDb::new(&conn)?;
         let event_replayer = EventReplayer::from_event_log_db(&effects, &repo, &event_log_db)?;
         let event_cursor = event_replayer.make_default_cursor();

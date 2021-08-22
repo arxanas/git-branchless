@@ -102,7 +102,7 @@ impl<'repo> Deref for CommitGraph<'repo> {
 fn find_path_to_merge_base_internal<'repo>(
     effects: &Effects,
     repo: &'repo Repo,
-    merge_base_db: &MergeBaseDb,
+    merge_base_db: &impl MergeBaseDb,
     commit_oid: NonZeroOid,
     target_oid: NonZeroOid,
     mut visited_commit_callback: impl FnMut(NonZeroOid),
@@ -163,7 +163,7 @@ fn find_path_to_merge_base_internal<'repo>(
 pub fn find_path_to_merge_base<'repo>(
     effects: &Effects,
     repo: &'repo Repo,
-    merge_base_db: &MergeBaseDb,
+    merge_base_db: &impl MergeBaseDb,
     commit_oid: NonZeroOid,
     target_oid: NonZeroOid,
 ) -> eyre::Result<Option<Vec<Commit<'repo>>>> {
@@ -187,7 +187,7 @@ pub fn find_path_to_merge_base<'repo>(
 fn walk_from_commits<'repo>(
     effects: &Effects,
     repo: &'repo Repo,
-    merge_base_db: &MergeBaseDb,
+    merge_base_db: &impl MergeBaseDb,
     event_replayer: &EventReplayer,
     event_cursor: EventCursor,
     main_branch_oid: &MainBranchOid,
@@ -415,7 +415,7 @@ fn do_remove_commits(graph: &mut CommitGraph, head_oid: &HeadOid, branch_oids: &
 pub fn make_graph<'repo>(
     effects: &Effects,
     repo: &'repo Repo,
-    merge_base_db: &MergeBaseDb,
+    merge_base_db: &impl MergeBaseDb,
     event_replayer: &EventReplayer,
     event_cursor: EventCursor,
     head_oid: &HeadOid,
@@ -458,7 +458,7 @@ mod tests {
     use std::collections::HashSet;
 
     use crate::core::formatting::Glyphs;
-    use crate::core::mergebase::MergeBaseDb;
+    use crate::core::mergebase::SqliteMergeBaseDb;
     use crate::testing::make_git;
 
     #[test]
@@ -473,7 +473,7 @@ mod tests {
 
         let repo = git.get_repo()?;
         let conn = repo.get_db_conn()?;
-        let merge_base_db = MergeBaseDb::new(&conn)?;
+        let merge_base_db = SqliteMergeBaseDb::new(&conn)?;
 
         let mut effects = Effects::new_suppress_for_test(Glyphs::detect());
         let mut seen_oids = HashSet::new();

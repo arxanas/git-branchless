@@ -14,7 +14,7 @@ use crate::core::graph::{
     make_graph, resolve_commits, BranchOids, CommitGraph, HeadOid, MainBranchOid,
     ResolveCommitsResult,
 };
-use crate::core::mergebase::MergeBaseDb;
+use crate::core::mergebase::{MergeBaseDb, SqliteMergeBaseDb};
 use crate::core::rewrite::{
     execute_rebase_plan, BuildRebasePlanOptions, ExecuteRebasePlanOptions, RebasePlanBuilder,
 };
@@ -104,7 +104,7 @@ pub fn r#move(
     let main_branch_oid = repo.get_main_branch_oid()?;
     let branch_oid_to_names = repo.get_branch_oid_to_names()?;
     let conn = repo.get_db_conn()?;
-    let merge_base_db = MergeBaseDb::new(&conn)?;
+    let merge_base_db = SqliteMergeBaseDb::new(&conn)?;
     let event_log_db = EventLogDb::new(&conn)?;
     let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
     let event_cursor = event_replayer.make_default_cursor();
