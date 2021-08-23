@@ -1,4 +1,4 @@
-name: "Linux (Git master)"
+name: "Linux (Git devel)"
 
 on:
   schedule:
@@ -7,6 +7,8 @@ on:
   push:
     branches:
       - master
+    paths:
+      - ".github/workflows/*.yml"
   workflow_dispatch:
 
 jobs:
@@ -17,12 +19,21 @@ jobs:
         with:
           path: git-master
           repository: git/git
-      - name: Build Git
+          ref: master
+      - uses: actions/checkout@v2
+        with:
+          path: git-next
+          repository: git/git
+          ref: next
+      - name: Install dependencies
         run: |
           sudo apt-get update --fix-missing
           # List of dependencies from https://git-scm.com/book/en/v2/Getting-Started-Installing-Git
           sudo apt-get install dh-autoreconf libcurl4-gnutls-dev libexpat1-dev gettext libz-dev libssl-dev
-          (cd git-master && make)
+      - name: Build Git `master`
+        run: (cd git-master && make)
+      - name: Build Git `next`
+        run: (cd git-next && make)
       - name: Set up Rust
         uses: actions-rs/toolchain@v1
         with:
@@ -31,8 +42,13 @@ jobs:
       - uses: actions/checkout@v2
         with:
           path: git-branchless
-      - name: Run Rust tests
+      - name: Run Rust tests on Git `master`
         run: |
           export RUST_BACKTRACE=1
           export PATH_TO_GIT="$PWD"/git-master/git
+          (cd git-branchless && cargo test)
+      - name: Run Rust tests on Git `next`
+        run: |
+          export RUST_BACKTRACE=1
+          export PATH_TO_GIT="$PWD"/git-next/git
           (cd git-branchless && cargo test)
