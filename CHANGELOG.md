@@ -29,7 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed: Some restack and move operations didn't relocate all commits and branches correctly, due to the experimental `git move` backend. The backend has been changed to use a constraint-solving approach rather than a greedy approach to fix this.
 - Fixed: `git move` preserves committer timestamps when `branchless.restack.preserveTimestamps` is set. The configuration key may change in the future.
 - Fixed: If your currently-checked-out commit was rewritten during a `git move` operation, it now checks out the new version of the commit, rather than leaving you on an old, hidden commit.
-- Fixed: If your current stack had another stack branching off of it, and `git move --base` was passed a commit that other stack, it would fail with a cyclic dependency error. It now clips off the unique part of the branch and moves it.
+- Fixed: If your current stack had another stack branching off of it, and `git move --base` was passed a commit from that other stack, it would fail with a cyclic dependency error. It now clips off the unique part of the branch and moves it.
 - Fixed: If an on-disk rebase would occur (such as the result of `git move` or `git restack`), but you have uncommitted changes in your working copy, the rebase is aborted and a warning is printed, rather than potentially clobbering your changes.
 
 ## [0.3.3] - 2021-06-27
