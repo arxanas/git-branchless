@@ -98,7 +98,10 @@ impl FromStr for GitVersion {
             [major, minor, patch, ..] => {
                 let major = major.parse()?;
                 let minor = minor.parse()?;
-                let patch = patch.parse()?;
+
+                // Example version without a real patch number: `2.33.GIT`.
+                let patch: isize = patch.parse().unwrap_or_default();
+
                 Ok(GitVersion(major, minor, patch))
             }
             _ => eyre::bail!("Could not parse Git version string: {}", version_str),
@@ -1265,6 +1268,12 @@ mod tests {
         assert_eq!(
             "git version 2.33.0-rc0".parse::<GitVersion>().unwrap(),
             GitVersion(2, 33, 0)
-        )
+        );
+
+        // See https://github.com/arxanas/git-branchless/issues/85
+        assert_eq!(
+            "git version 2.33.GIT".parse::<GitVersion>().unwrap(),
+            GitVersion(2, 33, 0)
+        );
     }
 }
