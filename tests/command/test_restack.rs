@@ -2,10 +2,21 @@ use branchless::testing::{make_git, GitRunOptions};
 
 /// Remove some of the output from `git rebase`, as it seems to be
 /// non-deterministic as to whether or not it appears.
-fn remove_rebase_lines(output: String) -> String {
+pub fn remove_rebase_lines(output: String) -> String {
     output
         .lines()
         .filter(|line| !line.contains("First, rewinding head") && !line.contains("Applying:"))
+        .filter(|line| {
+            // See https://github.com/arxanas/git-branchless/issues/87.  Before
+            // Git v2.33 (`next` branch), the "Auto-merging" line appears
+            // *after* the "CONFLICT" line for a given file (which doesn't make
+            // sense -- how can there be a conflict before merging has started)?
+            // The development version of Git v2.33 fixes this and places the
+            // "Auto-merging" line *before* the "CONFLICT" line. To avoid having
+            // to deal with multiple possible output formats, just remove the
+            // line in question.
+            !line.contains("Auto-merging")
+        })
         .map(|line| format!("{}\n", line))
         .collect()
 }
@@ -241,12 +252,13 @@ fn test_restack_aborts_during_rebase_conflict() -> eyre::Result<()> {
                 ..Default::default()
             },
         )?;
+        let stdout = remove_rebase_lines(stdout);
+
         insta::assert_snapshot!(stdout, @r###"
         branchless: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: <git-executable> rebase --continue
         CONFLICT (add/add): Merge conflict in test2.txt
-        Auto-merging test2.txt
         Error: Could not restack commits (exit code 1).
         You can resolve the error and try running `git restack` again.
         "###);
