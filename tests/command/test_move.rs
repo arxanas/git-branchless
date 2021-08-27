@@ -1,5 +1,7 @@
 use branchless::testing::{make_git, GitRunOptions};
 
+use crate::command::test_restack::remove_rebase_lines;
+
 #[test]
 fn test_move_stick_on_disk() -> eyre::Result<()> {
     let git = make_git()?;
@@ -350,6 +352,8 @@ fn test_move_merge_conflict() -> eyre::Result<()> {
                 ..Default::default()
             },
         )?;
+        let stdout = remove_rebase_lines(stdout);
+
         insta::assert_snapshot!(stdout, @r###"
         Rebase plan: Some(
             RebasePlan {
@@ -382,7 +386,6 @@ fn test_move_merge_conflict() -> eyre::Result<()> {
         Calling Git for on-disk rebase...
         branchless: <git-executable> rebase --continue
         CONFLICT (add/add): Merge conflict in conflict.txt
-        Auto-merging conflict.txt
         "###);
     }
 
