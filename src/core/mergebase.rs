@@ -88,7 +88,7 @@ impl<'conn> MergeBaseDb<'conn> {
 
         let merge_base_oid: Option<Option<String>> = self
             .conn
-            .query_row_named(
+            .query_row(
                 "
 SELECT merge_base_oid
 FROM merge_base_oids
@@ -121,7 +121,7 @@ WHERE lhs_oid = :lhs_oid
 
                 // Cache computed merge-base OID.
                 self.conn
-                    .execute_named(
+                    .execute(
                         "
 INSERT INTO merge_base_oids VALUES (
     :lhs_oid,

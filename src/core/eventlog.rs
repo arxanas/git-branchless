@@ -457,7 +457,7 @@ impl<'conn> EventLogDb<'conn> {
             let ref_name = ref_name.map(|x| x.to_string_lossy().into_owned());
             let message = message.map(|x| x.to_string_lossy().into_owned());
 
-            tx.execute_named(
+            tx.execute(
                 "
 INSERT INTO event_log VALUES (
     :timestamp,
@@ -543,7 +543,7 @@ ORDER BY rowid ASC
             .wrap_err_with(|| format!("Calculating event transaction timestamp: {:?}", &now))?
             .as_secs_f64();
         self.conn
-            .execute_named(
+            .execute(
                 "
             INSERT INTO event_transactions
             (timestamp, message)
