@@ -5,11 +5,11 @@ use eden_dag::ops::DagPersistent;
 use eden_dag::{DagAlgorithm, Set, Vertex};
 use eyre::Context;
 use itertools::Itertools;
-use tracing::{instrument, trace};
+use tracing::{instrument, trace, warn};
 
 use crate::core::eventlog::EventReplayer;
 use crate::core::mergebase::MergeBaseDb;
-use crate::git::{MaybeZeroOid, NonZeroOid, Repo};
+use crate::git::{Commit, MaybeZeroOid, NonZeroOid, Repo};
 use crate::tui::{Effects, OperationType};
 
 /// Interface to access the directed acyclic graph (DAG) representing Git's
@@ -156,6 +156,45 @@ impl Dag {
             Some(vertex) => Ok(Some(vertex.to_hex().parse()?)),
         }
     }
+
+    /// Get the range of OIDs from `parent_oid` to `child_oid`. Note that there
+    /// may be more than one path; in that case, the OIDs are returned in a
+    /// topologically-sorted order.
+    #[instrument]
+    pub fn get_range(
+        &self,
+        effects: &Effects,
+        repo: &Repo,
+        parent_oid: NonZeroOid,
+        child_oid: NonZeroOid,
+    ) -> eyre::Result<Vec<NonZeroOid>> {
+        let mut dag = self.inner.try_borrow_mut()?;
+        let dag = &mut *dag;
+        let roots =
+            Set::from_static_names(vec![self.oid_to_vertex(effects, repo, dag, parent_oid)?]);
+        let heads =
+            Set::from_static_names(vec![self.oid_to_vertex(effects, repo, dag, child_oid)?]);
+        let range = dag
+            .range(roots, heads)
+            .wrap_err_with(|| "Computing range")?;
+        let range = dag.sort(&range).wrap_err_with(|| "Sorting range")?;
+        let oids = {
+            let mut result = Vec::new();
+            for vertex in range.iter()? {
+                let vertex = vertex?;
+                let oid = vertex.as_ref();
+                let oid = MaybeZeroOid::from_bytes(oid)?;
+                match oid {
+                    MaybeZeroOid::Zero => {
+                        // Do nothing.
+                    }
+                    MaybeZeroOid::NonZero(oid) => result.push(oid),
+                }
+            }
+            result
+        };
+        Ok(oids)
+    }
 }
 
 impl std::fmt::Debug for Dag {
@@ -173,5 +212,34 @@ impl MergeBaseDb for Dag {
         rhs_oid: NonZeroOid,
     ) -> eyre::Result<Option<NonZeroOid>> {
         self.get_one_merge_base_oid(effects, repo, lhs_oid, rhs_oid)
+    }
+
+    fn find_path_to_merge_base<'repo>(
+        &self,
+        effects: &Effects,
+        repo: &'repo Repo,
+        commit_oid: NonZeroOid,
+        target_oid: NonZeroOid,
+    ) -> eyre::Result<Option<Vec<Commit<'repo>>>> {
+        let range = self.get_range(effects, repo, target_oid, commit_oid)?;
+        let path = {
+            let mut path = Vec::new();
+            for oid in range {
+                let commit = match repo.find_commit(oid)? {
+                    Some(commit) => commit,
+                    None => {
+                        warn!("Commit in path to merge-base not found: {:?}", oid);
+                        continue;
+                    }
+                };
+                path.push(commit)
+            }
+            path
+        };
+        if path.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(path))
+        }
     }
 }

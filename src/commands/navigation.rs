@@ -7,9 +7,7 @@ use tracing::{instrument, warn};
 use crate::commands::smartlog::smartlog;
 use crate::core::eventlog::{EventLogDb, EventReplayer};
 use crate::core::formatting::printable_styled_string;
-use crate::core::graph::{
-    find_path_to_merge_base, make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid,
-};
+use crate::core::graph::{make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid};
 use crate::core::mergebase::{make_merge_base_db, MergeBaseDb};
 use crate::git::{GitRunInfo, NonZeroOid, Repo};
 use crate::tui::Effects;
@@ -59,7 +57,7 @@ fn advance_towards_main_branch(
 ) -> eyre::Result<(isize, NonZeroOid)> {
     let MainBranchOid(main_branch_oid) = main_branch_oid;
     let path =
-        find_path_to_merge_base(effects, repo, merge_base_db, *main_branch_oid, current_oid)?;
+        merge_base_db.find_path_to_merge_base(effects, repo, *main_branch_oid, current_oid)?;
     let path = match path {
         None => return Ok((0, current_oid)),
         Some(path) if path.len() == 1 => {

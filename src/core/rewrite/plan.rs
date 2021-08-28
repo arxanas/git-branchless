@@ -9,7 +9,7 @@ use rayon::{prelude::*, ThreadPool, ThreadPoolBuilder};
 use tracing::{instrument, warn};
 
 use crate::core::formatting::printable_styled_string;
-use crate::core::graph::{find_path_to_merge_base, CommitGraph, MainBranchOid};
+use crate::core::graph::{CommitGraph, MainBranchOid};
 use crate::core::mergebase::MergeBaseDb;
 use crate::git::{Commit, NonZeroOid, PatchId, Repo};
 use crate::tui::{Effects, OperationType};
@@ -344,73 +344,6 @@ impl<'repo, M: MergeBaseDb + 'repo> RebasePlanBuilder<'repo, M> {
 
         // Calculate the commits along the main branch to be moved if this is a
         // constraint for a main branch commit.
-        //
-        // FIXME: The below logic is not quite correct when it comes to
-        // multi-parent commits. It's possible to have a topology where there
-        // are multiple paths to a main branch node:
-        //
-        // ```text
-        // O main node
-        // |\
-        // | o some node
-        // | |
-        // o some other node
-        // | |
-        // |/
-        // o visible node
-        // ```
-        //
-        // In this case, `find_path_to_merge_base` will only find the shortest
-        // path and move those commits. In principle, it should be possible to
-        // find all paths to the main node. The difficulty is that one has to be
-        // careful not to "overshoot" the main node and traverse history all the
-        // way to the initial commit for performance reasons. Example:
-        //
-        // ```text
-        // o initial commit
-        // :
-        // : one million commits...
-        // :
-        // o some ancestor node of the main node
-        // |\
-        // | |
-        // O main node
-        // | |
-        // | o some node
-        // | |
-        // o some other node
-        // | |
-        // |/
-        // o visible node
-        // ```
-        //
-        // The above case can be handled by calculating all the merge-bases with
-        // the main branch whenever we find a multi-parent commit. The below
-        // case is even trickier:
-        //
-        //
-        // ```text
-        // o initial commit
-        // |\
-        // : :
-        // : : one million commits...
-        // : :
-        // | |
-        // O main node
-        // | |
-        // | o some node
-        // | |
-        // o some other node
-        // | |
-        // |/
-        // o visible node
-        // ```
-        //
-        // Even determining the merge-bases with main of the parent nodes could
-        // take ages to complete. This could potentially be either by limiting
-        // the traversal to a certain amount and giving up, or leveraging `git
-        // commit-graph`: https://git-scm.com/docs/commit-graph. (I believe that
-        // `libgit2` does not currently have support for commit graphs.)
         let is_main = match self.graph.get(&current_oid) {
             Some(node) => node.is_main,
             None => true,
@@ -418,10 +351,9 @@ impl<'repo, M: MergeBaseDb + 'repo> RebasePlanBuilder<'repo, M> {
         if is_main {
             // This must be a main branch commit. We need to collect its
             // descendants, which don't appear in the commit graph.
-            let path = find_path_to_merge_base(
+            let path = self.merge_base_db.find_path_to_merge_base(
                 effects,
                 self.repo,
-                self.merge_base_db,
                 self.main_branch_oid,
                 current_oid,
             )?;
@@ -441,6 +373,10 @@ impl<'repo, M: MergeBaseDb + 'repo> RebasePlanBuilder<'repo, M> {
                     });
                     // We've hit a node that is in the graph, so further
                     // constraints should be added by the above code path.
+                    //
+                    // FIXME: this may be incorrect for multi-parent commits,
+                    // since `find_path_to_merge_base` actually returns a
+                    // partially-ordered set of commits.
                     if self.graph.contains_key(&child_oid) {
                         break;
                     }
@@ -631,10 +567,9 @@ impl<'repo, M: MergeBaseDb + 'repo> RebasePlanBuilder<'repo, M> {
             Some(merge_base_oid) => merge_base_oid,
         };
 
-        let path = find_path_to_merge_base(
+        let path = self.merge_base_db.find_path_to_merge_base(
             effects,
             self.repo,
-            self.merge_base_db,
             dest_oid,
             merge_base_oid,
         )?;
