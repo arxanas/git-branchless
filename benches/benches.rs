@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use branchless::core::eventlog::{EventLogDb, EventReplayer};
 use branchless::core::formatting::Glyphs;
 use branchless::core::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
-use branchless::core::mergebase::make_merge_base_db;
+use branchless::core::mergebase::{make_merge_base_db, MergeBaseDb};
 use branchless::core::rewrite::{BuildRebasePlanOptions, RebasePlanBuilder};
 use branchless::git::{Commit, Repo};
 use branchless::tui::Effects;
@@ -27,39 +27,39 @@ fn nth_parent<'repo>(commit: Commit<'repo>, n: usize) -> Commit<'repo> {
 }
 
 fn bench_rebase_plan(c: &mut Criterion) {
-    let repo = get_repo();
-    let head_oid = repo.get_head_info().unwrap().oid.unwrap();
-    let later_commit = nth_parent(repo.find_commit(head_oid).unwrap().unwrap(), 20);
-    let earlier_commit = nth_parent(later_commit.clone(), 1000);
-    println!("Comparing {:?} with {:?}", &earlier_commit, &later_commit);
+    c.bench_function("RebasePlanBuilder::build", |b| {
+        let repo = get_repo();
+        let head_oid = repo.get_head_info().unwrap().oid.unwrap();
+        let later_commit = nth_parent(repo.find_commit(head_oid).unwrap().unwrap(), 20);
+        let earlier_commit = nth_parent(later_commit.clone(), 1000);
+        println!("Comparing {:?} with {:?}", &earlier_commit, &later_commit);
 
-    let effects = Effects::new_suppress_for_test(Glyphs::text());
-    let conn = repo.get_db_conn().unwrap();
-    let event_log_db = EventLogDb::new(&conn).unwrap();
-    let event_replayer = EventReplayer::from_event_log_db(&effects, &repo, &event_log_db).unwrap();
-    let event_cursor = event_replayer.make_default_cursor();
-    let merge_base_db = make_merge_base_db(&effects, &repo, &conn, &event_replayer).unwrap();
-    let graph = make_graph(
-        &effects,
-        &repo,
-        &merge_base_db,
-        &event_replayer,
-        event_cursor,
-        &HeadOid(Some(head_oid)),
-        &MainBranchOid(head_oid),
-        &BranchOids(Default::default()),
-        true,
-    )
-    .unwrap();
-    println!("Built commit graph ({:?} elements)", graph.len());
-
-    let mut builder =
-        RebasePlanBuilder::new(&repo, &graph, &merge_base_db, &MainBranchOid(head_oid));
-    builder
-        .move_subtree(later_commit.get_oid(), earlier_commit.get_oid())
+        let effects = Effects::new_suppress_for_test(Glyphs::text());
+        let conn = repo.get_db_conn().unwrap();
+        let event_log_db = EventLogDb::new(&conn).unwrap();
+        let event_replayer =
+            EventReplayer::from_event_log_db(&effects, &repo, &event_log_db).unwrap();
+        let event_cursor = event_replayer.make_default_cursor();
+        let merge_base_db = make_merge_base_db(&effects, &repo, &conn, &event_replayer).unwrap();
+        let graph = make_graph(
+            &effects,
+            &repo,
+            &merge_base_db,
+            &event_replayer,
+            event_cursor,
+            &HeadOid(Some(head_oid)),
+            &MainBranchOid(head_oid),
+            &BranchOids(Default::default()),
+            true,
+        )
         .unwrap();
+        println!("Built commit graph ({:?} elements)", graph.len());
 
-    c.bench_function("RebasePlanBuilder::build", move |b| {
+        let mut builder =
+            RebasePlanBuilder::new(&repo, &graph, &merge_base_db, &MainBranchOid(head_oid));
+        builder
+            .move_subtree(later_commit.get_oid(), earlier_commit.get_oid())
+            .unwrap();
         b.iter_batched(
             || builder.clone(),
             |builder| {
@@ -81,9 +81,39 @@ fn bench_rebase_plan(c: &mut Criterion) {
     });
 }
 
+fn bench_find_path_to_merge_base(c: &mut Criterion) {
+    c.bench_function("MergeBaseDb::find_path_to_merge_base", |b| {
+        let repo = get_repo();
+        let head_oid = repo.get_head_info().unwrap().oid.unwrap();
+        let later_commit = nth_parent(repo.find_commit(head_oid).unwrap().unwrap(), 20);
+        let earlier_commit = nth_parent(later_commit.clone(), 1000);
+        println!(
+            "Finding path to merge-base for {:?} and {:?}",
+            &earlier_commit, &later_commit
+        );
+
+        let effects = Effects::new_suppress_for_test(Glyphs::text());
+        let conn = repo.get_db_conn().unwrap();
+        let event_log_db = EventLogDb::new(&conn).unwrap();
+        let event_replayer =
+            EventReplayer::from_event_log_db(&effects, &repo, &event_log_db).unwrap();
+        let merge_base_db = make_merge_base_db(&effects, &repo, &conn, &event_replayer).unwrap();
+        let merge_base_db: &dyn MergeBaseDb = &merge_base_db;
+
+        b.iter(|| {
+            merge_base_db.find_path_to_merge_base(
+                &effects,
+                &repo,
+                later_commit.get_oid(),
+                earlier_commit.get_oid(),
+            )
+        })
+    });
+}
+
 criterion_group!(
     name = benches;
     config = Criterion::default().sample_size(10);
-    targets = bench_rebase_plan,
+    targets = bench_rebase_plan, bench_find_path_to_merge_base
 );
 criterion_main!(benches);
