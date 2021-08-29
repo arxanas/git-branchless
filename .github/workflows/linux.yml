@@ -67,3 +67,8 @@ jobs:
           export RUST_BACKTRACE=1
           export PATH_TO_GIT="$PWD"/git
           cargo test
+      - name: Run Rust tests (no default features)
+        run: |
+          export RUST_BACKTRACE=1
+          export PATH_TO_GIT="$PWD"/git
+          cargo test --no-default-features

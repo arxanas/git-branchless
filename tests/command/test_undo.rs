@@ -8,7 +8,7 @@ use crate::util::trim_lines;
 use branchless::commands::undo::testing::{select_past_event, undo_events};
 use branchless::core::eventlog::{EventCursor, EventLogDb, EventReplayer};
 use branchless::core::formatting::Glyphs;
-use branchless::core::mergebase::SqliteMergeBaseDb;
+use branchless::core::mergebase::make_merge_base_db;
 use branchless::git::{GitRunInfo, Repo};
 use branchless::testing::{make_git, Git};
 use branchless::tui::testing::{screen_to_string, CursiveTestingBackend, CursiveTestingEvent};
@@ -25,9 +25,9 @@ fn run_select_past_event(
     let glyphs = Glyphs::text();
     let effects = Effects::new_suppress_for_test(glyphs);
     let conn = repo.get_db_conn()?;
-    let merge_base_db = SqliteMergeBaseDb::new(&conn)?;
     let event_log_db: EventLogDb = EventLogDb::new(&conn)?;
     let mut event_replayer = EventReplayer::from_event_log_db(&effects, &repo, &event_log_db)?;
+    let merge_base_db = make_merge_base_db(&effects, repo, &conn, &event_replayer)?;
     let siv = CursiveRunnable::new::<Infallible, _>(move || {
         Ok(CursiveTestingBackend::init(events.clone()))
     });

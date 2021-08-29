@@ -18,11 +18,12 @@ use eyre::Context;
 use rusqlite::OptionalExtension;
 use tracing::instrument;
 
-use crate::git::{NonZeroOid, Repo};
+use crate::core::eventlog::EventReplayer;
+use crate::git::{Dag, NonZeroOid, Repo};
 use crate::tui::Effects;
 
 /// Service that can answer merge-base queries.
-pub trait MergeBaseDb: std::fmt::Debug + Sized {
+pub trait MergeBaseDb: std::fmt::Debug {
     /// Get an arbitrary merge-base between two commits.
     fn get_merge_base_oid(
         &self,
@@ -64,7 +65,7 @@ CREATE TABLE IF NOT EXISTS merge_base_oids (
 impl<'conn> SqliteMergeBaseDb<'conn> {
     /// Constructor.
     #[instrument]
-    pub fn new(conn: &'conn rusqlite::Connection) -> eyre::Result<Self> {
+    fn new(conn: &'conn rusqlite::Connection) -> eyre::Result<Self> {
         init_tables(conn).wrap_err("Initializing tables")?;
         Ok(SqliteMergeBaseDb { conn })
     }
@@ -154,4 +155,26 @@ INSERT INTO merge_base_oids VALUES (
             }
         }
     }
+}
+
+/// Instantiate a `MergeBaseDb` based on the requested compile-time feature.
+#[cfg(feature = "eden-dag")]
+pub fn make_merge_base_db(
+    effects: &Effects,
+    repo: &Repo,
+    _conn: &rusqlite::Connection,
+    event_replayer: &EventReplayer,
+) -> eyre::Result<Dag> {
+    Dag::open(effects, repo, event_replayer)
+}
+
+/// Instantiate a `MergeBaseDb` based on the requested compile-time feature.
+#[cfg(not(feature = "eden-dag"))]
+pub fn make_merge_base_db<'conn>(
+    _effects: &Effects,
+    _repo: &Repo,
+    conn: &'conn rusqlite::Connection,
+    _event_replayer: &EventReplayer,
+) -> eyre::Result<SqliteMergeBaseDb<'conn>> {
+    Ok(SqliteMergeBaseDb::new(conn)?)
 }

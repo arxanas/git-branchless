@@ -457,8 +457,9 @@ mod tests {
 
     use std::collections::HashSet;
 
+    use crate::core::eventlog::EventLogDb;
     use crate::core::formatting::Glyphs;
-    use crate::core::mergebase::SqliteMergeBaseDb;
+    use crate::core::mergebase::make_merge_base_db;
     use crate::testing::make_git;
 
     #[test]
@@ -471,11 +472,13 @@ mod tests {
         git.detach_head()?;
         let test3_oid = git.commit_file("test3", 3)?;
 
+        let mut effects = Effects::new_suppress_for_test(Glyphs::detect());
         let repo = git.get_repo()?;
         let conn = repo.get_db_conn()?;
-        let merge_base_db = SqliteMergeBaseDb::new(&conn)?;
+        let event_log_db = EventLogDb::new(&conn)?;
+        let event_replayer = EventReplayer::from_event_log_db(&effects, &repo, &event_log_db)?;
+        let merge_base_db = make_merge_base_db(&effects, &repo, &conn, &event_replayer)?;
 
-        let mut effects = Effects::new_suppress_for_test(Glyphs::detect());
         let mut seen_oids = HashSet::new();
         let path = find_path_to_merge_base_internal(
             &mut effects,
