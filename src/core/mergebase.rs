@@ -21,7 +21,7 @@ use rusqlite::OptionalExtension;
 use tracing::instrument;
 
 use crate::core::eventlog::EventReplayer;
-use crate::git::{Commit, Dag, NonZeroOid, Repo};
+use crate::git::{Commit, NonZeroOid, Repo};
 use crate::tui::{Effects, OperationType};
 
 /// Service that can answer merge-base queries.
@@ -245,8 +245,8 @@ pub fn make_merge_base_db(
     repo: &Repo,
     _conn: &rusqlite::Connection,
     event_replayer: &EventReplayer,
-) -> eyre::Result<Dag> {
-    Dag::open(effects, repo, event_replayer)
+) -> eyre::Result<crate::git::Dag> {
+    crate::git::Dag::open(effects, repo, event_replayer)
 }
 
 /// Instantiate a `MergeBaseDb` based on the requested compile-time feature.
