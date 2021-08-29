@@ -130,7 +130,7 @@ See the [Architecture page](https://github.com/arxanas/git-branchless/wiki/Archi
 
 Alternative tools:
 
-* [`~krobelus/git-branchless`](https://git.sr.ht/~krobelus/git-branchless/): A tool with the same name, but the opposite workflow. Rather than making many commits without branches attached to them, you make all of your commits to one branch, and then automatically split them up later based on their topic.
+* [`~krobelus/git-branchstack`](https://git.sr.ht/~krobelus/git-branchstack/): A tool which allows you to make all of your commits to one branch, and then automatically split them up into separate branches later based on their topic.
 * [Stacked Git](https://stacked-git.github.io/): This tool lets you efficiently manage a stack of patches alongside your regular work. In comparison, `git-branchless` encourages that you commit all of your work directly and manipulate those commits directly.
 * [Git Patch Stack](https://github.com/uptech/git-ps): Similar to Stacked Git, specifically intended to support using a pull request workflow.
 * [Jujutsu](https://github.com/martinvonz/jj): An experimental, Git-compatible VCS. Supports anonymous branches, undo, checked-in conflicts, auto-rebase. Uses a completely different CLI (`jj` instead of `git`) and does not work in a Git working copy, but can work as an alternative working copy (like `git worktree`).
