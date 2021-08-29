@@ -16,6 +16,10 @@ version = "0.3.4"
 [lib]
 name = "branchless"
 
+[features]
+default = ["eden-dag"]
+eden-dag = []
+
 [dependencies]
 anyhow = "1.0.43"
 assert_cmd = "2.0.0"

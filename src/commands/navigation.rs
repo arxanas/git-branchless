@@ -10,7 +10,7 @@ use crate::core::formatting::printable_styled_string;
 use crate::core::graph::{
     find_path_to_merge_base, make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid,
 };
-use crate::core::mergebase::{MergeBaseDb, SqliteMergeBaseDb};
+use crate::core::mergebase::{make_merge_base_db, MergeBaseDb};
 use crate::git::{GitRunInfo, NonZeroOid, Repo};
 use crate::tui::Effects;
 
@@ -146,9 +146,9 @@ pub fn next(
 ) -> eyre::Result<isize> {
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
-    let merge_base_db = SqliteMergeBaseDb::new(&conn)?;
     let event_log_db = EventLogDb::new(&conn)?;
     let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
+    let merge_base_db = make_merge_base_db(effects, &repo, &conn, &event_replayer)?;
 
     let head_oid = match repo.get_head_info()?.oid {
         Some(head_oid) => head_oid,

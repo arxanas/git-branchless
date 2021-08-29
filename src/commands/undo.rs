@@ -22,7 +22,7 @@ use crate::commands::smartlog::render_graph;
 use crate::core::eventlog::{Event, EventCursor, EventLogDb, EventReplayer, EventTransactionId};
 use crate::core::formatting::{printable_styled_string, Pluralize, StyledStringBuilder};
 use crate::core::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
-use crate::core::mergebase::{MergeBaseDb, SqliteMergeBaseDb};
+use crate::core::mergebase::{make_merge_base_db, MergeBaseDb};
 use crate::core::metadata::{
     BranchesProvider, CommitMessageProvider, CommitOidProvider, DifferentialRevisionProvider,
     HiddenExplanationProvider, RelativeTimeProvider,
@@ -797,9 +797,9 @@ fn undo_events(
 pub fn undo(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<isize> {
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
-    let merge_base_db = SqliteMergeBaseDb::new(&conn)?;
     let mut event_log_db = EventLogDb::new(&conn)?;
     let mut event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
+    let merge_base_db = make_merge_base_db(effects, &repo, &conn, &event_replayer)?;
 
     let event_cursor = {
         let result = with_siv(effects, |effects, siv| {

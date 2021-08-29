@@ -9,6 +9,7 @@
 //! garbage collection doesn't collect commits which branchless thinks are still
 //! visible.
 
+use std::borrow::Borrow;
 use std::ffi::OsStr;
 use std::fmt::Write;
 
@@ -17,7 +18,7 @@ use tracing::instrument;
 
 use crate::core::eventlog::{is_gc_ref, EventLogDb, EventReplayer};
 use crate::core::graph::{make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid};
-use crate::core::mergebase::SqliteMergeBaseDb;
+use crate::core::mergebase::make_merge_base_db;
 use crate::git::{NonZeroOid, Reference, Repo};
 use crate::tui::Effects;
 
@@ -74,9 +75,9 @@ pub fn mark_commit_reachable(repo: &Repo, commit_oid: NonZeroOid) -> eyre::Resul
 pub fn gc(effects: &Effects) -> eyre::Result<()> {
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
-    let merge_base_db = SqliteMergeBaseDb::new(&conn)?;
     let event_log_db = EventLogDb::new(&conn)?;
     let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
+    let merge_base_db = make_merge_base_db(effects, &repo, &conn, &event_replayer)?;
     let head_oid = repo.get_head_info()?.oid;
     let main_branch_oid = repo.get_main_branch_oid()?;
     let branch_oid_to_names = repo.get_branch_oid_to_names()?;
@@ -84,7 +85,7 @@ pub fn gc(effects: &Effects) -> eyre::Result<()> {
     let graph = make_graph(
         effects,
         &repo,
-        &merge_base_db,
+        merge_base_db.borrow(),
         &event_replayer,
         event_replayer.make_default_cursor(),
         &HeadOid(head_oid),

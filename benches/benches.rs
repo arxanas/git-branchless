@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use branchless::core::eventlog::{EventLogDb, EventReplayer};
 use branchless::core::formatting::Glyphs;
 use branchless::core::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
-use branchless::core::mergebase::SqliteMergeBaseDb;
+use branchless::core::mergebase::make_merge_base_db;
 use branchless::core::rewrite::{BuildRebasePlanOptions, RebasePlanBuilder};
 use branchless::git::{Commit, Repo};
 use branchless::tui::Effects;
@@ -35,10 +35,10 @@ fn bench_rebase_plan(c: &mut Criterion) {
 
     let effects = Effects::new_suppress_for_test(Glyphs::text());
     let conn = repo.get_db_conn().unwrap();
-    let merge_base_db = SqliteMergeBaseDb::new(&conn).unwrap();
     let event_log_db = EventLogDb::new(&conn).unwrap();
     let event_replayer = EventReplayer::from_event_log_db(&effects, &repo, &event_log_db).unwrap();
     let event_cursor = event_replayer.make_default_cursor();
+    let merge_base_db = make_merge_base_db(&effects, &repo, &conn, &event_replayer).unwrap();
     let graph = make_graph(
         &effects,
         &repo,
