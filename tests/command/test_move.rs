@@ -776,14 +776,12 @@ fn test_rebase_in_memory_updates_committer_timestamp() -> eyre::Result<()> {
     git.commit_file("test3", 3)?;
 
     let original_committer_timestamp = repo
-        .find_commit(repo.get_head_info()?.oid.unwrap())?
-        .unwrap()
+        .find_commit_or_fail(repo.get_head_info()?.oid.unwrap())?
         .get_committer()
         .get_time();
     git.run(&["move", "-d", "master"])?;
     let updated_committer_timestamp = repo
-        .find_commit(repo.get_head_info()?.oid.unwrap())?
-        .unwrap()
+        .find_commit_or_fail(repo.get_head_info()?.oid.unwrap())?
         .get_committer()
         .get_time();
 

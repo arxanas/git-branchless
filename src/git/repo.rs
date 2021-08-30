@@ -712,6 +712,17 @@ Either create it, or update the main branch setting by running:
         }
     }
 
+    /// Like `find_commit`, but raises a generic error if the commit could not
+    /// be found.
+    #[instrument]
+    pub fn find_commit_or_fail(&self, oid: NonZeroOid) -> eyre::Result<Commit> {
+        match self.find_commit(oid) {
+            Ok(Some(commit)) => Ok(commit),
+            Ok(None) => eyre::bail!("Could not find commit with OID: {:?}", oid),
+            Err(err) => Err(err),
+        }
+    }
+
     /// Look up the commit with the given OID and render a friendly description
     /// of it, or render an error message if not found.
     pub fn friendly_describe_commit_from_oid(&self, oid: NonZeroOid) -> eyre::Result<StyledString> {

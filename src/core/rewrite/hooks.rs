@@ -479,10 +479,7 @@ pub fn hook_skip_upstream_applied_commit(
     commit_oid: NonZeroOid,
 ) -> eyre::Result<()> {
     let repo = Repo::from_current_dir()?;
-    let commit = match repo.find_commit(commit_oid)? {
-        Some(commit) => commit,
-        None => eyre::bail!("Could not find commit: {:?}", commit_oid),
-    };
+    let commit = repo.find_commit_or_fail(commit_oid)?;
     writeln!(
         effects.get_output_stream(),
         "Skipping commit (was already applied upstream): {}",
