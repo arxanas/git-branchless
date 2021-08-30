@@ -82,6 +82,28 @@ impl ToString for RebaseCommand {
     }
 }
 
+/// Mutable state modified while building the rebase plan.
+#[derive(Clone, Debug)]
+struct BuildState {
+    /// Copy of `initial_constraints` in `RebasePlanBuilder` but with any
+    /// implied constraints added (such as for descendant commits).
+    constraints: HashMap<NonZeroOid, HashSet<NonZeroOid>>,
+
+    /// When we're rebasing a commit with OID X, its commit hash will change to
+    /// some OID X', which we don't know ahead of time. However, we may still
+    /// need to refer to X' as part of the rest of the rebase (such as when
+    /// rebasing a tree: we have to back up to a parent node and start a new
+    /// branch). Whenever we make a commit that we want to address later, we add
+    /// a "label" pointing to that commit. This field is used to ensure that we
+    /// don't use the same label twice.
+    used_labels: HashSet<String>,
+
+    /// Cache mapping from commit OID to the paths changed in the diff for that
+    /// commit. The value is `None` if the commit doesn't have an associated
+    /// diff (i.e. is a merge commit).
+    touched_paths_cache: CHashMap<NonZeroOid, Option<HashSet<PathBuf>>>,
+}
+
 /// Builder for a rebase plan. Unlike regular Git rebases, a `git-branchless`
 /// rebase plan can move multiple unrelated subtrees to unrelated destinations.
 #[derive(Debug)]
@@ -93,12 +115,12 @@ pub struct RebasePlanBuilder<'repo, M: MergeBaseDb + 'repo> {
 
     /// There is a mapping from from `x` to `y` if `x` must be applied before
     /// `y`.
-    constraints: HashMap<NonZeroOid, HashSet<NonZeroOid>>,
-    used_labels: HashSet<String>,
-
-    touched_paths_cache: CHashMap<NonZeroOid, Option<HashSet<PathBuf>>>,
+    initial_constraints: HashMap<NonZeroOid, HashSet<NonZeroOid>>,
 }
 
+/// Can't `#[derive(Clone)]` because of the parametrized `M`, which isn't
+/// clonable. (Even though we're just storing a reference to `M`, which is
+/// clonable, the `derive` macro doesn't know that.)
 impl<'repo, M: MergeBaseDb + 'repo> Clone for RebasePlanBuilder<'repo, M> {
     fn clone(&self) -> Self {
         Self {
@@ -106,9 +128,7 @@ impl<'repo, M: MergeBaseDb + 'repo> Clone for RebasePlanBuilder<'repo, M> {
             graph: self.graph,
             merge_base_db: self.merge_base_db,
             main_branch_oid: self.main_branch_oid,
-            constraints: self.constraints.clone(),
-            used_labels: self.used_labels.clone(),
-            touched_paths_cache: self.touched_paths_cache.clone(),
+            initial_constraints: self.initial_constraints.clone(),
         }
     }
 }
@@ -204,26 +224,25 @@ impl<'repo, M: MergeBaseDb + 'repo> RebasePlanBuilder<'repo, M> {
             graph,
             merge_base_db,
             main_branch_oid: *main_branch_oid,
-            constraints: Default::default(),
-            used_labels: Default::default(),
-            touched_paths_cache: Default::default(),
+            initial_constraints: Default::default(),
         }
     }
 
-    fn make_label_name(&mut self, preferred_name: impl Into<String>) -> String {
+    fn make_label_name(&self, state: &mut BuildState, preferred_name: impl Into<String>) -> String {
         let mut preferred_name = preferred_name.into();
-        if !self.used_labels.contains(&preferred_name) {
-            self.used_labels.insert(preferred_name.clone());
+        if !state.used_labels.contains(&preferred_name) {
+            state.used_labels.insert(preferred_name.clone());
             preferred_name
         } else {
             preferred_name.push('\'');
-            self.make_label_name(preferred_name)
+            self.make_label_name(state, preferred_name)
         }
     }
 
     fn make_rebase_plan_for_current_commit(
-        &mut self,
+        &self,
         effects: &Effects,
+        state: &mut BuildState,
         current_oid: NonZeroOid,
         upstream_patch_ids: &HashSet<PatchId>,
         mut acc: Vec<RebaseCommand>,
@@ -265,7 +284,7 @@ impl<'repo, M: MergeBaseDb + 'repo> RebasePlanBuilder<'repo, M> {
             acc
         };
         let child_nodes: Vec<NonZeroOid> = {
-            let mut child_nodes: Vec<NonZeroOid> = self
+            let mut child_nodes: Vec<NonZeroOid> = state
                 .constraints
                 .entry(current_oid)
                 .or_default()
@@ -281,6 +300,7 @@ impl<'repo, M: MergeBaseDb + 'repo> RebasePlanBuilder<'repo, M> {
             [only_child_oid] => {
                 let acc = self.make_rebase_plan_for_current_commit(
                     effects,
+                    state,
                     *only_child_oid,
                     upstream_patch_ids,
                     acc,
@@ -289,7 +309,7 @@ impl<'repo, M: MergeBaseDb + 'repo> RebasePlanBuilder<'repo, M> {
             }
             children => {
                 let command_num = acc.len();
-                let label_name = self.make_label_name(format!("label-{}", command_num));
+                let label_name = self.make_label_name(state, format!("label-{}", command_num));
                 let mut acc = acc;
                 acc.push(RebaseCommand::CreateLabel {
                     label_name: label_name.clone(),
@@ -297,6 +317,7 @@ impl<'repo, M: MergeBaseDb + 'repo> RebasePlanBuilder<'repo, M> {
                 for child_oid in children {
                     acc = self.make_rebase_plan_for_current_commit(
                         effects,
+                        state,
                         *child_oid,
                         upstream_patch_ids,
                         acc,
@@ -317,7 +338,7 @@ impl<'repo, M: MergeBaseDb + 'repo> RebasePlanBuilder<'repo, M> {
         source_oid: NonZeroOid,
         dest_oid: NonZeroOid,
     ) -> eyre::Result<()> {
-        self.constraints
+        self.initial_constraints
             .entry(dest_oid)
             .or_default()
             .insert(source_oid);
@@ -391,10 +412,14 @@ impl<'repo, M: MergeBaseDb + 'repo> RebasePlanBuilder<'repo, M> {
     /// of a referred-to commit. This adds enough information to the constraint
     /// graph that it now represents the actual end-state commit graph that we
     /// want to create, not just a list of constraints.
-    fn add_descendant_constraints(&mut self, effects: &Effects) -> eyre::Result<()> {
+    fn add_descendant_constraints(
+        &self,
+        effects: &Effects,
+        state: &mut BuildState,
+    ) -> eyre::Result<()> {
         let all_descendants_of_constrained_nodes = {
             let mut acc = Vec::new();
-            for parent_oid in self.constraints.values().flatten().cloned() {
+            for parent_oid in state.constraints.values().flatten().cloned() {
                 self.collect_descendants(effects, &mut acc, parent_oid)?;
             }
             acc
@@ -404,7 +429,8 @@ impl<'repo, M: MergeBaseDb + 'repo> RebasePlanBuilder<'repo, M> {
             child_oid,
         } in all_descendants_of_constrained_nodes
         {
-            self.constraints
+            state
+                .constraints
                 .entry(parent_oid)
                 .or_default()
                 .insert(child_oid);
@@ -414,6 +440,7 @@ impl<'repo, M: MergeBaseDb + 'repo> RebasePlanBuilder<'repo, M> {
 
     fn check_for_cycles_helper(
         &self,
+        state: &BuildState,
         path: &mut Vec<NonZeroOid>,
         current_oid: NonZeroOid,
     ) -> Result<(), BuildRebasePlanError> {
@@ -425,29 +452,33 @@ impl<'repo, M: MergeBaseDb + 'repo> RebasePlanBuilder<'repo, M> {
         }
 
         path.push(current_oid);
-        if let Some(child_oids) = self.constraints.get(&current_oid) {
+        if let Some(child_oids) = state.constraints.get(&current_oid) {
             for child_oid in child_oids.iter().sorted() {
-                self.check_for_cycles_helper(path, *child_oid)?;
+                self.check_for_cycles_helper(state, path, *child_oid)?;
             }
         }
         Ok(())
     }
 
-    fn check_for_cycles(&self, effects: &Effects) -> Result<(), BuildRebasePlanError> {
+    fn check_for_cycles(
+        &self,
+        state: &BuildState,
+        effects: &Effects,
+    ) -> Result<(), BuildRebasePlanError> {
         let (_effects, _progress) = effects.start_operation(OperationType::CheckForCycles);
 
         // FIXME: O(n^2) algorithm.
-        for oid in self.constraints.keys().sorted() {
-            self.check_for_cycles_helper(&mut Vec::new(), *oid)?;
+        for oid in state.constraints.keys().sorted() {
+            self.check_for_cycles_helper(state, &mut Vec::new(), *oid)?;
         }
         Ok(())
     }
 
-    fn find_roots(&self) -> Vec<Constraint> {
+    fn find_roots(&self, state: &BuildState) -> Vec<Constraint> {
         let unconstrained_nodes = {
             let mut unconstrained_nodes: HashSet<NonZeroOid> =
-                self.constraints.keys().copied().collect();
-            for child_oid in self.constraints.values().flatten().copied() {
+                state.constraints.keys().copied().collect();
+            for child_oid in state.constraints.values().flatten().copied() {
                 unconstrained_nodes.remove(&child_oid);
             }
             unconstrained_nodes
@@ -455,7 +486,7 @@ impl<'repo, M: MergeBaseDb + 'repo> RebasePlanBuilder<'repo, M> {
         let mut root_edges: Vec<Constraint> = unconstrained_nodes
             .into_iter()
             .flat_map(|unconstrained_oid| {
-                self.constraints[&unconstrained_oid]
+                state.constraints[&unconstrained_oid]
                     .iter()
                     .copied()
                     .map(move |child_oid| Constraint {
@@ -468,8 +499,11 @@ impl<'repo, M: MergeBaseDb + 'repo> RebasePlanBuilder<'repo, M> {
         root_edges
     }
 
-    fn get_constraints_sorted_for_debug(&self) -> Vec<(&NonZeroOid, Vec<&NonZeroOid>)> {
-        self.constraints
+    fn get_constraints_sorted_for_debug(
+        state: &BuildState,
+    ) -> Vec<(&NonZeroOid, Vec<&NonZeroOid>)> {
+        state
+            .constraints
             .iter()
             .map(|(k, v)| (k, v.iter().sorted().collect::<Vec<_>>()))
             .sorted()
@@ -478,7 +512,7 @@ impl<'repo, M: MergeBaseDb + 'repo> RebasePlanBuilder<'repo, M> {
 
     /// Create the rebase plan. Returns `None` if there were no commands in the rebase plan.
     pub fn build(
-        mut self,
+        &self,
         effects: &Effects,
         options: &BuildRebasePlanOptions,
     ) -> eyre::Result<Result<Option<RebasePlan>, BuildRebasePlanError>> {
@@ -487,6 +521,11 @@ impl<'repo, M: MergeBaseDb + 'repo> RebasePlanBuilder<'repo, M> {
             dump_rebase_plan,
             detect_duplicate_commits_via_patch_id,
         } = options;
+        let mut state = BuildState {
+            constraints: self.initial_constraints.clone(),
+            used_labels: Default::default(),
+            touched_paths_cache: Default::default(),
+        };
 
         let (effects, _progress) = effects.start_operation(OperationType::BuildRebasePlan);
 
@@ -495,24 +534,24 @@ impl<'repo, M: MergeBaseDb + 'repo> RebasePlanBuilder<'repo, M> {
             // be suppressed.
             println!(
                 "Rebase constraints before adding descendants: {:#?}",
-                self.get_constraints_sorted_for_debug()
+                Self::get_constraints_sorted_for_debug(&state),
             );
         }
-        self.add_descendant_constraints(&effects)?;
+        self.add_descendant_constraints(&effects, &mut state)?;
         if *dump_rebase_constraints {
             // For test: don't print to `effects.get_output_stream()`, as it will
             // be suppressed.
             println!(
                 "Rebase constraints after adding descendants: {:#?}",
-                self.get_constraints_sorted_for_debug(),
+                Self::get_constraints_sorted_for_debug(&state),
             );
         }
 
-        if let Err(err) = self.check_for_cycles(&effects) {
+        if let Err(err) = self.check_for_cycles(&state, &effects) {
             return Ok(Err(err));
         }
 
-        let roots = self.find_roots();
+        let roots = self.find_roots(&state);
         let mut acc = vec![RebaseCommand::RegisterExtraPostRewriteHook];
         let mut first_dest_oid = None;
         for Constraint {
@@ -528,12 +567,13 @@ impl<'repo, M: MergeBaseDb + 'repo> RebasePlanBuilder<'repo, M> {
             let upstream_patch_ids = if *detect_duplicate_commits_via_patch_id {
                 let (effects, _progress) =
                     effects.start_operation(OperationType::DetectDuplicateCommits);
-                self.get_upstream_patch_ids(&effects, child_oid, parent_oid)?
+                self.get_upstream_patch_ids(&effects, &mut state, child_oid, parent_oid)?
             } else {
                 Default::default()
             };
             acc = self.make_rebase_plan_for_current_commit(
                 &effects,
+                &mut state,
                 child_oid,
                 &upstream_patch_ids,
                 acc,
@@ -556,6 +596,7 @@ impl<'repo, M: MergeBaseDb + 'repo> RebasePlanBuilder<'repo, M> {
     fn get_upstream_patch_ids(
         &self,
         effects: &Effects,
+        state: &mut BuildState,
         current_oid: NonZeroOid,
         dest_oid: NonZeroOid,
     ) -> eyre::Result<HashSet<PatchId>> {
@@ -581,14 +622,14 @@ impl<'repo, M: MergeBaseDb + 'repo> RebasePlanBuilder<'repo, M> {
         let pool = self.make_pool(self.repo)?;
 
         let path = {
-            let touched_commits = self
+            let touched_commits = state
                 .constraints
                 .values()
                 .flatten()
                 .map(|oid| self.repo.find_commit(*oid))
                 .flatten_ok()
                 .try_collect()?;
-            self.filter_path_to_merge_base_commits(effects, &pool, path, touched_commits)?
+            self.filter_path_to_merge_base_commits(effects, state, &pool, path, touched_commits)?
         };
 
         // FIXME: we may recalculate common patch IDs many times, should be
@@ -645,6 +686,7 @@ impl<'repo, M: MergeBaseDb + 'repo> RebasePlanBuilder<'repo, M> {
     fn filter_path_to_merge_base_commits(
         &self,
         effects: &Effects,
+        state: &mut BuildState,
         pool: &ThreadPool,
         path: Vec<Commit<'repo>>,
         touched_commits: Vec<Commit>,
@@ -666,7 +708,7 @@ impl<'repo, M: MergeBaseDb + 'repo> RebasePlanBuilder<'repo, M> {
                 .into_iter()
                 .map(|commit| commit.get_oid())
                 .collect_vec();
-            let touched_paths_cache = &self.touched_paths_cache;
+            let touched_paths_cache = &state.touched_paths_cache;
             pool.install(|| {
                 path.into_par_iter()
                     .map(|commit_oid| {
