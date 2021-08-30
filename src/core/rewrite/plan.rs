@@ -25,6 +25,15 @@ pub enum OidOrLabel {
     Label(String),
 }
 
+impl ToString for OidOrLabel {
+    fn to_string(&self) -> String {
+        match self {
+            Self::Oid(oid) => oid.to_string(),
+            Self::Label(label) => label.clone(),
+        }
+    }
+}
+
 /// A command that can be applied for either in-memory or on-disk rebases.
 #[derive(Debug)]
 pub enum RebaseCommand {
@@ -38,6 +47,17 @@ pub enum RebaseCommand {
     /// Apply the provided commit on top of the rebase head, and update the
     /// rebase head to point to the newly-applied commit.
     Pick { commit_oid: NonZeroOid },
+
+    Merge {
+        /// The original merge commit to copy the commit message from.
+        commit_oid: NonZeroOid,
+
+        /// The other commits to merge into this one. This may be a list of
+        /// either OIDs or strings. This will always be one fewer commit than
+        /// the number of actual parents for this commit, since we always merge
+        /// into the current `HEAD` commit when rebasing.
+        commits_to_merge: Vec<OidOrLabel>,
+    },
 
     /// On-disk rebases only. Register that we want to run cleanup at the end of
     /// the rebase, during the `post-rewrite` hook.
@@ -64,13 +84,19 @@ impl ToString for RebaseCommand {
     fn to_string(&self) -> String {
         match self {
             RebaseCommand::CreateLabel { label_name } => format!("label {}", label_name),
-            RebaseCommand::Reset {
-                target: OidOrLabel::Label(label_name),
-            } => format!("reset {}", label_name),
-            RebaseCommand::Reset {
-                target: OidOrLabel::Oid(commit_oid),
-            } => format!("reset {}", commit_oid),
+            RebaseCommand::Reset { target } => format!("reset {}", target.to_string()),
             RebaseCommand::Pick { commit_oid } => format!("pick {}", commit_oid),
+            RebaseCommand::Merge {
+                commit_oid,
+                commits_to_merge,
+            } => format!(
+                "merge -C {} {}",
+                commit_oid,
+                commits_to_merge
+                    .iter()
+                    .map(|commit_id| commit_id.to_string())
+                    .join(" ")
+            ),
             RebaseCommand::RegisterExtraPostRewriteHook => {
                 "exec git branchless hook-register-extra-post-rewrite-hook".to_string()
             }
@@ -97,6 +123,10 @@ struct BuildState {
     /// implied constraints added (such as for descendant commits).
     constraints: HashMap<NonZeroOid, HashSet<NonZeroOid>>,
 
+    /// The set of all commits which need to be rebased. Consequently, their
+    /// OIDs will change.
+    commits_to_move: HashSet<NonZeroOid>,
+
     /// When we're rebasing a commit with OID X, its commit hash will change to
     /// some OID X', which we don't know ahead of time. However, we may still
     /// need to refer to X' as part of the rest of the rebase (such as when
@@ -105,6 +135,13 @@ struct BuildState {
     /// a "label" pointing to that commit. This field is used to ensure that we
     /// don't use the same label twice.
     used_labels: HashSet<String>,
+
+    /// When rebasing merge commits, we build a rebase plan by traversing the
+    /// new commit graph in depth-first order. When we encounter a merge commit,
+    /// we first have to make sure that all of its parents have been committed.
+    /// (If not, then we stop this sub-traversal and wait for a later traversal
+    /// to hit the same merge commit).
+    merge_commit_parent_labels: HashMap<NonZeroOid, String>,
 
     /// Cache mapping from commit OID to the paths changed in the diff for that
     /// commit. The value is `None` if the commit doesn't have an associated
@@ -251,91 +288,165 @@ impl<'repo, M: MergeBaseDb + 'repo> RebasePlanBuilder<'repo, M> {
         &self,
         effects: &Effects,
         state: &mut BuildState,
-        current_oid: NonZeroOid,
+        previous_head_oid: NonZeroOid,
+        current_commit: Commit,
         upstream_patch_ids: &HashSet<PatchId>,
         mut acc: Vec<RebaseCommand>,
     ) -> eyre::Result<Vec<RebaseCommand>> {
-        let acc = {
-            let patch_already_applied_upstream = {
-                if upstream_patch_ids.is_empty() {
-                    // Save time in the common case that there are no
-                    // similar-looking upstream commits, so that we don't have
-                    // to calculate the patch ID.
-                    false
-                } else {
-                    let current_patch_id = match self.repo.find_commit(current_oid)? {
-                        None => {
-                            warn!(?current_oid, "Could not find commit");
-                            None
-                        }
-                        Some(commit) => self.repo.get_patch_id(effects, &commit)?,
-                    };
-                    match current_patch_id {
-                        Some(current_patch_id) => upstream_patch_ids.contains(&current_patch_id),
-                        None => false,
-                    }
+        let patch_already_applied_upstream = {
+            if upstream_patch_ids.is_empty() {
+                // Save time in the common case that there are no
+                // similar-looking upstream commits, so that we don't have
+                // to calculate the diff for the patch ID.
+                false
+            } else {
+                match self.repo.get_patch_id(effects, &current_commit)? {
+                    Some(current_patch_id) => upstream_patch_ids.contains(&current_patch_id),
+                    None => false,
                 }
-            };
+            }
+        };
 
+        let acc = {
             if patch_already_applied_upstream {
                 acc.push(RebaseCommand::SkipUpstreamAppliedCommit {
-                    commit_oid: current_oid,
+                    commit_oid: current_commit.get_oid(),
                 });
+            } else if current_commit.get_parent_count() > 1 {
+                // This is a merge commit. We need to make sure that all parent
+                // commits have been applied, and only then proceed with
+                // applying this commit. Note that parent commits may or may not
+                // be part of the set of commits to rebase (i.e. may or may not
+                // be mentioned in the constraints).
+                let commits_to_merge: Option<Vec<OidOrLabel>> = current_commit
+                    .get_parent_oids()
+                    .into_iter()
+                    .filter(|parent_oid| {
+                        // Don't include the parent which was the previous HEAD
+                        // commit, since we need to merge into that commit.
+                        *parent_oid != previous_head_oid
+                    })
+                    .map(|parent_oid| -> Option<OidOrLabel> {
+                        let does_parent_commit_need_rebase =
+                            state.commits_to_move.contains(&parent_oid);
+                        if does_parent_commit_need_rebase {
+                            // Since the parent commit will be rebased, it will
+                            // also have a new OID, so we need to address it by
+                            // the label it set when it was committed rather
+                            // than by OID.
+                            //
+                            // If the label is not yet present, then it means
+                            // that not all parents have been applied yet, so
+                            // we'll postpone this commit.
+                            state
+                                .merge_commit_parent_labels
+                                .get(&parent_oid)
+                                .map(|parent_oid| OidOrLabel::Label(parent_oid.clone()))
+                        } else {
+                            // This parent commit was not supposed to be
+                            // rebased, so its OID won't change and we can
+                            // address it OID directly.
+                            Some(OidOrLabel::Oid(parent_oid))
+                        }
+                    })
+                    .collect();
+
+                if let Some(commits_to_merge) = commits_to_merge {
+                    // All parents have been committed.
+                    acc.push(RebaseCommand::Merge {
+                        commit_oid: current_commit.get_oid(),
+                        commits_to_merge,
+                    });
+                } else {
+                    // Wait for the caller to come back to this commit
+                    // later and then proceed to any child commits.
+                    return Ok(acc);
+                }
             } else {
+                // Normal one-parent commit (or a zero-parent commit?), just
+                // rebase it and continue.
                 acc.push(RebaseCommand::Pick {
-                    commit_oid: current_oid,
+                    commit_oid: current_commit.get_oid(),
                 });
                 acc.push(RebaseCommand::DetectEmptyCommit {
-                    commit_oid: current_oid,
+                    commit_oid: current_commit.get_oid(),
                 });
             }
             acc
         };
-        let child_nodes: Vec<NonZeroOid> = {
-            let mut child_nodes: Vec<NonZeroOid> = state
+
+        let child_commits: Vec<Commit> = {
+            let mut child_oids: Vec<NonZeroOid> = state
                 .constraints
-                .entry(current_oid)
+                .entry(current_commit.get_oid())
                 .or_default()
                 .iter()
                 .copied()
                 .collect();
-            child_nodes.sort_unstable();
-            child_nodes
+            child_oids.sort_unstable();
+            child_oids
+                .into_iter()
+                .map(|child_oid| self.repo.find_commit_or_fail(child_oid))
+                .try_collect()?
         };
 
-        match child_nodes.as_slice() {
-            [] => Ok(acc),
-            [only_child_oid] => {
-                let acc = self.make_rebase_plan_for_current_commit(
+        let acc = {
+            if child_commits
+                .iter()
+                .any(|child_commit| child_commit.get_parent_count() > 1)
+            {
+                // If this commit has any merge commits as children, create a
+                // label so that the child can reference this commit later for
+                // merging.
+                let command_num = acc.len();
+                let label_name =
+                    self.make_label_name(state, format!("merge-parent-{}", command_num));
+                state
+                    .merge_commit_parent_labels
+                    .insert(current_commit.get_oid(), label_name.clone());
+                let mut acc = acc;
+                acc.push(RebaseCommand::CreateLabel { label_name });
+                acc
+            } else {
+                acc
+            }
+        };
+
+        if child_commits.is_empty() {
+            Ok(acc)
+        } else if child_commits.len() == 1 {
+            let mut child_commits = child_commits;
+            let only_child_commit = child_commits.pop().unwrap();
+            let acc = self.make_rebase_plan_for_current_commit(
+                effects,
+                state,
+                current_commit.get_oid(),
+                only_child_commit,
+                upstream_patch_ids,
+                acc,
+            )?;
+            Ok(acc)
+        } else {
+            let command_num = acc.len();
+            let label_name = self.make_label_name(state, format!("label-{}", command_num));
+            let mut acc = acc;
+            acc.push(RebaseCommand::CreateLabel {
+                label_name: label_name.clone(),
+            });
+            for child_commit in child_commits {
+                acc = self.make_rebase_plan_for_current_commit(
                     effects,
                     state,
-                    *only_child_oid,
+                    current_commit.get_oid(),
+                    child_commit,
                     upstream_patch_ids,
                     acc,
                 )?;
-                Ok(acc)
-            }
-            children => {
-                let command_num = acc.len();
-                let label_name = self.make_label_name(state, format!("label-{}", command_num));
-                let mut acc = acc;
-                acc.push(RebaseCommand::CreateLabel {
-                    label_name: label_name.clone(),
+                acc.push(RebaseCommand::Reset {
+                    target: OidOrLabel::Label(label_name.clone()),
                 });
-                for child_oid in children {
-                    acc = self.make_rebase_plan_for_current_commit(
-                        effects,
-                        state,
-                        *child_oid,
-                        upstream_patch_ids,
-                        acc,
-                    )?;
-                    acc.push(RebaseCommand::Reset {
-                        target: OidOrLabel::Label(label_name.clone()),
-                    });
-                }
-                Ok(acc)
             }
+            Ok(acc)
         }
     }
 
@@ -443,6 +554,7 @@ impl<'repo, M: MergeBaseDb + 'repo> RebasePlanBuilder<'repo, M> {
                 .or_default()
                 .insert(child_oid);
         }
+        state.commits_to_move = state.constraints.values().flatten().copied().collect();
         Ok(())
     }
 
@@ -531,7 +643,9 @@ impl<'repo, M: MergeBaseDb + 'repo> RebasePlanBuilder<'repo, M> {
         } = options;
         let mut state = BuildState {
             constraints: self.initial_constraints.clone(),
+            commits_to_move: Default::default(), // filled in by `add_descendant_constraints`
             used_labels: Default::default(),
+            merge_commit_parent_labels: Default::default(),
             touched_paths_cache: Default::default(),
         };
 
@@ -582,7 +696,8 @@ impl<'repo, M: MergeBaseDb + 'repo> RebasePlanBuilder<'repo, M> {
             acc = self.make_rebase_plan_for_current_commit(
                 &effects,
                 &mut state,
-                child_oid,
+                parent_oid,
+                self.repo.find_commit_or_fail(child_oid)?,
                 &upstream_patch_ids,
                 acc,
             )?;
