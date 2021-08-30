@@ -88,15 +88,9 @@ pub fn hook_post_commit(effects: &Effects) -> eyre::Result<()> {
         }
     };
 
-    let commit = match repo.find_commit(commit_oid)? {
-        Some(commit) => commit,
-        None => {
-            eyre::bail!(
-                "BUG: Attempted to look up current `HEAD` commit, but it could not be found: {:?}",
-                commit_oid
-            )
-        }
-    };
+    let commit = repo
+        .find_commit_or_fail(commit_oid)
+        .wrap_err_with(|| "Looking up `HEAD` commit")?;
     mark_commit_reachable(&repo, commit_oid)
         .wrap_err_with(|| "Marking commit as reachable for GC purposes")?;
 

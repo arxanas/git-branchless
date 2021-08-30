@@ -30,7 +30,7 @@ fn bench_rebase_plan(c: &mut Criterion) {
     c.bench_function("RebasePlanBuilder::build", |b| {
         let repo = get_repo();
         let head_oid = repo.get_head_info().unwrap().oid.unwrap();
-        let later_commit = nth_parent(repo.find_commit(head_oid).unwrap().unwrap(), 20);
+        let later_commit = nth_parent(repo.find_commit_or_fail(head_oid).unwrap(), 20);
         let earlier_commit = nth_parent(later_commit.clone(), 1000);
         println!("Comparing {:?} with {:?}", &earlier_commit, &later_commit);
 
@@ -85,7 +85,7 @@ fn bench_find_path_to_merge_base(c: &mut Criterion) {
     c.bench_function("MergeBaseDb::find_path_to_merge_base", |b| {
         let repo = get_repo();
         let head_oid = repo.get_head_info().unwrap().oid.unwrap();
-        let later_commit = nth_parent(repo.find_commit(head_oid).unwrap().unwrap(), 20);
+        let later_commit = nth_parent(repo.find_commit_or_fail(head_oid).unwrap(), 20);
         let earlier_commit = nth_parent(later_commit.clone(), 1000);
         println!(
             "Finding path to merge-base for {:?} and {:?}",

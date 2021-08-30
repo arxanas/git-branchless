@@ -108,10 +108,7 @@ fn find_path_to_merge_base_internal<'repo>(
 
     let mut queue = VecDeque::new();
     visited_commit_callback(commit_oid);
-    let first_commit = match repo.find_commit(commit_oid)? {
-        Some(commit) => commit,
-        None => eyre::bail!("Unable to find commit with OID: {:?}", commit_oid),
-    };
+    let first_commit = repo.find_commit_or_fail(commit_oid)?;
     queue.push_back(vec![first_commit]);
     let merge_base_oid =
         merge_base_db.get_merge_base_oid(&effects, repo, commit_oid, target_oid)?;

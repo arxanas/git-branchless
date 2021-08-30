@@ -752,10 +752,7 @@ impl<'repo, M: MergeBaseDb + 'repo> RebasePlanBuilder<'repo, M> {
         };
         let filtered_path = filtered_path
             .into_iter()
-            .map(|commit_oid| match self.repo.find_commit(commit_oid)? {
-                Some(commit) => Ok(commit),
-                None => eyre::bail!("Could not find commit: {:?}", commit_oid),
-            })
+            .map(|commit_oid| self.repo.find_commit_or_fail(commit_oid))
             .try_collect()?;
 
         Ok(filtered_path)

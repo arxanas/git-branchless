@@ -43,16 +43,13 @@ pub fn move_branches<'a>(
         names.sort_unstable();
         match new_oid {
             MaybeZeroOid::NonZero(new_oid) => {
-                let new_commit = match repo.find_commit(*new_oid) {
-                    Ok(Some(commit)) => commit,
-                    Ok(None) => {
-                        branch_move_err = Some(eyre::eyre!(
-                            "Could not find newly-rewritten commit with old OID: {:?}, new OID: {:?}",
-                            old_oid,
-                            new_oid
-                        ));
-                        break 'outer;
-                    }
+                let new_commit = match repo.find_commit_or_fail(*new_oid).wrap_err_with(|| {
+                    format!(
+                        "Could not find newly-rewritten commit with old OID: {:?}, new OID: {:?}",
+                        old_oid, new_oid,
+                    )
+                }) {
+                    Ok(commit) => commit,
                     Err(err) => {
                         branch_move_err = Some(err);
                         break 'outer;
@@ -228,27 +225,12 @@ mod in_memory {
                 }
 
                 RebaseCommand::Pick { commit_oid } => {
-                    let current_commit = repo.find_commit(current_oid).wrap_err_with(|| {
-                        format!("Finding current commit by OID: {:?}", current_oid)
-                    })?;
-                    let current_commit = match current_commit {
-                        Some(commit) => commit,
-                        None => {
-                            eyre::bail!("Unable to find current commit with OID: {:?}", current_oid)
-                        }
-                    };
-                    let commit_to_apply = repo.find_commit(*commit_oid).wrap_err_with(|| {
-                        format!("Finding commit to apply by OID: {:?}", commit_oid)
-                    })?;
-                    let commit_to_apply = match commit_to_apply {
-                        Some(commit) => commit,
-                        None => {
-                            eyre::bail!(
-                                "Unable to find commit to apply with OID: {:?}",
-                                current_oid
-                            )
-                        }
-                    };
+                    let current_commit = repo
+                        .find_commit_or_fail(current_oid)
+                        .wrap_err_with(|| "Finding current commit")?;
+                    let commit_to_apply = repo
+                        .find_commit_or_fail(*commit_oid)
+                        .wrap_err_with(|| "Finding commit to apply")?;
                     i += 1;
 
                     let commit_description = printable_styled_string(
@@ -292,21 +274,19 @@ mod in_memory {
                     let commit_tree_oid = repo
                         .write_index_to_tree(&mut rebased_index)
                         .wrap_err_with(|| "Converting index to tree")?;
-                    let commit_tree = match repo.find_tree(commit_tree_oid)? {
-                        Some(tree) => tree,
-                        None => eyre::bail!(
+                    let commit_tree = repo.find_tree(commit_tree_oid)?.ok_or_else(|| {
+                        eyre::eyre!(
                             "Could not find freshly-written tree for OID: {:?}",
                             commit_tree_oid
-                        ),
-                    };
+                        )
+                    })?;
                     let commit_message = commit_to_apply.get_message_raw()?;
-                    let commit_message = match commit_message.to_str() {
-                        Some(message) => message,
-                        None => eyre::bail!(
+                    let commit_message = commit_message.to_str().ok_or_else(|| {
+                        eyre::eyre!(
                             "Could not decode commit message for commit: {:?}",
                             commit_oid
-                        ),
-                    };
+                        )
+                    })?;
 
                     progress
                         .set_message(format!("Committing to repository: {}", commit_description));
@@ -326,18 +306,9 @@ mod in_memory {
                         )
                         .wrap_err_with(|| "Applying rebased commit")?;
 
-                    let rebased_commit = match repo
-                        .find_commit(rebased_commit_oid)
-                        .wrap_err_with(|| "Looking up just-rebased commit")?
-                    {
-                        Some(commit) => commit,
-                        None => {
-                            eyre::bail!(
-                                "Could not find just-rebased commit: {:?}",
-                                rebased_commit_oid
-                            )
-                        }
-                    };
+                    let rebased_commit = repo
+                        .find_commit_or_fail(rebased_commit_oid)
+                        .wrap_err_with(|| "Looking up just-rebased commit")?;
                     let commit_description = printable_styled_string(
                         effects.get_glyphs(),
                         repo.friendly_describe_commit_from_oid(rebased_commit_oid)?,
@@ -377,11 +348,8 @@ mod in_memory {
                     progress.set_style(
                         ProgressStyle::default_spinner().template(progress_template.trim()),
                     );
-                    let commit = match repo.find_commit(*commit_oid)? {
-                        Some(commit) => commit,
-                        None => eyre::bail!("Could not find commit: {:?}", commit_oid),
-                    };
 
+                    let commit = repo.find_commit_or_fail(*commit_oid)?;
                     rewritten_oids.push((*commit_oid, MaybeZeroOid::Zero));
                     maybe_set_skipped_head_new_oid(*commit_oid, current_oid);
 
