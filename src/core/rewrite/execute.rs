@@ -164,6 +164,28 @@ mod in_memory {
         rebase_plan: &RebasePlan,
         options: &ExecuteRebasePlanOptions,
     ) -> eyre::Result<RebaseInMemoryResult> {
+        if let Some(merge_commit_oid) =
+            rebase_plan
+                .commands
+                .iter()
+                .find_map(|command| match command {
+                    RebaseCommand::Merge {
+                        commit_oid,
+                        commits_to_merge: _,
+                    } => Some(commit_oid),
+                    RebaseCommand::CreateLabel { .. }
+                    | RebaseCommand::Reset { .. }
+                    | RebaseCommand::Pick { .. }
+                    | RebaseCommand::RegisterExtraPostRewriteHook
+                    | RebaseCommand::DetectEmptyCommit { .. }
+                    | RebaseCommand::SkipUpstreamAppliedCommit { .. } => None,
+                })
+        {
+            return Ok(RebaseInMemoryResult::CannotRebaseMergeCommit {
+                commit_oid: *merge_commit_oid,
+            });
+        }
+
         let ExecuteRebasePlanOptions {
             now,
             // Transaction ID will be passed to the `post-rewrite` hook via
@@ -200,9 +222,9 @@ mod in_memory {
                 | RebaseCommand::Reset { .. }
                 | RebaseCommand::RegisterExtraPostRewriteHook
                 | RebaseCommand::DetectEmptyCommit { .. } => false,
-                RebaseCommand::Pick { .. } | RebaseCommand::SkipUpstreamAppliedCommit { .. } => {
-                    true
-                }
+                RebaseCommand::Pick { .. }
+                | RebaseCommand::Merge { .. }
+                | RebaseCommand::SkipUpstreamAppliedCommit { .. } => true,
             })
             .count();
 
@@ -345,6 +367,19 @@ mod in_memory {
                             commit_description
                         )?;
                     }
+                }
+
+                RebaseCommand::Merge {
+                    commit_oid,
+                    commits_to_merge: _,
+                } => {
+                    warn!(
+                        ?commit_oid,
+                        "BUG: Merge commit should have been when starting in-memory rebase"
+                    );
+                    return Ok(RebaseInMemoryResult::CannotRebaseMergeCommit {
+                        commit_oid: *commit_oid,
+                    });
                 }
 
                 RebaseCommand::SkipUpstreamAppliedCommit { commit_oid } => {
@@ -787,6 +822,7 @@ pub fn execute_rebase_plan(
             effects.get_output_stream(),
             "Attempting rebase in-memory..."
         )?;
+
         match rebase_in_memory(effects, repo, rebase_plan, options)? {
             RebaseInMemoryResult::Succeeded {
                 rewritten_oids,
@@ -803,35 +839,48 @@ pub fn execute_rebase_plan(
                 writeln!(effects.get_output_stream(), "In-memory rebase succeeded.")?;
                 return Ok(0);
             }
+
             RebaseInMemoryResult::CannotRebaseMergeCommit { commit_oid } => {
-                writeln!(effects.get_output_stream(),
-                    "Merge commits currently can't be rebased with `git move`. The merge commit was: {}",
-                    printable_styled_string(effects.get_glyphs(), repo.friendly_describe_commit_from_oid(commit_oid)?)?,
+                writeln!(
+                    effects.get_output_stream(),
+                    "Merge commits currently can't be rebased in-memory."
                 )?;
-                return Ok(1);
+                writeln!(
+                    effects.get_output_stream(),
+                    "The merge commit was: {}",
+                    printable_styled_string(
+                        effects.get_glyphs(),
+                        repo.friendly_describe_commit_from_oid(commit_oid)?
+                    )?,
+                )?;
             }
+
             RebaseInMemoryResult::MergeConflict { commit_oid } => {
-                if *force_in_memory {
-                    writeln!(
-                        effects.get_output_stream(),
-                        "Merge conflict. The conflicting commit was: {}",
-                        printable_styled_string(
-                            effects.get_glyphs(),
-                            repo.friendly_describe_commit_from_oid(commit_oid)?,
-                        )?,
-                    )?;
-                    writeln!(
-                        effects.get_output_stream(),
-                        "Aborting since an in-memory rebase was requested."
-                    )?;
-                    return Ok(1);
-                } else {
-                    writeln!(effects.get_output_stream(),
-                        "Merge conflict, falling back to rebase on-disk. The conflicting commit was: {}",
-                        printable_styled_string(effects.get_glyphs(), repo.friendly_describe_commit_from_oid(commit_oid)?)?,
-                    )?;
-                }
+                writeln!(
+                    effects.get_output_stream(),
+                    "There was a merge conflict, which currently can't be resolved when rebasing in-memory."
+                )?;
+                writeln!(
+                    effects.get_output_stream(),
+                    "The conflicting commit was: {}",
+                    printable_styled_string(
+                        effects.get_glyphs(),
+                        repo.friendly_describe_commit_from_oid(commit_oid)?
+                    )?,
+                )?;
             }
+        }
+
+        // The rebase has failed at this point, decide whether or not to try
+        // again with an on-disk rebase.
+        if *force_in_memory {
+            writeln!(
+                effects.get_output_stream(),
+                "Aborting since an in-memory rebase was requested."
+            )?;
+            return Ok(1);
+        } else {
+            writeln!(effects.get_output_stream(), "Trying again on-disk...")?;
         }
     }
 
