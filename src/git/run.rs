@@ -2,9 +2,10 @@ use std::collections::HashMap;
 use std::convert::TryInto;
 use std::ffi::{OsStr, OsString};
 use std::fmt::Write;
-use std::io::{stderr, stdout, BufRead, BufReader, Read, Write as WriteIo};
+use std::io::{BufRead, BufReader, Read, Write as WriteIo};
 use std::path::PathBuf;
 use std::process::{Command, ExitStatus, Stdio};
+use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 
 use eyre::{eyre, Context};
@@ -14,7 +15,7 @@ use tracing::instrument;
 use crate::core::config::get_core_hooks_path;
 use crate::core::eventlog::{EventTransactionId, BRANCHLESS_TRANSACTION_ID_ENV_VAR};
 use crate::git::repo::Repo;
-use crate::tui::Effects;
+use crate::tui::{Effects, OperationType};
 use crate::util::get_sh;
 
 /// Path to the `git` executable on disk to be executed.
@@ -84,17 +85,21 @@ impl GitRunInfo {
             working_directory,
             env,
         } = self;
+
+        let args_string = args
+            .iter()
+            .map(|arg| arg.as_ref().to_string_lossy().to_string())
+            .collect::<Vec<_>>()
+            .join(" ");
+        let command_string = format!("git {}", args_string);
+        let (effects, _progress) =
+            effects.start_operation(OperationType::RunGitCommand(Arc::new(command_string)));
         writeln!(
             effects.get_output_stream(),
-            "branchless: {} {}",
-            path_to_git.to_string_lossy(),
-            args.iter()
-                .map(|arg| arg.as_ref().to_string_lossy().to_string())
-                .collect::<Vec<_>>()
-                .join(" ")
+            "branchless: running command: {} {}",
+            &path_to_git.to_string_lossy(),
+            &args_string
         )?;
-        stdout().flush()?;
-        stderr().flush()?;
 
         let mut command = Command::new(path_to_git);
         command.current_dir(working_directory);
@@ -194,6 +199,7 @@ impl GitRunInfo {
     #[instrument]
     pub fn run_hook<S: AsRef<str> + std::fmt::Debug>(
         &self,
+        effects: &Effects,
         repo: &Repo,
         hook_name: &str,
         event_tx_id: EventTransactionId,
@@ -236,6 +242,8 @@ impl GitRunInfo {
                 .env(BRANCHLESS_TRANSACTION_ID_ENV_VAR, event_tx_id.to_string())
                 .env("PATH", &path)
                 .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
                 .spawn()
                 .wrap_err_with(|| format!("Invoking {} hook with PATH: {:?}", &hook_name, &path))?;
 
@@ -248,7 +256,14 @@ impl GitRunInfo {
                     .wrap_err_with(|| "Writing hook process stdin")?;
             }
 
+            let stdout = child.stdout.take();
+            let stdout_thread = self.spawn_writer_thread(stdout, effects.get_output_stream());
+            let stderr = child.stderr.take();
+            let stderr_thread = self.spawn_writer_thread(stderr, effects.get_error_stream());
+
             let _ignored: ExitStatus = child.wait()?;
+            stdout_thread.join().unwrap();
+            stderr_thread.join().unwrap();
         }
         Ok(())
     }

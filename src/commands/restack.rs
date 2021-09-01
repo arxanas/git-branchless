@@ -237,7 +237,13 @@ fn restack_branches(
             "No abandoned branches to restack."
         )?;
     } else {
-        move_branches(git_run_info, repo, options.event_tx_id, &rewritten_oids)?;
+        move_branches(
+            effects,
+            git_run_info,
+            repo,
+            options.event_tx_id,
+            &rewritten_oids,
+        )?;
         writeln!(effects.get_output_stream(), "Finished restacking branches.")?;
     }
     Ok(0)

@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::fmt::Write;
-use std::io::{stderr, stdout, Write as WriteIo};
+use std::io::{stderr, stdout, Stderr, Stdout, Write as WriteIo};
+use std::mem::take;
 use std::sync::{Arc, Mutex, RwLock};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -14,7 +15,7 @@ use tracing::warn;
 use crate::core::formatting::Glyphs;
 
 #[allow(missing_docs)]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum OperationType {
     BuildRebasePlan,
     CalculateDiff,
@@ -30,6 +31,7 @@ pub enum OperationType {
     InitializeRebase,
     MakeGraph,
     ProcessEvents,
+    RunGitCommand(Arc<String>),
     UpdateCommitGraph,
     WalkCommits,
 }
@@ -51,6 +53,9 @@ impl ToString for OperationType {
             OperationType::InitializeRebase => "Initializing rebase",
             OperationType::MakeGraph => "Examining local history",
             OperationType::ProcessEvents => "Processing events",
+            OperationType::RunGitCommand(command) => {
+                return format!("Running Git command: {}", &command)
+            }
             OperationType::UpdateCommitGraph => "Updating commit graph",
             OperationType::WalkCommits => "Walking commits",
         };
@@ -245,7 +250,7 @@ impl Effects {
     pub fn start_operation(&self, operation_type: OperationType) -> (Effects, ProgressHandle) {
         let progress = ProgressHandle {
             effects: self,
-            operation_type,
+            operation_type: operation_type.clone(),
         };
         match self.dest {
             OutputDest::Stdout => {}
@@ -256,20 +261,22 @@ impl Effects {
         let mut operation_states = self.operation_states.write().unwrap();
 
         let mut nesting_level = self.nesting_level;
-        let operation_state = operation_states.entry(operation_type).or_insert_with(|| {
-            let progress_bar = self.multi_progress.add(ProgressBar::new_spinner());
-            nesting_level += 1;
-            progress_bar.set_prefix("  ".repeat(nesting_level));
-            let operation_state = OperationState {
-                operation_type,
-                progress_bar,
-                start_times: Vec::new(),
-                has_meter: false,
-                elapsed_duration: Default::default(),
-            };
-            operation_state.tick();
-            operation_state
-        });
+        let operation_state = operation_states
+            .entry(operation_type.clone())
+            .or_insert_with(|| {
+                let progress_bar = self.multi_progress.add(ProgressBar::new_spinner());
+                nesting_level += 1;
+                progress_bar.set_prefix("  ".repeat(nesting_level));
+                let operation_state = OperationState {
+                    operation_type,
+                    progress_bar,
+                    start_times: Vec::new(),
+                    has_meter: false,
+                    elapsed_duration: Default::default(),
+                };
+                operation_state.tick();
+                operation_state
+            });
         operation_state.start_times.push(now);
 
         let effects = Self {
@@ -359,6 +366,8 @@ impl Effects {
     pub fn get_output_stream(&self) -> OutputStream {
         OutputStream {
             dest: self.dest.clone(),
+            buffer: Default::default(),
+            operation_states: Arc::clone(&self.operation_states),
         }
     }
 
@@ -367,20 +376,117 @@ impl Effects {
     pub fn get_error_stream(&self) -> ErrorStream {
         ErrorStream {
             dest: self.dest.clone(),
+            buffer: Default::default(),
+            operation_states: Arc::clone(&self.operation_states),
         }
     }
 }
 
+trait WriteProgress {
+    type Stream: WriteIo;
+    fn get_stream() -> Self::Stream;
+    fn get_buffer(&mut self) -> &mut String;
+    fn get_operation_states(&self) -> Arc<RwLock<HashMap<OperationType, OperationState>>>;
+    fn style_output(output: &str) -> String;
+
+    fn flush(&mut self) {
+        let operation_states = self.get_operation_states();
+        let operation_states = operation_states.read().unwrap();
+
+        // Get an arbitrary progress meter. It turns out that when a
+        // `ProgressBar` is included in a `MultiProgress`, it doesn't matter
+        // which of them we call `println` on. The output will be printed above
+        // the `MultiProgress` regardless.
+        match operation_states.values().next() {
+            None => {
+                // There's no progress meters, so we can write directly to
+                // stdout. Note that we don't style output here; instead, we
+                // pass through exactly what we got from the caller.
+                write!(Self::get_stream(), "{}", take(self.get_buffer())).unwrap();
+                Self::get_stream().flush().unwrap();
+            }
+
+            Some(_operation_state) if !console::user_attended_stderr() => {
+                // The progress meters will be hidden, and any `println`
+                // calls on them will be ignored.
+                write!(Self::get_stream(), "{}", take(self.get_buffer())).unwrap();
+                Self::get_stream().flush().unwrap();
+            }
+
+            Some(operation_state) => {
+                // Use `Progress::println` to render output above the progress
+                // meters. We rely on buffering output because we can only print
+                // full lines at a time.
+                *self.get_buffer() = {
+                    let mut new_buffer = String::new();
+                    let lines = self.get_buffer().split_inclusive("\n");
+                    for line in lines {
+                        match line.strip_suffix('\n') {
+                            Some(line) => operation_state
+                                .progress_bar
+                                .println(Self::style_output(line)),
+                            None => {
+                                // This should only happen for the last element.
+                                new_buffer.push_str(line);
+                            }
+                        }
+                    }
+                    new_buffer
+                };
+            }
+        }
+    }
+
+    fn drop(&mut self) {
+        let buffer = self.get_buffer();
+        if !buffer.is_empty() {
+            // In practice, we're expecting that every sequence of `write` calls
+            // will shortly end with a `write` call that ends with a newline, in
+            // such a way that only full lines are written to the output stream.
+            // This assumption might be wrong, in which case we should revisit
+            // this warning and the behavior on `Drop`.
+            warn!(?buffer, "WriteProgress dropped while buffer was not empty");
+
+            // NB: this only flushes completely-written lines, which is not
+            // correct. We should flush the entire buffer contents, and possibly
+            // force a newline at the end in the case of a progress meter being
+            // visible.
+            self.flush();
+        }
+    }
+}
 pub struct OutputStream {
     dest: OutputDest,
+    buffer: String,
+    operation_states: Arc<RwLock<HashMap<OperationType, OperationState>>>,
+}
+
+impl WriteProgress for OutputStream {
+    type Stream = Stdout;
+
+    fn get_stream() -> Self::Stream {
+        stdout()
+    }
+
+    fn get_buffer(&mut self) -> &mut String {
+        &mut self.buffer
+    }
+
+    fn get_operation_states(&self) -> Arc<RwLock<HashMap<OperationType, OperationState>>> {
+        Arc::clone(&self.operation_states)
+    }
+
+    fn style_output(output: &str) -> String {
+        console::style(output).dim().to_string()
+    }
 }
 
 impl Write for OutputStream {
     fn write_str(&mut self, s: &str) -> std::fmt::Result {
         match &self.dest {
             OutputDest::Stdout => {
-                print!("{}", s);
-                stdout().flush().unwrap();
+                self.buffer.push_str(s);
+                self.flush();
             }
 
             OutputDest::Suppress => {
@@ -396,16 +502,44 @@ impl Write for OutputStream {
     }
 }
 
+impl Drop for OutputStream {
+    fn drop(&mut self) {
+        WriteProgress::drop(self)
+    }
+}
+
 pub struct ErrorStream {
     dest: OutputDest,
+    buffer: String,
+    operation_states: Arc<RwLock<HashMap<OperationType, OperationState>>>,
+}
+
+impl WriteProgress for ErrorStream {
+    type Stream = Stderr;
+
+    fn get_stream() -> Self::Stream {
+        stderr()
+    }
+
+    fn get_buffer(&mut self) -> &mut String {
+        &mut self.buffer
+    }
+
+    fn get_operation_states(&self) -> Arc<RwLock<HashMap<OperationType, OperationState>>> {
+        Arc::clone(&self.operation_states)
+    }
+
+    fn style_output(output: &str) -> String {
+        console::style(output).dim().to_string()
+    }
 }
 
 impl Write for ErrorStream {
     fn write_str(&mut self, s: &str) -> std::fmt::Result {
         match &self.dest {
             OutputDest::Stdout => {
-                eprint!("{}", s);
-                stderr().flush().unwrap();
+                self.buffer.push_str(s);
+                self.flush();
             }
 
             OutputDest::Suppress => {
@@ -420,6 +554,12 @@ impl Write for ErrorStream {
     }
 }
 
+impl Drop for ErrorStream {
+    fn drop(&mut self) {
+        WriteProgress::drop(self);
+    }
+}
+
 pub struct ProgressHandle<'a> {
     effects: &'a Effects,
     operation_type: OperationType,
@@ -427,19 +567,20 @@ pub struct ProgressHandle<'a> {
 
 impl Drop for ProgressHandle<'_> {
     fn drop(&mut self) {
-        self.effects.on_drop_progress_handle(self.operation_type)
+        self.effects
+            .on_drop_progress_handle(self.operation_type.clone())
     }
 }
 
 impl ProgressHandle<'_> {
     pub fn notify_progress(&self, current: usize, total: usize) {
         self.effects
-            .on_notify_progress(self.operation_type, current, total);
+            .on_notify_progress(self.operation_type.clone(), current, total);
     }
 
     pub fn notify_progress_inc(&self, increment: usize) {
         self.effects
-            .on_notify_progress_inc(self.operation_type, increment);
+            .on_notify_progress_inc(self.operation_type.clone(), increment);
     }
 }
 

@@ -103,7 +103,7 @@ fn test_move_stick_in_memory() -> eyre::Result<()> {
         [1/2] Committed as: 4838e49b create test3.txt
         [2/2] Committed as: a2482074 create test4.txt
         branchless: processing 2 rewritten commits
-        branchless: <git-executable> checkout a248207402822b7396cabe0f1011d8a7ce7daf1b
+        branchless: running command: <git-executable> checkout a248207402822b7396cabe0f1011d8a7ce7daf1b
         In-memory rebase succeeded.
         "###);
     }
@@ -307,7 +307,7 @@ fn test_move_with_source_not_in_smartlog_in_memory() -> eyre::Result<()> {
         [2/2] Committed as: a2482074 create test4.txt
         branchless: processing 1 update: branch master
         branchless: processing 2 rewritten commits
-        branchless: <git-executable> checkout master
+        branchless: running command: <git-executable> checkout master
         In-memory rebase succeeded.
         "###);
     }
@@ -382,9 +382,9 @@ fn test_move_merge_conflict() -> eyre::Result<()> {
         )
         Attempting rebase in-memory...
         Merge conflict, falling back to rebase on-disk. The conflicting commit was: e85d25c7 create conflict.txt
-        branchless: <git-executable> diff --quiet
+        branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
-        branchless: <git-executable> rebase --continue
+        branchless: running command: <git-executable> rebase --continue
         CONFLICT (add/add): Merge conflict in conflict.txt
         "###);
     }
@@ -474,7 +474,7 @@ fn test_move_base() -> eyre::Result<()> {
         [1/2] Committed as: 44352d00 create test2.txt
         [2/2] Committed as: cf5eb244 create test3.txt
         branchless: processing 2 rewritten commits
-        branchless: <git-executable> checkout master
+        branchless: running command: <git-executable> checkout master
         In-memory rebase succeeded.
         "###);
     }
@@ -525,7 +525,7 @@ fn test_move_base_shared() -> eyre::Result<()> {
         [1/2] Committed as: 70deb1e2 create test3.txt
         [2/2] Committed as: 355e173b create test4.txt
         branchless: processing 2 rewritten commits
-        branchless: <git-executable> checkout 355e173bf9c5d2efac2e451da0cdad3fb82b869a
+        branchless: running command: <git-executable> checkout 355e173bf9c5d2efac2e451da0cdad3fb82b869a
         In-memory rebase succeeded.
         "###);
     }
@@ -590,7 +590,7 @@ fn test_move_checkout_new_head() -> eyre::Result<()> {
         Attempting rebase in-memory...
         [1/1] Committed as: 96d1c37a create test2.txt
         branchless: processing 1 rewritten commit
-        branchless: <git-executable> checkout 96d1c37a3d4363611c49f7e52186e189a04c531f
+        branchless: running command: <git-executable> checkout 96d1c37a3d4363611c49f7e52186e189a04c531f
         In-memory rebase succeeded.
         "###);
     }
@@ -659,7 +659,7 @@ fn test_move_branch() -> eyre::Result<()> {
         [1/1] Committed as: 70deb1e2 create test3.txt
         branchless: processing 1 update: branch master
         branchless: processing 1 rewritten commit
-        branchless: <git-executable> checkout master
+        branchless: running command: <git-executable> checkout master
         In-memory rebase succeeded.
         "###);
     }
@@ -852,7 +852,7 @@ fn test_move_in_memory_gc() -> eyre::Result<()> {
         Attempting rebase in-memory...
         [1/1] Committed as: fe65c1fe create test2.txt
         branchless: processing 1 rewritten commit
-        branchless: <git-executable> checkout fe65c1fe15584744e649b2c79d4cf9b0d878f92e
+        branchless: running command: <git-executable> checkout fe65c1fe15584744e649b2c79d4cf9b0d878f92e
         In-memory rebase succeeded.
         "###);
     }
@@ -920,7 +920,7 @@ fn test_move_main_branch_commits() -> eyre::Result<()> {
         [3/3] Committed as: 566e4341 create test5.txt
         branchless: processing 1 update: branch master
         branchless: processing 3 rewritten commits
-        branchless: <git-executable> checkout master
+        branchless: running command: <git-executable> checkout master
         In-memory rebase succeeded.
         "###);
     }
@@ -1018,16 +1018,16 @@ fn test_move_branches_after_move_on_disk() -> eyre::Result<()> {
         Executing: git branchless hook-detect-empty-commit f81d55c0d520ff8d02ef9294d95156dcb78a5255
         branchless: processing 3 rewritten commits
         branchless: processing 2 updates: branch bar, branch foo
-        branchless: <git-executable> checkout 566e4341a4a9a930fc2bf7ccdfa168e9f266c34a
+        branchless: running command: <git-executable> checkout 566e4341a4a9a930fc2bf7ccdfa168e9f266c34a
         branchless: processing 1 update: ref HEAD
         HEAD is now at 566e434 create test5.txt
         branchless: processing checkout
         Successfully rebased and updated detached HEAD.
         "###);
         insta::assert_snapshot!(stdout, @r###"
-        branchless: <git-executable> diff --quiet
+        branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
-        branchless: <git-executable> rebase --continue
+        branchless: running command: <git-executable> rebase --continue
         "###);
     }
 
@@ -1053,7 +1053,7 @@ fn test_move_branches_after_move_on_disk() -> eyre::Result<()> {
         insta::assert_snapshot!(stdout, @r###"
         No abandoned commits to restack.
         No abandoned branches to restack.
-        branchless: <git-executable> checkout 566e4341a4a9a930fc2bf7ccdfa168e9f266c34a
+        branchless: running command: <git-executable> checkout 566e4341a4a9a930fc2bf7ccdfa168e9f266c34a
         :
         O 62fc20d2 create test1.txt
         |\
@@ -1103,7 +1103,7 @@ fn test_move_no_reapply_upstream_commits_in_memory() -> eyre::Result<()> {
         [2/2] Committed as: fa466332 create test2.txt
         branchless: processing 1 update: branch should-be-deleted
         branchless: processing 2 rewritten commits
-        branchless: <git-executable> checkout fa46633239bfa767036e41a77b67258286e4ddb9
+        branchless: running command: <git-executable> checkout fa46633239bfa767036e41a77b67258286e4ddb9
         In-memory rebase succeeded.
         "###);
     }
@@ -1172,7 +1172,7 @@ fn test_move_no_reapply_squashed_commits_in_memory() -> eyre::Result<()> {
         [1/2] Skipped now-empty commit: e7bcdd60 create test1.txt
         [2/2] Skipped now-empty commit: 12d361aa create test2.txt
         branchless: processing 2 rewritten commits
-        branchless: <git-executable> checkout master
+        branchless: running command: <git-executable> checkout master
         In-memory rebase succeeded.
         "###);
     }
@@ -1217,7 +1217,7 @@ fn test_move_no_reapply_upstream_commits_on_disk() -> eyre::Result<()> {
         Executing: git branchless hook-detect-empty-commit 96d1c37a3d4363611c49f7e52186e189a04c531f
         branchless: processing 2 rewritten commits
         branchless: processing 1 update: branch should-be-deleted
-        branchless: <git-executable> checkout refs/heads/master
+        branchless: running command: <git-executable> checkout refs/heads/master
         Previous HEAD position was fa46633 create test2.txt
         branchless: processing 1 update: ref HEAD
         HEAD is now at 047b7ad create test1.txt
@@ -1225,9 +1225,9 @@ fn test_move_no_reapply_upstream_commits_on_disk() -> eyre::Result<()> {
         Successfully rebased and updated master.
         "###);
         insta::assert_snapshot!(stdout, @r###"
-        branchless: <git-executable> diff --quiet
+        branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
-        branchless: <git-executable> rebase --continue
+        branchless: running command: <git-executable> rebase --continue
         Skipping commit (was already applied upstream): 62fc20d2 create test1.txt
         "###);
     }
@@ -1297,16 +1297,16 @@ fn test_move_no_reapply_squashed_commits_on_disk() -> eyre::Result<()> {
         branchless: processed commit: 12d361aa create test2.txt
         Executing: git branchless hook-detect-empty-commit 96d1c37a3d4363611c49f7e52186e189a04c531f
         branchless: processing 4 rewritten commits
-        branchless: <git-executable> checkout refs/heads/master
+        branchless: running command: <git-executable> checkout refs/heads/master
         branchless: processing 1 update: ref HEAD
         HEAD is now at de4a1fe squashed test1 and test2
         branchless: processing checkout
         Successfully rebased and updated master.
         "###);
         insta::assert_snapshot!(stdout, @r###"
-        branchless: <git-executable> diff --quiet
+        branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
-        branchless: <git-executable> rebase --continue
+        branchless: running command: <git-executable> rebase --continue
         Skipped now-empty commit: e7bcdd60 create test1.txt
         Skipped now-empty commit: 12d361aa create test2.txt
         "###);
@@ -1377,7 +1377,7 @@ fn test_move_delete_checked_out_branch_in_memory() -> eyre::Result<()> {
         [3/3] Committed as: 012efd6e create test3.txt
         branchless: processing 2 updates: branch more-work, branch work
         branchless: processing 3 rewritten commits
-        branchless: <git-executable> checkout 91c5ce63686889388daec1120bf57bea8a744bc2
+        branchless: running command: <git-executable> checkout 91c5ce63686889388daec1120bf57bea8a744bc2
         In-memory rebase succeeded.
         "###);
     }
@@ -1446,7 +1446,7 @@ fn test_move_delete_checked_out_branch_on_disk() -> eyre::Result<()> {
         Executing: git branchless hook-detect-empty-commit ffcba554683d83de283de084a7d3896e332bbcdb
         branchless: processing 3 rewritten commits
         branchless: processing 2 updates: branch more-work, branch work
-        branchless: <git-executable> checkout 91c5ce63686889388daec1120bf57bea8a744bc2
+        branchless: running command: <git-executable> checkout 91c5ce63686889388daec1120bf57bea8a744bc2
         Previous HEAD position was 012efd6 create test3.txt
         branchless: processing 1 update: ref HEAD
         HEAD is now at 91c5ce6 create test2.txt
@@ -1454,9 +1454,9 @@ fn test_move_delete_checked_out_branch_on_disk() -> eyre::Result<()> {
         Successfully rebased and updated work.
         "###);
         insta::assert_snapshot!(stdout, @r###"
-        branchless: <git-executable> diff --quiet
+        branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
-        branchless: <git-executable> rebase --continue
+        branchless: running command: <git-executable> rebase --continue
         Skipping commit (was already applied upstream): 62fc20d2 create test1.txt
         Skipping commit (was already applied upstream): 96d1c37a create test2.txt
         "###);
@@ -1498,7 +1498,7 @@ fn test_move_on_disk_with_unstaged_changes() -> eyre::Result<()> {
         )?;
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
-        branchless: <git-executable> diff --quiet
+        branchless: running command: <git-executable> diff --quiet
         This operation would modify the working copy, but you have uncommitted changes
         in your working copy which might be overwritten as a result.
         Commit your changes and then try again.

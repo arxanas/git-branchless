@@ -421,7 +421,7 @@ fn test_undo_move_refs() -> eyre::Result<()> {
 
         3. Move branch master from 96d1c37a create test2.txt
                                 to 62fc20d2 create test1.txt
-        Confirm? [yN] branchless: <git-executable> checkout --detach 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
+        Confirm? [yN] branchless: running command: <git-executable> checkout --detach 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
         Applied 3 inverse events.
         "###);
     }
@@ -645,7 +645,7 @@ fn test_undo_doesnt_make_working_dir_dirty() -> eyre::Result<()> {
                                 to f777ecc9 create initial.txt
         5. Delete branch foo at f777ecc9 create initial.txt
 
-        Confirm? [yN] branchless: <git-executable> checkout --detach f777ecc9b0db5ed372b2615695191a8a17f79f24
+        Confirm? [yN] branchless: running command: <git-executable> checkout --detach f777ecc9b0db5ed372b2615695191a8a17f79f24
         Applied 5 inverse events.
         "###);
     }
