@@ -491,19 +491,21 @@ impl<'repo, M: MergeBaseDb + 'repo> RebasePlanBuilder<'repo, M> {
         let (effects, _progress) = effects.start_operation(OperationType::BuildRebasePlan);
 
         if *dump_rebase_constraints {
-            writeln!(
-                effects.get_output_stream(),
+            // For test: don't print to `effects.get_output_stream()`, as it will
+            // be suppressed.
+            println!(
                 "Rebase constraints before adding descendants: {:#?}",
                 self.get_constraints_sorted_for_debug()
-            )?;
+            );
         }
         self.add_descendant_constraints(&effects)?;
         if *dump_rebase_constraints {
-            writeln!(
-                effects.get_output_stream(),
+            // For test: don't print to `effects.get_output_stream()`, as it will
+            // be suppressed.
+            println!(
                 "Rebase constraints after adding descendants: {:#?}",
                 self.get_constraints_sorted_for_debug(),
-            )?;
+            );
         }
 
         if let Err(err) = self.check_for_cycles(&effects) {
@@ -543,11 +545,9 @@ impl<'repo, M: MergeBaseDb + 'repo> RebasePlanBuilder<'repo, M> {
             commands: acc,
         });
         if *dump_rebase_plan {
-            writeln!(
-                effects.get_output_stream(),
-                "Rebase plan: {:#?}",
-                rebase_plan
-            )?;
+            // For test: don't print to `effects.get_output_stream()`, as it will
+            // be suppressed.
+            println!("Rebase plan: {:#?}", rebase_plan);
         }
         Ok(Ok(rebase_plan))
     }

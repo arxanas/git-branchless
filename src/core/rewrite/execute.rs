@@ -18,6 +18,7 @@ use super::plan::RebasePlan;
 /// from their old commits to their new commits. Invoke the
 /// `reference-transaction` hook when done.
 pub fn move_branches<'a>(
+    effects: &Effects,
     git_run_info: &GitRunInfo,
     repo: &'a Repo,
     event_tx_id: EventTransactionId,
@@ -109,6 +110,7 @@ pub fn move_branches<'a>(
         .wrap_err_with(|| "Encoding branch moves stdin")?;
     let branch_moves_stdin = OsString::from(branch_moves_stdin);
     git_run_info.run_hook(
+        effects,
         repo,
         "reference-transaction",
         event_tx_id,
@@ -483,7 +485,13 @@ mod in_memory {
             repo.detach_head(&head_info)?;
         }
 
-        move_branches(git_run_info, repo, *event_tx_id, &rewritten_oids_map)?;
+        move_branches(
+            effects,
+            git_run_info,
+            repo,
+            *event_tx_id,
+            &rewritten_oids_map,
+        )?;
 
         // Call the `post-rewrite` hook only after moving branches so that we don't
         // produce a spurious abandoned-branch warning.
@@ -493,6 +501,7 @@ mod in_memory {
             .collect();
         let post_rewrite_stdin = OsString::from(post_rewrite_stdin);
         git_run_info.run_hook(
+            effects,
             repo,
             "post-rewrite",
             *event_tx_id,

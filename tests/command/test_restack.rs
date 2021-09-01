@@ -58,12 +58,12 @@ fn test_restack_amended_commit() -> eyre::Result<()> {
         let (stdout, _stderr) = git.run(&["restack"])?;
         let stdout = remove_rebase_lines(stdout);
         insta::assert_snapshot!(stdout, @r###"
-        branchless: <git-executable> diff --quiet
+        branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
-        branchless: <git-executable> rebase --continue
+        branchless: running command: <git-executable> rebase --continue
         Finished restacking commits.
         No abandoned branches to restack.
-        branchless: <git-executable> checkout 024c35ce32dae6b12e981963465ee8a62b7eff9b
+        branchless: running command: <git-executable> checkout 024c35ce32dae6b12e981963465ee8a62b7eff9b
         O f777ecc9 (master) create initial.txt
         |
         @ 024c35ce amend test1.txt
@@ -101,12 +101,12 @@ fn test_restack_consecutive_rewrites() -> eyre::Result<()> {
         let stdout = remove_rebase_lines(stdout);
 
         insta::assert_snapshot!(stdout, @r###"
-        branchless: <git-executable> diff --quiet
+        branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
-        branchless: <git-executable> rebase --continue
+        branchless: running command: <git-executable> rebase --continue
         Finished restacking commits.
         No abandoned branches to restack.
-        branchless: <git-executable> checkout 662b451fb905b92404787e024af717ced49e3045
+        branchless: running command: <git-executable> checkout 662b451fb905b92404787e024af717ced49e3045
         O f777ecc9 (master) create initial.txt
         |
         @ 662b451f amend test1.txt v2
@@ -139,7 +139,7 @@ fn test_move_abandoned_branch() -> eyre::Result<()> {
         No abandoned commits to restack.
         branchless: processing 1 update: branch master
         Finished restacking branches.
-        branchless: <git-executable> checkout 662b451fb905b92404787e024af717ced49e3045
+        branchless: running command: <git-executable> checkout 662b451fb905b92404787e024af717ced49e3045
         :
         @ 662b451f (master) amend test1.txt v2
         "###);
@@ -178,12 +178,12 @@ fn test_amended_initial_commit() -> eyre::Result<()> {
         let (stdout, _stderr) = git.run(&["restack"])?;
         let stdout = remove_rebase_lines(stdout);
         insta::assert_snapshot!(stdout, @r###"
-        branchless: <git-executable> diff --quiet
+        branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
-        branchless: <git-executable> rebase --continue
+        branchless: running command: <git-executable> rebase --continue
         Finished restacking commits.
         No abandoned branches to restack.
-        branchless: <git-executable> checkout 9a9f929a0d4f052ff5d58bedd97b2f761120f8ed
+        branchless: running command: <git-executable> checkout 9a9f929a0d4f052ff5d58bedd97b2f761120f8ed
         @ 9a9f929a new initial commit
         |
         O 6d85943b (master) create test1.txt
@@ -214,12 +214,12 @@ fn test_restack_amended_master() -> eyre::Result<()> {
         let (stdout, _stderr) = git.run(&["restack"])?;
         let stdout = remove_rebase_lines(stdout);
         insta::assert_snapshot!(stdout, @r###"
-        branchless: <git-executable> diff --quiet
+        branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
-        branchless: <git-executable> rebase --continue
+        branchless: running command: <git-executable> rebase --continue
         Finished restacking commits.
         No abandoned branches to restack.
-        branchless: <git-executable> checkout ae94dc2a748bc0965c88fcf3edac2e30074ff7e2
+        branchless: running command: <git-executable> checkout ae94dc2a748bc0965c88fcf3edac2e30074ff7e2
         :
         @ ae94dc2a amended test1
         |
@@ -255,9 +255,9 @@ fn test_restack_aborts_during_rebase_conflict() -> eyre::Result<()> {
         let stdout = remove_rebase_lines(stdout);
 
         insta::assert_snapshot!(stdout, @r###"
-        branchless: <git-executable> diff --quiet
+        branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
-        branchless: <git-executable> rebase --continue
+        branchless: running command: <git-executable> rebase --continue
         CONFLICT (add/add): Merge conflict in test2.txt
         Error: Could not restack commits (exit code 1).
         You can resolve the error and try running `git restack` again.
@@ -287,12 +287,12 @@ fn test_restack_multiple_amended() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["restack"])?;
         insta::assert_snapshot!(stdout, @r###"
-        branchless: <git-executable> diff --quiet
+        branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
-        branchless: <git-executable> rebase --continue
+        branchless: running command: <git-executable> rebase --continue
         Finished restacking commits.
         No abandoned branches to restack.
-        branchless: <git-executable> checkout 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
+        branchless: running command: <git-executable> checkout 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
         O f777ecc9 (master) create initial.txt
         |
         @ 62fc20d2 create test1.txt
@@ -360,7 +360,7 @@ fn test_restack_single_of_many_commits() -> eyre::Result<()> {
         branchless: processed commit: bb7d4b2a create test3.txt
         Executing: git branchless hook-detect-empty-commit 70deb1e28791d8e7dd5a1f0c871a51b91282562f
         branchless: processing 1 rewritten commit
-        branchless: <git-executable> checkout 3bd716d57489779ab1daf446f80e66e90b56ead7
+        branchless: running command: <git-executable> checkout 3bd716d57489779ab1daf446f80e66e90b56ead7
         Previous HEAD position was bb7d4b2 create test3.txt
         branchless: processing 1 update: ref HEAD
         HEAD is now at 3bd716d updated test4
@@ -371,12 +371,12 @@ fn test_restack_single_of_many_commits() -> eyre::Result<()> {
         branchless: processing checkout
         "###);
         insta::assert_snapshot!(stdout, @r###"
-        branchless: <git-executable> diff --quiet
+        branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
-        branchless: <git-executable> rebase --continue
+        branchless: running command: <git-executable> rebase --continue
         Finished restacking commits.
         No abandoned branches to restack.
-        branchless: <git-executable> checkout 3bd716d57489779ab1daf446f80e66e90b56ead7
+        branchless: running command: <git-executable> checkout 3bd716d57489779ab1daf446f80e66e90b56ead7
         :
         O 62fc20d2 (master) create test1.txt
         |\

@@ -149,7 +149,7 @@ pub fn hook_post_rewrite(
         .join(EXTRA_POST_REWRITE_FILE_NAME)
         .exists()
     {
-        move_branches(git_run_info, &repo, event_tx_id, &rewritten_oids)?;
+        move_branches(effects, git_run_info, &repo, event_tx_id, &rewritten_oids)?;
         check_out_new_head(effects, git_run_info, &repo, event_tx_id, &rewritten_oids)?;
     }
 
