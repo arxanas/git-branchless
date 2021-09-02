@@ -60,38 +60,39 @@ fn test_old_git_version_warning() -> eyre::Result<()> {
         let (version_str, _stderr) = git.run(&["version"])?;
         let stdout = stdout.replace(version_str.trim(), "<git version output>");
         insta::assert_snapshot!(stdout, @r###"
-            Auto-detected your main branch as: master
-            If this is incorrect, run: git config branchless.core.mainBranch <branch>
-            Setting config (non-global): branchless.core.mainBranch = master
-            Setting config (non-global): advice.detachedHead = false
-            Installing hook: post-commit
-            Installing hook: post-rewrite
-            Installing hook: post-checkout
-            Installing hook: pre-auto-gc
-            Installing hook: reference-transaction
-            Installing alias (non-global): git smartlog -> git branchless smartlog
-            Installing alias (non-global): git sl -> git branchless smartlog
-            Installing alias (non-global): git hide -> git branchless hide
-            Installing alias (non-global): git unhide -> git branchless unhide
-            Installing alias (non-global): git prev -> git branchless prev
-            Installing alias (non-global): git next -> git branchless next
-            Installing alias (non-global): git restack -> git branchless restack
-            Installing alias (non-global): git undo -> git branchless undo
-            Installing alias (non-global): git move -> git branchless move
-            Warning: the branchless workflow's `git undo` command requires Git
-            v2.29 or later, but your Git version is: <git version output>
+        Auto-detected your main branch as: master
+        If this is incorrect, run: git config branchless.core.mainBranch <branch>
+        Setting config (non-global): branchless.core.mainBranch = master
+        Setting config (non-global): advice.detachedHead = false
+        Installing hook: post-commit
+        Installing hook: post-merge
+        Installing hook: post-rewrite
+        Installing hook: post-checkout
+        Installing hook: pre-auto-gc
+        Installing hook: reference-transaction
+        Installing alias (non-global): git smartlog -> git branchless smartlog
+        Installing alias (non-global): git sl -> git branchless smartlog
+        Installing alias (non-global): git hide -> git branchless hide
+        Installing alias (non-global): git unhide -> git branchless unhide
+        Installing alias (non-global): git prev -> git branchless prev
+        Installing alias (non-global): git next -> git branchless next
+        Installing alias (non-global): git restack -> git branchless restack
+        Installing alias (non-global): git undo -> git branchless undo
+        Installing alias (non-global): git move -> git branchless move
+        Warning: the branchless workflow's `git undo` command requires Git
+        v2.29 or later, but your Git version is: <git version output>
 
-            Some operations, such as branch updates, won't be correctly undone. Other
-            operations may be undoable. Attempt at your own risk.
+        Some operations, such as branch updates, won't be correctly undone. Other
+        operations may be undoable. Attempt at your own risk.
 
-            Once you upgrade to Git v2.29, run `git branchless init` again. Any work you
-            do from then on will be correctly undoable.
+        Once you upgrade to Git v2.29, run `git branchless init` again. Any work you
+        do from then on will be correctly undoable.
 
-            This only applies to the `git undo` command. Other commands which are part of
-            the branchless workflow will work properly.
-            Successfully installed git-branchless.
-            To uninstall, run: git branchless init --uninstall
-            "###);
+        This only applies to the `git undo` command. Other commands which are part of
+        the branchless workflow will work properly.
+        Successfully installed git-branchless.
+        To uninstall, run: git branchless init --uninstall
+        "###);
     }
 
     Ok(())
@@ -113,27 +114,28 @@ fn test_init_basic() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["branchless", "init"])?;
         insta::assert_snapshot!(stdout, @r###"
-            Auto-detected your main branch as: master
-            If this is incorrect, run: git config branchless.core.mainBranch <branch>
-            Setting config (non-global): branchless.core.mainBranch = master
-            Setting config (non-global): advice.detachedHead = false
-            Installing hook: post-commit
-            Installing hook: post-rewrite
-            Installing hook: post-checkout
-            Installing hook: pre-auto-gc
-            Installing hook: reference-transaction
-            Installing alias (non-global): git smartlog -> git branchless smartlog
-            Installing alias (non-global): git sl -> git branchless smartlog
-            Installing alias (non-global): git hide -> git branchless hide
-            Installing alias (non-global): git unhide -> git branchless unhide
-            Installing alias (non-global): git prev -> git branchless prev
-            Installing alias (non-global): git next -> git branchless next
-            Installing alias (non-global): git restack -> git branchless restack
-            Installing alias (non-global): git undo -> git branchless undo
-            Installing alias (non-global): git move -> git branchless move
-            Successfully installed git-branchless.
-            To uninstall, run: git branchless init --uninstall
-            "###);
+        Auto-detected your main branch as: master
+        If this is incorrect, run: git config branchless.core.mainBranch <branch>
+        Setting config (non-global): branchless.core.mainBranch = master
+        Setting config (non-global): advice.detachedHead = false
+        Installing hook: post-commit
+        Installing hook: post-merge
+        Installing hook: post-rewrite
+        Installing hook: post-checkout
+        Installing hook: pre-auto-gc
+        Installing hook: reference-transaction
+        Installing alias (non-global): git smartlog -> git branchless smartlog
+        Installing alias (non-global): git sl -> git branchless smartlog
+        Installing alias (non-global): git hide -> git branchless hide
+        Installing alias (non-global): git unhide -> git branchless unhide
+        Installing alias (non-global): git prev -> git branchless prev
+        Installing alias (non-global): git next -> git branchless next
+        Installing alias (non-global): git restack -> git branchless restack
+        Installing alias (non-global): git undo -> git branchless undo
+        Installing alias (non-global): git move -> git branchless move
+        Successfully installed git-branchless.
+        To uninstall, run: git branchless init --uninstall
+        "###);
     }
 
     Ok(())
@@ -164,28 +166,29 @@ fn test_init_prompt_for_main_branch() -> eyre::Result<()> {
         )?;
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
-            Your main branch name could not be auto-detected!
-            Examples of a main branch: master, main, trunk, etc.
-            See https://github.com/arxanas/git-branchless/wiki/Concepts#main-branch
-            Enter the name of your main branch: Setting config (non-global): branchless.core.mainBranch = bespoke
-            Setting config (non-global): advice.detachedHead = false
-            Installing hook: post-commit
-            Installing hook: post-rewrite
-            Installing hook: post-checkout
-            Installing hook: pre-auto-gc
-            Installing hook: reference-transaction
-            Installing alias (non-global): git smartlog -> git branchless smartlog
-            Installing alias (non-global): git sl -> git branchless smartlog
-            Installing alias (non-global): git hide -> git branchless hide
-            Installing alias (non-global): git unhide -> git branchless unhide
-            Installing alias (non-global): git prev -> git branchless prev
-            Installing alias (non-global): git next -> git branchless next
-            Installing alias (non-global): git restack -> git branchless restack
-            Installing alias (non-global): git undo -> git branchless undo
-            Installing alias (non-global): git move -> git branchless move
-            Successfully installed git-branchless.
-            To uninstall, run: git branchless init --uninstall
-            "###);
+        Your main branch name could not be auto-detected!
+        Examples of a main branch: master, main, trunk, etc.
+        See https://github.com/arxanas/git-branchless/wiki/Concepts#main-branch
+        Enter the name of your main branch: Setting config (non-global): branchless.core.mainBranch = bespoke
+        Setting config (non-global): advice.detachedHead = false
+        Installing hook: post-commit
+        Installing hook: post-merge
+        Installing hook: post-rewrite
+        Installing hook: post-checkout
+        Installing hook: pre-auto-gc
+        Installing hook: reference-transaction
+        Installing alias (non-global): git smartlog -> git branchless smartlog
+        Installing alias (non-global): git sl -> git branchless smartlog
+        Installing alias (non-global): git hide -> git branchless hide
+        Installing alias (non-global): git unhide -> git branchless unhide
+        Installing alias (non-global): git prev -> git branchless prev
+        Installing alias (non-global): git next -> git branchless next
+        Installing alias (non-global): git restack -> git branchless restack
+        Installing alias (non-global): git undo -> git branchless undo
+        Installing alias (non-global): git move -> git branchless move
+        Successfully installed git-branchless.
+        To uninstall, run: git branchless init --uninstall
+        "###);
     }
 
     {
@@ -253,23 +256,24 @@ fn test_init_uninstall() -> eyre::Result<()> {
         let (stdout, stderr) = git.run(&["branchless", "init", "--uninstall"])?;
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
-            Unsetting config (non-global): branchless.core.mainBranch
-            Unsetting config (non-global): advice.detachedHead
-            Uninstalling hook: post-commit
-            Uninstalling hook: post-rewrite
-            Uninstalling hook: post-checkout
-            Uninstalling hook: pre-auto-gc
-            Uninstalling hook: reference-transaction
-            Uninstalling alias (non-global): git smartlog
-            Uninstalling alias (non-global): git sl
-            Uninstalling alias (non-global): git hide
-            Uninstalling alias (non-global): git unhide
-            Uninstalling alias (non-global): git prev
-            Uninstalling alias (non-global): git next
-            Uninstalling alias (non-global): git restack
-            Uninstalling alias (non-global): git undo
-            Uninstalling alias (non-global): git move
-            "###);
+        Unsetting config (non-global): branchless.core.mainBranch
+        Unsetting config (non-global): advice.detachedHead
+        Uninstalling hook: post-commit
+        Uninstalling hook: post-merge
+        Uninstalling hook: post-rewrite
+        Uninstalling hook: post-checkout
+        Uninstalling hook: pre-auto-gc
+        Uninstalling hook: reference-transaction
+        Uninstalling alias (non-global): git smartlog
+        Uninstalling alias (non-global): git sl
+        Uninstalling alias (non-global): git hide
+        Uninstalling alias (non-global): git unhide
+        Uninstalling alias (non-global): git prev
+        Uninstalling alias (non-global): git next
+        Uninstalling alias (non-global): git restack
+        Uninstalling alias (non-global): git undo
+        Uninstalling alias (non-global): git move
+        "###);
     }
 
     Ok(())
