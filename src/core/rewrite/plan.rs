@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
+use std::ops::Sub;
 use std::path::PathBuf;
 
 use chashmap::CHashMap;
@@ -587,6 +588,8 @@ impl<'repo, M: MergeBaseDb + 'repo> RebasePlanBuilder<'repo, M> {
             )?;
         }
 
+        Self::check_all_commits_included_in_rebase_plan(&state, acc.as_slice());
+
         let rebase_plan = first_dest_oid.map(|first_dest_oid| RebasePlan {
             first_dest_oid,
             commands: acc,
@@ -597,6 +600,42 @@ impl<'repo, M: MergeBaseDb + 'repo> RebasePlanBuilder<'repo, M> {
             println!("Rebase plan: {:#?}", rebase_plan);
         }
         Ok(Ok(rebase_plan))
+    }
+
+    fn check_all_commits_included_in_rebase_plan(
+        state: &BuildState,
+        rebase_commands: &[RebaseCommand],
+    ) {
+        let included_commit_oids: HashSet<NonZeroOid> = rebase_commands
+            .iter()
+            .filter_map(|rebase_command| match rebase_command {
+                RebaseCommand::CreateLabel { label_name: _ }
+                | RebaseCommand::Reset { target: _ }
+                | RebaseCommand::RegisterExtraPostRewriteHook
+                | RebaseCommand::DetectEmptyCommit { commit_oid: _ } => None,
+                RebaseCommand::Pick { commit_oid }
+                | RebaseCommand::Merge {
+                    commit_oid,
+                    commits_to_merge: _,
+                }
+                | RebaseCommand::SkipUpstreamAppliedCommit { commit_oid } => Some(*commit_oid),
+            })
+            .collect();
+        let missing_commit_oids: HashSet<NonZeroOid> = state
+            .constraints
+            .values()
+            .flatten()
+            .copied()
+            .collect::<HashSet<NonZeroOid>>()
+            .sub(&included_commit_oids);
+        if !missing_commit_oids.is_empty() {
+            warn!(
+                ?missing_commit_oids,
+                "BUG? Not all commits were included in the rebase plan. \
+                This means that some commits might be missing \
+                after the rebase has completed."
+            );
+        }
     }
 
     #[instrument]
