@@ -132,7 +132,7 @@ mod in_memory {
     use crate::commands::gc::mark_commit_reachable;
     use crate::core::formatting::printable_styled_string;
     use crate::core::rewrite::move_branches;
-    use crate::core::rewrite::plan::{RebaseCommand, RebasePlan};
+    use crate::core::rewrite::plan::{OidOrLabel, RebaseCommand, RebasePlan};
     use crate::git::{GitRunInfo, MaybeZeroOid, NonZeroOid, Repo};
     use crate::tui::Effects;
 
@@ -197,8 +197,7 @@ mod in_memory {
             .iter()
             .filter(|command| match command {
                 RebaseCommand::CreateLabel { .. }
-                | RebaseCommand::ResetToLabel { .. }
-                | RebaseCommand::ResetToOid { .. }
+                | RebaseCommand::Reset { .. }
                 | RebaseCommand::RegisterExtraPostRewriteHook
                 | RebaseCommand::DetectEmptyCommit { .. } => false,
                 RebaseCommand::Pick { .. } | RebaseCommand::SkipUpstreamAppliedCommit { .. } => {
@@ -213,14 +212,18 @@ mod in_memory {
                     labels.insert(label_name.clone(), current_oid);
                 }
 
-                RebaseCommand::ResetToLabel { label_name } => {
+                RebaseCommand::Reset {
+                    target: OidOrLabel::Label(label_name),
+                } => {
                     current_oid = match labels.get(label_name) {
                         Some(oid) => *oid,
                         None => eyre::bail!("BUG: no associated OID for label: {}", label_name),
                     };
                 }
 
-                RebaseCommand::ResetToOid { commit_oid } => {
+                RebaseCommand::Reset {
+                    target: OidOrLabel::Oid(commit_oid),
+                } => {
                     current_oid = *commit_oid;
                 }
 
@@ -247,6 +250,10 @@ mod in_memory {
                     progress.enable_steady_tick(100);
 
                     if commit_to_apply.get_parent_count() > 1 {
+                        warn!(
+                            ?commit_oid,
+                            "BUG: Merge commit should have been detected during planning phase"
+                        );
                         return Ok(RebaseInMemoryResult::CannotRebaseMergeCommit {
                             commit_oid: *commit_oid,
                         });

@@ -71,10 +71,12 @@ fn test_move_stick_in_memory() -> eyre::Result<()> {
                 },
                 commands: [
                     RegisterExtraPostRewriteHook,
-                    ResetToOid {
-                        commit_oid: NonZeroOid {
-                            inner: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
-                        },
+                    Reset {
+                        target: Oid(
+                            NonZeroOid {
+                                inner: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
+                            },
+                        ),
                     },
                     Pick {
                         commit_oid: NonZeroOid {
@@ -274,10 +276,12 @@ fn test_move_with_source_not_in_smartlog_in_memory() -> eyre::Result<()> {
                 },
                 commands: [
                     RegisterExtraPostRewriteHook,
-                    ResetToOid {
-                        commit_oid: NonZeroOid {
-                            inner: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
-                        },
+                    Reset {
+                        target: Oid(
+                            NonZeroOid {
+                                inner: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
+                            },
+                        ),
                     },
                     Pick {
                         commit_oid: NonZeroOid {
@@ -362,10 +366,12 @@ fn test_move_merge_conflict() -> eyre::Result<()> {
                 },
                 commands: [
                     RegisterExtraPostRewriteHook,
-                    ResetToOid {
-                        commit_oid: NonZeroOid {
-                            inner: 202143f2fdfc785285ab097422f6a695ff1d93cb,
-                        },
+                    Reset {
+                        target: Oid(
+                            NonZeroOid {
+                                inner: 202143f2fdfc785285ab097422f6a695ff1d93cb,
+                            },
+                        ),
                     },
                     Pick {
                         commit_oid: NonZeroOid {
@@ -442,10 +448,12 @@ fn test_move_base() -> eyre::Result<()> {
                 },
                 commands: [
                     RegisterExtraPostRewriteHook,
-                    ResetToOid {
-                        commit_oid: NonZeroOid {
-                            inner: bf0d52a607f693201512a43b6b5a70b2a275e0ad,
-                        },
+                    Reset {
+                        target: Oid(
+                            NonZeroOid {
+                                inner: bf0d52a607f693201512a43b6b5a70b2a275e0ad,
+                            },
+                        ),
                     },
                     Pick {
                         commit_oid: NonZeroOid {
@@ -569,10 +577,12 @@ fn test_move_checkout_new_head() -> eyre::Result<()> {
                 },
                 commands: [
                     RegisterExtraPostRewriteHook,
-                    ResetToOid {
-                        commit_oid: NonZeroOid {
-                            inner: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
-                        },
+                    Reset {
+                        target: Oid(
+                            NonZeroOid {
+                                inner: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
+                            },
+                        ),
                     },
                     Pick {
                         commit_oid: NonZeroOid {
@@ -637,10 +647,12 @@ fn test_move_branch() -> eyre::Result<()> {
                 },
                 commands: [
                     RegisterExtraPostRewriteHook,
-                    ResetToOid {
-                        commit_oid: NonZeroOid {
-                            inner: 96d1c37a3d4363611c49f7e52186e189a04c531f,
-                        },
+                    Reset {
+                        target: Oid(
+                            NonZeroOid {
+                                inner: 96d1c37a3d4363611c49f7e52186e189a04c531f,
+                            },
+                        ),
                     },
                     Pick {
                         commit_oid: NonZeroOid {
@@ -829,10 +841,12 @@ fn test_move_in_memory_gc() -> eyre::Result<()> {
                 },
                 commands: [
                     RegisterExtraPostRewriteHook,
-                    ResetToOid {
-                        commit_oid: NonZeroOid {
-                            inner: f777ecc9b0db5ed372b2615695191a8a17f79f24,
-                        },
+                    Reset {
+                        target: Oid(
+                            NonZeroOid {
+                                inner: f777ecc9b0db5ed372b2615695191a8a17f79f24,
+                            },
+                        ),
                     },
                     Pick {
                         commit_oid: NonZeroOid {
