@@ -18,6 +18,12 @@ thread_local! {
     static REPO: RefCell<Option<Repo>> = Default::default();
 }
 
+#[derive(Debug)]
+pub enum OidOrLabel {
+    Oid(NonZeroOid),
+    Label(String),
+}
+
 /// A command that can be applied for either in-memory or on-disk rebases.
 #[derive(Debug)]
 pub enum RebaseCommand {
@@ -25,11 +31,8 @@ pub enum RebaseCommand {
     /// current rebase head for later use.
     CreateLabel { label_name: String },
 
-    /// Move the rebase head to the provided label.
-    ResetToLabel { label_name: String },
-
-    /// Move the rebase head to the provided commit.
-    ResetToOid { commit_oid: NonZeroOid },
+    /// Move the rebase head to the provided label or commit.
+    Reset { target: OidOrLabel },
 
     /// Apply the provided commit on top of the rebase head, and update the
     /// rebase head to point to the newly-applied commit.
@@ -60,8 +63,12 @@ impl ToString for RebaseCommand {
     fn to_string(&self) -> String {
         match self {
             RebaseCommand::CreateLabel { label_name } => format!("label {}", label_name),
-            RebaseCommand::ResetToLabel { label_name } => format!("reset {}", label_name),
-            RebaseCommand::ResetToOid { commit_oid: oid } => format!("reset {}", oid),
+            RebaseCommand::Reset {
+                target: OidOrLabel::Label(label_name),
+            } => format!("reset {}", label_name),
+            RebaseCommand::Reset {
+                target: OidOrLabel::Oid(commit_oid),
+            } => format!("reset {}", commit_oid),
             RebaseCommand::Pick { commit_oid } => format!("pick {}", commit_oid),
             RebaseCommand::RegisterExtraPostRewriteHook => {
                 "exec git branchless hook-register-extra-post-rewrite-hook".to_string()
@@ -322,8 +329,8 @@ impl<'repo, M: MergeBaseDb + 'repo> RebasePlanBuilder<'repo, M> {
                         upstream_patch_ids,
                         acc,
                     )?;
-                    acc.push(RebaseCommand::ResetToLabel {
-                        label_name: label_name.clone(),
+                    acc.push(RebaseCommand::Reset {
+                        target: OidOrLabel::Label(label_name.clone()),
                     });
                 }
                 Ok(acc)
@@ -560,8 +567,8 @@ impl<'repo, M: MergeBaseDb + 'repo> RebasePlanBuilder<'repo, M> {
         } in roots
         {
             first_dest_oid.get_or_insert(parent_oid);
-            acc.push(RebaseCommand::ResetToOid {
-                commit_oid: parent_oid,
+            acc.push(RebaseCommand::Reset {
+                target: OidOrLabel::Oid(parent_oid),
             });
 
             let upstream_patch_ids = if *detect_duplicate_commits_via_patch_id {
