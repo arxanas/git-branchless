@@ -8,7 +8,7 @@ use eyre::Context;
 use crate::git::repo::wrap_git_error;
 
 /// Represents the ID of a Git object.
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct NonZeroOid {
     pub(super) inner: git2::Oid,
 }
@@ -17,6 +17,12 @@ impl NonZeroOid {
     /// Convert this OID into its raw 20-byte slice.
     pub fn as_bytes(&self) -> &[u8] {
         self.inner.as_bytes()
+    }
+}
+
+impl std::fmt::Debug for NonZeroOid {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "NonZeroOid({:?})", self.inner)
     }
 }
 
