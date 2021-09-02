@@ -181,6 +181,9 @@ enum Opts {
     HookPostCommit,
 
     /// Internal use.
+    HookPostMerge { is_squash_merge: isize },
+
+    /// Internal use.
     HookReferenceTransaction { transaction_state: String },
 }
 
@@ -330,6 +333,11 @@ fn main() -> eyre::Result<()> {
 
         Opts::HookPostCommit => {
             branchless::commands::hooks::hook_post_commit(&effects)?;
+            0
+        }
+
+        Opts::HookPostMerge { is_squash_merge } => {
+            branchless::commands::hooks::hook_post_merge(&effects, is_squash_merge)?;
             0
         }
 

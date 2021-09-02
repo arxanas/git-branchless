@@ -68,11 +68,7 @@ pub fn hook_post_checkout(
     Ok(())
 }
 
-/// Handle Git's `post-commit` hook.
-///
-/// See the man-page for `githooks(5)`.
-#[instrument]
-pub fn hook_post_commit(effects: &Effects) -> eyre::Result<()> {
+fn hook_post_commit_common(effects: &Effects, hook_name: &str) -> eyre::Result<()> {
     let now = SystemTime::now();
     let glyphs = Glyphs::detect();
     let repo = Repo::from_current_dir()?;
@@ -83,7 +79,10 @@ pub fn hook_post_commit(effects: &Effects) -> eyre::Result<()> {
         Some(commit_oid) => commit_oid,
         None => {
             // A strange situation, but technically possible.
-            warn!("`post-commit` hook called, but could not determine the OID of `HEAD`");
+            warn!(
+                "`{}` hook called, but could not determine the OID of `HEAD`",
+                hook_name
+            );
             return Ok(());
         }
     };
@@ -95,7 +94,7 @@ pub fn hook_post_commit(effects: &Effects) -> eyre::Result<()> {
         .wrap_err_with(|| "Marking commit as reachable for GC purposes")?;
 
     let timestamp = commit.get_time().seconds() as f64;
-    let event_tx_id = event_log_db.make_transaction_id(now, "hook-post-commit")?;
+    let event_tx_id = event_log_db.make_transaction_id(now, hook_name)?;
     event_log_db.add_events(vec![Event::CommitEvent {
         timestamp,
         event_tx_id,
@@ -108,6 +107,24 @@ pub fn hook_post_commit(effects: &Effects) -> eyre::Result<()> {
     )?;
 
     Ok(())
+}
+
+/// Handle Git's `post-commit` hook.
+///
+/// See the man-page for `githooks(5)`.
+#[instrument]
+pub fn hook_post_commit(effects: &Effects) -> eyre::Result<()> {
+    hook_post_commit_common(effects, "post-commit")
+}
+
+/// Handle Git's `post-merge` hook. It seems that Git doesn't invoke the
+/// `post-commit` hook after a merge commit, so we need to handle this case
+/// explicitly with another hook.
+///
+/// See the man-page for `githooks(5)`.
+#[instrument]
+pub fn hook_post_merge(effects: &Effects, _is_squash_merge: isize) -> eyre::Result<()> {
+    hook_post_commit_common(effects, "post-merge")
 }
 
 #[instrument]
