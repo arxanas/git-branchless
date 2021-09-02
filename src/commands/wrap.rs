@@ -143,9 +143,7 @@ mod tests {
                 event_tx_id: EventTransactionId(
                     4,
                 ),
-                commit_oid: NonZeroOid {
-                    inner: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
-                },
+                commit_oid: NonZeroOid(62fc20d2a290daea0d52bdc2ed2ad4be6491010e),
             },
             RefUpdateEvent {
                 timestamp: 0.0,
@@ -172,9 +170,7 @@ mod tests {
                 event_tx_id: EventTransactionId(
                     6,
                 ),
-                commit_oid: NonZeroOid {
-                    inner: 96d1c37a3d4363611c49f7e52186e189a04c531f,
-                },
+                commit_oid: NonZeroOid(96d1c37a3d4363611c49f7e52186e189a04c531f),
             },
             RefUpdateEvent {
                 timestamp: 0.0,

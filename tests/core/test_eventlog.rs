@@ -77,9 +77,7 @@ fn test_git_v2_31_events() -> eyre::Result<()> {
             event_tx_id: EventTransactionId(
                 4,
             ),
-            commit_oid: NonZeroOid {
-                inner: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
-            },
+            commit_oid: NonZeroOid(62fc20d2a290daea0d52bdc2ed2ad4be6491010e),
         },
         RefUpdateEvent {
             timestamp: 0.0,
@@ -116,18 +114,14 @@ fn test_git_v2_31_events() -> eyre::Result<()> {
             event_tx_id: EventTransactionId(
                 8,
             ),
-            commit_oid: NonZeroOid {
-                inner: fe65c1fe15584744e649b2c79d4cf9b0d878f92e,
-            },
+            commit_oid: NonZeroOid(fe65c1fe15584744e649b2c79d4cf9b0d878f92e),
         },
         HideEvent {
             timestamp: 0.0,
             event_tx_id: EventTransactionId(
                 9,
             ),
-            commit_oid: NonZeroOid {
-                inner: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
-            },
+            commit_oid: NonZeroOid(62fc20d2a290daea0d52bdc2ed2ad4be6491010e),
         },
         RefUpdateEvent {
             timestamp: 0.0,
