@@ -743,7 +743,7 @@ Either create it, or update the main branch setting by running:
         author: &Signature,
         committer: &Signature,
         message: &str,
-        tree: &git2::Tree,
+        tree: &Tree,
         parents: &[&Commit],
     ) -> eyre::Result<NonZeroOid> {
         let parents = parents
@@ -757,7 +757,7 @@ Either create it, or update the main branch setting by running:
                 &author.inner,
                 &committer.inner,
                 message,
-                tree,
+                &tree.inner,
                 parents.as_slice(),
             )
             .map_err(wrap_git_error)?;
@@ -781,9 +781,9 @@ Either create it, or update the main branch setting by running:
 
     /// Look up the tree with the given OID. Returns `None` if not found.
     #[instrument]
-    pub fn find_tree(&self, oid: NonZeroOid) -> eyre::Result<Option<git2::Tree>> {
+    pub fn find_tree(&self, oid: NonZeroOid) -> eyre::Result<Option<Tree>> {
         match self.inner.find_tree(oid.inner) {
-            Ok(tree) => Ok(Some(tree)),
+            Ok(tree) => Ok(Some(Tree { inner: tree })),
             Err(err) if err.code() == git2::ErrorCode::NotFound => Ok(None),
             Err(err) => Err(wrap_git_error(err)),
         }
@@ -846,6 +846,7 @@ impl<'repo> Signature<'repo> {
 }
 
 /// A tree object. Contains a mapping from name to OID.
+#[derive(Debug)]
 pub struct Tree<'repo> {
     inner: git2::Tree<'repo>,
 }
