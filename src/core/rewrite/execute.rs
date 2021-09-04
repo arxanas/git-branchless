@@ -133,7 +133,7 @@ mod in_memory {
     use crate::core::formatting::printable_styled_string;
     use crate::core::rewrite::move_branches;
     use crate::core::rewrite::plan::{OidOrLabel, RebaseCommand, RebasePlan};
-    use crate::git::{GitRunInfo, MaybeZeroOid, NonZeroOid, Repo};
+    use crate::git::{CherryPickFastError, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo};
     use crate::tui::Effects;
 
     use super::ExecuteRebasePlanOptions;
@@ -283,32 +283,16 @@ mod in_memory {
 
                     progress
                         .set_message(format!("Applying patch for commit: {}", commit_description));
-                    let mut rebased_index =
-                        repo.cherrypick_commit(&commit_to_apply, &current_commit, 0)?;
+                    let commit_tree =
+                        match repo.cherrypick_fast(&commit_to_apply, &current_commit)? {
+                            Ok(rebased_commit) => rebased_commit,
+                            Err(CherryPickFastError::MergeConflict) => {
+                                return Ok(RebaseInMemoryResult::MergeConflict {
+                                    commit_oid: *commit_oid,
+                                })
+                            }
+                        };
 
-                    progress.set_message(format!(
-                        "Checking for merge conflicts: {}",
-                        commit_description
-                    ));
-                    if rebased_index.has_conflicts() {
-                        return Ok(RebaseInMemoryResult::MergeConflict {
-                            commit_oid: *commit_oid,
-                        });
-                    }
-
-                    progress.set_message(format!(
-                        "Writing commit data to disk: {}",
-                        commit_description
-                    ));
-                    let commit_tree_oid = repo
-                        .write_index_to_tree(&mut rebased_index)
-                        .wrap_err_with(|| "Converting index to tree")?;
-                    let commit_tree = repo.find_tree(commit_tree_oid)?.ok_or_else(|| {
-                        eyre::eyre!(
-                            "Could not find freshly-written tree for OID: {:?}",
-                            commit_tree_oid
-                        )
-                    })?;
                     let commit_message = commit_to_apply.get_message_raw()?;
                     let commit_message = commit_message.to_str().ok_or_else(|| {
                         eyre::eyre!(
@@ -331,7 +315,7 @@ mod in_memory {
                             &committer_signature,
                             commit_message,
                             &commit_tree,
-                            &[&current_commit],
+                            vec![&current_commit],
                         )
                         .wrap_err_with(|| "Applying rebased commit")?;
 

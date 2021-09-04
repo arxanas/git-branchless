@@ -9,7 +9,7 @@
 //! codebase.
 //! - To collect some different helper Git functions.
 
-use std::borrow::Cow;
+use std::borrow::{Borrow, Cow};
 use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
 use std::ffi::{OsStr, OsString};
@@ -29,9 +29,10 @@ use crate::core::config::get_main_branch_name;
 use crate::core::metadata::{render_commit_metadata, CommitMessageProvider, CommitOidProvider};
 use crate::git::config::Config;
 use crate::git::oid::{make_non_zero_oid, MaybeZeroOid, NonZeroOid};
+use crate::git::tree::{dehydrate_tree, hydrate_tree};
 use crate::tui::{Effects, OperationType};
 
-use super::GitRunInfo;
+use super::{GitRunInfo, Tree};
 
 /// Convert a `git2::Error` into an `eyre::Error` with an auto-generated message.
 pub(super) fn wrap_git_error(error: git2::Error) -> eyre::Error {
@@ -109,9 +110,16 @@ impl FromStr for GitVersion {
     }
 }
 
+/// An error raised when attempting the `Repo::cherrypick_fast` operation.
+#[derive(Debug)]
+pub enum CherryPickFastError {
+    /// A merge conflict occurred, so the cherry-pick could not continue.
+    MergeConflict,
+}
+
 /// Wrapper around `git2::Repository`.
 pub struct Repo {
-    inner: git2::Repository,
+    pub(super) inner: git2::Repository,
 }
 
 impl std::fmt::Debug for Repo {
@@ -525,7 +533,9 @@ Either create it, or update the main branch setting by running:
         Ok(())
     }
 
-    /// Get the file paths which were added, removed, or changed by the given commit.
+    /// Get the file paths which were added, removed, or changed by the given
+    /// commit.  Returns `None` if it's not valid to determine the paths touched
+    /// by this commit (i.e. if it has zero or more than one parent).
     #[instrument]
     pub fn get_paths_touched_by_commit(
         &self,
@@ -744,7 +754,7 @@ Either create it, or update the main branch setting by running:
         committer: &Signature,
         message: &str,
         tree: &Tree,
-        parents: &[&Commit],
+        parents: Vec<&Commit>,
     ) -> eyre::Result<NonZeroOid> {
         let parents = parents
             .iter()
@@ -777,6 +787,118 @@ Either create it, or update the main branch setting by running:
             .cherrypick_commit(&cherrypick_commit.inner, &our_commit.inner, mainline, None)
             .map_err(wrap_git_error)?;
         Ok(Index { inner: index })
+    }
+
+    /// Cherry-pick a commit in memory and return the resulting tree.
+    ///
+    /// The `libgit2` routines operate on entire `Index`es, which contain one
+    /// entry per file in the repository. When operating on a large repository,
+    /// this is prohibitively slow, as it takes several seconds just to write
+    /// the index to disk. To improve performance, we reduce the size of the
+    /// involved indexes by filtering out any unchanged entries from the input
+    /// trees, then call into `libgit2`, then add back the unchanged entries to
+    /// the output tree.
+    #[instrument]
+    pub fn cherrypick_fast(
+        &self,
+        patch_commit: &Commit,
+        target_commit: &Commit,
+    ) -> eyre::Result<Result<Tree, CherryPickFastError>> {
+        let changed_pathbufs = self
+            .get_paths_touched_by_commit(patch_commit)?
+            .ok_or_else(|| {
+                eyre::eyre!("Could not get paths touched by commit: {:?}", &patch_commit)
+            })?
+            .into_iter()
+            .collect_vec();
+        let changed_paths = changed_pathbufs.iter().map(PathBuf::borrow).collect_vec();
+
+        let dehydrated_patch_commit =
+            self.dehydrate_commit(patch_commit, changed_paths.as_slice())?;
+        let dehydrated_target_commit =
+            self.dehydrate_commit(target_commit, changed_paths.as_slice())?;
+
+        let rebased_index =
+            self.cherrypick_commit(&dehydrated_patch_commit, &dehydrated_target_commit, 0)?;
+        let rebased_tree = {
+            if rebased_index.has_conflicts() {
+                return Ok(Err(CherryPickFastError::MergeConflict));
+            }
+            let rebased_entries: HashMap<PathBuf, Option<(NonZeroOid, i32)>> = changed_pathbufs
+                .into_iter()
+                .map(|changed_path| {
+                    let value = match rebased_index.get_entry(&changed_path) {
+                        Some(IndexEntry {
+                            oid: MaybeZeroOid::Zero,
+                            file_mode: _,
+                        }) => {
+                            warn!(
+                                ?patch_commit,
+                                ?changed_path,
+                                "BUG: index entry was zero. \
+                                This probably indicates that a removed path \
+                                was not handled correctly."
+                            );
+                            None
+                        }
+                        Some(IndexEntry {
+                            oid: MaybeZeroOid::NonZero(oid),
+                            file_mode,
+                        }) => {
+                            // `libgit2` uses u32 for file modes in index
+                            // entries, but i32 for file modes in tree entries
+                            // for some reason.
+                            let file_mode: i32 = file_mode
+                                .try_into()
+                                .expect("Could not convert file mode from u32 to i32");
+                            Some((oid, file_mode))
+                        }
+                        None => None,
+                    };
+                    (changed_path, value)
+                })
+                .collect();
+            let rebased_tree_oid =
+                hydrate_tree(self, Some(&target_commit.get_tree()?), rebased_entries)?;
+            self.find_tree(rebased_tree_oid)?
+                .ok_or_else(|| eyre::eyre!("Could not find just-hydrated tree"))?
+        };
+        Ok(Ok(rebased_tree))
+    }
+
+    #[instrument]
+    fn dehydrate_commit(&self, commit: &Commit, changed_paths: &[&Path]) -> eyre::Result<Commit> {
+        let tree = commit.get_tree()?;
+        let dehydrated_tree_oid = dehydrate_tree(self, &tree, changed_paths)?;
+        let dehydrated_tree = self
+            .find_tree(dehydrated_tree_oid)?
+            .ok_or_else(|| eyre::eyre!("Could not find just-dehydrated tree"))?;
+
+        let signature = Signature {
+            inner: git2::Signature::new(
+                "git-branchless",
+                "git-branchless@example.com",
+                &git2::Time::new(0, 0),
+            )?,
+        };
+        let message = format!(
+            "generated by git-branchless: temporary dehydrated commit \
+                \
+                This commit was originally: {:?}",
+            commit.get_oid()
+        );
+        let dehydrated_commit_oid = self
+            .create_commit(
+                None,
+                &signature,
+                &signature,
+                &message,
+                &dehydrated_tree,
+                commit.get_parents().iter().collect_vec(),
+            )
+            .wrap_err_with(|| "Dehydrating commit")?;
+        let dehydrated_commit = self.find_commit_or_fail(dehydrated_commit_oid)?;
+        Ok(dehydrated_commit)
     }
 
     /// Look up the tree with the given OID. Returns `None` if not found.
@@ -845,20 +967,9 @@ impl<'repo> Signature<'repo> {
     }
 }
 
-/// A tree object. Contains a mapping from name to OID.
-#[derive(Debug)]
-pub struct Tree<'repo> {
-    inner: git2::Tree<'repo>,
-}
-
-impl Tree<'_> {
-    pub fn get_oid_for_path(&self, path: &Path) -> eyre::Result<Option<MaybeZeroOid>> {
-        match self.inner.get_path(path) {
-            Ok(entry) => Ok(Some(entry.id().into())),
-            Err(err) if err.code() == git2::ErrorCode::NotFound => Ok(None),
-            Err(err) => Err(err.into()),
-        }
-    }
+pub struct IndexEntry {
+    oid: MaybeZeroOid,
+    file_mode: u32,
 }
 
 pub struct Index {
@@ -874,6 +985,13 @@ impl std::fmt::Debug for Index {
 impl Index {
     pub fn has_conflicts(&self) -> bool {
         self.inner.has_conflicts()
+    }
+
+    pub fn get_entry(&self, path: &Path) -> Option<IndexEntry> {
+        self.inner.get_path(path, 0).map(|entry| IndexEntry {
+            oid: entry.id.into(),
+            file_mode: entry.mode,
+        })
     }
 }
 
@@ -1265,6 +1383,8 @@ impl<'repo> Branch<'repo> {
 
 #[cfg(test)]
 mod tests {
+    use crate::testing::make_git;
+
     use super::*;
 
     #[test]
@@ -1295,5 +1415,43 @@ mod tests {
             "git version 2.33.GIT".parse::<GitVersion>().unwrap(),
             GitVersion(2, 33, 0)
         );
+    }
+
+    #[test]
+    fn test_cherrypick_fast() -> eyre::Result<()> {
+        let git = make_git()?;
+        git.init_repo()?;
+
+        git.run(&["checkout", "-b", "foo"])?;
+        let test1_oid = git.commit_file_with_contents("test1", 1, "test1 contents")?;
+        git.run(&["checkout", "master"])?;
+        let initial2_oid =
+            git.commit_file_with_contents("initial", 2, "updated initial contents")?;
+
+        let repo = git.get_repo()?;
+        let tree = repo.cherrypick_fast(
+            &repo.find_commit_or_fail(test1_oid)?,
+            &repo.find_commit_or_fail(initial2_oid)?,
+        )?;
+
+        insta::assert_debug_snapshot!(tree, @r###"
+        Ok(
+            Tree {
+                inner: Tree {
+                    id: 367f91ddd5df2d1c18742ce3f09b4944944cac3a,
+                },
+            },
+        )
+        "###);
+
+        let tree = tree.unwrap();
+        insta::assert_debug_snapshot!(tree.inner.iter().map(|entry| entry.name().unwrap().to_string()).collect_vec(), @r###"
+        [
+            "initial.txt",
+            "test1.txt",
+        ]
+        "###);
+
+        Ok(())
     }
 }

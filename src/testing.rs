@@ -311,6 +311,10 @@ impl Git {
 
     /// Write the provided contents to the provided file in the repository root.
     pub fn write_file(&self, name: &str, contents: &str) -> eyre::Result<()> {
+        let path = PathBuf::from(name);
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(self.repo_path.join(dir))?;
+        }
         let file_path = self.repo_path.join(format!("{}.txt", name));
         std::fs::write(&file_path, contents)?;
         Ok(())
