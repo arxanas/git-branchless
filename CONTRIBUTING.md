@@ -8,12 +8,7 @@ For feature requests, workflow questions, and other open-ended topics, [start a 
 
 # Development
 
-See the developer guide in the wiki sidebar:
-
-* Developer guide
-  * [Runbook](https://github.com/arxanas/git-branchless/wiki/Runbook)
-  * [Coding](https://github.com/arxanas/git-branchless/wiki/Coding)
-  * [Architecture](https://github.com/arxanas/git-branchless/wiki/Architecture)
+See the developer guide in sidebar of [the wiki](https://github.com/arxanas/git-branchless/wiki).
 
 # Maintenance
 
