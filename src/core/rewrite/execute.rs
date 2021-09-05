@@ -133,7 +133,9 @@ mod in_memory {
     use crate::core::formatting::printable_styled_string;
     use crate::core::rewrite::move_branches;
     use crate::core::rewrite::plan::{OidOrLabel, RebaseCommand, RebasePlan};
-    use crate::git::{CherryPickFastError, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo};
+    use crate::git::{
+        CherryPickFastError, CherryPickFastOptions, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo,
+    };
     use crate::tui::Effects;
 
     use super::ExecuteRebasePlanOptions;
@@ -283,15 +285,20 @@ mod in_memory {
 
                     progress
                         .set_message(format!("Applying patch for commit: {}", commit_description));
-                    let commit_tree =
-                        match repo.cherrypick_fast(&commit_to_apply, &current_commit)? {
-                            Ok(rebased_commit) => rebased_commit,
-                            Err(CherryPickFastError::MergeConflict) => {
-                                return Ok(RebaseInMemoryResult::MergeConflict {
-                                    commit_oid: *commit_oid,
-                                })
-                            }
-                        };
+                    let commit_tree = match repo.cherrypick_fast(
+                        &commit_to_apply,
+                        &current_commit,
+                        &CherryPickFastOptions {
+                            reuse_parent_tree_if_possible: true,
+                        },
+                    )? {
+                        Ok(rebased_commit) => rebased_commit,
+                        Err(CherryPickFastError::MergeConflict) => {
+                            return Ok(RebaseInMemoryResult::MergeConflict {
+                                commit_oid: *commit_oid,
+                            })
+                        }
+                    };
 
                     let commit_message = commit_to_apply.get_message_raw()?;
                     let commit_message = commit_message.to_str().ok_or_else(|| {
