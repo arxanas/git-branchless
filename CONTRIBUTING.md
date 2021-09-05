@@ -8,14 +8,12 @@ For feature requests, workflow questions, and other open-ended topics, [start a 
 
 # Development
 
-See the [Architecture document](https://github.com/arxanas/git-branchless/wiki/Architecture).
+See the developer guide in the wiki sidebar:
 
-Run tests with `cargo test`. The tests depend on the version of Git you're using, so you need to provide a Git executable as an environment variable with the `PATH_TO_GIT` variable. For example:
-
-```
-$ PATH_TO_GIT=$(which git) cargo test  # use globally-installed version
-$ PATH_TO_GIT=/path/to/dir/git cargo test  # use the `git` executable inside /path/to/dir
-```
+* Developer guide
+  * [Runbook](https://github.com/arxanas/git-branchless/wiki/Runbook)
+  * [Coding](https://github.com/arxanas/git-branchless/wiki/Coding)
+  * [Architecture](https://github.com/arxanas/git-branchless/wiki/Architecture)
 
 # Maintenance
 
