@@ -358,16 +358,30 @@ fn install_tracing() {
     use tracing_subscriber::prelude::*;
     use tracing_subscriber::{fmt, EnvFilter};
 
-    let filter_layer = EnvFilter::try_from_default_env()
-        .or_else(|_| EnvFilter::try_new("warn"))
-        .unwrap();
-    let fmt_layer = fmt::layer()
-        .with_span_events(fmt::format::FmtSpan::CLOSE)
-        .with_target(false);
-
-    tracing_subscriber::registry()
-        .with(filter_layer)
-        .with(fmt_layer)
-        .with(ErrorLayer::default())
-        .init();
+    match EnvFilter::try_from_default_env() {
+        Ok(filter_layer) => {
+            let fmt_layer = fmt::layer()
+                .with_span_events(fmt::format::FmtSpan::CLOSE)
+                .with_target(false);
+            tracing_subscriber::registry()
+                .with(filter_layer)
+                .with(fmt_layer)
+                .with(ErrorLayer::default())
+                .init();
+        }
+        Err(_) => {
+            // We would like the filter layer to apply *only* to the formatting
+            // layer. That way, the logging output is suppressed, but we still
+            // get spantraces for use with `color-eyre`. However, it's currently
+            // not possible (?), at least not without writing some a custom
+            // subscriber. See https://github.com/tokio-rs/tracing/pull/1523
+            //
+            // The workaround is to only display logging messages if `RUST_LOG`
+            // is set (which is unfortunate, because we'll miss out on
+            // `WARN`-level messages by default).
+            tracing_subscriber::registry()
+                .with(ErrorLayer::default())
+                .init()
+        }
+    }
 }
