@@ -122,7 +122,10 @@ pub struct CherryPickFastOptions {
 #[derive(Debug)]
 pub enum CherryPickFastError {
     /// A merge conflict occurred, so the cherry-pick could not continue.
-    MergeConflict,
+    MergeConflict {
+        /// The paths that were in conflict.
+        conflicting_paths: HashSet<PathBuf>,
+    },
 }
 
 /// Wrapper around `git2::Repository`.
@@ -847,7 +850,25 @@ Either create it, or update the main branch setting by running:
             self.cherrypick_commit(&dehydrated_patch_commit, &dehydrated_target_commit, 0)?;
         let rebased_tree = {
             if rebased_index.has_conflicts() {
-                return Ok(Err(CherryPickFastError::MergeConflict));
+                let conflicting_paths = {
+                    let mut result = HashSet::new();
+                    for conflict in rebased_index
+                        .inner
+                        .conflicts()
+                        .wrap_err_with(|| "Getting conflicting paths")?
+                    {
+                        let conflict = conflict.wrap_err_with(|| "Getting conflicting path")?;
+                        if let Some(ancestor) = conflict.ancestor {
+                            // I'm not sure how the ancestor can be `None` here.
+                            result
+                                .insert(PathBuf::from(OsStrBytes::from_raw_bytes(ancestor.path)?));
+                        }
+                    }
+                    result
+                };
+                return Ok(Err(CherryPickFastError::MergeConflict {
+                    conflicting_paths,
+                }));
             }
             let rebased_entries: HashMap<PathBuf, Option<(NonZeroOid, i32)>> = changed_pathbufs
                 .into_iter()
