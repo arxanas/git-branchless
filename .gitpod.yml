@@ -1,7 +1,9 @@
 image:
   file: .gitpod/Dockerfile
 tasks:
-  - init: cargo build --tests && cargo install --path . && git branchless init
+  - init: |
+      cargo test --no-run
+      cargo install git-branchless && git branchless init
 vscode:
   extensions:
     - "matklad.rust-analyzer"
