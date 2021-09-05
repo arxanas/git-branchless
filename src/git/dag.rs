@@ -114,7 +114,7 @@ impl Dag {
         Ok(())
     }
 
-    #[instrument]
+    #[instrument(skip(dag))]
     fn oid_to_vertex(
         &self,
         effects: &Effects,
