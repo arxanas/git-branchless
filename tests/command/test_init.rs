@@ -228,6 +228,11 @@ fn test_main_branch_not_found_error_message() -> eyre::Result<()> {
     Location:
        some/file/path.rs:123
 
+      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ SPANTRACE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+       0: branchless::commands::smartlog::smartlog with effects=<Output fancy=false>
+          at some/file/path.rs:123
+
     Suggestion:
     The main branch "master" could not be found in your repository
     at path: "<repo-path>/.git/".
