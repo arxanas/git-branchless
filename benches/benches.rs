@@ -5,7 +5,7 @@ use branchless::core::formatting::Glyphs;
 use branchless::core::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
 use branchless::core::mergebase::{make_merge_base_db, MergeBaseDb};
 use branchless::core::rewrite::{BuildRebasePlanOptions, RebasePlanBuilder};
-use branchless::git::{Commit, Repo};
+use branchless::git::{CherryPickFastOptions, Commit, Repo};
 use branchless::tui::Effects;
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 
@@ -111,9 +111,46 @@ fn bench_find_path_to_merge_base(c: &mut Criterion) {
     });
 }
 
+fn bench_cherrypick_fast(c: &mut Criterion) {
+    let mut group = c.benchmark_group("Cherrypick");
+    group.sample_size(10);
+    group.bench_function("Repo::cherrypick_commit", |b| {
+        let repo = get_repo();
+        let head_oid = repo.get_head_info().unwrap().oid.unwrap();
+        let head_commit = repo.find_commit_or_fail(head_oid).unwrap();
+        let target_commit = nth_parent(head_commit.clone(), 1);
+
+        b.iter(|| {
+            let mut index = repo
+                .cherrypick_commit(&head_commit, &target_commit, 0)
+                .unwrap();
+            let tree_oid = repo.write_index_to_tree(&mut index).unwrap();
+            repo.find_tree(tree_oid).unwrap().unwrap()
+        })
+    });
+    group.bench_function("Repo::cherrypick_fast", |b| {
+        let repo = get_repo();
+        let head_oid = repo.get_head_info().unwrap().oid.unwrap();
+        let head_commit = repo.find_commit_or_fail(head_oid).unwrap();
+        let target_commit = nth_parent(head_commit.clone(), 1);
+
+        b.iter(|| {
+            repo.cherrypick_fast(
+                &head_commit,
+                &target_commit,
+                &CherryPickFastOptions {
+                    reuse_parent_tree_if_possible: false,
+                },
+            )
+            .unwrap()
+            .unwrap();
+        });
+    });
+}
+
 criterion_group!(
     name = benches;
     config = Criterion::default().sample_size(10);
-    targets = bench_rebase_plan, bench_find_path_to_merge_base
+    targets = bench_rebase_plan, bench_find_path_to_merge_base, bench_cherrypick_fast
 );
 criterion_main!(benches);
