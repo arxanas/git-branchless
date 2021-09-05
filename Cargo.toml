@@ -1,6 +1,7 @@
 [package]
 authors = ["Waleed Khan <me@waleedkhan.name>"]
 categories = ["command-line-utilities", "development-tools"]
+default-run = "git-branchless"
 description = "Branchless workflow for Git"
 documentation = "https://github.com/arxanas/git-branchless/wiki"
 edition = "2018"
@@ -60,3 +61,7 @@ insta = "1.7.2"
 [[bench]]
 harness = false
 name = "benches"
+
+[[bin]]
+name = "regression-test-cherrypick-fast"
+path = "bin/regression_test_cherrypick_fast.rs"
