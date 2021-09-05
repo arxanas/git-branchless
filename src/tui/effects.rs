@@ -94,9 +94,9 @@ impl OperationState {
         lazy_static! {
             static ref CHECKMARK: String = console::style("✓").green().to_string();
             static ref IN_PROGRESS_SPINNER_STYLE: ProgressStyle =
-                ProgressStyle::default_spinner().template("{prefix}{spinner} {msg}");
+                ProgressStyle::default_spinner().template("{prefix}{spinner} {wide_msg}");
             static ref IN_PROGRESS_BAR_STYLE: ProgressStyle =
-                ProgressStyle::default_bar().template("{prefix}{spinner} {msg} {bar} {pos}/{len}");
+                ProgressStyle::default_bar().template("{prefix}{spinner} {wide_msg} {bar} {pos}/{len}");
             static ref FINISHED_PROGRESS_STYLE: ProgressStyle = IN_PROGRESS_SPINNER_STYLE
                 .clone()
                 // Requires at least two tick values, so just pass the same one twice.
