@@ -121,9 +121,10 @@ pub fn move_branches<'a>(
 }
 
 mod in_memory {
-    use std::collections::HashMap;
+    use std::collections::{HashMap, HashSet};
     use std::ffi::OsString;
     use std::fmt::Write;
+    use std::path::PathBuf;
 
     use eyre::Context;
     use indicatif::{ProgressBar, ProgressStyle};
@@ -156,6 +157,7 @@ mod in_memory {
         },
         MergeConflict {
             commit_oid: NonZeroOid,
+            conflicting_paths: HashSet<PathBuf>,
         },
     }
 
@@ -293,9 +295,10 @@ mod in_memory {
                         },
                     )? {
                         Ok(rebased_commit) => rebased_commit,
-                        Err(CherryPickFastError::MergeConflict) => {
+                        Err(CherryPickFastError::MergeConflict { conflicting_paths }) => {
                             return Ok(RebaseInMemoryResult::MergeConflict {
                                 commit_oid: *commit_oid,
+                                conflicting_paths,
                             })
                         }
                     };
@@ -846,7 +849,10 @@ pub fn execute_rebase_plan(
                 )?;
             }
 
-            RebaseInMemoryResult::MergeConflict { commit_oid } => {
+            RebaseInMemoryResult::MergeConflict {
+                commit_oid,
+                conflicting_paths: _,
+            } => {
                 writeln!(
                     effects.get_output_stream(),
                     "There was a merge conflict, which currently can't be resolved when rebasing in-memory."
