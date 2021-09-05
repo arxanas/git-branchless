@@ -110,6 +110,14 @@ impl FromStr for GitVersion {
     }
 }
 
+/// Options for `Repo::cherrypick_fast`.
+#[derive(Clone, Debug)]
+pub struct CherryPickFastOptions {
+    /// Detect if a commit is being applied onto a parent with the same tree,
+    /// and skip applying the patch in that case.
+    pub reuse_parent_tree_if_possible: bool,
+}
+
 /// An error raised when attempting the `Repo::cherrypick_fast` operation.
 #[derive(Debug)]
 pub enum CherryPickFastError {
@@ -799,11 +807,28 @@ Either create it, or update the main branch setting by running:
     /// trees, then call into `libgit2`, then add back the unchanged entries to
     /// the output tree.
     #[instrument]
-    pub fn cherrypick_fast(
-        &self,
-        patch_commit: &Commit,
-        target_commit: &Commit,
-    ) -> eyre::Result<Result<Tree, CherryPickFastError>> {
+    pub fn cherrypick_fast<'repo>(
+        &'repo self,
+        patch_commit: &'repo Commit,
+        target_commit: &'repo Commit,
+        options: &CherryPickFastOptions,
+    ) -> eyre::Result<Result<Tree<'repo>, CherryPickFastError>> {
+        let CherryPickFastOptions {
+            reuse_parent_tree_if_possible,
+        } = options;
+
+        if *reuse_parent_tree_if_possible {
+            if let Some(only_parent) = patch_commit.get_only_parent() {
+                if only_parent.get_tree()?.get_oid() == target_commit.get_tree()?.get_oid() {
+                    // If this patch is being applied to the same commit it was
+                    // originally based on, then we can skip cherry-picking
+                    // altogether, and use its tree directly. This is common e.g.
+                    // when only rewording a commit message.
+                    return Ok(Ok(patch_commit.get_tree()?));
+                }
+            };
+        }
+
         let changed_pathbufs = self
             .get_paths_touched_by_commit(patch_commit)?
             .ok_or_else(|| {
@@ -1429,9 +1454,14 @@ mod tests {
             git.commit_file_with_contents("initial", 2, "updated initial contents")?;
 
         let repo = git.get_repo()?;
+        let test1_commit = repo.find_commit_or_fail(test1_oid)?;
+        let initial2_commit = repo.find_commit_or_fail(initial2_oid)?;
         let tree = repo.cherrypick_fast(
-            &repo.find_commit_or_fail(test1_oid)?,
-            &repo.find_commit_or_fail(initial2_oid)?,
+            &test1_commit,
+            &initial2_commit,
+            &CherryPickFastOptions {
+                reuse_parent_tree_if_possible: false,
+            },
         )?;
 
         insta::assert_debug_snapshot!(tree, @r###"
