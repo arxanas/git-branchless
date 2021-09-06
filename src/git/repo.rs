@@ -1130,7 +1130,7 @@ impl<'repo> Commit<'repo> {
 }
 
 /// The target of a reference.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum ReferenceTarget<'a> {
     /// The reference points directly to an object. This is the case for most
     /// references, such as branches.

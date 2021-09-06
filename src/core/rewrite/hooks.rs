@@ -167,15 +167,7 @@ pub fn hook_post_rewrite(
     Ok(())
 }
 
-#[instrument]
-fn check_out_new_head(
-    effects: &Effects,
-    git_run_info: &GitRunInfo,
-    repo: &Repo,
-    event_tx_id: EventTransactionId,
-    rewritten_oids: &HashMap<NonZeroOid, MaybeZeroOid>,
-) -> eyre::Result<()> {
-    let checkout_target: Option<OsString> =
+fn get_orig_head_info() -> HeadInfo {
         match repo.find_reference(&OsString::from("ORIG_HEAD"))? {
             None => None,
             Some(orig_head_reference) => match orig_head_reference.get_target()? {
@@ -191,15 +183,16 @@ fn check_out_new_head(
                 } => match rewritten_oids.get(&oid) {
                     Some(MaybeZeroOid::NonZero(oid)) => {
                         // This OID was rewritten, so check out the new version of the commit.
-                        Some(OsString::from(oid.to_string()))
+                        Some(ReferenceTarget::Direct { oid: (*oid).into() })
                     }
                     Some(MaybeZeroOid::Zero) => {
                         // The commit was skipped. Get the new location for `HEAD`.
-                        get_updated_head_oid(repo)?.map(|oid| oid.to_string().into())
+                        get_updated_head_oid(repo)?
+                            .map(|oid| ReferenceTarget::Direct { oid: oid.into() })
                     }
                     None => {
                         // This OID was not rewritten, so check it out again.
-                        Some(OsString::from(oid.to_string()))
+                        Some(ReferenceTarget::Direct { oid: oid.into() })
                     }
                 },
 
@@ -208,30 +201,53 @@ fn check_out_new_head(
                         Some(reference) => {
                             // The branch may have been moved above, but
                             // regardless, we check it again out here.
-                            Some(reference.get_name()?)
+                            Some(ReferenceTarget::Symbolic {
+                                reference_name: reference.get_name()?.into(),
+                            })
                         }
                         None => {
                             // The branch was deleted because it pointed to
                             // a skipped commit. Get the new location for
                             // `HEAD`.
-                            get_updated_head_oid(repo)?.map(|oid| oid.to_string().into())
+                            get_updated_head_oid(repo)?
+                                .map(|oid| ReferenceTarget::Direct { oid: oid.into() })
                         }
                     }
                 }
             },
-        };
+
+}
+
+#[instrument]
+fn check_out_new_head(
+    effects: &Effects,
+    git_run_info: &GitRunInfo,
+    repo: &Repo,
+    event_tx_id: EventTransactionId,
+    rewritten_oids: &HashMap<NonZeroOid, MaybeZeroOid>,
+) -> eyre::Result<()> {
+    let checkout_target = get_orig_head_info()?;
 
     if let Some(checkout_target) = checkout_target {
-        let exit_code = git_run_info.run(
-            effects,
-            Some(event_tx_id),
-            &[&OsString::from("checkout"), &checkout_target],
-        )?;
-        if exit_code != 0 {
-            eyre::bail!(
-                "Failed to check out previous HEAD location: {:?}",
-                &checkout_target
-            );
+        if let Some(current_head_reference) = repo.find_reference(&OsString::from("HEAD"))? {
+            let current_head_target = current_head_reference.get_target()?;
+            if current_head_target != checkout_target {
+                let checkout_target: OsString = match checkout_target {
+                    ReferenceTarget::Direct { oid } => oid.to_string().into(),
+                    ReferenceTarget::Symbolic { reference_name } => reference_name.into(),
+                };
+                let exit_code = git_run_info.run(
+                    effects,
+                    Some(event_tx_id),
+                    &[&OsString::from("checkout"), &checkout_target],
+                )?;
+                if exit_code != 0 {
+                    eyre::bail!(
+                        "Failed to check out previous HEAD location: {:?}",
+                        &checkout_target
+                    );
+                }
+            }
         }
     }
 

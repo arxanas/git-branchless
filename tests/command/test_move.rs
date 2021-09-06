@@ -965,10 +965,6 @@ fn test_move_branches_after_move_on_disk() -> eyre::Result<()> {
         Executing: git branchless hook-detect-empty-commit f81d55c0d520ff8d02ef9294d95156dcb78a5255
         branchless: processing 3 rewritten commits
         branchless: processing 2 updates: branch bar, branch foo
-        branchless: running command: <git-executable> checkout 566e4341a4a9a930fc2bf7ccdfa168e9f266c34a
-        branchless: processing 1 update: ref HEAD
-        HEAD is now at 566e434 create test5.txt
-        branchless: processing checkout
         Successfully rebased and updated detached HEAD.
         "###);
         insta::assert_snapshot!(stdout, @r###"
