@@ -63,5 +63,5 @@ harness = false
 name = "benches"
 
 [[bin]]
-name = "regression-test-cherrypick-fast"
-path = "bin/regression_test_cherrypick_fast.rs"
+name = "regression-test-cherry_pick-fast"
+path = "bin/regression_test_cherry_pick_fast.rs"

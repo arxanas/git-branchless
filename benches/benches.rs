@@ -111,10 +111,10 @@ fn bench_find_path_to_merge_base(c: &mut Criterion) {
     });
 }
 
-fn bench_cherrypick_fast(c: &mut Criterion) {
-    let mut group = c.benchmark_group("Cherrypick");
+fn bench_cherry_pick_fast(c: &mut Criterion) {
+    let mut group = c.benchmark_group("cherry-pick");
     group.sample_size(10);
-    group.bench_function("Repo::cherrypick_commit", |b| {
+    group.bench_function("Repo::cherry_pick_commit", |b| {
         let repo = get_repo();
         let head_oid = repo.get_head_info().unwrap().oid.unwrap();
         let head_commit = repo.find_commit_or_fail(head_oid).unwrap();
@@ -122,20 +122,20 @@ fn bench_cherrypick_fast(c: &mut Criterion) {
 
         b.iter(|| {
             let mut index = repo
-                .cherrypick_commit(&head_commit, &target_commit, 0)
+                .cherry_pick_commit(&head_commit, &target_commit, 0)
                 .unwrap();
             let tree_oid = repo.write_index_to_tree(&mut index).unwrap();
             repo.find_tree(tree_oid).unwrap().unwrap()
         })
     });
-    group.bench_function("Repo::cherrypick_fast", |b| {
+    group.bench_function("Repo::cherry_pick_fast", |b| {
         let repo = get_repo();
         let head_oid = repo.get_head_info().unwrap().oid.unwrap();
         let head_commit = repo.find_commit_or_fail(head_oid).unwrap();
         let target_commit = nth_parent(head_commit.clone(), 1);
 
         b.iter(|| {
-            repo.cherrypick_fast(
+            repo.cherry_pick_fast(
                 &head_commit,
                 &target_commit,
                 &CherryPickFastOptions {
@@ -151,6 +151,6 @@ fn bench_cherrypick_fast(c: &mut Criterion) {
 criterion_group!(
     name = benches;
     config = Criterion::default().sample_size(10);
-    targets = bench_rebase_plan, bench_find_path_to_merge_base, bench_cherrypick_fast
+    targets = bench_rebase_plan, bench_find_path_to_merge_base, bench_cherry_pick_fast
 );
 criterion_main!(benches);

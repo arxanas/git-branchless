@@ -1,4 +1,4 @@
-//! Test to make sure that `cherrypick_fast` produces the same results as
+//! Test to make sure that `Repo::cherry_pick_fast` produces the same results as
 //! regular Git when applying a patch.
 
 use std::path::PathBuf;
@@ -34,7 +34,7 @@ fn main() -> eyre::Result<()> {
             }
         };
 
-        let tree = repo.cherrypick_fast(
+        let tree = repo.cherry_pick_fast(
             &current_commit,
             &parent_commit,
             &CherryPickFastOptions {

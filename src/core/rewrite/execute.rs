@@ -287,7 +287,7 @@ mod in_memory {
 
                     progress
                         .set_message(format!("Applying patch for commit: {}", commit_description));
-                    let commit_tree = match repo.cherrypick_fast(
+                    let commit_tree = match repo.cherry_pick_fast(
                         &commit_to_apply,
                         &current_commit,
                         &CherryPickFastOptions {
