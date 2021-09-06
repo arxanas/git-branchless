@@ -4,54 +4,69 @@ on:
   schedule:
     # Run once every day at 6:40AM UTC.
     - cron: "40 6 * * *"
+
   push:
     branches:
       - master
+
   pull_request:
     branches:
       - "ci-*"
+
     paths:
       - ".github/workflows/*.yml"
+
   workflow_dispatch:
+
+env:
+  CARGO_INCREMENTAL: 0
+  RUST_BACKTRACE: short
 
 jobs:
   run-tests:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v2
         with:
           path: git-master
           repository: git/git
           ref: master
+
       - uses: actions/checkout@v2
         with:
           path: git-next
           repository: git/git
           ref: next
+
       - name: Install dependencies
         run: |
           sudo apt-get update --fix-missing
           # List of dependencies from https://git-scm.com/book/en/v2/Getting-Started-Installing-Git
           sudo apt-get install dh-autoreconf libcurl4-gnutls-dev libexpat1-dev gettext libz-dev libssl-dev
+
       - name: Build Git `master`
         run: (cd git-master && make)
+
       - name: Build Git `next`
         run: (cd git-next && make)
+
       - name: Set up Rust
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
           toolchain: stable
+
       - uses: actions/checkout@v2
         with:
           path: git-branchless
+
       - name: Run Rust tests on Git `master`
         run: |
-          export RUST_BACKTRACE=1
           export PATH_TO_GIT="$PWD"/git-master/git
           (cd git-branchless && cargo test)
+
       - name: Run Rust tests on Git `next`
         run: |
-          export RUST_BACKTRACE=1
           export PATH_TO_GIT="$PWD"/git-next/git
           (cd git-branchless && cargo test)

@@ -4,23 +4,38 @@ on:
   schedule:
     # Run once every day at 6:40AM UTC.
     - cron: "40 6 * * *"
+
   push:
     branches:
       - master
+
   pull_request:
     branches:
       - "ci-*"
 
+env:
+  CARGO_INCREMENTAL: 0
+  RUST_BACKTRACE: short
+
 jobs:
   run-tests:
     runs-on: macos-latest
+
     steps:
       - uses: actions/checkout@v2
+
       - name: Set up Rust
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
           toolchain: stable
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@ce325b60658c1b38465c06cc965b79baf32c1e72
+
+      - name: Compile
+        run: cargo build --benches --tests
+
       - name: Run tests
         run: |
           export RUST_BACKTRACE=1
