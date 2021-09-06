@@ -200,14 +200,14 @@ impl Git {
         // commit` later as a part of their execution.
         //
         // ":" is understood by `git` to skip editing.
-        let git_editor = OsString::from(":");
+        let git_editor = OsStr::new(":");
 
         let git_exec_path = self.get_git_exec_path();
         let new_path = self.get_path_for_env();
         let env: Vec<(&str, &OsStr)> = vec![
             ("GIT_AUTHOR_DATE", &date),
             ("GIT_COMMITTER_DATE", &date),
-            ("GIT_EDITOR", &git_editor),
+            ("GIT_EDITOR", git_editor),
             ("GIT_EXEC_PATH", git_exec_path.as_os_str()),
             ("PATH_TO_GIT", self.path_to_git.as_os_str()),
             ("PATH", &new_path),

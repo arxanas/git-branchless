@@ -218,7 +218,7 @@ impl GitRunInfo {
         } = self;
         let path = {
             let mut path_components: Vec<PathBuf> = vec![std::fs::canonicalize(&hook_dir)?];
-            if let Some(path) = env.get(&OsString::from("PATH")) {
+            if let Some(path) = env.get(OsStr::new("PATH")) {
                 path_components.extend(std::env::split_paths(path));
             }
             std::env::join_paths(path_components)?
