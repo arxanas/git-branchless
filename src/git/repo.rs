@@ -29,7 +29,7 @@ use crate::core::config::get_main_branch_name;
 use crate::core::metadata::{render_commit_metadata, CommitMessageProvider, CommitOidProvider};
 use crate::git::config::Config;
 use crate::git::oid::{make_non_zero_oid, MaybeZeroOid, NonZeroOid};
-use crate::git::tree::{dehydrate_tree, hydrate_tree};
+use crate::git::tree::{dehydrate_tree, get_changed_paths_between_trees, hydrate_tree};
 use crate::tui::{Effects, OperationType};
 
 use super::{GitRunInfo, Tree};
@@ -466,84 +466,6 @@ Either create it, or update the main branch setting by running:
         Ok(Some(diff))
     }
 
-    #[instrument]
-    fn get_changed_paths_between_trees(
-        &self,
-        acc: &mut Vec<PathBuf>,
-        current_path: &Path,
-        lhs: &git2::Tree,
-        rhs: &git2::Tree,
-    ) -> eyre::Result<()> {
-        let lhs_entries = lhs.iter().collect_vec();
-        let rhs_entries = rhs.iter().collect_vec();
-        let entry_names: HashSet<&[u8]> = lhs_entries
-            .iter()
-            .chain(rhs_entries.iter())
-            .map(|entry| entry.name_bytes())
-            .collect();
-
-        for entry_name in entry_names {
-            // FIXME: we could avoid the extra conversions and lookups here by
-            // iterating both trees together, since they should be in sorted
-            // order.
-            let entry_path =
-                PathBuf::from(OsStrBytes::from_raw_bytes(entry_name).wrap_err_with(|| {
-                    format!("Converting tree entry name to path: {:?}", entry_name)
-                })?);
-            let lhs_entry = match lhs.get_path(&entry_path) {
-                Ok(lhs_entry) => Some(lhs_entry),
-                Err(err) if err.code() == git2::ErrorCode::NotFound => None,
-                Err(err) => return Err(err.into()),
-            };
-            let rhs_entry = match rhs.get_path(&entry_path) {
-                Ok(rhs_entry) => Some(rhs_entry),
-                Err(err) if err.code() == git2::ErrorCode::NotFound => None,
-                Err(err) => return Err(err.into()),
-            };
-
-            let full_entry_path = current_path.join(entry_path);
-            match (lhs_entry, rhs_entry) {
-                (None, None) => {
-                    // Shouldn't happen, but there's no issue here.
-                }
-                (None, Some(_)) | (Some(_), None) => {
-                    acc.push(full_entry_path);
-                }
-                (Some(lhs_entry), Some(rhs_entry)) if lhs_entry.id() == rhs_entry.id() => {
-                    // Nothing to do.
-                }
-                (Some(lhs_entry), Some(rhs_entry)) => {
-                    match (lhs_entry.kind(), rhs_entry.kind()) {
-                        (Some(git2::ObjectType::Tree), Some(git2::ObjectType::Tree)) => {
-                            // The trees are different, so we need to recurse to
-                            // figure out which files inside those trees are
-                            // causing them to be different.
-                            let lhs_entry_tree =
-                                lhs_entry.to_object(&self.inner)?.into_tree().map_err(|_| {
-                                    eyre::eyre!("LHS entry was not a tree: {:?}", &full_entry_path)
-                                })?;
-                            let rhs_entry_tree =
-                                rhs_entry.to_object(&self.inner)?.into_tree().map_err(|_| {
-                                    eyre::eyre!("RHS entry was not a tree: {:?}", &full_entry_path)
-                                })?;
-                            self.get_changed_paths_between_trees(
-                                acc,
-                                &full_entry_path,
-                                &lhs_entry_tree,
-                                &rhs_entry_tree,
-                            )?;
-                        }
-                        _ => {
-                            acc.push(full_entry_path);
-                        }
-                    }
-                }
-            }
-        }
-
-        Ok(())
-    }
-
     /// Get the file paths which were added, removed, or changed by the given
     /// commit.  Returns `None` if it's not valid to determine the paths touched
     /// by this commit (i.e. if it has zero or more than one parent).
@@ -560,11 +482,12 @@ Either create it, or update the main branch setting by running:
         let parent_tree = only_parent.get_tree()?.inner;
         let current_tree = commit.get_tree()?.inner;
         let mut acc = Vec::new();
-        self.get_changed_paths_between_trees(
+        get_changed_paths_between_trees(
+            self,
             &mut acc,
             &PathBuf::new(),
-            &parent_tree,
-            &current_tree,
+            Some(&parent_tree),
+            Some(&current_tree),
         )?;
         Ok(Some(acc.into_iter().collect()))
     }
