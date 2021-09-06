@@ -110,7 +110,7 @@ impl FromStr for GitVersion {
     }
 }
 
-/// Options for `Repo::cherrypick_fast`.
+/// Options for `Repo::cherry_pick_fast`.
 #[derive(Clone, Debug)]
 pub struct CherryPickFastOptions {
     /// Detect if a commit is being applied onto a parent with the same tree,
@@ -118,7 +118,7 @@ pub struct CherryPickFastOptions {
     pub reuse_parent_tree_if_possible: bool,
 }
 
-/// An error raised when attempting the `Repo::cherrypick_fast` operation.
+/// An error raised when attempting the `Repo::cherry_pick_fast` operation.
 #[derive(Debug)]
 pub enum CherryPickFastError {
     /// A merge conflict occurred, so the cherry-pick could not continue.
@@ -710,15 +710,15 @@ Either create it, or update the main branch setting by running:
 
     /// Cherry-pick a commit in memory and return the resulting index.
     #[instrument]
-    pub fn cherrypick_commit(
+    pub fn cherry_pick_commit(
         &self,
-        cherrypick_commit: &Commit,
+        cherry_pick_commit: &Commit,
         our_commit: &Commit,
         mainline: u32,
     ) -> eyre::Result<Index> {
         let index = self
             .inner
-            .cherrypick_commit(&cherrypick_commit.inner, &our_commit.inner, mainline, None)
+            .cherrypick_commit(&cherry_pick_commit.inner, &our_commit.inner, mainline, None)
             .map_err(wrap_git_error)?;
         Ok(Index { inner: index })
     }
@@ -733,7 +733,7 @@ Either create it, or update the main branch setting by running:
     /// trees, then call into `libgit2`, then add back the unchanged entries to
     /// the output tree.
     #[instrument]
-    pub fn cherrypick_fast<'repo>(
+    pub fn cherry_pick_fast<'repo>(
         &'repo self,
         patch_commit: &'repo Commit,
         target_commit: &'repo Commit,
@@ -770,7 +770,7 @@ Either create it, or update the main branch setting by running:
             self.dehydrate_commit(target_commit, changed_paths.as_slice(), false)?;
 
         let rebased_index =
-            self.cherrypick_commit(&dehydrated_patch_commit, &dehydrated_target_commit, 0)?;
+            self.cherry_pick_commit(&dehydrated_patch_commit, &dehydrated_target_commit, 0)?;
         let rebased_tree = {
             if rebased_index.has_conflicts() {
                 let conflicting_paths = {
@@ -1404,7 +1404,7 @@ mod tests {
     }
 
     #[test]
-    fn test_cherrypick_fast() -> eyre::Result<()> {
+    fn test_cherry_pick_fast() -> eyre::Result<()> {
         let git = make_git()?;
         git.init_repo()?;
 
@@ -1417,7 +1417,7 @@ mod tests {
         let repo = git.get_repo()?;
         let test1_commit = repo.find_commit_or_fail(test1_oid)?;
         let initial2_commit = repo.find_commit_or_fail(initial2_oid)?;
-        let tree = repo.cherrypick_fast(
+        let tree = repo.cherry_pick_fast(
             &test1_commit,
             &initial2_commit,
             &CherryPickFastOptions {
