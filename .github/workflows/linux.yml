@@ -6,18 +6,25 @@ on:
       - master
   pull_request:
 
+env:
+  CARGO_INCREMENTAL: 0
+  RUST_BACKTRACE: short
+
 jobs:
   build-git:
     runs-on: ubuntu-latest
+
     strategy:
       matrix:
         # Use a tag from https://github.com/git/git/tags
         git-version: ["v2.24.3", "v2.29.2", "v2.31.1"]
+
     steps:
       - uses: actions/checkout@v2
         with:
           repository: git/git
           ref: ${{ matrix.git-version }}
+
       - uses: actions/cache@v2
         id: cache-git-build
         with:
@@ -25,6 +32,7 @@ jobs:
           path: |
             git
             git-*
+
       - name: Build Git ${{ matrix.git-version }}
         if: steps.cache-git-build.outputs.cache-hit != 'true'
         run: |
@@ -32,8 +40,10 @@ jobs:
           # List of dependencies from https://git-scm.com/book/en/v2/Getting-Started-Installing-Git
           sudo apt-get install dh-autoreconf libcurl4-gnutls-dev libexpat1-dev gettext libz-dev libssl-dev
           make
+
       - name: Package Git
         run: tar -czf git.tar.gz git git-*
+
       - name: "Upload artifact: git"
         uses: actions/upload-artifact@v2
         with:
@@ -44,31 +54,39 @@ jobs:
   run-tests:
     runs-on: ubuntu-latest
     needs: build-git
+
     strategy:
       matrix:
         git-version: ["v2.24.3", "v2.29.2", "v2.31.1"]
+
     steps:
       - uses: actions/checkout@v2
       - name: "Download artifact: git"
         uses: actions/download-artifact@v2
         with:
           name: git-${{ matrix.git-version }}
+
       - name: "Unpack artifact: git"
         run: tar -xf git.tar.gz
+
       - name: Set up Rust
         uses: actions-rs/toolchain@v1
         with:
           profile: minimal
           toolchain: stable
-      - name: Build benchmarks
-        run: cargo build --benches
+
+      - name: Cache dependencies
+        uses: Swatinem/rust-cache@ce325b60658c1b38465c06cc965b79baf32c1e72
+
+      - name: Compile
+        run: cargo build --benches --tests
+
       - name: Run Rust tests
         run: |
-          export RUST_BACKTRACE=1
           export PATH_TO_GIT="$PWD"/git
           cargo test
+
       - name: Run Rust tests (no default features)
         run: |
-          export RUST_BACKTRACE=1
           export PATH_TO_GIT="$PWD"/git
           cargo test --no-default-features
