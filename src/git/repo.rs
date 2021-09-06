@@ -55,7 +55,7 @@ pub(super) fn wrap_git_error(error: git2::Error) -> eyre::Error {
 /// - `HEAD` is unborn. This means that it doesn't even exist yet. This happens
 /// when a repository has been freshly initialized, but no commits have been
 /// made, for example.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct ResolvedReferenceInfo<'a> {
     /// The OID of the commit that `HEAD` points to. If `HEAD` is unborn, then
     /// this is `None`.
@@ -1137,7 +1137,7 @@ impl<'repo> Commit<'repo> {
 }
 
 /// The target of a reference.
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum ReferenceTarget<'a> {
     /// The reference points directly to an object. This is the case for most
     /// references, such as branches.

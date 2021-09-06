@@ -138,18 +138,16 @@ pub fn check_out_updated_head(
     previous_head_info: &ResolvedReferenceInfo,
     skipped_head_updated_oid: Option<NonZeroOid>,
 ) -> eyre::Result<isize> {
-    enum Target<'a> {
-        Oid(Option<NonZeroOid>),
-        Reference(Cow<'a, OsStr>),
-    }
-
-    let head_target: Target = match previous_head_info {
+    let checkout_target: ResolvedReferenceInfo = match previous_head_info {
         ResolvedReferenceInfo {
             oid: None,
             reference_name: None,
         } => {
             // Head was unborn, so no need to check out a new branch.
-            Target::Oid(skipped_head_updated_oid)
+            ResolvedReferenceInfo {
+                oid: skipped_head_updated_oid,
+                reference_name: None,
+            }
         }
 
         ResolvedReferenceInfo {
@@ -158,7 +156,10 @@ pub fn check_out_updated_head(
         } => {
             // Head was unborn but a branch was checked out. Not sure if this
             // can happen, but if so, just use that branch.
-            Target::Reference(Cow::Borrowed(reference_name))
+            ResolvedReferenceInfo {
+                oid: None,
+                reference_name: Some(Cow::Borrowed(reference_name)),
+            }
         }
 
         ResolvedReferenceInfo {
@@ -169,15 +170,24 @@ pub fn check_out_updated_head(
             match rewritten_oids.get(previous_head_oid) {
                 Some(MaybeZeroOid::NonZero(oid)) => {
                     // This OID was rewritten, so check out the new version of the commit.
-                    Target::Oid(Some(*oid))
+                    ResolvedReferenceInfo {
+                        oid: Some(*oid),
+                        reference_name: None,
+                    }
                 }
                 Some(MaybeZeroOid::Zero) => {
                     // The commit was skipped. Get the new location for `HEAD`.
-                    Target::Oid(skipped_head_updated_oid)
+                    ResolvedReferenceInfo {
+                        oid: skipped_head_updated_oid,
+                        reference_name: None,
+                    }
                 }
                 None => {
                     // This OID was not rewritten, so check it out again.
-                    Target::Oid(Some(*previous_head_oid))
+                    ResolvedReferenceInfo {
+                        oid: Some(*previous_head_oid),
+                        reference_name: None,
+                    }
                 }
             }
         }
@@ -188,7 +198,7 @@ pub fn check_out_updated_head(
         } => {
             // Find the reference at current time to see if it still exists.
             match repo.find_reference(reference_name)? {
-                Some(_) => {
+                Some(reference) => {
                     // The branch moved, so we need to make sure that we are
                     // still checked out to it.
                     //
@@ -198,27 +208,54 @@ pub fn check_out_updated_head(
                     //
                     // * In-memory rebases will detach `HEAD` before proceeding,
                     // so we need to reattach it if necessary.
-                    match previous_head_info.get_branch_name()? {
-                        Some(branch_name) => Target::Reference(Cow::Owned(branch_name)),
-                        None => Target::Reference(Cow::Borrowed(reference_name)),
+                    let oid = repo.resolve_reference(&reference)?.oid;
+                    ResolvedReferenceInfo {
+                        oid,
+                        reference_name: Some(Cow::Borrowed(reference_name)),
                     }
                 }
 
                 None => {
-                    // The branch was deleted because it pointed to
-                    // a skipped commit. Get the new location for
-                    // `HEAD`.
-                    Target::Oid(skipped_head_updated_oid)
+                    // The branch was deleted because it pointed to a skipped
+                    // commit. Get the new location for `HEAD`.
+                    ResolvedReferenceInfo {
+                        oid: skipped_head_updated_oid,
+                        reference_name: None,
+                    }
                 }
             }
         }
     };
 
-    let checkout_target = match head_target {
-        Target::Oid(None) => return Ok(0),
-        Target::Oid(Some(oid)) => Cow::Owned(OsString::from(oid.to_string())),
-        Target::Reference(reference_name) => reference_name,
+    let head_info = repo.get_head_info()?;
+    if head_info == checkout_target {
+        return Ok(0);
+    }
+
+    let checkout_target: Cow<OsStr> = match &checkout_target {
+        ResolvedReferenceInfo {
+            oid: None,
+            reference_name: None,
+        } => return Ok(0),
+
+        ResolvedReferenceInfo {
+            oid: Some(oid),
+            reference_name: None,
+        } => Cow::Owned(OsString::from(oid.to_string())),
+
+        ResolvedReferenceInfo {
+            oid: _,
+            reference_name: Some(reference_name),
+        } => {
+            // FIXME: we could check to see if the OIDs are the same and, if so,
+            // reattach or detach `HEAD` manually without having to call `git checkout`.
+            match checkout_target.get_branch_name()? {
+                Some(branch_name) => Cow::Owned(branch_name),
+                None => Cow::Borrowed(reference_name),
+            }
+        }
     };
+
     let result = git_run_info.run(
         effects,
         Some(event_tx_id),

@@ -965,10 +965,6 @@ fn test_move_branches_after_move_on_disk() -> eyre::Result<()> {
         Executing: git branchless hook-detect-empty-commit f81d55c0d520ff8d02ef9294d95156dcb78a5255
         branchless: processing 3 rewritten commits
         branchless: processing 2 updates: branch bar, branch foo
-        branchless: running command: <git-executable> checkout 566e4341a4a9a930fc2bf7ccdfa168e9f266c34a
-        branchless: processing 1 update: ref HEAD
-        HEAD is now at 566e434 create test5.txt
-        branchless: processing checkout
         Successfully rebased and updated detached HEAD.
         "###);
         insta::assert_snapshot!(stdout, @r###"
@@ -1844,6 +1840,42 @@ fn test_move_on_disk_orphaned_root() -> eyre::Result<()> {
         O 96d1c37a (master) create test2.txt
         |
         @ 70deb1e2 (new-root) create test3.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_move_in_memory_no_extra_checkout() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    git.init_repo()?;
+    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
+
+    git.commit_file("test1", 1)?;
+    git.detach_head()?;
+    git.commit_file("test2", 2)?;
+
+    {
+        let (stdout, _stderr) = git.run(&["move", "--in-memory", "-s", "HEAD", "-d", "HEAD^"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        Attempting rebase in-memory...
+        [1/1] Committed as: 96d1c37a create test2.txt
+        branchless: processing 1 rewritten commit
+        In-memory rebase succeeded.
+        "###);
+    }
+
+    {
+        git.run(&["branch", "foo"])?;
+        let (stdout, _stderr) = git.run(&["move", "--in-memory", "-s", "HEAD", "-d", "HEAD^"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        Attempting rebase in-memory...
+        [1/1] Committed as: 96d1c37a create test2.txt
+        branchless: processing 1 update: branch foo
+        branchless: processing 1 rewritten commit
+        In-memory rebase succeeded.
         "###);
     }
 
