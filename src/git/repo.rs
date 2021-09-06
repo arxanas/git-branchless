@@ -765,9 +765,9 @@ Either create it, or update the main branch setting by running:
         let changed_paths = changed_pathbufs.iter().map(PathBuf::borrow).collect_vec();
 
         let dehydrated_patch_commit =
-            self.dehydrate_commit(patch_commit, changed_paths.as_slice())?;
+            self.dehydrate_commit(patch_commit, changed_paths.as_slice(), true)?;
         let dehydrated_target_commit =
-            self.dehydrate_commit(target_commit, changed_paths.as_slice())?;
+            self.dehydrate_commit(target_commit, changed_paths.as_slice(), false)?;
 
         let rebased_index =
             self.cherrypick_commit(&dehydrated_patch_commit, &dehydrated_target_commit, 0)?;
@@ -836,7 +836,12 @@ Either create it, or update the main branch setting by running:
     }
 
     #[instrument]
-    fn dehydrate_commit(&self, commit: &Commit, changed_paths: &[&Path]) -> eyre::Result<Commit> {
+    fn dehydrate_commit(
+        &self,
+        commit: &Commit,
+        changed_paths: &[&Path],
+        base_on_parent: bool,
+    ) -> eyre::Result<Commit> {
         let tree = commit.get_tree()?;
         let dehydrated_tree_oid = dehydrate_tree(self, &tree, changed_paths)?;
         let dehydrated_tree = self
@@ -856,6 +861,18 @@ Either create it, or update the main branch setting by running:
                 This commit was originally: {:?}",
             commit.get_oid()
         );
+
+        let parents = if base_on_parent {
+            match commit.get_only_parent() {
+                Some(parent) => {
+                    let dehydrated_parent = self.dehydrate_commit(&parent, changed_paths, false)?;
+                    vec![dehydrated_parent]
+                }
+                None => vec![],
+            }
+        } else {
+            vec![]
+        };
         let dehydrated_commit_oid = self
             .create_commit(
                 None,
@@ -863,7 +880,7 @@ Either create it, or update the main branch setting by running:
                 &signature,
                 &message,
                 &dehydrated_tree,
-                commit.get_parents().iter().collect_vec(),
+                parents.iter().collect_vec(),
             )
             .wrap_err_with(|| "Dehydrating commit")?;
         let dehydrated_commit = self.find_commit_or_fail(dehydrated_commit_oid)?;
