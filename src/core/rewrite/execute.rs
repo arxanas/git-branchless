@@ -122,7 +122,7 @@ pub fn move_branches<'a>(
 
 mod in_memory {
     use std::collections::{HashMap, HashSet};
-    use std::ffi::OsString;
+    use std::ffi::{OsStr, OsString};
     use std::fmt::Write;
     use std::path::PathBuf;
 
@@ -531,32 +531,37 @@ mod in_memory {
                 (previous_head_oid, new_head_oid)
             }
         };
+
         let head_target = match (
-            head_info.get_branch_name(),
+            head_info.get_branch_name()?,
             rewritten_oids_map.get(&previous_head_oid),
         ) {
             (Some(head_branch), Some(MaybeZeroOid::NonZero(_))) => {
                 // The `HEAD` branch has been moved above. Check it out now.
-                head_branch.to_string()
+                head_branch
             }
             (Some(_), Some(MaybeZeroOid::Zero)) => {
                 // The `HEAD` branch was deleted, so check out whatever the
                 // caller says is the new appropriate `HEAD` OID.
-                new_head_oid.to_string()
+                OsString::from(new_head_oid.to_string())
             }
             (Some(head_branch), None) => {
                 // The `HEAD` commit was not rewritten, but we detached it
                 // from its branch, so check its branch out again.
-                head_branch.to_string()
+                head_branch
             }
             (None, _) => {
                 // We don't have to worry about a branch, so just use whatever
                 // we've been told is the new `HEAD` OID.
-                new_head_oid.to_string()
+                OsString::from(new_head_oid.to_string())
             }
         };
 
-        let result = git_run_info.run(effects, Some(*event_tx_id), &["checkout", &head_target])?;
+        let result = git_run_info.run(
+            effects,
+            Some(*event_tx_id),
+            &[OsStr::new("checkout"), &head_target],
+        )?;
         if result != 0 {
             return Ok(result);
         }
@@ -566,9 +571,12 @@ mod in_memory {
 }
 
 mod on_disk {
+    use std::borrow::Cow;
+    use std::ffi::OsStr;
     use std::fmt::Write;
 
     use eyre::Context;
+    use os_str_bytes::OsStrBytes;
     use tracing::instrument;
 
     use crate::core::rewrite::plan::RebasePlan;
@@ -660,7 +668,11 @@ mod on_disk {
             let head_name_file_path = rebase_state_dir.join("head-name");
             std::fs::write(
                 &head_name_file_path,
-                head_info.get_branch_name().unwrap_or("detached HEAD"),
+                head_info
+                    .get_branch_name()?
+                    .map(Cow::Owned)
+                    .unwrap_or_else(|| Cow::Borrowed(OsStr::new("detached HEAD")))
+                    .to_raw_bytes(),
             )
             .wrap_err_with(|| format!("Writing head-name to: {:?}", &head_name_file_path))?;
 
