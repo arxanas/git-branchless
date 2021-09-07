@@ -57,7 +57,7 @@ pub(super) fn wrap_git_error(error: git2::Error) -> eyre::Error {
 /// when a repository has been freshly initialized, but no commits have been
 /// made, for example.
 #[derive(Debug)]
-pub struct HeadInfo {
+pub struct ResolvedReferenceInfo {
     /// The OID of the commit that `HEAD` points to. If `HEAD` is unborn, then
     /// this is `None`.
     pub oid: Option<NonZeroOid>,
@@ -67,7 +67,7 @@ pub struct HeadInfo {
     reference_name: Option<String>,
 }
 
-impl HeadInfo {
+impl ResolvedReferenceInfo {
     /// Get the name of the branch, if any. Returns `None` if `HEAD` is
     /// detached.  The `refs/heads/` prefix, if any, is stripped.
     pub fn get_branch_name(&self) -> Option<&str> {
@@ -210,7 +210,7 @@ impl Repo {
 
     /// Get the OID for the repository's `HEAD` reference.
     #[instrument]
-    pub fn get_head_info(&self) -> eyre::Result<HeadInfo> {
+    pub fn get_head_info(&self) -> eyre::Result<ResolvedReferenceInfo> {
         let head_reference = match self.inner.find_reference("HEAD") {
             Err(err) if err.code() == git2::ErrorCode::NotFound => None,
             Err(err) => return Err(wrap_git_error(err)),
@@ -240,7 +240,7 @@ impl Repo {
             }
             None => (MaybeZeroOid::Zero, None),
         };
-        Ok(HeadInfo {
+        Ok(ResolvedReferenceInfo {
             oid: head_oid.into(),
             reference_name,
         })
@@ -257,7 +257,7 @@ impl Repo {
     /// Detach `HEAD` by making it point directly to its current OID, rather
     /// than to a branch. If `HEAD` is already detached, logs a warning.
     #[instrument]
-    pub fn detach_head(&self, head_info: &HeadInfo) -> eyre::Result<()> {
+    pub fn detach_head(&self, head_info: &ResolvedReferenceInfo) -> eyre::Result<()> {
         match head_info.oid {
             Some(oid) => self
                 .inner
