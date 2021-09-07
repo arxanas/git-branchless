@@ -38,9 +38,8 @@ use super::{GitRunInfo, Tree};
 pub(super) fn wrap_git_error(error: git2::Error) -> eyre::Error {
     eyre::eyre!("Git error {:?}: {}", error.code(), error.message())
 }
-/// A snapshot of information about the current `HEAD` of the repository. If
-/// `HEAD` is updated after a `HeadInfo` value is obtained, then it is not
-/// reflected in the value.
+/// A snapshot of information about a certain reference. Updates to the
+/// reference after this value is obtained are not reflected.
 ///
 /// `HEAD` is typically a symbolic reference, which means that it's a reference
 /// that points to another reference. Usually, the other reference is a branch.
@@ -57,26 +56,33 @@ pub(super) fn wrap_git_error(error: git2::Error) -> eyre::Error {
 /// when a repository has been freshly initialized, but no commits have been
 /// made, for example.
 #[derive(Debug)]
-pub struct ResolvedReferenceInfo {
+pub struct ResolvedReferenceInfo<'a> {
     /// The OID of the commit that `HEAD` points to. If `HEAD` is unborn, then
     /// this is `None`.
     pub oid: Option<NonZeroOid>,
 
     /// The name of the reference that `HEAD` points to symbolically. If `HEAD`
     /// is detached, then this is `None`.
-    reference_name: Option<String>,
+    reference_name: Option<Cow<'a, OsStr>>,
 }
 
-impl ResolvedReferenceInfo {
+impl<'a> ResolvedReferenceInfo<'a> {
     /// Get the name of the branch, if any. Returns `None` if `HEAD` is
     /// detached.  The `refs/heads/` prefix, if any, is stripped.
-    pub fn get_branch_name(&self) -> Option<&str> {
-        self.reference_name
-            .as_ref()
-            .map(|name| match name.strip_prefix("refs/heads/") {
-                Some(branch_name) => branch_name,
-                None => name,
-            })
+    pub fn get_branch_name(&self) -> eyre::Result<Option<OsString>> {
+        let reference_name: &OsStr = match &self.reference_name {
+            Some(reference_name) => reference_name,
+            None => return Ok(None),
+        };
+
+        let reference_name_bytes = reference_name.to_raw_bytes();
+        match reference_name_bytes.strip_prefix(b"refs/heads/") {
+            None => Ok(Some(reference_name.to_owned())),
+            Some(branch_name) => {
+                let branch_name = OsStringBytes::from_raw_vec(branch_name.to_vec())?;
+                Ok(Some(branch_name))
+            }
+        }
     }
 }
 
@@ -222,10 +228,11 @@ impl Repo {
                     .peel_to_commit()
                     .wrap_err_with(|| "Resolving `HEAD` reference")?
                     .id();
-                let reference_name = match head_reference.kind() {
+                let reference_name: Option<OsString> = match head_reference.kind() {
                     Some(git2::ReferenceType::Direct) => None,
-                    Some(git2::ReferenceType::Symbolic) => match head_reference.symbolic_target() {
-                        Some(name) => Some(name.to_string()),
+                    Some(git2::ReferenceType::Symbolic) => match head_reference.symbolic_target_bytes() {
+                        Some(name) => {
+                            Some(OsStringBytes::from_raw_vec(name.to_vec())?)},
                         None => eyre::bail!(
                             "`HEAD` reference was resolved to OID: {:?}, but its name could not be decoded: {:?}",
                             head_oid, head_reference.name_bytes()
@@ -242,7 +249,7 @@ impl Repo {
         };
         Ok(ResolvedReferenceInfo {
             oid: head_oid.into(),
-            reference_name,
+            reference_name: reference_name.map(Cow::Owned),
         })
     }
 
