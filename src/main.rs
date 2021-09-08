@@ -129,6 +129,16 @@ enum Opts {
         /// restacked. If not provided, all abandoned commits are restacked.
         commits: Vec<String>,
 
+        /// Only attempt to perform an in-memory rebase. If it fails, do not
+        /// attempt an on-disk rebase.
+        #[structopt(long = "--in-memory", conflicts_with = "force_on_disk")]
+        force_in_memory: bool,
+
+        /// Skip attempting to use an in-memory rebase, and try an
+        /// on-disk rebase directly.
+        #[structopt(long = "--on-disk")]
+        force_on_disk: bool,
+
         /// Debugging option. Print the constraints used to create the rebase
         /// plan before executing it.
         #[structopt(long = "--debug-dump-rebase-constraints")]
@@ -265,12 +275,16 @@ fn main() -> eyre::Result<()> {
 
         Opts::Restack {
             commits,
+            force_in_memory,
+            force_on_disk,
             dump_rebase_constraints,
             dump_rebase_plan,
         } => branchless::commands::restack::restack(
             &effects,
             &git_run_info,
             commits,
+            force_in_memory,
+            force_on_disk,
             dump_rebase_constraints,
             dump_rebase_plan,
         )?,

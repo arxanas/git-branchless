@@ -257,6 +257,8 @@ pub fn restack(
     effects: &Effects,
     git_run_info: &GitRunInfo,
     commits: Vec<String>,
+    force_in_memory: bool,
+    force_on_disk: bool,
     dump_rebase_constraints: bool,
     dump_rebase_plan: bool,
 ) -> eyre::Result<isize> {
@@ -289,9 +291,8 @@ pub fn restack(
         now,
         event_tx_id,
         preserve_timestamps: get_restack_preserve_timestamps(&repo)?,
-        force_in_memory: false,
-        // Use on-disk rebases only until `git move` is stabilized.
-        force_on_disk: true,
+        force_in_memory,
+        force_on_disk,
     };
 
     let result = restack_commits(

@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Changed: Merge-base calculation is now performed using [EdenSCM](https://github.com/facebookexperimental/eden)'s directed acyclic graph crate ([`esl01-dag`](https://crates.io/crates/esl01-dag)), which significantly improves performance on large repositories.
 - Changed: Subprocess command output is now dimmed and printed above a progress meter, to make it easier to visually filter out important `git-branchless` status messages from unimportant `git` machinery output.
 - Changed: `git move` tries to avoid issuing a superfluous `git checkout` operation if you're already at the target commit/branch.
+- Changed: `git restack` uses in-memory rebases by default.
 - Fixed: `git restack` warns if a sub-command fails (e.g. if `git rebase` fails with merge conflicts that need to be resolved).
 - Fixed (#57): `git undo` shows an informative link when dealing with empty events, rather than warning about a bug. Thanks to @waych for reporting.
 - Fixed: Flickering in `git undo`'s rendering has been reduced.
