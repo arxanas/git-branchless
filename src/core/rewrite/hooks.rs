@@ -59,12 +59,9 @@ fn write_rewritten_list(
     for (old_commit_oid, new_commit_oid) in rewritten_oids {
         writeln!(file, "{} {}", old_commit_oid, new_commit_oid)?;
     }
-    tempfile.persist(rewritten_list_path).wrap_err_with(|| {
-        format!(
-            "Moving new rewritten-list into place at: {:?}",
-            rewritten_list_path
-        )
-    })?;
+    tempfile
+        .persist(rewritten_list_path)
+        .wrap_err("Moving new rewritten-list into place")?;
     Ok(())
 }
 
@@ -353,7 +350,7 @@ pub fn hook_register_extra_post_rewrite_hook() -> eyre::Result<()> {
     let file_name = repo
         .get_rebase_state_dir_path()
         .join(EXTRA_POST_REWRITE_FILE_NAME);
-    File::create(file_name).wrap_err_with(|| "Registering extra post-rewrite hook")?;
+    File::create(file_name).wrap_err("Registering extra post-rewrite hook")?;
     Ok(())
 }
 

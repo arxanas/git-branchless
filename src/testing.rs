@@ -14,6 +14,7 @@ use crate::util::get_sh;
 
 use color_eyre::Help;
 use eyre::{eyre, Context};
+use itertools::Itertools;
 use lazy_static::lazy_static;
 use regex::{Captures, Regex};
 use tempfile::TempDir;
@@ -170,11 +171,10 @@ impl Git {
         .expect("joining paths")
     }
 
-    /// Run a Git command.
     #[instrument]
-    pub fn run_with_options<S: AsRef<str> + std::fmt::Debug>(
+    fn run_with_options_inner(
         &self,
-        args: &[S],
+        args: &[&str],
         options: &GitRunOptions,
     ) -> eyre::Result<(String, String)> {
         let GitRunOptions {
@@ -190,7 +190,7 @@ impl Git {
         let args: Vec<&str> = {
             let repo_path = self.repo_path.to_str().expect("Could not decode repo path");
             let mut new_args: Vec<&str> = vec!["-C", repo_path];
-            new_args.extend(args.iter().map(|arg| arg.as_ref()));
+            new_args.extend(args);
             new_args
         };
 
@@ -271,6 +271,18 @@ impl Git {
         let stderr = String::from_utf8(result.stderr)?;
         let stderr = self.preprocess_output(stderr)?;
         Ok((stdout, stderr))
+    }
+
+    /// Run a Git command.
+    pub fn run_with_options<S: AsRef<str> + std::fmt::Debug>(
+        &self,
+        args: &[S],
+        options: &GitRunOptions,
+    ) -> eyre::Result<(String, String)> {
+        self.run_with_options_inner(
+            args.iter().map(|arg| arg.as_ref()).collect_vec().as_slice(),
+            options,
+        )
     }
 
     /// Run a Git command.

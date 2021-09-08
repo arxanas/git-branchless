@@ -273,8 +273,8 @@ impl<'repo, M: MergeBaseDb + 'repo> RebasePlanBuilder<'repo, M> {
         }
     }
 
-    fn make_label_name(&self, state: &mut BuildState, preferred_name: impl Into<String>) -> String {
-        let mut preferred_name = preferred_name.into();
+    #[instrument]
+    fn make_label_name_inner(&self, state: &mut BuildState, mut preferred_name: String) -> String {
         if !state.used_labels.contains(&preferred_name) {
             state.used_labels.insert(preferred_name.clone());
             preferred_name
@@ -282,6 +282,10 @@ impl<'repo, M: MergeBaseDb + 'repo> RebasePlanBuilder<'repo, M> {
             preferred_name.push('\'');
             self.make_label_name(state, preferred_name)
         }
+    }
+
+    fn make_label_name(&self, state: &mut BuildState, preferred_name: impl Into<String>) -> String {
+        self.make_label_name_inner(state, preferred_name.into())
     }
 
     fn make_rebase_plan_for_current_commit(

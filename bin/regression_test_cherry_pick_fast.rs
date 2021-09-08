@@ -8,7 +8,7 @@ use eyre::Context;
 
 fn main() -> eyre::Result<()> {
     let path_to_repo = std::env::var("PATH_TO_REPO")
-        .wrap_err_with(|| "Could not read PATH_TO_REPO environment variable")?;
+        .wrap_err("Could not read PATH_TO_REPO environment variable")?;
     let repo = Repo::from_dir(&PathBuf::from(path_to_repo))?;
 
     let mut next_commit = repo.find_commit_or_fail(repo.get_head_info()?.oid.unwrap())?;

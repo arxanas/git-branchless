@@ -723,7 +723,7 @@ fn undo_events(
                             target_oid.as_os_str(),
                         ],
                     )
-                    .wrap_err_with(|| "Updating to previous HEAD location")?;
+                    .wrap_err("Updating to previous HEAD location")?;
             }
             Event::RefUpdateEvent {
                 timestamp: _,
@@ -744,9 +744,7 @@ fn undo_events(
                 message: _,
             } => match repo.find_reference(&ref_name)? {
                 Some(mut reference) => {
-                    reference
-                        .delete()
-                        .wrap_err_with(|| "Applying `RefUpdateEvent`")?;
+                    reference.delete().wrap_err("Applying `RefUpdateEvent`")?;
                 }
                 None => {
                     writeln!(

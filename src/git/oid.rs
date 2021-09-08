@@ -131,8 +131,7 @@ impl FromStr for MaybeZeroOid {
         match s.parse() {
             Ok(oid) if oid == git2::Oid::zero() => Ok(MaybeZeroOid::Zero),
             Ok(oid) => Ok(MaybeZeroOid::NonZero(NonZeroOid { inner: oid })),
-            Err(err) => Err(wrap_git_error(err))
-                .wrap_err_with(|| format!("Could not parse OID from string: {:?}", s)),
+            Err(err) => Err(wrap_git_error(err)).wrap_err("Could not parse OID from string"),
         }
     }
 }

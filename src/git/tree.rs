@@ -219,7 +219,7 @@ pub fn hydrate_tree(
     let mut builder = repo
         .inner
         .treebuilder(tree)
-        .wrap_err_with(|| "Instantiating tree builder")?;
+        .wrap_err("Instantiating tree builder")?;
     for (file_name, file_value) in file_entries {
         match file_value {
             Some((oid, file_mode)) => {
@@ -269,7 +269,7 @@ pub fn hydrate_tree(
         }
     }
 
-    let tree_oid = builder.write().wrap_err_with(|| "Building tree")?;
+    let tree_oid = builder.write().wrap_err("Building tree")?;
     Ok(make_non_zero_oid(tree_oid))
 }
 
