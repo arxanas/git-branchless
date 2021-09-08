@@ -474,26 +474,31 @@ Either create it, or update the main branch setting by running:
     }
 
     /// Get the file paths which were added, removed, or changed by the given
-    /// commit.  Returns `None` if it's not valid to determine the paths touched
-    /// by this commit (i.e. if it has zero or more than one parent).
+    /// commit.
+    ///
+    /// If the commit has no parents, returns all of the file paths in that
+    /// commit's tree.
+    ///
+    /// If the commit has more than one parent, returns `None`.
     #[instrument]
     pub fn get_paths_touched_by_commit(
         &self,
         commit: &Commit,
     ) -> eyre::Result<Option<HashSet<PathBuf>>> {
-        let only_parent = match commit.get_only_parent() {
-            None => return Ok(None),
-            Some(only_parent) => only_parent,
+        let parent_commits = commit.get_parents();
+        let parent_tree = match parent_commits.as_slice() {
+            [] => None,
+            [only_parent] => Some(only_parent.get_tree()?.inner),
+            [..] => return Ok(None),
         };
 
-        let parent_tree = only_parent.get_tree()?.inner;
         let current_tree = commit.get_tree()?.inner;
         let mut acc = Vec::new();
         get_changed_paths_between_trees(
             self,
             &mut acc,
             &PathBuf::new(),
-            Some(&parent_tree),
+            parent_tree.as_ref(),
             Some(&current_tree),
         )?;
         Ok(Some(acc.into_iter().collect()))

@@ -1743,3 +1743,112 @@ fn test_move_merge_commit() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_move_in_memory_orphaned_root() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+
+    git.init_repo()?;
+    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
+
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+
+    git.detach_head()?;
+    git.run(&["checkout", "--orphan", "new-root"])?;
+    git.run(&["commit", "-m", "new root"])?;
+    git.commit_file("test3", 3)?;
+
+    {
+        let (stdout, stderr) = git.run(&["move", "--in-memory", "-d", "master"])?;
+        insta::assert_snapshot!(stderr, @r###"
+        Previous HEAD position was fc09f3d create test3.txt
+        Switched to branch 'new-root'
+        branchless: processing checkout
+        "###);
+        insta::assert_snapshot!(stdout, @r###"
+        Attempting rebase in-memory...
+        [1/2] Skipped now-empty commit: 270b681e new root
+        [2/2] Committed as: 70deb1e2 create test3.txt
+        branchless: processing 1 update: branch new-root
+        branchless: processing 2 rewritten commits
+        branchless: running command: <git-executable> checkout new-root
+        In-memory rebase succeeded.
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 96d1c37a (master) create test2.txt
+        |
+        @ 70deb1e2 (new-root) create test3.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_move_on_disk_orphaned_root() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+
+    git.init_repo()?;
+    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
+
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+
+    git.detach_head()?;
+    git.run(&["checkout", "--orphan", "new-root"])?;
+    git.run(&["commit", "-m", "new root"])?;
+    git.commit_file("test3", 3)?;
+
+    {
+        let (stdout, stderr) = git.run(&["move", "--on-disk", "-d", "master"])?;
+        insta::assert_snapshot!(stderr, @r###"
+        Executing: git branchless hook-register-extra-post-rewrite-hook
+        branchless: processing 1 update: ref HEAD
+        branchless: processing 1 update: ref HEAD
+        branchless: processed commit: 270b681e new root
+        Executing: git branchless hook-detect-empty-commit da90168b4835f97f1a10bcc12833140056df9157
+        branchless: processing 1 update: ref HEAD
+        branchless: processed commit: 70deb1e2 create test3.txt
+        Executing: git branchless hook-detect-empty-commit fc09f3d9f0b7370dc38e761e3730a856dc5025c2
+        branchless: processing 3 rewritten commits
+        branchless: processing 1 update: branch new-root
+        branchless: running command: <git-executable> checkout refs/heads/new-root
+        branchless: processing 1 update: ref HEAD
+        HEAD is now at 70deb1e create test3.txt
+        branchless: processing checkout
+        Successfully rebased and updated new-root.
+        "###);
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> diff --quiet
+        Calling Git for on-disk rebase...
+        branchless: running command: <git-executable> rebase --continue
+        Skipped now-empty commit: 270b681e new root
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 96d1c37a (master) create test2.txt
+        |
+        @ 70deb1e2 (new-root) create test3.txt
+        "###);
+    }
+
+    Ok(())
+}
