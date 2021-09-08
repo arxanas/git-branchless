@@ -748,12 +748,9 @@ mod on_disk {
 
             // Confusingly, there is also a file at
             // `.git/rebase-merge/orig-head` (different from `.git/ORIG_HEAD`),
-            // which stores only the OID of the original `HEAD` commit.
-            //
-            // It's used by Git to rebase the originally-checked out branch.
-            // However, we don't use it for that purpose; instead, we use it to
-            // decide what commit we need to check out after the rebase
-            // operation has completed successfully.
+            // which stores only the OID of the original `HEAD` commit.  It's
+            // used by Git to rebase the originally-checked out branch, or to
+            // check out the old branch if the rebase is aborted.
             let rebase_orig_head_oid: MaybeZeroOid = head_info.oid.into();
             let rebase_orig_head_file_path = rebase_state_dir.join("orig-head");
             std::fs::write(
