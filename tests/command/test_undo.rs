@@ -23,10 +23,18 @@ fn run_select_past_event(
 ) -> eyre::Result<Option<EventCursor>> {
     let glyphs = Glyphs::text();
     let effects = Effects::new_suppress_for_test(glyphs);
+    let references_snapshot = repo.get_references_snapshot()?;
     let conn = repo.get_db_conn()?;
     let event_log_db: EventLogDb = EventLogDb::new(&conn)?;
     let mut event_replayer = EventReplayer::from_event_log_db(&effects, &repo, &event_log_db)?;
-    let dag = Dag::open(&effects, repo, &event_replayer)?;
+    let event_cursor = event_replayer.make_default_cursor();
+    let dag = Dag::open_and_sync(
+        &effects,
+        repo,
+        &event_replayer,
+        event_cursor,
+        &references_snapshot,
+    )?;
     let siv = CursiveRunnable::new::<Infallible, _>(move || {
         Ok(CursiveTestingBackend::init(events.clone()))
     });

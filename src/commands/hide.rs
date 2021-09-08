@@ -38,29 +38,15 @@ fn recurse_on_commits_helper<
 }
 
 fn recurse_on_commits<'repo, F: Fn(&Node) -> bool>(
-    effects: &Effects,
-    repo: &'repo Repo,
-    dag: &mut Dag,
-    event_replayer: &EventReplayer,
+    graph: &CommitGraph<'repo>,
     commits: Vec<Commit<'repo>>,
     condition: F,
 ) -> eyre::Result<Vec<Commit<'repo>>> {
-    let references_snapshot = repo.get_references_snapshot(dag)?;
-    let graph = make_graph(
-        effects,
-        repo,
-        dag,
-        event_replayer,
-        event_replayer.make_default_cursor(),
-        &references_snapshot,
-        false,
-    )?;
-
     // Maintain ordering, since it's likely to be meaningful.
     let mut result: Vec<Commit<'repo>> = Vec::new();
     let mut seen_oids = HashSet::new();
     for commit in commits {
-        recurse_on_commits_helper(&graph, &condition, &commit, &mut |child_node| {
+        recurse_on_commits_helper(graph, &condition, &commit, &mut |child_node| {
             let child_commit = &child_node.commit;
             if !seen_oids.contains(&child_commit.get_oid()) {
                 seen_oids.insert(child_commit.get_oid());
@@ -77,10 +63,18 @@ pub fn hide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::Re
     let now = SystemTime::now();
     let glyphs = Glyphs::detect();
     let repo = Repo::from_current_dir()?;
+    let references_snapshot = repo.get_references_snapshot()?;
     let conn = repo.get_db_conn()?;
     let mut event_log_db = EventLogDb::new(&conn)?;
     let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
-    let mut dag = Dag::open(effects, &repo, &event_replayer)?;
+    let event_cursor = event_replayer.make_default_cursor();
+    let dag = Dag::open_and_sync(
+        effects,
+        &repo,
+        &event_replayer,
+        event_cursor,
+        &references_snapshot,
+    )?;
 
     let commits = resolve_commits(&repo, hashes)?;
     let commits = match commits {
@@ -90,10 +84,10 @@ pub fn hide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::Re
             return Ok(1);
         }
     };
+
+    let graph = make_graph(effects, &repo, &dag, &event_replayer, event_cursor, false)?;
     let commits = if recursive {
-        recurse_on_commits(effects, &repo, &mut dag, &event_replayer, commits, |node| {
-            !node.is_obsolete
-        })?
+        recurse_on_commits(&graph, commits, |node| !node.is_obsolete)?
     } else {
         commits
     };
@@ -144,10 +138,18 @@ pub fn unhide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::
     let now = SystemTime::now();
     let glyphs = Glyphs::detect();
     let repo = Repo::from_current_dir()?;
+    let references_snapshot = repo.get_references_snapshot()?;
     let conn = repo.get_db_conn()?;
     let mut event_log_db = EventLogDb::new(&conn)?;
     let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
-    let mut dag = Dag::open(effects, &repo, &event_replayer)?;
+    let event_cursor = event_replayer.make_default_cursor();
+    let dag = Dag::open_and_sync(
+        effects,
+        &repo,
+        &event_replayer,
+        event_cursor,
+        &references_snapshot,
+    )?;
 
     let commits = resolve_commits(&repo, hashes)?;
     let commits = match commits {
@@ -157,10 +159,10 @@ pub fn unhide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::
             return Ok(1);
         }
     };
+
+    let graph = make_graph(effects, &repo, &dag, &event_replayer, event_cursor, false)?;
     let commits = if recursive {
-        recurse_on_commits(effects, &repo, &mut dag, &event_replayer, commits, |node| {
-            node.is_obsolete
-        })?
+        recurse_on_commits(&graph, commits, |node| node.is_obsolete)?
     } else {
         commits
     };

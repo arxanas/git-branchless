@@ -83,19 +83,17 @@ fn restack_commits(
     build_options: &BuildRebasePlanOptions,
     execute_options: &ExecuteRebasePlanOptions,
 ) -> eyre::Result<isize> {
+    let references_snapshot = repo.get_references_snapshot()?;
     let event_replayer = EventReplayer::from_event_log_db(effects, repo, event_log_db)?;
     let event_cursor = event_replayer.make_default_cursor();
-    let mut dag = Dag::open(effects, repo, &event_replayer)?;
-    let references_snapshot = repo.get_references_snapshot(&mut dag)?;
-    let graph = make_graph(
+    let dag = Dag::open_and_sync(
         effects,
         repo,
-        &dag,
         &event_replayer,
         event_cursor,
         &references_snapshot,
-        true,
     )?;
+    let graph = make_graph(effects, repo, &dag, &event_replayer, event_cursor, true)?;
 
     struct RebaseInfo {
         dest_oid: NonZeroOid,
@@ -105,17 +103,20 @@ fn restack_commits(
         Some(commits) => commits.into_iter().collect(),
         None => graph.keys().copied().collect(),
     };
-    let rebases: Vec<RebaseInfo> = commits
-        .into_iter()
-        .filter_map(|original_oid| {
-            find_abandoned_children(&graph, &event_replayer, event_cursor, original_oid).map(
-                |(rewritten_oid, abandoned_child_oids)| RebaseInfo {
+    let rebases: Vec<RebaseInfo> = {
+        let mut result = Vec::new();
+        for original_oid in commits {
+            let abandoned_children =
+                find_abandoned_children(&dag, &event_replayer, event_cursor, original_oid)?;
+            if let Some((rewritten_oid, abandoned_child_oids)) = abandoned_children {
+                result.push(RebaseInfo {
                     dest_oid: rewritten_oid,
                     abandoned_child_oids,
-                },
-            )
-        })
-        .collect();
+                });
+            }
+        }
+        result
+    };
 
     let rebase_plan = {
         let mut builder =
@@ -177,19 +178,18 @@ fn restack_branches(
     event_log_db: &EventLogDb,
     options: &ExecuteRebasePlanOptions,
 ) -> eyre::Result<isize> {
+    let references_snapshot = repo.get_references_snapshot()?;
     let event_replayer = EventReplayer::from_event_log_db(effects, repo, event_log_db)?;
-    let mut dag = Dag::open(effects, repo, &event_replayer)?;
-
-    let references_snapshot = repo.get_references_snapshot(&mut dag)?;
-    let graph = make_graph(
+    let event_cursor = event_replayer.make_default_cursor();
+    let dag = Dag::open_and_sync(
         effects,
         repo,
-        &dag,
         &event_replayer,
-        event_replayer.make_default_cursor(),
+        event_cursor,
         &references_snapshot,
-        true,
     )?;
+
+    let graph = make_graph(effects, repo, &dag, &event_replayer, event_cursor, true)?;
 
     let mut rewritten_oids = HashMap::new();
     for branch in repo.get_all_local_branches()? {
@@ -208,7 +208,6 @@ fn restack_branches(
         }
 
         if let Some(new_oid) = find_rewrite_target(
-            &graph,
             &event_replayer,
             event_replayer.make_default_cursor(),
             branch_target,

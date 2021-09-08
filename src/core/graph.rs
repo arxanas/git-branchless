@@ -2,14 +2,16 @@
 //!
 //! This is the basic data structure that most of branchless operates on.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
+use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::ops::Deref;
 
-use tracing::{instrument, warn};
+use eden_dag::DagAlgorithm;
+use tracing::instrument;
 
-use crate::core::eventlog::{CommitActivityStatus, Event, EventCursor, EventReplayer};
-use crate::git::{Commit, Dag, NonZeroOid, Repo, RepoReferencesSnapshot};
+use crate::core::eventlog::{Event, EventCursor, EventReplayer};
+use crate::git::{Commit, CommitSet, Dag, NonZeroOid, Repo};
 use crate::tui::{Effects, OperationType};
 
 /// Node contained in the smartlog commit graph.
@@ -83,98 +85,58 @@ impl<'repo> Deref for CommitGraph<'repo> {
 /// between it and the main branch, those intermediate commits should be shown
 /// (or else you won't get a good idea of the line of development that happened
 /// for this commit since the main branch).
-#[instrument(skip(commit_oids))]
-fn walk_from_commits<'repo>(
+#[instrument]
+fn find_visible_commits<'repo>(
     effects: &Effects,
     repo: &'repo Repo,
     dag: &Dag,
     event_replayer: &EventReplayer,
     event_cursor: EventCursor,
-    main_branch_oid: NonZeroOid,
-    commit_oids: &HashSet<NonZeroOid>,
+    visible_heads: &CommitSet,
 ) -> eyre::Result<CommitGraph<'repo>> {
-    let (effects, _progress) = effects.start_operation(OperationType::WalkCommits);
+    let public_commits = dag.query().ancestors(dag.main_branch_commit.clone())?;
 
-    let mut graph: HashMap<NonZeroOid, Node> = Default::default();
+    let mut graph: HashMap<NonZeroOid, Node> = {
+        let mut result = HashMap::new();
+        for vertex in visible_heads.iter()? {
+            let vertex = vertex?;
+            let path_to_main_branch =
+                dag.find_path_to_main_branch(effects, CommitSet::from(vertex.clone()))?;
+            let path_to_main_branch = match path_to_main_branch {
+                Some(path_to_main_branch) => path_to_main_branch,
+                None => CommitSet::from(vertex.clone()),
+            };
 
-    for commit_oid in commit_oids {
-        let commit = repo.find_commit(*commit_oid)?;
-        let current_commit = match commit {
-            Some(commit) => commit,
+            for vertex in path_to_main_branch.iter_rev()? {
+                let vertex = vertex?;
+                let oid = NonZeroOid::try_from(vertex.clone())?;
 
-            // Commit may have been garbage-collected.
-            None => continue,
-        };
-
-        let merge_base_oid =
-            dag.get_one_merge_base_oid(&effects, repo, current_commit.get_oid(), main_branch_oid)?;
-        let path_to_merge_base = match merge_base_oid {
-            // Occasionally we may find a commit that has no merge-base with the
-            // main branch. For example: a rewritten initial commit. This is
-            // somewhat pathological. We'll just add it to the graph as a
-            // standalone component and hope it works out.
-            None => vec![current_commit],
-            Some(merge_base_oid) => {
-                let path_to_merge_base = dag.find_path_to_merge_base(
-                    &effects,
-                    repo,
-                    current_commit.get_oid(),
-                    merge_base_oid,
-                )?;
-                match path_to_merge_base {
+                let commit = match repo.find_commit(oid)? {
+                    Some(commit) => commit,
                     None => {
-                        warn!(
-                            current_commit_oid = ?current_commit.get_oid(),
-                            "No path to merge-base for commit",
-                        );
+                        // This commit may have been garbage collected.
                         continue;
                     }
-                    Some(path_to_merge_base) => path_to_merge_base,
-                }
-            }
-        };
+                };
+                let event = event_replayer
+                    .get_cursor_commit_latest_event(event_cursor, commit.get_oid())
+                    .cloned();
 
-        for current_commit in path_to_merge_base.iter() {
-            if graph.contains_key(&current_commit.get_oid()) {
-                // This commit (and all of its parents!) should be in the graph
-                // already, so no need to continue this iteration.
-                break;
-            }
-
-            let activity_status = event_replayer
-                .get_cursor_commit_activity_status(event_cursor, current_commit.get_oid());
-            let is_obsolete = match activity_status {
-                CommitActivityStatus::Obsolete => true,
-                CommitActivityStatus::Active | CommitActivityStatus::Inactive => false,
-            };
-
-            let is_main = match merge_base_oid {
-                Some(merge_base_oid) => (current_commit.get_oid() == merge_base_oid),
-                None => false,
-            };
-
-            let event = event_replayer
-                .get_cursor_commit_latest_event(event_cursor, current_commit.get_oid())
-                .cloned();
-            graph.insert(
-                current_commit.get_oid(),
-                Node {
-                    commit: current_commit.clone(),
-                    parent: None,
-                    children: Vec::new(),
-                    is_main,
-                    is_obsolete,
-                    event,
-                },
-            );
-        }
-
-        if let Some(merge_base_oid) = merge_base_oid {
-            if !graph.contains_key(&merge_base_oid) {
-                warn!(?merge_base_oid, "Could not find merge base OID");
+                result.insert(
+                    commit.get_oid(),
+                    Node {
+                        commit,
+                        parent: None,         // populated below
+                        children: Vec::new(), // populated below
+                        is_main: public_commits.contains(&vertex)?,
+                        is_obsolete: dag.obsolete_commits.contains(&vertex)?,
+                        event,
+                    },
+                );
             }
         }
-    }
+        result
+    };
 
     // Find immediate parent-child links.
     let links: Vec<(NonZeroOid, NonZeroOid)> = graph
@@ -209,131 +171,6 @@ fn sort_children(graph: &mut CommitGraph) {
     }
 }
 
-fn is_commit_visible(
-    cache: &mut HashMap<NonZeroOid, bool>,
-    graph: &CommitGraph,
-    unhideable_oids: &HashSet<NonZeroOid>,
-    oid: &NonZeroOid,
-) -> bool {
-    if let Some(result) = cache.get(oid) {
-        return *result;
-    }
-
-    if unhideable_oids.contains(oid) {
-        return true;
-    }
-
-    let result = {
-        let node = &graph[oid];
-        match node {
-            Node {
-                commit: _,
-                parent: _,
-                children: _,
-                is_main: false,
-                is_obsolete: false,
-                event: _,
-            } => {
-                // This is an active commit.
-                true
-            }
-
-            Node {
-                commit: _,
-                parent: _,
-                children,
-                is_main: false,
-                is_obsolete: true,
-                event: _,
-            } => {
-                // This is an obsolete commit, so show it only if it has a visible descendant.
-                children
-                    .iter()
-                    .any(|child_oid| is_commit_visible(cache, graph, unhideable_oids, child_oid))
-            }
-
-            Node {
-                commit: _,
-                parent: _,
-                children,
-                is_main: true,
-                is_obsolete: false,
-                event: _,
-            } => {
-                // Main branch commits are not interesting by default. Only show
-                // it if it has an active child. But don't consider any visible
-                // children which are also main branch commits.
-                children
-                    .iter()
-                    // Don't consider the next commit in the main branch as a
-                    // descendant for visibility-calculation purposes.
-                    .filter(|child_oid| !graph[child_oid].is_main)
-                    .any(|child_oid| is_commit_visible(cache, graph, unhideable_oids, child_oid))
-            }
-
-            Node {
-                commit: _,
-                parent: _,
-                children: _,
-                is_main: true,
-                is_obsolete: true,
-                event: _,
-            } => {
-                // An obsolete main branch commit is an anomaly, so surface it
-                // for the user.
-                true
-            }
-        }
-    };
-
-    cache.insert(*oid, result);
-    result
-}
-
-/// Remove hidden commits from the graph.
-fn do_remove_commits(graph: &mut CommitGraph, references_snapshot: &RepoReferencesSnapshot) {
-    // OIDs which are pointed to by HEAD or a branch should not be hidden.
-    // Therefore, we can't hide them *or* their ancestors.
-    let mut unhideable_oids: HashSet<NonZeroOid> = references_snapshot
-        .branch_oid_to_names
-        .keys()
-        .copied()
-        .collect();
-    if let Some(head_oid) = references_snapshot.head_oid {
-        unhideable_oids.insert(head_oid);
-    }
-
-    let mut cache = HashMap::new();
-    let all_hidden_oids: HashSet<NonZeroOid> = graph
-        .keys()
-        .filter(|oid| !is_commit_visible(&mut cache, graph, &unhideable_oids, oid))
-        .cloned()
-        .collect();
-
-    // Actually update the graph and delete any parent-child links, as
-    // appropriate.
-    for oid in all_hidden_oids {
-        let parent_oid = graph[&oid].parent;
-        graph.nodes.remove(&oid);
-        match parent_oid {
-            Some(parent_oid) if graph.contains_key(&parent_oid) => {
-                let children = &mut graph.nodes.get_mut(&parent_oid).unwrap().children;
-                *children = children
-                    .iter()
-                    .filter_map(|child_oid| {
-                        if *child_oid != oid {
-                            Some(*child_oid)
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
-            }
-            _ => {}
-        }
-    }
-}
-
 /// Construct the smartlog graph for the repo.
 ///
 /// Args:
@@ -355,32 +192,40 @@ pub fn make_graph<'repo>(
     dag: &Dag,
     event_replayer: &EventReplayer,
     event_cursor: EventCursor,
-    references_snapshot: &RepoReferencesSnapshot,
     remove_commits: bool,
 ) -> eyre::Result<CommitGraph<'repo>> {
     let (effects, _progress) = effects.start_operation(OperationType::MakeGraph);
 
-    let mut commit_oids: HashSet<NonZeroOid> = event_replayer
-        .get_cursor_oids(event_cursor)
-        .into_iter()
-        .collect();
-    commit_oids.extend(references_snapshot.branch_oid_to_names.keys());
-    if let Some(head_oid) = references_snapshot.head_oid {
-        commit_oids.insert(head_oid);
-    }
-    let mut graph = walk_from_commits(
-        &effects,
-        repo,
-        dag,
-        event_replayer,
-        event_cursor,
-        references_snapshot.main_branch_oid,
-        &commit_oids,
-    )?;
+    let mut graph = {
+        let (effects, _progress) = effects.start_operation(OperationType::WalkCommits);
+
+        let visible_heads = if remove_commits {
+            dag.observed_commits.difference(&dag.obsolete_commits)
+        } else {
+            dag.observed_commits.clone()
+        };
+        let visible_heads = visible_heads.union(&dag.main_branch_commit);
+        let visible_heads = dag.query().heads(visible_heads)?;
+
+        let anomalous_main_branch_commits = dag
+            .query()
+            .ancestors(dag.main_branch_commit.clone())?
+            .intersection(&dag.obsolete_commits);
+        let visible_heads = visible_heads
+            .union(&dag.head_commit)
+            .union(&dag.branch_commits)
+            .union(&anomalous_main_branch_commits);
+
+        find_visible_commits(
+            &effects,
+            repo,
+            dag,
+            event_replayer,
+            event_cursor,
+            &visible_heads,
+        )?
+    };
     sort_children(&mut graph);
-    if remove_commits {
-        do_remove_commits(&mut graph, references_snapshot);
-    }
     Ok(graph)
 }
 

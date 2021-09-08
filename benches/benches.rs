@@ -29,6 +29,7 @@ fn nth_parent<'repo>(commit: Commit<'repo>, n: usize) -> Commit<'repo> {
 fn bench_rebase_plan(c: &mut Criterion) {
     c.bench_function("RebasePlanBuilder::build", |b| {
         let repo = get_repo();
+        let references_snapshot = repo.get_references_snapshot().unwrap();
         let head_oid = repo.get_head_info().unwrap().oid.unwrap();
         let later_commit = nth_parent(repo.find_commit_or_fail(head_oid).unwrap(), 20);
         let earlier_commit = nth_parent(later_commit.clone(), 1000);
@@ -40,19 +41,16 @@ fn bench_rebase_plan(c: &mut Criterion) {
         let event_replayer =
             EventReplayer::from_event_log_db(&effects, &repo, &event_log_db).unwrap();
         let event_cursor = event_replayer.make_default_cursor();
-        let mut dag = Dag::open(&effects, &repo, &event_replayer).unwrap();
-
-        let references_snapshot = repo.get_references_snapshot(&mut dag).unwrap();
-        let graph = make_graph(
+        let dag = Dag::open_and_sync(
             &effects,
             &repo,
-            &dag,
             &event_replayer,
             event_cursor,
             &references_snapshot,
-            true,
         )
         .unwrap();
+
+        let graph = make_graph(&effects, &repo, &dag, &event_replayer, event_cursor, true).unwrap();
         println!("Built commit graph ({:?} elements)", graph.len());
 
         let mut builder = RebasePlanBuilder::new(&repo, &graph, &dag, head_oid);
@@ -83,6 +81,7 @@ fn bench_rebase_plan(c: &mut Criterion) {
 fn bench_find_path_to_merge_base(c: &mut Criterion) {
     c.bench_function("Dag::find_path_to_merge_base", |b| {
         let repo = get_repo();
+        let references_snapshot = repo.get_references_snapshot().unwrap();
         let head_oid = repo.get_head_info().unwrap().oid.unwrap();
         let later_commit = nth_parent(repo.find_commit_or_fail(head_oid).unwrap(), 20);
         let earlier_commit = nth_parent(later_commit.clone(), 1000);
@@ -96,7 +95,15 @@ fn bench_find_path_to_merge_base(c: &mut Criterion) {
         let event_log_db = EventLogDb::new(&conn).unwrap();
         let event_replayer =
             EventReplayer::from_event_log_db(&effects, &repo, &event_log_db).unwrap();
-        let dag = Dag::open(&effects, &repo, &event_replayer).unwrap();
+        let event_cursor = event_replayer.make_default_cursor();
+        let dag = Dag::open_and_sync(
+            &effects,
+            &repo,
+            &event_replayer,
+            event_cursor,
+            &references_snapshot,
+        )
+        .unwrap();
 
         b.iter(|| {
             dag.find_path_to_merge_base(
