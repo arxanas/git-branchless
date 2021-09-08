@@ -28,7 +28,6 @@ use tracing::{instrument, warn};
 use crate::core::config::get_main_branch_name;
 use crate::core::metadata::{render_commit_metadata, CommitMessageProvider, CommitOidProvider};
 use crate::git::config::Config;
-use crate::git::dag::Dag;
 use crate::git::oid::{make_non_zero_oid, MaybeZeroOid, NonZeroOid};
 use crate::git::tree::{dehydrate_tree, get_changed_paths_between_trees, hydrate_tree};
 use crate::tui::{Effects, OperationType};
@@ -367,15 +366,11 @@ Either create it, or update the main branch setting by running:
         Ok(result)
     }
 
-    /// Get the positions of references in the repository, and also update the
-    /// `Dag` with any new commits.
-    pub fn get_references_snapshot(&self, dag: &mut Dag) -> eyre::Result<RepoReferencesSnapshot> {
+    /// Get the positions of references in the repository.
+    pub fn get_references_snapshot(&self) -> eyre::Result<RepoReferencesSnapshot> {
         let head_oid = self.get_head_info()?.oid;
         let main_branch_oid = self.get_main_branch_oid()?;
         let branch_oid_to_names = self.get_branch_oid_to_names()?;
-
-        // TODO: update the `Dag` with any commits it hasn't seen yet.
-        let _ = dag;
 
         Ok(RepoReferencesSnapshot {
             head_oid,

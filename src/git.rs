@@ -8,7 +8,7 @@ mod run;
 mod tree;
 
 pub use config::{Config, ConfigValue};
-pub use dag::Dag;
+pub use dag::{CommitSet, Dag};
 pub use oid::{MaybeZeroOid, NonZeroOid};
 pub use repo::{
     Branch, CategorizedReferenceName, CherryPickFastError, CherryPickFastOptions, Commit, Diff,

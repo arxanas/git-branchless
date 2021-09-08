@@ -8,7 +8,6 @@
 //! garbage collection doesn't collect commits which branchless thinks are still
 //! active.
 
-use std::borrow::Borrow;
 use std::ffi::OsStr;
 use std::fmt::Write;
 
@@ -72,19 +71,25 @@ pub fn mark_commit_reachable(repo: &Repo, commit_oid: NonZeroOid) -> eyre::Resul
 #[instrument]
 pub fn gc(effects: &Effects) -> eyre::Result<()> {
     let repo = Repo::from_current_dir()?;
+    let references_snapshot = repo.get_references_snapshot()?;
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
     let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
-    let mut dag = Dag::open(effects, &repo, &event_replayer)?;
-    let references_snapshot = repo.get_references_snapshot(&mut dag)?;
+    let event_cursor = event_replayer.make_default_cursor();
+    let dag = Dag::open_and_sync(
+        effects,
+        &repo,
+        &event_replayer,
+        event_cursor,
+        &references_snapshot,
+    )?;
 
     let graph = make_graph(
         effects,
         &repo,
-        dag.borrow(),
+        &dag,
         &event_replayer,
         event_replayer.make_default_cursor(),
-        &references_snapshot,
         true,
     )?;
 

@@ -145,27 +145,26 @@ pub fn next(
     towards: Option<Towards>,
 ) -> eyre::Result<isize> {
     let repo = Repo::from_current_dir()?;
+    let references_snapshot = repo.get_references_snapshot()?;
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
     let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
-    let mut dag = Dag::open(effects, &repo, &event_replayer)?;
+    let event_cursor = event_replayer.make_default_cursor();
+    let dag = Dag::open_and_sync(
+        effects,
+        &repo,
+        &event_replayer,
+        event_cursor,
+        &references_snapshot,
+    )?;
 
-    let references_snapshot = repo.get_references_snapshot(&mut dag)?;
     let head_oid = match references_snapshot.head_oid {
         Some(head_oid) => head_oid,
         None => {
             eyre::bail!("No HEAD present; cannot calculate next commit");
         }
     };
-    let graph = make_graph(
-        effects,
-        &repo,
-        &dag,
-        &event_replayer,
-        event_replayer.make_default_cursor(),
-        &references_snapshot,
-        true,
-    )?;
+    let graph = make_graph(effects, &repo, &dag, &event_replayer, event_cursor, true)?;
 
     let num_commits = num_commits.unwrap_or(1);
     let (num_commits_traversed_towards_main_branch, current_oid) =

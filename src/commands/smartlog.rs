@@ -186,7 +186,7 @@ fn get_output(
 
     // Determine if the provided OID has the provided parent OID as a parent.
     //
-    // This returns `True` in strictly more cases than checking `graph`,
+    // This returns `true` in strictly more cases than checking `graph`,
     // since there may be links between adjacent main branch commits which
     // are not reflected in `graph`.
     let has_real_parent = |oid: NonZeroOid, parent_oid: NonZeroOid| -> bool {
@@ -265,21 +265,20 @@ pub fn render_graph(
 #[instrument]
 pub fn smartlog(effects: &Effects) -> eyre::Result<()> {
     let repo = Repo::from_current_dir()?;
+    let references_snapshot = repo.get_references_snapshot()?;
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
     let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
-    let mut dag = Dag::open(effects, &repo, &event_replayer)?;
-
-    let references_snapshot = repo.get_references_snapshot(&mut dag)?;
-    let graph = make_graph(
+    let event_cursor = event_replayer.make_default_cursor();
+    let dag = Dag::open_and_sync(
         effects,
         &repo,
-        &dag,
         &event_replayer,
-        event_replayer.make_default_cursor(),
+        event_cursor,
         &references_snapshot,
-        true,
     )?;
+
+    let graph = make_graph(effects, &repo, &dag, &event_replayer, event_cursor, true)?;
 
     let lines = render_graph(
         effects,
@@ -291,7 +290,6 @@ pub fn smartlog(effects: &Effects) -> eyre::Result<()> {
             &mut CommitOidProvider::new(true)?,
             &mut RelativeTimeProvider::new(&repo, SystemTime::now())?,
             &mut ObsolescenceExplanationProvider::new(
-                &graph,
                 &event_replayer,
                 event_replayer.make_default_cursor(),
             )?,

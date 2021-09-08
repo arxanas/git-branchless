@@ -24,7 +24,6 @@ use crate::git::{CategorizedReferenceName, Commit, Repo, RepoReferencesSnapshot}
 
 use super::eventlog::{Event, EventCursor, EventReplayer};
 use super::formatting::StyledStringBuilder;
-use super::graph::CommitGraph;
 use super::rewrite::find_rewrite_target;
 
 /// Interface to display information about a commit in the smartlog.
@@ -101,20 +100,14 @@ impl CommitMetadataProvider for CommitMessageProvider {
 
 /// For obsolete commits, provide the reason that it's obsolete.
 pub struct ObsolescenceExplanationProvider<'a> {
-    graph: &'a CommitGraph<'a>,
     event_replayer: &'a EventReplayer,
     event_cursor: EventCursor,
 }
 
 impl<'a> ObsolescenceExplanationProvider<'a> {
     /// Constructor.
-    pub fn new(
-        graph: &'a CommitGraph,
-        event_replayer: &'a EventReplayer,
-        event_cursor: EventCursor,
-    ) -> eyre::Result<Self> {
+    pub fn new(event_replayer: &'a EventReplayer, event_cursor: EventCursor) -> eyre::Result<Self> {
         Ok(ObsolescenceExplanationProvider {
-            graph,
             event_replayer,
             event_cursor,
         })
@@ -134,12 +127,8 @@ impl<'a> CommitMetadataProvider for ObsolescenceExplanationProvider<'a> {
 
         let result = match event {
             Event::RewriteEvent { .. } => {
-                let rewrite_target = find_rewrite_target(
-                    self.graph,
-                    self.event_replayer,
-                    self.event_cursor,
-                    commit.get_oid(),
-                );
+                let rewrite_target =
+                    find_rewrite_target(self.event_replayer, self.event_cursor, commit.get_oid());
                 rewrite_target.map(|rewritten_oid| {
                     StyledString::styled(
                         format!("(rewritten as {})", &rewritten_oid.to_string()[..8]),

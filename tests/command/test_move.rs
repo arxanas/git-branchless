@@ -636,7 +636,7 @@ fn test_move_base_onto_head() -> eyre::Result<()> {
 
     {
         let (stdout, stderr) = git.run_with_options(
-            &["move", "--debug-dump-rebase-plan", "-b", "HEAD"],
+            &["move", "--debug-dump-rebase-plan", "-b", "HEAD^"],
             &GitRunOptions {
                 expected_exit_code: 1,
                 ..Default::default()
@@ -1677,7 +1677,26 @@ fn test_move_orphaned_root() -> eyre::Result<()> {
 
     git.detach_head()?;
     git.run(&["checkout", "--orphan", "new-root"])?;
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 96d1c37a (master) create test2.txt
+        "###);
+    }
+
     git.run(&["commit", "-m", "new root"])?;
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        // FIXME: the smartlog handling for unrelated roots is wrong. There
+        // should be no relation between these two commits.
+        insta::assert_snapshot!(stdout, @r###"
+        @ da90168b (new-root) new root
+        :
+        O 96d1c37a (master) create test2.txt
+        "###);
+    }
+
     git.commit_file("test3", 3)?;
 
     // --on-disk

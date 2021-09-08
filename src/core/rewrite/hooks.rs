@@ -18,7 +18,6 @@ use tracing::instrument;
 use crate::core::config::{get_restack_warn_abandoned, RESTACK_WARN_ABANDONED_CONFIG_KEY};
 use crate::core::eventlog::{Event, EventLogDb, EventReplayer};
 use crate::core::formatting::{printable_styled_string, Pluralize};
-use crate::core::graph::make_graph;
 use crate::git::{
     CategorizedReferenceName, Dag, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo,
     ResolvedReferenceInfo,
@@ -200,31 +199,23 @@ fn warn_abandoned(
 ) -> eyre::Result<()> {
     // The caller will have added events to the event log database, so make sure
     // to construct a fresh `EventReplayer` here.
+    let references_snapshot = repo.get_references_snapshot()?;
     let event_replayer = EventReplayer::from_event_log_db(effects, repo, event_log_db)?;
     let event_cursor = event_replayer.make_default_cursor();
-    let mut dag = Dag::open(effects, repo, &event_replayer)?;
-
-    let references_snapshot = repo.get_references_snapshot(&mut dag)?;
-    let graph = make_graph(
+    let dag = Dag::open_and_sync(
         effects,
         repo,
-        &dag,
         &event_replayer,
         event_cursor,
         &references_snapshot,
-        false,
     )?;
 
     let (all_abandoned_children, all_abandoned_branches) = {
         let mut all_abandoned_children: HashSet<NonZeroOid> = HashSet::new();
         let mut all_abandoned_branches: HashSet<&OsStr> = HashSet::new();
         for old_commit_oid in old_commit_oids {
-            let abandoned_result = find_abandoned_children(
-                &graph,
-                &event_replayer,
-                event_replayer.make_default_cursor(),
-                old_commit_oid,
-            );
+            let abandoned_result =
+                find_abandoned_children(&dag, &event_replayer, event_cursor, old_commit_oid)?;
             let (_rewritten_oid, abandoned_children) = match abandoned_result {
                 Some(abandoned_result) => abandoned_result,
                 None => continue,

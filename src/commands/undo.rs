@@ -37,26 +37,19 @@ fn render_cursor_smartlog(
     event_replayer: &EventReplayer,
     event_cursor: EventCursor,
 ) -> eyre::Result<Vec<StyledString>> {
+    let dag = dag.set_cursor(effects, repo, event_replayer, event_cursor)?;
     let references_snapshot = event_replayer.get_references_snapshot(repo, event_cursor)?;
-    let graph = make_graph(
-        effects,
-        repo,
-        dag,
-        event_replayer,
-        event_cursor,
-        &references_snapshot,
-        true,
-    )?;
+    let graph = make_graph(effects, repo, &dag, event_replayer, event_cursor, true)?;
     let result = render_graph(
         effects,
         repo,
-        dag,
+        &dag,
         &graph,
         references_snapshot.head_oid,
         &mut [
             &mut CommitOidProvider::new(true)?,
             &mut RelativeTimeProvider::new(repo, SystemTime::now())?,
-            &mut ObsolescenceExplanationProvider::new(&graph, event_replayer, event_cursor)?,
+            &mut ObsolescenceExplanationProvider::new(event_replayer, event_cursor)?,
             &mut BranchesProvider::new(repo, &references_snapshot)?,
             &mut DifferentialRevisionProvider::new(repo)?,
             &mut CommitMessageProvider::new()?,
@@ -789,14 +782,27 @@ fn undo_events(
 #[instrument]
 pub fn undo(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<isize> {
     let repo = Repo::from_current_dir()?;
+    let references_snapshot = repo.get_references_snapshot()?;
     let conn = repo.get_db_conn()?;
     let mut event_log_db = EventLogDb::new(&conn)?;
     let mut event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
-    let merge_base_db = Dag::open(effects, &repo, &event_replayer)?;
+    let dag = {
+        // Don't let `event_cursor` leak from this scope, since we intend to
+        // determine a new event cursor below.
+        let event_cursor = event_replayer.make_default_cursor();
+
+        Dag::open_and_sync(
+            effects,
+            &repo,
+            &event_replayer,
+            event_cursor,
+            &references_snapshot,
+        )?
+    };
 
     let event_cursor = {
         let result = with_siv(effects, |effects, siv| {
-            select_past_event(siv, &effects, &repo, &merge_base_db, &mut event_replayer)
+            select_past_event(siv, &effects, &repo, &dag, &mut event_replayer)
         })?;
         match result {
             Some(event_cursor) => event_cursor,

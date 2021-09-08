@@ -1,29 +1,44 @@
-use std::collections::HashSet;
+use std::borrow::Borrow;
 use std::convert::TryFrom;
 
 use eden_dag::ops::DagPersistent;
-use eden_dag::{DagAlgorithm, Set, Vertex};
+use eden_dag::DagAlgorithm;
 use eyre::Context;
 use itertools::Itertools;
 use tracing::{instrument, trace, warn};
 
-use crate::core::eventlog::EventReplayer;
+use crate::core::eventlog::{CommitActivityStatus, EventCursor, EventReplayer};
 use crate::git::{Commit, MaybeZeroOid, NonZeroOid, Repo};
 use crate::tui::{Effects, OperationType};
 
-impl From<NonZeroOid> for Vertex {
+use super::RepoReferencesSnapshot;
+
+impl From<NonZeroOid> for eden_dag::VertexName {
     fn from(oid: NonZeroOid) -> Self {
-        Vertex::copy_from(oid.as_bytes())
+        eden_dag::VertexName::copy_from(oid.as_bytes())
     }
 }
 
-impl TryFrom<Vertex> for NonZeroOid {
+impl TryFrom<eden_dag::VertexName> for NonZeroOid {
     type Error = eyre::Error;
 
-    fn try_from(value: Vertex) -> Result<Self, Self::Error> {
+    fn try_from(value: eden_dag::VertexName) -> Result<Self, Self::Error> {
         let oid = git2::Oid::from_bytes(value.as_ref())?;
         let oid = MaybeZeroOid::from(oid);
         NonZeroOid::try_from(oid)
+    }
+}
+
+/// A compact set of commits, backed by the Eden DAG.
+pub type CommitSet = eden_dag::NameSet;
+
+/// A vertex referring to a single commit in the Eden DAG.
+pub type CommitVertex = eden_dag::VertexName;
+
+impl From<NonZeroOid> for CommitSet {
+    fn from(oid: NonZeroOid) -> Self {
+        let vertex = CommitVertex::from(oid);
+        CommitSet::from_static_names([vertex])
     }
 }
 
@@ -31,55 +46,138 @@ impl TryFrom<Vertex> for NonZeroOid {
 /// commit graph. Based on the Eden SCM DAG.
 pub struct Dag {
     inner: eden_dag::Dag,
+
+    /// A set containing the commit which `HEAD` points to. If `HEAD` is unborn,
+    /// this is an empty set.
+    pub head_commit: CommitSet,
+
+    /// A set containing the commit that the main branch currently points to.
+    pub main_branch_commit: CommitSet,
+
+    /// A set containing all commits currently pointed to by local branches.
+    pub branch_commits: CommitSet,
+
+    /// A set containing all commits that have been observed by the
+    /// `EventReplayer`.
+    pub observed_commits: CommitSet,
+
+    /// A set containing all commits that have been determined to be obsolete by
+    /// the `EventReplayer`.
+    pub obsolete_commits: CommitSet,
 }
 
 impl Dag {
-    /// Initialize the DAG for the given repository.
+    /// Initialize the DAG for the given repository, and update it with any
+    /// newly-referenced commits.
     #[instrument]
-    pub fn open(
+    pub fn open_and_sync(
         effects: &Effects,
         repo: &Repo,
         event_replayer: &EventReplayer,
+        event_cursor: EventCursor,
+        references_snapshot: &RepoReferencesSnapshot,
     ) -> eyre::Result<Self> {
-        // There's currently no way to view the DAG as it was before a
-        // certain event, so just use the cursor for the present time.
-        let event_cursor = event_replayer.make_default_cursor();
-        let commit_oids = event_replayer.get_cursor_oids(event_cursor);
-        let main_branch_oid = repo.get_main_branch_oid()?;
+        let mut dag = Self::open_without_syncing(
+            effects,
+            repo,
+            event_replayer,
+            event_cursor,
+            references_snapshot,
+        )?;
+        dag.sync(effects, repo)?;
+        Ok(dag)
+    }
 
-        let master_oids = {
-            let mut result = HashSet::new();
-            result.insert(main_branch_oid);
-            result
-        };
-        let non_master_oids = {
-            let mut result = commit_oids;
-            result.remove(&main_branch_oid);
-            result
-        };
+    /// Initialize a DAG for the given repository, without updating it with new
+    /// commits that may have appeared.
+    ///
+    /// If used improperly, commit lookups could fail at runtime. This function
+    /// should only be used for opening the DAG when it's known that no more
+    /// live commits have appeared.
+    #[instrument]
+    pub fn open_without_syncing(
+        effects: &Effects,
+        repo: &Repo,
+        event_replayer: &EventReplayer,
+        event_cursor: EventCursor,
+        references_snapshot: &RepoReferencesSnapshot,
+    ) -> eyre::Result<Self> {
+        let observed_commits = event_replayer.get_cursor_oids(event_cursor);
+        let RepoReferencesSnapshot {
+            head_oid,
+            main_branch_oid,
+            branch_oid_to_names,
+        } = references_snapshot;
+
+        let obsolete_commits = CommitSet::from_iter(
+            observed_commits
+                .iter()
+                .copied()
+                .filter(|commit_oid| {
+                    match event_replayer
+                        .get_cursor_commit_activity_status(event_cursor, *commit_oid)
+                    {
+                        CommitActivityStatus::Active | CommitActivityStatus::Inactive => false,
+                        CommitActivityStatus::Obsolete => true,
+                    }
+                })
+                .map(CommitVertex::from)
+                .map(Ok)
+                .collect_vec(),
+        );
 
         let dag_dir = repo.get_dag_dir()?;
-        let dag = {
-            let mut dag = eden_dag::Dag::open(&dag_dir)
-                .wrap_err_with(|| format!("Opening DAG directory at: {:?}", &dag_dir))?;
-            Self::update_oids(effects, repo, &mut dag, &master_oids, &non_master_oids)?;
-            dag
-        };
+        let dag = eden_dag::Dag::open(&dag_dir)
+            .wrap_err_with(|| format!("Opening DAG directory at: {:?}", &dag_dir))?;
 
-        Ok(Self { inner: dag })
+        let observed_commits =
+            CommitSet::from_iter(observed_commits.into_iter().map(CommitVertex::from).map(Ok));
+        let head_commit = match head_oid {
+            Some(head_oid) => CommitSet::from(*head_oid),
+            None => CommitSet::empty(),
+        };
+        let main_branch_commit = CommitSet::from(*main_branch_oid);
+        let branch_commits = CommitSet::from_iter(
+            branch_oid_to_names
+                .keys()
+                .copied()
+                .map(CommitVertex::from)
+                .map(Ok)
+                .collect_vec(),
+        );
+
+        Ok(Self {
+            inner: dag,
+            head_commit,
+            main_branch_commit,
+            branch_commits,
+            observed_commits,
+            obsolete_commits,
+        })
     }
 
     /// This function's code adapted from `GitDag`, licensed under GPL-2.
-    fn update_oids(
+    fn sync(&mut self, effects: &Effects, repo: &Repo) -> eden_dag::Result<()> {
+        let master_heads = self.main_branch_commit.clone();
+        let non_master_heads = self
+            .observed_commits
+            .union(&self.head_commit)
+            .union(&self.branch_commits);
+        self.sync_from_oids(effects, repo, master_heads, non_master_heads)
+    }
+
+    /// Update the DAG with the given heads.
+    pub fn sync_from_oids(
+        &mut self,
         effects: &Effects,
         repo: &Repo,
-        dag: &mut eden_dag::Dag,
-        master_oids: &HashSet<NonZeroOid>,
-        non_master_oids: &HashSet<NonZeroOid>,
-    ) -> eyre::Result<()> {
-        let (_effects, _progress) = effects.start_operation(OperationType::UpdateCommitGraph);
+        master_heads: CommitSet,
+        non_master_heads: CommitSet,
+    ) -> eden_dag::Result<()> {
+        let (effects, _progress) = effects.start_operation(OperationType::UpdateCommitGraph);
+        let _effects = effects;
 
-        let parent_func = |v: Vertex| -> eden_dag::Result<Vec<Vertex>> {
+        let parent_func = |v: CommitVertex| -> eden_dag::Result<Vec<CommitVertex>> {
             use eden_dag::errors::BackendError;
             trace!(?v, "visiting Git commit");
 
@@ -107,26 +205,49 @@ impl Dag {
             Ok(commit
                 .get_parent_oids()
                 .into_iter()
-                .map(Vertex::from)
+                .map(CommitVertex::from)
                 .collect())
         };
 
-        dag.add_heads_and_flush(
+        let commit_set_to_vec = |commit_set: CommitSet| -> Vec<CommitVertex> {
+            let mut result = Vec::new();
+            for vertex in commit_set
+                .iter()
+                .expect("The commit set was produced statically, so iteration should not fail")
+            {
+                let vertex = vertex.expect(
+                    "The commit set was produced statically, so accessing a vertex should not fail",
+                );
+                result.push(vertex);
+            }
+            result
+        };
+        self.inner.add_heads_and_flush(
             parent_func,
-            master_oids
-                .iter()
-                .copied()
-                .map(Vertex::from)
-                .collect_vec()
-                .as_slice(),
-            non_master_oids
-                .iter()
-                .copied()
-                .map(Vertex::from)
-                .collect_vec()
-                .as_slice(),
+            commit_set_to_vec(master_heads).as_slice(),
+            commit_set_to_vec(non_master_heads).as_slice(),
         )?;
         Ok(())
+    }
+
+    /// Create a new version of this DAG at the point in time represented by
+    /// `event_cursor`.
+    pub fn set_cursor(
+        &self,
+        effects: &Effects,
+        repo: &Repo,
+        event_replayer: &EventReplayer,
+        event_cursor: EventCursor,
+    ) -> eyre::Result<Self> {
+        let references_snapshot = event_replayer.get_references_snapshot(repo, event_cursor)?;
+        let dag = Self::open_without_syncing(
+            effects,
+            repo,
+            event_replayer,
+            event_cursor,
+            &references_snapshot,
+        )?;
+        Ok(dag)
     }
 
     /// Get one of the merge-base OIDs for the given pair of OIDs. If there are
@@ -139,10 +260,10 @@ impl Dag {
         lhs_oid: NonZeroOid,
         rhs_oid: NonZeroOid,
     ) -> eyre::Result<Option<NonZeroOid>> {
-        let set = vec![Vertex::from(lhs_oid), Vertex::from(rhs_oid)];
+        let set = vec![CommitVertex::from(lhs_oid), CommitVertex::from(rhs_oid)];
         let set = self
             .inner
-            .sort(&Set::from_static_names(set))
+            .sort(&CommitSet::from_static_names(set))
             .wrap_err("Sorting DAG vertex set")?;
         let vertex = self.inner.gca_one(set).wrap_err("Computing merge-base")?;
         match vertex {
@@ -162,8 +283,8 @@ impl Dag {
         parent_oid: NonZeroOid,
         child_oid: NonZeroOid,
     ) -> eyre::Result<Vec<NonZeroOid>> {
-        let roots = Set::from_static_names(vec![Vertex::from(parent_oid)]);
-        let heads = Set::from_static_names(vec![Vertex::from(child_oid)]);
+        let roots = CommitSet::from_static_names(vec![CommitVertex::from(parent_oid)]);
+        let heads = CommitSet::from_static_names(vec![CommitVertex::from(child_oid)]);
         let range = self.inner.range(roots, heads).wrap_err("Computing range")?;
         let range = self.inner.sort(&range).wrap_err("Sorting range")?;
         let oids = {
@@ -182,6 +303,11 @@ impl Dag {
             result
         };
         Ok(oids)
+    }
+
+    /// Conduct an arbitrary query against the DAG.
+    pub fn query(&self) -> &eden_dag::Dag {
+        &*self.inner.borrow()
     }
 
     /// Find a shortest path between the given commits.
@@ -226,6 +352,32 @@ impl Dag {
         } else {
             Ok(Some(path))
         }
+    }
+
+    /// Find a path from the provided head to its merge-base with the main
+    /// branch.
+    #[instrument]
+    pub fn find_path_to_main_branch(
+        &self,
+        effects: &Effects,
+        head: CommitSet,
+    ) -> eyre::Result<Option<CommitSet>> {
+        // FIXME: this assumes that there is only one merge-base with the main branch.
+        let merge_base = {
+            let (_effects, _progress) = effects.start_operation(OperationType::GetMergeBase);
+            self.query().gca_one(self.main_branch_commit.union(&head))?
+        };
+        let merge_base = match merge_base {
+            Some(merge_base) => merge_base,
+            None => return Ok(None),
+        };
+
+        // FIXME: this assumes that there is only one path to the merge-base.
+        let path = {
+            let (_effects, _progress) = effects.start_operation(OperationType::FindPathToMergeBase);
+            self.query().range(CommitSet::from(merge_base), head)?
+        };
+        Ok(Some(path))
     }
 }
 

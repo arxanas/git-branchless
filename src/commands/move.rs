@@ -3,40 +3,47 @@
 //! Under the hood, this makes use of Git's advanced rebase functionality, which
 //! is also used to preserve merge commits using the `--rebase-merges` option.
 
+use std::convert::TryFrom;
 use std::fmt::Write;
 use std::time::SystemTime;
 
+use eden_dag::DagAlgorithm;
 use tracing::instrument;
 
 use crate::core::config::get_restack_preserve_timestamps;
 use crate::core::eventlog::{EventLogDb, EventReplayer};
-use crate::core::graph::{make_graph, resolve_commits, CommitGraph, ResolveCommitsResult};
+use crate::core::graph::{make_graph, resolve_commits, ResolveCommitsResult};
 use crate::core::rewrite::{
     execute_rebase_plan, BuildRebasePlanOptions, ExecuteRebasePlanOptions, RebasePlanBuilder,
 };
-use crate::git::{Dag, GitRunInfo, NonZeroOid, Repo};
+use crate::git::{CommitSet, Dag, GitRunInfo, NonZeroOid, Repo, RepoReferencesSnapshot};
 use crate::tui::Effects;
 
 #[instrument]
 fn resolve_base_commit(
-    graph: &CommitGraph,
+    dag: &Dag,
     merge_base_oid: Option<NonZeroOid>,
     oid: NonZeroOid,
-) -> NonZeroOid {
-    let node = &graph[&oid];
-    if node.is_main {
-        oid
-    } else {
-        match node.parent {
-            Some(parent_oid) => {
-                if graph[&parent_oid].is_main || Some(parent_oid) == merge_base_oid {
-                    oid
-                } else {
-                    resolve_base_commit(graph, merge_base_oid, parent_oid)
-                }
-            }
-            None => oid,
+) -> eyre::Result<NonZeroOid> {
+    let bases = match merge_base_oid {
+        Some(merge_base_oid) => {
+            let range = dag
+                .query()
+                .range(CommitSet::from(merge_base_oid), CommitSet::from(oid))?;
+            let roots = dag.query().roots(range.clone())?;
+            let bases = dag.query().children(roots)?.intersection(&range);
+            bases
         }
+        None => {
+            let ancestors = dag.query().ancestors(CommitSet::from(oid))?;
+            let bases = dag.query().roots(ancestors)?;
+            bases
+        }
+    };
+
+    match bases.first()? {
+        Some(base) => NonZeroOid::try_from(base),
+        None => Ok(oid),
     }
 }
 
@@ -97,32 +104,28 @@ pub fn r#move(
         }
     };
 
+    let references_snapshot = RepoReferencesSnapshot {
+        // FIXME: this seems like a hack; is there a better way to ensure that
+        // the graph has the commits we care about?
+        head_oid: Some(source_oid),
+        ..repo.get_references_snapshot()?
+    };
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
     let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
     let event_cursor = event_replayer.make_default_cursor();
-    let mut dag = Dag::open(effects, &repo, &event_replayer)?;
-
-    let references_snapshot = {
-        let mut references_snapshot = repo.get_references_snapshot(&mut dag)?;
-        // FIXME: this seems like a hack; is there a better way to ensure that
-        // the graph has the commits we care about?
-        references_snapshot.head_oid = Some(source_oid);
-        references_snapshot
-    };
-    let graph = make_graph(
+    let dag = Dag::open_and_sync(
         effects,
         &repo,
-        &dag,
         &event_replayer,
         event_cursor,
         &references_snapshot,
-        true,
     )?;
+    let graph = make_graph(effects, &repo, &dag, &event_replayer, event_cursor, true)?;
 
     let source_oid = if should_resolve_base_commit {
         let merge_base_oid = dag.get_one_merge_base_oid(effects, &repo, source_oid, dest_oid)?;
-        resolve_base_commit(&graph, merge_base_oid, source_oid)
+        resolve_base_commit(&dag, merge_base_oid, source_oid)?
     } else {
         source_oid
     };

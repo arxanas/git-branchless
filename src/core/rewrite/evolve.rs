@@ -1,8 +1,11 @@
-use std::collections::HashSet;
+use std::convert::TryFrom;
+
+use eden_dag::DagAlgorithm;
+use itertools::Itertools;
+use tracing::instrument;
 
 use crate::core::eventlog::{Event, EventCursor, EventReplayer};
-use crate::core::graph::CommitGraph;
-use crate::git::{MaybeZeroOid, NonZeroOid};
+use crate::git::{CommitSet, Dag, MaybeZeroOid, NonZeroOid};
 
 /// For a rewritten commit, find the newest version of the commit.
 ///
@@ -13,7 +16,6 @@ use crate::git::{MaybeZeroOid, NonZeroOid};
 /// If a commit was rewritten into itself through some chain of events, then
 /// returns `None`, rather than the same commit OID.
 pub fn find_rewrite_target(
-    graph: &CommitGraph,
     event_replayer: &EventReplayer,
     event_cursor: EventCursor,
     oid: NonZeroOid,
@@ -34,12 +36,8 @@ pub fn find_rewrite_target(
                 match new_commit_oid {
                     MaybeZeroOid::Zero => Some(MaybeZeroOid::Zero),
                     MaybeZeroOid::NonZero(new_commit_oid) => {
-                        let possible_newer_oid = find_rewrite_target(
-                            graph,
-                            event_replayer,
-                            event_cursor,
-                            *new_commit_oid,
-                        );
+                        let possible_newer_oid =
+                            find_rewrite_target(event_replayer, event_cursor, *new_commit_oid);
                         match possible_newer_oid {
                             Some(newer_commit_oid) => Some(newer_commit_oid),
                             None => Some(MaybeZeroOid::NonZero(*new_commit_oid)),
@@ -68,58 +66,33 @@ pub fn find_rewrite_target(
 ///
 /// A commit is considered "abandoned" if it's not obsolete, but one of its
 /// parents is.
+#[instrument]
 pub fn find_abandoned_children(
-    graph: &CommitGraph,
+    dag: &Dag,
     event_replayer: &EventReplayer,
     event_cursor: EventCursor,
     oid: NonZeroOid,
-) -> Option<(NonZeroOid, Vec<NonZeroOid>)> {
-    let rewritten_oid = match find_rewrite_target(graph, event_replayer, event_cursor, oid)? {
-        MaybeZeroOid::NonZero(rewritten_oid) => rewritten_oid,
-        MaybeZeroOid::Zero => oid,
+) -> eyre::Result<Option<(NonZeroOid, Vec<NonZeroOid>)>> {
+    let rewritten_oid = match find_rewrite_target(event_replayer, event_cursor, oid) {
+        Some(MaybeZeroOid::NonZero(rewritten_oid)) => rewritten_oid,
+        Some(MaybeZeroOid::Zero) => oid,
+        None => return Ok(None),
     };
 
-    // Adjacent main branch commits are not linked in the commit graph, but if
-    // the user rewrote a main branch commit, then we may need to restack
-    // subsequent main branch commits. Find the real set of children commits so
-    // that we can do this.
-    let mut real_children_oids = graph[&oid].children.clone();
-    let additional_children_oids: HashSet<NonZeroOid> = graph
-        .iter()
-        .filter_map(|(possible_child_oid, possible_child_node)| {
-            if real_children_oids.contains(possible_child_oid) {
-                // Don't bother looking up the parents for commits we are
-                // already including.
-                None
-            } else if possible_child_node
-                .commit
-                .get_parent_oids()
-                .into_iter()
-                .any(|parent_oid| parent_oid == oid)
-            {
-                Some(possible_child_oid)
-            } else {
-                None
-            }
-        })
-        .copied()
-        .collect();
-    real_children_oids.extend(additional_children_oids);
+    let children = dag.query().children(CommitSet::from(oid))?;
+    let non_obsolete_children = children.difference(&dag.obsolete_commits);
+    let non_obsolete_children_oids: Vec<NonZeroOid> = non_obsolete_children
+        .iter()?
+        .map(|x| -> eyre::Result<NonZeroOid> { NonZeroOid::try_from(x?) })
+        .try_collect()?;
 
-    let non_obsolete_children_oids = real_children_oids
-        .iter()
-        .filter(|child_oid| !graph[child_oid].is_obsolete)
-        .copied()
-        .collect();
-    Some((rewritten_oid, non_obsolete_children_oids))
+    Ok(Some((rewritten_oid, non_obsolete_children_oids)))
 }
 
 #[cfg(test)]
 mod tests {
     use crate::core::eventlog::EventLogDb;
     use crate::core::formatting::Glyphs;
-    use crate::core::graph::make_graph;
-    use crate::git::Dag;
     use crate::testing::{make_git, Git, GitRunOptions};
     use crate::tui::Effects;
 
@@ -134,21 +107,9 @@ mod tests {
         let conn = repo.get_db_conn()?;
         let event_log_db = EventLogDb::new(&conn)?;
         let event_replayer = EventReplayer::from_event_log_db(&effects, &repo, &event_log_db)?;
-        let mut dag = Dag::open(effects, &repo, &event_replayer)?;
         let event_cursor = event_replayer.make_default_cursor();
 
-        let references_snapshot = repo.get_references_snapshot(&mut dag)?;
-        let graph = make_graph(
-            &effects,
-            &repo,
-            &dag,
-            &event_replayer,
-            event_cursor,
-            &references_snapshot,
-            true,
-        )?;
-
-        let rewrite_target = find_rewrite_target(&graph, &event_replayer, event_cursor, oid);
+        let rewrite_target = find_rewrite_target(&event_replayer, event_cursor, oid);
         Ok(rewrite_target)
     }
 
