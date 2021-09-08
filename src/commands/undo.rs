@@ -22,19 +22,19 @@ use crate::commands::smartlog::render_graph;
 use crate::core::eventlog::{Event, EventCursor, EventLogDb, EventReplayer, EventTransactionId};
 use crate::core::formatting::{printable_styled_string, Pluralize, StyledStringBuilder};
 use crate::core::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
-use crate::core::mergebase::{make_merge_base_db, MergeBaseDb};
+use crate::core::mergebase::make_merge_base_db;
 use crate::core::metadata::{
     BranchesProvider, CommitMessageProvider, CommitOidProvider, DifferentialRevisionProvider,
     HiddenExplanationProvider, RelativeTimeProvider,
 };
 use crate::declare_views;
-use crate::git::{CategorizedReferenceName, GitRunInfo, MaybeZeroOid, Repo};
+use crate::git::{CategorizedReferenceName, Dag, GitRunInfo, MaybeZeroOid, Repo};
 use crate::tui::{with_siv, Effects, SingletonView};
 
 fn render_cursor_smartlog(
     effects: &Effects,
     repo: &Repo,
-    merge_base_db: &impl MergeBaseDb,
+    dag: &Dag,
     event_replayer: &EventReplayer,
     event_cursor: EventCursor,
 ) -> eyre::Result<Vec<StyledString>> {
@@ -44,7 +44,7 @@ fn render_cursor_smartlog(
     let graph = make_graph(
         effects,
         repo,
-        merge_base_db,
+        dag,
         event_replayer,
         event_cursor,
         &HeadOid(head_oid),
@@ -55,7 +55,7 @@ fn render_cursor_smartlog(
     let result = render_graph(
         effects,
         repo,
-        merge_base_db,
+        dag,
         &graph,
         &HeadOid(head_oid),
         &mut [
@@ -316,7 +316,7 @@ fn select_past_event(
     mut siv: CursiveRunner<CursiveRunnable>,
     effects: &Effects,
     repo: &Repo,
-    merge_base_db: &impl MergeBaseDb,
+    dag: &Dag,
     event_replayer: &mut EventReplayer,
 ) -> eyre::Result<Option<EventCursor>> {
     #[derive(Clone, Copy, Debug)]
@@ -383,7 +383,7 @@ fn select_past_event(
                       event_cursor: EventCursor|
          -> eyre::Result<()> {
             let smartlog =
-                render_cursor_smartlog(effects, repo, merge_base_db, event_replayer, event_cursor)?;
+                render_cursor_smartlog(effects, repo, dag, event_replayer, event_cursor)?;
             SmartlogView::find(siv)
                 .get_inner_mut()
                 .set_content(StyledStringBuilder::from_lines(smartlog));
@@ -828,18 +828,17 @@ pub mod testing {
     use cursive::{CursiveRunnable, CursiveRunner};
 
     use crate::core::eventlog::{EventCursor, EventLogDb, EventReplayer};
-    use crate::core::mergebase::MergeBaseDb;
-    use crate::git::{GitRunInfo, Repo};
+    use crate::git::{Dag, GitRunInfo, Repo};
     use crate::tui::Effects;
 
     pub fn select_past_event(
         siv: CursiveRunner<CursiveRunnable>,
         effects: &Effects,
         repo: &Repo,
-        merge_base_db: &impl MergeBaseDb,
+        dag: &Dag,
         event_replayer: &mut EventReplayer,
     ) -> eyre::Result<Option<EventCursor>> {
-        super::select_past_event(siv, effects, repo, merge_base_db, event_replayer)
+        super::select_past_event(siv, effects, repo, dag, event_replayer)
     }
 
     pub fn undo_events(

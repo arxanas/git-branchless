@@ -10,7 +10,7 @@ use tracing::{instrument, warn};
 
 use crate::core::eventlog::{CommitVisibility, Event, EventCursor, EventReplayer};
 use crate::core::mergebase::MergeBaseDb;
-use crate::git::{Commit, NonZeroOid, Repo};
+use crate::git::{Commit, Dag, NonZeroOid, Repo};
 use crate::tui::{Effects, OperationType};
 
 /// The OID of the repo's HEAD reference.
@@ -109,7 +109,7 @@ impl<'repo> Deref for CommitGraph<'repo> {
 fn walk_from_commits<'repo>(
     effects: &Effects,
     repo: &'repo Repo,
-    merge_base_db: &impl MergeBaseDb,
+    dag: &Dag,
     event_replayer: &EventReplayer,
     event_cursor: EventCursor,
     main_branch_oid: &MainBranchOid,
@@ -128,12 +128,8 @@ fn walk_from_commits<'repo>(
             None => continue,
         };
 
-        let merge_base_oid = merge_base_db.get_merge_base_oid(
-            &effects,
-            repo,
-            current_commit.get_oid(),
-            main_branch_oid.0,
-        )?;
+        let merge_base_oid =
+            dag.get_merge_base_oid(&effects, repo, current_commit.get_oid(), main_branch_oid.0)?;
         let path_to_merge_base = match merge_base_oid {
             // Occasionally we may find a commit that has no merge-base with the
             // main branch. For example: a rewritten initial commit. This is
@@ -141,7 +137,7 @@ fn walk_from_commits<'repo>(
             // standalone component and hope it works out.
             None => vec![current_commit],
             Some(merge_base_oid) => {
-                let path_to_merge_base = merge_base_db.find_path_to_merge_base(
+                let path_to_merge_base = dag.find_path_to_merge_base(
                     &effects,
                     repo,
                     current_commit.get_oid(),
@@ -336,7 +332,7 @@ fn do_remove_commits(graph: &mut CommitGraph, head_oid: &HeadOid, branch_oids: &
 pub fn make_graph<'repo>(
     effects: &Effects,
     repo: &'repo Repo,
-    merge_base_db: &impl MergeBaseDb,
+    dag: &Dag,
     event_replayer: &EventReplayer,
     event_cursor: EventCursor,
     head_oid: &HeadOid,
@@ -358,7 +354,7 @@ pub fn make_graph<'repo>(
     let mut graph = walk_from_commits(
         &effects,
         repo,
-        merge_base_db,
+        dag,
         event_replayer,
         event_cursor,
         main_branch_oid,

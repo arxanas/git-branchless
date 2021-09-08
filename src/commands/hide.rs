@@ -14,9 +14,9 @@ use crate::core::graph::{
     make_graph, resolve_commits, BranchOids, CommitGraph, HeadOid, MainBranchOid, Node,
     ResolveCommitsResult,
 };
-use crate::core::mergebase::{make_merge_base_db, MergeBaseDb};
+use crate::core::mergebase::make_merge_base_db;
 use crate::core::metadata::{render_commit_metadata, CommitOidProvider};
-use crate::git::{Commit, Repo};
+use crate::git::{Commit, Dag, Repo};
 use crate::tui::Effects;
 
 fn recurse_on_commits_helper<
@@ -44,7 +44,7 @@ fn recurse_on_commits_helper<
 fn recurse_on_commits<'repo, F: Fn(&Node) -> bool>(
     effects: &Effects,
     repo: &'repo Repo,
-    merge_base_db: &impl MergeBaseDb,
+    dag: &Dag,
     event_replayer: &EventReplayer,
     commits: Vec<Commit<'repo>>,
     condition: F,
@@ -55,7 +55,7 @@ fn recurse_on_commits<'repo, F: Fn(&Node) -> bool>(
     let graph = make_graph(
         effects,
         repo,
-        merge_base_db,
+        dag,
         event_replayer,
         event_replayer.make_default_cursor(),
         &HeadOid(head_oid),
