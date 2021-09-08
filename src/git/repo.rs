@@ -214,43 +214,38 @@ impl Repo {
         Ok(conn)
     }
 
+    /// Get a snapshot of information about a given reference.
+    #[instrument]
+    pub fn resolve_reference(&self, reference: &Reference) -> eyre::Result<ResolvedReferenceInfo> {
+        let oid = reference.peel_to_commit()?.map(|commit| commit.get_oid());
+        let reference_name: Option<OsString> = match reference.inner.kind() {
+            Some(git2::ReferenceType::Direct) => None,
+            Some(git2::ReferenceType::Symbolic) => match reference.inner.symbolic_target_bytes() {
+                Some(name) => Some(OsStringBytes::from_raw_vec(name.to_vec())?),
+                None => eyre::bail!(
+                    "Reference was resolved to OID: {:?}, but its name could not be decoded: {:?}",
+                    oid,
+                    reference.inner.name_bytes()
+                ),
+            },
+            None => eyre::bail!("Unknown `HEAD` reference type"),
+        };
+        Ok(ResolvedReferenceInfo {
+            oid,
+            reference_name: reference_name.map(Cow::Owned),
+        })
+    }
+
     /// Get the OID for the repository's `HEAD` reference.
     #[instrument]
     pub fn get_head_info(&self) -> eyre::Result<ResolvedReferenceInfo> {
-        let head_reference = match self.inner.find_reference("HEAD") {
-            Err(err) if err.code() == git2::ErrorCode::NotFound => None,
-            Err(err) => return Err(wrap_git_error(err)),
-            Ok(result) => Some(result),
-        };
-        let (head_oid, reference_name) = match &head_reference {
-            Some(head_reference) => {
-                let head_oid = head_reference
-                    .peel_to_commit()
-                    .wrap_err_with(|| "Resolving `HEAD` reference")?
-                    .id();
-                let reference_name: Option<OsString> = match head_reference.kind() {
-                    Some(git2::ReferenceType::Direct) => None,
-                    Some(git2::ReferenceType::Symbolic) => match head_reference.symbolic_target_bytes() {
-                        Some(name) => {
-                            Some(OsStringBytes::from_raw_vec(name.to_vec())?)},
-                        None => eyre::bail!(
-                            "`HEAD` reference was resolved to OID: {:?}, but its name could not be decoded: {:?}",
-                            head_oid, head_reference.name_bytes()
-                        ),
-                    }
-                    None => eyre::bail!("Unknown `HEAD` reference type")
-                };
-                (
-                    MaybeZeroOid::NonZero(make_non_zero_oid(head_oid)),
-                    reference_name,
-                )
-            }
-            None => (MaybeZeroOid::Zero, None),
-        };
-        Ok(ResolvedReferenceInfo {
-            oid: head_oid.into(),
-            reference_name: reference_name.map(Cow::Owned),
-        })
+        match self.find_reference(OsStr::new("HEAD"))? {
+            Some(reference) => self.resolve_reference(&reference),
+            None => Ok(ResolvedReferenceInfo {
+                oid: None,
+                reference_name: None,
+            }),
+        }
     }
 
     /// Set the `HEAD` reference directly to the provided `oid`. Does not touch
