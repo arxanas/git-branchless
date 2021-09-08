@@ -389,3 +389,24 @@ fn test_show_rewritten_commit_hash() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_smartlog_orphaned_root() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    git.init_repo()?;
+    git.commit_file("test1", 1)?;
+
+    git.run(&["checkout", "--orphan", "new-root"])?;
+
+    {
+        let (stdout, stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stderr, @"");
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d2 (master) create test1.txt
+        "###);
+    }
+
+    Ok(())
+}
