@@ -47,7 +47,7 @@ impl Dag {
         let dag = {
             let mut dag = eden_dag::Dag::open(&dag_dir)
                 .wrap_err_with(|| format!("Opening DAG directory at: {:?}", &dag_dir))?;
-            Self::update_oids(effects, repo, &mut dag, master_oids, non_master_oids)?;
+            Self::update_oids(effects, repo, &mut dag, &master_oids, &non_master_oids)?;
             dag
         };
 
@@ -61,8 +61,8 @@ impl Dag {
         effects: &Effects,
         repo: &Repo,
         dag: &mut eden_dag::Dag,
-        master_oids: impl IntoIterator<Item = NonZeroOid>,
-        non_master_oids: impl IntoIterator<Item = NonZeroOid>,
+        master_oids: &HashSet<NonZeroOid>,
+        non_master_oids: &HashSet<NonZeroOid>,
     ) -> eyre::Result<()> {
         let (_effects, _progress) = effects.start_operation(OperationType::UpdateCommitGraph);
 
@@ -101,12 +101,12 @@ impl Dag {
         dag.add_heads_and_flush(
             parent_func,
             master_oids
-                .into_iter()
+                .iter()
                 .map(|oid| Vertex::copy_from(oid.as_bytes()))
                 .collect_vec()
                 .as_slice(),
             non_master_oids
-                .into_iter()
+                .iter()
                 .map(|oid| Vertex::copy_from(oid.as_bytes()))
                 .collect_vec()
                 .as_slice(),
@@ -122,7 +122,13 @@ impl Dag {
         dag: &mut eden_dag::Dag,
         oid: NonZeroOid,
     ) -> eyre::Result<Vertex> {
-        Self::update_oids(effects, repo, dag, Vec::new(), vec![oid])?;
+        let master_oids = HashSet::new();
+        let non_master_oids = {
+            let mut non_master_oids = HashSet::new();
+            non_master_oids.insert(oid);
+            non_master_oids
+        };
+        Self::update_oids(effects, repo, dag, &master_oids, &non_master_oids)?;
         Ok(Vertex::copy_from(oid.as_bytes()))
     }
 
@@ -143,14 +149,9 @@ impl Dag {
             self.oid_to_vertex(effects, repo, dag, rhs_oid)?,
         ];
         let set = dag
-            .sort(&Set::from_static_names(set.clone()))
-            .wrap_err_with(|| format!("Sorting DAG vertex set: {:?}", &set))?;
-        let vertex = dag.gca_one(set).wrap_err_with(|| {
-            format!(
-                "Computing merge-base between {:?} and {:?}",
-                lhs_oid, rhs_oid
-            )
-        })?;
+            .sort(&Set::from_static_names(set))
+            .wrap_err("Sorting DAG vertex set")?;
+        let vertex = dag.gca_one(set).wrap_err("Computing merge-base")?;
         match vertex {
             None => Ok(None),
             Some(vertex) => Ok(Some(vertex.to_hex().parse()?)),
@@ -174,10 +175,8 @@ impl Dag {
             Set::from_static_names(vec![self.oid_to_vertex(effects, repo, dag, parent_oid)?]);
         let heads =
             Set::from_static_names(vec![self.oid_to_vertex(effects, repo, dag, child_oid)?]);
-        let range = dag
-            .range(roots, heads)
-            .wrap_err_with(|| "Computing range")?;
-        let range = dag.sort(&range).wrap_err_with(|| "Sorting range")?;
+        let range = dag.range(roots, heads).wrap_err("Computing range")?;
+        let range = dag.sort(&range).wrap_err("Sorting range")?;
         let oids = {
             let mut result = Vec::new();
             for vertex in range.iter()? {

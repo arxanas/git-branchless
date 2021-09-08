@@ -76,76 +76,78 @@ pub trait GetConfigValue<V> {
 
 impl GetConfigValue<String> for String {
     fn get_from_config(config: &Config, key: impl AsRef<str>) -> eyre::Result<Option<String>> {
-        let value = match config.inner.get_string(key.as_ref()) {
-            Ok(value) => Some(value),
-            Err(err) if err.code() == git2::ErrorCode::NotFound => None,
-            Err(err) => {
-                return Err(wrap_git_error(err)).wrap_err_with(|| {
-                    format!("Looking up string value for config key: {:?}", key.as_ref())
-                });
-            }
-        };
-        Ok(value)
+        #[instrument]
+        fn inner(config: &Config, key: &str) -> eyre::Result<Option<String>> {
+            let value = match config.inner.get_string(key) {
+                Ok(value) => Some(value),
+                Err(err) if err.code() == git2::ErrorCode::NotFound => None,
+                Err(err) => {
+                    return Err(wrap_git_error(err))
+                        .wrap_err("Looking up string value for config key");
+                }
+            };
+            Ok(value)
+        }
+        inner(config, key.as_ref())
     }
 }
 
 impl GetConfigValue<bool> for bool {
     fn get_from_config(config: &Config, key: impl AsRef<str>) -> eyre::Result<Option<bool>> {
-        let value = match config.inner.get_bool(key.as_ref()) {
-            Ok(value) => Some(value),
-            Err(err) if err.code() == git2::ErrorCode::NotFound => None,
-            Err(err) => {
-                return Err(wrap_git_error(err)).wrap_err_with(|| {
-                    format!("Looking up bool value for config key: {:?}", key.as_ref())
-                })
-            }
-        };
-        Ok(value)
+        #[instrument]
+        fn inner(config: &Config, key: &str) -> eyre::Result<Option<bool>> {
+            let value = match config.inner.get_bool(key) {
+                Ok(value) => Some(value),
+                Err(err) if err.code() == git2::ErrorCode::NotFound => None,
+                Err(err) => {
+                    return Err(wrap_git_error(err))
+                        .wrap_err("Looking up bool value for config key")
+                }
+            };
+            Ok(value)
+        }
+        inner(config, key.as_ref())
     }
 }
 
 impl GetConfigValue<PathBuf> for PathBuf {
     fn get_from_config(config: &Config, key: impl AsRef<str>) -> eyre::Result<Option<PathBuf>> {
-        let value = match config.inner.get_path(key.as_ref()) {
-            Ok(value) => Some(value),
-            Err(err) if err.code() == git2::ErrorCode::NotFound => None,
-            Err(err) => {
-                return Err(wrap_git_error(err)).wrap_err_with(|| {
-                    format!("Looking up path value for config key: {:?}", key.as_ref())
-                })
-            }
-        };
-        Ok(value)
+        #[instrument]
+        fn inner(config: &Config, key: &str) -> eyre::Result<Option<PathBuf>> {
+            let value = match config.inner.get_path(key.as_ref()) {
+                Ok(value) => Some(value),
+                Err(err) if err.code() == git2::ErrorCode::NotFound => None,
+                Err(err) => {
+                    return Err(wrap_git_error(err))
+                        .wrap_err("Looking up path value for config key")
+                }
+            };
+            Ok(value)
+        }
+        inner(config, key.as_ref())
     }
 }
 
 impl Config {
-    #[instrument(fields(key = key.as_ref()))]
-    fn set_internal<S: AsRef<str> + std::fmt::Debug>(
-        &mut self,
-        key: S,
-        value: ConfigValue,
-    ) -> eyre::Result<()> {
+    #[instrument]
+    fn set_inner(&mut self, key: &str, value: ConfigValue) -> eyre::Result<()> {
         match &value.inner {
-            ConfigValueInner::String(value) => self
-                .inner
-                .set_str(key.as_ref(), value)
-                .map_err(wrap_git_error),
-            ConfigValueInner::Bool(value) => self
-                .inner
-                .set_bool(key.as_ref(), *value)
-                .map_err(wrap_git_error),
+            ConfigValueInner::String(value) => {
+                self.inner.set_str(key, value).map_err(wrap_git_error)
+            }
+            ConfigValueInner::Bool(value) => {
+                self.inner.set_bool(key, *value).map_err(wrap_git_error)
+            }
         }
     }
 
     /// Set the given config key to the given value.
-    pub fn set<S: AsRef<str> + std::fmt::Debug>(
+    pub fn set(
         &mut self,
-        key: S,
+        key: impl AsRef<str> + std::fmt::Debug,
         value: impl Into<ConfigValue>,
     ) -> eyre::Result<()> {
-        let value = value.into();
-        self.set_internal(key, value)
+        self.set_inner(key.as_ref(), value.into())
     }
 
     /// Get a config key of one of various possible types.
@@ -176,13 +178,17 @@ impl Config {
         }
     }
 
-    /// Remove the given key from the configuration.
-    #[instrument(fields(key = key.as_ref()))]
-    pub fn remove(&mut self, key: impl AsRef<str>) -> eyre::Result<()> {
+    #[instrument]
+    fn remove_inner(&mut self, key: &str) -> eyre::Result<()> {
         self.inner
-            .remove(key.as_ref())
+            .remove(key)
             .map_err(wrap_git_error)
-            .wrap_err_with(|| format!("Removing config key: {:?}", key.as_ref()))?;
+            .wrap_err("Removing config key")?;
         Ok(())
+    }
+
+    /// Remove the given key from the configuration.
+    pub fn remove(&mut self, key: impl AsRef<str>) -> eyre::Result<()> {
+        self.remove_inner(key.as_ref())
     }
 }

@@ -9,6 +9,7 @@ use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 
 use eyre::{eyre, Context};
+use itertools::Itertools;
 use os_str_bytes::OsStrBytes;
 use tracing::instrument;
 
@@ -63,6 +64,67 @@ impl GitRunInfo {
         })
     }
 
+    fn run_inner(
+        &self,
+        effects: &Effects,
+        event_tx_id: Option<EventTransactionId>,
+        args: &[&OsStr],
+    ) -> eyre::Result<isize> {
+        let GitRunInfo {
+            path_to_git,
+            working_directory,
+            env,
+        } = self;
+
+        let args_string = args
+            .iter()
+            .map(|arg| arg.to_string_lossy().to_string())
+            .collect_vec()
+            .join(" ");
+        let command_string = format!("git {}", args_string);
+        let (effects, _progress) =
+            effects.start_operation(OperationType::RunGitCommand(Arc::new(command_string)));
+        writeln!(
+            effects.get_output_stream(),
+            "branchless: running command: {} {}",
+            &path_to_git.to_string_lossy(),
+            &args_string
+        )?;
+
+        let mut command = Command::new(path_to_git);
+        command.current_dir(working_directory);
+        command.args(args);
+        command.env_clear();
+        command.envs(env.iter());
+        if let Some(event_tx_id) = event_tx_id {
+            command.env(BRANCHLESS_TRANSACTION_ID_ENV_VAR, event_tx_id.to_string());
+        }
+        command.stdout(Stdio::piped());
+        command.stderr(Stdio::piped());
+
+        let mut child = command.spawn().wrap_err("Spawning Git subprocess")?;
+
+        let stdout = child.stdout.take();
+        let stdout_thread = self.spawn_writer_thread(stdout, effects.get_output_stream());
+        let stderr = child.stderr.take();
+        let stderr_thread = self.spawn_writer_thread(stderr, effects.get_error_stream());
+
+        let exit_status = child
+            .wait()
+            .wrap_err("Waiting for Git subprocess to complete")?;
+        stdout_thread.join().unwrap();
+        stderr_thread.join().unwrap();
+
+        // On Unix, if the child process was terminated by a signal, we need to call
+        // some Unix-specific functions to access the signal that terminated it. For
+        // simplicity, just return `1` in those cases.
+        let exit_code = exit_status.code().unwrap_or(1);
+        let exit_code = exit_code
+            .try_into()
+            .wrap_err("Converting exit code from i32 to isize")?;
+        Ok(exit_code)
+    }
+
     /// Run Git in a subprocess, and inform the user.
     ///
     /// This is suitable for commands which affect the working copy or should run
@@ -80,77 +142,18 @@ impl GitRunInfo {
         event_tx_id: Option<EventTransactionId>,
         args: &[S],
     ) -> eyre::Result<isize> {
-        let GitRunInfo {
-            path_to_git,
-            working_directory,
-            env,
-        } = self;
-
-        let args_string = args
-            .iter()
-            .map(|arg| arg.as_ref().to_string_lossy().to_string())
-            .collect::<Vec<_>>()
-            .join(" ");
-        let command_string = format!("git {}", args_string);
-        let (effects, _progress) =
-            effects.start_operation(OperationType::RunGitCommand(Arc::new(command_string)));
-        writeln!(
-            effects.get_output_stream(),
-            "branchless: running command: {} {}",
-            &path_to_git.to_string_lossy(),
-            &args_string
-        )?;
-
-        let mut command = Command::new(path_to_git);
-        command.current_dir(working_directory);
-        command.args(args.iter().map(|arg| arg.as_ref()));
-        command.env_clear();
-        command.envs(env.iter());
-        if let Some(event_tx_id) = event_tx_id {
-            command.env(BRANCHLESS_TRANSACTION_ID_ENV_VAR, event_tx_id.to_string());
-        }
-        command.stdout(Stdio::piped());
-        command.stderr(Stdio::piped());
-
-        let mut child = command
-            .spawn()
-            .wrap_err_with(|| format!("Spawning Git subprocess: {:?} {:?}", path_to_git, args))?;
-
-        let stdout = child.stdout.take();
-        let stdout_thread = self.spawn_writer_thread(stdout, effects.get_output_stream());
-        let stderr = child.stderr.take();
-        let stderr_thread = self.spawn_writer_thread(stderr, effects.get_error_stream());
-
-        let exit_status = child.wait().wrap_err_with(|| {
-            format!(
-                "Waiting for Git subprocess to complete: {:?} {:?}",
-                path_to_git, args
-            )
-        })?;
-        stdout_thread.join().unwrap();
-        stderr_thread.join().unwrap();
-
-        // On Unix, if the child process was terminated by a signal, we need to call
-        // some Unix-specific functions to access the signal that terminated it. For
-        // simplicity, just return `1` in those cases.
-        let exit_code = exit_status.code().unwrap_or(1);
-        let exit_code = exit_code
-            .try_into()
-            .wrap_err_with(|| format!("Converting exit code {} from i32 to isize", exit_code))?;
-        Ok(exit_code)
+        self.run_inner(
+            effects,
+            event_tx_id,
+            args.iter().map(AsRef::as_ref).collect_vec().as_slice(),
+        )
     }
 
-    /// Run Git silently (don't display output to the user).
-    ///
-    /// Whenever possible, use `git2`'s bindings to Git instead, as they're
-    /// considerably more lightweight and reliable.
-    ///
-    /// Returns the stdout of the Git invocation.
-    pub fn run_silent<S: AsRef<str> + std::fmt::Debug>(
+    fn run_silent_inner(
         &self,
         repo: &Repo,
         event_tx_id: Option<EventTransactionId>,
-        args: &[S],
+        args: &[&str],
     ) -> eyre::Result<String> {
         let GitRunInfo {
             path_to_git,
@@ -170,7 +173,7 @@ impl GitRunInfo {
 
         let args = {
             let mut result = vec!["-C", repo_path];
-            result.extend(args.iter().map(|arg| arg.as_ref()));
+            result.extend(args);
             result
         };
         let mut command = Command::new(path_to_git);
@@ -181,29 +184,38 @@ impl GitRunInfo {
         if let Some(event_tx_id) = event_tx_id {
             command.env(BRANCHLESS_TRANSACTION_ID_ENV_VAR, event_tx_id.to_string());
         }
-        let result = command
-            .output()
-            .wrap_err_with(|| format!("Spawning Git subprocess: {:?} {:?}", path_to_git, args))?;
-        let result = String::from_utf8(result.stdout).wrap_err_with(|| {
-            format!(
-                "Decoding stdout from Git subprocess: {:?} {:?}",
-                path_to_git, args
-            )
-        })?;
+        let result = command.output().wrap_err("Spawning Git subprocess")?;
+        let result =
+            String::from_utf8(result.stdout).wrap_err("Decoding stdout from Git subprocess")?;
         Ok(result)
     }
 
-    /// Run a provided Git hook if it exists for the repository.
+    /// Run Git silently (don't display output to the user).
     ///
-    /// See the man page for `githooks(5)` for more detail on Git hooks.
-    #[instrument]
-    pub fn run_hook<S: AsRef<str> + std::fmt::Debug>(
+    /// Whenever possible, use `git2`'s bindings to Git instead, as they're
+    /// considerably more lightweight and reliable.
+    ///
+    /// Returns the stdout of the Git invocation.
+    pub fn run_silent<S: AsRef<str> + std::fmt::Debug>(
+        &self,
+        repo: &Repo,
+        event_tx_id: Option<EventTransactionId>,
+        args: &[S],
+    ) -> eyre::Result<String> {
+        self.run_silent_inner(
+            repo,
+            event_tx_id,
+            args.iter().map(AsRef::as_ref).collect_vec().as_slice(),
+        )
+    }
+
+    fn run_hook_inner(
         &self,
         effects: &Effects,
         repo: &Repo,
         hook_name: &str,
         event_tx_id: EventTransactionId,
-        args: &[S],
+        args: &[&str],
         stdin: Option<OsString>,
     ) -> eyre::Result<()> {
         let hook_dir = get_core_hooks_path(repo)?;
@@ -236,7 +248,7 @@ impl GitRunInfo {
                 .arg("-c")
                 .arg(format!("{} \"$@\"", hook_name))
                 .arg(hook_name) // "$@" expands "$1" "$2" "$3" ... but we also must specify $0.
-                .args(args.iter().map(|arg| arg.as_ref()))
+                .args(args)
                 .env_clear()
                 .envs(env.iter())
                 .env(BRANCHLESS_TRANSACTION_ID_ENV_VAR, event_tx_id.to_string())
@@ -253,7 +265,7 @@ impl GitRunInfo {
                     .as_mut()
                     .unwrap()
                     .write_all(&stdin.to_raw_bytes())
-                    .wrap_err_with(|| "Writing hook process stdin")?;
+                    .wrap_err("Writing hook process stdin")?;
             }
 
             let stdout = child.stdout.take();
@@ -266,6 +278,29 @@ impl GitRunInfo {
             stderr_thread.join().unwrap();
         }
         Ok(())
+    }
+
+    /// Run a provided Git hook if it exists for the repository.
+    ///
+    /// See the man page for `githooks(5)` for more detail on Git hooks.
+    #[instrument]
+    pub fn run_hook<S: AsRef<str> + std::fmt::Debug>(
+        &self,
+        effects: &Effects,
+        repo: &Repo,
+        hook_name: &str,
+        event_tx_id: EventTransactionId,
+        args: &[S],
+        stdin: Option<OsString>,
+    ) -> eyre::Result<()> {
+        self.run_hook_inner(
+            effects,
+            repo,
+            hook_name,
+            event_tx_id,
+            args.iter().map(AsRef::as_ref).collect_vec().as_slice(),
+            stdin,
+        )
     }
 }
 

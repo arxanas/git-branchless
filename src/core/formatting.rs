@@ -195,24 +195,35 @@ impl StyledStringBuilder {
         }
     }
 
+    fn append_plain_inner(mut self, text: &str) -> Self {
+        self.elements.push(StyledString::plain(text));
+        self
+    }
+
     /// Append a plain-text string to the internal buffer.
-    pub fn append_plain(mut self, text: impl AsRef<str>) -> Self {
-        self.elements.push(StyledString::plain(text.as_ref()));
+    pub fn append_plain(self, text: impl AsRef<str>) -> Self {
+        self.append_plain_inner(text.as_ref())
+    }
+
+    fn append_styled_inner(mut self, text: &str, style: Style) -> Self {
+        self.elements.push(StyledString::styled(text, style));
         self
     }
 
     /// Style the provided `text` using `style`, then append it to the internal
     /// buffer.
-    pub fn append_styled(mut self, text: impl AsRef<str>, style: impl Into<Style>) -> Self {
-        self.elements
-            .push(StyledString::styled(text.as_ref(), style));
+    pub fn append_styled(self, text: impl AsRef<str>, style: impl Into<Style>) -> Self {
+        self.append_styled_inner(text.as_ref(), style.into())
+    }
+
+    fn append_inner(mut self, text: StyledString) -> Self {
+        self.elements.push(text);
         self
     }
 
     /// Directly append the provided `StyledString` to the internal buffer.
-    pub fn append(mut self, text: impl Into<StyledString>) -> Self {
-        self.elements.push(text.into());
-        self
+    pub fn append(self, text: impl Into<StyledString>) -> Self {
+        self.append_inner(text.into())
     }
 
     /// Create a new `StyledString` using all the components in the internal
@@ -227,15 +238,14 @@ impl StyledStringBuilder {
 
     /// Helper function to join a list of `StyledString`s into a single
     /// `StyledString`s, using the provided `delimiter`.
-    pub fn join(delimiter: impl Into<String>, strings: Vec<StyledString>) -> StyledString {
+    pub fn join(delimiter: &str, strings: Vec<StyledString>) -> StyledString {
         let mut result = Self::new();
         let mut is_first = true;
-        let delimiter = delimiter.into();
         for string in strings {
             if is_first {
                 is_first = false;
             } else {
-                result = result.append_plain(delimiter.clone());
+                result = result.append_plain(delimiter);
             }
             result = result.append(string);
         }

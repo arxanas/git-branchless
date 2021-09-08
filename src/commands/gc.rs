@@ -64,7 +64,7 @@ pub fn mark_commit_reachable(repo: &Repo, commit_oid: NonZeroOid) -> eyre::Resul
         true,
         "branchless: marking commit as reachable",
     )
-    .wrap_err_with(|| format!("Creating reference {}", ref_name))?;
+    .wrap_err("Creating reference")?;
     Ok(())
 }
 
@@ -100,9 +100,7 @@ pub fn gc(effects: &Effects) -> eyre::Result<()> {
     )?;
     let dangling_references = find_dangling_references(&repo, &graph)?;
     for mut reference in dangling_references.into_iter() {
-        reference
-            .delete()
-            .wrap_err_with(|| format!("Deleting reference {:?}", reference.get_name()))?;
+        reference.delete()?;
     }
     Ok(())
 }

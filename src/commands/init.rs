@@ -256,7 +256,7 @@ fn install_aliases(
 
     let version_str = git_run_info
         .run_silent(repo, None, &["version"])
-        .wrap_err_with(|| "Determining Git version")?;
+        .wrap_err("Determining Git version")?;
     let version_str = version_str.trim();
     let version: GitVersion = version_str
         .parse()
@@ -307,15 +307,23 @@ fn set_config(
     name: &str,
     value: impl Into<ConfigValue>,
 ) -> eyre::Result<()> {
-    let value = value.into();
-    writeln!(
-        effects.get_output_stream(),
-        "Setting config (non-global): {} = {}",
-        name,
-        value
-    )?;
-    config.set(name, value)?;
-    Ok(())
+    fn inner(
+        effects: &Effects,
+        config: &mut Config,
+        name: &str,
+        value: ConfigValue,
+    ) -> eyre::Result<()> {
+        writeln!(
+            effects.get_output_stream(),
+            "Setting config (non-global): {} = {}",
+            name,
+            value
+        )?;
+        config.set(name, value)?;
+        Ok(())
+    }
+
+    inner(effects, config, name, value.into())
 }
 
 #[instrument(skip(r#in))]
@@ -420,7 +428,7 @@ pub fn init(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<()> {
 #[instrument]
 pub fn uninstall(effects: &Effects) -> eyre::Result<()> {
     let repo = Repo::from_current_dir()?;
-    let mut config = repo.get_config().wrap_err_with(|| "Getting repo config")?;
+    let mut config = repo.get_config().wrap_err("Getting repo config")?;
     unset_configs(effects, &mut config)?;
     uninstall_hooks(effects, &repo)?;
     uninstall_aliases(effects, &mut config)?;

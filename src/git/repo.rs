@@ -156,7 +156,7 @@ impl Repo {
     /// Get the Git repository associated with the current directory.
     #[instrument]
     pub fn from_current_dir() -> eyre::Result<Self> {
-        let path = std::env::current_dir().wrap_err_with(|| "Getting working directory")?;
+        let path = std::env::current_dir().wrap_err("Getting working directory")?;
         Repo::from_dir(&path)
     }
 
@@ -191,7 +191,7 @@ impl Repo {
             .inner
             .config()
             .map_err(wrap_git_error)
-            .wrap_err_with(|| "Creating `git2::Config` object")?;
+            .wrap_err("Creating `git2::Config` object")?;
         Ok(config.into())
     }
 
@@ -199,7 +199,7 @@ impl Repo {
     #[instrument]
     pub fn get_dag_dir(&self) -> eyre::Result<PathBuf> {
         let path = self.get_path().join("branchless").join("dag");
-        std::fs::create_dir_all(&path).wrap_err_with(|| "Creating .git/branchless/dag dir")?;
+        std::fs::create_dir_all(&path).wrap_err("Creating .git/branchless/dag dir")?;
         Ok(path)
     }
 
@@ -207,7 +207,7 @@ impl Repo {
     #[instrument]
     pub fn get_db_conn(&self) -> eyre::Result<rusqlite::Connection> {
         let dir = self.get_path().join("branchless");
-        std::fs::create_dir_all(&dir).wrap_err_with(|| "Creating .git/branchless dir")?;
+        std::fs::create_dir_all(&dir).wrap_err("Creating .git/branchless dir")?;
         let path = dir.join("db.sqlite3");
         let conn = rusqlite::Connection::open(&path)
             .wrap_err_with(|| format!("Opening database connection at {:?}", &path))?;
@@ -328,43 +328,17 @@ Either create it, or update the main branch setting by running:
     /// be stripped if desired.
     #[instrument]
     pub fn get_branch_oid_to_names(&self) -> eyre::Result<HashMap<NonZeroOid, HashSet<OsString>>> {
-        let branches = self
-            .inner
-            .branches(Some(git2::BranchType::Local))
-            .wrap_err_with(|| "Reading branches")?;
-
         let mut result: HashMap<NonZeroOid, HashSet<OsString>> = HashMap::new();
-        for branch_info in branches {
-            let branch_info = branch_info.wrap_err_with(|| "Iterating over branches")?;
-            let branch = match branch_info {
-                (branch, git2::BranchType::Remote) => eyre::bail!(
-                    "Unexpectedly got a remote branch in local branch iterator: {:?}",
-                    branch.name()
-                ),
-                (branch, git2::BranchType::Local) => branch,
-            };
-
+        for branch in self.get_all_local_branches()? {
             let reference = branch.into_reference();
-            let reference_name = match reference.name() {
-                None => {
-                    warn!(
-                        reference_name = ?reference.name_bytes(),
-                        "Could not decode branch name, skipping"
-                    );
-                    continue;
-                }
-                Some(reference_name) => reference_name,
-            };
-
-            let branch_oid = reference
-                .resolve()
-                .wrap_err_with(|| format!("Resolving branch into commit: {}", reference_name))?
-                .target()
-                .unwrap();
-            result
-                .entry(make_non_zero_oid(branch_oid))
-                .or_insert_with(HashSet::new)
-                .insert(OsString::from(reference_name.to_owned()));
+            let reference_name = reference.get_name()?;
+            let reference_info = self.resolve_reference(&reference)?;
+            if let Some(reference_oid) = reference_info.oid {
+                result
+                    .entry(reference_oid)
+                    .or_insert_with(HashSet::new)
+                    .insert(reference_name);
+            }
         }
 
         // The main branch may be a remote branch, in which case it won't be
@@ -512,8 +486,7 @@ Either create it, or update the main branch setting by running:
         };
         let patch_id = {
             let (_effects, _progress) = effects.start_operation(OperationType::CalculatePatchId);
-            diff.patchid(None)
-                .wrap_err_with(|| format!("Computing patch ID for: {:?}", commit))?
+            diff.patchid(None).wrap_err("Computing patch ID")?
         };
         Ok(Some(PatchId { patch_id }))
     }
@@ -538,9 +511,9 @@ Either create it, or update the main branch setting by running:
             .inner
             .references()
             .map_err(wrap_git_error)
-            .wrap_err_with(|| "Iterating through references")?
+            .wrap_err("Iterating through references")?
         {
-            let reference = reference.wrap_err_with(|| "Accessing individual reference")?;
+            let reference = reference.wrap_err("Accessing individual reference")?;
             all_references.push(Reference { inner: reference });
         }
         Ok(all_references)
@@ -615,9 +588,9 @@ Either create it, or update the main branch setting by running:
             .inner
             .branches(Some(git2::BranchType::Local))
             .map_err(wrap_git_error)
-            .wrap_err_with(|| "Iterating over all local branches")?
+            .wrap_err("Iterating over all local branches")?
         {
-            let (branch, _branch_type) = branch.wrap_err_with(|| "Accessing individual branch")?;
+            let (branch, _branch_type) = branch.wrap_err("Accessing individual branch")?;
             all_branches.push(Branch { inner: branch });
         }
         Ok(all_branches)
@@ -785,9 +758,9 @@ Either create it, or update the main branch setting by running:
                     for conflict in rebased_index
                         .inner
                         .conflicts()
-                        .wrap_err_with(|| "Getting conflicting paths")?
+                        .wrap_err("Getting conflicting paths")?
                     {
-                        let conflict = conflict.wrap_err_with(|| "Getting conflicting path")?;
+                        let conflict = conflict.wrap_err("Getting conflicting path")?;
                         if let Some(ancestor) = conflict.ancestor {
                             // I'm not sure how the ancestor can be `None` here.
                             result
@@ -889,7 +862,7 @@ Either create it, or update the main branch setting by running:
                 &dehydrated_tree,
                 parents.iter().collect_vec(),
             )
-            .wrap_err_with(|| "Dehydrating commit")?;
+            .wrap_err("Dehydrating commit")?;
         let dehydrated_commit = self.find_commit_or_fail(dehydrated_commit_oid)?;
         Ok(dehydrated_commit)
     }
@@ -1085,11 +1058,9 @@ impl<'repo> Commit<'repo> {
     }
 
     /// Get the `Tree` object associated with this commit.
+    #[instrument]
     pub fn get_tree(&self) -> eyre::Result<Tree> {
-        let tree = self
-            .inner
-            .tree()
-            .wrap_err_with(|| format!("Getting tree object for commit: {:?}", self.get_oid()))?;
+        let tree = self.inner.tree().wrap_err("Getting tree object")?;
         Ok(Tree { inner: tree })
     }
 
@@ -1188,31 +1159,9 @@ impl<'repo> Reference<'repo> {
     #[instrument]
     pub fn get_name(&self) -> eyre::Result<OsString> {
         let name = OsStringBytes::from_raw_vec(self.inner.name_bytes().into())
-            .wrap_err_with(|| format!("Decoding reference name: {:?}", self.inner.name_bytes()))?;
+            .wrap_err("Decoding reference name")?;
         Ok(name)
     }
-
-    /// Get the target of this reference.
-    #[instrument]
-    pub fn get_target(&self) -> eyre::Result<ReferenceTarget> {
-        match self.inner.symbolic_target_bytes() {
-            Some(reference_name) => Ok(ReferenceTarget::Symbolic {
-                reference_name: OsStr::from_raw_bytes(reference_name).wrap_err_with(|| {
-                    format!("Decoding symbolic reference target: {:?}", reference_name)
-                })?,
-            }),
-            None => Ok(ReferenceTarget::Direct {
-                oid: match self.inner.target() {
-                    Some(oid) => oid.into(),
-                    None => eyre::bail!(
-                        "Could not get direct reference target for: {:?}",
-                        self.get_name()?
-                    ),
-                },
-            }),
-        }
-    }
-
     /// Get the commit object pointed to by this reference. Returns `None` if
     /// the object pointed to by the reference is a different kind of object.
     #[instrument]
@@ -1231,10 +1180,7 @@ impl<'repo> Reference<'repo> {
     /// Delete the reference.
     #[instrument]
     pub fn delete(&mut self) -> eyre::Result<()> {
-        let reference_name = self.get_name()?;
-        self.inner
-            .delete()
-            .wrap_err_with(|| format!("Deleting reference: {:?}", reference_name))?;
+        self.inner.delete().wrap_err("Deleting reference")?;
         Ok(())
     }
 }

@@ -6,13 +6,14 @@ use std::process::Command;
 use std::time::SystemTime;
 
 use eyre::Context;
+use itertools::Itertools;
 
 use crate::core::eventlog::{EventLogDb, EventTransactionId, BRANCHLESS_TRANSACTION_ID_ENV_VAR};
 use crate::git::{GitRunInfo, Repo};
 
-fn pass_through_git_command<S: AsRef<str> + std::fmt::Debug>(
+fn pass_through_git_command_inner(
     git_run_info: &GitRunInfo,
-    args: &[S],
+    args: &[&str],
     event_tx_id: Option<EventTransactionId>,
 ) -> eyre::Result<isize> {
     let GitRunInfo {
@@ -22,17 +23,27 @@ fn pass_through_git_command<S: AsRef<str> + std::fmt::Debug>(
     } = git_run_info;
     let mut command = Command::new(path_to_git);
     command.current_dir(working_directory);
-    command.args(args.iter().map(|arg| arg.as_ref()));
+    command.args(args);
     command.env_clear();
     command.envs(env.iter());
     if let Some(event_tx_id) = event_tx_id {
         command.env(BRANCHLESS_TRANSACTION_ID_ENV_VAR, event_tx_id.to_string());
     }
-    let exit_status = command
-        .status()
-        .wrap_err_with(|| format!("Running program: {:?} {:?}", path_to_git, args))?;
+    let exit_status = command.status().wrap_err("Running Git command")?;
     let exit_code = exit_status.code().unwrap_or(1).try_into()?;
     Ok(exit_code)
+}
+
+fn pass_through_git_command<S: AsRef<str> + std::fmt::Debug>(
+    git_run_info: &GitRunInfo,
+    args: &[S],
+    event_tx_id: Option<EventTransactionId>,
+) -> eyre::Result<isize> {
+    pass_through_git_command_inner(
+        git_run_info,
+        args.iter().map(AsRef::as_ref).collect_vec().as_slice(),
+        event_tx_id,
+    )
 }
 
 fn make_event_tx_id<S: AsRef<str> + std::fmt::Debug>(

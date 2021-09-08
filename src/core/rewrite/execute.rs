@@ -104,8 +104,8 @@ pub fn move_branches<'a>(
             line
         })
         .collect();
-    let branch_moves_stdin = OsStrBytes::from_raw_bytes(branch_moves_stdin)
-        .wrap_err_with(|| "Encoding branch moves stdin")?;
+    let branch_moves_stdin =
+        OsStrBytes::from_raw_bytes(branch_moves_stdin).wrap_err("Encoding branch moves stdin")?;
     let branch_moves_stdin = OsString::from(branch_moves_stdin);
     git_run_info.run_hook(
         effects,
@@ -401,10 +401,10 @@ mod in_memory {
                 RebaseCommand::Pick { commit_oid } => {
                     let current_commit = repo
                         .find_commit_or_fail(current_oid)
-                        .wrap_err_with(|| "Finding current commit")?;
+                        .wrap_err("Finding current commit")?;
                     let commit_to_apply = repo
                         .find_commit_or_fail(*commit_oid)
-                        .wrap_err_with(|| "Finding commit to apply")?;
+                        .wrap_err("Finding commit to apply")?;
                     i += 1;
 
                     let commit_description = printable_styled_string(
@@ -472,11 +472,11 @@ mod in_memory {
                             &commit_tree,
                             vec![&current_commit],
                         )
-                        .wrap_err_with(|| "Applying rebased commit")?;
+                        .wrap_err("Applying rebased commit")?;
 
                     let rebased_commit = repo
                         .find_commit_or_fail(rebased_commit_oid)
-                        .wrap_err_with(|| "Looking up just-rebased commit")?;
+                        .wrap_err("Looking up just-rebased commit")?;
                     let commit_description = printable_styled_string(
                         effects.get_glyphs(),
                         repo.friendly_describe_commit_from_oid(rebased_commit_oid)?,
@@ -832,8 +832,12 @@ mod on_disk {
 
         if *preserve_timestamps {
             let cdate_is_adate_file_path = rebase_state_dir.join("cdate_is_adate");
-            std::fs::write(&cdate_is_adate_file_path, "")
-                .wrap_err_with(|| "Writing `cdate_is_adate` option file")?;
+            std::fs::write(&cdate_is_adate_file_path, "").wrap_err_with(|| {
+                format!(
+                    "Writing `cdate_is_adate` option file to: {:?}",
+                    &cdate_is_adate_file_path
+                )
+            })?;
         }
 
         // Make sure we don't move around the current branch unintentionally. If it

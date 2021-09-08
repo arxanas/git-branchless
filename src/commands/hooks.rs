@@ -89,9 +89,9 @@ fn hook_post_commit_common(effects: &Effects, hook_name: &str) -> eyre::Result<(
 
     let commit = repo
         .find_commit_or_fail(commit_oid)
-        .wrap_err_with(|| "Looking up `HEAD` commit")?;
+        .wrap_err("Looking up `HEAD` commit")?;
     mark_commit_reachable(&repo, commit_oid)
-        .wrap_err_with(|| "Marking commit as reachable for GC purposes")?;
+        .wrap_err("Marking commit as reachable for GC purposes")?;
 
     let timestamp = commit.get_time().seconds() as f64;
     let event_tx_id = event_log_db.make_transaction_id(now, hook_name)?;
@@ -137,9 +137,9 @@ fn parse_reference_transaction_line(
     let fields = {
         let mut fields = Vec::new();
         for field in cursor.split(b' ') {
-            let field = field.wrap_err_with(|| "Reading reference-transaction field")?;
-            let field = OsString::from_raw_vec(field)
-                .wrap_err_with(|| "Decoding reference-transaction field")?;
+            let field = field.wrap_err("Reading reference-transaction field")?;
+            let field =
+                OsString::from_raw_vec(field).wrap_err("Decoding reference-transaction field")?;
             fields.push(field);
         }
         fields
@@ -149,7 +149,7 @@ fn parse_reference_transaction_line(
             if !should_ignore_ref_updates(ref_name) {
                 let timestamp = now
                     .duration_since(SystemTime::UNIX_EPOCH)
-                    .wrap_err_with(|| "Processing timestamp")?;
+                    .wrap_err("Processing timestamp")?;
                 Ok(Some(Event::RefUpdateEvent {
                     timestamp: timestamp.as_secs_f64(),
                     event_tx_id,

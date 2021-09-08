@@ -522,13 +522,11 @@ ORDER BY rowid ASC
         rows.into_iter().map(Event::try_from).collect()
     }
 
-    /// Create a new event transaction ID to be used to insert subsequent
-    /// `Event`s into the database.
-    #[instrument(fields(message = message.as_ref()))]
-    pub fn make_transaction_id(
+    #[instrument]
+    fn make_transaction_id_inner(
         &self,
         now: SystemTime,
-        message: impl AsRef<str>,
+        message: &str,
     ) -> eyre::Result<EventTransactionId> {
         if let Ok(transaction_id) = std::env::var(BRANCHLESS_TRANSACTION_ID_ENV_VAR) {
             if let Ok(transaction_id) = transaction_id.parse::<EventTransactionId>() {
@@ -540,7 +538,7 @@ ORDER BY rowid ASC
 
         let timestamp = now
             .duration_since(SystemTime::UNIX_EPOCH)
-            .wrap_err_with(|| format!("Calculating event transaction timestamp: {:?}", &now))?
+            .wrap_err("Calculating event transaction timestamp")?
             .as_secs_f64();
         self.conn
             .execute(
@@ -552,16 +550,10 @@ ORDER BY rowid ASC
         ",
                 rusqlite::named_params! {
                     ":timestamp": timestamp,
-                    ":message": message.as_ref(),
+                    ":message": message,
                 },
             )
-            .wrap_err_with(|| {
-                format!(
-                    "Creating event transaction (now: {:?}, message: {:?})",
-                    &now,
-                    message.as_ref(),
-                )
-            })?;
+            .wrap_err("Creating event transaction")?;
 
         // Ensure that we query `last_insert_rowid` in a transaction, in case
         // there's another thread in this process making queries with the same
@@ -569,6 +561,16 @@ ORDER BY rowid ASC
         let event_tx_id: isize = self.conn.last_insert_rowid().try_into()?;
         tx.commit()?;
         Ok(EventTransactionId(event_tx_id))
+    }
+
+    /// Create a new event transaction ID to be used to insert subsequent
+    /// `Event`s into the database.
+    pub fn make_transaction_id(
+        &self,
+        now: SystemTime,
+        message: impl AsRef<str>,
+    ) -> eyre::Result<EventTransactionId> {
+        self.make_transaction_id_inner(now, message.as_ref())
     }
 }
 
@@ -679,14 +681,18 @@ impl std::fmt::Debug for EventReplayer {
 }
 
 impl EventReplayer {
-    fn new(main_branch_reference_name: impl Into<OsString>) -> Self {
+    fn new_inner(main_branch_reference_name: OsString) -> Self {
         EventReplayer {
             id_counter: 0,
             events: vec![],
-            main_branch_reference_name: main_branch_reference_name.into(),
+            main_branch_reference_name,
             commit_history: HashMap::new(),
             ref_locations: HashMap::new(),
         }
+    }
+
+    fn new(main_branch_reference_name: impl Into<OsString>) -> Self {
+        Self::new_inner(main_branch_reference_name.into())
     }
 
     /// Construct the replayer from all the events in the database.
