@@ -1164,10 +1164,9 @@ fn test_move_no_reapply_upstream_commits_on_disk() -> eyre::Result<()> {
         Executing: git branchless hook-detect-empty-commit 96d1c37a3d4363611c49f7e52186e189a04c531f
         branchless: processing 2 rewritten commits
         branchless: processing 1 update: branch should-be-deleted
-        branchless: running command: <git-executable> checkout refs/heads/master
+        branchless: running command: <git-executable> checkout master
         Previous HEAD position was fa46633 create test2.txt
-        branchless: processing 1 update: ref HEAD
-        HEAD is now at 047b7ad create test1.txt
+        Switched to branch 'master'
         branchless: processing checkout
         Successfully rebased and updated master.
         "###);
@@ -1244,9 +1243,8 @@ fn test_move_no_reapply_squashed_commits_on_disk() -> eyre::Result<()> {
         branchless: processed commit: 12d361aa create test2.txt
         Executing: git branchless hook-detect-empty-commit 96d1c37a3d4363611c49f7e52186e189a04c531f
         branchless: processing 4 rewritten commits
-        branchless: running command: <git-executable> checkout refs/heads/master
-        branchless: processing 1 update: ref HEAD
-        HEAD is now at de4a1fe squashed test1 and test2
+        branchless: running command: <git-executable> checkout master
+        Switched to branch 'master'
         branchless: processing checkout
         Successfully rebased and updated master.
         "###);
@@ -1826,9 +1824,8 @@ fn test_move_on_disk_orphaned_root() -> eyre::Result<()> {
         Executing: git branchless hook-detect-empty-commit fc09f3d9f0b7370dc38e761e3730a856dc5025c2
         branchless: processing 3 rewritten commits
         branchless: processing 1 update: branch new-root
-        branchless: running command: <git-executable> checkout refs/heads/new-root
-        branchless: processing 1 update: ref HEAD
-        HEAD is now at 70deb1e create test3.txt
+        branchless: running command: <git-executable> checkout new-root
+        Switched to branch 'new-root'
         branchless: processing checkout
         Successfully rebased and updated new-root.
         "###);

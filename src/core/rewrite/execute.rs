@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::ffi::{OsStr, OsString};
 use std::fmt::Write;
@@ -9,7 +10,7 @@ use tracing::warn;
 
 use crate::core::eventlog::EventTransactionId;
 use crate::core::formatting::printable_styled_string;
-use crate::git::{GitRunInfo, MaybeZeroOid, NonZeroOid, Repo};
+use crate::git::{GitRunInfo, MaybeZeroOid, NonZeroOid, Repo, ResolvedReferenceInfo};
 use crate::tui::Effects;
 
 use super::plan::RebasePlan;
@@ -120,9 +121,115 @@ pub fn move_branches<'a>(
     }
 }
 
+/// After a rebase, check out the appropriate new `HEAD`. This can be difficult
+/// because the commit might have been rewritten, dropped, or have a branch
+/// pointing to it which also needs to be checked out.
+///
+/// `skipped_head_updated_oid` is the caller's belief of what the new OID of
+/// `HEAD` should be in the event that the original commit was skipped. If the
+/// caller doesn't think that the previous `HEAD` commit was skipped, then they
+/// should pass in `None`.
+pub fn check_out_updated_head(
+    effects: &Effects,
+    git_run_info: &GitRunInfo,
+    repo: &Repo,
+    event_tx_id: EventTransactionId,
+    rewritten_oids: &HashMap<NonZeroOid, MaybeZeroOid>,
+    previous_head_info: &ResolvedReferenceInfo,
+    skipped_head_updated_oid: Option<NonZeroOid>,
+) -> eyre::Result<isize> {
+    enum Target<'a> {
+        Oid(Option<NonZeroOid>),
+        Reference(Cow<'a, OsStr>),
+    }
+
+    let head_target: Target = match previous_head_info {
+        ResolvedReferenceInfo {
+            oid: None,
+            reference_name: None,
+        } => {
+            // Head was unborn, so no need to check out a new branch.
+            Target::Oid(skipped_head_updated_oid)
+        }
+
+        ResolvedReferenceInfo {
+            oid: None,
+            reference_name: Some(reference_name),
+        } => {
+            // Head was unborn but a branch was checked out. Not sure if this
+            // can happen, but if so, just use that branch.
+            Target::Reference(Cow::Borrowed(reference_name))
+        }
+
+        ResolvedReferenceInfo {
+            oid: Some(previous_head_oid),
+            reference_name: None,
+        } => {
+            // No branch was checked out.
+            match rewritten_oids.get(previous_head_oid) {
+                Some(MaybeZeroOid::NonZero(oid)) => {
+                    // This OID was rewritten, so check out the new version of the commit.
+                    Target::Oid(Some(*oid))
+                }
+                Some(MaybeZeroOid::Zero) => {
+                    // The commit was skipped. Get the new location for `HEAD`.
+                    Target::Oid(skipped_head_updated_oid)
+                }
+                None => {
+                    // This OID was not rewritten, so check it out again.
+                    Target::Oid(Some(*previous_head_oid))
+                }
+            }
+        }
+
+        ResolvedReferenceInfo {
+            oid: Some(_),
+            reference_name: Some(reference_name),
+        } => {
+            // Find the reference at current time to see if it still exists.
+            match repo.find_reference(reference_name)? {
+                Some(_) => {
+                    // The branch moved, so we need to make sure that we are
+                    // still checked out to it.
+                    //
+                    // * On-disk rebases will end with the branch pointing to
+                    // the last rebase head, which may not be the `HEAD` commit
+                    // before the rebase.
+                    //
+                    // * In-memory rebases will detach `HEAD` before proceeding,
+                    // so we need to reattach it if necessary.
+                    match previous_head_info.get_branch_name()? {
+                        Some(branch_name) => Target::Reference(Cow::Owned(branch_name)),
+                        None => Target::Reference(Cow::Borrowed(reference_name)),
+                    }
+                }
+
+                None => {
+                    // The branch was deleted because it pointed to
+                    // a skipped commit. Get the new location for
+                    // `HEAD`.
+                    Target::Oid(skipped_head_updated_oid)
+                }
+            }
+        }
+    };
+
+    let checkout_target = match head_target {
+        Target::Oid(None) => return Ok(0),
+        Target::Oid(Some(oid)) => Cow::Owned(OsString::from(oid.to_string())),
+        Target::Reference(reference_name) => reference_name,
+    };
+    let result = git_run_info.run(
+        effects,
+        Some(event_tx_id),
+        &[OsStr::new("checkout"), &checkout_target],
+    )?;
+    Ok(result)
+}
+
 mod in_memory {
     use std::collections::{HashMap, HashSet};
-    use std::ffi::{OsStr, OsString};
+    use std::ffi::OsString;
     use std::fmt::Write;
     use std::path::PathBuf;
 
@@ -132,6 +239,7 @@ mod in_memory {
 
     use crate::commands::gc::mark_commit_reachable;
     use crate::core::formatting::printable_styled_string;
+    use crate::core::rewrite::execute::check_out_updated_head;
     use crate::core::rewrite::move_branches;
     use crate::core::rewrite::plan::{OidOrLabel, RebaseCommand, RebasePlan};
     use crate::git::{
@@ -460,7 +568,7 @@ mod in_memory {
         git_run_info: &GitRunInfo,
         repo: &Repo,
         rewritten_oids: &[(NonZeroOid, MaybeZeroOid)],
-        new_head_oid: Option<NonZeroOid>,
+        skipped_head_updated_oid: Option<NonZeroOid>,
         options: &ExecuteRebasePlanOptions,
     ) -> eyre::Result<isize> {
         let ExecuteRebasePlanOptions {
@@ -513,60 +621,16 @@ mod in_memory {
             Some(post_rewrite_stdin),
         )?;
 
-        let (previous_head_oid, new_head_oid) = match head_info.oid {
-            None => {
-                // `HEAD` was unborn, so don't check anything out.
-                return Ok(0);
-            }
-            Some(previous_head_oid) => {
-                let new_head_oid = match new_head_oid {
-                    Some(new_head_oid) => new_head_oid,
-                    None => eyre::bail!(
-                        "`None` provided for `new_head_oid`,
-                        but it should have been `Some`
-                        because the previous `HEAD` OID was not `None`: {:?}",
-                        previous_head_oid
-                    ),
-                };
-                (previous_head_oid, new_head_oid)
-            }
-        };
-
-        let head_target = match (
-            head_info.get_branch_name()?,
-            rewritten_oids_map.get(&previous_head_oid),
-        ) {
-            (Some(head_branch), Some(MaybeZeroOid::NonZero(_))) => {
-                // The `HEAD` branch has been moved above. Check it out now.
-                head_branch
-            }
-            (Some(_), Some(MaybeZeroOid::Zero)) => {
-                // The `HEAD` branch was deleted, so check out whatever the
-                // caller says is the new appropriate `HEAD` OID.
-                OsString::from(new_head_oid.to_string())
-            }
-            (Some(head_branch), None) => {
-                // The `HEAD` commit was not rewritten, but we detached it
-                // from its branch, so check its branch out again.
-                head_branch
-            }
-            (None, _) => {
-                // We don't have to worry about a branch, so just use whatever
-                // we've been told is the new `HEAD` OID.
-                OsString::from(new_head_oid.to_string())
-            }
-        };
-
-        let result = git_run_info.run(
+        let exit_code = check_out_updated_head(
             effects,
-            Some(*event_tx_id),
-            &[OsStr::new("checkout"), &head_target],
+            git_run_info,
+            repo,
+            *event_tx_id,
+            &rewritten_oids_map,
+            &head_info,
+            skipped_head_updated_oid,
         )?;
-        if result != 0 {
-            return Ok(result);
-        }
-
-        Ok(0)
+        Ok(exit_code)
     }
 }
 
