@@ -316,29 +316,12 @@ branchless:   - {config_command}: suppress this message
 
 const EXTRA_POST_REWRITE_FILE_NAME: &str = "branchless_do_extra_post_rewrite";
 
-/// Git stores a file called `orig-head` in the rebase state directory. This is
-/// either a branch or an OID which is to be returned to after the rebase has
-/// concluded, or if the rebase is aborted.
-///
 /// In order to handle the case of a commit being skipped and its corresponding
 /// branch being deleted, we need to store our own copy of the original `HEAD`
 /// OID, and then replace it once the rebase is about to conclude. We can't do
 /// it earlier, because if the user aborts the rebase after the commit has been
 /// skipped, then they would be returned to the wrong commit.
 const UPDATED_HEAD_FILE_NAME: &str = "branchless_updated_head";
-
-fn get_original_head_oid(repo: &Repo) -> eyre::Result<MaybeZeroOid> {
-    let original_head_oid_file_path = repo.get_rebase_state_dir_path().join("orig-head");
-    let original_head_oid_file_contents = std::fs::read_to_string(&original_head_oid_file_path)
-        .wrap_err_with(|| {
-            format!(
-                "Reading `orig-head` from: {:?}",
-                &original_head_oid_file_path
-            )
-        })?;
-    let oid: MaybeZeroOid = original_head_oid_file_contents.parse()?;
-    Ok(oid)
-}
 
 #[instrument]
 fn save_updated_head_oid(repo: &Repo, updated_head_oid: NonZeroOid) -> eyre::Result<()> {
@@ -441,11 +424,15 @@ pub fn hook_skip_upstream_applied_commit(
         printable_styled_string(effects.get_glyphs(), commit.friendly_describe()?)?
     )?;
 
-    let original_head_oid = get_original_head_oid(&repo)?;
-    if MaybeZeroOid::NonZero(commit_oid) == original_head_oid {
-        let current_head_oid = repo.get_head_info()?.oid;
-        if let Some(current_head_oid) = current_head_oid {
-            save_updated_head_oid(&repo, current_head_oid)?;
+    if let Some(orig_head_reference) = repo.find_reference(OsStr::new("ORIG_HEAD"))? {
+        let resolved_orig_head = repo.resolve_reference(&orig_head_reference)?;
+        if let Some(original_head_oid) = resolved_orig_head.oid {
+            if original_head_oid == commit_oid {
+                let current_head_oid = repo.get_head_info()?.oid;
+                if let Some(current_head_oid) = current_head_oid {
+                    save_updated_head_oid(&repo, current_head_oid)?;
+                }
+            }
         }
     }
     add_rewritten_list_entries(
