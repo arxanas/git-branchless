@@ -63,7 +63,7 @@ pub struct ResolvedReferenceInfo<'a> {
 
     /// The name of the reference that `HEAD` points to symbolically. If `HEAD`
     /// is detached, then this is `None`.
-    reference_name: Option<Cow<'a, OsStr>>,
+    pub reference_name: Option<Cow<'a, OsStr>>,
 }
 
 impl<'a> ResolvedReferenceInfo<'a> {

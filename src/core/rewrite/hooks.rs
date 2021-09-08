@@ -16,15 +16,16 @@ use tempfile::NamedTempFile;
 use tracing::instrument;
 
 use crate::core::config::{get_restack_warn_abandoned, RESTACK_WARN_ABANDONED_CONFIG_KEY};
-use crate::core::eventlog::{Event, EventLogDb, EventReplayer, EventTransactionId};
+use crate::core::eventlog::{Event, EventLogDb, EventReplayer};
 use crate::core::formatting::{printable_styled_string, Pluralize};
 use crate::core::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
 use crate::core::mergebase::make_merge_base_db;
 use crate::git::{
-    CategorizedReferenceName, GitRunInfo, MaybeZeroOid, NonZeroOid, ReferenceTarget, Repo,
+    CategorizedReferenceName, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo, ResolvedReferenceInfo,
 };
 use crate::tui::Effects;
 
+use super::execute::check_out_updated_head;
 use super::{find_abandoned_children, move_branches};
 
 #[instrument(skip(stream))]
@@ -149,8 +150,24 @@ pub fn hook_post_rewrite(
         .join(EXTRA_POST_REWRITE_FILE_NAME)
         .exists()
     {
+        // Make sure to resolve `ORIG_HEAD` before we potentially delete the
+        // branch it points to, so that we can get the original OID of `HEAD`.
+        let previous_head_info = get_previous_head_info(&repo)?;
         move_branches(effects, git_run_info, &repo, event_tx_id, &rewritten_oids)?;
-        check_out_new_head(effects, git_run_info, &repo, event_tx_id, &rewritten_oids)?;
+
+        let skipped_head_updated_oid = get_updated_head_oid(&repo)?;
+        let exit_code = check_out_updated_head(
+            effects,
+            git_run_info,
+            &repo,
+            event_tx_id,
+            &rewritten_oids,
+            &previous_head_info,
+            skipped_head_updated_oid,
+        )?;
+        if exit_code != 0 {
+            eyre::bail!("Could not check out your updated `HEAD` commit.");
+        }
     }
 
     let should_check_abandoned_commits = get_restack_warn_abandoned(&repo)?;
@@ -167,77 +184,15 @@ pub fn hook_post_rewrite(
     Ok(())
 }
 
-#[instrument]
-fn check_out_new_head(
-    effects: &Effects,
-    git_run_info: &GitRunInfo,
-    repo: &Repo,
-    event_tx_id: EventTransactionId,
-    rewritten_oids: &HashMap<NonZeroOid, MaybeZeroOid>,
-) -> eyre::Result<()> {
-    let checkout_target: Option<OsString> =
-        match repo.find_reference(&OsString::from("ORIG_HEAD"))? {
-            None => None,
-            Some(orig_head_reference) => match orig_head_reference.get_target()? {
-                ReferenceTarget::Direct {
-                    oid: MaybeZeroOid::Zero,
-                } => {
-                    // `HEAD` was unborn, so keep it that way.
-                    None
-                }
-
-                ReferenceTarget::Direct {
-                    oid: MaybeZeroOid::NonZero(oid),
-                } => match rewritten_oids.get(&oid) {
-                    Some(MaybeZeroOid::NonZero(oid)) => {
-                        // This OID was rewritten, so check out the new version of the commit.
-                        Some(OsString::from(oid.to_string()))
-                    }
-                    Some(MaybeZeroOid::Zero) => {
-                        // The commit was skipped. Get the new location for `HEAD`.
-                        get_updated_head_oid(repo)?.map(|oid| oid.to_string().into())
-                    }
-                    None => {
-                        // This OID was not rewritten, so check it out again.
-                        Some(OsString::from(oid.to_string()))
-                    }
-                },
-
-                ReferenceTarget::Symbolic { reference_name } => {
-                    match repo.find_reference(&reference_name)? {
-                        Some(reference) => {
-                            // The branch may have been moved above, but
-                            // regardless, we check it again out here.
-                            Some(reference.get_name()?)
-                        }
-                        None => {
-                            // The branch was deleted because it pointed to
-                            // a skipped commit. Get the new location for
-                            // `HEAD`.
-                            get_updated_head_oid(repo)?.map(|oid| oid.to_string().into())
-                        }
-                    }
-                }
-            },
-        };
-
-    if let Some(checkout_target) = checkout_target {
-        let exit_code = git_run_info.run(
-            effects,
-            Some(event_tx_id),
-            &[&OsString::from("checkout"), &checkout_target],
-        )?;
-        if exit_code != 0 {
-            eyre::bail!(
-                "Failed to check out previous HEAD location: {:?}",
-                &checkout_target
-            );
-        }
+fn get_previous_head_info(repo: &Repo) -> eyre::Result<ResolvedReferenceInfo> {
+    match repo.find_reference(OsStr::new("ORIG_HEAD"))? {
+        None => Ok(ResolvedReferenceInfo {
+            oid: None,
+            reference_name: None,
+        }),
+        Some(reference) => Ok(repo.resolve_reference(&reference)?),
     }
-
-    Ok(())
 }
-
 #[instrument(skip(old_commit_oids))]
 fn warn_abandoned(
     effects: &Effects,

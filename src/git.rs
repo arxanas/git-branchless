@@ -12,7 +12,7 @@ pub use config::{Config, ConfigValue};
 pub use oid::{MaybeZeroOid, NonZeroOid};
 pub use repo::{
     Branch, CategorizedReferenceName, CherryPickFastError, CherryPickFastOptions, Commit,
-    GitVersion, PatchId, Reference, ReferenceTarget, Repo,
+    GitVersion, PatchId, Reference, ReferenceTarget, Repo, ResolvedReferenceInfo,
 };
 pub use run::GitRunInfo;
 pub use tree::Tree;
