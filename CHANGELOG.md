@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed: In-memory rebases on large repositories are now up to 500x faster.
 - Fixed: `git smartlog` no longer crashes after you've just run `git checkout --orphan <branch>`.
 - Fixed: In-memory diffs on large repositories (used for commit deduplication) are now up to 100x faster.
+- Fixed: Invocations of `git-branchless` commands which called subprocesses and then exited quickly no longer fail to print the subprocess output.
 
 ## [0.3.4] - 2021-08-12
 

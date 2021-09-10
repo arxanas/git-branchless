@@ -74,6 +74,7 @@ enum OutputDest {
 struct OperationState {
     operation_type: OperationType,
     progress_bar: ProgressBar,
+    is_visible: bool,
     has_meter: bool,
     start_times: Vec<Instant>,
     elapsed_duration: Duration,
@@ -159,7 +160,19 @@ fn spawn_progress_updater_thread(
         // finishes quickly, then it will flicker annoyingly.
         thread::sleep(Duration::from_millis(250));
         if let Some(multi_progress) = multi_progress.upgrade() {
+            let operation_states = match operation_states.upgrade() {
+                None => return,
+                Some(operation_states) => operation_states,
+            };
+            let mut operation_states = operation_states.write().unwrap();
+
+            // Make sure that we set the draw target while we're holding the
+            // lock on `operation_states`, so that other consumers don't read an
+            // inconsistent value for `is_visible`.
             multi_progress.set_draw_target(ProgressDrawTarget::stderr());
+            for operation_state in operation_states.values_mut() {
+                operation_state.is_visible = true;
+            }
         }
 
         loop {
@@ -271,6 +284,7 @@ impl Effects {
                     operation_type,
                     progress_bar,
                     start_times: Vec::new(),
+                    is_visible: false,
                     has_meter: false,
                     elapsed_duration: Default::default(),
                 };
@@ -410,6 +424,27 @@ trait WriteProgress {
                 // The progress meters will be hidden, and any `println`
                 // calls on them will be ignored.
                 write!(Self::get_stream(), "{}", take(self.get_buffer())).unwrap();
+                Self::get_stream().flush().unwrap();
+            }
+
+            Some(operation_state) if !operation_state.is_visible => {
+                // An operation has started, but we haven't started rendering
+                // the progress bars yet, because it hasn't been long enough.
+                // We'll write directly to the output stream, but make sure to
+                // style the output.
+                //
+                // Note that we can't use `ProgressBar::is_hidden` to detect if
+                // we should enter this case. The `ProgressBar`'s draw target
+                // will be set to the parent `MultiProgress`. The parent
+                // `MultiProgress` is the object with the hidden output, but
+                // it's not possible to get the draw target for the
+                // `MultiProgress` at present.
+                write!(
+                    Self::get_stream(),
+                    "{}",
+                    Self::style_output(&take(self.get_buffer()))
+                )
+                .unwrap();
                 Self::get_stream().flush().unwrap();
             }
 
