@@ -3,9 +3,12 @@ use branchless::testing::{make_git, GitRunOptions};
 use crate::command::test_restack::remove_rebase_lines;
 
 #[test]
-fn test_move_stick_on_disk() -> eyre::Result<()> {
+fn test_move_stick() -> eyre::Result<()> {
     let git = make_git()?;
 
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
     git.init_repo()?;
     git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
 
@@ -16,15 +19,18 @@ fn test_move_stick_on_disk() -> eyre::Result<()> {
     let test3_oid = git.commit_file("test3", 3)?;
     git.commit_file("test4", 4)?;
 
-    git.run(&[
-        "move",
-        "--on-disk",
-        "-s",
-        &test3_oid.to_string(),
-        "-d",
-        &test1_oid.to_string(),
-    ])?;
+    // --on-disk
     {
+        let git = git.clone_repo()?;
+        git.run(&[
+            "move",
+            "--on-disk",
+            "-s",
+            &test3_oid.to_string(),
+            "-d",
+            &test1_oid.to_string(),
+        ])?;
+
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
         :
@@ -38,26 +44,11 @@ fn test_move_stick_on_disk() -> eyre::Result<()> {
         "###);
     }
 
-    Ok(())
-}
-
-#[test]
-fn test_move_stick_in_memory() -> eyre::Result<()> {
-    let git = make_git()?;
-
-    git.init_repo()?;
-    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
-
-    let test1_oid = git.commit_file("test1", 1)?;
-    git.commit_file("test2", 2)?;
-
-    git.detach_head()?;
-    let test3_oid = git.commit_file("test3", 3)?;
-    git.commit_file("test4", 4)?;
-
+    // --in-memory
     {
         let (stdout, _stderr) = git.run(&[
             "move",
+            "--in-memory",
             "--debug-dump-rebase-plan",
             "-s",
             &test3_oid.to_string(),
@@ -97,9 +88,7 @@ fn test_move_stick_in_memory() -> eyre::Result<()> {
         branchless: running command: <git-executable> checkout a248207402822b7396cabe0f1011d8a7ce7daf1b
         In-memory rebase succeeded.
         "###);
-    }
 
-    {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
             :
@@ -117,9 +106,12 @@ fn test_move_stick_in_memory() -> eyre::Result<()> {
 }
 
 #[test]
-fn test_move_tree_on_disk() -> eyre::Result<()> {
+fn test_move_tree() -> eyre::Result<()> {
     let git = make_git()?;
 
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
     git.init_repo()?;
     git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
 
@@ -132,17 +124,20 @@ fn test_move_tree_on_disk() -> eyre::Result<()> {
     git.run(&["checkout", &test3_oid.to_string()])?;
     git.commit_file("test5", 5)?;
 
-    git.run(&[
-        "move",
-        "--on-disk",
-        "-s",
-        &test3_oid.to_string(),
-        "-d",
-        &test1_oid.to_string(),
-    ])?;
+    // --on-disk
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        let git = git.clone_repo()?;
+        git.run(&[
+            "move",
+            "--on-disk",
+            "-s",
+            &test3_oid.to_string(),
+            "-d",
+            &test1_oid.to_string(),
+        ])?;
+        {
+            let (stdout, _stderr) = git.run(&["smartlog"])?;
+            insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d2 create test1.txt
         |\
@@ -154,37 +149,21 @@ fn test_move_tree_on_disk() -> eyre::Result<()> {
         |
         O 96d1c37a (master) create test2.txt
         "###);
+        }
     }
 
-    Ok(())
-}
-
-#[test]
-fn test_move_tree_in_memory() -> eyre::Result<()> {
-    let git = make_git()?;
-
-    git.init_repo()?;
-    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
-
-    let test1_oid = git.commit_file("test1", 1)?;
-    git.commit_file("test2", 2)?;
-
-    git.detach_head()?;
-    let test3_oid = git.commit_file("test3", 3)?;
-    git.commit_file("test4", 4)?;
-    git.run(&["checkout", &test3_oid.to_string()])?;
-    git.commit_file("test5", 5)?;
-
-    git.run(&[
-        "move",
-        "-s",
-        &test3_oid.to_string(),
-        "-d",
-        &test1_oid.to_string(),
-    ])?;
+    // in-memory
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        git.run(&[
+            "move",
+            "-s",
+            &test3_oid.to_string(),
+            "-d",
+            &test1_oid.to_string(),
+        ])?;
+        {
+            let (stdout, _stderr) = git.run(&["smartlog"])?;
+            insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d2 create test1.txt
         |\
@@ -196,15 +175,19 @@ fn test_move_tree_in_memory() -> eyre::Result<()> {
         |
         O 96d1c37a (master) create test2.txt
         "###);
+        }
     }
 
     Ok(())
 }
 
 #[test]
-fn test_move_with_source_not_in_smartlog_on_disk() -> eyre::Result<()> {
+fn test_move_with_source_not_in_smartlog() -> eyre::Result<()> {
     let git = make_git()?;
 
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
     git.init_repo()?;
     git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
 
@@ -214,17 +197,22 @@ fn test_move_with_source_not_in_smartlog_on_disk() -> eyre::Result<()> {
     let test3_oid = git.commit_file("test3", 3)?;
     git.commit_file("test4", 4)?;
 
-    git.run(&[
-        "move",
-        "--on-disk",
-        "-s",
-        &test3_oid.to_string(),
-        "-d",
-        &test1_oid.to_string(),
-    ])?;
+    // on-disk
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        let git = git.clone_repo()?;
+
+        git.run(&[
+            "move",
+            "--on-disk",
+            "-s",
+            &test3_oid.to_string(),
+            "-d",
+            &test1_oid.to_string(),
+        ])?;
+
+        {
+            let (stdout, _stderr) = git.run(&["smartlog"])?;
+            insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d2 create test1.txt
         |\
@@ -232,34 +220,22 @@ fn test_move_with_source_not_in_smartlog_on_disk() -> eyre::Result<()> {
         :
         @ a2482074 (master) create test4.txt
         "###);
+        }
     }
 
-    Ok(())
-}
-
-#[test]
-fn test_move_with_source_not_in_smartlog_in_memory() -> eyre::Result<()> {
-    let git = make_git()?;
-
-    git.init_repo()?;
-    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
-
-    let test1_oid = git.commit_file("test1", 1)?;
-    git.commit_file("test2", 2)?;
-
-    let test3_oid = git.commit_file("test3", 3)?;
-    git.commit_file("test4", 4)?;
-
+    // --in-memory
     {
-        let (stdout, _stderr) = git.run(&[
-            "move",
-            "--debug-dump-rebase-plan",
-            "-s",
-            &test3_oid.to_string(),
-            "-d",
-            &test1_oid.to_string(),
-        ])?;
-        insta::assert_snapshot!(stdout, @r###"
+        {
+            let (stdout, _stderr) = git.run(&[
+                "move",
+                "--in-memory",
+                "--debug-dump-rebase-plan",
+                "-s",
+                &test3_oid.to_string(),
+                "-d",
+                &test1_oid.to_string(),
+            ])?;
+            insta::assert_snapshot!(stdout, @r###"
         Rebase plan: Some(
             RebasePlan {
                 first_dest_oid: NonZeroOid(62fc20d2a290daea0d52bdc2ed2ad4be6491010e),
@@ -293,11 +269,11 @@ fn test_move_with_source_not_in_smartlog_in_memory() -> eyre::Result<()> {
         branchless: running command: <git-executable> checkout master
         In-memory rebase succeeded.
         "###);
-    }
+        }
 
-    {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        {
+            let (stdout, _stderr) = git.run(&["smartlog"])?;
+            insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d2 create test1.txt
         |\
@@ -305,6 +281,7 @@ fn test_move_with_source_not_in_smartlog_in_memory() -> eyre::Result<()> {
         :
         @ a2482074 (master) create test4.txt
         "###);
+        }
     }
 
     Ok(())
@@ -314,6 +291,9 @@ fn test_move_with_source_not_in_smartlog_in_memory() -> eyre::Result<()> {
 fn test_move_merge_conflict() -> eyre::Result<()> {
     let git = make_git()?;
 
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
     git.init_repo()?;
     git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
 
@@ -927,7 +907,7 @@ fn test_move_main_branch_commits() -> eyre::Result<()> {
 }
 
 #[test]
-fn test_move_branches_after_move_on_disk() -> eyre::Result<()> {
+fn test_move_branches_after_move() -> eyre::Result<()> {
     let git = make_git()?;
 
     if !git.supports_reference_transactions()? {
@@ -946,16 +926,20 @@ fn test_move_branches_after_move_on_disk() -> eyre::Result<()> {
     git.commit_file("test5", 5)?;
     git.run(&["branch", "bar"])?;
 
+    // --on-disk
     {
-        let (stdout, stderr) = git.run(&[
-            "move",
-            "--on-disk",
-            "-s",
-            "foo",
-            "-d",
-            &test1_oid.to_string(),
-        ])?;
-        insta::assert_snapshot!(stderr, @r###"
+        let git = git.clone_repo()?;
+
+        {
+            let (stdout, stderr) = git.run(&[
+                "move",
+                "--on-disk",
+                "-s",
+                "foo",
+                "-d",
+                &test1_oid.to_string(),
+            ])?;
+            insta::assert_snapshot!(stderr, @r###"
         Executing: git branchless hook-register-extra-post-rewrite-hook
         branchless: processing 1 update: ref HEAD
         branchless: processing 1 update: ref HEAD
@@ -971,16 +955,16 @@ fn test_move_branches_after_move_on_disk() -> eyre::Result<()> {
         branchless: processing 2 updates: branch bar, branch foo
         Successfully rebased and updated detached HEAD.
         "###);
-        insta::assert_snapshot!(stdout, @r###"
+            insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
         "###);
-    }
+        }
 
-    {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        {
+            let (stdout, _stderr) = git.run(&["smartlog"])?;
+            insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d2 create test1.txt
         |\
@@ -992,12 +976,12 @@ fn test_move_branches_after_move_on_disk() -> eyre::Result<()> {
         |
         O 96d1c37a (master) create test2.txt
         "###);
-    }
+        }
 
-    {
-        // There should be no branches left to restack.
-        let (stdout, _stderr) = git.run(&["restack"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        {
+            // There should be no branches left to restack.
+            let (stdout, _stderr) = git.run(&["restack"])?;
+            insta::assert_snapshot!(stdout, @r###"
         No abandoned commits to restack.
         No abandoned branches to restack.
         branchless: running command: <git-executable> checkout 566e4341a4a9a930fc2bf7ccdfa168e9f266c34a
@@ -1012,13 +996,79 @@ fn test_move_branches_after_move_on_disk() -> eyre::Result<()> {
         |
         O 96d1c37a (master) create test2.txt
         "###);
+        }
+    }
+
+    {
+        {
+            let (stdout, stderr) = git.run(&[
+                "move",
+                "--in-memory",
+                "-s",
+                "foo",
+                "-d",
+                &test1_oid.to_string(),
+            ])?;
+            insta::assert_snapshot!(stderr, @r###"
+            Previous HEAD position was f81d55c create test5.txt
+            branchless: processing 1 update: ref HEAD
+            HEAD is now at 566e434 create test5.txt
+            branchless: processing checkout
+            "###);
+            insta::assert_snapshot!(stdout, @r###"
+            Attempting rebase in-memory...
+            [1/3] Committed as: 4838e49b create test3.txt
+            [2/3] Committed as: a2482074 create test4.txt
+            [3/3] Committed as: 566e4341 create test5.txt
+            branchless: processing 2 updates: branch bar, branch foo
+            branchless: processing 3 rewritten commits
+            branchless: running command: <git-executable> checkout 566e4341a4a9a930fc2bf7ccdfa168e9f266c34a
+            In-memory rebase succeeded.
+            "###);
+        }
+
+        {
+            let (stdout, _stderr) = git.run(&["smartlog"])?;
+            insta::assert_snapshot!(stdout, @r###"
+            :
+            O 62fc20d2 create test1.txt
+            |\
+            | o 4838e49b (foo) create test3.txt
+            | |
+            | o a2482074 create test4.txt
+            | |
+            | @ 566e4341 (bar) create test5.txt
+            |
+            O 96d1c37a (master) create test2.txt
+            "###);
+        }
+
+        {
+            // There should be no branches left to restack.
+            let (stdout, _stderr) = git.run(&["restack"])?;
+            insta::assert_snapshot!(stdout, @r###"
+        No abandoned commits to restack.
+        No abandoned branches to restack.
+        branchless: running command: <git-executable> checkout 566e4341a4a9a930fc2bf7ccdfa168e9f266c34a
+        :
+        O 62fc20d2 create test1.txt
+        |\
+        | o 4838e49b (foo) create test3.txt
+        | |
+        | o a2482074 create test4.txt
+        | |
+        | @ 566e4341 (bar) create test5.txt
+        |
+        O 96d1c37a (master) create test2.txt
+        "###);
+        }
     }
 
     Ok(())
 }
 
 #[test]
-fn test_move_no_reapply_upstream_commits_in_memory() -> eyre::Result<()> {
+fn test_move_no_reapply_upstream_commits() -> eyre::Result<()> {
     let git = make_git()?;
 
     if !git.supports_reference_transactions()? {
@@ -1036,15 +1086,54 @@ fn test_move_no_reapply_upstream_commits_in_memory() -> eyre::Result<()> {
     git.run(&["cherry-pick", &test1_oid.to_string()])?;
     git.run(&["checkout", &test2_oid.to_string()])?;
 
+    // --on-disk
     {
-        let (stdout, stderr) = git.run(&["move", "--in-memory", "-b", "HEAD", "-d", "master"])?;
-        insta::assert_snapshot!(stderr, @r###"
+        let git = git.clone_repo()?;
+
+        {
+            let (stdout, stderr) = git.run(&["move", "--on-disk", "-b", "HEAD", "-d", "master"])?;
+            insta::assert_snapshot!(stderr, @r###"
+            Executing: git branchless hook-register-extra-post-rewrite-hook
+            branchless: processing 1 update: ref HEAD
+            Executing: git branchless hook-skip-upstream-applied-commit 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
+            branchless: processing 1 update: ref HEAD
+            branchless: processed commit: fa466332 create test2.txt
+            Executing: git branchless hook-detect-empty-commit 96d1c37a3d4363611c49f7e52186e189a04c531f
+            branchless: processing 2 rewritten commits
+            branchless: processing 1 update: branch should-be-deleted
+            Successfully rebased and updated detached HEAD.
+            "###);
+            insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> diff --quiet
+        Calling Git for on-disk rebase...
+        branchless: running command: <git-executable> rebase --continue
+        Skipping commit (was already applied upstream): 62fc20d2 create test1.txt
+        "###);
+        }
+
+        {
+            let (stdout, _stderr) = git.run(&["smartlog"])?;
+            insta::assert_snapshot!(stdout, @r###"
+            :
+            O 047b7ad7 (master) create test1.txt
+            |
+            @ fa466332 create test2.txt
+            "###);
+        }
+    }
+
+    // --in-memory
+    {
+        {
+            let (stdout, stderr) =
+                git.run(&["move", "--in-memory", "-b", "HEAD", "-d", "master"])?;
+            insta::assert_snapshot!(stderr, @r###"
         Previous HEAD position was 96d1c37 create test2.txt
         branchless: processing 1 update: ref HEAD
         HEAD is now at fa46633 create test2.txt
         branchless: processing checkout
         "###);
-        insta::assert_snapshot!(stdout, @r###"
+            insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
         [1/2] Skipped commit (was already applied upstream): 62fc20d2 create test1.txt
         [2/2] Committed as: fa466332 create test2.txt
@@ -1053,23 +1142,23 @@ fn test_move_no_reapply_upstream_commits_in_memory() -> eyre::Result<()> {
         branchless: running command: <git-executable> checkout fa46633239bfa767036e41a77b67258286e4ddb9
         In-memory rebase succeeded.
         "###);
-    }
+        }
 
-    {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        {
+            let (stdout, _stderr) = git.run(&["smartlog"])?;
+            insta::assert_snapshot!(stdout, @r###"
         :
         O 047b7ad7 (master) create test1.txt
         |
         @ fa466332 create test2.txt
         "###);
+        }
     }
-
     Ok(())
 }
 
 #[test]
-fn test_move_no_reapply_squashed_commits_in_memory() -> eyre::Result<()> {
+fn test_move_no_reapply_squashed_commits() -> eyre::Result<()> {
     let git = make_git()?;
 
     if !git.supports_reference_transactions()? {
@@ -1088,9 +1177,13 @@ fn test_move_no_reapply_squashed_commits_in_memory() -> eyre::Result<()> {
     git.run(&["cherry-pick", "--no-commit", &test2_oid.to_string()])?;
     git.run(&["commit", "-m", "squashed test1 and test2"])?;
 
+    // --on-disk
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        let git = git.clone_repo()?;
+
+        {
+            let (stdout, _stderr) = git.run(&["smartlog"])?;
+            insta::assert_snapshot!(stdout, @r###"
         O f777ecc9 create initial.txt
         |\
         | o 62fc20d2 create test1.txt
@@ -1099,141 +1192,18 @@ fn test_move_no_reapply_squashed_commits_in_memory() -> eyre::Result<()> {
         |
         @ de4a1fe8 (master) squashed test1 and test2
         "###);
-    }
+        }
 
-    {
-        let (stdout, stderr) = git.run(&[
-            "move",
-            "--in-memory",
-            "-b",
-            &test2_oid.to_string(),
-            "-d",
-            "master",
-        ])?;
-        insta::assert_snapshot!(stderr, @r###"
-        Switched to branch 'master'
-        branchless: processing checkout
-        "###);
-        insta::assert_snapshot!(stdout, @r###"
-        Attempting rebase in-memory...
-        [1/2] Skipped now-empty commit: e7bcdd60 create test1.txt
-        [2/2] Skipped now-empty commit: 12d361aa create test2.txt
-        branchless: processing 2 rewritten commits
-        branchless: running command: <git-executable> checkout master
-        In-memory rebase succeeded.
-        "###);
-    }
-
-    {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
-        insta::assert_snapshot!(stdout, @r###"
-        :
-        @ de4a1fe8 (master) squashed test1 and test2
-        "###);
-    }
-
-    Ok(())
-}
-
-#[test]
-fn test_move_no_reapply_upstream_commits_on_disk() -> eyre::Result<()> {
-    let git = make_git()?;
-
-    if !git.supports_reference_transactions()? {
-        return Ok(());
-    }
-
-    git.init_repo()?;
-    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
-
-    git.detach_head()?;
-    let test1_oid = git.commit_file("test1", 1)?;
-    git.run(&["branch", "should-be-deleted"])?;
-    let test2_oid = git.commit_file("test2", 2)?;
-    git.run(&["checkout", "master"])?;
-    git.run(&["cherry-pick", &test1_oid.to_string()])?;
-
-    {
-        let (stdout, stderr) = git.run(&["move", "--on-disk", "-b", &test2_oid.to_string()])?;
-        insta::assert_snapshot!(stderr, @r###"
-        Executing: git branchless hook-register-extra-post-rewrite-hook
-        branchless: processing 1 update: ref HEAD
-        Executing: git branchless hook-skip-upstream-applied-commit 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
-        branchless: processing 1 update: ref HEAD
-        branchless: processed commit: fa466332 create test2.txt
-        Executing: git branchless hook-detect-empty-commit 96d1c37a3d4363611c49f7e52186e189a04c531f
-        branchless: processing 2 rewritten commits
-        branchless: processing 1 update: branch should-be-deleted
-        branchless: running command: <git-executable> checkout master
-        Previous HEAD position was fa46633 create test2.txt
-        Switched to branch 'master'
-        branchless: processing checkout
-        Successfully rebased and updated master.
-        "###);
-        insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> diff --quiet
-        Calling Git for on-disk rebase...
-        branchless: running command: <git-executable> rebase --continue
-        Skipping commit (was already applied upstream): 62fc20d2 create test1.txt
-        "###);
-    }
-
-    {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
-        insta::assert_snapshot!(stdout, @r###"
-        :
-        @ 047b7ad7 (master) create test1.txt
-        |
-        o fa466332 create test2.txt
-        "###);
-    }
-
-    Ok(())
-}
-
-#[test]
-fn test_move_no_reapply_squashed_commits_on_disk() -> eyre::Result<()> {
-    let git = make_git()?;
-
-    if !git.supports_reference_transactions()? {
-        return Ok(());
-    }
-
-    git.init_repo()?;
-    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
-
-    git.detach_head()?;
-    let test1_oid = git.commit_file("test1", 1)?;
-    let test2_oid = git.commit_file("test2", 2)?;
-
-    git.run(&["checkout", "master"])?;
-    git.run(&["cherry-pick", "--no-commit", &test1_oid.to_string()])?;
-    git.run(&["cherry-pick", "--no-commit", &test2_oid.to_string()])?;
-    git.run(&["commit", "-m", "squashed test1 and test2"])?;
-
-    {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
-        insta::assert_snapshot!(stdout, @r###"
-        O f777ecc9 create initial.txt
-        |\
-        | o 62fc20d2 create test1.txt
-        | |
-        | o 96d1c37a create test2.txt
-        |
-        @ de4a1fe8 (master) squashed test1 and test2
-        "###);
-    }
-
-    {
-        let (stdout, stderr) = git.run(&[
-            "move",
-            "--on-disk",
-            "-b",
-            &test2_oid.to_string(),
-            "-d",
-            "master",
-        ])?;
-        insta::assert_snapshot!(stderr, @r###"
+        {
+            let (stdout, stderr) = git.run(&[
+                "move",
+                "--on-disk",
+                "-b",
+                &test2_oid.to_string(),
+                "-d",
+                "master",
+            ])?;
+            insta::assert_snapshot!(stderr, @r###"
         Executing: git branchless hook-register-extra-post-rewrite-hook
         branchless: processing 1 update: ref HEAD
         branchless: processing 1 update: ref HEAD
@@ -1248,100 +1218,75 @@ fn test_move_no_reapply_squashed_commits_on_disk() -> eyre::Result<()> {
         branchless: processing checkout
         Successfully rebased and updated master.
         "###);
-        insta::assert_snapshot!(stdout, @r###"
+            insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
         Skipped now-empty commit: e7bcdd60 create test1.txt
         Skipped now-empty commit: 12d361aa create test2.txt
         "###);
-    }
+        }
 
-    {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        {
+            let (stdout, _stderr) = git.run(&["smartlog"])?;
+            insta::assert_snapshot!(stdout, @r###"
         :
         @ de4a1fe8 (master) squashed test1 and test2
         "###);
+        }
     }
 
-    Ok(())
-}
-
-#[test]
-fn test_move_delete_checked_out_branch_in_memory() -> eyre::Result<()> {
-    let git = make_git()?;
-
-    if !git.supports_reference_transactions()? {
-        return Ok(());
-    }
-
-    git.init_repo()?;
-    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
-
-    git.run(&["checkout", "-b", "work"])?;
-    let test1_oid = git.commit_file("test1", 1)?;
-    let test2_oid = git.commit_file("test2", 2)?;
-    git.run(&["checkout", "-b", "more-work"])?;
-    git.commit_file("test3", 2)?;
-    git.run(&["checkout", "master"])?;
-    git.run(&[
-        "cherry-pick",
-        &test1_oid.to_string(),
-        &test2_oid.to_string(),
-    ])?;
-
+    // --in-memory
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        {
+            let (stdout, _stderr) = git.run(&["smartlog"])?;
+            insta::assert_snapshot!(stdout, @r###"
         O f777ecc9 create initial.txt
         |\
-        : o 62fc20d2 create test1.txt
-        : |
-        : o 96d1c37a (work) create test2.txt
-        : |
-        : o ffcba554 (more-work) create test3.txt
-        :
-        @ 91c5ce63 (master) create test2.txt
+        | o 62fc20d2 create test1.txt
+        | |
+        | o 96d1c37a create test2.txt
+        |
+        @ de4a1fe8 (master) squashed test1 and test2
         "###);
-    }
+        }
 
-    {
-        git.run(&["checkout", "work"])?;
-        let (stdout, stderr) = git.run(&["move", "--in-memory", "-b", "HEAD", "-d", "master"])?;
-        insta::assert_snapshot!(stderr, @r###"
-        Previous HEAD position was 96d1c37 create test2.txt
-        branchless: processing 1 update: ref HEAD
-        HEAD is now at 91c5ce6 create test2.txt
+        {
+            let (stdout, stderr) = git.run(&[
+                "move",
+                "--in-memory",
+                "-b",
+                &test2_oid.to_string(),
+                "-d",
+                "master",
+            ])?;
+            insta::assert_snapshot!(stderr, @r###"
+        Switched to branch 'master'
         branchless: processing checkout
         "###);
-        insta::assert_snapshot!(stdout, @r###"
+            insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
-        [1/3] Skipped commit (was already applied upstream): 62fc20d2 create test1.txt
-        [2/3] Skipped commit (was already applied upstream): 96d1c37a create test2.txt
-        [3/3] Committed as: 012efd6e create test3.txt
-        branchless: processing 2 updates: branch more-work, branch work
-        branchless: processing 3 rewritten commits
-        branchless: running command: <git-executable> checkout 91c5ce63686889388daec1120bf57bea8a744bc2
+        [1/2] Skipped now-empty commit: e7bcdd60 create test1.txt
+        [2/2] Skipped now-empty commit: 12d361aa create test2.txt
+        branchless: processing 2 rewritten commits
+        branchless: running command: <git-executable> checkout master
         In-memory rebase succeeded.
         "###);
-    }
+        }
 
-    {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        {
+            let (stdout, _stderr) = git.run(&["smartlog"])?;
+            insta::assert_snapshot!(stdout, @r###"
         :
-        @ 91c5ce63 (master) create test2.txt
-        |
-        o 012efd6e (more-work) create test3.txt
+        @ de4a1fe8 (master) squashed test1 and test2
         "###);
+        }
     }
-
     Ok(())
 }
 
 #[test]
-fn test_move_delete_checked_out_branch_on_disk() -> eyre::Result<()> {
+fn test_move_delete_checked_out_branch() -> eyre::Result<()> {
     let git = make_git()?;
 
     if !git.supports_reference_transactions()? {
@@ -1378,10 +1323,14 @@ fn test_move_delete_checked_out_branch_on_disk() -> eyre::Result<()> {
         "###);
     }
 
+    // --on-disk
     {
-        git.run(&["checkout", "work"])?;
-        let (stdout, stderr) = git.run(&["move", "--on-disk", "-b", "HEAD", "-d", "master"])?;
-        insta::assert_snapshot!(stderr, @r###"
+        let git = git.clone_repo()?;
+
+        {
+            git.run(&["checkout", "work"])?;
+            let (stdout, stderr) = git.run(&["move", "--on-disk", "-b", "HEAD", "-d", "master"])?;
+            insta::assert_snapshot!(stderr, @r###"
         Executing: git branchless hook-register-extra-post-rewrite-hook
         branchless: processing 1 update: ref HEAD
         Executing: git branchless hook-skip-upstream-applied-commit 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
@@ -1398,30 +1347,65 @@ fn test_move_delete_checked_out_branch_on_disk() -> eyre::Result<()> {
         branchless: processing checkout
         Successfully rebased and updated work.
         "###);
-        insta::assert_snapshot!(stdout, @r###"
+            insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
         Skipping commit (was already applied upstream): 62fc20d2 create test1.txt
         Skipping commit (was already applied upstream): 96d1c37a create test2.txt
         "###);
-    }
+        }
 
-    {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        {
+            let (stdout, _stderr) = git.run(&["smartlog"])?;
+            insta::assert_snapshot!(stdout, @r###"
         :
         @ 91c5ce63 (master) create test2.txt
         |
         o 012efd6e (more-work) create test3.txt
         "###);
+        }
+    }
+    // --in-memory
+    {
+        {
+            git.run(&["checkout", "work"])?;
+            let (stdout, stderr) =
+                git.run(&["move", "--in-memory", "-b", "HEAD", "-d", "master"])?;
+            insta::assert_snapshot!(stderr, @r###"
+        Previous HEAD position was 96d1c37 create test2.txt
+        branchless: processing 1 update: ref HEAD
+        HEAD is now at 91c5ce6 create test2.txt
+        branchless: processing checkout
+        "###);
+            insta::assert_snapshot!(stdout, @r###"
+        Attempting rebase in-memory...
+        [1/3] Skipped commit (was already applied upstream): 62fc20d2 create test1.txt
+        [2/3] Skipped commit (was already applied upstream): 96d1c37a create test2.txt
+        [3/3] Committed as: 012efd6e create test3.txt
+        branchless: processing 2 updates: branch more-work, branch work
+        branchless: processing 3 rewritten commits
+        branchless: running command: <git-executable> checkout 91c5ce63686889388daec1120bf57bea8a744bc2
+        In-memory rebase succeeded.
+        "###);
+        }
+
+        {
+            let (stdout, _stderr) = git.run(&["smartlog"])?;
+            insta::assert_snapshot!(stdout, @r###"
+        :
+        @ 91c5ce63 (master) create test2.txt
+        |
+        o 012efd6e (more-work) create test3.txt
+        "###);
+        }
     }
 
     Ok(())
 }
 
 #[test]
-fn test_move_on_disk_with_unstaged_changes() -> eyre::Result<()> {
+fn test_move_with_unstaged_changes() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -1454,7 +1438,7 @@ fn test_move_on_disk_with_unstaged_changes() -> eyre::Result<()> {
 }
 
 #[test]
-fn test_move_on_disk_merge_commit() -> eyre::Result<()> {
+fn test_move_merge_commit() -> eyre::Result<()> {
     let git = make_git()?;
 
     if !git.supports_reference_transactions()? {
@@ -1463,14 +1447,14 @@ fn test_move_on_disk_merge_commit() -> eyre::Result<()> {
     git.init_repo()?;
     git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
 
-    let test1_oid = git.commit_file("test1", 1)?;
+    git.commit_file("test1", 1)?;
     git.run(&["checkout", "HEAD^"])?;
     let test2_oid = git.commit_file("test2", 2)?;
     git.run(&["checkout", "HEAD^"])?;
     let test3_oid = git.commit_file("test3", 3)?;
     git.run(&["merge", &test2_oid.to_string()])?;
 
-    git.run(&["checkout", &test1_oid.to_string()])?;
+    git.run(&["checkout", &test3_oid.to_string()])?;
     {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
@@ -1480,27 +1464,30 @@ fn test_move_on_disk_merge_commit() -> eyre::Result<()> {
         | |
         | o 28790c73 Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
         |\
-        | o 98b9119d create test3.txt
+        | @ 98b9119d create test3.txt
         | |
         | o 28790c73 Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
         |
-        @ 62fc20d2 (master) create test1.txt
+        O 62fc20d2 (master) create test1.txt
         "###);
     }
 
-    git.run(&["checkout", &test3_oid.to_string()])?;
+    // --on-disk
     {
-        let (stdout, stderr) = git.run(&[
-            "move",
-            "--debug-dump-rebase-constraints",
-            "--debug-dump-rebase-plan",
-            "--on-disk",
-            "-s",
-            &test2_oid.to_string(),
-            "-d",
-            "master",
-        ])?;
-        insta::assert_snapshot!(stdout, @r###"
+        let git = git.clone_repo()?;
+
+        {
+            let (stdout, stderr) = git.run(&[
+                "move",
+                "--debug-dump-rebase-constraints",
+                "--debug-dump-rebase-plan",
+                "--on-disk",
+                "-s",
+                &test2_oid.to_string(),
+                "-d",
+                "master",
+            ])?;
+            insta::assert_snapshot!(stdout, @r###"
         Rebase constraints before adding descendants: [
             (
                 NonZeroOid(62fc20d2a290daea0d52bdc2ed2ad4be6491010e),
@@ -1557,7 +1544,7 @@ fn test_move_on_disk_merge_commit() -> eyre::Result<()> {
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
         "###);
-        insta::assert_snapshot!(stderr, @r###"
+            insta::assert_snapshot!(stderr, @r###"
         Executing: git branchless hook-register-extra-post-rewrite-hook
         branchless: processing 1 update: ref HEAD
         branchless: processing 1 update: ref HEAD
@@ -1573,11 +1560,11 @@ fn test_move_on_disk_merge_commit() -> eyre::Result<()> {
         Successfully rebased and updated detached HEAD.
         branchless: processing 1 update: ref refs/rewritten/merge-parent-4
         "###);
-    }
+        }
 
-    {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        {
+            let (stdout, _stderr) = git.run(&["smartlog"])?;
+            insta::assert_snapshot!(stdout, @r###"
         O f777ecc9 create initial.txt
         |\
         | @ 98b9119d create test3.txt
@@ -1590,112 +1577,43 @@ fn test_move_on_disk_merge_commit() -> eyre::Result<()> {
         |
         o 96a2c4be Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
         "###);
+        }
     }
 
-    Ok(())
-}
-
-#[test]
-fn test_move_in_memory_merge_commit() -> eyre::Result<()> {
-    let git = make_git()?;
-
-    if !git.supports_reference_transactions()? {
-        return Ok(());
-    }
-    git.init_repo()?;
-    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
-
-    let test1_oid = git.commit_file("test1", 1)?;
-    git.run(&["checkout", "HEAD^"])?;
-    let test2_oid = git.commit_file("test2", 2)?;
-    git.run(&["checkout", "HEAD^"])?;
-    let test3_oid = git.commit_file("test3", 3)?;
-    git.run(&["merge", &test2_oid.to_string()])?;
-
-    git.run(&["checkout", &test1_oid.to_string()])?;
+    // --in-memory
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
-        insta::assert_snapshot!(stdout, @r###"
-        O f777ecc9 create initial.txt
-        |\
-        | o fe65c1fe create test2.txt
-        | |
-        | o 28790c73 Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
-        |\
-        | o 98b9119d create test3.txt
-        | |
-        | o 28790c73 Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
-        |
-        @ 62fc20d2 (master) create test1.txt
-        "###);
-    }
+        let git = git.clone_repo()?;
 
-    git.run(&["checkout", &test3_oid.to_string()])?;
-    {
-        let (stdout, _stderr) = git.run_with_options(
-            &[
-                "move",
-                "--in-memory",
-                "-s",
-                &test2_oid.to_string(),
-                "-d",
-                "master",
-            ],
-            &GitRunOptions {
-                expected_exit_code: 1,
-                ..Default::default()
-            },
-        )?;
-        insta::assert_snapshot!(stdout, @r###"
+        {
+            let (stdout, _stderr) = git.run_with_options(
+                &[
+                    "move",
+                    "--in-memory",
+                    "-s",
+                    &test2_oid.to_string(),
+                    "-d",
+                    "master",
+                ],
+                &GitRunOptions {
+                    expected_exit_code: 1,
+                    ..Default::default()
+                },
+            )?;
+            insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
         Merge commits currently can't be rebased in-memory.
         The merge commit was: 28790c73 Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
         Aborting since an in-memory rebase was requested.
         "###);
+        }
     }
 
-    Ok(())
-}
-
-#[test]
-fn test_move_merge_commit() -> eyre::Result<()> {
-    let git = make_git()?;
-
-    if !git.supports_reference_transactions()? {
-        return Ok(());
-    }
-    git.init_repo()?;
-    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
-
-    let test1_oid = git.commit_file("test1", 1)?;
-    git.run(&["checkout", "HEAD^"])?;
-    let test2_oid = git.commit_file("test2", 2)?;
-    git.run(&["checkout", "HEAD^"])?;
-    let test3_oid = git.commit_file("test3", 3)?;
-    git.run(&["merge", &test2_oid.to_string()])?;
-
-    git.run(&["checkout", &test1_oid.to_string()])?;
+    // no flag
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
-        insta::assert_snapshot!(stdout, @r###"
-        O f777ecc9 create initial.txt
-        |\
-        | o fe65c1fe create test2.txt
-        | |
-        | o 28790c73 Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
-        |\
-        | o 98b9119d create test3.txt
-        | |
-        | o 28790c73 Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
-        |
-        @ 62fc20d2 (master) create test1.txt
-        "###);
-    }
-
-    git.run(&["checkout", &test3_oid.to_string()])?;
-    {
-        let (stdout, stderr) = git.run(&["move", "-s", &test2_oid.to_string(), "-d", "master"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        {
+            let (stdout, stderr) =
+                git.run(&["move", "-s", &test2_oid.to_string(), "-d", "master"])?;
+            insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
         Merge commits currently can't be rebased in-memory.
         The merge commit was: 28790c73 Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
@@ -1704,7 +1622,7 @@ fn test_move_merge_commit() -> eyre::Result<()> {
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
         "###);
-        insta::assert_snapshot!(stderr, @r###"
+            insta::assert_snapshot!(stderr, @r###"
         Executing: git branchless hook-register-extra-post-rewrite-hook
         branchless: processing 1 update: ref HEAD
         branchless: processing 1 update: ref HEAD
@@ -1720,11 +1638,11 @@ fn test_move_merge_commit() -> eyre::Result<()> {
         Successfully rebased and updated detached HEAD.
         branchless: processing 1 update: ref refs/rewritten/merge-parent-4
         "###);
-    }
+        }
 
-    {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        {
+            let (stdout, _stderr) = git.run(&["smartlog"])?;
+            insta::assert_snapshot!(stdout, @r###"
         O f777ecc9 create initial.txt
         |\
         | @ 98b9119d create test3.txt
@@ -1737,13 +1655,14 @@ fn test_move_merge_commit() -> eyre::Result<()> {
         |
         o 96a2c4be Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
         "###);
+        }
     }
 
     Ok(())
 }
 
 #[test]
-fn test_move_in_memory_orphaned_root() -> eyre::Result<()> {
+fn test_move_orphaned_root() -> eyre::Result<()> {
     let git = make_git()?;
 
     if !git.supports_reference_transactions()? {
@@ -1761,59 +1680,13 @@ fn test_move_in_memory_orphaned_root() -> eyre::Result<()> {
     git.run(&["commit", "-m", "new root"])?;
     git.commit_file("test3", 3)?;
 
+    // --on-disk
     {
-        let (stdout, stderr) = git.run(&["move", "--in-memory", "-d", "master"])?;
-        insta::assert_snapshot!(stderr, @r###"
-        Previous HEAD position was fc09f3d create test3.txt
-        Switched to branch 'new-root'
-        branchless: processing checkout
-        "###);
-        insta::assert_snapshot!(stdout, @r###"
-        Attempting rebase in-memory...
-        [1/2] Skipped now-empty commit: 270b681e new root
-        [2/2] Committed as: 70deb1e2 create test3.txt
-        branchless: processing 1 update: branch new-root
-        branchless: processing 2 rewritten commits
-        branchless: running command: <git-executable> checkout new-root
-        In-memory rebase succeeded.
-        "###);
-    }
+        let git = git.clone_repo()?;
 
-    {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
-        insta::assert_snapshot!(stdout, @r###"
-        :
-        O 96d1c37a (master) create test2.txt
-        |
-        @ 70deb1e2 (new-root) create test3.txt
-        "###);
-    }
-
-    Ok(())
-}
-
-#[test]
-fn test_move_on_disk_orphaned_root() -> eyre::Result<()> {
-    let git = make_git()?;
-
-    if !git.supports_reference_transactions()? {
-        return Ok(());
-    }
-
-    git.init_repo()?;
-    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
-
-    git.commit_file("test1", 1)?;
-    git.commit_file("test2", 2)?;
-
-    git.detach_head()?;
-    git.run(&["checkout", "--orphan", "new-root"])?;
-    git.run(&["commit", "-m", "new root"])?;
-    git.commit_file("test3", 3)?;
-
-    {
-        let (stdout, stderr) = git.run(&["move", "--on-disk", "-d", "master"])?;
-        insta::assert_snapshot!(stderr, @r###"
+        {
+            let (stdout, stderr) = git.run(&["move", "--on-disk", "-d", "master"])?;
+            insta::assert_snapshot!(stderr, @r###"
         Executing: git branchless hook-register-extra-post-rewrite-hook
         branchless: processing 1 update: ref HEAD
         branchless: processing 1 update: ref HEAD
@@ -1829,29 +1702,61 @@ fn test_move_on_disk_orphaned_root() -> eyre::Result<()> {
         branchless: processing checkout
         Successfully rebased and updated new-root.
         "###);
-        insta::assert_snapshot!(stdout, @r###"
+            insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
         Skipped now-empty commit: 270b681e new root
         "###);
-    }
+        }
 
-    {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
-        insta::assert_snapshot!(stdout, @r###"
+        {
+            let (stdout, _stderr) = git.run(&["smartlog"])?;
+            insta::assert_snapshot!(stdout, @r###"
         :
         O 96d1c37a (master) create test2.txt
         |
         @ 70deb1e2 (new-root) create test3.txt
         "###);
+        }
+    }
+
+    // --in-memory
+    {
+        {
+            let (stdout, stderr) = git.run(&["move", "--in-memory", "-d", "master"])?;
+            insta::assert_snapshot!(stderr, @r###"
+        Previous HEAD position was fc09f3d create test3.txt
+        Switched to branch 'new-root'
+        branchless: processing checkout
+        "###);
+            insta::assert_snapshot!(stdout, @r###"
+        Attempting rebase in-memory...
+        [1/2] Skipped now-empty commit: 270b681e new root
+        [2/2] Committed as: 70deb1e2 create test3.txt
+        branchless: processing 1 update: branch new-root
+        branchless: processing 2 rewritten commits
+        branchless: running command: <git-executable> checkout new-root
+        In-memory rebase succeeded.
+        "###);
+        }
+
+        {
+            let (stdout, _stderr) = git.run(&["smartlog"])?;
+            insta::assert_snapshot!(stdout, @r###"
+        :
+        O 96d1c37a (master) create test2.txt
+        |
+        @ 70deb1e2 (new-root) create test3.txt
+        "###);
+        }
     }
 
     Ok(())
 }
 
 #[test]
-fn test_move_in_memory_no_extra_checkout() -> eyre::Result<()> {
+fn test_move_no_extra_checkout() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
