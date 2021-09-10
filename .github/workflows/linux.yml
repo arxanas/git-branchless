@@ -81,10 +81,10 @@ jobs:
       - name: Compile
         run: cargo build --benches --tests
 
-      - name: Run Rust tests
+      - name: Run Rust tests (all features)
         run: |
           export PATH_TO_GIT="$PWD"/git
-          cargo test
+          cargo test --all-features
 
       - name: Run Rust tests (no default features)
         run: |
