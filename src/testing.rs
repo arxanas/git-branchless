@@ -308,6 +308,14 @@ impl Git {
         // Non-deterministic metadata (depends on current time).
         self.run(&["config", "branchless.commitMetadata.relativeTime", "false"])?;
 
+        // Disable warnings of the following form on Windows:
+        //
+        // ```
+        // warning: LF will be replaced by CRLF in initial.txt.
+        // The file will have its original line endings in your working directory
+        // ```
+        self.run(&["config", "core.autocrlf", "false"])?;
+
         if options.run_branchless_init {
             self.run(&["branchless", "init"])?;
         }
