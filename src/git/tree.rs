@@ -79,8 +79,8 @@ pub fn get_changed_paths_between_trees(
 
         enum ClassifiedEntry<'repo> {
             Absent,
-            NotATree(git2::Oid),
-            Tree(git2::Tree<'repo>),
+            NotATree(git2::Oid, i32),
+            Tree(git2::Tree<'repo>, i32),
         }
 
         fn classify_entry<'repo>(
@@ -99,15 +99,17 @@ pub fn get_changed_paths_between_trees(
                 }
                 Err(err) => return Err(err.into()),
             };
+
+            let file_mode = entry.filemode_raw();
             match entry.kind() {
                 Some(git2::ObjectType::Tree) => {
                     let entry_tree = entry
                         .to_object(&repo.inner)?
                         .into_tree()
                         .map_err(|_| eyre::eyre!("Not a tree: {:?}", entry.id()))?;
-                    Ok(ClassifiedEntry::Tree(entry_tree))
+                    Ok(ClassifiedEntry::Tree(entry_tree, file_mode))
                 }
-                _ => Ok(ClassifiedEntry::NotATree(entry.id())),
+                _ => Ok(ClassifiedEntry::NotATree(entry.id(), file_mode)),
             }
         }
 
@@ -120,8 +122,11 @@ pub fn get_changed_paths_between_trees(
                 // Shouldn't happen, but there's no issue here.
             }
 
-            (ClassifiedEntry::NotATree(lhs_oid), ClassifiedEntry::NotATree(rhs_oid)) => {
-                if lhs_oid == rhs_oid {
+            (
+                ClassifiedEntry::NotATree(lhs_oid, lhs_file_mode),
+                ClassifiedEntry::NotATree(rhs_oid, rhs_file_mode),
+            ) => {
+                if lhs_oid == rhs_oid && lhs_file_mode == rhs_file_mode {
                     // Unchanged file, do nothing.
                 } else {
                     // Changed file.
@@ -129,40 +134,71 @@ pub fn get_changed_paths_between_trees(
                 }
             }
 
-            (ClassifiedEntry::Absent, ClassifiedEntry::NotATree(_))
-            | (ClassifiedEntry::NotATree(_), ClassifiedEntry::Absent) => {
+            (ClassifiedEntry::Absent, ClassifiedEntry::NotATree(_, _))
+            | (ClassifiedEntry::NotATree(_, _), ClassifiedEntry::Absent) => {
                 // Added, removed, or changed file.
                 acc.push(full_entry_path);
             }
 
-            (ClassifiedEntry::Absent, ClassifiedEntry::Tree(tree))
-            | (ClassifiedEntry::Tree(tree), ClassifiedEntry::Absent) => {
+            (ClassifiedEntry::Absent, ClassifiedEntry::Tree(tree, _))
+            | (ClassifiedEntry::Tree(tree, _), ClassifiedEntry::Absent) => {
                 // A directory was added or removed. Add all entries from that
                 // directory.
                 get_changed_paths_between_trees(repo, acc, &full_entry_path, Some(&tree), None)?;
             }
 
-            (ClassifiedEntry::NotATree(_), ClassifiedEntry::Tree(tree))
-            | (ClassifiedEntry::Tree(tree), ClassifiedEntry::NotATree(_)) => {
+            (ClassifiedEntry::NotATree(_, _), ClassifiedEntry::Tree(tree, _))
+            | (ClassifiedEntry::Tree(tree, _), ClassifiedEntry::NotATree(_, _)) => {
                 // A file was changed into a directory. Add both the file and
                 // all subdirectory entries as changed entries.
                 get_changed_paths_between_trees(repo, acc, &full_entry_path, Some(&tree), None)?;
                 acc.push(full_entry_path);
             }
 
-            (ClassifiedEntry::Tree(lhs_tree), ClassifiedEntry::Tree(rhs_tree)) => {
-                if lhs_tree.id() == rhs_tree.id() {
-                    // Unchanged tree, do nothing.
-                } else {
-                    // Only include the files changed in the subtrees, and not
-                    // the directory itself.
-                    get_changed_paths_between_trees(
-                        repo,
-                        acc,
-                        &full_entry_path,
-                        Some(&lhs_tree),
-                        Some(&rhs_tree),
-                    )?;
+            (
+                ClassifiedEntry::Tree(lhs_tree, lhs_file_mode),
+                ClassifiedEntry::Tree(rhs_tree, rhs_file_mode),
+            ) => {
+                match (
+                    (lhs_tree.id() == rhs_tree.id()),
+                    // Note that there should only be one possible file mode for
+                    // an entry which points to a tree, but it's possible that
+                    // some extra non-meaningful bits are set. Should we report
+                    // a change in that case? This code takes the conservative
+                    // approach and reports a change.
+                    (lhs_file_mode == rhs_file_mode),
+                ) {
+                    (true, true) => {
+                        // Unchanged entry, do nothing.
+                    }
+
+                    (true, false) => {
+                        // Only the directory changed, but none of its contents.
+                        acc.push(full_entry_path);
+                    }
+
+                    (false, true) => {
+                        // Only include the files changed in the subtrees, and
+                        // not the directory itself.
+                        get_changed_paths_between_trees(
+                            repo,
+                            acc,
+                            &full_entry_path,
+                            Some(&lhs_tree),
+                            Some(&rhs_tree),
+                        )?;
+                    }
+
+                    (false, false) => {
+                        get_changed_paths_between_trees(
+                            repo,
+                            acc,
+                            &full_entry_path,
+                            Some(&lhs_tree),
+                            Some(&rhs_tree),
+                        )?;
+                        acc.push(full_entry_path);
+                    }
                 }
             }
         }
@@ -419,6 +455,39 @@ mod tests {
             "foo.txt" 19102815663d23f8b75a47e7a01965dcdc96468c
             "###);
         }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_detect_path_only_changed_file_mode() -> eyre::Result<()> {
+        let git = make_git()?;
+        git.init_repo()?;
+
+        git.run(&["update-index", "--chmod=+x", "initial.txt"])?;
+        git.run(&["commit", "-m", "update file mode"])?;
+
+        let repo = git.get_repo()?;
+        let oid = repo.get_head_info()?.oid.unwrap();
+        let commit = repo.find_commit_or_fail(oid)?;
+
+        let mut acc = Vec::new();
+        let lhs = commit.get_only_parent().unwrap();
+        let lhs_tree = lhs.get_tree()?;
+        let rhs_tree = commit.get_tree()?;
+        get_changed_paths_between_trees(
+            &repo,
+            &mut acc,
+            &PathBuf::new(),
+            Some(&lhs_tree.inner),
+            Some(&rhs_tree.inner),
+        )?;
+
+        insta::assert_debug_snapshot!(acc, @r###"
+        [
+            "initial.txt",
+        ]
+        "###);
 
         Ok(())
     }
