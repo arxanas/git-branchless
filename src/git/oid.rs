@@ -76,6 +76,12 @@ impl FromStr for NonZeroOid {
     }
 }
 
+impl From<NonZeroOid> for git2::Oid {
+    fn from(oid: NonZeroOid) -> Self {
+        oid.inner
+    }
+}
+
 pub(super) fn make_non_zero_oid(oid: git2::Oid) -> NonZeroOid {
     assert_ne!(oid, git2::Oid::zero());
     NonZeroOid { inner: oid }
@@ -185,6 +191,15 @@ impl From<MaybeZeroOid> for Option<NonZeroOid> {
         match oid {
             MaybeZeroOid::Zero => None,
             MaybeZeroOid::NonZero(oid) => Some(oid),
+        }
+    }
+}
+
+impl From<MaybeZeroOid> for git2::Oid {
+    fn from(oid: MaybeZeroOid) -> Self {
+        match oid {
+            MaybeZeroOid::Zero => git2::Oid::zero(),
+            MaybeZeroOid::NonZero(oid) => oid.into(),
         }
     }
 }

@@ -415,31 +415,44 @@ Either create it, or update the main branch setting by running:
         }
     }
 
+    /// Get the patch for a commit, i.e. the diff between that commit and its
+    /// parent.
+    ///
+    /// If the commit has more than one parent, returns `None`.
     #[instrument]
-    fn get_diff_for_commit(
+    pub fn get_patch_for_commit(
         &self,
         effects: &Effects,
         commit: &Commit,
-    ) -> eyre::Result<Option<git2::Diff>> {
+    ) -> eyre::Result<Option<Diff>> {
         let (_effects, _progress) = effects.start_operation(OperationType::CalculateDiff);
 
-        let only_parent = match commit.get_only_parent() {
+        let changed_paths = match self.get_paths_touched_by_commit(commit)? {
             None => return Ok(None),
-            Some(only_parent) => only_parent,
+            Some(changed_paths) => changed_paths,
         };
+        let dehydrated_commit = self.dehydrate_commit(
+            commit,
+            changed_paths
+                .iter()
+                .map(|x| -> &Path { x })
+                .collect_vec()
+                .as_slice(),
+            true,
+        )?;
 
-        let parent_tree = only_parent.get_tree()?;
-        let current_tree = commit.get_tree()?;
+        let parent = dehydrated_commit.get_only_parent();
+        let parent_tree = match &parent {
+            Some(parent) => Some(parent.get_tree()?.inner.clone()),
+            None => None,
+        };
+        let current_tree = dehydrated_commit.get_tree()?;
+
         let diff = self
             .inner
-            .diff_tree_to_tree(Some(&parent_tree.inner), Some(&current_tree.inner), None)
-            .wrap_err_with(|| {
-                format!(
-                    "Calculating diff between: {:?} and {:?}",
-                    commit, only_parent
-                )
-            })?;
-        Ok(Some(diff))
+            .diff_tree_to_tree(parent_tree.as_ref(), Some(&current_tree.inner), None)
+            .wrap_err_with(|| format!("Calculating diff between: {:?}", commit))?;
+        Ok(Some(Diff { inner: diff }))
     }
 
     /// Get the file paths which were added, removed, or changed by the given
@@ -480,13 +493,13 @@ Either create it, or update the main branch setting by running:
         effects: &Effects,
         commit: &Commit,
     ) -> eyre::Result<Option<PatchId>> {
-        let diff = match self.get_diff_for_commit(effects, commit)? {
+        let patch = match self.get_patch_for_commit(effects, commit)? {
             None => return Ok(None),
             Some(diff) => diff,
         };
         let patch_id = {
             let (_effects, _progress) = effects.start_operation(OperationType::CalculatePatchId);
-            diff.patchid(None).wrap_err("Computing patch ID")?
+            patch.inner.patchid(None).wrap_err("Computing patch ID")?
         };
         Ok(Some(PatchId { patch_id }))
     }
@@ -959,6 +972,11 @@ impl Index {
             file_mode: entry.mode,
         })
     }
+}
+
+/// A diff between two trees/commits.
+pub struct Diff<'repo> {
+    inner: git2::Diff<'repo>,
 }
 
 /// A checksum of the diff induced by a given commit, used for duplicate commit

@@ -11,7 +11,7 @@ pub use self::dag::Dag;
 pub use config::{Config, ConfigValue};
 pub use oid::{MaybeZeroOid, NonZeroOid};
 pub use repo::{
-    Branch, CategorizedReferenceName, CherryPickFastError, CherryPickFastOptions, Commit,
+    Branch, CategorizedReferenceName, CherryPickFastError, CherryPickFastOptions, Commit, Diff,
     GitVersion, PatchId, Reference, ReferenceTarget, Repo, ResolvedReferenceInfo,
 };
 pub use run::GitRunInfo;
