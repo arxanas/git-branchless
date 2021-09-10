@@ -5,7 +5,7 @@ use branchless::core::formatting::Glyphs;
 use branchless::core::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
 use branchless::core::mergebase::{make_merge_base_db, MergeBaseDb};
 use branchless::core::rewrite::{BuildRebasePlanOptions, RebasePlanBuilder};
-use branchless::git::{CherryPickFastOptions, Commit, Repo};
+use branchless::git::{CherryPickFastOptions, Commit, Diff, Repo};
 use branchless::tui::Effects;
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 
@@ -148,9 +148,37 @@ fn bench_cherry_pick_fast(c: &mut Criterion) {
     });
 }
 
+fn bench_diff_fast(c: &mut Criterion) {
+    let mut group = c.benchmark_group("diff");
+    group.sample_size(10);
+    group.bench_function("git2::Repository::diff_tree_to_tree", |b| {
+        let repo = get_repo();
+        let repo = git2::Repository::open(repo.get_path()).unwrap();
+        let commit = repo.head().unwrap().peel_to_commit().unwrap();
+
+        b.iter(|| -> git2::Diff {
+            repo.diff_tree_to_tree(
+                Some(&commit.tree().unwrap()),
+                Some(&commit.parent(0).unwrap().tree().unwrap()),
+                None,
+            )
+            .unwrap()
+        })
+    });
+
+    group.bench_function("Repo::get_patch_for_commit", |b| {
+        let repo = get_repo();
+        let oid = repo.get_head_info().unwrap().oid.unwrap();
+        let commit = repo.find_commit_or_fail(oid).unwrap();
+        let effects = Effects::new_suppress_for_test(Glyphs::text());
+
+        b.iter(|| -> Option<Diff> { repo.get_patch_for_commit(&effects, &commit).unwrap() });
+    });
+}
+
 criterion_group!(
     name = benches;
     config = Criterion::default().sample_size(10);
-    targets = bench_rebase_plan, bench_find_path_to_merge_base, bench_cherry_pick_fast
+    targets = bench_rebase_plan, bench_find_path_to_merge_base, bench_cherry_pick_fast, bench_diff_fast
 );
 criterion_main!(benches);
