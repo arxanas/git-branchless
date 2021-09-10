@@ -6,7 +6,7 @@
 use std::ffi::{OsStr, OsString};
 use std::io::Write;
 use std::ops::Deref;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use crate::git::{GitRunInfo, GitVersion, NonZeroOid, Repo};
@@ -450,7 +450,7 @@ pub fn get_path_to_git() -> eyre::Result<PathBuf> {
 
 /// Wrapper around a `Git` instance which cleans up the repository once dropped.
 pub struct GitWrapper {
-    _repo_dir: TempDir,
+    repo_dir: TempDir,
     git: Git,
 }
 
@@ -459,6 +459,38 @@ impl Deref for GitWrapper {
 
     fn deref(&self) -> &Self::Target {
         &self.git
+    }
+}
+
+/// From https://stackoverflow.com/a/65192210
+/// License: CC-BY-SA 4.0
+fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> std::io::Result<()> {
+    use std::fs;
+    fs::create_dir_all(&dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        if ty.is_dir() {
+            copy_dir_all(entry.path(), dst.as_ref().join(entry.file_name()))?;
+        } else {
+            fs::copy(entry.path(), dst.as_ref().join(entry.file_name()))?;
+        }
+    }
+    Ok(())
+}
+
+impl GitWrapper {
+    /// Make a copy of the repo on disk. This can be used to reuse testing setup.
+    ///
+    /// The copied repo will be deleted once the returned value has been dropped.
+    pub fn clone_repo(&self) -> eyre::Result<Self> {
+        let repo_dir = tempfile::tempdir()?;
+        copy_dir_all(&self.repo_dir, &repo_dir)?;
+        let git = Git {
+            repo_path: repo_dir.path().to_path_buf(),
+            path_to_git: self.git.path_to_git.clone(),
+        };
+        Ok(Self { repo_dir, git })
     }
 }
 
@@ -472,8 +504,5 @@ pub fn make_git() -> eyre::Result<GitWrapper> {
         env: std::env::vars_os().collect(),
     };
     let git = Git::new(repo_dir.path().to_path_buf(), path_to_git);
-    Ok(GitWrapper {
-        _repo_dir: repo_dir,
-        git,
-    })
+    Ok(GitWrapper { repo_dir, git })
 }
