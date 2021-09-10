@@ -7,6 +7,7 @@ fn test_move_stick_on_disk() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
+    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
 
     let test1_oid = git.commit_file("test1", 1)?;
     git.commit_file("test2", 2)?;
@@ -29,9 +30,9 @@ fn test_move_stick_on_disk() -> eyre::Result<()> {
         :
         O 62fc20d2 create test1.txt
         |\
-        | o cade1d30 create test3.txt
+        | o 4838e49b create test3.txt
         | |
-        | @ 5bb72580 create test4.txt
+        | @ a2482074 create test4.txt
         |
         O 96d1c37a (master) create test2.txt
         "###);
@@ -120,6 +121,7 @@ fn test_move_tree_on_disk() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
+    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
 
     let test1_oid = git.commit_file("test1", 1)?;
     git.commit_file("test2", 2)?;
@@ -144,11 +146,11 @@ fn test_move_tree_on_disk() -> eyre::Result<()> {
         :
         O 62fc20d2 create test1.txt
         |\
-        | o cade1d30 create test3.txt
+        | o 4838e49b create test3.txt
         | |\
-        | | o 5bb72580 create test4.txt
+        | | o a2482074 create test4.txt
         | |
-        | @ df755ed1 create test5.txt
+        | @ b1f9efa0 create test5.txt
         |
         O 96d1c37a (master) create test2.txt
         "###);
@@ -204,6 +206,7 @@ fn test_move_with_source_not_in_smartlog_on_disk() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
+    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
 
     let test1_oid = git.commit_file("test1", 1)?;
     git.commit_file("test2", 2)?;
@@ -227,7 +230,7 @@ fn test_move_with_source_not_in_smartlog_on_disk() -> eyre::Result<()> {
         |\
         : o 96d1c37a create test2.txt
         :
-        @ 5bb72580 (master) create test4.txt
+        @ a2482074 (master) create test4.txt
         "###);
     }
 
@@ -312,6 +315,7 @@ fn test_move_merge_conflict() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
+    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
 
     let base_oid = git.commit_file("test1", 1)?;
     git.detach_head()?;
@@ -369,7 +373,7 @@ fn test_move_merge_conflict() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["rebase", "--continue"])?;
         insta::assert_snapshot!(stdout, @r###"
-        [detached HEAD 244e2bd] create conflict.txt
+        [detached HEAD 42951b5] create conflict.txt
          1 file changed, 1 insertion(+), 1 deletion(-)
         "###);
     }
@@ -382,7 +386,7 @@ fn test_move_merge_conflict() -> eyre::Result<()> {
         |
         @ 202143f2 create conflict.txt
         |
-        o 244e2bd1 create conflict.txt
+        o 42951b5f create conflict.txt
         "###);
     }
 
