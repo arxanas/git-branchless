@@ -64,9 +64,9 @@ jobs:
       - name: Run Rust tests on Git `master`
         run: |
           export PATH_TO_GIT="$PWD"/git-master/git
-          (cd git-branchless && cargo test)
+          (cd git-branchless && cargo test --all-features)
 
       - name: Run Rust tests on Git `next`
         run: |
           export PATH_TO_GIT="$PWD"/git-next/git
-          (cd git-branchless && cargo test)
+          (cd git-branchless && cargo test --all-features)
