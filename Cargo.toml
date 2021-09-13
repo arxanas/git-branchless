@@ -61,6 +61,7 @@ rusqlite = { version = "0.25.3", features = ["bundled"] }
 structopt = "0.3.22"
 tempfile = "3.2.0"
 tracing = "0.1.26"
+tracing-chrome = "0.3.1"
 tracing-error = "0.1.2"
 tracing-subscriber = "0.2.20"
 

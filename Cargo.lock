@@ -783,6 +783,7 @@ dependencies = [
  "structopt",
  "tempfile",
  "tracing",
+ "tracing-chrome",
  "tracing-error",
  "tracing-subscriber",
 ]
@@ -1008,6 +1009,12 @@ checksum = "e4bf49d50e2961077d9c99f4b7997d770a1114f087c3c2e0069b36c13fc2979d"
 dependencies = [
  "wasm-bindgen",
 ]
+
+[[package]]
+name = "json"
+version = "0.12.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "078e285eafdfb6c4b434e0d31e8cfcb5115b651496faca5749b88fafd4f23bfd"
 
 [[package]]
 name = "lalrpop-util"
@@ -2122,6 +2129,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "tracing-chrome"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a0b56325e75af38a126daf4e9b577bdb6de801ec0de8b431749a4f4754657804"
+dependencies = [
+ "json",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

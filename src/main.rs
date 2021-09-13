@@ -197,9 +197,11 @@ enum Opts {
     HookReferenceTransaction { transaction_state: String },
 }
 
-fn main() -> eyre::Result<()> {
+/// Wrapper function for `main` to ensure that `Drop` is called for local
+/// variables, since `std::process::exit` will skip them.
+fn do_main_and_drop_locals() -> eyre::Result<i32> {
     color_eyre::install()?;
-    install_tracing();
+    let _tracing_guard = install_tracing();
 
     let opts = Opts::from_args();
     let path_to_git = std::env::var_os("PATH_TO_GIT").unwrap_or_else(|| OsString::from("git"));
@@ -362,26 +364,29 @@ fn main() -> eyre::Result<()> {
     };
 
     let exit_code: i32 = exit_code.try_into()?;
+    Ok(exit_code)
+}
+
+fn main() -> eyre::Result<()> {
+    let exit_code = do_main_and_drop_locals()?;
     std::process::exit(exit_code)
 }
 
-fn install_tracing() {
+#[must_use = "This function returns a guard object to flush traces. Dropping it immediately is probably incorrect. Make sure that the returned value lives until tracing has finished."]
+fn install_tracing() -> Box<dyn Drop> {
     // From https://github.com/yaahc/color-eyre/blob/07b9f0351544e2b07fcd173dc1fc602a7fc8bb6b/examples/usage.rs
     // Licensed under MIT.
+    use tracing_chrome::ChromeLayerBuilder;
     use tracing_error::ErrorLayer;
     use tracing_subscriber::prelude::*;
     use tracing_subscriber::{fmt, EnvFilter};
 
-    match EnvFilter::try_from_default_env() {
+    let (filter_layer, fmt_layer) = match EnvFilter::try_from_default_env() {
         Ok(filter_layer) => {
             let fmt_layer = fmt::layer()
                 .with_span_events(fmt::format::FmtSpan::CLOSE)
                 .with_target(false);
-            tracing_subscriber::registry()
-                .with(filter_layer)
-                .with(fmt_layer)
-                .with(ErrorLayer::default())
-                .init();
+            (Some(filter_layer), Some(fmt_layer))
         }
         Err(_) => {
             // We would like the filter layer to apply *only* to the formatting
@@ -393,9 +398,39 @@ fn install_tracing() {
             // The workaround is to only display logging messages if `RUST_LOG`
             // is set (which is unfortunate, because we'll miss out on
             // `WARN`-level messages by default).
-            tracing_subscriber::registry()
-                .with(ErrorLayer::default())
-                .init()
+            (None, None)
+        }
+    };
+
+    let (profile_layer, profile_layer_guard) = match std::env::var("RUST_PROFILE") {
+        Ok(value) if value == "1" || value == "true" => {
+            let (chrome_layer, chrome_layer_guard) = ChromeLayerBuilder::new().build();
+            (Some(chrome_layer), Some(chrome_layer_guard))
+        }
+        Ok(value) if !value.is_empty() => {
+            let (chrome_layer, chrome_layer_guard) = ChromeLayerBuilder::new().file(value).build();
+            (Some(chrome_layer), Some(chrome_layer_guard))
+        }
+        Ok(_) | Err(_) => (None, None),
+    };
+
+    tracing_subscriber::registry()
+        .with(ErrorLayer::default())
+        .with(filter_layer)
+        .with(fmt_layer)
+        .with(profile_layer)
+        .init();
+
+    match profile_layer_guard {
+        Some(profile_layer_guard) => Box::new(profile_layer_guard),
+        None => {
+            struct TrivialDrop;
+            impl Drop for TrivialDrop {
+                fn drop(&mut self) {
+                    // Do nothing.
+                }
+            }
+            Box::new(TrivialDrop)
         }
     }
 }
