@@ -74,7 +74,6 @@ enum OutputDest {
 struct OperationState {
     operation_type: OperationType,
     progress_bar: ProgressBar,
-    is_visible: bool,
     has_meter: bool,
     start_times: Vec<Instant>,
     elapsed_duration: Duration,
@@ -134,6 +133,7 @@ pub struct Effects {
     glyphs: Glyphs,
     dest: OutputDest,
     multi_progress: Arc<MultiProgress>,
+    updater_thread_handle: Arc<RwLock<UpdaterThreadHandle>>,
     nesting_level: usize,
     operation_states: Arc<RwLock<HashMap<OperationType, OperationState>>>,
 }
@@ -148,49 +148,56 @@ impl std::fmt::Debug for Effects {
     }
 }
 
+#[derive(Clone, Debug, Default)]
+struct UpdaterThreadHandle {
+    is_visible: bool,
+}
+
 fn spawn_progress_updater_thread(
     multi_progress: &Arc<MultiProgress>,
     operation_states: &Arc<RwLock<HashMap<OperationType, OperationState>>>,
-) {
+) -> Arc<RwLock<UpdaterThreadHandle>> {
     multi_progress.set_draw_target(ProgressDrawTarget::hidden());
     let multi_progress = Arc::downgrade(multi_progress);
     let operation_states = Arc::downgrade(operation_states);
-    thread::spawn(move || {
-        // Don't start displaying progress immediately, since if the operation
-        // finishes quickly, then it will flicker annoyingly.
-        thread::sleep(Duration::from_millis(250));
-        if let Some(multi_progress) = multi_progress.upgrade() {
-            let operation_states = match operation_states.upgrade() {
-                None => return,
-                Some(operation_states) => operation_states,
-            };
-            let mut operation_states = operation_states.write().unwrap();
+    let handle = Arc::new(RwLock::new(UpdaterThreadHandle { is_visible: false }));
 
-            // Make sure that we set the draw target while we're holding the
-            // lock on `operation_states`, so that other consumers don't read an
-            // inconsistent value for `is_visible`.
-            multi_progress.set_draw_target(ProgressDrawTarget::stderr());
-            for operation_state in operation_states.values_mut() {
-                operation_state.is_visible = true;
+    thread::spawn({
+        let handle = Arc::clone(&handle);
+        move || {
+            // Don't start displaying progress immediately, since if the operation
+            // finishes quickly, then it will flicker annoyingly.
+            thread::sleep(Duration::from_millis(250));
+            {
+                let mut handle = handle.write().unwrap();
+                match multi_progress.upgrade() {
+                    Some(multi_progress) => {
+                        multi_progress.set_draw_target(ProgressDrawTarget::stderr())
+                    }
+                    None => return,
+                }
+                handle.is_visible = true;
             }
-        }
 
-        loop {
-            // Drop the `Arc` after this block, before the sleep, to make sure
-            // that progress bars aren't kept alive longer than they should be.
-            match operation_states.upgrade() {
-                None => return,
-                Some(operation_states) => {
-                    let operation_states = operation_states.read().unwrap();
-                    for operation_state in operation_states.values() {
-                        operation_state.tick();
+            loop {
+                // Drop the `Arc` after this block, before the sleep, to make sure
+                // that progress bars aren't kept alive longer than they should be.
+                match operation_states.upgrade() {
+                    None => return,
+                    Some(operation_states) => {
+                        let operation_states = operation_states.read().unwrap();
+                        for operation_state in operation_states.values() {
+                            operation_state.tick();
+                        }
                     }
                 }
-            }
 
-            thread::sleep(Duration::from_millis(100));
+                thread::sleep(Duration::from_millis(100));
+            }
         }
     });
+
+    handle
 }
 
 impl Effects {
@@ -198,11 +205,13 @@ impl Effects {
     pub fn new(glyphs: Glyphs) -> Self {
         let multi_progress = Default::default();
         let operation_states = Default::default();
-        spawn_progress_updater_thread(&multi_progress, &operation_states);
+        let updater_thread_handle =
+            spawn_progress_updater_thread(&multi_progress, &operation_states);
         Effects {
             glyphs,
             dest: OutputDest::Stdout,
             multi_progress,
+            updater_thread_handle,
             nesting_level: Default::default(),
             operation_states,
         }
@@ -214,6 +223,7 @@ impl Effects {
             glyphs,
             dest: OutputDest::Suppress,
             multi_progress: Default::default(),
+            updater_thread_handle: Default::default(),
             nesting_level: Default::default(),
             operation_states: Default::default(),
         }
@@ -225,6 +235,7 @@ impl Effects {
             glyphs,
             dest: OutputDest::BufferForTest(Arc::clone(buffer)),
             multi_progress: Default::default(),
+            updater_thread_handle: Default::default(),
             nesting_level: Default::default(),
             operation_states: Default::default(),
         }
@@ -284,7 +295,6 @@ impl Effects {
                     operation_type,
                     progress_bar,
                     start_times: Vec::new(),
-                    is_visible: false,
                     has_meter: false,
                     elapsed_duration: Default::default(),
                 };
@@ -381,6 +391,7 @@ impl Effects {
         OutputStream {
             dest: self.dest.clone(),
             buffer: Default::default(),
+            updater_thread_handle: Arc::clone(&self.updater_thread_handle),
             operation_states: Arc::clone(&self.operation_states),
         }
     }
@@ -391,6 +402,7 @@ impl Effects {
         ErrorStream {
             dest: self.dest.clone(),
             buffer: Default::default(),
+            updater_thread_handle: Arc::clone(&self.updater_thread_handle),
             operation_states: Arc::clone(&self.operation_states),
         }
     }
@@ -401,6 +413,7 @@ trait WriteProgress {
     fn get_stream() -> Self::Stream;
     fn get_buffer(&mut self) -> &mut String;
     fn get_operation_states(&self) -> Arc<RwLock<HashMap<OperationType, OperationState>>>;
+    fn get_updater_thread_handle(&self) -> Arc<RwLock<UpdaterThreadHandle>>;
     fn style_output(output: &str) -> String;
 
     fn flush(&mut self) {
@@ -427,7 +440,9 @@ trait WriteProgress {
                 Self::get_stream().flush().unwrap();
             }
 
-            Some(operation_state) if !operation_state.is_visible => {
+            Some(_operation_state)
+                if !self.get_updater_thread_handle().read().unwrap().is_visible =>
+            {
                 // An operation has started, but we haven't started rendering
                 // the progress bars yet, because it hasn't been long enough.
                 // We'll write directly to the output stream, but make sure to
@@ -493,6 +508,7 @@ trait WriteProgress {
 pub struct OutputStream {
     dest: OutputDest,
     buffer: String,
+    updater_thread_handle: Arc<RwLock<UpdaterThreadHandle>>,
     operation_states: Arc<RwLock<HashMap<OperationType, OperationState>>>,
 }
 
@@ -509,6 +525,10 @@ impl WriteProgress for OutputStream {
 
     fn get_operation_states(&self) -> Arc<RwLock<HashMap<OperationType, OperationState>>> {
         Arc::clone(&self.operation_states)
+    }
+
+    fn get_updater_thread_handle(&self) -> Arc<RwLock<UpdaterThreadHandle>> {
+        Arc::clone(&self.updater_thread_handle)
     }
 
     fn style_output(output: &str) -> String {
@@ -546,6 +566,7 @@ impl Drop for OutputStream {
 pub struct ErrorStream {
     dest: OutputDest,
     buffer: String,
+    updater_thread_handle: Arc<RwLock<UpdaterThreadHandle>>,
     operation_states: Arc<RwLock<HashMap<OperationType, OperationState>>>,
 }
 
@@ -562,6 +583,10 @@ impl WriteProgress for ErrorStream {
 
     fn get_operation_states(&self) -> Arc<RwLock<HashMap<OperationType, OperationState>>> {
         Arc::clone(&self.operation_states)
+    }
+
+    fn get_updater_thread_handle(&self) -> Arc<RwLock<UpdaterThreadHandle>> {
+        Arc::clone(&self.updater_thread_handle)
     }
 
     fn style_output(output: &str) -> String {

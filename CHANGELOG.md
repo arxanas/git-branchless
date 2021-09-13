@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+- Fixed: Output of subcommands is no longer overwritten by progress updates.
+
 ## [0.3.5] - 2021-09-11
 
 - Added: Merge commits can be rebased by `git move --on-disk`. This uses the same system as `git rebase --rebase-merges`.
