@@ -3,6 +3,7 @@
 //! This is inside `src` rather than `tests` since we use this code in some unit
 //! tests.
 
+use std::collections::HashMap;
 use std::ffi::{OsStr, OsString};
 use std::io::Write;
 use std::ops::Deref;
@@ -58,7 +59,7 @@ impl Default for GitInitOptions {
 }
 
 /// Options for `Git::run_with_options`.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct GitRunOptions {
     /// The timestamp of the command. Mostly useful for `git commit`. This should
     /// be a number like 0, 1, 2, 3...
@@ -69,16 +70,9 @@ pub struct GitRunOptions {
 
     /// The input to write to the child process's stdin.
     pub input: Option<String>,
-}
 
-impl Default for GitRunOptions {
-    fn default() -> Self {
-        GitRunOptions {
-            time: 0,
-            expected_exit_code: 0,
-            input: None,
-        }
-    }
+    /// Additional environment variables to start the process with.
+    pub env: HashMap<String, String>,
 }
 
 impl Git {
@@ -181,6 +175,7 @@ impl Git {
             time,
             expected_exit_code,
             input,
+            env,
         } = options;
 
         // Required for determinism, as these values will be baked into the commit
@@ -204,7 +199,7 @@ impl Git {
 
         let git_exec_path = self.get_git_exec_path();
         let new_path = self.get_path_for_env();
-        let env: Vec<(&str, &OsStr)> = vec![
+        let base_env: Vec<(&str, &OsStr)> = vec![
             ("GIT_AUTHOR_DATE", &date),
             ("GIT_COMMITTER_DATE", &date),
             ("GIT_EDITOR", git_editor),
@@ -214,7 +209,11 @@ impl Git {
         ];
 
         let mut command = Command::new(&self.path_to_git);
-        command.args(&args).env_clear().envs(env.iter().copied());
+        command
+            .args(&args)
+            .env_clear()
+            .envs(base_env.iter().copied())
+            .envs(env.iter());
 
         let result = if let Some(input) = input {
             let mut child = command

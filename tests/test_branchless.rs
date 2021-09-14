@@ -1,4 +1,7 @@
-use branchless::testing::make_git;
+use std::collections::HashMap;
+
+use branchless::testing::{make_git, GitRunOptions};
+use itertools::Itertools;
 
 #[test]
 fn test_commands() -> eyre::Result<()> {
@@ -49,6 +52,33 @@ To hide this commit, run: git hide 3df4b935
         @ 3df4b935 (master) create test.txt
         "###);
     }
+
+    Ok(())
+}
+
+#[test]
+fn test_profiling() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+
+    git.run_with_options(
+        &["smartlog"],
+        &GitRunOptions {
+            env: {
+                let mut env: HashMap<String, String> = HashMap::new();
+                env.insert("RUST_PROFILE".to_string(), "1".to_string());
+                env
+            },
+            ..Default::default()
+        },
+    )?;
+
+    let entries: Vec<_> = std::fs::read_dir(&git.repo_path)?
+        .into_iter()
+        .try_collect()?;
+    assert!(entries
+        .iter()
+        .any(|entry| entry.file_name().to_str().unwrap().contains("trace-")));
 
     Ok(())
 }
