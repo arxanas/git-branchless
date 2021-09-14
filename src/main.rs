@@ -1,12 +1,18 @@
 use std::convert::TryInto;
 use std::ffi::OsString;
 use std::path::PathBuf;
+use std::time::SystemTime;
 
 use branchless::commands::wrap;
 use branchless::core::formatting::Glyphs;
 use branchless::git::{GitRunInfo, NonZeroOid};
 use branchless::tui::Effects;
 use structopt::StructOpt;
+use tracing_chrome::ChromeLayerBuilder;
+use tracing_error::ErrorLayer;
+use tracing_subscriber::fmt as tracing_fmt;
+use tracing_subscriber::prelude::*;
+use tracing_subscriber::EnvFilter;
 
 #[derive(StructOpt)]
 enum WrappedCommand {
@@ -372,19 +378,17 @@ fn main() -> eyre::Result<()> {
     std::process::exit(exit_code)
 }
 
-#[must_use = "This function returns a guard object to flush traces. Dropping it immediately is probably incorrect. Make sure that the returned value lives until tracing has finished."]
-fn install_tracing() -> Box<dyn Drop> {
-    // From https://github.com/yaahc/color-eyre/blob/07b9f0351544e2b07fcd173dc1fc602a7fc8bb6b/examples/usage.rs
-    // Licensed under MIT.
-    use tracing_chrome::ChromeLayerBuilder;
-    use tracing_error::ErrorLayer;
-    use tracing_subscriber::prelude::*;
-    use tracing_subscriber::{fmt, EnvFilter};
+/// A droppable type. See discussion at
+/// https://github.com/rust-lang/rust/pull/86747#issuecomment-921414209.
+trait ScopeGuard {}
+impl<T> ScopeGuard for T {}
 
+#[must_use = "This function returns a guard object to flush traces. Dropping it immediately is probably incorrect. Make sure that the returned value lives until tracing has finished."]
+fn install_tracing() -> eyre::Result<Box<dyn ScopeGuard>> {
     let (filter_layer, fmt_layer) = match EnvFilter::try_from_default_env() {
         Ok(filter_layer) => {
-            let fmt_layer = fmt::layer()
-                .with_span_events(fmt::format::FmtSpan::CLOSE)
+            let fmt_layer = tracing_fmt::layer()
+                .with_span_events(tracing_fmt::format::FmtSpan::CLOSE)
                 .with_target(false);
             (Some(filter_layer), Some(fmt_layer))
         }
@@ -402,16 +406,49 @@ fn install_tracing() -> Box<dyn Drop> {
         }
     };
 
-    let (profile_layer, profile_layer_guard) = match std::env::var("RUST_PROFILE") {
-        Ok(value) if value == "1" || value == "true" => {
-            let (chrome_layer, chrome_layer_guard) = ChromeLayerBuilder::new().build();
-            (Some(chrome_layer), Some(chrome_layer_guard))
+    let (profile_layer, flush_guard): (_, Box<dyn ScopeGuard>) = {
+        // We may invoke a hook that calls back into `git-branchless`. In that case,
+        // we have to be careful not to write to the same logging file.
+        const NESTING_LEVEL_KEY: &str = "RUST_LOGGING_NESTING_LEVEL";
+        let nesting_level = match std::env::var(NESTING_LEVEL_KEY) {
+            Ok(nesting_level) => nesting_level.parse::<usize>().unwrap_or_default(),
+            Err(_) => 0,
+        };
+        std::env::set_var(NESTING_LEVEL_KEY, (nesting_level + 1).to_string());
+
+        let should_include_function_args = match std::env::var("RUST_PROFILE_INCLUDE_ARGS") {
+            Ok(value) if !value.is_empty() => true,
+            Ok(_) | Err(_) => false,
+        };
+
+        let filename = match std::env::var("RUST_PROFILE") {
+            Ok(value) if value == "1" || value == "true" => {
+                let filename = format!(
+                    "trace-{}.json-{}",
+                    SystemTime::now()
+                        .duration_since(SystemTime::UNIX_EPOCH)?
+                        .as_secs(),
+                    nesting_level,
+                );
+                Some(filename)
+            }
+            Ok(value) if !value.is_empty() => Some(format!("{}-{}", value, nesting_level)),
+            Ok(_) | Err(_) => None,
+        };
+
+        match filename {
+            Some(filename) => {
+                let (layer, flush_guard) = ChromeLayerBuilder::new()
+                    .file(filename)
+                    .include_args(should_include_function_args)
+                    .build();
+                (Some(layer), Box::new(flush_guard))
+            }
+            None => {
+                struct TrivialDrop;
+                (None, Box::new(TrivialDrop))
+            }
         }
-        Ok(value) if !value.is_empty() => {
-            let (chrome_layer, chrome_layer_guard) = ChromeLayerBuilder::new().file(value).build();
-            (Some(chrome_layer), Some(chrome_layer_guard))
-        }
-        Ok(_) | Err(_) => (None, None),
     };
 
     tracing_subscriber::registry()
@@ -419,18 +456,7 @@ fn install_tracing() -> Box<dyn Drop> {
         .with(filter_layer)
         .with(fmt_layer)
         .with(profile_layer)
-        .init();
+        .try_init()?;
 
-    match profile_layer_guard {
-        Some(profile_layer_guard) => Box::new(profile_layer_guard),
-        None => {
-            struct TrivialDrop;
-            impl Drop for TrivialDrop {
-                fn drop(&mut self) {
-                    // Do nothing.
-                }
-            }
-            Box::new(TrivialDrop)
-        }
-    }
+    Ok(flush_guard)
 }
