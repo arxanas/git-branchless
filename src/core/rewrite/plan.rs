@@ -858,11 +858,10 @@ impl<'repo, M: MergeBaseDb + 'repo> RebasePlanBuilder<'repo, M> {
     ) -> eyre::Result<Vec<Commit<'repo>>> {
         let (effects, _progress) = effects.start_operation(OperationType::FilterCommits);
 
-        let local_touched_paths: HashSet<PathBuf> = touched_commits
+        let local_touched_paths: Vec<HashSet<PathBuf>> = touched_commits
             .into_iter()
             .map(|commit| self.repo.get_paths_touched_by_commit(&commit))
             .filter_map(|x| x.transpose())
-            .flatten_ok()
             .try_collect()?;
 
         let filtered_path = {
@@ -878,7 +877,7 @@ impl<'repo, M: MergeBaseDb + 'repo> RebasePlanBuilder<'repo, M> {
                 path.into_par_iter()
                     .map(|commit_oid| {
                         if let Some(upstream_touched_paths) = touched_paths_cache.get(&commit_oid) {
-                            if Self::is_candidate_to_check_patch_id(
+                            if Self::should_check_patch_id(
                                 &*upstream_touched_paths,
                                 &local_touched_paths,
                             ) {
@@ -898,7 +897,7 @@ impl<'repo, M: MergeBaseDb + 'repo> RebasePlanBuilder<'repo, M> {
                             };
                             let upstream_touched_paths =
                                 repo.get_paths_touched_by_commit(&commit)?;
-                            let result = if Self::is_candidate_to_check_patch_id(
+                            let result = if Self::should_check_patch_id(
                                 &upstream_touched_paths,
                                 &local_touched_paths,
                             ) {
@@ -923,17 +922,18 @@ impl<'repo, M: MergeBaseDb + 'repo> RebasePlanBuilder<'repo, M> {
         Ok(filtered_path)
     }
 
-    fn is_candidate_to_check_patch_id(
+    fn should_check_patch_id(
         upstream_touched_paths: &Option<HashSet<PathBuf>>,
-        local_touched_paths: &HashSet<PathBuf>,
+        local_touched_paths: &[HashSet<PathBuf>],
     ) -> bool {
         match upstream_touched_paths {
             Some(upstream_touched_paths) => {
-                // This could be more specific -- we could check to see if they are
-                // exactly the same. I'm checking only if there is some intersection to
-                // make sure there's not some edge-case e.g. around renames that I've
-                // missed.
-                !local_touched_paths.is_disjoint(upstream_touched_paths)
+                // It's possible that the same commit was applied after a parent
+                // commit renamed a certain path. In that case, this check won't
+                // trigger. We'll rely on the empty-commit check after the
+                // commit has been made to deduplicate the commit in that case.
+                // FIXME: this code path could be optimized further.
+                local_touched_paths.iter().contains(upstream_touched_paths)
             }
             None => true,
         }
