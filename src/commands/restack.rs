@@ -64,9 +64,7 @@ use tracing::{instrument, warn};
 use crate::commands::smartlog::smartlog;
 use crate::core::config::get_restack_preserve_timestamps;
 use crate::core::eventlog::{EventLogDb, EventReplayer};
-use crate::core::graph::{
-    make_graph, resolve_commits, BranchOids, HeadOid, MainBranchOid, ResolveCommitsResult,
-};
+use crate::core::graph::{make_graph, resolve_commits, ResolveCommitsResult};
 use crate::core::mergebase::make_merge_base_db;
 use crate::core::rewrite::{
     execute_rebase_plan, find_abandoned_children, find_rewrite_target, move_branches,
@@ -88,19 +86,15 @@ fn restack_commits(
 ) -> eyre::Result<isize> {
     let event_replayer = EventReplayer::from_event_log_db(effects, repo, event_log_db)?;
     let event_cursor = event_replayer.make_default_cursor();
-    let merge_base_db = make_merge_base_db(effects, repo, conn, &event_replayer)?;
-    let head_oid = repo.get_head_info()?.oid;
-    let main_branch_oid = repo.get_main_branch_oid()?;
-    let branch_oid_to_names = repo.get_branch_oid_to_names()?;
+    let mut dag = make_merge_base_db(effects, repo, conn, &event_replayer)?;
+    let references_snapshot = repo.get_references_snapshot(&mut dag)?;
     let graph = make_graph(
         effects,
         repo,
-        &merge_base_db,
+        &dag,
         &event_replayer,
         event_cursor,
-        &HeadOid(head_oid),
-        &MainBranchOid(main_branch_oid),
-        &BranchOids(branch_oid_to_names.keys().copied().collect()),
+        &references_snapshot,
         true,
     )?;
 
@@ -125,12 +119,8 @@ fn restack_commits(
         .collect();
 
     let rebase_plan = {
-        let mut builder = RebasePlanBuilder::new(
-            repo,
-            &graph,
-            &merge_base_db,
-            &MainBranchOid(main_branch_oid),
-        );
+        let mut builder =
+            RebasePlanBuilder::new(repo, &graph, &dag, references_snapshot.main_branch_oid);
         for RebaseInfo {
             dest_oid,
             abandoned_child_oids,
@@ -189,19 +179,16 @@ fn restack_branches(
     options: &ExecuteRebasePlanOptions,
 ) -> eyre::Result<isize> {
     let event_replayer = EventReplayer::from_event_log_db(effects, repo, event_log_db)?;
-    let merge_base_db = make_merge_base_db(effects, repo, conn, &event_replayer)?;
-    let head_oid = repo.get_head_info()?.oid;
-    let main_branch_oid = repo.get_main_branch_oid()?;
-    let branch_oid_to_names = repo.get_branch_oid_to_names()?;
+    let mut dag = make_merge_base_db(effects, repo, conn, &event_replayer)?;
+
+    let references_snapshot = repo.get_references_snapshot(&mut dag)?;
     let graph = make_graph(
         effects,
         repo,
-        &merge_base_db,
+        &dag,
         &event_replayer,
         event_replayer.make_default_cursor(),
-        &HeadOid(head_oid),
-        &MainBranchOid(main_branch_oid),
-        &BranchOids(branch_oid_to_names.keys().copied().collect()),
+        &references_snapshot,
         true,
     )?;
 

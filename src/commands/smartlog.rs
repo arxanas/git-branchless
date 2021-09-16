@@ -14,7 +14,7 @@ use tracing::instrument;
 use crate::core::eventlog::{EventLogDb, EventReplayer};
 use crate::core::formatting::set_effect;
 use crate::core::formatting::{printable_styled_string, Glyphs, StyledStringBuilder};
-use crate::core::graph::{make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid};
+use crate::core::graph::{make_graph, CommitGraph};
 use crate::core::mergebase::{make_merge_base_db, MergeBaseDb};
 use crate::core::metadata::{
     render_commit_metadata, BranchesProvider, CommitMessageProvider, CommitMetadataProvider,
@@ -84,15 +84,12 @@ fn get_child_output(
     graph: &CommitGraph,
     root_oids: &[NonZeroOid],
     commit_metadata_providers: &mut [&mut dyn CommitMetadataProvider],
-    head_oid: &HeadOid,
+    head_oid: Option<NonZeroOid>,
     current_oid: NonZeroOid,
     last_child_line_char: Option<&str>,
 ) -> eyre::Result<Vec<StyledString>> {
     let current_node = &graph[&current_oid];
-    let is_head = {
-        let HeadOid(head_oid) = head_oid;
-        Some(current_node.commit.get_oid()) == *head_oid
-    };
+    let is_head = Some(current_node.commit.get_oid()) == head_oid;
 
     let text = render_commit_metadata(&current_node.commit, commit_metadata_providers)?;
     let cursor = match (current_node.is_main, current_node.is_visible, is_head) {
@@ -183,7 +180,7 @@ fn get_output(
     glyphs: &Glyphs,
     graph: &CommitGraph,
     commit_metadata_providers: &mut [&mut dyn CommitMetadataProvider],
-    head_oid: &HeadOid,
+    head_oid: Option<NonZeroOid>,
     root_oids: &[NonZeroOid],
 ) -> eyre::Result<Vec<StyledString>> {
     let mut lines = Vec::new();
@@ -251,7 +248,7 @@ pub fn render_graph(
     repo: &Repo,
     merge_base_db: &impl MergeBaseDb,
     graph: &CommitGraph,
-    head_oid: &HeadOid,
+    head_oid: Option<NonZeroOid>,
     commit_metadata_providers: &mut [&mut dyn CommitMetadataProvider],
 ) -> eyre::Result<Vec<StyledString>> {
     let root_oids = split_commit_graph_by_roots(effects, repo, merge_base_db, graph);
@@ -272,28 +269,25 @@ pub fn smartlog(effects: &Effects) -> eyre::Result<()> {
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
     let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
-    let merge_base_db = make_merge_base_db(effects, &repo, &conn, &event_replayer)?;
-    let head_oid = repo.get_head_info()?.oid;
-    let main_branch_oid = repo.get_main_branch_oid()?;
-    let branch_oid_to_names = repo.get_branch_oid_to_names()?;
+    let mut dag = make_merge_base_db(effects, &repo, &conn, &event_replayer)?;
+
+    let references_snapshot = repo.get_references_snapshot(&mut dag)?;
     let graph = make_graph(
         effects,
         &repo,
-        &merge_base_db,
+        &dag,
         &event_replayer,
         event_replayer.make_default_cursor(),
-        &HeadOid(head_oid),
-        &MainBranchOid(main_branch_oid),
-        &BranchOids(branch_oid_to_names.keys().cloned().collect()),
+        &references_snapshot,
         true,
     )?;
 
     let lines = render_graph(
         effects,
         &repo,
-        &merge_base_db,
+        &dag,
         &graph,
-        &HeadOid(head_oid),
+        references_snapshot.head_oid,
         &mut [
             &mut CommitOidProvider::new(true)?,
             &mut RelativeTimeProvider::new(&repo, SystemTime::now())?,
@@ -302,7 +296,7 @@ pub fn smartlog(effects: &Effects) -> eyre::Result<()> {
                 &event_replayer,
                 event_replayer.make_default_cursor(),
             )?,
-            &mut BranchesProvider::new(&repo, &branch_oid_to_names)?,
+            &mut BranchesProvider::new(&repo, &references_snapshot)?,
             &mut DifferentialRevisionProvider::new(&repo)?,
             &mut CommitMessageProvider::new()?,
         ],

@@ -7,9 +7,9 @@ use tracing::{instrument, warn};
 use crate::commands::smartlog::smartlog;
 use crate::core::eventlog::{EventLogDb, EventReplayer};
 use crate::core::formatting::printable_styled_string;
-use crate::core::graph::{make_graph, BranchOids, CommitGraph, HeadOid, MainBranchOid};
+use crate::core::graph::{make_graph, CommitGraph};
 use crate::core::mergebase::{make_merge_base_db, MergeBaseDb};
-use crate::git::{GitRunInfo, NonZeroOid, Repo};
+use crate::git::{GitRunInfo, NonZeroOid, Repo, RepoReferencesSnapshot};
 use crate::tui::Effects;
 
 /// Go back a certain number of commits.
@@ -52,12 +52,15 @@ fn advance_towards_main_branch(
     repo: &Repo,
     merge_base_db: &impl MergeBaseDb,
     graph: &CommitGraph,
+    references_snapshot: &RepoReferencesSnapshot,
     current_oid: NonZeroOid,
-    main_branch_oid: &MainBranchOid,
 ) -> eyre::Result<(isize, NonZeroOid)> {
-    let MainBranchOid(main_branch_oid) = main_branch_oid;
-    let path =
-        merge_base_db.find_path_to_merge_base(effects, repo, *main_branch_oid, current_oid)?;
+    let path = merge_base_db.find_path_to_merge_base(
+        effects,
+        repo,
+        references_snapshot.main_branch_oid,
+        current_oid,
+    )?;
     let path = match path {
         None => return Ok((0, current_oid)),
         Some(path) if path.len() == 1 => {
@@ -146,35 +149,28 @@ pub fn next(
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
     let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
-    let merge_base_db = make_merge_base_db(effects, &repo, &conn, &event_replayer)?;
+    let mut dag = make_merge_base_db(effects, &repo, &conn, &event_replayer)?;
 
-    let head_oid = match repo.get_head_info()?.oid {
+    let references_snapshot = repo.get_references_snapshot(&mut dag)?;
+    let head_oid = match references_snapshot.head_oid {
         Some(head_oid) => head_oid,
-        None => eyre::bail!("No HEAD present; cannot calculate next commit"),
+        None => {
+            eyre::bail!("No HEAD present; cannot calculate next commit");
+        }
     };
-    let main_branch_oid = repo.get_main_branch_oid()?;
-    let branch_oid_to_names = repo.get_branch_oid_to_names()?;
     let graph = make_graph(
         effects,
         &repo,
-        &merge_base_db,
+        &dag,
         &event_replayer,
         event_replayer.make_default_cursor(),
-        &HeadOid(Some(head_oid)),
-        &MainBranchOid(main_branch_oid),
-        &BranchOids(branch_oid_to_names.keys().copied().collect()),
+        &references_snapshot,
         true,
     )?;
 
     let num_commits = num_commits.unwrap_or(1);
-    let (num_commits_traversed_towards_main_branch, current_oid) = advance_towards_main_branch(
-        effects,
-        &repo,
-        &merge_base_db,
-        &graph,
-        head_oid,
-        &MainBranchOid(main_branch_oid),
-    )?;
+    let (num_commits_traversed_towards_main_branch, current_oid) =
+        advance_towards_main_branch(effects, &repo, &dag, &graph, &references_snapshot, head_oid)?;
     let num_commits = num_commits - num_commits_traversed_towards_main_branch;
     let current_oid =
         advance_towards_own_commit(effects, &repo, &graph, current_oid, num_commits, towards)?;

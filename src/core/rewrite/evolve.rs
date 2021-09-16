@@ -118,7 +118,7 @@ pub fn find_abandoned_children(
 mod tests {
     use crate::core::eventlog::EventLogDb;
     use crate::core::formatting::Glyphs;
-    use crate::core::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
+    use crate::core::graph::make_graph;
     use crate::core::mergebase::make_merge_base_db;
     use crate::testing::{make_git, Git, GitRunOptions};
     use crate::tui::Effects;
@@ -134,20 +134,17 @@ mod tests {
         let conn = repo.get_db_conn()?;
         let event_log_db = EventLogDb::new(&conn)?;
         let event_replayer = EventReplayer::from_event_log_db(&effects, &repo, &event_log_db)?;
-        let merge_base_db = make_merge_base_db(effects, &repo, &conn, &event_replayer)?;
+        let mut dag = make_merge_base_db(effects, &repo, &conn, &event_replayer)?;
         let event_cursor = event_replayer.make_default_cursor();
-        let head_oid = repo.get_head_info()?.oid;
-        let main_branch_oid = repo.get_main_branch_oid()?;
-        let branch_oid_to_names = repo.get_branch_oid_to_names()?;
+
+        let references_snapshot = repo.get_references_snapshot(&mut dag)?;
         let graph = make_graph(
             &effects,
             &repo,
-            &merge_base_db,
+            &dag,
             &event_replayer,
             event_cursor,
-            &HeadOid(head_oid),
-            &MainBranchOid(main_branch_oid),
-            &BranchOids(branch_oid_to_names.keys().copied().collect()),
+            &references_snapshot,
             true,
         )?;
 

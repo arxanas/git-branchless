@@ -10,7 +10,7 @@ use rayon::{prelude::*, ThreadPool, ThreadPoolBuilder};
 use tracing::{instrument, warn};
 
 use crate::core::formatting::printable_styled_string;
-use crate::core::graph::{CommitGraph, MainBranchOid};
+use crate::core::graph::CommitGraph;
 use crate::core::mergebase::MergeBaseDb;
 use crate::git::{Commit, NonZeroOid, PatchId, Repo};
 use crate::tui::{Effects, OperationType};
@@ -261,14 +261,13 @@ impl<'repo, M: MergeBaseDb + 'repo> RebasePlanBuilder<'repo, M> {
         repo: &'repo Repo,
         graph: &'repo CommitGraph,
         merge_base_db: &'repo M,
-        main_branch_oid: &MainBranchOid,
+        main_branch_oid: NonZeroOid,
     ) -> Self {
-        let MainBranchOid(main_branch_oid) = main_branch_oid;
         RebasePlanBuilder {
             repo,
             graph,
             merge_base_db,
-            main_branch_oid: *main_branch_oid,
+            main_branch_oid,
             initial_constraints: Default::default(),
         }
     }

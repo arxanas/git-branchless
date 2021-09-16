@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use branchless::core::eventlog::{EventLogDb, EventReplayer};
 use branchless::core::formatting::Glyphs;
-use branchless::core::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
+use branchless::core::graph::make_graph;
 use branchless::core::mergebase::{make_merge_base_db, MergeBaseDb};
 use branchless::core::rewrite::{BuildRebasePlanOptions, RebasePlanBuilder};
 use branchless::git::{CherryPickFastOptions, Commit, Diff, Repo};
@@ -41,23 +41,22 @@ fn bench_rebase_plan(c: &mut Criterion) {
         let event_replayer =
             EventReplayer::from_event_log_db(&effects, &repo, &event_log_db).unwrap();
         let event_cursor = event_replayer.make_default_cursor();
-        let merge_base_db = make_merge_base_db(&effects, &repo, &conn, &event_replayer).unwrap();
+        let mut dag = make_merge_base_db(&effects, &repo, &conn, &event_replayer).unwrap();
+
+        let references_snapshot = repo.get_references_snapshot(&mut dag).unwrap();
         let graph = make_graph(
             &effects,
             &repo,
-            &merge_base_db,
+            &dag,
             &event_replayer,
             event_cursor,
-            &HeadOid(Some(head_oid)),
-            &MainBranchOid(head_oid),
-            &BranchOids(Default::default()),
+            &references_snapshot,
             true,
         )
         .unwrap();
         println!("Built commit graph ({:?} elements)", graph.len());
 
-        let mut builder =
-            RebasePlanBuilder::new(&repo, &graph, &merge_base_db, &MainBranchOid(head_oid));
+        let mut builder = RebasePlanBuilder::new(&repo, &graph, &dag, head_oid);
         builder
             .move_subtree(later_commit.get_oid(), earlier_commit.get_oid())
             .unwrap();

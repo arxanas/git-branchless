@@ -10,25 +10,8 @@ use tracing::{instrument, warn};
 
 use crate::core::eventlog::{CommitVisibility, Event, EventCursor, EventReplayer};
 use crate::core::mergebase::MergeBaseDb;
-use crate::git::{Commit, Dag, NonZeroOid, Repo};
+use crate::git::{Commit, Dag, NonZeroOid, Repo, RepoReferencesSnapshot};
 use crate::tui::{Effects, OperationType};
-
-/// The OID of the repo's HEAD reference.
-#[derive(Debug)]
-pub struct HeadOid(pub Option<NonZeroOid>);
-
-/// The OID that the repo's main branch points to.
-#[derive(Debug)]
-pub struct MainBranchOid(pub NonZeroOid);
-
-/// The OIDs of any branches whose pointed-to commits should be included in the
-/// commit graph.
-#[derive(Debug)]
-pub struct BranchOids(pub HashSet<NonZeroOid>);
-
-/// The OIDs of any visible commits that should be included in the commit graph.
-#[derive(Debug)]
-pub struct CommitOids(pub HashSet<NonZeroOid>);
 
 /// Node contained in the smartlog commit graph.
 #[derive(Debug)]
@@ -112,14 +95,14 @@ fn walk_from_commits<'repo>(
     dag: &Dag,
     event_replayer: &EventReplayer,
     event_cursor: EventCursor,
-    main_branch_oid: &MainBranchOid,
-    commit_oids: &CommitOids,
+    main_branch_oid: NonZeroOid,
+    commit_oids: &HashSet<NonZeroOid>,
 ) -> eyre::Result<CommitGraph<'repo>> {
     let (effects, _progress) = effects.start_operation(OperationType::WalkCommits);
 
     let mut graph: HashMap<NonZeroOid, Node> = Default::default();
 
-    for commit_oid in &commit_oids.0 {
+    for commit_oid in commit_oids {
         let commit = repo.find_commit(*commit_oid)?;
         let current_commit = match commit {
             Some(commit) => commit,
@@ -129,7 +112,7 @@ fn walk_from_commits<'repo>(
         };
 
         let merge_base_oid =
-            dag.get_merge_base_oid(&effects, repo, current_commit.get_oid(), main_branch_oid.0)?;
+            dag.get_merge_base_oid(&effects, repo, current_commit.get_oid(), main_branch_oid)?;
         let path_to_merge_base = match merge_base_oid {
             // Occasionally we may find a commit that has no merge-base with the
             // main branch. For example: a rewritten initial commit. This is
@@ -275,11 +258,15 @@ fn should_hide(
 }
 
 /// Remove commits from the graph according to their status.
-fn do_remove_commits(graph: &mut CommitGraph, head_oid: &HeadOid, branch_oids: &BranchOids) {
+fn do_remove_commits(graph: &mut CommitGraph, references_snapshot: &RepoReferencesSnapshot) {
     // OIDs which are pointed to by HEAD or a branch should not be hidden.
     // Therefore, we can't hide them *or* their ancestors.
-    let mut unhideable_oids = branch_oids.0.clone();
-    if let Some(head_oid) = head_oid.0 {
+    let mut unhideable_oids: HashSet<NonZeroOid> = references_snapshot
+        .branch_oid_to_names
+        .keys()
+        .copied()
+        .collect();
+    if let Some(head_oid) = references_snapshot.head_oid {
         unhideable_oids.insert(head_oid);
     }
 
@@ -335,9 +322,7 @@ pub fn make_graph<'repo>(
     dag: &Dag,
     event_replayer: &EventReplayer,
     event_cursor: EventCursor,
-    head_oid: &HeadOid,
-    main_branch_oid: &MainBranchOid,
-    branch_oids: &BranchOids,
+    references_snapshot: &RepoReferencesSnapshot,
     remove_commits: bool,
 ) -> eyre::Result<CommitGraph<'repo>> {
     let (effects, _progress) = effects.start_operation(OperationType::MakeGraph);
@@ -346,23 +331,22 @@ pub fn make_graph<'repo>(
         .get_cursor_active_oids(event_cursor)
         .into_iter()
         .collect();
-    commit_oids.extend(branch_oids.0.iter().cloned());
-    if let HeadOid(Some(head_oid)) = head_oid {
-        commit_oids.insert(*head_oid);
+    commit_oids.extend(references_snapshot.branch_oid_to_names.keys());
+    if let Some(head_oid) = references_snapshot.head_oid {
+        commit_oids.insert(head_oid);
     }
-    let commit_oids = &CommitOids(commit_oids);
     let mut graph = walk_from_commits(
         &effects,
         repo,
         dag,
         event_replayer,
         event_cursor,
-        main_branch_oid,
-        commit_oids,
+        references_snapshot.main_branch_oid,
+        &commit_oids,
     )?;
     sort_children(&mut graph);
     if remove_commits {
-        do_remove_commits(&mut graph, head_oid, branch_oids);
+        do_remove_commits(&mut graph, references_snapshot);
     }
     Ok(graph)
 }
