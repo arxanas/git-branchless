@@ -7,6 +7,7 @@ use branchless::commands::wrap;
 use branchless::core::formatting::Glyphs;
 use branchless::git::{GitRunInfo, NonZeroOid};
 use branchless::tui::Effects;
+use eyre::Context;
 use structopt::StructOpt;
 use tracing_chrome::ChromeLayerBuilder;
 use tracing_error::ErrorLayer;
@@ -20,12 +21,8 @@ enum WrappedCommand {
     WrappedCommand(Vec<String>),
 }
 
-/// Branchless workflow for Git.
-///
-/// See the documentation at https://github.com/arxanas/git-branchless/wiki.
 #[derive(StructOpt)]
-#[structopt(version = env!("CARGO_PKG_VERSION"), author = "Waleed Khan <me@waleedkhan.name>")]
-enum Opts {
+enum Command {
     /// Initialize the branchless workflow for this repository.
     Init {
         /// Uninstall the branchless workflow instead of initializing it.
@@ -203,13 +200,40 @@ enum Opts {
     HookReferenceTransaction { transaction_state: String },
 }
 
+/// Branchless workflow for Git.
+///
+/// See the documentation at https://github.com/arxanas/git-branchless/wiki.
+#[derive(StructOpt)]
+#[structopt(version = env!("CARGO_PKG_VERSION"), author = "Waleed Khan <me@waleedkhan.name>")]
+struct Opts {
+    /// Change to the given directory before executing the rest of the program.
+    /// (The option is called `-C` for symmetry with Git.)
+    #[structopt(short = "-C")]
+    working_directory: Option<PathBuf>,
+
+    #[structopt(subcommand)]
+    command: Command,
+}
+
 /// Wrapper function for `main` to ensure that `Drop` is called for local
 /// variables, since `std::process::exit` will skip them.
 fn do_main_and_drop_locals() -> eyre::Result<i32> {
     color_eyre::install()?;
     let _tracing_guard = install_tracing();
 
-    let opts = Opts::from_args();
+    let Opts {
+        working_directory,
+        command,
+    } = Opts::from_args();
+    if let Some(working_directory) = working_directory {
+        std::env::set_current_dir(&working_directory).wrap_err_with(|| {
+            format!(
+                "Could not set working directory to: {:?}",
+                &working_directory
+            )
+        })?;
+    }
+
     let path_to_git = std::env::var_os("PATH_TO_GIT").unwrap_or_else(|| OsString::from("git"));
     let path_to_git = PathBuf::from(&path_to_git);
     let git_run_info = GitRunInfo {
@@ -219,35 +243,35 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
     };
     let effects = Effects::new(Glyphs::detect());
 
-    let exit_code = match opts {
-        Opts::Init { uninstall: false } => {
+    let exit_code = match command {
+        Command::Init { uninstall: false } => {
             branchless::commands::init::init(&effects, &git_run_info)?;
             0
         }
 
-        Opts::Init { uninstall: true } => {
+        Command::Init { uninstall: true } => {
             branchless::commands::init::uninstall(&effects)?;
             0
         }
 
-        Opts::Smartlog => {
+        Command::Smartlog => {
             branchless::commands::smartlog::smartlog(&effects)?;
             0
         }
 
-        Opts::Hide { commits, recursive } => {
+        Command::Hide { commits, recursive } => {
             branchless::commands::hide::hide(&effects, commits, recursive)?
         }
 
-        Opts::Unhide { commits, recursive } => {
+        Command::Unhide { commits, recursive } => {
             branchless::commands::hide::unhide(&effects, commits, recursive)?
         }
 
-        Opts::Prev { num_commits } => {
+        Command::Prev { num_commits } => {
             branchless::commands::navigation::prev(&effects, &git_run_info, num_commits)?
         }
 
-        Opts::Next {
+        Command::Next {
             num_commits,
             oldest,
             newest,
@@ -261,7 +285,7 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
             branchless::commands::navigation::next(&effects, &git_run_info, num_commits, towards)?
         }
 
-        Opts::Move {
+        Command::Move {
             source,
             dest,
             base,
@@ -281,7 +305,7 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
             dump_rebase_plan,
         )?,
 
-        Opts::Restack {
+        Command::Restack {
             commits,
             force_in_memory,
             force_on_disk,
@@ -297,14 +321,14 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
             dump_rebase_plan,
         )?,
 
-        Opts::Undo => branchless::commands::undo::undo(&effects, &git_run_info)?,
+        Command::Undo => branchless::commands::undo::undo(&effects, &git_run_info)?,
 
-        Opts::Gc | Opts::HookPreAutoGc => {
+        Command::Gc | Command::HookPreAutoGc => {
             branchless::commands::gc::gc(&effects)?;
             0
         }
 
-        Opts::Wrap {
+        Command::Wrap {
             git_executable: explicit_git_executable,
             command: WrappedCommand::WrappedCommand(args),
         } => {
@@ -319,27 +343,27 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
             exit_code
         }
 
-        Opts::HookPostRewrite { rewrite_type } => {
+        Command::HookPostRewrite { rewrite_type } => {
             branchless::commands::hooks::hook_post_rewrite(&effects, &git_run_info, &rewrite_type)?;
             0
         }
 
-        Opts::HookRegisterExtraPostRewriteHook => {
+        Command::HookRegisterExtraPostRewriteHook => {
             branchless::commands::hooks::hook_register_extra_post_rewrite_hook()?;
             0
         }
 
-        Opts::HookDetectEmptyCommit { old_commit_oid } => {
+        Command::HookDetectEmptyCommit { old_commit_oid } => {
             branchless::commands::hooks::hook_drop_commit_if_empty(&effects, old_commit_oid)?;
             0
         }
 
-        Opts::HookSkipUpstreamAppliedCommit { commit_oid } => {
+        Command::HookSkipUpstreamAppliedCommit { commit_oid } => {
             branchless::commands::hooks::hook_skip_upstream_applied_commit(&effects, commit_oid)?;
             0
         }
 
-        Opts::HookPostCheckout {
+        Command::HookPostCheckout {
             previous_commit,
             current_commit,
             is_branch_checkout,
@@ -353,17 +377,17 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
             0
         }
 
-        Opts::HookPostCommit => {
+        Command::HookPostCommit => {
             branchless::commands::hooks::hook_post_commit(&effects)?;
             0
         }
 
-        Opts::HookPostMerge { is_squash_merge } => {
+        Command::HookPostMerge { is_squash_merge } => {
             branchless::commands::hooks::hook_post_merge(&effects, is_squash_merge)?;
             0
         }
 
-        Opts::HookReferenceTransaction { transaction_state } => {
+        Command::HookReferenceTransaction { transaction_state } => {
             branchless::commands::hooks::hook_reference_transaction(&effects, &transaction_state)?;
             0
         }
