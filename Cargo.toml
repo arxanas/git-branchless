@@ -37,6 +37,12 @@ path = "bin/regression_test_cherry_pick.rs"
 required-features = ["integration-test-bin"]
 test = true
 
+[[bin]]
+name = "git-branchless-profile-changed-paths"
+path = "bin/profile_changed_paths.rs"
+required-features = ["integration-test-bin"]
+test = true
+
 [dependencies]
 anyhow = "1.0.43"
 assert_cmd = "2.0.0"
