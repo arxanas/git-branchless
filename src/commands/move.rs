@@ -10,10 +10,7 @@ use tracing::instrument;
 
 use crate::core::config::get_restack_preserve_timestamps;
 use crate::core::eventlog::{EventLogDb, EventReplayer};
-use crate::core::graph::{
-    make_graph, resolve_commits, BranchOids, CommitGraph, HeadOid, MainBranchOid,
-    ResolveCommitsResult,
-};
+use crate::core::graph::{make_graph, resolve_commits, CommitGraph, ResolveCommitsResult};
 use crate::core::mergebase::{make_merge_base_db, MergeBaseDb};
 use crate::core::rewrite::{
     execute_rebase_plan, BuildRebasePlanOptions, ExecuteRebasePlanOptions, RebasePlanBuilder,
@@ -101,28 +98,31 @@ pub fn r#move(
         }
     };
 
-    let main_branch_oid = repo.get_main_branch_oid()?;
-    let branch_oid_to_names = repo.get_branch_oid_to_names()?;
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
     let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
     let event_cursor = event_replayer.make_default_cursor();
-    let merge_base_db = make_merge_base_db(effects, &repo, &conn, &event_replayer)?;
+    let mut dag = make_merge_base_db(effects, &repo, &conn, &event_replayer)?;
+
+    let references_snapshot = {
+        let mut references_snapshot = repo.get_references_snapshot(&mut dag)?;
+        // FIXME: this seems like a hack; is there a better way to ensure that
+        // the graph has the commits we care about?
+        references_snapshot.head_oid = Some(source_oid);
+        references_snapshot
+    };
     let graph = make_graph(
         effects,
         &repo,
-        &merge_base_db,
+        &dag,
         &event_replayer,
         event_cursor,
-        &HeadOid(Some(source_oid)),
-        &MainBranchOid(main_branch_oid),
-        &BranchOids(branch_oid_to_names.keys().copied().collect()),
+        &references_snapshot,
         true,
     )?;
 
     let source_oid = if should_resolve_base_commit {
-        let merge_base_oid =
-            merge_base_db.get_merge_base_oid(effects, &repo, source_oid, dest_oid)?;
+        let merge_base_oid = dag.get_merge_base_oid(effects, &repo, source_oid, dest_oid)?;
         resolve_base_commit(&graph, merge_base_oid, source_oid)
     } else {
         source_oid
@@ -131,12 +131,8 @@ pub fn r#move(
     let now = SystemTime::now();
     let event_tx_id = event_log_db.make_transaction_id(now, "move")?;
     let rebase_plan = {
-        let mut builder = RebasePlanBuilder::new(
-            &repo,
-            &graph,
-            &merge_base_db,
-            &MainBranchOid(main_branch_oid),
-        );
+        let mut builder =
+            RebasePlanBuilder::new(&repo, &graph, &dag, references_snapshot.main_branch_oid);
         builder.move_subtree(source_oid, dest_oid)?;
         builder.build(
             effects,

@@ -21,7 +21,7 @@ use tracing::instrument;
 use crate::commands::smartlog::render_graph;
 use crate::core::eventlog::{Event, EventCursor, EventLogDb, EventReplayer, EventTransactionId};
 use crate::core::formatting::{printable_styled_string, Pluralize, StyledStringBuilder};
-use crate::core::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
+use crate::core::graph::make_graph;
 use crate::core::mergebase::make_merge_base_db;
 use crate::core::metadata::{
     BranchesProvider, CommitMessageProvider, CommitOidProvider, DifferentialRevisionProvider,
@@ -38,18 +38,14 @@ fn render_cursor_smartlog(
     event_replayer: &EventReplayer,
     event_cursor: EventCursor,
 ) -> eyre::Result<Vec<StyledString>> {
-    let head_oid = event_replayer.get_cursor_head_oid(event_cursor);
-    let main_branch_oid = event_replayer.get_cursor_main_branch_oid(event_cursor, repo)?;
-    let branch_oid_to_names = event_replayer.get_cursor_branch_oid_to_names(event_cursor, repo)?;
+    let references_snapshot = event_replayer.get_references_snapshot(repo, event_cursor)?;
     let graph = make_graph(
         effects,
         repo,
         dag,
         event_replayer,
         event_cursor,
-        &HeadOid(head_oid),
-        &MainBranchOid(main_branch_oid),
-        &BranchOids(branch_oid_to_names.keys().copied().collect()),
+        &references_snapshot,
         true,
     )?;
     let result = render_graph(
@@ -57,12 +53,12 @@ fn render_cursor_smartlog(
         repo,
         dag,
         &graph,
-        &HeadOid(head_oid),
+        references_snapshot.head_oid,
         &mut [
             &mut CommitOidProvider::new(true)?,
             &mut RelativeTimeProvider::new(repo, SystemTime::now())?,
             &mut HiddenExplanationProvider::new(&graph, event_replayer, event_cursor)?,
-            &mut BranchesProvider::new(repo, &branch_oid_to_names)?,
+            &mut BranchesProvider::new(repo, &references_snapshot)?,
             &mut DifferentialRevisionProvider::new(repo)?,
             &mut CommitMessageProvider::new()?,
         ],

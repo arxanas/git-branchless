@@ -16,7 +16,9 @@ use std::time::{Duration, SystemTime};
 use eyre::Context;
 use tracing::{error, instrument};
 
-use crate::git::{CategorizedReferenceName, MaybeZeroOid, NonZeroOid, Repo};
+use crate::git::{
+    CategorizedReferenceName, MaybeZeroOid, NonZeroOid, Repo, RepoReferencesSnapshot,
+};
 use crate::tui::{Effects, OperationType};
 
 /// When this environment variable is set, we reuse the ID for the transaction
@@ -1068,7 +1070,7 @@ impl EventReplayer {
     ///
     /// Returns: The OID pointed to by `HEAD` at that time, or `None` if `HEAD`
     /// was never observed.
-    pub fn get_cursor_head_oid(&self, cursor: EventCursor) -> Option<NonZeroOid> {
+    fn get_cursor_head_oid(&self, cursor: EventCursor) -> Option<NonZeroOid> {
         let cursor_event_id: usize = cursor.event_id.try_into().unwrap();
         self.events[0..cursor_event_id]
             .iter()
@@ -1126,7 +1128,7 @@ impl EventReplayer {
     ///
     /// Returns: A mapping from an OID to the names of branches pointing to that
     /// OID.
-    pub fn get_cursor_main_branch_oid(
+    fn get_cursor_main_branch_oid(
         &self,
         cursor: EventCursor,
         repo: &Repo,
@@ -1153,7 +1155,7 @@ impl EventReplayer {
     ///
     /// Returns: A mapping from an OID to the names of branches pointing to that
     /// OID.
-    pub fn get_cursor_branch_oid_to_names(
+    fn get_cursor_branch_oid_to_names(
         &self,
         cursor: EventCursor,
         repo: &Repo,
@@ -1198,6 +1200,22 @@ impl EventReplayer {
             .or_insert_with(HashSet::new)
             .insert(self.main_branch_reference_name.clone());
         Ok(result)
+    }
+
+    /// Get the `RepoReferencesSnapshot` at the cursor's point in time.
+    pub fn get_references_snapshot(
+        &self,
+        repo: &Repo,
+        cursor: EventCursor,
+    ) -> eyre::Result<RepoReferencesSnapshot> {
+        let head_oid = self.get_cursor_head_oid(cursor);
+        let main_branch_oid = self.get_cursor_main_branch_oid(cursor, repo)?;
+        let branch_oid_to_names = self.get_cursor_branch_oid_to_names(cursor, repo)?;
+        Ok(RepoReferencesSnapshot {
+            head_oid,
+            main_branch_oid,
+            branch_oid_to_names,
+        })
     }
 
     /// Get the event immediately before the cursor.

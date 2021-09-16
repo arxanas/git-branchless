@@ -4,9 +4,9 @@
 //! These are rendered inline in the smartlog, between the commit hash and the
 //! commit message.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::convert::TryInto;
-use std::ffi::{OsStr, OsString};
+use std::ffi::OsStr;
 use std::ops::Add;
 use std::time::{Duration, SystemTime};
 
@@ -20,7 +20,7 @@ use crate::core::config::{
     get_commit_metadata_branches, get_commit_metadata_differential_revision,
     get_commit_metadata_relative_time,
 };
-use crate::git::{CategorizedReferenceName, Commit, NonZeroOid, Repo};
+use crate::git::{CategorizedReferenceName, Commit, Repo, RepoReferencesSnapshot};
 
 use super::eventlog::{Event, EventCursor, EventReplayer};
 use super::formatting::StyledStringBuilder;
@@ -165,19 +165,16 @@ impl<'a> CommitMetadataProvider for HiddenExplanationProvider<'a> {
 #[derive(Debug)]
 pub struct BranchesProvider<'a> {
     is_enabled: bool,
-    branch_oid_to_names: &'a HashMap<NonZeroOid, HashSet<OsString>>,
+    references_snapshot: &'a RepoReferencesSnapshot,
 }
 
 impl<'a> BranchesProvider<'a> {
     /// Constructor.
-    pub fn new(
-        repo: &Repo,
-        branch_oid_to_names: &'a HashMap<NonZeroOid, HashSet<OsString>>,
-    ) -> eyre::Result<Self> {
+    pub fn new(repo: &Repo, references_snapshot: &'a RepoReferencesSnapshot) -> eyre::Result<Self> {
         let is_enabled = get_commit_metadata_branches(repo)?;
         Ok(BranchesProvider {
             is_enabled,
-            branch_oid_to_names,
+            references_snapshot,
         })
     }
 }
@@ -189,7 +186,11 @@ impl<'a> CommitMetadataProvider for BranchesProvider<'a> {
             return Ok(None);
         }
 
-        let branch_names: HashSet<&OsStr> = match self.branch_oid_to_names.get(&commit.get_oid()) {
+        let branch_names: HashSet<&OsStr> = match self
+            .references_snapshot
+            .branch_oid_to_names
+            .get(&commit.get_oid())
+        {
             Some(branch_names) => branch_names
                 .iter()
                 .map(|branch_name| branch_name.as_os_str())

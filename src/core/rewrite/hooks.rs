@@ -18,7 +18,7 @@ use tracing::instrument;
 use crate::core::config::{get_restack_warn_abandoned, RESTACK_WARN_ABANDONED_CONFIG_KEY};
 use crate::core::eventlog::{Event, EventLogDb, EventReplayer};
 use crate::core::formatting::{printable_styled_string, Pluralize};
-use crate::core::graph::{make_graph, BranchOids, HeadOid, MainBranchOid};
+use crate::core::graph::make_graph;
 use crate::core::mergebase::make_merge_base_db;
 use crate::git::{
     CategorizedReferenceName, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo, ResolvedReferenceInfo,
@@ -202,20 +202,16 @@ fn warn_abandoned(
     // to construct a fresh `EventReplayer` here.
     let event_replayer = EventReplayer::from_event_log_db(effects, repo, event_log_db)?;
     let event_cursor = event_replayer.make_default_cursor();
-    let merge_base_db = make_merge_base_db(effects, repo, conn, &event_replayer)?;
+    let mut dag = make_merge_base_db(effects, repo, conn, &event_replayer)?;
 
-    let head_oid = repo.get_head_info()?.oid;
-    let main_branch_oid = repo.get_main_branch_oid()?;
-    let branch_oid_to_names = repo.get_branch_oid_to_names()?;
+    let references_snapshot = repo.get_references_snapshot(&mut dag)?;
     let graph = make_graph(
         effects,
         repo,
-        &merge_base_db,
+        &dag,
         &event_replayer,
         event_cursor,
-        &HeadOid(head_oid),
-        &MainBranchOid(main_branch_oid),
-        &BranchOids(branch_oid_to_names.keys().copied().collect()),
+        &references_snapshot,
         false,
     )?;
 
@@ -234,7 +230,8 @@ fn warn_abandoned(
                 None => continue,
             };
             all_abandoned_children.extend(abandoned_children.iter());
-            if let Some(branch_names) = branch_oid_to_names.get(&old_commit_oid) {
+            if let Some(branch_names) = references_snapshot.branch_oid_to_names.get(&old_commit_oid)
+            {
                 all_abandoned_branches.extend(branch_names.iter().map(OsString::as_os_str));
             }
         }
