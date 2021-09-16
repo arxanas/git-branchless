@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::path::PathBuf;
 
 use branchless::core::eventlog::{EventLogDb, EventReplayer};
@@ -176,9 +177,26 @@ fn bench_diff_fast(c: &mut Criterion) {
     });
 }
 
+fn bench_get_paths_touched_by_commits(c: &mut Criterion) {
+    c.bench_function("Repo::get_paths_touched_by_commit", |b| {
+        let repo = get_repo();
+        let oid = repo.get_head_info().unwrap().oid.unwrap();
+        let commit = repo.find_commit_or_fail(oid).unwrap();
+
+        b.iter(|| -> Option<HashSet<PathBuf>> {
+            repo.get_paths_touched_by_commit(&commit).unwrap()
+        });
+    });
+}
+
 criterion_group!(
     name = benches;
     config = Criterion::default().sample_size(10);
-    targets = bench_rebase_plan, bench_find_path_to_merge_base, bench_cherry_pick_fast, bench_diff_fast
+    targets =
+        bench_cherry_pick_fast,
+        bench_diff_fast,
+        bench_find_path_to_merge_base,
+        bench_get_paths_touched_by_commits,
+        bench_rebase_plan,
 );
 criterion_main!(benches);
