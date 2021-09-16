@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added: The `-C` option can be used to set the working directory for `git-branchless` commands.
 - Fixed: Output of subcommands is no longer overwritten by progress updates.
+- Fixed: Improved performance up to 100x for commit deduplication during  `git move` when rebasing past certain large commits.
 
 ## [0.3.5] - 2021-09-11
 

@@ -757,6 +757,9 @@ impl<'repo, M: MergeBaseDb + 'repo> RebasePlanBuilder<'repo, M> {
         }
     }
 
+    /// Get the patch IDs for commits between `current_oid` and `dest_oid`,
+    /// filtered to only the commits which might have the same patch ID as a
+    /// commit being rebased.
     #[instrument]
     fn get_upstream_patch_ids(
         &self,
@@ -794,6 +797,7 @@ impl<'repo, M: MergeBaseDb + 'repo> RebasePlanBuilder<'repo, M> {
                 .map(|oid| self.repo.find_commit(*oid))
                 .flatten_ok()
                 .try_collect()?;
+
             self.filter_path_to_merge_base_commits(effects, state, &pool, path, touched_commits)?
         };
 
