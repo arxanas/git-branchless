@@ -475,15 +475,9 @@ Either create it, or update the main branch setting by running:
         };
 
         let current_tree = commit.get_tree()?.inner;
-        let mut acc = Vec::new();
-        get_changed_paths_between_trees(
-            self,
-            &mut acc,
-            &PathBuf::new(),
-            parent_tree.as_ref(),
-            Some(&current_tree),
-        )?;
-        Ok(Some(acc.into_iter().collect()))
+        let changed_paths =
+            get_changed_paths_between_trees(self, parent_tree.as_ref(), Some(&current_tree))?;
+        Ok(Some(changed_paths))
     }
 
     /// Get the patch ID for this commit.

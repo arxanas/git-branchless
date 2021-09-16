@@ -1,9 +1,12 @@
 use std::collections::{HashMap, HashSet};
+use std::convert::TryFrom;
+use std::ffi::OsString;
+use std::iter::FromIterator;
 use std::path::{Path, PathBuf};
 
 use eyre::Context;
 use itertools::Itertools;
-use os_str_bytes::OsStrBytes;
+use os_str_bytes::OsStringBytes;
 use tracing::{instrument, warn};
 
 use super::oid::make_non_zero_oid;
@@ -43,81 +46,90 @@ impl Tree<'_> {
     }
 }
 
-#[instrument]
-pub fn get_changed_paths_between_trees(
+/// This function is a hot code path. Do not annotate with `#[instrument]`, and
+/// be mindful of performance/memory allocations.
+fn get_changed_paths_between_trees_internal(
     repo: &Repo,
-    acc: &mut Vec<PathBuf>,
-    current_path: &Path,
+    acc: &mut Vec<Vec<PathBuf>>,
+    current_path: &[PathBuf],
     lhs: Option<&git2::Tree>,
     rhs: Option<&git2::Tree>,
 ) -> eyre::Result<()> {
     let lhs_entries = lhs
         .map(|tree| tree.iter().collect_vec())
         .unwrap_or_default();
+    let lhs_entries: HashMap<&[u8], &git2::TreeEntry> = lhs_entries
+        .iter()
+        .map(|entry| (entry.name_bytes(), entry))
+        .collect();
+
     let rhs_entries = rhs
         .map(|tree| tree.iter().collect_vec())
         .unwrap_or_default();
-    let entry_names: HashSet<&[u8]> = lhs_entries
+    let rhs_entries: HashMap<&[u8], &git2::TreeEntry> = rhs_entries
         .iter()
-        .chain(rhs_entries.iter())
-        .map(|entry| {
-            // Use `name_bytes` instead of `name` in case there's a non-UTF-8
-            // path. (Likewise, use `TreeEntry::get_path` instead of
-            // `TreeEntry::get_name` below.)
-            entry.name_bytes()
-        })
+        .map(|entry| (entry.name_bytes(), entry))
         .collect();
 
-    for entry_name in entry_names {
-        // FIXME: we could avoid the extra conversions and lookups here by
-        // iterating both trees together, since they should be in sorted
-        // order.
-        let entry_name =
-            PathBuf::from(OsStrBytes::from_raw_bytes(entry_name).wrap_err_with(|| {
-                format!("Converting tree entry name to path: {:?}", entry_name)
-            })?);
+    let all_entry_names: HashSet<&[u8]> = lhs_entries
+        .keys()
+        .chain(rhs_entries.keys())
+        .cloned()
+        .collect();
+    let entries: HashMap<&[u8], (Option<&git2::TreeEntry>, Option<&git2::TreeEntry>)> =
+        all_entry_names
+            .into_iter()
+            .map(|entry_name| {
+                (
+                    entry_name,
+                    (
+                        lhs_entries.get(entry_name).copied(),
+                        rhs_entries.get(entry_name).copied(),
+                    ),
+                )
+            })
+            .collect();
 
-        enum ClassifiedEntry<'repo> {
+    for (entry_name, (lhs_entry, rhs_entry)) in entries {
+        enum ClassifiedEntry {
             Absent,
             NotATree(git2::Oid, i32),
-            Tree(git2::Tree<'repo>, i32),
+            Tree(git2::Oid, i32),
         }
 
-        fn classify_entry<'repo>(
-            repo: &'repo Repo,
-            tree: Option<&'repo git2::Tree>,
-            entry_name: &Path,
-        ) -> eyre::Result<ClassifiedEntry<'repo>> {
-            let tree = match tree {
-                Some(tree) => tree,
+        fn classify_entry(entry: Option<&git2::TreeEntry>) -> eyre::Result<ClassifiedEntry> {
+            let entry = match entry {
+                Some(entry) => entry,
                 None => return Ok(ClassifiedEntry::Absent),
-            };
-            let entry = match tree.get_path(entry_name) {
-                Ok(entry) => entry,
-                Err(err) if err.code() == git2::ErrorCode::NotFound => {
-                    return Ok(ClassifiedEntry::Absent)
-                }
-                Err(err) => return Err(err.into()),
             };
 
             let file_mode = entry.filemode_raw();
             match entry.kind() {
-                Some(git2::ObjectType::Tree) => {
-                    let entry_tree = entry
-                        .to_object(&repo.inner)?
-                        .into_tree()
-                        .map_err(|_| eyre::eyre!("Not a tree: {:?}", entry.id()))?;
-                    Ok(ClassifiedEntry::Tree(entry_tree, file_mode))
-                }
+                Some(git2::ObjectType::Tree) => Ok(ClassifiedEntry::Tree(entry.id(), file_mode)),
                 _ => Ok(ClassifiedEntry::NotATree(entry.id(), file_mode)),
             }
         }
 
-        let full_entry_path = current_path.join(&entry_name);
-        match (
-            classify_entry(repo, lhs, &entry_name)?,
-            classify_entry(repo, rhs, &entry_name)?,
-        ) {
+        let get_tree = |oid| {
+            let entry_oid = MaybeZeroOid::from(oid);
+            let entry_oid = NonZeroOid::try_from(entry_oid)?;
+            let entry_tree = repo.find_tree(entry_oid)?;
+            entry_tree.ok_or_else(|| {
+                eyre::eyre!(
+                    "Tree entry was said to be an object of kind tree, \
+                            but it could not be looked up: {:?}",
+                    oid
+                )
+            })
+        };
+
+        let full_entry_path = || -> Vec<PathBuf> {
+            let entry_name: OsString = OsStringBytes::from_raw_vec(entry_name.to_vec()).unwrap();
+            let mut full_entry_path = current_path.to_vec();
+            full_entry_path.push(PathBuf::from(entry_name));
+            full_entry_path
+        };
+        match (classify_entry(lhs_entry)?, classify_entry(rhs_entry)?) {
             (ClassifiedEntry::Absent, ClassifiedEntry::Absent) => {
                 // Shouldn't happen, but there's no issue here.
             }
@@ -130,37 +142,53 @@ pub fn get_changed_paths_between_trees(
                     // Unchanged file, do nothing.
                 } else {
                     // Changed file.
-                    acc.push(full_entry_path);
+                    acc.push(full_entry_path());
                 }
             }
 
             (ClassifiedEntry::Absent, ClassifiedEntry::NotATree(_, _))
             | (ClassifiedEntry::NotATree(_, _), ClassifiedEntry::Absent) => {
                 // Added, removed, or changed file.
-                acc.push(full_entry_path);
+                acc.push(full_entry_path());
             }
 
-            (ClassifiedEntry::Absent, ClassifiedEntry::Tree(tree, _))
-            | (ClassifiedEntry::Tree(tree, _), ClassifiedEntry::Absent) => {
+            (ClassifiedEntry::Absent, ClassifiedEntry::Tree(tree_oid, _))
+            | (ClassifiedEntry::Tree(tree_oid, _), ClassifiedEntry::Absent) => {
                 // A directory was added or removed. Add all entries from that
                 // directory.
-                get_changed_paths_between_trees(repo, acc, &full_entry_path, Some(&tree), None)?;
+                let full_entry_path = full_entry_path();
+                let tree = get_tree(tree_oid)?;
+                get_changed_paths_between_trees_internal(
+                    repo,
+                    acc,
+                    &full_entry_path,
+                    Some(&tree.inner),
+                    None,
+                )?;
             }
 
-            (ClassifiedEntry::NotATree(_, _), ClassifiedEntry::Tree(tree, _))
-            | (ClassifiedEntry::Tree(tree, _), ClassifiedEntry::NotATree(_, _)) => {
+            (ClassifiedEntry::NotATree(_, _), ClassifiedEntry::Tree(tree_oid, _))
+            | (ClassifiedEntry::Tree(tree_oid, _), ClassifiedEntry::NotATree(_, _)) => {
                 // A file was changed into a directory. Add both the file and
                 // all subdirectory entries as changed entries.
-                get_changed_paths_between_trees(repo, acc, &full_entry_path, Some(&tree), None)?;
+                let full_entry_path = full_entry_path();
+                let tree = get_tree(tree_oid)?;
+                get_changed_paths_between_trees_internal(
+                    repo,
+                    acc,
+                    &full_entry_path,
+                    Some(&tree.inner),
+                    None,
+                )?;
                 acc.push(full_entry_path);
             }
 
             (
-                ClassifiedEntry::Tree(lhs_tree, lhs_file_mode),
-                ClassifiedEntry::Tree(rhs_tree, rhs_file_mode),
+                ClassifiedEntry::Tree(lhs_tree_oid, lhs_file_mode),
+                ClassifiedEntry::Tree(rhs_tree_oid, rhs_file_mode),
             ) => {
                 match (
-                    (lhs_tree.id() == rhs_tree.id()),
+                    (lhs_tree_oid == rhs_tree_oid),
                     // Note that there should only be one possible file mode for
                     // an entry which points to a tree, but it's possible that
                     // some extra non-meaningful bits are set. Should we report
@@ -174,28 +202,35 @@ pub fn get_changed_paths_between_trees(
 
                     (true, false) => {
                         // Only the directory changed, but none of its contents.
-                        acc.push(full_entry_path);
+                        acc.push(full_entry_path());
                     }
 
                     (false, true) => {
+                        let lhs_tree = get_tree(lhs_tree_oid)?;
+                        let rhs_tree = get_tree(rhs_tree_oid)?;
+
                         // Only include the files changed in the subtrees, and
                         // not the directory itself.
-                        get_changed_paths_between_trees(
+                        get_changed_paths_between_trees_internal(
                             repo,
                             acc,
-                            &full_entry_path,
-                            Some(&lhs_tree),
-                            Some(&rhs_tree),
+                            &full_entry_path(),
+                            Some(&lhs_tree.inner),
+                            Some(&rhs_tree.inner),
                         )?;
                     }
 
                     (false, false) => {
-                        get_changed_paths_between_trees(
+                        let lhs_tree = get_tree(lhs_tree_oid)?;
+                        let rhs_tree = get_tree(rhs_tree_oid)?;
+                        let full_entry_path = full_entry_path();
+
+                        get_changed_paths_between_trees_internal(
                             repo,
                             acc,
                             &full_entry_path,
-                            Some(&lhs_tree),
-                            Some(&rhs_tree),
+                            Some(&lhs_tree.inner),
+                            Some(&rhs_tree.inner),
                         )?;
                         acc.push(full_entry_path);
                     }
@@ -205,6 +240,18 @@ pub fn get_changed_paths_between_trees(
     }
 
     Ok(())
+}
+
+#[instrument]
+pub fn get_changed_paths_between_trees(
+    repo: &Repo,
+    lhs: Option<&git2::Tree>,
+    rhs: Option<&git2::Tree>,
+) -> eyre::Result<HashSet<PathBuf>> {
+    let mut acc = Vec::new();
+    get_changed_paths_between_trees_internal(repo, &mut acc, &Vec::new(), lhs, rhs)?;
+    let changed_paths: HashSet<PathBuf> = acc.into_iter().map(PathBuf::from_iter).collect();
+    Ok(changed_paths)
 }
 
 /// Add the provided entries into the tree.
@@ -471,22 +518,16 @@ mod tests {
         let oid = repo.get_head_info()?.oid.unwrap();
         let commit = repo.find_commit_or_fail(oid)?;
 
-        let mut acc = Vec::new();
         let lhs = commit.get_only_parent().unwrap();
         let lhs_tree = lhs.get_tree()?;
         let rhs_tree = commit.get_tree()?;
-        get_changed_paths_between_trees(
-            &repo,
-            &mut acc,
-            &PathBuf::new(),
-            Some(&lhs_tree.inner),
-            Some(&rhs_tree.inner),
-        )?;
+        let changed_paths =
+            get_changed_paths_between_trees(&repo, Some(&lhs_tree.inner), Some(&rhs_tree.inner))?;
 
-        insta::assert_debug_snapshot!(acc, @r###"
-        [
+        insta::assert_debug_snapshot!(changed_paths, @r###"
+        {
             "initial.txt",
-        ]
+        }
         "###);
 
         Ok(())
