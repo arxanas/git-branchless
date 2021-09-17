@@ -99,21 +99,21 @@ impl CommitMetadataProvider for CommitMessageProvider {
     }
 }
 
-/// For hidden commits, provide the reason that it's hidden.
-pub struct HiddenExplanationProvider<'a> {
+/// For obsolete commits, provide the reason that it's obsolete.
+pub struct ObsolescenceExplanationProvider<'a> {
     graph: &'a CommitGraph<'a>,
     event_replayer: &'a EventReplayer,
     event_cursor: EventCursor,
 }
 
-impl<'a> HiddenExplanationProvider<'a> {
+impl<'a> ObsolescenceExplanationProvider<'a> {
     /// Constructor.
     pub fn new(
         graph: &'a CommitGraph,
         event_replayer: &'a EventReplayer,
         event_cursor: EventCursor,
     ) -> eyre::Result<Self> {
-        Ok(HiddenExplanationProvider {
+        Ok(ObsolescenceExplanationProvider {
             graph,
             event_replayer,
             event_cursor,
@@ -121,7 +121,7 @@ impl<'a> HiddenExplanationProvider<'a> {
     }
 }
 
-impl<'a> CommitMetadataProvider for HiddenExplanationProvider<'a> {
+impl<'a> CommitMetadataProvider for ObsolescenceExplanationProvider<'a> {
     fn describe_commit(&mut self, commit: &Commit) -> eyre::Result<Option<StyledString>> {
         let event = self
             .event_replayer
@@ -148,14 +148,14 @@ impl<'a> CommitMetadataProvider for HiddenExplanationProvider<'a> {
                 })
             }
 
-            Event::HideEvent { .. } => Some(StyledString::styled(
+            Event::ObsoleteEvent { .. } => Some(StyledString::styled(
                 "(manually hidden)",
                 BaseColor::Black.light(),
             )),
 
             Event::RefUpdateEvent { .. }
             | Event::CommitEvent { .. }
-            | Event::UnhideEvent { .. } => None,
+            | Event::UnobsoleteEvent { .. } => None,
         };
         Ok(result)
     }

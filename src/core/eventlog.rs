@@ -79,8 +79,8 @@ pub enum Event {
     ///
     /// Examples of rewriting include rebases and amended commits.
     ///
-    /// We typically want to mark the new version of the commit as visible and
-    /// the old version of the commit as hidden.
+    /// We typically want to mark the new version of the commit as active and
+    /// the old version of the commit as obsolete.
     RewriteEvent {
         /// The timestamp of the event.
         timestamp: f64,
@@ -124,7 +124,7 @@ pub enum Event {
 
     /// Indicate that the user made a commit.
     ///
-    /// User commits should be marked as visible.
+    /// User commits should be marked as active.
     CommitEvent {
         /// The timestamp of the event.
         timestamp: f64,
@@ -136,33 +136,33 @@ pub enum Event {
         commit_oid: NonZeroOid,
     },
 
-    /// Indicates that a commit was explicitly hidden by the user.
+    /// Indicates that a commit was explicitly obsoleted by the user.
     ///
-    /// If the commit in question was not already visible, then this has no
+    /// If the commit in question was not already active, then this has no
     /// practical effect.
-    HideEvent {
+    ObsoleteEvent {
         /// The timestamp of the event.
         timestamp: f64,
 
         /// The transaction ID of the event.
         event_tx_id: EventTransactionId,
 
-        /// The OID of the commit that was hidden.
+        /// The OID of the commit that was obsoleted.
         commit_oid: NonZeroOid,
     },
 
-    /// Indicates that a commit was explicitly un-hidden by the user.
+    /// Indicates that a commit was explicitly un-obsoleted by the user.
     ///
-    /// If the commit in question was not already hidden, then this has no
+    /// If the commit in question was not already obsolete, then this has no
     /// practical effect.
-    UnhideEvent {
+    UnobsoleteEvent {
         /// The timestamp of the event.
         timestamp: f64,
 
         /// The transaction ID of the event.
         event_tx_id: EventTransactionId,
 
-        /// The OID of the commit that was unhidden.
+        /// The OID of the commit that was unobsoleted.
         commit_oid: NonZeroOid,
     },
 }
@@ -174,8 +174,8 @@ impl Event {
             Event::RewriteEvent { timestamp, .. } => timestamp,
             Event::RefUpdateEvent { timestamp, .. } => timestamp,
             Event::CommitEvent { timestamp, .. } => timestamp,
-            Event::HideEvent { timestamp, .. } => timestamp,
-            Event::UnhideEvent { timestamp, .. } => timestamp,
+            Event::ObsoleteEvent { timestamp, .. } => timestamp,
+            Event::UnobsoleteEvent { timestamp, .. } => timestamp,
         };
         SystemTime::UNIX_EPOCH + Duration::from_secs_f64(*timestamp)
     }
@@ -186,8 +186,8 @@ impl Event {
             Event::RewriteEvent { event_tx_id, .. } => *event_tx_id,
             Event::RefUpdateEvent { event_tx_id, .. } => *event_tx_id,
             Event::CommitEvent { event_tx_id, .. } => *event_tx_id,
-            Event::HideEvent { event_tx_id, .. } => *event_tx_id,
-            Event::UnhideEvent { event_tx_id, .. } => *event_tx_id,
+            Event::ObsoleteEvent { event_tx_id, .. } => *event_tx_id,
+            Event::UnobsoleteEvent { event_tx_id, .. } => *event_tx_id,
         }
     }
 }
@@ -241,28 +241,28 @@ impl From<Event> for Row {
                 message: None,
             },
 
-            Event::HideEvent {
+            Event::ObsoleteEvent {
                 timestamp,
                 event_tx_id: EventTransactionId(event_tx_id),
                 commit_oid,
             } => Row {
                 timestamp,
                 event_tx_id,
-                type_: String::from("hide"),
+                type_: String::from("hide"), // historical name
                 ref1: Some(commit_oid.to_string().into()),
                 ref2: None,
                 ref_name: None,
                 message: None,
             },
 
-            Event::UnhideEvent {
+            Event::UnobsoleteEvent {
                 timestamp,
                 event_tx_id: EventTransactionId(event_tx_id),
                 commit_oid,
             } => Row {
                 timestamp,
                 event_tx_id,
-                type_: String::from("unhide"),
+                type_: String::from("unhide"), // historical name
                 ref1: Some(commit_oid.to_string().into()),
                 ref2: None,
                 ref_name: None,
@@ -340,7 +340,7 @@ fn try_from_row_helper(row: &Row) -> Result<Event, eyre::Error> {
 
         "hide" => {
             let commit_oid: NonZeroOid = get_oid(&ref1, "commit OID")?.try_into()?;
-            Event::HideEvent {
+            Event::ObsoleteEvent {
                 timestamp,
                 event_tx_id,
                 commit_oid,
@@ -349,7 +349,7 @@ fn try_from_row_helper(row: &Row) -> Result<Event, eyre::Error> {
 
         "unhide" => {
             let commit_oid: NonZeroOid = get_oid(&ref1, "commit OID")?.try_into()?;
-            Event::UnhideEvent {
+            Event::UnobsoleteEvent {
                 timestamp,
                 event_tx_id,
                 commit_oid,
@@ -614,17 +614,24 @@ enum EventClassification {
     Hide,
 }
 
-/// Whether or not a commit is visible.
+/// Whether or not a commit is considered active.
 ///
-/// This is determined by the last `Event` that affected the commit.
+/// This is determined by the last `Event` that affected the commit. If no
+/// activity has been observed for a commit, it's considered inactive.
 #[derive(Debug)]
-pub enum CommitVisibility {
-    /// The commit is visible, and should be rendered as part of the commit graph.
-    Visible,
+pub enum CommitActivityStatus {
+    /// The commit is active, and should be rendered as part of the commit graph.
+    Active,
 
-    /// The commit is hidden, and should be hidden from the commit graph (unless
-    /// a descendant commit is visible).
-    Hidden,
+    /// No history has been observed for this commit, so it's inactive, and
+    /// should not be rendered as part of the commit graph (unless a descendant
+    /// commit is visible).
+    Inactive,
+
+    /// The commit has been obsoleted by a user event (rewriting or an explicit
+    /// request to obsolete the commit), and should be hidden from the commit
+    /// graph (unless a descendant commit is visible).
+    Obsolete,
 }
 
 #[derive(Debug)]
@@ -804,7 +811,7 @@ impl EventReplayer {
                     event_classification: EventClassification::Show,
                 }),
 
-            Event::HideEvent {
+            Event::ObsoleteEvent {
                 timestamp: _,
                 event_tx_id: _,
                 commit_oid,
@@ -818,7 +825,7 @@ impl EventReplayer {
                     event_classification: EventClassification::Hide,
                 }),
 
-            Event::UnhideEvent {
+            Event::UnobsoleteEvent {
                 timestamp: _,
                 event_tx_id: _,
                 commit_oid,
@@ -902,24 +909,28 @@ impl EventReplayer {
         }
     }
 
-    /// Determines whether a commit has been marked as visible or hidden at the
-    /// cursor's point in time.
-    ///
-    /// Args:
-    /// * `oid`: The OID of the commit to check.
-    ///
-    /// Returns: Whether the commit is visible or hidden. Returns `None` if no
-    /// history has been recorded for that commit.
-    pub fn get_cursor_commit_visibility(
+    /// Determines whether a commit is considered "active" at the cursor's point
+    /// in time.
+    pub fn get_cursor_commit_activity_status(
         &self,
         cursor: EventCursor,
         oid: NonZeroOid,
-    ) -> Option<CommitVisibility> {
+    ) -> CommitActivityStatus {
         let history = self.get_cursor_commit_history(cursor, oid);
-        let event_info = *history.last()?;
-        match event_info.event_classification {
-            EventClassification::Show => Some(CommitVisibility::Visible),
-            EventClassification::Hide => Some(CommitVisibility::Hidden),
+        match history.last() {
+            Some(EventInfo {
+                id: _,
+                event: _,
+                event_classification: EventClassification::Show,
+            }) => CommitActivityStatus::Active,
+
+            Some(EventInfo {
+                id: _,
+                event: _,
+                event_classification: EventClassification::Hide,
+            }) => CommitActivityStatus::Obsolete,
+
+            None => CommitActivityStatus::Inactive,
         }
     }
 
@@ -941,11 +952,9 @@ impl EventReplayer {
         Some(&event_info.event)
     }
 
-    /// Get the OIDs which have activity according to the repository history.
-    ///
-    /// Returns: The set of OIDs referring to commits which are thought to be
-    /// active due to user action.
-    pub fn get_cursor_active_oids(&self, cursor: EventCursor) -> HashSet<NonZeroOid> {
+    /// Get all OIDs which have been observed so far. This should be the set of
+    /// non-inactive commits.
+    pub fn get_cursor_oids(&self, cursor: EventCursor) -> HashSet<NonZeroOid> {
         self.commit_history
             .iter()
             .filter_map(|(oid, history)| {
@@ -1090,8 +1099,8 @@ impl EventReplayer {
                     Event::CommitEvent { commit_oid, .. } => Some(*commit_oid),
 
                     Event::RewriteEvent { .. }
-                    | Event::HideEvent { .. }
-                    | Event::UnhideEvent { .. } => None,
+                    | Event::ObsoleteEvent { .. }
+                    | Event::UnobsoleteEvent { .. } => None,
                 }
             })
     }
@@ -1284,10 +1293,10 @@ pub mod testing {
             Event::CommitEvent {
                 ref mut timestamp, ..
             } => *timestamp = 0.0,
-            Event::HideEvent {
+            Event::ObsoleteEvent {
                 ref mut timestamp, ..
             } => *timestamp = 0.0,
-            Event::UnhideEvent {
+            Event::UnobsoleteEvent {
                 ref mut timestamp, ..
             } => *timestamp = 0.0,
         }
@@ -1393,7 +1402,7 @@ mod tests {
         let mut event_replayer = EventReplayer::new("refs/heads/master");
         for (timestamp, event_tx_id) in (0..).zip(&[1, 1, 2, 2, 3, 4]) {
             let timestamp: f64 = timestamp.try_into()?;
-            event_replayer.process_event(&Event::UnhideEvent {
+            event_replayer.process_event(&Event::UnobsoleteEvent {
                 timestamp,
                 event_tx_id: EventTransactionId(*event_tx_id),
                 commit_oid: NonZeroOid::from_str("abc")?,

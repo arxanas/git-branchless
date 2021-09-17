@@ -29,7 +29,7 @@ impl Dag {
         // There's currently no way to view the DAG as it was before a
         // certain event, so just use the cursor for the present time.
         let event_cursor = event_replayer.make_default_cursor();
-        let active_oids = event_replayer.get_cursor_active_oids(event_cursor);
+        let commit_oids = event_replayer.get_cursor_oids(event_cursor);
         let main_branch_oid = repo.get_main_branch_oid()?;
 
         let master_oids = {
@@ -38,7 +38,7 @@ impl Dag {
             result
         };
         let non_master_oids = {
-            let mut result = active_oids;
+            let mut result = commit_oids;
             result.remove(&main_branch_oid);
             result
         };

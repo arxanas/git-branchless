@@ -1,4 +1,4 @@
-//! Handle hiding commits when explicitly requested by the user (as opposed to
+//! Handle obsoleting commits when explicitly requested by the user (as opposed to
 //! automatically as the result of a rewrite operation).
 
 use std::collections::HashSet;
@@ -7,7 +7,7 @@ use std::time::SystemTime;
 
 use tracing::instrument;
 
-use crate::core::eventlog::{CommitVisibility, Event};
+use crate::core::eventlog::{CommitActivityStatus, Event};
 use crate::core::eventlog::{EventLogDb, EventReplayer};
 use crate::core::formatting::{printable_styled_string, Glyphs};
 use crate::core::graph::{make_graph, resolve_commits, CommitGraph, Node, ResolveCommitsResult};
@@ -93,7 +93,7 @@ pub fn hide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::Re
     };
     let commits = if recursive {
         recurse_on_commits(effects, &repo, &mut dag, &event_replayer, commits, |node| {
-            node.is_visible
+            !node.is_obsolete
         })?
     } else {
         commits
@@ -103,7 +103,7 @@ pub fn hide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::Re
     let event_tx_id = event_log_db.make_transaction_id(now, "hide")?;
     let events = commits
         .iter()
-        .map(|commit| Event::HideEvent {
+        .map(|commit| Event::ObsoleteEvent {
             timestamp,
             event_tx_id,
             commit_oid: commit.get_oid(),
@@ -118,8 +118,8 @@ pub fn hide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::Re
             "Hid commit: {}",
             printable_styled_string(&glyphs, commit.friendly_describe()?)?
         )?;
-        if let Some(CommitVisibility::Hidden) =
-            event_replayer.get_cursor_commit_visibility(cursor, commit.get_oid())
+        if let CommitActivityStatus::Obsolete =
+            event_replayer.get_cursor_commit_activity_status(cursor, commit.get_oid())
         {
             writeln!(
                 effects.get_output_stream(),
@@ -160,7 +160,7 @@ pub fn unhide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::
     };
     let commits = if recursive {
         recurse_on_commits(effects, &repo, &mut dag, &event_replayer, commits, |node| {
-            !node.is_visible
+            node.is_obsolete
         })?
     } else {
         commits
@@ -170,7 +170,7 @@ pub fn unhide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::
     let event_tx_id = event_log_db.make_transaction_id(now, "unhide")?;
     let events = commits
         .iter()
-        .map(|commit| Event::UnhideEvent {
+        .map(|commit| Event::UnobsoleteEvent {
             timestamp,
             event_tx_id,
             commit_oid: commit.get_oid(),
@@ -185,8 +185,8 @@ pub fn unhide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::
             "Unhid commit: {}",
             printable_styled_string(&glyphs, commit.friendly_describe()?)?,
         )?;
-        if let Some(CommitVisibility::Visible) =
-            event_replayer.get_cursor_commit_visibility(cursor, commit.get_oid())
+        if let CommitActivityStatus::Active =
+            event_replayer.get_cursor_commit_activity_status(cursor, commit.get_oid())
         {
             writeln!(
                 effects.get_output_stream(),

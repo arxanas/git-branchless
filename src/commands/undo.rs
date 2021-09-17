@@ -25,7 +25,7 @@ use crate::core::graph::make_graph;
 use crate::core::mergebase::make_merge_base_db;
 use crate::core::metadata::{
     BranchesProvider, CommitMessageProvider, CommitOidProvider, DifferentialRevisionProvider,
-    HiddenExplanationProvider, RelativeTimeProvider,
+    ObsolescenceExplanationProvider, RelativeTimeProvider,
 };
 use crate::declare_views;
 use crate::git::{CategorizedReferenceName, Dag, GitRunInfo, MaybeZeroOid, Repo};
@@ -57,7 +57,7 @@ fn render_cursor_smartlog(
         &mut [
             &mut CommitOidProvider::new(true)?,
             &mut RelativeTimeProvider::new(repo, SystemTime::now())?,
-            &mut HiddenExplanationProvider::new(&graph, event_replayer, event_cursor)?,
+            &mut ObsolescenceExplanationProvider::new(&graph, event_replayer, event_cursor)?,
             &mut BranchesProvider::new(repo, &references_snapshot)?,
             &mut DifferentialRevisionProvider::new(repo)?,
             &mut CommitMessageProvider::new()?,
@@ -86,7 +86,7 @@ fn describe_event(repo: &Repo, event: &Event) -> eyre::Result<Vec<StyledString>>
             ]
         }
 
-        Event::HideEvent {
+        Event::ObsoleteEvent {
             timestamp: _,
             event_tx_id: _,
             commit_oid,
@@ -106,7 +106,7 @@ fn describe_event(repo: &Repo, event: &Event) -> eyre::Result<Vec<StyledString>>
             ]
         }
 
-        Event::UnhideEvent {
+        Event::UnobsoleteEvent {
             timestamp: _,
             event_tx_id: _,
             commit_oid,
@@ -539,21 +539,21 @@ fn inverse_event(
             event_tx_id: _,
             commit_oid,
         }
-        | Event::UnhideEvent {
+        | Event::UnobsoleteEvent {
             timestamp: _,
             event_tx_id: _,
             commit_oid,
-        } => Event::HideEvent {
+        } => Event::ObsoleteEvent {
             timestamp,
             event_tx_id,
             commit_oid,
         },
 
-        Event::HideEvent {
+        Event::ObsoleteEvent {
             timestamp: _,
             event_tx_id: _,
             commit_oid,
-        } => Event::UnhideEvent {
+        } => Event::UnobsoleteEvent {
             timestamp,
             event_tx_id,
             commit_oid,
@@ -770,8 +770,8 @@ fn undo_events(
                 repo.create_reference(&ref_name, new_oid, true, "branchless undo")?;
             }
             Event::CommitEvent { .. }
-            | Event::HideEvent { .. }
-            | Event::UnhideEvent { .. }
+            | Event::ObsoleteEvent { .. }
+            | Event::UnobsoleteEvent { .. }
             | Event::RewriteEvent { .. } => {
                 event_log_db.add_events(vec![event])?;
             }
