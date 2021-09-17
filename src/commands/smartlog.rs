@@ -18,7 +18,7 @@ use crate::core::graph::{make_graph, CommitGraph};
 use crate::core::mergebase::{make_merge_base_db, MergeBaseDb};
 use crate::core::metadata::{
     render_commit_metadata, BranchesProvider, CommitMessageProvider, CommitMetadataProvider,
-    CommitOidProvider, DifferentialRevisionProvider, HiddenExplanationProvider,
+    CommitOidProvider, DifferentialRevisionProvider, ObsolescenceExplanationProvider,
     RelativeTimeProvider,
 };
 use crate::git::{NonZeroOid, Repo};
@@ -92,15 +92,15 @@ fn get_child_output(
     let is_head = Some(current_node.commit.get_oid()) == head_oid;
 
     let text = render_commit_metadata(&current_node.commit, commit_metadata_providers)?;
-    let cursor = match (current_node.is_main, current_node.is_visible, is_head) {
-        (false, false, false) => glyphs.commit_hidden,
-        (false, false, true) => glyphs.commit_hidden_head,
-        (false, true, false) => glyphs.commit_visible,
-        (false, true, true) => glyphs.commit_visible_head,
-        (true, false, false) => glyphs.commit_main_hidden,
-        (true, false, true) => glyphs.commit_main_hidden_head,
-        (true, true, false) => glyphs.commit_main,
-        (true, true, true) => glyphs.commit_main_head,
+    let cursor = match (current_node.is_main, current_node.is_obsolete, is_head) {
+        (false, false, false) => glyphs.commit_visible,
+        (false, false, true) => glyphs.commit_visible_head,
+        (false, true, false) => glyphs.commit_obsolete,
+        (false, true, true) => glyphs.commit_obsolete_head,
+        (true, false, false) => glyphs.commit_main,
+        (true, false, true) => glyphs.commit_main_head,
+        (true, true, false) => glyphs.commit_main_obsolete,
+        (true, true, true) => glyphs.commit_main_obsolete_head,
     };
 
     let first_line = {
@@ -291,7 +291,7 @@ pub fn smartlog(effects: &Effects) -> eyre::Result<()> {
         &mut [
             &mut CommitOidProvider::new(true)?,
             &mut RelativeTimeProvider::new(&repo, SystemTime::now())?,
-            &mut HiddenExplanationProvider::new(
+            &mut ObsolescenceExplanationProvider::new(
                 &graph,
                 &event_replayer,
                 event_replayer.make_default_cursor(),

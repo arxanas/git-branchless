@@ -57,17 +57,17 @@ pub struct Glyphs {
     /// Line used to connect a parent commit to its non-first child commit.
     pub slash: &'static str,
 
-    /// Cursor for a visible commit which is not currently checked out.
+    /// Cursor for a normal visible commit which is not currently checked out.
     pub commit_visible: &'static str,
 
     /// Cursor for the visible commit which is currently checked out.
     pub commit_visible_head: &'static str,
 
-    /// Cursor for a hidden commit.
-    pub commit_hidden: &'static str,
+    /// Cursor for an obsolete commit.
+    pub commit_obsolete: &'static str,
 
-    /// Cursor for the hidden commit which is currently checked out.
-    pub commit_hidden_head: &'static str,
+    /// Cursor for the obsolete commit which is currently checked out.
+    pub commit_obsolete_head: &'static str,
 
     /// Cursor for a commit belonging to the main branch, which is not currently
     /// checked out.
@@ -77,13 +77,13 @@ pub struct Glyphs {
     /// checked out.
     pub commit_main_head: &'static str,
 
-    /// Cursor for a hidden commit belonging to the main branch. (This is an
+    /// Cursor for an obsolete commit belonging to the main branch. (This is an
     /// unusual situation.)
-    pub commit_main_hidden: &'static str,
+    pub commit_main_obsolete: &'static str,
 
-    /// Cursor for a hidden commit belonging to the main branch, which is
+    /// Cursor for an obsolete commit belonging to the main branch, which is
     /// currently checked out. (This is an unusual situation.)
-    pub commit_main_hidden_head: &'static str,
+    pub commit_main_obsolete_head: &'static str,
 
     /// Bullet-point character for a list of newline-separated items.
     pub bullet_point: &'static str,
@@ -124,12 +124,12 @@ impl Glyphs {
             slash: "\\",
             commit_visible: "o",
             commit_visible_head: "@",
-            commit_hidden: "x",
-            commit_hidden_head: "%",
+            commit_obsolete: "x",
+            commit_obsolete_head: "%",
             commit_main: "O",
             commit_main_head: "@",
-            commit_main_hidden: "X",
-            commit_main_hidden_head: "%",
+            commit_main_obsolete: "X",
+            commit_main_obsolete_head: "%",
             bullet_point: "-",
             cycle_arrow: ">",
             cycle_horizontal_line: "-",
@@ -149,12 +149,12 @@ impl Glyphs {
             slash: "━┓",
             commit_visible: "◯",
             commit_visible_head: "●",
-            commit_hidden: "✕",
-            commit_hidden_head: "⦻",
+            commit_obsolete: "✕",
+            commit_obsolete_head: "⦻",
             commit_main: "◇",
             commit_main_head: "◆",
-            commit_main_hidden: "✕",
-            commit_main_hidden_head: "❖",
+            commit_main_obsolete: "✕",
+            commit_main_obsolete_head: "❖",
             bullet_point: "•",
             cycle_arrow: "ᐅ",
             cycle_horizontal_line: "─",

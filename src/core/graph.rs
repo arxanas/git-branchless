@@ -8,7 +8,7 @@ use std::ops::Deref;
 
 use tracing::{instrument, warn};
 
-use crate::core::eventlog::{CommitVisibility, Event, EventCursor, EventReplayer};
+use crate::core::eventlog::{CommitActivityStatus, Event, EventCursor, EventReplayer};
 use crate::core::mergebase::MergeBaseDb;
 use crate::git::{Commit, Dag, NonZeroOid, Repo, RepoReferencesSnapshot};
 use crate::tui::{Effects, OperationType};
@@ -31,33 +31,29 @@ pub struct Node<'repo> {
     /// Indicates that this is a commit to the main branch.
     ///
     /// These commits are considered to be immutable and should never leave the
-    /// `main` state. However, this can still happen sometimes if the user's
+    /// `main` state. But this can still happen in practice if the user's
     /// workflow is different than expected.
     pub is_main: bool,
 
-    /// Indicates that this commit should be considered "visible".
+    /// Indicates that this commit has been marked as obsolete.
     ///
-    /// A visible commit is a commit that hasn't been checked into the main
-    /// branch, but the user is actively working on. We may infer this from user
-    /// behavior, e.g. they committed something recently, so they are now working
-    /// on it.
+    /// Commits are marked as obsolete when they've been rewritten into another
+    /// commit, or explicitly marked such by the user. Normally, they're not
+    /// visible in the smartlog, except if there's some anomalous situation that
+    /// the user should take note of (such as an obsolete commit having a
+    /// non-obsolete descendant).
     ///
-    /// In contrast, a hidden commit is a commit that hasn't been checked into
-    /// the main branch, and the user is no longer working on. We may infer this
-    /// from user behavior, e.g. they have rebased a commit and no longer want to
-    /// see the old version of that commit. The user can also manually hide
-    /// commits.
-    ///
-    /// Occasionally, a main commit can be marked as hidden, such as if a commit
-    /// in the main branch has been rewritten. We don't expect this to happen in
-    /// the monorepo workflow, but it can happen in other workflows where you
-    /// commit directly to the main branch and then later rewrite the commit.
-    pub is_visible: bool,
+    /// Occasionally, a main commit can be marked as obsolete, such as if a
+    /// commit in the main branch has been rewritten. We don't expect this to
+    /// happen in the monorepo workflow, but it can happen in other workflows
+    /// where you commit directly to the main branch and then later rewrite the
+    /// commit.
+    pub is_obsolete: bool,
 
     /// The latest event to affect this commit.
     ///
     /// It's possible that no event affected this commit, and it was simply
-    /// visible due to a reference pointing to it. In that case, this field is
+    /// visible due to a branch pointing to it. In that case, this field is
     /// `None`.
     pub event: Option<Event>,
 }
@@ -146,11 +142,11 @@ fn walk_from_commits<'repo>(
                 break;
             }
 
-            let visibility =
-                event_replayer.get_cursor_commit_visibility(event_cursor, current_commit.get_oid());
-            let is_visible = match visibility {
-                Some(CommitVisibility::Visible) | None => true,
-                Some(CommitVisibility::Hidden) => false,
+            let activity_status = event_replayer
+                .get_cursor_commit_activity_status(event_cursor, current_commit.get_oid());
+            let is_obsolete = match activity_status {
+                CommitActivityStatus::Obsolete => true,
+                CommitActivityStatus::Active | CommitActivityStatus::Inactive => false,
             };
 
             let is_main = match merge_base_oid {
@@ -168,7 +164,7 @@ fn walk_from_commits<'repo>(
                     parent: None,
                     children: Vec::new(),
                     is_main,
-                    is_visible,
+                    is_obsolete,
                     event,
                 },
             );
@@ -214,50 +210,88 @@ fn sort_children(graph: &mut CommitGraph) {
     }
 }
 
-fn should_hide(
+fn is_commit_visible(
     cache: &mut HashMap<NonZeroOid, bool>,
     graph: &CommitGraph,
     unhideable_oids: &HashSet<NonZeroOid>,
     oid: &NonZeroOid,
 ) -> bool {
+    if let Some(result) = cache.get(oid) {
+        return *result;
+    }
+
+    if unhideable_oids.contains(oid) {
+        return true;
+    }
+
     let result = {
-        match cache.get(oid) {
-            Some(result) => *result,
-            None => {
-                if unhideable_oids.contains(oid) {
-                    false
-                } else {
-                    let node = &graph[oid];
-                    if node.is_main {
-                        // We only want to hide "uninteresting" main branch nodes. Main
-                        // branch nodes should normally be visible, so instead, we only hide
-                        // it if it's *not* visible, which is an anomaly that should be
-                        // addressed by the user.
-                        node.is_visible
-                            && node
-                                .children
-                                .iter()
-                                // Don't consider the next commit in the main branch as a child
-                                // for hiding purposes.
-                                .filter(|child_oid| !graph[child_oid].is_main)
-                                .all(|child_oid| {
-                                    should_hide(cache, graph, unhideable_oids, child_oid)
-                                })
-                    } else {
-                        !node.is_visible
-                            && node.children.iter().all(|child_oid| {
-                                should_hide(cache, graph, unhideable_oids, child_oid)
-                            })
-                    }
-                }
+        let node = &graph[oid];
+        match node {
+            Node {
+                commit: _,
+                parent: _,
+                children: _,
+                is_main: false,
+                is_obsolete: false,
+                event: _,
+            } => {
+                // This is an active commit.
+                true
+            }
+
+            Node {
+                commit: _,
+                parent: _,
+                children,
+                is_main: false,
+                is_obsolete: true,
+                event: _,
+            } => {
+                // This is an obsolete commit, so show it only if it has a visible descendant.
+                children
+                    .iter()
+                    .any(|child_oid| is_commit_visible(cache, graph, unhideable_oids, child_oid))
+            }
+
+            Node {
+                commit: _,
+                parent: _,
+                children,
+                is_main: true,
+                is_obsolete: false,
+                event: _,
+            } => {
+                // Main branch commits are not interesting by default. Only show
+                // it if it has an active child. But don't consider any visible
+                // children which are also main branch commits.
+                children
+                    .iter()
+                    // Don't consider the next commit in the main branch as a
+                    // descendant for visibility-calculation purposes.
+                    .filter(|child_oid| !graph[child_oid].is_main)
+                    .any(|child_oid| is_commit_visible(cache, graph, unhideable_oids, child_oid))
+            }
+
+            Node {
+                commit: _,
+                parent: _,
+                children: _,
+                is_main: true,
+                is_obsolete: true,
+                event: _,
+            } => {
+                // An obsolete main branch commit is an anomaly, so surface it
+                // for the user.
+                true
             }
         }
     };
+
     cache.insert(*oid, result);
     result
 }
 
-/// Remove commits from the graph according to their status.
+/// Remove hidden commits from the graph.
 fn do_remove_commits(graph: &mut CommitGraph, references_snapshot: &RepoReferencesSnapshot) {
     // OIDs which are pointed to by HEAD or a branch should not be hidden.
     // Therefore, we can't hide them *or* their ancestors.
@@ -271,15 +305,15 @@ fn do_remove_commits(graph: &mut CommitGraph, references_snapshot: &RepoReferenc
     }
 
     let mut cache = HashMap::new();
-    let all_oids_to_hide: HashSet<NonZeroOid> = graph
+    let all_hidden_oids: HashSet<NonZeroOid> = graph
         .keys()
-        .filter(|oid| should_hide(&mut cache, graph, &unhideable_oids, oid))
+        .filter(|oid| !is_commit_visible(&mut cache, graph, &unhideable_oids, oid))
         .cloned()
         .collect();
 
     // Actually update the graph and delete any parent-child links, as
     // appropriate.
-    for oid in all_oids_to_hide {
+    for oid in all_hidden_oids {
         let parent_oid = graph[&oid].parent;
         graph.nodes.remove(&oid);
         match parent_oid {
@@ -328,7 +362,7 @@ pub fn make_graph<'repo>(
     let (effects, _progress) = effects.start_operation(OperationType::MakeGraph);
 
     let mut commit_oids: HashSet<NonZeroOid> = event_replayer
-        .get_cursor_active_oids(event_cursor)
+        .get_cursor_oids(event_cursor)
         .into_iter()
         .collect();
     commit_oids.extend(references_snapshot.branch_oid_to_names.keys());

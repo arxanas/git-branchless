@@ -2,7 +2,7 @@
 //!
 //! Git uses "hooks" to run user-defined scripts after certain events. We
 //! extensively use these hooks to track user activity and e.g. decide if a
-//! commit should be considered "hidden".
+//! commit should be considered obsolete.
 //!
 //! The hooks are installed by the `branchless init` command. This module
 //! contains the implementations for the hooks.
@@ -228,8 +228,8 @@ pub fn hook_reference_transaction(effects: &Effects, transaction_state: &str) ->
                     }
                     Event::RewriteEvent { .. }
                     | Event::CommitEvent { .. }
-                    | Event::HideEvent { .. }
-                    | Event::UnhideEvent { .. } => None,
+                    | Event::ObsoleteEvent { .. }
+                    | Event::UnobsoleteEvent { .. } => None,
                 }
             })
             .map(|description| format!("{}", console::style(description).green()))

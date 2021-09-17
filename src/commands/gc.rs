@@ -1,13 +1,12 @@
 //! Deal with Git's garbage collection mechanism.
 //!
 //! Git treats a commit as unreachable if there are no references that point to
-//! it or one of its descendants. However, the branchless workflow oftentimes
-//! involves keeping such commits reachable until the user has explicitly hidden
-//! them.
+//! it or one of its descendants. However, the branchless workflow requires
+//! keeping such commits reachable until the user has obsoleted them.
 //!
 //! This module is responsible for adding extra references to Git, so that Git's
 //! garbage collection doesn't collect commits which branchless thinks are still
-//! visible.
+//! active.
 
 use std::borrow::Borrow;
 use std::ffi::OsStr;

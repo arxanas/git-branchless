@@ -15,26 +15,6 @@
 //!   * Losing track of `git stash`es you made previously.
 //!
 //! Then the branchless workflow may be for you instead.
-//!
-//! # Branchless workflow and concepts
-//!
-//! The branchless workflow does away with needing to explicitly name commits
-//! with branches (although you are free to do so if you like). Rather than use
-//! branches to see your current work items, you simply make commits as you go.
-//!
-//! The branchless extensions infer which commits you're working on, and display
-//! them to you with the `git smartlog` (or `git sl`) command.
-//!
-//! A commit is in one of three states:
-//!
-//!   * **Main**: A commit which has been checked into the main branch. No longer
-//!     mutable. Visible to you in the branchless workflow.
-//!   * **Visible**: A commit which you are working on currently. Visible to you in
-//!     the branchless workflow.
-//!   * **Hidden**: A commit which has been discarded or replaced. In particular,
-//!     old versions of rebased commits are considered hidden. You can also
-//!     manually hide commits that you no longer need. Not visible to you in the
-//!     branchless workflow.
 
 #![warn(clippy::all, missing_docs)]
 #![allow(clippy::too_many_arguments)]

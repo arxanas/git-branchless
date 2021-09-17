@@ -116,7 +116,7 @@ fn test_git_v2_31_events() -> eyre::Result<()> {
             ),
             commit_oid: NonZeroOid(fe65c1fe15584744e649b2c79d4cf9b0d878f92e),
         },
-        HideEvent {
+        ObsoleteEvent {
             timestamp: 0.0,
             event_tx_id: EventTransactionId(
                 9,

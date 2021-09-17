@@ -59,15 +59,15 @@ pub fn find_rewrite_target(
         }
         | Event::RefUpdateEvent { .. }
         | Event::CommitEvent { .. }
-        | Event::HideEvent { .. }
-        | Event::UnhideEvent { .. } => None,
+        | Event::ObsoleteEvent { .. }
+        | Event::UnobsoleteEvent { .. } => None,
     }
 }
 
 /// Find commits which have been "abandoned" in the commit graph.
 ///
-/// A commit is considered "abandoned" if it is visible, but one of its parents
-/// is hidden.
+/// A commit is considered "abandoned" if it's not obsolete, but one of its
+/// parents is.
 pub fn find_abandoned_children(
     graph: &CommitGraph,
     event_replayer: &EventReplayer,
@@ -106,12 +106,12 @@ pub fn find_abandoned_children(
         .collect();
     real_children_oids.extend(additional_children_oids);
 
-    let visible_children_oids = real_children_oids
+    let non_obsolete_children_oids = real_children_oids
         .iter()
-        .filter(|child_oid| graph[child_oid].is_visible)
+        .filter(|child_oid| !graph[child_oid].is_obsolete)
         .copied()
         .collect();
-    Some((rewritten_oid, visible_children_oids))
+    Some((rewritten_oid, non_obsolete_children_oids))
 }
 
 #[cfg(test)]

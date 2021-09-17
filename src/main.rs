@@ -41,7 +41,8 @@ enum Command {
         /// Can either be hashes, like `abc123`, or ref-specs, like `HEAD^`.
         commits: Vec<String>,
 
-        /// Also recursively hide all children commits of the provided commits.
+        /// Also recursively hide all visible children commits of the provided
+        /// commits.
         #[structopt(short = "-r", long = "--recursive")]
         recursive: bool,
     },
