@@ -119,7 +119,7 @@ mod tests {
     use crate::core::eventlog::EventLogDb;
     use crate::core::formatting::Glyphs;
     use crate::core::graph::make_graph;
-    use crate::core::mergebase::make_merge_base_db;
+    use crate::git::Dag;
     use crate::testing::{make_git, Git, GitRunOptions};
     use crate::tui::Effects;
 
@@ -134,7 +134,7 @@ mod tests {
         let conn = repo.get_db_conn()?;
         let event_log_db = EventLogDb::new(&conn)?;
         let event_replayer = EventReplayer::from_event_log_db(&effects, &repo, &event_log_db)?;
-        let mut dag = make_merge_base_db(effects, &repo, &conn, &event_replayer)?;
+        let mut dag = Dag::open(effects, &repo, &event_replayer)?;
         let event_cursor = event_replayer.make_default_cursor();
 
         let references_snapshot = repo.get_references_snapshot(&mut dag)?;

@@ -65,12 +65,11 @@ use crate::commands::smartlog::smartlog;
 use crate::core::config::get_restack_preserve_timestamps;
 use crate::core::eventlog::{EventLogDb, EventReplayer};
 use crate::core::graph::{make_graph, resolve_commits, ResolveCommitsResult};
-use crate::core::mergebase::make_merge_base_db;
 use crate::core::rewrite::{
     execute_rebase_plan, find_abandoned_children, find_rewrite_target, move_branches,
     BuildRebasePlanOptions, ExecuteRebasePlanOptions, RebasePlanBuilder,
 };
-use crate::git::{GitRunInfo, NonZeroOid, Repo};
+use crate::git::{Dag, GitRunInfo, NonZeroOid, Repo};
 use crate::tui::Effects;
 
 #[instrument(skip(commits))]
@@ -86,7 +85,7 @@ fn restack_commits(
 ) -> eyre::Result<isize> {
     let event_replayer = EventReplayer::from_event_log_db(effects, repo, event_log_db)?;
     let event_cursor = event_replayer.make_default_cursor();
-    let mut dag = make_merge_base_db(effects, repo, conn, &event_replayer)?;
+    let mut dag = Dag::open(effects, repo, &event_replayer)?;
     let references_snapshot = repo.get_references_snapshot(&mut dag)?;
     let graph = make_graph(
         effects,
@@ -179,7 +178,7 @@ fn restack_branches(
     options: &ExecuteRebasePlanOptions,
 ) -> eyre::Result<isize> {
     let event_replayer = EventReplayer::from_event_log_db(effects, repo, event_log_db)?;
-    let mut dag = make_merge_base_db(effects, repo, conn, &event_replayer)?;
+    let mut dag = Dag::open(effects, repo, &event_replayer)?;
 
     let references_snapshot = repo.get_references_snapshot(&mut dag)?;
     let graph = make_graph(

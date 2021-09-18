@@ -15,13 +15,12 @@ use crate::core::eventlog::{EventLogDb, EventReplayer};
 use crate::core::formatting::set_effect;
 use crate::core::formatting::{printable_styled_string, Glyphs, StyledStringBuilder};
 use crate::core::graph::{make_graph, CommitGraph};
-use crate::core::mergebase::{make_merge_base_db, MergeBaseDb};
 use crate::core::metadata::{
     render_commit_metadata, BranchesProvider, CommitMessageProvider, CommitMetadataProvider,
     CommitOidProvider, DifferentialRevisionProvider, ObsolescenceExplanationProvider,
     RelativeTimeProvider,
 };
-use crate::git::{NonZeroOid, Repo};
+use crate::git::{Dag, NonZeroOid, Repo};
 use crate::tui::Effects;
 
 /// Split fully-independent subgraphs into multiple graphs.
@@ -34,7 +33,7 @@ use crate::tui::Effects;
 fn split_commit_graph_by_roots(
     effects: &Effects,
     repo: &Repo,
-    merge_base_db: &impl MergeBaseDb,
+    dag: &Dag,
     graph: &CommitGraph,
 ) -> Vec<NonZeroOid> {
     let mut root_commit_oids: Vec<NonZeroOid> = graph
@@ -53,7 +52,7 @@ fn split_commit_graph_by_roots(
             _ => return lhs_oid.cmp(rhs_oid),
         };
 
-        let merge_base_oid = merge_base_db.get_merge_base_oid(effects, repo, *lhs_oid, *rhs_oid);
+        let merge_base_oid = dag.get_one_merge_base_oid(effects, repo, *lhs_oid, *rhs_oid);
         let merge_base_oid = match merge_base_oid {
             Err(_) => return lhs_oid.cmp(rhs_oid),
             Ok(merge_base_oid) => merge_base_oid,
@@ -246,12 +245,12 @@ fn get_output(
 pub fn render_graph(
     effects: &Effects,
     repo: &Repo,
-    merge_base_db: &impl MergeBaseDb,
+    dag: &Dag,
     graph: &CommitGraph,
     head_oid: Option<NonZeroOid>,
     commit_metadata_providers: &mut [&mut dyn CommitMetadataProvider],
 ) -> eyre::Result<Vec<StyledString>> {
-    let root_oids = split_commit_graph_by_roots(effects, repo, merge_base_db, graph);
+    let root_oids = split_commit_graph_by_roots(effects, repo, dag, graph);
     let lines = get_output(
         effects.get_glyphs(),
         graph,
@@ -269,7 +268,7 @@ pub fn smartlog(effects: &Effects) -> eyre::Result<()> {
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
     let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
-    let mut dag = make_merge_base_db(effects, &repo, &conn, &event_replayer)?;
+    let mut dag = Dag::open(effects, &repo, &event_replayer)?;
 
     let references_snapshot = repo.get_references_snapshot(&mut dag)?;
     let graph = make_graph(

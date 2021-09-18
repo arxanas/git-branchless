@@ -8,8 +8,7 @@ use crate::commands::smartlog::smartlog;
 use crate::core::eventlog::{EventLogDb, EventReplayer};
 use crate::core::formatting::printable_styled_string;
 use crate::core::graph::{make_graph, CommitGraph};
-use crate::core::mergebase::{make_merge_base_db, MergeBaseDb};
-use crate::git::{GitRunInfo, NonZeroOid, Repo, RepoReferencesSnapshot};
+use crate::git::{Dag, GitRunInfo, NonZeroOid, Repo, RepoReferencesSnapshot};
 use crate::tui::Effects;
 
 /// Go back a certain number of commits.
@@ -50,12 +49,12 @@ pub enum Towards {
 fn advance_towards_main_branch(
     effects: &Effects,
     repo: &Repo,
-    merge_base_db: &impl MergeBaseDb,
+    dag: &Dag,
     graph: &CommitGraph,
     references_snapshot: &RepoReferencesSnapshot,
     current_oid: NonZeroOid,
 ) -> eyre::Result<(isize, NonZeroOid)> {
-    let path = merge_base_db.find_path_to_merge_base(
+    let path = dag.find_path_to_merge_base(
         effects,
         repo,
         references_snapshot.main_branch_oid,
@@ -149,7 +148,7 @@ pub fn next(
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
     let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
-    let mut dag = make_merge_base_db(effects, &repo, &conn, &event_replayer)?;
+    let mut dag = Dag::open(effects, &repo, &event_replayer)?;
 
     let references_snapshot = repo.get_references_snapshot(&mut dag)?;
     let head_oid = match references_snapshot.head_oid {

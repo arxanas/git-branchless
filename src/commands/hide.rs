@@ -11,7 +11,6 @@ use crate::core::eventlog::{CommitActivityStatus, Event};
 use crate::core::eventlog::{EventLogDb, EventReplayer};
 use crate::core::formatting::{printable_styled_string, Glyphs};
 use crate::core::graph::{make_graph, resolve_commits, CommitGraph, Node, ResolveCommitsResult};
-use crate::core::mergebase::make_merge_base_db;
 use crate::core::metadata::{render_commit_metadata, CommitOidProvider};
 use crate::git::{Commit, Dag, Repo};
 use crate::tui::Effects;
@@ -81,7 +80,7 @@ pub fn hide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::Re
     let conn = repo.get_db_conn()?;
     let mut event_log_db = EventLogDb::new(&conn)?;
     let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
-    let mut dag = make_merge_base_db(effects, &repo, &conn, &event_replayer)?;
+    let mut dag = Dag::open(effects, &repo, &event_replayer)?;
 
     let commits = resolve_commits(&repo, hashes)?;
     let commits = match commits {
@@ -148,7 +147,7 @@ pub fn unhide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::
     let conn = repo.get_db_conn()?;
     let mut event_log_db = EventLogDb::new(&conn)?;
     let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
-    let mut dag = make_merge_base_db(effects, &repo, &conn, &event_replayer)?;
+    let mut dag = Dag::open(effects, &repo, &event_replayer)?;
 
     let commits = resolve_commits(&repo, hashes)?;
     let commits = match commits {

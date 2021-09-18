@@ -19,9 +19,9 @@ use crate::core::config::{get_restack_warn_abandoned, RESTACK_WARN_ABANDONED_CON
 use crate::core::eventlog::{Event, EventLogDb, EventReplayer};
 use crate::core::formatting::{printable_styled_string, Pluralize};
 use crate::core::graph::make_graph;
-use crate::core::mergebase::make_merge_base_db;
 use crate::git::{
-    CategorizedReferenceName, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo, ResolvedReferenceInfo,
+    CategorizedReferenceName, Dag, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo,
+    ResolvedReferenceInfo,
 };
 use crate::tui::Effects;
 
@@ -202,7 +202,7 @@ fn warn_abandoned(
     // to construct a fresh `EventReplayer` here.
     let event_replayer = EventReplayer::from_event_log_db(effects, repo, event_log_db)?;
     let event_cursor = event_replayer.make_default_cursor();
-    let mut dag = make_merge_base_db(effects, repo, conn, &event_replayer)?;
+    let mut dag = Dag::open(effects, repo, &event_replayer)?;
 
     let references_snapshot = repo.get_references_snapshot(&mut dag)?;
     let graph = make_graph(

@@ -9,7 +9,6 @@ use std::ops::Deref;
 use tracing::{instrument, warn};
 
 use crate::core::eventlog::{CommitActivityStatus, Event, EventCursor, EventReplayer};
-use crate::core::mergebase::MergeBaseDb;
 use crate::git::{Commit, Dag, NonZeroOid, Repo, RepoReferencesSnapshot};
 use crate::tui::{Effects, OperationType};
 
@@ -108,7 +107,7 @@ fn walk_from_commits<'repo>(
         };
 
         let merge_base_oid =
-            dag.get_merge_base_oid(&effects, repo, current_commit.get_oid(), main_branch_oid)?;
+            dag.get_one_merge_base_oid(&effects, repo, current_commit.get_oid(), main_branch_oid)?;
         let path_to_merge_base = match merge_base_oid {
             // Occasionally we may find a commit that has no merge-base with the
             // main branch. For example: a rewritten initial commit. This is

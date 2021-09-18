@@ -4,9 +4,8 @@ use std::path::PathBuf;
 use branchless::core::eventlog::{EventLogDb, EventReplayer};
 use branchless::core::formatting::Glyphs;
 use branchless::core::graph::make_graph;
-use branchless::core::mergebase::{make_merge_base_db, MergeBaseDb};
 use branchless::core::rewrite::{BuildRebasePlanOptions, RebasePlanBuilder};
-use branchless::git::{CherryPickFastOptions, Commit, Diff, Repo};
+use branchless::git::{CherryPickFastOptions, Commit, Dag, Diff, Repo};
 use branchless::tui::Effects;
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 
@@ -41,7 +40,7 @@ fn bench_rebase_plan(c: &mut Criterion) {
         let event_replayer =
             EventReplayer::from_event_log_db(&effects, &repo, &event_log_db).unwrap();
         let event_cursor = event_replayer.make_default_cursor();
-        let mut dag = make_merge_base_db(&effects, &repo, &conn, &event_replayer).unwrap();
+        let mut dag = Dag::open(&effects, &repo, &event_replayer).unwrap();
 
         let references_snapshot = repo.get_references_snapshot(&mut dag).unwrap();
         let graph = make_graph(
@@ -82,7 +81,7 @@ fn bench_rebase_plan(c: &mut Criterion) {
 }
 
 fn bench_find_path_to_merge_base(c: &mut Criterion) {
-    c.bench_function("MergeBaseDb::find_path_to_merge_base", |b| {
+    c.bench_function("Dag::find_path_to_merge_base", |b| {
         let repo = get_repo();
         let head_oid = repo.get_head_info().unwrap().oid.unwrap();
         let later_commit = nth_parent(repo.find_commit_or_fail(head_oid).unwrap(), 20);
@@ -97,11 +96,10 @@ fn bench_find_path_to_merge_base(c: &mut Criterion) {
         let event_log_db = EventLogDb::new(&conn).unwrap();
         let event_replayer =
             EventReplayer::from_event_log_db(&effects, &repo, &event_log_db).unwrap();
-        let merge_base_db = make_merge_base_db(&effects, &repo, &conn, &event_replayer).unwrap();
-        let merge_base_db: &dyn MergeBaseDb = &merge_base_db;
+        let dag = Dag::open(&effects, &repo, &event_replayer).unwrap();
 
         b.iter(|| {
-            merge_base_db.find_path_to_merge_base(
+            dag.find_path_to_merge_base(
                 &effects,
                 &repo,
                 later_commit.get_oid(),
