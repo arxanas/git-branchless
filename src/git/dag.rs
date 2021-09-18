@@ -8,7 +8,6 @@ use itertools::Itertools;
 use tracing::{instrument, trace, warn};
 
 use crate::core::eventlog::EventReplayer;
-use crate::core::mergebase::MergeBaseDb;
 use crate::git::{Commit, MaybeZeroOid, NonZeroOid, Repo};
 use crate::tui::{Effects, OperationType};
 
@@ -194,26 +193,23 @@ impl Dag {
         };
         Ok(oids)
     }
-}
 
-impl std::fmt::Debug for Dag {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<Dag>")
-    }
-}
-
-impl MergeBaseDb for Dag {
-    fn get_merge_base_oid(
-        &self,
-        effects: &Effects,
-        repo: &Repo,
-        lhs_oid: NonZeroOid,
-        rhs_oid: NonZeroOid,
-    ) -> eyre::Result<Option<NonZeroOid>> {
-        self.get_one_merge_base_oid(effects, repo, lhs_oid, rhs_oid)
-    }
-
-    fn find_path_to_merge_base<'repo>(
+    /// Find a shortest path between the given commits.
+    ///
+    /// This is particularly important for multi-parent commits (i.e. merge commits).
+    /// If we don't happen to traverse the correct parent, we may end up traversing a
+    /// huge amount of commit history, with a significant performance hit.
+    ///
+    /// Args:
+    /// * `repo`: The Git repository.
+    /// * `commit_oid`: The OID of the commit to start at. We take parents of the
+    /// provided commit until we end up at the target OID.
+    /// * `target_oid`: The OID of the commit to end at.
+    ///
+    /// Returns: A path of commits from `commit_oid` through parents to `target_oid`.
+    /// The path includes `commit_oid` at the beginning and `target_oid` at the end.
+    /// If there is no such path, returns `None`.
+    pub fn find_path_to_merge_base<'repo>(
         &self,
         effects: &Effects,
         repo: &'repo Repo,
@@ -240,5 +236,11 @@ impl MergeBaseDb for Dag {
         } else {
             Ok(Some(path))
         }
+    }
+}
+
+impl std::fmt::Debug for Dag {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<Dag>")
     }
 }

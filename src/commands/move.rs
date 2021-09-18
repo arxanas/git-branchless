@@ -11,11 +11,10 @@ use tracing::instrument;
 use crate::core::config::get_restack_preserve_timestamps;
 use crate::core::eventlog::{EventLogDb, EventReplayer};
 use crate::core::graph::{make_graph, resolve_commits, CommitGraph, ResolveCommitsResult};
-use crate::core::mergebase::{make_merge_base_db, MergeBaseDb};
 use crate::core::rewrite::{
     execute_rebase_plan, BuildRebasePlanOptions, ExecuteRebasePlanOptions, RebasePlanBuilder,
 };
-use crate::git::{GitRunInfo, NonZeroOid, Repo};
+use crate::git::{Dag, GitRunInfo, NonZeroOid, Repo};
 use crate::tui::Effects;
 
 #[instrument]
@@ -102,7 +101,7 @@ pub fn r#move(
     let event_log_db = EventLogDb::new(&conn)?;
     let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
     let event_cursor = event_replayer.make_default_cursor();
-    let mut dag = make_merge_base_db(effects, &repo, &conn, &event_replayer)?;
+    let mut dag = Dag::open(effects, &repo, &event_replayer)?;
 
     let references_snapshot = {
         let mut references_snapshot = repo.get_references_snapshot(&mut dag)?;
@@ -122,7 +121,7 @@ pub fn r#move(
     )?;
 
     let source_oid = if should_resolve_base_commit {
-        let merge_base_oid = dag.get_merge_base_oid(effects, &repo, source_oid, dest_oid)?;
+        let merge_base_oid = dag.get_one_merge_base_oid(effects, &repo, source_oid, dest_oid)?;
         resolve_base_commit(&graph, merge_base_oid, source_oid)
     } else {
         source_oid

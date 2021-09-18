@@ -11,8 +11,7 @@ use tracing::{instrument, warn};
 
 use crate::core::formatting::printable_styled_string;
 use crate::core::graph::CommitGraph;
-use crate::core::mergebase::MergeBaseDb;
-use crate::git::{Commit, NonZeroOid, PatchId, Repo};
+use crate::git::{Commit, Dag, NonZeroOid, PatchId, Repo};
 use crate::tui::{Effects, OperationType};
 
 thread_local! {
@@ -151,31 +150,16 @@ struct BuildState {
 
 /// Builder for a rebase plan. Unlike regular Git rebases, a `git-branchless`
 /// rebase plan can move multiple unrelated subtrees to unrelated destinations.
-#[derive(Debug)]
-pub struct RebasePlanBuilder<'repo, M: MergeBaseDb + 'repo> {
+#[derive(Clone, Debug)]
+pub struct RebasePlanBuilder<'repo> {
     repo: &'repo Repo,
     graph: &'repo CommitGraph<'repo>,
-    merge_base_db: &'repo M,
+    dag: &'repo Dag,
     main_branch_oid: NonZeroOid,
 
     /// There is a mapping from from `x` to `y` if `x` must be applied before
     /// `y`.
     initial_constraints: HashMap<NonZeroOid, HashSet<NonZeroOid>>,
-}
-
-/// Can't `#[derive(Clone)]` because of the parametrized `M`, which isn't
-/// clonable. (Even though we're just storing a reference to `M`, which is
-/// clonable, the `derive` macro doesn't know that.)
-impl<'repo, M: MergeBaseDb + 'repo> Clone for RebasePlanBuilder<'repo, M> {
-    fn clone(&self) -> Self {
-        Self {
-            repo: self.repo,
-            graph: self.graph,
-            merge_base_db: self.merge_base_db,
-            main_branch_oid: self.main_branch_oid,
-            initial_constraints: self.initial_constraints.clone(),
-        }
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -255,18 +239,18 @@ impl BuildRebasePlanError {
     }
 }
 
-impl<'repo, M: MergeBaseDb + 'repo> RebasePlanBuilder<'repo, M> {
+impl<'repo> RebasePlanBuilder<'repo> {
     /// Constructor.
     pub fn new(
         repo: &'repo Repo,
         graph: &'repo CommitGraph,
-        merge_base_db: &'repo M,
+        dag: &'repo Dag,
         main_branch_oid: NonZeroOid,
     ) -> Self {
         RebasePlanBuilder {
             repo,
             graph,
-            merge_base_db,
+            dag,
             main_branch_oid,
             initial_constraints: Default::default(),
         }
@@ -494,7 +478,7 @@ impl<'repo, M: MergeBaseDb + 'repo> RebasePlanBuilder<'repo, M> {
         if is_main {
             // This must be a main branch commit. We need to collect its
             // descendants, which don't appear in the commit graph.
-            let path = self.merge_base_db.find_path_to_merge_base(
+            let path = self.dag.find_path_to_merge_base(
                 effects,
                 self.repo,
                 self.main_branch_oid,
@@ -768,19 +752,16 @@ impl<'repo, M: MergeBaseDb + 'repo> RebasePlanBuilder<'repo, M> {
         dest_oid: NonZeroOid,
     ) -> eyre::Result<HashSet<PatchId>> {
         let merge_base_oid =
-            self.merge_base_db
-                .get_merge_base_oid(effects, self.repo, dest_oid, current_oid)?;
+            self.dag
+                .get_one_merge_base_oid(effects, self.repo, dest_oid, current_oid)?;
         let merge_base_oid = match merge_base_oid {
             None => return Ok(HashSet::new()),
             Some(merge_base_oid) => merge_base_oid,
         };
 
-        let path = self.merge_base_db.find_path_to_merge_base(
-            effects,
-            self.repo,
-            dest_oid,
-            merge_base_oid,
-        )?;
+        let path =
+            self.dag
+                .find_path_to_merge_base(effects, self.repo, dest_oid, merge_base_oid)?;
         let path = match path {
             None => return Ok(HashSet::new()),
             Some(path) => path,

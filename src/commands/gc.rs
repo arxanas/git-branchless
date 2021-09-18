@@ -17,8 +17,7 @@ use tracing::instrument;
 
 use crate::core::eventlog::{is_gc_ref, EventLogDb, EventReplayer};
 use crate::core::graph::{make_graph, CommitGraph};
-use crate::core::mergebase::make_merge_base_db;
-use crate::git::{NonZeroOid, Reference, Repo};
+use crate::git::{Dag, NonZeroOid, Reference, Repo};
 use crate::tui::Effects;
 
 fn find_dangling_references<'repo>(
@@ -76,7 +75,7 @@ pub fn gc(effects: &Effects) -> eyre::Result<()> {
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
     let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
-    let mut dag = make_merge_base_db(effects, &repo, &conn, &event_replayer)?;
+    let mut dag = Dag::open(effects, &repo, &event_replayer)?;
     let references_snapshot = repo.get_references_snapshot(&mut dag)?;
 
     let graph = make_graph(
