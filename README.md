@@ -48,7 +48,7 @@ Undo almost anything:
 Currently, `git undo` can't undo the following. You can find the design document to handle some of these cases in [issue #10](https://github.com/arxanas/git-branchless/issues/10).
 
 - "Uncommitting" a commit by undoing the commit and restoring its changes to the working copy.
-  - In stock Git, this can be accomplished with `git reset --soft HEAD^` followed by `git restore .`.
+  - In stock Git, this can be accomplished with `git reset HEAD^`.
   - This scenario would be better implemented with a custom `git uncommit` command instead. See [issue #3](https://github.com/arxanas/git-branchless/issues/3).
 - Undoing the staging or unstaging of files. This is tracked by issue #10 above.
 - Undoing back into the _middle_ of a conflict, such that `git status` shows a message like `path/to/file (both modified)`, so that you can resolve that specific conflict differently. This is tracked by issue #10 above.
