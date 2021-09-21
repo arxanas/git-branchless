@@ -1,5 +1,5 @@
-use std::cell::RefCell;
 use std::collections::HashSet;
+use std::convert::TryFrom;
 
 use eden_dag::ops::DagPersistent;
 use eden_dag::{DagAlgorithm, Set, Vertex};
@@ -11,10 +11,26 @@ use crate::core::eventlog::EventReplayer;
 use crate::git::{Commit, MaybeZeroOid, NonZeroOid, Repo};
 use crate::tui::{Effects, OperationType};
 
+impl From<NonZeroOid> for Vertex {
+    fn from(oid: NonZeroOid) -> Self {
+        Vertex::copy_from(oid.as_bytes())
+    }
+}
+
+impl TryFrom<Vertex> for NonZeroOid {
+    type Error = eyre::Error;
+
+    fn try_from(value: Vertex) -> Result<Self, Self::Error> {
+        let oid = git2::Oid::from_bytes(value.as_ref())?;
+        let oid = MaybeZeroOid::from(oid);
+        NonZeroOid::try_from(oid)
+    }
+}
+
 /// Interface to access the directed acyclic graph (DAG) representing Git's
 /// commit graph. Based on the Eden SCM DAG.
 pub struct Dag {
-    inner: RefCell<eden_dag::Dag>,
+    inner: eden_dag::Dag,
 }
 
 impl Dag {
@@ -50,9 +66,7 @@ impl Dag {
             dag
         };
 
-        Ok(Self {
-            inner: RefCell::new(dag),
-        })
+        Ok(Self { inner: dag })
     }
 
     /// This function's code adapted from `GitDag`, licensed under GPL-2.
@@ -93,7 +107,7 @@ impl Dag {
             Ok(commit
                 .get_parent_oids()
                 .into_iter()
-                .map(|oid| Vertex::copy_from(oid.as_bytes()))
+                .map(Vertex::from)
                 .collect())
         };
 
@@ -101,34 +115,18 @@ impl Dag {
             parent_func,
             master_oids
                 .iter()
-                .map(|oid| Vertex::copy_from(oid.as_bytes()))
+                .copied()
+                .map(Vertex::from)
                 .collect_vec()
                 .as_slice(),
             non_master_oids
                 .iter()
-                .map(|oid| Vertex::copy_from(oid.as_bytes()))
+                .copied()
+                .map(Vertex::from)
                 .collect_vec()
                 .as_slice(),
         )?;
         Ok(())
-    }
-
-    #[instrument(skip(dag))]
-    fn oid_to_vertex(
-        &self,
-        effects: &Effects,
-        repo: &Repo,
-        dag: &mut eden_dag::Dag,
-        oid: NonZeroOid,
-    ) -> eyre::Result<Vertex> {
-        let master_oids = HashSet::new();
-        let non_master_oids = {
-            let mut non_master_oids = HashSet::new();
-            non_master_oids.insert(oid);
-            non_master_oids
-        };
-        Self::update_oids(effects, repo, dag, &master_oids, &non_master_oids)?;
-        Ok(Vertex::copy_from(oid.as_bytes()))
     }
 
     /// Get one of the merge-base OIDs for the given pair of OIDs. If there are
@@ -141,16 +139,12 @@ impl Dag {
         lhs_oid: NonZeroOid,
         rhs_oid: NonZeroOid,
     ) -> eyre::Result<Option<NonZeroOid>> {
-        let mut dag = self.inner.try_borrow_mut()?;
-        let dag = &mut *dag;
-        let set = vec![
-            self.oid_to_vertex(effects, repo, dag, lhs_oid)?,
-            self.oid_to_vertex(effects, repo, dag, rhs_oid)?,
-        ];
-        let set = dag
+        let set = vec![Vertex::from(lhs_oid), Vertex::from(rhs_oid)];
+        let set = self
+            .inner
             .sort(&Set::from_static_names(set))
             .wrap_err("Sorting DAG vertex set")?;
-        let vertex = dag.gca_one(set).wrap_err("Computing merge-base")?;
+        let vertex = self.inner.gca_one(set).wrap_err("Computing merge-base")?;
         match vertex {
             None => Ok(None),
             Some(vertex) => Ok(Some(vertex.to_hex().parse()?)),
@@ -168,14 +162,10 @@ impl Dag {
         parent_oid: NonZeroOid,
         child_oid: NonZeroOid,
     ) -> eyre::Result<Vec<NonZeroOid>> {
-        let mut dag = self.inner.try_borrow_mut()?;
-        let dag = &mut *dag;
-        let roots =
-            Set::from_static_names(vec![self.oid_to_vertex(effects, repo, dag, parent_oid)?]);
-        let heads =
-            Set::from_static_names(vec![self.oid_to_vertex(effects, repo, dag, child_oid)?]);
-        let range = dag.range(roots, heads).wrap_err("Computing range")?;
-        let range = dag.sort(&range).wrap_err("Sorting range")?;
+        let roots = Set::from_static_names(vec![Vertex::from(parent_oid)]);
+        let heads = Set::from_static_names(vec![Vertex::from(child_oid)]);
+        let range = self.inner.range(roots, heads).wrap_err("Computing range")?;
+        let range = self.inner.sort(&range).wrap_err("Sorting range")?;
         let oids = {
             let mut result = Vec::new();
             for vertex in range.iter()? {
