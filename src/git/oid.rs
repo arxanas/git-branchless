@@ -64,6 +64,15 @@ impl TryFrom<&OsStr> for NonZeroOid {
     }
 }
 
+impl TryFrom<&[u8]> for NonZeroOid {
+    type Error = eyre::Error;
+
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        let oid = MaybeZeroOid::try_from(value)?;
+        NonZeroOid::try_from(oid)
+    }
+}
+
 impl FromStr for NonZeroOid {
     type Err = eyre::Error;
 
@@ -168,6 +177,15 @@ impl TryFrom<OsString> for MaybeZeroOid {
 
     fn try_from(value: OsString) -> Result<Self, Self::Error> {
         MaybeZeroOid::try_from(value.as_os_str())
+    }
+}
+
+impl TryFrom<&[u8]> for MaybeZeroOid {
+    type Error = git2::Error;
+
+    fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+        let oid = git2::Oid::from_bytes(value)?;
+        Ok(MaybeZeroOid::from(oid))
     }
 }
 
