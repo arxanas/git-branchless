@@ -29,7 +29,7 @@ pub fn prev(
     if exit_code != 0 {
         return Ok(exit_code);
     }
-    smartlog(effects)?;
+    smartlog(effects, &Default::default())?;
     Ok(0)
 }
 
@@ -182,6 +182,6 @@ pub fn next(
         return Ok(result);
     }
 
-    smartlog(effects)?;
+    smartlog(effects, &Default::default())?;
     Ok(0)
 }
