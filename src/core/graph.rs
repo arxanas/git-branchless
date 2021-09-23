@@ -207,10 +207,11 @@ pub fn make_graph<'repo>(
         let visible_heads = visible_heads.union(&dag.main_branch_commit);
         let visible_heads = dag.query().heads(visible_heads)?;
 
-        let anomalous_main_branch_commits = dag
-            .query()
-            .ancestors(dag.main_branch_commit.clone())?
-            .intersection(&dag.obsolete_commits);
+        let anomalous_main_branch_commits = dag.obsolete_commits.intersection(
+            // `ancestors` query here is expensive, so be sure to evaluate
+            // `obsolete_commits` first.
+            &dag.query().ancestors(dag.main_branch_commit.clone())?,
+        );
         let visible_heads = visible_heads
             .union(&dag.head_commit)
             .union(&dag.branch_commits)
