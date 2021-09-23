@@ -410,3 +410,31 @@ fn test_smartlog_orphaned_root() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_show_hidden_commits() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    git.init_repo()?;
+    git.commit_file("test1", 1)?;
+    git.detach_head()?;
+    git.commit_file("test2", 2)?;
+    git.run(&["commit", "--amend", "-m", "amended test2"])?;
+    git.run(&["hide", "HEAD"])?;
+    git.run(&["checkout", "HEAD^"])?;
+
+    {
+        let (stdout, stderr) = git.run(&["smartlog", "--hidden"])?;
+        insta::assert_snapshot!(stderr, @"");
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        @ 62fc20d2 (master) create test1.txt
+        |\
+        | x cb8137ad (manually hidden) amended test2
+        |
+        x 96d1c37a (rewritten as cb8137ad) create test2.txt
+        "###);
+    }
+
+    Ok(())
+}

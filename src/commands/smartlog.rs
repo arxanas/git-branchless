@@ -261,9 +261,21 @@ pub fn render_graph(
     Ok(lines)
 }
 
+/// Options for rendering the smartlog.
+#[derive(Debug, Default)]
+pub struct SmartlogOptions {
+    /// Whether to also show commits in the smartlog which would normally not be
+    /// visible.
+    pub show_hidden_commits: bool,
+}
+
 /// Display a nice graph of commits you've recently worked on.
 #[instrument]
-pub fn smartlog(effects: &Effects) -> eyre::Result<()> {
+pub fn smartlog(effects: &Effects, options: &SmartlogOptions) -> eyre::Result<()> {
+    let SmartlogOptions {
+        show_hidden_commits,
+    } = options;
+
     let repo = Repo::from_current_dir()?;
     let references_snapshot = repo.get_references_snapshot()?;
     let conn = repo.get_db_conn()?;
@@ -278,7 +290,14 @@ pub fn smartlog(effects: &Effects) -> eyre::Result<()> {
         &references_snapshot,
     )?;
 
-    let graph = make_graph(effects, &repo, &dag, &event_replayer, event_cursor, true)?;
+    let graph = make_graph(
+        effects,
+        &repo,
+        &dag,
+        &event_replayer,
+        event_cursor,
+        !show_hidden_commits,
+    )?;
 
     let lines = render_graph(
         effects,

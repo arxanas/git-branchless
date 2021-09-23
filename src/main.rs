@@ -4,6 +4,7 @@ use std::ffi::OsString;
 use std::path::PathBuf;
 use std::time::SystemTime;
 
+use branchless::commands::smartlog::SmartlogOptions;
 use branchless::commands::wrap;
 use branchless::core::formatting::Glyphs;
 use branchless::git::{GitRunInfo, NonZeroOid};
@@ -32,7 +33,10 @@ enum Command {
     },
 
     /// Display a nice graph of the commits you've recently worked on.
-    Smartlog,
+    Smartlog {
+        #[structopt(long = "--hidden")]
+        show_hidden_commits: bool,
+    },
 
     /// Hide the provided commits from the smartlog.
     Hide {
@@ -256,8 +260,15 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
             0
         }
 
-        Command::Smartlog => {
-            branchless::commands::smartlog::smartlog(&effects)?;
+        Command::Smartlog {
+            show_hidden_commits,
+        } => {
+            branchless::commands::smartlog::smartlog(
+                &effects,
+                &SmartlogOptions {
+                    show_hidden_commits,
+                },
+            )?;
             0
         }
 

@@ -315,6 +315,6 @@ pub fn restack(
         None => result,
     };
 
-    smartlog(effects)?;
+    smartlog(effects, &Default::default())?;
     Ok(result)
 }

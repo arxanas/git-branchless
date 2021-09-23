@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 - Added: The `-C` option can be used to set the working directory for `git-branchless` commands.
+- Added: The `--hidden` option can be passed to `git smartlog` to show commits which are not ordinarily visible.
 - Fixed: Output of subcommands is no longer overwritten by progress updates.
 - Fixed: Improved performance up to 100x for commit deduplication during  `git move` when rebasing past certain large commits.
 - Fixed: Improved performance up to 10x for smartlog rendering.
