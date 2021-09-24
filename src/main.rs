@@ -9,32 +9,33 @@ use branchless::commands::wrap;
 use branchless::core::formatting::Glyphs;
 use branchless::git::{GitRunInfo, NonZeroOid};
 use branchless::tui::Effects;
+use clap::Clap;
 use eyre::Context;
-use structopt::StructOpt;
 use tracing_chrome::ChromeLayerBuilder;
 use tracing_error::ErrorLayer;
 use tracing_subscriber::fmt as tracing_fmt;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
 
-#[derive(StructOpt)]
+#[derive(Clap)]
 enum WrappedCommand {
-    #[structopt(external_subcommand)]
+    #[clap(external_subcommand)]
     WrappedCommand(Vec<String>),
 }
 
-#[derive(StructOpt)]
+#[derive(Clap)]
 enum Command {
     /// Initialize the branchless workflow for this repository.
     Init {
         /// Uninstall the branchless workflow instead of initializing it.
-        #[structopt(long = "--uninstall")]
+        #[clap(long = "uninstall")]
         uninstall: bool,
     },
 
     /// Display a nice graph of the commits you've recently worked on.
     Smartlog {
-        #[structopt(long = "--hidden")]
+        /// Also show commits which have been hidden.
+        #[clap(long = "hidden")]
         show_hidden_commits: bool,
     },
 
@@ -47,7 +48,7 @@ enum Command {
 
         /// Also recursively hide all visible children commits of the provided
         /// commits.
-        #[structopt(short = "-r", long = "--recursive")]
+        #[clap(short = 'r', long = "recursive")]
         recursive: bool,
     },
 
@@ -59,7 +60,7 @@ enum Command {
         commits: Vec<String>,
 
         /// Also recursively unhide all children commits of the provided commits.
-        #[structopt(short = "-r", long = "--recursive")]
+        #[clap(short = 'r', long = "recursive")]
         recursive: bool,
     },
 
@@ -77,11 +78,11 @@ enum Command {
         num_commits: Option<isize>,
 
         /// When encountering multiple next commits, choose the oldest.
-        #[structopt(short = "-o", long = "--oldest")]
+        #[clap(short = 'o', long = "oldest")]
         oldest: bool,
 
         /// When encountering multiple next commits, choose the newest.
-        #[structopt(short = "-n", long = "--newest", conflicts_with("oldest"))]
+        #[clap(short = 'n', long = "newest", conflicts_with("oldest"))]
         newest: bool,
     },
 
@@ -97,38 +98,38 @@ enum Command {
     Move {
         /// The source commit to move. This commit, and all of its descendants,
         /// will be moved.
-        #[structopt(short = "-s", long = "--source")]
+        #[clap(short = 's', long = "source")]
         source: Option<String>,
 
         /// A commit inside a subtree to move. The entire subtree, starting from
         /// the main branch, will be moved, not just the commits descending from
         /// this commit.
-        #[structopt(short = "-b", long = "--base", conflicts_with = "source")]
+        #[clap(short = 'b', long = "base", conflicts_with = "source")]
         base: Option<String>,
 
         /// The destination commit to move all source commits onto. If not
         /// provided, defaults to the current commit.
-        #[structopt(short = "-d", long = "--dest")]
+        #[clap(short = 'd', long = "dest")]
         dest: Option<String>,
 
         /// Only attempt to perform an in-memory rebase. If it fails, do not
         /// attempt an on-disk rebase.
-        #[structopt(long = "--in-memory", conflicts_with = "force_on_disk")]
+        #[clap(long = "in-memory", conflicts_with = "force-on-disk")]
         force_in_memory: bool,
 
         /// Skip attempting to use an in-memory rebase, and try an
         /// on-disk rebase directly.
-        #[structopt(long = "--on-disk")]
+        #[clap(long = "on-disk")]
         force_on_disk: bool,
 
         /// Debugging option. Print the constraints used to create the rebase
         /// plan before executing it.
-        #[structopt(long = "--debug-dump-rebase-constraints")]
+        #[clap(long = "debug-dump-rebase-constraints")]
         dump_rebase_constraints: bool,
 
         /// Debugging option. Print the rebase plan that will be executed before
         /// executing it.
-        #[structopt(long = "--debug-dump-rebase-plan")]
+        #[clap(long = "debug-dump-rebase-plan")]
         dump_rebase_plan: bool,
     },
 
@@ -140,22 +141,22 @@ enum Command {
 
         /// Only attempt to perform an in-memory rebase. If it fails, do not
         /// attempt an on-disk rebase.
-        #[structopt(long = "--in-memory", conflicts_with = "force_on_disk")]
+        #[clap(long = "in-memory", conflicts_with = "force-on-disk")]
         force_in_memory: bool,
 
         /// Skip attempting to use an in-memory rebase, and try an
         /// on-disk rebase directly.
-        #[structopt(long = "--on-disk")]
+        #[clap(long = "on-disk")]
         force_on_disk: bool,
 
         /// Debugging option. Print the constraints used to create the rebase
         /// plan before executing it.
-        #[structopt(long = "--debug-dump-rebase-constraints")]
+        #[clap(long = "debug-dump-rebase-constraints")]
         dump_rebase_constraints: bool,
 
         /// Debugging option. Print the rebase plan that will be executed before
         /// executing it.
-        #[structopt(long = "--debug-dump-rebase-plan")]
+        #[clap(long = "debug-dump-rebase-plan")]
         dump_rebase_plan: bool,
     },
 
@@ -167,10 +168,10 @@ enum Command {
 
     /// Wrap a Git command inside a branchless transaction.
     Wrap {
-        #[structopt(long = "--git-executable")]
+        #[clap(long = "git-executable")]
         git_executable: Option<PathBuf>,
 
-        #[structopt(subcommand)]
+        #[clap(subcommand)]
         command: WrappedCommand,
     },
 
@@ -209,15 +210,15 @@ enum Command {
 /// Branchless workflow for Git.
 ///
 /// See the documentation at https://github.com/arxanas/git-branchless/wiki.
-#[derive(StructOpt)]
-#[structopt(version = env!("CARGO_PKG_VERSION"), author = "Waleed Khan <me@waleedkhan.name>")]
+#[derive(Clap)]
+#[clap(version = env!("CARGO_PKG_VERSION"), author = "Waleed Khan <me@waleedkhan.name>")]
 struct Opts {
     /// Change to the given directory before executing the rest of the program.
     /// (The option is called `-C` for symmetry with Git.)
-    #[structopt(short = "-C")]
+    #[clap(short = 'C')]
     working_directory: Option<PathBuf>,
 
-    #[structopt(subcommand)]
+    #[clap(subcommand)]
     command: Command,
 }
 
@@ -230,7 +231,7 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
     let Opts {
         working_directory,
         command,
-    } = Opts::from_args();
+    } = Opts::parse();
     if let Some(working_directory) = working_directory {
         std::env::set_current_dir(&working_directory).wrap_err_with(|| {
             format!(
