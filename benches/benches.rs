@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use branchless::core::eventlog::{EventLogDb, EventReplayer};
 use branchless::core::formatting::Glyphs;
-use branchless::core::graph::make_graph;
+use branchless::core::graph::make_smartlog_graph;
 use branchless::core::rewrite::{BuildRebasePlanOptions, RebasePlanBuilder};
 use branchless::git::{CherryPickFastOptions, Commit, Dag, Diff, Repo};
 use branchless::tui::Effects;
@@ -50,7 +50,8 @@ fn bench_rebase_plan(c: &mut Criterion) {
         )
         .unwrap();
 
-        let graph = make_graph(&effects, &repo, &dag, &event_replayer, event_cursor, true).unwrap();
+        let graph = make_smartlog_graph(&effects, &repo, &dag, &event_replayer, event_cursor, true)
+            .unwrap();
         println!("Built commit graph ({:?} elements)", graph.len());
 
         let mut builder = RebasePlanBuilder::new(&repo, &graph, &dag, head_oid);

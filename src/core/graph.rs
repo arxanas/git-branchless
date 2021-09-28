@@ -54,17 +54,17 @@ pub struct Node<'repo> {
 
 /// Graph of commits that the user is working on.
 #[derive(Default)]
-pub struct CommitGraph<'repo> {
+pub struct SmartlogGraph<'repo> {
     nodes: HashMap<NonZeroOid, Node<'repo>>,
 }
 
-impl std::fmt::Debug for CommitGraph<'_> {
+impl std::fmt::Debug for SmartlogGraph<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "<CommitGraph len={}>", self.nodes.len())
     }
 }
 
-impl<'repo> Deref for CommitGraph<'repo> {
+impl<'repo> Deref for SmartlogGraph<'repo> {
     type Target = HashMap<NonZeroOid, Node<'repo>>;
 
     fn deref(&self) -> &Self::Target {
@@ -86,7 +86,7 @@ fn find_visible_commits<'repo>(
     event_replayer: &EventReplayer,
     event_cursor: EventCursor,
     visible_heads: &CommitSet,
-) -> eyre::Result<CommitGraph<'repo>> {
+) -> eyre::Result<SmartlogGraph<'repo>> {
     let public_commits = dag.query().ancestors(dag.main_branch_commit.clone())?;
 
     let mut graph: HashMap<NonZeroOid, Node> = {
@@ -144,12 +144,12 @@ fn find_visible_commits<'repo>(
         graph.get_mut(parent_oid).unwrap().children.push(*child_oid);
     }
 
-    Ok(CommitGraph { nodes: graph })
+    Ok(SmartlogGraph { nodes: graph })
 }
 
 /// Sort children nodes of the commit graph in a standard order, for determinism
 /// in output.
-fn sort_children(graph: &mut CommitGraph) {
+fn sort_children(graph: &mut SmartlogGraph) {
     let commit_times: HashMap<NonZeroOid, git2::Time> = graph
         .iter()
         .map(|(oid, node)| (*oid, node.commit.get_time()))
@@ -161,28 +161,15 @@ fn sort_children(graph: &mut CommitGraph) {
 }
 
 /// Construct the smartlog graph for the repo.
-///
-/// Args:
-/// * `repo`: The Git repository.
-/// * `merge_base_db`: The merge-base database.
-/// * `event_replayer`: The event replayer.
-/// * `head_oid`: The OID of the repository's `HEAD` reference.
-/// * `main_branch_oid`: The OID of the main branch.
-/// * `branch_oids`: The set of OIDs pointed to by branches.
-/// * `hide_commits`: If set to `True`, then, after constructing the graph,
-/// remove nodes from it that appear to be hidden by user activity. This should
-/// be set to `True` for most display-related purposes.
-///
-/// Returns: A tuple of the head OID and the commit graph.
 #[instrument]
-pub fn make_graph<'repo>(
+pub fn make_smartlog_graph<'repo>(
     effects: &Effects,
     repo: &'repo Repo,
     dag: &Dag,
     event_replayer: &EventReplayer,
     event_cursor: EventCursor,
     remove_commits: bool,
-) -> eyre::Result<CommitGraph<'repo>> {
+) -> eyre::Result<SmartlogGraph<'repo>> {
     let (effects, _progress) = effects.start_operation(OperationType::MakeGraph);
 
     let mut graph = {

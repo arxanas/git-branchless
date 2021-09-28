@@ -64,7 +64,7 @@ use tracing::{instrument, warn};
 use crate::commands::smartlog::smartlog;
 use crate::core::config::get_restack_preserve_timestamps;
 use crate::core::eventlog::{EventLogDb, EventReplayer};
-use crate::core::graph::{make_graph, resolve_commits, ResolveCommitsResult};
+use crate::core::graph::{make_smartlog_graph, resolve_commits, ResolveCommitsResult};
 use crate::core::rewrite::{
     execute_rebase_plan, find_abandoned_children, find_rewrite_target, move_branches,
     BuildRebasePlanOptions, ExecuteRebasePlanOptions, RebasePlanBuilder,
@@ -93,7 +93,7 @@ fn restack_commits(
         event_cursor,
         &references_snapshot,
     )?;
-    let graph = make_graph(effects, repo, &dag, &event_replayer, event_cursor, true)?;
+    let graph = make_smartlog_graph(effects, repo, &dag, &event_replayer, event_cursor, true)?;
 
     struct RebaseInfo {
         dest_oid: NonZeroOid,
@@ -189,7 +189,7 @@ fn restack_branches(
         &references_snapshot,
     )?;
 
-    let graph = make_graph(effects, repo, &dag, &event_replayer, event_cursor, true)?;
+    let graph = make_smartlog_graph(effects, repo, &dag, &event_replayer, event_cursor, true)?;
 
     let mut rewritten_oids = HashMap::new();
     for branch in repo.get_all_local_branches()? {

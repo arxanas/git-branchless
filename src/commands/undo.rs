@@ -21,7 +21,7 @@ use tracing::instrument;
 use crate::commands::smartlog::render_graph;
 use crate::core::eventlog::{Event, EventCursor, EventLogDb, EventReplayer, EventTransactionId};
 use crate::core::formatting::{printable_styled_string, Pluralize, StyledStringBuilder};
-use crate::core::graph::make_graph;
+use crate::core::graph::make_smartlog_graph;
 use crate::core::metadata::{
     BranchesProvider, CommitMessageProvider, CommitOidProvider, DifferentialRevisionProvider,
     ObsolescenceExplanationProvider, RelativeTimeProvider,
@@ -39,7 +39,7 @@ fn render_cursor_smartlog(
 ) -> eyre::Result<Vec<StyledString>> {
     let dag = dag.set_cursor(effects, repo, event_replayer, event_cursor)?;
     let references_snapshot = event_replayer.get_references_snapshot(repo, event_cursor)?;
-    let graph = make_graph(effects, repo, &dag, event_replayer, event_cursor, true)?;
+    let graph = make_smartlog_graph(effects, repo, &dag, event_replayer, event_cursor, true)?;
     let result = render_graph(
         effects,
         repo,

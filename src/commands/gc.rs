@@ -15,13 +15,13 @@ use eyre::Context;
 use tracing::instrument;
 
 use crate::core::eventlog::{is_gc_ref, EventLogDb, EventReplayer};
-use crate::core::graph::{make_graph, CommitGraph};
+use crate::core::graph::{make_smartlog_graph, SmartlogGraph};
 use crate::git::{Dag, NonZeroOid, Reference, Repo};
 use crate::tui::Effects;
 
 fn find_dangling_references<'repo>(
     repo: &'repo Repo,
-    graph: &CommitGraph,
+    graph: &SmartlogGraph,
 ) -> eyre::Result<Vec<Reference<'repo>>> {
     let mut result = Vec::new();
     for reference in repo.get_all_references()? {
@@ -84,7 +84,7 @@ pub fn gc(effects: &Effects) -> eyre::Result<()> {
         &references_snapshot,
     )?;
 
-    let graph = make_graph(
+    let graph = make_smartlog_graph(
         effects,
         &repo,
         &dag,

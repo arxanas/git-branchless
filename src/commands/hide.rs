@@ -10,7 +10,9 @@ use tracing::instrument;
 use crate::core::eventlog::{CommitActivityStatus, Event};
 use crate::core::eventlog::{EventLogDb, EventReplayer};
 use crate::core::formatting::{printable_styled_string, Glyphs};
-use crate::core::graph::{make_graph, resolve_commits, CommitGraph, Node, ResolveCommitsResult};
+use crate::core::graph::{
+    make_smartlog_graph, resolve_commits, Node, ResolveCommitsResult, SmartlogGraph,
+};
 use crate::core::metadata::{render_commit_metadata, CommitOidProvider};
 use crate::git::{Commit, Dag, Repo};
 use crate::tui::Effects;
@@ -21,7 +23,7 @@ fn recurse_on_commits_helper<
     Condition: Fn(&'graph Node<'repo>) -> bool,
     Callback: FnMut(&'graph Node<'repo>),
 >(
-    graph: &'graph CommitGraph<'repo>,
+    graph: &'graph SmartlogGraph<'repo>,
     condition: &Condition,
     commit: &Commit<'repo>,
     callback: &mut Callback,
@@ -38,7 +40,7 @@ fn recurse_on_commits_helper<
 }
 
 fn recurse_on_commits<'repo, F: Fn(&Node) -> bool>(
-    graph: &CommitGraph<'repo>,
+    graph: &SmartlogGraph<'repo>,
     commits: Vec<Commit<'repo>>,
     condition: F,
 ) -> eyre::Result<Vec<Commit<'repo>>> {
@@ -85,7 +87,7 @@ pub fn hide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::Re
         }
     };
 
-    let graph = make_graph(effects, &repo, &dag, &event_replayer, event_cursor, false)?;
+    let graph = make_smartlog_graph(effects, &repo, &dag, &event_replayer, event_cursor, false)?;
     let commits = if recursive {
         recurse_on_commits(&graph, commits, |node| !node.is_obsolete)?
     } else {
@@ -160,7 +162,7 @@ pub fn unhide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::
         }
     };
 
-    let graph = make_graph(effects, &repo, &dag, &event_replayer, event_cursor, false)?;
+    let graph = make_smartlog_graph(effects, &repo, &dag, &event_replayer, event_cursor, false)?;
     let commits = if recursive {
         recurse_on_commits(&graph, commits, |node| node.is_obsolete)?
     } else {
