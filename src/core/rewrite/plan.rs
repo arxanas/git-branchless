@@ -10,7 +10,7 @@ use rayon::{prelude::*, ThreadPool, ThreadPoolBuilder};
 use tracing::{instrument, warn};
 
 use crate::core::formatting::printable_styled_string;
-use crate::core::graph::CommitGraph;
+use crate::core::graph::SmartlogGraph;
 use crate::git::{Commit, Dag, NonZeroOid, PatchId, Repo};
 use crate::tui::{Effects, OperationType};
 
@@ -153,7 +153,7 @@ struct BuildState {
 #[derive(Clone, Debug)]
 pub struct RebasePlanBuilder<'repo> {
     repo: &'repo Repo,
-    graph: &'repo CommitGraph<'repo>,
+    graph: &'repo SmartlogGraph<'repo>,
     dag: &'repo Dag,
     main_branch_oid: NonZeroOid,
 
@@ -243,7 +243,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
     /// Constructor.
     pub fn new(
         repo: &'repo Repo,
-        graph: &'repo CommitGraph,
+        graph: &'repo SmartlogGraph,
         dag: &'repo Dag,
         main_branch_oid: NonZeroOid,
     ) -> Self {

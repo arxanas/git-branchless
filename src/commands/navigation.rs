@@ -7,7 +7,7 @@ use tracing::{instrument, warn};
 use crate::commands::smartlog::smartlog;
 use crate::core::eventlog::{EventLogDb, EventReplayer};
 use crate::core::formatting::printable_styled_string;
-use crate::core::graph::{make_graph, CommitGraph};
+use crate::core::graph::{make_smartlog_graph, SmartlogGraph};
 use crate::git::{Dag, GitRunInfo, NonZeroOid, Repo, RepoReferencesSnapshot};
 use crate::tui::Effects;
 
@@ -50,7 +50,7 @@ fn advance_towards_main_branch(
     effects: &Effects,
     repo: &Repo,
     dag: &Dag,
-    graph: &CommitGraph,
+    graph: &SmartlogGraph,
     references_snapshot: &RepoReferencesSnapshot,
     current_oid: NonZeroOid,
 ) -> eyre::Result<(isize, NonZeroOid)> {
@@ -83,7 +83,7 @@ fn advance_towards_main_branch(
 fn advance_towards_own_commit(
     effects: &Effects,
     repo: &Repo,
-    graph: &CommitGraph,
+    graph: &SmartlogGraph,
     current_oid: NonZeroOid,
     num_commits: isize,
     towards: Option<Towards>,
@@ -164,7 +164,7 @@ pub fn next(
             eyre::bail!("No HEAD present; cannot calculate next commit");
         }
     };
-    let graph = make_graph(effects, &repo, &dag, &event_replayer, event_cursor, true)?;
+    let graph = make_smartlog_graph(effects, &repo, &dag, &event_replayer, event_cursor, true)?;
 
     let num_commits = num_commits.unwrap_or(1);
     let (num_commits_traversed_towards_main_branch, current_oid) =

@@ -14,7 +14,7 @@ use tracing::instrument;
 use crate::core::eventlog::{EventLogDb, EventReplayer};
 use crate::core::formatting::set_effect;
 use crate::core::formatting::{printable_styled_string, Glyphs, StyledStringBuilder};
-use crate::core::graph::{make_graph, CommitGraph};
+use crate::core::graph::{make_smartlog_graph, SmartlogGraph};
 use crate::core::metadata::{
     render_commit_metadata, BranchesProvider, CommitMessageProvider, CommitMetadataProvider,
     CommitOidProvider, DifferentialRevisionProvider, ObsolescenceExplanationProvider,
@@ -34,7 +34,7 @@ fn split_commit_graph_by_roots(
     effects: &Effects,
     repo: &Repo,
     dag: &Dag,
-    graph: &CommitGraph,
+    graph: &SmartlogGraph,
 ) -> Vec<NonZeroOid> {
     let mut root_commit_oids: Vec<NonZeroOid> = graph
         .iter()
@@ -80,7 +80,7 @@ fn split_commit_graph_by_roots(
 #[instrument(skip(commit_metadata_providers, graph))]
 fn get_child_output(
     glyphs: &Glyphs,
-    graph: &CommitGraph,
+    graph: &SmartlogGraph,
     root_oids: &[NonZeroOid],
     commit_metadata_providers: &mut [&mut dyn CommitMetadataProvider],
     head_oid: Option<NonZeroOid>,
@@ -177,7 +177,7 @@ fn get_child_output(
 #[instrument(skip(commit_metadata_providers, graph))]
 fn get_output(
     glyphs: &Glyphs,
-    graph: &CommitGraph,
+    graph: &SmartlogGraph,
     commit_metadata_providers: &mut [&mut dyn CommitMetadataProvider],
     head_oid: Option<NonZeroOid>,
     root_oids: &[NonZeroOid],
@@ -246,7 +246,7 @@ pub fn render_graph(
     effects: &Effects,
     repo: &Repo,
     dag: &Dag,
-    graph: &CommitGraph,
+    graph: &SmartlogGraph,
     head_oid: Option<NonZeroOid>,
     commit_metadata_providers: &mut [&mut dyn CommitMetadataProvider],
 ) -> eyre::Result<Vec<StyledString>> {
@@ -290,7 +290,7 @@ pub fn smartlog(effects: &Effects, options: &SmartlogOptions) -> eyre::Result<()
         &references_snapshot,
     )?;
 
-    let graph = make_graph(
+    let graph = make_smartlog_graph(
         effects,
         &repo,
         &dag,
