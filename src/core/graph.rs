@@ -199,22 +199,23 @@ pub fn make_graph<'repo>(
     let mut graph = {
         let (effects, _progress) = effects.start_operation(OperationType::WalkCommits);
 
+        // This is a large, lazy set. Be sure not to force evaluation of the
+        // entire set.
+        let public_commits = &dag.query().ancestors(dag.main_branch_commit.clone())?;
+
         let visible_heads = if remove_commits {
             dag.observed_commits.difference(&dag.obsolete_commits)
         } else {
             dag.observed_commits.clone()
         };
-        let visible_heads = visible_heads.union(&dag.main_branch_commit);
         let visible_heads = dag.query().heads(visible_heads)?;
+        let visible_heads = visible_heads.difference(public_commits);
 
-        let anomalous_main_branch_commits = dag.obsolete_commits.intersection(
-            // `ancestors` query here is expensive, so be sure to evaluate
-            // `obsolete_commits` first.
-            &dag.query().ancestors(dag.main_branch_commit.clone())?,
-        );
+        let anomalous_main_branch_commits = dag.obsolete_commits.intersection(public_commits);
         let visible_heads = visible_heads
             .union(&dag.head_commit)
             .union(&dag.branch_commits)
+            .union(&dag.main_branch_commit)
             .union(&anomalous_main_branch_commits);
 
         find_visible_commits(
