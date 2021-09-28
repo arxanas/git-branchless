@@ -438,3 +438,53 @@ fn test_show_hidden_commits() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_active_non_head_main_branch_commit() -> eyre::Result<()> {
+    let path_to_git = get_path_to_git()?;
+    let temp_dir = tempfile::tempdir()?;
+    let git_run_info = GitRunInfo {
+        path_to_git,
+        working_directory: temp_dir.path().to_path_buf(),
+        env: Default::default(),
+    };
+
+    let original_repo_path = temp_dir.path().join("original");
+    std::fs::create_dir(&original_repo_path)?;
+    let original_repo = Git::new(original_repo_path, git_run_info.clone());
+    let cloned_repo_path = temp_dir.path().join("cloned");
+    let cloned_repo = Git::new(cloned_repo_path, git_run_info);
+
+    let test1_oid = {
+        original_repo.init_repo()?;
+        let test1_oid = original_repo.commit_file("test1", 1)?;
+        original_repo.commit_file("test2", 2)?;
+        original_repo.commit_file("test3", 3)?;
+
+        original_repo.run(&[
+            "clone",
+            original_repo.repo_path.to_str().unwrap(),
+            cloned_repo.repo_path.to_str().unwrap(),
+        ])?;
+
+        test1_oid
+    };
+
+    {
+        cloned_repo.init_repo_with_options(&GitInitOptions {
+            make_initial_commit: false,
+            ..Default::default()
+        })?;
+        // Ensure that the `test1` commit isn't visible just because it's been
+        // un-hidden. It's a public commit, so it should be hidden if possible.
+        cloned_repo.run(&["unhide", &test1_oid.to_string()])?;
+
+        let (stdout, _stderr) = cloned_repo.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        @ 70deb1e2 (master) create test3.txt
+        "###);
+    }
+
+    Ok(())
+}
