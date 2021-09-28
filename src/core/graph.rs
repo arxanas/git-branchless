@@ -10,7 +10,7 @@ use std::ops::Deref;
 use eden_dag::DagAlgorithm;
 use tracing::instrument;
 
-use crate::core::eventlog::{Event, EventCursor, EventReplayer};
+use crate::core::eventlog::{EventCursor, EventReplayer};
 use crate::git::{Commit, CommitSet, Dag, NonZeroOid, Repo};
 use crate::tui::{Effects, OperationType};
 
@@ -50,13 +50,6 @@ pub struct Node<'repo> {
     /// where you commit directly to the main branch and then later rewrite the
     /// commit.
     pub is_obsolete: bool,
-
-    /// The latest event to affect this commit.
-    ///
-    /// It's possible that no event affected this commit, and it was simply
-    /// visible due to a branch pointing to it. In that case, this field is
-    /// `None`.
-    pub event: Option<Event>,
 }
 
 /// Graph of commits that the user is working on.
@@ -118,9 +111,6 @@ fn find_visible_commits<'repo>(
                         continue;
                     }
                 };
-                let event = event_replayer
-                    .get_cursor_commit_latest_event(event_cursor, commit.get_oid())
-                    .cloned();
 
                 result.insert(
                     commit.get_oid(),
@@ -130,7 +120,6 @@ fn find_visible_commits<'repo>(
                         children: Vec::new(), // populated below
                         is_main: public_commits.contains(&vertex)?,
                         is_obsolete: dag.obsolete_commits.contains(&vertex)?,
-                        event,
                     },
                 );
             }
