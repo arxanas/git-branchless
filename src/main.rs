@@ -8,218 +8,40 @@ use branchless::commands::smartlog::SmartlogOptions;
 use branchless::commands::wrap;
 use branchless::core::formatting::Glyphs;
 use branchless::git::{GitRunInfo, NonZeroOid};
+use branchless::opts::{Command, Opts, WrappedCommand};
 use branchless::tui::Effects;
 use clap::Clap;
 use eyre::Context;
+use itertools::Itertools;
 use tracing_chrome::ChromeLayerBuilder;
 use tracing_error::ErrorLayer;
 use tracing_subscriber::fmt as tracing_fmt;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
 
-#[derive(Clap)]
-enum WrappedCommand {
-    #[clap(external_subcommand)]
-    WrappedCommand(Vec<String>),
-}
+fn rewrite_args(args: Vec<OsString>) -> Vec<OsString> {
+    let first_arg = match args.first() {
+        None => return args,
+        Some(first_arg) => first_arg,
+    };
 
-#[derive(Clap)]
-enum Command {
-    /// Initialize the branchless workflow for this repository.
-    Init {
-        /// Uninstall the branchless workflow instead of initializing it.
-        #[clap(long = "uninstall")]
-        uninstall: bool,
-    },
+    // Don't use `std::env::current_exe`, because it may or may not resolve the
+    // symlink. We want to preserve the symlink in our case. See
+    // https://doc.rust-lang.org/std/env/fn.current_exe.html#platform-specific-behavior
+    let exe_path = PathBuf::from(first_arg);
+    let exe_name = match exe_path.file_name().and_then(|arg| arg.to_str()) {
+        Some(exe_name) => exe_name,
+        None => return args,
+    };
 
-    /// Display a nice graph of the commits you've recently worked on.
-    Smartlog {
-        /// Also show commits which have been hidden.
-        #[clap(long = "hidden")]
-        show_hidden_commits: bool,
-    },
-
-    /// Hide the provided commits from the smartlog.
-    Hide {
-        /// Zero or more commits to hide.
-        ///
-        /// Can either be hashes, like `abc123`, or ref-specs, like `HEAD^`.
-        commits: Vec<String>,
-
-        /// Also recursively hide all visible children commits of the provided
-        /// commits.
-        #[clap(short = 'r', long = "recursive")]
-        recursive: bool,
-    },
-
-    /// Unhide previously-hidden commits from the smartlog.
-    Unhide {
-        /// Zero or more commits to unhide.
-        ///
-        /// Can either be hashes, like `abc123`, or ref-specs, like `HEAD^`.
-        commits: Vec<String>,
-
-        /// Also recursively unhide all children commits of the provided commits.
-        #[clap(short = 'r', long = "recursive")]
-        recursive: bool,
-    },
-
-    /// Move to an earlier commit in the current stack.
-    Prev {
-        /// The number of commits backward to go.
-        num_commits: Option<isize>,
-    },
-
-    /// Move to a later commit in the current stack.
-    Next {
-        /// The number of commits forward to go.
-        ///
-        /// If not provided, defaults to 1.
-        num_commits: Option<isize>,
-
-        /// When encountering multiple next commits, choose the oldest.
-        #[clap(short = 'o', long = "oldest")]
-        oldest: bool,
-
-        /// When encountering multiple next commits, choose the newest.
-        #[clap(short = 'n', long = "newest", conflicts_with("oldest"))]
-        newest: bool,
-    },
-
-    /// Move a subtree of commits from one location to another.
-    ///
-    /// By default, `git move` tries to move the entire current stack if you
-    /// don't pass a `--source` or `--base` option (equivalent to writing
-    /// `--base HEAD`).
-    ///
-    /// By default, `git move` attempts to rebase all commits in-memory. If you
-    /// want to force an on-disk rebase, pass the `--on-disk` flag. Note that
-    /// `post-commit` hooks are not called during in-memory rebases.
-    Move {
-        /// The source commit to move. This commit, and all of its descendants,
-        /// will be moved.
-        #[clap(short = 's', long = "source")]
-        source: Option<String>,
-
-        /// A commit inside a subtree to move. The entire subtree, starting from
-        /// the main branch, will be moved, not just the commits descending from
-        /// this commit.
-        #[clap(short = 'b', long = "base", conflicts_with = "source")]
-        base: Option<String>,
-
-        /// The destination commit to move all source commits onto. If not
-        /// provided, defaults to the current commit.
-        #[clap(short = 'd', long = "dest")]
-        dest: Option<String>,
-
-        /// Only attempt to perform an in-memory rebase. If it fails, do not
-        /// attempt an on-disk rebase.
-        #[clap(long = "in-memory", conflicts_with = "force-on-disk")]
-        force_in_memory: bool,
-
-        /// Skip attempting to use an in-memory rebase, and try an
-        /// on-disk rebase directly.
-        #[clap(long = "on-disk")]
-        force_on_disk: bool,
-
-        /// Debugging option. Print the constraints used to create the rebase
-        /// plan before executing it.
-        #[clap(long = "debug-dump-rebase-constraints")]
-        dump_rebase_constraints: bool,
-
-        /// Debugging option. Print the rebase plan that will be executed before
-        /// executing it.
-        #[clap(long = "debug-dump-rebase-plan")]
-        dump_rebase_plan: bool,
-    },
-
-    /// Fix up commits abandoned by a previous rewrite operation.
-    Restack {
-        /// The IDs of the abandoned commits whose descendants should be
-        /// restacked. If not provided, all abandoned commits are restacked.
-        commits: Vec<String>,
-
-        /// Only attempt to perform an in-memory rebase. If it fails, do not
-        /// attempt an on-disk rebase.
-        #[clap(long = "in-memory", conflicts_with = "force-on-disk")]
-        force_in_memory: bool,
-
-        /// Skip attempting to use an in-memory rebase, and try an
-        /// on-disk rebase directly.
-        #[clap(long = "on-disk")]
-        force_on_disk: bool,
-
-        /// Debugging option. Print the constraints used to create the rebase
-        /// plan before executing it.
-        #[clap(long = "debug-dump-rebase-constraints")]
-        dump_rebase_constraints: bool,
-
-        /// Debugging option. Print the rebase plan that will be executed before
-        /// executing it.
-        #[clap(long = "debug-dump-rebase-plan")]
-        dump_rebase_plan: bool,
-    },
-
-    /// Browse or return to a previous state of the repository.
-    Undo,
-
-    /// Run internal garbage collection.
-    Gc,
-
-    /// Wrap a Git command inside a branchless transaction.
-    Wrap {
-        #[clap(long = "git-executable")]
-        git_executable: Option<PathBuf>,
-
-        #[clap(subcommand)]
-        command: WrappedCommand,
-    },
-
-    /// Internal use.
-    HookPreAutoGc,
-
-    /// Internal use.
-    HookPostRewrite { rewrite_type: String },
-
-    /// Internal use.
-    HookRegisterExtraPostRewriteHook,
-
-    /// Internal use.
-    HookDetectEmptyCommit { old_commit_oid: NonZeroOid },
-
-    /// Internal use.
-    HookSkipUpstreamAppliedCommit { commit_oid: NonZeroOid },
-
-    /// Internal use.
-    HookPostCheckout {
-        previous_commit: String,
-        current_commit: String,
-        is_branch_checkout: isize,
-    },
-
-    /// Internal use.
-    HookPostCommit,
-
-    /// Internal use.
-    HookPostMerge { is_squash_merge: isize },
-
-    /// Internal use.
-    HookReferenceTransaction { transaction_state: String },
-}
-
-/// Branchless workflow for Git.
-///
-/// See the documentation at https://github.com/arxanas/git-branchless/wiki.
-#[derive(Clap)]
-#[clap(version = env!("CARGO_PKG_VERSION"), author = "Waleed Khan <me@waleedkhan.name>")]
-struct Opts {
-    /// Change to the given directory before executing the rest of the program.
-    /// (The option is called `-C` for symmetry with Git.)
-    #[clap(short = 'C')]
-    working_directory: Option<PathBuf>,
-
-    #[clap(subcommand)]
-    command: Command,
+    match exe_name.strip_prefix("git-branchless-") {
+        Some(subcommand) => {
+            let mut new_args = vec![OsString::from("git-branchless"), OsString::from(subcommand)];
+            new_args.extend(args.into_iter().skip(1));
+            new_args
+        }
+        None => args,
+    }
 }
 
 /// Wrapper function for `main` to ensure that `Drop` is called for local
@@ -228,10 +50,11 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
     color_eyre::install()?;
     let _tracing_guard = install_tracing();
 
+    let args = rewrite_args(std::env::args_os().collect_vec());
     let Opts {
         working_directory,
         command,
-    } = Opts::parse();
+    } = Opts::parse_from(args);
     if let Some(working_directory) = working_directory {
         std::env::set_current_dir(&working_directory).wrap_err_with(|| {
             format!(
@@ -368,11 +191,13 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
         }
 
         Command::HookDetectEmptyCommit { old_commit_oid } => {
+            let old_commit_oid: NonZeroOid = old_commit_oid.parse()?;
             branchless::commands::hooks::hook_drop_commit_if_empty(&effects, old_commit_oid)?;
             0
         }
 
         Command::HookSkipUpstreamAppliedCommit { commit_oid } => {
+            let commit_oid: NonZeroOid = commit_oid.parse()?;
             branchless::commands::hooks::hook_skip_upstream_applied_commit(&effects, commit_oid)?;
             0
         }

@@ -20,7 +20,8 @@ version = "0.3.5"
 debug = 0
 
 [features]
-default = []
+default = ["man-pages"]
+man-pages = []
 integration-test-bin = []
 
 [lib]
@@ -30,6 +31,52 @@ name = "branchless"
 harness = false
 name = "benches"
 
+[[bin]]
+name = "git-branchless"
+path = "src/main.rs"
+
+## Subcommand aliases ##
+[[bin]]
+name = "git-branchless-smartlog"
+path = "src/main.rs"
+required-features = ["man-pages"]
+
+[[bin]]
+name = "git-branchless-hide"
+path = "src/main.rs"
+required-features = ["man-pages"]
+
+[[bin]]
+name = "git-branchless-unhide"
+path = "src/main.rs"
+required-features = ["man-pages"]
+
+[[bin]]
+name = "git-branchless-prev"
+path = "src/main.rs"
+required-features = ["man-pages"]
+
+[[bin]]
+name = "git-branchless-next"
+path = "src/main.rs"
+required-features = ["man-pages"]
+
+[[bin]]
+name = "git-branchless-restack"
+path = "src/main.rs"
+required-features = ["man-pages"]
+
+[[bin]]
+name = "git-branchless-undo"
+path = "src/main.rs"
+required-features = ["man-pages"]
+
+[[bin]]
+name = "git-branchless-move"
+path = "src/main.rs"
+required-features = ["man-pages"]
+
+## Testing binaries ##
 [[bin]]
 name = "git-branchless-regression-test-cherry-pick"
 path = "bin/regression_test_cherry_pick.rs"
@@ -46,6 +93,7 @@ test = true
 anyhow = "1.0.43"
 assert_cmd = "2.0.0"
 chashmap = "2.2.2"
+clap = "3.0.0-beta.4"
 color-eyre = "0.5.11"
 console = "0.14.1"
 cursive = { version = "0.17.0-alpha.0", default-features = false, features = [
@@ -59,11 +107,11 @@ gitrevset = { version = "0.2.0" }
 indicatif = "0.17.0-beta.1"
 itertools = "0.10.1"
 lazy_static = "1.4.0"
+man = "0.3.0"
 os_str_bytes = "4.0.0"
 rayon = "1.5.1"
 regex = "1.5.4"
 rusqlite = { version = "0.25.3", features = ["bundled"] }
-clap = "3.0.0-beta.4"
 tempfile = "3.2.0"
 tracing = "0.1.26"
 tracing-chrome = "0.3.1"

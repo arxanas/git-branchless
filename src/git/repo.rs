@@ -210,10 +210,15 @@ impl Repo {
 
     /// Get the directory where the DAG for the repository is stored.
     #[instrument]
-    pub fn get_dag_dir(&self) -> eyre::Result<PathBuf> {
-        let path = self.get_path().join("branchless").join("dag");
-        std::fs::create_dir_all(&path).wrap_err("Creating .git/branchless/dag dir")?;
-        Ok(path)
+    pub fn get_dag_dir(&self) -> PathBuf {
+        self.get_path().join("branchless").join("dag")
+    }
+
+    /// Get the directory to store man-pages. Note that this is the `man/man1`
+    /// directory, specifically referring to the section 1 manual pages.
+    #[instrument]
+    pub fn get_man1_dir(&self) -> PathBuf {
+        self.get_path().join("branchless").join("man").join("man1")
     }
 
     /// Get the connection to the SQLite database for this repository.
