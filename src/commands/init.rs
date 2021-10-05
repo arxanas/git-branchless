@@ -10,6 +10,7 @@ use tracing::{instrument, warn};
 
 use crate::core::config::get_core_hooks_path;
 use crate::git::{Config, ConfigValue, GitRunInfo, GitVersion, Repo};
+use crate::opts::write_man_pages;
 use crate::tui::Effects;
 
 const ALL_HOOKS: &[(&str, &str)] = &[
@@ -326,6 +327,18 @@ fn uninstall_aliases(effects: &Effects, config: &mut Config) -> eyre::Result<()>
     Ok(())
 }
 
+#[instrument]
+fn install_man_pages(effects: &Effects, repo: &Repo) -> eyre::Result<()> {
+    let should_install = cfg!(feature = "man-pages");
+    if !should_install {
+        return Ok(());
+    }
+
+    let man_dir = repo.get_man1_dir();
+    write_man_pages(&man_dir).wrap_err_with(|| format!("Writing man-pages to: {:?}", &man_dir))?;
+    Ok(())
+}
+
 #[instrument(skip(value))]
 fn set_config(
     effects: &Effects,
@@ -435,6 +448,7 @@ pub fn init(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<()> {
     set_configs(&mut in_, effects, &repo, &mut config)?;
     install_hooks(effects, &repo)?;
     install_aliases(effects, &mut repo, &mut config, git_run_info)?;
+    install_man_pages(effects, &repo)?;
     writeln!(
         effects.get_output_stream(),
         "{}",

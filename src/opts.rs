@@ -1,7 +1,8 @@
 //! The command-line options for `git-branchless`.
 
-use clap::Clap;
-use std::path::PathBuf;
+use clap::{App, Clap, IntoApp};
+use man::{Arg, Author, Manual, Opt};
+use std::path::{Path, PathBuf};
 
 /// A command wrapped by `git-branchless wrap`. The arguments are forwarded to
 /// `git`.
@@ -233,4 +234,85 @@ pub struct Opts {
     /// The `git-branchless` subcommand to run.
     #[clap(subcommand)]
     pub command: Command,
+}
+
+/// Generate and write man-pages into the specified directory.
+///
+/// The generated files are named things like `git-branchless-smartlog.1`, so
+/// this directory should be of the form `path/to/man/man1`, to ensure that
+/// these files get generated into the correct man-page section.
+pub fn write_man_pages(man_dir: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(&man_dir)?;
+
+    let app = Opts::into_app();
+    generate_man_page(man_dir, "git-branchless", &app)?;
+    for subcommand in app.get_subcommands() {
+        let subcommand_exe_name = format!("git-branchless-{}", subcommand.get_name());
+        generate_man_page(man_dir, &subcommand_exe_name, subcommand)?;
+    }
+    Ok(())
+}
+
+fn generate_man_page(man_dir: &Path, name: &str, command: &App) -> std::io::Result<()> {
+    let mut manual = Manual::new(name);
+    if let Some(about) = command.get_about() {
+        manual = manual.about(about);
+    }
+
+    let authors = env!("CARGO_PKG_AUTHORS").split(':').map(|author_string| {
+        let (name, email) = match author_string.split_once(" <") {
+            Some(value) => value,
+            None => panic!(
+                "Invalid author specifier (should be Full Name <email@example.com>): {:?}",
+                author_string
+            ),
+        };
+
+        let email = email.strip_prefix('<').unwrap_or(email);
+        let email = email.strip_suffix('>').unwrap_or(email);
+        Author::new(name).email(email)
+    });
+    for author in authors {
+        manual = manual.author(author);
+    }
+
+    {
+        // `clap==3.0.0-beta.4` does not have a `get_long_about` method, which
+        // seems to be an omission. See
+        // https://github.com/clap-rs/clap/pull/2843.
+        let mut buf = Vec::new();
+        command
+            .clone()
+            .help_template("{about}")
+            .write_long_help(&mut buf)?;
+        let long_help = String::from_utf8(buf).expect("Argument help should be UTF-8");
+        manual = manual.description(long_help);
+    }
+
+    for arg in command.get_positionals() {
+        manual = manual.arg(Arg::new(&format!("[{}]", arg.get_name().to_uppercase())));
+    }
+
+    for flag in command.get_flags() {
+        let opt = Opt::new(flag.get_name());
+        let opt = match flag.get_short() {
+            Some(short) => opt.short(&String::from(short)),
+            None => opt,
+        };
+        let opt = match flag.get_long() {
+            Some(long) => opt.long(long),
+            None => opt,
+        };
+        let opt = match flag.get_about() {
+            Some(help) => opt.help(help),
+            None => opt,
+        };
+        manual = manual.option(opt);
+    }
+
+    // FIXME: implement rest of man-page rendering.
+
+    let output_path = man_dir.join(format!("{}.1", name));
+    std::fs::write(output_path, manual.render())?;
+    Ok(())
 }
