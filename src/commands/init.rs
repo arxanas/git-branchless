@@ -2,7 +2,7 @@
 
 use std::fmt::Write;
 use std::io::{stdin, stdout, BufRead, BufReader, Write as WriteIo};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use console::style;
 use eyre::Context;
@@ -123,6 +123,32 @@ fn update_between_lines(lines: &str, updated_lines: &str) -> String {
 }
 
 #[instrument]
+fn write_script(path: &Path, contents: &str) -> eyre::Result<()> {
+    let script_dir = path
+        .parent()
+        .ok_or_else(|| eyre::eyre!("No parent for dir {:?}", path))?;
+    std::fs::create_dir_all(script_dir).wrap_err("Creating script dir")?;
+
+    std::fs::write(path, contents).wrap_err("Writing script contents")?;
+
+    // Setting hook file as executable only supported on Unix systems.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let metadata = std::fs::metadata(path).wrap_err("Reading script permissions")?;
+        let mut permissions = metadata.permissions();
+        let mode = permissions.mode();
+        // Set execute bits.
+        let mode = mode | 0o111;
+        permissions.set_mode(mode);
+        std::fs::set_permissions(path, permissions)
+            .wrap_err_with(|| format!("Marking {:?} as executable", path))?;
+    }
+
+    Ok(())
+}
+
+#[instrument]
 fn update_hook_contents(hook: &Hook, hook_contents: &str) -> eyre::Result<()> {
     let (hook_path, hook_contents) = match hook {
         Hook::RegularHook { path } => match std::fs::read_to_string(path) {
@@ -144,28 +170,7 @@ fn update_hook_contents(hook: &Hook, hook_contents: &str) -> eyre::Result<()> {
         Hook::MultiHook { path } => (path, format!("{}\n{}", SHEBANG, hook_contents)),
     };
 
-    let hook_dir = hook_path
-        .parent()
-        .ok_or_else(|| eyre::eyre!("No parent for dir {:?}", hook_path))?;
-    std::fs::create_dir_all(hook_dir)
-        .wrap_err_with(|| format!("Creating hook dir {:?}", hook_path))?;
-    std::fs::write(hook_path, hook_contents)
-        .wrap_err_with(|| format!("Writing hook contents to {:?}", hook_path))?;
-
-    // Setting hook file as executable only supported on Unix systems.
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let metadata = std::fs::metadata(hook_path)
-            .wrap_err_with(|| format!("Reading hook permissions for {:?}", hook_path))?;
-        let mut permissions = metadata.permissions();
-        let mode = permissions.mode();
-        // Set execute bits.
-        let mode = mode | 0o111;
-        permissions.set_mode(mode);
-        std::fs::set_permissions(hook_path, permissions)
-            .wrap_err_with(|| format!("Marking {:?} as executable", hook_path))?;
-    }
+    write_script(hook_path, &hook_contents).wrap_err("Writing hook script")?;
 
     Ok(())
 }
@@ -210,9 +215,30 @@ fn uninstall_hooks(effects: &Effects, repo: &Repo) -> eyre::Result<()> {
     Ok(())
 }
 
+/// Determine if we should make an alias of the form `branchless smartlog` or
+/// `branchless-smartlog`.
+///
+/// The form of the alias is important because it determines what command Git
+/// tries to look up with `man` when you run e.g. `git smartlog --help`:
+///
+/// - `branchless smartlog`: invokes `man git-branchless`, which means that the
+/// subcommand is not included in the `man` invocation, so it can only show
+/// generic help.
+/// - `branchless-smartlog`: invokes `man git-branchless-smartlog, so the
+/// subcommand is included in the `man` invocation, so it can show more specific
+/// help.
+fn should_use_wrapped_command_alias() -> bool {
+    cfg!(feature = "man-pages")
+}
+
 #[instrument]
-fn install_alias(config: &mut Config, from: &str, to: &str) -> eyre::Result<()> {
-    config.set(format!("alias.{}", from), format!("branchless {}", to))?;
+fn install_alias(repo: &Repo, config: &mut Config, from: &str, to: &str) -> eyre::Result<()> {
+    let alias = if should_use_wrapped_command_alias() {
+        format!("branchless-{}", to)
+    } else {
+        format!("branchless {}", to)
+    };
+    config.set(format!("alias.{}", from), alias)?;
     Ok(())
 }
 
@@ -251,7 +277,7 @@ fn install_aliases(
             from,
             to
         )?;
-        install_alias(config, from, to)?;
+        install_alias(repo, config, from, to)?;
     }
 
     let version_str = git_run_info
@@ -437,7 +463,7 @@ pub fn uninstall(effects: &Effects) -> eyre::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{update_between_lines, UPDATE_MARKER_END, UPDATE_MARKER_START};
+    use super::{update_between_lines, ALL_ALIASES, UPDATE_MARKER_END, UPDATE_MARKER_START};
 
     #[test]
     fn test_update_between_lines() {
@@ -473,5 +499,24 @@ contents 3
             ),
             expected
         )
+    }
+
+    #[test]
+    fn test_all_alias_binaries_exist() {
+        for (_from, to) in ALL_ALIASES {
+            let executable_name = format!("git-branchless-{}", to);
+
+            // For each subcommand that's been aliased, asserts that a binary
+            // with the corresponding name exists in `Cargo.toml`. If this test
+            // fails, then it may mean that a new binary entry should be added.
+            //
+            // Note that this check may require a `cargo clean` to clear out any
+            // old executables in order to produce deterministic results.
+            assert_cmd::cmd::Command::cargo_bin(executable_name)
+                .unwrap()
+                .arg("--help")
+                .assert()
+                .success();
+        }
     }
 }

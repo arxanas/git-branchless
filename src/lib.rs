@@ -22,6 +22,7 @@
 pub mod commands;
 pub mod core;
 pub mod git;
+pub mod opts;
 pub mod testing;
 pub mod tui;
 pub mod util;
