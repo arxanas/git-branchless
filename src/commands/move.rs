@@ -12,11 +12,13 @@ use tracing::instrument;
 
 use crate::core::config::get_restack_preserve_timestamps;
 use crate::core::eventlog::{EventLogDb, EventReplayer};
-use crate::core::graph::{resolve_commits, ResolveCommitsResult};
 use crate::core::rewrite::{
     execute_rebase_plan, BuildRebasePlanOptions, ExecuteRebasePlanOptions, RebasePlanBuilder,
 };
-use crate::git::{CommitSet, Dag, GitRunInfo, NonZeroOid, Repo, RepoReferencesSnapshot};
+use crate::git::{
+    resolve_commits, CommitSet, Dag, GitRunInfo, NonZeroOid, Repo, RepoReferencesSnapshot,
+    ResolveCommitsResult,
+};
 use crate::tui::Effects;
 
 #[instrument]
