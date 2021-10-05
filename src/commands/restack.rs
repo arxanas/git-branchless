@@ -64,12 +64,12 @@ use tracing::{instrument, warn};
 use crate::commands::smartlog::smartlog;
 use crate::core::config::get_restack_preserve_timestamps;
 use crate::core::eventlog::{EventLogDb, EventReplayer};
-use crate::core::graph::{make_smartlog_graph, resolve_commits, ResolveCommitsResult};
+use crate::core::graph::{resolve_commits, ResolveCommitsResult};
 use crate::core::rewrite::{
     execute_rebase_plan, find_abandoned_children, find_rewrite_target, move_branches,
     BuildRebasePlanOptions, ExecuteRebasePlanOptions, RebasePlanBuilder,
 };
-use crate::git::{Dag, GitRunInfo, NonZeroOid, Repo};
+use crate::git::{sort_commit_set, CommitSet, Dag, GitRunInfo, NonZeroOid, Repo};
 use crate::tui::Effects;
 
 #[instrument(skip(commits))]
@@ -93,21 +93,26 @@ fn restack_commits(
         event_cursor,
         &references_snapshot,
     )?;
-    let graph = make_smartlog_graph(effects, repo, &dag, &event_replayer, event_cursor, true)?;
+
+    let commit_set: CommitSet = match commits {
+        Some(commits) => commits.into_iter().collect(),
+        None => dag.obsolete_commits.clone(),
+    };
+    let commits = sort_commit_set(repo, &dag, &commit_set)?;
 
     struct RebaseInfo {
         dest_oid: NonZeroOid,
         abandoned_child_oids: Vec<NonZeroOid>,
     }
-    let commits: HashSet<NonZeroOid> = match commits {
-        Some(commits) => commits.into_iter().collect(),
-        None => graph.keys().copied().collect(),
-    };
     let rebases: Vec<RebaseInfo> = {
         let mut result = Vec::new();
-        for original_oid in commits {
-            let abandoned_children =
-                find_abandoned_children(&dag, &event_replayer, event_cursor, original_oid)?;
+        for original_commit in commits {
+            let abandoned_children = find_abandoned_children(
+                &dag,
+                &event_replayer,
+                event_cursor,
+                original_commit.get_oid(),
+            )?;
             if let Some((rewritten_oid, abandoned_child_oids)) = abandoned_children {
                 result.push(RebaseInfo {
                     dest_oid: rewritten_oid,
@@ -177,18 +182,7 @@ fn restack_branches(
     event_log_db: &EventLogDb,
     options: &ExecuteRebasePlanOptions,
 ) -> eyre::Result<isize> {
-    let references_snapshot = repo.get_references_snapshot()?;
     let event_replayer = EventReplayer::from_event_log_db(effects, repo, event_log_db)?;
-    let event_cursor = event_replayer.make_default_cursor();
-    let dag = Dag::open_and_sync(
-        effects,
-        repo,
-        &event_replayer,
-        event_cursor,
-        &references_snapshot,
-    )?;
-
-    let graph = make_smartlog_graph(effects, repo, &dag, &event_replayer, event_cursor, true)?;
 
     let mut rewritten_oids = HashMap::new();
     for branch in repo.get_all_local_branches()? {
@@ -202,9 +196,6 @@ fn restack_branches(
                 continue;
             }
         };
-        if !graph.contains_key(&branch_target) {
-            continue;
-        }
 
         if let Some(new_oid) = find_rewrite_target(
             &event_replayer,
