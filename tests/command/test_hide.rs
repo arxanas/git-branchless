@@ -268,11 +268,11 @@ fn test_hide_recursive() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["hide", "-r", &test2_oid.to_string()])?;
         insta::assert_snapshot!(stdout, @r###"
-            Hid commit: 96d1c37a create test2.txt
-            To unhide this commit, run: git unhide 96d1c37a
-            Hid commit: 70deb1e2 create test3.txt
-            To unhide this commit, run: git unhide 70deb1e2
-            "###);
+        Hid commit: 96d1c37a create test2.txt
+        To unhide this commit, run: git unhide 96d1c37a
+        Hid commit: 70deb1e2 create test3.txt
+        To unhide this commit, run: git unhide 70deb1e2
+        "###);
     }
 
     {
@@ -287,11 +287,11 @@ fn test_hide_recursive() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["unhide", "-r", &test2_oid.to_string()])?;
         insta::assert_snapshot!(stdout, @r###"
-            Unhid commit: 96d1c37a create test2.txt
-            To hide this commit, run: git hide 96d1c37a
-            Unhid commit: 70deb1e2 create test3.txt
-            To hide this commit, run: git hide 70deb1e2
-            "###);
+        Unhid commit: 96d1c37a create test2.txt
+        To hide this commit, run: git hide 96d1c37a
+        Unhid commit: 70deb1e2 create test3.txt
+        To hide this commit, run: git hide 70deb1e2
+        "###);
     }
 
     {

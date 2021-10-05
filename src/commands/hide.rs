@@ -1,63 +1,19 @@
 //! Handle obsoleting commits when explicitly requested by the user (as opposed to
 //! automatically as the result of a rewrite operation).
 
-use std::collections::HashSet;
 use std::fmt::Write;
 use std::time::SystemTime;
 
+use eden_dag::DagAlgorithm;
 use tracing::instrument;
 
 use crate::core::eventlog::{CommitActivityStatus, Event};
 use crate::core::eventlog::{EventLogDb, EventReplayer};
 use crate::core::formatting::{printable_styled_string, Glyphs};
-use crate::core::graph::{
-    make_smartlog_graph, resolve_commits, Node, ResolveCommitsResult, SmartlogGraph,
-};
+use crate::core::graph::{resolve_commits, ResolveCommitsResult};
 use crate::core::metadata::{render_commit_metadata, CommitOidProvider};
-use crate::git::{Commit, Dag, Repo};
+use crate::git::{sort_commit_set, CommitSet, Dag, Repo};
 use crate::tui::Effects;
-
-fn recurse_on_commits_helper<
-    'repo,
-    'graph,
-    Condition: Fn(&'graph Node<'repo>) -> bool,
-    Callback: FnMut(&'graph Node<'repo>),
->(
-    graph: &'graph SmartlogGraph<'repo>,
-    condition: &Condition,
-    commit: &Commit<'repo>,
-    callback: &mut Callback,
-) {
-    let node = &graph[&commit.get_oid()];
-    if condition(node) {
-        callback(node);
-    };
-
-    for child_oid in node.children.iter() {
-        let child_commit = &graph[child_oid].commit;
-        recurse_on_commits_helper(graph, condition, child_commit, callback)
-    }
-}
-
-fn recurse_on_commits<'repo, F: Fn(&Node) -> bool>(
-    graph: &SmartlogGraph<'repo>,
-    commits: Vec<Commit<'repo>>,
-    condition: F,
-) -> eyre::Result<Vec<Commit<'repo>>> {
-    // Maintain ordering, since it's likely to be meaningful.
-    let mut result: Vec<Commit<'repo>> = Vec::new();
-    let mut seen_oids = HashSet::new();
-    for commit in commits {
-        recurse_on_commits_helper(graph, &condition, &commit, &mut |child_node| {
-            let child_commit = &child_node.commit;
-            if !seen_oids.contains(&child_commit.get_oid()) {
-                seen_oids.insert(child_commit.get_oid());
-                result.push(child_commit.clone());
-            }
-        });
-    }
-    Ok(result)
-}
 
 /// Hide the hashes provided on the command-line.
 #[instrument]
@@ -87,12 +43,20 @@ pub fn hide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::Re
         }
     };
 
-    let graph = make_smartlog_graph(effects, &repo, &dag, &event_replayer, event_cursor, false)?;
+    let commits: CommitSet = commits
+        .into_iter()
+        .map(|commit| commit.get_oid())
+        .rev()
+        .collect();
     let commits = if recursive {
-        recurse_on_commits(&graph, commits, |node| !node.is_obsolete)?
+        dag.query()
+            .descendants(commits)?
+            .difference(&dag.obsolete_commits)
     } else {
         commits
     };
+    let commits = dag.query().sort(&commits)?;
+    let commits = sort_commit_set(&repo, &dag, &commits)?;
 
     let timestamp = now.duration_since(SystemTime::UNIX_EPOCH)?.as_secs_f64();
     let event_tx_id = event_log_db.make_transaction_id(now, "hide")?;
@@ -162,12 +126,16 @@ pub fn unhide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::
         }
     };
 
-    let graph = make_smartlog_graph(effects, &repo, &dag, &event_replayer, event_cursor, false)?;
+    let commits: CommitSet = commits.into_iter().map(|commit| commit.get_oid()).collect();
     let commits = if recursive {
-        recurse_on_commits(&graph, commits, |node| node.is_obsolete)?
+        dag.query()
+            .descendants(commits)?
+            .intersection(&dag.obsolete_commits)
     } else {
         commits
     };
+    let commits = dag.query().sort(&commits)?;
+    let commits = sort_commit_set(&repo, &dag, &commits)?;
 
     let timestamp = now.duration_since(SystemTime::UNIX_EPOCH)?.as_secs_f64();
     let event_tx_id = event_log_db.make_transaction_id(now, "unhide")?;
