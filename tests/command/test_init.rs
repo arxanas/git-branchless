@@ -98,6 +98,7 @@ fn test_old_git_version_warning() -> eyre::Result<()> {
     Ok(())
 }
 
+#[cfg(unix)]
 #[test]
 fn test_init_basic() -> eyre::Result<()> {
     let git = make_git()?;
@@ -261,6 +262,7 @@ fn test_main_branch_not_found_error_message() -> eyre::Result<()> {
     Ok(())
 }
 
+#[cfg(unix)]
 #[test]
 fn test_init_uninstall() -> eyre::Result<()> {
     let git = make_git()?;
