@@ -14,24 +14,37 @@ use std::fmt::Write;
 use eyre::Context;
 use tracing::instrument;
 
-use crate::core::eventlog::{is_gc_ref, EventLogDb, EventReplayer};
-use crate::core::graph::{make_smartlog_graph, SmartlogGraph};
-use crate::git::{Dag, NonZeroOid, Reference, Repo};
+use crate::core::eventlog::{
+    is_gc_ref, CommitActivityStatus, EventCursor, EventLogDb, EventReplayer,
+};
+use crate::git::{NonZeroOid, Reference, Repo};
 use crate::tui::Effects;
 
 fn find_dangling_references<'repo>(
     repo: &'repo Repo,
-    graph: &SmartlogGraph,
+    event_replayer: &EventReplayer,
+    event_cursor: EventCursor,
 ) -> eyre::Result<Vec<Reference<'repo>>> {
     let mut result = Vec::new();
     for reference in repo.get_all_references()? {
         let reference_name = reference.get_name()?;
+        if !is_gc_ref(&reference_name) {
+            continue;
+        }
 
         // The graph only contains commits, so we don't need to handle the
         // case of the reference not peeling to a valid commit. (It might be
         // a reference to a different kind of object.)
-        if let Some(commit) = reference.peel_to_commit()? {
-            if is_gc_ref(&reference_name) && !graph.contains_key(&commit.get_oid()) {
+        let commit = match reference.peel_to_commit()? {
+            Some(commit) => commit,
+            None => continue,
+        };
+
+        match event_replayer.get_cursor_commit_activity_status(event_cursor, commit.get_oid()) {
+            CommitActivityStatus::Active => {
+                // Do nothing.
+            }
+            CommitActivityStatus::Inactive | CommitActivityStatus::Obsolete => {
                 result.push(reference)
             }
         }
@@ -71,33 +84,16 @@ pub fn mark_commit_reachable(repo: &Repo, commit_oid: NonZeroOid) -> eyre::Resul
 #[instrument]
 pub fn gc(effects: &Effects) -> eyre::Result<()> {
     let repo = Repo::from_current_dir()?;
-    let references_snapshot = repo.get_references_snapshot()?;
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
     let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
     let event_cursor = event_replayer.make_default_cursor();
-    let dag = Dag::open_and_sync(
-        effects,
-        &repo,
-        &event_replayer,
-        event_cursor,
-        &references_snapshot,
-    )?;
-
-    let graph = make_smartlog_graph(
-        effects,
-        &repo,
-        &dag,
-        &event_replayer,
-        event_replayer.make_default_cursor(),
-        true,
-    )?;
 
     writeln!(
         effects.get_output_stream(),
         "branchless: collecting garbage"
     )?;
-    let dangling_references = find_dangling_references(&repo, &graph)?;
+    let dangling_references = find_dangling_references(&repo, &event_replayer, event_cursor)?;
     for mut reference in dangling_references.into_iter() {
         reference.delete()?;
     }
