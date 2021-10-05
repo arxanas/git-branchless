@@ -2,13 +2,13 @@
 
 use std::fmt::Write;
 
-use tracing::{instrument, warn};
+use eden_dag::DagAlgorithm;
+use tracing::instrument;
 
 use crate::commands::smartlog::smartlog;
 use crate::core::eventlog::{EventLogDb, EventReplayer};
 use crate::core::formatting::printable_styled_string;
-use crate::core::graph::{make_smartlog_graph, SmartlogGraph};
-use crate::git::{Dag, GitRunInfo, NonZeroOid, Repo, RepoReferencesSnapshot};
+use crate::git::{sort_commit_set, CommitSet, Dag, GitRunInfo, NonZeroOid, Repo};
 use crate::tui::Effects;
 
 /// Go back a certain number of commits.
@@ -46,44 +46,10 @@ pub enum Towards {
 }
 
 #[instrument]
-fn advance_towards_main_branch(
+fn advance(
     effects: &Effects,
     repo: &Repo,
     dag: &Dag,
-    graph: &SmartlogGraph,
-    references_snapshot: &RepoReferencesSnapshot,
-    current_oid: NonZeroOid,
-) -> eyre::Result<(isize, NonZeroOid)> {
-    let path = dag.find_path_to_merge_base(
-        effects,
-        repo,
-        references_snapshot.main_branch_oid,
-        current_oid,
-    )?;
-    let path = match path {
-        None => return Ok((0, current_oid)),
-        Some(path) if path.len() == 1 => {
-            // Must be the case that `current_oid == main_branch_oid`.
-            return Ok((0, current_oid));
-        }
-        Some(path) => path,
-    };
-
-    for (i, commit) in (1..).zip(path.iter().rev().skip(1)) {
-        if graph.contains_key(&commit.get_oid()) {
-            return Ok((i, commit.get_oid()));
-        }
-    }
-
-    warn!("Failed to find graph commit when advancing towards main branch");
-    Ok((0, current_oid))
-}
-
-#[instrument]
-fn advance_towards_own_commit(
-    effects: &Effects,
-    repo: &Repo,
-    graph: &SmartlogGraph,
     current_oid: NonZeroOid,
     num_commits: isize,
     towards: Option<Towards>,
@@ -91,16 +57,21 @@ fn advance_towards_own_commit(
     let glyphs = effects.get_glyphs();
     let mut current_oid = current_oid;
     for i in 0..num_commits {
-        let children = &graph[&current_oid].children;
+        let children = dag
+            .query()
+            .children(CommitSet::from(current_oid))?
+            .difference(&dag.obsolete_commits);
+        let children = sort_commit_set(repo, dag, &children)?;
+
         current_oid = match (towards, children.as_slice()) {
             (_, []) => {
                 // It would also make sense to issue an error here, rather than
                 // silently stop going forward commits.
                 break;
             }
-            (_, [only_child_oid]) => *only_child_oid,
-            (Some(Towards::Newest), [.., newest_child_oid]) => *newest_child_oid,
-            (Some(Towards::Oldest), [oldest_child_oid, ..]) => *oldest_child_oid,
+            (_, [only_child]) => only_child.get_oid(),
+            (Some(Towards::Newest), [.., newest_child]) => newest_child.get_oid(),
+            (Some(Towards::Oldest), [oldest_child, ..]) => oldest_child.get_oid(),
             (None, [_, _, ..]) => {
                 writeln!(
                     effects.get_output_stream(),
@@ -108,7 +79,7 @@ fn advance_towards_own_commit(
                     i
                 )?;
 
-                for (j, child_oid) in (0..).zip(children.iter()) {
+                for (j, child) in (0..).zip(children.iter()) {
                     let descriptor = if j == 0 {
                         " (oldest)"
                     } else if j + 1 == children.len() {
@@ -121,10 +92,7 @@ fn advance_towards_own_commit(
                         effects.get_output_stream(),
                         "  {} {}{}",
                         glyphs.bullet_point,
-                        printable_styled_string(
-                            glyphs,
-                            repo.friendly_describe_commit_from_oid(*child_oid)?
-                        )?,
+                        printable_styled_string(glyphs, child.friendly_describe()?)?,
                         descriptor
                     )?;
                 }
@@ -164,14 +132,9 @@ pub fn next(
             eyre::bail!("No HEAD present; cannot calculate next commit");
         }
     };
-    let graph = make_smartlog_graph(effects, &repo, &dag, &event_replayer, event_cursor, true)?;
 
     let num_commits = num_commits.unwrap_or(1);
-    let (num_commits_traversed_towards_main_branch, current_oid) =
-        advance_towards_main_branch(effects, &repo, &dag, &graph, &references_snapshot, head_oid)?;
-    let num_commits = num_commits - num_commits_traversed_towards_main_branch;
-    let current_oid =
-        advance_towards_own_commit(effects, &repo, &graph, current_oid, num_commits, towards)?;
+    let current_oid = advance(effects, &repo, &dag, head_oid, num_commits, towards)?;
     let current_oid = match current_oid {
         None => return Ok(1),
         Some(current_oid) => current_oid,
