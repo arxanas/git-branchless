@@ -12,7 +12,7 @@ use tracing::instrument;
 
 use crate::core::config::get_restack_preserve_timestamps;
 use crate::core::eventlog::{EventLogDb, EventReplayer};
-use crate::core::graph::{make_smartlog_graph, resolve_commits, ResolveCommitsResult};
+use crate::core::graph::{resolve_commits, ResolveCommitsResult};
 use crate::core::rewrite::{
     execute_rebase_plan, BuildRebasePlanOptions, ExecuteRebasePlanOptions, RebasePlanBuilder,
 };
@@ -121,7 +121,6 @@ pub fn r#move(
         event_cursor,
         &references_snapshot,
     )?;
-    let graph = make_smartlog_graph(effects, &repo, &dag, &event_replayer, event_cursor, true)?;
 
     let source_oid = if should_resolve_base_commit {
         let merge_base_oid = dag.get_one_merge_base_oid(effects, &repo, source_oid, dest_oid)?;
@@ -133,8 +132,7 @@ pub fn r#move(
     let now = SystemTime::now();
     let event_tx_id = event_log_db.make_transaction_id(now, "move")?;
     let rebase_plan = {
-        let mut builder =
-            RebasePlanBuilder::new(&repo, &graph, &dag, references_snapshot.main_branch_oid);
+        let mut builder = RebasePlanBuilder::new(&repo, &dag, references_snapshot.main_branch_oid);
         builder.move_subtree(source_oid, dest_oid)?;
         builder.build(
             effects,

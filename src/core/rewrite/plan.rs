@@ -5,13 +5,13 @@ use std::ops::Sub;
 use std::path::PathBuf;
 
 use chashmap::CHashMap;
+use eden_dag::DagAlgorithm;
 use itertools::Itertools;
 use rayon::{prelude::*, ThreadPool, ThreadPoolBuilder};
 use tracing::{instrument, warn};
 
 use crate::core::formatting::printable_styled_string;
-use crate::core::graph::SmartlogGraph;
-use crate::git::{Commit, Dag, NonZeroOid, PatchId, Repo};
+use crate::git::{commit_set_to_vec, Commit, CommitSet, Dag, NonZeroOid, PatchId, Repo};
 use crate::tui::{Effects, OperationType};
 
 thread_local! {
@@ -153,7 +153,6 @@ struct BuildState {
 #[derive(Clone, Debug)]
 pub struct RebasePlanBuilder<'repo> {
     repo: &'repo Repo,
-    graph: &'repo SmartlogGraph<'repo>,
     dag: &'repo Dag,
     main_branch_oid: NonZeroOid,
 
@@ -241,15 +240,9 @@ impl BuildRebasePlanError {
 
 impl<'repo> RebasePlanBuilder<'repo> {
     /// Constructor.
-    pub fn new(
-        repo: &'repo Repo,
-        graph: &'repo SmartlogGraph,
-        dag: &'repo Dag,
-        main_branch_oid: NonZeroOid,
-    ) -> Self {
+    pub fn new(repo: &'repo Repo, dag: &'repo Dag, main_branch_oid: NonZeroOid) -> Self {
         RebasePlanBuilder {
             repo,
-            graph,
             dag,
             main_branch_oid,
             initial_constraints: Default::default(),
@@ -454,62 +447,22 @@ impl<'repo> RebasePlanBuilder<'repo> {
     #[instrument]
     fn collect_descendants(
         &self,
-        effects: &Effects,
+        visible_commits: &CommitSet,
         acc: &mut Vec<Constraint>,
         current_oid: NonZeroOid,
     ) -> eyre::Result<()> {
-        // FIXME: O(n^2) algorithm.
-        for (child_oid, node) in self.graph.iter() {
-            if node.commit.get_parent_oids().contains(&current_oid) {
-                acc.push(Constraint {
-                    parent_oid: current_oid,
-                    child_oid: *child_oid,
-                });
-                self.collect_descendants(effects, acc, *child_oid)?;
-            }
-        }
-
-        // Calculate the commits along the main branch to be moved if this is a
-        // constraint for a main branch commit.
-        let is_main = match self.graph.get(&current_oid) {
-            Some(node) => node.is_main,
-            None => true,
-        };
-        if is_main {
-            // This must be a main branch commit. We need to collect its
-            // descendants, which don't appear in the commit graph.
-            let path = self.dag.find_path_to_merge_base(
-                effects,
-                self.repo,
-                self.main_branch_oid,
-                current_oid,
-            )?;
-            if let Some(path) = path {
-                let mut parent_oid = current_oid;
-                for child_commit in path
-                    .into_iter()
-                    // Start from the node and traverse children towards the main branch.
-                    .rev()
-                    // Skip the starting node itself, as it already has a constraint.
-                    .skip(1)
-                {
-                    let child_oid = child_commit.get_oid();
-                    acc.push(Constraint {
-                        parent_oid,
-                        child_oid,
-                    });
-                    // We've hit a node that is in the graph, so further
-                    // constraints should be added by the above code path.
-                    //
-                    // FIXME: this may be incorrect for multi-parent commits,
-                    // since `find_path_to_merge_base` actually returns a
-                    // partially-ordered set of commits.
-                    if self.graph.contains_key(&child_oid) {
-                        break;
-                    }
-                    parent_oid = child_oid;
-                }
-            }
+        let children_oids = self
+            .dag
+            .query()
+            .children(CommitSet::from(current_oid))?
+            .intersection(visible_commits);
+        let children_oids = commit_set_to_vec(&children_oids)?;
+        for child_oid in children_oids {
+            acc.push(Constraint {
+                parent_oid: current_oid,
+                child_oid,
+            });
+            self.collect_descendants(visible_commits, acc, child_oid)?;
         }
         Ok(())
     }
@@ -518,15 +471,21 @@ impl<'repo> RebasePlanBuilder<'repo> {
     /// of a referred-to commit. This adds enough information to the constraint
     /// graph that it now represents the actual end-state commit graph that we
     /// want to create, not just a list of constraints.
-    fn add_descendant_constraints(
-        &self,
-        effects: &Effects,
-        state: &mut BuildState,
-    ) -> eyre::Result<()> {
+    fn add_descendant_constraints(&self, state: &mut BuildState) -> eyre::Result<()> {
         let all_descendants_of_constrained_nodes = {
+            let public_commits = self.dag.query_public_commits()?;
+            let active_heads = self.dag.query_active_heads(
+                &public_commits,
+                &self
+                    .dag
+                    .observed_commits
+                    .difference(&self.dag.obsolete_commits),
+            )?;
+            let visible_commits = self.dag.query().ancestors(active_heads)?;
+
             let mut acc = Vec::new();
             for parent_oid in state.constraints.values().flatten().cloned() {
-                self.collect_descendants(effects, &mut acc, parent_oid)?;
+                self.collect_descendants(&visible_commits, &mut acc, parent_oid)?;
             }
             acc
         };
@@ -646,7 +605,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
                 Self::get_constraints_sorted_for_debug(&state),
             );
         }
-        self.add_descendant_constraints(&effects, &mut state)?;
+        self.add_descendant_constraints(&mut state)?;
         if *dump_rebase_constraints {
             // For test: don't print to `effects.get_output_stream()`, as it will
             // be suppressed.

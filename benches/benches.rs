@@ -54,7 +54,7 @@ fn bench_rebase_plan(c: &mut Criterion) {
             .unwrap();
         println!("Built commit graph ({:?} elements)", graph.len());
 
-        let mut builder = RebasePlanBuilder::new(&repo, &graph, &dag, head_oid);
+        let mut builder = RebasePlanBuilder::new(&repo, &dag, head_oid);
         builder
             .move_subtree(later_commit.get_oid(), earlier_commit.get_oid())
             .unwrap();
