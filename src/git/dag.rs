@@ -1,5 +1,8 @@
 use std::borrow::Borrow;
+use std::cmp::Ordering;
+use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::iter::FromIterator;
 
 use eden_dag::ops::DagPersistent;
 use eden_dag::DagAlgorithm;
@@ -40,6 +43,30 @@ impl From<NonZeroOid> for CommitSet {
         let vertex = CommitVertex::from(oid);
         CommitSet::from_static_names([vertex])
     }
+}
+
+impl FromIterator<NonZeroOid> for CommitSet {
+    fn from_iter<T: IntoIterator<Item = NonZeroOid>>(iter: T) -> Self {
+        let oids = iter
+            .into_iter()
+            .map(CommitVertex::from)
+            .map(Ok)
+            .collect_vec();
+        CommitSet::from_iter(oids)
+    }
+}
+
+/// Eagerly convert a `CommitSet` into a `Vec<NonZeroOid>` by iterating over it.
+#[instrument]
+pub fn commit_set_to_vec(commit_set: &CommitSet) -> eyre::Result<Vec<NonZeroOid>> {
+    let mut result = Vec::new();
+    for vertex in commit_set.iter().wrap_err("Iterating commit set")? {
+        let vertex = vertex.wrap_err("Evaluating vertex")?;
+        let vertex = NonZeroOid::try_from(vertex.clone())
+            .wrap_err_with(|| format!("Converting vertex to NonZeroOid: {:?}", &vertex))?;
+        result.push(vertex);
+    }
+    Ok(result)
 }
 
 /// Interface to access the directed acyclic graph (DAG) representing Git's
@@ -385,4 +412,67 @@ impl std::fmt::Debug for Dag {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "<Dag>")
     }
+}
+
+/// Sort the given set of commits topologically. In the case of two commits
+/// being unorderable, sort them using a deterministic tie-breaking function.
+/// Commits which have been garbage collected and are no longer available in the
+/// repository are omitted.
+pub fn sort_commit_set<'repo>(
+    repo: &'repo Repo,
+    dag: &Dag,
+    commit_set: &CommitSet,
+) -> eyre::Result<Vec<Commit<'repo>>> {
+    let commit_oids = commit_set_to_vec(commit_set)?;
+    let mut commits: Vec<Commit> = {
+        let mut commits = Vec::new();
+        for commit_oid in commit_oids {
+            if let Some(commit) = repo.find_commit(commit_oid)? {
+                commits.push(commit)
+            }
+        }
+        commits
+    };
+
+    let commit_times: HashMap<NonZeroOid, git2::Time> = commits
+        .iter()
+        .map(|commit| (commit.get_oid(), commit.get_time()))
+        .collect();
+
+    commits.sort_by(|lhs, rhs| {
+        let lhs_vertex = CommitVertex::from(lhs.get_oid());
+        let rhs_vertex = CommitVertex::from(rhs.get_oid());
+        if dag
+            .query()
+            .is_ancestor(lhs_vertex.clone(), rhs_vertex.clone())
+            .unwrap_or_else(|_| {
+                warn!(
+                    ?lhs_vertex,
+                    ?rhs_vertex,
+                    "Could not calculate `is_ancestor`"
+                );
+                false
+            })
+        {
+            return Ordering::Less;
+        } else if dag
+            .query()
+            .is_ancestor(rhs_vertex.clone(), lhs_vertex.clone())
+            .unwrap_or_else(|_| {
+                warn!(
+                    ?lhs_vertex,
+                    ?rhs_vertex,
+                    "Could not calculate `is_ancestor`"
+                );
+                false
+            })
+        {
+            return Ordering::Greater;
+        }
+
+        (commit_times[&lhs.get_oid()], lhs.get_oid())
+            .cmp(&(commit_times[&rhs.get_oid()], rhs.get_oid()))
+    });
+
+    Ok(commits)
 }
