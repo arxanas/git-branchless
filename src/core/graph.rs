@@ -7,7 +7,6 @@ use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::ops::Deref;
 
-use eden_dag::DagAlgorithm;
 use tracing::instrument;
 
 use crate::core::eventlog::{EventCursor, EventReplayer};
@@ -53,7 +52,6 @@ pub struct Node<'repo> {
 }
 
 /// Graph of commits that the user is working on.
-#[derive(Default)]
 pub struct SmartlogGraph<'repo> {
     nodes: HashMap<NonZeroOid, Node<'repo>>,
 }
@@ -79,19 +77,18 @@ impl<'repo> Deref for SmartlogGraph<'repo> {
 /// (or else you won't get a good idea of the line of development that happened
 /// for this commit since the main branch).
 #[instrument]
-fn find_visible_commits<'repo>(
+fn walk_from_active_heads<'repo>(
     effects: &Effects,
     repo: &'repo Repo,
     dag: &Dag,
     event_replayer: &EventReplayer,
     event_cursor: EventCursor,
-    visible_heads: &CommitSet,
+    public_commits: &CommitSet,
+    active_heads: &CommitSet,
 ) -> eyre::Result<SmartlogGraph<'repo>> {
-    let public_commits = dag.query().ancestors(dag.main_branch_commit.clone())?;
-
     let mut graph: HashMap<NonZeroOid, Node> = {
         let mut result = HashMap::new();
-        for vertex in visible_heads.iter()? {
+        for vertex in active_heads.iter()? {
             let vertex = vertex?;
             let path_to_main_branch =
                 dag.find_path_to_main_branch(effects, CommitSet::from(vertex.clone()))?;
@@ -175,32 +172,24 @@ pub fn make_smartlog_graph<'repo>(
     let mut graph = {
         let (effects, _progress) = effects.start_operation(OperationType::WalkCommits);
 
-        // This is a large, lazy set. Be sure not to force evaluation of the
-        // entire set.
-        let public_commits = &dag.query().ancestors(dag.main_branch_commit.clone())?;
-
-        let visible_heads = if remove_commits {
-            dag.observed_commits.difference(&dag.obsolete_commits)
+        let public_commits = dag.query_public_commits()?;
+        let active_heads = if remove_commits {
+            dag.query_active_heads(
+                &public_commits,
+                &dag.observed_commits.difference(&dag.obsolete_commits),
+            )?
         } else {
-            dag.observed_commits.clone()
+            dag.query_active_heads(&public_commits, &dag.observed_commits.clone())?
         };
-        let visible_heads = dag.query().heads(visible_heads)?;
-        let visible_heads = visible_heads.difference(public_commits);
 
-        let anomalous_main_branch_commits = dag.obsolete_commits.intersection(public_commits);
-        let visible_heads = visible_heads
-            .union(&dag.head_commit)
-            .union(&dag.branch_commits)
-            .union(&dag.main_branch_commit)
-            .union(&anomalous_main_branch_commits);
-
-        find_visible_commits(
+        walk_from_active_heads(
             &effects,
             repo,
             dag,
             event_replayer,
             event_cursor,
-            &visible_heads,
+            &public_commits,
+            &active_heads,
         )?
     };
     sort_children(&mut graph);

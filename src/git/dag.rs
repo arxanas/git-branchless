@@ -337,6 +337,41 @@ impl Dag {
         &*self.inner.borrow()
     }
 
+    /// Return the set of commits which are public (checked into the main branch).
+    pub fn query_public_commits(&self) -> eyre::Result<CommitSet> {
+        let public_commits = self.query().ancestors(self.main_branch_commit.clone())?;
+        Ok(public_commits)
+    }
+
+    /// Query the set of active heads. This includes the heads of the set of
+    /// visible commits, plus any other commits which would be rendered in the
+    /// smartlog.
+    ///
+    /// This query includes heads which may be ancestor of other commits in the
+    /// set. For example, if `HEAD` points to a commit which is the ancestor of
+    /// a visible commit, both commits are included in the resulting set. This
+    /// is so that they can be explicitly rendered in the smartlog. To get the
+    /// set of visible commits, simply query for the ancestors of the set
+    /// resulting from this function.
+    pub fn query_active_heads(
+        &self,
+        public_commits: &CommitSet,
+        observed_commits: &CommitSet,
+    ) -> eyre::Result<CommitSet> {
+        let active_commits = observed_commits.clone();
+        let active_heads = self.query().heads(active_commits)?;
+        let active_heads = active_heads.difference(public_commits);
+
+        let anomalous_main_branch_commits = self.obsolete_commits.intersection(public_commits);
+        let active_heads = active_heads
+            .union(&self.head_commit)
+            .union(&self.branch_commits)
+            .union(&self.main_branch_commit)
+            .union(&anomalous_main_branch_commits);
+
+        Ok(active_heads)
+    }
+
     /// Find a shortest path between the given commits.
     ///
     /// This is particularly important for multi-parent commits (i.e. merge commits).

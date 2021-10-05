@@ -119,8 +119,7 @@ fn restack_commits(
     };
 
     let rebase_plan = {
-        let mut builder =
-            RebasePlanBuilder::new(repo, &graph, &dag, references_snapshot.main_branch_oid);
+        let mut builder = RebasePlanBuilder::new(repo, &dag, references_snapshot.main_branch_oid);
         for RebaseInfo {
             dest_oid,
             abandoned_child_oids,
