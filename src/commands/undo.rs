@@ -18,10 +18,9 @@ use cursive::{Cursive, CursiveRunnable, CursiveRunner};
 use eyre::Context;
 use tracing::instrument;
 
-use crate::commands::smartlog::render_graph;
+use crate::commands::smartlog::{make_smartlog_graph, render_graph};
 use crate::core::eventlog::{Event, EventCursor, EventLogDb, EventReplayer, EventTransactionId};
 use crate::core::formatting::{printable_styled_string, Pluralize, StyledStringBuilder};
-use crate::core::graph::make_smartlog_graph;
 use crate::core::metadata::{
     BranchesProvider, CommitMessageProvider, CommitOidProvider, DifferentialRevisionProvider,
     ObsolescenceExplanationProvider, RelativeTimeProvider,

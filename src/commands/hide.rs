@@ -10,9 +10,8 @@ use tracing::instrument;
 use crate::core::eventlog::{CommitActivityStatus, Event};
 use crate::core::eventlog::{EventLogDb, EventReplayer};
 use crate::core::formatting::{printable_styled_string, Glyphs};
-use crate::core::graph::{resolve_commits, ResolveCommitsResult};
 use crate::core::metadata::{render_commit_metadata, CommitOidProvider};
-use crate::git::{sort_commit_set, CommitSet, Dag, Repo};
+use crate::git::{resolve_commits, sort_commit_set, CommitSet, Dag, Repo, ResolveCommitsResult};
 use crate::tui::Effects;
 
 /// Hide the hashes provided on the command-line.

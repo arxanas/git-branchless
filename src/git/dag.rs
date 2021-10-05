@@ -511,3 +511,36 @@ pub fn sort_commit_set<'repo>(
 
     Ok(commits)
 }
+
+/// The result of attempting to resolve commits.
+pub enum ResolveCommitsResult<'repo> {
+    /// All commits were successfully resolved.
+    Ok {
+        /// The commits.
+        commits: Vec<Commit<'repo>>,
+    },
+
+    /// The first commit which couldn't be resolved.
+    CommitNotFound {
+        /// The identifier of the commit, as provided by the user.
+        commit: String,
+    },
+}
+
+/// Parse strings which refer to commits, such as:
+///
+/// - Full OIDs.
+/// - Short OIDs.
+/// - Reference names.
+#[instrument]
+pub fn resolve_commits(repo: &Repo, hashes: Vec<String>) -> eyre::Result<ResolveCommitsResult> {
+    let mut commits = Vec::new();
+    for hash in hashes {
+        let commit = match repo.revparse_single_commit(&hash)? {
+            Some(commit) => commit,
+            None => return Ok(ResolveCommitsResult::CommitNotFound { commit: hash }),
+        };
+        commits.push(commit)
+    }
+    Ok(ResolveCommitsResult::Ok { commits })
+}
