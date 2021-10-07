@@ -33,59 +33,59 @@ name = "benches"
 
 [[bin]]
 name = "git-branchless"
-path = "src/main.rs"
+path = "bin/entry_points/git-branchless.rs"
 
 ## Subcommand aliases ##
 [[bin]]
 name = "git-branchless-smartlog"
-path = "src/main.rs"
+path = "bin/entry_points/git-branchless-smartlog.rs"
 required-features = ["man-pages"]
 
 [[bin]]
 name = "git-branchless-hide"
-path = "src/main.rs"
+path = "bin/entry_points/git-branchless-hide.rs"
 required-features = ["man-pages"]
 
 [[bin]]
 name = "git-branchless-unhide"
-path = "src/main.rs"
+path = "bin/entry_points/git-branchless-unhide.rs"
 required-features = ["man-pages"]
 
 [[bin]]
 name = "git-branchless-prev"
-path = "src/main.rs"
+path = "bin/entry_points/git-branchless-prev.rs"
 required-features = ["man-pages"]
 
 [[bin]]
 name = "git-branchless-next"
-path = "src/main.rs"
+path = "bin/entry_points/git-branchless-next.rs"
 required-features = ["man-pages"]
 
 [[bin]]
 name = "git-branchless-restack"
-path = "src/main.rs"
+path = "bin/entry_points/git-branchless-restack.rs"
 required-features = ["man-pages"]
 
 [[bin]]
 name = "git-branchless-undo"
-path = "src/main.rs"
+path = "bin/entry_points/git-branchless-undo.rs"
 required-features = ["man-pages"]
 
 [[bin]]
 name = "git-branchless-move"
-path = "src/main.rs"
+path = "bin/entry_points/git-branchless-move.rs"
 required-features = ["man-pages"]
 
 ## Testing binaries ##
 [[bin]]
 name = "git-branchless-regression-test-cherry-pick"
-path = "bin/regression_test_cherry_pick.rs"
+path = "bin/testing/regression_test_cherry_pick.rs"
 required-features = ["integration-test-bin"]
 test = true
 
 [[bin]]
 name = "git-branchless-profile-changed-paths"
-path = "bin/profile_changed_paths.rs"
+path = "bin/testing/profile_changed_paths.rs"
 required-features = ["integration-test-bin"]
 test = true
 
