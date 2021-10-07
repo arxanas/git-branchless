@@ -212,7 +212,9 @@ fn test_main_branch_not_found_error_message() -> eyre::Result<()> {
     let (stdout, stderr) = git.run_with_options(
         &["smartlog"],
         &GitRunOptions {
-            expected_exit_code: 1,
+            // Exit code 101 indicates a panic.
+            expected_exit_code: 101,
+
             ..Default::default()
         },
     )?;
@@ -222,7 +224,8 @@ fn test_main_branch_not_found_error_message() -> eyre::Result<()> {
     let stderr = console::strip_ansi_codes(&stderr);
     let stderr = location_trace_re.replace_all(&stderr, "some/file/path.rs:123");
     insta::assert_snapshot!(stderr, @r###"
-    Error:
+    The application panicked (crashed).
+    Message:  A fatal error occurred:
        0: Could not find repository main branch
 
     Location:
@@ -243,6 +246,11 @@ fn test_main_branch_not_found_error_message() -> eyre::Result<()> {
 
         git config branchless.core.mainBranch <branch>
 
+
+    Backtrace omitted.
+    Run with RUST_BACKTRACE=1 environment variable to display it.
+    Run with RUST_BACKTRACE=full to include source snippets.
+    Location: some/file/path.rs:123
 
     Backtrace omitted.
     Run with RUST_BACKTRACE=1 environment variable to display it.
