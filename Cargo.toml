@@ -109,6 +109,7 @@ itertools = "0.10.1"
 lazy_static = "1.4.0"
 man = "0.3.0"
 os_str_bytes = "4.0.0"
+path-slash = "0.1.4"
 rayon = "1.5.1"
 regex = "1.5.4"
 rusqlite = { version = "0.25.3", features = ["bundled"] }

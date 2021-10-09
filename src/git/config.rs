@@ -1,5 +1,5 @@
 use std::fmt::Display;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use eyre::Context;
 use tracing::instrument;
@@ -128,7 +128,82 @@ impl GetConfigValue<PathBuf> for PathBuf {
     }
 }
 
+/// Read-only interface to Git's configuration.
+pub trait ConfigRead {
+    /// Convert this object into an owned, writable version of the
+    /// configuration. You should only use this if you know that it's safe to
+    /// write to the underlying configuration file.
+    fn into_config(self) -> Config;
+
+    /// Get a config key of one of various possible types.
+    fn get<V: GetConfigValue<V>, S: AsRef<str>>(&self, key: S) -> eyre::Result<Option<V>>;
+
+    /// Same as `get`, but uses a default value if the config key doesn't exist.
+    fn get_or<V: GetConfigValue<V>, S: AsRef<str>>(&self, key: S, default: V) -> eyre::Result<V> {
+        let result = self.get(key)?;
+        Ok(result.unwrap_or(default))
+    }
+
+    /// Same as `get`, but computes a default value if the config key doesn't exist.
+    fn get_or_else<V: GetConfigValue<V>, S: AsRef<str>, F: FnOnce() -> V>(
+        &self,
+        key: S,
+        default: F,
+    ) -> eyre::Result<V> {
+        let result = self.get(key)?;
+        match result {
+            Some(result) => Ok(result),
+            None => Ok(default()),
+        }
+    }
+}
+
+impl ConfigRead for Config {
+    fn into_config(self) -> Self {
+        self
+    }
+
+    /// Get a config key of one of various possible types.
+    fn get<V: GetConfigValue<V>, S: AsRef<str>>(&self, key: S) -> eyre::Result<Option<V>> {
+        V::get_from_config(self, key)
+    }
+}
+
+/// Write-only interface to Git's configuration.
+pub trait ConfigWrite {
+    /// Set the given config key to the given value.
+    fn set(&mut self, key: impl AsRef<str>, value: impl Into<ConfigValue>) -> eyre::Result<()>;
+
+    /// Remove the given key from the configuration.
+    fn remove(&mut self, key: impl AsRef<str>) -> eyre::Result<()>;
+
+    /// Add or set a multivariable entry with the given to the given value. If a
+    /// key-value pair whose value matches the provided regex already exists,
+    /// that entry is overwritten.
+    fn set_multivar(
+        &mut self,
+        key: impl AsRef<str>,
+        regex: impl AsRef<str>,
+        value: impl AsRef<str>,
+    ) -> eyre::Result<()>;
+
+    /// Remove the multivariable entry with the provided key and whose value
+    /// matches the provided regex. If such a key is not present, does nothing.
+    fn remove_multivar(&mut self, key: impl AsRef<str>, regex: impl AsRef<str>)
+        -> eyre::Result<()>;
+}
+
 impl Config {
+    /// Open a configuration instance backed by the provided file. Unlike a
+    /// configuration instance opened directly from the Git repository, this
+    /// instance won't have a chain of parent configuration files to fall back
+    /// to for entry lookup.
+    #[instrument]
+    pub fn open(path: &Path) -> eyre::Result<Self> {
+        let inner = git2::Config::open(path).map_err(wrap_git_error)?;
+        Ok(Config { inner })
+    }
+
     #[instrument]
     fn set_inner(&mut self, key: &str, value: ConfigValue) -> eyre::Result<()> {
         match &value.inner {
@@ -141,43 +216,6 @@ impl Config {
         }
     }
 
-    /// Set the given config key to the given value.
-    pub fn set(
-        &mut self,
-        key: impl AsRef<str> + std::fmt::Debug,
-        value: impl Into<ConfigValue>,
-    ) -> eyre::Result<()> {
-        self.set_inner(key.as_ref(), value.into())
-    }
-
-    /// Get a config key of one of various possible types.
-    pub fn get<V: GetConfigValue<V>, S: AsRef<str>>(&self, key: S) -> eyre::Result<Option<V>> {
-        V::get_from_config(self, key)
-    }
-
-    /// Same as `get`, but uses a default value if the config key doesn't exist.
-    pub fn get_or<V: GetConfigValue<V>, S: AsRef<str>>(
-        &self,
-        key: S,
-        default: V,
-    ) -> eyre::Result<V> {
-        let result = self.get(key)?;
-        Ok(result.unwrap_or(default))
-    }
-
-    /// Same as `get`, but computes a default value if the config key doesn't exist.
-    pub fn get_or_else<V: GetConfigValue<V>, S: AsRef<str>, F: FnOnce() -> V>(
-        &self,
-        key: S,
-        default: F,
-    ) -> eyre::Result<V> {
-        let result = self.get(key)?;
-        match result {
-            Some(result) => Ok(result),
-            None => Ok(default()),
-        }
-    }
-
     #[instrument]
     fn remove_inner(&mut self, key: &str) -> eyre::Result<()> {
         self.inner
@@ -187,8 +225,51 @@ impl Config {
         Ok(())
     }
 
-    /// Remove the given key from the configuration.
-    pub fn remove(&mut self, key: impl AsRef<str>) -> eyre::Result<()> {
+    #[instrument]
+    fn set_multivar_inner(&mut self, key: &str, regex: &str, value: &str) -> eyre::Result<()> {
+        self.inner
+            .set_multivar(key, regex, value)
+            .map_err(wrap_git_error)
+    }
+
+    #[instrument]
+    fn remove_multivar_inner(&mut self, key: &str, regex: &str) -> eyre::Result<()> {
+        let result = self.inner.remove_multivar(key, regex);
+        let result = match result {
+            Err(err) if err.code() == git2::ErrorCode::NotFound => {
+                // Do nothing.
+                Ok(())
+            }
+            result => result,
+        };
+        let result = result.map_err(wrap_git_error)?;
+        Ok(result)
+    }
+}
+
+impl ConfigWrite for Config {
+    fn set(&mut self, key: impl AsRef<str>, value: impl Into<ConfigValue>) -> eyre::Result<()> {
+        self.set_inner(key.as_ref(), value.into())
+    }
+
+    fn remove(&mut self, key: impl AsRef<str>) -> eyre::Result<()> {
         self.remove_inner(key.as_ref())
+    }
+
+    fn set_multivar(
+        &mut self,
+        key: impl AsRef<str>,
+        regex: impl AsRef<str>,
+        value: impl AsRef<str>,
+    ) -> eyre::Result<()> {
+        self.set_multivar_inner(key.as_ref(), regex.as_ref(), value.as_ref())
+    }
+
+    fn remove_multivar(
+        &mut self,
+        key: impl AsRef<str>,
+        regex: impl AsRef<str>,
+    ) -> eyre::Result<()> {
+        self.remove_multivar_inner(key.as_ref(), regex.as_ref())
     }
 }
