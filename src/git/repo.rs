@@ -27,12 +27,11 @@ use tracing::{instrument, warn};
 
 use crate::core::config::get_main_branch_name;
 use crate::core::metadata::{render_commit_metadata, CommitMessageProvider, CommitOidProvider};
-use crate::git::config::Config;
+use crate::git::config::{Config, ConfigRead};
 use crate::git::oid::{make_non_zero_oid, MaybeZeroOid, NonZeroOid};
-use crate::git::tree::{dehydrate_tree, get_changed_paths_between_trees, hydrate_tree};
+use crate::git::run::GitRunInfo;
+use crate::git::tree::{dehydrate_tree, get_changed_paths_between_trees, hydrate_tree, Tree};
 use crate::tui::{Effects, OperationType};
-
-use super::{GitRunInfo, Tree};
 
 /// Convert a `git2::Error` into an `eyre::Error` with an auto-generated message.
 pub(super) fn wrap_git_error(error: git2::Error) -> eyre::Error {
@@ -198,14 +197,24 @@ impl Repo {
     }
 
     /// Get the configuration object for the repository.
+    ///
+    /// **Warning**: This object should only be used for read operations. Write
+    /// operations should go to the `config` file under the `.git/branchless`
+    /// directory.
     #[instrument]
-    pub fn get_config(&self) -> eyre::Result<Config> {
+    pub fn get_readonly_config(&self) -> eyre::Result<impl ConfigRead> {
         let config = self
             .inner
             .config()
             .map_err(wrap_git_error)
             .wrap_err("Creating `git2::Config` object")?;
-        Ok(config.into())
+        Ok(Config::from(config))
+    }
+
+    /// Get the file where git-branchless-specific Git configuration is stored.
+    #[instrument]
+    pub fn get_config_path(&self) -> PathBuf {
+        self.get_path().join("branchless").join("config")
     }
 
     /// Get the directory where the DAG for the repository is stored.

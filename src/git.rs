@@ -7,7 +7,7 @@ mod repo;
 mod run;
 mod tree;
 
-pub use config::{Config, ConfigValue};
+pub use config::{Config, ConfigRead, ConfigValue, ConfigWrite};
 pub use dag::{
     commit_set_to_vec, resolve_commits, sort_commit_set, CommitSet, CommitVertex, Dag,
     ResolveCommitsResult,

@@ -6,10 +6,11 @@ use std::path::{Path, PathBuf};
 
 use console::style;
 use eyre::Context;
+use path_slash::PathExt;
 use tracing::{instrument, warn};
 
 use crate::core::config::get_core_hooks_path;
-use crate::git::{Config, ConfigValue, GitRunInfo, GitVersion, Repo};
+use crate::git::{Config, ConfigRead, ConfigWrite, GitRunInfo, GitVersion, Repo};
 use crate::opts::write_man_pages;
 use crate::tui::Effects;
 
@@ -272,12 +273,6 @@ fn install_aliases(
     git_run_info: &GitRunInfo,
 ) -> eyre::Result<()> {
     for (from, to) in ALL_ALIASES {
-        writeln!(
-            effects.get_output_stream(),
-            "Installing alias (non-global): git {} -> git branchless {}",
-            from,
-            to
-        )?;
         install_alias(repo, config, from, to)?;
     }
 
@@ -313,21 +308,6 @@ the branchless workflow will work properly.
 }
 
 #[instrument]
-fn uninstall_aliases(effects: &Effects, config: &mut Config) -> eyre::Result<()> {
-    for (from, _to) in ALL_ALIASES {
-        writeln!(
-            effects.get_output_stream(),
-            "Uninstalling alias (non-global): git {}",
-            from
-        )?;
-        config
-            .remove(&format!("alias.{}", from))
-            .wrap_err_with(|| format!("Uninstalling alias {}", from))?;
-    }
-    Ok(())
-}
-
-#[instrument]
 fn install_man_pages(effects: &Effects, repo: &Repo) -> eyre::Result<()> {
     let should_install = cfg!(feature = "man-pages");
     if !should_install {
@@ -337,32 +317,6 @@ fn install_man_pages(effects: &Effects, repo: &Repo) -> eyre::Result<()> {
     let man_dir = repo.get_man1_dir();
     write_man_pages(&man_dir).wrap_err_with(|| format!("Writing man-pages to: {:?}", &man_dir))?;
     Ok(())
-}
-
-#[instrument(skip(value))]
-fn set_config(
-    effects: &Effects,
-    config: &mut Config,
-    name: &str,
-    value: impl Into<ConfigValue>,
-) -> eyre::Result<()> {
-    fn inner(
-        effects: &Effects,
-        config: &mut Config,
-        name: &str,
-        value: ConfigValue,
-    ) -> eyre::Result<()> {
-        writeln!(
-            effects.get_output_stream(),
-            "Setting config (non-global): {} = {}",
-            name,
-            value
-        )?;
-        config.set(name, value)?;
-        Ok(())
-    }
-
-    inner(effects, config, name, value.into())
 }
 
 #[instrument(skip(r#in))]
@@ -414,29 +368,84 @@ fn set_configs(
             }
         }
     };
-    set_config(
-        effects,
-        config,
-        "branchless.core.mainBranch",
-        main_branch_name,
-    )?;
-    set_config(effects, config, "advice.detachedHead", false)?;
+
+    config.set("branchless.core.mainBranch", main_branch_name)?;
+    config.set("advice.detachedHead", false)?;
+
     Ok(())
 }
 
+const INCLUDE_PATH_REGEX: &str = r"^branchless/";
+
+/// Create an isolated configuration file under `.git/branchless`, which is then
+/// included into the repository's main configuration file. This makes it easier
+/// to uninstall our settings (or for the user to override our settings) without
+/// needing to modify the user's configuration file.
 #[instrument]
-fn unset_configs(effects: &Effects, config: &mut Config) -> eyre::Result<()> {
-    for key in ["branchless.core.mainBranch", "advice.detachedHead"] {
-        writeln!(
-            effects.get_output_stream(),
-            "Unsetting config (non-global): {}",
-            key
-        )?;
-        config
-            .remove(key)
-            .wrap_err_with(|| format!("Unsetting config {}", key))?;
-    }
-    Ok(())
+fn create_isolated_config(
+    effects: &Effects,
+    repo: &Repo,
+    mut parent_config: Config,
+) -> eyre::Result<Config> {
+    let config_path = repo.get_config_path();
+    let config_dir = config_path
+        .parent()
+        .ok_or_else(|| eyre::eyre!("Could not get parent config directory"))?;
+    std::fs::create_dir_all(config_dir).wrap_err("Creating config path parent")?;
+
+    let config = Config::open(&config_path)?;
+    let config_path_relative = config_path
+        .strip_prefix(repo.get_path())
+        .wrap_err("Getting relative config path")?;
+    // Be careful when setting paths on Windows. Since the path would have a
+    // backslash, naively using it produces
+    //
+    //    Git error GenericError: invalid escape at config
+    //
+    // We need to convert it to forward-slashes for Git. See also
+    // https://stackoverflow.com/a/28520596.
+    let config_path_relative = config_path_relative.to_slash().ok_or_else(|| {
+        eyre::eyre!(
+            "Could not convert config path to UTF-8 string: {:?}",
+            &config_path_relative
+        )
+    })?;
+    parent_config.set_multivar("include.path", INCLUDE_PATH_REGEX, config_path_relative)?;
+
+    writeln!(
+        effects.get_output_stream(),
+        "Created config file at {}",
+        config_path.to_string_lossy()
+    )?;
+    Ok(config)
+}
+
+/// Delete the configuration file created by `create_isolated_config` and remove
+/// its `include` directive from the repository's configuration file.
+#[instrument]
+fn delete_isolated_config(
+    effects: &Effects,
+    repo: &Repo,
+    mut parent_config: Config,
+) -> eyre::Result<()> {
+    writeln!(
+        effects.get_output_stream(),
+        "Removing config file: {}",
+        repo.get_config_path().to_string_lossy()
+    )?;
+    parent_config.remove_multivar("include.path", INCLUDE_PATH_REGEX)?;
+    let result = match std::fs::remove_file(repo.get_config_path()) {
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+            writeln!(
+                effects.get_output_stream(),
+                "(The config file was not present, ignoring)"
+            )?;
+            Ok(())
+        }
+        result => result,
+    };
+    let result = result.wrap_err("Deleting isolated config")?;
+    Ok(result)
 }
 
 /// Initialize `git-branchless` in the current repo.
@@ -444,7 +453,9 @@ fn unset_configs(effects: &Effects, config: &mut Config) -> eyre::Result<()> {
 pub fn init(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<()> {
     let mut in_ = BufReader::new(stdin());
     let mut repo = Repo::from_current_dir()?;
-    let mut config = repo.get_config()?;
+    let readonly_config = repo.get_readonly_config()?;
+    let mut config = create_isolated_config(effects, &repo, readonly_config.into_config())?;
+
     set_configs(&mut in_, effects, &repo, &mut config)?;
     install_hooks(effects, &repo)?;
     install_aliases(effects, &mut repo, &mut config, git_run_info)?;
@@ -468,10 +479,9 @@ pub fn init(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<()> {
 #[instrument]
 pub fn uninstall(effects: &Effects) -> eyre::Result<()> {
     let repo = Repo::from_current_dir()?;
-    let mut config = repo.get_config().wrap_err("Getting repo config")?;
-    unset_configs(effects, &mut config)?;
+    let readonly_config = repo.get_readonly_config().wrap_err("Getting repo config")?;
+    delete_isolated_config(effects, &repo, readonly_config.into_config())?;
     uninstall_hooks(effects, &repo)?;
-    uninstall_aliases(effects, &mut config)?;
     Ok(())
 }
 
