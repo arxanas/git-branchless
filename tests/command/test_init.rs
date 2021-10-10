@@ -256,3 +256,73 @@ fn test_init_uninstall() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[cfg(feature = "man-pages")]
+#[test]
+fn test_man_viewer_installed() -> eyre::Result<()> {
+    use std::collections::HashMap;
+
+    use itertools::Itertools;
+
+    // The `man` executable isn't installed for most Windows Git installations.
+    // In particular, it's not installed on Github Actions.  It might be
+    // possible to install it manually, but I didn't bother.
+    //
+    // See https://stackoverflow.com/q/5517564,
+    // https://github.com/swcarpentry/shell-novice/issues/249
+    let should_skip = cfg!(windows);
+    if should_skip {
+        return Ok(());
+    }
+
+    let git = make_git()?;
+    git.init_repo()?;
+
+    // `env` and `man` are not on the sanitized testing `PATH`, so use the
+    // caller's `PATH` instead.
+    let testing_path = git.get_path_for_env();
+    let testing_path = std::env::split_paths(&testing_path).collect_vec();
+    let inherited_path = std::env::var_os("PATH").unwrap();
+    let inherited_path = std::env::split_paths(&inherited_path).collect_vec();
+    let env = {
+        let mut env = HashMap::new();
+        let full_path = std::env::join_paths(testing_path.iter().chain(inherited_path.iter()))?;
+        let full_path = full_path.to_str().unwrap().to_owned();
+        env.insert("PATH".to_string(), full_path);
+        env
+    };
+
+    {
+        let (stdout, _stderr) = git.run_with_options(
+            &["smartlog", "--help"],
+            &GitRunOptions {
+                env: env.clone(),
+                ..Default::default()
+            },
+        )?;
+        let first_word = stdout.split_whitespace().next();
+        insta::assert_debug_snapshot!(first_word, @r###"
+        Some(
+            "GIT-BRANCHLESS-SMARTLOG(1)",
+        )
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run_with_options(
+            &["init", "--help"],
+            &GitRunOptions {
+                env,
+                ..Default::default()
+            },
+        )?;
+        let first_word = stdout.split_whitespace().next();
+        insta::assert_debug_snapshot!(first_word, @r###"
+        Some(
+            "GIT-INIT(1)",
+        )
+        "###);
+    }
+
+    Ok(())
+}
