@@ -238,22 +238,23 @@ pub struct Opts {
 
 /// Generate and write man-pages into the specified directory.
 ///
-/// The generated files are named things like `git-branchless-smartlog.1`, so
-/// this directory should be of the form `path/to/man/man1`, to ensure that
-/// these files get generated into the correct man-page section.
+/// The generated files are named things like `man1/git-branchless-smartlog.1`,
+/// so this directory should be of the form `path/to/man`, to ensure that these
+/// files get generated into the correct man-page section.
 pub fn write_man_pages(man_dir: &Path) -> std::io::Result<()> {
-    std::fs::create_dir_all(&man_dir)?;
+    let man1_dir = man_dir.join("man1");
+    std::fs::create_dir_all(&man1_dir)?;
 
     let app = Opts::into_app();
-    generate_man_page(man_dir, "git-branchless", &app)?;
+    generate_man_page(&man1_dir, "git-branchless", &app)?;
     for subcommand in app.get_subcommands() {
         let subcommand_exe_name = format!("git-branchless-{}", subcommand.get_name());
-        generate_man_page(man_dir, &subcommand_exe_name, subcommand)?;
+        generate_man_page(&man1_dir, &subcommand_exe_name, subcommand)?;
     }
     Ok(())
 }
 
-fn generate_man_page(man_dir: &Path, name: &str, command: &App) -> std::io::Result<()> {
+fn generate_man_page(man1_dir: &Path, name: &str, command: &App) -> std::io::Result<()> {
     let mut manual = Manual::new(name);
     if let Some(about) = command.get_about() {
         manual = manual.about(about);
@@ -312,7 +313,7 @@ fn generate_man_page(man_dir: &Path, name: &str, command: &App) -> std::io::Resu
 
     // FIXME: implement rest of man-page rendering.
 
-    let output_path = man_dir.join(format!("{}.1", name));
+    let output_path = man1_dir.join(format!("{}.1", name));
     std::fs::write(output_path, manual.render())?;
     Ok(())
 }

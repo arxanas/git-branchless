@@ -223,11 +223,12 @@ impl Repo {
         self.get_path().join("branchless").join("dag")
     }
 
-    /// Get the directory to store man-pages. Note that this is the `man/man1`
-    /// directory, specifically referring to the section 1 manual pages.
+    /// Get the directory to store man-pages. Note that this is the `man`
+    /// directory, and not a subsection thereof. `git-branchless` man-pages must
+    /// go into the `man/man1` directory to be found by `man`.
     #[instrument]
-    pub fn get_man1_dir(&self) -> PathBuf {
-        self.get_path().join("branchless").join("man").join("man1")
+    pub fn get_man_dir(&self) -> PathBuf {
+        self.get_path().join("branchless").join("man")
     }
 
     /// Get the connection to the SQLite database for this repository.
