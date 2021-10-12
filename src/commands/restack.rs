@@ -70,7 +70,7 @@ use crate::core::rewrite::{
 };
 use crate::git::{
     resolve_commits, sort_commit_set, CommitSet, Dag, GitRunInfo, NonZeroOid, Repo,
-    RepoReferencesSnapshot, ResolveCommitsResult,
+    ResolveCommitsResult,
 };
 use crate::opts::MoveOptions;
 use crate::tui::Effects;
@@ -80,7 +80,6 @@ fn restack_commits(
     effects: &Effects,
     repo: &Repo,
     dag: &Dag,
-    references_snapshot: &RepoReferencesSnapshot,
     event_replayer: &EventReplayer,
     event_cursor: EventCursor,
     git_run_info: &GitRunInfo,
@@ -118,7 +117,7 @@ fn restack_commits(
     };
 
     let rebase_plan = {
-        let mut builder = RebasePlanBuilder::new(repo, dag, references_snapshot.main_branch_oid);
+        let mut builder = RebasePlanBuilder::new(repo, dag);
         for RebaseInfo {
             dest_oid,
             abandoned_child_oids,
@@ -290,7 +289,6 @@ pub fn restack(
         effects,
         &repo,
         &dag,
-        &references_snapshot,
         &event_replayer,
         event_cursor,
         git_run_info,

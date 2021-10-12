@@ -136,7 +136,7 @@ pub fn r#move(
     let now = SystemTime::now();
     let event_tx_id = event_log_db.make_transaction_id(now, "move")?;
     let rebase_plan = {
-        let mut builder = RebasePlanBuilder::new(&repo, &dag, references_snapshot.main_branch_oid);
+        let mut builder = RebasePlanBuilder::new(&repo, &dag);
         builder.move_subtree(source_oid, dest_oid)?;
         builder.build(
             effects,

@@ -49,7 +49,7 @@ fn bench_rebase_plan(c: &mut Criterion) {
         )
         .unwrap();
 
-        let mut builder = RebasePlanBuilder::new(&repo, &dag, head_oid);
+        let mut builder = RebasePlanBuilder::new(&repo, &dag);
         builder
             .move_subtree(later_commit.get_oid(), earlier_commit.get_oid())
             .unwrap();
