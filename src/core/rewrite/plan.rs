@@ -154,7 +154,6 @@ struct BuildState {
 pub struct RebasePlanBuilder<'repo> {
     repo: &'repo Repo,
     dag: &'repo Dag,
-    main_branch_oid: NonZeroOid,
 
     /// There is a mapping from from `x` to `y` if `x` must be applied before
     /// `y`.
@@ -240,11 +239,10 @@ impl BuildRebasePlanError {
 
 impl<'repo> RebasePlanBuilder<'repo> {
     /// Constructor.
-    pub fn new(repo: &'repo Repo, dag: &'repo Dag, main_branch_oid: NonZeroOid) -> Self {
+    pub fn new(repo: &'repo Repo, dag: &'repo Dag) -> Self {
         RebasePlanBuilder {
             repo,
             dag,
-            main_branch_oid,
             initial_constraints: Default::default(),
         }
     }
