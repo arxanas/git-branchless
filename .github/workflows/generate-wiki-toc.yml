@@ -1,0 +1,30 @@
+name: 'Generate Wiki tables of contents'
+
+on:
+- gollum
+- workflow_dispatch
+
+jobs:
+  "generate-toc":
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          repository: ${{ github.repository }}.wiki
+          token: ${{ secrets.WIKI_UPDATE_TOC_TOKEN }}
+
+      - run: |
+          curl -O https://raw.githubusercontent.com/ekalinin/github-markdown-toc/17ec0170cdb8ac5c6fc4aa265087a1067e930b0a/gh-md-toc
+          chmod +x gh-md-toc
+
+          # Avoid recursive Actions invocations.
+          if git show -s --format='%B' | egrep '^Updated '; then
+            # Make sure to insert tables of contents individually, so that they
+            # don't include the name of the document in the item links.
+            for i in $(grep -l '<!--ts-->' *.md); do ./gh-md-toc --insert --no-backup "$i"; done
+          fi
+
+      - uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: Auto update Wiki tables of contents
+          file_pattern: "*.md"
