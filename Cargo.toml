@@ -20,7 +20,7 @@ version = "0.3.5"
 debug = 0
 
 [features]
-default = ["man-pages"]
+default = []
 man-pages = []
 integration-test-bin = []
 

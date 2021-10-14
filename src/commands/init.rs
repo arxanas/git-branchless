@@ -556,6 +556,11 @@ contents 3
 
     #[test]
     fn test_all_alias_binaries_exist() {
+        let all_alias_binaries_installed = cfg!(feature = "man-pages");
+        if !all_alias_binaries_installed {
+            return;
+        }
+
         for (_from, to) in ALL_ALIASES {
             let executable_name = format!("git-branchless-{}", to);
 
