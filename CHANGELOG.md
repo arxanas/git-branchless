@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.6] - 2021-10-14
+
 ### Added
 
 - The `-C` option can be used to set the working directory for `git-branchless` commands.
