@@ -326,8 +326,8 @@ mod tests {
                 .join("post-rewrite"),
             r#"#!/bin/sh
                    # This won't work unless we're running the hook in the Git working copy.
-                   echo "Contents of test1.txt:"
-                   cat test1.txt
+                   echo "Check if test1.txt exists"
+                   [ -f test1.txt ] && echo "test1.txt exists"
                    "#,
         )?;
 
@@ -337,8 +337,8 @@ mod tests {
             insta::assert_snapshot!(stderr, @r###"
             branchless: processing 2 updates: branch master, ref HEAD
             branchless: processed commit: f23bf8f7 foo
-            Contents of test1.txt:
-            test1 contents
+            Check if test1.txt exists
+            test1.txt exists
             "###);
             insta::assert_snapshot!(stdout, @r###"
                 [master f23bf8f] foo
