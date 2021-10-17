@@ -1,6 +1,6 @@
 //! The command-line options for `git-branchless`.
 
-use clap::{App, ArgEnum, IntoApp, Parser};
+use clap::{App, ArgEnum, Args, IntoApp, Parser};
 use man::Arg;
 use std::path::{Path, PathBuf};
 
@@ -11,6 +11,30 @@ pub enum WrappedCommand {
     /// The wrapped command.
     #[clap(external_subcommand)]
     WrappedCommand(Vec<String>),
+}
+
+/// Options for moving commits.
+#[derive(Args, Debug)]
+pub struct MoveOptions {
+    /// Only attempt to perform an in-memory rebase. If it fails, do not
+    /// attempt an on-disk rebase.
+    #[clap(long = "in-memory", conflicts_with = "force-on-disk")]
+    pub force_in_memory: bool,
+
+    /// Skip attempting to use an in-memory rebase, and try an
+    /// on-disk rebase directly.
+    #[clap(long = "on-disk")]
+    pub force_on_disk: bool,
+
+    /// Debugging option. Print the constraints used to create the rebase
+    /// plan before executing it.
+    #[clap(long = "debug-dump-rebase-constraints")]
+    pub dump_rebase_constraints: bool,
+
+    /// Debugging option. Print the rebase plan that will be executed before
+    /// executing it.
+    #[clap(long = "debug-dump-rebase-plan")]
+    pub dump_rebase_plan: bool,
 }
 
 /// FIXME: write man-page text
@@ -110,25 +134,9 @@ pub enum Command {
         #[clap(short = 'd', long = "dest")]
         dest: Option<String>,
 
-        /// Only attempt to perform an in-memory rebase. If it fails, do not
-        /// attempt an on-disk rebase.
-        #[clap(long = "in-memory", conflicts_with = "force-on-disk")]
-        force_in_memory: bool,
-
-        /// Skip attempting to use an in-memory rebase, and try an
-        /// on-disk rebase directly.
-        #[clap(long = "on-disk")]
-        force_on_disk: bool,
-
-        /// Debugging option. Print the constraints used to create the rebase
-        /// plan before executing it.
-        #[clap(long = "debug-dump-rebase-constraints")]
-        dump_rebase_constraints: bool,
-
-        /// Debugging option. Print the rebase plan that will be executed before
-        /// executing it.
-        #[clap(long = "debug-dump-rebase-plan")]
-        dump_rebase_plan: bool,
+        /// Options for moving commits.
+        #[clap(flatten)]
+        move_options: MoveOptions,
     },
 
     /// Fix up commits abandoned by a previous rewrite operation.
@@ -137,25 +145,9 @@ pub enum Command {
         /// restacked. If not provided, all abandoned commits are restacked.
         commits: Vec<String>,
 
-        /// Only attempt to perform an in-memory rebase. If it fails, do not
-        /// attempt an on-disk rebase.
-        #[clap(long = "in-memory", conflicts_with = "force-on-disk")]
-        force_in_memory: bool,
-
-        /// Skip attempting to use an in-memory rebase, and try an
-        /// on-disk rebase directly.
-        #[clap(long = "on-disk")]
-        force_on_disk: bool,
-
-        /// Debugging option. Print the constraints used to create the rebase
-        /// plan before executing it.
-        #[clap(long = "debug-dump-rebase-constraints")]
-        dump_rebase_constraints: bool,
-
-        /// Debugging option. Print the rebase plan that will be executed before
-        /// executing it.
-        #[clap(long = "debug-dump-rebase-plan")]
-        dump_rebase_plan: bool,
+        /// Options for moving commits.
+        #[clap(flatten)]
+        move_options: MoveOptions,
     },
 
     /// Browse or return to a previous state of the repository.

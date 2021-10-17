@@ -72,6 +72,7 @@ use crate::git::{
     resolve_commits, sort_commit_set, CommitSet, Dag, GitRunInfo, NonZeroOid, Repo,
     RepoReferencesSnapshot, ResolveCommitsResult,
 };
+use crate::opts::MoveOptions;
 use crate::tui::Effects;
 
 #[instrument(skip(commits))]
@@ -225,10 +226,7 @@ pub fn restack(
     effects: &Effects,
     git_run_info: &GitRunInfo,
     commits: Vec<String>,
-    force_in_memory: bool,
-    force_on_disk: bool,
-    dump_rebase_constraints: bool,
-    dump_rebase_plan: bool,
+    move_options: &MoveOptions,
 ) -> eyre::Result<isize> {
     let now = SystemTime::now();
     let repo = Repo::from_current_dir()?;
@@ -261,6 +259,12 @@ pub fn restack(
         Some(commits.into_iter().map(|commit| commit.get_oid()).collect())
     };
 
+    let MoveOptions {
+        force_in_memory,
+        force_on_disk,
+        dump_rebase_constraints,
+        dump_rebase_plan,
+    } = *move_options;
     let build_options = BuildRebasePlanOptions {
         dump_rebase_constraints,
         dump_rebase_plan,

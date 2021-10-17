@@ -18,6 +18,7 @@ use crate::core::rewrite::{
 use crate::git::{
     resolve_commits, CommitSet, Dag, GitRunInfo, NonZeroOid, Repo, ResolveCommitsResult,
 };
+use crate::opts::MoveOptions;
 use crate::tui::Effects;
 
 #[instrument]
@@ -56,10 +57,7 @@ pub fn r#move(
     source: Option<String>,
     dest: Option<String>,
     base: Option<String>,
-    force_in_memory: bool,
-    force_on_disk: bool,
-    dump_rebase_constraints: bool,
-    dump_rebase_plan: bool,
+    move_options: &MoveOptions,
 ) -> eyre::Result<isize> {
     let repo = Repo::from_current_dir()?;
     let head_oid = repo.get_head_info()?.oid;
@@ -127,6 +125,12 @@ pub fn r#move(
         source_oid
     };
 
+    let MoveOptions {
+        force_in_memory,
+        force_on_disk,
+        dump_rebase_constraints,
+        dump_rebase_plan,
+    } = *move_options;
     let now = SystemTime::now();
     let event_tx_id = event_log_db.make_transaction_id(now, "move")?;
     let rebase_plan = {
