@@ -482,7 +482,31 @@ fn test_active_non_head_main_branch_commit() -> eyre::Result<()> {
         let (stdout, _stderr) = cloned_repo.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
         :
-        @ 70deb1e2 (master) create test3.txt
+        @ 70deb1e2 (master, remote origin/master) create test3.txt
+        "###);
+    }
+
+    // This assertion seems to fail on Windows because the created commit has a
+    // different commit hash:
+    //
+    // ```
+    // -@ 355e173b (master) create test4.txt
+    // +@ b20a6542 (master) create test4.txt
+    // ```
+    //
+    // The commit hash appears to be consistent across runs. My guess is that
+    // this is some kind of line-ending related issue, but I couldn't figure it
+    // out quickly, so I'm just disabling this assertion on Windows.
+    #[cfg(not(windows))]
+    {
+        // Verify that both `origin/master` and `master` appear in the smartlog.
+        cloned_repo.commit_file("test4", 4)?;
+        let (stdout, _stderr) = cloned_repo.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 70deb1e2 (remote origin/master) create test3.txt
+        |
+        @ 355e173b (master) create test4.txt
         "###);
     }
 
