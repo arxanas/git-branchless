@@ -66,7 +66,7 @@ use crate::core::config::get_restack_preserve_timestamps;
 use crate::core::eventlog::{EventCursor, EventLogDb, EventReplayer};
 use crate::core::rewrite::{
     execute_rebase_plan, find_abandoned_children, find_rewrite_target, move_branches,
-    BuildRebasePlanOptions, ExecuteRebasePlanOptions, RebasePlanBuilder,
+    BuildRebasePlanOptions, ExecuteRebasePlanOptions, ExecuteRebasePlanResult, RebasePlanBuilder,
 };
 use crate::git::{
     resolve_commits, sort_commit_set, CommitSet, Dag, GitRunInfo, NonZeroOid, Repo,
@@ -128,41 +128,47 @@ fn restack_commits(
                 builder.move_subtree(child_oid, dest_oid)?;
             }
         }
-        builder.build(effects, build_options)?
+        let rebase_plan = match builder.build(effects, build_options)? {
+            Ok(Some(rebase_plan)) => rebase_plan,
+            Ok(None) => {
+                writeln!(
+                    effects.get_output_stream(),
+                    "No abandoned commits to restack."
+                )?;
+                return Ok(0);
+            }
+            Err(err) => {
+                err.describe(effects, repo)?;
+                return Ok(1);
+            }
+        };
+        rebase_plan
     };
 
-    match rebase_plan {
-        Ok(None) => {
-            writeln!(
-                effects.get_output_stream(),
-                "No abandoned commits to restack."
-            )?;
+    let execute_rebase_plan_result =
+        execute_rebase_plan(effects, git_run_info, repo, &rebase_plan, execute_options)?;
+    match execute_rebase_plan_result {
+        ExecuteRebasePlanResult::Succeeded => {
+            writeln!(effects.get_output_stream(), "Finished restacking commits.")?;
             Ok(0)
         }
-        Ok(Some(rebase_plan)) => {
-            let exit_code =
-                execute_rebase_plan(effects, git_run_info, repo, &rebase_plan, execute_options)?;
-            match exit_code {
-                0 => {
-                    writeln!(effects.get_output_stream(), "Finished restacking commits.")?;
-                }
-                exit_code => {
-                    writeln!(
-                        effects.get_output_stream(),
-                        "Error: Could not restack commits (exit code {}).",
-                        exit_code
-                    )?;
-                    writeln!(
-                        effects.get_output_stream(),
-                        "You can resolve the error and try running `git restack` again."
-                    )?;
-                }
-            }
-            Ok(exit_code)
-        }
-        Err(err) => {
-            err.describe(effects, repo)?;
+
+        ExecuteRebasePlanResult::DeclinedToMerge { merge_conflict } => {
+            merge_conflict.describe(effects, repo)?;
             Ok(1)
+        }
+
+        ExecuteRebasePlanResult::Failed { exit_code } => {
+            writeln!(
+                effects.get_output_stream(),
+                "Error: Could not restack commits (exit code {}).",
+                exit_code
+            )?;
+            writeln!(
+                effects.get_output_stream(),
+                "You can resolve the error and try running `git restack` again."
+            )?;
+            Ok(exit_code)
         }
     }
 }
@@ -262,6 +268,7 @@ pub fn restack(
     let MoveOptions {
         force_in_memory,
         force_on_disk,
+        resolve_merge_conflicts,
         dump_rebase_constraints,
         dump_rebase_plan,
     } = *move_options;
@@ -276,6 +283,7 @@ pub fn restack(
         preserve_timestamps: get_restack_preserve_timestamps(&repo)?,
         force_in_memory,
         force_on_disk,
+        resolve_merge_conflicts,
     };
 
     let result = restack_commits(

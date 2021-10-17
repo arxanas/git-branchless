@@ -1,7 +1,9 @@
 use std::borrow::Cow;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::convert::TryInto;
 use std::ffi::{OsStr, OsString};
 use std::fmt::Write;
+use std::path::PathBuf;
 use std::time::SystemTime;
 
 use eyre::Context;
@@ -9,7 +11,7 @@ use os_str_bytes::OsStrBytes;
 use tracing::warn;
 
 use crate::core::eventlog::EventTransactionId;
-use crate::core::formatting::printable_styled_string;
+use crate::core::formatting::{printable_styled_string, Pluralize};
 use crate::git::{GitRunInfo, MaybeZeroOid, NonZeroOid, Repo, ResolvedReferenceInfo};
 use crate::tui::Effects;
 
@@ -264,11 +266,50 @@ pub fn check_out_updated_head(
     Ok(result)
 }
 
+/// Information about a merge conflict that occurred while moving commits.
+pub struct MergeConflictInfo {
+    /// The OID of the commit that, when moved, caused a conflict.
+    pub commit_oid: NonZeroOid,
+
+    /// The paths which were in conflict.
+    pub conflicting_paths: HashSet<PathBuf>,
+}
+
+impl MergeConflictInfo {
+    /// Describe the merge conflict in a user-friendly way and advise to rerun
+    /// with `--merge`.
+    pub fn describe(&self, effects: &Effects, repo: &Repo) -> eyre::Result<()> {
+        writeln!(
+            effects.get_output_stream(),
+            "This operation would cause a merge conflict:"
+        )?;
+        writeln!(
+            effects.get_output_stream(),
+            "{} ({}) {}",
+            effects.get_glyphs().bullet_point,
+            Pluralize {
+                amount: self.conflicting_paths.len().try_into()?,
+                singular: "conflicting file",
+                plural: "conflicting files"
+            }
+            .to_string(),
+            printable_styled_string(
+                effects.get_glyphs(),
+                repo.friendly_describe_commit_from_oid(self.commit_oid)?
+            )?
+        )?;
+        writeln!(
+            effects.get_output_stream(),
+            "To resolve merge conflicts, retry this operation with the --merge option."
+        )?;
+        Ok(())
+    }
+}
+
 mod in_memory {
-    use std::collections::{HashMap, HashSet};
+    use std::collections::HashMap;
     use std::ffi::OsString;
     use std::fmt::Write;
-    use std::path::PathBuf;
 
     use eyre::Context;
     use indicatif::{ProgressBar, ProgressStyle};
@@ -284,7 +325,7 @@ mod in_memory {
     };
     use crate::tui::Effects;
 
-    use super::ExecuteRebasePlanOptions;
+    use super::{ExecuteRebasePlanOptions, MergeConflictInfo};
 
     pub enum RebaseInMemoryResult {
         Succeeded {
@@ -300,10 +341,7 @@ mod in_memory {
         CannotRebaseMergeCommit {
             commit_oid: NonZeroOid,
         },
-        MergeConflict {
-            commit_oid: NonZeroOid,
-            conflicting_paths: HashSet<PathBuf>,
-        },
+        MergeConflict(MergeConflictInfo),
     }
 
     #[instrument]
@@ -343,6 +381,7 @@ mod in_memory {
             preserve_timestamps,
             force_in_memory: _,
             force_on_disk: _,
+            resolve_merge_conflicts: _, // May be needed once we can resolve merge conflicts in memory.
         } = options;
 
         let mut current_oid = rebase_plan.first_dest_oid;
@@ -441,10 +480,10 @@ mod in_memory {
                     )? {
                         Ok(rebased_commit) => rebased_commit,
                         Err(CherryPickFastError::MergeConflict { conflicting_paths }) => {
-                            return Ok(RebaseInMemoryResult::MergeConflict {
+                            return Ok(RebaseInMemoryResult::MergeConflict(MergeConflictInfo {
                                 commit_oid: *commit_oid,
                                 conflicting_paths,
-                            })
+                            }))
                         }
                     };
 
@@ -514,7 +553,7 @@ mod in_memory {
                 } => {
                     warn!(
                         ?commit_oid,
-                        "BUG: Merge commit should have been when starting in-memory rebase"
+                        "BUG: Merge commit should have been detected when starting in-memory rebase"
                     );
                     return Ok(RebaseInMemoryResult::CannotRebaseMergeCommit {
                         commit_oid: *commit_oid,
@@ -614,6 +653,7 @@ mod in_memory {
             preserve_timestamps: _,
             force_in_memory: _,
             force_on_disk: _,
+            resolve_merge_conflicts: _,
         } = options;
 
         // Note that if an OID has been mapped to multiple other OIDs, then the last
@@ -704,6 +744,7 @@ mod on_disk {
             preserve_timestamps,
             force_in_memory: _,
             force_on_disk: _,
+            resolve_merge_conflicts: _,
         } = options;
 
         let (effects, _progress) = effects.start_operation(OperationType::InitializeRebase);
@@ -870,6 +911,7 @@ mod on_disk {
             preserve_timestamps: _,
             force_in_memory: _,
             force_on_disk: _,
+            resolve_merge_conflicts: _,
         } = options;
 
         match write_rebase_state_to_disk(effects, git_run_info, repo, rebase_plan, options)? {
@@ -905,6 +947,30 @@ pub struct ExecuteRebasePlanOptions {
 
     /// Force an on-disk rebase (as opposed to an in-memory rebase).
     pub force_on_disk: bool,
+
+    /// Whether or not an attempt should be made to resolve merge conflicts,
+    /// rather than failing-fast.
+    pub resolve_merge_conflicts: bool,
+}
+
+/// The result of executing a rebase plan.
+pub enum ExecuteRebasePlanResult {
+    /// The rebase operation succeeded.
+    Succeeded,
+
+    /// The rebase operation encounter a merge conflict, and it was not
+    /// requested to try to resolve it.
+    DeclinedToMerge {
+        /// Information about the merge conflict that occurred.
+        merge_conflict: MergeConflictInfo,
+    },
+
+    /// The rebase operation failed.
+    Failed {
+        /// The exit code to exit with. (This value may have been obtained from
+        /// a subcommand invocation.)
+        exit_code: isize,
+    },
 }
 
 /// Execute the provided rebase plan. Returns the exit status (zero indicates
@@ -915,13 +981,14 @@ pub fn execute_rebase_plan(
     repo: &Repo,
     rebase_plan: &RebasePlan,
     options: &ExecuteRebasePlanOptions,
-) -> eyre::Result<isize> {
+) -> eyre::Result<ExecuteRebasePlanResult> {
     let ExecuteRebasePlanOptions {
         now: _,
         event_tx_id: _,
         preserve_timestamps: _,
         force_in_memory,
         force_on_disk,
+        resolve_merge_conflicts,
     } = options;
 
     if !force_on_disk {
@@ -945,7 +1012,7 @@ pub fn execute_rebase_plan(
                     options,
                 )?;
                 writeln!(effects.get_output_stream(), "In-memory rebase succeeded.")?;
-                return Ok(0);
+                return Ok(ExecuteRebasePlanResult::Succeeded);
             }
 
             RebaseInMemoryResult::CannotRebaseMergeCommit { commit_oid } => {
@@ -963,10 +1030,20 @@ pub fn execute_rebase_plan(
                 )?;
             }
 
-            RebaseInMemoryResult::MergeConflict {
-                commit_oid,
-                conflicting_paths: _,
-            } => {
+            RebaseInMemoryResult::MergeConflict(merge_conflict) => {
+                if !resolve_merge_conflicts
+                    // If an in-memory rebase was forced, don't suggest to the user
+                    // that they can re-run with `--merge`, since that still won't
+                    // work.
+                    && !*force_in_memory
+                {
+                    return Ok(ExecuteRebasePlanResult::DeclinedToMerge { merge_conflict });
+                }
+
+                let MergeConflictInfo {
+                    commit_oid,
+                    conflicting_paths: _,
+                } = merge_conflict;
                 writeln!(
                     effects.get_output_stream(),
                     "There was a merge conflict, which currently can't be resolved when rebasing in-memory."
@@ -989,7 +1066,7 @@ pub fn execute_rebase_plan(
                 effects.get_output_stream(),
                 "Aborting since an in-memory rebase was requested."
             )?;
-            return Ok(1);
+            return Ok(ExecuteRebasePlanResult::Failed { exit_code: 1 });
         } else {
             writeln!(effects.get_output_stream(), "Trying again on-disk...")?;
         }
@@ -998,7 +1075,8 @@ pub fn execute_rebase_plan(
     if !force_in_memory {
         use on_disk::*;
         match rebase_on_disk(effects, git_run_info, repo, rebase_plan, options)? {
-            Ok(exit_code) => return Ok(exit_code),
+            Ok(0) => return Ok(ExecuteRebasePlanResult::Succeeded),
+            Ok(exit_code) => return Ok(ExecuteRebasePlanResult::Failed { exit_code }),
             Err(Error::ChangedFilesInRepository) => {
                 write!(
                     effects.get_output_stream(),
@@ -1008,7 +1086,7 @@ in your working copy which might be overwritten as a result.
 Commit your changes and then try again.
 "
                 )?;
-                return Ok(1);
+                return Ok(ExecuteRebasePlanResult::Failed { exit_code: 1 });
             }
             Err(Error::OperationAlreadyInProgress { operation_type }) => {
                 writeln!(
@@ -1021,7 +1099,7 @@ Commit your changes and then try again.
                     "Run git {0} --continue or git {0} --abort to resolve it and proceed.",
                     operation_type
                 )?;
-                return Ok(1);
+                return Ok(ExecuteRebasePlanResult::Failed { exit_code: 1 });
             }
         }
     }

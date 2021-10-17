@@ -828,13 +828,23 @@ Either create it, or update the main branch setting by running:
                     {
                         let conflict = conflict.wrap_err("Getting conflicting path")?;
                         if let Some(ancestor) = conflict.ancestor {
-                            // I'm not sure how the ancestor can be `None` here.
                             result
                                 .insert(PathBuf::from(OsStrBytes::from_raw_bytes(ancestor.path)?));
+                        }
+                        if let Some(our) = conflict.our {
+                            result.insert(PathBuf::from(OsStrBytes::from_raw_bytes(our.path)?));
+                        }
+                        if let Some(their) = conflict.their {
+                            result.insert(PathBuf::from(OsStrBytes::from_raw_bytes(their.path)?));
                         }
                     }
                     result
                 };
+
+                if conflicting_paths.is_empty() {
+                    warn!("BUG: A merge conflict was detected, but there were no entries in `conflicting_paths`. Maybe the wrong index entry was used?")
+                }
+
                 return Ok(Err(CherryPickFastError::MergeConflict {
                     conflicting_paths,
                 }));

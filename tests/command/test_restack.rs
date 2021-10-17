@@ -252,6 +252,22 @@ fn test_restack_aborts_during_rebase_conflict() -> eyre::Result<()> {
                 ..Default::default()
             },
         )?;
+        insta::assert_snapshot!(stdout, @r###"
+        Attempting rebase in-memory...
+        This operation would cause a merge conflict:
+        - (1 conflicting file) 96d1c37a create test2.txt
+        To resolve merge conflicts, retry this operation with the --merge option.
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run_with_options(
+            &["restack", "--merge"],
+            &GitRunOptions {
+                expected_exit_code: 1,
+                ..Default::default()
+            },
+        )?;
         let stdout = remove_rebase_lines(stdout);
 
         insta::assert_snapshot!(stdout, @r###"
