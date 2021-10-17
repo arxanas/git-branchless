@@ -113,6 +113,9 @@ pub enum Command {
         newest: bool,
     },
 
+    /// Interactively pick a commit to checkout.
+    Checkout,
+
     /// Move a subtree of commits from one location to another.
     ///
     /// By default, `git move` tries to move the entire current stack if you

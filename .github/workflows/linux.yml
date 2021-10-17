@@ -82,11 +82,13 @@ jobs:
         run: cargo build --benches --tests
 
       - name: Run Rust tests (all features)
+        timeout-minutes: 5
         run: |
           export PATH_TO_GIT="$PWD"/git
           cargo test --all-features
 
       - name: Run Rust tests (no default features)
+        timeout-minutes: 5
         run: |
           export PATH_TO_GIT="$PWD"/git
           cargo test --no-default-features
