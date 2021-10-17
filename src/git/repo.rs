@@ -315,7 +315,14 @@ impl Repo {
     pub fn get_main_branch_reference(&self) -> eyre::Result<Reference> {
         let main_branch_name = get_main_branch_name(self)?;
         match self.find_branch(&main_branch_name, git2::BranchType::Local)? {
-            Some(branch) => Ok(branch.into_reference()),
+            Some(branch) => {
+                let upstream_branch = branch
+                    .inner
+                    .upstream()
+                    .map(|branch| Branch { inner: branch })
+                    .unwrap_or_else(|_| branch);
+                Ok(upstream_branch.into_reference())
+            }
             None => match self.find_branch(&main_branch_name, git2::BranchType::Remote)? {
                 Some(branch) => Ok(branch.into_reference()),
                 None => {
