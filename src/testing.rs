@@ -4,7 +4,7 @@
 //! tests.
 
 use std::collections::HashMap;
-use std::ffi::{OsStr, OsString};
+use std::ffi::OsString;
 use std::io::Write;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
@@ -165,6 +165,32 @@ impl Git {
         .expect("joining paths")
     }
 
+    /// Get the environment variables needed to run git in the test environment.
+    pub fn get_base_env(&self, time: &isize) -> Vec<(&'static str, OsString)> {
+        // Required for determinism, as these values will be baked into the commit
+        // hash.
+        let date: OsString = format!("{date} -{time:0>2}", date = DUMMY_DATE, time = time).into();
+
+        // Fake "editor" which accepts the default contents of any commit
+        // messages. Usually, we can set this with `git commit -m`, but we have
+        // no such option for things such as `git rebase`, which may call `git
+        // commit` later as a part of their execution.
+        //
+        // ":" is understood by `git` to skip editing.
+        let git_editor = OsString::from(":");
+
+        let git_exec_path = self.get_git_exec_path();
+        let new_path = self.get_path_for_env();
+        vec![
+            ("GIT_AUTHOR_DATE", date.clone()),
+            ("GIT_COMMITTER_DATE", date),
+            ("GIT_EDITOR", git_editor),
+            ("GIT_EXEC_PATH", git_exec_path.as_os_str().into()),
+            ("PATH_TO_GIT", self.path_to_git.as_os_str().into()),
+            ("PATH", new_path),
+        ]
+    }
+
     #[instrument]
     fn run_with_options_inner(
         &self,
@@ -178,10 +204,6 @@ impl Git {
             env,
         } = options;
 
-        // Required for determinism, as these values will be baked into the commit
-        // hash.
-        let date: OsString = format!("{date} -{time:0>2}", date = DUMMY_DATE, time = time).into();
-
         let args: Vec<&str> = {
             let repo_path = self.repo_path.to_str().expect("Could not decode repo path");
             let mut new_args: Vec<&str> = vec!["-C", repo_path];
@@ -189,30 +211,11 @@ impl Git {
             new_args
         };
 
-        // Fake "editor" which accepts the default contents of any commit
-        // messages. Usually, we can set this with `git commit -m`, but we have
-        // no such option for things such as `git rebase`, which may call `git
-        // commit` later as a part of their execution.
-        //
-        // ":" is understood by `git` to skip editing.
-        let git_editor = OsStr::new(":");
-
-        let git_exec_path = self.get_git_exec_path();
-        let new_path = self.get_path_for_env();
-        let base_env: Vec<(&str, &OsStr)> = vec![
-            ("GIT_AUTHOR_DATE", &date),
-            ("GIT_COMMITTER_DATE", &date),
-            ("GIT_EDITOR", git_editor),
-            ("GIT_EXEC_PATH", git_exec_path.as_os_str()),
-            ("PATH_TO_GIT", self.path_to_git.as_os_str()),
-            ("PATH", &new_path),
-        ];
-
         let mut command = Command::new(&self.path_to_git);
         command
             .args(&args)
             .env_clear()
-            .envs(base_env.iter().copied())
+            .envs(self.get_base_env(time))
             .envs(env.iter());
 
         let result = if let Some(input) = input {
