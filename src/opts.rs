@@ -13,7 +13,7 @@ pub enum WrappedCommand {
     WrappedCommand(Vec<String>),
 }
 
-/// @nocommit write man page text
+/// FIXME: write man-page text
 #[derive(Clap)]
 pub enum Command {
     /// Initialize the branchless workflow for this repository.
