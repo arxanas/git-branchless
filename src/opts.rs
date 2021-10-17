@@ -18,13 +18,18 @@ pub enum WrappedCommand {
 pub struct MoveOptions {
     /// Only attempt to perform an in-memory rebase. If it fails, do not
     /// attempt an on-disk rebase.
-    #[clap(long = "in-memory", conflicts_with = "force-on-disk")]
+    #[clap(long = "in-memory", conflicts_with_all(&["force-on-disk", "merge"]))]
     pub force_in_memory: bool,
 
     /// Skip attempting to use an in-memory rebase, and try an
     /// on-disk rebase directly.
     #[clap(long = "on-disk")]
     pub force_on_disk: bool,
+
+    /// Attempt to resolve merge conflicts, if any. If a merge conflict
+    /// occurs and this option is not set, the operation is aborted.
+    #[clap(name = "merge", short = 'm', long = "merge")]
+    pub resolve_merge_conflicts: bool,
 
     /// Debugging option. Print the constraints used to create the rebase
     /// plan before executing it.

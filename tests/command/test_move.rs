@@ -307,10 +307,27 @@ fn test_move_merge_conflict() -> eyre::Result<()> {
 
     {
         let (stdout, _stderr) = git.run_with_options(
+            &["move", "--source", &other_oid.to_string()],
+            &GitRunOptions {
+                expected_exit_code: 1,
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stdout, @r###"
+        Attempting rebase in-memory...
+        This operation would cause a merge conflict:
+        - (1 conflicting file) e85d25c7 create conflict.txt
+        To resolve merge conflicts, retry this operation with the --merge option.
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run_with_options(
             &[
                 "move",
                 "--debug-dump-rebase-plan",
-                "-s",
+                "--merge",
+                "--source",
                 &other_oid.to_string(),
             ],
             &GitRunOptions {

@@ -13,7 +13,8 @@ use tracing::instrument;
 use crate::core::config::get_restack_preserve_timestamps;
 use crate::core::eventlog::{EventLogDb, EventReplayer};
 use crate::core::rewrite::{
-    execute_rebase_plan, BuildRebasePlanOptions, ExecuteRebasePlanOptions, RebasePlanBuilder,
+    execute_rebase_plan, BuildRebasePlanOptions, ExecuteRebasePlanOptions, ExecuteRebasePlanResult,
+    RebasePlanBuilder,
 };
 use crate::git::{
     resolve_commits, CommitSet, Dag, GitRunInfo, NonZeroOid, Repo, ResolveCommitsResult,
@@ -128,6 +129,7 @@ pub fn r#move(
     let MoveOptions {
         force_in_memory,
         force_on_disk,
+        resolve_merge_conflicts,
         dump_rebase_constraints,
         dump_rebase_plan,
     } = *move_options;
@@ -148,7 +150,7 @@ pub fn r#move(
     let result = match rebase_plan {
         Ok(None) => {
             writeln!(effects.get_output_stream(), "Nothing to do.")?;
-            0
+            return Ok(0);
         }
         Ok(Some(rebase_plan)) => {
             let options = ExecuteRebasePlanOptions {
@@ -157,13 +159,24 @@ pub fn r#move(
                 preserve_timestamps: get_restack_preserve_timestamps(&repo)?,
                 force_in_memory,
                 force_on_disk,
+                resolve_merge_conflicts,
             };
             execute_rebase_plan(effects, git_run_info, &repo, &rebase_plan, &options)?
         }
         Err(err) => {
             err.describe(effects, &repo)?;
-            1
+            return Ok(1);
         }
     };
-    Ok(result)
+
+    match result {
+        ExecuteRebasePlanResult::Succeeded => Ok(0),
+
+        ExecuteRebasePlanResult::DeclinedToMerge { merge_conflict } => {
+            merge_conflict.describe(effects, &repo)?;
+            Ok(1)
+        }
+
+        ExecuteRebasePlanResult::Failed { exit_code } => Ok(exit_code),
+    }
 }
