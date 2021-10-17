@@ -1,4 +1,13 @@
-use branchless::testing::{make_git, GitRunOptions};
+use std::io::{Read, Write};
+use std::thread;
+
+use eyre::eyre;
+
+use branchless::testing::{make_git, GitRunOptions, GitWrapper};
+use portable_pty::{native_pty_system, CommandBuilder, PtySize};
+
+const CARRIAGE_RETURN: &'static str = "\r";
+const END_OF_TEXT: &'static str = "\x03";
 
 #[test]
 fn test_prev() -> eyre::Result<()> {
@@ -192,6 +201,165 @@ fn test_next_on_master2() -> eyre::Result<()> {
         @ 70deb1e2 create test3.txt
         "###);
     }
+
+    Ok(())
+}
+
+#[test]
+#[cfg(unix)]
+fn test_checkout_pty() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    git.init_repo()?;
+    git.detach_head()?;
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+    git.run(&["checkout", "master"])?;
+    git.detach_head()?;
+    git.commit_file("test3", 3)?;
+
+    run_in_pty(
+        &git,
+        &["branchless", "checkout"],
+        &vec![
+            PtyAction::WaitUntilContains("> "),
+            PtyAction::Write("test1"),
+            PtyAction::WaitUntilContains("> test1"),
+            PtyAction::WaitUntilContains("> 62fc20d2"),
+            PtyAction::Write(CARRIAGE_RETURN),
+        ],
+    )?;
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc9 (master) create initial.txt
+        |\
+        | @ 62fc20d2 create test1.txt
+        | |
+        | o 96d1c37a create test2.txt
+        |
+        o 98b9119d create test3.txt
+        "###);
+    }
+
+    run_in_pty(
+        &git,
+        &["branchless", "checkout"],
+        &vec![
+            PtyAction::WaitUntilContains("> "),
+            PtyAction::Write("test3"),
+            PtyAction::WaitUntilContains("> test3"),
+            PtyAction::WaitUntilContains("> 98b9119d"),
+            PtyAction::Write(CARRIAGE_RETURN),
+        ],
+    )?;
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc9 (master) create initial.txt
+        |\
+        | o 62fc20d2 create test1.txt
+        | |
+        | o 96d1c37a create test2.txt
+        |
+        @ 98b9119d create test3.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+#[cfg(unix)]
+fn test_checkout_abort() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    git.init_repo()?;
+    git.detach_head()?;
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 1)?;
+
+    run_in_pty(
+        &git,
+        &["branchless", "checkout"],
+        &vec![
+            PtyAction::WaitUntilContains("> ".into()),
+            PtyAction::Write(END_OF_TEXT.into()),
+        ],
+    )?;
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc9 (master) create initial.txt
+        |
+        o 62fc20d2 create test1.txt
+        |
+        @ 142901d5 create test2.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+enum PtyAction<'a> {
+    Write(&'a str),
+    WaitUntilContains(&'a str),
+}
+
+fn run_in_pty(git: &GitWrapper, args: &[&str], inputs: &[PtyAction]) -> eyre::Result<()> {
+    // Use the native pty implementation for the system
+    let pty_system = native_pty_system();
+    let pty_size = PtySize::default();
+    let mut pty = pty_system.openpty(pty_size).unwrap();
+
+    let args: Vec<&str> = {
+        let repo_path = git.repo_path.to_str().expect("Could not decode repo path");
+        let mut new_args: Vec<&str> = vec!["-C", repo_path];
+        new_args.extend(args);
+        new_args
+    };
+
+    // Spawn a git instance in the pty.
+    let mut cmd = CommandBuilder::new(&git.path_to_git);
+    let time = 0;
+    for (k, v) in git.get_base_env(&time) {
+        cmd.env(k, v);
+    }
+    cmd.env("TERM", "xterm");
+    cmd.args(args);
+
+    let mut child = pty
+        .slave
+        .spawn_command(cmd)
+        .map_err(|e| eyre!("Could not spawn child: {}", e))?;
+    let mut reader = pty
+        .master
+        .try_clone_reader()
+        .map_err(|e| eyre!("Could not clone reader: {}", e))?;
+
+    let mut parser = vt100::Parser::new(pty_size.rows, pty_size.cols, 0);
+    for action in inputs {
+        match &action {
+            PtyAction::WaitUntilContains(value) => {
+                let mut buffer = [0; 1024];
+                while !parser.screen().contents().contains(value) {
+                    let n = reader.read(&mut buffer)?;
+                    parser.process(&buffer[..n]);
+                }
+            }
+            PtyAction::Write(value) => {
+                write!(pty.master, "{}", value)?;
+                pty.master.flush()?;
+            }
+        }
+    }
+
+    thread::spawn(move || {
+        let mut buffer = Vec::new();
+        reader.read_to_end(&mut buffer).expect("finish reading pty");
+    });
+
+    child.wait()?;
 
     Ok(())
 }

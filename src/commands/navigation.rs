@@ -5,10 +5,11 @@ use std::fmt::Write;
 use eden_dag::DagAlgorithm;
 use tracing::instrument;
 
-use crate::commands::smartlog::smartlog;
+use crate::commands::smartlog::{make_smartlog_graph, smartlog};
 use crate::core::eventlog::{EventLogDb, EventReplayer};
 use crate::core::formatting::printable_styled_string;
 use crate::git::{sort_commit_set, CommitSet, Dag, GitRunInfo, NonZeroOid, Repo};
+use crate::tui::prompt_select_commit;
 use crate::tui::Effects;
 
 /// Go back a certain number of commits.
@@ -147,4 +148,32 @@ pub fn next(
 
     smartlog(effects, &Default::default())?;
     Ok(0)
+}
+
+/// Interactively checkout a commit from the smartlog.
+pub fn checkout(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<isize> {
+    let repo = Repo::from_current_dir()?;
+    let references_snapshot = repo.get_references_snapshot()?;
+    let conn = repo.get_db_conn()?;
+    let event_log_db = EventLogDb::new(&conn)?;
+    let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
+    let event_cursor = event_replayer.make_default_cursor();
+    let dag = Dag::open_and_sync(
+        effects,
+        &repo,
+        &event_replayer,
+        event_cursor,
+        &references_snapshot,
+    )?;
+
+    let graph = make_smartlog_graph(effects, &repo, &dag, &event_replayer, event_cursor, true)?;
+
+    match prompt_select_commit(graph.get_commits())? {
+        Some(oid) => {
+            let result = git_run_info.run(effects, None, &["checkout", &oid.to_string()])?;
+            smartlog(effects, &Default::default())?;
+            Ok(result)
+        }
+        None => Ok(1),
+    }
 }

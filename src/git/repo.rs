@@ -17,6 +17,7 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::SystemTime;
 
+use chrono::{DateTime, Local, TimeZone, Utc};
 use color_eyre::Help;
 use cursive::theme::BaseColor;
 use cursive::utils::markup::StyledString;
@@ -26,6 +27,7 @@ use os_str_bytes::{OsStrBytes, OsStringBytes};
 use tracing::{instrument, warn};
 
 use crate::core::config::get_main_branch_name;
+use crate::core::formatting::StyledStringBuilder;
 use crate::core::metadata::{render_commit_metadata, CommitMessageProvider, CommitOidProvider};
 use crate::git::config::{Config, ConfigRead};
 use crate::git::oid::{make_non_zero_oid, MaybeZeroOid, NonZeroOid};
@@ -1007,6 +1009,18 @@ impl<'repo> Signature<'repo> {
     pub fn get_time(&self) -> git2::Time {
         self.inner.when()
     }
+
+    /// Return the friendly formatted name and email of the signature.
+    pub fn friendly_describe(&self) -> Option<String> {
+        let name = self.inner.name();
+        let email = self.inner.email().map(|email| format!("<{}>", email));
+        match (name, email) {
+            (Some(name), Some(email)) => Some(format!("{} {}", name, email)),
+            (Some(name), _) => Some(name.into()),
+            (_, Some(email)) => Some(email),
+            _ => None,
+        }
+    }
 }
 
 pub struct IndexEntry {
@@ -1157,6 +1171,37 @@ impl<'repo> Commit<'repo> {
             ],
         )?;
         Ok(description)
+    }
+
+    /// Get a multi-line description of this commit containing information about
+    /// its OID, author, commit time, and message.
+    #[instrument]
+    pub fn friendly_preview(&self) -> eyre::Result<StyledString> {
+        let commit_time = Utc.timestamp(self.get_time().seconds(), 0);
+        let commit_time: DateTime<Local> = DateTime::from(commit_time);
+        let preview = StyledStringBuilder::from_lines(vec![
+            StyledStringBuilder::new()
+                .append_styled(
+                    format!("Commit:\t{}", self.get_oid().to_string()),
+                    BaseColor::Yellow.light(),
+                )
+                .build(),
+            StyledString::styled(
+                format!(
+                    "Author:\t{}",
+                    self.get_author()
+                        .friendly_describe()
+                        .unwrap_or_else(|| "".into())
+                ),
+                BaseColor::Magenta.light(),
+            ),
+            StyledString::styled(format!("Date:\t{}", commit_time), BaseColor::Green.light()),
+            StyledString::plain(textwrap::indent(
+                &self.get_message_pretty()?.to_string_lossy(),
+                "    ",
+            )),
+        ]);
+        Ok(preview)
     }
 
     /// Determine if the current commit is empty (has no changes compared to its

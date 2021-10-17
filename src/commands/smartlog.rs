@@ -75,6 +75,21 @@ mod graph {
         nodes: HashMap<NonZeroOid, Node<'repo>>,
     }
 
+    impl<'repo> SmartlogGraph<'repo> {
+        /// Get a list of commits stored in the graph.
+        /// Returns commits in descending commit time order.
+        pub fn get_commits(&self) -> Vec<Commit<'repo>> {
+            let mut commits = self
+                .nodes
+                .values()
+                .map(|node| node.commit.clone())
+                .collect::<Vec<Commit<'repo>>>();
+            commits.sort_by_key(|commit| (commit.get_committer().get_time(), commit.get_oid()));
+            commits.reverse();
+            commits
+        }
+    }
+
     impl std::fmt::Debug for SmartlogGraph<'_> {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             write!(f, "<CommitGraph len={}>", self.nodes.len())
