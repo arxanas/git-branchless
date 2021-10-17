@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- On-disk rebases on systems with `/tmp` residing on a different filesystem should no longer fail.
+
 ## [0.3.6] - 2021-10-14
 
 ### Added

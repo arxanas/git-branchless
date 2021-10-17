@@ -50,10 +50,14 @@ fn read_rewritten_list_entries(
 
 #[instrument]
 fn write_rewritten_list(
+    tempfile_dir: &Path,
     rewritten_list_path: &Path,
     rewritten_oids: &[(NonZeroOid, MaybeZeroOid)],
 ) -> eyre::Result<()> {
-    let mut tempfile = NamedTempFile::new()?;
+    std::fs::create_dir_all(tempfile_dir).wrap_err("Creating tempfile dir")?;
+    let mut tempfile =
+        NamedTempFile::new_in(tempfile_dir).wrap_err("Creating temporary `rewritten-list` file")?;
+
     let file = tempfile.as_file_mut();
     for (old_commit_oid, new_commit_oid) in rewritten_oids {
         writeln!(file, "{} {}", old_commit_oid, new_commit_oid)?;
@@ -66,6 +70,7 @@ fn write_rewritten_list(
 
 #[instrument]
 fn add_rewritten_list_entries(
+    tempfile_dir: &Path,
     rewritten_list_path: &Path,
     entries: &[(NonZeroOid, MaybeZeroOid)],
 ) -> eyre::Result<()> {
@@ -86,7 +91,7 @@ fn add_rewritten_list_entries(
     }
     new_entries.extend(entries_to_add.into_iter());
 
-    write_rewritten_list(rewritten_list_path, new_entries.as_slice())?;
+    write_rewritten_list(tempfile_dir, rewritten_list_path, new_entries.as_slice())?;
     Ok(())
 }
 
@@ -385,6 +390,7 @@ pub fn hook_drop_commit_if_empty(
         save_updated_head_oid(&repo, only_parent_oid)?;
     }
     add_rewritten_list_entries(
+        &repo.get_tempfile_dir(),
         &repo.get_rebase_state_dir_path().join("rewritten-list"),
         &[
             (old_commit_oid, MaybeZeroOid::Zero),
@@ -421,6 +427,7 @@ pub fn hook_skip_upstream_applied_commit(
         }
     }
     add_rewritten_list_entries(
+        &repo.get_tempfile_dir(),
         &repo.get_rebase_state_dir_path().join("rewritten-list"),
         &[(commit_oid, MaybeZeroOid::Zero)],
     )?;

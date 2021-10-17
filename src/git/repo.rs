@@ -231,6 +231,17 @@ impl Repo {
         self.get_path().join("branchless").join("man")
     }
 
+    /// Get a directory suitable for storing temporary files.
+    ///
+    /// In particular, this directory is guaranteed to be on the same filesystem
+    /// as the Git repository itself, so you can move files between them
+    /// atomically. See
+    /// https://github.com/arxanas/git-branchless/discussions/120
+    #[instrument]
+    pub fn get_tempfile_dir(&self) -> PathBuf {
+        self.get_path().join("branchless").join("tmp")
+    }
+
     /// Get the connection to the SQLite database for this repository.
     #[instrument]
     pub fn get_db_conn(&self) -> eyre::Result<rusqlite::Connection> {
