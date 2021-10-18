@@ -17,7 +17,7 @@ use std::ffi::OsString;
 use std::path::PathBuf;
 use std::time::SystemTime;
 
-use clap::Clap;
+use clap::Parser;
 use eyre::Context;
 use itertools::Itertools;
 use tracing_chrome::ChromeLayerBuilder;
