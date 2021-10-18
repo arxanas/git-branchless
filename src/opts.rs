@@ -1,12 +1,12 @@
 //! The command-line options for `git-branchless`.
 
-use clap::{App, Clap, IntoApp};
-use man::{Arg, Author, Manual, Opt};
+use clap::{App, IntoApp, Parser};
+use man::Arg;
 use std::path::{Path, PathBuf};
 
 /// A command wrapped by `git-branchless wrap`. The arguments are forwarded to
 /// `git`.
-#[derive(Clap)]
+#[derive(Parser)]
 pub enum WrappedCommand {
     /// The wrapped command.
     #[clap(external_subcommand)]
@@ -14,7 +14,7 @@ pub enum WrappedCommand {
 }
 
 /// FIXME: write man-page text
-#[derive(Clap)]
+#[derive(Parser)]
 pub enum Command {
     /// Initialize the branchless workflow for this repository.
     Init {
@@ -223,7 +223,7 @@ pub enum Command {
 /// Branchless workflow for Git.
 ///
 /// See the documentation at https://github.com/arxanas/git-branchless/wiki.
-#[derive(Clap)]
+#[derive(Parser)]
 #[clap(version = env!("CARGO_PKG_VERSION"), author = "Waleed Khan <me@waleedkhan.name>")]
 pub struct Opts {
     /// Change to the given directory before executing the rest of the program.
@@ -255,7 +255,7 @@ pub fn write_man_pages(man_dir: &Path) -> std::io::Result<()> {
 }
 
 fn generate_man_page(man1_dir: &Path, name: &str, command: &App) -> std::io::Result<()> {
-    let mut manual = Manual::new(name);
+    let mut manual = man::Manual::new(name);
     if let Some(about) = command.get_about() {
         manual = manual.about(about);
     }
@@ -271,31 +271,23 @@ fn generate_man_page(man1_dir: &Path, name: &str, command: &App) -> std::io::Res
 
         let email = email.strip_prefix('<').unwrap_or(email);
         let email = email.strip_suffix('>').unwrap_or(email);
-        Author::new(name).email(email)
+        man::Author::new(name).email(email)
     });
     for author in authors {
         manual = manual.author(author);
     }
 
-    {
-        // `clap==3.0.0-beta.4` does not have a `get_long_about` method, which
-        // seems to be an omission. See
-        // https://github.com/clap-rs/clap/pull/2843.
-        let mut buf = Vec::new();
-        command
-            .clone()
-            .help_template("{about}")
-            .write_long_help(&mut buf)?;
-        let long_help = String::from_utf8(buf).expect("Argument help should be UTF-8");
-        manual = manual.description(long_help);
+    if let Some(long_about) = command.get_long_about() {
+        manual = manual.description(long_about);
     }
 
     for arg in command.get_positionals() {
         manual = manual.arg(Arg::new(&format!("[{}]", arg.get_name().to_uppercase())));
     }
 
-    for flag in command.get_flags() {
-        let opt = Opt::new(flag.get_name());
+    // The below doesn't compile as of `clap` `v3.0.0-beta.5`.
+    for flag in command.get_opts() {
+        let opt = man::Opt::new(flag.get_name());
         let opt = match flag.get_short() {
             Some(short) => opt.short(&String::from(short)),
             None => opt,
