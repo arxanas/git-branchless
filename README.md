@@ -114,7 +114,9 @@ In the branchless workflow, the commits you're working on are inferred based on 
 
 See https://github.com/arxanas/git-branchless/wiki/Installation.
 
-Short version: run `cargo install git-branchless`, then run `git branchless init` in your repository.
+Short version: run `cargo install --locked git-branchless`, then run `git branchless init` in your repository.
+
+**NOTE**: due to https://github.com/arxanas/git-branchless/issues/127, you must install with the `--locked` flag for `cargo`.
 
 ## Status
 
