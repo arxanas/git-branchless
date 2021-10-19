@@ -1,5 +1,6 @@
-use branchless::git::GitRunInfo;
-use branchless::testing::{get_path_to_git, make_git, Git, GitInitOptions, GitRunOptions};
+use branchless::testing::{
+    make_git, make_git_with_remote_repo, GitInitOptions, GitRunOptions, GitWrapperWithRemoteRepo,
+};
 
 #[test]
 fn test_init_smartlog() -> eyre::Result<()> {
@@ -303,24 +304,16 @@ fn test_custom_main_branch() -> eyre::Result<()> {
 
 #[test]
 fn test_main_remote_branch() -> eyre::Result<()> {
-    let path_to_git = get_path_to_git()?;
-    let temp_dir = tempfile::tempdir()?;
-    let git_run_info = GitRunInfo {
-        path_to_git,
-        working_directory: temp_dir.path().to_path_buf(),
-        env: Default::default(),
-    };
-    let original_repo_path = temp_dir.path().join("original");
-    std::fs::create_dir(&original_repo_path)?;
-    let original_repo = Git::new(original_repo_path, git_run_info.clone());
-    let cloned_repo_path = temp_dir.path().join("cloned");
-    let cloned_repo = Git::new(cloned_repo_path, git_run_info);
+    let GitWrapperWithRemoteRepo {
+        temp_dir: _guard,
+        original_repo,
+        cloned_repo,
+    } = make_git_with_remote_repo()?;
 
     {
-        let git = original_repo.clone();
-        git.init_repo()?;
-        git.commit_file("test1", 1)?;
-        git.run(&[
+        original_repo.init_repo()?;
+        original_repo.commit_file("test1", 1)?;
+        original_repo.run(&[
             "clone",
             original_repo.repo_path.to_str().unwrap(),
             cloned_repo.repo_path.to_str().unwrap(),
@@ -328,15 +321,14 @@ fn test_main_remote_branch() -> eyre::Result<()> {
     }
 
     {
-        let git = cloned_repo.clone();
-        git.init_repo_with_options(&GitInitOptions {
+        cloned_repo.init_repo_with_options(&GitInitOptions {
             make_initial_commit: false,
             ..Default::default()
         })?;
-        git.detach_head()?;
-        git.run(&["config", "branchless.core.mainBranch", "origin/master"])?;
-        git.run(&["branch", "-d", "master"])?;
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        cloned_repo.detach_head()?;
+        cloned_repo.run(&["config", "branchless.core.mainBranch", "origin/master"])?;
+        cloned_repo.run(&["branch", "-d", "master"])?;
+        let (stdout, _stderr) = cloned_repo.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
         :
         @ 62fc20d2 (remote origin/master) create test1.txt
@@ -344,14 +336,12 @@ fn test_main_remote_branch() -> eyre::Result<()> {
     }
 
     {
-        let git = original_repo.clone();
-        git.commit_file("test2", 2)?;
+        original_repo.commit_file("test2", 2)?;
     }
 
     {
-        let git = cloned_repo.clone();
-        git.run(&["fetch"])?;
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        cloned_repo.run(&["fetch"])?;
+        let (stdout, _stderr) = cloned_repo.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
         :
         @ 62fc20d2 create test1.txt
@@ -441,19 +431,11 @@ fn test_show_hidden_commits() -> eyre::Result<()> {
 
 #[test]
 fn test_active_non_head_main_branch_commit() -> eyre::Result<()> {
-    let path_to_git = get_path_to_git()?;
-    let temp_dir = tempfile::tempdir()?;
-    let git_run_info = GitRunInfo {
-        path_to_git,
-        working_directory: temp_dir.path().to_path_buf(),
-        env: Default::default(),
-    };
-
-    let original_repo_path = temp_dir.path().join("original");
-    std::fs::create_dir(&original_repo_path)?;
-    let original_repo = Git::new(original_repo_path, git_run_info.clone());
-    let cloned_repo_path = temp_dir.path().join("cloned");
-    let cloned_repo = Git::new(cloned_repo_path, git_run_info);
+    let GitWrapperWithRemoteRepo {
+        temp_dir: _guard,
+        original_repo,
+        cloned_repo,
+    } = make_git_with_remote_repo()?;
 
     let test1_oid = {
         original_repo.init_repo()?;
