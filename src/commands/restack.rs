@@ -63,14 +63,14 @@ use tracing::{instrument, warn};
 
 use crate::commands::smartlog::smartlog;
 use crate::core::config::get_restack_preserve_timestamps;
-use crate::core::eventlog::{EventLogDb, EventReplayer};
+use crate::core::eventlog::{EventCursor, EventLogDb, EventReplayer};
 use crate::core::rewrite::{
     execute_rebase_plan, find_abandoned_children, find_rewrite_target, move_branches,
     BuildRebasePlanOptions, ExecuteRebasePlanOptions, RebasePlanBuilder,
 };
 use crate::git::{
     resolve_commits, sort_commit_set, CommitSet, Dag, GitRunInfo, NonZeroOid, Repo,
-    ResolveCommitsResult,
+    RepoReferencesSnapshot, ResolveCommitsResult,
 };
 use crate::tui::Effects;
 
@@ -78,29 +78,20 @@ use crate::tui::Effects;
 fn restack_commits(
     effects: &Effects,
     repo: &Repo,
-    conn: &rusqlite::Connection,
+    dag: &Dag,
+    references_snapshot: &RepoReferencesSnapshot,
+    event_replayer: &EventReplayer,
+    event_cursor: EventCursor,
     git_run_info: &GitRunInfo,
-    event_log_db: &EventLogDb,
     commits: Option<impl IntoIterator<Item = NonZeroOid>>,
     build_options: &BuildRebasePlanOptions,
     execute_options: &ExecuteRebasePlanOptions,
 ) -> eyre::Result<isize> {
-    let references_snapshot = repo.get_references_snapshot()?;
-    let event_replayer = EventReplayer::from_event_log_db(effects, repo, event_log_db)?;
-    let event_cursor = event_replayer.make_default_cursor();
-    let dag = Dag::open_and_sync(
-        effects,
-        repo,
-        &event_replayer,
-        event_cursor,
-        &references_snapshot,
-    )?;
-
     let commit_set: CommitSet = match commits {
         Some(commits) => commits.into_iter().collect(),
         None => dag.obsolete_commits.clone(),
     };
-    let commits = sort_commit_set(repo, &dag, &commit_set)?;
+    let commits = sort_commit_set(repo, dag, &commit_set)?;
 
     struct RebaseInfo {
         dest_oid: NonZeroOid,
@@ -110,8 +101,8 @@ fn restack_commits(
         let mut result = Vec::new();
         for original_commit in commits {
             let abandoned_children = find_abandoned_children(
-                &dag,
-                &event_replayer,
+                dag,
+                event_replayer,
                 event_cursor,
                 original_commit.get_oid(),
             )?;
@@ -126,7 +117,7 @@ fn restack_commits(
     };
 
     let rebase_plan = {
-        let mut builder = RebasePlanBuilder::new(repo, &dag, references_snapshot.main_branch_oid);
+        let mut builder = RebasePlanBuilder::new(repo, dag, references_snapshot.main_branch_oid);
         for RebaseInfo {
             dest_oid,
             abandoned_child_oids,
@@ -246,7 +237,18 @@ pub fn restack(
     let event_tx_id = event_log_db.make_transaction_id(now, "restack")?;
     let head_oid = repo.get_head_info()?.oid;
 
-    let commits = match resolve_commits(&repo, commits)? {
+    let references_snapshot = repo.get_references_snapshot()?;
+    let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
+    let event_cursor = event_replayer.make_default_cursor();
+    let mut dag = Dag::open_and_sync(
+        effects,
+        &repo,
+        &event_replayer,
+        event_cursor,
+        &references_snapshot,
+    )?;
+
+    let commits = match resolve_commits(effects, &repo, &mut dag, commits)? {
         ResolveCommitsResult::Ok { commits } => commits,
         ResolveCommitsResult::CommitNotFound { commit } => {
             writeln!(effects.get_output_stream(), "Commit not found: {}", commit)?;
@@ -275,9 +277,11 @@ pub fn restack(
     let result = restack_commits(
         effects,
         &repo,
-        &conn,
+        &dag,
+        &references_snapshot,
+        &event_replayer,
+        event_cursor,
         git_run_info,
-        &event_log_db,
         commits,
         &build_options,
         &execute_options,

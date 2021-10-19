@@ -16,8 +16,7 @@ use crate::core::rewrite::{
     execute_rebase_plan, BuildRebasePlanOptions, ExecuteRebasePlanOptions, RebasePlanBuilder,
 };
 use crate::git::{
-    resolve_commits, CommitSet, Dag, GitRunInfo, NonZeroOid, Repo, RepoReferencesSnapshot,
-    ResolveCommitsResult,
+    resolve_commits, CommitSet, Dag, GitRunInfo, NonZeroOid, Repo, ResolveCommitsResult,
 };
 use crate::tui::Effects;
 
@@ -95,34 +94,31 @@ pub fn r#move(
             }
         },
     };
-    let (source_oid, dest_oid) = match resolve_commits(&repo, vec![source, dest])? {
-        ResolveCommitsResult::Ok { commits } => match &commits.as_slice() {
-            [source_commit, dest_commit] => (source_commit.get_oid(), dest_commit.get_oid()),
-            _ => eyre::bail!("Unexpected number of returns values from resolve_commits"),
-        },
-        ResolveCommitsResult::CommitNotFound { commit } => {
-            writeln!(effects.get_output_stream(), "Commit not found: {}", commit)?;
-            return Ok(1);
-        }
-    };
 
-    let references_snapshot = RepoReferencesSnapshot {
-        // FIXME: this seems like a hack; is there a better way to ensure that
-        // the graph has the commits we care about?
-        head_oid: Some(source_oid),
-        ..repo.get_references_snapshot()?
-    };
+    let references_snapshot = repo.get_references_snapshot()?;
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
     let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
     let event_cursor = event_replayer.make_default_cursor();
-    let dag = Dag::open_and_sync(
+    let mut dag = Dag::open_and_sync(
         effects,
         &repo,
         &event_replayer,
         event_cursor,
         &references_snapshot,
     )?;
+
+    let (source_oid, dest_oid) =
+        match resolve_commits(effects, &repo, &mut dag, vec![source, dest])? {
+            ResolveCommitsResult::Ok { commits } => match &commits.as_slice() {
+                [source_commit, dest_commit] => (source_commit.get_oid(), dest_commit.get_oid()),
+                _ => eyre::bail!("Unexpected number of returns values from resolve_commits"),
+            },
+            ResolveCommitsResult::CommitNotFound { commit } => {
+                writeln!(effects.get_output_stream(), "Commit not found: {}", commit)?;
+                return Ok(1);
+            }
+        };
 
     let source_oid = if should_resolve_base_commit {
         let merge_base_oid = dag.get_one_merge_base_oid(effects, &repo, source_oid, dest_oid)?;

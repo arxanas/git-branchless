@@ -534,7 +534,12 @@ pub enum ResolveCommitsResult<'repo> {
 /// - Short OIDs.
 /// - Reference names.
 #[instrument]
-pub fn resolve_commits(repo: &Repo, hashes: Vec<String>) -> eyre::Result<ResolveCommitsResult> {
+pub fn resolve_commits<'repo>(
+    effects: &Effects,
+    repo: &'repo Repo,
+    dag: &mut Dag,
+    hashes: Vec<String>,
+) -> eyre::Result<ResolveCommitsResult<'repo>> {
     let mut commits = Vec::new();
     for hash in hashes {
         let commit = match repo.revparse_single_commit(&hash)? {
@@ -543,5 +548,13 @@ pub fn resolve_commits(repo: &Repo, hashes: Vec<String>) -> eyre::Result<Resolve
         };
         commits.push(commit)
     }
+
+    let commit_oids = commits.iter().map(|commit| commit.get_oid()).collect_vec();
+    dag.sync_from_oids(
+        effects,
+        repo,
+        CommitSet::empty(),
+        CommitSet::from_iter(commit_oids.into_iter().map(CommitVertex::from).map(Ok)),
+    )?;
     Ok(ResolveCommitsResult::Ok { commits })
 }
