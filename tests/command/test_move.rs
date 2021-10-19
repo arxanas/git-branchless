@@ -1,4 +1,6 @@
-use branchless::testing::{make_git, GitRunOptions};
+use branchless::testing::{
+    make_git, make_git_with_remote_repo, GitInitOptions, GitRunOptions, GitWrapperWithRemoteRepo,
+};
 
 use crate::command::test_restack::remove_rebase_lines;
 
@@ -1803,6 +1805,48 @@ fn test_move_no_extra_checkout() -> eyre::Result<()> {
         [1/1] Committed as: 96d1c37a create test2.txt
         branchless: processing 1 update: branch foo
         branchless: processing 1 rewritten commit
+        In-memory rebase succeeded.
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_move_dest_not_in_dag() -> eyre::Result<()> {
+    let GitWrapperWithRemoteRepo {
+        temp_dir: _guard,
+        original_repo,
+        cloned_repo,
+    } = make_git_with_remote_repo()?;
+
+    {
+        original_repo.init_repo()?;
+        original_repo.commit_file("test1", 1)?;
+        original_repo.commit_file("test2", 2)?;
+        original_repo.run(&["checkout", "-b", "other-branch", "HEAD^"])?;
+        original_repo.commit_file("test3", 3)?;
+
+        original_repo.clone_repo_into(&cloned_repo, &["--branch", "other-branch"])?;
+    }
+
+    {
+        cloned_repo.init_repo_with_options(&GitInitOptions {
+            make_initial_commit: false,
+            run_branchless_init: false,
+            ..Default::default()
+        })?;
+        cloned_repo.run(&["branchless", "init", "--main-branch", "other-branch"])?;
+        cloned_repo.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
+
+        let (stdout, _stderr) = cloned_repo.run(&["move", "-d", "origin/master"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        Attempting rebase in-memory...
+        [1/1] Committed as: 70deb1e2 create test3.txt
+        branchless: processing 2 updates: branch other-branch, remote branch origin/other-branch
+        branchless: processing 1 rewritten commit
+        branchless: running command: <git-executable> checkout other-branch
+        Your branch is up to date with 'origin/other-branch'.
         In-memory rebase succeeded.
         "###);
     }
