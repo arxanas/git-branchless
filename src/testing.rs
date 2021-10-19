@@ -507,10 +507,12 @@ fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> std::io::Result
 }
 
 impl GitWrapper {
-    /// Make a copy of the repo on disk. This can be used to reuse testing setup.
+    /// Make a copy of the repo on disk. This can be used to reuse testing
+    /// setup.  This is *not* the same as running `git clone`; it's used to save
+    /// initialization time as part of testing optimization.
     ///
     /// The copied repo will be deleted once the returned value has been dropped.
-    pub fn clone_repo(&self) -> eyre::Result<Self> {
+    pub fn duplicate_repo(&self) -> eyre::Result<Self> {
         let repo_dir = tempfile::tempdir()?;
         copy_dir_all(&self.repo_dir, &repo_dir)?;
         let git = Git {
