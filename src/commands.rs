@@ -29,6 +29,7 @@ use tracing_subscriber::EnvFilter;
 use crate::core::formatting::Glyphs;
 use crate::git::GitRunInfo;
 use crate::git::NonZeroOid;
+use crate::opts::ColorSetting;
 use crate::opts::Command;
 use crate::opts::Opts;
 use crate::opts::WrappedCommand;
@@ -78,6 +79,7 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
     let Opts {
         working_directory,
         command,
+        color,
     } = Opts::parse_from(args);
     if let Some(working_directory) = working_directory {
         std::env::set_current_dir(&working_directory).wrap_err_with(|| {
@@ -95,7 +97,13 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
         working_directory: std::env::current_dir()?,
         env: std::env::vars_os().collect(),
     };
-    let effects = Effects::new(Glyphs::detect());
+
+    let color = match color {
+        Some(ColorSetting::Always) => Glyphs::pretty(),
+        Some(ColorSetting::Never) => Glyphs::text(),
+        Some(ColorSetting::Auto) | None => Glyphs::detect(),
+    };
+    let effects = Effects::new(color);
 
     let exit_code = match command {
         Command::Init {

@@ -107,7 +107,8 @@ pub struct Glyphs {
 impl Glyphs {
     /// Make the `Glyphs` object appropriate for `stdout`.
     pub fn detect() -> Self {
-        if console::user_attended() {
+        let color_support = concolor_control::get(concolor_control::Stream::Stdout);
+        if color_support.color() {
             Glyphs::pretty()
         } else {
             Glyphs::text()
@@ -336,7 +337,7 @@ fn render_style_as_ansi(content: &str, style: Style) -> eyre::Result<String> {
     Ok(output.to_string())
 }
 
-/// Write the provided string to `out`, using ANSI escape codfes as necessary to
+/// Write the provided string to `out`, using ANSI escape codes as necessary to
 /// style it.
 ///
 /// TODO: return something that implements `Display` instead of a `String`.
