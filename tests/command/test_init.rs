@@ -326,3 +326,28 @@ fn test_man_viewer_installed() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_init_explicit_main_branch_name() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    git.init_repo_with_options(&GitInitOptions {
+        run_branchless_init: false,
+        ..Default::default()
+    })?;
+
+    {
+        git.run(&["branchless", "init", "--main-branch", "foo"])?;
+        git.run(&["checkout", "-b", "foo"])?;
+        git.run(&["branch", "-d", "master"])?;
+        git.commit_file("test1", 1)?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        @ 62fc20d2 (foo) create test1.txt
+        "###);
+    }
+
+    Ok(())
+}

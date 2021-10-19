@@ -21,6 +21,13 @@ pub enum Command {
         /// Uninstall the branchless workflow instead of initializing it.
         #[clap(long = "uninstall")]
         uninstall: bool,
+
+        /// Use the provided name as the name of the main branch.
+        ///
+        /// If not set, it will be auto-detected. If it can't be auto-detected,
+        /// then you will be prompted to enter a value for the main branch name.
+        #[clap(long = "main-branch", conflicts_with = "uninstall")]
+        main_branch_name: Option<String>,
     },
 
     /// Display a nice graph of the commits you've recently worked on.
