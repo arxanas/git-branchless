@@ -116,8 +116,6 @@ See https://github.com/arxanas/git-branchless/wiki/Installation.
 
 Short version: run `cargo install --locked git-branchless`, then run `git branchless init` in your repository.
 
-**NOTE**: due to https://github.com/arxanas/git-branchless/issues/127, you must install with the `--locked` flag for `cargo`.
-
 ## Status
 
 `git-branchless` is currently in **alpha**. Be prepared for breaking changes, as some of the workflows and architecture may change in the future. It's believed that there are no major bugs, but it has not yet been comprehensively battle-tested. You can see the known issues in the [issue tracker](https://github.com/arxanas/git-branchless/issues/1).
