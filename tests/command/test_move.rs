@@ -21,7 +21,7 @@ fn test_move_stick() -> eyre::Result<()> {
 
     // --on-disk
     {
-        let git = git.clone_repo()?;
+        let git = git.duplicate_repo()?;
         git.run(&[
             "move",
             "--on-disk",
@@ -126,7 +126,7 @@ fn test_move_tree() -> eyre::Result<()> {
 
     // --on-disk
     {
-        let git = git.clone_repo()?;
+        let git = git.duplicate_repo()?;
         git.run(&[
             "move",
             "--on-disk",
@@ -199,7 +199,7 @@ fn test_move_with_source_not_in_smartlog() -> eyre::Result<()> {
 
     // on-disk
     {
-        let git = git.clone_repo()?;
+        let git = git.duplicate_repo()?;
 
         git.run(&[
             "move",
@@ -928,7 +928,7 @@ fn test_move_branches_after_move() -> eyre::Result<()> {
 
     // --on-disk
     {
-        let git = git.clone_repo()?;
+        let git = git.duplicate_repo()?;
 
         {
             let (stdout, stderr) = git.run(&[
@@ -1088,7 +1088,7 @@ fn test_move_no_reapply_upstream_commits() -> eyre::Result<()> {
 
     // --on-disk
     {
-        let git = git.clone_repo()?;
+        let git = git.duplicate_repo()?;
 
         {
             let (stdout, stderr) = git.run(&["move", "--on-disk", "-b", "HEAD", "-d", "master"])?;
@@ -1179,7 +1179,7 @@ fn test_move_no_reapply_squashed_commits() -> eyre::Result<()> {
 
     // --on-disk
     {
-        let git = git.clone_repo()?;
+        let git = git.duplicate_repo()?;
 
         {
             let (stdout, _stderr) = git.run(&["smartlog"])?;
@@ -1325,7 +1325,7 @@ fn test_move_delete_checked_out_branch() -> eyre::Result<()> {
 
     // --on-disk
     {
-        let git = git.clone_repo()?;
+        let git = git.duplicate_repo()?;
 
         {
             git.run(&["checkout", "work"])?;
@@ -1474,7 +1474,7 @@ fn test_move_merge_commit() -> eyre::Result<()> {
 
     // --on-disk
     {
-        let git = git.clone_repo()?;
+        let git = git.duplicate_repo()?;
 
         {
             let (stdout, stderr) = git.run(&[
@@ -1582,7 +1582,7 @@ fn test_move_merge_commit() -> eyre::Result<()> {
 
     // --in-memory
     {
-        let git = git.clone_repo()?;
+        let git = git.duplicate_repo()?;
 
         {
             let (stdout, _stderr) = git.run_with_options(
@@ -1701,7 +1701,7 @@ fn test_move_orphaned_root() -> eyre::Result<()> {
 
     // --on-disk
     {
-        let git = git.clone_repo()?;
+        let git = git.duplicate_repo()?;
 
         {
             let (stdout, stderr) = git.run(&["move", "--on-disk", "-d", "master"])?;
