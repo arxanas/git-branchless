@@ -328,6 +328,26 @@ impl Git {
         self.init_repo_with_options(&Default::default())
     }
 
+    /// Clone this repository into the `target` repository (which must not have
+    /// been initialized).
+    pub fn clone_repo_into(&self, target: &Git, additional_args: &[&str]) -> eyre::Result<()> {
+        let args = {
+            let mut args = vec![
+                "clone",
+                // For Windows in CI.
+                "-c",
+                "core.autocrlf=false",
+                self.repo_path.to_str().unwrap(),
+                target.repo_path.to_str().unwrap(),
+            ];
+            args.extend(additional_args.iter());
+            args
+        };
+
+        let (_stdout, _stderr) = self.run(args.as_slice())?;
+        Ok(())
+    }
+
     /// Write the provided contents to the provided file in the repository root.
     pub fn write_file(&self, name: &str, contents: &str) -> eyre::Result<()> {
         let path = PathBuf::from(name);
