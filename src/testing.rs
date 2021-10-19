@@ -513,3 +513,52 @@ pub fn make_git() -> eyre::Result<GitWrapper> {
     let git = Git::new(repo_dir.path().to_path_buf(), path_to_git);
     Ok(GitWrapper { repo_dir, git })
 }
+
+/// Represents a pair of directories that will be cleaned up after this value
+/// dropped. The two directories need to be `init`ed and `clone`ed by the
+/// caller, respectively.
+pub struct GitWrapperWithRemoteRepo {
+    /// Guard to clean up the containing temporary directory. Make sure to bind
+    /// this to a local variable not named `_`.
+    pub temp_dir: TempDir,
+
+    /// The wrapper around the original repository.
+    pub original_repo: Git,
+
+    /// The wrapper around the cloned repository.
+    pub cloned_repo: Git,
+}
+
+/// Create a `GitWrapperWithRemoteRepo`.
+pub fn make_git_with_remote_repo() -> eyre::Result<GitWrapperWithRemoteRepo> {
+    let path_to_git = get_path_to_git()?;
+    let temp_dir = tempfile::tempdir()?;
+    let git_run_info = GitRunInfo {
+        path_to_git,
+        working_directory: temp_dir.path().to_path_buf(),
+        env: Default::default(),
+    };
+    let original_repo_path = temp_dir.path().join("original");
+    std::fs::create_dir_all(&original_repo_path)?;
+    let original_repo = Git::new(
+        original_repo_path.clone(),
+        GitRunInfo {
+            working_directory: original_repo_path,
+            ..git_run_info.clone()
+        },
+    );
+    let cloned_repo_path = temp_dir.path().join("cloned");
+    let cloned_repo = Git::new(
+        cloned_repo_path.clone(),
+        GitRunInfo {
+            working_directory: cloned_repo_path,
+            ..git_run_info
+        },
+    );
+
+    Ok(GitWrapperWithRemoteRepo {
+        temp_dir,
+        original_repo,
+        cloned_repo,
+    })
+}
