@@ -443,11 +443,7 @@ fn test_active_non_head_main_branch_commit() -> eyre::Result<()> {
         original_repo.commit_file("test2", 2)?;
         original_repo.commit_file("test3", 3)?;
 
-        original_repo.run(&[
-            "clone",
-            original_repo.repo_path.to_str().unwrap(),
-            cloned_repo.repo_path.to_str().unwrap(),
-        ])?;
+        original_repo.clone_repo_into(&cloned_repo, &[])?;
 
         test1_oid
     };
@@ -468,18 +464,6 @@ fn test_active_non_head_main_branch_commit() -> eyre::Result<()> {
         "###);
     }
 
-    // This assertion seems to fail on Windows because the created commit has a
-    // different commit hash:
-    //
-    // ```
-    // -@ 355e173b (master) create test4.txt
-    // +@ b20a6542 (master) create test4.txt
-    // ```
-    //
-    // The commit hash appears to be consistent across runs. My guess is that
-    // this is some kind of line-ending related issue, but I couldn't figure it
-    // out quickly, so I'm just disabling this assertion on Windows.
-    #[cfg(not(windows))]
     {
         // Verify that both `origin/master` and `master` appear in the smartlog.
         cloned_repo.commit_file("test4", 4)?;
