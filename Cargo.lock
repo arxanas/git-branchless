@@ -298,6 +298,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "concolor-control"
+version = "0.0.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7104119c2f80d887239879d0c50e033cd40eac9a3f3561e0684ba7d5d654f4da"
+dependencies = [
+ "atty",
+ "bitflags",
+ "concolor-query",
+]
+
+[[package]]
+name = "concolor-query"
+version = "0.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ad159cc964ac8f9d407cbc0aa44b02436c054b541f2b4b5f06972e1efdc54bc7"
+
+[[package]]
 name = "console"
 version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -783,6 +800,7 @@ dependencies = [
  "clap 3.0.0-beta.5",
  "clippy",
  "color-eyre",
+ "concolor-control",
  "console",
  "criterion",
  "cursive",

@@ -1,6 +1,6 @@
 //! The command-line options for `git-branchless`.
 
-use clap::{App, IntoApp, Parser};
+use clap::{App, ArgEnum, IntoApp, Parser};
 use man::Arg;
 use std::path::{Path, PathBuf};
 
@@ -227,6 +227,18 @@ pub enum Command {
     },
 }
 
+/// Whether to display terminal colors.
+#[derive(ArgEnum, Clone)]
+pub enum ColorSetting {
+    /// Automatically determine whether to display colors from the terminal and environment variables.
+    /// This is the default behavior.
+    Auto,
+    /// Always display terminal colors.
+    Always,
+    /// Never display terminal colors.
+    Never,
+}
+
 /// Branchless workflow for Git.
 ///
 /// See the documentation at https://github.com/arxanas/git-branchless/wiki.
@@ -237,6 +249,10 @@ pub struct Opts {
     /// (The option is called `-C` for symmetry with Git.)
     #[clap(short = 'C')]
     pub working_directory: Option<PathBuf>,
+
+    /// Flag to force enable or disable terminal colors.
+    #[clap(long = "color", arg_enum)]
+    pub color: Option<ColorSetting>,
 
     /// The `git-branchless` subcommand to run.
     #[clap(subcommand)]

@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `git branchless init` takes a `--main-branch` option to specify the name of the main branch without interactive prompting.
+- The `--color=[auto,always,never]` flag can be used to override the automatically detected value for terminal colors.
+- The `CLICOLOR` and `NOCOLOR` environment variables are now respected.
 
 ### Changed
 
@@ -34,7 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Output of subcommands is no longer overwritten by progress updates.
-- Improved performance up to 100x for commit deduplication during  `git move` when rebasing past certain large commits.
+- Improved performance up to 100x for commit deduplication during `git move` when rebasing past certain large commits.
 - Improved performance up to 10x for smartlog rendering.
 
 ## [0.3.5] - 2021-09-11
@@ -101,7 +103,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - The version number in `git-branchless --help` was fixed at `0.2.0`. It now reflects the version of the package.
--  `git branchless wrap` no longer fails to run if there is no Git repository in the current directory.
+- `git branchless wrap` no longer fails to run if there is no Git repository in the current directory.
 - User hooks which are invoked by `git-branchless` are now invoked in the correct working directory.
 
 ## [0.3.2] - 2021-06-23
