@@ -98,12 +98,18 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
     let effects = Effects::new(Glyphs::detect());
 
     let exit_code = match command {
-        Command::Init { uninstall: false } => {
-            init::init(&effects, &git_run_info)?;
+        Command::Init {
+            uninstall: false,
+            main_branch_name,
+        } => {
+            init::init(&effects, &git_run_info, main_branch_name.as_deref())?;
             0
         }
 
-        Command::Init { uninstall: true } => {
+        Command::Init {
+            uninstall: true,
+            main_branch_name: _,
+        } => {
             init::uninstall(&effects)?;
             0
         }

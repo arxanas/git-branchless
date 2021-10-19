@@ -354,48 +354,54 @@ fn set_configs(
     effects: &Effects,
     repo: &Repo,
     config: &mut Config,
+    main_branch_name: Option<&str>,
 ) -> eyre::Result<()> {
-    let main_branch_name = match detect_main_branch_name(repo)? {
-        Some(main_branch_name) => {
-            writeln!(
-                effects.get_output_stream(),
-                "Auto-detected your main branch as: {}",
-                console::style(&main_branch_name).bold()
-            )?;
-            writeln!(
-                effects.get_output_stream(),
-                "If this is incorrect, run: git config branchless.core.mainBranch <branch>"
-            )?;
-            main_branch_name
-        }
-        None => {
-            writeln!(
-                effects.get_output_stream(),
-                "{}",
-                console::style("Your main branch name could not be auto-detected!")
-                    .yellow()
-                    .bold()
-            )?;
-            writeln!(
-                effects.get_output_stream(),
-                "Examples of a main branch: master, main, trunk, etc."
-            )?;
-            writeln!(
-                effects.get_output_stream(),
-                "See https://github.com/arxanas/git-branchless/wiki/Concepts#main-branch"
-            )?;
-            write!(
-                effects.get_output_stream(),
-                "Enter the name of your main branch: "
-            )?;
-            stdout().flush()?;
-            let mut input = String::new();
-            r#in.read_line(&mut input)?;
-            match input.trim() {
-                "" => eyre::bail!("No main branch name provided"),
-                main_branch_name => main_branch_name.to_string(),
+    let main_branch_name = match main_branch_name {
+        Some(main_branch_name) => main_branch_name.to_string(),
+
+        None => match detect_main_branch_name(repo)? {
+            Some(main_branch_name) => {
+                writeln!(
+                    effects.get_output_stream(),
+                    "Auto-detected your main branch as: {}",
+                    console::style(&main_branch_name).bold()
+                )?;
+                writeln!(
+                    effects.get_output_stream(),
+                    "If this is incorrect, run: git config branchless.core.mainBranch <branch>"
+                )?;
+                main_branch_name
             }
-        }
+
+            None => {
+                writeln!(
+                    effects.get_output_stream(),
+                    "{}",
+                    console::style("Your main branch name could not be auto-detected!")
+                        .yellow()
+                        .bold()
+                )?;
+                writeln!(
+                    effects.get_output_stream(),
+                    "Examples of a main branch: master, main, trunk, etc."
+                )?;
+                writeln!(
+                    effects.get_output_stream(),
+                    "See https://github.com/arxanas/git-branchless/wiki/Concepts#main-branch"
+                )?;
+                write!(
+                    effects.get_output_stream(),
+                    "Enter the name of your main branch: "
+                )?;
+                stdout().flush()?;
+                let mut input = String::new();
+                r#in.read_line(&mut input)?;
+                match input.trim() {
+                    "" => eyre::bail!("No main branch name provided"),
+                    main_branch_name => main_branch_name.to_string(),
+                }
+            }
+        },
     };
 
     config.set("branchless.core.mainBranch", main_branch_name)?;
@@ -479,13 +485,17 @@ fn delete_isolated_config(
 
 /// Initialize `git-branchless` in the current repo.
 #[instrument]
-pub fn init(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<()> {
+pub fn init(
+    effects: &Effects,
+    git_run_info: &GitRunInfo,
+    main_branch_name: Option<&str>,
+) -> eyre::Result<()> {
     let mut in_ = BufReader::new(stdin());
     let mut repo = Repo::from_current_dir()?;
     let readonly_config = repo.get_readonly_config()?;
     let mut config = create_isolated_config(effects, &repo, readonly_config.into_config())?;
 
-    set_configs(&mut in_, effects, &repo, &mut config)?;
+    set_configs(&mut in_, effects, &repo, &mut config, main_branch_name)?;
     install_hooks(effects, &repo)?;
     install_aliases(effects, &mut repo, &mut config, git_run_info)?;
     install_man_pages(effects, &repo, &mut config)?;

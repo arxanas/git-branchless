@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `git branchless init` takes a `--main-branch` option to specify the name of the main branch without interactive prompting.
+
 ### Changed
 
 - BREAKING: If your local main branch has an upstream branch, then that upstream branch will be treated as the repository's main branch, and your local main will be treated as a branch like any other. This should make workflows which commit to the main branch more ergonomic.
