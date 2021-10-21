@@ -26,6 +26,13 @@ pub fn get_main_branch_name(repo: &Repo) -> eyre::Result<String> {
     Ok(main_branch_name)
 }
 
+/// Get the default init branch name.
+pub fn get_default_branch_name(repo: &Repo) -> eyre::Result<Option<String>> {
+    let config = repo.get_readonly_config()?;
+    let default_branch_name: Option<String> = config.get("init.defaultBranch")?;
+    Ok(default_branch_name)
+}
+
 /// If `true`, when restacking a commit, do not update its timestamp to the
 /// current time.
 pub fn get_restack_preserve_timestamps(repo: &Repo) -> eyre::Result<bool> {

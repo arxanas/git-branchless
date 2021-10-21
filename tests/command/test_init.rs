@@ -337,6 +337,10 @@ fn test_init_explicit_main_branch_name() -> eyre::Result<()> {
     })?;
 
     {
+        // Set the default branch to ensure `--main-branch` takes precedence
+        // over the repo default.
+        git.run(&["config", "init.defaultBranch", "repo-default-branch"])?;
+
         git.run(&["branchless", "init", "--main-branch", "foo"])?;
         git.run(&["checkout", "-b", "foo"])?;
         git.run(&["branch", "-d", "master"])?;
@@ -346,6 +350,33 @@ fn test_init_explicit_main_branch_name() -> eyre::Result<()> {
         insta::assert_snapshot!(stdout, @r###"
         :
         @ 62fc20d2 (foo) create test1.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_init_repo_default_branch() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    git.init_repo_with_options(&GitInitOptions {
+        run_branchless_init: false,
+        ..Default::default()
+    })?;
+
+    {
+        git.run(&["checkout", "-b", "repo-default-branch"])?;
+        git.run(&["config", "init.defaultBranch", "repo-default-branch"])?;
+        git.run(&["branch", "-d", "master"])?;
+
+        git.run(&["branchless", "init"])?;
+        git.commit_file("test1", 1)?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        @ 62fc20d2 (repo-default-branch) create test1.txt
         "###);
     }
 

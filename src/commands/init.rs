@@ -9,7 +9,7 @@ use eyre::Context;
 use path_slash::PathExt;
 use tracing::{instrument, warn};
 
-use crate::core::config::get_core_hooks_path;
+use crate::core::config::{get_core_hooks_path, get_default_branch_name};
 use crate::git::{Config, ConfigRead, ConfigWrite, GitRunInfo, GitVersion, Repo};
 use crate::opts::write_man_pages;
 use crate::tui::Effects;
@@ -246,6 +246,15 @@ fn install_alias(repo: &Repo, config: &mut Config, from: &str, to: &str) -> eyre
 
 #[instrument]
 fn detect_main_branch_name(repo: &Repo) -> eyre::Result<Option<String>> {
+    if let Some(default_branch_name) = get_default_branch_name(repo)? {
+        if repo
+            .find_branch(&default_branch_name, git2::BranchType::Local)?
+            .is_some()
+        {
+            return Ok(Some(default_branch_name));
+        }
+    }
+
     for branch_name in [
         "master",
         "main",
