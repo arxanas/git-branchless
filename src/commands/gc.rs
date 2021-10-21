@@ -8,6 +8,7 @@
 //! garbage collection doesn't collect commits which branchless thinks are still
 //! active.
 
+use std::convert::TryInto;
 use std::ffi::OsStr;
 use std::fmt::Write;
 
@@ -17,6 +18,7 @@ use tracing::instrument;
 use crate::core::eventlog::{
     is_gc_ref, CommitActivityStatus, EventCursor, EventLogDb, EventReplayer,
 };
+use crate::core::formatting::Pluralize;
 use crate::git::{NonZeroOid, Reference, Repo};
 use crate::tui::Effects;
 
@@ -94,8 +96,20 @@ pub fn gc(effects: &Effects) -> eyre::Result<()> {
         "branchless: collecting garbage"
     )?;
     let dangling_references = find_dangling_references(&repo, &event_replayer, event_cursor)?;
+    let num_dangling_references = Pluralize {
+        amount: dangling_references.len().try_into()?,
+        singular: "dangling reference",
+        plural: "dangling references",
+    }
+    .to_string();
     for mut reference in dangling_references.into_iter() {
         reference.delete()?;
     }
+
+    writeln!(
+        effects.get_output_stream(),
+        "branchless: {} deleted",
+        num_dangling_references,
+    )?;
     Ok(())
 }
