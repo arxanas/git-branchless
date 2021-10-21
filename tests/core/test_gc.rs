@@ -28,8 +28,9 @@ o 62fc20d2 create test1.txt
     {
         let (stdout, _stderr) = git.run(&["branchless", "gc"])?;
         insta::assert_snapshot!(stdout, @r###"
-branchless: collecting garbage
-"###);
+        branchless: collecting garbage
+        branchless: 1 dangling reference deleted
+        "###);
     }
 
     git.run(&["gc", "--prune=now"])?;

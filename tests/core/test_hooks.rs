@@ -203,8 +203,10 @@ fn test_pre_auto_gc() -> eyre::Result<()> {
         stdout,
         stderr
     );
-    insta::assert_snapshot!(stdout, @"branchless: collecting garbage
-");
+    insta::assert_snapshot!(stdout, @r###"
+    branchless: collecting garbage
+    branchless: 0 dangling references deleted
+    "###);
 
     Ok(())
 }
