@@ -105,7 +105,7 @@ When you use `git rebase -i` with `git-branchless`, you will be prompted to repa
 
 ## About
 
-The branchless workflow is designed for use in a repository with a **single main branch** that all commits are rebased onto. It improves developer velocity by encouraging fast and frequent commits, and helps developers operate on these commits fearlessly.
+The branchless workflow is designed for use in a repository with a **single main branch** that all commits are rebased onto, but works with other setups as well. It improves developer velocity by encouraging fast and frequent commits, and helps developers operate on these commits fearlessly (see [Design goals](https://github.com/arxanas/git-branchless/wiki/Design-goals)).
 
 In the branchless workflow, the commits you're working on are inferred based on your activity, so you no longer need branches to keep track of them. Nonetheless, branches are sometimes convenient, and `git-branchless` fully supports them. If you prefer, you can continue to use your normal workflow and benefit from features like `git sl` or `git undo` without going entirely branchless.
 
