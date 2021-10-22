@@ -5,12 +5,12 @@
 [![macOS](https://github.com/arxanas/git-branchless/actions/workflows/macos.yml/badge.svg)](https://github.com/arxanas/git-branchless/actions/workflows/macos.yml)
 [![crates.io](https://img.shields.io/crates/v/git-branchless)](https://crates.io/crates/git-branchless)
 
-`git-branchless` is a suite of tools to help you **visualize**, **navigate**, **manipulate**, and **repair** your commit history. It's based off of the branchless Mercurial workflows at large companies such as Google and Facebook.
+`git-branchless` is a suite of tools to help you **visualize**, **navigate**, **manipulate**, and **repair** your commit graph. It's based off of the branchless Mercurial workflows at large companies such as Google and Facebook.
 
 - [Demos](#demos)
   - [Repair](#repair)
   - [Visualize](#visualize)
-  - [Navigate and manipulate](#navigate-and-manipulate)
+  - [Manipulate](#manipulate)
 - [About](#about)
 - [Installation](#installation)
 - [Status](#status)
@@ -79,13 +79,13 @@ Visualize your commit history with the smartlog (`git sl`):
 
 `git log --graph` only shows commits which have branches attached with them. If you prefer to work without branches, then `git log --graph` won't work for you.
 
-To support users who rewrite history extensively, `git sl` also points out commits which have been abandoned and need to be repaired (descendants of commits marked with `rewritten as abcd1234`). They can be automatically fixed up with `git restack`, or manually handled.
+To support users who rewrite their commit graph extensively, `git sl` also points out commits which have been abandoned and need to be repaired (descendants of commits marked with `rewritten as abcd1234`). They can be automatically fixed up with `git restack`, or manually handled.
 
 </details>
 
-### Navigate and manipulate
+### Manipulate
 
-Rewrite history without fear:
+Edit your commit graph without fear:
 
 <p align="center">
 <a href="https://asciinema.org/a/3UVPMf0IpJaGdP6Kd6Zum4cq8" target="_blank"><img src="https://asciinema.org/a/3UVPMf0IpJaGdP6Kd6Zum4cq8.svg" /></a>
@@ -99,7 +99,7 @@ Interactive rebasing with `git rebase -i` is fully supported, but it has a coupl
 - `git rebase -i` can only repair linear series of commits, not trees. If you modify a commit with multiple children, then you have to be sure to rebase all of the other children commits appropriately.
 - You have to commit to a plan of action before starting the rebase. For some use-cases, it can be easier to operate on individual commits at a time, rather than an entire series of commits all at once.
 
-When you use `git rebase -i` with `git-branchless`, you will be prompted to repair your history if you abandon any commits.
+When you use `git rebase -i` with `git-branchless`, you will be prompted to repair your commit graph if you abandon any commits.
 
 </details>
 
