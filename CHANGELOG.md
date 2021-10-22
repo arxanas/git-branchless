@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.7] - 2021-10-22
+
 ### Added
 
 - `git branchless init` takes a `--main-branch` option to specify the name of the main branch without interactive prompting.
@@ -17,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - BREAKING: If your local main branch has an upstream branch, then that upstream branch will be treated as the repository's main branch, and your local main will be treated as a branch like any other. This should make workflows which commit to the main branch more ergonomic.
 - BREAKING: `git move` and `git restack` will no longer perform merge conflict resolution unless the `--merge` option was passed.
-- `git branchless init` will use `init.defaultBranch` when detecting the name of the main branch, if one is not provided by `--main-branch`.
+  `git branchless init` will use `init.defaultBranch` when detecting the name of the main branch, if one is not provided by `--main-branch`.
 - (#144) When automatic garbage collection is run, the number of deleted references is displayed.
 
 ### Fixed
