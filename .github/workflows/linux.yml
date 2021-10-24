@@ -84,9 +84,11 @@ jobs:
       - name: Run Rust tests (all features)
         run: |
           export PATH_TO_GIT="$PWD"/git
-          cargo test --all-features
+          # https://github.com/actions/runner/issues/241#issuecomment-577360161
+          script -e -c cargo test --all-features
 
       - name: Run Rust tests (no default features)
         run: |
           export PATH_TO_GIT="$PWD"/git
-          cargo test --no-default-features
+          # https://github.com/actions/runner/issues/241#issuecomment-577360161
+          script -e -c cargo test --no-default-features
