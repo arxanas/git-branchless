@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - New `git branchless checkout` command, which enables you to interactively pick a commit to checkout from the commits tracked in the smartlog.
   - This command is aliased to `git co`.
+- `git next` accepts an `--interactive` flag which, if set, prompts which commit to advance to in ambiguous circumstances. This can be enabled by default with the `branchless.next.interactive` config setting.
 
 ## [0.3.7] - 2021-10-22
 

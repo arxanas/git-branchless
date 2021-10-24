@@ -40,6 +40,13 @@ pub fn get_restack_preserve_timestamps(repo: &Repo) -> eyre::Result<bool> {
         .get_or("branchless.restack.preserveTimestamps", false)
 }
 
+/// If `true`, when advancing to a "next" commit, prompt interactively to
+/// if there is ambiguity in which commit to advance to.
+pub fn get_next_interactive(repo: &Repo) -> eyre::Result<bool> {
+    repo.get_readonly_config()?
+        .get_or("branchless.next.interactive", false)
+}
+
 /// Config key for `get_restack_warn_abandoned`.
 pub const RESTACK_WARN_ABANDONED_CONFIG_KEY: &str = "branchless.restack.warnAbandoned";
 

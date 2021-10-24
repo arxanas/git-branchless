@@ -111,6 +111,16 @@ pub enum Command {
         /// When encountering multiple next commits, choose the newest.
         #[clap(short = 'n', long = "newest", conflicts_with("oldest"))]
         newest: bool,
+
+        /// When encountering multiple next commits, interactively prompt which to
+        /// advance to.
+        #[clap(
+            short = 'i',
+            long = "interactive",
+            conflicts_with("newest"),
+            conflicts_with("oldest")
+        )]
+        interactive: bool,
     },
 
     /// Interactively pick a commit to checkout.
