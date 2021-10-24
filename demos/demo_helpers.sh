@@ -64,7 +64,7 @@ confirm() {
 run_demo() {
     local expect_script="
 source $BASE_DIR/demo_helpers.tcl
-spawn asciinema rec
+spawn asciinema rec -c \"PS1='$ ' bash --norc\"
 expect_prompt
 
 $1
@@ -77,7 +77,6 @@ quit_and_dump_asciicast_path
         return
     fi
 
-    export PS1='$ '
     echo "Recording demo (terminal size is $(tput cols)x$(tput lines))..."
     if [[ "$PREVIEW" == 'false' ]]; then
         echo '(Pass --preview to play the demo automatically once done)'
