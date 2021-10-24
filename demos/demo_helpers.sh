@@ -62,8 +62,15 @@ confirm() {
 }
 
 run_demo() {
-    local expect_script="$1"
-    expect_script=$(printf "source $BASE_DIR/demo_helpers.tcl\n%s\n" "$expect_script")
+    local expect_script="
+source $BASE_DIR/demo_helpers.tcl
+spawn asciinema rec
+expect_prompt
+
+$1
+
+quit_and_dump_asciicast_path
+"
 
     if [[ "$DEBUG" == true ]]; then
         echo "$expect_script" | /usr/bin/env expect
