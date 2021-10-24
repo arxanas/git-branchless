@@ -9,9 +9,6 @@ git add foo
 git commit -m 'Commit foo'
 
 run_demo '
-spawn asciinema rec
-expect_prompt
-
 run_command "cat foo"
 expect_prompt
 
@@ -49,6 +46,4 @@ run_command "y"
 
 run_command "cat foo"
 run_command "echo crisis averted"
-
-quit_and_dump_asciicast_path
 '
