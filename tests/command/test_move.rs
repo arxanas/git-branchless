@@ -1223,6 +1223,10 @@ fn test_move_no_reapply_squashed_commits() -> eyre::Result<()> {
             Executing: git branchless hook-detect-empty-commit 96d1c37a3d4363611c49f7e52186e189a04c531f
             branchless: processing 1 update: branch master
             branchless: processing 4 rewritten commits
+            branchless: running command: <git-executable> checkout de4a1fe8f80b830d7d9a5b4adfd79fab3fcdc80c
+            branchless: processing 1 update: ref HEAD
+            HEAD is now at de4a1fe squashed test1 and test2
+            branchless: processing checkout
             Successfully rebased and updated refs/heads/master.
             "###);
             insta::assert_snapshot!(stdout, @r###"
@@ -1720,6 +1724,10 @@ fn test_move_orphaned_root() -> eyre::Result<()> {
             Executing: git branchless hook-detect-empty-commit fc09f3d9f0b7370dc38e761e3730a856dc5025c2
             branchless: processing 1 update: branch new-root
             branchless: processing 3 rewritten commits
+            branchless: running command: <git-executable> checkout 70deb1e28791d8e7dd5a1f0c871a51b91282562f
+            branchless: processing 1 update: ref HEAD
+            HEAD is now at 70deb1e create test3.txt
+            branchless: processing checkout
             Successfully rebased and updated refs/heads/new-root.
             "###);
             insta::assert_snapshot!(stdout, @r###"
@@ -1888,6 +1896,48 @@ fn test_move_abort_rebase_check_out_old_branch() -> eyre::Result<()> {
         // Will output `HEAD` if `HEAD` is detached, which is not what we want.
         let (stdout, _stderr) = git.run(&["rev-parse", "--abbrev-ref", "HEAD"])?;
         insta::assert_snapshot!(stdout, @"conflicting");
+    }
+
+    Ok(())
+}
+
+/// For https://github.com/arxanas/git-branchless/issues/151
+#[test]
+fn test_move_orig_head_no_symbolic_reference() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    git.init_repo()?;
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+
+    git.run(&["checkout", "-b", "foo"])?;
+    // Force `ORIG_HEAD` to be written to disk.
+    git.run(&["move", "-d", "HEAD^", "--on-disk"])?;
+    git.detach_head()?;
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        @ 96d1c37a (foo, master) create test2.txt
+        "###);
+    }
+
+    // Get `git reset` to write a new value to `ORIG_HEAD`. If `ORIG_HEAD` is a
+    // symbolic reference, it will write to the target reference, rather than
+    // overwriting `ORIG_HEAD`.
+    git.run(&["reset", "--hard", "HEAD^"])?;
+    git.run(&["reset", "--hard", "HEAD^"])?;
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        // `foo` should be unmoved here, rather than moved to
+        // `create test1.txt`.
+        insta::assert_snapshot!(stdout, @r###"
+        @ f777ecc9 create initial.txt
+        :
+        O 96d1c37a (foo, master) create test2.txt
+        "###);
     }
 
     Ok(())
