@@ -720,7 +720,7 @@ mod on_disk {
     use tracing::instrument;
 
     use crate::core::rewrite::plan::RebasePlan;
-    use crate::git::{GitRunInfo, MaybeZeroOid, Repo};
+    use crate::git::{GitRunInfo, Repo};
     use crate::tui::{Effects, OperationType};
 
     use super::ExecuteRebasePlanOptions;
@@ -780,26 +780,18 @@ mod on_disk {
         std::fs::write(&interactive_file_path, "")
             .wrap_err_with(|| format!("Writing interactive to: {:?}", &interactive_file_path))?;
 
-        if head_info.oid.is_some() {
-            let repo_head_file_path = repo.get_path().join("HEAD");
+        if let Some(head_oid) = head_info.oid {
             let orig_head_file_path = repo.get_path().join("ORIG_HEAD");
-            std::fs::copy(&repo_head_file_path, &orig_head_file_path)
-                .wrap_err_with(|| format!("Copying `HEAD` to: {:?}", &orig_head_file_path))?;
+            std::fs::write(&orig_head_file_path, head_oid.to_string())
+                .wrap_err_with(|| format!("Writing `ORIG_HEAD` to: {:?}", &orig_head_file_path))?;
 
             // Confusingly, there is also a file at
             // `.git/rebase-merge/orig-head` (different from `.git/ORIG_HEAD`),
-            // which stores only the OID of the original `HEAD` commit.  It's
-            // used by Git to rebase the originally-checked out branch, or to
-            // check out the old branch if the rebase is aborted.
-            let rebase_orig_head_oid: MaybeZeroOid = head_info.oid.into();
+            // which seems to store the same thing.
             let rebase_orig_head_file_path = rebase_state_dir.join("orig-head");
-            std::fs::write(
-                &rebase_orig_head_file_path,
-                rebase_orig_head_oid.to_string(),
-            )
-            .wrap_err_with(|| {
-                format!("Writing `orig-head` to: {:?}", &rebase_orig_head_file_path)
-            })?;
+            std::fs::write(&rebase_orig_head_file_path, head_oid.to_string()).wrap_err_with(
+                || format!("Writing `orig-head` to: {:?}", &rebase_orig_head_file_path),
+            )?;
 
             // `head-name` contains the name of the branch which will be reset
             // to point to the OID contained in `orig-head` when the rebase is
