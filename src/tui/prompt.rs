@@ -3,12 +3,18 @@ use crate::git::{Commit, NonZeroOid};
 /// Prompt the user to select a commit from the provided list
 /// of commits, and returns the OID of the selected commit.
 #[cfg(unix)]
-pub fn prompt_select_commit(commits: Vec<Commit>) -> eyre::Result<Option<NonZeroOid>> {
-    skim::prompt_skim(commits)
+pub fn prompt_select_commit(
+    commits: Vec<Commit>,
+    header: Option<&str>,
+) -> eyre::Result<Option<NonZeroOid>> {
+    skim::prompt_skim(commits, header)
 }
 
 #[cfg(not(unix))]
-pub fn prompt_select_commit(commits: Vec<Commit>) -> eyre::Result<Option<NonZeroOid>> {
+pub fn prompt_select_commit(
+    commits: Vec<Commit>,
+    header: Option<&str>,
+) -> eyre::Result<Option<NonZeroOid>> {
     unimplemented!("Non-unix targets are currently unsupported for prompting")
 }
 
@@ -97,13 +103,18 @@ mod skim {
         }
     }
 
-    pub fn prompt_skim(commits: Vec<Commit>) -> eyre::Result<Option<NonZeroOid>> {
+    #[cfg(unix)]
+    pub fn prompt_skim(
+        commits: Vec<Commit>,
+        header: Option<&str>,
+    ) -> eyre::Result<Option<NonZeroOid>> {
         let options = SkimOptionsBuilder::default()
             .height(Some("100%"))
             .preview(Some(""))
             .preview_window(Some("up:70%"))
             .sync(true) // Consume all items before displaying selector.
             .bind(vec!["Enter:accept"])
+            .header(header)
             .build()
             .map_err(|e| eyre!("building Skim options failed: {}", e))?;
 

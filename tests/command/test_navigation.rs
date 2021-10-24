@@ -117,7 +117,7 @@ fn test_next_ambiguous() -> eyre::Result<()> {
               - 62fc20d2 create test1.txt (oldest)
               - fe65c1fe create test2.txt
               - 98b9119d create test3.txt (newest)
-            (Pass --oldest (-o) or --newest (-n) to select between ambiguous next commits)
+            (Pass --oldest (-o), --newest (-n), or --interactive (-i) to select between ambiguous next commits)
             "###);
     }
 
@@ -147,6 +147,50 @@ fn test_next_ambiguous() -> eyre::Result<()> {
         | o fe65c1fe create test2.txt
         |
         @ 98b9119d create test3.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+#[cfg(unix)]
+fn test_next_ambiguous_interactive() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    git.init_repo()?;
+    git.detach_head()?;
+    git.commit_file("test1", 1)?;
+    git.run(&["checkout", "master"])?;
+    git.detach_head()?;
+    git.commit_file("test2", 2)?;
+    git.run(&["checkout", "master"])?;
+    git.detach_head()?;
+    git.commit_file("test3", 3)?;
+    git.run(&["checkout", "master"])?;
+
+    run_in_pty(
+        &git,
+        &["next", "--interactive"],
+        &vec![
+            PtyAction::WaitUntilContains("> "),
+            PtyAction::Write("test2"),
+            PtyAction::WaitUntilContains("> test2"),
+            PtyAction::WaitUntilContains("> fe65c1fe"),
+            PtyAction::Write(CARRIAGE_RETURN),
+        ],
+    )?;
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc9 (master) create initial.txt
+        |\
+        | o 62fc20d2 create test1.txt
+        |\
+        | @ fe65c1fe create test2.txt
+        |
+        o 98b9119d create test3.txt
         "###);
     }
 

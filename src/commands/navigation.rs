@@ -6,6 +6,7 @@ use eden_dag::DagAlgorithm;
 use tracing::instrument;
 
 use crate::commands::smartlog::{make_smartlog_graph, smartlog};
+use crate::core::config::get_next_interactive;
 use crate::core::eventlog::{EventLogDb, EventReplayer};
 use crate::core::formatting::printable_styled_string;
 use crate::git::{sort_commit_set, CommitSet, Dag, GitRunInfo, NonZeroOid, Repo};
@@ -44,6 +45,10 @@ pub enum Towards {
 
     /// When encountering multiple children, select the oldest one.
     Oldest,
+
+    /// When encountering multiple children, interactively prompt for
+    /// which one to advance to.
+    Interactive,
 }
 
 #[instrument]
@@ -55,6 +60,17 @@ fn advance(
     num_commits: isize,
     towards: Option<Towards>,
 ) -> eyre::Result<Option<NonZeroOid>> {
+    let towards = match towards {
+        Some(towards) => Some(towards),
+        None => {
+            if get_next_interactive(repo)? {
+                Some(Towards::Interactive)
+            } else {
+                None
+            }
+        }
+    };
+
     let glyphs = effects.get_glyphs();
     let mut current_oid = current_oid;
     for i in 0..num_commits {
@@ -63,6 +79,10 @@ fn advance(
             .children(CommitSet::from(current_oid))?
             .difference(&dag.obsolete_commits);
         let children = sort_commit_set(repo, dag, &children)?;
+        let header = format!(
+            "Found multiple possible next commits to go to after traversing {} children:",
+            i
+        );
 
         current_oid = match (towards, children.as_slice()) {
             (_, []) => {
@@ -73,13 +93,16 @@ fn advance(
             (_, [only_child]) => only_child.get_oid(),
             (Some(Towards::Newest), [.., newest_child]) => newest_child.get_oid(),
             (Some(Towards::Oldest), [oldest_child, ..]) => oldest_child.get_oid(),
+            (Some(Towards::Interactive), [_, _, ..]) => {
+                match prompt_select_commit(children, Some(&header))? {
+                    Some(oid) => oid,
+                    None => {
+                        return Ok(None);
+                    }
+                }
+            }
             (None, [_, _, ..]) => {
-                writeln!(
-                    effects.get_output_stream(),
-                    "Found multiple possible next commits to go to after traversing {} children:",
-                    i
-                )?;
-
+                writeln!(effects.get_output_stream(), "{}", header)?;
                 for (j, child) in (0..).zip(children.iter()) {
                     let descriptor = if j == 0 {
                         " (oldest)"
@@ -97,7 +120,7 @@ fn advance(
                         descriptor
                     )?;
                 }
-                writeln!(effects.get_output_stream(), "(Pass --oldest (-o) or --newest (-n) to select between ambiguous next commits)")?;
+                writeln!(effects.get_output_stream(), "(Pass --oldest (-o), --newest (-n), or --interactive (-i) to select between ambiguous next commits)")?;
                 return Ok(None);
             }
         };
@@ -168,7 +191,7 @@ pub fn checkout(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<is
 
     let graph = make_smartlog_graph(effects, &repo, &dag, &event_replayer, event_cursor, true)?;
 
-    match prompt_select_commit(graph.get_commits())? {
+    match prompt_select_commit(graph.get_commits(), None)? {
         Some(oid) => {
             let result = git_run_info.run(effects, None, &["checkout", &oid.to_string()])?;
             smartlog(effects, &Default::default())?;

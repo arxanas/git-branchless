@@ -144,12 +144,16 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
             num_commits,
             oldest,
             newest,
+            interactive,
         } => {
-            let towards = match (oldest, newest) {
-                (false, false) => None,
-                (true, false) => Some(navigation::Towards::Oldest),
-                (false, true) => Some(navigation::Towards::Newest),
-                (true, true) => eyre::bail!("Both --oldest and --newest were set"),
+            let towards = match (oldest, newest, interactive) {
+                (false, false, false) => None,
+                (true, false, false) => Some(navigation::Towards::Oldest),
+                (false, true, false) => Some(navigation::Towards::Newest),
+                (false, false, true) => Some(navigation::Towards::Interactive),
+                (_, _, _) => {
+                    eyre::bail!("Only one of --oldest, --newest, and --interactive can be set")
+                }
             };
             navigation::next(&effects, &git_run_info, num_commits, towards)?
         }
