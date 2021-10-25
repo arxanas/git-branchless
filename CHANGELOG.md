@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - (#155) `git branchless init` now appends to your existing hooks, rather than silently doing nothing.
+- When carrying out an on-disk rebase operation with `git move`, calling `git rebase --abort` will correctly reset the branch which you had checked out prior to the rebase.
 
 ## [0.3.7] - 2021-10-22
 

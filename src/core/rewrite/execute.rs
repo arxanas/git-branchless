@@ -712,7 +712,6 @@ mod in_memory {
 }
 
 mod on_disk {
-    use std::borrow::Cow;
     use std::ffi::OsStr;
     use std::fmt::Write;
 
@@ -802,15 +801,16 @@ mod on_disk {
                 format!("Writing `orig-head` to: {:?}", &rebase_orig_head_file_path)
             })?;
 
-            // `head-name` appears to be purely for UX concerns. Git will warn if the
-            // file isn't found.
+            // `head-name` contains the name of the branch which will be reset
+            // to point to the OID contained in `orig-head` when the rebase is
+            // aborted.
             let head_name_file_path = rebase_state_dir.join("head-name");
             std::fs::write(
                 &head_name_file_path,
                 head_info
-                    .get_branch_name()?
-                    .map(Cow::Owned)
-                    .unwrap_or_else(|| Cow::Borrowed(OsStr::new("detached HEAD")))
+                    .reference_name
+                    .as_deref()
+                    .unwrap_or_else(|| OsStr::new("detached HEAD"))
                     .to_raw_bytes(),
             )
             .wrap_err_with(|| format!("Writing head-name to: {:?}", &head_name_file_path))?;

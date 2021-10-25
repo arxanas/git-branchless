@@ -1213,20 +1213,18 @@ fn test_move_no_reapply_squashed_commits() -> eyre::Result<()> {
                 "master",
             ])?;
             insta::assert_snapshot!(stderr, @r###"
-        Executing: git branchless hook-register-extra-post-rewrite-hook
-        branchless: processing 1 update: ref HEAD
-        branchless: processing 1 update: ref HEAD
-        branchless: processed commit: e7bcdd60 create test1.txt
-        Executing: git branchless hook-detect-empty-commit 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
-        branchless: processing 1 update: ref HEAD
-        branchless: processed commit: 12d361aa create test2.txt
-        Executing: git branchless hook-detect-empty-commit 96d1c37a3d4363611c49f7e52186e189a04c531f
-        branchless: processing 4 rewritten commits
-        branchless: running command: <git-executable> checkout master
-        Switched to branch 'master'
-        branchless: processing checkout
-        Successfully rebased and updated master.
-        "###);
+            Executing: git branchless hook-register-extra-post-rewrite-hook
+            branchless: processing 1 update: ref HEAD
+            branchless: processing 1 update: ref HEAD
+            branchless: processed commit: e7bcdd60 create test1.txt
+            Executing: git branchless hook-detect-empty-commit 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
+            branchless: processing 1 update: ref HEAD
+            branchless: processed commit: 12d361aa create test2.txt
+            Executing: git branchless hook-detect-empty-commit 96d1c37a3d4363611c49f7e52186e189a04c531f
+            branchless: processing 1 update: branch master
+            branchless: processing 4 rewritten commits
+            Successfully rebased and updated refs/heads/master.
+            "###);
             insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
@@ -1339,22 +1337,22 @@ fn test_move_delete_checked_out_branch() -> eyre::Result<()> {
             git.run(&["checkout", "work"])?;
             let (stdout, stderr) = git.run(&["move", "--on-disk", "-b", "HEAD", "-d", "master"])?;
             insta::assert_snapshot!(stderr, @r###"
-        Executing: git branchless hook-register-extra-post-rewrite-hook
-        branchless: processing 1 update: ref HEAD
-        Executing: git branchless hook-skip-upstream-applied-commit 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
-        Executing: git branchless hook-skip-upstream-applied-commit 96d1c37a3d4363611c49f7e52186e189a04c531f
-        branchless: processing 1 update: ref HEAD
-        branchless: processed commit: 012efd6e create test3.txt
-        Executing: git branchless hook-detect-empty-commit ffcba554683d83de283de084a7d3896e332bbcdb
-        branchless: processing 3 rewritten commits
-        branchless: processing 2 updates: branch more-work, branch work
-        branchless: running command: <git-executable> checkout 91c5ce63686889388daec1120bf57bea8a744bc2
-        Previous HEAD position was 012efd6 create test3.txt
-        branchless: processing 1 update: ref HEAD
-        HEAD is now at 91c5ce6 create test2.txt
-        branchless: processing checkout
-        Successfully rebased and updated work.
-        "###);
+            Executing: git branchless hook-register-extra-post-rewrite-hook
+            branchless: processing 1 update: ref HEAD
+            Executing: git branchless hook-skip-upstream-applied-commit 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
+            Executing: git branchless hook-skip-upstream-applied-commit 96d1c37a3d4363611c49f7e52186e189a04c531f
+            branchless: processing 1 update: ref HEAD
+            branchless: processed commit: 012efd6e create test3.txt
+            Executing: git branchless hook-detect-empty-commit ffcba554683d83de283de084a7d3896e332bbcdb
+            branchless: processing 3 rewritten commits
+            branchless: processing 2 updates: branch more-work, branch work
+            branchless: running command: <git-executable> checkout 91c5ce63686889388daec1120bf57bea8a744bc2
+            Previous HEAD position was 012efd6 create test3.txt
+            branchless: processing 1 update: ref HEAD
+            HEAD is now at 91c5ce6 create test2.txt
+            branchless: processing checkout
+            Successfully rebased and updated detached HEAD.
+            "###);
             insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
@@ -1712,21 +1710,18 @@ fn test_move_orphaned_root() -> eyre::Result<()> {
         {
             let (stdout, stderr) = git.run(&["move", "--on-disk", "-d", "master"])?;
             insta::assert_snapshot!(stderr, @r###"
-        Executing: git branchless hook-register-extra-post-rewrite-hook
-        branchless: processing 1 update: ref HEAD
-        branchless: processing 1 update: ref HEAD
-        branchless: processed commit: 270b681e new root
-        Executing: git branchless hook-detect-empty-commit da90168b4835f97f1a10bcc12833140056df9157
-        branchless: processing 1 update: ref HEAD
-        branchless: processed commit: 70deb1e2 create test3.txt
-        Executing: git branchless hook-detect-empty-commit fc09f3d9f0b7370dc38e761e3730a856dc5025c2
-        branchless: processing 3 rewritten commits
-        branchless: processing 1 update: branch new-root
-        branchless: running command: <git-executable> checkout new-root
-        Switched to branch 'new-root'
-        branchless: processing checkout
-        Successfully rebased and updated new-root.
-        "###);
+            Executing: git branchless hook-register-extra-post-rewrite-hook
+            branchless: processing 1 update: ref HEAD
+            branchless: processing 1 update: ref HEAD
+            branchless: processed commit: 270b681e new root
+            Executing: git branchless hook-detect-empty-commit da90168b4835f97f1a10bcc12833140056df9157
+            branchless: processing 1 update: ref HEAD
+            branchless: processed commit: 70deb1e2 create test3.txt
+            Executing: git branchless hook-detect-empty-commit fc09f3d9f0b7370dc38e761e3730a856dc5025c2
+            branchless: processing 1 update: branch new-root
+            branchless: processing 3 rewritten commits
+            Successfully rebased and updated refs/heads/new-root.
+            "###);
             insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
@@ -1851,6 +1846,48 @@ fn test_move_dest_not_in_dag() -> eyre::Result<()> {
         Your branch is up to date with 'origin/other-branch'.
         In-memory rebase succeeded.
         "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_move_abort_rebase_check_out_old_branch() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    git.init_repo()?;
+    git.commit_file("test1", 1)?;
+    git.detach_head()?;
+
+    git.run(&["checkout", "-b", "original"])?;
+    git.commit_file_with_contents("test2", 2, "test2 original contents")?;
+
+    git.run(&["checkout", "-b", "conflicting", "master"])?;
+    git.commit_file_with_contents("test2", 2, "test2 conflicting contents")?;
+
+    {
+        let (stdout, _stderr) = git.run_with_options(
+            &["move", "-d", "original", "--on-disk"],
+            &GitRunOptions {
+                expected_exit_code: 1,
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> diff --quiet
+        Calling Git for on-disk rebase...
+        branchless: running command: <git-executable> rebase --continue
+        CONFLICT (add/add): Merge conflict in test2.txt
+        Auto-merging test2.txt
+        "###);
+    }
+
+    git.run(&["rebase", "--abort"])?;
+
+    {
+        // Will output `HEAD` if `HEAD` is detached, which is not what we want.
+        let (stdout, _stderr) = git.run(&["rev-parse", "--abbrev-ref", "HEAD"])?;
+        insta::assert_snapshot!(stdout, @"conflicting");
     }
 
     Ok(())
