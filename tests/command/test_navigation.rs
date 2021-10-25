@@ -320,7 +320,7 @@ fn run_in_pty(git: &GitWrapper, args: &[&str], inputs: &[&str]) -> eyre::Result<
 
     for input in inputs {
         // Sleep between inputs, to give the pty time to catch up.
-        sleep(Duration::from_millis(100));
+        sleep(Duration::from_millis(500));
         write!(pty.master, "{}", input)?;
         pty.master.flush()?;
     }
