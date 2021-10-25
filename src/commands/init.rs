@@ -100,17 +100,23 @@ const SHEBANG: &str = "#!/bin/sh";
 const UPDATE_MARKER_START: &str = "## START BRANCHLESS CONFIG";
 const UPDATE_MARKER_END: &str = "## END BRANCHLESS CONFIG";
 
+fn append_hook(new_lines: &mut String, hook_contents: &str) {
+    new_lines.push_str(UPDATE_MARKER_START);
+    new_lines.push('\n');
+    new_lines.push_str(hook_contents);
+    new_lines.push_str(UPDATE_MARKER_END);
+    new_lines.push('\n');
+}
+
 fn update_between_lines(lines: &str, updated_lines: &str) -> String {
     let mut new_lines = String::new();
+    let mut found_marker = false;
     let mut is_ignoring_lines = false;
     for line in lines.lines() {
         if line == UPDATE_MARKER_START {
+            found_marker = true;
             is_ignoring_lines = true;
-            new_lines.push_str(UPDATE_MARKER_START);
-            new_lines.push('\n');
-            new_lines.push_str(updated_lines);
-            new_lines.push_str(UPDATE_MARKER_END);
-            new_lines.push('\n');
+            append_hook(&mut new_lines, updated_lines);
         } else if line == UPDATE_MARKER_END {
             is_ignoring_lines = false;
         } else if !is_ignoring_lines {
@@ -120,6 +126,8 @@ fn update_between_lines(lines: &str, updated_lines: &str) -> String {
     }
     if is_ignoring_lines {
         warn!("Unterminated branchless config comment in hook");
+    } else if !found_marker {
+        append_hook(&mut new_lines, updated_lines);
     }
     new_lines
 }
