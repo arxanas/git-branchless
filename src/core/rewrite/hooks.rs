@@ -319,6 +319,10 @@ fn save_updated_head_oid(repo: &Repo, updated_head_oid: NonZeroOid) -> eyre::Res
         .get_rebase_state_dir_path()
         .join(UPDATED_HEAD_FILE_NAME);
     std::fs::write(dest_file_name, updated_head_oid.to_string())?;
+
+    let head_name_file_name = repo.get_rebase_state_dir_path().join("head-name");
+    std::fs::write(head_name_file_name, "detached HEAD")?;
+
     Ok(())
 }
 
