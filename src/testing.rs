@@ -166,7 +166,7 @@ impl Git {
     }
 
     /// Get the environment variables needed to run git in the test environment.
-    pub fn get_base_env(&self, time: &isize) -> Vec<(&'static str, OsString)> {
+    pub fn get_base_env(&self, time: isize) -> Vec<(&'static str, OsString)> {
         // Required for determinism, as these values will be baked into the commit
         // hash.
         let date: OsString = format!("{date} -{time:0>2}", date = DUMMY_DATE, time = time).into();
@@ -204,18 +204,12 @@ impl Git {
             env,
         } = options;
 
-        let args: Vec<&str> = {
-            let repo_path = self.repo_path.to_str().expect("Could not decode repo path");
-            let mut new_args: Vec<&str> = vec!["-C", repo_path];
-            new_args.extend(args);
-            new_args
-        };
-
         let mut command = Command::new(&self.path_to_git);
         command
-            .args(&args)
+            .current_dir(&self.repo_path)
+            .args(args)
             .env_clear()
-            .envs(self.get_base_env(time))
+            .envs(self.get_base_env(*time))
             .envs(env.iter());
 
         let result = if let Some(input) = input {

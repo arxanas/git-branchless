@@ -3,7 +3,7 @@ use std::thread;
 
 use eyre::eyre;
 
-use branchless::testing::{make_git, GitRunOptions, GitWrapper};
+use branchless::testing::{make_git, Git, GitRunOptions};
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 
 const CARRIAGE_RETURN: &'static str = "\r";
@@ -221,7 +221,7 @@ fn test_checkout_pty() -> eyre::Result<()> {
     run_in_pty(
         &git,
         &["branchless", "checkout"],
-        &vec![
+        &[
             PtyAction::WaitUntilContains("> "),
             PtyAction::Write("test1"),
             PtyAction::WaitUntilContains("> test1"),
@@ -245,7 +245,7 @@ fn test_checkout_pty() -> eyre::Result<()> {
     run_in_pty(
         &git,
         &["branchless", "checkout"],
-        &vec![
+        &[
             PtyAction::WaitUntilContains("> "),
             PtyAction::Write("test3"),
             PtyAction::WaitUntilContains("> test3"),
@@ -282,7 +282,7 @@ fn test_checkout_abort() -> eyre::Result<()> {
     run_in_pty(
         &git,
         &["branchless", "checkout"],
-        &vec![
+        &[
             PtyAction::WaitUntilContains("> ".into()),
             PtyAction::Write(END_OF_TEXT.into()),
         ],
@@ -306,27 +306,22 @@ enum PtyAction<'a> {
     WaitUntilContains(&'a str),
 }
 
-fn run_in_pty(git: &GitWrapper, args: &[&str], inputs: &[PtyAction]) -> eyre::Result<()> {
+fn run_in_pty(git: &Git, args: &[&str], inputs: &[PtyAction]) -> eyre::Result<()> {
     // Use the native pty implementation for the system
     let pty_system = native_pty_system();
     let pty_size = PtySize::default();
-    let mut pty = pty_system.openpty(pty_size).unwrap();
-
-    let args: Vec<&str> = {
-        let repo_path = git.repo_path.to_str().expect("Could not decode repo path");
-        let mut new_args: Vec<&str> = vec!["-C", repo_path];
-        new_args.extend(args);
-        new_args
-    };
+    let mut pty = pty_system
+        .openpty(pty_size)
+        .map_err(|e| eyre!("Could not open pty: {}", e))?;
 
     // Spawn a git instance in the pty.
     let mut cmd = CommandBuilder::new(&git.path_to_git);
-    let time = 0;
-    for (k, v) in git.get_base_env(&time) {
+    for (k, v) in git.get_base_env(0) {
         cmd.env(k, v);
     }
     cmd.env("TERM", "xterm");
     cmd.args(args);
+    cmd.cwd(&git.repo_path);
 
     let mut child = pty
         .slave
