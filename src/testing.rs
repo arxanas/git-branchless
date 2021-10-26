@@ -303,6 +303,7 @@ impl Git {
 
         // Non-deterministic metadata (depends on current time).
         self.run(&["config", "branchless.commitMetadata.relativeTime", "false"])?;
+        self.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
 
         // Disable warnings of the following form on Windows:
         //

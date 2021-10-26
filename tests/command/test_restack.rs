@@ -30,7 +30,6 @@ fn test_restack_amended_commit() -> eyre::Result<()> {
     }
 
     git.init_repo()?;
-    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
 
     git.detach_head()?;
     git.commit_file("test1", 1)?;
@@ -86,7 +85,6 @@ fn test_restack_consecutive_rewrites() -> eyre::Result<()> {
     }
 
     git.init_repo()?;
-    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
 
     git.detach_head()?;
     git.commit_file("test1", 1)?;
@@ -125,7 +123,6 @@ fn test_move_abandoned_branch() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
-    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
 
     git.commit_file("test1", 1)?;
     git.detach_head()?;
@@ -202,7 +199,6 @@ fn test_restack_amended_master() -> eyre::Result<()> {
     }
 
     git.init_repo()?;
-    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
 
     git.commit_file("test1", 1)?;
     git.commit_file("test2", 2)?;
@@ -291,7 +287,11 @@ fn test_restack_aborts_during_rebase_conflict() -> eyre::Result<()> {
 fn test_restack_multiple_amended() -> eyre::Result<()> {
     let git = make_git()?;
 
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
     git.init_repo()?;
+
     git.detach_head()?;
     git.commit_file("test1", 1)?;
     git.commit_file("test2", 2)?;
@@ -319,9 +319,9 @@ fn test_restack_multiple_amended() -> eyre::Result<()> {
         |
         o 22f39285 test2 amended
         |
-        o 2fdee375 test3 amended
+        o 8e06b96d test3 amended
         |
-        o c2dfde02 create test4.txt
+        o f5644e32 create test4.txt
         "###);
     }
 
@@ -377,11 +377,11 @@ fn test_restack_single_of_many_commits() -> eyre::Result<()> {
         Executing: git branchless hook-register-extra-post-rewrite-hook
         branchless: processing 1 update: ref HEAD
         branchless: processing 1 update: ref HEAD
-        branchless: processed commit: bb7d4b2a create test3.txt
+        branchless: processed commit: 944f78da create test3.txt
         Executing: git branchless hook-detect-empty-commit 70deb1e28791d8e7dd5a1f0c871a51b91282562f
         branchless: processing 1 rewritten commit
         branchless: running command: <git-executable> checkout 3bd716d57489779ab1daf446f80e66e90b56ead7
-        Previous HEAD position was bb7d4b2 create test3.txt
+        Previous HEAD position was 944f78d create test3.txt
         branchless: processing 1 update: ref HEAD
         HEAD is now at 3bd716d updated test4
         branchless: processing checkout
@@ -404,7 +404,7 @@ fn test_restack_single_of_many_commits() -> eyre::Result<()> {
         |\
         | o 7357d2b7 updated test2
         | |
-        | o bb7d4b2a create test3.txt
+        | o 944f78da create test3.txt
         |
         x bf0d52a6 (rewritten as 3bd716d5) create test4.txt
         |

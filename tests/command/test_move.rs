@@ -12,7 +12,6 @@ fn test_move_stick() -> eyre::Result<()> {
         return Ok(());
     }
     git.init_repo()?;
-    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
 
     let test1_oid = git.commit_file("test1", 1)?;
     git.commit_file("test2", 2)?;
@@ -115,7 +114,6 @@ fn test_move_tree() -> eyre::Result<()> {
         return Ok(());
     }
     git.init_repo()?;
-    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
 
     let test1_oid = git.commit_file("test1", 1)?;
     git.commit_file("test2", 2)?;
@@ -191,7 +189,6 @@ fn test_move_with_source_not_in_smartlog() -> eyre::Result<()> {
         return Ok(());
     }
     git.init_repo()?;
-    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
 
     let test1_oid = git.commit_file("test1", 1)?;
     git.commit_file("test2", 2)?;
@@ -297,7 +294,6 @@ fn test_move_merge_conflict() -> eyre::Result<()> {
         return Ok(());
     }
     git.init_repo()?;
-    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
 
     let base_oid = git.commit_file("test1", 1)?;
     git.detach_head()?;
@@ -397,7 +393,6 @@ fn test_move_base() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
-    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
 
     git.commit_file("test1", 1)?;
     git.detach_head()?;
@@ -522,7 +517,6 @@ fn test_move_checkout_new_head() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
-    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
 
     git.commit_file("test1", 1)?;
     git.run(&["prev"])?;
@@ -576,7 +570,6 @@ fn test_move_branch() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
-    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
 
     git.detach_head()?;
     git.commit_file("test1", 1)?;
@@ -690,7 +683,6 @@ fn test_move_force_in_memory() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
-    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
 
     git.commit_file("test1", 1)?;
     git.commit_file("test2", 2)?;
@@ -725,6 +717,8 @@ fn test_rebase_in_memory_updates_committer_timestamp() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
+    git.run(&["config", "branchless.restack.preserveTimestamps", "false"])?;
+
     let repo = git.get_repo()?;
 
     git.commit_file("test1", 1)?;
@@ -757,7 +751,6 @@ fn test_move_in_memory_gc() -> eyre::Result<()> {
     }
 
     git.init_repo()?;
-    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
 
     git.detach_head()?;
     let test1_oid = git.commit_file("test1", 1)?;
@@ -847,7 +840,6 @@ fn test_move_main_branch_commits() -> eyre::Result<()> {
     }
 
     git.init_repo()?;
-    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
 
     let test1_oid = git.commit_file("test1", 1)?;
     git.commit_file("test2", 2)?;
@@ -1095,7 +1087,6 @@ fn test_move_no_reapply_upstream_commits() -> eyre::Result<()> {
     }
 
     git.init_repo()?;
-    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
 
     git.detach_head()?;
     let test1_oid = git.commit_file("test1", 1)?;
@@ -1185,7 +1176,6 @@ fn test_move_no_reapply_squashed_commits() -> eyre::Result<()> {
     }
 
     git.init_repo()?;
-    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
 
     git.detach_head()?;
     let test1_oid = git.commit_file("test1", 1)?;
@@ -1313,7 +1303,6 @@ fn test_move_delete_checked_out_branch() -> eyre::Result<()> {
     }
 
     git.init_repo()?;
-    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
 
     git.run(&["checkout", "-b", "work"])?;
     let test1_oid = git.commit_file("test1", 1)?;
@@ -1464,7 +1453,6 @@ fn test_move_merge_commit() -> eyre::Result<()> {
         return Ok(());
     }
     git.init_repo()?;
-    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
 
     git.commit_file("test1", 1)?;
     git.run(&["checkout", "HEAD^"])?;
@@ -1689,7 +1677,6 @@ fn test_move_orphaned_root() -> eyre::Result<()> {
     }
 
     git.init_repo()?;
-    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
 
     git.commit_file("test1", 1)?;
     git.commit_file("test2", 2)?;
@@ -1798,7 +1785,6 @@ fn test_move_no_extra_checkout() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
-    git.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
 
     git.commit_file("test1", 1)?;
     git.detach_head()?;
@@ -1854,7 +1840,6 @@ fn test_move_dest_not_in_dag() -> eyre::Result<()> {
             ..Default::default()
         })?;
         cloned_repo.run(&["branchless", "init", "--main-branch", "other-branch"])?;
-        cloned_repo.run(&["config", "branchless.restack.preserveTimestamps", "true"])?;
 
         let (stdout, _stderr) = cloned_repo.run(&["move", "-d", "origin/master"])?;
         insta::assert_snapshot!(stdout, @r###"
