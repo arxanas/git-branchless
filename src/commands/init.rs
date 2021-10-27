@@ -69,6 +69,7 @@ const ALL_ALIASES: &[(&str, &str)] = &[
     ("restack", "restack"),
     ("undo", "undo"),
     ("move", "move"),
+    ("co", "checkout"),
 ];
 
 #[derive(Debug)]

@@ -76,6 +76,11 @@ name = "git-branchless-move"
 path = "bin/entry_points/git-branchless-move.rs"
 required-features = ["man-pages"]
 
+[[bin]]
+name = "git-branchless-checkout"
+path = "bin/entry_points/git-branchless-checkout.rs"
+required-features = ["man-pages"]
+
 ## Testing binaries ##
 [[bin]]
 name = "git-branchless-regression-test-cherry-pick"
