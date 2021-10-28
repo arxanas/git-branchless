@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- (#155) `git branchless init` now appends to your existing hooks, rather than clobbering their contents.
+- (#155) `git branchless init` now appends to your existing hooks, rather than silently doing nothing.
 
 ## [0.3.7] - 2021-10-22
 
