@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New `git branchless checkout` command, which enables you to interactively pick a commit to checkout from the commits tracked in the smartlog.
   - This command is aliased to `git co`.
 
+### Fixed
+
+- (#155) `git branchless init` now appends to your existing hooks, rather than clobbering their contents.
+
 ## [0.3.7] - 2021-10-22
 
 ### Added
