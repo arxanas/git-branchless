@@ -27,6 +27,39 @@ fn test_hook_installed() -> eyre::Result<()> {
 }
 
 #[test]
+fn test_hook_appended_to_existing_contents() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    let hook_path = git.repo_path.join(".git").join("hooks").join("post-commit");
+    std::fs::write(
+        &hook_path,
+        "#!/bin/sh
+echo Hello, world
+",
+    )?;
+
+    git.run(&["branchless", "init"])?;
+
+    {
+        let (stdout, stderr) = git.run(&["commit", "--allow-empty", "-m", "test"])?;
+        insta::assert_snapshot!(stdout, @"[master 4cd1a9b] test
+");
+        insta::assert_snapshot!(stderr, @r###"
+        branchless: processing 2 updates: branch master, ref HEAD
+        Hello, world
+        branchless: processed commit: 4cd1a9ba test
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_alias_installed() -> eyre::Result<()> {
     let git = make_git()?;
 
