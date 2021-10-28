@@ -14,6 +14,7 @@
 - [About](#about)
 - [Installation](#installation)
 - [Status](#status)
+- [Related tool](https://github.com/arxanas/git-branchless/wiki/Related-tools)
 
 ## Demos
 ### Repair
@@ -122,3 +123,7 @@ Short version: run `cargo install --locked git-branchless`, then run `git branch
 `git-branchless` follows [semantic versioning](https://semver.org/). New 0.x.y versions, and new major versions after reaching 1.0.0, may change the on-disk format in a backward-incompatible way.
 
 To be notified about new versions, select Watch » Custom » Releases in Github's notifications menu at the top of the page. Or use [GitPunch](https://gitpunch.com/) to deliver notifications by email.
+
+## Related tools
+
+There's a lot of promising tooling developing in this space. See [Related tools](https://github.com/arxanas/git-branchless/wiki/Related-tools) for more information.
