@@ -446,6 +446,13 @@ impl Git {
         Ok(version >= GitVersion(2, 29, 0))
     }
 
+    /// The `log.excludeDecoration` configuration option was introduced in Git
+    /// v2.27.
+    pub fn supports_log_exclude_decoration(&self) -> eyre::Result<bool> {
+        let version = self.get_version()?;
+        Ok(version >= GitVersion(2, 27, 0))
+    }
+
     /// Resolve a file during a merge or rebase conflict with the provided
     /// contents.
     #[instrument]

@@ -415,3 +415,35 @@ fn test_init_repo_default_branch() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_hide_branchless_refs_from_git_log() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_log_exclude_decoration()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    git.commit_file("test1", 1)?;
+    git.run(&["update-ref", "refs/foo/bar", "HEAD"])?;
+
+    {
+        let (stdout, _stderr) = git.run(&["log", "--decorate"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        commit 62fc20d2a290daea0d52bdc2ed2ad4be6491010e (HEAD -> master, refs/foo/bar)
+        Author: Testy McTestface <test@example.com>
+        Date:   Thu Oct 29 12:34:56 2020 -0100
+
+            create test1.txt
+
+        commit f777ecc9b0db5ed372b2615695191a8a17f79f24
+        Author: Testy McTestface <test@example.com>
+        Date:   Thu Oct 29 12:34:56 2020 +0000
+
+            create initial.txt
+        "###);
+    }
+
+    Ok(())
+}

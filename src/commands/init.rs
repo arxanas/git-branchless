@@ -424,6 +424,7 @@ fn set_configs(
 
     config.set("branchless.core.mainBranch", main_branch_name)?;
     config.set("advice.detachedHead", false)?;
+    config.set("log.excludeDecoration", "refs/branchless/*")?;
 
     Ok(())
 }
