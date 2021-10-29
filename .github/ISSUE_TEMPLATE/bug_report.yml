@@ -1,5 +1,6 @@
 name: Bug report
-description: Create a report to help us improve
+description: |
+  File a bug report. This is for bugs with concrete resolutions. If you don't have a specific resolution in mind, then start a Discussion instead.
 labels:
 - bug
 
@@ -7,7 +8,7 @@ body:
 - type: markdown
   attributes:
     value: |
-      Thanks for reporting a bug! This form is for bugs which can be resolved with a concrete solution. To ask a question or to brainstorm solutions to a problem, start a [Discussion](https://github.com/arxanas/git-branchless/discussions) instead.
+      Thanks for reporting a bug! This form is for bugs which have concrete resolutions. To ask a question or to brainstorm solutions to a problem, start a [Discussion](https://github.com/arxanas/git-branchless/discussions) instead.
 
 - type: textarea
   id: description
