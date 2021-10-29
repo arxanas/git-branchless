@@ -1943,3 +1943,35 @@ fn test_move_orig_head_no_symbolic_reference() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_move_standalone_no_create_gc_refs() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    git.init_repo_with_options(&GitInitOptions {
+        run_branchless_init: false,
+        ..Default::default()
+    })?;
+    let test1_oid = git.commit_file("test1", 1)?;
+    git.run(&["checkout", "HEAD^"])?;
+    git.commit_file("test2", 2)?;
+
+    let show_refs_output = {
+        let (stdout, _stderr) = git.run(&["show-ref"])?;
+        insta::assert_snapshot!(stdout, @"62fc20d2a290daea0d52bdc2ed2ad4be6491010e refs/heads/master
+");
+        stdout
+    };
+
+    git.run(&["branchless", "move", "-d", &test1_oid.to_string()])?;
+
+    {
+        let (stdout, _stderr) = git.run(&["show-ref"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        62fc20d2a290daea0d52bdc2ed2ad4be6491010e refs/heads/master
+        "###);
+        assert!(stdout == show_refs_output);
+    }
+
+    Ok(())
+}

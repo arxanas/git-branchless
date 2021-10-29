@@ -219,6 +219,9 @@ impl GitRunInfo {
         stdin: Option<OsString>,
     ) -> eyre::Result<()> {
         let hook_dir = get_core_hooks_path(repo)?;
+        if !hook_dir.exists() {
+            return Ok(());
+        }
 
         let GitRunInfo {
             // We're calling a Git hook, but not Git itself.
@@ -229,11 +232,12 @@ impl GitRunInfo {
             env,
         } = self;
         let path = {
-            let mut path_components: Vec<PathBuf> = vec![std::fs::canonicalize(&hook_dir)?];
+            let mut path_components: Vec<PathBuf> =
+                vec![std::fs::canonicalize(&hook_dir).wrap_err("Canonicalizing hook dir")?];
             if let Some(path) = env.get(OsStr::new("PATH")) {
                 path_components.extend(std::env::split_paths(path));
             }
-            std::env::join_paths(path_components)?
+            std::env::join_paths(path_components).wrap_err("Joining path components")?
         };
 
         if hook_dir.join(hook_name).exists() {
@@ -273,7 +277,8 @@ impl GitRunInfo {
             let stderr = child.stderr.take();
             let stderr_thread = self.spawn_writer_thread(stderr, effects.get_error_stream());
 
-            let _ignored: ExitStatus = child.wait()?;
+            let _ignored: ExitStatus =
+                child.wait().wrap_err("Waiting for child process to exit")?;
             stdout_thread.join().unwrap();
             stderr_thread.join().unwrap();
         }
