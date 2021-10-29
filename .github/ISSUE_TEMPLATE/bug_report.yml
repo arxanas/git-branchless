@@ -1,0 +1,42 @@
+name: Bug report
+description: Create a report to help us improve
+labels:
+- bug
+
+body:
+- type: textarea
+  id: description
+  attributes:
+    label: Description of the bug
+  validations:
+    required: true
+
+- type: textarea
+  id: steps-to-reproduce
+  attributes:
+    label: Steps to reproduce
+
+- type: textarea
+  id: expected-behavior
+  attributes:
+    label: Expected behavior
+
+- type: textarea
+  id: actual-behavior
+  attributes:
+    label: Actual behavior
+
+- type: input
+  id: git-branchless-version
+  attributes:
+    label: Version of `git-branchless`
+    description: Paste the output of `git branchless --version` here.
+    placeholder: "Example: git-branchless 0.3.7"
+  required: true
+  
+- type: input
+  id: rustc-version
+  attributes:
+    label: Version of `rustc`
+    description: Paste the output of `rustc --version` here.
+    placeholder: "Example: rustc 1.55.0 (c8dfcfe04 2021-09-06)"
