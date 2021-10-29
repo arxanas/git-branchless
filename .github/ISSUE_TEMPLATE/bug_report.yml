@@ -4,27 +4,29 @@ labels:
 - bug
 
 body:
+- type: markdown
+  value: |
+    Thanks for reporting a bug! This form is for bugs which can be resolved with a concrete solution. To ask a question or to brainstorm solutions to a problem, start a [Discussion](https://github.com/arxanas/git-branchless/discussions) instead.
+
 - type: textarea
   id: description
   attributes:
     label: Description of the bug
+    description: Include a description of the bug and steps to reproduce the issue.
   validations:
     required: true
-
-- type: textarea
-  id: steps-to-reproduce
-  attributes:
-    label: Steps to reproduce
 
 - type: textarea
   id: expected-behavior
   attributes:
     label: Expected behavior
+    description: What did you expect to happen?
 
 - type: textarea
   id: actual-behavior
   attributes:
     label: Actual behavior
+    description: What actually happened?
 
 - type: input
   id: git-branchless-version
@@ -39,5 +41,5 @@ body:
   id: rustc-version
   attributes:
     label: Version of `rustc`
-    description: Paste the output of `rustc --version` here.
+    description: If this is a build issue, paste the output of `rustc --version` here.
     placeholder: "Example: rustc 1.55.0 (c8dfcfe04 2021-09-06)"
