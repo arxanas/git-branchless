@@ -1,4 +1,4 @@
-name: File a bug report.
+name: File a bug report
 description: |
   This form is for bugs with concrete resolutions. If you don't have a specific resolution in mind, then start a Discussion instead.
 labels:
