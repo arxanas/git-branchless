@@ -1881,12 +1881,13 @@ fn test_move_abort_rebase_check_out_old_branch() -> eyre::Result<()> {
                 ..Default::default()
             },
         )?;
+        let stdout = remove_rebase_lines(stdout);
+
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
         CONFLICT (add/add): Merge conflict in test2.txt
-        Auto-merging test2.txt
         "###);
     }
 
