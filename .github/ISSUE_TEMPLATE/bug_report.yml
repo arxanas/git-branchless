@@ -5,8 +5,9 @@ labels:
 
 body:
 - type: markdown
-  value: |
-    Thanks for reporting a bug! This form is for bugs which can be resolved with a concrete solution. To ask a question or to brainstorm solutions to a problem, start a [Discussion](https://github.com/arxanas/git-branchless/discussions) instead.
+  attributes:
+    value: |
+      Thanks for reporting a bug! This form is for bugs which can be resolved with a concrete solution. To ask a question or to brainstorm solutions to a problem, start a [Discussion](https://github.com/arxanas/git-branchless/discussions) instead.
 
 - type: textarea
   id: description
