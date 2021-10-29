@@ -65,6 +65,14 @@ fn find_dangling_references<'repo>(
 /// * `commit_oid`: The commit OID to mark as reachable.
 #[instrument]
 pub fn mark_commit_reachable(repo: &Repo, commit_oid: NonZeroOid) -> eyre::Result<()> {
+    if !repo.get_config_path().exists() {
+        // Don't create garbage collection references for users who don't appear
+        // to have run `git branchless init` in this repository, since they may
+        // not want their tooling (such as `tig`) polluted by extra references.
+        // See https://github.com/arxanas/git-branchless/issues/183
+        return Ok(());
+    }
+
     let ref_name = format!("refs/branchless/{}", commit_oid.to_string());
     eyre::ensure!(
         Reference::is_valid_name(&ref_name),
