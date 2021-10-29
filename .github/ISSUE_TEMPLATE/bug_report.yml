@@ -1,6 +1,6 @@
-name: Bug report
+name: File a bug report.
 description: |
-  File a bug report. This is for bugs with concrete resolutions. If you don't have a specific resolution in mind, then start a Discussion instead.
+  This form is for bugs with concrete resolutions. If you don't have a specific resolution in mind, then start a Discussion instead.
 labels:
 - bug
 
