@@ -12,6 +12,22 @@ use tracing::{instrument, warn};
 use super::oid::make_non_zero_oid;
 use super::{MaybeZeroOid, NonZeroOid, Repo};
 
+pub struct TreeEntry<'repo> {
+    pub(super) inner: git2::TreeEntry<'repo>,
+}
+
+impl TreeEntry<'_> {
+    /// Get the object ID for this tree entry.
+    pub fn get_oid(&self) -> NonZeroOid {
+        make_non_zero_oid(self.inner.id())
+    }
+
+    /// Get the object filemode for this tree entry.
+    pub fn get_filemode(&self) -> i32 {
+        self.inner.filemode()
+    }
+}
+
 /// A tree object. Contains a mapping from name to OID.
 #[derive(Debug)]
 pub struct Tree<'repo> {
@@ -33,16 +49,25 @@ impl Tree<'_> {
         self.inner.is_empty()
     }
 
+    /// Get the tree entry for the the given path.
+    ///
+    /// Note that the path isn't just restricted to entries of the current tree,
+    /// i.e. you can use slashes in the provided path.
+    pub fn get_path(&self, path: &Path) -> eyre::Result<Option<TreeEntry>> {
+        match self.inner.get_path(path) {
+            Ok(entry) => Ok(Some(TreeEntry { inner: entry })),
+            Err(err) if err.code() == git2::ErrorCode::NotFound => Ok(None),
+            Err(err) => Err(err.into()),
+        }
+    }
+
     /// Get the OID for the entry with the given path.
     ///
     /// Note that the path isn't just restricted to entries of the current tree,
     /// i.e. you can use slashes in the provided path.
     pub fn get_oid_for_path(&self, path: &Path) -> eyre::Result<Option<MaybeZeroOid>> {
-        match self.inner.get_path(path) {
-            Ok(entry) => Ok(Some(entry.id().into())),
-            Err(err) if err.code() == git2::ErrorCode::NotFound => Ok(None),
-            Err(err) => Err(err.into()),
-        }
+        self.get_path(path)
+            .map(|maybe_entry| maybe_entry.map(|entry| entry.inner.id().into()))
     }
 }
 

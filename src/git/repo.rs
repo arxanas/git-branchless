@@ -11,7 +11,7 @@
 
 use std::borrow::{Borrow, Cow};
 use std::collections::{HashMap, HashSet};
-use std::convert::TryInto;
+use std::convert::{TryFrom, TryInto};
 use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -23,7 +23,9 @@ use cursive::theme::BaseColor;
 use cursive::utils::markup::StyledString;
 use eyre::{eyre, Context};
 use itertools::Itertools;
+use lazy_static::lazy_static;
 use os_str_bytes::{OsStrBytes, OsStringBytes};
+use regex::bytes::Regex;
 use tracing::{instrument, warn};
 
 use crate::core::commit_descriptors::{
@@ -31,6 +33,7 @@ use crate::core::commit_descriptors::{
 };
 use crate::core::config::get_main_branch_name;
 use crate::core::effects::{Effects, OperationType};
+use crate::core::eventlog::EventTransactionId;
 use crate::core::formatting::StyledStringBuilder;
 use crate::git::config::{Config, ConfigRead};
 use crate::git::oid::{make_non_zero_oid, MaybeZeroOid, NonZeroOid};
@@ -137,6 +140,30 @@ pub enum CherryPickFastError {
     },
 }
 
+/// Options for `Repo::amend_fast`
+pub enum AmendFastOptions {
+    /// Amend a set of paths from the current state of the working copy.
+    FromWorkingCopy {
+        /// The status entries for the files to amend.
+        status_entries: Vec<StatusEntry>,
+    },
+    /// Amend a set of paths from the current state of the index.
+    FromIndex {
+        /// The paths to amend.
+        paths: Vec<PathBuf>,
+    },
+}
+
+impl AmendFastOptions {
+    /// Returns whether there are any paths to be amended.
+    pub fn is_empty(&self) -> bool {
+        match &self {
+            AmendFastOptions::FromIndex { paths } => paths.is_empty(),
+            AmendFastOptions::FromWorkingCopy { status_entries } => status_entries.is_empty(),
+        }
+    }
+}
+
 /// A snapshot of all the positions of references we care about in the repository.
 #[derive(Debug)]
 pub struct RepoReferencesSnapshot {
@@ -198,6 +225,13 @@ impl Repo {
     /// is bare (has no working copy), returns `None`.
     pub fn get_working_copy_path(&self) -> Option<&Path> {
         self.inner.workdir()
+    }
+
+    /// Get the index file for this repository.
+    pub fn get_index(&self) -> eyre::Result<Index> {
+        Ok(Index {
+            inner: self.inner.index()?,
+        })
     }
 
     /// Get the configuration object for the repository.
@@ -518,6 +552,29 @@ Either create it, or update the main branch setting by running:
         Ok(Some(Diff { inner: diff }))
     }
 
+    /// Returns the set of paths currently staged to the repository's index.
+    pub fn get_staged_paths(&self) -> eyre::Result<HashSet<PathBuf>> {
+        let head_commit_oid = match self.get_head_info()?.oid {
+            Some(oid) => oid,
+            None => eyre::bail!("No HEAD to check for staged paths"),
+        };
+        let head_commit = self.find_commit_or_fail(head_commit_oid)?;
+        let head_tree = self.find_tree_or_fail(head_commit.get_tree()?.get_oid())?;
+
+        let diff = self.inner.diff_tree_to_index(
+            Some(&head_tree.inner),
+            Some(&self.get_index()?.inner),
+            None,
+        )?;
+        let paths = diff
+            .deltas()
+            .into_iter()
+            .flat_map(|delta| vec![delta.old_file().path(), delta.new_file().path()])
+            .flat_map(|p| p.map(PathBuf::from))
+            .collect();
+        Ok(paths)
+    }
+
     /// Get the file paths which were added, removed, or changed by the given
     /// commit.
     ///
@@ -608,6 +665,55 @@ Either create it, or update the main branch setting by running:
         } else {
             Ok(true)
         }
+    }
+
+    /// Returns the current status of the repo index and working copy.
+    pub fn get_status(
+        &self,
+        git_run_info: &GitRunInfo,
+        event_tx_id: Option<EventTransactionId>,
+    ) -> eyre::Result<Vec<StatusEntry>> {
+        let output = git_run_info.run_silent(
+            self,
+            event_tx_id,
+            &["status", "--porcelain=v2", "--untracked-files=no", "-z"],
+        )?;
+
+        let not_null_terminator = |c: &u8| *c != 0_u8;
+        let mut statuses = Vec::new();
+        let mut status_bytes = output.into_iter().peekable();
+
+        // Iterate over the status entries in the output.
+        // This takes some care, because NUL bytes are both used to delimit
+        // between entries, and as a separator between paths in the case
+        // of renames.
+        // See https://git-scm.com/docs/git-status#_porcelain_format_version_2
+        while let Some(line_prefix) = status_bytes.peek() {
+            let line = match line_prefix {
+                // Ordinary change entry.
+                b'1' => {
+                    let line = status_bytes
+                        .by_ref()
+                        .take_while(not_null_terminator)
+                        .collect_vec();
+                    line
+                }
+                // Rename or copy change entry.
+                b'2' => {
+                    let mut line = status_bytes
+                        .by_ref()
+                        .take_while(not_null_terminator)
+                        .collect_vec();
+                    line.push(0_u8); // Persist first null terminator in the line.
+                    line.extend(status_bytes.by_ref().take_while(not_null_terminator));
+                    line
+                }
+                _ => eyre::bail!("unknown status line prefix: {}", line_prefix),
+            };
+            let entry = line.as_slice().try_into()?;
+            statuses.push(entry);
+        }
+        Ok(statuses)
     }
 
     /// Create a new reference or update an existing one.
@@ -957,6 +1063,17 @@ Either create it, or update the main branch setting by running:
         }
     }
 
+    /// Like `find_tree`, but raises a generic error if the commit could not
+    /// be found.
+    #[instrument]
+    pub fn find_tree_or_fail(&self, oid: NonZeroOid) -> eyre::Result<Tree> {
+        match self.find_tree(oid) {
+            Ok(Some(tree)) => Ok(tree),
+            Ok(None) => eyre::bail!("Could not find tree with OID: {:?}", oid),
+            Err(err) => Err(err),
+        }
+    }
+
     /// Write the provided in-memory index as a tree into Git`s object database.
     /// There must be no merge conflicts in the index.
     #[instrument]
@@ -966,6 +1083,132 @@ Either create it, or update the main branch setting by running:
             .write_tree_to(&self.inner)
             .map_err(wrap_git_error)?;
         Ok(make_non_zero_oid(oid))
+    }
+
+    /// Amends the provided parent commit in memory and returns the resulting tree.
+    ///
+    /// Only amends the files provided in the options, and only supports amending from
+    /// either the working tree or the index, but not both.
+    ///
+    /// See `Repo::cherry_pick_fast` for motivation for performing the operation
+    /// in-memory.
+    pub fn amend_fast(
+        &self,
+        parent_commit: &Commit,
+        opts: &AmendFastOptions,
+    ) -> eyre::Result<Tree> {
+        let parent_commit_pathbufs = self
+            .get_paths_touched_by_commit(parent_commit)?
+            .ok_or_else(|| {
+                eyre::eyre!(
+                    "Could not get paths touched by commit: {:?}",
+                    &parent_commit
+                )
+            })?
+            .into_iter()
+            .collect_vec();
+        let changed_paths: Vec<PathBuf> = {
+            let mut result: HashSet<PathBuf> = parent_commit_pathbufs.into_iter().collect();
+            match opts {
+                AmendFastOptions::FromIndex { paths } => result.extend(paths.iter().cloned()),
+                AmendFastOptions::FromWorkingCopy { ref status_entries } => {
+                    for entry in status_entries {
+                        result.extend(entry.paths().iter().cloned());
+                    }
+                }
+            };
+            result.into_iter().collect_vec()
+        };
+        let changed_paths = changed_paths
+            .iter()
+            .map(|path| path.as_path())
+            .collect_vec();
+
+        let dehydrated_parent =
+            self.dehydrate_commit(parent_commit, changed_paths.as_slice(), true)?;
+        let dehydrated_parent_tree = dehydrated_parent.get_tree()?;
+
+        let repo_path = self
+            .get_working_copy_path()
+            .ok_or_else(|| eyre::eyre!("unable to get repo working copy path"))?;
+        let new_tree_entries: HashMap<PathBuf, Option<(NonZeroOid, i32)>> = match opts {
+            AmendFastOptions::FromWorkingCopy { status_entries } => status_entries
+                .iter()
+                .map(|entry| {
+                    entry.paths().into_iter().map(move |path| {
+                        let file_path = &repo_path.join(&path);
+                        // Try to create a new blob OID based on the current on-disk
+                        // contents of the file in the working copy.
+                        match self.inner.blob_path(file_path) {
+                            Ok(oid) => Ok((
+                                path,
+                                Some((make_non_zero_oid(oid), entry.working_copy_file_mode.into())),
+                            )),
+                            // If the file doesn't exist, it needs to be explicitly marked as
+                            // such, as a tombstone to override if the file exists in the parent tree.
+                            Err(err) if err.code() == git2::ErrorCode::NotFound => Ok((path, None)),
+                            Err(other) => Err(eyre::eyre!(other)),
+                        }
+                    })
+                })
+                .flatten()
+                .collect::<Result<HashMap<_, _>, _>>()?,
+            AmendFastOptions::FromIndex { paths } => {
+                let index = self.get_index()?;
+                paths
+                    .iter()
+                    .filter_map(|path| match index.get_entry(path) {
+                        Some(IndexEntry {
+                            oid: MaybeZeroOid::Zero,
+                            ..
+                        }) => {
+                            warn!(?path, "index entry was zero");
+                            None
+                        }
+                        Some(IndexEntry {
+                            oid: MaybeZeroOid::NonZero(oid),
+                            file_mode,
+                            ..
+                        }) => Some((
+                            path.clone(),
+                            Some((
+                                oid,
+                                file_mode
+                                    .try_into()
+                                    .expect("Could not convert file mode from u32 to i32"),
+                            )),
+                        )),
+                        None => Some((path.clone(), None)),
+                    })
+                    .collect::<HashMap<_, _>>()
+            }
+        };
+
+        // Merge the new path entries into the existing set of parent tree.
+        let amended_tree_entries: HashMap<PathBuf, Option<(NonZeroOid, i32)>> = changed_paths
+            .into_iter()
+            .map(|changed_path| {
+                let value = match new_tree_entries.get(changed_path) {
+                    Some(new_tree_entry) => new_tree_entry.as_ref().copied(),
+                    None => match dehydrated_parent_tree.get_path(changed_path) {
+                        Ok(Some(entry)) => Some((entry.get_oid(), entry.get_filemode())),
+                        Ok(None) => None,
+                        Err(err) => eyre::bail!(
+                            "getting path {:?} from dehydrated parent index: {}",
+                            changed_path,
+                            err
+                        ),
+                    },
+                };
+                Ok((changed_path.into(), value))
+            })
+            .collect::<eyre::Result<_>>()?;
+
+        let amended_tree_oid =
+            hydrate_tree(self, Some(&parent_commit.get_tree()?), amended_tree_entries)?;
+        let amended_tree = self.find_tree_or_fail(amended_tree_oid)?;
+
+        Ok(amended_tree)
     }
 }
 
@@ -1233,6 +1476,31 @@ impl<'repo> Commit<'repo> {
             (Some(parent_oid), Some(current_oid)) => Ok(Some(parent_oid != current_oid)),
         }
     }
+
+    /// Amend this existing commit.
+    /// Returns the OID of the resulting new commit.
+    #[instrument]
+    pub fn amend_commit(
+        &self,
+        update_ref: Option<&str>,
+        author: Option<&Signature>,
+        committer: Option<&Signature>,
+        message: Option<&str>,
+        tree: Option<&Tree>,
+    ) -> eyre::Result<NonZeroOid> {
+        let oid = self
+            .inner
+            .amend(
+                update_ref,
+                author.map(|author| &author.inner),
+                committer.map(|committer| &committer.inner),
+                None,
+                message,
+                tree.map(|tree| &tree.inner),
+            )
+            .map_err(wrap_git_error)?;
+        Ok(make_non_zero_oid(oid))
+    }
 }
 
 /// The target of a reference.
@@ -1448,6 +1716,188 @@ impl<'repo> Branch<'repo> {
     }
 }
 
+/// A Git file status indicator.
+/// See https://git-scm.com/docs/git-status#_short_format
+#[allow(missing_docs)]
+#[derive(Debug, PartialEq, Eq)]
+pub enum FileStatus {
+    Unmodified,
+    Modified,
+    Added,
+    Deleted,
+    Renamed,
+    Copied,
+    Unmerged,
+    Untracked,
+    Ignored,
+}
+
+impl From<u8> for FileStatus {
+    fn from(status: u8) -> Self {
+        match status {
+            b'.' => FileStatus::Unmodified,
+            b'M' => FileStatus::Modified,
+            b'A' => FileStatus::Added,
+            b'D' => FileStatus::Deleted,
+            b'R' => FileStatus::Renamed,
+            b'C' => FileStatus::Copied,
+            b'U' => FileStatus::Unmerged,
+            b'?' => FileStatus::Untracked,
+            b'!' => FileStatus::Ignored,
+            _ => {
+                warn!(?status, "invalid status indicator");
+                FileStatus::Untracked
+            }
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum FileMode {
+    Unreadable,
+    Tree,
+    Blob,
+    BlobExecutable,
+    Link,
+    Commit,
+}
+
+impl From<git2::FileMode> for FileMode {
+    fn from(file_mode: git2::FileMode) -> Self {
+        match file_mode {
+            git2::FileMode::Blob => FileMode::Blob,
+            git2::FileMode::BlobExecutable => FileMode::BlobExecutable,
+            git2::FileMode::Commit => FileMode::Commit,
+            git2::FileMode::Link => FileMode::Link,
+            git2::FileMode::Tree => FileMode::Tree,
+            git2::FileMode::Unreadable => FileMode::Unreadable,
+        }
+    }
+}
+
+impl From<FileMode> for i32 {
+    fn from(file_mode: FileMode) -> Self {
+        match file_mode {
+            FileMode::Blob => git2::FileMode::Blob.into(),
+            FileMode::BlobExecutable => git2::FileMode::BlobExecutable.into(),
+            FileMode::Commit => git2::FileMode::Commit.into(),
+            FileMode::Link => git2::FileMode::Link.into(),
+            FileMode::Tree => git2::FileMode::Tree.into(),
+            FileMode::Unreadable => git2::FileMode::Unreadable.into(),
+        }
+    }
+}
+
+impl FromStr for FileMode {
+    type Err = eyre::Error;
+
+    // Parses the string representation of a filemode for a status entry.
+    // Git only supports a small subset of Unix octal file mode permissions.
+    // See http://git-scm.com/book/en/v2/Git-Internals-Git-Objects
+    fn from_str(file_mode: &str) -> eyre::Result<Self> {
+        let file_mode = match file_mode {
+            "000000" => FileMode::Unreadable,
+            "040000" => FileMode::Tree,
+            "100644" => FileMode::Blob,
+            "100755" => FileMode::BlobExecutable,
+            "120000" => FileMode::Link,
+            "160000" => FileMode::Commit,
+            _ => eyre::bail!("unknown file mode: {}", file_mode),
+        };
+        Ok(file_mode)
+    }
+}
+
+/// The status of a file in the repo.
+#[derive(Debug, PartialEq, Eq)]
+pub struct StatusEntry {
+    /// The status of the file in the index.
+    pub index_status: FileStatus,
+    /// The status of the file in the working copy.
+    pub working_copy_status: FileStatus,
+    /// The file mode of the file in the working copy.
+    pub working_copy_file_mode: FileMode,
+    /// The file path.
+    pub path: PathBuf,
+    /// The original path of the file (for renamed files).
+    pub orig_path: Option<PathBuf>,
+}
+
+impl StatusEntry {
+    /// Returns the paths associated with the status entry.
+    pub fn paths(&self) -> Vec<PathBuf> {
+        let mut result = vec![self.path.clone()];
+        if let Some(orig_path) = &self.orig_path {
+            result.push(orig_path.clone());
+        }
+        result
+    }
+}
+
+impl TryFrom<&[u8]> for StatusEntry {
+    type Error = eyre::Error;
+
+    #[instrument]
+    fn try_from(line: &[u8]) -> eyre::Result<StatusEntry> {
+        lazy_static! {
+            /// Parses an entry of the git porcelain v2 status format.
+            /// See https://git-scm.com/docs/git-status#_porcelain_format_version_2
+            static ref STATUS_PORCELAIN_V2_REGEXP: Regex = Regex::new(concat!(
+                r#"^(1|2) (?P<index_status>[\w.])(?P<working_copy_status>[\w.]) "#, // Prefix and status indicators.
+                r#"[\w.]+ "#,                                                       // Submodule state.
+                r#"(\d{6} ){2}(?P<working_copy_filemode>\d{6}) "#,                  // HEAD, Index, and Working Copy file modes.
+                r#"([\w\d]+ ){2,3}"#,                                               // HEAD and Index object IDs, and optionally the rename/copy score.
+                r#"(?P<path>[^\x00]+)(\x00(?P<orig_path>[^\x00]+))?$"#              // Path and original path (for renames/copies).
+            ))
+            .expect("porcelain v2 status line regex");
+        }
+
+        let status_line_parts = STATUS_PORCELAIN_V2_REGEXP
+            .captures(line)
+            .ok_or_else(|| eyre::eyre!("unable to parse status line into parts"))?;
+
+        let index_status: FileStatus = status_line_parts
+            .name("index_status")
+            .and_then(|m| m.as_bytes().iter().next().copied())
+            .ok_or_else(|| eyre::eyre!("no index status indicator"))?
+            .into();
+        let working_copy_status: FileStatus = status_line_parts
+            .name("working_copy_status")
+            .and_then(|m| m.as_bytes().iter().next().copied())
+            .ok_or_else(|| eyre::eyre!("no working copy status indicator"))?
+            .into();
+        let working_copy_file_mode = status_line_parts
+            .name("working_copy_filemode")
+            .ok_or_else(|| eyre::eyre!("no working copy filemode in status line"))
+            .and_then(|m| {
+                std::str::from_utf8(m.as_bytes())
+                    .map_err(|err| {
+                        eyre::eyre!("unable to decode working copy file mode: {:?}", err)
+                    })
+                    .and_then(|working_copy_file_mode| working_copy_file_mode.parse::<FileMode>())
+            })?;
+        let path = status_line_parts
+            .name("path")
+            .ok_or_else(|| eyre::eyre!("no path in status line"))?
+            .as_bytes();
+        let orig_path = status_line_parts
+            .name("orig_path")
+            .map(|orig_path| orig_path.as_bytes());
+
+        Ok(StatusEntry {
+            index_status,
+            working_copy_status,
+            working_copy_file_mode,
+            path: PathBuf::from(OsStrBytes::from_raw_bytes(path)?),
+            orig_path: orig_path.map(|orig_path| {
+                OsStrBytes::from_raw_bytes(orig_path)
+                    .map(PathBuf::from)
+                    .expect("unable to convert orig_path to PathBuf")
+            }),
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::testing::make_git;
@@ -1523,6 +1973,284 @@ mod tests {
             "test1.txt",
         ]
         "###);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_amend_fast_from_index() -> eyre::Result<()> {
+        let git = make_git()?;
+        git.init_repo()?;
+
+        git.run(&["checkout", "master"])?;
+        let initial_oid = git.commit_file_with_contents("initial", 2, "initial contents")?;
+        git.write_file("initial", "updated contents")?;
+
+        let repo = git.get_repo()?;
+        let initial_commit = repo.find_commit_or_fail(initial_oid)?;
+
+        let tree = initial_commit.get_tree()?;
+        insta::assert_debug_snapshot!(tree, @r###"
+        Tree {
+            inner: Tree {
+                id: 01deb7745d411223bbf6b9cb1abaeed451bb25a0,
+            },
+        }
+        "###);
+        insta::assert_debug_snapshot!(tree.inner.iter().map(|entry| (entry.name().unwrap().to_string(), entry.id().to_string())).collect_vec(), @r###"
+        [
+            (
+                "initial.txt",
+                "5c41c3d7e736911dbbd53d62c10292b9bc78f838",
+            ),
+        ]
+        "###);
+
+        let tree = repo.amend_fast(
+            &initial_commit,
+            &AmendFastOptions::FromIndex {
+                paths: vec!["initial.txt".into()],
+            },
+        )?;
+
+        insta::assert_debug_snapshot!(tree, @r###"
+        Tree {
+            inner: Tree {
+                id: 01deb7745d411223bbf6b9cb1abaeed451bb25a0,
+            },
+        }
+        "###);
+        insta::assert_debug_snapshot!(tree.inner.iter().map(|entry| (entry.name().unwrap().to_string(), entry.id().to_string())).collect_vec(), @r###"
+        [
+            (
+                "initial.txt",
+                "5c41c3d7e736911dbbd53d62c10292b9bc78f838",
+            ),
+        ]
+        "###);
+
+        git.run(&["add", "initial.txt"])?;
+        let tree = repo.amend_fast(
+            &initial_commit,
+            &AmendFastOptions::FromIndex {
+                paths: vec!["initial.txt".into()],
+            },
+        )?;
+
+        insta::assert_debug_snapshot!(tree, @r###"
+        Tree {
+            inner: Tree {
+                id: 01deb7745d411223bbf6b9cb1abaeed451bb25a0,
+            },
+        }
+        "###);
+        insta::assert_debug_snapshot!(tree.inner.iter().map(|entry| (entry.name().unwrap().to_string(), entry.id().to_string())).collect_vec(), @r###"
+        [
+            (
+                "initial.txt",
+                "5c41c3d7e736911dbbd53d62c10292b9bc78f838",
+            ),
+        ]
+        "###);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_amend_fast_from_working_tree() -> eyre::Result<()> {
+        let git = make_git()?;
+        git.init_repo()?;
+
+        git.run(&["checkout", "master"])?;
+        let initial_oid = git.commit_file_with_contents("initial", 2, "initial contents")?;
+        git.write_file("initial", "updated contents")?;
+
+        let repo = git.get_repo()?;
+        let initial_commit = repo.find_commit_or_fail(initial_oid)?;
+        let tree = repo.amend_fast(
+            &initial_commit,
+            &AmendFastOptions::FromWorkingCopy {
+                status_entries: vec![StatusEntry {
+                    index_status: FileStatus::Renamed,
+                    working_copy_status: FileStatus::Unmodified,
+                    working_copy_file_mode: FileMode::Blob,
+                    path: "initial.txt".into(),
+                    orig_path: None,
+                }],
+            },
+        )?;
+
+        insta::assert_debug_snapshot!(tree, @r###"
+        Tree {
+            inner: Tree {
+                id: 1c15b79a72c3285df172fcfdaceedb7259283eb5,
+            },
+        }
+        "###);
+        insta::assert_debug_snapshot!(tree.inner.iter().map(|entry| (entry.name().unwrap().to_string(), entry.id().to_string())).collect_vec(), @r###"
+        [
+            (
+                "initial.txt",
+                "53cd9398c8a2d92f18d279c6cad3f5dde67235e7",
+            ),
+        ]
+        "###);
+
+        git.write_file("file2", "another file")?;
+        git.write_file("initial", "updated contents again")?;
+        let tree = repo.amend_fast(
+            &initial_commit,
+            &AmendFastOptions::FromWorkingCopy {
+                status_entries: vec![StatusEntry {
+                    index_status: FileStatus::Unmodified,
+                    working_copy_status: FileStatus::Added,
+                    working_copy_file_mode: FileMode::Blob,
+                    path: "file2.txt".into(),
+                    orig_path: None,
+                }],
+            },
+        )?;
+        insta::assert_debug_snapshot!(tree, @r###"
+        Tree {
+            inner: Tree {
+                id: 1a9fbbecd825881c3e79f0fb194a1c1e1104fe0f,
+            },
+        }
+        "###);
+        insta::assert_debug_snapshot!(tree.inner.iter().map(|entry| (entry.name().unwrap().to_string(), entry.id().to_string())).collect_vec(), @r###"
+        [
+            (
+                "file2.txt",
+                "cdcb28483da7783a8b505a074c50632a5481a69b",
+            ),
+            (
+                "initial.txt",
+                "5c41c3d7e736911dbbd53d62c10292b9bc78f838",
+            ),
+        ]
+        "###);
+
+        git.delete_file("initial")?;
+        let tree = repo.amend_fast(
+            &initial_commit,
+            &AmendFastOptions::FromWorkingCopy {
+                status_entries: vec![StatusEntry {
+                    index_status: FileStatus::Unmodified,
+                    working_copy_status: FileStatus::Deleted,
+                    working_copy_file_mode: FileMode::Blob,
+                    path: "initial.txt".into(),
+                    orig_path: None,
+                }],
+            },
+        )?;
+        insta::assert_debug_snapshot!(tree, @r###"
+        Tree {
+            inner: Tree {
+                id: 4b825dc642cb6eb9a060e54bf8d69288fbee4904,
+            },
+        }
+        "###);
+        insta::assert_debug_snapshot!(tree.inner.iter().map(|entry| (entry.name().unwrap().to_string(), entry.id().to_string())).collect_vec(), @"[]");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_status_line() {
+        assert_eq!(
+            TryInto::<StatusEntry>::try_into(
+                "1 .M N... 100644 100644 100644 51fcbe2362663a19d132767b69c2c7829023f3da 51fcbe2362663a19d132767b69c2c7829023f3da repo.rs".as_bytes(),
+            ).unwrap(),
+            StatusEntry {
+                index_status: FileStatus::Unmodified,
+                working_copy_status: FileStatus::Modified,
+                path: "repo.rs".into(),
+                orig_path: None,
+                working_copy_file_mode: FileMode::Blob,
+            }
+        );
+
+        assert_eq!(
+            TryInto::<StatusEntry>::try_into(
+                "1 A. N... 100755 100755 100755 51fcbe2362663a19d132767b69c2c7829023f3da 51fcbe2362663a19d132767b69c2c7829023f3da repo.rs".as_bytes(),
+            ).unwrap(),
+            StatusEntry {
+                index_status: FileStatus::Added,
+                working_copy_status: FileStatus::Unmodified,
+                path: "repo.rs".into(),
+                orig_path: None,
+                working_copy_file_mode: FileMode::BlobExecutable,
+            }
+        );
+
+        let entry: StatusEntry = TryInto::<StatusEntry>::try_into(
+            "2 RD N... 100644 100644 100644 9daeafb9864cf43055ae93beb0afd6c7d144bfa4 9daeafb9864cf43055ae93beb0afd6c7d144bfa4 R100 new_file.rs\x00old_file.rs".as_bytes(),
+        ).unwrap();
+        assert_eq!(
+            entry,
+            StatusEntry {
+                index_status: FileStatus::Renamed,
+                working_copy_status: FileStatus::Deleted,
+                path: "new_file.rs".into(),
+                orig_path: Some("old_file.rs".into()),
+                working_copy_file_mode: FileMode::Blob,
+            }
+        );
+        assert_eq!(
+            entry.paths(),
+            vec![PathBuf::from("new_file.rs"), PathBuf::from("old_file.rs")]
+        );
+    }
+
+    #[test]
+    fn test_get_status() -> eyre::Result<()> {
+        let git = make_git()?;
+        let git_run_info = GitRunInfo {
+            path_to_git: git.path_to_git.clone(),
+            working_directory: git.repo_path.clone(),
+            env: std::env::vars_os().collect(),
+        };
+        git.init_repo()?;
+        git.commit_file("test1", 1)?;
+
+        let repo = git.get_repo()?;
+
+        let status = repo.get_status(&git_run_info, None)?;
+        assert_eq!(status, vec![]);
+
+        git.write_file("new_file", "another file")?;
+        git.run(&["add", "new_file.txt"])?;
+        git.write_file("untracked", "should not show up in status")?;
+        git.delete_file("initial")?;
+        git.run(&["mv", "test1.txt", "renamed.txt"])?;
+
+        let status = repo.get_status(&git_run_info, None)?;
+        assert_eq!(
+            status,
+            vec![
+                StatusEntry {
+                    index_status: FileStatus::Unmodified,
+                    working_copy_status: FileStatus::Deleted,
+                    working_copy_file_mode: FileMode::Unreadable,
+                    path: "initial.txt".into(),
+                    orig_path: None
+                },
+                StatusEntry {
+                    index_status: FileStatus::Added,
+                    working_copy_status: FileStatus::Unmodified,
+                    working_copy_file_mode: FileMode::Blob,
+                    path: "new_file.txt".into(),
+                    orig_path: None
+                },
+                StatusEntry {
+                    index_status: FileStatus::Renamed,
+                    working_copy_status: FileStatus::Unmodified,
+                    working_copy_file_mode: FileMode::Blob,
+                    path: "renamed.txt".into(),
+                    orig_path: Some("test1.txt".into())
+                }
+            ]
+        );
 
         Ok(())
     }

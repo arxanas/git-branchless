@@ -160,20 +160,25 @@ impl GitRunInfo {
         repo: &Repo,
         event_tx_id: Option<EventTransactionId>,
         args: &[&str],
-    ) -> eyre::Result<String> {
+    ) -> eyre::Result<Vec<u8>> {
         let GitRunInfo {
             path_to_git,
             working_directory,
             env,
         } = self;
 
+        // Prefer running in the working copy path to the repo path, because
+        // some commands (notably `git status`) to not function correctly
+        // when run from the git repo (i.e. `.git`) path.
+        let repo_path = repo
+            .get_working_copy_path()
+            .unwrap_or_else(|| repo.get_path());
         // Technically speaking, we should be able to work with non-UTF-8 repository
         // paths. Need to make the typechecker accept it.
-        let repo_path = repo.get_path();
         let repo_path = repo_path.to_str().ok_or_else(|| {
             eyre::eyre!(
                 "Path to Git repo could not be converted to UTF-8 string: {:?}",
-                repo_path
+                repo.get_path()
             )
         })?;
 
@@ -191,9 +196,7 @@ impl GitRunInfo {
             command.env(BRANCHLESS_TRANSACTION_ID_ENV_VAR, event_tx_id.to_string());
         }
         let result = command.output().wrap_err("Spawning Git subprocess")?;
-        let result =
-            String::from_utf8(result.stdout).wrap_err("Decoding stdout from Git subprocess")?;
-        Ok(result)
+        Ok(result.stdout)
     }
 
     /// Run Git silently (don't display output to the user).
@@ -207,7 +210,7 @@ impl GitRunInfo {
         repo: &Repo,
         event_tx_id: Option<EventTransactionId>,
         args: &[S],
-    ) -> eyre::Result<String> {
+    ) -> eyre::Result<Vec<u8>> {
         self.run_silent_inner(
             repo,
             event_tx_id,

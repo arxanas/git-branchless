@@ -1,5 +1,6 @@
 //! Sub-commands of `git-branchless`.
 
+pub mod amend;
 pub mod gc;
 pub mod hide;
 pub mod hooks;
@@ -164,6 +165,8 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
             base,
             move_options,
         } => r#move::r#move(&effects, &git_run_info, source, dest, base, &move_options)?,
+
+        Command::Amend { move_options } => amend::amend(&effects, &git_run_info, &move_options)?,
 
         Command::Restack {
             commits,

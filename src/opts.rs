@@ -185,6 +185,13 @@ pub enum Command {
         move_options: MoveOptions,
     },
 
+    /// Amend the current HEAD commit.
+    Amend {
+        /// Options for moving commits.
+        #[clap(flatten)]
+        move_options: MoveOptions,
+    },
+
     /// Browse or return to a previous state of the repository.
     Undo,
 

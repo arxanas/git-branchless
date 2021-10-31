@@ -70,6 +70,7 @@ const ALL_ALIASES: &[(&str, &str)] = &[
     ("undo", "undo"),
     ("move", "move"),
     ("co", "checkout"),
+    ("amend", "amend"),
 ];
 
 #[derive(Debug)]
@@ -297,6 +298,8 @@ fn install_aliases(
     let version_str = git_run_info
         .run_silent(repo, None, &["version"])
         .wrap_err("Determining Git version")?;
+    let version_str =
+        String::from_utf8(version_str).wrap_err("Decoding stdout from Git subprocess")?;
     let version_str = version_str.trim();
     let version: GitVersion = version_str
         .parse()
