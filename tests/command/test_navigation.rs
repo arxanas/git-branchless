@@ -268,6 +268,7 @@ fn test_next_no_more_children() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["next", "3"])?;
         insta::assert_snapshot!(stdout, @r###"
+        No more child commits to go to after traversing 2 children.
         branchless: running command: <git-executable> checkout 70deb1e28791d8e7dd5a1f0c871a51b91282562f
         :
         O 96d1c37a (master) create test2.txt
