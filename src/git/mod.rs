@@ -14,9 +14,9 @@ pub use dag::{
 };
 pub use oid::{MaybeZeroOid, NonZeroOid};
 pub use repo::{
-    Branch, CategorizedReferenceName, CherryPickFastError, CherryPickFastOptions, Commit, Diff,
-    GitVersion, PatchId, Reference, ReferenceTarget, Repo, RepoReferencesSnapshot,
-    ResolvedReferenceInfo,
+    AmendFastOptions, Branch, CategorizedReferenceName, CherryPickFastError, CherryPickFastOptions,
+    Commit, Diff, FileStatus, GitVersion, PatchId, Reference, ReferenceTarget, Repo,
+    RepoReferencesSnapshot, ResolvedReferenceInfo, StatusEntry,
 };
 pub use run::{check_out_commit, GitRunInfo};
 pub use tree::Tree;

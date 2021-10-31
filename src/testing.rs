@@ -5,6 +5,7 @@
 
 use std::collections::HashMap;
 use std::ffi::OsString;
+use std::fs;
 use std::io::Write;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
@@ -361,6 +362,24 @@ impl Git {
         Ok(())
     }
 
+    /// Delete the provided file in the repository root.
+    pub fn delete_file(&self, name: &str) -> eyre::Result<()> {
+        let file_path = self.repo_path.join(format!("{}.txt", name));
+        fs::remove_file(file_path)?;
+        Ok(())
+    }
+
+    /// Delete the provided file in the repository root.
+    pub fn set_file_permissions(
+        &self,
+        name: &str,
+        permissions: fs::Permissions,
+    ) -> eyre::Result<()> {
+        let file_path = self.repo_path.join(format!("{}.txt", name));
+        fs::set_permissions(file_path, permissions)?;
+        Ok(())
+    }
+
     /// Commit a file with default contents. The `time` argument is used to set
     /// the commit timestamp, which is factored into the commit hash.
     #[instrument]
@@ -501,7 +520,6 @@ impl Deref for GitWrapper {
 /// From https://stackoverflow.com/a/65192210
 /// License: CC-BY-SA 4.0
 fn copy_dir_all(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> std::io::Result<()> {
-    use std::fs;
     fs::create_dir_all(&dst)?;
     for entry in fs::read_dir(src)? {
         let entry = entry?;
