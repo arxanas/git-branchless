@@ -18,5 +18,5 @@ pub use repo::{
     GitVersion, PatchId, Reference, ReferenceTarget, Repo, RepoReferencesSnapshot,
     ResolvedReferenceInfo,
 };
-pub use run::GitRunInfo;
+pub use run::{check_out_commit, GitRunInfo};
 pub use tree::Tree;

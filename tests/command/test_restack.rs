@@ -385,6 +385,18 @@ fn test_restack_single_of_many_commits() -> eyre::Result<()> {
         branchless: processing 1 update: ref HEAD
         HEAD is now at 3bd716d updated test4
         branchless: processing checkout
+        :
+        O 62fc20d2 (master) create test1.txt
+        |\
+        | @ 3bd716d5 updated test4
+        |\
+        | o 7357d2b7 updated test2
+        | |
+        | o 944f78da create test3.txt
+        |
+        x bf0d52a6 (rewritten as 3bd716d5) create test4.txt
+        |
+        o 848121cb create test5.txt
         Successfully rebased and updated detached HEAD.
         branchless: processing 1 update: ref HEAD
         HEAD is now at 3bd716d updated test4
