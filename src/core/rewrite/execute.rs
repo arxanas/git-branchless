@@ -12,7 +12,9 @@ use tracing::warn;
 
 use crate::core::eventlog::EventTransactionId;
 use crate::core::formatting::{printable_styled_string, Pluralize};
-use crate::git::{GitRunInfo, MaybeZeroOid, NonZeroOid, Repo, ResolvedReferenceInfo};
+use crate::git::{
+    check_out_commit, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo, ResolvedReferenceInfo,
+};
 use crate::tui::Effects;
 
 use super::plan::RebasePlan;
@@ -258,10 +260,11 @@ pub fn check_out_updated_head(
         }
     };
 
-    let result = git_run_info.run(
+    let result = check_out_commit(
         effects,
+        git_run_info,
         Some(event_tx_id),
-        &[OsStr::new("checkout"), &checkout_target],
+        &checkout_target.to_string_lossy(),
     )?;
     Ok(result)
 }

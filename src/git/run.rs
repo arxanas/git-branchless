@@ -8,13 +8,17 @@ use std::process::{Command, ExitStatus, Stdio};
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 
+use cursive::theme::BaseColor;
+use cursive::utils::markup::StyledString;
 use eyre::{eyre, Context};
 use itertools::Itertools;
 use os_str_bytes::OsStrBytes;
 use tracing::instrument;
 
+use crate::commands::smartlog::smartlog;
 use crate::core::config::get_core_hooks_path;
 use crate::core::eventlog::{EventTransactionId, BRANCHLESS_TRANSACTION_ID_ENV_VAR};
+use crate::core::formatting::printable_styled_string;
 use crate::git::repo::Repo;
 use crate::tui::{Effects, OperationType};
 use crate::util::get_sh;
@@ -307,6 +311,32 @@ impl GitRunInfo {
             stdin,
         )
     }
+}
+
+/// Checks out the requested commit, and displays the smartlog.
+/// Also displays a warning message if the checkout operation fails.
+pub fn check_out_commit(
+    effects: &Effects,
+    git_run_info: &GitRunInfo,
+    event_tx_id: Option<EventTransactionId>,
+    target: &str,
+) -> eyre::Result<isize> {
+    let result = git_run_info.run(effects, event_tx_id, &["checkout", target])?;
+    smartlog(effects, &Default::default())?;
+    if result != 0 {
+        writeln!(
+            effects.get_output_stream(),
+            "{}",
+            printable_styled_string(
+                effects.get_glyphs(),
+                StyledString::styled(
+                    format!("Failed to check out commit {}", target),
+                    BaseColor::Red.light()
+                )
+            )?
+        )?;
+    }
+    Ok(result)
 }
 
 #[cfg(test)]

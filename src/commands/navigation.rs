@@ -5,11 +5,11 @@ use std::fmt::Write;
 use eden_dag::DagAlgorithm;
 use tracing::instrument;
 
-use crate::commands::smartlog::{make_smartlog_graph, smartlog};
+use crate::commands::smartlog::make_smartlog_graph;
 use crate::core::config::get_next_interactive;
 use crate::core::eventlog::{EventLogDb, EventReplayer};
-use crate::core::formatting::printable_styled_string;
-use crate::git::{sort_commit_set, CommitSet, Dag, GitRunInfo, NonZeroOid, Repo};
+use crate::core::formatting::{printable_styled_string, Pluralize};
+use crate::git::{check_out_commit, sort_commit_set, CommitSet, Dag, GitRunInfo, NonZeroOid, Repo};
 use crate::tui::prompt_select_commit;
 use crate::tui::Effects;
 
@@ -20,19 +20,11 @@ pub fn prev(
     git_run_info: &GitRunInfo,
     num_commits: Option<isize>,
 ) -> eyre::Result<isize> {
-    let exit_code = match num_commits {
-        None => git_run_info.run(effects, None, &["checkout", "HEAD^"])?,
-        Some(num_commits) => git_run_info.run(
-            effects,
-            None,
-            &["checkout", &format!("HEAD~{}", num_commits)],
-        )?,
+    let target = match num_commits {
+        None => "HEAD^".into(),
+        Some(num_commits) => format!("HEAD~{}", num_commits),
     };
-    if exit_code != 0 {
-        return Ok(exit_code);
-    }
-    smartlog(effects, &Default::default())?;
-    Ok(0)
+    check_out_commit(effects, git_run_info, None, &target)
 }
 
 /// Some commits have multiple children, which makes `next` ambiguous. These
@@ -79,9 +71,15 @@ fn advance(
             .children(CommitSet::from(current_oid))?
             .difference(&dag.obsolete_commits);
         let children = sort_commit_set(repo, dag, &children)?;
+
+        let children_pluralize = Pluralize {
+            amount: i,
+            plural: "children",
+            singular: "child",
+        };
         let header = format!(
-            "Found multiple possible next commits to go to after traversing {} children:",
-            i
+            "Found multiple possible next commits to go to after traversing {}:",
+            children_pluralize.to_string(),
         );
 
         current_oid = match (towards, children.as_slice()) {
@@ -164,13 +162,7 @@ pub fn next(
         Some(current_oid) => current_oid,
     };
 
-    let result = git_run_info.run(effects, None, &["checkout", &current_oid.to_string()])?;
-    if result != 0 {
-        return Ok(result);
-    }
-
-    smartlog(effects, &Default::default())?;
-    Ok(0)
+    check_out_commit(effects, git_run_info, None, &current_oid.to_string())
 }
 
 /// Interactively checkout a commit from the smartlog.
@@ -192,11 +184,7 @@ pub fn checkout(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<is
     let graph = make_smartlog_graph(effects, &repo, &dag, &event_replayer, event_cursor, true)?;
 
     match prompt_select_commit(graph.get_commits(), None)? {
-        Some(oid) => {
-            let result = git_run_info.run(effects, None, &["checkout", &oid.to_string()])?;
-            smartlog(effects, &Default::default())?;
-            Ok(result)
-        }
+        Some(oid) => check_out_commit(effects, git_run_info, None, &oid.to_string()),
         None => Ok(1),
     }
 }
