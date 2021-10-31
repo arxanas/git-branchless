@@ -2,6 +2,8 @@
 
 use std::fmt::Write;
 
+use cursive::theme::BaseColor;
+use cursive::utils::markup::StyledString;
 use eden_dag::DagAlgorithm;
 use tracing::instrument;
 
@@ -84,8 +86,20 @@ fn advance(
 
         current_oid = match (towards, children.as_slice()) {
             (_, []) => {
-                // It would also make sense to issue an error here, rather than
-                // silently stop going forward commits.
+                writeln!(
+                    effects.get_output_stream(),
+                    "{}",
+                    printable_styled_string(
+                        glyphs,
+                        StyledString::styled(
+                            format!(
+                                "No more child commits to go to after traversing {}.",
+                                children_pluralize.to_string(),
+                            ),
+                            BaseColor::Yellow.light()
+                        )
+                    )?
+                )?;
                 break;
             }
             (_, [only_child]) => only_child.get_oid(),
