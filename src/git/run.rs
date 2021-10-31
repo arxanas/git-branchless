@@ -219,6 +219,9 @@ impl GitRunInfo {
         stdin: Option<OsString>,
     ) -> eyre::Result<()> {
         let hook_dir = get_core_hooks_path(repo)?;
+        if !hook_dir.exists() {
+            return Ok(());
+        }
 
         let GitRunInfo {
             // We're calling a Git hook, but not Git itself.
