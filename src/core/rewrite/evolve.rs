@@ -91,10 +91,10 @@ pub fn find_abandoned_children(
 
 #[cfg(test)]
 mod tests {
+    use crate::core::effects::Effects;
     use crate::core::eventlog::EventLogDb;
     use crate::core::formatting::Glyphs;
     use crate::testing::{make_git, Git, GitRunOptions};
-    use crate::tui::Effects;
 
     use super::*;
 

@@ -27,13 +27,13 @@ use os_str_bytes::{OsStrBytes, OsStringBytes};
 use tracing::{instrument, warn};
 
 use crate::core::config::get_main_branch_name;
+use crate::core::effects::{Effects, OperationType};
 use crate::core::formatting::StyledStringBuilder;
 use crate::core::metadata::{render_commit_metadata, CommitMessageProvider, CommitOidProvider};
 use crate::git::config::{Config, ConfigRead};
 use crate::git::oid::{make_non_zero_oid, MaybeZeroOid, NonZeroOid};
 use crate::git::run::GitRunInfo;
 use crate::git::tree::{dehydrate_tree, get_changed_paths_between_trees, hydrate_tree, Tree};
-use crate::tui::{Effects, OperationType};
 
 /// Convert a `git2::Error` into an `eyre::Error` with an auto-generated message.
 pub(super) fn wrap_git_error(error: git2::Error) -> eyre::Error {

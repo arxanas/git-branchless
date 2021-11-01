@@ -75,11 +75,11 @@ pub fn wrap<S: AsRef<str> + std::fmt::Debug>(
 
 #[cfg(test)]
 mod tests {
+    use crate::core::effects::Effects;
     use crate::core::eventlog::testing::{get_event_replayer_events, redact_event_timestamp};
     use crate::core::eventlog::{Event, EventLogDb, EventReplayer};
     use crate::core::formatting::Glyphs;
     use crate::testing::make_git;
-    use crate::tui::Effects;
 
     #[test]
     fn test_wrap_rebase_in_transaction() -> eyre::Result<()> {

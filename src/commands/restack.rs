@@ -63,6 +63,7 @@ use tracing::{instrument, warn};
 
 use crate::commands::smartlog::smartlog;
 use crate::core::config::get_restack_preserve_timestamps;
+use crate::core::effects::Effects;
 use crate::core::eventlog::{EventCursor, EventLogDb, EventReplayer};
 use crate::core::rewrite::{
     execute_rebase_plan, find_abandoned_children, find_rewrite_target, move_branches,
@@ -73,7 +74,6 @@ use crate::git::{
     ResolveCommitsResult,
 };
 use crate::opts::MoveOptions;
-use crate::tui::Effects;
 
 #[instrument(skip(commits))]
 fn restack_commits(

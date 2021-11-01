@@ -1,3 +1,5 @@
+//! Wrappers around various side effects.
+
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::fmt::Write;
@@ -505,6 +507,8 @@ trait WriteProgress {
         }
     }
 }
+
+/// A handle to stdout, but doesn't overwrite interactive progress notifications.
 pub struct OutputStream {
     dest: OutputDest,
     buffer: String,
@@ -563,6 +567,7 @@ impl Drop for OutputStream {
     }
 }
 
+/// A handle to stderr, but doesn't overwrite interactive progress notifications.
 pub struct ErrorStream {
     dest: OutputDest,
     buffer: String,
@@ -620,6 +625,9 @@ impl Drop for ErrorStream {
     }
 }
 
+/// A handle to an operation in progress. This object should be kept live while
+/// the operation is underway, and a timing entry for it will be displayed in
+/// the interactive progress display.
 pub struct ProgressHandle<'a> {
     effects: &'a Effects,
     operation_type: OperationType,
@@ -633,11 +641,17 @@ impl Drop for ProgressHandle<'_> {
 }
 
 impl ProgressHandle<'_> {
+    /// Notify the progress meter that the current operation has `total`
+    /// discrete units of work, and it's currently `current` units of the way
+    /// through the operation.
     pub fn notify_progress(&self, current: usize, total: usize) {
         self.effects
             .on_notify_progress(self.operation_type.clone(), current, total);
     }
 
+    /// Notify the progress meter that additional progress has taken place.
+    /// Should be used only after a call to `notify_progress` to indicate how
+    /// much total work there is.
     pub fn notify_progress_inc(&self, increment: usize) {
         self.effects
             .on_notify_progress_inc(self.operation_type.clone(), increment);

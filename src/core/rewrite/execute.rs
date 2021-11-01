@@ -10,12 +10,12 @@ use eyre::Context;
 use os_str_bytes::OsStrBytes;
 use tracing::warn;
 
+use crate::core::effects::Effects;
 use crate::core::eventlog::EventTransactionId;
 use crate::core::formatting::{printable_styled_string, Pluralize};
 use crate::git::{
     check_out_commit, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo, ResolvedReferenceInfo,
 };
-use crate::tui::Effects;
 
 use super::plan::RebasePlan;
 
@@ -319,6 +319,7 @@ mod in_memory {
     use tracing::{instrument, warn};
 
     use crate::commands::gc::mark_commit_reachable;
+    use crate::core::effects::Effects;
     use crate::core::formatting::printable_styled_string;
     use crate::core::rewrite::execute::check_out_updated_head;
     use crate::core::rewrite::move_branches;
@@ -326,7 +327,6 @@ mod in_memory {
     use crate::git::{
         CherryPickFastError, CherryPickFastOptions, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo,
     };
-    use crate::tui::Effects;
 
     use super::{ExecuteRebasePlanOptions, MergeConflictInfo};
 
@@ -722,9 +722,9 @@ mod on_disk {
     use os_str_bytes::OsStrBytes;
     use tracing::instrument;
 
+    use crate::core::effects::{Effects, OperationType};
     use crate::core::rewrite::plan::RebasePlan;
     use crate::git::{GitRunInfo, Repo};
-    use crate::tui::{Effects, OperationType};
 
     use super::ExecuteRebasePlanOptions;
 

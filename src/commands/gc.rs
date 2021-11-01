@@ -15,12 +15,12 @@ use std::fmt::Write;
 use eyre::Context;
 use tracing::instrument;
 
+use crate::core::effects::Effects;
 use crate::core::eventlog::{
     is_gc_ref, CommitActivityStatus, EventCursor, EventLogDb, EventReplayer,
 };
 use crate::core::formatting::Pluralize;
 use crate::git::{NonZeroOid, Reference, Repo};
-use crate::tui::Effects;
 
 fn find_dangling_references<'repo>(
     repo: &'repo Repo,

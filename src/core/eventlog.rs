@@ -16,10 +16,10 @@ use std::time::{Duration, SystemTime};
 use eyre::Context;
 use tracing::{error, instrument};
 
+use crate::core::effects::{Effects, OperationType};
 use crate::git::{
     CategorizedReferenceName, MaybeZeroOid, NonZeroOid, Repo, RepoReferencesSnapshot,
 };
-use crate::tui::{Effects, OperationType};
 
 /// When this environment variable is set, we reuse the ID for the transaction
 /// which the caller has already started.

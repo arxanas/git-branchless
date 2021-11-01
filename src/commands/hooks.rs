@@ -23,11 +23,11 @@ use crate::core::eventlog::{should_ignore_ref_updates, Event, EventLogDb, EventT
 use crate::core::formatting::{printable_styled_string, Glyphs, Pluralize};
 use crate::git::{CategorizedReferenceName, MaybeZeroOid, Repo};
 
+use crate::core::effects::Effects;
 pub use crate::core::rewrite::hooks::{
     hook_drop_commit_if_empty, hook_post_rewrite, hook_register_extra_post_rewrite_hook,
     hook_skip_upstream_applied_commit,
 };
-use crate::tui::Effects;
 
 /// Handle Git's `post-checkout` hook.
 ///

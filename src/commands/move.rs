@@ -11,6 +11,7 @@ use eden_dag::DagAlgorithm;
 use tracing::instrument;
 
 use crate::core::config::get_restack_preserve_timestamps;
+use crate::core::effects::Effects;
 use crate::core::eventlog::{EventLogDb, EventReplayer};
 use crate::core::rewrite::{
     execute_rebase_plan, BuildRebasePlanOptions, ExecuteRebasePlanOptions, ExecuteRebasePlanResult,
@@ -20,7 +21,6 @@ use crate::git::{
     resolve_commits, CommitSet, Dag, GitRunInfo, NonZeroOid, Repo, ResolveCommitsResult,
 };
 use crate::opts::MoveOptions;
-use crate::tui::Effects;
 
 #[instrument]
 fn resolve_base_commit(
