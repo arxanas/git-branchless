@@ -8,6 +8,7 @@ use std::time::SystemTime;
 
 use tracing::instrument;
 
+use crate::core::effects::Effects;
 use crate::core::eventlog::{EventLogDb, EventReplayer};
 use crate::core::formatting::printable_styled_string;
 use crate::core::metadata::{
@@ -15,7 +16,6 @@ use crate::core::metadata::{
     ObsolescenceExplanationProvider, RelativeTimeProvider,
 };
 use crate::git::{Dag, Repo};
-use crate::tui::Effects;
 
 pub use graph::{make_smartlog_graph, SmartlogGraph};
 pub use render::{render_graph, SmartlogOptions};
@@ -27,10 +27,10 @@ mod graph {
 
     use tracing::instrument;
 
+    use crate::core::effects::{Effects, OperationType};
     use crate::core::eventlog::{EventCursor, EventReplayer};
     use crate::git::{Commit, CommitSet};
     use crate::git::{Dag, NonZeroOid, Repo};
-    use crate::tui::{Effects, OperationType};
 
     /// Node contained in the smartlog commit graph.
     #[derive(Debug)]
@@ -238,11 +238,11 @@ mod render {
     use cursive::utils::markup::StyledString;
     use tracing::instrument;
 
+    use crate::core::effects::Effects;
     use crate::core::formatting::set_effect;
     use crate::core::formatting::{Glyphs, StyledStringBuilder};
     use crate::core::metadata::{render_commit_metadata, CommitMetadataProvider};
     use crate::git::{Dag, NonZeroOid, Repo};
-    use crate::tui::Effects;
 
     use super::graph::SmartlogGraph;
 

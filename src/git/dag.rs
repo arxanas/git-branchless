@@ -10,9 +10,9 @@ use eyre::Context;
 use itertools::Itertools;
 use tracing::{instrument, trace, warn};
 
+use crate::core::effects::{Effects, OperationType};
 use crate::core::eventlog::{CommitActivityStatus, EventCursor, EventReplayer};
 use crate::git::{Commit, MaybeZeroOid, NonZeroOid, Repo};
-use crate::tui::{Effects, OperationType};
 
 use super::RepoReferencesSnapshot;
 

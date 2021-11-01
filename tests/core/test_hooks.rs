@@ -1,8 +1,8 @@
+use branchless::core::effects::Effects;
 use branchless::core::eventlog::testing::{get_event_replayer_events, redact_event_timestamp};
 use branchless::core::eventlog::{Event, EventLogDb, EventReplayer};
 use branchless::core::formatting::Glyphs;
 use branchless::testing::make_git;
-use branchless::tui::Effects;
 use branchless::util::get_sh;
 use eyre::{eyre, Context};
 use std::process::Command;

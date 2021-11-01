@@ -1,8 +1,8 @@
+use branchless::core::effects::Effects;
 use branchless::core::eventlog::testing::{get_event_replayer_events, redact_event_timestamp};
 use branchless::core::eventlog::{Event, EventLogDb, EventReplayer};
 use branchless::core::formatting::Glyphs;
 use branchless::testing::make_git;
-use branchless::tui::Effects;
 
 #[test]
 fn test_git_v2_31_events() -> eyre::Result<()> {

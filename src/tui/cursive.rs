@@ -6,7 +6,7 @@ use cursive::theme::{Color, PaletteColor};
 use cursive::{Cursive, CursiveRunnable, CursiveRunner};
 use cursive_buffered_backend::BufferedBackend;
 
-use super::Effects;
+use crate::core::effects::Effects;
 
 /// Create an instance of a `CursiveRunner`, and clean it up afterward.
 pub fn with_siv<T, F: FnOnce(Effects, CursiveRunner<CursiveRunnable>) -> eyre::Result<T>>(

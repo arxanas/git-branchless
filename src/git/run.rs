@@ -17,10 +17,10 @@ use tracing::instrument;
 
 use crate::commands::smartlog::smartlog;
 use crate::core::config::get_core_hooks_path;
+use crate::core::effects::{Effects, OperationType};
 use crate::core::eventlog::{EventTransactionId, BRANCHLESS_TRANSACTION_ID_ENV_VAR};
 use crate::core::formatting::printable_styled_string;
 use crate::git::repo::Repo;
-use crate::tui::{Effects, OperationType};
 use crate::util::get_sh;
 
 /// Path to the `git` executable on disk to be executed.
