@@ -32,6 +32,9 @@ pub enum Command {
 pub enum Distance {
     /// Traverse this number of commits.
     NumCommits(usize),
+
+    /// Traverse as many commits as possible.
+    AllTheWay,
 }
 
 /// Some commits have multiple children, which makes `next` ambiguous. These
@@ -57,7 +60,7 @@ fn advance(
     dag: &Dag,
     current_oid: NonZeroOid,
     command: Command,
-    num_commits: Distance,
+    distance: Distance,
     towards: Option<Towards>,
 ) -> eyre::Result<Option<NonZeroOid>> {
     let towards = match towards {
@@ -71,17 +74,12 @@ fn advance(
         }
     };
 
+    let public_commits = dag.query().ancestors(dag.main_branch_commit.clone())?;
+
     let glyphs = effects.get_glyphs();
     let mut current_oid = current_oid;
     let mut i = 0;
     loop {
-        #[allow(irrefutable_let_patterns)]
-        if let Distance::NumCommits(num_commits) = num_commits {
-            if i == num_commits {
-                break;
-            }
-        }
-
         let candidate_commits = match command {
             Command::Next => {
                 let children = dag
@@ -93,9 +91,34 @@ fn advance(
 
             Command::Prev => {
                 let parents = dag.query().parents(CommitSet::from(current_oid))?;
+
+                // The `--all` flag for `git prev` isn't useful if all it does
+                // is take you to the root commit for the repository.  Instead,
+                // we assume that the user wanted to get to the root commit for
+                // their current *commit stack*. We filter out commits which
+                // aren't part of the commit stack so that we stop early here.
+                let parents = match distance {
+                    Distance::AllTheWay => parents.difference(&public_commits),
+                    Distance::NumCommits(_) => parents,
+                };
+
                 sort_commit_set(repo, dag, &parents)?
             }
         };
+
+        match distance {
+            Distance::NumCommits(num_commits) => {
+                if i == num_commits {
+                    break;
+                }
+            }
+
+            Distance::AllTheWay => {
+                if candidate_commits.is_empty() {
+                    break;
+                }
+            }
+        }
 
         let pluralize = match command {
             Command::Next => Pluralize {
@@ -194,14 +217,19 @@ pub fn traverse_commits(
 ) -> eyre::Result<isize> {
     let TraverseCommitsOptions {
         num_commits,
+        all_the_way,
         oldest,
         newest,
         interactive,
     } = *options;
 
-    let distance = match num_commits {
-        None => Distance::NumCommits(1),
-        Some(num_commits) => Distance::NumCommits(num_commits),
+    let distance = match (all_the_way, num_commits) {
+        (false, None) => Distance::NumCommits(1),
+        (false, Some(num_commits)) => Distance::NumCommits(num_commits),
+        (true, None) => Distance::AllTheWay,
+        (true, Some(_)) => {
+            eyre::bail!("num_commits and --all cannot both be set")
+        }
     };
 
     let towards = match (oldest, newest, interactive) {

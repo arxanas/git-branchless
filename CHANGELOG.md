@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `git next` accepts an `--interactive` flag which, if set, prompts which commit to advance to in ambiguous circumstances. This can be enabled by default with the `branchless.next.interactive` config setting.
 - References created for garbage collection purposes no longer appear in `git log` by default.
 - References created for garbage collection purposes are no longer generated unless you've run `git branchless init` in the repository.
+- `git next` and `git prev` accept `-a`/`--all` to take you all the way to a head or root commit for your commit stack, respectively.
 
 ### Fixed
 
