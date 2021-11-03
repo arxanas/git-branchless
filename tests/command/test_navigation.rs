@@ -636,3 +636,40 @@ fn test_navigation_failed_to_check_out_commit() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+#[cfg(unix)]
+fn test_checkout_pty_branch() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    git.init_repo()?;
+    let test1_oid = git.commit_file("test1", 1)?;
+    git.detach_head()?;
+    git.commit_file("test2", 2)?;
+    git.run(&["checkout", "--detach", "master"])?;
+    git.commit_file("test3", 3)?;
+
+    run_in_pty(
+        &git,
+        &["branchless", "checkout"],
+        &[
+            PtyAction::WaitUntilContains("> "),
+            PtyAction::Write("master"),
+            PtyAction::WaitUntilContains(&format!("> {}", &test1_oid.to_string()[0..6])),
+            PtyAction::Write(CARRIAGE_RETURN),
+        ],
+    )?;
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        @ 62fc20d2 (master) create test1.txt
+        |\
+        | o 96d1c37a create test2.txt
+        |
+        o 4838e49b create test3.txt
+        "###);
+    }
+
+    Ok(())
+}
