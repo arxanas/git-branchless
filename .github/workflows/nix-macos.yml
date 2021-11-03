@@ -1,18 +1,17 @@
 name: Nix on macOS
 
-# Currently failing -- see https://github.com/arxanas/git-branchless/pull/159#issuecomment-958611320
-on: {}
-#   schedule:
-#     # Run once every day at 6:40AM UTC.
-#     - cron: "40 6 * * *"
+on:
+  schedule:
+    # Run once every day at 6:40AM UTC.
+    - cron: "40 6 * * *"
 
-#   push:
-#     branches:
-#       - master
+  push:
+    branches:
+      - master
 
-#   pull_request:
-#     branches:
-#       - "ci-*"
+  pull_request:
+    branches:
+      - "ci-*"
 
 jobs:
   nix:
@@ -27,4 +26,5 @@ jobs:
         with:
           extra_nix_config: |
             experimental-features = nix-command flakes
+            access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
       - run: nix build --print-build-logs --show-trace --override-input nixpkgs github:NixOS/nixpkgs
