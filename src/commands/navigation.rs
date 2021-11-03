@@ -1,5 +1,6 @@
 //! Convenience commands to help the user move through a stack of commits.
 
+use std::convert::TryInto;
 use std::fmt::Write;
 
 use cursive::theme::BaseColor;
@@ -13,20 +14,24 @@ use crate::core::effects::Effects;
 use crate::core::eventlog::{EventLogDb, EventReplayer};
 use crate::core::formatting::{printable_styled_string, Pluralize};
 use crate::git::{check_out_commit, sort_commit_set, CommitSet, Dag, GitRunInfo, NonZeroOid, Repo};
+use crate::opts::TraverseCommitsOptions;
 use crate::tui::prompt_select_commit;
 
-/// Go back a certain number of commits.
-#[instrument]
-pub fn prev(
-    effects: &Effects,
-    git_run_info: &GitRunInfo,
-    num_commits: Option<isize>,
-) -> eyre::Result<isize> {
-    let target = match num_commits {
-        None => "HEAD^".into(),
-        Some(num_commits) => format!("HEAD~{}", num_commits),
-    };
-    check_out_commit(effects, git_run_info, None, &target)
+/// The command being invoked, indicating which direction to traverse commits.
+#[derive(Clone, Copy, Debug)]
+pub enum Command {
+    /// Traverse child commits.
+    Next,
+
+    /// Traverse parent commits.
+    Prev,
+}
+
+/// The number of commits to traverse.
+#[derive(Clone, Copy, Debug)]
+pub enum Distance {
+    /// Traverse this number of commits.
+    NumCommits(usize),
 }
 
 /// Some commits have multiple children, which makes `next` ambiguous. These
@@ -51,7 +56,8 @@ fn advance(
     repo: &Repo,
     dag: &Dag,
     current_oid: NonZeroOid,
-    num_commits: isize,
+    command: Command,
+    num_commits: Distance,
     towards: Option<Towards>,
 ) -> eyre::Result<Option<NonZeroOid>> {
     let towards = match towards {
@@ -67,24 +73,50 @@ fn advance(
 
     let glyphs = effects.get_glyphs();
     let mut current_oid = current_oid;
-    for i in 0..num_commits {
-        let children = dag
-            .query()
-            .children(CommitSet::from(current_oid))?
-            .difference(&dag.obsolete_commits);
-        let children = sort_commit_set(repo, dag, &children)?;
+    let mut i = 0;
+    loop {
+        #[allow(irrefutable_let_patterns)]
+        if let Distance::NumCommits(num_commits) = num_commits {
+            if i == num_commits {
+                break;
+            }
+        }
 
-        let children_pluralize = Pluralize {
-            amount: i,
-            plural: "children",
-            singular: "child",
+        let candidate_commits = match command {
+            Command::Next => {
+                let children = dag
+                    .query()
+                    .children(CommitSet::from(current_oid))?
+                    .difference(&dag.obsolete_commits);
+                sort_commit_set(repo, dag, &children)?
+            }
+
+            Command::Prev => {
+                let parents = dag.query().parents(CommitSet::from(current_oid))?;
+                sort_commit_set(repo, dag, &parents)?
+            }
+        };
+
+        let pluralize = match command {
+            Command::Next => Pluralize {
+                amount: i.try_into()?,
+                plural: "children",
+                singular: "child",
+            },
+
+            Command::Prev => Pluralize {
+                amount: i.try_into()?,
+                plural: "parents",
+                singular: "parent",
+            },
         };
         let header = format!(
-            "Found multiple possible next commits to go to after traversing {}:",
-            children_pluralize.to_string(),
+            "Found multiple possible {} commits to go to after traversing {}:",
+            pluralize.singular,
+            pluralize.to_string(),
         );
 
-        current_oid = match (towards, children.as_slice()) {
+        current_oid = match (towards, candidate_commits.as_slice()) {
             (_, []) => {
                 writeln!(
                     effects.get_output_stream(),
@@ -93,20 +125,30 @@ fn advance(
                         glyphs,
                         StyledString::styled(
                             format!(
-                                "No more child commits to go to after traversing {}.",
-                                children_pluralize.to_string(),
+                                "No more {} commits to go to after traversing {}.",
+                                pluralize.singular,
+                                pluralize.to_string(),
                             ),
                             BaseColor::Yellow.light()
                         )
                     )?
                 )?;
-                break;
+
+                if i == 0 {
+                    // If we didn't succeed in traversing any commits, then
+                    // treat the operation as a failure. Otherwise, assume that
+                    // the user just meant to go as many commits as possible.
+                    return Ok(None);
+                } else {
+                    break;
+                }
             }
+
             (_, [only_child]) => only_child.get_oid(),
             (Some(Towards::Newest), [.., newest_child]) => newest_child.get_oid(),
             (Some(Towards::Oldest), [oldest_child, ..]) => oldest_child.get_oid(),
             (Some(Towards::Interactive), [_, _, ..]) => {
-                match prompt_select_commit(children, Some(&header))? {
+                match prompt_select_commit(candidate_commits, Some(&header))? {
                     Some(oid) => oid,
                     None => {
                         return Ok(None);
@@ -115,10 +157,10 @@ fn advance(
             }
             (None, [_, _, ..]) => {
                 writeln!(effects.get_output_stream(), "{}", header)?;
-                for (j, child) in (0..).zip(children.iter()) {
+                for (j, child) in (0..).zip(candidate_commits.iter()) {
                     let descriptor = if j == 0 {
                         " (oldest)"
-                    } else if j + 1 == children.len() {
+                    } else if j + 1 == candidate_commits.len() {
                         " (newest)"
                     } else {
                         ""
@@ -132,22 +174,46 @@ fn advance(
                         descriptor
                     )?;
                 }
-                writeln!(effects.get_output_stream(), "(Pass --oldest (-o), --newest (-n), or --interactive (-i) to select between ambiguous next commits)")?;
+                writeln!(effects.get_output_stream(), "(Pass --oldest (-o), --newest (-n), or --interactive (-i) to select between ambiguous commits)")?;
                 return Ok(None);
             }
         };
+
+        i += 1;
     }
     Ok(Some(current_oid))
 }
 
-/// Go forward a certain number of commits.
+/// Go forward or backward a certain number of commits.
 #[instrument]
-pub fn next(
+pub fn traverse_commits(
     effects: &Effects,
     git_run_info: &GitRunInfo,
-    num_commits: Option<isize>,
-    towards: Option<Towards>,
+    command: Command,
+    options: &TraverseCommitsOptions,
 ) -> eyre::Result<isize> {
+    let TraverseCommitsOptions {
+        num_commits,
+        oldest,
+        newest,
+        interactive,
+    } = *options;
+
+    let distance = match num_commits {
+        None => Distance::NumCommits(1),
+        Some(num_commits) => Distance::NumCommits(num_commits),
+    };
+
+    let towards = match (oldest, newest, interactive) {
+        (false, false, false) => None,
+        (true, false, false) => Some(Towards::Oldest),
+        (false, true, false) => Some(Towards::Newest),
+        (false, false, true) => Some(Towards::Interactive),
+        (_, _, _) => {
+            eyre::bail!("Only one of --oldest, --newest, and --interactive can be set")
+        }
+    };
+
     let repo = Repo::from_current_dir()?;
     let references_snapshot = repo.get_references_snapshot()?;
     let conn = repo.get_db_conn()?;
@@ -169,8 +235,7 @@ pub fn next(
         }
     };
 
-    let num_commits = num_commits.unwrap_or(1);
-    let current_oid = advance(effects, &repo, &dag, head_oid, num_commits, towards)?;
+    let current_oid = advance(effects, &repo, &dag, head_oid, command, distance, towards)?;
     let current_oid = match current_oid {
         None => return Ok(1),
         Some(current_oid) => current_oid,
