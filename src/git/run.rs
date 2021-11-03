@@ -337,7 +337,7 @@ pub fn check_out_commit(
             printable_styled_string(
                 effects.get_glyphs(),
                 StyledString::styled(
-                    format!("Failed to check out commit {:?}", target),
+                    format!("Failed to check out commit: {}", target.to_string_lossy()),
                     BaseColor::Red.light()
                 )
             )?

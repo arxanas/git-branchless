@@ -607,3 +607,32 @@ fn test_traverse_branches_ambiguous() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_navigation_failed_to_check_out_commit() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    git.init_repo()?;
+    git.detach_head()?;
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+    git.run(&["checkout", "HEAD^"])?;
+
+    git.write_file("test2", "conflicting contents")?;
+
+    {
+        let (stdout, _stderr) = git.run_with_options(
+            &["next"],
+            &GitRunOptions {
+                expected_exit_code: 1,
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> checkout 96d1c37a3d4363611c49f7e52186e189a04c531f
+        Failed to check out commit: 96d1c37a3d4363611c49f7e52186e189a04c531f
+        "###);
+    }
+
+    Ok(())
+}
