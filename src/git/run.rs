@@ -23,6 +23,8 @@ use crate::core::formatting::printable_styled_string;
 use crate::git::repo::Repo;
 use crate::util::get_sh;
 
+use super::CategorizedReferenceName;
+
 /// Path to the `git` executable on disk to be executed.
 #[derive(Clone)]
 pub struct GitRunInfo {
@@ -319,9 +321,13 @@ pub fn check_out_commit(
     effects: &Effects,
     git_run_info: &GitRunInfo,
     event_tx_id: Option<EventTransactionId>,
-    target: &str,
+    target: impl AsRef<OsStr> + std::fmt::Debug,
 ) -> eyre::Result<isize> {
-    let result = git_run_info.run(effects, event_tx_id, &["checkout", target])?;
+    let categorized_target = CategorizedReferenceName::new(target.as_ref());
+    let target = categorized_target.remove_prefix()?;
+
+    let result = git_run_info.run(effects, event_tx_id, &[OsStr::new("checkout"), &target])?;
+
     if result == 0 {
         smartlog(effects, &Default::default())?;
     } else {
@@ -331,7 +337,7 @@ pub fn check_out_commit(
             printable_styled_string(
                 effects.get_glyphs(),
                 StyledString::styled(
-                    format!("Failed to check out commit {}", target),
+                    format!("Failed to check out commit {:?}", target),
                     BaseColor::Red.light()
                 )
             )?

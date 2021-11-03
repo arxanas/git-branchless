@@ -1,12 +1,14 @@
 //! Convenience commands to help the user move through a stack of commits.
 
+use std::collections::HashSet;
 use std::convert::TryInto;
+use std::ffi::OsString;
 use std::fmt::Write;
 
 use cursive::theme::BaseColor;
 use cursive::utils::markup::StyledString;
 use eden_dag::DagAlgorithm;
-use tracing::instrument;
+use tracing::{instrument, warn};
 
 use crate::commands::smartlog::make_smartlog_graph;
 use crate::core::config::get_next_interactive;
@@ -32,12 +34,18 @@ pub enum Command {
 pub enum Distance {
     /// Traverse this number of commits or branches.
     NumCommits {
+        /// The number of commits or branches to traverse.
         amount: usize,
+
+        /// If `true`, count the number of branches traversed, not commits.
         move_by_branches: bool,
     },
 
     /// Traverse as many commits as possible.
-    AllTheWay { move_by_branches: bool },
+    AllTheWay {
+        /// If `true`, find the farthest commit with a branch attached to it.
+        move_by_branches: bool,
+    },
 }
 
 /// Some commits have multiple children, which makes `next` ambiguous. These
@@ -349,7 +357,42 @@ pub fn traverse_commits(
         Some(current_oid) => current_oid,
     };
 
-    check_out_commit(effects, git_run_info, None, &current_oid.to_string())
+    let current_oid: OsString = match distance {
+        Distance::AllTheWay {
+            move_by_branches: false,
+        }
+        | Distance::NumCommits {
+            amount: _,
+            move_by_branches: false,
+        } => current_oid.to_string().into(),
+
+        Distance::AllTheWay {
+            move_by_branches: true,
+        }
+        | Distance::NumCommits {
+            amount: _,
+            move_by_branches: true,
+        } => {
+            let empty = HashSet::new();
+            let branches = references_snapshot
+                .branch_oid_to_names
+                .get(&current_oid)
+                .unwrap_or(&empty);
+
+            if branches.is_empty() {
+                warn!(?current_oid, "No branches attached to commit with OID");
+                current_oid.to_string().into()
+            } else if branches.len() == 1 {
+                let branch = branches.iter().next().unwrap();
+                branch.clone()
+            } else {
+                // It's ambiguous which branch the user wants; just check out the commit directly.
+                current_oid.to_string().into()
+            }
+        }
+    };
+
+    check_out_commit(effects, git_run_info, None, &current_oid)
 }
 
 /// Interactively checkout a commit from the smartlog.
