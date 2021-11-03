@@ -19,7 +19,7 @@ fn test_prev() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["prev"])?;
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> checkout HEAD^
+        branchless: running command: <git-executable> checkout f777ecc9b0db5ed372b2615695191a8a17f79f24
         @ f777ecc9 create initial.txt
         |
         O 62fc20d2 (master) create test1.txt
@@ -34,12 +34,18 @@ fn test_prev() -> eyre::Result<()> {
                 ..Default::default()
             },
         )?;
-        insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> checkout HEAD^
-        Failed to check out commit HEAD^
-        "###);
-        insta::assert_snapshot!(stderr, @"error: pathspec 'HEAD^' did not match any file(s) known to git
+        insta::assert_snapshot!(stdout, @"No more parent commits to go to after traversing 0 parents.
 ");
+        insta::assert_snapshot!(stderr, @"");
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        @ f777ecc9 create initial.txt
+        |
+        O 62fc20d2 (master) create test1.txt
+        "###);
     }
 
     Ok(())
@@ -56,7 +62,7 @@ fn test_prev_multiple() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["prev", "2"])?;
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> checkout HEAD~2
+        branchless: running command: <git-executable> checkout f777ecc9b0db5ed372b2615695191a8a17f79f24
         @ f777ecc9 create initial.txt
         :
         O 96d1c37a (master) create test2.txt
@@ -115,11 +121,11 @@ fn test_next_ambiguous() -> eyre::Result<()> {
             },
         )?;
         insta::assert_snapshot!(stdout, @r###"
-        Found multiple possible next commits to go to after traversing 0 children:
+        Found multiple possible child commits to go to after traversing 0 children:
           - 62fc20d2 create test1.txt (oldest)
           - fe65c1fe create test2.txt
           - 98b9119d create test3.txt (newest)
-        (Pass --oldest (-o), --newest (-n), or --interactive (-i) to select between ambiguous next commits)
+        (Pass --oldest (-o), --newest (-n), or --interactive (-i) to select between ambiguous commits)
         "###);
     }
 

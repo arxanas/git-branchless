@@ -138,25 +138,23 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
 
         Command::Unhide { commits, recursive } => hide::unhide(&effects, commits, recursive)?,
 
-        Command::Prev { num_commits } => navigation::prev(&effects, &git_run_info, num_commits)?,
+        Command::Prev {
+            traverse_commits_options,
+        } => navigation::traverse_commits(
+            &effects,
+            &git_run_info,
+            navigation::Command::Prev,
+            &traverse_commits_options,
+        )?,
 
         Command::Next {
-            num_commits,
-            oldest,
-            newest,
-            interactive,
-        } => {
-            let towards = match (oldest, newest, interactive) {
-                (false, false, false) => None,
-                (true, false, false) => Some(navigation::Towards::Oldest),
-                (false, true, false) => Some(navigation::Towards::Newest),
-                (false, false, true) => Some(navigation::Towards::Interactive),
-                (_, _, _) => {
-                    eyre::bail!("Only one of --oldest, --newest, and --interactive can be set")
-                }
-            };
-            navigation::next(&effects, &git_run_info, num_commits, towards)?
-        }
+            traverse_commits_options,
+        } => navigation::traverse_commits(
+            &effects,
+            &git_run_info,
+            navigation::Command::Next,
+            &traverse_commits_options,
+        )?,
 
         Command::Checkout => navigation::checkout(&effects, &git_run_info)?,
 

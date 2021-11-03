@@ -42,6 +42,33 @@ pub struct MoveOptions {
     pub dump_rebase_plan: bool,
 }
 
+/// Options for traversing commits.
+#[derive(Args, Debug)]
+pub struct TraverseCommitsOptions {
+    /// The number of commits to traverse.
+    ///
+    /// If not provided, defaults to 1.
+    pub num_commits: Option<usize>,
+
+    /// When encountering multiple next commits, choose the oldest.
+    #[clap(short = 'o', long = "oldest")]
+    pub oldest: bool,
+
+    /// When encountering multiple next commits, choose the newest.
+    #[clap(short = 'n', long = "newest", conflicts_with("oldest"))]
+    pub newest: bool,
+
+    /// When encountering multiple next commits, interactively prompt which to
+    /// advance to.
+    #[clap(
+        short = 'i',
+        long = "interactive",
+        conflicts_with("newest"),
+        conflicts_with("oldest")
+    )]
+    pub interactive: bool,
+}
+
 /// FIXME: write man-page text
 #[derive(Parser)]
 pub enum Command {
@@ -93,34 +120,16 @@ pub enum Command {
 
     /// Move to an earlier commit in the current stack.
     Prev {
-        /// The number of commits backward to go.
-        num_commits: Option<isize>,
+        /// Options for traversing commits.
+        #[clap(flatten)]
+        traverse_commits_options: TraverseCommitsOptions,
     },
 
     /// Move to a later commit in the current stack.
     Next {
-        /// The number of commits forward to go.
-        ///
-        /// If not provided, defaults to 1.
-        num_commits: Option<isize>,
-
-        /// When encountering multiple next commits, choose the oldest.
-        #[clap(short = 'o', long = "oldest")]
-        oldest: bool,
-
-        /// When encountering multiple next commits, choose the newest.
-        #[clap(short = 'n', long = "newest", conflicts_with("oldest"))]
-        newest: bool,
-
-        /// When encountering multiple next commits, interactively prompt which to
-        /// advance to.
-        #[clap(
-            short = 'i',
-            long = "interactive",
-            conflicts_with("newest"),
-            conflicts_with("oldest")
-        )]
-        interactive: bool,
+        /// Options for traversing commits.
+        #[clap(flatten)]
+        traverse_commits_options: TraverseCommitsOptions,
     },
 
     /// Interactively pick a commit to checkout.
