@@ -8,13 +8,13 @@ use std::time::SystemTime;
 
 use tracing::instrument;
 
+use crate::core::commit_descriptors::{
+    BranchesDescriptor, CommitMessageDescriptor, CommitOidDescriptor,
+    DifferentialRevisionDescriptor, ObsolescenceExplanationDescriptor, RelativeTimeDescriptor,
+};
 use crate::core::effects::Effects;
 use crate::core::eventlog::{EventLogDb, EventReplayer};
 use crate::core::formatting::printable_styled_string;
-use crate::core::metadata::{
-    BranchesProvider, CommitMessageProvider, CommitOidProvider, DifferentialRevisionProvider,
-    ObsolescenceExplanationProvider, RelativeTimeProvider,
-};
 use crate::git::{Dag, Repo};
 
 pub use graph::{make_smartlog_graph, SmartlogGraph};
@@ -238,10 +238,10 @@ mod render {
     use cursive::utils::markup::StyledString;
     use tracing::instrument;
 
+    use crate::core::commit_descriptors::{render_commit_descriptors, CommitDescriptor};
     use crate::core::effects::Effects;
     use crate::core::formatting::set_effect;
     use crate::core::formatting::{Glyphs, StyledStringBuilder};
-    use crate::core::metadata::{render_commit_metadata, CommitMetadataProvider};
     use crate::git::{Dag, NonZeroOid, Repo};
 
     use super::graph::SmartlogGraph;
@@ -300,12 +300,12 @@ mod render {
         root_commit_oids
     }
 
-    #[instrument(skip(commit_metadata_providers, graph))]
+    #[instrument(skip(commit_descriptors, graph))]
     fn get_child_output(
         glyphs: &Glyphs,
         graph: &SmartlogGraph,
         root_oids: &[NonZeroOid],
-        commit_metadata_providers: &mut [&mut dyn CommitMetadataProvider],
+        commit_descriptors: &mut [&mut dyn CommitDescriptor],
         head_oid: Option<NonZeroOid>,
         current_oid: NonZeroOid,
         last_child_line_char: Option<&str>,
@@ -313,7 +313,7 @@ mod render {
         let current_node = &graph[&current_oid];
         let is_head = Some(current_node.commit.get_oid()) == head_oid;
 
-        let text = render_commit_metadata(&current_node.commit, commit_metadata_providers)?;
+        let text = render_commit_descriptors(&current_node.commit, commit_descriptors)?;
         let cursor = match (current_node.is_main, current_node.is_obsolete, is_head) {
             (false, false, false) => glyphs.commit_visible,
             (false, false, true) => glyphs.commit_visible_head,
@@ -371,7 +371,7 @@ mod render {
                 glyphs,
                 graph,
                 root_oids,
-                commit_metadata_providers,
+                commit_descriptors,
                 head_oid,
                 *child_oid,
                 None,
@@ -398,11 +398,11 @@ mod render {
     }
 
     /// Render a pretty graph starting from the given root OIDs in the given graph.
-    #[instrument(skip(commit_metadata_providers, graph))]
+    #[instrument(skip(commit_descriptors, graph))]
     fn get_output(
         glyphs: &Glyphs,
         graph: &SmartlogGraph,
-        commit_metadata_providers: &mut [&mut dyn CommitMetadataProvider],
+        commit_descriptors: &mut [&mut dyn CommitDescriptor],
         head_oid: Option<NonZeroOid>,
         root_oids: &[NonZeroOid],
     ) -> eyre::Result<Vec<StyledString>> {
@@ -453,7 +453,7 @@ mod render {
                 glyphs,
                 graph,
                 root_oids,
-                commit_metadata_providers,
+                commit_descriptors,
                 head_oid,
                 *root_oid,
                 last_child_line_char,
@@ -465,20 +465,20 @@ mod render {
     }
 
     /// Render the smartlog graph and write it to the provided stream.
-    #[instrument(skip(commit_metadata_providers, graph))]
+    #[instrument(skip(commit_descriptors, graph))]
     pub fn render_graph(
         effects: &Effects,
         repo: &Repo,
         dag: &Dag,
         graph: &SmartlogGraph,
         head_oid: Option<NonZeroOid>,
-        commit_metadata_providers: &mut [&mut dyn CommitMetadataProvider],
+        commit_descriptors: &mut [&mut dyn CommitDescriptor],
     ) -> eyre::Result<Vec<StyledString>> {
         let root_oids = split_commit_graph_by_roots(effects, repo, dag, graph);
         let lines = get_output(
             effects.get_glyphs(),
             graph,
-            commit_metadata_providers,
+            commit_descriptors,
             head_oid,
             &root_oids,
         )?;
@@ -531,15 +531,15 @@ pub fn smartlog(effects: &Effects, options: &SmartlogOptions) -> eyre::Result<()
         &graph,
         references_snapshot.head_oid,
         &mut [
-            &mut CommitOidProvider::new(true)?,
-            &mut RelativeTimeProvider::new(&repo, SystemTime::now())?,
-            &mut ObsolescenceExplanationProvider::new(
+            &mut CommitOidDescriptor::new(true)?,
+            &mut RelativeTimeDescriptor::new(&repo, SystemTime::now())?,
+            &mut ObsolescenceExplanationDescriptor::new(
                 &event_replayer,
                 event_replayer.make_default_cursor(),
             )?,
-            &mut BranchesProvider::new(&repo, &references_snapshot)?,
-            &mut DifferentialRevisionProvider::new(&repo)?,
-            &mut CommitMessageProvider::new()?,
+            &mut BranchesDescriptor::new(&repo, &references_snapshot)?,
+            &mut DifferentialRevisionDescriptor::new(&repo)?,
+            &mut CommitMessageDescriptor::new()?,
         ],
     )?;
     for line in lines {

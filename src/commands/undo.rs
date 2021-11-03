@@ -19,13 +19,13 @@ use eyre::Context;
 use tracing::instrument;
 
 use crate::commands::smartlog::{make_smartlog_graph, render_graph};
+use crate::core::commit_descriptors::{
+    BranchesDescriptor, CommitMessageDescriptor, CommitOidDescriptor,
+    DifferentialRevisionDescriptor, ObsolescenceExplanationDescriptor, RelativeTimeDescriptor,
+};
 use crate::core::effects::Effects;
 use crate::core::eventlog::{Event, EventCursor, EventLogDb, EventReplayer, EventTransactionId};
 use crate::core::formatting::{printable_styled_string, Pluralize, StyledStringBuilder};
-use crate::core::metadata::{
-    BranchesProvider, CommitMessageProvider, CommitOidProvider, DifferentialRevisionProvider,
-    ObsolescenceExplanationProvider, RelativeTimeProvider,
-};
 use crate::declare_views;
 use crate::git::{CategorizedReferenceName, Dag, GitRunInfo, MaybeZeroOid, Repo};
 use crate::tui::{with_siv, SingletonView};
@@ -47,12 +47,12 @@ fn render_cursor_smartlog(
         &graph,
         references_snapshot.head_oid,
         &mut [
-            &mut CommitOidProvider::new(true)?,
-            &mut RelativeTimeProvider::new(repo, SystemTime::now())?,
-            &mut ObsolescenceExplanationProvider::new(event_replayer, event_cursor)?,
-            &mut BranchesProvider::new(repo, &references_snapshot)?,
-            &mut DifferentialRevisionProvider::new(repo)?,
-            &mut CommitMessageProvider::new()?,
+            &mut CommitOidDescriptor::new(true)?,
+            &mut RelativeTimeDescriptor::new(repo, SystemTime::now())?,
+            &mut ObsolescenceExplanationDescriptor::new(event_replayer, event_cursor)?,
+            &mut BranchesDescriptor::new(repo, &references_snapshot)?,
+            &mut DifferentialRevisionDescriptor::new(repo)?,
+            &mut CommitMessageDescriptor::new()?,
         ],
     )?;
     Ok(result)
@@ -383,11 +383,11 @@ fn select_past_event(
                 )],
                 Some((event_id, events)) => {
                     let event_description_lines = describe_events_numbered(repo, events)?;
-                    let relative_time_provider = RelativeTimeProvider::new(repo, now)?;
+                    let relative_time_provider = RelativeTimeDescriptor::new(repo, now)?;
                     let relative_time = if relative_time_provider.is_enabled() {
                         format!(
                             " ({} ago)",
-                            RelativeTimeProvider::describe_time_delta(
+                            RelativeTimeDescriptor::describe_time_delta(
                                 now,
                                 events[0].get_timestamp()
                             )?
