@@ -1,5 +1,4 @@
-//! Additional metadata to display for commits.
-
+//! Additional description metadata to display for commits.
 //!
 //! These are rendered inline in the smartlog, between the commit hash and the
 //! commit message.
@@ -17,8 +16,8 @@ use regex::Regex;
 use tracing::instrument;
 
 use crate::core::config::{
-    get_commit_metadata_branches, get_commit_metadata_differential_revision,
-    get_commit_metadata_relative_time,
+    get_commit_descriptors_branches, get_commit_descriptors_differential_revision,
+    get_commit_descriptors_relative_time,
 };
 use crate::git::{CategorizedReferenceName, Commit, Repo, RepoReferencesSnapshot};
 
@@ -27,23 +26,23 @@ use super::formatting::StyledStringBuilder;
 use super::rewrite::find_rewrite_target;
 
 /// Interface to display information about a commit in the smartlog.
-pub trait CommitMetadataProvider {
+pub trait CommitDescriptor {
     /// Provide a description of the given commit.
     ///
-    /// A return value of `None` indicates that this commit metadata provider was
+    /// A return value of `None` indicates that this commit descriptor was
     /// inapplicable for the provided commit.
     fn describe_commit(&mut self, commit: &Commit) -> eyre::Result<Option<StyledString>>;
 }
 
 /// Get the complete description for a given commit.
-#[instrument(skip(commit_metadata_providers))]
-pub fn render_commit_metadata(
+#[instrument(skip(commit_descriptors))]
+pub fn render_commit_descriptors(
     commit: &Commit,
-    commit_metadata_providers: &mut [&mut dyn CommitMetadataProvider],
+    commit_descriptors: &mut [&mut dyn CommitDescriptor],
 ) -> eyre::Result<StyledString> {
-    let descriptions = commit_metadata_providers
+    let descriptions = commit_descriptors
         .iter_mut()
-        .filter_map(|provider: &mut &mut dyn CommitMetadataProvider| {
+        .filter_map(|provider: &mut &mut dyn CommitDescriptor| {
             provider.describe_commit(commit).transpose()
         })
         .collect::<eyre::Result<Vec<_>>>()?;
@@ -53,18 +52,18 @@ pub fn render_commit_metadata(
 
 /// Display an abbreviated commit hash.
 #[derive(Debug)]
-pub struct CommitOidProvider {
+pub struct CommitOidDescriptor {
     use_color: bool,
 }
 
-impl CommitOidProvider {
+impl CommitOidDescriptor {
     /// Constructor.
     pub fn new(use_color: bool) -> eyre::Result<Self> {
-        Ok(CommitOidProvider { use_color })
+        Ok(CommitOidDescriptor { use_color })
     }
 }
 
-impl CommitMetadataProvider for CommitOidProvider {
+impl CommitDescriptor for CommitOidDescriptor {
     #[instrument]
     fn describe_commit(&mut self, commit: &Commit) -> eyre::Result<Option<StyledString>> {
         let oid = commit.get_oid();
@@ -80,16 +79,16 @@ impl CommitMetadataProvider for CommitOidProvider {
 
 /// Display the first line of the commit message.
 #[derive(Debug)]
-pub struct CommitMessageProvider;
+pub struct CommitMessageDescriptor;
 
-impl CommitMessageProvider {
+impl CommitMessageDescriptor {
     /// Constructor.
     pub fn new() -> eyre::Result<Self> {
-        Ok(CommitMessageProvider)
+        Ok(CommitMessageDescriptor)
     }
 }
 
-impl CommitMetadataProvider for CommitMessageProvider {
+impl CommitDescriptor for CommitMessageDescriptor {
     #[instrument]
     fn describe_commit(&mut self, commit: &Commit) -> eyre::Result<Option<StyledString>> {
         Ok(Some(StyledString::plain(
@@ -99,22 +98,22 @@ impl CommitMetadataProvider for CommitMessageProvider {
 }
 
 /// For obsolete commits, provide the reason that it's obsolete.
-pub struct ObsolescenceExplanationProvider<'a> {
+pub struct ObsolescenceExplanationDescriptor<'a> {
     event_replayer: &'a EventReplayer,
     event_cursor: EventCursor,
 }
 
-impl<'a> ObsolescenceExplanationProvider<'a> {
+impl<'a> ObsolescenceExplanationDescriptor<'a> {
     /// Constructor.
     pub fn new(event_replayer: &'a EventReplayer, event_cursor: EventCursor) -> eyre::Result<Self> {
-        Ok(ObsolescenceExplanationProvider {
+        Ok(ObsolescenceExplanationDescriptor {
             event_replayer,
             event_cursor,
         })
     }
 }
 
-impl<'a> CommitMetadataProvider for ObsolescenceExplanationProvider<'a> {
+impl<'a> CommitDescriptor for ObsolescenceExplanationDescriptor<'a> {
     fn describe_commit(&mut self, commit: &Commit) -> eyre::Result<Option<StyledString>> {
         let event = self
             .event_replayer
@@ -152,23 +151,23 @@ impl<'a> CommitMetadataProvider for ObsolescenceExplanationProvider<'a> {
 
 /// Display branches that point to a given commit.
 #[derive(Debug)]
-pub struct BranchesProvider<'a> {
+pub struct BranchesDescriptor<'a> {
     is_enabled: bool,
     references_snapshot: &'a RepoReferencesSnapshot,
 }
 
-impl<'a> BranchesProvider<'a> {
+impl<'a> BranchesDescriptor<'a> {
     /// Constructor.
     pub fn new(repo: &Repo, references_snapshot: &'a RepoReferencesSnapshot) -> eyre::Result<Self> {
-        let is_enabled = get_commit_metadata_branches(repo)?;
-        Ok(BranchesProvider {
+        let is_enabled = get_commit_descriptors_branches(repo)?;
+        Ok(BranchesDescriptor {
             is_enabled,
             references_snapshot,
         })
     }
 }
 
-impl<'a> CommitMetadataProvider for BranchesProvider<'a> {
+impl<'a> CommitDescriptor for BranchesDescriptor<'a> {
     #[instrument]
     fn describe_commit(&mut self, commit: &Commit) -> eyre::Result<Option<StyledString>> {
         if !self.is_enabled {
@@ -218,15 +217,15 @@ impl<'a> CommitMetadataProvider for BranchesProvider<'a> {
 
 /// Display the associated Phabricator revision for a given commit.
 #[derive(Debug)]
-pub struct DifferentialRevisionProvider {
+pub struct DifferentialRevisionDescriptor {
     is_enabled: bool,
 }
 
-impl DifferentialRevisionProvider {
+impl DifferentialRevisionDescriptor {
     /// Constructor.
     pub fn new(repo: &Repo) -> eyre::Result<Self> {
-        let is_enabled = get_commit_metadata_differential_revision(repo)?;
-        Ok(DifferentialRevisionProvider { is_enabled })
+        let is_enabled = get_commit_descriptors_differential_revision(repo)?;
+        Ok(DifferentialRevisionDescriptor { is_enabled })
     }
 }
 
@@ -240,14 +239,14 @@ Differential[\ ]Revision:[\ ]
     (?P<diff>D[0-9]+)
 $",
         )
-        .expect("Failed to compile DifferentialRevisionProvider regex");
+        .expect("Failed to compile `extract_diff_number` regex");
     }
     let captures = RE.captures(message)?;
     let diff_number = &captures["diff"];
     Some(diff_number.to_owned())
 }
 
-impl CommitMetadataProvider for DifferentialRevisionProvider {
+impl CommitDescriptor for DifferentialRevisionDescriptor {
     #[instrument]
     fn describe_commit(&mut self, commit: &Commit) -> eyre::Result<Option<StyledString>> {
         if !self.is_enabled {
@@ -265,16 +264,16 @@ impl CommitMetadataProvider for DifferentialRevisionProvider {
 
 /// Display how long ago the given commit was committed.
 #[derive(Debug)]
-pub struct RelativeTimeProvider {
+pub struct RelativeTimeDescriptor {
     is_enabled: bool,
     now: SystemTime,
 }
 
-impl RelativeTimeProvider {
+impl RelativeTimeDescriptor {
     /// Constructor.
     pub fn new(repo: &Repo, now: SystemTime) -> eyre::Result<Self> {
-        let is_enabled = get_commit_metadata_relative_time(repo)?;
-        Ok(RelativeTimeProvider { is_enabled, now })
+        let is_enabled = get_commit_descriptors_relative_time(repo)?;
+        Ok(RelativeTimeDescriptor { is_enabled, now })
     }
 
     /// Whether or not relative times should be shown, according to the user's
@@ -318,7 +317,7 @@ impl RelativeTimeProvider {
     }
 }
 
-impl CommitMetadataProvider for RelativeTimeProvider {
+impl CommitDescriptor for RelativeTimeDescriptor {
     #[instrument]
     fn describe_commit(&mut self, commit: &Commit) -> eyre::Result<Option<StyledString>> {
         if !self.is_enabled {
@@ -387,7 +386,7 @@ Differential Revision: phabricator.com/D123";
             } else {
                 now.sub(Duration::from_secs(delta.try_into()?))
             };
-            let delta = RelativeTimeProvider::describe_time_delta(now, previous_time)?;
+            let delta = RelativeTimeDescriptor::describe_time_delta(now, previous_time)?;
             assert_eq!(delta, expected);
         }
 

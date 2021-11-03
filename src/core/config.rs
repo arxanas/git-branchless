@@ -67,21 +67,21 @@ pub fn get_restack_warn_abandoned(repo: &Repo) -> eyre::Result<bool> {
 
 /// If `true`, show branches pointing to each commit in the smartlog.
 #[instrument]
-pub fn get_commit_metadata_branches(repo: &Repo) -> eyre::Result<bool> {
+pub fn get_commit_descriptors_branches(repo: &Repo) -> eyre::Result<bool> {
     repo.get_readonly_config()?
-        .get_or("branchless.commitMetadata.branches", true)
+        .get_or("branchless.commitDescriptors.branches", true)
 }
 
 /// If `true`, show associated Phabricator commits in the smartlog.
 #[instrument]
-pub fn get_commit_metadata_differential_revision(repo: &Repo) -> eyre::Result<bool> {
+pub fn get_commit_descriptors_differential_revision(repo: &Repo) -> eyre::Result<bool> {
     repo.get_readonly_config()?
-        .get_or("branchless.commitMetadata.differentialRevision", true)
+        .get_or("branchless.commitDescriptors.differentialRevision", true)
 }
 
 /// If `true`, show the age of each commit in the smartlog.
 #[instrument]
-pub fn get_commit_metadata_relative_time(repo: &Repo) -> eyre::Result<bool> {
+pub fn get_commit_descriptors_relative_time(repo: &Repo) -> eyre::Result<bool> {
     repo.get_readonly_config()?
-        .get_or("branchless.commitMetadata.relativeTime", true)
+        .get_or("branchless.commitDescriptors.relativeTime", true)
 }

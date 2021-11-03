@@ -26,10 +26,12 @@ use itertools::Itertools;
 use os_str_bytes::{OsStrBytes, OsStringBytes};
 use tracing::{instrument, warn};
 
+use crate::core::commit_descriptors::{
+    render_commit_descriptors, CommitMessageDescriptor, CommitOidDescriptor,
+};
 use crate::core::config::get_main_branch_name;
 use crate::core::effects::{Effects, OperationType};
 use crate::core::formatting::StyledStringBuilder;
-use crate::core::metadata::{render_commit_metadata, CommitMessageProvider, CommitOidProvider};
 use crate::git::config::{Config, ConfigRead};
 use crate::git::oid::{make_non_zero_oid, MaybeZeroOid, NonZeroOid};
 use crate::git::run::GitRunInfo;
@@ -1163,11 +1165,11 @@ impl<'repo> Commit<'repo> {
     /// summary.
     #[instrument]
     pub fn friendly_describe(&self) -> eyre::Result<StyledString> {
-        let description = render_commit_metadata(
+        let description = render_commit_descriptors(
             self,
             &mut [
-                &mut CommitOidProvider::new(true)?,
-                &mut CommitMessageProvider::new()?,
+                &mut CommitOidDescriptor::new(true)?,
+                &mut CommitMessageDescriptor::new()?,
             ],
         )?;
         Ok(description)
