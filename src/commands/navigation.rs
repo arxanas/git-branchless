@@ -4,6 +4,7 @@ use std::collections::HashSet;
 use std::convert::TryInto;
 use std::ffi::OsString;
 use std::fmt::Write;
+use std::time::SystemTime;
 
 use cursive::theme::BaseColor;
 use cursive::utils::markup::StyledString;
@@ -11,6 +12,10 @@ use eden_dag::DagAlgorithm;
 use tracing::{instrument, warn};
 
 use crate::commands::smartlog::make_smartlog_graph;
+use crate::core::commit_descriptors::{
+    BranchesDescriptor, CommitDescriptor, CommitMessageDescriptor, CommitOidDescriptor,
+    DifferentialRevisionDescriptor, RelativeTimeDescriptor,
+};
 use crate::core::config::get_next_interactive;
 use crate::core::effects::Effects;
 use crate::core::eventlog::{EventLogDb, EventReplayer};
@@ -64,11 +69,12 @@ pub enum Towards {
     Interactive,
 }
 
-#[instrument]
+#[instrument(skip(commit_descriptors))]
 fn advance(
     effects: &Effects,
     repo: &Repo,
     dag: &Dag,
+    commit_descriptors: &mut [&mut dyn CommitDescriptor],
     current_oid: NonZeroOid,
     command: Command,
     distance: Distance,
@@ -249,7 +255,7 @@ fn advance(
             (Some(Towards::Newest), [.., newest_child]) => newest_child.get_oid(),
             (Some(Towards::Oldest), [oldest_child, ..]) => oldest_child.get_oid(),
             (Some(Towards::Interactive), [_, _, ..]) => {
-                match prompt_select_commit(candidate_commits, Some(&header))? {
+                match prompt_select_commit(Some(&header), candidate_commits, commit_descriptors)? {
                     Some(oid) => oid,
                     None => {
                         return Ok(None);
@@ -351,7 +357,22 @@ pub fn traverse_commits(
         }
     };
 
-    let current_oid = advance(effects, &repo, &dag, head_oid, command, distance, towards)?;
+    let current_oid = advance(
+        effects,
+        &repo,
+        &dag,
+        &mut [
+            &mut CommitOidDescriptor::new(true)?,
+            &mut RelativeTimeDescriptor::new(&repo, SystemTime::now())?,
+            &mut BranchesDescriptor::new(&repo, &references_snapshot)?,
+            &mut DifferentialRevisionDescriptor::new(&repo)?,
+            &mut CommitMessageDescriptor::new()?,
+        ],
+        head_oid,
+        command,
+        distance,
+        towards,
+    )?;
     let current_oid = match current_oid {
         None => return Ok(1),
         Some(current_oid) => current_oid,
@@ -413,7 +434,17 @@ pub fn checkout(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<is
 
     let graph = make_smartlog_graph(effects, &repo, &dag, &event_replayer, event_cursor, true)?;
 
-    match prompt_select_commit(graph.get_commits(), None)? {
+    match prompt_select_commit(
+        None,
+        graph.get_commits(),
+        &mut [
+            &mut CommitOidDescriptor::new(true)?,
+            &mut RelativeTimeDescriptor::new(&repo, SystemTime::now())?,
+            &mut BranchesDescriptor::new(&repo, &references_snapshot)?,
+            &mut DifferentialRevisionDescriptor::new(&repo)?,
+            &mut CommitMessageDescriptor::new()?,
+        ],
+    )? {
         Some(oid) => check_out_commit(effects, git_run_info, None, &oid.to_string()),
         None => Ok(1),
     }

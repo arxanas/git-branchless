@@ -1,19 +1,22 @@
+use crate::core::commit_descriptors::CommitDescriptor;
 use crate::git::{Commit, NonZeroOid};
 
 /// Prompt the user to select a commit from the provided list
 /// of commits, and returns the OID of the selected commit.
 #[cfg(unix)]
 pub fn prompt_select_commit(
-    commits: Vec<Commit>,
     header: Option<&str>,
+    commits: Vec<Commit>,
+    commit_descriptors: &mut [&mut dyn CommitDescriptor],
 ) -> eyre::Result<Option<NonZeroOid>> {
-    skim::prompt_skim(commits, header)
+    skim::prompt_skim(header, commits, commit_descriptors)
 }
 
 #[cfg(not(unix))]
 pub fn prompt_select_commit(
-    commits: Vec<Commit>,
     header: Option<&str>,
+    commits: Vec<Commit>,
+    commit_descriptors: &mut [&mut dyn CommitDescriptor],
 ) -> eyre::Result<Option<NonZeroOid>> {
     unimplemented!("Non-unix targets are currently unsupported for prompting")
 }
@@ -25,10 +28,11 @@ mod skim {
     use std::convert::TryFrom;
     use std::sync::Arc;
 
-    use crate::{
-        core::formatting::{printable_styled_string, Glyphs},
-        git::{Commit, NonZeroOid},
-    };
+    use itertools::Itertools;
+
+    use crate::core::commit_descriptors::{render_commit_descriptors, CommitDescriptor};
+    use crate::core::formatting::{printable_styled_string, Glyphs};
+    use crate::git::{Commit, NonZeroOid};
 
     use skim::{
         prelude::SkimOptionsBuilder, AnsiString, DisplayContext, ItemPreview, Matches,
@@ -88,13 +92,16 @@ mod skim {
     }
 
     impl CommitSkimItem {
-        fn new(commit: &Commit) -> eyre::Result<Self> {
+        fn from_descriptors(
+            commit: &Commit,
+            commit_descriptors: &mut [&mut dyn CommitDescriptor],
+        ) -> eyre::Result<Self> {
+            let glyphs = Glyphs::pretty();
+            let styled_summary = render_commit_descriptors(commit, commit_descriptors)?;
+
             Ok(CommitSkimItem {
                 oid: commit.get_oid(),
-                styled_summary: printable_styled_string(
-                    &Glyphs::pretty(),
-                    commit.friendly_describe()?,
-                )?,
+                styled_summary: printable_styled_string(&glyphs, styled_summary)?,
                 styled_preview: printable_styled_string(
                     &Glyphs::pretty(),
                     commit.friendly_preview()?,
@@ -105,8 +112,9 @@ mod skim {
 
     #[cfg(unix)]
     pub fn prompt_skim(
-        commits: Vec<Commit>,
         header: Option<&str>,
+        commits: Vec<Commit>,
+        commit_descriptors: &mut [&mut dyn CommitDescriptor],
     ) -> eyre::Result<Option<NonZeroOid>> {
         let options = SkimOptionsBuilder::default()
             .height(Some("100%"))
@@ -118,10 +126,10 @@ mod skim {
             .build()
             .map_err(|e| eyre!("building Skim options failed: {}", e))?;
 
-        let items = commits
+        let items: Vec<CommitSkimItem> = commits
             .iter()
-            .map(|commit| CommitSkimItem::new(commit).expect("skim item from commit"))
-            .collect::<Vec<CommitSkimItem>>();
+            .map(|commit| CommitSkimItem::from_descriptors(commit, commit_descriptors))
+            .try_collect()?;
 
         let rx_item = {
             let (tx_item, rx_item): (SkimItemSender, SkimItemReceiver) = skim::prelude::unbounded();
