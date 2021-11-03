@@ -313,8 +313,8 @@ impl GitRunInfo {
     }
 }
 
-/// Checks out the requested commit, and displays the smartlog.
-/// Also displays a warning message if the checkout operation fails.
+/// Checks out the requested commit. If the operation succeeds, then displays
+/// the new smartlog. Otherwise displays a warning message.
 pub fn check_out_commit(
     effects: &Effects,
     git_run_info: &GitRunInfo,
@@ -322,8 +322,9 @@ pub fn check_out_commit(
     target: &str,
 ) -> eyre::Result<isize> {
     let result = git_run_info.run(effects, event_tx_id, &["checkout", target])?;
-    smartlog(effects, &Default::default())?;
-    if result != 0 {
+    if result == 0 {
+        smartlog(effects, &Default::default())?;
+    } else {
         writeln!(
             effects.get_output_stream(),
             "{}",

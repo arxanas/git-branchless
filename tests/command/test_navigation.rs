@@ -36,9 +36,6 @@ fn test_prev() -> eyre::Result<()> {
         )?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> checkout HEAD^
-        @ f777ecc9 create initial.txt
-        |
-        O 62fc20d2 (master) create test1.txt
         Failed to check out commit HEAD^
         "###);
         insta::assert_snapshot!(stderr, @"error: pathspec 'HEAD^' did not match any file(s) known to git
