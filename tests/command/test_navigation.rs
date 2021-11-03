@@ -496,7 +496,7 @@ fn test_navigation_traverse_branches() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["prev", "-b", "2"])?;
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> checkout 96d1c37a3d4363611c49f7e52186e189a04c531f
+        branchless: running command: <git-executable> checkout foo
         O f777ecc9 (master) create initial.txt
         |
         o 62fc20d2 create test1.txt
@@ -512,7 +512,7 @@ fn test_navigation_traverse_branches() -> eyre::Result<()> {
 
         let (stdout, _stderr) = git.run(&["prev", "-a", "-b"])?;
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> checkout 96d1c37a3d4363611c49f7e52186e189a04c531f
+        branchless: running command: <git-executable> checkout foo
         O f777ecc9 (master) create initial.txt
         |
         o 62fc20d2 create test1.txt
@@ -528,7 +528,7 @@ fn test_navigation_traverse_branches() -> eyre::Result<()> {
 
         let (stdout, _stderr) = git.run(&["prev", "-b"])?;
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> checkout f777ecc9b0db5ed372b2615695191a8a17f79f24
+        branchless: running command: <git-executable> checkout master
         @ f777ecc9 (master) create initial.txt
         |
         o 62fc20d2 create test1.txt
@@ -546,7 +546,7 @@ fn test_navigation_traverse_branches() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["next", "-b", "2"])?;
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> checkout 355e173bf9c5d2efac2e451da0cdad3fb82b869a
+        branchless: running command: <git-executable> checkout bar
         O f777ecc9 (master) create initial.txt
         |
         o 62fc20d2 create test1.txt
@@ -564,7 +564,7 @@ fn test_navigation_traverse_branches() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["next", "-a", "-b"])?;
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> checkout 355e173bf9c5d2efac2e451da0cdad3fb82b869a
+        branchless: running command: <git-executable> checkout bar
         O f777ecc9 (master) create initial.txt
         |
         o 62fc20d2 create test1.txt
@@ -576,6 +576,32 @@ fn test_navigation_traverse_branches() -> eyre::Result<()> {
         @ 355e173b (bar) create test4.txt
         |
         o f81d55c0 create test5.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_traverse_branches_ambiguous() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    git.init_repo()?;
+    git.detach_head()?;
+    git.commit_file("test1", 1)?;
+    git.run(&["branch", "foo"])?;
+    git.run(&["branch", "bar"])?;
+    git.commit_file("test2", 2)?;
+
+    {
+        let (stdout, _stderr) = git.run(&["prev", "--all", "--branch"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> checkout 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
+        O f777ecc9 (master) create initial.txt
+        |
+        @ 62fc20d2 (bar, foo) create test1.txt
+        |
+        o 96d1c37a create test2.txt
         "###);
     }
 
