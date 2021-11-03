@@ -436,3 +436,45 @@ fn run_in_pty(git: &Git, args: &[&str], inputs: &[PtyAction]) -> eyre::Result<()
 
     Ok(())
 }
+
+#[test]
+fn test_navigation_traverse_all_the_way() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    git.init_repo()?;
+
+    git.detach_head()?;
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+    git.commit_file("test3", 3)?;
+
+    {
+        let (stdout, _stderr) = git.run(&["prev", "-a"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> checkout 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
+        O f777ecc9 (master) create initial.txt
+        |
+        @ 62fc20d2 create test1.txt
+        |
+        o 96d1c37a create test2.txt
+        |
+        o 70deb1e2 create test3.txt
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["next", "-a"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> checkout 70deb1e28791d8e7dd5a1f0c871a51b91282562f
+        O f777ecc9 (master) create initial.txt
+        |
+        o 62fc20d2 create test1.txt
+        |
+        o 96d1c37a create test2.txt
+        |
+        @ 70deb1e2 create test3.txt
+        "###);
+    }
+
+    Ok(())
+}

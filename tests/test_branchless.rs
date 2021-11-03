@@ -37,7 +37,7 @@ To hide this commit, run: git hide 3df4b935
     {
         let (stdout, _stderr) = git.run(&["prev"])?;
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> checkout HEAD^
+        branchless: running command: <git-executable> checkout f777ecc9b0db5ed372b2615695191a8a17f79f24
         @ f777ecc9 create initial.txt
         |
         O 3df4b935 (master) create test.txt

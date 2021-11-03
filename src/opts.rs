@@ -50,6 +50,10 @@ pub struct TraverseCommitsOptions {
     /// If not provided, defaults to 1.
     pub num_commits: Option<usize>,
 
+    /// Traverse as many commits as possible.
+    #[clap(short = 'a', long = "all")]
+    pub all_the_way: bool,
+
     /// When encountering multiple next commits, choose the oldest.
     #[clap(short = 'o', long = "oldest")]
     pub oldest: bool,
