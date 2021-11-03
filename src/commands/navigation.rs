@@ -30,11 +30,14 @@ pub enum Command {
 /// The number of commits to traverse.
 #[derive(Clone, Copy, Debug)]
 pub enum Distance {
-    /// Traverse this number of commits.
-    NumCommits(usize),
+    /// Traverse this number of commits or branches.
+    NumCommits {
+        amount: usize,
+        move_by_branches: bool,
+    },
 
     /// Traverse as many commits as possible.
-    AllTheWay,
+    AllTheWay { move_by_branches: bool },
 }
 
 /// Some commits have multiple children, which makes `next` ambiguous. These
@@ -82,24 +85,86 @@ fn advance(
     loop {
         let candidate_commits = match command {
             Command::Next => {
-                let children = dag
-                    .query()
-                    .children(CommitSet::from(current_oid))?
-                    .difference(&dag.obsolete_commits);
+                let child_commits = || -> eyre::Result<CommitSet> {
+                    let result = dag
+                        .query()
+                        .children(CommitSet::from(current_oid))?
+                        .difference(&dag.obsolete_commits);
+                    Ok(result)
+                };
+
+                let descendant_branches = || -> eyre::Result<CommitSet> {
+                    let descendant_commits = dag.query().descendants(child_commits()?)?;
+                    let descendant_branches = dag.branch_commits.intersection(&descendant_commits);
+                    let descendants = dag.query().descendants(descendant_branches)?;
+                    let nearest_descendant_branches = dag.query().roots(descendants)?;
+                    Ok(nearest_descendant_branches)
+                };
+
+                let children = match distance {
+                    Distance::AllTheWay {
+                        move_by_branches: false,
+                    }
+                    | Distance::NumCommits {
+                        amount: _,
+                        move_by_branches: false,
+                    } => child_commits()?,
+
+                    Distance::AllTheWay {
+                        move_by_branches: true,
+                    }
+                    | Distance::NumCommits {
+                        amount: _,
+                        move_by_branches: true,
+                    } => descendant_branches()?,
+                };
+
                 sort_commit_set(repo, dag, &children)?
             }
 
             Command::Prev => {
-                let parents = dag.query().parents(CommitSet::from(current_oid))?;
+                let parent_commits = || -> eyre::Result<CommitSet> {
+                    let result = dag.query().parents(CommitSet::from(current_oid))?;
+                    Ok(result)
+                };
+                let ancestor_branches = || -> eyre::Result<CommitSet> {
+                    let ancestor_commits = dag.query().ancestors(parent_commits()?)?;
+                    let ancestor_branches = dag.branch_commits.intersection(&ancestor_commits);
+                    let nearest_ancestor_branches =
+                        dag.query().heads_ancestors(ancestor_branches)?;
+                    Ok(nearest_ancestor_branches)
+                };
 
-                // The `--all` flag for `git prev` isn't useful if all it does
-                // is take you to the root commit for the repository.  Instead,
-                // we assume that the user wanted to get to the root commit for
-                // their current *commit stack*. We filter out commits which
-                // aren't part of the commit stack so that we stop early here.
                 let parents = match distance {
-                    Distance::AllTheWay => parents.difference(&public_commits),
-                    Distance::NumCommits(_) => parents,
+                    Distance::AllTheWay {
+                        move_by_branches: false,
+                    } => {
+                        // The `--all` flag for `git prev` isn't useful if all it does
+                        // is take you to the root commit for the repository.  Instead,
+                        // we assume that the user wanted to get to the root commit for
+                        // their current *commit stack*. We filter out commits which
+                        // aren't part of the commit stack so that we stop early here.
+                        let parents = parent_commits()?;
+                        parents.difference(&public_commits)
+                    }
+
+                    Distance::AllTheWay {
+                        move_by_branches: true,
+                    } => {
+                        // See above case.
+                        let parents = ancestor_branches()?;
+                        parents.difference(&public_commits)
+                    }
+
+                    Distance::NumCommits {
+                        amount: _,
+                        move_by_branches: false,
+                    } => parent_commits()?,
+
+                    Distance::NumCommits {
+                        amount: _,
+                        move_by_branches: true,
+                    } => ancestor_branches()?,
                 };
 
                 sort_commit_set(repo, dag, &parents)?
@@ -107,13 +172,18 @@ fn advance(
         };
 
         match distance {
-            Distance::NumCommits(num_commits) => {
-                if i == num_commits {
+            Distance::NumCommits {
+                amount,
+                move_by_branches: _,
+            } => {
+                if i == amount {
                     break;
                 }
             }
 
-            Distance::AllTheWay => {
+            Distance::AllTheWay {
+                move_by_branches: _,
+            } => {
                 if candidate_commits.is_empty() {
                     break;
                 }
@@ -218,15 +288,25 @@ pub fn traverse_commits(
     let TraverseCommitsOptions {
         num_commits,
         all_the_way,
+        move_by_branches,
         oldest,
         newest,
         interactive,
     } = *options;
 
     let distance = match (all_the_way, num_commits) {
-        (false, None) => Distance::NumCommits(1),
-        (false, Some(num_commits)) => Distance::NumCommits(num_commits),
-        (true, None) => Distance::AllTheWay,
+        (false, None) => Distance::NumCommits {
+            amount: 1,
+            move_by_branches,
+        },
+
+        (false, Some(amount)) => Distance::NumCommits {
+            amount,
+            move_by_branches,
+        },
+
+        (true, None) => Distance::AllTheWay { move_by_branches },
+
         (true, Some(_)) => {
             eyre::bail!("num_commits and --all cannot both be set")
         }

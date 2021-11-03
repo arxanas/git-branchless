@@ -478,3 +478,106 @@ fn test_navigation_traverse_all_the_way() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_navigation_traverse_branches() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    git.init_repo()?;
+    git.detach_head()?;
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+    git.run(&["branch", "foo"])?;
+    git.commit_file("test3", 3)?;
+    git.commit_file("test4", 4)?;
+    git.run(&["branch", "bar"])?;
+    git.commit_file("test5", 5)?;
+
+    {
+        let (stdout, _stderr) = git.run(&["prev", "-b", "2"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> checkout 96d1c37a3d4363611c49f7e52186e189a04c531f
+        O f777ecc9 (master) create initial.txt
+        |
+        o 62fc20d2 create test1.txt
+        |
+        @ 96d1c37a (foo) create test2.txt
+        |
+        o 70deb1e2 create test3.txt
+        |
+        o 355e173b (bar) create test4.txt
+        |
+        o f81d55c0 create test5.txt
+        "###);
+
+        let (stdout, _stderr) = git.run(&["prev", "-a", "-b"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> checkout 96d1c37a3d4363611c49f7e52186e189a04c531f
+        O f777ecc9 (master) create initial.txt
+        |
+        o 62fc20d2 create test1.txt
+        |
+        @ 96d1c37a (foo) create test2.txt
+        |
+        o 70deb1e2 create test3.txt
+        |
+        o 355e173b (bar) create test4.txt
+        |
+        o f81d55c0 create test5.txt
+        "###);
+
+        let (stdout, _stderr) = git.run(&["prev", "-b"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> checkout f777ecc9b0db5ed372b2615695191a8a17f79f24
+        @ f777ecc9 (master) create initial.txt
+        |
+        o 62fc20d2 create test1.txt
+        |
+        o 96d1c37a (foo) create test2.txt
+        |
+        o 70deb1e2 create test3.txt
+        |
+        o 355e173b (bar) create test4.txt
+        |
+        o f81d55c0 create test5.txt
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["next", "-b", "2"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> checkout 355e173bf9c5d2efac2e451da0cdad3fb82b869a
+        O f777ecc9 (master) create initial.txt
+        |
+        o 62fc20d2 create test1.txt
+        |
+        o 96d1c37a (foo) create test2.txt
+        |
+        o 70deb1e2 create test3.txt
+        |
+        @ 355e173b (bar) create test4.txt
+        |
+        o f81d55c0 create test5.txt
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["next", "-a", "-b"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> checkout 355e173bf9c5d2efac2e451da0cdad3fb82b869a
+        O f777ecc9 (master) create initial.txt
+        |
+        o 62fc20d2 create test1.txt
+        |
+        o 96d1c37a (foo) create test2.txt
+        |
+        o 70deb1e2 create test3.txt
+        |
+        @ 355e173b (bar) create test4.txt
+        |
+        o f81d55c0 create test5.txt
+        "###);
+    }
+
+    Ok(())
+}

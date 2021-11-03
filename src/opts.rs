@@ -54,6 +54,10 @@ pub struct TraverseCommitsOptions {
     #[clap(short = 'a', long = "all")]
     pub all_the_way: bool,
 
+    /// Move the specified number of branches rather than commits.
+    #[clap(short = 'b', long = "branch")]
+    pub move_by_branches: bool,
+
     /// When encountering multiple next commits, choose the oldest.
     #[clap(short = 'o', long = "oldest")]
     pub oldest: bool,

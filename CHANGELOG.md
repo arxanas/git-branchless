@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - References created for garbage collection purposes no longer appear in `git log` by default.
 - References created for garbage collection purposes are no longer generated unless you've run `git branchless init` in the repository.
 - `git next` and `git prev` accept `-a`/`--all` to take you all the way to a head or root commit for your commit stack, respectively.
+- `git next` and `git prev` accept `-b`/`--branch` to take you to the next or previous branch for your commit stack, respectively.
 
 ### Fixed
 
