@@ -24,8 +24,8 @@ git branchless hook-post-commit "$@"
     (
         "post-merge",
         r#"
-        git branchless hook-post-merge "$@"
-        "#,
+git branchless hook-post-merge "$@"
+"#,
     ),
     (
         "post-rewrite",
