@@ -255,7 +255,12 @@ fn advance(
             (Some(Towards::Newest), [.., newest_child]) => newest_child.get_oid(),
             (Some(Towards::Oldest), [oldest_child, ..]) => oldest_child.get_oid(),
             (Some(Towards::Interactive), [_, _, ..]) => {
-                match prompt_select_commit(Some(&header), candidate_commits, commit_descriptors)? {
+                match prompt_select_commit(
+                    Some(&header),
+                    "",
+                    candidate_commits,
+                    commit_descriptors,
+                )? {
                     Some(oid) => oid,
                     None => {
                         return Ok(None);
@@ -417,7 +422,11 @@ pub fn traverse_commits(
 }
 
 /// Interactively checkout a commit from the smartlog.
-pub fn checkout(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<isize> {
+pub fn checkout(
+    effects: &Effects,
+    git_run_info: &GitRunInfo,
+    initial_query: &str,
+) -> eyre::Result<isize> {
     let repo = Repo::from_current_dir()?;
     let references_snapshot = repo.get_references_snapshot()?;
     let conn = repo.get_db_conn()?;
@@ -436,6 +445,7 @@ pub fn checkout(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<is
 
     match prompt_select_commit(
         None,
+        initial_query,
         graph.get_commits(),
         &mut [
             &mut CommitOidDescriptor::new(true)?,
