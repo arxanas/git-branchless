@@ -6,15 +6,17 @@ use crate::git::{Commit, NonZeroOid};
 #[cfg(unix)]
 pub fn prompt_select_commit(
     header: Option<&str>,
+    initial_query: &str,
     commits: Vec<Commit>,
     commit_descriptors: &mut [&mut dyn CommitDescriptor],
 ) -> eyre::Result<Option<NonZeroOid>> {
-    skim::prompt_skim(header, commits, commit_descriptors)
+    skim::prompt_skim(header, initial_query, commits, commit_descriptors)
 }
 
 #[cfg(not(unix))]
 pub fn prompt_select_commit(
     header: Option<&str>,
+    initial_query: &str,
     commits: Vec<Commit>,
     commit_descriptors: &mut [&mut dyn CommitDescriptor],
 ) -> eyre::Result<Option<NonZeroOid>> {
@@ -113,6 +115,7 @@ mod skim {
     #[cfg(unix)]
     pub fn prompt_skim(
         header: Option<&str>,
+        initial_query: &str,
         commits: Vec<Commit>,
         commit_descriptors: &mut [&mut dyn CommitDescriptor],
     ) -> eyre::Result<Option<NonZeroOid>> {
@@ -123,6 +126,7 @@ mod skim {
             .sync(true) // Consume all items before displaying selector.
             .bind(vec!["Enter:accept"])
             .header(header)
+            .query(Some(initial_query))
             .build()
             .map_err(|e| eyre!("building Skim options failed: {}", e))?;
 

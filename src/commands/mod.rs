@@ -109,7 +109,9 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
     let exit_code = match command {
         Command::Amend { move_options } => amend::amend(&effects, &git_run_info, &move_options)?,
 
-        Command::Checkout => navigation::checkout(&effects, &git_run_info)?,
+        Command::Checkout { initial_query } => {
+            navigation::checkout(&effects, &git_run_info, &initial_query)?
+        }
 
         Command::Gc | Command::HookPreAutoGc => {
             gc::gc(&effects)?;

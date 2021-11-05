@@ -88,7 +88,11 @@ pub enum Command {
     },
 
     /// Interactively pick a commit to checkout.
-    Checkout,
+    Checkout {
+        /// A query to pre-fill the search text with.
+        #[clap(default_value = "")]
+        initial_query: String,
+    },
 
     /// Run internal garbage collection.
     Gc,

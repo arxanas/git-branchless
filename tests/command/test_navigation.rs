@@ -673,3 +673,35 @@ fn test_checkout_pty_branch() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+#[cfg(unix)]
+fn test_checkout_pty_initial_query() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    git.init_repo()?;
+    git.detach_head()?;
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+
+    run_in_pty(
+        &git,
+        &["branchless", "checkout", "test1"],
+        &[
+            PtyAction::WaitUntilContains("> test1"),
+            PtyAction::Write(CARRIAGE_RETURN),
+        ],
+    )?;
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc9 (master) create initial.txt
+        |
+        @ 62fc20d2 create test1.txt
+        |
+        o 96d1c37a create test2.txt
+        "###);
+    }
+
+    Ok(())
+}
