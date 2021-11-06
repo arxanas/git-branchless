@@ -48,6 +48,37 @@ impl std::fmt::Debug for GitRunInfo {
     }
 }
 
+pub struct GitRunOpts {
+    /// If set, a non-zero exit code will be treated as an error.
+    treat_git_failure_as_error: bool,
+}
+
+impl Default for GitRunOpts {
+    fn default() -> Self {
+        Self {
+            treat_git_failure_as_error: true,
+        }
+    }
+}
+
+pub struct GitRunResult {
+    pub exit_code: i32,
+    pub stdout: Vec<u8>,
+    pub stderr: Vec<u8>,
+}
+
+impl std::fmt::Debug for GitRunResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "<GitRunResult exit_code={:?} stdout={:?} stderr={:?}>",
+            self.exit_code,
+            String::from_utf8_lossy(&self.stdout),
+            String::from_utf8_lossy(&self.stderr),
+        )
+    }
+}
+
 impl GitRunInfo {
     fn spawn_writer_thread<
         InputStream: Read + Send + 'static,
@@ -160,12 +191,16 @@ impl GitRunInfo {
         repo: &Repo,
         event_tx_id: Option<EventTransactionId>,
         args: &[&str],
-    ) -> eyre::Result<Vec<u8>> {
+        opts: GitRunOpts,
+    ) -> eyre::Result<GitRunResult> {
         let GitRunInfo {
             path_to_git,
             working_directory,
             env,
         } = self;
+        let GitRunOpts {
+            treat_git_failure_as_error,
+        } = opts;
 
         // Prefer running in the working copy path to the repo path, because
         // some commands (notably `git status`) to not function correctly
@@ -195,8 +230,19 @@ impl GitRunInfo {
         if let Some(event_tx_id) = event_tx_id {
             command.env(BRANCHLESS_TRANSACTION_ID_ENV_VAR, event_tx_id.to_string());
         }
-        let result = command.output().wrap_err("Spawning Git subprocess")?;
-        Ok(result.stdout)
+        let output = command.output().wrap_err("Spawning Git subprocess")?;
+        let result = GitRunResult {
+            // On Unix, if the child process was terminated by a signal, we need to call
+            // some Unix-specific functions to access the signal that terminated it. For
+            // simplicity, just return `1` in those cases.
+            exit_code: output.status.code().unwrap_or(1),
+            stdout: output.stdout,
+            stderr: output.stderr,
+        };
+        if treat_git_failure_as_error && !output.status.success() {
+            eyre::bail!("Git subprocess failed: {:?}", result);
+        }
+        Ok(result)
     }
 
     /// Run Git silently (don't display output to the user).
@@ -210,11 +256,13 @@ impl GitRunInfo {
         repo: &Repo,
         event_tx_id: Option<EventTransactionId>,
         args: &[S],
-    ) -> eyre::Result<Vec<u8>> {
+        opts: GitRunOpts,
+    ) -> eyre::Result<GitRunResult> {
         self.run_silent_inner(
             repo,
             event_tx_id,
             args.iter().map(AsRef::as_ref).collect_vec().as_slice(),
+            opts,
         )
     }
 
@@ -351,6 +399,9 @@ pub fn check_out_commit(
 
 #[cfg(test)]
 mod tests {
+    use insta::assert_debug_snapshot;
+
+    use super::{GitRunInfo, GitRunOpts};
     use crate::testing::make_git;
 
     #[test]
@@ -392,6 +443,48 @@ mod tests {
                  create mode 100644 test1.txt
                 "###);
         }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_run_silent_failures() -> eyre::Result<()> {
+        let git = make_git()?;
+        git.init_repo()?;
+
+        let git_run_info = GitRunInfo {
+            path_to_git: git.path_to_git.clone(),
+            working_directory: git.repo_path.clone(),
+            env: std::env::vars_os().collect(),
+        };
+
+        let result = git_run_info.run_silent(
+            &git.get_repo()?,
+            None,
+            &["some-nonexistent-command"],
+            GitRunOpts {
+                treat_git_failure_as_error: true,
+            },
+        );
+        assert_debug_snapshot!(result, @r###"
+        Err(
+            "Git subprocess failed: <GitRunResult exit_code=1 stdout=\"\" stderr=\"git: 'some-nonexistent-command' is not a git command. See 'git --help'.\\n\">",
+        )
+        "###);
+
+        let result = git_run_info.run_silent(
+            &git.get_repo()?,
+            None,
+            &["some-nonexistent-command"],
+            GitRunOpts {
+                treat_git_failure_as_error: false,
+            },
+        );
+        assert_debug_snapshot!(result, @r###"
+        Ok(
+            <GitRunResult exit_code=1 stdout="" stderr="git: 'some-nonexistent-command' is not a git command. See 'git --help'.\n">,
+        )
+        "###);
 
         Ok(())
     }

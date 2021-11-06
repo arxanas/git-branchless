@@ -296,8 +296,9 @@ fn install_aliases(
     }
 
     let version_str = git_run_info
-        .run_silent(repo, None, &["version"])
-        .wrap_err("Determining Git version")?;
+        .run_silent(repo, None, &["version"], Default::default())
+        .wrap_err("Determining Git version")?
+        .stdout;
     let version_str =
         String::from_utf8(version_str).wrap_err("Decoding stdout from Git subprocess")?;
     let version_str = version_str.trim();
