@@ -673,11 +673,14 @@ Either create it, or update the main branch setting by running:
         git_run_info: &GitRunInfo,
         event_tx_id: Option<EventTransactionId>,
     ) -> eyre::Result<Vec<StatusEntry>> {
-        let output = git_run_info.run_silent(
-            self,
-            event_tx_id,
-            &["status", "--porcelain=v2", "--untracked-files=no", "-z"],
-        )?;
+        let output = git_run_info
+            .run_silent(
+                self,
+                event_tx_id,
+                &["status", "--porcelain=v2", "--untracked-files=no", "-z"],
+                Default::default(),
+            )?
+            .stdout;
 
         let not_null_terminator = |c: &u8| *c != 0_u8;
         let mut statuses = Vec::new();
