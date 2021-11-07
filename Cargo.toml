@@ -21,7 +21,6 @@ debug = 0
 
 [features]
 default = []
-man-pages = []
 integration-test-bin = []
 
 [lib]
@@ -34,57 +33,6 @@ name = "benches"
 [[bin]]
 name = "git-branchless"
 path = "bin/entry_points/git-branchless.rs"
-
-## Subcommand aliases ##
-[[bin]]
-name = "git-branchless-smartlog"
-path = "bin/entry_points/git-branchless-smartlog.rs"
-required-features = ["man-pages"]
-
-[[bin]]
-name = "git-branchless-hide"
-path = "bin/entry_points/git-branchless-hide.rs"
-required-features = ["man-pages"]
-
-[[bin]]
-name = "git-branchless-unhide"
-path = "bin/entry_points/git-branchless-unhide.rs"
-required-features = ["man-pages"]
-
-[[bin]]
-name = "git-branchless-prev"
-path = "bin/entry_points/git-branchless-prev.rs"
-required-features = ["man-pages"]
-
-[[bin]]
-name = "git-branchless-next"
-path = "bin/entry_points/git-branchless-next.rs"
-required-features = ["man-pages"]
-
-[[bin]]
-name = "git-branchless-restack"
-path = "bin/entry_points/git-branchless-restack.rs"
-required-features = ["man-pages"]
-
-[[bin]]
-name = "git-branchless-undo"
-path = "bin/entry_points/git-branchless-undo.rs"
-required-features = ["man-pages"]
-
-[[bin]]
-name = "git-branchless-move"
-path = "bin/entry_points/git-branchless-move.rs"
-required-features = ["man-pages"]
-
-[[bin]]
-name = "git-branchless-checkout"
-path = "bin/entry_points/git-branchless-checkout.rs"
-required-features = ["man-pages"]
-
-[[bin]]
-name = "git-branchless-amend"
-path = "bin/entry_points/git-branchless-amend.rs"
-required-features = ["man-pages"]
 
 ## Testing binaries ##
 [[bin]]
