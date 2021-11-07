@@ -2,8 +2,8 @@
 
 mod evolve;
 mod execute;
-pub mod hooks;
 mod plan;
+pub mod rewrite_hooks;
 
 pub use evolve::{find_abandoned_children, find_rewrite_target};
 pub use execute::{

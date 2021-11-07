@@ -24,7 +24,7 @@ use crate::core::formatting::{printable_styled_string, Glyphs, Pluralize};
 use crate::git::{CategorizedReferenceName, MaybeZeroOid, Repo};
 
 use crate::core::effects::Effects;
-pub use crate::core::rewrite::hooks::{
+pub use crate::core::rewrite::rewrite_hooks::{
     hook_drop_commit_if_empty, hook_post_rewrite, hook_register_extra_post_rewrite_hook,
     hook_skip_upstream_applied_commit,
 };
