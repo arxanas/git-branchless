@@ -107,113 +107,20 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
     let effects = Effects::new(color);
 
     let exit_code = match command {
-        Command::Init {
-            uninstall: false,
-            main_branch_name,
-        } => {
-            init::init(&effects, &git_run_info, main_branch_name.as_deref())?;
-            0
-        }
-
-        Command::Init {
-            uninstall: true,
-            main_branch_name: _,
-        } => {
-            init::uninstall(&effects)?;
-            0
-        }
-
-        Command::Smartlog {
-            show_hidden_commits,
-        } => {
-            smartlog::smartlog(
-                &effects,
-                &SmartlogOptions {
-                    show_hidden_commits,
-                },
-            )?;
-            0
-        }
-
-        Command::Hide { commits, recursive } => hide::hide(&effects, commits, recursive)?,
-
-        Command::Unhide { commits, recursive } => hide::unhide(&effects, commits, recursive)?,
-
-        Command::Prev {
-            traverse_commits_options,
-        } => navigation::traverse_commits(
-            &effects,
-            &git_run_info,
-            navigation::Command::Prev,
-            &traverse_commits_options,
-        )?,
-
-        Command::Next {
-            traverse_commits_options,
-        } => navigation::traverse_commits(
-            &effects,
-            &git_run_info,
-            navigation::Command::Next,
-            &traverse_commits_options,
-        )?,
-
-        Command::Checkout => navigation::checkout(&effects, &git_run_info)?,
-
-        Command::Move {
-            source,
-            dest,
-            base,
-            move_options,
-        } => r#move::r#move(&effects, &git_run_info, source, dest, base, &move_options)?,
-
         Command::Amend { move_options } => amend::amend(&effects, &git_run_info, &move_options)?,
 
-        Command::Restack {
-            commits,
-            move_options,
-        } => restack::restack(&effects, &git_run_info, commits, &move_options)?,
-
-        Command::Undo => undo::undo(&effects, &git_run_info)?,
+        Command::Checkout => navigation::checkout(&effects, &git_run_info)?,
 
         Command::Gc | Command::HookPreAutoGc => {
             gc::gc(&effects)?;
             0
         }
 
-        Command::Wrap {
-            git_executable: explicit_git_executable,
-            command: WrappedCommand::WrappedCommand(args),
-        } => {
-            let git_run_info = match explicit_git_executable {
-                Some(path_to_git) => GitRunInfo {
-                    path_to_git,
-                    ..git_run_info
-                },
-                None => git_run_info,
-            };
-            let exit_code = wrap::wrap(&git_run_info, args.as_slice())?;
-            exit_code
-        }
-
-        Command::HookPostRewrite { rewrite_type } => {
-            hooks::hook_post_rewrite(&effects, &git_run_info, &rewrite_type)?;
-            0
-        }
-
-        Command::HookRegisterExtraPostRewriteHook => {
-            hooks::hook_register_extra_post_rewrite_hook()?;
-            0
-        }
+        Command::Hide { commits, recursive } => hide::hide(&effects, commits, recursive)?,
 
         Command::HookDetectEmptyCommit { old_commit_oid } => {
             let old_commit_oid: NonZeroOid = old_commit_oid.parse()?;
             hooks::hook_drop_commit_if_empty(&effects, old_commit_oid)?;
-            0
-        }
-
-        Command::HookSkipUpstreamAppliedCommit { commit_oid } => {
-            let commit_oid: NonZeroOid = commit_oid.parse()?;
-            hooks::hook_skip_upstream_applied_commit(&effects, commit_oid)?;
             0
         }
 
@@ -241,9 +148,102 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
             0
         }
 
+        Command::HookPostRewrite { rewrite_type } => {
+            hooks::hook_post_rewrite(&effects, &git_run_info, &rewrite_type)?;
+            0
+        }
+
         Command::HookReferenceTransaction { transaction_state } => {
             hooks::hook_reference_transaction(&effects, &transaction_state)?;
             0
+        }
+
+        Command::HookRegisterExtraPostRewriteHook => {
+            hooks::hook_register_extra_post_rewrite_hook()?;
+            0
+        }
+
+        Command::HookSkipUpstreamAppliedCommit { commit_oid } => {
+            let commit_oid: NonZeroOid = commit_oid.parse()?;
+            hooks::hook_skip_upstream_applied_commit(&effects, commit_oid)?;
+            0
+        }
+
+        Command::Init {
+            uninstall: false,
+            main_branch_name,
+        } => {
+            init::init(&effects, &git_run_info, main_branch_name.as_deref())?;
+            0
+        }
+
+        Command::Init {
+            uninstall: true,
+            main_branch_name: _,
+        } => {
+            init::uninstall(&effects)?;
+            0
+        }
+
+        Command::Move {
+            source,
+            dest,
+            base,
+            move_options,
+        } => r#move::r#move(&effects, &git_run_info, source, dest, base, &move_options)?,
+
+        Command::Next {
+            traverse_commits_options,
+        } => navigation::traverse_commits(
+            &effects,
+            &git_run_info,
+            navigation::Command::Next,
+            &traverse_commits_options,
+        )?,
+
+        Command::Prev {
+            traverse_commits_options,
+        } => navigation::traverse_commits(
+            &effects,
+            &git_run_info,
+            navigation::Command::Prev,
+            &traverse_commits_options,
+        )?,
+
+        Command::Restack {
+            commits,
+            move_options,
+        } => restack::restack(&effects, &git_run_info, commits, &move_options)?,
+
+        Command::Smartlog {
+            show_hidden_commits,
+        } => {
+            smartlog::smartlog(
+                &effects,
+                &SmartlogOptions {
+                    show_hidden_commits,
+                },
+            )?;
+            0
+        }
+
+        Command::Undo => undo::undo(&effects, &git_run_info)?,
+
+        Command::Unhide { commits, recursive } => hide::unhide(&effects, commits, recursive)?,
+
+        Command::Wrap {
+            git_executable: explicit_git_executable,
+            command: WrappedCommand::WrappedCommand(args),
+        } => {
+            let git_run_info = match explicit_git_executable {
+                Some(path_to_git) => GitRunInfo {
+                    path_to_git,
+                    ..git_run_info
+                },
+                None => git_run_info,
+            };
+            let exit_code = wrap::wrap(&git_run_info, args.as_slice())?;
+            exit_code
         }
     };
 

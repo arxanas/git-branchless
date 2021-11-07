@@ -80,26 +80,18 @@ pub struct TraverseCommitsOptions {
 /// FIXME: write man-page text
 #[derive(Parser)]
 pub enum Command {
-    /// Initialize the branchless workflow for this repository.
-    Init {
-        /// Uninstall the branchless workflow instead of initializing it.
-        #[clap(long = "uninstall")]
-        uninstall: bool,
-
-        /// Use the provided name as the name of the main branch.
-        ///
-        /// If not set, it will be auto-detected. If it can't be auto-detected,
-        /// then you will be prompted to enter a value for the main branch name.
-        #[clap(long = "main-branch", conflicts_with = "uninstall")]
-        main_branch_name: Option<String>,
+    /// Amend the current HEAD commit.
+    Amend {
+        /// Options for moving commits.
+        #[clap(flatten)]
+        move_options: MoveOptions,
     },
 
-    /// Display a nice graph of the commits you've recently worked on.
-    Smartlog {
-        /// Also show commits which have been hidden.
-        #[clap(long = "hidden")]
-        show_hidden_commits: bool,
-    },
+    /// Interactively pick a commit to checkout.
+    Checkout,
+
+    /// Run internal garbage collection.
+    Gc,
 
     /// Hide the provided commits from the smartlog.
     Hide {
@@ -114,34 +106,70 @@ pub enum Command {
         recursive: bool,
     },
 
-    /// Unhide previously-hidden commits from the smartlog.
-    Unhide {
-        /// Zero or more commits to unhide.
+    /// Internal use.
+    HookDetectEmptyCommit {
+        /// The OID of the commit currently being applied, to be checked for emptiness.
+        old_commit_oid: String,
+    },
+
+    /// Internal use.
+    HookPreAutoGc,
+
+    /// Internal use.
+    HookPostCheckout {
+        /// The previous commit OID.
+        previous_commit: String,
+
+        /// The current commit OID.
+        current_commit: String,
+
+        /// Whether or not this was a branch checkout (versus a file checkout).
+        is_branch_checkout: isize,
+    },
+
+    /// Internal use.
+    HookPostCommit,
+
+    /// Internal use.
+    HookPostMerge {
+        /// Whether or not this is a squash merge. See githooks(5).
+        is_squash_merge: isize,
+    },
+
+    /// Internal use.
+    HookPostRewrite {
+        /// One of `amend` or `rebase`.
+        rewrite_type: String,
+    },
+
+    /// Internal use.
+    HookReferenceTransaction {
+        /// One of `prepared`, `committed`, or `aborted`. See githooks(5).
+        transaction_state: String,
+    },
+
+    /// Internal use.
+    HookRegisterExtraPostRewriteHook,
+
+    /// Internal use.
+    HookSkipUpstreamAppliedCommit {
+        /// The OID of the commit that was skipped.
+        commit_oid: String,
+    },
+
+    /// Initialize the branchless workflow for this repository.
+    Init {
+        /// Uninstall the branchless workflow instead of initializing it.
+        #[clap(long = "uninstall")]
+        uninstall: bool,
+
+        /// Use the provided name as the name of the main branch.
         ///
-        /// Can either be hashes, like `abc123`, or ref-specs, like `HEAD^`.
-        commits: Vec<String>,
-
-        /// Also recursively unhide all children commits of the provided commits.
-        #[clap(short = 'r', long = "recursive")]
-        recursive: bool,
+        /// If not set, it will be auto-detected. If it can't be auto-detected,
+        /// then you will be prompted to enter a value for the main branch name.
+        #[clap(long = "main-branch", conflicts_with = "uninstall")]
+        main_branch_name: Option<String>,
     },
-
-    /// Move to an earlier commit in the current stack.
-    Prev {
-        /// Options for traversing commits.
-        #[clap(flatten)]
-        traverse_commits_options: TraverseCommitsOptions,
-    },
-
-    /// Move to a later commit in the current stack.
-    Next {
-        /// Options for traversing commits.
-        #[clap(flatten)]
-        traverse_commits_options: TraverseCommitsOptions,
-    },
-
-    /// Interactively pick a commit to checkout.
-    Checkout,
 
     /// Move a subtree of commits from one location to another.
     ///
@@ -174,6 +202,20 @@ pub enum Command {
         move_options: MoveOptions,
     },
 
+    /// Move to a later commit in the current stack.
+    Next {
+        /// Options for traversing commits.
+        #[clap(flatten)]
+        traverse_commits_options: TraverseCommitsOptions,
+    },
+
+    /// Move to an earlier commit in the current stack.
+    Prev {
+        /// Options for traversing commits.
+        #[clap(flatten)]
+        traverse_commits_options: TraverseCommitsOptions,
+    },
+
     /// Fix up commits abandoned by a previous rewrite operation.
     Restack {
         /// The IDs of the abandoned commits whose descendants should be
@@ -185,18 +227,27 @@ pub enum Command {
         move_options: MoveOptions,
     },
 
-    /// Amend the current HEAD commit.
-    Amend {
-        /// Options for moving commits.
-        #[clap(flatten)]
-        move_options: MoveOptions,
+    /// Display a nice graph of the commits you've recently worked on.
+    Smartlog {
+        /// Also show commits which have been hidden.
+        #[clap(long = "hidden")]
+        show_hidden_commits: bool,
     },
 
     /// Browse or return to a previous state of the repository.
     Undo,
 
-    /// Run internal garbage collection.
-    Gc,
+    /// Unhide previously-hidden commits from the smartlog.
+    Unhide {
+        /// Zero or more commits to unhide.
+        ///
+        /// Can either be hashes, like `abc123`, or ref-specs, like `HEAD^`.
+        commits: Vec<String>,
+
+        /// Also recursively unhide all children commits of the provided commits.
+        #[clap(short = 'r', long = "recursive")]
+        recursive: bool,
+    },
 
     /// Wrap a Git command inside a branchless transaction.
     Wrap {
@@ -207,57 +258,6 @@ pub enum Command {
         /// The arguments to pass to `git`.
         #[clap(subcommand)]
         command: WrappedCommand,
-    },
-
-    /// Internal use.
-    HookPreAutoGc,
-
-    /// Internal use.
-    HookPostRewrite {
-        /// One of `amend` or `rebase`.
-        rewrite_type: String,
-    },
-
-    /// Internal use.
-    HookRegisterExtraPostRewriteHook,
-
-    /// Internal use.
-    HookDetectEmptyCommit {
-        /// The OID of the commit currently being applied, to be checked for emptiness.
-        old_commit_oid: String,
-    },
-
-    /// Internal use.
-    HookSkipUpstreamAppliedCommit {
-        /// The OID of the commit that was skipped.
-        commit_oid: String,
-    },
-
-    /// Internal use.
-    HookPostCheckout {
-        /// The previous commit OID.
-        previous_commit: String,
-
-        /// The current commit OID.
-        current_commit: String,
-
-        /// Whether or not this was a branch checkout (versus a file checkout).
-        is_branch_checkout: isize,
-    },
-
-    /// Internal use.
-    HookPostCommit,
-
-    /// Internal use.
-    HookPostMerge {
-        /// Whether or not this is a squash merge. See githooks(5).
-        is_squash_merge: isize,
-    },
-
-    /// Internal use.
-    HookReferenceTransaction {
-        /// One of `prepared`, `committed`, or `aborted`. See githooks(5).
-        transaction_state: String,
     },
 }
 

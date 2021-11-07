@@ -60,17 +60,17 @@ echo 'branchless: This is a bug. Please report it.'
 ];
 
 const ALL_ALIASES: &[(&str, &str)] = &[
-    ("smartlog", "smartlog"),
-    ("sl", "smartlog"),
-    ("hide", "hide"),
-    ("unhide", "unhide"),
-    ("prev", "prev"),
-    ("next", "next"),
-    ("restack", "restack"),
-    ("undo", "undo"),
-    ("move", "move"),
-    ("co", "checkout"),
     ("amend", "amend"),
+    ("co", "checkout"),
+    ("hide", "hide"),
+    ("move", "move"),
+    ("next", "next"),
+    ("prev", "prev"),
+    ("restack", "restack"),
+    ("sl", "smartlog"),
+    ("smartlog", "smartlog"),
+    ("undo", "undo"),
+    ("unhide", "unhide"),
 ];
 
 #[derive(Debug)]
