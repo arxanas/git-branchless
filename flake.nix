@@ -13,9 +13,9 @@
       ];
       foreachSystem = f: lib.foldl' (attrs: system: lib.recursiveUpdate attrs (f system)) { } systems;
     in
-    foreachSystem (system: {
-      packages.${system}.git-branchless = with nixpkgs.legacyPackages.${system};
-        rustPlatform.buildRustPackage {
+    {
+      overlay = (final: prev: {
+        git-branchless = with final; rustPlatform.buildRustPackage {
           name = "git-branchless";
 
           src = self;
@@ -36,9 +36,7 @@
             libiconv
           ]);
 
-          buildType = "debug";
           preCheck = ''
-            export RUST_BACKTRACE=1
             export PATH_TO_GIT=${git}/bin/git
             export GIT_EXEC_PATH=$(${git}/bin/git --exec-path)
           '';
@@ -48,6 +46,24 @@
             "--skip=test_next_ambiguous_interactive"
           ];
         };
-      defaultPackage.${system} = self.packages.${system}.git-branchless;
-    });
+      });
+    } //
+    (foreachSystem (system:
+      let
+        pkgs = import nixpkgs {
+          inherit system;
+          overlays = [ self.overlay ];
+        };
+      in
+      {
+        packages.${system}.git-branchless = pkgs.git-branchless;
+        defaultPackage.${system} = self.packages.${system}.git-branchless;
+        checks.${system}.git-branchless = pkgs.git-branchless.overrideAttrs ({ preCheck, ... }: {
+          cargoBuildType = "debug";
+          cargoCheckType = "debug";
+          preCheck = ''
+            export RUST_BACKTRACE=1
+          '' + preCheck;
+        });
+      }));
 }
