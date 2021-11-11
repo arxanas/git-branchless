@@ -15,7 +15,7 @@
 - [About](#about)
 - [Installation](#installation)
 - [Status](#status)
-- [Related tool](https://github.com/arxanas/git-branchless/wiki/Related-tools)
+- [Related tools](https://github.com/arxanas/git-branchless/wiki/Related-tools)
 
 ## Demos
 ### Repair
