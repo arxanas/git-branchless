@@ -1,6 +1,6 @@
 name: Documentation issue
 description: |
-  Report unclear documentation or request missing documentation. This includes documentation in the Wiki and help available on the command-line, such as with the `--help` flag.
+  Report unclear documentation or request missing documentation.
 labels: ["documentation"]
 body:
   - type: markdown
