@@ -1,0 +1,29 @@
+name: Documentation issue
+description: |
+  Report unclear documentation or request missing documentation. This includes documentation in the Wiki and help available on the command-line, such as with the `--help` flag.
+labels: ["documentation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a documentation issue! High-quality documentation is a [first-class goal](https://github.com/arxanas/git-branchless/wiki/Design-goals) for git-branchless, so your report is appreciated.
+
+  - type: input
+    id: url
+    attributes:
+      label: Wiki page
+      description: The URL of the Wiki page, if applicable.
+      placeholder: https://github.com/arxanas/git-branchless/wiki/Design-goals
+
+  - type: input
+    id: command
+    attributes:
+      label: Subcommand
+      description: The specific `git-branchless` subcommand(s) which the request pertains to, if applicable.
+      placeholder: next, prev
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: Description of the issue.
