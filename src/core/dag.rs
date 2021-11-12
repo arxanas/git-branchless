@@ -1,3 +1,6 @@
+//! Wrapper around the Eden SCM directed acyclic graph implementation, which
+//! allows for efficient graph queries.
+
 use std::borrow::Borrow;
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -12,9 +15,7 @@ use tracing::{instrument, trace, warn};
 
 use crate::core::effects::{Effects, OperationType};
 use crate::core::eventlog::{CommitActivityStatus, EventCursor, EventReplayer};
-use crate::git::{Commit, MaybeZeroOid, NonZeroOid, Repo};
-
-use super::RepoReferencesSnapshot;
+use crate::git::{Commit, MaybeZeroOid, NonZeroOid, Repo, RepoReferencesSnapshot};
 
 impl From<NonZeroOid> for eden_dag::VertexName {
     fn from(oid: NonZeroOid) -> Self {

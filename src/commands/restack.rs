@@ -63,16 +63,14 @@ use tracing::{instrument, warn};
 
 use crate::commands::smartlog::smartlog;
 use crate::core::config::get_restack_preserve_timestamps;
+use crate::core::dag::{resolve_commits, sort_commit_set, CommitSet, Dag, ResolveCommitsResult};
 use crate::core::effects::Effects;
 use crate::core::eventlog::{EventCursor, EventLogDb, EventReplayer};
 use crate::core::rewrite::{
     execute_rebase_plan, find_abandoned_children, find_rewrite_target, move_branches,
     BuildRebasePlanOptions, ExecuteRebasePlanOptions, ExecuteRebasePlanResult, RebasePlanBuilder,
 };
-use crate::git::{
-    resolve_commits, sort_commit_set, CommitSet, Dag, GitRunInfo, NonZeroOid, Repo,
-    ResolveCommitsResult,
-};
+use crate::git::{GitRunInfo, NonZeroOid, Repo};
 use crate::opts::MoveOptions;
 
 #[instrument(skip(commits))]

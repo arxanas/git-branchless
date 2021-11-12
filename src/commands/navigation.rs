@@ -12,15 +12,16 @@ use eden_dag::DagAlgorithm;
 use tracing::{instrument, warn};
 
 use crate::commands::smartlog::make_smartlog_graph;
+use crate::core::config::get_next_interactive;
+use crate::core::dag::{sort_commit_set, CommitSet, Dag};
+use crate::core::effects::Effects;
+use crate::core::eventlog::{EventLogDb, EventReplayer};
+use crate::core::formatting::{printable_styled_string, Pluralize};
 use crate::core::node_descriptors::{
     BranchesDescriptor, CommitMessageDescriptor, CommitOidDescriptor,
     DifferentialRevisionDescriptor, NodeDescriptor, RelativeTimeDescriptor,
 };
-use crate::core::config::get_next_interactive;
-use crate::core::effects::Effects;
-use crate::core::eventlog::{EventLogDb, EventReplayer};
-use crate::core::formatting::{printable_styled_string, Pluralize};
-use crate::git::{check_out_commit, sort_commit_set, CommitSet, Dag, GitRunInfo, NonZeroOid, Repo};
+use crate::git::{check_out_commit, GitRunInfo, NonZeroOid, Repo};
 use crate::opts::TraverseCommitsOptions;
 use crate::tui::prompt_select_commit;
 

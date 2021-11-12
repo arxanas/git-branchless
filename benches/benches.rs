@@ -1,11 +1,12 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
 
+use branchless::core::dag::Dag;
 use branchless::core::effects::Effects;
 use branchless::core::eventlog::{EventLogDb, EventReplayer};
 use branchless::core::formatting::Glyphs;
 use branchless::core::rewrite::{BuildRebasePlanOptions, RebasePlanBuilder};
-use branchless::git::{CherryPickFastOptions, Commit, Dag, Diff, Repo};
+use branchless::git::{CherryPickFastOptions, Commit, Diff, Repo};
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 
 fn get_repo() -> Repo {

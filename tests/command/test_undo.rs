@@ -6,10 +6,11 @@ use std::sync::{Arc, Mutex};
 use crate::util::trim_lines;
 
 use branchless::commands::undo::testing::{select_past_event, undo_events};
+use branchless::core::dag::Dag;
 use branchless::core::effects::Effects;
 use branchless::core::eventlog::{EventCursor, EventLogDb, EventReplayer};
 use branchless::core::formatting::Glyphs;
-use branchless::git::{Dag, GitRunInfo, Repo};
+use branchless::git::{GitRunInfo, Repo};
 use branchless::testing::{make_git, Git};
 use branchless::tui::testing::{screen_to_string, CursiveTestingBackend, CursiveTestingEvent};
 

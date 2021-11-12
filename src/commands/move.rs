@@ -11,15 +11,14 @@ use eden_dag::DagAlgorithm;
 use tracing::instrument;
 
 use crate::core::config::get_restack_preserve_timestamps;
+use crate::core::dag::{resolve_commits, CommitSet, Dag, ResolveCommitsResult};
 use crate::core::effects::Effects;
 use crate::core::eventlog::{EventLogDb, EventReplayer};
 use crate::core::rewrite::{
     execute_rebase_plan, BuildRebasePlanOptions, ExecuteRebasePlanOptions, ExecuteRebasePlanResult,
     RebasePlanBuilder,
 };
-use crate::git::{
-    resolve_commits, CommitSet, Dag, GitRunInfo, NonZeroOid, Repo, ResolveCommitsResult,
-};
+use crate::git::{GitRunInfo, NonZeroOid, Repo};
 use crate::opts::MoveOptions;
 
 #[instrument]
