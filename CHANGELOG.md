@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - (#151) `ORIG_HEAD` is populated correctly, which means that Git commands which write to `ORIG_HEAD` don't accidentally clobber unrelated branches.
 - (#155) `git branchless init` now appends to your existing hooks, rather than silently doing nothing.
 - (#172) When carrying out an on-disk rebase operation with `git move`, calling `git rebase --abort` will correctly reset the branch which you had checked out prior to the rebase.
+- (#209) `git restack` no longer resurrects commits which were created before `git branchless init` was run.
 
 ## [0.3.7] - 2021-10-22
 
