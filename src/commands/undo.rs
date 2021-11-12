@@ -19,6 +19,7 @@ use eyre::Context;
 use tracing::instrument;
 
 use crate::commands::smartlog::{make_smartlog_graph, render_graph};
+use crate::core::dag::Dag;
 use crate::core::effects::Effects;
 use crate::core::eventlog::{Event, EventCursor, EventLogDb, EventReplayer, EventTransactionId};
 use crate::core::formatting::{printable_styled_string, Pluralize, StyledStringBuilder};
@@ -27,7 +28,7 @@ use crate::core::node_descriptors::{
     DifferentialRevisionDescriptor, ObsolescenceExplanationDescriptor, RelativeTimeDescriptor,
 };
 use crate::declare_views;
-use crate::git::{CategorizedReferenceName, Dag, GitRunInfo, MaybeZeroOid, Repo};
+use crate::git::{CategorizedReferenceName, GitRunInfo, MaybeZeroOid, Repo};
 use crate::tui::{with_siv, SingletonView};
 
 fn render_cursor_smartlog(
@@ -828,9 +829,10 @@ pub mod testing {
 
     use cursive::{CursiveRunnable, CursiveRunner};
 
+    use crate::core::dag::Dag;
     use crate::core::effects::Effects;
     use crate::core::eventlog::{EventCursor, EventLogDb, EventReplayer};
-    use crate::git::{Dag, GitRunInfo, Repo};
+    use crate::git::{GitRunInfo, Repo};
 
     pub fn select_past_event(
         siv: CursiveRunner<CursiveRunnable>,

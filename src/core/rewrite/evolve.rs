@@ -4,8 +4,9 @@ use eden_dag::DagAlgorithm;
 use itertools::Itertools;
 use tracing::instrument;
 
+use crate::core::dag::{CommitSet, Dag};
 use crate::core::eventlog::{Event, EventCursor, EventReplayer};
-use crate::git::{CommitSet, Dag, MaybeZeroOid, NonZeroOid};
+use crate::git::{MaybeZeroOid, NonZeroOid};
 
 /// For a rewritten commit, find the newest version of the commit.
 ///

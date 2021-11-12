@@ -8,6 +8,7 @@ use std::time::SystemTime;
 
 use tracing::instrument;
 
+use crate::core::dag::Dag;
 use crate::core::effects::Effects;
 use crate::core::eventlog::{EventLogDb, EventReplayer};
 use crate::core::formatting::printable_styled_string;
@@ -15,7 +16,7 @@ use crate::core::node_descriptors::{
     BranchesDescriptor, CommitMessageDescriptor, CommitOidDescriptor,
     DifferentialRevisionDescriptor, ObsolescenceExplanationDescriptor, RelativeTimeDescriptor,
 };
-use crate::git::{Dag, Repo};
+use crate::git::Repo;
 
 pub use graph::{make_smartlog_graph, SmartlogGraph};
 pub use render::{render_graph, SmartlogOptions};
@@ -28,11 +29,12 @@ mod graph {
     use eden_dag::DagAlgorithm;
     use tracing::instrument;
 
+    use crate::core::dag::{commit_set_to_vec, CommitSet, Dag};
     use crate::core::effects::{Effects, OperationType};
     use crate::core::eventlog::{EventCursor, EventReplayer};
     use crate::core::node_descriptors::NodeObject;
-    use crate::git::{commit_set_to_vec, Commit, CommitSet};
-    use crate::git::{Dag, NonZeroOid, Repo};
+    use crate::git::Commit;
+    use crate::git::{NonZeroOid, Repo};
 
     /// Node contained in the smartlog commit graph.
     #[derive(Debug)]
@@ -260,11 +262,12 @@ mod render {
     use eden_dag::DagAlgorithm;
     use tracing::instrument;
 
+    use crate::core::dag::{CommitSet, CommitVertex, Dag};
     use crate::core::effects::Effects;
     use crate::core::formatting::set_effect;
     use crate::core::formatting::{Glyphs, StyledStringBuilder};
     use crate::core::node_descriptors::{render_node_descriptors, NodeDescriptor};
-    use crate::git::{CommitSet, CommitVertex, Dag, NonZeroOid, Repo};
+    use crate::git::{NonZeroOid, Repo};
 
     use super::graph::SmartlogGraph;
 

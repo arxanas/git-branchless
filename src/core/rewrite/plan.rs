@@ -10,9 +10,10 @@ use itertools::Itertools;
 use rayon::{prelude::*, ThreadPool, ThreadPoolBuilder};
 use tracing::{instrument, warn};
 
+use crate::core::dag::{commit_set_to_vec, CommitSet, Dag};
 use crate::core::effects::{Effects, OperationType};
 use crate::core::formatting::printable_styled_string;
-use crate::git::{commit_set_to_vec, Commit, CommitSet, Dag, NonZeroOid, PatchId, Repo};
+use crate::git::{Commit, NonZeroOid, PatchId, Repo};
 
 thread_local! {
     static REPO: RefCell<Option<Repo>> = Default::default();
