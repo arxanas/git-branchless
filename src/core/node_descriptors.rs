@@ -19,31 +19,57 @@ use crate::core::config::{
     get_commit_descriptors_branches, get_commit_descriptors_differential_revision,
     get_commit_descriptors_relative_time,
 };
-use crate::git::{CategorizedReferenceName, Commit, Repo, RepoReferencesSnapshot};
+use crate::git::{CategorizedReferenceName, Commit, NonZeroOid, Repo, RepoReferencesSnapshot};
 
 use super::eventlog::{Event, EventCursor, EventReplayer};
 use super::formatting::StyledStringBuilder;
 use super::rewrite::find_rewrite_target;
 
-/// Interface to display information about a commit in the smartlog.
-pub trait CommitDescriptor {
+/// An object which can be rendered in the smartlog.
+#[derive(Clone, Debug)]
+pub enum NodeObject<'repo> {
+    /// A commit.
+    Commit {
+        /// The commit.
+        commit: Commit<'repo>,
+    },
+
+    /// A commit which has been garbage collected, for which detailed
+    /// information is no longer available.
+    GarbageCollected {
+        /// The OID of the garbage-collected commit.
+        oid: NonZeroOid,
+    },
+}
+
+impl<'repo> NodeObject<'repo> {
+    fn get_oid(&self) -> NonZeroOid {
+        match self {
+            NodeObject::Commit { commit } => commit.get_oid(),
+            NodeObject::GarbageCollected { oid } => *oid,
+        }
+    }
+}
+
+/// Interface to display information about a node in the smartlog.
+pub trait NodeDescriptor {
     /// Provide a description of the given commit.
     ///
     /// A return value of `None` indicates that this commit descriptor was
     /// inapplicable for the provided commit.
-    fn describe_commit(&mut self, commit: &Commit) -> eyre::Result<Option<StyledString>>;
+    fn describe_node(&mut self, object: &NodeObject) -> eyre::Result<Option<StyledString>>;
 }
 
 /// Get the complete description for a given commit.
-#[instrument(skip(commit_descriptors))]
-pub fn render_commit_descriptors(
-    commit: &Commit,
-    commit_descriptors: &mut [&mut dyn CommitDescriptor],
+#[instrument(skip(node_descriptors))]
+pub fn render_node_descriptors(
+    object: &NodeObject,
+    node_descriptors: &mut [&mut dyn NodeDescriptor],
 ) -> eyre::Result<StyledString> {
-    let descriptions = commit_descriptors
+    let descriptions = node_descriptors
         .iter_mut()
-        .filter_map(|provider: &mut &mut dyn CommitDescriptor| {
-            provider.describe_commit(commit).transpose()
+        .filter_map(|provider: &mut &mut dyn NodeDescriptor| {
+            provider.describe_node(object).transpose()
         })
         .collect::<eyre::Result<Vec<_>>>()?;
     let result = StyledStringBuilder::join(" ", descriptions);
@@ -63,10 +89,10 @@ impl CommitOidDescriptor {
     }
 }
 
-impl CommitDescriptor for CommitOidDescriptor {
+impl NodeDescriptor for CommitOidDescriptor {
     #[instrument]
-    fn describe_commit(&mut self, commit: &Commit) -> eyre::Result<Option<StyledString>> {
-        let oid = commit.get_oid();
+    fn describe_node(&mut self, object: &NodeObject) -> eyre::Result<Option<StyledString>> {
+        let oid = object.get_oid();
         let oid = &oid.to_string()[..8];
         let oid = if self.use_color {
             StyledString::styled(oid, BaseColor::Yellow.dark())
@@ -88,12 +114,14 @@ impl CommitMessageDescriptor {
     }
 }
 
-impl CommitDescriptor for CommitMessageDescriptor {
+impl NodeDescriptor for CommitMessageDescriptor {
     #[instrument]
-    fn describe_commit(&mut self, commit: &Commit) -> eyre::Result<Option<StyledString>> {
-        Ok(Some(StyledString::plain(
-            commit.get_summary()?.to_string_lossy(),
-        )))
+    fn describe_node(&mut self, object: &NodeObject) -> eyre::Result<Option<StyledString>> {
+        let message = match object {
+            NodeObject::Commit { commit } => commit.get_summary()?.to_string_lossy().into_owned(),
+            NodeObject::GarbageCollected { oid: _ } => "<garbage collected>".to_string(),
+        };
+        Ok(Some(StyledString::plain(message)))
     }
 }
 
@@ -113,11 +141,11 @@ impl<'a> ObsolescenceExplanationDescriptor<'a> {
     }
 }
 
-impl<'a> CommitDescriptor for ObsolescenceExplanationDescriptor<'a> {
-    fn describe_commit(&mut self, commit: &Commit) -> eyre::Result<Option<StyledString>> {
+impl<'a> NodeDescriptor for ObsolescenceExplanationDescriptor<'a> {
+    fn describe_node(&mut self, object: &NodeObject) -> eyre::Result<Option<StyledString>> {
         let event = self
             .event_replayer
-            .get_cursor_commit_latest_event(self.event_cursor, commit.get_oid());
+            .get_cursor_commit_latest_event(self.event_cursor, object.get_oid());
 
         let event = match event {
             Some(event) => event,
@@ -127,7 +155,7 @@ impl<'a> CommitDescriptor for ObsolescenceExplanationDescriptor<'a> {
         let result = match event {
             Event::RewriteEvent { .. } => {
                 let rewrite_target =
-                    find_rewrite_target(self.event_replayer, self.event_cursor, commit.get_oid());
+                    find_rewrite_target(self.event_replayer, self.event_cursor, object.get_oid());
                 rewrite_target.map(|rewritten_oid| {
                     StyledString::styled(
                         format!("(rewritten as {})", &rewritten_oid.to_string()[..8]),
@@ -167,9 +195,9 @@ impl<'a> BranchesDescriptor<'a> {
     }
 }
 
-impl<'a> CommitDescriptor for BranchesDescriptor<'a> {
+impl<'a> NodeDescriptor for BranchesDescriptor<'a> {
     #[instrument]
-    fn describe_commit(&mut self, commit: &Commit) -> eyre::Result<Option<StyledString>> {
+    fn describe_node(&mut self, object: &NodeObject) -> eyre::Result<Option<StyledString>> {
         if !self.is_enabled {
             return Ok(None);
         }
@@ -177,7 +205,7 @@ impl<'a> CommitDescriptor for BranchesDescriptor<'a> {
         let branch_names: HashSet<&OsStr> = match self
             .references_snapshot
             .branch_oid_to_names
-            .get(&commit.get_oid())
+            .get(&object.get_oid())
         {
             Some(branch_names) => branch_names
                 .iter()
@@ -246,12 +274,16 @@ $",
     Some(diff_number.to_owned())
 }
 
-impl CommitDescriptor for DifferentialRevisionDescriptor {
+impl NodeDescriptor for DifferentialRevisionDescriptor {
     #[instrument]
-    fn describe_commit(&mut self, commit: &Commit) -> eyre::Result<Option<StyledString>> {
+    fn describe_node(&mut self, object: &NodeObject) -> eyre::Result<Option<StyledString>> {
         if !self.is_enabled {
             return Ok(None);
         }
+        let commit = match object {
+            NodeObject::Commit { commit } => commit,
+            NodeObject::GarbageCollected { oid: _ } => return Ok(None),
+        };
 
         let diff_number = match extract_diff_number(&commit.get_message_raw()?.to_string_lossy()) {
             Some(diff_number) => diff_number,
@@ -317,12 +349,16 @@ impl RelativeTimeDescriptor {
     }
 }
 
-impl CommitDescriptor for RelativeTimeDescriptor {
+impl NodeDescriptor for RelativeTimeDescriptor {
     #[instrument]
-    fn describe_commit(&mut self, commit: &Commit) -> eyre::Result<Option<StyledString>> {
+    fn describe_node(&mut self, object: &NodeObject) -> eyre::Result<Option<StyledString>> {
         if !self.is_enabled {
             return Ok(None);
         }
+        let commit = match object {
+            NodeObject::Commit { commit } => commit,
+            NodeObject::GarbageCollected { oid: _ } => return Ok(None),
+        };
 
         let previous_time = SystemTime::UNIX_EPOCH
             .add(Duration::from_secs(commit.get_time().seconds().try_into()?));

@@ -12,9 +12,9 @@ use eden_dag::DagAlgorithm;
 use tracing::{instrument, warn};
 
 use crate::commands::smartlog::make_smartlog_graph;
-use crate::core::commit_descriptors::{
-    BranchesDescriptor, CommitDescriptor, CommitMessageDescriptor, CommitOidDescriptor,
-    DifferentialRevisionDescriptor, RelativeTimeDescriptor,
+use crate::core::node_descriptors::{
+    BranchesDescriptor, CommitMessageDescriptor, CommitOidDescriptor,
+    DifferentialRevisionDescriptor, NodeDescriptor, RelativeTimeDescriptor,
 };
 use crate::core::config::get_next_interactive;
 use crate::core::effects::Effects;
@@ -74,7 +74,7 @@ fn advance(
     effects: &Effects,
     repo: &Repo,
     dag: &Dag,
-    commit_descriptors: &mut [&mut dyn CommitDescriptor],
+    commit_descriptors: &mut [&mut dyn NodeDescriptor],
     current_oid: NonZeroOid,
     command: Command,
     distance: Distance,

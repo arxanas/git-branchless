@@ -1,4 +1,4 @@
-use crate::core::commit_descriptors::CommitDescriptor;
+use crate::core::node_descriptors::NodeDescriptor;
 use crate::git::{Commit, NonZeroOid};
 
 /// Prompt the user to select a commit from the provided list
@@ -8,7 +8,7 @@ pub fn prompt_select_commit(
     header: Option<&str>,
     initial_query: &str,
     commits: Vec<Commit>,
-    commit_descriptors: &mut [&mut dyn CommitDescriptor],
+    commit_descriptors: &mut [&mut dyn NodeDescriptor],
 ) -> eyre::Result<Option<NonZeroOid>> {
     skim::prompt_skim(header, initial_query, commits, commit_descriptors)
 }
@@ -18,7 +18,7 @@ pub fn prompt_select_commit(
     header: Option<&str>,
     initial_query: &str,
     commits: Vec<Commit>,
-    commit_descriptors: &mut [&mut dyn CommitDescriptor],
+    commit_descriptors: &mut [&mut dyn NodeDescriptor],
 ) -> eyre::Result<Option<NonZeroOid>> {
     unimplemented!("Non-unix targets are currently unsupported for prompting")
 }
@@ -32,8 +32,8 @@ mod skim {
 
     use itertools::Itertools;
 
-    use crate::core::commit_descriptors::{render_commit_descriptors, CommitDescriptor};
     use crate::core::formatting::{printable_styled_string, Glyphs};
+    use crate::core::node_descriptors::{render_node_descriptors, NodeDescriptor, NodeObject};
     use crate::git::{Commit, NonZeroOid};
 
     use skim::{
@@ -96,10 +96,15 @@ mod skim {
     impl CommitSkimItem {
         fn from_descriptors(
             commit: &Commit,
-            commit_descriptors: &mut [&mut dyn CommitDescriptor],
+            commit_descriptors: &mut [&mut dyn NodeDescriptor],
         ) -> eyre::Result<Self> {
             let glyphs = Glyphs::pretty();
-            let styled_summary = render_commit_descriptors(commit, commit_descriptors)?;
+            let styled_summary = render_node_descriptors(
+                &NodeObject::Commit {
+                    commit: commit.clone(),
+                },
+                commit_descriptors,
+            )?;
 
             Ok(CommitSkimItem {
                 oid: commit.get_oid(),
@@ -117,7 +122,7 @@ mod skim {
         header: Option<&str>,
         initial_query: &str,
         commits: Vec<Commit>,
-        commit_descriptors: &mut [&mut dyn CommitDescriptor],
+        commit_descriptors: &mut [&mut dyn NodeDescriptor],
     ) -> eyre::Result<Option<NonZeroOid>> {
         let options = SkimOptionsBuilder::default()
             .height(Some("100%"))

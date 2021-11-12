@@ -19,13 +19,13 @@ use eyre::Context;
 use tracing::instrument;
 
 use crate::commands::smartlog::{make_smartlog_graph, render_graph};
-use crate::core::commit_descriptors::{
-    BranchesDescriptor, CommitMessageDescriptor, CommitOidDescriptor,
-    DifferentialRevisionDescriptor, ObsolescenceExplanationDescriptor, RelativeTimeDescriptor,
-};
 use crate::core::effects::Effects;
 use crate::core::eventlog::{Event, EventCursor, EventLogDb, EventReplayer, EventTransactionId};
 use crate::core::formatting::{printable_styled_string, Pluralize, StyledStringBuilder};
+use crate::core::node_descriptors::{
+    BranchesDescriptor, CommitMessageDescriptor, CommitOidDescriptor,
+    DifferentialRevisionDescriptor, ObsolescenceExplanationDescriptor, RelativeTimeDescriptor,
+};
 use crate::declare_views;
 use crate::git::{CategorizedReferenceName, Dag, GitRunInfo, MaybeZeroOid, Repo};
 use crate::tui::{with_siv, SingletonView};
