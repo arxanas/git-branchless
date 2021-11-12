@@ -80,6 +80,7 @@ pub fn find_abandoned_children(
     };
 
     let children = dag.query().children(CommitSet::from(oid))?;
+    let children = dag.observed_commits.intersection(&children);
     let non_obsolete_children = children.difference(&dag.obsolete_commits);
     let non_obsolete_children_oids: Vec<NonZeroOid> = non_obsolete_children
         .iter()?

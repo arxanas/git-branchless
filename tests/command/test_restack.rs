@@ -1,4 +1,4 @@
-use branchless::testing::{make_git, GitRunOptions};
+use branchless::testing::{make_git, GitInitOptions, GitRunOptions};
 
 /// Remove some of the output from `git rebase`, as it seems to be
 /// non-deterministic as to whether or not it appears.
@@ -421,6 +421,65 @@ fn test_restack_single_of_many_commits() -> eyre::Result<()> {
         x bf0d52a6 (rewritten as 3bd716d5) create test4.txt
         |
         o 848121cb create test5.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+/// Regression test for: https://github.com/arxanas/git-branchless/issues/209
+#[test]
+fn test_restack_unobserved_commit() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    git.init_repo_with_options(&GitInitOptions {
+        run_branchless_init: false,
+        ..Default::default()
+    })?;
+
+    git.commit_file("test1", 1)?;
+    git.run(&["checkout", "-b", "foo"])?;
+    git.commit_file("test2", 2)?;
+    git.detach_head()?;
+    git.commit_file("test3", 3)?;
+
+    git.run(&["branchless", "init"])?;
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d2 (master) create test1.txt
+        |
+        o 96d1c37a (foo) create test2.txt
+        |
+        @ 70deb1e2 create test3.txt
+        "###);
+    }
+
+    // Only abandon `test3` now that it's been observed by the DAG.
+    git.run(&["checkout", "foo"])?;
+
+    git.run(&["commit", "--amend", "-m", "Updated test2"])?;
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d2 (master) create test1.txt
+        |
+        @ f4229de3 (foo) Updated test2
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["restack"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        No abandoned commits to restack.
+        No abandoned branches to restack.
+        branchless: running command: <git-executable> checkout f4229de371f9e2a77cd9401a1851dbb14d6f69ab
+        :
+        O 62fc20d2 (master) create test1.txt
+        |
+        @ f4229de3 (foo) Updated test2
         "###);
     }
 
