@@ -8,13 +8,13 @@ use std::time::SystemTime;
 
 use tracing::instrument;
 
-use crate::core::commit_descriptors::{
-    BranchesDescriptor, CommitMessageDescriptor, CommitOidDescriptor,
-    DifferentialRevisionDescriptor, ObsolescenceExplanationDescriptor, RelativeTimeDescriptor,
-};
 use crate::core::effects::Effects;
 use crate::core::eventlog::{EventLogDb, EventReplayer};
 use crate::core::formatting::printable_styled_string;
+use crate::core::node_descriptors::{
+    BranchesDescriptor, CommitMessageDescriptor, CommitOidDescriptor,
+    DifferentialRevisionDescriptor, ObsolescenceExplanationDescriptor, RelativeTimeDescriptor,
+};
 use crate::git::{Dag, Repo};
 
 pub use graph::{make_smartlog_graph, SmartlogGraph};
@@ -25,18 +25,20 @@ mod graph {
     use std::convert::TryFrom;
     use std::ops::Deref;
 
+    use eden_dag::DagAlgorithm;
     use tracing::instrument;
 
     use crate::core::effects::{Effects, OperationType};
     use crate::core::eventlog::{EventCursor, EventReplayer};
-    use crate::git::{Commit, CommitSet};
+    use crate::core::node_descriptors::NodeObject;
+    use crate::git::{commit_set_to_vec, Commit, CommitSet};
     use crate::git::{Dag, NonZeroOid, Repo};
 
     /// Node contained in the smartlog commit graph.
     #[derive(Debug)]
     pub struct Node<'repo> {
         /// The underlying commit object.
-        pub commit: Commit<'repo>,
+        pub object: NodeObject<'repo>,
 
         /// The OID of the parent node in the smartlog commit graph.
         ///
@@ -82,7 +84,10 @@ mod graph {
             let mut commits = self
                 .nodes
                 .values()
-                .map(|node| node.commit.clone())
+                .filter_map(|node| match &node.object {
+                    NodeObject::Commit { commit } => Some(commit.clone()),
+                    NodeObject::GarbageCollected { oid: _ } => None,
+                })
                 .collect::<Vec<Commit<'repo>>>();
             commits.sort_by_key(|commit| (commit.get_committer().get_time(), commit.get_oid()));
             commits.reverse();
@@ -135,18 +140,18 @@ mod graph {
                     let vertex = vertex?;
                     let oid = NonZeroOid::try_from(vertex.clone())?;
 
-                    let commit = match repo.find_commit(oid)? {
-                        Some(commit) => commit,
+                    let object = match repo.find_commit(oid)? {
+                        Some(commit) => NodeObject::Commit { commit },
                         None => {
-                            // This commit may have been garbage collected.
-                            continue;
+                            // Assume that this commit was garbage collected.
+                            NodeObject::GarbageCollected { oid }
                         }
                     };
 
                     result.insert(
-                        commit.get_oid(),
+                        oid,
                         Node {
-                            commit,
+                            object,
                             parent: None,         // populated below
                             children: Vec::new(), // populated below
                             is_main: public_commits.contains(&vertex)?,
@@ -159,17 +164,25 @@ mod graph {
         };
 
         // Find immediate parent-child links.
-        let links: Vec<(NonZeroOid, NonZeroOid)> = graph
-            .iter()
-            .filter(|(_child_oid, node)| !node.is_main)
-            .flat_map(|(child_oid, node)| {
-                node.commit
-                    .get_parent_oids()
-                    .into_iter()
-                    .filter(|parent_oid| graph.contains_key(parent_oid))
-                    .map(move |parent_oid| (*child_oid, parent_oid))
-            })
-            .collect();
+        let links: Vec<(NonZeroOid, NonZeroOid)> = {
+            let non_main_node_oids =
+                graph.iter().filter_map(
+                    |(child_oid, node)| if !node.is_main { Some(child_oid) } else { None },
+                );
+
+            let mut links = Vec::new();
+            for child_oid in non_main_node_oids {
+                let parent_vertexes = dag.query().parents(CommitSet::from(*child_oid))?;
+                let parent_oids = commit_set_to_vec(&parent_vertexes)?;
+                for parent_oid in parent_oids {
+                    if graph.contains_key(&parent_oid) {
+                        links.push((*child_oid, parent_oid))
+                    }
+                }
+            }
+            links
+        };
+
         for (child_oid, parent_oid) in links.iter() {
             graph.get_mut(child_oid).unwrap().parent = Some(*parent_oid);
             graph.get_mut(parent_oid).unwrap().children.push(*child_oid);
@@ -181,9 +194,17 @@ mod graph {
     /// Sort children nodes of the commit graph in a standard order, for determinism
     /// in output.
     fn sort_children(graph: &mut SmartlogGraph) {
-        let commit_times: HashMap<NonZeroOid, git2::Time> = graph
+        let commit_times: HashMap<NonZeroOid, Option<git2::Time>> = graph
             .iter()
-            .map(|(oid, node)| (*oid, node.commit.get_time()))
+            .map(|(oid, node)| {
+                (
+                    *oid,
+                    match &node.object {
+                        NodeObject::Commit { commit } => Some(commit.get_time()),
+                        NodeObject::GarbageCollected { oid: _ } => None,
+                    },
+                )
+            })
             .collect();
         for node in graph.nodes.values_mut() {
             node.children
@@ -236,13 +257,14 @@ mod render {
 
     use cursive::theme::Effect;
     use cursive::utils::markup::StyledString;
+    use eden_dag::DagAlgorithm;
     use tracing::instrument;
 
-    use crate::core::commit_descriptors::{render_commit_descriptors, CommitDescriptor};
     use crate::core::effects::Effects;
     use crate::core::formatting::set_effect;
     use crate::core::formatting::{Glyphs, StyledStringBuilder};
-    use crate::git::{Dag, NonZeroOid, Repo};
+    use crate::core::node_descriptors::{render_node_descriptors, NodeDescriptor};
+    use crate::git::{CommitSet, CommitVertex, Dag, NonZeroOid, Repo};
 
     use super::graph::SmartlogGraph;
 
@@ -305,15 +327,15 @@ mod render {
         glyphs: &Glyphs,
         graph: &SmartlogGraph,
         root_oids: &[NonZeroOid],
-        commit_descriptors: &mut [&mut dyn CommitDescriptor],
+        commit_descriptors: &mut [&mut dyn NodeDescriptor],
         head_oid: Option<NonZeroOid>,
         current_oid: NonZeroOid,
         last_child_line_char: Option<&str>,
     ) -> eyre::Result<Vec<StyledString>> {
         let current_node = &graph[&current_oid];
-        let is_head = Some(current_node.commit.get_oid()) == head_oid;
+        let is_head = Some(current_oid) == head_oid;
 
-        let text = render_commit_descriptors(&current_node.commit, commit_descriptors)?;
+        let text = render_node_descriptors(&current_node.object, commit_descriptors)?;
         let cursor = match (current_node.is_main, current_node.is_obsolete, is_head) {
             (false, false, false) => glyphs.commit_visible,
             (false, false, true) => glyphs.commit_visible_head,
@@ -401,8 +423,9 @@ mod render {
     #[instrument(skip(commit_descriptors, graph))]
     fn get_output(
         glyphs: &Glyphs,
+        dag: &Dag,
         graph: &SmartlogGraph,
-        commit_descriptors: &mut [&mut dyn CommitDescriptor],
+        commit_descriptors: &mut [&mut dyn NodeDescriptor],
         head_oid: Option<NonZeroOid>,
         root_oids: &[NonZeroOid],
     ) -> eyre::Result<Vec<StyledString>> {
@@ -413,18 +436,19 @@ mod render {
         // This returns `true` in strictly more cases than checking `graph`,
         // since there may be links between adjacent main branch commits which
         // are not reflected in `graph`.
-        let has_real_parent = |oid: NonZeroOid, parent_oid: NonZeroOid| -> bool {
-            graph[&oid]
-                .commit
-                .get_parent_oids()
-                .into_iter()
-                .any(|parent_oid2| parent_oid2 == parent_oid)
+        let has_real_parent = |oid: NonZeroOid, parent_oid: NonZeroOid| -> eyre::Result<bool> {
+            let parents = dag.query().parents(CommitSet::from(oid))?;
+            let result = parents.contains(&CommitVertex::from(parent_oid))?;
+            Ok(result)
         };
 
         for (root_idx, root_oid) in root_oids.iter().enumerate() {
-            let root_node = &graph[root_oid];
-            if root_node.commit.get_parent_count() > 0 {
-                let line = if root_idx > 0 && has_real_parent(*root_oid, root_oids[root_idx - 1]) {
+            if !dag
+                .query()
+                .parents(CommitSet::from(*root_oid))?
+                .is_empty()?
+            {
+                let line = if root_idx > 0 && has_real_parent(*root_oid, root_oids[root_idx - 1])? {
                     StyledString::plain(glyphs.line.to_owned())
                 } else {
                     StyledString::plain(glyphs.vertical_ellipsis.to_owned())
@@ -441,7 +465,7 @@ mod render {
                     None
                 } else {
                     let next_root_oid = root_oids[root_idx + 1];
-                    if has_real_parent(next_root_oid, *root_oid) {
+                    if has_real_parent(next_root_oid, *root_oid)? {
                         Some(glyphs.line)
                     } else {
                         Some(glyphs.vertical_ellipsis)
@@ -472,11 +496,12 @@ mod render {
         dag: &Dag,
         graph: &SmartlogGraph,
         head_oid: Option<NonZeroOid>,
-        commit_descriptors: &mut [&mut dyn CommitDescriptor],
+        commit_descriptors: &mut [&mut dyn NodeDescriptor],
     ) -> eyre::Result<Vec<StyledString>> {
         let root_oids = split_commit_graph_by_roots(effects, repo, dag, graph);
         let lines = get_output(
             effects.get_glyphs(),
+            dag,
             graph,
             commit_descriptors,
             head_oid,

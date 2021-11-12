@@ -7,7 +7,7 @@ use std::time::SystemTime;
 use eden_dag::DagAlgorithm;
 use tracing::instrument;
 
-use crate::core::commit_descriptors::{render_commit_descriptors, CommitOidDescriptor};
+use crate::core::node_descriptors::{render_node_descriptors, CommitOidDescriptor, NodeObject};
 use crate::core::effects::Effects;
 use crate::core::eventlog::{CommitActivityStatus, Event};
 use crate::core::eventlog::{EventLogDb, EventReplayer};
@@ -85,8 +85,10 @@ pub fn hide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::Re
             )?;
         }
 
-        let commit_target_oid =
-            render_commit_descriptors(&commit, &mut [&mut CommitOidDescriptor::new(false)?])?;
+        let commit_target_oid = render_node_descriptors(
+            &NodeObject::Commit { commit },
+            &mut [&mut CommitOidDescriptor::new(false)?],
+        )?;
         writeln!(
             effects.get_output_stream(),
             "To unhide this commit, run: git unhide {}",
@@ -164,8 +166,10 @@ pub fn unhide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::
             )?;
         }
 
-        let commit_target_oid =
-            render_commit_descriptors(&commit, &mut [&mut CommitOidDescriptor::new(false)?])?;
+        let commit_target_oid = render_node_descriptors(
+            &NodeObject::Commit { commit },
+            &mut [&mut CommitOidDescriptor::new(false)?],
+        )?;
         writeln!(
             effects.get_output_stream(),
             "To hide this commit, run: git hide {}",

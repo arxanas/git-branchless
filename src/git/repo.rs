@@ -28,13 +28,13 @@ use os_str_bytes::{OsStrBytes, OsStringBytes};
 use regex::bytes::Regex;
 use tracing::{instrument, warn};
 
-use crate::core::commit_descriptors::{
-    render_commit_descriptors, CommitMessageDescriptor, CommitOidDescriptor,
-};
 use crate::core::config::get_main_branch_name;
 use crate::core::effects::{Effects, OperationType};
 use crate::core::eventlog::EventTransactionId;
 use crate::core::formatting::StyledStringBuilder;
+use crate::core::node_descriptors::{
+    render_node_descriptors, CommitMessageDescriptor, CommitOidDescriptor, NodeObject,
+};
 use crate::git::config::{Config, ConfigRead};
 use crate::git::oid::{make_non_zero_oid, MaybeZeroOid, NonZeroOid};
 use crate::git::run::GitRunInfo;
@@ -1431,8 +1431,10 @@ impl<'repo> Commit<'repo> {
     /// summary.
     #[instrument]
     pub fn friendly_describe(&self) -> eyre::Result<StyledString> {
-        let description = render_commit_descriptors(
-            self,
+        let description = render_node_descriptors(
+            &NodeObject::Commit {
+                commit: self.clone(),
+            },
             &mut [
                 &mut CommitOidDescriptor::new(true)?,
                 &mut CommitMessageDescriptor::new()?,
