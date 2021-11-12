@@ -30,10 +30,6 @@ name = "branchless"
 harness = false
 name = "benches"
 
-[[bin]]
-name = "git-branchless"
-path = "bin/entry_points/git-branchless.rs"
-
 ## Testing binaries ##
 [[bin]]
 name = "git-branchless-regression-test-cherry-pick"
