@@ -2211,7 +2211,7 @@ mod tests {
         let git_run_info = GitRunInfo {
             path_to_git: git.path_to_git.clone(),
             working_directory: git.repo_path.clone(),
-            env: std::env::vars_os().collect(),
+            env: git.get_base_env(0).into_iter().collect(),
         };
         git.init_repo()?;
         git.commit_file("test1", 1)?;

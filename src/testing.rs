@@ -167,7 +167,7 @@ impl Git {
     }
 
     /// Get the environment variables needed to run git in the test environment.
-    pub fn get_base_env(&self, time: isize) -> Vec<(&'static str, OsString)> {
+    pub fn get_base_env(&self, time: isize) -> Vec<(OsString, OsString)> {
         // Required for determinism, as these values will be baked into the commit
         // hash.
         let date: OsString = format!("{date} -{time:0>2}", date = DUMMY_DATE, time = time).into();
@@ -182,14 +182,18 @@ impl Git {
 
         let git_exec_path = self.get_git_exec_path();
         let new_path = self.get_path_for_env();
-        vec![
+        let envs = vec![
             ("GIT_AUTHOR_DATE", date.clone()),
             ("GIT_COMMITTER_DATE", date),
             ("GIT_EDITOR", git_editor),
             ("GIT_EXEC_PATH", git_exec_path.as_os_str().into()),
             ("PATH_TO_GIT", self.path_to_git.as_os_str().into()),
             ("PATH", new_path),
-        ]
+        ];
+
+        envs.into_iter()
+            .map(|(key, value)| (OsString::from(key), value))
+            .collect()
     }
 
     #[instrument]
