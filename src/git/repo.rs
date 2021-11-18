@@ -215,6 +215,11 @@ impl Repo {
         self.inner.path()
     }
 
+    /// Get the path to the `packed-refs` file for the repository.
+    pub fn get_packed_refs_path(&self) -> PathBuf {
+        self.inner.path().join("packed-refs")
+    }
+
     /// Get the path to the directory inside the `.git` directory which contains
     /// state used for the current rebase (if any).
     pub fn get_rebase_state_dir_path(&self) -> PathBuf {
@@ -627,6 +632,21 @@ Either create it, or update the main branch setting by running:
             },
             Err(err) if err.code() == git2::ErrorCode::NotFound => Ok(None),
             Err(err) => Err(wrap_git_error(err)),
+        }
+    }
+
+    /// Look up a single reference by name.
+    pub fn get_reference(&self, reference_name: &OsStr) -> eyre::Result<Option<Reference>> {
+        let reference_name = reference_name.to_str().ok_or_else(|| {
+            eyre::eyre!(
+                "Cannot convert reference name to string (libgit2 limitation): {:?}",
+                reference_name
+            )
+        })?;
+        match self.inner.find_reference(reference_name) {
+            Ok(reference) => Ok(Some(Reference { inner: reference })),
+            Err(err) if err.code() == git2::ErrorCode::NotFound => Ok(None),
+            Err(err) => (Err(err.into())),
         }
     }
 
