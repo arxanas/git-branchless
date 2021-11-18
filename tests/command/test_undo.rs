@@ -51,7 +51,8 @@ fn run_undo_events(git: &Git, event_cursor: EventCursor) -> eyre::Result<String>
     let event_replayer = EventReplayer::from_event_log_db(&effects, &repo, &event_log_db)?;
     let input = "y";
     let mut in_ = input.as_bytes();
-    let out: Arc<Mutex<Vec<u8>>> = Default::default();
+    let stdout: Arc<Mutex<Vec<u8>>> = Default::default();
+    let stderr: Arc<Mutex<Vec<u8>>> = Default::default();
 
     let git_run_info = GitRunInfo {
         path_to_git: git.path_to_git.clone(),
@@ -74,7 +75,7 @@ fn run_undo_events(git: &Git, event_cursor: EventCursor) -> eyre::Result<String>
 
     let result = undo_events(
         &mut in_,
-        &Effects::new_from_buffer_for_test(glyphs, &out),
+        &Effects::new_from_buffer_for_test(glyphs, &stdout, &stderr),
         &repo,
         &git_run_info,
         &mut event_log_db,
@@ -83,16 +84,16 @@ fn run_undo_events(git: &Git, event_cursor: EventCursor) -> eyre::Result<String>
     )?;
     assert_eq!(result, 0);
 
-    let out = {
-        let mut buf = out.lock().unwrap();
+    let stdout = {
+        let mut buf = stdout.lock().unwrap();
         let mut result_buf = Vec::new();
         swap(&mut *buf, &mut result_buf);
         result_buf
     };
-    let out = String::from_utf8(out)?;
-    let out = git.preprocess_output(out)?;
-    let out = trim_lines(out);
-    Ok(out)
+    let stdout = String::from_utf8(stdout)?;
+    let stdout = git.preprocess_output(stdout)?;
+    let stdout = trim_lines(stdout);
+    Ok(stdout)
 }
 
 #[test]

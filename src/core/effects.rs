@@ -69,7 +69,10 @@ impl ToString for OperationType {
 enum OutputDest {
     Stdout,
     Suppress,
-    BufferForTest(Arc<Mutex<Vec<u8>>>),
+    BufferForTest {
+        stdout: Arc<Mutex<Vec<u8>>>,
+        stderr: Arc<Mutex<Vec<u8>>>,
+    },
 }
 
 #[derive(Debug)]
@@ -232,10 +235,17 @@ impl Effects {
     }
 
     /// Constructor. Writes to the provided buffer.
-    pub fn new_from_buffer_for_test(glyphs: Glyphs, buffer: &Arc<Mutex<Vec<u8>>>) -> Self {
+    pub fn new_from_buffer_for_test(
+        glyphs: Glyphs,
+        stdout: &Arc<Mutex<Vec<u8>>>,
+        stderr: &Arc<Mutex<Vec<u8>>>,
+    ) -> Self {
         Effects {
             glyphs,
-            dest: OutputDest::BufferForTest(Arc::clone(buffer)),
+            dest: OutputDest::BufferForTest {
+                stdout: Arc::clone(stdout),
+                stderr: Arc::clone(stderr),
+            },
             multi_progress: Default::default(),
             updater_thread_handle: Default::default(),
             nesting_level: Default::default(),
@@ -280,7 +290,9 @@ impl Effects {
         };
         match self.dest {
             OutputDest::Stdout => {}
-            OutputDest::Suppress | OutputDest::BufferForTest(_) => return (self.clone(), progress),
+            OutputDest::Suppress | OutputDest::BufferForTest { .. } => {
+                return (self.clone(), progress)
+            }
         }
 
         let now = Instant::now();
@@ -335,7 +347,7 @@ impl Effects {
     fn on_drop_progress_handle(&self, operation_type: OperationType) {
         match self.dest {
             OutputDest::Stdout => {}
-            OutputDest::Suppress | OutputDest::BufferForTest(_) => return,
+            OutputDest::Suppress | OutputDest::BufferForTest { .. } => return,
         }
 
         let now = Instant::now();
@@ -552,8 +564,8 @@ impl Write for OutputStream {
                 // Do nothing.
             }
 
-            OutputDest::BufferForTest(buffer) => {
-                let mut buffer = buffer.lock().unwrap();
+            OutputDest::BufferForTest { stdout, stderr: _ } => {
+                let mut buffer = stdout.lock().unwrap();
                 write!(buffer, "{}", s).unwrap();
             }
         }
@@ -611,8 +623,9 @@ impl Write for ErrorStream {
                 // Do nothing.
             }
 
-            OutputDest::BufferForTest(_) => {
-                // Drop the error output, as the buffer only represents `stdout`.
+            OutputDest::BufferForTest { stdout: _, stderr } => {
+                let mut buffer = stderr.lock().unwrap();
+                write!(buffer, "{}", s).unwrap();
             }
         }
         Ok(())
