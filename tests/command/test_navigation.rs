@@ -394,6 +394,7 @@ fn run_in_pty(git: &Git, args: &[&str], inputs: &[PtyAction]) -> eyre::Result<()
 
     // Spawn a git instance in the pty.
     let mut cmd = CommandBuilder::new(&git.path_to_git);
+    cmd.env_clear();
     for (k, v) in git.get_base_env(0) {
         cmd.env(k, v);
     }
