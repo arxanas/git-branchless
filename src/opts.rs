@@ -80,6 +80,11 @@ pub struct TraverseCommitsOptions {
     /// merge them.
     #[clap(short = 'm', long = "merge")]
     pub merge: bool,
+
+    /// If the local changes conflict with the destination commit, discard them.
+    /// (Use with caution!)
+    #[clap(short = 'f', long = "force", conflicts_with("merge"))]
+    pub force: bool,
 }
 
 /// FIXME: write man-page text

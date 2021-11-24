@@ -769,3 +769,53 @@ fn test_navigation_merge() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_navigation_force() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+
+    git.detach_head()?;
+    git.commit_file_with_contents("conflicting", 1, "foo\nbar\n")?;
+    git.commit_file_with_contents("conflicting", 2, "baz\nqux\n")?;
+    git.write_file("conflicting", "foo\n\nbar\nqux\n")?;
+
+    {
+        let (stdout, stderr) = git.run_with_options(
+            &["prev"],
+            &GitRunOptions {
+                expected_exit_code: 1,
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> checkout 25497cb08387d7d20aa741398b73ce7f924afdb5
+        Failed to check out commit: 25497cb08387d7d20aa741398b73ce7f924afdb5
+        "###);
+        insta::assert_snapshot!(stderr, @r###"
+        error: Your local changes to the following files would be overwritten by checkout:
+        	conflicting.txt
+        Please commit your changes or stash them before you switch branches.
+        Aborting
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["prev", "--force"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> checkout 25497cb08387d7d20aa741398b73ce7f924afdb5 --force
+        O f777ecc9 (master) create initial.txt
+        |
+        @ 25497cb0 create conflicting.txt
+        |
+        o 6dd50913 create conflicting.txt
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["diff"])?;
+        insta::assert_snapshot!(stdout, @"");
+    }
+
+    Ok(())
+}
