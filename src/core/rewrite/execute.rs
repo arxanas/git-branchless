@@ -260,7 +260,13 @@ pub fn check_out_updated_head(
         }
     };
 
-    let result = check_out_commit(effects, git_run_info, Some(event_tx_id), &checkout_target)?;
+    let result = check_out_commit(
+        effects,
+        git_run_info,
+        Some(event_tx_id),
+        &checkout_target,
+        &[] as &[&OsStr],
+    )?;
     Ok(result)
 }
 
