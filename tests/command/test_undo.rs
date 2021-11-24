@@ -714,6 +714,10 @@ fn test_git_bisect_produces_empty_event() -> eyre::Result<()> {
 #[test]
 fn test_undo_garbage_collected_commit() -> eyre::Result<()> {
     let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
     git.init_repo()?;
 
     git.commit_file("test1", 1)?;
