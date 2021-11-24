@@ -312,6 +312,7 @@ pub fn traverse_commits(
         oldest,
         newest,
         interactive,
+        merge,
     } = *options;
 
     let distance = match (all_the_way, num_commits) {
@@ -419,7 +420,14 @@ pub fn traverse_commits(
         }
     };
 
-    check_out_commit(effects, git_run_info, None, &current_oid, &[] as &[&OsStr])
+    let additional_args = if merge { vec!["--merge"] } else { vec![] };
+    check_out_commit(
+        effects,
+        git_run_info,
+        None,
+        &current_oid,
+        additional_args.as_slice(),
+    )
 }
 
 /// Interactively checkout a commit from the smartlog.

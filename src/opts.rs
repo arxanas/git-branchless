@@ -75,6 +75,11 @@ pub struct TraverseCommitsOptions {
         conflicts_with("oldest")
     )]
     pub interactive: bool,
+
+    /// If the local changes conflict with the destination commit, attempt to
+    /// merge them.
+    #[clap(short = 'm', long = "merge")]
+    pub merge: bool,
 }
 
 /// FIXME: write man-page text
