@@ -2,7 +2,7 @@
 
 use std::collections::HashSet;
 use std::convert::TryInto;
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::fmt::Write;
 use std::time::SystemTime;
 
@@ -419,7 +419,7 @@ pub fn traverse_commits(
         }
     };
 
-    check_out_commit(effects, git_run_info, None, &current_oid)
+    check_out_commit(effects, git_run_info, None, &current_oid, &[] as &[&OsStr])
 }
 
 /// Interactively checkout a commit from the smartlog.
@@ -456,7 +456,13 @@ pub fn checkout(
             &mut CommitMessageDescriptor::new()?,
         ],
     )? {
-        Some(oid) => check_out_commit(effects, git_run_info, None, &oid.to_string()),
+        Some(oid) => check_out_commit(
+            effects,
+            git_run_info,
+            None,
+            &oid.to_string(),
+            &[] as &[&OsStr],
+        ),
         None => Ok(1),
     }
 }

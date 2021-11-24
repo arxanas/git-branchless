@@ -373,11 +373,18 @@ pub fn check_out_commit(
     git_run_info: &GitRunInfo,
     event_tx_id: Option<EventTransactionId>,
     target: impl AsRef<OsStr> + std::fmt::Debug,
+    additional_args: impl IntoIterator<Item = impl AsRef<OsStr>>,
 ) -> eyre::Result<isize> {
     let categorized_target = CategorizedReferenceName::new(target.as_ref());
     let target = categorized_target.remove_prefix()?;
 
-    let result = git_run_info.run(effects, event_tx_id, &[OsStr::new("checkout"), &target])?;
+    let additional_args: Vec<_> = additional_args.into_iter().collect();
+    let args = {
+        let mut args = vec![OsStr::new("checkout"), target.as_ref()];
+        args.extend(additional_args.iter().map(|arg| arg.as_ref()));
+        args
+    };
+    let result = git_run_info.run(effects, event_tx_id, args.as_slice())?;
 
     if result == 0 {
         smartlog(effects, &Default::default())?;
