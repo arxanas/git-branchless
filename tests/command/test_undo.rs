@@ -16,7 +16,6 @@ use branchless::tui::testing::{screen_to_string, CursiveTestingBackend, CursiveT
 
 use cursive::event::Key;
 use cursive::CursiveRunnable;
-use os_str_bytes::OsStrBytes;
 
 fn run_select_past_event(
     repo: &Repo,
@@ -56,21 +55,8 @@ fn run_undo_events(git: &Git, event_cursor: EventCursor) -> eyre::Result<(isize,
 
     let git_run_info = GitRunInfo {
         path_to_git: git.path_to_git.clone(),
-
-        // Ensure that nested calls to `git` are run under the correct environment.
-        // (Normally, the user will be running `git undo` from the correct directory
-        // already.)
         working_directory: repo.get_working_copy_path().unwrap().to_path_buf(),
-
-        // Normally, we want to inherit the user's environment when running external
-        // Git commands. However, for testing, we may have inherited variables which
-        // affect the execution of Git. In particular, `GIT_INDEX_FILE` is set to
-        // `.git/index` normally (which works for the test), but can be set to an
-        // absolute path when running `git commit -a`, and having these tests run as
-        // part of a commit hook.
-        env: std::env::vars_os()
-            .filter(|(k, _v)| !k.to_raw_bytes().starts_with(b"GIT_"))
-            .collect(),
+        env: git.get_base_env(0).into_iter().collect(),
     };
 
     let exit_code = undo_events(
@@ -424,7 +410,11 @@ fn test_undo_move_refs() -> eyre::Result<()> {
 
         3. Move branch master from 96d1c37a create test2.txt
                                 to 62fc20d2 create test1.txt
-        Confirm? [yN] branchless: running command: <git-executable> checkout --detach 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
+        Confirm? [yN] branchless: running command: <git-executable> checkout 62fc20d2a290daea0d52bdc2ed2ad4be6491010e --detach
+        :
+        @ 62fc20d2 create test1.txt
+        |
+        O 96d1c37a (master) create test2.txt
         Applied 3 inverse events.
         "###);
         assert_eq!(exit_code, 0);
@@ -649,7 +639,10 @@ fn test_undo_doesnt_make_working_dir_dirty() -> eyre::Result<()> {
                                 to f777ecc9 create initial.txt
         5. Delete branch foo at f777ecc9 create initial.txt
 
-        Confirm? [yN] branchless: running command: <git-executable> checkout --detach f777ecc9b0db5ed372b2615695191a8a17f79f24
+        Confirm? [yN] branchless: running command: <git-executable> checkout f777ecc9b0db5ed372b2615695191a8a17f79f24 --detach
+        @ f777ecc9 (foo) create initial.txt
+        |
+        O 62fc20d2 (bar, master) create test1.txt
         Applied 5 inverse events.
         "###);
         assert_eq!(exit_code, 0);
@@ -714,6 +707,94 @@ fn test_git_bisect_produces_empty_event() -> eyre::Result<()> {
     │   This may be an unsupported use-case; see https://git.io/J0b7z                                                      │
     └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
     "###);
+
+    Ok(())
+}
+
+#[test]
+fn test_undo_garbage_collected_commit() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+
+    git.commit_file("test1", 1)?;
+    git.detach_head()?;
+    git.commit_file("test2", 2)?;
+    git.run(&["hide", "HEAD"])?;
+    git.run(&["checkout", "HEAD^"])?;
+
+    {
+        let (stdout, _stderr) = git.run(&["branchless", "gc"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: collecting garbage
+        branchless: 1 dangling reference deleted
+        "###);
+    }
+    git.run(&["gc", "--prune=now"])?;
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        @ 62fc20d2 (master) create test1.txt
+        "###);
+    }
+
+    let screenshot1 = Default::default();
+    let event_cursor = run_select_past_event(
+        &git.get_repo()?,
+        vec![
+            CursiveTestingEvent::Event('p'.into()),
+            CursiveTestingEvent::Event('p'.into()),
+            CursiveTestingEvent::Event('p'.into()),
+            CursiveTestingEvent::Event('p'.into()),
+            CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot1)),
+            CursiveTestingEvent::Event(Key::Enter.into()),
+        ],
+    )?;
+    insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
+    ┌───────────────────────────────────────────────────┤─Commit graph ├───────────────────────────────────────────────────┐
+    │:                                                                                                                     │
+    │O 62fc20d2 (master) create test1.txt                                                                                  │
+    │|                                                                                                                     │
+    │% 96d1c37a (manually hidden) <garbage collected>                                                                      │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    │                                                                                                                      │
+    └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+    ┌──────────────────────────────────────────────────────┤─Events ├──────────────────────────────────────────────────────┐
+    │Repo after transaction 7 (event 8). Press 'h' for help, 'q' to quit.                                                  │
+    │1. Hide commit <commit not available: 96d1c37a3d4363611c49f7e52186e189a04c531f>                                       │
+    │                                                                                                                      │
+    └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+    "###);
+
+    let event_cursor = event_cursor.unwrap();
+    {
+        let (exit_code, stdout) = run_undo_events(&git, event_cursor)?;
+        insta::assert_snapshot!(stdout, @r###"
+        Will apply these actions:
+        1. Check out from 62fc20d2 create test1.txt
+                       to <commit not available: 96d1c37a3d4363611c49f7e52186e189a04c531f>
+        2. Move branch master from 62fc20d2 create test1.txt
+                                to 62fc20d2 create test1.txt
+        3. Move branch master from 62fc20d2 create test1.txt
+                                to 62fc20d2 create test1.txt
+        Confirm? [yN] branchless: running command: <git-executable> checkout 96d1c37a3d4363611c49f7e52186e189a04c531f --detach
+        Failed to check out commit: 96d1c37a3d4363611c49f7e52186e189a04c531f
+        Applied 3 inverse events.
+        "###);
+        assert!(exit_code > 0);
+    }
 
     Ok(())
 }

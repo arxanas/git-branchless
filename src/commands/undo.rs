@@ -4,7 +4,7 @@
 //! time and inverting them.
 
 use std::convert::TryInto;
-use std::ffi::{OsStr, OsString};
+use std::ffi::OsString;
 use std::fmt::Write;
 use std::io::{stdin, BufRead, BufReader, Read};
 use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
@@ -28,7 +28,7 @@ use crate::core::node_descriptors::{
     DifferentialRevisionDescriptor, ObsolescenceExplanationDescriptor, RelativeTimeDescriptor,
 };
 use crate::declare_views;
-use crate::git::{CategorizedReferenceName, GitRunInfo, MaybeZeroOid, Repo};
+use crate::git::{check_out_commit, CategorizedReferenceName, GitRunInfo, MaybeZeroOid, Repo};
 use crate::tui::{with_siv, SingletonView};
 
 fn render_cursor_smartlog(
@@ -703,17 +703,14 @@ fn undo_events(
                 // this case, rather than just update `HEAD` (and be left with a
                 // dirty working copy). The `Git` command will update the event
                 // log appropriately, as it will invoke our hooks.
-                let exit_code = git_run_info
-                    .run(
-                        effects,
-                        Some(event_tx_id),
-                        &[
-                            OsStr::new("checkout"),
-                            OsStr::new("--detach"),
-                            target_oid.as_os_str(),
-                        ],
-                    )
-                    .wrap_err("Updating to previous HEAD location")?;
+                let exit_code = check_out_commit(
+                    effects,
+                    git_run_info,
+                    Some(event_tx_id),
+                    target_oid.as_os_str(),
+                    &["--detach"],
+                )
+                .wrap_err("Updating to previous HEAD location")?;
                 if exit_code != 0 {
                     result = exit_code;
                 }

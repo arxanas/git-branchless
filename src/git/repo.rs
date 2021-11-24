@@ -851,10 +851,13 @@ Either create it, or update the main branch setting by running:
     pub fn friendly_describe_commit_from_oid(&self, oid: NonZeroOid) -> eyre::Result<StyledString> {
         match self.find_commit(oid)? {
             Some(commit) => Ok(commit.friendly_describe()?),
-            None => Ok(StyledString::styled(
-                format!("<commit not found: {:?}>", oid),
-                BaseColor::Red.light(),
-            )),
+            None => {
+                let NonZeroOid { inner: oid } = oid;
+                Ok(StyledString::styled(
+                    format!("<commit not available: {}>", oid.to_string()),
+                    BaseColor::Red.light(),
+                ))
+            }
         }
     }
 
