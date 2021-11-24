@@ -42,7 +42,7 @@ fn run_select_past_event(
     select_past_event(siv.into_runner(), &effects, repo, &dag, &mut event_replayer)
 }
 
-fn run_undo_events(git: &Git, event_cursor: EventCursor) -> eyre::Result<String> {
+fn run_undo_events(git: &Git, event_cursor: EventCursor) -> eyre::Result<(isize, String)> {
     let glyphs = Glyphs::text();
     let effects = Effects::new_suppress_for_test(glyphs.clone());
     let repo = git.get_repo()?;
@@ -73,7 +73,7 @@ fn run_undo_events(git: &Git, event_cursor: EventCursor) -> eyre::Result<String>
             .collect(),
     };
 
-    let result = undo_events(
+    let exit_code = undo_events(
         &mut in_,
         &Effects::new_from_buffer_for_test(glyphs, &stdout, &stderr),
         &repo,
@@ -82,7 +82,6 @@ fn run_undo_events(git: &Git, event_cursor: EventCursor) -> eyre::Result<String>
         &event_replayer,
         event_cursor,
     )?;
-    assert_eq!(result, 0);
 
     let stdout = {
         let mut buf = stdout.lock().unwrap();
@@ -93,7 +92,7 @@ fn run_undo_events(git: &Git, event_cursor: EventCursor) -> eyre::Result<String>
     let stdout = String::from_utf8(stdout)?;
     let stdout = git.preprocess_output(stdout)?;
     let stdout = trim_lines(stdout);
-    Ok(stdout)
+    Ok((exit_code, stdout))
 }
 
 #[test]
@@ -359,7 +358,7 @@ fn test_undo_hide() -> eyre::Result<()> {
     let event_cursor = event_cursor.unwrap();
 
     {
-        let stdout = run_undo_events(&git, event_cursor)?;
+        let (exit_code, stdout) = run_undo_events(&git, event_cursor)?;
         insta::assert_snapshot!(stdout, @r###"
             Will apply these actions:
             1. Create branch test1 at 62fc20d2 create test1.txt
@@ -368,6 +367,7 @@ fn test_undo_hide() -> eyre::Result<()> {
 
             Confirm? [yN] Applied 2 inverse events.
             "###);
+        assert_eq!(exit_code, 0);
     }
 
     {
@@ -415,7 +415,7 @@ fn test_undo_move_refs() -> eyre::Result<()> {
     let event_cursor = event_cursor.unwrap();
 
     {
-        let stdout = run_undo_events(&git, event_cursor)?;
+        let (exit_code, stdout) = run_undo_events(&git, event_cursor)?;
         insta::assert_snapshot!(stdout, @r###"
         Will apply these actions:
         1. Check out from 96d1c37a create test2.txt
@@ -427,6 +427,7 @@ fn test_undo_move_refs() -> eyre::Result<()> {
         Confirm? [yN] branchless: running command: <git-executable> checkout --detach 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
         Applied 3 inverse events.
         "###);
+        assert_eq!(exit_code, 0);
     }
 
     {
@@ -635,7 +636,7 @@ fn test_undo_doesnt_make_working_dir_dirty() -> eyre::Result<()> {
         assert_eq!(stdout, "");
     }
     {
-        let stdout = run_undo_events(&git, event_cursor)?;
+        let (exit_code, stdout) = run_undo_events(&git, event_cursor)?;
         insta::assert_snapshot!(stdout, @r###"
         Will apply these actions:
         1. Check out from 62fc20d2 create test1.txt
@@ -651,6 +652,7 @@ fn test_undo_doesnt_make_working_dir_dirty() -> eyre::Result<()> {
         Confirm? [yN] branchless: running command: <git-executable> checkout --detach f777ecc9b0db5ed372b2615695191a8a17f79f24
         Applied 5 inverse events.
         "###);
+        assert_eq!(exit_code, 0);
     }
     {
         let (stdout, _stderr) = git.run(&["status", "--porcelain"])?;
