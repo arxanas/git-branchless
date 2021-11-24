@@ -387,7 +387,7 @@ pub fn check_out_commit(
     let result = git_run_info.run(effects, event_tx_id, args.as_slice())?;
 
     if result == 0 {
-        smartlog(effects, &Default::default())?;
+        smartlog(effects, git_run_info, &Default::default())?;
     } else {
         writeln!(
             effects.get_output_stream(),

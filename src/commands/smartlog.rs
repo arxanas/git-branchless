@@ -16,7 +16,7 @@ use crate::core::node_descriptors::{
     BranchesDescriptor, CommitMessageDescriptor, CommitOidDescriptor,
     DifferentialRevisionDescriptor, ObsolescenceExplanationDescriptor, RelativeTimeDescriptor,
 };
-use crate::git::Repo;
+use crate::git::{GitRunInfo, Repo};
 
 pub use graph::{make_smartlog_graph, SmartlogGraph};
 pub use render::{render_graph, SmartlogOptions};
@@ -524,12 +524,16 @@ mod render {
 
 /// Display a nice graph of commits you've recently worked on.
 #[instrument]
-pub fn smartlog(effects: &Effects, options: &SmartlogOptions) -> eyre::Result<()> {
+pub fn smartlog(
+    effects: &Effects,
+    git_run_info: &GitRunInfo,
+    options: &SmartlogOptions,
+) -> eyre::Result<()> {
     let SmartlogOptions {
         show_hidden_commits,
     } = options;
 
-    let repo = Repo::from_current_dir()?;
+    let repo = Repo::from_dir(&git_run_info.working_directory)?;
     let references_snapshot = repo.get_references_snapshot()?;
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
