@@ -319,6 +319,6 @@ pub fn restack(
         None => result,
     };
 
-    smartlog(effects, &Default::default())?;
+    smartlog(effects, git_run_info, &Default::default())?;
     Ok(result)
 }

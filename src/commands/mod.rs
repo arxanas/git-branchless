@@ -222,6 +222,7 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
         } => {
             smartlog::smartlog(
                 &effects,
+                &git_run_info,
                 &SmartlogOptions {
                     show_hidden_commits,
                 },
