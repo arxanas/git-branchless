@@ -313,6 +313,7 @@ pub fn traverse_commits(
         newest,
         interactive,
         merge,
+        force,
     } = *options;
 
     let distance = match (all_the_way, num_commits) {
@@ -420,7 +421,16 @@ pub fn traverse_commits(
         }
     };
 
-    let additional_args = if merge { vec!["--merge"] } else { vec![] };
+    let additional_args = {
+        let mut args = Vec::new();
+        if merge {
+            args.push("--merge");
+        }
+        if force {
+            args.push("--force");
+        }
+        args
+    };
     check_out_commit(
         effects,
         git_run_info,

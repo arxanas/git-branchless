@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `git next` and `git prev` accept `-b`/`--branch` to take you to the next or previous branch for your commit stack, respectively.
 - New `git branchless amend` command (aliased to `git amend`) that amends the current HEAD commit, and automatically performs a restack.
 - `git next` and `git prev` accept `-m`/`--merge` to merge unstaged changes when checking out to the destination commit.
+- `git next` and `git prev` accept `-f`/`--force` to discard unstaged changes when checking out to the destination commit.
 
 ### Fixed
 
