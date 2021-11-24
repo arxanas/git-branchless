@@ -687,6 +687,7 @@ fn undo_events(
     }
     .to_string();
 
+    let mut result = 0;
     for event in inverse_events.into_iter() {
         match event {
             Event::RefUpdateEvent {
@@ -702,7 +703,7 @@ fn undo_events(
                 // this case, rather than just update `HEAD` (and be left with a
                 // dirty working copy). The `Git` command will update the event
                 // log appropriately, as it will invoke our hooks.
-                git_run_info
+                let exit_code = git_run_info
                     .run(
                         effects,
                         Some(event_tx_id),
@@ -713,6 +714,9 @@ fn undo_events(
                         ],
                     )
                     .wrap_err("Updating to previous HEAD location")?;
+                if exit_code != 0 {
+                    result = exit_code;
+                }
             }
             Event::RefUpdateEvent {
                 timestamp: _,
@@ -776,7 +780,7 @@ fn undo_events(
         "Applied {}.",
         num_inverse_events
     )?;
-    Ok(0)
+    Ok(result)
 }
 
 /// Restore the repository to a previous state interactively.
