@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use console::style;
 use eyre::Context;
 use path_slash::PathExt;
+use regex::Regex;
 use tracing::{instrument, warn};
 
 use crate::core::config::{get_core_hooks_path, get_default_branch_name};
@@ -440,42 +441,88 @@ const INCLUDE_PATH_REGEX: &str = r"^branchless/";
 /// to uninstall our settings (or for the user to override our settings) without
 /// needing to modify the user's configuration file.
 #[instrument]
-fn create_isolated_config(
-    effects: &Effects,
-    repo: &Repo,
-    mut parent_config: Config,
-) -> eyre::Result<Config> {
-    let config_path = repo.get_config_path();
-    let config_dir = config_path
-        .parent()
-        .ok_or_else(|| eyre::eyre!("Could not get parent config directory"))?;
-    std::fs::create_dir_all(config_dir).wrap_err("Creating config path parent")?;
+fn create_isolated_config(effects: &Effects, repo: Repo) -> eyre::Result<(Repo, Config)> {
+    let repo_path = repo.get_path().to_owned();
+    let config_path_relative: String;
+    {
+        let repo = repo;
+        let config_path = repo.get_config_path();
+        let config_dir = config_path
+            .parent()
+            .ok_or_else(|| eyre::eyre!("Could not get parent config directory"))?;
+        std::fs::create_dir_all(config_dir).wrap_err("Creating config path parent")?;
 
-    let config = Config::open(&config_path)?;
-    let config_path_relative = config_path
-        .strip_prefix(repo.get_path())
-        .wrap_err("Getting relative config path")?;
-    // Be careful when setting paths on Windows. Since the path would have a
-    // backslash, naively using it produces
-    //
-    //    Git error GenericError: invalid escape at config
-    //
-    // We need to convert it to forward-slashes for Git. See also
-    // https://stackoverflow.com/a/28520596.
-    let config_path_relative = config_path_relative.to_slash().ok_or_else(|| {
-        eyre::eyre!(
-            "Could not convert config path to UTF-8 string: {:?}",
-            &config_path_relative
-        )
-    })?;
-    parent_config.set_multivar("include.path", INCLUDE_PATH_REGEX, config_path_relative)?;
+        // Be careful when setting paths on Windows. Since the path would have a
+        // backslash, naively using it produces
+        //
+        //    Git error GenericError: invalid escape at config
+        //
+        // We need to convert it to forward-slashes for Git. See also
+        // https://stackoverflow.com/a/28520596.
+        config_path_relative = config_path
+            .strip_prefix(repo.get_path())
+            .wrap_err("Getting relative config path")?
+            .to_slash()
+            .ok_or_else(|| {
+                eyre::eyre!(
+                    "Could not convert config path to UTF-8 string: {:?}",
+                    &config_path // todo: this should be relative path
+                )
+            })?;
 
-    writeln!(
-        effects.get_output_stream(),
-        "Created config file at {}",
-        config_path.to_string_lossy()
-    )?;
-    Ok(config)
+        writeln!(
+            effects.get_output_stream(),
+            "Created config file at {}",
+            config_path.to_string_lossy()
+        )?;
+    }
+    let repo_config_path = repo_path.join("config");
+    let old_config = std::fs::read_to_string(&repo_config_path).unwrap_or("".to_owned());
+    let new_config = update_config_text(old_config, &config_path_relative);
+    std::fs::write(&repo_config_path, &new_config)?;
+
+    let repo = Repo::from_dir(&repo_path)?;
+    let config = Config::open(&repo.get_config_path())?;
+    Ok((repo, config))
+}
+
+fn section_string(contents: &str) -> String {
+    format!(
+        "# git-branchless section start\n\
+        {}\
+        # git-branchless section end\n",
+        contents
+    )
+}
+
+fn section_regex() -> Regex {
+    Regex::new(&format!("(?s){}", section_string("(.*?)")))
+        .expect("failed to compile section matching regex")
+}
+
+/// Pure function that modifies the config textually to add include paths for
+/// git-branchless-specific and other configuration.
+fn update_config_text(old_config: String, config_path_relative: &str) -> String {
+    // This solution doesn't work for config files read based on
+    // environment variables.
+    let git_branchless_section = section_string(&format!(
+        "[include]
+\tpath = \"{}\"
+\tpath = \"~/.gitconfig\"
+",
+        config_path_relative
+    ));
+    // Ensure that `git branchless init` is idempotent by using find+replace
+    // instead of indiscriminately adding a prefix.
+    let section_regex = section_regex();
+    let new_config = if section_regex.is_match(&old_config) {
+        section_regex
+            .replace(&old_config, &git_branchless_section)
+            .to_string()
+    } else {
+        format!("{}{}", &git_branchless_section, old_config)
+    };
+    new_config
 }
 
 /// Delete the configuration file created by `create_isolated_config` and remove
@@ -514,9 +561,8 @@ pub fn init(
     main_branch_name: Option<&str>,
 ) -> eyre::Result<()> {
     let mut in_ = BufReader::new(stdin());
-    let mut repo = Repo::from_current_dir()?;
-    let readonly_config = repo.get_readonly_config()?;
-    let mut config = create_isolated_config(effects, &repo, readonly_config.into_config())?;
+    let old_repo = Repo::from_current_dir()?;
+    let (mut repo, mut config) = create_isolated_config(effects, old_repo)?;
 
     set_configs(&mut in_, effects, &repo, &mut config, main_branch_name)?;
     install_hooks(effects, &repo)?;
@@ -549,7 +595,18 @@ pub fn uninstall(effects: &Effects) -> eyre::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{update_between_lines, ALL_ALIASES, UPDATE_MARKER_END, UPDATE_MARKER_START};
+    use std::collections::HashMap;
+
+    use crate::{
+        core::{effects::Effects, formatting::Glyphs},
+        git::{GitRunInfo, Repo},
+        testing::{get_path_to_git, make_git, Git, GitRunOptions},
+    };
+
+    use super::{
+        create_isolated_config, update_between_lines, update_config_text, ALL_ALIASES,
+        UPDATE_MARKER_END, UPDATE_MARKER_START,
+    };
 
     #[test]
     fn test_update_between_lines() {
@@ -609,5 +666,70 @@ contents 3
                 .assert()
                 .success();
         }
+    }
+
+    #[test]
+    fn test_config_text_update() {
+        let original = "\
+[blahblah]
+\tkey = \"value\"
+";
+        let expect = "\
+# git-branchless section start
+[include]
+\tpath = \"branchless/config\"
+\tpath = \"~/.gitconfig\"
+# git-branchless section end
+[blahblah]
+\tkey = \"value\"
+";
+        assert_eq!(
+            update_config_text(original.to_owned(), "branchless/config"),
+            expect
+        );
+        // Check for idempotence.
+        assert_eq!(
+            update_config_text(expect.to_owned(), "branchless/config"),
+            expect
+        );
+    }
+
+    #[test]
+    fn test_alias_shadowing() -> eyre::Result<()> {
+        let git = make_git()?;
+        git.init_repo()?;
+
+        let fake_home_path = git.repo_path.join("fakehome");
+        std::fs::create_dir(&fake_home_path)?;
+        std::fs::write(
+            &fake_home_path.join(".gitconfig"),
+            "[alias]\n\tco = checkout\n",
+        )?;
+
+        let repo = Repo::from_dir(&git.repo_path)?;
+        let _ = create_isolated_config(&Effects::new_suppress_for_test(Glyphs::text()), repo)?;
+
+        let new_git = Git::new(
+            git.repo_path.clone(),
+            GitRunInfo {
+                path_to_git: get_path_to_git()?,
+                working_directory: git.repo_path.clone(),
+                env: HashMap::new(),
+            },
+        );
+        let mut env = HashMap::new();
+        env.insert(
+            "HOME".to_owned(),
+            fake_home_path.to_string_lossy().to_string(),
+        );
+        let git_run_options = GitRunOptions {
+            env,
+            ..GitRunOptions::default()
+        };
+        let (output, _) =
+            new_git.run_with_options(&["config", "--show-origin", "alias.co"], &git_run_options)?;
+        Ok(assert!(output.contains(
+            fake_home_path.join(".gitconfig").to_str().unwrap()
+        )))
     }
 }
