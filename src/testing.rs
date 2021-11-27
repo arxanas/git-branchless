@@ -14,7 +14,6 @@ use std::process::{Command, Stdio};
 use crate::git::{GitRunInfo, GitVersion, NonZeroOid, Repo};
 use crate::util::get_sh;
 
-use color_eyre::Help;
 use eyre::{eyre, Context};
 use itertools::Itertools;
 use lazy_static::lazy_static;
@@ -499,10 +498,7 @@ impl Git {
 #[instrument]
 pub fn get_path_to_git() -> eyre::Result<PathBuf> {
     let path_to_git = std::env::var_os("PATH_TO_GIT")
-        .ok_or_else(|| eyre!("Could not get path to Git executable"))
-        .suggestion(
-            "No path to git set. Try running as: PATH_TO_GIT=$(which git) cargo test ...",
-        )?;
+        .ok_or_else(|| eyre!("No path to Git executable was set. Try running as: PATH_TO_GIT=$(which git) cargo test ..."))?;
     let path_to_git = PathBuf::from(&path_to_git);
     Ok(path_to_git)
 }
