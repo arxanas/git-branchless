@@ -16,6 +16,7 @@
 - [Installation](#installation)
 - [Status](#status)
 - [Related tools](https://github.com/arxanas/git-branchless/wiki/Related-tools)
+- [Contributing](#contributing)
 
 ## Demos
 ### Repair
@@ -128,3 +129,13 @@ To be notified about new versions, select Watch » Custom » Releases in Githu
 ## Related tools
 
 There's a lot of promising tooling developing in this space. See [Related tools](https://github.com/arxanas/git-branchless/wiki/Related-tools) for more information.
+
+## Contributing
+
+Thanks for your interest in contributing! If you'd like, I'm happy to set up a call to [help you onboard](https://github.com/arxanas/git-branchless/wiki/Onboarding).
+
+For code contributions, check out the [Runbook](https://github.com/arxanas/git-branchless/wiki/Runbook) to understand how to set up a development workflow, and the [Coding guidelines](https://github.com/arxanas/git-branchless/wiki/Coding). You may also want to read the [Architecture](https://github.com/arxanas/git-branchless/wiki/Architecture) documentation.
+
+For contributing documentation, see the [Wiki style guide](https://github.com/arxanas/git-branchless/wiki/Wiki-style-guide).
+
+Contributors should abide by the [Code of Conduct](https://github.com/arxanas/git-branchless/blob/master/CODE_OF_CONDUCT.md).
