@@ -447,3 +447,40 @@ fn test_hide_branchless_refs_from_git_log() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[cfg(unix)]
+#[test]
+
+fn test_init_core_hooks_path_warning() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    let hooks_path = git.get_repo()?.get_path().join("my-hooks");
+    std::fs::create_dir_all(&hooks_path)?;
+    git.run(&["config", "core.hooksPath", "my-hooks"])?;
+
+    {
+        let (stdout, _stderr) = git.run(&["branchless", "init"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        Created config file at <repo-path>/.git/branchless/config
+        Auto-detected your main branch as: master
+        If this is incorrect, run: git config branchless.core.mainBranch <branch>
+        Installing hook: post-commit
+        Installing hook: post-merge
+        Installing hook: post-rewrite
+        Installing hook: post-checkout
+        Installing hook: pre-auto-gc
+        Installing hook: reference-transaction
+        Warning: the configuration value core.hooksPath was set to: my-hooks
+        The Git hooks above may have been installed to an unexpected location.
+        Successfully installed git-branchless.
+        To uninstall, run: git branchless init --uninstall
+        "###);
+    }
+
+    Ok(())
+}
