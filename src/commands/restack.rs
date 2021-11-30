@@ -236,7 +236,6 @@ pub fn restack(
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
     let event_tx_id = event_log_db.make_transaction_id(now, "restack")?;
-    let head_oid = repo.get_head_info()?.oid;
 
     let references_snapshot = repo.get_references_snapshot()?;
     let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
@@ -309,15 +308,6 @@ pub fn restack(
     if result != 0 {
         return Ok(result);
     }
-
-    let result = match head_oid {
-        Some(head_oid) => git_run_info.run(
-            effects,
-            Some(event_tx_id),
-            &["checkout", &head_oid.to_string()],
-        )?,
-        None => result,
-    };
 
     smartlog(effects, git_run_info, &Default::default())?;
     Ok(result)
