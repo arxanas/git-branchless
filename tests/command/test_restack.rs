@@ -62,7 +62,6 @@ fn test_restack_amended_commit() -> eyre::Result<()> {
         branchless: running command: <git-executable> rebase --continue
         Finished restacking commits.
         No abandoned branches to restack.
-        branchless: running command: <git-executable> checkout 024c35ce32dae6b12e981963465ee8a62b7eff9b
         O f777ecc9 (master) create initial.txt
         |
         @ 024c35ce amend test1.txt
@@ -104,7 +103,6 @@ fn test_restack_consecutive_rewrites() -> eyre::Result<()> {
         branchless: running command: <git-executable> rebase --continue
         Finished restacking commits.
         No abandoned branches to restack.
-        branchless: running command: <git-executable> checkout 662b451fb905b92404787e024af717ced49e3045
         O f777ecc9 (master) create initial.txt
         |
         @ 662b451f amend test1.txt v2
@@ -136,7 +134,6 @@ fn test_move_abandoned_branch() -> eyre::Result<()> {
         No abandoned commits to restack.
         branchless: processing 1 update: branch master
         Finished restacking branches.
-        branchless: running command: <git-executable> checkout 662b451fb905b92404787e024af717ced49e3045
         :
         @ 662b451f (master) amend test1.txt v2
         "###);
@@ -180,7 +177,6 @@ fn test_amended_initial_commit() -> eyre::Result<()> {
         branchless: running command: <git-executable> rebase --continue
         Finished restacking commits.
         No abandoned branches to restack.
-        branchless: running command: <git-executable> checkout 9a9f929a0d4f052ff5d58bedd97b2f761120f8ed
         @ 9a9f929a new initial commit
         |
         O 6d85943b (master) create test1.txt
@@ -215,7 +211,6 @@ fn test_restack_amended_master() -> eyre::Result<()> {
         branchless: running command: <git-executable> rebase --continue
         Finished restacking commits.
         No abandoned branches to restack.
-        branchless: running command: <git-executable> checkout ae94dc2a748bc0965c88fcf3edac2e30074ff7e2
         :
         @ ae94dc2a amended test1
         |
@@ -312,7 +307,6 @@ fn test_restack_multiple_amended() -> eyre::Result<()> {
         branchless: running command: <git-executable> rebase --continue
         Finished restacking commits.
         No abandoned branches to restack.
-        branchless: running command: <git-executable> checkout 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
         O f777ecc9 (master) create initial.txt
         |
         @ 62fc20d2 create test1.txt
@@ -398,9 +392,6 @@ fn test_restack_single_of_many_commits() -> eyre::Result<()> {
         |
         o 848121cb create test5.txt
         Successfully rebased and updated detached HEAD.
-        branchless: processing 1 update: ref HEAD
-        HEAD is now at 3bd716d updated test4
-        branchless: processing checkout
         "###);
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> diff --quiet
@@ -408,7 +399,6 @@ fn test_restack_single_of_many_commits() -> eyre::Result<()> {
         branchless: running command: <git-executable> rebase --continue
         Finished restacking commits.
         No abandoned branches to restack.
-        branchless: running command: <git-executable> checkout 3bd716d57489779ab1daf446f80e66e90b56ead7
         :
         O 62fc20d2 (master) create test1.txt
         |\
@@ -475,11 +465,44 @@ fn test_restack_unobserved_commit() -> eyre::Result<()> {
         insta::assert_snapshot!(stdout, @r###"
         No abandoned commits to restack.
         No abandoned branches to restack.
-        branchless: running command: <git-executable> checkout f4229de371f9e2a77cd9401a1851dbb14d6f69ab
         :
         O 62fc20d2 (master) create test1.txt
         |
         @ f4229de3 (foo) Updated test2
+        "###);
+    }
+
+    Ok(())
+}
+
+/// Regression test for https://github.com/arxanas/git-branchless/issues/236
+#[test]
+fn test_restack_checked_out_branch() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+    git.run(&["branch", "foo"])?;
+    git.run(&["checkout", "HEAD^"])?;
+    git.run(&["commit", "--amend", "-m", "test1 amended"])?;
+    git.run(&["checkout", "foo"])?;
+
+    {
+        let (stdout, _stderr) = git.run(&["restack"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        Attempting rebase in-memory...
+        [1/1] Committed as: 59e75818 create test2.txt
+        branchless: processing 2 updates: branch foo, branch master
+        branchless: processing 1 rewritten commit
+        branchless: running command: <git-executable> checkout foo
+        :
+        @ 59e75818 (foo, master) create test2.txt
+        In-memory rebase succeeded.
+        Finished restacking commits.
+        No abandoned branches to restack.
+        :
+        @ 59e75818 (foo, master) create test2.txt
         "###);
     }
 

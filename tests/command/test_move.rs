@@ -1039,20 +1039,19 @@ fn test_move_branches_after_move() -> eyre::Result<()> {
             // There should be no branches left to restack.
             let (stdout, _stderr) = git.run(&["restack"])?;
             insta::assert_snapshot!(stdout, @r###"
-        No abandoned commits to restack.
-        No abandoned branches to restack.
-        branchless: running command: <git-executable> checkout 566e4341a4a9a930fc2bf7ccdfa168e9f266c34a
-        :
-        O 62fc20d2 create test1.txt
-        |\
-        | o 4838e49b (foo) create test3.txt
-        | |
-        | o a2482074 create test4.txt
-        | |
-        | @ 566e4341 (bar) create test5.txt
-        |
-        O 96d1c37a (master) create test2.txt
-        "###);
+            No abandoned commits to restack.
+            No abandoned branches to restack.
+            :
+            O 62fc20d2 create test1.txt
+            |\
+            | o 4838e49b (foo) create test3.txt
+            | |
+            | o a2482074 create test4.txt
+            | |
+            | @ 566e4341 (bar) create test5.txt
+            |
+            O 96d1c37a (master) create test2.txt
+            "###);
         }
     }
 
@@ -1114,20 +1113,19 @@ fn test_move_branches_after_move() -> eyre::Result<()> {
             // There should be no branches left to restack.
             let (stdout, _stderr) = git.run(&["restack"])?;
             insta::assert_snapshot!(stdout, @r###"
-        No abandoned commits to restack.
-        No abandoned branches to restack.
-        branchless: running command: <git-executable> checkout 566e4341a4a9a930fc2bf7ccdfa168e9f266c34a
-        :
-        O 62fc20d2 create test1.txt
-        |\
-        | o 4838e49b (foo) create test3.txt
-        | |
-        | o a2482074 create test4.txt
-        | |
-        | @ 566e4341 (bar) create test5.txt
-        |
-        O 96d1c37a (master) create test2.txt
-        "###);
+            No abandoned commits to restack.
+            No abandoned branches to restack.
+            :
+            O 62fc20d2 create test1.txt
+            |\
+            | o 4838e49b (foo) create test3.txt
+            | |
+            | o a2482074 create test4.txt
+            | |
+            | @ 566e4341 (bar) create test5.txt
+            |
+            O 96d1c37a (master) create test2.txt
+            "###);
         }
     }
 
