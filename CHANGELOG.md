@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New `git branchless amend` command (aliased to `git amend`) that amends the current HEAD commit, and automatically performs a restack.
 - `git next` and `git prev` accept `-m`/`--merge` to merge unstaged changes when checking out to the destination commit.
 - `git next` and `git prev` accept `-f`/`--force` to discard unstaged changes when checking out to the destination commit.
+- `git branchless init` warns if the configuration value `core.hooksPath` is set.
 
 ### Fixed
 

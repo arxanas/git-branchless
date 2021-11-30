@@ -204,6 +204,21 @@ fn install_hooks(effects: &Effects, repo: &Repo) -> eyre::Result<()> {
         )?;
         install_hook(repo, hook_type, hook_script)?;
     }
+
+    let hooks_path: Option<PathBuf> = repo.get_readonly_config()?.get("core.hooksPath")?;
+    if let Some(hooks_path) = hooks_path {
+        writeln!(
+            effects.get_output_stream(),
+            "{}: the configuration value core.hooksPath was set to: {}",
+            style("Warning").yellow().bold(),
+            hooks_path.to_string_lossy()
+        )?;
+        writeln!(
+            effects.get_output_stream(),
+            "The Git hooks above may have been installed to an unexpected location."
+        )?;
+    }
+
     Ok(())
 }
 
