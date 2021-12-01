@@ -1,4 +1,6 @@
-# Branchless workflow for Git
+<p align="center"><img src="https://user-images.githubusercontent.com/454057/144287756-8570ba1b-b9f1-46de-9236-ca17db246856.png" alt="git-branchless logo" /></p>
+
+<h1 align="center">Branchless workflow for Git</h1>
 
 [![Linux](https://github.com/arxanas/git-branchless/actions/workflows/linux.yml/badge.svg)](https://github.com/arxanas/git-branchless/actions/workflows/linux.yml)
 [![Windows](https://github.com/arxanas/git-branchless/actions/workflows/windows.yml/badge.svg)](https://github.com/arxanas/git-branchless/actions/workflows/windows.yml)
