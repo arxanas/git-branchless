@@ -6,6 +6,8 @@
 [![Nix on Linux](https://github.com/arxanas/git-branchless/actions/workflows/nix-linux.yml/badge.svg)](https://github.com/arxanas/git-branchless/actions/workflows/nix-linux.yml)
 [![crates.io](https://img.shields.io/crates/v/git-branchless)](https://crates.io/crates/git-branchless)
 
+![GitHub Discussions](https://img.shields.io/github/discussions/arxanas/git-branchless) ![Discord](https://img.shields.io/discord/915309546984050709)
+
 `git-branchless` is a suite of tools to help you **visualize**, **navigate**, **manipulate**, and **repair** your commit graph. It's based off of the branchless Mercurial workflows at large companies such as Google and Facebook.
 
 - [Demos](#demos)
