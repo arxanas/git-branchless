@@ -821,7 +821,7 @@ fn test_navigation_force() -> eyre::Result<()> {
 }
 
 #[test]
-fn test_navigation_checkout_create_branch() -> eyre::Result<()> {
+fn test_navigation_checkout_flags() -> eyre::Result<()> {
     let git = make_git()?;
     git.init_repo()?;
 
@@ -829,14 +829,33 @@ fn test_navigation_checkout_create_branch() -> eyre::Result<()> {
     git.commit_file("test2", 2)?;
 
     {
-        let (stdout, _stderr) = git.run(&["branchless", "checkout", "-b", "foo", "HEAD^"])?;
-        insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> checkout HEAD^ -b foo
-        :
-        @ 62fc20d2 (foo) create test1.txt
-        |
-        O 96d1c37a (master) create test2.txt
-        "###);
+        let git = git.duplicate_repo()?;
+        {
+            let (stdout, _stderr) = git.run(&["branchless", "checkout", "-b", "foo", "HEAD^"])?;
+            insta::assert_snapshot!(stdout, @r###"
+            branchless: running command: <git-executable> checkout HEAD^ -b foo
+            :
+            @ 62fc20d2 (foo) create test1.txt
+            |
+            O 96d1c37a (master) create test2.txt
+            "###);
+        }
+    }
+
+    {
+        let git = git.duplicate_repo()?;
+        {
+            git.commit_file_with_contents("test1", 3, "new contents")?;
+            git.write_file("test1", "conflicting\n")?;
+            let (stdout, _stderr) = git.run(&["branchless", "checkout", "-f", "HEAD~2"])?;
+            insta::assert_snapshot!(stdout, @r###"
+            branchless: running command: <git-executable> checkout HEAD~2 -f
+            :
+            @ 62fc20d2 create test1.txt
+            :
+            O 5b738c1c (master) create test1.txt
+            "###);
+        }
     }
 
     {

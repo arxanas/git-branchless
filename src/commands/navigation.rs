@@ -512,7 +512,7 @@ pub fn checkout(
     let CheckoutOptions {
         interactive: _,
         branch_name,
-        force: _,
+        force,
         merge: _,
         target,
     } = checkout_options;
@@ -560,6 +560,9 @@ pub fn checkout(
         if let Some(branch_name) = branch_name {
             args.push("-b");
             args.push(branch_name);
+        }
+        if *force {
+            args.push("-f");
         }
         args
     };
