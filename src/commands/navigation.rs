@@ -513,7 +513,7 @@ pub fn checkout(
         interactive: _,
         branch_name,
         force,
-        merge: _,
+        merge,
         target,
     } = checkout_options;
 
@@ -563,6 +563,9 @@ pub fn checkout(
         }
         if *force {
             args.push("-f");
+        }
+        if *merge {
+            args.push("-m");
         }
         args
     };

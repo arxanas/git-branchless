@@ -840,6 +840,17 @@ fn test_navigation_checkout_flags() -> eyre::Result<()> {
             O 96d1c37a (master) create test2.txt
             "###);
         }
+
+        {
+            let (stdout, _stderr) = git.run(&["branchless", "checkout", "-b", "bar"])?;
+            insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> checkout -b bar
+        :
+        @ 62fc20d2 (bar, foo) create test1.txt
+        |
+        O 96d1c37a (master) create test2.txt
+        "###);
+        }
     }
 
     {
@@ -859,13 +870,16 @@ fn test_navigation_checkout_flags() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["branchless", "checkout", "-b", "bar"])?;
+        git.commit_file_with_contents("test1", 3, "new contents")?;
+        git.write_file("test1", "conflicting\n")?;
+        let (stdout, _stderr) = git.run(&["branchless", "checkout", "-m", "HEAD~2"])?;
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> checkout -b bar
+        branchless: running command: <git-executable> checkout HEAD~2 -m
+        M	test1.txt
         :
-        @ 62fc20d2 (bar, foo) create test1.txt
-        |
-        O 96d1c37a (master) create test2.txt
+        @ 62fc20d2 create test1.txt
+        :
+        O 5b738c1c (master) create test1.txt
         "###);
     }
 
