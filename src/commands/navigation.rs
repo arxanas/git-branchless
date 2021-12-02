@@ -22,7 +22,7 @@ use crate::core::node_descriptors::{
     DifferentialRevisionDescriptor, NodeDescriptor, RelativeTimeDescriptor,
 };
 use crate::git::{check_out_commit, GitRunInfo, NonZeroOid, Repo};
-use crate::opts::TraverseCommitsOptions;
+use crate::opts::{CheckoutOptions, TraverseCommitsOptions};
 use crate::tui::prompt_select_commit;
 
 /// The command being invoked, indicating which direction to traverse commits.
@@ -444,8 +444,16 @@ pub fn traverse_commits(
 pub fn checkout(
     effects: &Effects,
     git_run_info: &GitRunInfo,
-    initial_query: &str,
+    checkout_options: &CheckoutOptions,
 ) -> eyre::Result<isize> {
+    let CheckoutOptions {
+        interactive: _,
+        branch_name: _,
+        force: _,
+        merge: _,
+        target,
+    } = checkout_options;
+
     let repo = Repo::from_current_dir()?;
     let references_snapshot = repo.get_references_snapshot()?;
     let conn = repo.get_db_conn()?;
@@ -462,6 +470,7 @@ pub fn checkout(
 
     let graph = make_smartlog_graph(effects, &repo, &dag, &event_replayer, event_cursor, true)?;
 
+    let initial_query = target.as_deref().unwrap_or_default();
     match prompt_select_commit(
         None,
         initial_query,
