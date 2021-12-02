@@ -87,6 +87,38 @@ pub struct TraverseCommitsOptions {
     pub force: bool,
 }
 
+/// Options for checking out a commit.
+#[derive(Args, Debug)]
+pub struct CheckoutOptions {
+    /// Interactively select a commit to check out.
+    #[clap(short = 'i', long = "interactive")]
+    pub interactive: bool,
+
+    /// When checking out the target commit, also create a branch with the
+    /// provided name pointing to that commit.
+    #[clap(short = 'b', long = "branch")]
+    pub branch_name: Option<String>,
+
+    /// Forcibly switch commits, discarding any working copy changes if
+    /// necessary.
+    #[clap(short = 'f', long = "force")]
+    pub force: bool,
+
+    /// If the current working copy changes do not apply cleanly to the
+    /// target commit, start merge conflict resolution instead of aborting.
+    #[clap(short = 'm', long = "merge", conflicts_with("force"))]
+    pub merge: bool,
+
+    /// The commit or branch to check out.
+    ///
+    /// If this is not provided, then interactive commit selection starts as
+    /// if `--interactive` were passed.
+    ///
+    /// If this is provided and the `--interactive` flag is passed, this
+    /// text is used to pre-fill the interactive commit selector.
+    pub target: Option<String>,
+}
+
 /// FIXME: write man-page text
 #[derive(Parser)]
 pub enum Command {
@@ -97,11 +129,11 @@ pub enum Command {
         move_options: MoveOptions,
     },
 
-    /// Interactively pick a commit to checkout.
+    /// Check out a given commit.
     Checkout {
-        /// A query to pre-fill the search text with.
-        #[clap(default_value = "")]
-        initial_query: String,
+        /// Options for checking out a commit.
+        #[clap(flatten)]
+        checkout_options: CheckoutOptions,
     },
 
     /// Run internal garbage collection.
