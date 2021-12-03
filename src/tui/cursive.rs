@@ -118,7 +118,6 @@ pub mod testing {
         event_index: usize,
         just_emitted_event: bool,
         screen: RefCell<Screen>,
-        screenshots: Vec<Screen>,
     }
 
     impl<'screenshot> CursiveTestingBackend {
@@ -129,7 +128,6 @@ pub mod testing {
                 event_index: 0,
                 just_emitted_event: false,
                 screen: RefCell::new(vec![vec![' '; 120]; 24]),
-                screenshots: Vec::new(),
             })
         }
     }
