@@ -60,8 +60,9 @@ echo 'branchless: This is a bug. Please report it.'
 ];
 
 const ALL_ALIASES: &[(&str, &str)] = &[
-    ("amend", "amend"),
-    ("co", "checkout"),
+    // Re-enable these aliases when they no longer clobber user aliases:
+    // ("amend", "amend"),
+    // ("co", "checkout"),
     ("hide", "hide"),
     ("move", "move"),
     ("next", "next"),
