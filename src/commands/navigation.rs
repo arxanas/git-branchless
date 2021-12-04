@@ -448,14 +448,15 @@ fn get_initial_query(checkout_options: &CheckoutOptions) -> Option<&str> {
             branch_name: _,
             force: _,
             merge: _,
-        }
-        | CheckoutOptions {
+        } => Some(target),
+
+        CheckoutOptions {
             interactive: false,
-            target: Some(target),
+            target: Some(_),
             branch_name: None,
             force: false,
             merge: false,
-        } => Some(target),
+        } => None,
 
         CheckoutOptions {
             interactive: true,

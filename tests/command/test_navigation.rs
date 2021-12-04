@@ -844,12 +844,12 @@ fn test_navigation_checkout_flags() -> eyre::Result<()> {
         {
             let (stdout, _stderr) = git.run(&["branchless", "checkout", "-b", "bar"])?;
             insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> checkout -b bar
-        :
-        @ 62fc20d2 (bar, foo) create test1.txt
-        |
-        O 96d1c37a (master) create test2.txt
-        "###);
+            branchless: running command: <git-executable> checkout -b bar
+            :
+            @ 62fc20d2 (bar, foo) create test1.txt
+            |
+            O 96d1c37a (master) create test2.txt
+            "###);
         }
     }
 
@@ -880,6 +880,22 @@ fn test_navigation_checkout_flags() -> eyre::Result<()> {
         @ 62fc20d2 create test1.txt
         :
         O 5b738c1c (master) create test1.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_navigation_checkout_target_only() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+
+    {
+        let (stdout, _stderr) = git.run(&["branchless", "checkout", "master"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> checkout master
+        @ f777ecc9 (master) create initial.txt
         "###);
     }
 
