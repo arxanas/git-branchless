@@ -687,7 +687,7 @@ fn test_checkout_pty_initial_query() -> eyre::Result<()> {
 
     run_in_pty(
         &git,
-        &["branchless", "checkout", "test1"],
+        &["branchless", "checkout", "-i", "test1"],
         &[
             PtyAction::WaitUntilContains("> test1"),
             PtyAction::Write(CARRIAGE_RETURN),
@@ -815,6 +815,39 @@ fn test_navigation_force() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["diff"])?;
         insta::assert_snapshot!(stdout, @"");
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_navigation_checkout_create_branch() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+
+    {
+        let (stdout, _stderr) = git.run(&["branchless", "checkout", "-b", "foo", "HEAD^"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> checkout HEAD^ -b foo
+        :
+        @ 62fc20d2 (foo) create test1.txt
+        |
+        O 96d1c37a (master) create test2.txt
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["branchless", "checkout", "-b", "bar"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> checkout -b bar
+        :
+        @ 62fc20d2 (bar, foo) create test1.txt
+        |
+        O 96d1c37a (master) create test2.txt
+        "###);
     }
 
     Ok(())

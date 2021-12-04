@@ -264,7 +264,7 @@ pub fn check_out_updated_head(
         effects,
         git_run_info,
         Some(event_tx_id),
-        &checkout_target,
+        Some(&checkout_target),
         &[] as &[&OsStr],
     )?;
     Ok(result)
