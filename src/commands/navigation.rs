@@ -2,7 +2,7 @@
 
 use std::collections::HashSet;
 use std::convert::TryInto;
-use std::ffi::{OsStr, OsString};
+use std::ffi::OsString;
 use std::fmt::Write;
 use std::time::SystemTime;
 
@@ -435,9 +435,72 @@ pub fn traverse_commits(
         effects,
         git_run_info,
         None,
-        &current_oid,
+        Some(&current_oid),
         additional_args.as_slice(),
     )
+}
+
+fn get_initial_query(checkout_options: &CheckoutOptions) -> Option<&str> {
+    match checkout_options {
+        CheckoutOptions {
+            interactive: true,
+            target: Some(target),
+            branch_name: _,
+            force: _,
+            merge: _,
+        }
+        | CheckoutOptions {
+            interactive: false,
+            target: Some(target),
+            branch_name: None,
+            force: false,
+            merge: false,
+        } => Some(target),
+
+        CheckoutOptions {
+            interactive: true,
+            target: None,
+            branch_name: _,
+            force: _,
+            merge: _,
+        }
+        | CheckoutOptions {
+            interactive: false,
+            target: None,
+            branch_name: None,
+            force: false,
+            merge: false,
+        } => Some(""),
+
+        CheckoutOptions {
+            interactive: false,
+            target: Some(_),
+            branch_name: _,
+            force: _,
+            merge: _,
+        }
+        | CheckoutOptions {
+            interactive: false,
+            target: _,
+            branch_name: Some(_),
+            force: _,
+            merge: _,
+        }
+        | CheckoutOptions {
+            interactive: false,
+            target: _,
+            branch_name: _,
+            force: true,
+            merge: _,
+        }
+        | CheckoutOptions {
+            interactive: false,
+            target: _,
+            branch_name: _,
+            force: _,
+            merge: true,
+        } => None,
+    }
 }
 
 /// Interactively checkout a commit from the smartlog.
@@ -448,7 +511,7 @@ pub fn checkout(
 ) -> eyre::Result<isize> {
     let CheckoutOptions {
         interactive: _,
-        branch_name: _,
+        branch_name,
         force: _,
         merge: _,
         target,
@@ -470,26 +533,43 @@ pub fn checkout(
 
     let graph = make_smartlog_graph(effects, &repo, &dag, &event_replayer, event_cursor, true)?;
 
-    let initial_query = target.as_deref().unwrap_or_default();
-    match prompt_select_commit(
+    let initial_query = get_initial_query(checkout_options);
+    let target = match initial_query {
+        None => target.clone(),
+        Some(initial_query) => {
+            match prompt_select_commit(
+                None,
+                initial_query,
+                graph.get_commits(),
+                &mut [
+                    &mut CommitOidDescriptor::new(true)?,
+                    &mut RelativeTimeDescriptor::new(&repo, SystemTime::now())?,
+                    &mut BranchesDescriptor::new(&repo, &references_snapshot)?,
+                    &mut DifferentialRevisionDescriptor::new(&repo)?,
+                    &mut CommitMessageDescriptor::new()?,
+                ],
+            )? {
+                Some(oid) => Some(oid.to_string()),
+                None => return Ok(1),
+            }
+        }
+    };
+
+    let additional_args = {
+        let mut args = Vec::new();
+        if let Some(branch_name) = branch_name {
+            args.push("-b");
+            args.push(branch_name);
+        }
+        args
+    };
+
+    let exit_code = check_out_commit(
+        effects,
+        git_run_info,
         None,
-        initial_query,
-        graph.get_commits(),
-        &mut [
-            &mut CommitOidDescriptor::new(true)?,
-            &mut RelativeTimeDescriptor::new(&repo, SystemTime::now())?,
-            &mut BranchesDescriptor::new(&repo, &references_snapshot)?,
-            &mut DifferentialRevisionDescriptor::new(&repo)?,
-            &mut CommitMessageDescriptor::new()?,
-        ],
-    )? {
-        Some(oid) => check_out_commit(
-            effects,
-            git_run_info,
-            None,
-            &oid.to_string(),
-            &[] as &[&OsStr],
-        ),
-        None => Ok(1),
-    }
+        target.as_ref(),
+        additional_args,
+    )?;
+    Ok(exit_code)
 }

@@ -707,7 +707,7 @@ fn undo_events(
                     effects,
                     git_run_info,
                     Some(event_tx_id),
-                    target_oid.as_os_str(),
+                    Some(target_oid.as_os_str()),
                     &["--detach"],
                 )
                 .wrap_err("Updating to previous HEAD location")?;
