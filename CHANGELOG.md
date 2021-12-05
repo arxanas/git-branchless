@@ -5,18 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.3.8] - 2021-12-04
 
 ### Added
 
 - New `git branchless checkout` command, which enables you to interactively pick a commit to checkout from the commits tracked in the smartlog.
-  - This command is aliased to `git co`.
 - `git next` accepts an `--interactive` flag which, if set, prompts which commit to advance to in ambiguous circumstances. This can be enabled by default with the `branchless.next.interactive` config setting.
 - References created for garbage collection purposes no longer appear in `git log` by default.
 - References created for garbage collection purposes are no longer generated unless you've run `git branchless init` in the repository.
 - `git next` and `git prev` accept `-a`/`--all` to take you all the way to a head or root commit for your commit stack, respectively.
 - `git next` and `git prev` accept `-b`/`--branch` to take you to the next or previous branch for your commit stack, respectively.
-- New `git branchless amend` command (aliased to `git amend`) that amends the current HEAD commit, and automatically performs a restack.
+- New `git branchless amend` command that amends the current HEAD commit, and automatically performs a restack.
 - `git next` and `git prev` accept `-m`/`--merge` to merge unstaged changes when checking out to the destination commit.
 - `git next` and `git prev` accept `-f`/`--force` to discard unstaged changes when checking out to the destination commit.
 - `git branchless init` warns if the configuration value `core.hooksPath` is set.
