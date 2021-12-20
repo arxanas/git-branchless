@@ -388,7 +388,6 @@ fn generate_man_page(man1_dir: &Path, name: &str, command: &App) -> std::io::Res
         manual = manual.arg(Arg::new(&format!("[{}]", arg.get_name().to_uppercase())));
     }
 
-    // The below doesn't compile as of `clap` `v3.0.0-beta.5`.
     for flag in command.get_opts() {
         let opt = man::Opt::new(flag.get_name());
         let opt = match flag.get_short() {
@@ -399,7 +398,7 @@ fn generate_man_page(man1_dir: &Path, name: &str, command: &App) -> std::io::Res
             Some(long) => opt.long(long),
             None => opt,
         };
-        let opt = match flag.get_about() {
+        let opt = match flag.get_help() {
             Some(help) => opt.help(help),
             None => opt,
         };
