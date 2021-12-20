@@ -44,11 +44,11 @@ required-features = ["integration-test-bin"]
 test = true
 
 [dependencies]
-anyhow = "1.0.50"
+anyhow = "1.0.51"
 assert_cmd = "2.0.2"
 chashmap = "2.2.2"
 chrono = "0.4.19"
-clap = "3.0.0-beta.5"
+clap = { version = "3.0.0-rc.7", features = ["derive"]}
 color-eyre = "0.5.11"
 concolor-control = { version = "0.0.7", features = ["auto"] }
 console = "0.15.0"
@@ -58,17 +58,17 @@ cursive = { version = "0.17.0-alpha.0", default-features = false, features = [
 cursive_buffered_backend = "0.6.0-alpha.0"
 eden_dag = { package = "esl01-dag", version = "0.2.1" }
 eyre = "0.6.5"
-git2 = { version = "0.13.24", default-features = false }
+git2 = { version = "0.13.25", default-features = false }
 gitrevset = "0.2.0"
 indicatif = "0.17.0-beta.1"
-itertools = "0.10.1"
+itertools = "0.10.3"
 lazy_static = "1.4.0"
 man = "0.3.0"
-os_str_bytes = "5.0.0"
+os_str_bytes = "6.0.0"
 path-slash = "0.1.4"
 rayon = "1.5.1"
 regex = "1.5.4"
-rusqlite = { version = "0.26.1", features = ["bundled"] }
+rusqlite = { version = "0.26.3", features = ["bundled"] }
 tempfile = "3.2.0"
 textwrap = "0.14.2"
 tracing = "0.1.26"
@@ -80,11 +80,11 @@ tracing-subscriber = { version = "0.2.20", features = ["env-filter"] }
 skim = "0.9.4"
 
 [build-dependencies]
-clap = "3.0.0-beta.5"
+clap = "3.0.0-rc.7"
 man = "0.3.0"
 
 [dev-dependencies]
 criterion = { version = "0.3.5", features = ["html_reports"] }
 insta = "1.8.0"
-portable-pty = "0.6.0"
-vt100 = "0.12.0"
+portable-pty = "0.7.0"
+vt100 = "0.15.0"
