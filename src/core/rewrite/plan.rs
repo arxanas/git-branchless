@@ -1,8 +1,8 @@
-use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 use std::ops::Sub;
 use std::path::PathBuf;
+use std::sync::Mutex;
 
 use chashmap::CHashMap;
 use eden_dag::DagAlgorithm;
@@ -13,11 +13,9 @@ use tracing::{instrument, warn};
 use crate::core::dag::{commit_set_to_vec, CommitSet, Dag};
 use crate::core::effects::{Effects, OperationType};
 use crate::core::formatting::printable_styled_string;
+use crate::core::rewrite::{RepoPool, RepoResource};
+use crate::core::task::ResourcePool;
 use crate::git::{Commit, NonZeroOid, PatchId, Repo};
-
-thread_local! {
-    static REPO: RefCell<Option<Repo>> = Default::default();
-}
 
 #[derive(Debug)]
 pub enum OidOrLabel {
@@ -618,6 +616,12 @@ impl<'repo> RebasePlanBuilder<'repo> {
             return Ok(Err(err));
         }
 
+        let pool = ThreadPoolBuilder::new().build()?;
+        let repo_resource = RepoResource {
+            repo: Mutex::new(self.repo.try_clone()?),
+        };
+        let repo_pool = ResourcePool::new(repo_resource);
+
         let roots = self.find_roots(&state);
         let mut acc = Vec::new();
         let mut first_dest_oid = None;
@@ -634,7 +638,9 @@ impl<'repo> RebasePlanBuilder<'repo> {
             let upstream_patch_ids = if *detect_duplicate_commits_via_patch_id {
                 let (effects, _progress) =
                     effects.start_operation(OperationType::DetectDuplicateCommits);
-                self.get_upstream_patch_ids(&effects, &mut state, child_oid, parent_oid)?
+                self.get_upstream_patch_ids(
+                    &effects, &pool, &repo_pool, &mut state, child_oid, parent_oid,
+                )?
             } else {
                 Default::default()
             };
@@ -706,6 +712,8 @@ impl<'repo> RebasePlanBuilder<'repo> {
     fn get_upstream_patch_ids(
         &self,
         effects: &Effects,
+        pool: &ThreadPool,
+        repo_pool: &ResourcePool<RepoResource>,
         state: &mut BuildState,
         current_oid: NonZeroOid,
         dest_oid: NonZeroOid,
@@ -726,8 +734,6 @@ impl<'repo> RebasePlanBuilder<'repo> {
             Some(path) => path,
         };
 
-        let pool = self.make_pool(self.repo)?;
-
         let path = {
             let touched_commits = state
                 .constraints
@@ -737,7 +743,14 @@ impl<'repo> RebasePlanBuilder<'repo> {
                 .flatten_ok()
                 .try_collect()?;
 
-            self.filter_path_to_merge_base_commits(effects, state, &pool, path, touched_commits)?
+            self.filter_path_to_merge_base_commits(
+                effects,
+                state,
+                pool,
+                repo_pool,
+                path,
+                touched_commits,
+            )?
         };
 
         // FIXME: we may recalculate common patch IDs many times, should be
@@ -754,16 +767,13 @@ impl<'repo> RebasePlanBuilder<'repo> {
                 path_oids
                     .into_par_iter()
                     .map(|commit_oid| -> eyre::Result<Option<PatchId>> {
-                        REPO.with(|repo| {
-                            let repo = repo.borrow();
-                            let repo = repo.as_ref().expect("Could not get thread-local repo");
-                            let commit = match repo.find_commit(commit_oid)? {
-                                Some(commit) => commit,
-                                None => return Ok(None),
-                            };
-                            let result = repo.get_patch_id(&effects, &commit)?;
-                            Ok(result)
-                        })
+                        let repo = repo_pool.try_create()?;
+                        let commit = match repo.find_commit(commit_oid)? {
+                            Some(commit) => commit,
+                            None => return Ok(None),
+                        };
+                        let result = repo.get_patch_id(&effects, &commit)?;
+                        Ok(result)
                     })
                     .inspect(|_| progress.notify_progress_inc(1))
                     .filter_map(|result| result.transpose())
@@ -773,29 +783,12 @@ impl<'repo> RebasePlanBuilder<'repo> {
         Ok(result)
     }
 
-    #[instrument]
-    fn make_pool(&self, repo: &Repo) -> eyre::Result<ThreadPool> {
-        let repo_path = repo.get_path().to_owned();
-        let pool = ThreadPoolBuilder::new()
-            .start_handler(move |_index| {
-                REPO.with(|thread_repo| -> eyre::Result<()> {
-                    let mut thread_repo = thread_repo.borrow_mut();
-                    if thread_repo.is_none() {
-                        *thread_repo = Some(Repo::from_dir(&repo_path)?);
-                    }
-                    Ok(())
-                })
-                .expect("Could not clone repo for thread");
-            })
-            .build()?;
-        Ok(pool)
-    }
-
     fn filter_path_to_merge_base_commits(
         &self,
         effects: &Effects,
         state: &mut BuildState,
         pool: &ThreadPool,
+        repo_pool: &RepoPool,
         path: Vec<Commit<'repo>>,
         touched_commits: Vec<Commit>,
     ) -> eyre::Result<Vec<Commit<'repo>>> {
@@ -830,27 +823,22 @@ impl<'repo> RebasePlanBuilder<'repo> {
                             }
                         }
 
-                        REPO.with(|repo| {
-                            let repo = repo.borrow();
-                            let repo = repo.as_ref().expect("Could not get thread-local repo");
-
-                            let commit = match repo.find_commit(commit_oid)? {
-                                Some(commit) => commit,
-                                None => return Ok(None),
-                            };
-                            let upstream_touched_paths =
-                                repo.get_paths_touched_by_commit(&commit)?;
-                            let result = if Self::should_check_patch_id(
-                                &upstream_touched_paths,
-                                &local_touched_paths,
-                            ) {
-                                Some(commit_oid)
-                            } else {
-                                None
-                            };
-                            touched_paths_cache.insert(commit_oid, upstream_touched_paths);
-                            Ok(result)
-                        })
+                        let repo = repo_pool.try_create()?;
+                        let commit = match repo.find_commit(commit_oid)? {
+                            Some(commit) => commit,
+                            None => return Ok(None),
+                        };
+                        let upstream_touched_paths = repo.get_paths_touched_by_commit(&commit)?;
+                        let result = if Self::should_check_patch_id(
+                            &upstream_touched_paths,
+                            &local_touched_paths,
+                        ) {
+                            Some(commit_oid)
+                        } else {
+                            None
+                        };
+                        touched_paths_cache.insert(commit_oid, upstream_touched_paths);
+                        Ok(result)
                     })
                     .inspect(|_| progress.notify_progress_inc(1))
                     .filter_map(|x| x.transpose())

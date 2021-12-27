@@ -7,3 +7,4 @@ pub mod eventlog;
 pub mod formatting;
 pub mod node_descriptors;
 pub mod rewrite;
+pub mod task;
