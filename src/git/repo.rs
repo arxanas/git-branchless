@@ -280,7 +280,7 @@ impl Repo {
     /// In particular, this directory is guaranteed to be on the same filesystem
     /// as the Git repository itself, so you can move files between them
     /// atomically. See
-    /// https://github.com/arxanas/git-branchless/discussions/120
+    /// <https://github.com/arxanas/git-branchless/discussions/120>.
     #[instrument]
     pub fn get_tempfile_dir(&self) -> PathBuf {
         self.get_path().join("branchless").join("tmp")
@@ -1748,7 +1748,7 @@ impl<'repo> Branch<'repo> {
 }
 
 /// A Git file status indicator.
-/// See https://git-scm.com/docs/git-status#_short_format
+/// See <https://git-scm.com/docs/git-status#_short_format>.
 #[allow(missing_docs)]
 #[derive(Debug, PartialEq, Eq)]
 pub enum FileStatus {

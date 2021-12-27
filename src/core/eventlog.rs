@@ -671,7 +671,7 @@ pub struct EventReplayer {
     commit_history: HashMap<NonZeroOid, Vec<EventInfo>>,
 
     /// Map from ref names to ref locations (an OID or another ref name). Works
-    /// around https://github.com/arxanas/git-branchless/issues/7.
+    /// around <https://github.com/arxanas/git-branchless/issues/7>.
     ///
     /// If an entry is not present, it was either never observed, or it most
     /// recently changed to point to the zero hash (i.e. it was deleted).

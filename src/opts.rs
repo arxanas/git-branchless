@@ -321,7 +321,7 @@ pub enum ColorSetting {
 
 /// Branchless workflow for Git.
 ///
-/// See the documentation at https://github.com/arxanas/git-branchless/wiki.
+/// See the documentation at <https://github.com/arxanas/git-branchless/wiki>.
 #[derive(Parser)]
 #[clap(version = env!("CARGO_PKG_VERSION"), author = "Waleed Khan <me@waleedkhan.name>")]
 pub struct Opts {
