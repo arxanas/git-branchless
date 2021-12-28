@@ -59,6 +59,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 use std::time::SystemTime;
 
+use rayon::{ThreadPool, ThreadPoolBuilder};
 use tracing::{instrument, warn};
 
 use crate::commands::smartlog::smartlog;
@@ -76,6 +77,7 @@ use crate::opts::MoveOptions;
 #[instrument(skip(commits))]
 fn restack_commits(
     effects: &Effects,
+    pool: &ThreadPool,
     repo: &Repo,
     dag: &Dag,
     event_replayer: &EventReplayer,
@@ -125,7 +127,7 @@ fn restack_commits(
                 builder.move_subtree(child_oid, dest_oid)?;
             }
         }
-        let rebase_plan = match builder.build(effects, build_options)? {
+        let rebase_plan = match builder.build(effects, pool, build_options)? {
             Ok(Some(rebase_plan)) => rebase_plan,
             Ok(None) => {
                 writeln!(
@@ -281,9 +283,11 @@ pub fn restack(
         force_on_disk,
         resolve_merge_conflicts,
     };
+    let pool = ThreadPoolBuilder::new().build()?;
 
     let result = restack_commits(
         effects,
+        &pool,
         &repo,
         &dag,
         &event_replayer,

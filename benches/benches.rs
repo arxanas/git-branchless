@@ -8,6 +8,7 @@ use branchless::core::formatting::Glyphs;
 use branchless::core::rewrite::{BuildRebasePlanOptions, RebasePlanBuilder};
 use branchless::git::{CherryPickFastOptions, Commit, Diff, Repo};
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
+use rayon::ThreadPoolBuilder;
 
 fn get_repo() -> Repo {
     let repo_dir =
@@ -49,6 +50,7 @@ fn bench_rebase_plan(c: &mut Criterion) {
             &references_snapshot,
         )
         .unwrap();
+        let pool = ThreadPoolBuilder::new().build().unwrap();
 
         let mut builder = RebasePlanBuilder::new(&repo, &dag);
         builder
@@ -60,6 +62,7 @@ fn bench_rebase_plan(c: &mut Criterion) {
                 builder
                     .build(
                         &effects,
+                        &pool,
                         &BuildRebasePlanOptions {
                             dump_rebase_constraints: false,
                             dump_rebase_plan: false,
