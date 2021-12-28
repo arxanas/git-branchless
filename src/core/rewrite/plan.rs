@@ -7,7 +7,7 @@ use std::sync::Mutex;
 use chashmap::CHashMap;
 use eden_dag::DagAlgorithm;
 use itertools::Itertools;
-use rayon::{prelude::*, ThreadPool, ThreadPoolBuilder};
+use rayon::{prelude::*, ThreadPool};
 use tracing::{instrument, warn};
 
 use crate::core::dag::{commit_set_to_vec, CommitSet, Dag};
@@ -577,6 +577,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
     pub fn build(
         &self,
         effects: &Effects,
+        pool: &ThreadPool,
         options: &BuildRebasePlanOptions,
     ) -> eyre::Result<Result<Option<RebasePlan>, BuildRebasePlanError>> {
         let BuildRebasePlanOptions {
@@ -616,7 +617,6 @@ impl<'repo> RebasePlanBuilder<'repo> {
             return Ok(Err(err));
         }
 
-        let pool = ThreadPoolBuilder::new().build()?;
         let repo_resource = RepoResource {
             repo: Mutex::new(self.repo.try_clone()?),
         };
@@ -639,7 +639,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
                 let (effects, _progress) =
                     effects.start_operation(OperationType::DetectDuplicateCommits);
                 self.get_upstream_patch_ids(
-                    &effects, &pool, &repo_pool, &mut state, child_oid, parent_oid,
+                    &effects, pool, &repo_pool, &mut state, child_oid, parent_oid,
                 )?
             } else {
                 Default::default()

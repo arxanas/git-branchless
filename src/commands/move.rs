@@ -8,6 +8,7 @@ use std::fmt::Write;
 use std::time::SystemTime;
 
 use eden_dag::DagAlgorithm;
+use rayon::ThreadPoolBuilder;
 use tracing::instrument;
 
 use crate::core::config::get_restack_preserve_timestamps;
@@ -134,11 +135,13 @@ pub fn r#move(
     } = *move_options;
     let now = SystemTime::now();
     let event_tx_id = event_log_db.make_transaction_id(now, "move")?;
+    let pool = ThreadPoolBuilder::new().build()?;
     let rebase_plan = {
         let mut builder = RebasePlanBuilder::new(&repo, &dag);
         builder.move_subtree(source_oid, dest_oid)?;
         builder.build(
             effects,
+            &pool,
             &BuildRebasePlanOptions {
                 dump_rebase_constraints,
                 dump_rebase_plan,
