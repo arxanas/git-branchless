@@ -48,7 +48,7 @@ anyhow = "1.0.51"
 assert_cmd = "2.0.2"
 chashmap = "2.2.2"
 chrono = "0.4.19"
-clap = { version = "3.0.0-rc.7", features = ["derive"]}
+clap = { version = "3.0.0", features = ["derive"] }
 color-eyre = "0.5.11"
 concolor-control = { version = "0.0.7", features = ["auto"] }
 console = "0.15.0"
