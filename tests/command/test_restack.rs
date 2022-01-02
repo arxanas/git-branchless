@@ -368,11 +368,11 @@ fn test_restack_single_of_many_commits() -> eyre::Result<()> {
     {
         let (stdout, stderr) = git.run(&["restack", "--on-disk", &test2_oid.to_string()])?;
         insta::assert_snapshot!(stderr, @r###"
-        Executing: git branchless hook-register-extra-post-rewrite-hook
         branchless: processing 1 update: ref HEAD
         branchless: processing 1 update: ref HEAD
         branchless: processed commit: 944f78da create test3.txt
         Executing: git branchless hook-detect-empty-commit 70deb1e28791d8e7dd5a1f0c871a51b91282562f
+        Executing: git branchless hook-register-extra-post-rewrite-hook
         branchless: processing 1 rewritten commit
         branchless: running command: <git-executable> checkout 3bd716d57489779ab1daf446f80e66e90b56ead7
         Previous HEAD position was 944f78d create test3.txt

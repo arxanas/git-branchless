@@ -61,7 +61,6 @@ fn test_move_stick() -> eyre::Result<()> {
             RebasePlan {
                 first_dest_oid: NonZeroOid(62fc20d2a290daea0d52bdc2ed2ad4be6491010e),
                 commands: [
-                    RegisterExtraPostRewriteHook,
                     Reset {
                         target: Oid(
                             NonZeroOid(62fc20d2a290daea0d52bdc2ed2ad4be6491010e),
@@ -79,6 +78,7 @@ fn test_move_stick() -> eyre::Result<()> {
                     DetectEmptyCommit {
                         commit_oid: NonZeroOid(355e173bf9c5d2efac2e451da0cdad3fb82b869a),
                     },
+                    RegisterExtraPostRewriteHook,
                 ],
             },
         )
@@ -247,7 +247,6 @@ fn test_move_with_source_not_in_smartlog() -> eyre::Result<()> {
                 RebasePlan {
                     first_dest_oid: NonZeroOid(62fc20d2a290daea0d52bdc2ed2ad4be6491010e),
                     commands: [
-                        RegisterExtraPostRewriteHook,
                         Reset {
                             target: Oid(
                                 NonZeroOid(62fc20d2a290daea0d52bdc2ed2ad4be6491010e),
@@ -265,6 +264,7 @@ fn test_move_with_source_not_in_smartlog() -> eyre::Result<()> {
                         DetectEmptyCommit {
                             commit_oid: NonZeroOid(355e173bf9c5d2efac2e451da0cdad3fb82b869a),
                         },
+                        RegisterExtraPostRewriteHook,
                     ],
                 },
             )
@@ -352,7 +352,6 @@ fn test_move_merge_conflict() -> eyre::Result<()> {
             RebasePlan {
                 first_dest_oid: NonZeroOid(202143f2fdfc785285ab097422f6a695ff1d93cb),
                 commands: [
-                    RegisterExtraPostRewriteHook,
                     Reset {
                         target: Oid(
                             NonZeroOid(202143f2fdfc785285ab097422f6a695ff1d93cb),
@@ -364,6 +363,7 @@ fn test_move_merge_conflict() -> eyre::Result<()> {
                     DetectEmptyCommit {
                         commit_oid: NonZeroOid(e85d25c772a05b5c73ea8ec43881c12bbf588848),
                     },
+                    RegisterExtraPostRewriteHook,
                 ],
             },
         )
@@ -427,7 +427,6 @@ fn test_move_base() -> eyre::Result<()> {
             RebasePlan {
                 first_dest_oid: NonZeroOid(bf0d52a607f693201512a43b6b5a70b2a275e0ad),
                 commands: [
-                    RegisterExtraPostRewriteHook,
                     Reset {
                         target: Oid(
                             NonZeroOid(bf0d52a607f693201512a43b6b5a70b2a275e0ad),
@@ -445,6 +444,7 @@ fn test_move_base() -> eyre::Result<()> {
                     DetectEmptyCommit {
                         commit_oid: NonZeroOid(70deb1e28791d8e7dd5a1f0c871a51b91282562f),
                     },
+                    RegisterExtraPostRewriteHook,
                 ],
             },
         )
@@ -558,7 +558,6 @@ fn test_move_checkout_new_head() -> eyre::Result<()> {
             RebasePlan {
                 first_dest_oid: NonZeroOid(62fc20d2a290daea0d52bdc2ed2ad4be6491010e),
                 commands: [
-                    RegisterExtraPostRewriteHook,
                     Reset {
                         target: Oid(
                             NonZeroOid(62fc20d2a290daea0d52bdc2ed2ad4be6491010e),
@@ -570,6 +569,7 @@ fn test_move_checkout_new_head() -> eyre::Result<()> {
                     DetectEmptyCommit {
                         commit_oid: NonZeroOid(fe65c1fe15584744e649b2c79d4cf9b0d878f92e),
                     },
+                    RegisterExtraPostRewriteHook,
                 ],
             },
         )
@@ -612,6 +612,11 @@ fn test_move_branch() -> eyre::Result<()> {
     git.commit_file("test3", 3)?;
 
     {
+        let (stdout, _stderr) = git.run(&["branch", "--show-current"])?;
+        insta::assert_snapshot!(stdout, @"master");
+    }
+
+    {
         let (stdout, _stderr) = git.run(&[
             "move",
             "--debug-dump-rebase-plan",
@@ -623,7 +628,6 @@ fn test_move_branch() -> eyre::Result<()> {
             RebasePlan {
                 first_dest_oid: NonZeroOid(96d1c37a3d4363611c49f7e52186e189a04c531f),
                 commands: [
-                    RegisterExtraPostRewriteHook,
                     Reset {
                         target: Oid(
                             NonZeroOid(96d1c37a3d4363611c49f7e52186e189a04c531f),
@@ -635,6 +639,7 @@ fn test_move_branch() -> eyre::Result<()> {
                     DetectEmptyCommit {
                         commit_oid: NonZeroOid(98b9119d16974f372e76cb64a3b77c528fc0b18b),
                     },
+                    RegisterExtraPostRewriteHook,
                 ],
             },
         )
@@ -812,7 +817,6 @@ fn test_move_in_memory_gc() -> eyre::Result<()> {
             RebasePlan {
                 first_dest_oid: NonZeroOid(f777ecc9b0db5ed372b2615695191a8a17f79f24),
                 commands: [
-                    RegisterExtraPostRewriteHook,
                     Reset {
                         target: Oid(
                             NonZeroOid(f777ecc9b0db5ed372b2615695191a8a17f79f24),
@@ -824,6 +828,7 @@ fn test_move_in_memory_gc() -> eyre::Result<()> {
                     DetectEmptyCommit {
                         commit_oid: NonZeroOid(96d1c37a3d4363611c49f7e52186e189a04c531f),
                     },
+                    RegisterExtraPostRewriteHook,
                 ],
             },
         )
@@ -988,6 +993,11 @@ fn test_move_branches_after_move() -> eyre::Result<()> {
         let git = git.duplicate_repo()?;
 
         {
+            let (stdout, _stderr) = git.run(&["branch", "--show-current"])?;
+            insta::assert_snapshot!(stdout, @"");
+        }
+
+        {
             let (stdout, stderr) = git.run(&[
                 "move",
                 "--on-disk",
@@ -997,21 +1007,21 @@ fn test_move_branches_after_move() -> eyre::Result<()> {
                 &test1_oid.to_string(),
             ])?;
             insta::assert_snapshot!(stderr, @r###"
-        Executing: git branchless hook-register-extra-post-rewrite-hook
-        branchless: processing 1 update: ref HEAD
-        branchless: processing 1 update: ref HEAD
-        branchless: processed commit: 4838e49b create test3.txt
-        Executing: git branchless hook-detect-empty-commit 70deb1e28791d8e7dd5a1f0c871a51b91282562f
-        branchless: processing 1 update: ref HEAD
-        branchless: processed commit: a2482074 create test4.txt
-        Executing: git branchless hook-detect-empty-commit 355e173bf9c5d2efac2e451da0cdad3fb82b869a
-        branchless: processing 1 update: ref HEAD
-        branchless: processed commit: 566e4341 create test5.txt
-        Executing: git branchless hook-detect-empty-commit f81d55c0d520ff8d02ef9294d95156dcb78a5255
-        branchless: processing 3 rewritten commits
-        branchless: processing 2 updates: branch bar, branch foo
-        Successfully rebased and updated detached HEAD.
-        "###);
+            branchless: processing 1 update: ref HEAD
+            branchless: processing 1 update: ref HEAD
+            branchless: processed commit: 4838e49b create test3.txt
+            Executing: git branchless hook-detect-empty-commit 70deb1e28791d8e7dd5a1f0c871a51b91282562f
+            branchless: processing 1 update: ref HEAD
+            branchless: processed commit: a2482074 create test4.txt
+            Executing: git branchless hook-detect-empty-commit 355e173bf9c5d2efac2e451da0cdad3fb82b869a
+            branchless: processing 1 update: ref HEAD
+            branchless: processed commit: 566e4341 create test5.txt
+            Executing: git branchless hook-detect-empty-commit f81d55c0d520ff8d02ef9294d95156dcb78a5255
+            Executing: git branchless hook-register-extra-post-rewrite-hook
+            branchless: processing 3 rewritten commits
+            branchless: processing 2 updates: branch bar, branch foo
+            Successfully rebased and updated detached HEAD.
+            "###);
             insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
@@ -1033,6 +1043,11 @@ fn test_move_branches_after_move() -> eyre::Result<()> {
         |
         O 96d1c37a (master) create test2.txt
         "###);
+        }
+
+        {
+            let (stdout, _stderr) = git.run(&["branch", "--show-current"])?;
+            insta::assert_snapshot!(stdout, @"");
         }
 
         {
@@ -1157,12 +1172,12 @@ fn test_move_no_reapply_upstream_commits() -> eyre::Result<()> {
         {
             let (stdout, stderr) = git.run(&["move", "--on-disk", "-b", "HEAD", "-d", "master"])?;
             insta::assert_snapshot!(stderr, @r###"
-            Executing: git branchless hook-register-extra-post-rewrite-hook
             branchless: processing 1 update: ref HEAD
             Executing: git branchless hook-skip-upstream-applied-commit 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
             branchless: processing 1 update: ref HEAD
             branchless: processed commit: fa466332 create test2.txt
             Executing: git branchless hook-detect-empty-commit 96d1c37a3d4363611c49f7e52186e189a04c531f
+            Executing: git branchless hook-register-extra-post-rewrite-hook
             branchless: processing 2 rewritten commits
             branchless: processing 1 update: branch should-be-deleted
             Successfully rebased and updated detached HEAD.
@@ -1262,6 +1277,11 @@ fn test_move_no_reapply_squashed_commits() -> eyre::Result<()> {
         }
 
         {
+            let (stdout, _stderr) = git.run(&["branch", "--show-current"])?;
+            insta::assert_snapshot!(stdout, @"master");
+        }
+
+        {
             let (stdout, stderr) = git.run(&[
                 "move",
                 "--on-disk",
@@ -1271,7 +1291,6 @@ fn test_move_no_reapply_squashed_commits() -> eyre::Result<()> {
                 "master",
             ])?;
             insta::assert_snapshot!(stderr, @r###"
-            Executing: git branchless hook-register-extra-post-rewrite-hook
             branchless: processing 1 update: ref HEAD
             branchless: processing 1 update: ref HEAD
             branchless: processed commit: e7bcdd60 create test1.txt
@@ -1279,15 +1298,14 @@ fn test_move_no_reapply_squashed_commits() -> eyre::Result<()> {
             branchless: processing 1 update: ref HEAD
             branchless: processed commit: 12d361aa create test2.txt
             Executing: git branchless hook-detect-empty-commit 96d1c37a3d4363611c49f7e52186e189a04c531f
-            branchless: processing 1 update: branch master
+            Executing: git branchless hook-register-extra-post-rewrite-hook
             branchless: processing 4 rewritten commits
-            branchless: running command: <git-executable> checkout de4a1fe8f80b830d7d9a5b4adfd79fab3fcdc80c
-            branchless: processing 1 update: ref HEAD
-            HEAD is now at de4a1fe squashed test1 and test2
+            branchless: running command: <git-executable> checkout master
+            Switched to branch 'master'
             branchless: processing checkout
             :
             @ de4a1fe8 (master) squashed test1 and test2
-            Successfully rebased and updated refs/heads/master.
+            Successfully rebased and updated detached HEAD.
             "###);
             insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> diff --quiet
@@ -1304,6 +1322,11 @@ fn test_move_no_reapply_squashed_commits() -> eyre::Result<()> {
         :
         @ de4a1fe8 (master) squashed test1 and test2
         "###);
+        }
+
+        {
+            let (stdout, _stderr) = git.run(&["branch", "--show-current"])?;
+            insta::assert_snapshot!(stdout, @"master");
         }
     }
 
@@ -1403,13 +1426,13 @@ fn test_move_delete_checked_out_branch() -> eyre::Result<()> {
             git.run(&["checkout", "work"])?;
             let (stdout, stderr) = git.run(&["move", "--on-disk", "-b", "HEAD", "-d", "master"])?;
             insta::assert_snapshot!(stderr, @r###"
-            Executing: git branchless hook-register-extra-post-rewrite-hook
             branchless: processing 1 update: ref HEAD
             Executing: git branchless hook-skip-upstream-applied-commit 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
             Executing: git branchless hook-skip-upstream-applied-commit 96d1c37a3d4363611c49f7e52186e189a04c531f
             branchless: processing 1 update: ref HEAD
             branchless: processed commit: 012efd6e create test3.txt
             Executing: git branchless hook-detect-empty-commit ffcba554683d83de283de084a7d3896e332bbcdb
+            Executing: git branchless hook-register-extra-post-rewrite-hook
             branchless: processing 3 rewritten commits
             branchless: processing 2 updates: branch more-work, branch work
             branchless: running command: <git-executable> checkout 91c5ce63686889388daec1120bf57bea8a744bc2
@@ -1567,69 +1590,69 @@ fn test_move_merge_commit() -> eyre::Result<()> {
                 "master",
             ])?;
             insta::assert_snapshot!(stdout, @r###"
-        Rebase constraints before adding descendants: [
-            (
-                NonZeroOid(62fc20d2a290daea0d52bdc2ed2ad4be6491010e),
-                [
+            Rebase constraints before adding descendants: [
+                (
+                    NonZeroOid(62fc20d2a290daea0d52bdc2ed2ad4be6491010e),
+                    [
+                        NonZeroOid(fe65c1fe15584744e649b2c79d4cf9b0d878f92e),
+                    ],
+                ),
+            ]
+            Rebase constraints after adding descendants: [
+                (
+                    NonZeroOid(62fc20d2a290daea0d52bdc2ed2ad4be6491010e),
+                    [
+                        NonZeroOid(fe65c1fe15584744e649b2c79d4cf9b0d878f92e),
+                    ],
+                ),
+                (
                     NonZeroOid(fe65c1fe15584744e649b2c79d4cf9b0d878f92e),
-                ],
-            ),
-        ]
-        Rebase constraints after adding descendants: [
-            (
-                NonZeroOid(62fc20d2a290daea0d52bdc2ed2ad4be6491010e),
-                [
-                    NonZeroOid(fe65c1fe15584744e649b2c79d4cf9b0d878f92e),
-                ],
-            ),
-            (
-                NonZeroOid(fe65c1fe15584744e649b2c79d4cf9b0d878f92e),
-                [
-                    NonZeroOid(28790c73f13f38ce0d3beb6cfeb2d818b32bcd09),
-                ],
-            ),
-        ]
-        Rebase plan: Some(
-            RebasePlan {
-                first_dest_oid: NonZeroOid(62fc20d2a290daea0d52bdc2ed2ad4be6491010e),
-                commands: [
-                    RegisterExtraPostRewriteHook,
-                    Reset {
-                        target: Oid(
-                            NonZeroOid(62fc20d2a290daea0d52bdc2ed2ad4be6491010e),
-                        ),
-                    },
-                    Pick {
-                        commit_oid: NonZeroOid(fe65c1fe15584744e649b2c79d4cf9b0d878f92e),
-                    },
-                    DetectEmptyCommit {
-                        commit_oid: NonZeroOid(fe65c1fe15584744e649b2c79d4cf9b0d878f92e),
-                    },
-                    CreateLabel {
-                        label_name: "merge-parent-4",
-                    },
-                    Merge {
-                        commit_oid: NonZeroOid(28790c73f13f38ce0d3beb6cfeb2d818b32bcd09),
-                        commits_to_merge: [
-                            Oid(
-                                NonZeroOid(98b9119d16974f372e76cb64a3b77c528fc0b18b),
+                    [
+                        NonZeroOid(28790c73f13f38ce0d3beb6cfeb2d818b32bcd09),
+                    ],
+                ),
+            ]
+            Rebase plan: Some(
+                RebasePlan {
+                    first_dest_oid: NonZeroOid(62fc20d2a290daea0d52bdc2ed2ad4be6491010e),
+                    commands: [
+                        Reset {
+                            target: Oid(
+                                NonZeroOid(62fc20d2a290daea0d52bdc2ed2ad4be6491010e),
                             ),
-                        ],
-                    },
-                ],
-            },
-        )
-        branchless: running command: <git-executable> diff --quiet
-        Calling Git for on-disk rebase...
-        branchless: running command: <git-executable> rebase --continue
-        "###);
+                        },
+                        Pick {
+                            commit_oid: NonZeroOid(fe65c1fe15584744e649b2c79d4cf9b0d878f92e),
+                        },
+                        DetectEmptyCommit {
+                            commit_oid: NonZeroOid(fe65c1fe15584744e649b2c79d4cf9b0d878f92e),
+                        },
+                        CreateLabel {
+                            label_name: "merge-parent-3",
+                        },
+                        Merge {
+                            commit_oid: NonZeroOid(28790c73f13f38ce0d3beb6cfeb2d818b32bcd09),
+                            commits_to_merge: [
+                                Oid(
+                                    NonZeroOid(98b9119d16974f372e76cb64a3b77c528fc0b18b),
+                                ),
+                            ],
+                        },
+                        RegisterExtraPostRewriteHook,
+                    ],
+                },
+            )
+            branchless: running command: <git-executable> diff --quiet
+            Calling Git for on-disk rebase...
+            branchless: running command: <git-executable> rebase --continue
+            "###);
             insta::assert_snapshot!(stderr, @r###"
-            Executing: git branchless hook-register-extra-post-rewrite-hook
             branchless: processing 1 update: ref HEAD
             branchless: processing 1 update: ref HEAD
             branchless: processed commit: 96d1c37a create test2.txt
             Executing: git branchless hook-detect-empty-commit fe65c1fe15584744e649b2c79d4cf9b0d878f92e
-            branchless: processing 1 update: ref refs/rewritten/merge-parent-4
+            branchless: processing 1 update: ref refs/rewritten/merge-parent-3
+            Executing: git branchless hook-register-extra-post-rewrite-hook
             branchless: processing 2 rewritten commits
             branchless: running command: <git-executable> checkout 98b9119d16974f372e76cb64a3b77c528fc0b18b
             Previous HEAD position was 96a2c4b Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
@@ -1648,7 +1671,7 @@ fn test_move_merge_commit() -> eyre::Result<()> {
             |
             o 96a2c4be Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
             Successfully rebased and updated detached HEAD.
-            branchless: processing 1 update: ref refs/rewritten/merge-parent-4
+            branchless: processing 1 update: ref refs/rewritten/merge-parent-3
             "###);
         }
 
@@ -1713,12 +1736,12 @@ fn test_move_merge_commit() -> eyre::Result<()> {
         branchless: running command: <git-executable> rebase --continue
         "###);
             insta::assert_snapshot!(stderr, @r###"
-            Executing: git branchless hook-register-extra-post-rewrite-hook
             branchless: processing 1 update: ref HEAD
             branchless: processing 1 update: ref HEAD
             branchless: processed commit: 96d1c37a create test2.txt
             Executing: git branchless hook-detect-empty-commit fe65c1fe15584744e649b2c79d4cf9b0d878f92e
-            branchless: processing 1 update: ref refs/rewritten/merge-parent-4
+            branchless: processing 1 update: ref refs/rewritten/merge-parent-3
+            Executing: git branchless hook-register-extra-post-rewrite-hook
             branchless: processing 2 rewritten commits
             branchless: running command: <git-executable> checkout 98b9119d16974f372e76cb64a3b77c528fc0b18b
             Previous HEAD position was 96a2c4b Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
@@ -1737,7 +1760,7 @@ fn test_move_merge_commit() -> eyre::Result<()> {
             |
             o 96a2c4be Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
             Successfully rebased and updated detached HEAD.
-            branchless: processing 1 update: ref refs/rewritten/merge-parent-4
+            branchless: processing 1 update: ref refs/rewritten/merge-parent-3
             "###);
         }
 
@@ -1806,7 +1829,6 @@ fn test_move_orphaned_root() -> eyre::Result<()> {
         {
             let (stdout, stderr) = git.run(&["move", "--on-disk", "-d", "master"])?;
             insta::assert_snapshot!(stderr, @r###"
-            Executing: git branchless hook-register-extra-post-rewrite-hook
             branchless: processing 1 update: ref HEAD
             branchless: processing 1 update: ref HEAD
             branchless: processed commit: 270b681e new root
@@ -1814,17 +1836,17 @@ fn test_move_orphaned_root() -> eyre::Result<()> {
             branchless: processing 1 update: ref HEAD
             branchless: processed commit: 70deb1e2 create test3.txt
             Executing: git branchless hook-detect-empty-commit fc09f3d9f0b7370dc38e761e3730a856dc5025c2
-            branchless: processing 1 update: branch new-root
+            Executing: git branchless hook-register-extra-post-rewrite-hook
             branchless: processing 3 rewritten commits
-            branchless: running command: <git-executable> checkout 70deb1e28791d8e7dd5a1f0c871a51b91282562f
-            branchless: processing 1 update: ref HEAD
-            HEAD is now at 70deb1e create test3.txt
+            branchless: processing 1 update: branch new-root
+            branchless: running command: <git-executable> checkout new-root
+            Switched to branch 'new-root'
             branchless: processing checkout
             :
             O 96d1c37a (master) create test2.txt
             |
             @ 70deb1e2 (new-root) create test3.txt
-            Successfully rebased and updated refs/heads/new-root.
+            Successfully rebased and updated detached HEAD.
             "###);
             insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> diff --quiet
@@ -1843,6 +1865,11 @@ fn test_move_orphaned_root() -> eyre::Result<()> {
         @ 70deb1e2 (new-root) create test3.txt
         "###);
         }
+
+        {
+            let (stdout, _stderr) = git.run(&["branch", "--show-current"])?;
+            insta::assert_snapshot!(stdout, @"new-root");
+        }
     }
 
     // --in-memory
@@ -1850,10 +1877,10 @@ fn test_move_orphaned_root() -> eyre::Result<()> {
         {
             let (stdout, stderr) = git.run(&["move", "--in-memory", "-d", "master"])?;
             insta::assert_snapshot!(stderr, @r###"
-        Previous HEAD position was fc09f3d create test3.txt
-        Switched to branch 'new-root'
-        branchless: processing checkout
-        "###);
+            Previous HEAD position was fc09f3d create test3.txt
+            Switched to branch 'new-root'
+            branchless: processing checkout
+            "###);
             insta::assert_snapshot!(stdout, @r###"
             Attempting rebase in-memory...
             [1/2] Skipped now-empty commit: 270b681e new root
@@ -1872,11 +1899,11 @@ fn test_move_orphaned_root() -> eyre::Result<()> {
         {
             let (stdout, _stderr) = git.run(&["smartlog"])?;
             insta::assert_snapshot!(stdout, @r###"
-        :
-        O 96d1c37a (master) create test2.txt
-        |
-        @ 70deb1e2 (new-root) create test3.txt
-        "###);
+            :
+            O 96d1c37a (master) create test2.txt
+            |
+            @ 70deb1e2 (new-root) create test3.txt
+            "###);
         }
     }
 
@@ -2073,6 +2100,78 @@ fn test_move_standalone_no_create_gc_refs() -> eyre::Result<()> {
         62fc20d2a290daea0d52bdc2ed2ad4be6491010e refs/heads/master
         "###);
         assert!(stdout == show_refs_output);
+    }
+
+    Ok(())
+}
+
+/// Regression test for <https://github.com/arxanas/git-branchless/issues/249>.
+#[test]
+fn test_move_branch_on_merge_conflict_resolution() -> eyre::Result<()> {
+    let git = make_git()?;
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+
+    git.init_repo()?;
+    git.commit_file("test1", 1)?;
+    git.detach_head()?;
+    git.commit_file_with_contents("test1", 2, "contents 2")?;
+    let test3_oid = git.commit_file_with_contents("test1", 3, "contents 3")?;
+
+    git.run(&["checkout", "master"])?;
+    git.run_with_options(
+        &["move", "-s", &test3_oid.to_string(), "--merge"],
+        &GitRunOptions {
+            expected_exit_code: 1,
+            ..Default::default()
+        },
+    )?;
+
+    git.write_file("test1", "contents 3")?;
+    git.run(&["add", "."])?;
+
+    {
+        let (stdout, stderr) = git.run(&["rebase", "--continue"])?;
+        insta::assert_snapshot!(stderr, @r###"
+        branchless: processing 1 update: ref HEAD
+        branchless: processed commit: 3632ef43 create test1.txt
+        Executing: git branchless hook-detect-empty-commit aec59174640c3e3dbb92fdade0bc44ca31552a85
+        Executing: git branchless hook-register-extra-post-rewrite-hook
+        branchless: processing 1 rewritten commit
+        branchless: running command: <git-executable> checkout master
+        Previous HEAD position was 3632ef4 create test1.txt
+        Switched to branch 'master'
+        branchless: processing checkout
+        :
+        @ 62fc20d2 (master) create test1.txt
+        |\
+        | o 6002762d create test1.txt
+        |
+        o 3632ef43 create test1.txt
+        Successfully rebased and updated detached HEAD.
+        "###);
+        insta::assert_snapshot!(stdout, @r###"
+        [detached HEAD 3632ef4] create test1.txt
+         1 file changed, 1 insertion(+), 1 deletion(-)
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        @ 62fc20d2 (master) create test1.txt
+        |\
+        | o 6002762d create test1.txt
+        |
+        o 3632ef43 create test1.txt
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["branch", "--show-current"])?;
+        insta::assert_snapshot!(stdout, @"master");
     }
 
     Ok(())
