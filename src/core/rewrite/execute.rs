@@ -725,6 +725,7 @@ mod on_disk {
 
     use crate::core::effects::{Effects, OperationType};
     use crate::core::rewrite::plan::RebasePlan;
+    use crate::core::rewrite::rewrite_hooks::save_original_head_info;
     use crate::git::{GitRunInfo, Repo};
 
     use super::ExecuteRebasePlanOptions;
@@ -810,6 +811,8 @@ mod on_disk {
                     .to_raw_bytes(),
             )
             .wrap_err_with(|| format!("Writing head-name to: {:?}", &head_name_file_path))?;
+
+            save_original_head_info(repo, &head_info)?;
 
             // Dummy `head` file. We will `reset` to the appropriate commit as soon as
             // we start the rebase.

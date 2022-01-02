@@ -1,5 +1,6 @@
 //! Hooks used to have Git call back into `git-branchless` for various functionality.
 
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
 use std::ffi::{OsStr, OsString};
@@ -12,6 +13,7 @@ use std::time::SystemTime;
 use console::style;
 use eyre::Context;
 use itertools::Itertools;
+use os_str_bytes::{OsStrBytes, OsStringBytes};
 use tempfile::NamedTempFile;
 use tracing::instrument;
 
@@ -153,10 +155,10 @@ pub fn hook_post_rewrite(
     {
         // Make sure to resolve `ORIG_HEAD` before we potentially delete the
         // branch it points to, so that we can get the original OID of `HEAD`.
-        let previous_head_info = get_previous_head_info(&repo)?;
+        let previous_head_info = load_original_head_info(&repo)?;
         move_branches(effects, git_run_info, &repo, event_tx_id, &rewritten_oids)?;
 
-        let skipped_head_updated_oid = get_updated_head_oid(&repo)?;
+        let skipped_head_updated_oid = load_updated_head_oid(&repo)?;
         let exit_code = check_out_updated_head(
             effects,
             git_run_info,
@@ -185,15 +187,6 @@ pub fn hook_post_rewrite(
     Ok(())
 }
 
-fn get_previous_head_info(repo: &Repo) -> eyre::Result<ResolvedReferenceInfo> {
-    match repo.find_reference(OsStr::new("ORIG_HEAD"))? {
-        None => Ok(ResolvedReferenceInfo {
-            oid: None,
-            reference_name: None,
-        }),
-        Some(reference) => Ok(repo.resolve_reference(&reference)?),
-    }
-}
 #[instrument(skip(old_commit_oids))]
 fn warn_abandoned(
     effects: &Effects,
@@ -304,6 +297,68 @@ branchless:   - {config_command}: suppress this message
     Ok(())
 }
 
+const ORIGINAL_HEAD_OID_FILE_NAME: &str = "branchless_original_head_oid";
+const ORIGINAL_HEAD_FILE_NAME: &str = "branchless_original_head";
+
+/// Save the name of the currently checked-out branch. This should be called as
+/// part of initializing the rebase.
+#[instrument]
+pub fn save_original_head_info(repo: &Repo, head_info: &ResolvedReferenceInfo) -> eyre::Result<()> {
+    let ResolvedReferenceInfo {
+        oid,
+        reference_name,
+    } = head_info;
+
+    if let Some(oid) = oid {
+        let dest_file_name = repo
+            .get_rebase_state_dir_path()
+            .join(ORIGINAL_HEAD_OID_FILE_NAME);
+        std::fs::write(dest_file_name, oid.to_string()).wrap_err("Writing head OID")?;
+    }
+
+    if let Some(head_name) = reference_name {
+        let dest_file_name = repo
+            .get_rebase_state_dir_path()
+            .join(ORIGINAL_HEAD_FILE_NAME);
+        std::fs::write(dest_file_name, head_name.to_raw_bytes()).wrap_err("Writing head name")?;
+    }
+
+    Ok(())
+}
+
+#[instrument]
+fn load_original_head_info(repo: &Repo) -> eyre::Result<ResolvedReferenceInfo> {
+    let head_oid = {
+        let source_file_name = repo
+            .get_rebase_state_dir_path()
+            .join(ORIGINAL_HEAD_OID_FILE_NAME);
+        match std::fs::read_to_string(source_file_name) {
+            Ok(oid) => Some(oid.parse().wrap_err("Parsing original head OID")?),
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => None,
+            Err(err) => return Err(err.into()),
+        }
+    };
+
+    let head_name = {
+        let source_file_name = repo
+            .get_rebase_state_dir_path()
+            .join(ORIGINAL_HEAD_FILE_NAME);
+        match std::fs::read(source_file_name) {
+            Ok(reference_name) => Some(Cow::Owned(
+                OsStringBytes::from_raw_vec(reference_name)
+                    .wrap_err("Decoding original head name")?,
+            )),
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => None,
+            Err(err) => return Err(err.into()),
+        }
+    };
+
+    Ok(ResolvedReferenceInfo {
+        oid: head_oid,
+        reference_name: head_name,
+    })
+}
+
 const EXTRA_POST_REWRITE_FILE_NAME: &str = "branchless_do_extra_post_rewrite";
 
 /// In order to handle the case of a commit being skipped and its corresponding
@@ -319,15 +374,11 @@ fn save_updated_head_oid(repo: &Repo, updated_head_oid: NonZeroOid) -> eyre::Res
         .get_rebase_state_dir_path()
         .join(UPDATED_HEAD_FILE_NAME);
     std::fs::write(dest_file_name, updated_head_oid.to_string())?;
-
-    let head_name_file_name = repo.get_rebase_state_dir_path().join("head-name");
-    std::fs::write(head_name_file_name, "detached HEAD")?;
-
     Ok(())
 }
 
 #[instrument]
-fn get_updated_head_oid(repo: &Repo) -> eyre::Result<Option<NonZeroOid>> {
+fn load_updated_head_oid(repo: &Repo) -> eyre::Result<Option<NonZeroOid>> {
     let source_file_name = repo
         .get_rebase_state_dir_path()
         .join(UPDATED_HEAD_FILE_NAME);
@@ -348,6 +399,21 @@ pub fn hook_register_extra_post_rewrite_hook() -> eyre::Result<()> {
         .get_rebase_state_dir_path()
         .join(EXTRA_POST_REWRITE_FILE_NAME);
     File::create(file_name).wrap_err("Registering extra post-rewrite hook")?;
+
+    // This is the last step before the rebase concludes. Ordinarily, Git will
+    // use `head-name` as the name of the previously checked-out branch, and
+    // move that branch to point to the current commit (and check it out again).
+    // We want to suppress this behavior because we don't want the branch to
+    // move (or, if we do want it to move, we will handle that ourselves as part
+    // of the post-rewrite hook). So we update `head-name` to contain "detached
+    // HEAD" to indicate to Git that no branch was checked out prior to the
+    // rebase, so that it doesn't try to adjust any branches.
+    std::fs::write(
+        repo.get_rebase_state_dir_path().join("head-name"),
+        "detached HEAD",
+    )
+    .wrap_err("Setting `head-name` to detached HEAD")?;
+
     Ok(())
 }
 

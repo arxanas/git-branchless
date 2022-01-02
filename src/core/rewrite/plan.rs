@@ -619,7 +619,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
         }
 
         let roots = self.find_roots(&state);
-        let mut acc = vec![RebaseCommand::RegisterExtraPostRewriteHook];
+        let mut acc = Vec::new();
         let mut first_dest_oid = None;
         for Constraint {
             parent_oid,
@@ -647,6 +647,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
                 acc,
             )?;
         }
+        acc.push(RebaseCommand::RegisterExtraPostRewriteHook);
 
         Self::check_all_commits_included_in_rebase_plan(&state, acc.as_slice());
 
