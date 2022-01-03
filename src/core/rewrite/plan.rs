@@ -2,6 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 use std::ops::Sub;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use chashmap::CHashMap;
 use eden_dag::DagAlgorithm;
@@ -139,11 +140,6 @@ struct BuildState {
     /// (If not, then we stop this sub-traversal and wait for a later traversal
     /// to hit the same merge commit).
     merge_commit_parent_labels: HashMap<NonZeroOid, String>,
-
-    /// Cache mapping from commit OID to the paths changed in the diff for that
-    /// commit. The value is `None` if the commit doesn't have an associated
-    /// diff (i.e. is a merge commit).
-    touched_paths_cache: CHashMap<NonZeroOid, Option<HashSet<PathBuf>>>,
 }
 
 /// Builder for a rebase plan. Unlike regular Git rebases, a `git-branchless`
@@ -155,6 +151,11 @@ pub struct RebasePlanBuilder<'repo> {
     /// There is a mapping from from `x` to `y` if `x` must be applied before
     /// `y`.
     initial_constraints: HashMap<NonZeroOid, HashSet<NonZeroOid>>,
+
+    /// Cache mapping from commit OID to the paths changed in the diff for that
+    /// commit. The value is `None` if the commit doesn't have an associated
+    /// diff (i.e. is a merge commit).
+    touched_paths_cache: Arc<CHashMap<NonZeroOid, Option<HashSet<PathBuf>>>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -240,6 +241,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
         RebasePlanBuilder {
             dag,
             initial_constraints: Default::default(),
+            touched_paths_cache: Default::default(),
         }
     }
 
@@ -468,7 +470,14 @@ impl<'repo> RebasePlanBuilder<'repo> {
     /// of a referred-to commit. This adds enough information to the constraint
     /// graph that it now represents the actual end-state commit graph that we
     /// want to create, not just a list of constraints.
-    fn add_descendant_constraints(&self, state: &mut BuildState) -> eyre::Result<()> {
+    fn add_descendant_constraints(
+        &self,
+        effects: &Effects,
+        state: &mut BuildState,
+    ) -> eyre::Result<()> {
+        let (effects, progress) = effects.start_operation(OperationType::ConstrainCommits);
+        let _effects = effects;
+
         let all_descendants_of_constrained_nodes = {
             let public_commits = self.dag.query_public_commits()?;
             let active_heads = self.dag.query_active_heads(
@@ -481,8 +490,11 @@ impl<'repo> RebasePlanBuilder<'repo> {
             let visible_commits = self.dag.query().ancestors(active_heads)?;
 
             let mut acc = Vec::new();
-            for parent_oid in state.constraints.values().flatten().cloned() {
+            let parents = state.constraints.values().flatten().cloned().collect_vec();
+            progress.notify_progress(0, parents.len());
+            for parent_oid in parents {
                 self.collect_descendants(&visible_commits, &mut acc, parent_oid)?;
+                progress.notify_progress_inc(1);
             }
             acc
         };
@@ -591,7 +603,6 @@ impl<'repo> RebasePlanBuilder<'repo> {
             commits_to_move: Default::default(), // filled in by `add_descendant_constraints`
             used_labels: Default::default(),
             merge_commit_parent_labels: Default::default(),
-            touched_paths_cache: Default::default(),
         };
 
         let (effects, _progress) = effects.start_operation(OperationType::BuildRebasePlan);
@@ -604,7 +615,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
                 Self::get_constraints_sorted_for_debug(&state),
             );
         }
-        self.add_descendant_constraints(&mut state)?;
+        self.add_descendant_constraints(&effects, &mut state)?;
         if *dump_rebase_constraints {
             // For test: don't print to `effects.get_output_stream()`, as it will
             // be suppressed.
@@ -725,26 +736,33 @@ impl<'repo> RebasePlanBuilder<'repo> {
             Some(merge_base_oid) => merge_base_oid,
         };
 
-        let path = self
-            .dag
-            .find_path_to_merge_base(effects, repo, dest_oid, merge_base_oid)?;
-        let path = match path {
-            None => return Ok(HashSet::new()),
-            Some(path) => path,
-        };
-
-        let path = {
-            let touched_commits = state
+        let touched_commits = {
+            let (effects, _progress) = effects.start_operation(OperationType::ConstrainCommits);
+            let _effects = effects;
+            state
                 .constraints
                 .values()
                 .flatten()
                 .map(|oid| repo.find_commit(*oid))
                 .flatten_ok()
-                .try_collect()?;
+                .try_collect()?
+        };
 
+        let path = {
+            let (effects, _progress) = effects.start_operation(OperationType::WalkCommits);
+
+            let path =
+                self.dag
+                    .find_path_to_merge_base(&effects, repo, dest_oid, merge_base_oid)?;
+            match path {
+                None => return Ok(HashSet::new()),
+                Some(path) => path,
+            }
+        };
+
+        let path = {
             self.filter_path_to_merge_base_commits(
                 effects,
-                state,
                 pool,
                 repo_pool,
                 repo,
@@ -786,7 +804,6 @@ impl<'repo> RebasePlanBuilder<'repo> {
     fn filter_path_to_merge_base_commits(
         &self,
         effects: &Effects,
-        state: &mut BuildState,
         pool: &ThreadPool,
         repo_pool: &RepoPool,
         repo: &'repo Repo,
@@ -802,27 +819,53 @@ impl<'repo> RebasePlanBuilder<'repo> {
             .try_collect()?;
 
         let filtered_path = {
-            let (_effects, progress) = effects.start_operation(OperationType::FilterByTouchedPaths);
-            progress.notify_progress(0, path.len());
-
+            enum CacheLookupResult<T, U> {
+                Cached(T),
+                NotCached(U),
+            }
             let path = path
                 .into_iter()
                 .map(|commit| commit.get_oid())
                 .collect_vec();
-            let touched_paths_cache = &state.touched_paths_cache;
+            let touched_paths_cache = &self.touched_paths_cache;
+            // Check cache before distributing work to threads.
+            let path: Vec<CacheLookupResult<Option<NonZeroOid>, NonZeroOid>> = {
+                let (effects, progress) = effects.start_operation(OperationType::ReadingFromCache);
+                let _effects = effects;
+                progress.notify_progress(0, path.len());
+                if touched_paths_cache.is_empty() {
+                    // Fast path for when the cache hasn't been populated.
+                    path.into_iter().map(CacheLookupResult::NotCached).collect()
+                } else {
+                    path.into_iter()
+                        .map(|commit_oid| match touched_paths_cache.get(&commit_oid) {
+                            Some(upstream_touched_paths) => {
+                                if Self::should_check_patch_id(
+                                    &*upstream_touched_paths,
+                                    &local_touched_paths,
+                                ) {
+                                    CacheLookupResult::Cached(Some(commit_oid))
+                                } else {
+                                    CacheLookupResult::Cached(None)
+                                }
+                            }
+                            None => CacheLookupResult::NotCached(commit_oid),
+                        })
+                        .inspect(|_| progress.notify_progress_inc(1))
+                        .collect()
+                }
+            };
+
+            let (_effects, progress) = effects.start_operation(OperationType::FilterByTouchedPaths);
+            progress.notify_progress(0, path.len());
+
             pool.install(|| {
                 path.into_par_iter()
                     .map(|commit_oid| {
-                        if let Some(upstream_touched_paths) = touched_paths_cache.get(&commit_oid) {
-                            if Self::should_check_patch_id(
-                                &*upstream_touched_paths,
-                                &local_touched_paths,
-                            ) {
-                                return Ok(Some(commit_oid));
-                            } else {
-                                return Ok(None);
-                            }
-                        }
+                        let commit_oid = match commit_oid {
+                            CacheLookupResult::Cached(result) => return Ok(result),
+                            CacheLookupResult::NotCached(commit_oid) => commit_oid,
+                        };
 
                         let repo = repo_pool.try_create()?;
                         let commit = match repo.find_commit(commit_oid)? {
@@ -869,5 +912,67 @@ impl<'repo> RebasePlanBuilder<'repo> {
             }
             None => true,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Mutex;
+
+    use rayon::ThreadPoolBuilder;
+
+    use crate::core::eventlog::{EventLogDb, EventReplayer};
+    use crate::core::formatting::Glyphs;
+    use crate::testing::make_git;
+
+    use super::*;
+
+    #[test]
+    fn test_cache_shared_between_builders() -> eyre::Result<()> {
+        let git = make_git()?;
+        git.init_repo()?;
+
+        let test1_oid = git.commit_file("test1", 1)?;
+        git.commit_file("test2", 2)?;
+        let test3_oid = git.commit_file("test3", 3)?;
+
+        let effects = Effects::new_suppress_for_test(Glyphs::text());
+        let repo = git.get_repo()?;
+        let conn = repo.get_db_conn()?;
+        let event_log_db = EventLogDb::new(&conn)?;
+        let event_replayer = EventReplayer::from_event_log_db(&effects, &repo, &event_log_db)?;
+        let event_cursor = event_replayer.make_default_cursor();
+        let references_snapshot = repo.get_references_snapshot()?;
+        let dag = Dag::open_and_sync(
+            &effects,
+            &repo,
+            &event_replayer,
+            event_cursor,
+            &references_snapshot,
+        )?;
+
+        let pool = ThreadPoolBuilder::new().build()?;
+        let repo_pool = RepoPool::new(RepoResource {
+            repo: Mutex::new(repo.try_clone()?),
+        });
+        let mut builder = RebasePlanBuilder::new(&dag);
+        let builder2 = builder.clone();
+        builder.move_subtree(test3_oid, test1_oid)?;
+        let result = builder.build(
+            &effects,
+            &pool,
+            &repo_pool,
+            &BuildRebasePlanOptions {
+                dump_rebase_constraints: false,
+                dump_rebase_plan: false,
+                detect_duplicate_commits_via_patch_id: true,
+            },
+        )?;
+        let result = result.unwrap();
+        let _ignored: Option<RebasePlan> = result;
+        assert!(builder.touched_paths_cache.contains_key(&test1_oid));
+        assert!(builder2.touched_paths_cache.contains_key(&test1_oid));
+
+        Ok(())
     }
 }
