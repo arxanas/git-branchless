@@ -540,7 +540,8 @@ impl<'repo> RebasePlanBuilder<'repo> {
         state: &BuildState,
         effects: &Effects,
     ) -> Result<(), BuildRebasePlanError> {
-        let (_effects, _progress) = effects.start_operation(OperationType::CheckForCycles);
+        let (effects, _progress) = effects.start_operation(OperationType::CheckForCycles);
+        let _effects = effects;
 
         // FIXME: O(n^2) algorithm.
         for oid in state.constraints.keys().sorted() {
