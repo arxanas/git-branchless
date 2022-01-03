@@ -749,17 +749,9 @@ impl<'repo> RebasePlanBuilder<'repo> {
                 .try_collect()?
         };
 
-        let path = {
-            let (effects, _progress) = effects.start_operation(OperationType::WalkCommits);
-
-            let path =
-                self.dag
-                    .find_path_to_merge_base(&effects, repo, dest_oid, merge_base_oid)?;
-            match path {
-                None => return Ok(HashSet::new()),
-                Some(path) => path,
-            }
-        };
+        let path = self
+            .dag
+            .get_range(effects, repo, merge_base_oid, dest_oid)?;
 
         let path = {
             self.filter_path_to_merge_base_commits(
@@ -808,7 +800,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
         pool: &ThreadPool,
         repo_pool: &RepoPool,
         repo: &'repo Repo,
-        path: Vec<Commit<'repo>>,
+        path: Vec<NonZeroOid>,
         touched_commits: Vec<Commit>,
     ) -> eyre::Result<Vec<Commit<'repo>>> {
         let (effects, _progress) = effects.start_operation(OperationType::FilterCommits);
@@ -824,10 +816,6 @@ impl<'repo> RebasePlanBuilder<'repo> {
                 Cached(T),
                 NotCached(U),
             }
-            let path = path
-                .into_iter()
-                .map(|commit| commit.get_oid())
-                .collect_vec();
             let touched_paths_cache = &self.touched_paths_cache;
             // Check cache before distributing work to threads.
             let path: Vec<CacheLookupResult<Option<NonZeroOid>, NonZeroOid>> = {

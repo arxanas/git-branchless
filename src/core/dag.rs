@@ -312,6 +312,9 @@ impl Dag {
         parent_oid: NonZeroOid,
         child_oid: NonZeroOid,
     ) -> eyre::Result<Vec<NonZeroOid>> {
+        let (effects, _progress) = effects.start_operation(OperationType::WalkCommits);
+        let _effects = effects;
+
         let roots = CommitSet::from_static_names(vec![CommitVertex::from(parent_oid)]);
         let heads = CommitSet::from_static_names(vec![CommitVertex::from(child_oid)]);
         let range = self.inner.range(roots, heads).wrap_err("Computing range")?;
@@ -372,50 +375,6 @@ impl Dag {
             .union(&anomalous_main_branch_commits);
 
         Ok(active_heads)
-    }
-
-    /// Find a shortest path between the given commits.
-    ///
-    /// This is particularly important for multi-parent commits (i.e. merge commits).
-    /// If we don't happen to traverse the correct parent, we may end up traversing a
-    /// huge amount of commit history, with a significant performance hit.
-    ///
-    /// Args:
-    /// * `repo`: The Git repository.
-    /// * `commit_oid`: The OID of the commit to start at. We take parents of the
-    /// provided commit until we end up at the target OID.
-    /// * `target_oid`: The OID of the commit to end at.
-    ///
-    /// Returns: A path of commits from `commit_oid` through parents to `target_oid`.
-    /// The path includes `commit_oid` at the beginning and `target_oid` at the end.
-    /// If there is no such path, returns `None`.
-    pub fn find_path_to_merge_base<'repo>(
-        &self,
-        effects: &Effects,
-        repo: &'repo Repo,
-        commit_oid: NonZeroOid,
-        target_oid: NonZeroOid,
-    ) -> eyre::Result<Option<Vec<Commit<'repo>>>> {
-        let range = self.get_range(effects, repo, target_oid, commit_oid)?;
-        let path = {
-            let mut path = Vec::new();
-            for oid in range {
-                let commit = match repo.find_commit(oid)? {
-                    Some(commit) => commit,
-                    None => {
-                        warn!("Commit in path to merge-base not found: {:?}", oid);
-                        continue;
-                    }
-                };
-                path.push(commit)
-            }
-            path
-        };
-        if path.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(path))
-        }
     }
 
     /// Find a path from the provided head to its merge-base with the main
