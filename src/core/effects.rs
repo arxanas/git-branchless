@@ -1,6 +1,5 @@
 //! Wrappers around various side effects.
 
-use std::collections::HashMap;
 use std::convert::TryInto;
 use std::fmt::Write;
 use std::io::{stderr, stdout, Stderr, Stdout, Write as WriteIo};
@@ -79,6 +78,145 @@ enum OutputDest {
     },
 }
 
+/// An index into the recursive hierarchy of progress bars. For example, the key
+/// `[OperationType::GetMergeBase, OperationType::WalkCommits]` refers to the
+/// "walk commits" operation which is nested under the "get merge-base"
+/// operation.
+type OperationKey = [OperationType];
+
+#[derive(Debug, Default)]
+struct RootOperation {
+    multi_progress: MultiProgress,
+    children: Vec<OperationState>,
+}
+
+impl RootOperation {
+    pub fn hide_multi_progress(&mut self) {
+        self.multi_progress
+            .set_draw_target(ProgressDrawTarget::hidden());
+    }
+
+    pub fn show_multi_progress(&mut self) {
+        self.multi_progress
+            .set_draw_target(ProgressDrawTarget::stderr());
+    }
+
+    /// If all operations are no longer in progress, clear the multi-progress bar.
+    pub fn clear_operations_if_finished(&mut self) {
+        if self
+            .children
+            .iter()
+            .all(|operation_state| operation_state.start_times.is_empty())
+        {
+            if self.multi_progress.clear().is_err() {
+                // Ignore error. Assume that the draw target is no longer available
+                // to write to.
+            }
+            self.children.clear();
+        }
+    }
+
+    pub fn get_or_create_child(&mut self, key: &[OperationType]) -> &mut OperationState {
+        match key {
+            [] => panic!("Empty operation key"),
+            [first, rest @ ..] => {
+                let index = match self
+                    .children
+                    .iter()
+                    .find_position(|child| &child.operation_type == first)
+                {
+                    Some((child_index, _)) => child_index,
+                    None => {
+                        self.children.push(OperationState {
+                            operation_type: first.clone(),
+                            progress_bar: ProgressBar::new_spinner(),
+                            has_meter: Default::default(),
+                            start_times: Default::default(),
+                            elapsed_duration: Default::default(),
+                            children: Default::default(),
+                        });
+                        self.children.len() - 1
+                    }
+                };
+                self.children
+                    .get_mut(index)
+                    .unwrap()
+                    .get_or_create_child(rest)
+            }
+        }
+    }
+
+    pub fn get_child(&mut self, key: &[OperationType]) -> Option<&mut OperationState> {
+        match key {
+            [] => panic!("Empty operation key"),
+            [first, rest @ ..] => {
+                let index = self
+                    .children
+                    .iter()
+                    .find_position(|child| &child.operation_type == first);
+                match index {
+                    Some((index, _)) => self.children.get_mut(index).unwrap().get_child(rest),
+                    None => None,
+                }
+            }
+        }
+    }
+
+    /// Re-render all operation progress bars. This does not change their
+    /// ordering like [`refresh_multi_progress`] does.
+    pub fn tick(&mut self) {
+        let operations = {
+            let mut acc = Vec::new();
+            self.traverse_operations(&mut acc, 0, &self.children);
+            acc
+        };
+        for (_, operation) in operations {
+            operation.tick();
+        }
+    }
+
+    /// Update the ordering of progress bars in the multi-progress. This should be called after
+    pub fn refresh_multi_progress(&mut self) {
+        let operations = {
+            let mut acc = Vec::new();
+            self.traverse_operations(&mut acc, 0, &self.children);
+            acc
+        };
+        if self.multi_progress.clear().is_err() {
+            // Ignore the error and assume that the multi-progress is now dead,
+            // so it doesn't need to be updated.
+        }
+        for (nesting_level, operation) in operations {
+            // Avoid deadlock inside the progress bar library when we call
+            // `add`, which sets the draw target again.
+            operation
+                .progress_bar
+                .set_draw_target(ProgressDrawTarget::hidden());
+
+            self.multi_progress.add(operation.progress_bar.clone());
+
+            // `set_prefix` forces a render, so only call it after it's been
+            // added to the multi-progress.
+            operation
+                .progress_bar
+                .set_prefix("  ".repeat(nesting_level));
+        }
+        self.tick();
+    }
+
+    fn traverse_operations<'a>(
+        &self,
+        acc: &mut Vec<(usize, &'a OperationState)>,
+        current_level: usize,
+        operations: &'a [OperationState],
+    ) {
+        for operation in operations {
+            acc.push((current_level, operation));
+            self.traverse_operations(acc, current_level + 1, &operation.children);
+        }
+    }
+}
+
 #[derive(Debug)]
 struct OperationState {
     operation_type: OperationType,
@@ -86,6 +224,7 @@ struct OperationState {
     has_meter: bool,
     start_times: Vec<Instant>,
     elapsed_duration: Duration,
+    children: Vec<OperationState>,
 }
 
 impl OperationState {
@@ -97,6 +236,52 @@ impl OperationState {
 
     pub fn inc_progress(&mut self, increment: usize) {
         self.progress_bar.inc(increment.try_into().unwrap());
+    }
+
+    pub fn get_or_create_child(&mut self, child_type: &[OperationType]) -> &mut Self {
+        match child_type {
+            [] => self,
+            [first, rest @ ..] => {
+                let index = match self
+                    .children
+                    .iter()
+                    .find_position(|child| &child.operation_type == first)
+                {
+                    Some((child_index, _)) => child_index,
+                    None => {
+                        self.children.push(OperationState {
+                            operation_type: first.clone(),
+                            progress_bar: ProgressBar::new_spinner(),
+                            has_meter: Default::default(),
+                            start_times: Default::default(),
+                            elapsed_duration: Default::default(),
+                            children: Default::default(),
+                        });
+                        self.children.len() - 1
+                    }
+                };
+                self.children
+                    .get_mut(index)
+                    .unwrap()
+                    .get_or_create_child(rest)
+            }
+        }
+    }
+
+    pub fn get_child(&mut self, child_type: &[OperationType]) -> Option<&mut Self> {
+        match child_type {
+            [] => Some(self),
+            [first, rest @ ..] => {
+                let index = self
+                    .children
+                    .iter()
+                    .find_position(|child| &child.operation_type == first);
+                match index {
+                    Some((index, _)) => self.children.get_mut(index).unwrap().get_child(rest),
+                    None => None,
+                }
+            }
+        }
     }
 
     pub fn tick(&self) {
@@ -141,10 +326,9 @@ impl OperationState {
 pub struct Effects {
     glyphs: Glyphs,
     dest: OutputDest,
-    multi_progress: Arc<MultiProgress>,
     updater_thread_handle: Arc<RwLock<UpdaterThreadHandle>>,
-    nesting_level: usize,
-    operation_states: Arc<RwLock<HashMap<OperationType, OperationState>>>,
+    operation_key: Vec<OperationType>,
+    root_operation: Arc<Mutex<RootOperation>>,
 }
 
 impl std::fmt::Debug for Effects {
@@ -163,12 +347,13 @@ struct UpdaterThreadHandle {
 }
 
 fn spawn_progress_updater_thread(
-    multi_progress: &Arc<MultiProgress>,
-    operation_states: &Arc<RwLock<HashMap<OperationType, OperationState>>>,
+    root_operation: &Arc<Mutex<RootOperation>>,
 ) -> Arc<RwLock<UpdaterThreadHandle>> {
-    multi_progress.set_draw_target(ProgressDrawTarget::hidden());
-    let multi_progress = Arc::downgrade(multi_progress);
-    let operation_states = Arc::downgrade(operation_states);
+    {
+        let mut root_operation = root_operation.lock().unwrap();
+        root_operation.hide_multi_progress();
+    }
+    let root_operation = Arc::downgrade(root_operation);
     let handle = Arc::new(RwLock::new(UpdaterThreadHandle { is_visible: false }));
 
     thread::spawn({
@@ -179,9 +364,10 @@ fn spawn_progress_updater_thread(
             thread::sleep(Duration::from_millis(250));
             {
                 let mut handle = handle.write().unwrap();
-                match multi_progress.upgrade() {
-                    Some(multi_progress) => {
-                        multi_progress.set_draw_target(ProgressDrawTarget::stderr())
+                match root_operation.upgrade() {
+                    Some(root_operation) => {
+                        let mut root_operation = root_operation.lock().unwrap();
+                        root_operation.show_multi_progress();
                     }
                     None => return,
                 }
@@ -191,13 +377,11 @@ fn spawn_progress_updater_thread(
             loop {
                 // Drop the `Arc` after this block, before the sleep, to make sure
                 // that progress bars aren't kept alive longer than they should be.
-                match operation_states.upgrade() {
+                match root_operation.upgrade() {
                     None => return,
-                    Some(operation_states) => {
-                        let operation_states = operation_states.read().unwrap();
-                        for operation_state in operation_states.values() {
-                            operation_state.tick();
-                        }
+                    Some(root_operation) => {
+                        let mut root_operation = root_operation.lock().unwrap();
+                        root_operation.tick();
                     }
                 }
 
@@ -212,17 +396,14 @@ fn spawn_progress_updater_thread(
 impl Effects {
     /// Constructor. Writes to stdout.
     pub fn new(glyphs: Glyphs) -> Self {
-        let multi_progress = Default::default();
-        let operation_states = Default::default();
-        let updater_thread_handle =
-            spawn_progress_updater_thread(&multi_progress, &operation_states);
+        let root_operation = Default::default();
+        let updater_thread_handle = spawn_progress_updater_thread(&root_operation);
         Effects {
             glyphs,
             dest: OutputDest::Stdout,
-            multi_progress,
             updater_thread_handle,
-            nesting_level: Default::default(),
-            operation_states,
+            operation_key: Default::default(),
+            root_operation,
         }
     }
 
@@ -231,10 +412,9 @@ impl Effects {
         Effects {
             glyphs,
             dest: OutputDest::Suppress,
-            multi_progress: Default::default(),
             updater_thread_handle: Default::default(),
-            nesting_level: Default::default(),
-            operation_states: Default::default(),
+            operation_key: Default::default(),
+            root_operation: Default::default(),
         }
     }
 
@@ -250,18 +430,17 @@ impl Effects {
                 stdout: Arc::clone(stdout),
                 stderr: Arc::clone(stderr),
             },
-            multi_progress: Default::default(),
             updater_thread_handle: Default::default(),
-            nesting_level: Default::default(),
-            operation_states: Default::default(),
+            operation_key: Default::default(),
+            root_operation: Default::default(),
         }
     }
 
     /// Send output to an appropriate place when using a terminal user interface
     /// (TUI), such as for `git undo`.
     pub fn enable_tui_mode(&self) -> Self {
-        let multi_progress = Arc::clone(&self.multi_progress);
-        multi_progress.set_draw_target(ProgressDrawTarget::hidden());
+        let mut root_operation = self.root_operation.lock().unwrap();
+        root_operation.hide_multi_progress();
         Self {
             dest: OutputDest::Suppress,
             ..self.clone()
@@ -288,9 +467,14 @@ impl Effects {
     /// see the aggregate time it took to carry out sibling operations, i.e. the
     /// same operation called multiple times in a loop.
     pub fn start_operation(&self, operation_type: OperationType) -> (Effects, ProgressHandle) {
+        let operation_key = {
+            let mut result = self.operation_key.clone();
+            result.push(operation_type);
+            result
+        };
         let progress = ProgressHandle {
             effects: self,
-            operation_type: operation_type.clone(),
+            operation_key: operation_key.clone(),
         };
         match self.dest {
             OutputDest::Stdout => {}
@@ -300,64 +484,43 @@ impl Effects {
         }
 
         let now = Instant::now();
-        let mut operation_states = self.operation_states.write().unwrap();
-
-        let mut nesting_level = self.nesting_level;
-        let operation_state = operation_states
-            .entry(operation_type.clone())
-            .or_insert_with(|| {
-                let progress_bar = self.multi_progress.add(ProgressBar::new_spinner());
-                nesting_level += 1;
-                progress_bar.set_prefix("  ".repeat(nesting_level));
-                let operation_state = OperationState {
-                    operation_type,
-                    progress_bar,
-                    start_times: Vec::new(),
-                    has_meter: false,
-                    elapsed_duration: Default::default(),
-                };
-                operation_state.tick();
-                operation_state
-            });
+        let mut root_operation = self.root_operation.lock().unwrap();
+        let operation_state = root_operation.get_or_create_child(&operation_key);
         operation_state.start_times.push(now);
+        root_operation.refresh_multi_progress();
 
         let effects = Self {
-            nesting_level,
+            operation_key,
             ..self.clone()
         };
         (effects, progress)
     }
 
-    fn on_notify_progress(&self, operation_type: OperationType, current: usize, total: usize) {
-        let mut operation_states = self.operation_states.write().unwrap();
-        let operation_state = match operation_states.get_mut(&operation_type) {
-            Some(operation_state) => operation_state,
-            None => return,
-        };
-
+    fn on_notify_progress(&self, operation_key: &OperationKey, current: usize, total: usize) {
+        let mut root_operation = self.root_operation.lock().unwrap();
+        let operation_state = root_operation.get_or_create_child(operation_key);
         operation_state.set_progress(current, total);
     }
 
-    fn on_notify_progress_inc(&self, operation_type: OperationType, increment: usize) {
-        let mut operation_states = self.operation_states.write().unwrap();
-        let operation_state = match operation_states.get_mut(&operation_type) {
+    fn on_notify_progress_inc(&self, operation_key: &OperationKey, increment: usize) {
+        let mut root_operation = self.root_operation.lock().unwrap();
+        let operation_state = match root_operation.get_child(operation_key) {
             Some(operation_state) => operation_state,
             None => return,
         };
-
         operation_state.inc_progress(increment);
     }
 
-    fn on_drop_progress_handle(&self, operation_type: OperationType) {
+    fn on_drop_progress_handle(&self, operation_key: &OperationKey) {
         match self.dest {
             OutputDest::Stdout => {}
             OutputDest::Suppress | OutputDest::BufferForTest { .. } => return,
         }
 
         let now = Instant::now();
-        let mut operation_states = self.operation_states.write().unwrap();
+        let mut root_operation = self.root_operation.lock().unwrap();
 
-        let operation_state = match operation_states.get_mut(&operation_type) {
+        let operation_state = match root_operation.get_child(operation_key) {
             Some(operation_state) => operation_state,
             None => {
                 warn!("Progress operation not started");
@@ -388,14 +551,7 @@ impl Effects {
             Duration::ZERO
         };
 
-        // Reset all elapsed times only if the root-level operation completed.
-        if operation_states
-            .values()
-            .all(|operation_state| operation_state.start_times.is_empty())
-        {
-            self.multi_progress.clear().unwrap();
-            operation_states.clear();
-        }
+        root_operation.clear_operations_if_finished();
     }
 
     /// Get the set of glyphs associated with the output.
@@ -410,7 +566,7 @@ impl Effects {
             dest: self.dest.clone(),
             buffer: Default::default(),
             updater_thread_handle: Arc::clone(&self.updater_thread_handle),
-            operation_states: Arc::clone(&self.operation_states),
+            root_operation: Arc::clone(&self.root_operation),
         }
     }
 
@@ -421,7 +577,7 @@ impl Effects {
             dest: self.dest.clone(),
             buffer: Default::default(),
             updater_thread_handle: Arc::clone(&self.updater_thread_handle),
-            operation_states: Arc::clone(&self.operation_states),
+            root_operation: Arc::clone(&self.root_operation),
         }
     }
 }
@@ -430,19 +586,19 @@ trait WriteProgress {
     type Stream: WriteIo;
     fn get_stream() -> Self::Stream;
     fn get_buffer(&mut self) -> &mut String;
-    fn get_operation_states(&self) -> Arc<RwLock<HashMap<OperationType, OperationState>>>;
+    fn get_root_operation(&self) -> Arc<Mutex<RootOperation>>;
     fn get_updater_thread_handle(&self) -> Arc<RwLock<UpdaterThreadHandle>>;
     fn style_output(output: &str) -> String;
 
     fn flush(&mut self) {
-        let operation_states = self.get_operation_states();
-        let operation_states = operation_states.read().unwrap();
+        let root_operation = self.get_root_operation();
+        let root_operation = root_operation.lock().unwrap();
 
         // Get an arbitrary progress meter. It turns out that when a
         // `ProgressBar` is included in a `MultiProgress`, it doesn't matter
         // which of them we call `println` on. The output will be printed above
         // the `MultiProgress` regardless.
-        match operation_states.values().next() {
+        match root_operation.children.get(0) {
             None => {
                 // There's no progress meters, so we can write directly to
                 // stdout. Note that we don't style output here; instead, we
@@ -502,7 +658,7 @@ trait WriteProgress {
                     new_buffer
                 };
             }
-        }
+        };
     }
 
     fn drop(&mut self) {
@@ -529,7 +685,7 @@ pub struct OutputStream {
     dest: OutputDest,
     buffer: String,
     updater_thread_handle: Arc<RwLock<UpdaterThreadHandle>>,
-    operation_states: Arc<RwLock<HashMap<OperationType, OperationState>>>,
+    root_operation: Arc<Mutex<RootOperation>>,
 }
 
 impl WriteProgress for OutputStream {
@@ -543,8 +699,8 @@ impl WriteProgress for OutputStream {
         &mut self.buffer
     }
 
-    fn get_operation_states(&self) -> Arc<RwLock<HashMap<OperationType, OperationState>>> {
-        Arc::clone(&self.operation_states)
+    fn get_root_operation(&self) -> Arc<Mutex<RootOperation>> {
+        Arc::clone(&self.root_operation)
     }
 
     fn get_updater_thread_handle(&self) -> Arc<RwLock<UpdaterThreadHandle>> {
@@ -588,7 +744,7 @@ pub struct ErrorStream {
     dest: OutputDest,
     buffer: String,
     updater_thread_handle: Arc<RwLock<UpdaterThreadHandle>>,
-    operation_states: Arc<RwLock<HashMap<OperationType, OperationState>>>,
+    root_operation: Arc<Mutex<RootOperation>>,
 }
 
 impl WriteProgress for ErrorStream {
@@ -602,8 +758,8 @@ impl WriteProgress for ErrorStream {
         &mut self.buffer
     }
 
-    fn get_operation_states(&self) -> Arc<RwLock<HashMap<OperationType, OperationState>>> {
-        Arc::clone(&self.operation_states)
+    fn get_root_operation(&self) -> Arc<Mutex<RootOperation>> {
+        Arc::clone(&self.root_operation)
     }
 
     fn get_updater_thread_handle(&self) -> Arc<RwLock<UpdaterThreadHandle>> {
@@ -647,13 +803,12 @@ impl Drop for ErrorStream {
 /// the interactive progress display.
 pub struct ProgressHandle<'a> {
     effects: &'a Effects,
-    operation_type: OperationType,
+    operation_key: Vec<OperationType>,
 }
 
 impl Drop for ProgressHandle<'_> {
     fn drop(&mut self) {
-        self.effects
-            .on_drop_progress_handle(self.operation_type.clone())
+        self.effects.on_drop_progress_handle(&self.operation_key)
     }
 }
 
@@ -663,7 +818,7 @@ impl ProgressHandle<'_> {
     /// through the operation.
     pub fn notify_progress(&self, current: usize, total: usize) {
         self.effects
-            .on_notify_progress(self.operation_type.clone(), current, total);
+            .on_notify_progress(&self.operation_key, current, total);
     }
 
     /// Notify the progress meter that additional progress has taken place.
@@ -671,7 +826,7 @@ impl ProgressHandle<'_> {
     /// much total work there is.
     pub fn notify_progress_inc(&self, increment: usize) {
         self.effects
-            .on_notify_progress_inc(self.operation_type.clone(), increment);
+            .on_notify_progress_inc(&self.operation_key, increment);
     }
 }
 
@@ -685,27 +840,30 @@ mod tests {
         let (effects2, progress2) = effects.start_operation(OperationType::GetMergeBase);
 
         {
-            let operation_states = effects.operation_states.read().unwrap();
-            let get_merge_base_operation =
-                operation_states.get(&OperationType::GetMergeBase).unwrap();
+            let mut root_operation = effects.root_operation.lock().unwrap();
+            let get_merge_base_operation = root_operation
+                .get_child(&[OperationType::GetMergeBase])
+                .unwrap();
             assert_eq!(get_merge_base_operation.start_times.len(), 1);
         }
 
         std::thread::sleep(Duration::from_millis(1));
         let (_effects3, progress3) = effects.start_operation(OperationType::GetMergeBase);
         let earlier_start_time = {
-            let operation_states = effects.operation_states.read().unwrap();
-            let get_merge_base_operation =
-                operation_states.get(&OperationType::GetMergeBase).unwrap();
+            let mut root_operation = effects.root_operation.lock().unwrap();
+            let get_merge_base_operation = root_operation
+                .get_child(&[OperationType::GetMergeBase])
+                .ok_or_else(|| eyre::eyre!("Could not find merge-base operation"))?;
             assert_eq!(get_merge_base_operation.start_times.len(), 2);
             get_merge_base_operation.start_times[0]
         };
 
         drop(progress3);
         {
-            let operation_states = effects.operation_states.read().unwrap();
-            let get_merge_base_operation =
-                operation_states.get(&OperationType::GetMergeBase).unwrap();
+            let mut root_operation = effects.root_operation.lock().unwrap();
+            let get_merge_base_operation = root_operation
+                .get_child(&[OperationType::GetMergeBase])
+                .unwrap();
             // Ensure that we try to keep the earliest times in the list, to
             // accurately gauge the wall-clock time.
             assert_eq!(
@@ -719,19 +877,20 @@ mod tests {
         std::thread::sleep(Duration::from_millis(1));
         drop(progress4);
         {
-            let operation_states = effects.operation_states.read().unwrap();
+            let mut root_operation = effects.root_operation.lock().unwrap();
             // The operation should still be present until the root-level
             // operation has finished, even if it's not currently in progress.
-            let calculate_diff_operation =
-                operation_states.get(&OperationType::CalculateDiff).unwrap();
+            let calculate_diff_operation = root_operation
+                .get_child(&[OperationType::GetMergeBase, OperationType::CalculateDiff])
+                .unwrap();
             assert!(calculate_diff_operation.start_times.is_empty());
             assert!(calculate_diff_operation.elapsed_duration >= Duration::from_millis(1));
         }
 
         drop(progress2);
         {
-            let operation_states = effects.operation_states.read().unwrap();
-            assert!(operation_states.is_empty());
+            let root_operation = effects.root_operation.lock().unwrap();
+            assert!(root_operation.children.is_empty());
         }
 
         Ok(())
