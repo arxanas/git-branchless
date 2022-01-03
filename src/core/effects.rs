@@ -23,6 +23,7 @@ pub enum OperationType {
     CalculateDiff,
     CalculatePatchId,
     CheckForCycles,
+    ConstrainCommits,
     DetectDuplicateCommits,
     FilterByTouchedPaths,
     FilterCommits,
@@ -33,6 +34,7 @@ pub enum OperationType {
     InitializeRebase,
     MakeGraph,
     ProcessEvents,
+    ReadingFromCache,
     RunGitCommand(Arc<String>),
     UpdateCommitGraph,
     WalkCommits,
@@ -45,6 +47,7 @@ impl ToString for OperationType {
             OperationType::CalculateDiff => "Computing diffs",
             OperationType::CalculatePatchId => "Hashing commit contents",
             OperationType::CheckForCycles => "Checking for cycles",
+            OperationType::ConstrainCommits => "Creating commit constraints",
             OperationType::DetectDuplicateCommits => "Checking for duplicate commits",
             OperationType::FilterByTouchedPaths => "Filtering upstream commits by touched paths",
             OperationType::FilterCommits => "Filtering commits",
@@ -55,6 +58,7 @@ impl ToString for OperationType {
             OperationType::InitializeRebase => "Initializing rebase",
             OperationType::MakeGraph => "Examining local history",
             OperationType::ProcessEvents => "Processing events",
+            OperationType::ReadingFromCache => "Reading from cache",
             OperationType::RunGitCommand(command) => {
                 return format!("Running Git command: {}", &command)
             }
