@@ -107,7 +107,7 @@ pub struct Glyphs {
 impl Glyphs {
     /// Make the `Glyphs` object appropriate for `stdout`.
     pub fn detect() -> Self {
-        let color_support = concolor_control::get(concolor_control::Stream::Stdout);
+        let color_support = concolor::get(concolor::Stream::Stdout);
         if color_support.color() {
             Glyphs::pretty()
         } else {
