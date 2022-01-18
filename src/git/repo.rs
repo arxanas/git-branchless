@@ -854,7 +854,7 @@ Either create it, or update the main branch setting by running:
             None => {
                 let NonZeroOid { inner: oid } = oid;
                 Ok(StyledString::styled(
-                    format!("<commit not available: {}>", oid.to_string()),
+                    format!("<commit not available: {}>", oid),
                     BaseColor::Red.light(),
                 ))
             }
@@ -1455,7 +1455,7 @@ impl<'repo> Commit<'repo> {
         let preview = StyledStringBuilder::from_lines(vec![
             StyledStringBuilder::new()
                 .append_styled(
-                    format!("Commit:\t{}", self.get_oid().to_string()),
+                    format!("Commit:\t{}", self.get_oid()),
                     BaseColor::Yellow.light(),
                 )
                 .build(),
