@@ -690,7 +690,7 @@ mod in_memory {
         // produce a spurious abandoned-branch warning.
         let post_rewrite_stdin: String = rewritten_oids
             .iter()
-            .map(|(old_oid, new_oid)| format!("{} {}\n", old_oid.to_string(), new_oid.to_string()))
+            .map(|(old_oid, new_oid)| format!("{} {}\n", old_oid, new_oid))
             .collect();
         let post_rewrite_stdin = OsString::from(post_rewrite_stdin);
         git_run_info.run_hook(

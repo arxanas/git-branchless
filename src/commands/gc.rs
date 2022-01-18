@@ -73,7 +73,7 @@ pub fn mark_commit_reachable(repo: &Repo, commit_oid: NonZeroOid) -> eyre::Resul
         return Ok(());
     }
 
-    let ref_name = format!("refs/branchless/{}", commit_oid.to_string());
+    let ref_name = format!("refs/branchless/{}", commit_oid);
     eyre::ensure!(
         Reference::is_valid_name(&ref_name),
         format!("Invalid ref name to mark commit as reachable: {}", ref_name)
