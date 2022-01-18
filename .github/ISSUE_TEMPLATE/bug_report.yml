@@ -38,7 +38,16 @@ body:
     placeholder: "Example: git-branchless 0.3.7"
   validations:
     required: true
-  
+
+- type: input
+  id: git-version
+  attributes:
+    label: Version of `git`
+    description: Paste the output of `git version` here.
+    placeholder: "Example: git version 2.28.0"
+  validations:
+    required: true
+
 - type: input
   id: rustc-version
   attributes:
