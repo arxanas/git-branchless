@@ -737,17 +737,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
             Some(merge_base_oid) => merge_base_oid,
         };
 
-        let touched_commits = {
-            let (effects, _progress) = effects.start_operation(OperationType::ConstrainCommits);
-            let _effects = effects;
-            state
-                .constraints
-                .values()
-                .flatten()
-                .map(|oid| repo.find_commit(*oid))
-                .flatten_ok()
-                .try_collect()?
-        };
+        let touched_commit_oids = state.constraints.values().flatten().copied().collect();
 
         let path = self
             .dag
@@ -760,7 +750,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
                 repo_pool,
                 repo,
                 path,
-                touched_commits,
+                touched_commit_oids,
             )?
         };
 
@@ -801,10 +791,15 @@ impl<'repo> RebasePlanBuilder<'repo> {
         repo_pool: &RepoPool,
         repo: &'repo Repo,
         path: Vec<NonZeroOid>,
-        touched_commits: Vec<Commit>,
+        touched_commit_oids: Vec<NonZeroOid>,
     ) -> eyre::Result<Vec<Commit<'repo>>> {
         let (effects, _progress) = effects.start_operation(OperationType::FilterCommits);
 
+        let touched_commits: Vec<Commit> = touched_commit_oids
+            .into_iter()
+            .map(|oid| repo.find_commit(oid))
+            .flatten_ok()
+            .try_collect()?;
         let local_touched_paths: Vec<HashSet<PathBuf>> = touched_commits
             .into_iter()
             .map(|commit| repo.get_paths_touched_by_commit(&commit))
