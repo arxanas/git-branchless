@@ -75,7 +75,7 @@ pub fn hide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::Re
         writeln!(
             effects.get_output_stream(),
             "Hid commit: {}",
-            printable_styled_string(&glyphs, commit.friendly_describe()?)?
+            printable_styled_string(&glyphs, commit.friendly_describe(&glyphs)?)?
         )?;
         if let CommitActivityStatus::Obsolete =
             event_replayer.get_cursor_commit_activity_status(cursor, commit.get_oid())
@@ -87,6 +87,7 @@ pub fn hide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::Re
         }
 
         let commit_target_oid = render_node_descriptors(
+            &glyphs,
             &NodeObject::Commit { commit },
             &mut [&mut CommitOidDescriptor::new(false)?],
         )?;
@@ -156,7 +157,7 @@ pub fn unhide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::
         writeln!(
             effects.get_output_stream(),
             "Unhid commit: {}",
-            printable_styled_string(&glyphs, commit.friendly_describe()?)?,
+            printable_styled_string(&glyphs, commit.friendly_describe(&glyphs)?)?,
         )?;
         if let CommitActivityStatus::Active =
             event_replayer.get_cursor_commit_activity_status(cursor, commit.get_oid())
@@ -168,6 +169,7 @@ pub fn unhide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::
         }
 
         let commit_target_oid = render_node_descriptors(
+            &glyphs,
             &NodeObject::Commit { commit },
             &mut [&mut CommitOidDescriptor::new(false)?],
         )?;

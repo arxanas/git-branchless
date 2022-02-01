@@ -100,6 +100,7 @@ mod skim {
         ) -> eyre::Result<Self> {
             let glyphs = Glyphs::pretty();
             let styled_summary = render_node_descriptors(
+                &glyphs,
                 &NodeObject::Commit {
                     commit: commit.clone(),
                 },

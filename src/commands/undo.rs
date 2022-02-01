@@ -22,7 +22,7 @@ use crate::commands::smartlog::{make_smartlog_graph, render_graph};
 use crate::core::dag::Dag;
 use crate::core::effects::Effects;
 use crate::core::eventlog::{Event, EventCursor, EventLogDb, EventReplayer, EventTransactionId};
-use crate::core::formatting::{printable_styled_string, Pluralize, StyledStringBuilder};
+use crate::core::formatting::{printable_styled_string, Glyphs, Pluralize, StyledStringBuilder};
 use crate::core::node_descriptors::{
     BranchesDescriptor, CommitMessageDescriptor, CommitOidDescriptor,
     DifferentialRevisionDescriptor, ObsolescenceExplanationDescriptor, RelativeTimeDescriptor,
@@ -62,7 +62,7 @@ fn render_cursor_smartlog(
     Ok(result)
 }
 
-fn describe_event(repo: &Repo, event: &Event) -> eyre::Result<Vec<StyledString>> {
+fn describe_event(glyphs: &Glyphs, repo: &Repo, event: &Event) -> eyre::Result<Vec<StyledString>> {
     // Links to https://github.com/arxanas/git-branchless/issues/57
     const EMPTY_EVENT_MESSAGE: &str =
         "This may be an unsupported use-case; see https://git.io/J0b7z";
@@ -76,7 +76,7 @@ fn describe_event(repo: &Repo, event: &Event) -> eyre::Result<Vec<StyledString>>
             vec![
                 StyledStringBuilder::new()
                     .append_plain("Commit ")
-                    .append(repo.friendly_describe_commit_from_oid(*commit_oid)?)
+                    .append(repo.friendly_describe_commit_from_oid(glyphs, *commit_oid)?)
                     .build(),
                 StyledString::new(),
             ]
@@ -96,7 +96,7 @@ fn describe_event(repo: &Repo, event: &Event) -> eyre::Result<Vec<StyledString>>
             vec![
                 StyledStringBuilder::new()
                     .append_plain("Hide commit ")
-                    .append(repo.friendly_describe_commit_from_oid(*commit_oid)?)
+                    .append(repo.friendly_describe_commit_from_oid(glyphs, *commit_oid)?)
                     .build(),
                 StyledString::new(),
             ]
@@ -116,7 +116,7 @@ fn describe_event(repo: &Repo, event: &Event) -> eyre::Result<Vec<StyledString>>
             vec![
                 StyledStringBuilder::new()
                     .append_plain("Unhide commit ")
-                    .append(repo.friendly_describe_commit_from_oid(*commit_oid)?)
+                    .append(repo.friendly_describe_commit_from_oid(glyphs, *commit_oid)?)
                     .build(),
                 StyledString::new(),
             ]
@@ -134,7 +134,7 @@ fn describe_event(repo: &Repo, event: &Event) -> eyre::Result<Vec<StyledString>>
             vec![
                 StyledStringBuilder::new()
                     .append_plain("Check out to ")
-                    .append(repo.friendly_describe_commit_from_oid(*new_oid)?)
+                    .append(repo.friendly_describe_commit_from_oid(glyphs, *new_oid)?)
                     .build(),
                 StyledString::new(),
             ]
@@ -151,11 +151,11 @@ fn describe_event(repo: &Repo, event: &Event) -> eyre::Result<Vec<StyledString>>
             vec![
                 StyledStringBuilder::new()
                     .append_plain("Check out from ")
-                    .append(repo.friendly_describe_commit_from_oid(*old_oid)?)
+                    .append(repo.friendly_describe_commit_from_oid(glyphs, *old_oid)?)
                     .build(),
                 StyledStringBuilder::new()
                     .append_plain("            to ")
-                    .append(repo.friendly_describe_commit_from_oid(*new_oid)?)
+                    .append(repo.friendly_describe_commit_from_oid(glyphs, *new_oid)?)
                     .build(),
             ]
         }
@@ -192,7 +192,7 @@ fn describe_event(repo: &Repo, event: &Event) -> eyre::Result<Vec<StyledString>>
                     .append_plain("Create ")
                     .append_plain(CategorizedReferenceName::new(ref_name).friendly_describe())
                     .append_plain(" at ")
-                    .append(repo.friendly_describe_commit_from_oid(*new_oid)?)
+                    .append(repo.friendly_describe_commit_from_oid(glyphs, *new_oid)?)
                     .build(),
                 StyledString::new(),
             ]
@@ -211,7 +211,7 @@ fn describe_event(repo: &Repo, event: &Event) -> eyre::Result<Vec<StyledString>>
                     .append_plain("Delete ")
                     .append_plain(CategorizedReferenceName::new(ref_name).friendly_describe())
                     .append_plain(" at ")
-                    .append(repo.friendly_describe_commit_from_oid(*old_oid)?)
+                    .append(repo.friendly_describe_commit_from_oid(glyphs, *old_oid)?)
                     .build(),
                 StyledString::new(),
             ]
@@ -231,13 +231,13 @@ fn describe_event(repo: &Repo, event: &Event) -> eyre::Result<Vec<StyledString>>
                     .append_plain("Move ")
                     .append_plain(ref_name.clone())
                     .append_plain(" from ")
-                    .append(repo.friendly_describe_commit_from_oid(*old_oid)?)
+                    .append(repo.friendly_describe_commit_from_oid(glyphs, *old_oid)?)
                     .build(),
                 StyledStringBuilder::new()
                     .append_plain("     ")
                     .append_plain(" ".repeat(ref_name.len()))
                     .append_plain("   to ")
-                    .append(repo.friendly_describe_commit_from_oid(*new_oid)?)
+                    .append(repo.friendly_describe_commit_from_oid(glyphs, *new_oid)?)
                     .build(),
             ]
         }
@@ -251,11 +251,11 @@ fn describe_event(repo: &Repo, event: &Event) -> eyre::Result<Vec<StyledString>>
             vec![
                 StyledStringBuilder::new()
                     .append_plain("Rewrite commit ")
-                    .append(repo.friendly_describe_commit_from_oid(*old_commit_oid)?)
+                    .append(repo.friendly_describe_commit_from_oid(glyphs, *old_commit_oid)?)
                     .build(),
                 StyledStringBuilder::new()
                     .append_plain("           as ")
-                    .append(repo.friendly_describe_commit_from_oid(*new_commit_oid)?)
+                    .append(repo.friendly_describe_commit_from_oid(glyphs, *new_commit_oid)?)
                     .build(),
             ]
         }
@@ -280,13 +280,14 @@ fn describe_event(repo: &Repo, event: &Event) -> eyre::Result<Vec<StyledString>>
 }
 
 fn describe_events_numbered(
+    glyphs: &Glyphs,
     repo: &Repo,
     events: &[Event],
 ) -> Result<Vec<StyledString>, eyre::Error> {
     let mut lines = Vec::new();
     for (i, event) in (1..).zip(events) {
         let num_header = format!("{}. ", i);
-        for (j, event_line) in (0..).zip(describe_event(repo, event)?) {
+        for (j, event_line) in (0..).zip(describe_event(glyphs, repo, event)?) {
             let prefix = if j == 0 {
                 num_header.clone()
             } else {
@@ -386,7 +387,8 @@ fn select_past_event(
                     "There are no previous available events.",
                 )],
                 Some((event_id, events)) => {
-                    let event_description_lines = describe_events_numbered(repo, events)?;
+                    let event_description_lines =
+                        describe_events_numbered(effects.get_glyphs(), repo, events)?;
                     let relative_time_provider = RelativeTimeDescriptor::new(repo, now)?;
                     let relative_time = if relative_time_provider.is_enabled() {
                         format!(
@@ -657,7 +659,7 @@ fn undo_events(
     }
 
     writeln!(effects.get_output_stream(), "Will apply these actions:")?;
-    let events = describe_events_numbered(repo, &inverse_events)?;
+    let events = describe_events_numbered(effects.get_glyphs(), repo, &inverse_events)?;
     for line in events {
         writeln!(
             effects.get_output_stream(),

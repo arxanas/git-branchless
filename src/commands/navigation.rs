@@ -283,7 +283,7 @@ fn advance(
                         effects.get_output_stream(),
                         "  {} {}{}",
                         glyphs.bullet_point,
-                        printable_styled_string(glyphs, child.friendly_describe()?)?,
+                        printable_styled_string(glyphs, child.friendly_describe(glyphs)?)?,
                         descriptor
                     )?;
                 }

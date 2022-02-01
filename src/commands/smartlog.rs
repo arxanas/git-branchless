@@ -338,7 +338,7 @@ mod render {
         let current_node = &graph[&current_oid];
         let is_head = Some(current_oid) == head_oid;
 
-        let text = render_node_descriptors(&current_node.object, commit_descriptors)?;
+        let text = render_node_descriptors(glyphs, &current_node.object, commit_descriptors)?;
         let cursor = match (current_node.is_main, current_node.is_obsolete, is_head) {
             (false, false, false) => glyphs.commit_visible,
             (false, false, true) => glyphs.commit_visible_head,

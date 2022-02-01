@@ -301,7 +301,7 @@ impl MergeConflictInfo {
             .to_string(),
             printable_styled_string(
                 effects.get_glyphs(),
-                repo.friendly_describe_commit_from_oid(self.commit_oid)?
+                repo.friendly_describe_commit_from_oid(effects.get_glyphs(), self.commit_oid)?
             )?
         )?;
         writeln!(
@@ -456,7 +456,7 @@ mod in_memory {
 
                     let commit_description = printable_styled_string(
                         effects.get_glyphs(),
-                        commit_to_apply.friendly_describe()?,
+                        commit_to_apply.friendly_describe(effects.get_glyphs())?,
                     )?;
                     let commit_num = format!("[{}/{}]", i, num_picks);
                     let progress_template = format!("{} {{spinner}} {{wide_msg}}", commit_num);
@@ -526,7 +526,10 @@ mod in_memory {
                         .wrap_err("Looking up just-rebased commit")?;
                     let commit_description = printable_styled_string(
                         effects.get_glyphs(),
-                        repo.friendly_describe_commit_from_oid(rebased_commit_oid)?,
+                        repo.friendly_describe_commit_from_oid(
+                            effects.get_glyphs(),
+                            rebased_commit_oid,
+                        )?,
                     )?;
                     if rebased_commit.is_empty() {
                         rewritten_oids.push((*commit_oid, MaybeZeroOid::Zero));
@@ -582,7 +585,7 @@ mod in_memory {
                     maybe_set_skipped_head_new_oid(*commit_oid, current_oid);
 
                     progress.finish_and_clear();
-                    let commit_description = commit.friendly_describe()?;
+                    let commit_description = commit.friendly_describe(effects.get_glyphs())?;
                     let commit_description =
                         printable_styled_string(effects.get_glyphs(), commit_description)?;
                     writeln!(
@@ -1037,7 +1040,7 @@ pub fn execute_rebase_plan(
                     "The merge commit was: {}",
                     printable_styled_string(
                         effects.get_glyphs(),
-                        repo.friendly_describe_commit_from_oid(commit_oid)?
+                        repo.friendly_describe_commit_from_oid(effects.get_glyphs(), commit_oid)?
                     )?,
                 )?;
             }
@@ -1065,7 +1068,7 @@ pub fn execute_rebase_plan(
                     "The conflicting commit was: {}",
                     printable_styled_string(
                         effects.get_glyphs(),
-                        repo.friendly_describe_commit_from_oid(commit_oid)?
+                        repo.friendly_describe_commit_from_oid(effects.get_glyphs(), commit_oid)?
                     )?,
                 )?;
             }

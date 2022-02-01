@@ -102,7 +102,7 @@ fn hook_post_commit_common(effects: &Effects, hook_name: &str) -> eyre::Result<(
     writeln!(
         effects.get_output_stream(),
         "branchless: processed commit: {}",
-        printable_styled_string(&glyphs, commit.friendly_describe()?)?,
+        printable_styled_string(&glyphs, commit.friendly_describe(&glyphs)?)?,
     )?;
 
     Ok(())
