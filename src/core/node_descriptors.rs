@@ -22,7 +22,7 @@ use crate::core::config::{
 use crate::git::{CategorizedReferenceName, Commit, NonZeroOid, Repo, RepoReferencesSnapshot};
 
 use super::eventlog::{Event, EventCursor, EventReplayer};
-use super::formatting::StyledStringBuilder;
+use super::formatting::{Glyphs, StyledStringBuilder};
 use super::rewrite::find_rewrite_target;
 
 /// An object which can be rendered in the smartlog.
@@ -57,19 +57,24 @@ pub trait NodeDescriptor {
     ///
     /// A return value of `None` indicates that this commit descriptor was
     /// inapplicable for the provided commit.
-    fn describe_node(&mut self, object: &NodeObject) -> eyre::Result<Option<StyledString>>;
+    fn describe_node(
+        &mut self,
+        glyphs: &Glyphs,
+        object: &NodeObject,
+    ) -> eyre::Result<Option<StyledString>>;
 }
 
 /// Get the complete description for a given commit.
 #[instrument(skip(node_descriptors))]
 pub fn render_node_descriptors(
+    glyphs: &Glyphs,
     object: &NodeObject,
     node_descriptors: &mut [&mut dyn NodeDescriptor],
 ) -> eyre::Result<StyledString> {
     let descriptions = node_descriptors
         .iter_mut()
         .filter_map(|provider: &mut &mut dyn NodeDescriptor| {
-            provider.describe_node(object).transpose()
+            provider.describe_node(glyphs, object).transpose()
         })
         .collect::<eyre::Result<Vec<_>>>()?;
     let result = StyledStringBuilder::join(" ", descriptions);
@@ -91,7 +96,11 @@ impl CommitOidDescriptor {
 
 impl NodeDescriptor for CommitOidDescriptor {
     #[instrument]
-    fn describe_node(&mut self, object: &NodeObject) -> eyre::Result<Option<StyledString>> {
+    fn describe_node(
+        &mut self,
+        _glyphs: &Glyphs,
+        object: &NodeObject,
+    ) -> eyre::Result<Option<StyledString>> {
         let oid = object.get_oid();
         let oid = &oid.to_string()[..8];
         let oid = if self.use_color {
@@ -116,7 +125,11 @@ impl CommitMessageDescriptor {
 
 impl NodeDescriptor for CommitMessageDescriptor {
     #[instrument]
-    fn describe_node(&mut self, object: &NodeObject) -> eyre::Result<Option<StyledString>> {
+    fn describe_node(
+        &mut self,
+        _glyphs: &Glyphs,
+        object: &NodeObject,
+    ) -> eyre::Result<Option<StyledString>> {
         let message = match object {
             NodeObject::Commit { commit } => commit.get_summary()?.to_string_lossy().into_owned(),
             NodeObject::GarbageCollected { oid: _ } => "<garbage collected>".to_string(),
@@ -142,7 +155,11 @@ impl<'a> ObsolescenceExplanationDescriptor<'a> {
 }
 
 impl<'a> NodeDescriptor for ObsolescenceExplanationDescriptor<'a> {
-    fn describe_node(&mut self, object: &NodeObject) -> eyre::Result<Option<StyledString>> {
+    fn describe_node(
+        &mut self,
+        _glyphs: &Glyphs,
+        object: &NodeObject,
+    ) -> eyre::Result<Option<StyledString>> {
         let event = self
             .event_replayer
             .get_cursor_commit_latest_event(self.event_cursor, object.get_oid());
@@ -197,7 +214,11 @@ impl<'a> BranchesDescriptor<'a> {
 
 impl<'a> NodeDescriptor for BranchesDescriptor<'a> {
     #[instrument]
-    fn describe_node(&mut self, object: &NodeObject) -> eyre::Result<Option<StyledString>> {
+    fn describe_node(
+        &mut self,
+        _glyphs: &Glyphs,
+        object: &NodeObject,
+    ) -> eyre::Result<Option<StyledString>> {
         if !self.is_enabled {
             return Ok(None);
         }
@@ -276,7 +297,11 @@ $",
 
 impl NodeDescriptor for DifferentialRevisionDescriptor {
     #[instrument]
-    fn describe_node(&mut self, object: &NodeObject) -> eyre::Result<Option<StyledString>> {
+    fn describe_node(
+        &mut self,
+        _glyphs: &Glyphs,
+        object: &NodeObject,
+    ) -> eyre::Result<Option<StyledString>> {
         if !self.is_enabled {
             return Ok(None);
         }
@@ -351,7 +376,11 @@ impl RelativeTimeDescriptor {
 
 impl NodeDescriptor for RelativeTimeDescriptor {
     #[instrument]
-    fn describe_node(&mut self, object: &NodeObject) -> eyre::Result<Option<StyledString>> {
+    fn describe_node(
+        &mut self,
+        _glyphs: &Glyphs,
+        object: &NodeObject,
+    ) -> eyre::Result<Option<StyledString>> {
         if !self.is_enabled {
             return Ok(None);
         }

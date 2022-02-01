@@ -225,7 +225,7 @@ impl BuildRebasePlanError {
                         char3,
                         printable_styled_string(
                             glyphs,
-                            repo.friendly_describe_commit_from_oid(*oid)?
+                            repo.friendly_describe_commit_from_oid(glyphs, *oid)?
                         )?,
                     )?;
                 }

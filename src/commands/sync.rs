@@ -203,7 +203,7 @@ pub fn sync(
                 &glyphs,
                 StyledStringBuilder::new()
                     .append_plain("Synced ")
-                    .append(success_commit.friendly_describe()?)
+                    .append(success_commit.friendly_describe(&glyphs)?)
                     .build()
             )?
         )?;
@@ -217,7 +217,7 @@ pub fn sync(
                 &glyphs,
                 StyledStringBuilder::new()
                     .append_plain("Merge conflict for ")
-                    .append(merge_conflict_commit.friendly_describe()?)
+                    .append(merge_conflict_commit.friendly_describe(&glyphs)?)
                     .build()
             )?
         )?;
@@ -227,7 +227,7 @@ pub fn sync(
         writeln!(
             effects.get_output_stream(),
             "Not moving up-to-date stack at {}",
-            printable_styled_string(&glyphs, skipped_commit.friendly_describe()?)?
+            printable_styled_string(&glyphs, skipped_commit.friendly_describe(&glyphs)?)?
         )?;
     }
 

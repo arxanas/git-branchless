@@ -31,7 +31,7 @@ use tracing::{instrument, warn};
 use crate::core::config::get_main_branch_name;
 use crate::core::effects::{Effects, OperationType};
 use crate::core::eventlog::EventTransactionId;
-use crate::core::formatting::StyledStringBuilder;
+use crate::core::formatting::{Glyphs, StyledStringBuilder};
 use crate::core::node_descriptors::{
     render_node_descriptors, CommitMessageDescriptor, CommitOidDescriptor, NodeObject,
 };
@@ -850,9 +850,13 @@ Either create it, or update the main branch setting by running:
 
     /// Look up the commit with the given OID and render a friendly description
     /// of it, or render an error message if not found.
-    pub fn friendly_describe_commit_from_oid(&self, oid: NonZeroOid) -> eyre::Result<StyledString> {
+    pub fn friendly_describe_commit_from_oid(
+        &self,
+        glyphs: &Glyphs,
+        oid: NonZeroOid,
+    ) -> eyre::Result<StyledString> {
         match self.find_commit(oid)? {
-            Some(commit) => Ok(commit.friendly_describe()?),
+            Some(commit) => Ok(commit.friendly_describe(glyphs)?),
             None => {
                 let NonZeroOid { inner: oid } = oid;
                 Ok(StyledString::styled(
@@ -1435,8 +1439,9 @@ impl<'repo> Commit<'repo> {
     /// Print a one-line description of this commit containing its OID and
     /// summary.
     #[instrument]
-    pub fn friendly_describe(&self) -> eyre::Result<StyledString> {
+    pub fn friendly_describe(&self, glyphs: &Glyphs) -> eyre::Result<StyledString> {
         let description = render_node_descriptors(
+            glyphs,
             &NodeObject::Commit {
                 commit: self.clone(),
             },
