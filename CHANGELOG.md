@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.9] - 2022-02-08
+
 ### Fixed
 
 - (#249) On-disk `git move` commands now ensure that they keep your current branch checked out after the operation.
