@@ -953,6 +953,7 @@ pub struct ExecuteRebasePlanOptions {
 }
 
 /// The result of executing a rebase plan.
+#[must_use]
 pub enum ExecuteRebasePlanResult {
     /// The rebase operation succeeded.
     Succeeded,

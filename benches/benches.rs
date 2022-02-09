@@ -5,7 +5,7 @@ use branchless::core::dag::Dag;
 use branchless::core::effects::Effects;
 use branchless::core::eventlog::{EventLogDb, EventReplayer};
 use branchless::core::formatting::Glyphs;
-use branchless::core::rewrite::{BuildRebasePlanOptions, RebasePlanBuilder};
+use branchless::core::rewrite::{BuildRebasePlanOptions, RebasePlanBuilder, RepoResource};
 use branchless::git::{CherryPickFastOptions, Commit, Diff, Repo};
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use rayon::ThreadPoolBuilder;
@@ -51,8 +51,9 @@ fn bench_rebase_plan(c: &mut Criterion) {
         )
         .unwrap();
         let pool = ThreadPoolBuilder::new().build().unwrap();
+        let repo_pool = RepoResource::new_pool(&repo).unwrap();
 
-        let mut builder = RebasePlanBuilder::new(&repo, &dag);
+        let mut builder = RebasePlanBuilder::new(&dag);
         builder
             .move_subtree(later_commit.get_oid(), earlier_commit.get_oid())
             .unwrap();
@@ -63,6 +64,7 @@ fn bench_rebase_plan(c: &mut Criterion) {
                     .build(
                         &effects,
                         &pool,
+                        &repo_pool,
                         &BuildRebasePlanOptions {
                             dump_rebase_constraints: false,
                             dump_rebase_plan: false,

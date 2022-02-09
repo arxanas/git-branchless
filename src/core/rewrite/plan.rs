@@ -2,7 +2,6 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 use std::ops::Sub;
 use std::path::PathBuf;
-use std::sync::Mutex;
 
 use chashmap::CHashMap;
 use eden_dag::DagAlgorithm;
@@ -151,7 +150,6 @@ struct BuildState {
 /// rebase plan can move multiple unrelated subtrees to unrelated destinations.
 #[derive(Clone, Debug)]
 pub struct RebasePlanBuilder<'repo> {
-    repo: &'repo Repo,
     dag: &'repo Dag,
 
     /// There is a mapping from from `x` to `y` if `x` must be applied before
@@ -238,9 +236,8 @@ impl BuildRebasePlanError {
 
 impl<'repo> RebasePlanBuilder<'repo> {
     /// Constructor.
-    pub fn new(repo: &'repo Repo, dag: &'repo Dag) -> Self {
+    pub fn new(dag: &'repo Dag) -> Self {
         RebasePlanBuilder {
-            repo,
             dag,
             initial_constraints: Default::default(),
         }
@@ -264,6 +261,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
     fn make_rebase_plan_for_current_commit(
         &self,
         effects: &Effects,
+        repo: &Repo,
         state: &mut BuildState,
         previous_head_oid: NonZeroOid,
         current_commit: Commit,
@@ -277,7 +275,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
                 // to calculate the diff for the patch ID.
                 false
             } else {
-                match self.repo.get_patch_id(effects, &current_commit)? {
+                match repo.get_patch_id(effects, &current_commit)? {
                     Some(current_patch_id) => upstream_patch_ids.contains(&current_patch_id),
                     None => false,
                 }
@@ -363,7 +361,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
             child_oids.sort_unstable();
             child_oids
                 .into_iter()
-                .map(|child_oid| self.repo.find_commit_or_fail(child_oid))
+                .map(|child_oid| repo.find_commit_or_fail(child_oid))
                 .try_collect()?
         };
 
@@ -396,6 +394,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
             let only_child_commit = child_commits.pop().unwrap();
             let acc = self.make_rebase_plan_for_current_commit(
                 effects,
+                repo,
                 state,
                 current_commit.get_oid(),
                 only_child_commit,
@@ -413,6 +412,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
             for child_commit in child_commits {
                 acc = self.make_rebase_plan_for_current_commit(
                     effects,
+                    repo,
                     state,
                     current_commit.get_oid(),
                     child_commit,
@@ -578,6 +578,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
         &self,
         effects: &Effects,
         pool: &ThreadPool,
+        repo_pool: &ResourcePool<RepoResource>,
         options: &BuildRebasePlanOptions,
     ) -> eyre::Result<Result<Option<RebasePlan>, BuildRebasePlanError>> {
         let BuildRebasePlanOptions {
@@ -617,11 +618,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
             return Ok(Err(err));
         }
 
-        let repo_resource = RepoResource {
-            repo: Mutex::new(self.repo.try_clone()?),
-        };
-        let repo_pool = ResourcePool::new(repo_resource);
-
+        let repo = repo_pool.try_create()?;
         let roots = self.find_roots(&state);
         let mut acc = Vec::new();
         let mut first_dest_oid = None;
@@ -639,16 +636,17 @@ impl<'repo> RebasePlanBuilder<'repo> {
                 let (effects, _progress) =
                     effects.start_operation(OperationType::DetectDuplicateCommits);
                 self.get_upstream_patch_ids(
-                    &effects, pool, &repo_pool, &mut state, child_oid, parent_oid,
+                    &effects, pool, repo_pool, &repo, &mut state, child_oid, parent_oid,
                 )?
             } else {
                 Default::default()
             };
             acc = self.make_rebase_plan_for_current_commit(
                 &effects,
+                &repo,
                 &mut state,
                 parent_oid,
-                self.repo.find_commit_or_fail(child_oid)?,
+                repo.find_commit_or_fail(child_oid)?,
                 &upstream_patch_ids,
                 acc,
             )?;
@@ -713,22 +711,23 @@ impl<'repo> RebasePlanBuilder<'repo> {
         &self,
         effects: &Effects,
         pool: &ThreadPool,
-        repo_pool: &ResourcePool<RepoResource>,
+        repo_pool: &RepoPool,
+        repo: &Repo,
         state: &mut BuildState,
         current_oid: NonZeroOid,
         dest_oid: NonZeroOid,
     ) -> eyre::Result<HashSet<PatchId>> {
         let merge_base_oid =
             self.dag
-                .get_one_merge_base_oid(effects, self.repo, dest_oid, current_oid)?;
+                .get_one_merge_base_oid(effects, repo, dest_oid, current_oid)?;
         let merge_base_oid = match merge_base_oid {
             None => return Ok(HashSet::new()),
             Some(merge_base_oid) => merge_base_oid,
         };
 
-        let path =
-            self.dag
-                .find_path_to_merge_base(effects, self.repo, dest_oid, merge_base_oid)?;
+        let path = self
+            .dag
+            .find_path_to_merge_base(effects, repo, dest_oid, merge_base_oid)?;
         let path = match path {
             None => return Ok(HashSet::new()),
             Some(path) => path,
@@ -739,7 +738,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
                 .constraints
                 .values()
                 .flatten()
-                .map(|oid| self.repo.find_commit(*oid))
+                .map(|oid| repo.find_commit(*oid))
                 .flatten_ok()
                 .try_collect()?;
 
@@ -748,6 +747,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
                 state,
                 pool,
                 repo_pool,
+                repo,
                 path,
                 touched_commits,
             )?
@@ -789,6 +789,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
         state: &mut BuildState,
         pool: &ThreadPool,
         repo_pool: &RepoPool,
+        repo: &'repo Repo,
         path: Vec<Commit<'repo>>,
         touched_commits: Vec<Commit>,
     ) -> eyre::Result<Vec<Commit<'repo>>> {
@@ -796,7 +797,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
 
         let local_touched_paths: Vec<HashSet<PathBuf>> = touched_commits
             .into_iter()
-            .map(|commit| self.repo.get_paths_touched_by_commit(&commit))
+            .map(|commit| repo.get_paths_touched_by_commit(&commit))
             .filter_map(|x| x.transpose())
             .try_collect()?;
 
@@ -847,7 +848,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
         };
         let filtered_path = filtered_path
             .into_iter()
-            .map(|commit_oid| self.repo.find_commit_or_fail(commit_oid))
+            .map(|commit_oid| repo.find_commit_or_fail(commit_oid))
             .try_collect()?;
 
         Ok(filtered_path)
