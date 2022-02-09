@@ -168,7 +168,7 @@ pub mod testing {
         }
 
         fn print_at(&self, pos: cursive::Vec2, text: &str) {
-            for (i, c) in text.char_indices() {
+            for (i, c) in text.chars().enumerate() {
                 let mut screen = self.screen.borrow_mut();
                 let screen_width = screen[0].len();
                 if pos.x + i < screen_width {
