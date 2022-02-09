@@ -180,7 +180,7 @@ fn test_next_ambiguous_interactive() -> eyre::Result<()> {
     run_in_pty(
         &git,
         &["next", "--interactive"],
-        &vec![
+        &[
             PtyAction::WaitUntilContains("> "),
             PtyAction::Write("test2"),
             PtyAction::WaitUntilContains("> test2"),
