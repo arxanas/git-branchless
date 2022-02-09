@@ -17,7 +17,7 @@ use crate::core::effects::Effects;
 use crate::core::eventlog::{EventLogDb, EventReplayer};
 use crate::core::rewrite::{
     execute_rebase_plan, BuildRebasePlanOptions, ExecuteRebasePlanOptions, ExecuteRebasePlanResult,
-    RebasePlanBuilder,
+    RebasePlanBuilder, RepoResource,
 };
 use crate::git::{GitRunInfo, NonZeroOid, Repo};
 use crate::opts::MoveOptions;
@@ -136,12 +136,14 @@ pub fn r#move(
     let now = SystemTime::now();
     let event_tx_id = event_log_db.make_transaction_id(now, "move")?;
     let pool = ThreadPoolBuilder::new().build()?;
+    let repo_pool = RepoResource::new_pool(&repo)?;
     let rebase_plan = {
-        let mut builder = RebasePlanBuilder::new(&repo, &dag);
+        let mut builder = RebasePlanBuilder::new(&dag);
         builder.move_subtree(source_oid, dest_oid)?;
         builder.build(
             effects,
             &pool,
+            &repo_pool,
             &BuildRebasePlanOptions {
                 dump_rebase_constraints,
                 dump_rebase_plan,

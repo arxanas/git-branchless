@@ -70,6 +70,7 @@ use crate::core::eventlog::{EventCursor, EventLogDb, EventReplayer};
 use crate::core::rewrite::{
     execute_rebase_plan, find_abandoned_children, find_rewrite_target, move_branches,
     BuildRebasePlanOptions, ExecuteRebasePlanOptions, ExecuteRebasePlanResult, RebasePlanBuilder,
+    RepoPool, RepoResource,
 };
 use crate::git::{GitRunInfo, NonZeroOid, Repo};
 use crate::opts::MoveOptions;
@@ -78,7 +79,7 @@ use crate::opts::MoveOptions;
 fn restack_commits(
     effects: &Effects,
     pool: &ThreadPool,
-    repo: &Repo,
+    repo_pool: &RepoPool,
     dag: &Dag,
     event_replayer: &EventReplayer,
     event_cursor: EventCursor,
@@ -87,11 +88,12 @@ fn restack_commits(
     build_options: &BuildRebasePlanOptions,
     execute_options: &ExecuteRebasePlanOptions,
 ) -> eyre::Result<isize> {
+    let repo = repo_pool.try_create()?;
     let commit_set: CommitSet = match commits {
         Some(commits) => commits.into_iter().collect(),
         None => dag.obsolete_commits.clone(),
     };
-    let commits = sort_commit_set(repo, dag, &commit_set)?;
+    let commits = sort_commit_set(&repo, dag, &commit_set)?;
 
     struct RebaseInfo {
         dest_oid: NonZeroOid,
@@ -117,7 +119,7 @@ fn restack_commits(
     };
 
     let rebase_plan = {
-        let mut builder = RebasePlanBuilder::new(repo, dag);
+        let mut builder = RebasePlanBuilder::new(dag);
         for RebaseInfo {
             dest_oid,
             abandoned_child_oids,
@@ -127,7 +129,7 @@ fn restack_commits(
                 builder.move_subtree(child_oid, dest_oid)?;
             }
         }
-        let rebase_plan = match builder.build(effects, pool, build_options)? {
+        let rebase_plan = match builder.build(effects, pool, repo_pool, build_options)? {
             Ok(Some(rebase_plan)) => rebase_plan,
             Ok(None) => {
                 writeln!(
@@ -137,7 +139,7 @@ fn restack_commits(
                 return Ok(0);
             }
             Err(err) => {
-                err.describe(effects, repo)?;
+                err.describe(effects, &repo)?;
                 return Ok(1);
             }
         };
@@ -145,7 +147,7 @@ fn restack_commits(
     };
 
     let execute_rebase_plan_result =
-        execute_rebase_plan(effects, git_run_info, repo, &rebase_plan, execute_options)?;
+        execute_rebase_plan(effects, git_run_info, &repo, &rebase_plan, execute_options)?;
     match execute_rebase_plan_result {
         ExecuteRebasePlanResult::Succeeded => {
             writeln!(effects.get_output_stream(), "Finished restacking commits.")?;
@@ -153,7 +155,7 @@ fn restack_commits(
         }
 
         ExecuteRebasePlanResult::DeclinedToMerge { merge_conflict } => {
-            merge_conflict.describe(effects, repo)?;
+            merge_conflict.describe(effects, &repo)?;
             Ok(1)
         }
 
@@ -284,11 +286,12 @@ pub fn restack(
         resolve_merge_conflicts,
     };
     let pool = ThreadPoolBuilder::new().build()?;
+    let repo_pool = RepoResource::new_pool(&repo)?;
 
     let result = restack_commits(
         effects,
         &pool,
-        &repo,
+        &repo_pool,
         &dag,
         &event_replayer,
         event_cursor,
