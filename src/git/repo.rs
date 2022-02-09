@@ -141,6 +141,7 @@ pub enum CherryPickFastError {
 }
 
 /// Options for `Repo::amend_fast`
+#[derive(Debug)]
 pub enum AmendFastOptions {
     /// Amend a set of paths from the current state of the working copy.
     FromWorkingCopy {
@@ -558,6 +559,7 @@ Either create it, or update the main branch setting by running:
     }
 
     /// Returns the set of paths currently staged to the repository's index.
+    #[instrument]
     pub fn get_staged_paths(&self) -> eyre::Result<HashSet<PathBuf>> {
         let head_commit_oid = match self.get_head_info()?.oid {
             Some(oid) => oid,
@@ -1118,6 +1120,7 @@ Either create it, or update the main branch setting by running:
     ///
     /// See `Repo::cherry_pick_fast` for motivation for performing the operation
     /// in-memory.
+    #[instrument]
     pub fn amend_fast(
         &self,
         parent_commit: &Commit,

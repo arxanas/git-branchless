@@ -10,6 +10,7 @@ use std::time::SystemTime;
 
 use eyre::Context;
 use itertools::Itertools;
+use tracing::instrument;
 
 use crate::commands::gc::mark_commit_reachable;
 use crate::commands::restack;
@@ -21,6 +22,7 @@ use crate::git::{AmendFastOptions, FileStatus, GitRunInfo, Repo};
 use crate::opts::MoveOptions;
 
 /// Amends the existing HEAD commit.
+#[instrument]
 pub fn amend(
     effects: &Effects,
     git_run_info: &GitRunInfo,
