@@ -204,6 +204,14 @@ impl Config {
         Ok(Config { inner })
     }
 
+    /// Open a configuration instance derived from the global, XDG and
+    /// system configuration files.
+    #[instrument]
+    pub fn open_default() -> eyre::Result<Self> {
+        let inner = git2::Config::open_default().map_err(wrap_git_error)?;
+        Ok(Config { inner })
+    }
+
     #[instrument]
     fn set_inner(&mut self, key: &str, value: ConfigValue) -> eyre::Result<()> {
         match &value.inner {
