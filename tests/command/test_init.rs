@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use regex::Regex;
 
 use crate::util::trim_lines;
@@ -77,6 +79,93 @@ fn test_alias_installed() -> eyre::Result<()> {
         insta::assert_snapshot!(stdout, @r###"
 @ f777ecc9 (master) create initial.txt
 "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_dont_install_existing_aliases() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    let git_init_options = GitInitOptions {
+        run_branchless_init: false,
+        ..Default::default()
+    };
+
+    git.init_repo_with_options(&git_init_options)?;
+
+    // Create a fake $HOME directory, to allow us to emulate a user's .gitconfig file
+    let fake_home_dir = git.repo_path.join("fake_home");
+    let fake_home_git_config = fake_home_dir.join(".gitconfig");
+    std::fs::create_dir(&fake_home_dir)?;
+    std::fs::write(&fake_home_git_config, "[alias]\n\tsl = status\n")?;
+
+    let env = HashMap::from([(
+        "HOME".to_string(),
+        fake_home_dir.to_string_lossy().to_string(),
+    )]);
+    let git_run_options = GitRunOptions {
+        env,
+        ..GitRunOptions::default()
+    };
+
+    // Initialize branchless and make sure it didn't add the "sl" alias
+    git.run_with_options(&["branchless", "init"], &git_run_options)?;
+
+    {
+        let (expected_stdout, _) = git.run_with_options(&["status"], &git_run_options)?;
+        let (actual_stdout, _) = git.run_with_options(&["sl"], &git_run_options)?;
+
+        assert_eq!(expected_stdout, actual_stdout);
+    }
+
+    // Update the config to add "smartlog" and make sure neither alias is added
+    std::fs::write(
+        &fake_home_git_config,
+        "[alias]\n\tsl = status\n\tsmartlog = status",
+    )?;
+
+    git.run_with_options(&["branchless", "init"], &git_run_options)?;
+
+    {
+        let (expected_stdout, _) = git.run_with_options(&["status"], &git_run_options)?;
+        let (actual_stdout, _) = git.run_with_options(&["sl"], &git_run_options)?;
+
+        assert_eq!(expected_stdout, actual_stdout);
+    }
+
+    {
+        let (expected_stdout, _) = git.run_with_options(&["status"], &git_run_options)?;
+        let (actual_stdout, _) = git.run_with_options(&["smartlog"], &git_run_options)?;
+
+        assert_eq!(expected_stdout, actual_stdout);
+    }
+
+    // Update the config to remove both aliases and make sure both are added
+    std::fs::write(&fake_home_git_config, "")?;
+
+    git.run_with_options(&["branchless", "init"], &git_run_options)?;
+
+    {
+        let (expected_stdout, _) = git.run_with_options(&["smartlog"], &git_run_options)?;
+        let (actual_stdout, _) = git.run_with_options(&["sl"], &git_run_options)?;
+
+        assert_eq!(expected_stdout, actual_stdout);
+    }
+
+    {
+        let (expected_stdout, _) = git.run_with_options(&["status"], &git_run_options)?;
+        let (actual_stdout, _) = git.run_with_options(&["sl"], &git_run_options)?;
+
+        assert_ne!(expected_stdout, actual_stdout);
+    }
+
+    {
+        let (expected_stdout, _) = git.run_with_options(&["status"], &git_run_options)?;
+        let (actual_stdout, _) = git.run_with_options(&["smartlog"], &git_run_options)?;
+
+        assert_ne!(expected_stdout, actual_stdout);
     }
 
     Ok(())

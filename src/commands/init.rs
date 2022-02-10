@@ -260,13 +260,37 @@ fn should_use_wrapped_command_alias() -> bool {
 }
 
 #[instrument]
-fn install_alias(repo: &Repo, config: &mut Config, from: &str, to: &str) -> eyre::Result<()> {
+fn install_alias(
+    effects: &Effects,
+    repo: &Repo,
+    config: &mut Config,
+    default_config: &Config,
+    from: &str,
+    to: &str,
+) -> eyre::Result<()> {
+    let alias_key = format!("alias.{}", from);
+
+    let existing_alias: Option<String> = config.get(&alias_key)?;
+    if existing_alias.is_some() {
+        config.remove(&alias_key)?;
+    }
+
+    let default_alias: Option<String> = default_config.get(&alias_key)?;
+    if default_alias.is_some() {
+        writeln!(
+            effects.get_output_stream(),
+            "Alias {} already installed, skipping",
+            from
+        )?;
+        return Ok(());
+    }
+
     let alias = if should_use_wrapped_command_alias() {
         format!("branchless-{}", to)
     } else {
         format!("branchless {}", to)
     };
-    config.set(format!("alias.{}", from), alias)?;
+    config.set(&alias_key, alias)?;
     Ok(())
 }
 
@@ -305,10 +329,11 @@ fn install_aliases(
     effects: &Effects,
     repo: &mut Repo,
     config: &mut Config,
+    default_config: &Config,
     git_run_info: &GitRunInfo,
 ) -> eyre::Result<()> {
     for (from, to) in ALL_ALIASES {
-        install_alias(repo, config, from, to)?;
+        install_alias(effects, repo, config, default_config, from, to)?;
     }
 
     let version_str = git_run_info
@@ -531,12 +556,19 @@ pub fn init(
 ) -> eyre::Result<()> {
     let mut in_ = BufReader::new(stdin());
     let mut repo = Repo::from_current_dir()?;
+    let default_config = Config::open_default()?;
     let readonly_config = repo.get_readonly_config()?;
     let mut config = create_isolated_config(effects, &repo, readonly_config.into_config())?;
 
     set_configs(&mut in_, effects, &repo, &mut config, main_branch_name)?;
     install_hooks(effects, &repo)?;
-    install_aliases(effects, &mut repo, &mut config, git_run_info)?;
+    install_aliases(
+        effects,
+        &mut repo,
+        &mut config,
+        &default_config,
+        git_run_info,
+    )?;
     install_man_pages(effects, &repo, &mut config)?;
     writeln!(
         effects.get_output_stream(),
