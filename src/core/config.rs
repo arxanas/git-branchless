@@ -88,7 +88,7 @@ pub fn get_commit_descriptors_relative_time(repo: &Repo) -> eyre::Result<bool> {
 
 /// Environment variables which affect the functioning of `git-branchless`.
 pub mod env_vars {
-    use std::path::{Path, PathBuf};
+    use std::path::PathBuf;
 
     use tracing::instrument;
 
@@ -107,7 +107,10 @@ pub mod env_vars {
     pub fn get_path_to_git() -> eyre::Result<PathBuf> {
         let path_to_git = std::env::var_os(PATH_TO_GIT).ok_or_else(|| {
             eyre::eyre!(
-                "No path to Git executable was set. Try running as: {}=$(which git) cargo test ...",
+                "No path to Git executable was set. \
+Try running as: `{0}=$(which git) cargo test ...` \
+or set `env.{0}` in your `config.toml` \
+(see https://doc.rust-lang.org/cargo/reference/config.html)",
                 PATH_TO_GIT,
             )
         })?;
@@ -117,15 +120,17 @@ pub mod env_vars {
 
     /// Get the `GIT_EXEC_PATH` environment variable for testing.
     #[instrument]
-    pub fn get_git_exec_path(path_to_git: &Path) -> PathBuf {
-        match std::env::var_os(GIT_EXEC_PATH) {
-            Some(git_exec_path) => git_exec_path.into(),
-            None => {
-                let git_path = path_to_git
-                    .parent()
-                    .expect("Unable to find git path parent");
-                git_path.to_path_buf()
-            }
-        }
+    pub fn get_git_exec_path() -> eyre::Result<PathBuf> {
+        let git_exec_path = std::env::var_os(GIT_EXEC_PATH).ok_or_else(|| {
+            eyre::eyre!(
+                "No Git exec path was set. \
+Try running as: `{0}=$(git --exec-path) cargo test ...` \
+or set `env.{0}` in your `config.toml` \
+(see https://doc.rust-lang.org/cargo/reference/config.html)",
+                GIT_EXEC_PATH,
+            )
+        })?;
+        let git_exec_path = PathBuf::from(&git_exec_path);
+        Ok(git_exec_path)
     }
 }
