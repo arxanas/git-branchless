@@ -39,6 +39,9 @@ pub struct Git {
     /// The path to the Git executable on disk. This is important since we test
     /// against multiple Git versions.
     pub path_to_git: PathBuf,
+
+    /// The `GIT_EXEC_PATH` environment variable value to use for testing.
+    pub git_exec_path: PathBuf,
 }
 
 /// Options for `Git::init_repo_with_options`.
@@ -80,7 +83,7 @@ pub struct GitRunOptions {
 
 impl Git {
     /// Constructor.
-    pub fn new(repo_path: PathBuf, git_run_info: GitRunInfo) -> Self {
+    pub fn new(git_run_info: GitRunInfo, repo_path: PathBuf, git_exec_path: PathBuf) -> Self {
         let GitRunInfo {
             path_to_git,
             // We pass the repo directory when calling `run`.
@@ -91,6 +94,7 @@ impl Git {
         Git {
             repo_path,
             path_to_git,
+            git_exec_path,
         }
     }
 
@@ -146,7 +150,7 @@ impl Git {
                 // For Git to be able to launch `git-branchless`.
                 branchless_path.as_os_str(),
                 // For our hooks to be able to call back into `git`.
-                get_git_exec_path(&self.path_to_git).as_os_str(),
+                self.git_exec_path.as_os_str(),
                 // For branchless to manually invoke bash when needed.
                 bash_path.as_os_str(),
             ]
@@ -174,10 +178,7 @@ impl Git {
             ("GIT_AUTHOR_DATE", date.clone()),
             ("GIT_COMMITTER_DATE", date),
             ("GIT_EDITOR", git_editor),
-            (
-                GIT_EXEC_PATH,
-                get_git_exec_path(&self.path_to_git).as_os_str().into(),
-            ),
+            (GIT_EXEC_PATH, self.git_exec_path.as_os_str().into()),
             (PATH_TO_GIT, self.path_to_git.as_os_str().into()),
             ("PATH", new_path),
         ];
@@ -527,7 +528,7 @@ impl GitWrapper {
         copy_dir_all(&self.repo_dir, &repo_dir)?;
         let git = Git {
             repo_path: repo_dir.path().to_path_buf(),
-            path_to_git: self.git.path_to_git.clone(),
+            ..self.git.clone()
         };
         Ok(Self { repo_dir, git })
     }
@@ -537,12 +538,13 @@ impl GitWrapper {
 pub fn make_git() -> eyre::Result<GitWrapper> {
     let repo_dir = tempfile::tempdir()?;
     let path_to_git = get_path_to_git()?;
-    let path_to_git = GitRunInfo {
+    let git_exec_path = get_git_exec_path()?;
+    let git_run_info = GitRunInfo {
         path_to_git,
         working_directory: repo_dir.path().to_path_buf(),
         env: std::env::vars_os().collect(),
     };
-    let git = Git::new(repo_dir.path().to_path_buf(), path_to_git);
+    let git = Git::new(git_run_info, repo_dir.path().to_path_buf(), git_exec_path);
     Ok(GitWrapper { repo_dir, git })
 }
 
@@ -564,6 +566,7 @@ pub struct GitWrapperWithRemoteRepo {
 /// Create a `GitWrapperWithRemoteRepo`.
 pub fn make_git_with_remote_repo() -> eyre::Result<GitWrapperWithRemoteRepo> {
     let path_to_git = get_path_to_git()?;
+    let git_exec_path = get_git_exec_path()?;
     let temp_dir = tempfile::tempdir()?;
     let git_run_info = GitRunInfo {
         path_to_git,
@@ -573,19 +576,21 @@ pub fn make_git_with_remote_repo() -> eyre::Result<GitWrapperWithRemoteRepo> {
     let original_repo_path = temp_dir.path().join("original");
     std::fs::create_dir_all(&original_repo_path)?;
     let original_repo = Git::new(
-        original_repo_path.clone(),
         GitRunInfo {
-            working_directory: original_repo_path,
+            working_directory: original_repo_path.clone(),
             ..git_run_info.clone()
         },
+        original_repo_path,
+        git_exec_path.clone(),
     );
     let cloned_repo_path = temp_dir.path().join("cloned");
     let cloned_repo = Git::new(
-        cloned_repo_path.clone(),
         GitRunInfo {
-            working_directory: cloned_repo_path,
+            working_directory: cloned_repo_path.clone(),
             ..git_run_info
         },
+        cloned_repo_path,
+        git_exec_path,
     );
 
     Ok(GitWrapperWithRemoteRepo {
