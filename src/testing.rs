@@ -11,10 +11,13 @@ use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
+use crate::core::config::env_vars::{
+    get_git_exec_path, get_path_to_git, GIT_EXEC_PATH, PATH_TO_GIT,
+};
 use crate::git::{GitRunInfo, GitVersion, NonZeroOid, Repo};
 use crate::util::get_sh;
 
-use eyre::{eyre, Context};
+use eyre::Context;
 use itertools::Itertools;
 use lazy_static::lazy_static;
 use regex::{Captures, Regex};
@@ -130,19 +133,6 @@ impl Git {
         Ok(output)
     }
 
-    fn get_git_exec_path(&self) -> PathBuf {
-        match std::env::var_os("GIT_EXEC_PATH") {
-            Some(git_exec_path) => git_exec_path.into(),
-            None => {
-                let git_path = self
-                    .path_to_git
-                    .parent()
-                    .expect("Unable to find git path parent");
-                git_path.to_path_buf()
-            }
-        }
-    }
-
     /// Get the `PATH` environment variable to use for testing.
     pub fn get_path_for_env(&self) -> OsString {
         let cargo_bin_path = assert_cmd::cargo::cargo_bin("git-branchless");
@@ -156,7 +146,7 @@ impl Git {
                 // For Git to be able to launch `git-branchless`.
                 branchless_path.as_os_str(),
                 // For our hooks to be able to call back into `git`.
-                self.get_git_exec_path().as_os_str(),
+                get_git_exec_path(&self.path_to_git).as_os_str(),
                 // For branchless to manually invoke bash when needed.
                 bash_path.as_os_str(),
             ]
@@ -179,14 +169,16 @@ impl Git {
         // ":" is understood by `git` to skip editing.
         let git_editor = OsString::from(":");
 
-        let git_exec_path = self.get_git_exec_path();
         let new_path = self.get_path_for_env();
         let envs = vec![
             ("GIT_AUTHOR_DATE", date.clone()),
             ("GIT_COMMITTER_DATE", date),
             ("GIT_EDITOR", git_editor),
-            ("GIT_EXEC_PATH", git_exec_path.as_os_str().into()),
-            ("PATH_TO_GIT", self.path_to_git.as_os_str().into()),
+            (
+                GIT_EXEC_PATH,
+                get_git_exec_path(&self.path_to_git).as_os_str().into(),
+            ),
+            (PATH_TO_GIT, self.path_to_git.as_os_str().into()),
             ("PATH", new_path),
         ];
 
@@ -492,15 +484,6 @@ impl Git {
         self.run(&["add", file_path])?;
         Ok(())
     }
-}
-
-/// Get the path to the Git executable for testing.
-#[instrument]
-pub fn get_path_to_git() -> eyre::Result<PathBuf> {
-    let path_to_git = std::env::var_os("PATH_TO_GIT")
-        .ok_or_else(|| eyre!("No path to Git executable was set. Try running as: PATH_TO_GIT=$(which git) cargo test ..."))?;
-    let path_to_git = PathBuf::from(&path_to_git);
-    Ok(path_to_git)
 }
 
 /// Wrapper around a `Git` instance which cleans up the repository once dropped.
