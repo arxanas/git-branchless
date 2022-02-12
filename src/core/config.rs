@@ -85,3 +85,47 @@ pub fn get_commit_descriptors_relative_time(repo: &Repo) -> eyre::Result<bool> {
     repo.get_readonly_config()?
         .get_or("branchless.commitDescriptors.relativeTime", true)
 }
+
+/// Environment variables which affect the functioning of `git-branchless`.
+pub mod env_vars {
+    use std::path::{Path, PathBuf};
+
+    use tracing::instrument;
+
+    /// Path to the Git executable to shell out to as a subprocess when
+    /// appropriate. This may be set during tests.
+    pub const PATH_TO_GIT: &str = "PATH_TO_GIT";
+
+    /// "Path to wherever your core Git programs are installed". You can find
+    /// the default value by running `git --exec-path`.
+    ///
+    /// See <https://git-scm.com/docs/git#Documentation/git.txt---exec-pathltpathgt>.
+    pub const GIT_EXEC_PATH: &str = "GIT_EXEC_PATH";
+
+    /// Get the path to the Git executable for testing.
+    #[instrument]
+    pub fn get_path_to_git() -> eyre::Result<PathBuf> {
+        let path_to_git = std::env::var_os(PATH_TO_GIT).ok_or_else(|| {
+            eyre::eyre!(
+                "No path to Git executable was set. Try running as: {}=$(which git) cargo test ...",
+                PATH_TO_GIT,
+            )
+        })?;
+        let path_to_git = PathBuf::from(&path_to_git);
+        Ok(path_to_git)
+    }
+
+    /// Get the `GIT_EXEC_PATH` environment variable for testing.
+    #[instrument]
+    pub fn get_git_exec_path(path_to_git: &Path) -> PathBuf {
+        match std::env::var_os(GIT_EXEC_PATH) {
+            Some(git_exec_path) => git_exec_path.into(),
+            None => {
+                let git_path = path_to_git
+                    .parent()
+                    .expect("Unable to find git path parent");
+                git_path.to_path_buf()
+            }
+        }
+    }
+}

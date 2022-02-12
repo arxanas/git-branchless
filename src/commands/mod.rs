@@ -27,6 +27,7 @@ use tracing_subscriber::fmt as tracing_fmt;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
 
+use crate::core::config::env_vars::get_path_to_git;
 use crate::core::effects::Effects;
 use crate::core::formatting::Glyphs;
 use crate::git::GitRunInfo;
@@ -91,7 +92,7 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
         })?;
     }
 
-    let path_to_git = std::env::var_os("PATH_TO_GIT").unwrap_or_else(|| OsString::from("git"));
+    let path_to_git = get_path_to_git().unwrap_or_else(|_| PathBuf::from("git"));
     let path_to_git = PathBuf::from(&path_to_git);
     let git_run_info = GitRunInfo {
         path_to_git,
