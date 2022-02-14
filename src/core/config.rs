@@ -94,24 +94,24 @@ pub mod env_vars {
 
     /// Path to the Git executable to shell out to as a subprocess when
     /// appropriate. This may be set during tests.
-    pub const PATH_TO_GIT: &str = "PATH_TO_GIT";
+    pub const TEST_GIT: &str = "TEST_GIT";
 
     /// "Path to wherever your core Git programs are installed". You can find
     /// the default value by running `git --exec-path`.
     ///
     /// See <https://git-scm.com/docs/git#Documentation/git.txt---exec-pathltpathgt>.
-    pub const GIT_EXEC_PATH: &str = "GIT_EXEC_PATH";
+    pub const TEST_GIT_EXEC_PATH: &str = "TEST_GIT_EXEC_PATH";
 
     /// Get the path to the Git executable for testing.
     #[instrument]
     pub fn get_path_to_git() -> eyre::Result<PathBuf> {
-        let path_to_git = std::env::var_os(PATH_TO_GIT).ok_or_else(|| {
+        let path_to_git = std::env::var_os(TEST_GIT).ok_or_else(|| {
             eyre::eyre!(
                 "No path to Git executable was set. \
 Try running as: `{0}=$(which git) cargo test ...` \
 or set `env.{0}` in your `config.toml` \
 (see https://doc.rust-lang.org/cargo/reference/config.html)",
-                PATH_TO_GIT,
+                TEST_GIT,
             )
         })?;
         let path_to_git = PathBuf::from(&path_to_git);
@@ -121,13 +121,13 @@ or set `env.{0}` in your `config.toml` \
     /// Get the `GIT_EXEC_PATH` environment variable for testing.
     #[instrument]
     pub fn get_git_exec_path() -> eyre::Result<PathBuf> {
-        let git_exec_path = std::env::var_os(GIT_EXEC_PATH).ok_or_else(|| {
+        let git_exec_path = std::env::var_os(TEST_GIT_EXEC_PATH).ok_or_else(|| {
             eyre::eyre!(
                 "No Git exec path was set. \
 Try running as: `{0}=$(git --exec-path) cargo test ...` \
 or set `env.{0}` in your `config.toml` \
 (see https://doc.rust-lang.org/cargo/reference/config.html)",
-                GIT_EXEC_PATH,
+                TEST_GIT_EXEC_PATH,
             )
         })?;
         let git_exec_path = PathBuf::from(&git_exec_path);

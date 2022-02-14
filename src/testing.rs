@@ -11,9 +11,7 @@ use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use crate::core::config::env_vars::{
-    get_git_exec_path, get_path_to_git, GIT_EXEC_PATH, PATH_TO_GIT,
-};
+use crate::core::config::env_vars::{get_git_exec_path, get_path_to_git, TEST_GIT};
 use crate::git::{GitRunInfo, GitVersion, NonZeroOid, Repo};
 use crate::util::get_sh;
 
@@ -178,9 +176,9 @@ impl Git {
             ("GIT_AUTHOR_DATE", date.clone()),
             ("GIT_COMMITTER_DATE", date),
             ("GIT_EDITOR", git_editor),
-            (GIT_EXEC_PATH, self.git_exec_path.as_os_str().into()),
-            (PATH_TO_GIT, self.path_to_git.as_os_str().into()),
+            ("GIT_EXEC_PATH", self.git_exec_path.as_os_str().into()),
             ("PATH", new_path),
+            (TEST_GIT, self.path_to_git.as_os_str().into()),
         ];
 
         envs.into_iter()

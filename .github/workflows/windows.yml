@@ -31,5 +31,6 @@ jobs:
       - name: Run tests
         timeout-minutes: 10
         run: |
-          $env:PATH_TO_GIT='C:\Program Files\Git\cmd\git.exe'
+          $env:TEST_GIT='C:\Program Files\Git\cmd\git.exe'
+          $env:TEST_GIT_EXEC_PATH='C:\Program Files\Git\cmd'
           cargo test

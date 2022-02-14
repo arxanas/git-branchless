@@ -40,6 +40,6 @@ jobs:
         timeout-minutes: 10
         run: |
           export RUST_BACKTRACE=1
-          export PATH_TO_GIT=$(which git)
-          export GIT_EXEC_PATH=$(git --exec-path)
+          export TEST_GIT=$(which git)
+          export TEST_GIT_EXEC_PATH=$(dirname "$TEST_GIT")
           cargo test

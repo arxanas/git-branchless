@@ -85,11 +85,13 @@ jobs:
       - name: Run Rust tests (all features)
         timeout-minutes: 10
         run: |
-          export PATH_TO_GIT="$PWD"/git
+          export TEST_GIT="$PWD"/git
+          export TEST_GIT_EXEC_PATH=$(dirname "$GIT")
           cargo test --all-features
 
       - name: Run Rust tests (no default features)
         timeout-minutes: 10
         run: |
-          export PATH_TO_GIT="$PWD"/git
+          export TEST_GIT="$PWD"/git
+          export TEST_GIT_EXEC_PATH=$(dirname "$GIT")
           cargo test --no-default-features
