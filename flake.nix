@@ -37,8 +37,8 @@
           ]);
 
           preCheck = ''
-            export PATH_TO_GIT=${git}/bin/git
-            export GIT_EXEC_PATH=$(${git}/bin/git --exec-path)
+            export TEST_GIT=${git}/bin/git
+            export TEST_GIT_EXEC_PATH=$(${git}/bin/git --exec-path)
           '';
           # FIXME: these tests deadlock when run in the Nix sandbox
           checkFlags = [
