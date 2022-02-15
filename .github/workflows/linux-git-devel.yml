@@ -10,9 +10,6 @@ on:
       - master
 
   pull_request:
-    branches:
-      - "ci-*"
-
     paths:
       - ".github/workflows/*.yml"
 
@@ -24,6 +21,7 @@ env:
 
 jobs:
   run-tests:
+    if: startsWith(github.head_ref, 'ci-')
     runs-on: ubuntu-latest
 
     steps:
