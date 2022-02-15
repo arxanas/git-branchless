@@ -1353,7 +1353,6 @@ mod tests {
 
     #[test]
     fn test_different_event_transaction_ids() -> eyre::Result<()> {
-        return Ok(());
         let git = make_git()?;
 
         git.init_repo()?;

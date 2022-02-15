@@ -11,7 +11,7 @@ use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
 use std::time::SystemTime;
 
 use cursive::event::Key;
-use cursive::traits::Boxable;
+use cursive::traits::Resizable;
 use cursive::utils::markup::StyledString;
 use cursive::views::{Dialog, EditView, LinearLayout, OnEventView, Panel, ScrollView, TextView};
 use cursive::{Cursive, CursiveRunnable, CursiveRunner};

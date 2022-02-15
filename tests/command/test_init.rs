@@ -313,7 +313,7 @@ fn test_main_branch_not_found_error_message() -> eyre::Result<()> {
         },
     )?;
 
-    let location_trace_re = Regex::new(r"[^ .]+\.rs:[0-9]+")?;
+    let location_trace_re = Regex::new(r"[^ ]+\.rs:[0-9]+")?;
     let stderr = trim_lines(stderr);
     let stderr = console::strip_ansi_codes(&stderr);
     let stderr = location_trace_re.replace_all(&stderr, "some/file/path.rs:123");
