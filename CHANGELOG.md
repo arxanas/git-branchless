@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- (#267) Aliases like `git amend` are now installed only if the user does not already have aliases with the same name. Thanks to @rslabbert for implementing this.
+
 ## [0.3.9] - 2022-02-08
 
 ### Fixed
