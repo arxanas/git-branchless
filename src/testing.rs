@@ -3,7 +3,7 @@
 //! This is inside `src` rather than `tests` since we use this code in some unit
 //! tests.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::ffi::OsString;
 use std::fs;
 use std::io::Write;
@@ -243,14 +243,17 @@ impl Git {
         let result = if exit_code != *expected_exit_code {
             eyre::bail!(
                 "Git command {:?} {:?} exited with unexpected code {} (expected {})
-                stdout:
-                {}
-                stderr:
-                {}",
+env:
+{:#?}
+stdout:
+{}
+stderr:
+{}",
                 &self.path_to_git,
                 &args,
                 exit_code,
                 expected_exit_code,
+                command.get_envs().collect::<BTreeMap<_, _>>(),
                 &String::from_utf8_lossy(&result.stdout),
                 &String::from_utf8_lossy(&result.stderr),
             )
