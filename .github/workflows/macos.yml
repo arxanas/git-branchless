@@ -10,8 +10,6 @@ on:
       - master
 
   pull_request:
-    branches:
-      - "ci-*"
 
 env:
   CARGO_INCREMENTAL: 0
@@ -19,6 +17,7 @@ env:
 
 jobs:
   run-tests:
+    if: startsWith(github.head_ref, 'ci-')
     runs-on: macos-latest
 
     steps:
