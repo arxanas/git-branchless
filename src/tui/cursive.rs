@@ -196,6 +196,8 @@ pub mod testing {
         fn set_effect(&self, _effect: cursive::theme::Effect) {}
 
         fn unset_effect(&self, _effect: cursive::theme::Effect) {}
+
+        fn set_title(&mut self, _title: String) {}
     }
 
     /// Convert the screenshot into a string for assertions, such as for use

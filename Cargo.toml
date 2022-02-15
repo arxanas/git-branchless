@@ -52,10 +52,10 @@ clap = { version = "3.0.0", features = ["derive"] }
 color-eyre = "0.5.11"
 concolor = { version = "0.0.8", features = ["auto"] }
 console = "0.15.0"
-cursive = { version = "0.17.0-alpha.0", default-features = false, features = [
+cursive = { version = "0.17.0", default-features = false, features = [
   "crossterm-backend",
 ] }
-cursive_buffered_backend = "0.6.0-alpha.0"
+cursive_buffered_backend = "0.6.0"
 eden_dag = { package = "esl01-dag", version = "0.2.1" }
 eyre = "0.6.5"
 git2 = { version = "0.13.25", default-features = false }
@@ -83,4 +83,4 @@ skim = "0.9.4"
 criterion = { version = "0.3.5", features = ["html_reports"] }
 insta = "1.8.0"
 portable-pty = "0.7.0"
-vt100 = "0.15.0"
+vt100 = "0.15.1"

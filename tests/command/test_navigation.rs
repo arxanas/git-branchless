@@ -413,14 +413,17 @@ fn run_in_pty(git: &Git, args: &[&str], inputs: &[PtyAction]) -> eyre::Result<()
 
     let mut parser = vt100::Parser::new(pty_size.rows, pty_size.cols, 0);
     for action in inputs {
-        match &action {
+        match action {
             PtyAction::WaitUntilContains(value) => {
-                let mut buffer = [0; 1024];
                 while !parser.screen().contents().contains(value) {
+                    const BUF_SIZE: usize = 4096;
+                    let mut buffer = [0; BUF_SIZE];
                     let n = reader.read(&mut buffer)?;
+                    assert!(n < BUF_SIZE, "filled up PTY buffer by reading {} bytes", n);
                     parser.process(&buffer[..n]);
                 }
             }
+
             PtyAction::Write(value) => {
                 write!(pty.master, "{}", value)?;
                 pty.master.flush()?;
@@ -428,12 +431,19 @@ fn run_in_pty(git: &Git, args: &[&str], inputs: &[PtyAction]) -> eyre::Result<()
         }
     }
 
-    thread::spawn(move || {
+    let read_remainder_of_pty_output_thread = thread::spawn(move || {
         let mut buffer = Vec::new();
         reader.read_to_end(&mut buffer).expect("finish reading pty");
+        String::from_utf8(buffer).unwrap()
     });
 
     child.wait()?;
+    let remainder_of_pty_output = read_remainder_of_pty_output_thread.join().unwrap();
+    assert!(
+        !remainder_of_pty_output.contains("panic"),
+        "Panic in PTY thread:\n{}",
+        console::strip_ansi_codes(&remainder_of_pty_output)
+    );
 
     Ok(())
 }
