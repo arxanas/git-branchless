@@ -10,12 +10,12 @@ on:
       - master
 
   pull_request:
-    branches:
-      - "ci-*"
 
 jobs:
   nix:
+    if: startsWith(github.head_ref, 'ci-')
     runs-on: macos-latest
+
     name: nix-build
     timeout-minutes: 20
     steps:
