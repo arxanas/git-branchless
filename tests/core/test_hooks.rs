@@ -2,6 +2,7 @@ use branchless::core::effects::Effects;
 use branchless::core::eventlog::testing::{get_event_replayer_events, redact_event_timestamp};
 use branchless::core::eventlog::{Event, EventLogDb, EventReplayer};
 use branchless::core::formatting::Glyphs;
+use branchless::git::GitVersion;
 use branchless::testing::make_git;
 use branchless::util::get_sh;
 use eyre::{eyre, Context};
@@ -100,16 +101,19 @@ fn test_fixup_no_abandoned_commit_message() -> eyre::Result<()> {
     git.commit_file("test3", 3)?;
     git.run(&["commit", "--amend", "-m", "fixup! create test1.txt"])?;
 
+    let git_version = git.get_version()?;
     {
         let (_stdout, stderr) = git.run(&["rebase", "-i", "master", "--autosquash"])?;
-        insta::assert_snapshot!(stderr, @r###"
-        branchless: processing 1 update: ref HEAD
-        branchless: processed commit: a84541d7 # This is a combination of 2 commits. # This is the 1st commit message:
-        branchless: processing 1 update: ref HEAD
-        branchless: processed commit: 7f023a10 create test1.txt
-        branchless: processing 3 rewritten commits
-        Successfully rebased and updated detached HEAD.
-        "###);
+        if git_version < GitVersion(2, 35, 0) {
+            insta::assert_snapshot!(stderr, @r###"
+            branchless: processing 1 update: ref HEAD
+            branchless: processed commit: a84541d7 # This is a combination of 2 commits. # This is the 1st commit message:
+            branchless: processing 1 update: ref HEAD
+            branchless: processed commit: 7f023a10 create test1.txt
+            branchless: processing 3 rewritten commits
+            Successfully rebased and updated detached HEAD.
+            "###);
+        }
     }
 
     Ok(())
@@ -129,22 +133,25 @@ fn test_rebase_individual_commit() -> eyre::Result<()> {
     git.commit_file("test2", 2)?;
     git.commit_file("test3", 3)?;
 
+    let git_version = git.get_version()?;
     {
         let (_stdout, stderr) = git.run(&["rebase", "master", "HEAD^"])?;
-        insta::assert_snapshot!(stderr, @r###"
-        branchless: processing 1 update: ref HEAD
-        branchless: processed commit: f8d9985b create test2.txt
-        branchless: processing 1 rewritten commit
-        branchless: This operation abandoned 1 commit!
-        branchless: Consider running one of the following:
-        branchless:   - git restack: re-apply the abandoned commits/branches
-        branchless:     (this is most likely what you want to do)
-        branchless:   - git smartlog: assess the situation
-        branchless:   - git hide [<commit>...]: hide the commits from the smartlog
-        branchless:   - git undo: undo the operation
-        branchless:   - git config branchless.restack.warnAbandoned false: suppress this message
-        Successfully rebased and updated detached HEAD.
-        "###);
+        if git_version < GitVersion(2, 35, 0) {
+            insta::assert_snapshot!(stderr, @r###"
+            branchless: processing 1 update: ref HEAD
+            branchless: processed commit: f8d9985b create test2.txt
+            branchless: processing 1 rewritten commit
+            branchless: This operation abandoned 1 commit!
+            branchless: Consider running one of the following:
+            branchless:   - git restack: re-apply the abandoned commits/branches
+            branchless:     (this is most likely what you want to do)
+            branchless:   - git smartlog: assess the situation
+            branchless:   - git hide [<commit>...]: hide the commits from the smartlog
+            branchless:   - git undo: undo the operation
+            branchless:   - git config branchless.restack.warnAbandoned false: suppress this message
+            Successfully rebased and updated detached HEAD.
+            "###);
+        }
     }
 
     Ok(())
@@ -159,10 +166,13 @@ fn test_interactive_rebase_noop() -> eyre::Result<()> {
     git.commit_file("test1", 1)?;
     git.commit_file("test2", 2)?;
 
+    let git_version = git.get_version()?;
     {
         let (_stdout, stderr) = git.run(&["rebase", "-i", "master"])?;
-        insta::assert_snapshot!(stderr, @"Successfully rebased and updated detached HEAD.
+        if git_version < GitVersion(2, 35, 0) {
+            insta::assert_snapshot!(stderr, @"Successfully rebased and updated detached HEAD.
 ");
+        }
     }
 
     Ok(())
