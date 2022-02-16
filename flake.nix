@@ -15,37 +15,56 @@
     in
     {
       overlay = (final: prev: {
-        git-branchless = with final; rustPlatform.buildRustPackage {
-          name = "git-branchless";
+        git-branchless = final.callPackage
+          (
+            { lib
+            , git
+            , libiconv
+            , ncurses
+            , openssl
+            , pkg-config
+            , rustPlatform
+            , sqlite
+            , stdenv
+            , Security
+            , SystemConfiguration
+            }:
 
-          src = self;
+            rustPlatform.buildRustPackage {
+              name = "git-branchless";
 
-          cargoLock = {
-            lockFile = "${self}/Cargo.lock";
+              src = self;
+
+              cargoLock = {
+                lockFile = "${self}/Cargo.lock";
+              };
+
+              nativeBuildInputs = [ pkg-config ];
+
+              buildInputs = [
+                ncurses
+                openssl
+                sqlite
+              ] ++ lib.optionals stdenv.isDarwin [
+                Security
+                SystemConfiguration
+                libiconv
+              ];
+
+              preCheck = ''
+                export TEST_GIT=${git}/bin/git
+                export TEST_GIT_EXEC_PATH=$(${git}/bin/git --exec-path)
+              '';
+              # FIXME: these tests deadlock when run in the Nix sandbox
+              checkFlags = [
+                "--skip=test_checkout_pty"
+                "--skip=test_next_ambiguous_interactive"
+              ];
+            }
+          )
+          {
+            inherit (final.darwin.apple_sdk.frameworks) Security SystemConfiguration;
           };
-
-          nativeBuildInputs = [ pkg-config ];
-
-          buildInputs = [
-            ncurses
-            openssl
-            sqlite
-          ] ++ lib.optionals stdenv.isDarwin (with darwin.apple_sdk.frameworks; [
-            Security
-            SystemConfiguration
-            libiconv
-          ]);
-
-          preCheck = ''
-            export TEST_GIT=${git}/bin/git
-            export TEST_GIT_EXEC_PATH=$(${git}/bin/git --exec-path)
-          '';
-          # FIXME: these tests deadlock when run in the Nix sandbox
-          checkFlags = [
-            "--skip=test_checkout_pty"
-            "--skip=test_next_ambiguous_interactive"
-          ];
-        };
       });
     } //
     (foreachSystem (system:
