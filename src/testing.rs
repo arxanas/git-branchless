@@ -199,13 +199,20 @@ impl Git {
             env,
         } = options;
 
+        let env: BTreeMap<_, _> = self
+            .get_base_env(*time)
+            .into_iter()
+            .chain(
+                env.iter()
+                    .map(|(k, v)| (OsString::from(k), OsString::from(v))),
+            )
+            .collect();
         let mut command = Command::new(&self.path_to_git);
         command
             .current_dir(&self.repo_path)
             .args(args)
             .env_clear()
-            .envs(self.get_base_env(*time))
-            .envs(env.iter());
+            .envs(&env);
 
         let result = if let Some(input) = input {
             let mut child = command
@@ -253,7 +260,7 @@ stderr:
                 &args,
                 exit_code,
                 expected_exit_code,
-                command.get_envs().collect::<BTreeMap<_, _>>(),
+                &env,
                 &String::from_utf8_lossy(&result.stdout),
                 &String::from_utf8_lossy(&result.stderr),
             )
