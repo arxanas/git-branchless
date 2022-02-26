@@ -21,7 +21,7 @@ use crate::core::node_descriptors::{
     BranchesDescriptor, CommitMessageDescriptor, CommitOidDescriptor,
     DifferentialRevisionDescriptor, NodeDescriptor, RelativeTimeDescriptor,
 };
-use crate::git::{check_out_commit, GitRunInfo, NonZeroOid, Repo};
+use crate::git::{check_out_commit, CheckOutCommitOptions, GitRunInfo, NonZeroOid, Repo};
 use crate::opts::{CheckoutOptions, TraverseCommitsOptions};
 use crate::tui::prompt_select_commit;
 
@@ -427,7 +427,7 @@ pub fn traverse_commits(
             args.push("--merge");
         }
         if force {
-            args.push("--force");
+            args.push("--force")
         }
         args
     };
@@ -436,7 +436,10 @@ pub fn traverse_commits(
         git_run_info,
         None,
         Some(&current_oid),
-        additional_args.as_slice(),
+        &CheckOutCommitOptions {
+            additional_args: additional_args.as_slice(),
+            ..Default::default()
+        },
     )
 }
 
@@ -576,7 +579,10 @@ pub fn checkout(
         git_run_info,
         None,
         target.as_ref(),
-        additional_args,
+        &CheckOutCommitOptions {
+            additional_args: additional_args.as_slice(),
+            render_smartlog: true,
+        },
     )?;
     Ok(exit_code)
 }

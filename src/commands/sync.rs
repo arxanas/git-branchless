@@ -16,7 +16,7 @@ use crate::core::rewrite::{
     execute_rebase_plan, BuildRebasePlanError, BuildRebasePlanOptions, ExecuteRebasePlanOptions,
     ExecuteRebasePlanResult, RebasePlan, RebasePlanBuilder, RepoResource,
 };
-use crate::git::{Commit, GitRunInfo, NonZeroOid, Repo};
+use crate::git::{CheckOutCommitOptions, Commit, GitRunInfo, NonZeroOid, Repo};
 use crate::opts::MoveOptions;
 
 fn get_stack_roots(dag: &Dag) -> eyre::Result<CommitSet> {
@@ -142,6 +142,10 @@ pub fn sync(
         force_in_memory,
         force_on_disk,
         resolve_merge_conflicts,
+        check_out_commit_options: CheckOutCommitOptions {
+            additional_args: &[],
+            render_smartlog: false,
+        },
     };
 
     let (success_commits, merge_conflict_commits) = {

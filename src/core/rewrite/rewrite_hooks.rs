@@ -23,7 +23,8 @@ use crate::core::effects::Effects;
 use crate::core::eventlog::{Event, EventLogDb, EventReplayer};
 use crate::core::formatting::{printable_styled_string, Pluralize};
 use crate::git::{
-    CategorizedReferenceName, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo, ResolvedReferenceInfo,
+    CategorizedReferenceName, CheckOutCommitOptions, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo,
+    ResolvedReferenceInfo,
 };
 
 use super::execute::check_out_updated_head;
@@ -167,6 +168,7 @@ pub fn hook_post_rewrite(
             &rewritten_oids,
             &previous_head_info,
             skipped_head_updated_oid,
+            &CheckOutCommitOptions::default(),
         )?;
         if exit_code != 0 {
             eyre::bail!("Could not check out your updated `HEAD` commit.");

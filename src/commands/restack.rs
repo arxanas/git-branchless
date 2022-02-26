@@ -284,6 +284,7 @@ pub fn restack(
         force_in_memory,
         force_on_disk,
         resolve_merge_conflicts,
+        check_out_commit_options: Default::default(),
     };
     let pool = ThreadPoolBuilder::new().build()?;
     let repo_pool = RepoResource::new_pool(&repo)?;

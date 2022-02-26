@@ -14,7 +14,8 @@ use crate::core::effects::Effects;
 use crate::core::eventlog::EventTransactionId;
 use crate::core::formatting::{printable_styled_string, Pluralize};
 use crate::git::{
-    check_out_commit, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo, ResolvedReferenceInfo,
+    check_out_commit, CheckOutCommitOptions, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo,
+    ResolvedReferenceInfo,
 };
 
 use super::plan::RebasePlan;
@@ -141,6 +142,7 @@ pub fn check_out_updated_head(
     rewritten_oids: &HashMap<NonZeroOid, MaybeZeroOid>,
     previous_head_info: &ResolvedReferenceInfo,
     skipped_head_updated_oid: Option<NonZeroOid>,
+    check_out_commit_options: &CheckOutCommitOptions,
 ) -> eyre::Result<isize> {
     let checkout_target: ResolvedReferenceInfo = match previous_head_info {
         ResolvedReferenceInfo {
@@ -265,7 +267,7 @@ pub fn check_out_updated_head(
         git_run_info,
         Some(event_tx_id),
         Some(&checkout_target),
-        &[] as &[&OsStr],
+        check_out_commit_options,
     )?;
     Ok(result)
 }
@@ -386,6 +388,7 @@ mod in_memory {
             force_in_memory: _,
             force_on_disk: _,
             resolve_merge_conflicts: _, // May be needed once we can resolve merge conflicts in memory.
+            check_out_commit_options: _, // Caller is responsible for checking out to new HEAD.
         } = options;
 
         let mut current_oid = rebase_plan.first_dest_oid;
@@ -658,6 +661,7 @@ mod in_memory {
             force_in_memory: _,
             force_on_disk: _,
             resolve_merge_conflicts: _,
+            check_out_commit_options,
         } = options;
 
         // Note that if an OID has been mapped to multiple other OIDs, then the last
@@ -710,6 +714,7 @@ mod in_memory {
             &rewritten_oids_map,
             &head_info,
             skipped_head_updated_oid,
+            check_out_commit_options,
         )?;
         Ok(exit_code)
     }
@@ -749,6 +754,7 @@ mod on_disk {
             force_in_memory: _,
             force_on_disk: _,
             resolve_merge_conflicts: _,
+            check_out_commit_options: _, // Checkout happens after rebase has concluded.
         } = options;
 
         let (effects, _progress) = effects.start_operation(OperationType::InitializeRebase);
@@ -911,6 +917,7 @@ mod on_disk {
             force_in_memory: _,
             force_on_disk: _,
             resolve_merge_conflicts: _,
+            check_out_commit_options: _, // Checkout happens after rebase has concluded.
         } = options;
 
         match write_rebase_state_to_disk(effects, git_run_info, repo, rebase_plan, options)? {
@@ -929,7 +936,7 @@ mod on_disk {
 
 /// Options to use when executing a `RebasePlan`.
 #[derive(Clone, Debug)]
-pub struct ExecuteRebasePlanOptions {
+pub struct ExecuteRebasePlanOptions<'a> {
     /// The time which should be recorded for this event.
     pub now: SystemTime,
 
@@ -950,6 +957,9 @@ pub struct ExecuteRebasePlanOptions {
     /// Whether or not an attempt should be made to resolve merge conflicts,
     /// rather than failing-fast.
     pub resolve_merge_conflicts: bool,
+
+    /// If `HEAD` was moved, the options for checking out the new `HEAD` commit.
+    pub check_out_commit_options: CheckOutCommitOptions<'a>,
 }
 
 /// The result of executing a rebase plan.
@@ -989,6 +999,7 @@ pub fn execute_rebase_plan(
         force_in_memory,
         force_on_disk,
         resolve_merge_conflicts,
+        check_out_commit_options: _,
     } = options;
 
     if !force_on_disk {
