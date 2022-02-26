@@ -50,29 +50,11 @@ fn test_sync_basic() -> eyre::Result<()> {
         [2/2] Committed as: 8ee4f266 create test2.txt
         branchless: processing 2 rewritten commits
         branchless: running command: <git-executable> checkout master
-        :
-        O 98b9119d create test3.txt
-        |\
-        | o 2b633ed7 create test4.txt
-        |
-        @ 117e0866 (master) create test5.txt
-        |
-        o 87c7a36c create test1.txt
-        |
-        o 8ee4f266 create test2.txt
         In-memory rebase succeeded.
         Attempting rebase in-memory...
         [1/1] Committed as: d7e7e6c3 create test4.txt
         branchless: processing 1 rewritten commit
         branchless: running command: <git-executable> checkout master
-        :
-        @ 117e0866 (master) create test5.txt
-        |\
-        | o 87c7a36c create test1.txt
-        | |
-        | o 8ee4f266 create test2.txt
-        |
-        o d7e7e6c3 create test4.txt
         In-memory rebase succeeded.
         Synced 62fc20d2 create test1.txt
         Synced 2b633ed7 create test4.txt

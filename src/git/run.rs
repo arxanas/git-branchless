@@ -366,15 +366,40 @@ impl GitRunInfo {
     }
 }
 
+/// Options for checking out a commit.
+#[derive(Clone, Debug)]
+pub struct CheckOutCommitOptions<'a> {
+    /// Additional arguments to pass to `git checkout`.
+    pub additional_args: &'a [&'a str],
+
+    /// Whether or not to render the smartlog after the checkout has completed.
+    pub render_smartlog: bool,
+}
+
+impl Default for CheckOutCommitOptions<'_> {
+    fn default() -> Self {
+        Self {
+            additional_args: Default::default(),
+            render_smartlog: true,
+        }
+    }
+}
+
 /// Checks out the requested commit. If the operation succeeds, then displays
 /// the new smartlog. Otherwise displays a warning message.
+#[instrument]
 pub fn check_out_commit(
     effects: &Effects,
     git_run_info: &GitRunInfo,
     event_tx_id: Option<EventTransactionId>,
-    target: Option<impl AsRef<OsStr>>,
-    additional_args: impl IntoIterator<Item = impl AsRef<OsStr>>,
+    target: Option<impl AsRef<OsStr> + std::fmt::Debug>,
+    options: &CheckOutCommitOptions,
 ) -> eyre::Result<isize> {
+    let CheckOutCommitOptions {
+        additional_args,
+        render_smartlog,
+    } = options;
+
     let target = match target {
         None => None,
         Some(target) => {
@@ -383,19 +408,20 @@ pub fn check_out_commit(
         }
     };
 
-    let additional_args: Vec<_> = additional_args.into_iter().collect();
     let args = {
         let mut args = vec![OsStr::new("checkout")];
         if let Some(target) = &target {
             args.push(target);
         }
-        args.extend(additional_args.iter().map(|arg| arg.as_ref()));
+        args.extend(additional_args.iter().map(OsStr::new));
         args
     };
     let result = git_run_info.run(effects, event_tx_id, args.as_slice())?;
 
     if result == 0 {
-        smartlog(effects, git_run_info, &Default::default())?;
+        if *render_smartlog {
+            smartlog(effects, git_run_info, &Default::default())?;
+        }
     } else {
         writeln!(
             effects.get_output_stream(),

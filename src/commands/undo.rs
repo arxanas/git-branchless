@@ -28,7 +28,10 @@ use crate::core::node_descriptors::{
     DifferentialRevisionDescriptor, ObsolescenceExplanationDescriptor, RelativeTimeDescriptor,
 };
 use crate::declare_views;
-use crate::git::{check_out_commit, CategorizedReferenceName, GitRunInfo, MaybeZeroOid, Repo};
+use crate::git::{
+    check_out_commit, CategorizedReferenceName, CheckOutCommitOptions, GitRunInfo, MaybeZeroOid,
+    Repo,
+};
 use crate::tui::{with_siv, SingletonView};
 
 fn render_cursor_smartlog(
@@ -708,7 +711,10 @@ fn undo_events(
                     git_run_info,
                     Some(event_tx_id),
                     Some(target_oid.as_os_str()),
-                    &["--detach"],
+                    &CheckOutCommitOptions {
+                        additional_args: &["--detach"],
+                        render_smartlog: true,
+                    },
                 )
                 .wrap_err("Updating to previous HEAD location")?;
                 if exit_code != 0 {
