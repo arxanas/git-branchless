@@ -16,6 +16,7 @@ use crate::git::{MaybeZeroOid, NonZeroOid};
 ///
 /// If a commit was rewritten into itself through some chain of events, then
 /// returns `None`, rather than the same commit OID.
+#[instrument]
 pub fn find_rewrite_target(
     event_replayer: &EventReplayer,
     event_cursor: EventCursor,
@@ -81,7 +82,7 @@ pub fn find_abandoned_children(
     };
 
     let children = dag.query().children(CommitSet::from(oid))?;
-    let children = dag.observed_commits.intersection(&children);
+    let children = children.intersection(&dag.observed_commits);
     let non_obsolete_children = children.difference(&dag.obsolete_commits);
     let non_obsolete_children_oids: Vec<NonZeroOid> = non_obsolete_children
         .iter()?
