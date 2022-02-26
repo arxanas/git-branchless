@@ -35,6 +35,7 @@ pub enum OperationType {
     ProcessEvents,
     ReadingFromCache,
     RunGitCommand(Arc<String>),
+    SyncCommits,
     UpdateCommitGraph,
     WalkCommits,
 }
@@ -61,6 +62,7 @@ impl ToString for OperationType {
             OperationType::RunGitCommand(command) => {
                 return format!("Running Git command: {}", &command)
             }
+            OperationType::SyncCommits => "Syncing commits",
             OperationType::UpdateCommitGraph => "Updating commit graph",
             OperationType::WalkCommits => "Walking commits",
         };
