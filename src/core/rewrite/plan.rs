@@ -554,8 +554,8 @@ impl<'repo> RebasePlanBuilder<'repo> {
         let unconstrained_nodes = {
             let mut unconstrained_nodes: HashSet<NonZeroOid> =
                 state.constraints.keys().copied().collect();
-            for child_oid in state.constraints.values().flatten().copied() {
-                unconstrained_nodes.remove(&child_oid);
+            for child_oid in state.constraints.values().flatten() {
+                unconstrained_nodes.remove(child_oid);
             }
             unconstrained_nodes
         };

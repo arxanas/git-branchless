@@ -1163,7 +1163,7 @@ Either create it, or update the main branch setting by running:
         let new_tree_entries: HashMap<PathBuf, Option<(NonZeroOid, i32)>> = match opts {
             AmendFastOptions::FromWorkingCopy { status_entries } => status_entries
                 .iter()
-                .map(|entry| {
+                .flat_map(|entry| {
                     entry.paths().into_iter().map(move |path| {
                         let file_path = &repo_path.join(&path);
                         // Try to create a new blob OID based on the current on-disk
@@ -1180,7 +1180,6 @@ Either create it, or update the main branch setting by running:
                         }
                     })
                 })
-                .flatten()
                 .collect::<Result<HashMap<_, _>, _>>()?,
             AmendFastOptions::FromIndex { paths } => {
                 let index = self.get_index()?;
