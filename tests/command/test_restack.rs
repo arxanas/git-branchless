@@ -496,8 +496,6 @@ fn test_restack_checked_out_branch() -> eyre::Result<()> {
         branchless: processing 2 updates: branch foo, branch master
         branchless: processing 1 rewritten commit
         branchless: running command: <git-executable> checkout foo
-        :
-        @ 59e75818 (foo, master) create test2.txt
         In-memory rebase succeeded.
         Finished restacking commits.
         No abandoned branches to restack.

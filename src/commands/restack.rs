@@ -72,7 +72,7 @@ use crate::core::rewrite::{
     BuildRebasePlanOptions, ExecuteRebasePlanOptions, ExecuteRebasePlanResult, RebasePlanBuilder,
     RepoPool, RepoResource,
 };
-use crate::git::{GitRunInfo, NonZeroOid, Repo};
+use crate::git::{CheckOutCommitOptions, GitRunInfo, NonZeroOid, Repo};
 use crate::opts::MoveOptions;
 
 #[instrument(skip(commits))]
@@ -282,7 +282,10 @@ pub fn restack(
         force_in_memory,
         force_on_disk,
         resolve_merge_conflicts,
-        check_out_commit_options: Default::default(),
+        check_out_commit_options: CheckOutCommitOptions {
+            additional_args: &[],
+            render_smartlog: false,
+        },
     };
     let pool = ThreadPoolBuilder::new().build()?;
     let repo_pool = RepoResource::new_pool(&repo)?;
