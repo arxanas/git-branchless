@@ -77,3 +77,23 @@ fn test_sync_basic() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_sync_up_to_date() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+    git.detach_head()?;
+    git.commit_file("test3", 3)?;
+    git.commit_file("test4", 4)?;
+
+    {
+        let (stdout, stderr) = git.run(&["sync"])?;
+        insta::assert_snapshot!(stderr, @"");
+        insta::assert_snapshot!(stdout, @"Not moving up-to-date stack at 70deb1e2 create test3.txt
+");
+    }
+    Ok(())
+}
