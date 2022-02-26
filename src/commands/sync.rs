@@ -100,6 +100,11 @@ pub fn sync(
 
                         let repo = repo_pool.try_create()?;
                         let root_commit = repo.find_commit_or_fail(root_commit_oid)?;
+                        if root_commit.get_only_parent().map(|parent| parent.get_oid())
+                            == Some(references_snapshot.main_branch_oid)
+                        {
+                            return Ok(Ok((root_commit_oid, None)));
+                        }
 
                         builder.move_subtree(
                             root_commit.get_oid(),
@@ -148,9 +153,10 @@ pub fn sync(
         },
     };
 
-    let (success_commits, merge_conflict_commits) = {
+    let (success_commits, merge_conflict_commits, skipped_commits) = {
         let mut success_commits: Vec<Commit> = Vec::new();
         let mut merge_conflict_commits: Vec<Commit> = Vec::new();
+        let mut skipped_commits: Vec<Commit> = Vec::new();
 
         let (effects, progress) = effects.start_operation(OperationType::SyncCommits);
         progress.notify_progress(0, root_commit_and_plans.len());
@@ -160,11 +166,7 @@ pub fn sync(
             let rebase_plan = match rebase_plan {
                 Some(rebase_plan) => rebase_plan,
                 None => {
-                    writeln!(
-                        effects.get_output_stream(),
-                        "Not moving up-to-date stack at {}",
-                        printable_styled_string(&glyphs, root_commit.friendly_describe()?)?
-                    )?;
+                    skipped_commits.push(root_commit);
                     continue;
                 }
             };
@@ -190,7 +192,7 @@ pub fn sync(
             }
         }
 
-        (success_commits, merge_conflict_commits)
+        (success_commits, merge_conflict_commits, skipped_commits)
     };
 
     for success_commit in success_commits {
@@ -218,6 +220,14 @@ pub fn sync(
                     .append(merge_conflict_commit.friendly_describe()?)
                     .build()
             )?
+        )?;
+    }
+
+    for skipped_commit in skipped_commits {
+        writeln!(
+            effects.get_output_stream(),
+            "Not moving up-to-date stack at {}",
+            printable_styled_string(&glyphs, skipped_commit.friendly_describe()?)?
         )?;
     }
 
