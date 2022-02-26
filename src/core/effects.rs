@@ -643,7 +643,7 @@ trait WriteProgress {
                 // full lines at a time.
                 *self.get_buffer() = {
                     let mut new_buffer = String::new();
-                    let lines = self.get_buffer().split_inclusive("\n");
+                    let lines = self.get_buffer().split_inclusive('\n');
                     for line in lines {
                         match line.strip_suffix('\n') {
                             Some(line) => operation_state
