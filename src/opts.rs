@@ -280,6 +280,18 @@ pub enum Command {
         show_hidden_commits: bool,
     },
 
+    /// Move any local commit stacks on top of the main branch.
+    Sync {
+        /// Run `git fetch` to update remote references before carrying out the
+        /// sync.
+        #[clap(short = 'p', long = "pull")]
+        update_refs: bool,
+
+        /// Options for moving commits.
+        #[clap(flatten)]
+        move_options: MoveOptions,
+    },
+
     /// Browse or return to a previous state of the repository.
     Undo,
 

@@ -14,6 +14,7 @@ mod command {
     mod test_navigation;
     mod test_restack;
     mod test_smartlog;
+    mod test_sync;
     mod test_undo;
     mod test_wrap;
 }

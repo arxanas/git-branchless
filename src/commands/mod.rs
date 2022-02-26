@@ -9,6 +9,7 @@ pub mod r#move;
 pub mod navigation;
 pub mod restack;
 pub mod smartlog;
+pub mod sync;
 pub mod undo;
 pub mod wrap;
 
@@ -230,6 +231,11 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
             )?;
             0
         }
+
+        Command::Sync {
+            update_refs,
+            move_options,
+        } => sync::sync(&effects, &git_run_info, update_refs, &move_options)?,
 
         Command::Undo => undo::undo(&effects, &git_run_info)?,
 
