@@ -64,7 +64,7 @@ use tracing::{instrument, warn};
 
 use crate::commands::smartlog::smartlog;
 use crate::core::config::get_restack_preserve_timestamps;
-use crate::core::dag::{resolve_commits, sort_commit_set, CommitSet, Dag, ResolveCommitsResult};
+use crate::core::dag::{commit_set_to_vec, resolve_commits, CommitSet, Dag, ResolveCommitsResult};
 use crate::core::effects::Effects;
 use crate::core::eventlog::{EventCursor, EventLogDb, EventReplayer};
 use crate::core::rewrite::{
@@ -93,7 +93,9 @@ fn restack_commits(
         Some(commits) => commits.into_iter().collect(),
         None => dag.obsolete_commits.clone(),
     };
-    let commits = sort_commit_set(&repo, dag, &commit_set)?;
+    // Don't use `sort_commit_set` since the set of obsolete commits may be very
+    // large and we'll be throwing away most of them.
+    let commits = commit_set_to_vec(&commit_set)?;
 
     struct RebaseInfo {
         dest_oid: NonZeroOid,
@@ -101,13 +103,9 @@ fn restack_commits(
     }
     let rebases: Vec<RebaseInfo> = {
         let mut result = Vec::new();
-        for original_commit in commits {
-            let abandoned_children = find_abandoned_children(
-                dag,
-                event_replayer,
-                event_cursor,
-                original_commit.get_oid(),
-            )?;
+        for original_commit_oid in commits {
+            let abandoned_children =
+                find_abandoned_children(dag, event_replayer, event_cursor, original_commit_oid)?;
             if let Some((rewritten_oid, abandoned_child_oids)) = abandoned_children {
                 result.push(RebaseInfo {
                     dest_oid: rewritten_oid,
