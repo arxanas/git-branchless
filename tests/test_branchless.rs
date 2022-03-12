@@ -13,9 +13,9 @@ fn test_commands() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
-:
-@ 3df4b935 (master) create test.txt
-"###);
+        :
+        @ 3df4b935 (> master) create test.txt
+        "###);
     }
 
     {

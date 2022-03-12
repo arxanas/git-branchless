@@ -220,13 +220,13 @@ fn test_move_with_source_not_in_smartlog() -> eyre::Result<()> {
         {
             let (stdout, _stderr) = git.run(&["smartlog"])?;
             insta::assert_snapshot!(stdout, @r###"
-        :
-        O 62fc20d2 create test1.txt
-        |\
-        : o 96d1c37a create test2.txt
-        :
-        @ a2482074 (master) create test4.txt
-        "###);
+            :
+            O 62fc20d2 create test1.txt
+            |\
+            : o 96d1c37a create test2.txt
+            :
+            @ a2482074 (> master) create test4.txt
+            "###);
         }
     }
 
@@ -279,7 +279,7 @@ fn test_move_with_source_not_in_smartlog() -> eyre::Result<()> {
             |\
             : o 96d1c37a create test2.txt
             :
-            @ a2482074 (master) create test4.txt
+            @ a2482074 (> master) create test4.txt
             In-memory rebase succeeded.
             "###);
         }
@@ -287,13 +287,13 @@ fn test_move_with_source_not_in_smartlog() -> eyre::Result<()> {
         {
             let (stdout, _stderr) = git.run(&["smartlog"])?;
             insta::assert_snapshot!(stdout, @r###"
-        :
-        O 62fc20d2 create test1.txt
-        |\
-        : o 96d1c37a create test2.txt
-        :
-        @ a2482074 (master) create test4.txt
-        "###);
+            :
+            O 62fc20d2 create test1.txt
+            |\
+            : o 96d1c37a create test2.txt
+            :
+            @ a2482074 (> master) create test4.txt
+            "###);
         }
     }
 
@@ -454,7 +454,7 @@ fn test_move_base() -> eyre::Result<()> {
         branchless: processing 2 rewritten commits
         branchless: running command: <git-executable> checkout master
         :
-        @ bf0d52a6 (master) create test4.txt
+        @ bf0d52a6 (> master) create test4.txt
         |
         o 44352d00 create test2.txt
         |
@@ -466,13 +466,13 @@ fn test_move_base() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
-            :
-            @ bf0d52a6 (master) create test4.txt
-            |
-            o 44352d00 create test2.txt
-            |
-            o cf5eb244 create test3.txt
-            "###);
+        :
+        @ bf0d52a6 (> master) create test4.txt
+        |
+        o 44352d00 create test2.txt
+        |
+        o cf5eb244 create test3.txt
+        "###);
     }
 
     Ok(())
@@ -649,7 +649,7 @@ fn test_move_branch() -> eyre::Result<()> {
         branchless: processing 1 rewritten commit
         branchless: running command: <git-executable> checkout master
         :
-        @ 70deb1e2 (master) create test3.txt
+        @ 70deb1e2 (> master) create test3.txt
         In-memory rebase succeeded.
         "###);
     }
@@ -657,9 +657,9 @@ fn test_move_branch() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
-            :
-            @ 70deb1e2 (master) create test3.txt
-            "###);
+        :
+        @ 70deb1e2 (> master) create test3.txt
+        "###);
     }
 
     {
@@ -913,7 +913,7 @@ fn test_move_main_branch_commits() -> eyre::Result<()> {
         |\
         : o 96d1c37a create test2.txt
         :
-        @ 566e4341 (master) create test5.txt
+        @ 566e4341 (> master) create test5.txt
         In-memory rebase succeeded.
         "###);
     }
@@ -926,7 +926,7 @@ fn test_move_main_branch_commits() -> eyre::Result<()> {
         |\
         : o 96d1c37a create test2.txt
         :
-        @ 566e4341 (master) create test5.txt
+        @ 566e4341 (> master) create test5.txt
         "###);
     }
 
@@ -1266,14 +1266,14 @@ fn test_move_no_reapply_squashed_commits() -> eyre::Result<()> {
         {
             let (stdout, _stderr) = git.run(&["smartlog"])?;
             insta::assert_snapshot!(stdout, @r###"
-        O f777ecc9 create initial.txt
-        |\
-        | o 62fc20d2 create test1.txt
-        | |
-        | o 96d1c37a create test2.txt
-        |
-        @ de4a1fe8 (master) squashed test1 and test2
-        "###);
+            O f777ecc9 create initial.txt
+            |\
+            | o 62fc20d2 create test1.txt
+            | |
+            | o 96d1c37a create test2.txt
+            |
+            @ de4a1fe8 (> master) squashed test1 and test2
+            "###);
         }
 
         {
@@ -1304,7 +1304,7 @@ fn test_move_no_reapply_squashed_commits() -> eyre::Result<()> {
             Switched to branch 'master'
             branchless: processing checkout
             :
-            @ de4a1fe8 (master) squashed test1 and test2
+            @ de4a1fe8 (> master) squashed test1 and test2
             Successfully rebased and updated detached HEAD.
             "###);
             insta::assert_snapshot!(stdout, @r###"
@@ -1319,9 +1319,9 @@ fn test_move_no_reapply_squashed_commits() -> eyre::Result<()> {
         {
             let (stdout, _stderr) = git.run(&["smartlog"])?;
             insta::assert_snapshot!(stdout, @r###"
-        :
-        @ de4a1fe8 (master) squashed test1 and test2
-        "###);
+            :
+            @ de4a1fe8 (> master) squashed test1 and test2
+            "###);
         }
 
         {
@@ -1335,14 +1335,14 @@ fn test_move_no_reapply_squashed_commits() -> eyre::Result<()> {
         {
             let (stdout, _stderr) = git.run(&["smartlog"])?;
             insta::assert_snapshot!(stdout, @r###"
-        O f777ecc9 create initial.txt
-        |\
-        | o 62fc20d2 create test1.txt
-        | |
-        | o 96d1c37a create test2.txt
-        |
-        @ de4a1fe8 (master) squashed test1 and test2
-        "###);
+            O f777ecc9 create initial.txt
+            |\
+            | o 62fc20d2 create test1.txt
+            | |
+            | o 96d1c37a create test2.txt
+            |
+            @ de4a1fe8 (> master) squashed test1 and test2
+            "###);
         }
 
         {
@@ -1365,7 +1365,7 @@ fn test_move_no_reapply_squashed_commits() -> eyre::Result<()> {
             branchless: processing 2 rewritten commits
             branchless: running command: <git-executable> checkout master
             :
-            @ de4a1fe8 (master) squashed test1 and test2
+            @ de4a1fe8 (> master) squashed test1 and test2
             In-memory rebase succeeded.
             "###);
         }
@@ -1373,9 +1373,9 @@ fn test_move_no_reapply_squashed_commits() -> eyre::Result<()> {
         {
             let (stdout, _stderr) = git.run(&["smartlog"])?;
             insta::assert_snapshot!(stdout, @r###"
-        :
-        @ de4a1fe8 (master) squashed test1 and test2
-        "###);
+            :
+            @ de4a1fe8 (> master) squashed test1 and test2
+            "###);
         }
     }
     Ok(())
@@ -1414,7 +1414,7 @@ fn test_move_delete_checked_out_branch() -> eyre::Result<()> {
         : |
         : o ffcba554 (more-work) create test3.txt
         :
-        @ 91c5ce63 (master) create test2.txt
+        @ 91c5ce63 (> master) create test2.txt
         "###);
     }
 
@@ -1814,7 +1814,7 @@ fn test_move_orphaned_root() -> eyre::Result<()> {
         // FIXME: the smartlog handling for unrelated roots is wrong. There
         // should be no relation between these two commits.
         insta::assert_snapshot!(stdout, @r###"
-        @ da90168b (new-root) new root
+        @ da90168b (> new-root) new root
         :
         O 96d1c37a (master) create test2.txt
         "###);
@@ -1845,7 +1845,7 @@ fn test_move_orphaned_root() -> eyre::Result<()> {
             :
             O 96d1c37a (master) create test2.txt
             |
-            @ 70deb1e2 (new-root) create test3.txt
+            @ 70deb1e2 (> new-root) create test3.txt
             Successfully rebased and updated detached HEAD.
             "###);
             insta::assert_snapshot!(stdout, @r###"
@@ -1859,11 +1859,11 @@ fn test_move_orphaned_root() -> eyre::Result<()> {
         {
             let (stdout, _stderr) = git.run(&["smartlog"])?;
             insta::assert_snapshot!(stdout, @r###"
-        :
-        O 96d1c37a (master) create test2.txt
-        |
-        @ 70deb1e2 (new-root) create test3.txt
-        "###);
+            :
+            O 96d1c37a (master) create test2.txt
+            |
+            @ 70deb1e2 (> new-root) create test3.txt
+            "###);
         }
 
         {
@@ -1891,7 +1891,7 @@ fn test_move_orphaned_root() -> eyre::Result<()> {
             :
             O 96d1c37a (master) create test2.txt
             |
-            @ 70deb1e2 (new-root) create test3.txt
+            @ 70deb1e2 (> new-root) create test3.txt
             In-memory rebase succeeded.
             "###);
         }
@@ -1902,7 +1902,7 @@ fn test_move_orphaned_root() -> eyre::Result<()> {
             :
             O 96d1c37a (master) create test2.txt
             |
-            @ 70deb1e2 (new-root) create test3.txt
+            @ 70deb1e2 (> new-root) create test3.txt
             "###);
         }
     }
@@ -1980,7 +1980,7 @@ fn test_move_dest_not_in_dag() -> eyre::Result<()> {
         branchless: running command: <git-executable> checkout other-branch
         Your branch is up to date with 'origin/other-branch'.
         :
-        @ 70deb1e2 (other-branch, remote origin/other-branch) create test3.txt
+        @ 70deb1e2 (> other-branch, remote origin/other-branch) create test3.txt
         In-memory rebase succeeded.
         "###);
     }
@@ -2144,7 +2144,7 @@ fn test_move_branch_on_merge_conflict_resolution() -> eyre::Result<()> {
         Switched to branch 'master'
         branchless: processing checkout
         :
-        @ 62fc20d2 (master) create test1.txt
+        @ 62fc20d2 (> master) create test1.txt
         |\
         | o 6002762d create test1.txt
         |
@@ -2161,7 +2161,7 @@ fn test_move_branch_on_merge_conflict_resolution() -> eyre::Result<()> {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
         :
-        @ 62fc20d2 (master) create test1.txt
+        @ 62fc20d2 (> master) create test1.txt
         |\
         | o 6002762d create test1.txt
         |

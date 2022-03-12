@@ -30,7 +30,7 @@ use crate::core::node_descriptors::{
 use crate::declare_views;
 use crate::git::{
     check_out_commit, CategorizedReferenceName, CheckOutCommitOptions, GitRunInfo, MaybeZeroOid,
-    Repo,
+    Repo, ResolvedReferenceInfo,
 };
 use crate::tui::{with_siv, SingletonView};
 
@@ -43,6 +43,15 @@ fn render_cursor_smartlog(
 ) -> eyre::Result<Vec<StyledString>> {
     let dag = dag.set_cursor(effects, repo, event_replayer, event_cursor)?;
     let references_snapshot = event_replayer.get_references_snapshot(repo, event_cursor)?;
+
+    // FIXME: the information of which branch is checked out is not stored in
+    // the event log. For now, just pretend that `HEAD` was always detached in
+    // the past.
+    let head_info = ResolvedReferenceInfo {
+        oid: references_snapshot.head_oid,
+        reference_name: None,
+    };
+
     let graph = make_smartlog_graph(effects, repo, &dag, event_replayer, event_cursor, true)?;
     let result = render_graph(
         effects,
@@ -54,7 +63,7 @@ fn render_cursor_smartlog(
             &mut CommitOidDescriptor::new(true)?,
             &mut RelativeTimeDescriptor::new(repo, SystemTime::now())?,
             &mut ObsolescenceExplanationDescriptor::new(event_replayer, event_cursor)?,
-            &mut BranchesDescriptor::new(repo, &references_snapshot)?,
+            &mut BranchesDescriptor::new(repo, &head_info, &references_snapshot)?,
             &mut DifferentialRevisionDescriptor::new(repo)?,
             &mut CommitMessageDescriptor::new()?,
         ],

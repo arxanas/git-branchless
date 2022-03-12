@@ -456,7 +456,7 @@ fn test_restack_unobserved_commit() -> eyre::Result<()> {
         :
         O 62fc20d2 (master) create test1.txt
         |
-        @ f4229de3 (foo) Updated test2
+        @ f4229de3 (> foo) Updated test2
         "###);
     }
 
@@ -468,7 +468,7 @@ fn test_restack_unobserved_commit() -> eyre::Result<()> {
         :
         O 62fc20d2 (master) create test1.txt
         |
-        @ f4229de3 (foo) Updated test2
+        @ f4229de3 (> foo) Updated test2
         "###);
     }
 
@@ -500,7 +500,7 @@ fn test_restack_checked_out_branch() -> eyre::Result<()> {
         Finished restacking commits.
         No abandoned branches to restack.
         :
-        @ 59e75818 (foo, master) create test2.txt
+        @ 59e75818 (> foo, master) create test2.txt
         "###);
     }
 
