@@ -316,6 +316,7 @@ mod in_memory {
     use std::collections::HashMap;
     use std::ffi::OsString;
     use std::fmt::Write;
+    use std::time::Duration;
 
     use eyre::Context;
     use indicatif::{ProgressBar, ProgressStyle};
@@ -461,10 +462,10 @@ mod in_memory {
                     let progress_template = format!("{} {{spinner}} {{wide_msg}}", commit_num);
                     let progress = ProgressBar::new_spinner();
                     progress.set_style(
-                        ProgressStyle::default_spinner().template(progress_template.trim()),
+                        ProgressStyle::default_spinner().template(progress_template.trim())?,
                     );
                     progress.set_message("Starting");
-                    progress.enable_steady_tick(100);
+                    progress.enable_steady_tick(Duration::from_millis(100));
 
                     if commit_to_apply.get_parent_count() > 1 {
                         warn!(
@@ -573,7 +574,7 @@ mod in_memory {
                     let commit_num = format!("[{}/{}]", i, num_picks);
                     let progress_template = format!("{} {{spinner}} {{wide_msg}}", commit_num);
                     progress.set_style(
-                        ProgressStyle::default_spinner().template(progress_template.trim()),
+                        ProgressStyle::default_spinner().template(progress_template.trim())?,
                     );
 
                     let commit = repo.find_commit_or_fail(*commit_oid)?;
