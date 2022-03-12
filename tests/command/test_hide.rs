@@ -149,9 +149,9 @@ fn test_hide_master_commit_with_hidden_children() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
-            :
-            @ 20230db7 (master) create test5.txt
-            "###);
+        :
+        @ 20230db7 (> master) create test5.txt
+        "###);
     }
 
     Ok(())
@@ -172,18 +172,18 @@ fn test_branches_always_visible() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
-            @ f777ecc9 (master) create initial.txt
-            |
-            x 62fc20d2 (manually hidden) create test1.txt
-            |
-            x 96d1c37a (manually hidden) (test) create test2.txt
-            "###);
+        @ f777ecc9 (> master) create initial.txt
+        |
+        x 62fc20d2 (manually hidden) create test1.txt
+        |
+        x 96d1c37a (manually hidden) (test) create test2.txt
+        "###);
     }
 
     git.run(&["branch", "-D", "test"])?;
     {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
-        insta::assert_snapshot!(stdout, @"@ f777ecc9 (master) create initial.txt
+        insta::assert_snapshot!(stdout, @"@ f777ecc9 (> master) create initial.txt
 ");
     }
 
@@ -213,10 +213,10 @@ fn test_unhide() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
-            @ f777ecc9 (master) create initial.txt
-            |
-            o 62fc20d2 create test1.txt
-            "###);
+        @ f777ecc9 (> master) create initial.txt
+        |
+        o 62fc20d2 create test1.txt
+        "###);
     }
 
     {
@@ -230,12 +230,12 @@ fn test_unhide() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
-            @ f777ecc9 (master) create initial.txt
-            |
-            o 62fc20d2 create test1.txt
-            |
-            o 96d1c37a create test2.txt
-            "###);
+        @ f777ecc9 (> master) create initial.txt
+        |
+        o 62fc20d2 create test1.txt
+        |
+        o 96d1c37a create test2.txt
+        "###);
     }
 
     Ok(())
@@ -255,14 +255,14 @@ fn test_hide_recursive() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
-            @ f777ecc9 (master) create initial.txt
-            |
-            o 62fc20d2 create test1.txt
-            |
-            o 96d1c37a create test2.txt
-            |
-            o 70deb1e2 create test3.txt
-            "###);
+        @ f777ecc9 (> master) create initial.txt
+        |
+        o 62fc20d2 create test1.txt
+        |
+        o 96d1c37a create test2.txt
+        |
+        o 70deb1e2 create test3.txt
+        "###);
     }
 
     {
@@ -278,10 +278,10 @@ fn test_hide_recursive() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
-            @ f777ecc9 (master) create initial.txt
-            |
-            o 62fc20d2 create test1.txt
-            "###);
+        @ f777ecc9 (> master) create initial.txt
+        |
+        o 62fc20d2 create test1.txt
+        "###);
     }
 
     {
@@ -297,14 +297,14 @@ fn test_hide_recursive() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
-            @ f777ecc9 (master) create initial.txt
-            |
-            o 62fc20d2 create test1.txt
-            |
-            o 96d1c37a create test2.txt
-            |
-            o 70deb1e2 create test3.txt
-            "###);
+        @ f777ecc9 (> master) create initial.txt
+        |
+        o 62fc20d2 create test1.txt
+        |
+        o 96d1c37a create test2.txt
+        |
+        o 70deb1e2 create test3.txt
+        "###);
     }
 
     Ok(())

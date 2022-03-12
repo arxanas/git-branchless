@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - EXPERIMENTAL: created `git sync` command, which moves all commit stacks onto the main branch (if possible).
 
+### Changed
+
+- The smartlog now displays an icon next to the currently-checked-out branch.
+
 ### Fixed
 
 - (#267) Aliases like `git amend` are now installed only if the user does not already have aliases with the same name. Thanks to @rslabbert for implementing this.

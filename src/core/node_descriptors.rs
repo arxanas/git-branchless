@@ -3,6 +3,7 @@
 //! These are rendered inline in the smartlog, between the commit hash and the
 //! commit message.
 
+use std::borrow::Cow;
 use std::collections::HashSet;
 use std::convert::TryInto;
 use std::ffi::OsStr;
@@ -19,7 +20,10 @@ use crate::core::config::{
     get_commit_descriptors_branches, get_commit_descriptors_differential_revision,
     get_commit_descriptors_relative_time,
 };
-use crate::git::{CategorizedReferenceName, Commit, NonZeroOid, Repo, RepoReferencesSnapshot};
+use crate::git::{
+    CategorizedReferenceName, Commit, NonZeroOid, Repo, RepoReferencesSnapshot,
+    ResolvedReferenceInfo,
+};
 
 use super::eventlog::{Event, EventCursor, EventReplayer};
 use super::formatting::{Glyphs, StyledStringBuilder};
@@ -198,15 +202,21 @@ impl<'a> NodeDescriptor for ObsolescenceExplanationDescriptor<'a> {
 #[derive(Debug)]
 pub struct BranchesDescriptor<'a> {
     is_enabled: bool,
+    head_info: &'a ResolvedReferenceInfo<'a>,
     references_snapshot: &'a RepoReferencesSnapshot,
 }
 
 impl<'a> BranchesDescriptor<'a> {
     /// Constructor.
-    pub fn new(repo: &Repo, references_snapshot: &'a RepoReferencesSnapshot) -> eyre::Result<Self> {
+    pub fn new(
+        repo: &Repo,
+        head_info: &'a ResolvedReferenceInfo,
+        references_snapshot: &'a RepoReferencesSnapshot,
+    ) -> eyre::Result<Self> {
         let is_enabled = get_commit_descriptors_branches(repo)?;
         Ok(BranchesDescriptor {
             is_enabled,
+            head_info,
             references_snapshot,
         })
     }
@@ -216,7 +226,7 @@ impl<'a> NodeDescriptor for BranchesDescriptor<'a> {
     #[instrument]
     fn describe_node(
         &mut self,
-        _glyphs: &Glyphs,
+        glyphs: &Glyphs,
         object: &NodeObject,
     ) -> eyre::Result<Option<StyledString>> {
         if !self.is_enabled {
@@ -240,19 +250,30 @@ impl<'a> NodeDescriptor for BranchesDescriptor<'a> {
         } else {
             let mut branch_names: Vec<String> = branch_names
                 .into_iter()
-                .map(
-                    |branch_name| match CategorizedReferenceName::new(branch_name) {
+                .map(|branch_name| {
+                    let is_checked_out_branch =
+                        self.head_info.reference_name == Some(Cow::Borrowed(branch_name));
+                    let icon = if is_checked_out_branch {
+                        format!(
+                            "{} ",
+                            glyphs.cycle_arrow // @nocommit rename
+                        )
+                    } else {
+                        "".to_string()
+                    };
+
+                    match CategorizedReferenceName::new(branch_name) {
                         reference_name @ CategorizedReferenceName::LocalBranch { .. } => {
-                            reference_name.render_suffix()
+                            format!("{}{}", icon, reference_name.render_suffix())
                         }
                         reference_name @ CategorizedReferenceName::RemoteBranch { .. } => {
-                            format!("remote {}", reference_name.render_suffix())
+                            format!("{}remote {}", icon, reference_name.render_suffix())
                         }
                         reference_name @ CategorizedReferenceName::OtherRef { .. } => {
-                            format!("ref {}", reference_name.render_suffix())
+                            format!("{}ref {}", icon, reference_name.render_suffix())
                         }
-                    },
-                )
+                    }
+                })
                 .collect();
             branch_names.sort_unstable();
             let result = StyledString::styled(

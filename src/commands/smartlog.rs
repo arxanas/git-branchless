@@ -534,6 +534,7 @@ pub fn smartlog(
     } = options;
 
     let repo = Repo::from_dir(&git_run_info.working_directory)?;
+    let head_info = repo.get_head_info()?;
     let references_snapshot = repo.get_references_snapshot()?;
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
@@ -569,7 +570,7 @@ pub fn smartlog(
                 &event_replayer,
                 event_replayer.make_default_cursor(),
             )?,
-            &mut BranchesDescriptor::new(&repo, &references_snapshot)?,
+            &mut BranchesDescriptor::new(&repo, &head_info, &references_snapshot)?,
             &mut DifferentialRevisionDescriptor::new(&repo)?,
             &mut CommitMessageDescriptor::new()?,
         ],

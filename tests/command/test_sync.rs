@@ -32,7 +32,7 @@ fn test_sync_basic() -> eyre::Result<()> {
         |\
         | o 2b633ed7 create test4.txt
         |
-        @ 117e0866 (master) create test5.txt
+        @ 117e0866 (> master) create test5.txt
         "###);
     }
 
@@ -65,7 +65,7 @@ fn test_sync_basic() -> eyre::Result<()> {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
         :
-        @ 117e0866 (master) create test5.txt
+        @ 117e0866 (> master) create test5.txt
         |\
         | o 87c7a36c create test1.txt
         | |

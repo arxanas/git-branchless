@@ -568,7 +568,7 @@ fn test_navigation_traverse_branches() -> eyre::Result<()> {
         |
         o 62fc20d2 create test1.txt
         |
-        @ 96d1c37a (foo) create test2.txt
+        @ 96d1c37a (> foo) create test2.txt
         |
         o 70deb1e2 create test3.txt
         |
@@ -584,7 +584,7 @@ fn test_navigation_traverse_branches() -> eyre::Result<()> {
         |
         o 62fc20d2 create test1.txt
         |
-        @ 96d1c37a (foo) create test2.txt
+        @ 96d1c37a (> foo) create test2.txt
         |
         o 70deb1e2 create test3.txt
         |
@@ -596,7 +596,7 @@ fn test_navigation_traverse_branches() -> eyre::Result<()> {
         let (stdout, _stderr) = git.run(&["prev", "-b"])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> checkout master
-        @ f777ecc9 (master) create initial.txt
+        @ f777ecc9 (> master) create initial.txt
         |
         o 62fc20d2 create test1.txt
         |
@@ -622,7 +622,7 @@ fn test_navigation_traverse_branches() -> eyre::Result<()> {
         |
         o 70deb1e2 create test3.txt
         |
-        @ 355e173b (bar) create test4.txt
+        @ 355e173b (> bar) create test4.txt
         |
         o f81d55c0 create test5.txt
         "###);
@@ -640,7 +640,7 @@ fn test_navigation_traverse_branches() -> eyre::Result<()> {
         |
         o 70deb1e2 create test3.txt
         |
-        @ 355e173b (bar) create test4.txt
+        @ 355e173b (> bar) create test4.txt
         |
         o f81d55c0 create test5.txt
         "###);
@@ -901,7 +901,7 @@ fn test_navigation_checkout_flags() -> eyre::Result<()> {
             insta::assert_snapshot!(stdout, @r###"
             branchless: running command: <git-executable> checkout HEAD^ -b foo
             :
-            @ 62fc20d2 (foo) create test1.txt
+            @ 62fc20d2 (> foo) create test1.txt
             |
             O 96d1c37a (master) create test2.txt
             "###);
@@ -912,7 +912,7 @@ fn test_navigation_checkout_flags() -> eyre::Result<()> {
             insta::assert_snapshot!(stdout, @r###"
             branchless: running command: <git-executable> checkout -b bar
             :
-            @ 62fc20d2 (bar, foo) create test1.txt
+            @ 62fc20d2 (> bar, foo) create test1.txt
             |
             O 96d1c37a (master) create test2.txt
             "###);
@@ -961,7 +961,7 @@ fn test_navigation_checkout_target_only() -> eyre::Result<()> {
         let (stdout, _stderr) = git.run(&["branchless", "checkout", "master"])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> checkout master
-        @ f777ecc9 (master) create initial.txt
+        @ f777ecc9 (> master) create initial.txt
         "###);
     }
 
