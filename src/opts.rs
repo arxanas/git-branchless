@@ -1,6 +1,6 @@
 //! The command-line options for `git-branchless`.
 
-use clap::{App, ArgEnum, Args, IntoApp, Parser};
+use clap::{ArgEnum, Args, Command as ClapCommand, IntoApp, Parser};
 use man::Arg;
 use std::path::{Path, PathBuf};
 
@@ -360,7 +360,7 @@ pub fn write_man_pages(man_dir: &Path) -> std::io::Result<()> {
     let man1_dir = man_dir.join("man1");
     std::fs::create_dir_all(&man1_dir)?;
 
-    let app = Opts::into_app();
+    let app = Opts::command();
     generate_man_page(&man1_dir, "git-branchless", &app)?;
     for subcommand in app.get_subcommands() {
         let subcommand_exe_name = format!("git-branchless-{}", subcommand.get_name());
@@ -369,7 +369,7 @@ pub fn write_man_pages(man_dir: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
-fn generate_man_page(man1_dir: &Path, name: &str, command: &App) -> std::io::Result<()> {
+fn generate_man_page(man1_dir: &Path, name: &str, command: &ClapCommand) -> std::io::Result<()> {
     let mut manual = man::Manual::new(name);
     if let Some(about) = command.get_about() {
         manual = manual.about(about);
@@ -397,11 +397,11 @@ fn generate_man_page(man1_dir: &Path, name: &str, command: &App) -> std::io::Res
     }
 
     for arg in command.get_positionals() {
-        manual = manual.arg(Arg::new(&format!("[{}]", arg.get_name().to_uppercase())));
+        manual = manual.arg(Arg::new(&format!("[{}]", arg.get_id().to_uppercase())));
     }
 
     for flag in command.get_opts() {
-        let opt = man::Opt::new(flag.get_name());
+        let opt = man::Opt::new(flag.get_id());
         let opt = match flag.get_short() {
             Some(short) => opt.short(&String::from(short)),
             None => opt,
