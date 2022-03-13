@@ -52,7 +52,7 @@ pub fn sync(
     let event_tx_id = event_log_db.make_transaction_id(now, "sync fetch")?;
 
     if update_refs {
-        let exit_code = git_run_info.run(effects, Some(event_tx_id), &["fetch"])?;
+        let exit_code = git_run_info.run(effects, Some(event_tx_id), &["fetch", "--all"])?;
         if exit_code != 0 {
             return Ok(exit_code);
         }

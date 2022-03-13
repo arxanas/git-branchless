@@ -571,7 +571,7 @@ pub struct GitWrapperWithRemoteRepo {
     pub cloned_repo: Git,
 }
 
-/// Create a `GitWrapperWithRemoteRepo`.
+/// Create a [`GitWrapperWithRemoteRepo`].
 pub fn make_git_with_remote_repo() -> eyre::Result<GitWrapperWithRemoteRepo> {
     let path_to_git = get_path_to_git()?;
     let git_exec_path = get_git_exec_path()?;
