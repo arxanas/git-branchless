@@ -287,6 +287,11 @@ pub enum Command {
         #[clap(short = 'p', long = "pull")]
         update_refs: bool,
 
+        /// Force rebasing commits even if they're already based on top of their
+        /// destination.
+        #[clap(short = 'f', long = "force")]
+        force: bool,
+
         /// Options for moving commits.
         #[clap(flatten)]
         move_options: MoveOptions,
