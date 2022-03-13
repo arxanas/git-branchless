@@ -42,6 +42,7 @@ pub fn sync(
     effects: &Effects,
     git_run_info: &GitRunInfo,
     update_refs: bool,
+    force: bool,
     move_options: &MoveOptions,
 ) -> eyre::Result<isize> {
     let glyphs = Glyphs::detect();
@@ -100,9 +101,10 @@ pub fn sync(
 
                         let repo = repo_pool.try_create()?;
                         let root_commit = repo.find_commit_or_fail(root_commit_oid)?;
-                        if root_commit.get_only_parent().map(|parent| parent.get_oid())
-                            == Some(references_snapshot.main_branch_oid)
-                        {
+
+                        let only_parent_id =
+                            root_commit.get_only_parent().map(|parent| parent.get_oid());
+                        if only_parent_id == Some(references_snapshot.main_branch_oid) && !force {
                             return Ok(Ok((root_commit_oid, None)));
                         }
 
