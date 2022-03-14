@@ -25,9 +25,9 @@ fn test_hide_commit() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["hide", &test1_oid.to_string()])?;
         insta::assert_snapshot!(stdout, @r###"
-            Hid commit: 62fc20d2 create test1.txt
-            To unhide this commit, run: git unhide 62fc20d2
-            "###);
+        Hid commit: 62fc20d2 create test1.txt
+        To unhide this 1 commit, run: git undo
+        "###);
     }
 
     {
@@ -74,10 +74,10 @@ fn test_hide_already_hidden_commit() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["hide", &test1_oid.to_string()])?;
         insta::assert_snapshot!(stdout, @r###"
-            Hid commit: 62fc20d2 create test1.txt
-            (It was already hidden, so this operation had no effect.)
-            To unhide this commit, run: git unhide 62fc20d2
-            "###);
+        Hid commit: 62fc20d2 create test1.txt
+        (It was already hidden, so this operation had no effect.)
+        To unhide this 1 commit, run: git undo
+        "###);
     }
 
     Ok(())
@@ -203,10 +203,10 @@ fn test_unhide() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["unhide", &test2_oid.to_string()])?;
         insta::assert_snapshot!(stdout, @r###"
-            Unhid commit: 96d1c37a create test2.txt
-            (It was not hidden, so this operation had no effect.)
-            To hide this commit, run: git hide 96d1c37a
-            "###);
+        Unhid commit: 96d1c37a create test2.txt
+        (It was not hidden, so this operation had no effect.)
+        To hide this 1 commit, run: git undo
+        "###);
     }
 
     git.run(&["hide", &test2_oid.to_string()])?;
@@ -222,9 +222,9 @@ fn test_unhide() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["unhide", &test2_oid.to_string()])?;
         insta::assert_snapshot!(stdout, @r###"
-            Unhid commit: 96d1c37a create test2.txt
-            To hide this commit, run: git hide 96d1c37a
-            "###);
+        Unhid commit: 96d1c37a create test2.txt
+        To hide this 1 commit, run: git undo
+        "###);
     }
 
     {
@@ -269,9 +269,8 @@ fn test_hide_recursive() -> eyre::Result<()> {
         let (stdout, _stderr) = git.run(&["hide", "-r", &test2_oid.to_string()])?;
         insta::assert_snapshot!(stdout, @r###"
         Hid commit: 96d1c37a create test2.txt
-        To unhide this commit, run: git unhide 96d1c37a
         Hid commit: 70deb1e2 create test3.txt
-        To unhide this commit, run: git unhide 70deb1e2
+        To unhide these 2 commits, run: git undo
         "###);
     }
 
@@ -288,9 +287,8 @@ fn test_hide_recursive() -> eyre::Result<()> {
         let (stdout, _stderr) = git.run(&["unhide", "-r", &test2_oid.to_string()])?;
         insta::assert_snapshot!(stdout, @r###"
         Unhid commit: 96d1c37a create test2.txt
-        To hide this commit, run: git hide 96d1c37a
         Unhid commit: 70deb1e2 create test3.txt
-        To hide this commit, run: git hide 70deb1e2
+        To hide these 2 commits, run: git undo
         "###);
     }
 

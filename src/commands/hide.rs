@@ -1,6 +1,7 @@
 //! Handle obsoleting commits when explicitly requested by the user (as opposed to
 //! automatically as the result of a rewrite operation).
 
+use std::convert::TryInto;
 use std::fmt::Write;
 use std::time::SystemTime;
 
@@ -11,8 +12,7 @@ use crate::core::dag::{resolve_commits, sort_commit_set, CommitSet, Dag, Resolve
 use crate::core::effects::Effects;
 use crate::core::eventlog::{CommitActivityStatus, Event};
 use crate::core::eventlog::{EventLogDb, EventReplayer};
-use crate::core::formatting::{printable_styled_string, Glyphs};
-use crate::core::node_descriptors::{render_node_descriptors, CommitOidDescriptor, NodeObject};
+use crate::core::formatting::{printable_styled_string, Glyphs, Pluralize};
 use crate::git::Repo;
 
 /// Hide the hashes provided on the command-line.
@@ -71,6 +71,7 @@ pub fn hide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::Re
     event_log_db.add_events(events)?;
 
     let cursor = event_replayer.make_default_cursor();
+    let num_commits = commits.len();
     for commit in commits {
         writeln!(
             effects.get_output_stream(),
@@ -85,18 +86,17 @@ pub fn hide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::Re
                 "(It was already hidden, so this operation had no effect.)"
             )?;
         }
-
-        let commit_target_oid = render_node_descriptors(
-            &glyphs,
-            &NodeObject::Commit { commit },
-            &mut [&mut CommitOidDescriptor::new(false)?],
-        )?;
-        writeln!(
-            effects.get_output_stream(),
-            "To unhide this commit, run: git unhide {}",
-            printable_styled_string(&glyphs, commit_target_oid)?
-        )?;
     }
+
+    writeln!(
+        effects.get_output_stream(),
+        "To unhide {}, run: git undo",
+        Pluralize {
+            determiner: Some(("this", "these")),
+            amount: num_commits.try_into()?,
+            unit: ("commit", "commits"),
+        },
+    )?;
 
     Ok(0)
 }
@@ -153,6 +153,7 @@ pub fn unhide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::
     event_log_db.add_events(events)?;
 
     let cursor = event_replayer.make_default_cursor();
+    let num_commits = commits.len();
     for commit in commits {
         writeln!(
             effects.get_output_stream(),
@@ -167,18 +168,17 @@ pub fn unhide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::
                 "(It was not hidden, so this operation had no effect.)"
             )?;
         }
-
-        let commit_target_oid = render_node_descriptors(
-            &glyphs,
-            &NodeObject::Commit { commit },
-            &mut [&mut CommitOidDescriptor::new(false)?],
-        )?;
-        writeln!(
-            effects.get_output_stream(),
-            "To hide this commit, run: git hide {}",
-            printable_styled_string(&glyphs, commit_target_oid)?
-        )?;
     }
+
+    writeln!(
+        effects.get_output_stream(),
+        "To hide {}, run: git undo",
+        Pluralize {
+            determiner: Some(("this", "these")),
+            amount: num_commits.try_into()?,
+            unit: ("commit", "commits"),
+        },
+    )?;
 
     Ok(0)
 }
