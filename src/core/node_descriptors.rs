@@ -254,10 +254,7 @@ impl<'a> NodeDescriptor for BranchesDescriptor<'a> {
                     let is_checked_out_branch =
                         self.head_info.reference_name == Some(Cow::Borrowed(branch_name));
                     let icon = if is_checked_out_branch {
-                        format!(
-                            "{} ",
-                            glyphs.cycle_arrow // @nocommit rename
-                        )
+                        format!("{} ", glyphs.branch_arrow)
                     } else {
                         "".to_string()
                     };

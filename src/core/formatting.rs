@@ -116,6 +116,9 @@ pub struct Glyphs {
     /// currently checked out. (This is an unusual situation.)
     pub commit_main_obsolete_head: &'static str,
 
+    /// Character used to point to the currently-checked-out branch.
+    pub branch_arrow: &'static str,
+
     /// Bullet-point character for a list of newline-separated items.
     pub bullet_point: &'static str,
 
@@ -162,6 +165,7 @@ impl Glyphs {
             commit_main_head: "@",
             commit_main_obsolete: "X",
             commit_main_obsolete_head: "%",
+            branch_arrow: ">",
             bullet_point: "-",
             cycle_arrow: ">",
             cycle_horizontal_line: "-",
@@ -187,6 +191,7 @@ impl Glyphs {
             commit_main_head: "◆",
             commit_main_obsolete: "✕",
             commit_main_obsolete_head: "❖",
+            branch_arrow: "ᐅ",
             bullet_point: "•",
             cycle_arrow: "ᐅ",
             cycle_horizontal_line: "─",
