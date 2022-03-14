@@ -21,17 +21,17 @@ fn test_commands() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["hide", "3df4b935"])?;
         insta::assert_snapshot!(stdout, @r###"
-Hid commit: 3df4b935 create test.txt
-To unhide this commit, run: git unhide 3df4b935
-"###);
+        Hid commit: 3df4b935 create test.txt
+        To unhide this 1 commit, run: git undo
+        "###);
     }
 
     {
         let (stdout, _stderr) = git.run(&["unhide", "3df4b935"])?;
         insta::assert_snapshot!(stdout, @r###"
-Unhid commit: 3df4b935 create test.txt
-To hide this commit, run: git hide 3df4b935
-"###);
+        Unhid commit: 3df4b935 create test.txt
+        To hide this 1 commit, run: git undo
+        "###);
     }
 
     {
