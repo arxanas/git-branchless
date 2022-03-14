@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- The smartlog now displays an icon next to the currently-checked-out branch.
+- (#286) The smartlog now displays an icon next to the currently-checked-out branch.
 
 ### Fixed
 
