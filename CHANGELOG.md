@@ -57,7 +57,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `git branchless init` takes a `--main-branch` option to specify the name of the main branch without interactive prompting.
 - The `--color=[auto,always,never]` flag can be used to override the automatically detected value for terminal colors.
-- The `CLICOLOR` and `NOCOLOR` environment variables are now respected.
+- The `CLICOLOR` and `NO_COLOR` environment variables are now respected.
 
 ### Changed
 
