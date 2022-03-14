@@ -135,9 +135,9 @@ pub fn hook_post_rewrite(
     let is_spurious_event = rewrite_type == "amend" && repo.is_rebase_underway()?;
     if !is_spurious_event {
         let message_rewritten_commits = Pluralize {
+            determiner: None,
             amount: rewritten_oids.len().try_into()?,
-            singular: "rewritten commit",
-            plural: "rewritten commits",
+            unit: ("rewritten commit", "rewritten commits"),
         }
         .to_string();
         writeln!(
@@ -237,18 +237,18 @@ fn warn_abandoned(
             if num_abandoned_children > 0 {
                 warning_items.push(
                     Pluralize {
+                        determiner: None,
                         amount: num_abandoned_children.try_into()?,
-                        singular: "commit",
-                        plural: "commits",
+                        unit: ("commit", "commits"),
                     }
                     .to_string(),
                 );
             }
             if num_abandoned_branches > 0 {
                 let abandoned_branch_count = Pluralize {
+                    determiner: None,
                     amount: num_abandoned_branches.try_into()?,
-                    singular: "branch",
-                    plural: "branches",
+                    unit: ("branch", "branches"),
                 }
                 .to_string();
 

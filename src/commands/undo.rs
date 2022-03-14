@@ -695,9 +695,9 @@ fn undo_events(
     }
 
     let num_inverse_events = Pluralize {
+        determiner: None,
         amount: inverse_events.len().try_into().unwrap(),
-        singular: "inverse event",
-        plural: "inverse events",
+        unit: ("inverse event", "inverse events"),
     }
     .to_string();
 

@@ -434,14 +434,14 @@ pub fn hook_reference_transaction(effects: &Effects, transaction_state: &str) ->
     }
 
     let num_reference_updates = Pluralize {
+        determiner: None,
         amount: parsed_lines.len().try_into()?,
-        singular: "update",
-        plural: "updates",
+        unit: ("update", "updates"),
     };
     writeln!(
         effects.get_output_stream(),
         "branchless: processing {}: {}",
-        num_reference_updates.to_string(),
+        num_reference_updates,
         parsed_lines
             .iter()
             .map(
