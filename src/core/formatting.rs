@@ -4,6 +4,8 @@
 //! "TTY"). In the case of interactive output, we render with prettier non-ASCII
 //! characters and with colors, using shell-specific escape codes.
 
+use std::fmt::Display;
+
 use cursive::theme::{Effect, Style};
 use cursive::utils::markup::StyledString;
 use cursive::utils::span::Span;
@@ -12,28 +14,57 @@ use cursive::utils::span::Span;
 ///
 /// ```
 /// # use branchless::core::formatting::Pluralize;
-/// let p = Pluralize { amount: 1, singular: "thing", plural: "things"};
+/// let p = Pluralize {
+///     determiner: None,
+///     amount: 1,
+///     unit: ("thing", "things"),
+/// };
 /// assert_eq!(p.to_string(), "1 thing");
 ///
-/// let p = Pluralize { amount: 2, singular: "thing", plural: "things"};
-/// assert_eq!(p.to_string(), "2 things");
+/// let p = Pluralize {
+///     determiner: Some(("this", "these")),
+///     amount: 2,
+///     unit: ("thing", "things")
+/// };
+/// assert_eq!(p.to_string(), "these 2 things");
 /// ```
 pub struct Pluralize<'a> {
+    /// The string to render before the amount if the amount is singular vs plural.
+    pub determiner: Option<(&'a str, &'a str)>,
+
     /// The amount of the quantity.
     pub amount: isize,
 
-    /// The string to render if the amount is singular.
-    pub singular: &'a str,
-
-    /// The string to render if the amount is plural.uee
-    pub plural: &'a str,
+    /// The string to render after the amount if the amount is singular vs plural.
+    pub unit: (&'a str, &'a str),
 }
 
-impl<'a> ToString for Pluralize<'a> {
-    fn to_string(&self) -> String {
-        match self.amount {
-            1 => format!("{} {}", self.amount, self.singular),
-            _ => format!("{} {}", self.amount, self.plural),
+impl Display for Pluralize<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self {
+                amount: 1,
+                unit: (unit, _),
+                determiner: None,
+            } => write!(f, "{} {}", 1, unit),
+
+            Self {
+                amount,
+                unit: (_, unit),
+                determiner: None,
+            } => write!(f, "{} {}", amount, unit),
+
+            Self {
+                amount: 1,
+                unit: (unit, _),
+                determiner: Some((determiner, _)),
+            } => write!(f, "{} {} {}", determiner, 1, unit),
+
+            Self {
+                amount,
+                unit: (_, unit),
+                determiner: Some((_, determiner)),
+            } => write!(f, "{} {} {}", determiner, amount, unit),
         }
     }
 }

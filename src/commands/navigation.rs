@@ -207,21 +207,20 @@ fn advance(
 
         let pluralize = match command {
             Command::Next => Pluralize {
+                determiner: None,
                 amount: i.try_into()?,
-                plural: "children",
-                singular: "child",
+                unit: ("child", "children"),
             },
 
             Command::Prev => Pluralize {
+                determiner: None,
                 amount: i.try_into()?,
-                plural: "parents",
-                singular: "parent",
+                unit: ("parent", "parents"),
             },
         };
         let header = format!(
             "Found multiple possible {} commits to go to after traversing {}:",
-            pluralize.singular,
-            pluralize.to_string(),
+            pluralize.unit.0, pluralize,
         );
 
         current_oid = match (towards, candidate_commits.as_slice()) {
@@ -234,8 +233,7 @@ fn advance(
                         StyledString::styled(
                             format!(
                                 "No more {} commits to go to after traversing {}.",
-                                pluralize.singular,
-                                pluralize.to_string(),
+                                pluralize.unit.0, pluralize,
                             ),
                             BaseColor::Yellow.light()
                         )

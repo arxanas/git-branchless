@@ -294,11 +294,10 @@ impl MergeConflictInfo {
             "{} ({}) {}",
             effects.get_glyphs().bullet_point,
             Pluralize {
+                determiner: None,
                 amount: self.conflicting_paths.len().try_into()?,
-                singular: "conflicting file",
-                plural: "conflicting files"
-            }
-            .to_string(),
+                unit: ("conflicting file", "conflicting files"),
+            },
             printable_styled_string(
                 effects.get_glyphs(),
                 repo.friendly_describe_commit_from_oid(effects.get_glyphs(), self.commit_oid)?

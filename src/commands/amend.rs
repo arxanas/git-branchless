@@ -139,11 +139,11 @@ pub fn amend(
     match opts {
         AmendFastOptions::FromIndex { paths } => {
             let staged_changes = Pluralize {
+                determiner: None,
                 amount: paths.len().try_into()?,
-                plural: "staged changes",
-                singular: "staged change",
+                unit: ("staged change", "staged changes"),
             };
-            let mut message = format!("Amended with {}.", staged_changes.to_string());
+            let mut message = format!("Amended with {}.", staged_changes);
             // TODO: Include the number of uncommitted changes.
             if dirty_working_tree {
                 message += " (Some uncommitted changes were not amended.)";
@@ -152,14 +152,14 @@ pub fn amend(
         }
         AmendFastOptions::FromWorkingCopy { status_entries } => {
             let uncommitted_changes = Pluralize {
+                determiner: None,
                 amount: status_entries.len().try_into()?,
-                plural: "uncommitted changes",
-                singular: "uncommitted change",
+                unit: ("uncommitted change", "uncommitted changes"),
             };
             writeln!(
                 effects.get_output_stream(),
                 "Amended with {}.",
-                uncommitted_changes.to_string(),
+                uncommitted_changes,
             )?;
         }
     }

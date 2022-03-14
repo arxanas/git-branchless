@@ -105,9 +105,9 @@ pub fn gc(effects: &Effects) -> eyre::Result<()> {
     )?;
     let dangling_references = find_dangling_references(&repo, &event_replayer, event_cursor)?;
     let num_dangling_references = Pluralize {
+        determiner: None,
         amount: dangling_references.len().try_into()?,
-        singular: "dangling reference",
-        plural: "dangling references",
+        unit: ("dangling reference", "dangling references"),
     }
     .to_string();
     for mut reference in dangling_references.into_iter() {
