@@ -8,6 +8,7 @@ mod core {
 
 mod command {
     mod test_amend;
+    mod test_bug_report;
     mod test_hide;
     mod test_init;
     mod test_move;

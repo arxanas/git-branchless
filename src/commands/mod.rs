@@ -1,6 +1,7 @@
 //! Sub-commands of `git-branchless`.
 
 pub mod amend;
+pub mod bug_report;
 pub mod gc;
 pub mod hide;
 pub mod hooks;
@@ -110,6 +111,8 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
 
     let exit_code = match command {
         Command::Amend { move_options } => amend::amend(&effects, &git_run_info, &move_options)?,
+
+        Command::BugReport => bug_report::bug_report(&effects, &git_run_info)?,
 
         Command::Checkout { checkout_options } => {
             navigation::checkout(&effects, &git_run_info, &checkout_options)?

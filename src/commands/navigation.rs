@@ -19,7 +19,7 @@ use crate::core::eventlog::{EventLogDb, EventReplayer};
 use crate::core::formatting::{printable_styled_string, Pluralize};
 use crate::core::node_descriptors::{
     BranchesDescriptor, CommitMessageDescriptor, CommitOidDescriptor,
-    DifferentialRevisionDescriptor, NodeDescriptor, RelativeTimeDescriptor,
+    DifferentialRevisionDescriptor, NodeDescriptor, Redactor, RelativeTimeDescriptor,
 };
 use crate::git::{check_out_commit, CheckOutCommitOptions, GitRunInfo, NonZeroOid, Repo};
 use crate::opts::{CheckoutOptions, TraverseCommitsOptions};
@@ -371,9 +371,14 @@ pub fn traverse_commits(
         &mut [
             &mut CommitOidDescriptor::new(true)?,
             &mut RelativeTimeDescriptor::new(&repo, SystemTime::now())?,
-            &mut BranchesDescriptor::new(&repo, &head_info, &references_snapshot)?,
-            &mut DifferentialRevisionDescriptor::new(&repo)?,
-            &mut CommitMessageDescriptor::new()?,
+            &mut BranchesDescriptor::new(
+                &repo,
+                &head_info,
+                &references_snapshot,
+                &Redactor::Disabled,
+            )?,
+            &mut DifferentialRevisionDescriptor::new(&repo, &Redactor::Disabled)?,
+            &mut CommitMessageDescriptor::new(&Redactor::Disabled)?,
         ],
         head_oid,
         command,
@@ -548,9 +553,14 @@ pub fn checkout(
                 &mut [
                     &mut CommitOidDescriptor::new(true)?,
                     &mut RelativeTimeDescriptor::new(&repo, SystemTime::now())?,
-                    &mut BranchesDescriptor::new(&repo, &head_info, &references_snapshot)?,
-                    &mut DifferentialRevisionDescriptor::new(&repo)?,
-                    &mut CommitMessageDescriptor::new()?,
+                    &mut BranchesDescriptor::new(
+                        &repo,
+                        &head_info,
+                        &references_snapshot,
+                        &Redactor::Disabled,
+                    )?,
+                    &mut DifferentialRevisionDescriptor::new(&repo, &Redactor::Disabled)?,
+                    &mut CommitMessageDescriptor::new(&Redactor::Disabled)?,
                 ],
             )? {
                 Some(oid) => Some(oid.to_string()),

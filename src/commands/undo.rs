@@ -25,7 +25,8 @@ use crate::core::eventlog::{Event, EventCursor, EventLogDb, EventReplayer, Event
 use crate::core::formatting::{printable_styled_string, Glyphs, Pluralize, StyledStringBuilder};
 use crate::core::node_descriptors::{
     BranchesDescriptor, CommitMessageDescriptor, CommitOidDescriptor,
-    DifferentialRevisionDescriptor, ObsolescenceExplanationDescriptor, RelativeTimeDescriptor,
+    DifferentialRevisionDescriptor, ObsolescenceExplanationDescriptor, Redactor,
+    RelativeTimeDescriptor,
 };
 use crate::declare_views;
 use crate::git::{
@@ -63,9 +64,14 @@ fn render_cursor_smartlog(
             &mut CommitOidDescriptor::new(true)?,
             &mut RelativeTimeDescriptor::new(repo, SystemTime::now())?,
             &mut ObsolescenceExplanationDescriptor::new(event_replayer, event_cursor)?,
-            &mut BranchesDescriptor::new(repo, &head_info, &references_snapshot)?,
-            &mut DifferentialRevisionDescriptor::new(repo)?,
-            &mut CommitMessageDescriptor::new()?,
+            &mut BranchesDescriptor::new(
+                repo,
+                &head_info,
+                &references_snapshot,
+                &Redactor::Disabled,
+            )?,
+            &mut DifferentialRevisionDescriptor::new(repo, &Redactor::Disabled)?,
+            &mut CommitMessageDescriptor::new(&Redactor::Disabled)?,
         ],
     )?;
     Ok(result)
