@@ -33,7 +33,7 @@ use crate::core::effects::{Effects, OperationType};
 use crate::core::eventlog::EventTransactionId;
 use crate::core::formatting::{Glyphs, StyledStringBuilder};
 use crate::core::node_descriptors::{
-    render_node_descriptors, CommitMessageDescriptor, CommitOidDescriptor, NodeObject,
+    render_node_descriptors, CommitMessageDescriptor, CommitOidDescriptor, NodeObject, Redactor,
 };
 use crate::git::config::{Config, ConfigRead};
 use crate::git::oid::{make_non_zero_oid, MaybeZeroOid, NonZeroOid};
@@ -1447,7 +1447,7 @@ impl<'repo> Commit<'repo> {
             },
             &mut [
                 &mut CommitOidDescriptor::new(true)?,
-                &mut CommitMessageDescriptor::new()?,
+                &mut CommitMessageDescriptor::new(&Redactor::Disabled)?,
             ],
         )?;
         Ok(description)

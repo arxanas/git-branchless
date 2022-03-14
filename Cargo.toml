@@ -83,5 +83,6 @@ skim = "0.9.4"
 [dev-dependencies]
 criterion = { version = "0.3.5", features = ["html_reports"] }
 insta = "1.8.0"
+lazy_static = "1.4.0"
 portable-pty = "0.7.0"
 vt100 = "0.15.1"

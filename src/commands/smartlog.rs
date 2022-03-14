@@ -14,7 +14,8 @@ use crate::core::eventlog::{EventLogDb, EventReplayer};
 use crate::core::formatting::printable_styled_string;
 use crate::core::node_descriptors::{
     BranchesDescriptor, CommitMessageDescriptor, CommitOidDescriptor,
-    DifferentialRevisionDescriptor, ObsolescenceExplanationDescriptor, RelativeTimeDescriptor,
+    DifferentialRevisionDescriptor, ObsolescenceExplanationDescriptor, Redactor,
+    RelativeTimeDescriptor,
 };
 use crate::git::{GitRunInfo, Repo};
 
@@ -570,9 +571,14 @@ pub fn smartlog(
                 &event_replayer,
                 event_replayer.make_default_cursor(),
             )?,
-            &mut BranchesDescriptor::new(&repo, &head_info, &references_snapshot)?,
-            &mut DifferentialRevisionDescriptor::new(&repo)?,
-            &mut CommitMessageDescriptor::new()?,
+            &mut BranchesDescriptor::new(
+                &repo,
+                &head_info,
+                &references_snapshot,
+                &Redactor::Disabled,
+            )?,
+            &mut DifferentialRevisionDescriptor::new(&repo, &Redactor::Disabled)?,
+            &mut CommitMessageDescriptor::new(&Redactor::Disabled)?,
         ],
     )?;
     for line in lines {

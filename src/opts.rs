@@ -129,6 +129,10 @@ pub enum Command {
         move_options: MoveOptions,
     },
 
+    /// Gather information about recent operations to upload as part of a bug
+    /// report.
+    BugReport,
+
     /// Check out a given commit.
     Checkout {
         /// Options for checking out a commit.
