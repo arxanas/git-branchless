@@ -8,7 +8,7 @@ use itertools::Itertools;
 use rayon::ThreadPoolBuilder;
 
 use crate::core::config::get_restack_preserve_timestamps;
-use crate::core::dag::{sort_commit_set, CommitSet, Dag};
+use crate::core::dag::{resolve_commits, sort_commit_set, CommitSet, Dag, ResolveCommitsResult};
 use crate::core::effects::{Effects, OperationType};
 use crate::core::eventlog::{EventLogDb, EventReplayer};
 use crate::core::formatting::{printable_styled_string, Glyphs, StyledStringBuilder};
@@ -44,6 +44,7 @@ pub fn sync(
     update_refs: bool,
     force: bool,
     move_options: &MoveOptions,
+    commits: Vec<String>,
 ) -> eyre::Result<isize> {
     let glyphs = Glyphs::detect();
     let repo = Repo::from_current_dir()?;
@@ -62,7 +63,7 @@ pub fn sync(
     let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
     let event_cursor = event_replayer.make_default_cursor();
     let references_snapshot = repo.get_references_snapshot()?;
-    let dag = Dag::open_and_sync(
+    let mut dag = Dag::open_and_sync(
         effects,
         &repo,
         &event_replayer,
@@ -70,7 +71,19 @@ pub fn sync(
         &references_snapshot,
     )?;
 
-    let root_commits = get_stack_roots(&dag)?;
+    let commits = match resolve_commits(effects, &repo, &mut dag, commits)? {
+        ResolveCommitsResult::Ok { commits } => commits,
+        ResolveCommitsResult::CommitNotFound { commit } => {
+            writeln!(effects.get_output_stream(), "Commit not found: {}", commit)?;
+            return Ok(1);
+        }
+    };
+    let root_commits = if commits.is_empty() {
+        get_stack_roots(&dag)?
+    } else {
+        let commits: CommitSet = commits.into_iter().map(|commit| commit.get_oid()).collect();
+        dag.query().roots(commits)?
+    };
     let root_commits = sort_commit_set(&repo, &dag, &root_commits)?;
 
     let MoveOptions {

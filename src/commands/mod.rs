@@ -236,12 +236,14 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
             update_refs,
             force,
             move_options,
+            commits,
         } => sync::sync(
             &effects,
             &git_run_info,
             update_refs,
             force,
             &move_options,
+            commits,
         )?,
 
         Command::Undo => undo::undo(&effects, &git_run_info)?,
