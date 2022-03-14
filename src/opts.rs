@@ -295,6 +295,12 @@ pub enum Command {
         /// Options for moving commits.
         #[clap(flatten)]
         move_options: MoveOptions,
+
+        /// The commits whose stacks will be moved on top of the main branch. If
+        /// no commits are provided, all draft commits will be synced.
+        ///
+        /// Can either be hashes, like `abc123`, or ref-specs, like `HEAD^`.
+        commits: Vec<String>,
     },
 
     /// Browse or return to a previous state of the repository.
