@@ -47,6 +47,7 @@ test = true
 [dependencies]
 anyhow = "1.0.51"
 assert_cmd = "2.0.2"
+bugreport = "0.4.1"
 chashmap = "2.2.2"
 chrono = "0.4.19"
 clap = { version = "3.0.0", features = ["derive"] }

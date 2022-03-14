@@ -1,9 +1,12 @@
 //! Automatically collects information which may be relevant for a bug report.
 
 use std::collections::HashSet;
-use std::fmt::Write;
 use std::time::SystemTime;
 
+use bugreport::bugreport;
+use bugreport::collector::{CollectionError, Collector};
+use bugreport::format::Markdown;
+use bugreport::report::ReportEntry;
 use itertools::Itertools;
 
 use crate::commands::smartlog::{make_smartlog_graph, render_graph};
@@ -79,7 +82,7 @@ fn describe_event_cursor(
         Some((event_id, events)) => {
             let mut lines = vec![
                 format!(
-                    "### Event ID: {}, transaction ID: {} ###",
+                    "##### Event ID: {}, transaction ID: {}",
                     event_id,
                     events[0].get_event_tx_id().to_string()
                 ),
@@ -88,7 +91,7 @@ fn describe_event_cursor(
             lines.extend(
                 events
                     .iter()
-                    .map(|event| format!("1. {}", redact_event(redactor, event))),
+                    .map(|event| format!("1. `{}`", redact_event(redactor, event))),
             );
             lines
         }
@@ -123,15 +126,14 @@ fn describe_event_cursor(
 
     Ok([
         event_description_lines,
-        vec!["".to_string()],
+        vec!["```".to_string()],
         graph_lines,
-        vec!["".to_string()],
+        vec!["```".to_string()],
     ]
     .concat())
 }
 
-/// Generate information suitable for inclusion in a bug report.
-pub fn bug_report(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<isize> {
+fn collect_events(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<ReportEntry> {
     let now = SystemTime::now();
     let repo = Repo::from_dir(&git_run_info.working_directory)?;
     let head_info = repo.get_head_info()?;
@@ -154,7 +156,9 @@ pub fn bug_report(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<
         preserved_ref_names
     });
 
-    for i in 0..5 {
+    let mut event_text_lines = Vec::new();
+    let num_events = 5;
+    for i in 0..num_events {
         let event_cursor = event_replayer.advance_cursor_by_transaction(event_cursor, -i);
         let lines = describe_event_cursor(
             now,
@@ -166,10 +170,55 @@ pub fn bug_report(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<
             &redactor,
             event_cursor,
         )?;
-        for line in lines {
-            writeln!(effects.get_output_stream(), "{}", line)?;
-        }
+
+        event_text_lines.extend(lines);
     }
+    Ok(ReportEntry::Text(format!(
+        "
+<details>
+<summary>Show {} events</summary>
+
+{}
+
+</details>",
+        num_events,
+        event_text_lines.join("\n")
+    )))
+}
+
+struct EventCollector {
+    effects: Effects,
+    git_run_info: GitRunInfo,
+}
+
+impl Collector for EventCollector {
+    fn description(&self) -> &str {
+        "Events"
+    }
+
+    fn collect(
+        &mut self,
+        _crate_info: &bugreport::CrateInfo,
+    ) -> Result<ReportEntry, CollectionError> {
+        collect_events(&self.effects, &self.git_run_info)
+            .map_err(|e| CollectionError::CouldNotRetrieve(format!("Error: {}", e)))
+    }
+}
+
+/// Generate information suitable for inclusion in a bug report.
+pub fn bug_report(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<isize> {
+    use bugreport::collector::*;
+    bugreport!()
+        .info(SoftwareVersion::default())
+        .info(OperatingSystem::default())
+        .info(CommandLine::default())
+        .info(EnvironmentVariables::list(&["SHELL", "EDITOR"]))
+        .info(CommandOutput::new("Git version", "git", &["version"]))
+        .info(EventCollector {
+            effects: effects.clone(),
+            git_run_info: git_run_info.clone(),
+        })
+        .print::<Markdown>();
 
     Ok(0)
 }
