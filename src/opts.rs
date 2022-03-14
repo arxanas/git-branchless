@@ -284,7 +284,12 @@ pub enum Command {
     Sync {
         /// Run `git fetch` to update remote references before carrying out the
         /// sync.
-        #[clap(short = 'p', long = "pull")]
+        #[clap(
+            short = 'p',
+            long = "pull",
+            visible_short_alias = 'u',
+            visible_alias = "--update"
+        )]
         update_refs: bool,
 
         /// Force rebasing commits even if they're already based on top of their
