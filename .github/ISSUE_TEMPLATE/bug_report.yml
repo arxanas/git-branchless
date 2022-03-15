@@ -54,3 +54,11 @@ body:
     label: Version of `rustc`
     description: If this is a build issue, paste the output of `rustc --version` here.
     placeholder: "Example: rustc 1.55.0 (c8dfcfe04 2021-09-06)"
+    
+- type: textarea
+  id: bug-report-output
+  attributes:
+    label: Automated bug report
+    description: |
+      Paste the output of `git branchless bug-report` here.
+      If that subcommand doesn't exist, leave this field blank.
