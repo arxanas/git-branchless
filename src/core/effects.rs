@@ -34,6 +34,7 @@ pub enum OperationType {
     MakeGraph,
     ProcessEvents,
     ReadingFromCache,
+    RebaseCommits,
     RunGitCommand(Arc<String>),
     SyncCommits,
     UpdateCommitGraph,
@@ -59,10 +60,11 @@ impl ToString for OperationType {
             OperationType::MakeGraph => "Examining local history",
             OperationType::ProcessEvents => "Processing events",
             OperationType::ReadingFromCache => "Reading from cache",
+            OperationType::RebaseCommits => "Rebasing commits",
             OperationType::RunGitCommand(command) => {
                 return format!("Running Git command: {}", &command)
             }
-            OperationType::SyncCommits => "Syncing commits",
+            OperationType::SyncCommits => "Syncing commit stacks",
             OperationType::UpdateCommitGraph => "Updating commit graph",
             OperationType::WalkCommits => "Walking commits",
         };
@@ -300,7 +302,11 @@ impl OperationState {
             static ref IN_PROGRESS_SPINNER_STYLE: ProgressStyle =
                 ProgressStyle::default_spinner().template("{prefix}{spinner} {wide_msg}").unwrap();
             static ref IN_PROGRESS_BAR_STYLE: ProgressStyle =
-                ProgressStyle::default_bar().template("{prefix}{spinner} {wide_msg} {bar} {pos}/{len}").unwrap();
+                // indicatif places the cursor at the end of the line, which may
+                // be visible in the terminal, so we add a space at the end of
+                // the line so that the length number isn't overlapped by the
+                // cursor.
+                ProgressStyle::default_bar().template("{prefix}{spinner} {wide_msg} {bar} {pos}/{len} ").unwrap();
             static ref FINISHED_PROGRESS_STYLE: ProgressStyle = IN_PROGRESS_SPINNER_STYLE
                 .clone()
                 // Requires at least two tick values, so just pass the same one twice.
@@ -521,6 +527,15 @@ impl Effects {
             None => return,
         };
         operation_state.inc_progress(increment);
+    }
+
+    fn on_set_message(&self, operation_key: &OperationKey, message: String) {
+        let mut root_operation = self.root_operation.lock().unwrap();
+        let operation_state = match root_operation.get_child(operation_key) {
+            Some(operation_state) => operation_state,
+            None => return,
+        };
+        operation_state.progress_bar.set_message(message);
     }
 
     fn on_drop_progress_handle(&self, operation_key: &OperationKey) {
@@ -813,6 +828,7 @@ impl Drop for ErrorStream {
 /// A handle to an operation in progress. This object should be kept live while
 /// the operation is underway, and a timing entry for it will be displayed in
 /// the interactive progress display.
+#[derive(Debug)]
 pub struct ProgressHandle<'a> {
     effects: &'a Effects,
     operation_key: Vec<OperationType>,
@@ -839,6 +855,12 @@ impl ProgressHandle<'_> {
     pub fn notify_progress_inc(&self, increment: usize) {
         self.effects
             .on_notify_progress_inc(&self.operation_key, increment);
+    }
+
+    /// Update the message for this progress meter.
+    pub fn notify_status(&self, message: impl Into<String>) {
+        let message = message.into();
+        self.effects.on_set_message(&self.operation_key, message);
     }
 }
 
