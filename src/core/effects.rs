@@ -172,8 +172,8 @@ impl RootOperation {
             self.traverse_operations(&mut acc, 0, &self.children);
             acc
         };
-        for (_, operation) in operations {
-            operation.tick();
+        for (nesting_level, operation) in operations {
+            operation.tick(nesting_level);
         }
     }
 
@@ -197,13 +197,10 @@ impl RootOperation {
 
             self.multi_progress.add(operation.progress_bar.clone());
 
-            // `set_prefix` forces a render, so only call it after it's been
-            // added to the multi-progress.
-            operation
-                .progress_bar
-                .set_prefix("  ".repeat(nesting_level));
+            // Re-render only after it's been added to the multi-progress, so
+            // that the draw target has been set.
+            operation.tick(nesting_level);
         }
-        self.tick();
     }
 
     fn traverse_operations<'a>(
@@ -297,7 +294,7 @@ impl OperationState {
         }
     }
 
-    pub fn tick(&self) {
+    pub fn tick(&self, nesting_level: usize) {
         lazy_static! {
             static ref CHECKMARK: String = console::style("✓").green().to_string();
             static ref IN_PROGRESS_SPINNER_STYLE: ProgressStyle =
@@ -318,18 +315,20 @@ impl OperationState {
             }
         };
 
-        self.progress_bar.set_message(format!(
-            "{} ({:.1}s)",
-            self.operation_type.to_string(),
-            elapsed_duration.as_secs_f64(),
-        ));
         self.progress_bar
             .set_style(match (self.start_times.as_slice(), self.has_meter) {
                 ([], _) => FINISHED_PROGRESS_STYLE.clone(),
                 ([..], false) => IN_PROGRESS_SPINNER_STYLE.clone(),
                 ([..], true) => IN_PROGRESS_BAR_STYLE.clone(),
             });
-        self.progress_bar.tick();
+        // Both `set_message` and `set_prefix` implicitly call
+        // `ProgressBar::tick` and force a redraw.
+        self.progress_bar.set_prefix("  ".repeat(nesting_level));
+        self.progress_bar.set_message(format!(
+            "{} ({:.1}s)",
+            self.operation_type.to_string(),
+            elapsed_duration.as_secs_f64(),
+        ));
     }
 }
 
