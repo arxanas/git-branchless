@@ -23,6 +23,7 @@ use crate::git::{GitRunInfo, Repo, RepoReferencesSnapshot, ResolvedReferenceInfo
 
 fn redact_event(redactor: &Redactor, event: &Event) -> String {
     let event = match event.clone() {
+        // Explicitly list all variants and fields here so we're forced to audit it if we add any.
         event @ (Event::RewriteEvent {
             timestamp: _,
             event_tx_id: _,
