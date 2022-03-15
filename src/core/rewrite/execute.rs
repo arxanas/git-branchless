@@ -315,14 +315,12 @@ mod in_memory {
     use std::collections::HashMap;
     use std::ffi::OsString;
     use std::fmt::Write;
-    use std::time::Duration;
 
     use eyre::Context;
-    use indicatif::{ProgressBar, ProgressStyle};
     use tracing::{instrument, warn};
 
     use crate::commands::gc::mark_commit_reachable;
-    use crate::core::effects::Effects;
+    use crate::core::effects::{Effects, OperationType};
     use crate::core::formatting::printable_styled_string;
     use crate::core::rewrite::execute::check_out_updated_head;
     use crate::core::rewrite::move_branches;
@@ -422,6 +420,7 @@ mod in_memory {
                 | RebaseCommand::SkipUpstreamAppliedCommit { .. } => true,
             })
             .count();
+        let (effects, progress) = effects.start_operation(OperationType::RebaseCommits);
 
         for command in rebase_plan.commands.iter() {
             match command {
@@ -458,13 +457,7 @@ mod in_memory {
                         commit_to_apply.friendly_describe(effects.get_glyphs())?,
                     )?;
                     let commit_num = format!("[{}/{}]", i, num_picks);
-                    let progress_template = format!("{} {{spinner}} {{wide_msg}}", commit_num);
-                    let progress = ProgressBar::new_spinner();
-                    progress.set_style(
-                        ProgressStyle::default_spinner().template(progress_template.trim())?,
-                    );
-                    progress.set_message("Starting");
-                    progress.enable_steady_tick(Duration::from_millis(100));
+                    progress.notify_progress(i, num_picks);
 
                     if commit_to_apply.get_parent_count() > 1 {
                         warn!(
@@ -476,8 +469,10 @@ mod in_memory {
                         });
                     };
 
-                    progress
-                        .set_message(format!("Applying patch for commit: {}", commit_description));
+                    progress.notify_status(format!(
+                        "Applying patch for commit: {}",
+                        commit_description
+                    ));
                     let commit_tree = match repo.cherry_pick_fast(
                         &commit_to_apply,
                         &current_commit,
@@ -503,7 +498,7 @@ mod in_memory {
                     })?;
 
                     progress
-                        .set_message(format!("Committing to repository: {}", commit_description));
+                        .notify_status(format!("Committing to repository: {}", commit_description));
                     let committer_signature = if *preserve_timestamps {
                         commit_to_apply.get_committer()
                     } else {
@@ -534,7 +529,6 @@ mod in_memory {
                         rewritten_oids.push((*commit_oid, MaybeZeroOid::Zero));
                         maybe_set_skipped_head_new_oid(*commit_oid, current_oid);
 
-                        progress.finish_and_clear();
                         writeln!(
                             effects.get_output_stream(),
                             "[{}/{}] Skipped now-empty commit: {}",
@@ -547,7 +541,6 @@ mod in_memory {
                             .push((*commit_oid, MaybeZeroOid::NonZero(rebased_commit_oid)));
                         current_oid = rebased_commit_oid;
 
-                        progress.finish_and_clear();
                         writeln!(
                             effects.get_output_stream(),
                             "{} Committed as: {}",
@@ -571,19 +564,13 @@ mod in_memory {
                 }
 
                 RebaseCommand::SkipUpstreamAppliedCommit { commit_oid } => {
-                    let progress = ProgressBar::new_spinner();
                     i += 1;
                     let commit_num = format!("[{}/{}]", i, num_picks);
-                    let progress_template = format!("{} {{spinner}} {{wide_msg}}", commit_num);
-                    progress.set_style(
-                        ProgressStyle::default_spinner().template(progress_template.trim())?,
-                    );
 
                     let commit = repo.find_commit_or_fail(*commit_oid)?;
                     rewritten_oids.push((*commit_oid, MaybeZeroOid::Zero));
                     maybe_set_skipped_head_new_oid(*commit_oid, current_oid);
 
-                    progress.finish_and_clear();
                     let commit_description = commit.friendly_describe(effects.get_glyphs())?;
                     let commit_description =
                         printable_styled_string(effects.get_glyphs(), commit_description)?;
