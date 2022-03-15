@@ -735,6 +735,7 @@ impl WriteProgress for OutputStream {
     }
 
     fn style_output(output: &str) -> String {
+        let output = console::strip_ansi_codes(output);
         console::style(output).dim().to_string()
     }
 }
@@ -794,6 +795,7 @@ impl WriteProgress for ErrorStream {
     }
 
     fn style_output(output: &str) -> String {
+        let output = console::strip_ansi_codes(output);
         console::style(output).dim().to_string()
     }
 }
