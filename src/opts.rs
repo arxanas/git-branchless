@@ -26,6 +26,12 @@ pub struct MoveOptions {
     #[clap(long = "on-disk")]
     pub force_on_disk: bool,
 
+    /// Don't attempt to deduplicate commits. Normally, a commit with the same
+    /// contents as another commit which has already been applied to the target
+    /// branch is skipped. If set, this flag skips that check.
+    #[clap(long = "no-deduplicate-commits", parse(from_flag = std::ops::Not::not))]
+    pub detect_duplicate_commits_via_patch_id: bool,
+
     /// Attempt to resolve merge conflicts, if any. If a merge conflict
     /// occurs and this option is not set, the operation is aborted.
     #[clap(name = "merge", short = 'm', long = "merge")]
