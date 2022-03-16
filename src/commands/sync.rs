@@ -89,6 +89,7 @@ pub fn sync(
     let MoveOptions {
         force_in_memory,
         force_on_disk,
+        detect_duplicate_commits_via_patch_id,
         resolve_merge_conflicts,
         dump_rebase_constraints,
         dump_rebase_plan,
@@ -130,7 +131,7 @@ pub fn sync(
                             &pool,
                             &repo_pool,
                             &BuildRebasePlanOptions {
-                                detect_duplicate_commits_via_patch_id: true,
+                                detect_duplicate_commits_via_patch_id,
                                 dump_rebase_constraints,
                                 dump_rebase_plan,
                             },

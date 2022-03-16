@@ -129,6 +129,7 @@ pub fn r#move(
     let MoveOptions {
         force_in_memory,
         force_on_disk,
+        detect_duplicate_commits_via_patch_id,
         resolve_merge_conflicts,
         dump_rebase_constraints,
         dump_rebase_plan,
@@ -147,7 +148,7 @@ pub fn r#move(
             &BuildRebasePlanOptions {
                 dump_rebase_constraints,
                 dump_rebase_plan,
-                detect_duplicate_commits_via_patch_id: true,
+                detect_duplicate_commits_via_patch_id,
             },
         )?
     };

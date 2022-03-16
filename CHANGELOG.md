@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - EXPERIMENTAL: created `git sync` command, which moves all commit stacks onto the main branch (if possible).
 - The `--only-branches` option can be passed to `git smartlog` to only show commits which are on branches.
+- The `git move` command, and other commands which can move commits, now accepts the option `--no-deduplicate-commits` to skip commit deduplication.
 
 ### Changed
 
