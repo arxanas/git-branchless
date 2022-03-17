@@ -21,7 +21,7 @@ jobs:
         git-version: ["v2.24.3", "v2.29.2", "v2.31.1", "v2.33.1"]
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           repository: git/git
           ref: ${{ matrix.git-version }}
@@ -61,7 +61,7 @@ jobs:
         git-version: ["v2.24.3", "v2.29.2", "v2.31.1", "v2.33.1"]
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: "Download artifact: git"
         uses: actions/download-artifact@v2
         with:
