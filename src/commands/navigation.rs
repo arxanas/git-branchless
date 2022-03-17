@@ -540,7 +540,15 @@ pub fn checkout(
         &references_snapshot,
     )?;
 
-    let graph = make_smartlog_graph(effects, &repo, &dag, &event_replayer, event_cursor, true)?;
+    let graph = make_smartlog_graph(
+        effects,
+        &repo,
+        &dag,
+        &event_replayer,
+        event_cursor,
+        true,
+        false,
+    )?;
 
     let initial_query = get_initial_query(checkout_options);
     let target = match initial_query {

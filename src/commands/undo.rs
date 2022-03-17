@@ -53,7 +53,15 @@ fn render_cursor_smartlog(
         reference_name: None,
     };
 
-    let graph = make_smartlog_graph(effects, repo, &dag, event_replayer, event_cursor, true)?;
+    let graph = make_smartlog_graph(
+        effects,
+        repo,
+        &dag,
+        event_replayer,
+        event_cursor,
+        true,
+        false,
+    )?;
     let result = render_graph(
         effects,
         repo,

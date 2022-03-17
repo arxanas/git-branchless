@@ -282,6 +282,10 @@ pub enum Command {
         /// Also show commits which have been hidden.
         #[clap(long = "hidden")]
         show_hidden_commits: bool,
+
+        /// Only show commits that exist on a branch.
+        #[clap(long = "only-branches", conflicts_with = "show-hidden-commits")]
+        only_show_branches: bool,
     },
 
     /// Move any local commit stacks on top of the main branch.

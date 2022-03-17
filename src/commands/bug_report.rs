@@ -104,7 +104,15 @@ fn describe_event_cursor(
 
     let glyphs = Glyphs::text();
     let effects = Effects::new(glyphs.clone());
-    let graph = make_smartlog_graph(&effects, repo, dag, event_replayer, event_cursor, true)?;
+    let graph = make_smartlog_graph(
+        &effects,
+        repo,
+        dag,
+        event_replayer,
+        event_cursor,
+        true,
+        false,
+    )?;
     let graph_lines = render_graph(
         &effects,
         repo,
