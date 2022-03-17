@@ -232,6 +232,17 @@ struct OperationState {
 impl OperationState {
     pub fn set_progress(&mut self, current: usize, total: usize) {
         self.has_meter = true;
+
+        if current
+            .try_into()
+            .map(|current: u64| current < self.progress_bar.position())
+            .unwrap_or(false)
+        {
+            // Workaround for issue fixed by
+            // <https://github.com/console-rs/indicatif/pull/403>.
+            self.progress_bar.reset_eta();
+        }
+
         self.progress_bar.set_position(current.try_into().unwrap());
         self.progress_bar.set_length(total.try_into().unwrap());
     }
@@ -895,6 +906,18 @@ mod tests {
             assert!(root_operation.children.is_empty());
         }
 
+        Ok(())
+    }
+
+    /// Test for the issue fixed by <https://github.com/console-rs/indicatif/pull/403>.
+    #[test]
+    fn test_effects_progress_rewind_panic() -> eyre::Result<()> {
+        let effects = Effects::new(Glyphs::text());
+        let (effects, progress) = effects.start_operation(OperationType::GetMergeBase);
+        let _ = effects;
+        progress.notify_progress(3, 10);
+        // Should not panic.
+        progress.notify_progress(0, 10);
         Ok(())
     }
 }
