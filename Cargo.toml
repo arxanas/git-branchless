@@ -45,13 +45,13 @@ required-features = ["integration-test-bin"]
 test = true
 
 [dependencies]
-anyhow = "1.0.51"
-assert_cmd = "2.0.2"
+anyhow = "1.0.56"
+assert_cmd = "2.0.4"
 bugreport = "0.4.1"
 chashmap = "2.2.2"
 chrono = "0.4.19"
-clap = { version = "3.0.0", features = ["derive"] }
-color-eyre = "0.5.11"
+clap = { version = "3.1.6", features = ["derive"] }
+color-eyre = "0.6.1"
 concolor = { version = "0.0.8", features = ["auto"] }
 console = "0.15.0"
 cursive = { version = "0.17.0", default-features = false, features = [
@@ -59,30 +59,30 @@ cursive = { version = "0.17.0", default-features = false, features = [
 ] }
 cursive_buffered_backend = "0.6.0"
 eden_dag = { package = "esl01-dag", version = "0.2.1" }
-eyre = "0.6.5"
-git2 = { version = "0.13.25", default-features = false }
-indicatif = "0.17.0-beta.1"
+eyre = "0.6.7"
+git2 = { version = "0.14.2", default-features = false }
+indicatif = "0.17.0-rc.9"
 itertools = "0.10.3"
 lazy_static = "1.4.0"
 man = "0.3.0"
 os_str_bytes = "6.0.0"
 path-slash = "0.1.4"
 rayon = "1.5.1"
-regex = "1.5.4"
-rusqlite = { version = "0.26.3", features = ["bundled"] }
-tempfile = "3.2.0"
-textwrap = "0.14.2"
-tracing = "0.1.26"
-tracing-chrome = "0.3.1"
-tracing-error = "0.1.2"
-tracing-subscriber = { version = "0.2.20", features = ["env-filter"] }
+regex = "1.5.5"
+rusqlite = { version = "0.27.0", features = ["bundled"] }
+tempfile = "3.3.0"
+textwrap = "0.15.0"
+tracing = "0.1.32"
+tracing-chrome = "0.4.0"
+tracing-error = "0.2.0"
+tracing-subscriber = { version = "0.3.9", features = ["env-filter"] }
 
 [target.'cfg(unix)'.dependencies]
 skim = "0.9.4"
 
 [dev-dependencies]
 criterion = { version = "0.3.5", features = ["html_reports"] }
-insta = "1.8.0"
+insta = "1.13.0"
 lazy_static = "1.4.0"
 portable-pty = "0.7.0"
 vt100 = "0.15.1"

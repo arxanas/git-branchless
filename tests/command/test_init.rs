@@ -339,13 +339,11 @@ fn test_main_branch_not_found_error_message() -> eyre::Result<()> {
         git config branchless.core.mainBranch <branch>
 
 
-    Backtrace omitted.
-    Run with RUST_BACKTRACE=1 environment variable to display it.
+    Backtrace omitted. Run with RUST_BACKTRACE=1 environment variable to display it.
     Run with RUST_BACKTRACE=full to include source snippets.
     Location: some/file/path.rs:123
 
-    Backtrace omitted.
-    Run with RUST_BACKTRACE=1 environment variable to display it.
+    Backtrace omitted. Run with RUST_BACKTRACE=1 environment variable to display it.
     Run with RUST_BACKTRACE=full to include source snippets.
     "###);
     insta::assert_snapshot!(stdout, @"");
