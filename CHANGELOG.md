@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - EXPERIMENTAL: created `git sync` command, which moves all commit stacks onto the main branch (if possible).
+- The `--only-branches` option can be passed to `git smartlog` to only show commits which are on branches.
 
 ### Changed
 

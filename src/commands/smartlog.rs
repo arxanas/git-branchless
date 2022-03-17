@@ -224,6 +224,7 @@ mod graph {
         event_replayer: &EventReplayer,
         event_cursor: EventCursor,
         remove_commits: bool,
+        only_branches: bool,
     ) -> eyre::Result<SmartlogGraph<'repo>> {
         let (effects, _progress) = effects.start_operation(OperationType::MakeGraph);
 
@@ -231,14 +232,16 @@ mod graph {
             let (effects, _progress) = effects.start_operation(OperationType::WalkCommits);
 
             let public_commits = dag.query_public_commits()?;
-            let active_heads = if remove_commits {
-                dag.query_active_heads(
-                    &public_commits,
-                    &dag.observed_commits.difference(&dag.obsolete_commits),
-                )?
+
+            let observed_commits = if only_branches {
+                dag.branch_commits.clone()
+            } else if remove_commits {
+                dag.observed_commits.difference(&dag.obsolete_commits)
             } else {
-                dag.query_active_heads(&public_commits, &dag.observed_commits.clone())?
+                dag.observed_commits.clone()
             };
+
+            let active_heads = dag.query_active_heads(&public_commits, &observed_commits)?;
 
             walk_from_active_heads(
                 &effects,
@@ -520,6 +523,9 @@ mod render {
         /// Whether to also show commits in the smartlog which would normally not be
         /// visible.
         pub show_hidden_commits: bool,
+
+        /// Whether to only show commits on branches.
+        pub only_show_branches: bool,
     }
 }
 
@@ -532,6 +538,7 @@ pub fn smartlog(
 ) -> eyre::Result<()> {
     let SmartlogOptions {
         show_hidden_commits,
+        only_show_branches,
     } = options;
 
     let repo = Repo::from_dir(&git_run_info.working_directory)?;
@@ -556,6 +563,7 @@ pub fn smartlog(
         &event_replayer,
         event_cursor,
         !show_hidden_commits,
+        *only_show_branches,
     )?;
 
     let lines = render_graph(

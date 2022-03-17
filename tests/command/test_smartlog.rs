@@ -430,6 +430,76 @@ fn test_show_hidden_commits() -> eyre::Result<()> {
 }
 
 #[test]
+fn test_show_only_branches() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    git.init_repo()?;
+    git.commit_file("test1", 1)?;
+    git.detach_head()?;
+    let test2_oid = git.commit_file("test2", 2)?;
+    git.run(&["checkout", "master"])?;
+    git.commit_file("test3", 3)?;
+    git.detach_head()?;
+    let test4_oid = git.commit_file("test4", 4)?;
+    git.run(&["checkout", "master"])?;
+    git.commit_file("test5", 5)?;
+    git.detach_head()?;
+    let test6_oid = git.commit_file("test6", 6)?;
+    git.run(&["checkout", "master"])?;
+    git.commit_file("test7", 7)?;
+    git.detach_head()?;
+    git.commit_file("test8", 8)?;
+    git.run(&["checkout", "master"])?;
+    git.commit_file("test9", 9)?;
+
+    git.run(&["branch", "branch-2", &test2_oid.to_string()])?;
+    git.run(&["branch", "branch-4", &test4_oid.to_string()])?;
+    git.run(&["hide", &test4_oid.to_string()])?;
+    git.run(&["hide", &test6_oid.to_string()])?;
+
+    // confirm our baseline:
+    // branch, hidden branch and non-branch head are visible; hidden non-branch head is not
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d2 create test1.txt
+        |\
+        | o 96d1c37a (branch-2) create test2.txt
+        |
+        O 4838e49b create test3.txt
+        |\
+        : x a2482074 (manually hidden) (branch-4) create test4.txt
+        :
+        O 8577a964 create test7.txt
+        |\
+        | o e8b6a382 create test8.txt
+        |
+        @ 1b854edc (> master) create test9.txt
+        "###);
+    }
+
+    // just branches (normal and hidden) but no non-branch heads
+    {
+        let (stdout, _stderr) = git.run(&["smartlog", "--only-branches"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d2 create test1.txt
+        |\
+        | o 96d1c37a (branch-2) create test2.txt
+        |
+        O 4838e49b create test3.txt
+        |\
+        : x a2482074 (manually hidden) (branch-4) create test4.txt
+        :
+        @ 1b854edc (> master) create test9.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_active_non_head_main_branch_commit() -> eyre::Result<()> {
     let GitWrapperWithRemoteRepo {
         temp_dir: _guard,

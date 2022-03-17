@@ -224,12 +224,14 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
 
         Command::Smartlog {
             show_hidden_commits,
+            only_show_branches,
         } => {
             smartlog::smartlog(
                 &effects,
                 &git_run_info,
                 &SmartlogOptions {
                     show_hidden_commits,
+                    only_show_branches,
                 },
             )?;
             0
