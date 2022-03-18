@@ -15,6 +15,7 @@ use cursive::utils::markup::StyledString;
 use cursive::views::{Dialog, EditView, LinearLayout, OnEventView, Panel, ScrollView, TextView};
 use cursive::{Cursive, CursiveRunnable, CursiveRunner};
 use eyre::Context;
+use itertools::Itertools;
 use tracing::instrument;
 
 use crate::commands::smartlog::{make_smartlog_graph, render_graph};
@@ -642,8 +643,8 @@ fn undo_events(
 ) -> eyre::Result<isize> {
     let now = SystemTime::now();
     let event_tx_id = event_log_db.make_transaction_id(now, "undo")?;
-    let inverse_events: Vec<Event> = event_replayer
-        .get_events_since_cursor(event_cursor)
+    let events = event_replayer.get_events_since_cursor(event_cursor);
+    let inverse_events: Vec<Event> = events
         .iter()
         .rev()
         .filter(|event| {
@@ -681,13 +682,19 @@ fn undo_events(
     }
 
     writeln!(effects.get_output_stream(), "Will apply these actions:")?;
-    let events = describe_events_numbered(effects.get_glyphs(), repo, &inverse_events)?;
-    for line in events {
+    let event_lines = describe_events_numbered(effects.get_glyphs(), repo, &inverse_events)?;
+    for line in event_lines {
         writeln!(
             effects.get_output_stream(),
             "{}",
             printable_styled_string(effects.get_glyphs(), line)?
         )?;
+    }
+
+    let tx_messages = event_log_db
+        .get_transaction_messages(events.iter().map(|event| event.get_event_tx_id()).collect())?;
+    for (event_tx_id, message) in tx_messages.into_iter().sorted() {
+        writeln!(effects.get_output_stream(), "git {}", message)?;
     }
 
     let confirmed = {

@@ -53,7 +53,7 @@ struct Row {
 ///
 /// Unlike in a database, there is no specific guarantee that an event
 /// transaction is an atomic unit of work.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialOrd, Ord, PartialEq, Eq, Hash)]
 pub struct EventTransactionId(isize);
 
 impl ToString for EventTransactionId {
@@ -573,6 +573,36 @@ ORDER BY rowid ASC
         message: impl AsRef<str>,
     ) -> eyre::Result<EventTransactionId> {
         self.make_transaction_id_inner(now, message.as_ref())
+    }
+
+    pub fn get_transaction_messages(
+        &self,
+        event_tx_ids: HashSet<EventTransactionId>,
+    ) -> eyre::Result<HashMap<EventTransactionId, String>> {
+        let mut stmt = self.conn.prepare(
+            "
+SELECT event_tx_id, message
+FROM event_transactions
+",
+        )?;
+        // FIXME: don't load all transactions
+        let messages: Vec<(EventTransactionId, Option<String>)> = stmt
+            .query_map(rusqlite::params![], |row| {
+                let event_tx_id: isize = row.get("event_tx_id")?;
+                let message: Option<String> = row.get("message")?;
+                Ok((EventTransactionId(event_tx_id), message))
+            })?
+            .collect::<rusqlite::Result<_>>()?;
+        let messages: HashMap<EventTransactionId, String> = messages
+            .into_iter()
+            .filter_map(|(event_tx_id, message)| {
+                match (event_tx_ids.contains(&event_tx_id), message) {
+                    (true, Some(message)) => Some((event_tx_id, message)),
+                    (false, Some(_)) | (true, None) | (false, None) => None,
+                }
+            })
+            .collect();
+        Ok(messages)
     }
 }
 
