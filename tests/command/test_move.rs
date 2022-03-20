@@ -68,12 +68,14 @@ fn test_move_stick() -> eyre::Result<()> {
                     },
                     Pick {
                         commit_oid: NonZeroOid(70deb1e28791d8e7dd5a1f0c871a51b91282562f),
+                        message: None,
                     },
                     DetectEmptyCommit {
                         commit_oid: NonZeroOid(70deb1e28791d8e7dd5a1f0c871a51b91282562f),
                     },
                     Pick {
                         commit_oid: NonZeroOid(355e173bf9c5d2efac2e451da0cdad3fb82b869a),
+                        message: None,
                     },
                     DetectEmptyCommit {
                         commit_oid: NonZeroOid(355e173bf9c5d2efac2e451da0cdad3fb82b869a),
@@ -254,12 +256,14 @@ fn test_move_with_source_not_in_smartlog() -> eyre::Result<()> {
                         },
                         Pick {
                             commit_oid: NonZeroOid(70deb1e28791d8e7dd5a1f0c871a51b91282562f),
+                            message: None,
                         },
                         DetectEmptyCommit {
                             commit_oid: NonZeroOid(70deb1e28791d8e7dd5a1f0c871a51b91282562f),
                         },
                         Pick {
                             commit_oid: NonZeroOid(355e173bf9c5d2efac2e451da0cdad3fb82b869a),
+                            message: None,
                         },
                         DetectEmptyCommit {
                             commit_oid: NonZeroOid(355e173bf9c5d2efac2e451da0cdad3fb82b869a),
@@ -359,6 +363,7 @@ fn test_move_merge_conflict() -> eyre::Result<()> {
                     },
                     Pick {
                         commit_oid: NonZeroOid(e85d25c772a05b5c73ea8ec43881c12bbf588848),
+                        message: None,
                     },
                     DetectEmptyCommit {
                         commit_oid: NonZeroOid(e85d25c772a05b5c73ea8ec43881c12bbf588848),
@@ -434,12 +439,14 @@ fn test_move_base() -> eyre::Result<()> {
                     },
                     Pick {
                         commit_oid: NonZeroOid(96d1c37a3d4363611c49f7e52186e189a04c531f),
+                        message: None,
                     },
                     DetectEmptyCommit {
                         commit_oid: NonZeroOid(96d1c37a3d4363611c49f7e52186e189a04c531f),
                     },
                     Pick {
                         commit_oid: NonZeroOid(70deb1e28791d8e7dd5a1f0c871a51b91282562f),
+                        message: None,
                     },
                     DetectEmptyCommit {
                         commit_oid: NonZeroOid(70deb1e28791d8e7dd5a1f0c871a51b91282562f),
@@ -565,6 +572,7 @@ fn test_move_checkout_new_head() -> eyre::Result<()> {
                     },
                     Pick {
                         commit_oid: NonZeroOid(fe65c1fe15584744e649b2c79d4cf9b0d878f92e),
+                        message: None,
                     },
                     DetectEmptyCommit {
                         commit_oid: NonZeroOid(fe65c1fe15584744e649b2c79d4cf9b0d878f92e),
@@ -635,6 +643,7 @@ fn test_move_branch() -> eyre::Result<()> {
                     },
                     Pick {
                         commit_oid: NonZeroOid(98b9119d16974f372e76cb64a3b77c528fc0b18b),
+                        message: None,
                     },
                     DetectEmptyCommit {
                         commit_oid: NonZeroOid(98b9119d16974f372e76cb64a3b77c528fc0b18b),
@@ -824,6 +833,7 @@ fn test_move_in_memory_gc() -> eyre::Result<()> {
                     },
                     Pick {
                         commit_oid: NonZeroOid(96d1c37a3d4363611c49f7e52186e189a04c531f),
+                        message: None,
                     },
                     DetectEmptyCommit {
                         commit_oid: NonZeroOid(96d1c37a3d4363611c49f7e52186e189a04c531f),
@@ -1623,6 +1633,7 @@ fn test_move_merge_commit() -> eyre::Result<()> {
                         },
                         Pick {
                             commit_oid: NonZeroOid(fe65c1fe15584744e649b2c79d4cf9b0d878f92e),
+                            message: None,
                         },
                         DetectEmptyCommit {
                             commit_oid: NonZeroOid(fe65c1fe15584744e649b2c79d4cf9b0d878f92e),

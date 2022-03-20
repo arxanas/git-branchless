@@ -9,6 +9,7 @@ pub mod init;
 pub mod r#move;
 pub mod navigation;
 pub mod restack;
+pub mod reword;
 pub mod smartlog;
 pub mod sync;
 pub mod undo;
@@ -221,6 +222,20 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
             commits,
             move_options,
         } => restack::restack(&effects, &git_run_info, commits, &move_options)?,
+
+        Command::Reword {
+            commits,
+            force,
+            messages,
+            rebase_options,
+        } => reword::reword(
+            &effects,
+            force,
+            commits,
+            messages,
+            &git_run_info,
+            &rebase_options,
+        )?,
 
         Command::Smartlog {
             show_hidden_commits,
