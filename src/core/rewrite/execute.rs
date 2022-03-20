@@ -443,7 +443,10 @@ mod in_memory {
                     current_oid = *commit_oid;
                 }
 
-                RebaseCommand::Pick { commit_oid } => {
+                RebaseCommand::Pick {
+                    commit_oid,
+                    message,
+                } => {
                     let current_commit = repo
                         .find_commit_or_fail(current_oid)
                         .wrap_err("Finding current commit")?;
@@ -489,13 +492,16 @@ mod in_memory {
                         }
                     };
 
-                    let commit_message = commit_to_apply.get_message_raw()?;
-                    let commit_message = commit_message.to_str().ok_or_else(|| {
-                        eyre::eyre!(
-                            "Could not decode commit message for commit: {:?}",
-                            commit_oid
-                        )
-                    })?;
+                    let possible_message = commit_to_apply.get_message_raw()?;
+                    let commit_message = match message {
+                        Some(message) => message.as_str(),
+                        None => possible_message.to_str().ok_or_else(|| {
+                            eyre::eyre!(
+                                "Could not decode commit message for commit: {:?}",
+                                commit_oid
+                            )
+                        })?,
+                    };
 
                     progress
                         .notify_status(format!("Committing to repository: {}", commit_description));

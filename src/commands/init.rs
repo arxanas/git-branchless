@@ -67,6 +67,7 @@ const ALL_ALIASES: &[(&str, &str)] = &[
     ("next", "next"),
     ("prev", "prev"),
     ("restack", "restack"),
+    ("reword", "reword"),
     ("sl", "smartlog"),
     ("smartlog", "smartlog"),
     ("sync", "sync"),
