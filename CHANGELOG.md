@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - (#286) The smartlog now displays an icon next to the currently-checked-out branch.
 - (#289) Changed output wording for `git hide`/`git unhide`.
+- BREAKING: `git undo` now undoes the most recent operation by default (after confirming). The interactive behavior is available with the `-i`/`--interactive` flag.
 
 ### Fixed
 

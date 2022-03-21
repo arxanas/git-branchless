@@ -323,7 +323,12 @@ pub enum Command {
     },
 
     /// Browse or return to a previous state of the repository.
-    Undo,
+    Undo {
+        /// Interactively browse through previous states of the repository
+        /// before selecting one to return to.
+        #[clap(short = 'i', long = "interactive")]
+        interactive: bool,
+    },
 
     /// Unhide previously-hidden commits from the smartlog.
     Unhide {
