@@ -813,7 +813,11 @@ fn undo_events(
 
 /// Restore the repository to a previous state interactively.
 #[instrument]
-pub fn undo(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<isize> {
+pub fn undo(
+    effects: &Effects,
+    git_run_info: &GitRunInfo,
+    interactive: bool,
+) -> eyre::Result<isize> {
     let repo = Repo::from_current_dir()?;
     let references_snapshot = repo.get_references_snapshot()?;
     let conn = repo.get_db_conn()?;
@@ -834,12 +838,16 @@ pub fn undo(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<isize>
     };
 
     let event_cursor = {
-        let result = with_siv(effects, |effects, siv| {
-            select_past_event(siv, &effects, &repo, &dag, &mut event_replayer)
-        })?;
-        match result {
-            Some(event_cursor) => event_cursor,
-            None => return Ok(0),
+        if interactive {
+            let result = with_siv(effects, |effects, siv| {
+                select_past_event(siv, &effects, &repo, &dag, &mut event_replayer)
+            })?;
+            match result {
+                Some(event_cursor) => event_cursor,
+                None => return Ok(0),
+            }
+        } else {
+            event_replayer.advance_cursor_by_transaction(event_replayer.make_default_cursor(), -1)
         }
     };
 

@@ -809,3 +809,96 @@ fn test_undo_garbage_collected_commit() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_undo_noninteractive() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+
+    git.init_repo()?;
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+    git.run(&[
+        "branchless",
+        "wrap",
+        "--",
+        "commit",
+        "--amend",
+        "-m",
+        "bad message",
+    ])?;
+
+    {
+        let (stdout, _stderr) = git.run_with_options(
+            &["undo"],
+            &branchless::testing::GitRunOptions {
+                expected_exit_code: 1,
+                input: Some("n".to_string()),
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stdout, @r###"
+        Will apply these actions:
+        1. Check out from 9ed8f9a2 bad message
+                       to 96d1c37a create test2.txt
+        2. Rewrite commit 9ed8f9a2 bad message
+                      as 96d1c37a create test2.txt
+        3. Hide commit 9ed8f9a2 bad message
+           
+        4. Move branch master from 9ed8f9a2 bad message
+                                to 96d1c37a create test2.txt
+        Confirm? [yN] Aborted.
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        @ 9ed8f9a2 (> master) bad message
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run_with_options(
+            &["undo"],
+            &branchless::testing::GitRunOptions {
+                input: Some("y".to_string()),
+                ..Default::default()
+            },
+        )?;
+        let stdout = trim_lines(stdout);
+        insta::assert_snapshot!(stdout, @r###"
+        Will apply these actions:
+        1. Check out from 9ed8f9a2 bad message
+                       to 96d1c37a create test2.txt
+        2. Rewrite commit 9ed8f9a2 bad message
+                      as 96d1c37a create test2.txt
+        3. Hide commit 9ed8f9a2 bad message
+
+        4. Move branch master from 9ed8f9a2 bad message
+                                to 96d1c37a create test2.txt
+        Confirm? [yN] branchless: running command: <git-executable> checkout 96d1c37a3d4363611c49f7e52186e189a04c531f --detach
+        :
+        O 62fc20d2 create test1.txt
+        |\
+        | % 96d1c37a (rewritten as 9ed8f9a2) create test2.txt
+        |
+        O 9ed8f9a2 (master) bad message
+        Applied 4 inverse events.
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        @ 96d1c37a (master) create test2.txt
+        "###);
+    }
+
+    Ok(())
+}
