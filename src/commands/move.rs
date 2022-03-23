@@ -176,7 +176,7 @@ pub fn r#move(
     };
 
     match result {
-        ExecuteRebasePlanResult::Succeeded => Ok(0),
+        ExecuteRebasePlanResult::Succeeded { rewritten_oids: _ } => Ok(0),
 
         ExecuteRebasePlanResult::DeclinedToMerge { merge_conflict } => {
             merge_conflict.describe(effects, &repo)?;

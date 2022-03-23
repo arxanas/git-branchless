@@ -45,8 +45,8 @@ pub enum RebaseCommand {
     /// Apply the provided commit on top of the rebase head, and update the
     /// rebase head to point to the newly-applied commit.
     Pick {
-        commit_oid: NonZeroOid,
-        message: Option<String>,
+        original_commit_oid: NonZeroOid,
+        commit_to_apply_oid: NonZeroOid,
     },
 
     Merge {
@@ -87,8 +87,8 @@ impl ToString for RebaseCommand {
             RebaseCommand::CreateLabel { label_name } => format!("label {}", label_name),
             RebaseCommand::Reset { target } => format!("reset {}", target.to_string()),
             RebaseCommand::Pick {
-                commit_oid,
-                message: _,
+                original_commit_oid: _,
+                commit_to_apply_oid: commit_oid,
             } => format!("pick {}", commit_oid),
             RebaseCommand::Merge {
                 commit_oid,
@@ -154,12 +154,12 @@ struct BuildState {
 pub struct RebasePlanBuilder<'repo> {
     dag: &'repo Dag,
 
-    /// There is a mapping from from `x` to `y` if `x` must be applied before
-    /// `y`.
+    /// There is a mapping from `x` to `y` if `x` must be applied before `y`.
     initial_constraints: HashMap<NonZeroOid, HashSet<NonZeroOid>>,
 
-    /// FIXME
-    messages_to_apply: Option<HashMap<NonZeroOid, String>>,
+    /// Mapping of commits that should be replaced to the commits that they should be replaced
+    /// with.
+    replacement_commits: HashMap<NonZeroOid, NonZeroOid>,
 
     /// Cache mapping from commit OID to the paths changed in the diff for that
     /// commit. The value is `None` if the commit doesn't have an associated
@@ -250,7 +250,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
         RebasePlanBuilder {
             dag,
             initial_constraints: Default::default(),
-            messages_to_apply: Default::default(),
+            replacement_commits: Default::default(),
             touched_paths_cache: Default::default(),
         }
     }
@@ -352,20 +352,14 @@ impl<'repo> RebasePlanBuilder<'repo> {
             } else {
                 // Normal one-parent commit (or a zero-parent commit?), just
                 // rebase it and continue.
-                let message = match self.messages_to_apply {
-                    Some(_) => {
-                        let possible_message = self
-                            .messages_to_apply
-                            .as_ref()
-                            .unwrap()
-                            .get(&current_commit.get_oid());
-                        possible_message.cloned()
-                    }
-                    None => None,
+                let original_commit_oid = current_commit.get_oid();
+                let commit_oid = match self.replacement_commits.get(&original_commit_oid) {
+                    Some(replacement_oid) => *replacement_oid,
+                    None => original_commit_oid,
                 };
                 acc.push(RebaseCommand::Pick {
-                    commit_oid: current_commit.get_oid(),
-                    message,
+                    original_commit_oid,
+                    commit_to_apply_oid: commit_oid,
                 });
                 acc.push(RebaseCommand::DetectEmptyCommit {
                     commit_oid: current_commit.get_oid(),
@@ -465,9 +459,21 @@ impl<'repo> RebasePlanBuilder<'repo> {
         Ok(())
     }
 
-    /// FIXME
-    pub fn reword_commits(&mut self, messages: &HashMap<NonZeroOid, String>) -> eyre::Result<()> {
-        self.messages_to_apply = Some(messages.clone());
+    /// Instruct the rebase planner to replace the commit at `original_oid` with the commit at
+    /// `replacement_oid`.
+    pub fn replace_commit(
+        &mut self,
+        original_oid: NonZeroOid,
+        replacement_oid: NonZeroOid,
+    ) -> eyre::Result<()> {
+        if self.replacement_commits.contains_key(&original_oid) {
+            eyre::bail!(
+                "Attempting to rewrite commit {}. Refusing to replace a commit twice.",
+                original_oid
+            );
+        }
+        self.replacement_commits
+            .insert(original_oid, replacement_oid);
         Ok(())
     }
 
@@ -720,8 +726,8 @@ impl<'repo> RebasePlanBuilder<'repo> {
                 | RebaseCommand::RegisterExtraPostRewriteHook
                 | RebaseCommand::DetectEmptyCommit { commit_oid: _ } => None,
                 RebaseCommand::Pick {
-                    commit_oid,
-                    message: _,
+                    original_commit_oid: _,
+                    commit_to_apply_oid: commit_oid,
                 }
                 | RebaseCommand::Merge {
                     commit_oid,

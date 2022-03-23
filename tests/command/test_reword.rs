@@ -27,7 +27,41 @@ fn test_reword_head() -> eyre::Result<()> {
     :
     O 62fc20d2 (test1) create test1.txt
     |
-    @ b38039bd (> master) foo
+    @ c1f5400a (> master) foo
+    "###);
+
+    Ok(())
+}
+
+#[test]
+fn test_reword_current_commit_not_head() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+    git.commit_file("test1", 1)?;
+    git.run(&["branch", "test1"])?;
+    git.commit_file("test2", 2)?;
+    git.run(&["prev"])?;
+
+    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    :
+    @ 62fc20d2 (test1) create test1.txt
+    |
+    O 96d1c37a (master) create test2.txt
+    "###);
+
+    git.run(&["reword", "--message", "foo"])?;
+
+    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    :
+    @ a6f88684 (test1) foo
+    |
+    O 5207ad50 (master) create test2.txt
     "###);
 
     Ok(())
@@ -53,10 +87,42 @@ fn test_reword_with_multiple_messages() -> eyre::Result<()> {
 
     let (stdout, _stderr) = git.run(&["log", "-n", "1", "--format=%h%n%B"])?;
     insta::assert_snapshot!(stdout, @r###"
-    961064b
+    34ae21e
     foo
 
     bar
+
+    "###);
+
+    Ok(())
+}
+
+#[test]
+fn test_reword_removes_comment_lines_from_messages() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+    git.commit_file("test1", 1)?;
+
+    let (stdout, _stderr) = git.run(&["log", "-n", "1", "--format=%h%n%B"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    62fc20d
+    create test1.txt
+    "###);
+
+    // try adding several messages that start w/ '#'
+    git.run(&["reword", "-m", "foo", "-m", "# bar", "-m", "#", "-m", "buz"])?;
+
+    // confirm the '#' messages aren't present
+    let (stdout, _stderr) = git.run(&["log", "-n", "1", "--format=%h%n%B"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    2666020
+    foo
+
+    buz
     "###);
 
     Ok(())
@@ -87,9 +153,9 @@ fn test_reword_non_head_commit() -> eyre::Result<()> {
     let (stdout, _stderr) = git.run(&["smartlog"])?;
     insta::assert_snapshot!(stdout, @r###"
     :
-    O 09b42f44 (test1) bar
+    O 8d4a670d (test1) bar
     |
-    @ 8ab8b750 (> master) create test2.txt
+    @ 8f7f70ea (> master) create test2.txt
     "###);
 
     Ok(())
@@ -115,15 +181,14 @@ fn test_reword_multiple_commits_on_same_branch() -> eyre::Result<()> {
     @ 96d1c37a (> master) create test2.txt
     "###);
 
-    let (_stdout, _stderr) =
-        git.run(&["reword", "HEAD", "HEAD^", "--message", "foo", "--force"])?;
+    let (_stdout, _stderr) = git.run(&["reword", "HEAD", "HEAD^", "--message", "foo"])?;
 
     let (stdout, _stderr) = git.run(&["smartlog"])?;
     insta::assert_snapshot!(stdout, @r###"
     :
-    O 5b4452da (test1) foo
+    O a6f88684 (test1) foo
     |
-    @ 12217a2f (> master) foo
+    @ e2308b39 (> master) foo
     "###);
 
     Ok(())
@@ -165,11 +230,11 @@ fn test_reword_tree() -> eyre::Result<()> {
     :
     O 96d1c37a (master) create test2.txt
     |
-    o 4de8ed1a foo
+    o 929b68d8 foo
     |\
-    | o 93c8ffd1 create test4.txt
+    | o a3679359 create test4.txt
     |
-    @ 92c4833c create test5.txt
+    @ 38f9ce96 create test5.txt
     "###);
 
     Ok(())
@@ -212,7 +277,6 @@ fn test_reword_across_branches() -> eyre::Result<()> {
         &test4_oid.to_string(),
         "--message",
         "foo",
-        "--force",
     ])?;
 
     let (stdout, _stderr) = git.run(&["smartlog"])?;
@@ -220,13 +284,13 @@ fn test_reword_across_branches() -> eyre::Result<()> {
     :
     O 62fc20d2 (master) create test1.txt
     |\
-    | o b38039bd foo
+    | o c1f5400a foo
     | |
-    | o 0c46d151 create test3.txt
+    | o 1c9ad631 create test3.txt
     |
-    o b376ed9e foo
+    o 3c442fc0 foo
     |
-    @ a9fc71df create test5.txt
+    @ 8648fbd2 create test5.txt
     "###);
 
     Ok(())

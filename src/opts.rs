@@ -48,41 +48,6 @@ pub struct MoveOptions {
     pub dump_rebase_plan: bool,
 }
 
-/// Options for rebasing commits. These are the same as MoveOptions, but without the shorthand -m.
-#[derive(Args, Debug)]
-pub struct RebaseOptions {
-    /// Only attempt to perform an in-memory rebase. If it fails, do not
-    /// attempt an on-disk rebase.
-    #[clap(long = "in-memory", conflicts_with_all(&["force-on-disk", "merge"]))]
-    pub force_in_memory: bool,
-
-    /// Skip attempting to use an in-memory rebase, and try an
-    /// on-disk rebase directly.
-    #[clap(long = "on-disk")]
-    pub force_on_disk: bool,
-
-    /// Don't attempt to deduplicate commits. Normally, a commit with the same
-    /// contents as another commit which has already been applied to the target
-    /// branch is skipped. If set, this flag skips that check.
-    #[clap(long = "no-deduplicate-commits", parse(from_flag = std::ops::Not::not))]
-    pub detect_duplicate_commits_via_patch_id: bool,
-
-    /// Attempt to resolve merge conflicts, if any. If a merge conflict
-    /// occurs and this option is not set, the operation is aborted.
-    #[clap(name = "merge", long = "merge")]
-    pub resolve_merge_conflicts: bool,
-
-    /// Debugging option. Print the constraints used to create the rebase
-    /// plan before executing it.
-    #[clap(long = "debug-dump-rebase-constraints")]
-    pub dump_rebase_constraints: bool,
-
-    /// Debugging option. Print the rebase plan that will be executed before
-    /// executing it.
-    #[clap(long = "debug-dump-rebase-plan")]
-    pub dump_rebase_plan: bool,
-}
-
 /// Options for traversing commits.
 #[derive(Args, Debug)]
 pub struct TraverseCommitsOptions {
@@ -318,25 +283,17 @@ pub enum Command {
         move_options: MoveOptions,
     },
 
-    /// Reword the current HEAD commit.
+    /// Reword commits.
     Reword {
-        /// Zero or more commits to reword.
+        /// Zero or more commits to reword. If not provided, defaults to "HEAD".
         ///
         /// Can either be hashes, like `abc123`, or ref-specs, like `HEAD^`.
         commits: Vec<String>,
 
         /// Message to apply to commits. Multiple messages will be combined as separate paragraphs,
-        /// similar to `git commit`
+        /// similar to `git commit`.
         #[clap(short = 'm', long = "message")]
         messages: Vec<String>,
-
-        /// Don't prompt for confirmation when rewording multiple commits.
-        #[clap(short = 'f', long = "force")]
-        force: bool,
-
-        /// Options for moving commits.
-        #[clap(flatten)]
-        rebase_options: RebaseOptions,
     },
 
     /// Display a nice graph of the commits you've recently worked on.

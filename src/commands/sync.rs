@@ -196,7 +196,7 @@ pub fn sync(
             )?;
             progress.notify_progress_inc(1);
             match result {
-                ExecuteRebasePlanResult::Succeeded => {
+                ExecuteRebasePlanResult::Succeeded { rewritten_oids: _ } => {
                     success_commits.push(root_commit);
                 }
                 ExecuteRebasePlanResult::DeclinedToMerge { merge_conflict: _ } => {

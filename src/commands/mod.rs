@@ -223,19 +223,9 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
             move_options,
         } => restack::restack(&effects, &git_run_info, commits, &move_options)?,
 
-        Command::Reword {
-            commits,
-            force,
-            messages,
-            rebase_options,
-        } => reword::reword(
-            &effects,
-            force,
-            commits,
-            messages,
-            &git_run_info,
-            &rebase_options,
-        )?,
+        Command::Reword { commits, messages } => {
+            reword::reword(&effects, commits, messages, &git_run_info)?
+        }
 
         Command::Smartlog {
             show_hidden_commits,
