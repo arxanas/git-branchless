@@ -30,6 +30,18 @@ pub fn get_main_branch_name(repo: &Repo) -> eyre::Result<String> {
     Ok(main_branch_name)
 }
 
+/// Get the default comment character.
+#[instrument]
+pub fn get_comment_char(repo: &Repo) -> eyre::Result<Option<u8>> {
+    let config = repo.get_readonly_config()?;
+    let comment_char: Option<String> = config.get("core.commentChar")?;
+    let comment_char = match comment_char {
+        Some(c) => Some(c.chars().next().unwrap() as u8),
+        None => git2::DEFAULT_COMMENT_CHAR,
+    };
+    Ok(comment_char)
+}
+
 /// Get the default init branch name.
 #[instrument]
 pub fn get_default_branch_name(repo: &Repo) -> eyre::Result<Option<String>> {

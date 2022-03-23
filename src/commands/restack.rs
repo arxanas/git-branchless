@@ -147,7 +147,7 @@ fn restack_commits(
     let execute_rebase_plan_result =
         execute_rebase_plan(effects, git_run_info, &repo, &rebase_plan, execute_options)?;
     match execute_rebase_plan_result {
-        ExecuteRebasePlanResult::Succeeded => {
+        ExecuteRebasePlanResult::Succeeded { rewritten_oids: _ } => {
             writeln!(effects.get_output_stream(), "Finished restacking commits.")?;
             Ok(0)
         }

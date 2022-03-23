@@ -273,6 +273,7 @@ pub fn check_out_updated_head(
 }
 
 /// Information about a merge conflict that occurred while moving commits.
+#[derive(Debug)]
 pub struct MergeConflictInfo {
     /// The OID of the commit that, when moved, caused a conflict.
     pub commit_oid: NonZeroOid,
@@ -444,14 +445,14 @@ mod in_memory {
                 }
 
                 RebaseCommand::Pick {
-                    commit_oid,
-                    message,
+                    original_commit_oid,
+                    commit_to_apply_oid,
                 } => {
                     let current_commit = repo
                         .find_commit_or_fail(current_oid)
                         .wrap_err("Finding current commit")?;
                     let commit_to_apply = repo
-                        .find_commit_or_fail(*commit_oid)
+                        .find_commit_or_fail(*commit_to_apply_oid)
                         .wrap_err("Finding commit to apply")?;
                     i += 1;
 
@@ -464,11 +465,11 @@ mod in_memory {
 
                     if commit_to_apply.get_parent_count() > 1 {
                         warn!(
-                            ?commit_oid,
+                            ?commit_to_apply_oid,
                             "BUG: Merge commit should have been detected during planning phase"
                         );
                         return Ok(RebaseInMemoryResult::CannotRebaseMergeCommit {
-                            commit_oid: *commit_oid,
+                            commit_oid: *commit_to_apply_oid,
                         });
                     };
 
@@ -486,22 +487,19 @@ mod in_memory {
                         Ok(rebased_commit) => rebased_commit,
                         Err(CherryPickFastError::MergeConflict { conflicting_paths }) => {
                             return Ok(RebaseInMemoryResult::MergeConflict(MergeConflictInfo {
-                                commit_oid: *commit_oid,
+                                commit_oid: *commit_to_apply_oid,
                                 conflicting_paths,
                             }))
                         }
                     };
 
-                    let possible_message = commit_to_apply.get_message_raw()?;
-                    let commit_message = match message {
-                        Some(message) => message.as_str(),
-                        None => possible_message.to_str().ok_or_else(|| {
-                            eyre::eyre!(
-                                "Could not decode commit message for commit: {:?}",
-                                commit_oid
-                            )
-                        })?,
-                    };
+                    let commit_message = commit_to_apply.get_message_raw()?;
+                    let commit_message = commit_message.to_str().ok_or_else(|| {
+                        eyre::eyre!(
+                            "Could not decode commit message for commit: {:?}",
+                            commit_to_apply_oid
+                        )
+                    })?;
 
                     progress
                         .notify_status(format!("Committing to repository: {}", commit_description));
@@ -532,8 +530,8 @@ mod in_memory {
                         )?,
                     )?;
                     if rebased_commit.is_empty() {
-                        rewritten_oids.push((*commit_oid, MaybeZeroOid::Zero));
-                        maybe_set_skipped_head_new_oid(*commit_oid, current_oid);
+                        rewritten_oids.push((*original_commit_oid, MaybeZeroOid::Zero));
+                        maybe_set_skipped_head_new_oid(*original_commit_oid, current_oid);
 
                         writeln!(
                             effects.get_output_stream(),
@@ -543,8 +541,10 @@ mod in_memory {
                             commit_description
                         )?;
                     } else {
-                        rewritten_oids
-                            .push((*commit_oid, MaybeZeroOid::NonZero(rebased_commit_oid)));
+                        rewritten_oids.push((
+                            *original_commit_oid,
+                            MaybeZeroOid::NonZero(rebased_commit_oid),
+                        ));
                         current_oid = rebased_commit_oid;
 
                         writeln!(
@@ -725,6 +725,7 @@ mod on_disk {
     use tracing::instrument;
 
     use crate::core::effects::{Effects, OperationType};
+    use crate::core::rewrite::plan::RebaseCommand;
     use crate::core::rewrite::plan::RebasePlan;
     use crate::core::rewrite::rewrite_hooks::save_original_head_info;
     use crate::git::{GitRunInfo, Repo};
@@ -838,6 +839,16 @@ mod on_disk {
                 )
             },
         )?;
+
+        if rebase_plan.commands.iter().any(|command| match command {
+            RebaseCommand::Pick {
+                original_commit_oid,
+                commit_to_apply_oid,
+            } => original_commit_oid != commit_to_apply_oid,
+            _ => false,
+        }) {
+            eyre::bail!("Not implemented: replacing commits in an on disk rebase");
+        }
 
         let todo_file_path = rebase_state_dir.join("git-rebase-todo");
         std::fs::write(
@@ -960,9 +971,14 @@ pub struct ExecuteRebasePlanOptions<'a> {
 
 /// The result of executing a rebase plan.
 #[must_use]
+#[derive(Debug)]
 pub enum ExecuteRebasePlanResult {
     /// The rebase operation succeeded.
-    Succeeded,
+    Succeeded {
+        /// Mapping from old OID to new/rewritten OID. Will always be empty for on disk rebases.
+        // TODO should this be an Option?
+        rewritten_oids: HashMap<NonZeroOid, MaybeZeroOid>,
+    },
 
     /// The rebase operation encounter a merge conflict, and it was not
     /// requested to try to resolve it.
@@ -1018,8 +1034,10 @@ pub fn execute_rebase_plan(
                     new_head_oid,
                     options,
                 )?;
+                let rewritten_oids: HashMap<NonZeroOid, MaybeZeroOid> =
+                    rewritten_oids.into_iter().collect();
                 writeln!(effects.get_output_stream(), "In-memory rebase succeeded.")?;
-                return Ok(ExecuteRebasePlanResult::Succeeded);
+                return Ok(ExecuteRebasePlanResult::Succeeded { rewritten_oids });
             }
 
             RebaseInMemoryResult::CannotRebaseMergeCommit { commit_oid } => {
@@ -1082,7 +1100,11 @@ pub fn execute_rebase_plan(
     if !force_in_memory {
         use on_disk::*;
         match rebase_on_disk(effects, git_run_info, repo, rebase_plan, options)? {
-            Ok(0) => return Ok(ExecuteRebasePlanResult::Succeeded),
+            Ok(0) => {
+                return Ok(ExecuteRebasePlanResult::Succeeded {
+                    rewritten_oids: Default::default(),
+                });
+            }
             Ok(exit_code) => return Ok(ExecuteRebasePlanResult::Failed { exit_code }),
             Err(Error::ChangedFilesInRepository) => {
                 write!(
