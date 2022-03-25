@@ -14,20 +14,29 @@ pub fn get_core_hooks_path(repo: &Repo) -> eyre::Result<PathBuf> {
 }
 
 /// Get the configured name of the main branch.
+///
+/// The following config values are resolved, in order. The first valid value is returned.
+/// - branchless.core.mainBranch
+/// - (deprecated) branchless.mainBranch
+/// - init.defaultBranch
+/// - finally, default to "master"
 #[instrument]
 pub fn get_main_branch_name(repo: &Repo) -> eyre::Result<String> {
     let config = repo.get_readonly_config()?;
-    let main_branch_name: Option<String> = config.get("branchless.core.mainBranch")?;
-    let main_branch_name = match main_branch_name {
-        Some(main_branch_name) => main_branch_name,
-        None => {
-            // Deprecated; use `branchless.core.mainBranch` instead.
-            config
-                .get("branchless.mainBranch")?
-                .unwrap_or_else(|| "master".to_string())
-        }
-    };
-    Ok(main_branch_name)
+
+    if let Some(branch_name) = config.get("branchless.core.mainBranch")? {
+        return Ok(branch_name);
+    }
+
+    if let Some(branch_name) = config.get("branchless.mainBranch")? {
+        return Ok(branch_name);
+    }
+
+    if let Some(branch_name) = get_default_branch_name(repo)? {
+        return Ok(branch_name);
+    }
+
+    Ok("master".to_string())
 }
 
 /// Get the default comment character.
