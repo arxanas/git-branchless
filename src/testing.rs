@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use crate::core::config::env_vars::{get_git_exec_path, get_path_to_git, TEST_GIT};
-use crate::git::{GitRunInfo, GitVersion, NonZeroOid, Repo};
+use crate::git::{GitVersion, NonZeroOid, Repo};
 use crate::util::get_sh;
 
 use eyre::Context;
@@ -81,14 +81,7 @@ pub struct GitRunOptions {
 
 impl Git {
     /// Constructor.
-    pub fn new(git_run_info: GitRunInfo, repo_path: PathBuf, git_exec_path: PathBuf) -> Self {
-        let GitRunInfo {
-            path_to_git,
-            // We pass the repo directory when calling `run`.
-            working_directory: _,
-            // We manually set the environment when calling `run`.
-            env: _,
-        } = git_run_info;
+    pub fn new(path_to_git: PathBuf, repo_path: PathBuf, git_exec_path: PathBuf) -> Self {
         Git {
             repo_path,
             path_to_git,
@@ -548,12 +541,7 @@ pub fn make_git() -> eyre::Result<GitWrapper> {
     let repo_dir = tempfile::tempdir()?;
     let path_to_git = get_path_to_git()?;
     let git_exec_path = get_git_exec_path()?;
-    let git_run_info = GitRunInfo {
-        path_to_git,
-        working_directory: repo_dir.path().to_path_buf(),
-        env: std::env::vars_os().collect(),
-    };
-    let git = Git::new(git_run_info, repo_dir.path().to_path_buf(), git_exec_path);
+    let git = Git::new(path_to_git, repo_dir.path().to_path_buf(), git_exec_path);
     Ok(GitWrapper { repo_dir, git })
 }
 
@@ -577,30 +565,15 @@ pub fn make_git_with_remote_repo() -> eyre::Result<GitWrapperWithRemoteRepo> {
     let path_to_git = get_path_to_git()?;
     let git_exec_path = get_git_exec_path()?;
     let temp_dir = tempfile::tempdir()?;
-    let git_run_info = GitRunInfo {
-        path_to_git,
-        working_directory: temp_dir.path().to_path_buf(),
-        env: Default::default(),
-    };
     let original_repo_path = temp_dir.path().join("original");
     std::fs::create_dir_all(&original_repo_path)?;
     let original_repo = Git::new(
-        GitRunInfo {
-            working_directory: original_repo_path.clone(),
-            ..git_run_info.clone()
-        },
+        path_to_git.clone(),
         original_repo_path,
         git_exec_path.clone(),
     );
     let cloned_repo_path = temp_dir.path().join("cloned");
-    let cloned_repo = Git::new(
-        GitRunInfo {
-            working_directory: cloned_repo_path.clone(),
-            ..git_run_info
-        },
-        cloned_repo_path,
-        git_exec_path,
-    );
+    let cloned_repo = Git::new(path_to_git, cloned_repo_path, git_exec_path);
 
     Ok(GitWrapperWithRemoteRepo {
         temp_dir,
