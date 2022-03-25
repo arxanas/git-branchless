@@ -500,7 +500,7 @@ mod tests {
         let git_run_info = GitRunInfo {
             path_to_git: git.path_to_git.clone(),
             working_directory: git.repo_path.clone(),
-            env: std::env::vars_os().collect(),
+            env: Default::default(),
         };
 
         let result = git_run_info.run_silent(
