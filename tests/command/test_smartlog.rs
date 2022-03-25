@@ -10,7 +10,7 @@ fn test_init_smartlog() -> eyre::Result<()> {
 
     {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
-        insta::assert_snapshot!(stdout, @"@ f777ecc9 (> master) create initial.txt
+        insta::assert_snapshot!(stdout, @"@ f777ecc (> master) create initial.txt
 ");
     }
 
@@ -28,9 +28,9 @@ fn test_show_reachable_commit() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
-        O f777ecc9 (master) create initial.txt
+        O f777ecc (master) create initial.txt
         |
-        @ 3df4b935 (> initial-branch) create test.txt
+        @ 3df4b93 (> initial-branch) create test.txt
         "###);
     }
 
@@ -51,11 +51,11 @@ fn test_tree() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
-        O f777ecc9 (master) create initial.txt
+        O f777ecc (master) create initial.txt
         |\
-        | o 62fc20d2 create test1.txt
+        | o 62fc20d create test1.txt
         |
-        @ fe65c1fe (> initial) create test2.txt
+        @ fe65c1f (> initial) create test2.txt
         "###);
     }
 
@@ -77,12 +77,12 @@ fn test_rebase() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
-            O f777ecc9 (master) create initial.txt
-            |
-            o 62fc20d2 (test1) create test1.txt
-            |
-            @ f8d9985b create test2.txt
-            "###);
+        O f777ecc (master) create initial.txt
+        |
+        o 62fc20d (test1) create test1.txt
+        |
+        @ f8d9985 create test2.txt
+        "###);
     }
 
     Ok(())
@@ -101,7 +101,7 @@ fn test_sequential_master_commits() -> eyre::Result<()> {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
         :
-        @ 70deb1e2 (> master) create test3.txt
+        @ 70deb1e (> master) create test3.txt
         "###);
     }
 
@@ -130,17 +130,17 @@ fn test_merge_commit() -> eyre::Result<()> {
         // Rendering here is arbitrary and open to change.
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
-        O f777ecc9 (master) create initial.txt
+        O f777ecc (master) create initial.txt
         |\
-        | o 62fc20d2 (test1) create test1.txt
+        | o 62fc20d (test1) create test1.txt
         | |
-        | @ fa4e4e1a (> test2and3) Merge branch 'test1' into test2and3
+        | @ fa4e4e1 (> test2and3) Merge branch 'test1' into test2and3
         |
-        o fe65c1fe create test2.txt
+        o fe65c1f create test2.txt
         |
-        o 02067177 create test3.txt
+        o 0206717 create test3.txt
         |
-        @ fa4e4e1a (> test2and3) Merge branch 'test1' into test2and3
+        @ fa4e4e1 (> test2and3) Merge branch 'test1' into test2and3
         "###);
     }
 
@@ -171,11 +171,11 @@ fn test_rebase_conflict() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
-        O f777ecc9 (master) create initial.txt
+        O f777ecc (master) create initial.txt
         |
-        o 88646b56 (branch1) create test.txt
+        o 88646b5 (branch1) create test.txt
         |
-        @ 4549af33 (> branch2) create test.txt
+        @ 4549af3 (> branch2) create test.txt
         "###);
     }
 
@@ -198,14 +198,14 @@ fn test_non_adjacent_commits() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
-            O f777ecc9 create initial.txt
-            |\
-            : o 62fc20d2 create test1.txt
-            :
-            O 02067177 (master) create test3.txt
-            |
-            @ 8e62740b create test4.txt
-            "###);
+        O f777ecc create initial.txt
+        |\
+        : o 62fc20d create test1.txt
+        :
+        O 0206717 (master) create test3.txt
+        |
+        @ 8e62740 create test4.txt
+        "###);
     }
 
     Ok(())
@@ -228,16 +228,16 @@ fn test_non_adjacent_commits2() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
-            O f777ecc9 create initial.txt
-            |\
-            : o 62fc20d2 create test1.txt
-            : |
-            : o 96d1c37a create test2.txt
-            :
-            O 2b633ed7 (master) create test4.txt
-            |
-            @ 13932989 create test5.txt
-            "###);
+        O f777ecc create initial.txt
+        |\
+        : o 62fc20d create test1.txt
+        : |
+        : o 96d1c37 create test2.txt
+        :
+        O 2b633ed (master) create test4.txt
+        |
+        @ 1393298 create test5.txt
+        "###);
     }
 
     Ok(())
@@ -263,15 +263,15 @@ fn test_non_adjacent_commits3() -> eyre::Result<()> {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
         :
-        O 62fc20d2 create test1.txt
+        O 62fc20d create test1.txt
         |\
-        | o 96d1c37a create test2.txt
+        | o 96d1c37 create test2.txt
         |
-        O 4838e49b create test3.txt
+        O 4838e49 create test3.txt
         |\
-        : o a2482074 create test4.txt
+        : o a248207 create test4.txt
         :
-        @ 500c9b3e (> master) create test6.txt
+        @ 500c9b3 (> master) create test6.txt
         "###);
     }
 
@@ -292,11 +292,11 @@ fn test_custom_main_branch() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
-            :
-            O 62fc20d2 (main) create test1.txt
-            |
-            @ 96d1c37a create test2.txt
-            "###);
+        :
+        O 62fc20d (main) create test1.txt
+        |
+        @ 96d1c37 create test2.txt
+        "###);
     }
 
     Ok(())
@@ -331,7 +331,7 @@ fn test_main_remote_branch() -> eyre::Result<()> {
         let (stdout, _stderr) = cloned_repo.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
         :
-        @ 62fc20d2 (remote origin/master) create test1.txt
+        @ 62fc20d (remote origin/master) create test1.txt
         "###);
     }
 
@@ -344,9 +344,9 @@ fn test_main_remote_branch() -> eyre::Result<()> {
         let (stdout, _stderr) = cloned_repo.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
         :
-        @ 62fc20d2 create test1.txt
+        @ 62fc20d create test1.txt
         |
-        O 96d1c37a (remote origin/master) create test2.txt
+        O 96d1c37 (remote origin/master) create test2.txt
         "###);
     }
 
@@ -367,14 +367,14 @@ fn test_show_rewritten_commit_hash() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
-            O f777ecc9 create initial.txt
-            |\
-            | @ 2ebe0950 test1 version 2
-            |
-            X 62fc20d2 (rewritten as 2ebe0950) create test1.txt
-            |
-            O 96d1c37a (master) create test2.txt
-            "###);
+        O f777ecc create initial.txt
+        |\
+        | @ 2ebe095 test1 version 2
+        |
+        X 62fc20d (rewritten as 2ebe0950) create test1.txt
+        |
+        O 96d1c37 (master) create test2.txt
+        "###);
     }
 
     Ok(())
@@ -394,7 +394,7 @@ fn test_smartlog_orphaned_root() -> eyre::Result<()> {
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
         :
-        O 62fc20d2 (master) create test1.txt
+        O 62fc20d (master) create test1.txt
         "###);
     }
 
@@ -418,11 +418,11 @@ fn test_show_hidden_commits() -> eyre::Result<()> {
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
         :
-        @ 62fc20d2 (master) create test1.txt
+        @ 62fc20d (master) create test1.txt
         |\
-        | x cb8137ad (manually hidden) amended test2
+        | x cb8137a (manually hidden) amended test2
         |
-        x 96d1c37a (rewritten as cb8137ad) create test2.txt
+        x 96d1c37 (rewritten as cb8137ad) create test2.txt
         "###);
     }
 
@@ -463,19 +463,19 @@ fn test_show_only_branches() -> eyre::Result<()> {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
         :
-        O 62fc20d2 create test1.txt
+        O 62fc20d create test1.txt
         |\
-        | o 96d1c37a (branch-2) create test2.txt
+        | o 96d1c37 (branch-2) create test2.txt
         |
-        O 4838e49b create test3.txt
+        O 4838e49 create test3.txt
         |\
-        : x a2482074 (manually hidden) (branch-4) create test4.txt
+        : x a248207 (manually hidden) (branch-4) create test4.txt
         :
-        O 8577a964 create test7.txt
+        O 8577a96 create test7.txt
         |\
-        | o e8b6a382 create test8.txt
+        | o e8b6a38 create test8.txt
         |
-        @ 1b854edc (> master) create test9.txt
+        @ 1b854ed (> master) create test9.txt
         "###);
     }
 
@@ -484,15 +484,15 @@ fn test_show_only_branches() -> eyre::Result<()> {
         let (stdout, _stderr) = git.run(&["smartlog", "--only-branches"])?;
         insta::assert_snapshot!(stdout, @r###"
         :
-        O 62fc20d2 create test1.txt
+        O 62fc20d create test1.txt
         |\
-        | o 96d1c37a (branch-2) create test2.txt
+        | o 96d1c37 (branch-2) create test2.txt
         |
-        O 4838e49b create test3.txt
+        O 4838e49 create test3.txt
         |\
-        : x a2482074 (manually hidden) (branch-4) create test4.txt
+        : x a248207 (manually hidden) (branch-4) create test4.txt
         :
-        @ 1b854edc (> master) create test9.txt
+        @ 1b854ed (> master) create test9.txt
         "###);
     }
 
@@ -530,7 +530,7 @@ fn test_active_non_head_main_branch_commit() -> eyre::Result<()> {
         let (stdout, _stderr) = cloned_repo.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
         :
-        @ 70deb1e2 (> master, remote origin/master) create test3.txt
+        @ 70deb1e (> master, remote origin/master) create test3.txt
         "###);
     }
 
@@ -540,9 +540,9 @@ fn test_active_non_head_main_branch_commit() -> eyre::Result<()> {
         let (stdout, _stderr) = cloned_repo.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
         :
-        O 70deb1e2 (remote origin/master) create test3.txt
+        O 70deb1e (remote origin/master) create test3.txt
         |
-        @ 355e173b (> master) create test4.txt
+        @ 355e173 (> master) create test4.txt
         "###);
     }
 

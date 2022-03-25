@@ -14,18 +14,18 @@ fn test_hide_commit() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
-            O f777ecc9 (master) create initial.txt
-            |\
-            | o 62fc20d2 create test1.txt
-            |
-            @ fe65c1fe create test2.txt
-            "###);
+        O f777ecc (master) create initial.txt
+        |\
+        | o 62fc20d create test1.txt
+        |
+        @ fe65c1f create test2.txt
+        "###);
     }
 
     {
         let (stdout, _stderr) = git.run(&["hide", &test1_oid.to_string()])?;
         insta::assert_snapshot!(stdout, @r###"
-        Hid commit: 62fc20d2 create test1.txt
+        Hid commit: 62fc20d create test1.txt
         To unhide this 1 commit, run: git undo
         "###);
     }
@@ -33,10 +33,10 @@ fn test_hide_commit() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
-            O f777ecc9 (master) create initial.txt
-            |
-            @ fe65c1fe create test2.txt
-            "###);
+        O f777ecc (master) create initial.txt
+        |
+        @ fe65c1f create test2.txt
+        "###);
     }
 
     Ok(())
@@ -74,7 +74,7 @@ fn test_hide_already_hidden_commit() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["hide", &test1_oid.to_string()])?;
         insta::assert_snapshot!(stdout, @r###"
-        Hid commit: 62fc20d2 create test1.txt
+        Hid commit: 62fc20d create test1.txt
         (It was already hidden, so this operation had no effect.)
         To unhide this 1 commit, run: git undo
         "###);
@@ -95,10 +95,10 @@ fn test_hide_current_commit() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
-            O f777ecc9 (master) create initial.txt
-            |
-            % 3df4b935 (manually hidden) create test.txt
-            "###);
+        O f777ecc (master) create initial.txt
+        |
+        % 3df4b93 (manually hidden) create test.txt
+        "###);
     }
 
     Ok(())
@@ -121,12 +121,12 @@ fn test_hidden_commit_with_head_as_child() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
-            O f777ecc9 (master) create initial.txt
-            |
-            x 62fc20d2 (manually hidden) create test1.txt
-            |
-            @ 96d1c37a create test2.txt
-            "###);
+        O f777ecc (master) create initial.txt
+        |
+        x 62fc20d (manually hidden) create test1.txt
+        |
+        @ 96d1c37 create test2.txt
+        "###);
     }
 
     Ok(())
@@ -150,7 +150,7 @@ fn test_hide_master_commit_with_hidden_children() -> eyre::Result<()> {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
         :
-        @ 20230db7 (> master) create test5.txt
+        @ 20230db (> master) create test5.txt
         "###);
     }
 
@@ -172,18 +172,18 @@ fn test_branches_always_visible() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
-        @ f777ecc9 (> master) create initial.txt
+        @ f777ecc (> master) create initial.txt
         |
-        x 62fc20d2 (manually hidden) create test1.txt
+        x 62fc20d (manually hidden) create test1.txt
         |
-        x 96d1c37a (manually hidden) (test) create test2.txt
+        x 96d1c37 (manually hidden) (test) create test2.txt
         "###);
     }
 
     git.run(&["branch", "-D", "test"])?;
     {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
-        insta::assert_snapshot!(stdout, @"@ f777ecc9 (> master) create initial.txt
+        insta::assert_snapshot!(stdout, @"@ f777ecc (> master) create initial.txt
 ");
     }
 
@@ -203,7 +203,7 @@ fn test_unhide() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["unhide", &test2_oid.to_string()])?;
         insta::assert_snapshot!(stdout, @r###"
-        Unhid commit: 96d1c37a create test2.txt
+        Unhid commit: 96d1c37 create test2.txt
         (It was not hidden, so this operation had no effect.)
         To hide this 1 commit, run: git undo
         "###);
@@ -213,16 +213,16 @@ fn test_unhide() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
-        @ f777ecc9 (> master) create initial.txt
+        @ f777ecc (> master) create initial.txt
         |
-        o 62fc20d2 create test1.txt
+        o 62fc20d create test1.txt
         "###);
     }
 
     {
         let (stdout, _stderr) = git.run(&["unhide", &test2_oid.to_string()])?;
         insta::assert_snapshot!(stdout, @r###"
-        Unhid commit: 96d1c37a create test2.txt
+        Unhid commit: 96d1c37 create test2.txt
         To hide this 1 commit, run: git undo
         "###);
     }
@@ -230,11 +230,11 @@ fn test_unhide() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
-        @ f777ecc9 (> master) create initial.txt
+        @ f777ecc (> master) create initial.txt
         |
-        o 62fc20d2 create test1.txt
+        o 62fc20d create test1.txt
         |
-        o 96d1c37a create test2.txt
+        o 96d1c37 create test2.txt
         "###);
     }
 
@@ -255,21 +255,21 @@ fn test_hide_recursive() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
-        @ f777ecc9 (> master) create initial.txt
+        @ f777ecc (> master) create initial.txt
         |
-        o 62fc20d2 create test1.txt
+        o 62fc20d create test1.txt
         |
-        o 96d1c37a create test2.txt
+        o 96d1c37 create test2.txt
         |
-        o 70deb1e2 create test3.txt
+        o 70deb1e create test3.txt
         "###);
     }
 
     {
         let (stdout, _stderr) = git.run(&["hide", "-r", &test2_oid.to_string()])?;
         insta::assert_snapshot!(stdout, @r###"
-        Hid commit: 96d1c37a create test2.txt
-        Hid commit: 70deb1e2 create test3.txt
+        Hid commit: 96d1c37 create test2.txt
+        Hid commit: 70deb1e create test3.txt
         To unhide these 2 commits, run: git undo
         "###);
     }
@@ -277,17 +277,17 @@ fn test_hide_recursive() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
-        @ f777ecc9 (> master) create initial.txt
+        @ f777ecc (> master) create initial.txt
         |
-        o 62fc20d2 create test1.txt
+        o 62fc20d create test1.txt
         "###);
     }
 
     {
         let (stdout, _stderr) = git.run(&["unhide", "-r", &test2_oid.to_string()])?;
         insta::assert_snapshot!(stdout, @r###"
-        Unhid commit: 96d1c37a create test2.txt
-        Unhid commit: 70deb1e2 create test3.txt
+        Unhid commit: 96d1c37 create test2.txt
+        Unhid commit: 70deb1e create test3.txt
         To hide these 2 commits, run: git undo
         "###);
     }
@@ -295,13 +295,13 @@ fn test_hide_recursive() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
-        @ f777ecc9 (> master) create initial.txt
+        @ f777ecc (> master) create initial.txt
         |
-        o 62fc20d2 create test1.txt
+        o 62fc20d create test1.txt
         |
-        o 96d1c37a create test2.txt
+        o 96d1c37 create test2.txt
         |
-        o 70deb1e2 create test3.txt
+        o 70deb1e create test3.txt
         "###);
     }
 

@@ -41,16 +41,16 @@ fn test_restack_amended_commit() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
-            O f777ecc9 (master) create initial.txt
-            |\
-            | @ 024c35ce amend test1.txt
-            |
-            x 62fc20d2 (rewritten as 024c35ce) create test1.txt
-            |
-            o 96d1c37a create test2.txt
-            |
-            o 70deb1e2 create test3.txt
-            "###);
+        O f777ecc (master) create initial.txt
+        |\
+        | @ 024c35c amend test1.txt
+        |
+        x 62fc20d (rewritten as 024c35ce) create test1.txt
+        |
+        o 96d1c37 create test2.txt
+        |
+        o 70deb1e create test3.txt
+        "###);
     }
 
     {
@@ -62,13 +62,13 @@ fn test_restack_amended_commit() -> eyre::Result<()> {
         branchless: running command: <git-executable> rebase --continue
         Finished restacking commits.
         No abandoned branches to restack.
-        O f777ecc9 (master) create initial.txt
+        O f777ecc (master) create initial.txt
         |
-        @ 024c35ce amend test1.txt
+        @ 024c35c amend test1.txt
         |
-        o 8cd7de68 create test2.txt
+        o 8cd7de6 create test2.txt
         |
-        o b9a0491a create test3.txt
+        o b9a0491 create test3.txt
         "###);
     }
 
@@ -103,13 +103,13 @@ fn test_restack_consecutive_rewrites() -> eyre::Result<()> {
         branchless: running command: <git-executable> rebase --continue
         Finished restacking commits.
         No abandoned branches to restack.
-        O f777ecc9 (master) create initial.txt
+        O f777ecc (master) create initial.txt
         |
-        @ 662b451f amend test1.txt v2
+        @ 662b451 amend test1.txt v2
         |
-        o 8e9bbde3 create test2.txt
+        o 8e9bbde create test2.txt
         |
-        o 9dc6dd07 create test3.txt
+        o 9dc6dd0 create test3.txt
         "###)
     }
 
@@ -135,7 +135,7 @@ fn test_move_abandoned_branch() -> eyre::Result<()> {
         branchless: processing 1 update: branch master
         Finished restacking branches.
         :
-        @ 662b451f (master) amend test1.txt v2
+        @ 662b451 (master) amend test1.txt v2
         "###);
     }
 
@@ -160,12 +160,12 @@ fn test_amended_initial_commit() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
-            @ 9a9f929a new initial commit
+        @ 9a9f929 new initial commit
 
-            X f777ecc9 (rewritten as 9a9f929a) create initial.txt
-            |
-            O 62fc20d2 (master) create test1.txt
-            "###);
+        X f777ecc (rewritten as 9a9f929a) create initial.txt
+        |
+        O 62fc20d (master) create test1.txt
+        "###);
     }
 
     {
@@ -177,9 +177,9 @@ fn test_amended_initial_commit() -> eyre::Result<()> {
         branchless: running command: <git-executable> rebase --continue
         Finished restacking commits.
         No abandoned branches to restack.
-        @ 9a9f929a new initial commit
+        @ 9a9f929 new initial commit
         |
-        O 6d85943b (master) create test1.txt
+        O 6d85943 (master) create test1.txt
         "###);
     }
 
@@ -212,9 +212,9 @@ fn test_restack_amended_master() -> eyre::Result<()> {
         Finished restacking commits.
         No abandoned branches to restack.
         :
-        @ ae94dc2a amended test1
+        @ ae94dc2 amended test1
         |
-        O 51452b55 (master) create test2.txt
+        O 51452b5 (master) create test2.txt
         "###);
     }
 
@@ -246,7 +246,7 @@ fn test_restack_aborts_during_rebase_conflict() -> eyre::Result<()> {
         insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
         This operation would cause a merge conflict:
-        - (1 conflicting file) 96d1c37a create test2.txt
+        - (1 conflicting file) 96d1c37 create test2.txt
         To resolve merge conflicts, retry this operation with the --merge option.
         "###);
     }
@@ -264,7 +264,7 @@ fn test_restack_aborts_during_rebase_conflict() -> eyre::Result<()> {
         insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
         There was a merge conflict, which currently can't be resolved when rebasing in-memory.
-        The conflicting commit was: 96d1c37a create test2.txt
+        The conflicting commit was: 96d1c37 create test2.txt
         Trying again on-disk...
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
@@ -307,15 +307,15 @@ fn test_restack_multiple_amended() -> eyre::Result<()> {
         branchless: running command: <git-executable> rebase --continue
         Finished restacking commits.
         No abandoned branches to restack.
-        O f777ecc9 (master) create initial.txt
+        O f777ecc (master) create initial.txt
         |
-        @ 62fc20d2 create test1.txt
+        @ 62fc20d create test1.txt
         |
-        o 22f39285 test2 amended
+        o 22f3928 test2 amended
         |
-        o 8e06b96d test3 amended
+        o 8e06b96 test3 amended
         |
-        o f5644e32 create test4.txt
+        o f5644e3 create test4.txt
         "###);
     }
 
@@ -349,19 +349,19 @@ fn test_restack_single_of_many_commits() -> eyre::Result<()> {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
         :
-        O 62fc20d2 (master) create test1.txt
+        O 62fc20d (master) create test1.txt
         |\
-        | @ 3bd716d5 updated test4
+        | @ 3bd716d updated test4
         |\
-        | o 7357d2b7 updated test2
+        | o 7357d2b updated test2
         |\
-        | x 96d1c37a (rewritten as 7357d2b7) create test2.txt
+        | x 96d1c37 (rewritten as 7357d2b7) create test2.txt
         | |
-        | o 70deb1e2 create test3.txt
+        | o 70deb1e create test3.txt
         |
-        x bf0d52a6 (rewritten as 3bd716d5) create test4.txt
+        x bf0d52a (rewritten as 3bd716d5) create test4.txt
         |
-        o 848121cb create test5.txt
+        o 848121c create test5.txt
         "###);
     }
 
@@ -370,7 +370,7 @@ fn test_restack_single_of_many_commits() -> eyre::Result<()> {
         insta::assert_snapshot!(stderr, @r###"
         branchless: processing 1 update: ref HEAD
         branchless: processing 1 update: ref HEAD
-        branchless: processed commit: 944f78da create test3.txt
+        branchless: processed commit: 944f78d create test3.txt
         Executing: git branchless hook-detect-empty-commit 70deb1e28791d8e7dd5a1f0c871a51b91282562f
         Executing: git branchless hook-register-extra-post-rewrite-hook
         branchless: processing 1 rewritten commit
@@ -380,17 +380,17 @@ fn test_restack_single_of_many_commits() -> eyre::Result<()> {
         HEAD is now at 3bd716d updated test4
         branchless: processing checkout
         :
-        O 62fc20d2 (master) create test1.txt
+        O 62fc20d (master) create test1.txt
         |\
-        | @ 3bd716d5 updated test4
+        | @ 3bd716d updated test4
         |\
-        | o 7357d2b7 updated test2
+        | o 7357d2b updated test2
         | |
-        | o 944f78da create test3.txt
+        | o 944f78d create test3.txt
         |
-        x bf0d52a6 (rewritten as 3bd716d5) create test4.txt
+        x bf0d52a (rewritten as 3bd716d5) create test4.txt
         |
-        o 848121cb create test5.txt
+        o 848121c create test5.txt
         Successfully rebased and updated detached HEAD.
         "###);
         insta::assert_snapshot!(stdout, @r###"
@@ -400,17 +400,17 @@ fn test_restack_single_of_many_commits() -> eyre::Result<()> {
         Finished restacking commits.
         No abandoned branches to restack.
         :
-        O 62fc20d2 (master) create test1.txt
+        O 62fc20d (master) create test1.txt
         |\
-        | @ 3bd716d5 updated test4
+        | @ 3bd716d updated test4
         |\
-        | o 7357d2b7 updated test2
+        | o 7357d2b updated test2
         | |
-        | o 944f78da create test3.txt
+        | o 944f78d create test3.txt
         |
-        x bf0d52a6 (rewritten as 3bd716d5) create test4.txt
+        x bf0d52a (rewritten as 3bd716d5) create test4.txt
         |
-        o 848121cb create test5.txt
+        o 848121c create test5.txt
         "###);
     }
 
@@ -438,11 +438,11 @@ fn test_restack_unobserved_commit() -> eyre::Result<()> {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
         :
-        O 62fc20d2 (master) create test1.txt
+        O 62fc20d (master) create test1.txt
         |
-        o 96d1c37a (foo) create test2.txt
+        o 96d1c37 (foo) create test2.txt
         |
-        @ 70deb1e2 create test3.txt
+        @ 70deb1e create test3.txt
         "###);
     }
 
@@ -454,9 +454,9 @@ fn test_restack_unobserved_commit() -> eyre::Result<()> {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
         :
-        O 62fc20d2 (master) create test1.txt
+        O 62fc20d (master) create test1.txt
         |
-        @ f4229de3 (> foo) Updated test2
+        @ f4229de (> foo) Updated test2
         "###);
     }
 
@@ -466,9 +466,9 @@ fn test_restack_unobserved_commit() -> eyre::Result<()> {
         No abandoned commits to restack.
         No abandoned branches to restack.
         :
-        O 62fc20d2 (master) create test1.txt
+        O 62fc20d (master) create test1.txt
         |
-        @ f4229de3 (> foo) Updated test2
+        @ f4229de (> foo) Updated test2
         "###);
     }
 
@@ -492,7 +492,7 @@ fn test_restack_checked_out_branch() -> eyre::Result<()> {
         let (stdout, _stderr) = git.run(&["restack"])?;
         insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
-        [1/1] Committed as: 59e75818 create test2.txt
+        [1/1] Committed as: 59e7581 create test2.txt
         branchless: processing 2 updates: branch foo, branch master
         branchless: processing 1 rewritten commit
         branchless: running command: <git-executable> checkout foo
@@ -500,7 +500,7 @@ fn test_restack_checked_out_branch() -> eyre::Result<()> {
         Finished restacking commits.
         No abandoned branches to restack.
         :
-        @ 59e75818 (> foo, master) create test2.txt
+        @ 59e7581 (> foo, master) create test2.txt
         "###);
     }
 

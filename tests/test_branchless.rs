@@ -14,14 +14,14 @@ fn test_commands() -> eyre::Result<()> {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
         :
-        @ 3df4b935 (> master) create test.txt
+        @ 3df4b93 (> master) create test.txt
         "###);
     }
 
     {
         let (stdout, _stderr) = git.run(&["hide", "3df4b935"])?;
         insta::assert_snapshot!(stdout, @r###"
-        Hid commit: 3df4b935 create test.txt
+        Hid commit: 3df4b93 create test.txt
         To unhide this 1 commit, run: git undo
         "###);
     }
@@ -29,7 +29,7 @@ fn test_commands() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["unhide", "3df4b935"])?;
         insta::assert_snapshot!(stdout, @r###"
-        Unhid commit: 3df4b935 create test.txt
+        Unhid commit: 3df4b93 create test.txt
         To hide this 1 commit, run: git undo
         "###);
     }
@@ -38,9 +38,9 @@ fn test_commands() -> eyre::Result<()> {
         let (stdout, _stderr) = git.run(&["prev"])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> checkout f777ecc9b0db5ed372b2615695191a8a17f79f24
-        @ f777ecc9 create initial.txt
+        @ f777ecc create initial.txt
         |
-        O 3df4b935 (master) create test.txt
+        O 3df4b93 (master) create test.txt
         "###);
     }
 
@@ -49,7 +49,7 @@ fn test_commands() -> eyre::Result<()> {
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> checkout 3df4b9355b3b072aa6c50c6249bf32e289b3a661
         :
-        @ 3df4b935 (master) create test.txt
+        @ 3df4b93 (master) create test.txt
         "###);
     }
 

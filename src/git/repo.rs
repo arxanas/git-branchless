@@ -1354,6 +1354,11 @@ impl<'repo> Commit<'repo> {
         }
     }
 
+    /// Get the short object ID of the commit.
+    pub fn get_short_oid(&self) -> eyre::Result<String> {
+        Ok(String::from_utf8_lossy(&self.inner.clone().into_object().short_id()?).to_string())
+    }
+
     /// Get the object IDs of the parents of this commit.
     pub fn get_parent_oids(&self) -> Vec<NonZeroOid> {
         self.inner.parent_ids().map(make_non_zero_oid).collect()
