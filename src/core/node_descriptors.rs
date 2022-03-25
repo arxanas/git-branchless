@@ -55,6 +55,16 @@ impl<'repo> NodeObject<'repo> {
             NodeObject::GarbageCollected { oid } => *oid,
         }
     }
+
+    fn get_short_oid(&self) -> eyre::Result<String> {
+        match self {
+            NodeObject::Commit { commit } => Ok(commit.get_short_oid()?),
+            NodeObject::GarbageCollected { oid } => {
+                // `7` is the default value for config setting `core.abbrev`.
+                Ok(oid.to_string()[..7].to_string())
+            }
+        }
+    }
 }
 
 /// Object responsible for redacting sensitive information, so that it can be
@@ -187,8 +197,7 @@ impl NodeDescriptor for CommitOidDescriptor {
         _glyphs: &Glyphs,
         object: &NodeObject,
     ) -> eyre::Result<Option<StyledString>> {
-        let oid = object.get_oid();
-        let oid = &oid.to_string()[..8];
+        let oid = object.get_short_oid()?;
         let oid = if self.use_color {
             StyledString::styled(oid, BaseColor::Yellow.dark())
         } else {

@@ -22,10 +22,10 @@ fn test_gc() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
-@ f777ecc9 (master) create initial.txt
-|
-o 62fc20d2 create test1.txt
-"###);
+        @ f777ecc (master) create initial.txt
+        |
+        o 62fc20d create test1.txt
+        "###);
     }
 
     git.run(&["hide", "62fc20d2"])?;
@@ -40,9 +40,8 @@ o 62fc20d2 create test1.txt
     git.run(&["gc", "--prune=now"])?;
     {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
-        insta::assert_snapshot!(stdout, @r###"
-@ f777ecc9 (master) create initial.txt
-"###);
+        insta::assert_snapshot!(stdout, @"@ f777ecc (master) create initial.txt
+");
     }
 
     {

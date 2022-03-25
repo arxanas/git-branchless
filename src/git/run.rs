@@ -477,7 +477,7 @@ mod tests {
             let (stdout, stderr) = git.run(&["commit", "--amend", "-m", "foo"])?;
             insta::assert_snapshot!(stderr, @r###"
             branchless: processing 2 updates: branch master, ref HEAD
-            branchless: processed commit: f23bf8f7 foo
+            branchless: processed commit: f23bf8f foo
             Check if test1.txt exists
             test1.txt exists
             "###);

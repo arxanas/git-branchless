@@ -99,7 +99,7 @@ fn test_undo_help() -> eyre::Result<()> {
         )?;
         insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
         ┌───────────────────────────────────────────────────┤ Commit graph ├───────────────────────────────────────────────────┐
-        │O f777ecc9 (master) create initial.txt                                                                                │
+        │O f777ecc (master) create initial.txt                                                                                 │
         │                                                                                                                      │
         │                                                                                                                      │
         │                                                                                                                      │
@@ -163,7 +163,7 @@ fn test_undo_navigate() -> eyre::Result<()> {
         insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
         ┌───────────────────────────────────────────────────┤ Commit graph ├───────────────────────────────────────────────────┐
         │:                                                                                                                     │
-        │@ 96d1c37a (master) create test2.txt                                                                                  │
+        │@ 96d1c37 (master) create test2.txt                                                                                   │
         │                                                                                                                      │
         │                                                                                                                      │
         │                                                                                                                      │
@@ -180,16 +180,16 @@ fn test_undo_navigate() -> eyre::Result<()> {
         └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
         ┌──────────────────────────────────────────────────────┤ Events ├──────────────────────────────────────────────────────┐
         │Repo after transaction 3 (event 4). Press 'h' for help, 'q' to quit.                                                  │
-        │1. Check out from 62fc20d2 create test1.txt                                                                           │
-        │               to 96d1c37a create test2.txt                                                                           │
-        │2. Move branch master from 62fc20d2 create test1.txt                                                                  │
-        │                        to 96d1c37a create test2.txt                                                                  │
+        │1. Check out from 62fc20d create test1.txt                                                                            │
+        │               to 96d1c37 create test2.txt                                                                            │
+        │2. Move branch master from 62fc20d create test1.txt                                                                   │
+        │                        to 96d1c37 create test2.txt                                                                   │
         └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
         "###);
         insta::assert_snapshot!(screen_to_string(&screenshot2), @r###"
         ┌───────────────────────────────────────────────────┤ Commit graph ├───────────────────────────────────────────────────┐
         │:                                                                                                                     │
-        │@ 96d1c37a (master) create test2.txt                                                                                  │
+        │@ 96d1c37 (master) create test2.txt                                                                                   │
         │                                                                                                                      │
         │                                                                                                                      │
         │                                                                                                                      │
@@ -208,7 +208,7 @@ fn test_undo_navigate() -> eyre::Result<()> {
         └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
         ┌──────────────────────────────────────────────────────┤ Events ├──────────────────────────────────────────────────────┐
         │Repo after transaction 4 (event 6). Press 'h' for help, 'q' to quit.                                                  │
-        │1. Commit 96d1c37a create test2.txt                                                                                   │
+        │1. Commit 96d1c37 create test2.txt                                                                                    │
         │                                                                                                                      │
         └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
         "###);
@@ -246,7 +246,7 @@ fn test_go_to_event() -> eyre::Result<()> {
     insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
     ┌───────────────────────────────────────────────────┤ Commit graph ├───────────────────────────────────────────────────┐
     │:                                                                                                                     │
-    │@ 96d1c37a (master) create test2.txt                                                                                  │
+    │@ 96d1c37 (master) create test2.txt                                                                                   │
     │                                                                                                                      │
     │                                                                                                                      │
     │                                                                                                                      │
@@ -265,16 +265,16 @@ fn test_go_to_event() -> eyre::Result<()> {
     └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
     ┌──────────────────────────────────────────────────────┤ Events ├──────────────────────────────────────────────────────┐
     │Repo after transaction 4 (event 6). Press 'h' for help, 'q' to quit.                                                  │
-    │1. Commit 96d1c37a create test2.txt                                                                                   │
+    │1. Commit 96d1c37 create test2.txt                                                                                    │
     │                                                                                                                      │
     └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
     "###);
     insta::assert_snapshot!(screen_to_string(&screenshot2), @r###"
     ┌───────────────────────────────────────────────────┤ Commit graph ├───────────────────────────────────────────────────┐
     │:                                                                                                                     │
-    │@ 62fc20d2 create test1.txt                                                                                           │
+    │@ 62fc20d create test1.txt                                                                                            │
     │|                                                                                                                     │
-    │O 96d1c37a (master) create test2.txt                                                                                  │
+    │O 96d1c37 (master) create test2.txt                                                                                   │
     │                                                                                                                      │
     │                                                                                                                      │
     │                                                                                                                      │
@@ -291,8 +291,8 @@ fn test_go_to_event() -> eyre::Result<()> {
     └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
     ┌──────────────────────────────────────────────────────┤ Events ├──────────────────────────────────────────────────────┐
     │Repo after transaction 1 (event 1). Press 'h' for help, 'q' to quit.                                                  │
-    │1. Check out from f777ecc9 create initial.txt                                                                         │
-    │               to 62fc20d2 create test1.txt                                                                           │
+    │1. Check out from f777ecc create initial.txt                                                                          │
+    │               to 62fc20d create test1.txt                                                                            │
     └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
     "###);
 
@@ -319,10 +319,10 @@ fn test_undo_hide() -> eyre::Result<()> {
         let (stdout, stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
-            O f777ecc9 (master) create initial.txt
-            |
-            @ fe65c1fe create test2.txt
-            "###);
+        O f777ecc (master) create initial.txt
+        |
+        @ fe65c1f create test2.txt
+        "###);
     }
 
     let event_cursor = run_select_past_event(
@@ -346,25 +346,25 @@ fn test_undo_hide() -> eyre::Result<()> {
     {
         let (exit_code, stdout) = run_undo_events(&git, event_cursor)?;
         insta::assert_snapshot!(stdout, @r###"
-            Will apply these actions:
-            1. Create branch test1 at 62fc20d2 create test1.txt
+        Will apply these actions:
+        1. Create branch test1 at 62fc20d create test1.txt
 
-            2. Unhide commit 62fc20d2 create test1.txt
+        2. Unhide commit 62fc20d create test1.txt
 
-            Confirm? [yN] Applied 2 inverse events.
-            "###);
+        Confirm? [yN] Applied 2 inverse events.
+        "###);
         assert_eq!(exit_code, 0);
     }
 
     {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
-            O f777ecc9 (master) create initial.txt
-            |\
-            | o 62fc20d2 (test1) create test1.txt
-            |
-            @ fe65c1fe create test2.txt
-            "###);
+        O f777ecc (master) create initial.txt
+        |\
+        | o 62fc20d (test1) create test1.txt
+        |
+        @ fe65c1f create test2.txt
+        "###);
     }
 
     Ok(())
@@ -404,17 +404,17 @@ fn test_undo_move_refs() -> eyre::Result<()> {
         let (exit_code, stdout) = run_undo_events(&git, event_cursor)?;
         insta::assert_snapshot!(stdout, @r###"
         Will apply these actions:
-        1. Check out from 96d1c37a create test2.txt
-                       to 62fc20d2 create test1.txt
-        2. Hide commit 96d1c37a create test2.txt
+        1. Check out from 96d1c37 create test2.txt
+                       to 62fc20d create test1.txt
+        2. Hide commit 96d1c37 create test2.txt
 
-        3. Move branch master from 96d1c37a create test2.txt
-                                to 62fc20d2 create test1.txt
+        3. Move branch master from 96d1c37 create test2.txt
+                                to 62fc20d create test1.txt
         Confirm? [yN] branchless: running command: <git-executable> checkout 62fc20d2a290daea0d52bdc2ed2ad4be6491010e --detach
         :
-        @ 62fc20d2 create test1.txt
+        @ 62fc20d create test1.txt
         |
-        O 96d1c37a (master) create test2.txt
+        O 96d1c37 (master) create test2.txt
         Applied 3 inverse events.
         "###);
         assert_eq!(exit_code, 0);
@@ -423,9 +423,9 @@ fn test_undo_move_refs() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
-            :
-            @ 62fc20d2 (master) create test1.txt
-            "###);
+        :
+        @ 62fc20d (master) create test1.txt
+        "###);
     }
 
     Ok(())
@@ -455,7 +455,7 @@ fn test_historical_smartlog_visibility() -> eyre::Result<()> {
         insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
         ┌───────────────────────────────────────────────────┤ Commit graph ├───────────────────────────────────────────────────┐
         │:                                                                                                                     │
-        │% 62fc20d2 (manually hidden) (master) create test1.txt                                                                │
+        │% 62fc20d (manually hidden) (master) create test1.txt                                                                 │
         │                                                                                                                      │
         │                                                                                                                      │
         │                                                                                                                      │
@@ -474,14 +474,14 @@ fn test_historical_smartlog_visibility() -> eyre::Result<()> {
         └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
         ┌──────────────────────────────────────────────────────┤ Events ├──────────────────────────────────────────────────────┐
         │Repo after transaction 3 (event 4). Press 'h' for help, 'q' to quit.                                                  │
-        │1. Hide commit 62fc20d2 create test1.txt                                                                              │
+        │1. Hide commit 62fc20d create test1.txt                                                                               │
         │                                                                                                                      │
         └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
         "###);
         insta::assert_snapshot!(screen_to_string(&screenshot2), @r###"
         ┌───────────────────────────────────────────────────┤ Commit graph ├───────────────────────────────────────────────────┐
         │:                                                                                                                     │
-        │@ 62fc20d2 (master) create test1.txt                                                                                  │
+        │@ 62fc20d (master) create test1.txt                                                                                   │
         │                                                                                                                      │
         │                                                                                                                      │
         │                                                                                                                      │
@@ -500,7 +500,7 @@ fn test_historical_smartlog_visibility() -> eyre::Result<()> {
         └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
         ┌──────────────────────────────────────────────────────┤ Events ├──────────────────────────────────────────────────────┐
         │Repo after transaction 2 (event 3). Press 'h' for help, 'q' to quit.                                                  │
-        │1. Commit 62fc20d2 create test1.txt                                                                                   │
+        │1. Commit 62fc20d create test1.txt                                                                                    │
         │                                                                                                                      │
         └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
         "###);
@@ -508,7 +508,7 @@ fn test_historical_smartlog_visibility() -> eyre::Result<()> {
         insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
         ┌───────────────────────────────────────────────────┤ Commit graph ├───────────────────────────────────────────────────┐
         │:                                                                                                                     │
-        │% 62fc20d2 (manually hidden) (master) create test1.txt                                                                │
+        │% 62fc20d (manually hidden) (master) create test1.txt                                                                 │
         │                                                                                                                      │
         │                                                                                                                      │
         │                                                                                                                      │
@@ -527,14 +527,14 @@ fn test_historical_smartlog_visibility() -> eyre::Result<()> {
         └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
         ┌──────────────────────────────────────────────────────┤ Events ├──────────────────────────────────────────────────────┐
         │Repo after transaction 2 (event 2). Press 'h' for help, 'q' to quit.                                                  │
-        │1. Hide commit 62fc20d2 create test1.txt                                                                              │
+        │1. Hide commit 62fc20d create test1.txt                                                                               │
         │                                                                                                                      │
         └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
         "###);
         insta::assert_snapshot!(screen_to_string(&screenshot2), @r###"
         ┌───────────────────────────────────────────────────┤ Commit graph ├───────────────────────────────────────────────────┐
         │:                                                                                                                     │
-        │@ 62fc20d2 (master) create test1.txt                                                                                  │
+        │@ 62fc20d (master) create test1.txt                                                                                   │
         │                                                                                                                      │
         │                                                                                                                      │
         │                                                                                                                      │
@@ -553,7 +553,7 @@ fn test_historical_smartlog_visibility() -> eyre::Result<()> {
         └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
         ┌──────────────────────────────────────────────────────┤ Events ├──────────────────────────────────────────────────────┐
         │Repo after transaction 1 (event 1). Press 'h' for help, 'q' to quit.                                                  │
-        │1. Commit 62fc20d2 create test1.txt                                                                                   │
+        │1. Commit 62fc20d create test1.txt                                                                                    │
         │                                                                                                                      │
         └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
         "###);
@@ -594,7 +594,7 @@ fn test_undo_doesnt_make_working_dir_dirty() -> eyre::Result<()> {
     insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
     ┌───────────────────────────────────────────────────┤ Commit graph ├───────────────────────────────────────────────────┐
     │:                                                                                                                     │
-    │O 62fc20d2 (master) create test1.txt                                                                                  │
+    │O 62fc20d (master) create test1.txt                                                                                   │
     │                                                                                                                      │
     │                                                                                                                      │
     │                                                                                                                      │
@@ -629,20 +629,20 @@ fn test_undo_doesnt_make_working_dir_dirty() -> eyre::Result<()> {
         let (exit_code, stdout) = run_undo_events(&git, event_cursor)?;
         insta::assert_snapshot!(stdout, @r###"
         Will apply these actions:
-        1. Check out from 62fc20d2 create test1.txt
-                       to f777ecc9 create initial.txt
-        2. Delete branch bar at 62fc20d2 create test1.txt
+        1. Check out from 62fc20d create test1.txt
+                       to f777ecc create initial.txt
+        2. Delete branch bar at 62fc20d create test1.txt
 
-        3. Hide commit 62fc20d2 create test1.txt
+        3. Hide commit 62fc20d create test1.txt
 
-        4. Move branch master from 62fc20d2 create test1.txt
-                                to f777ecc9 create initial.txt
-        5. Delete branch foo at f777ecc9 create initial.txt
+        4. Move branch master from 62fc20d create test1.txt
+                                to f777ecc create initial.txt
+        5. Delete branch foo at f777ecc create initial.txt
 
         Confirm? [yN] branchless: running command: <git-executable> checkout f777ecc9b0db5ed372b2615695191a8a17f79f24 --detach
-        @ f777ecc9 (foo) create initial.txt
+        @ f777ecc (foo) create initial.txt
         |
-        O 62fc20d2 (bar, master) create test1.txt
+        O 62fc20d (bar, master) create test1.txt
         Applied 5 inverse events.
         "###);
         assert_eq!(exit_code, 0);
@@ -684,7 +684,7 @@ fn test_git_bisect_produces_empty_event() -> eyre::Result<()> {
     insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
     ┌───────────────────────────────────────────────────┤ Commit graph ├───────────────────────────────────────────────────┐
     │:                                                                                                                     │
-    │@ 62fc20d2 (master) create test1.txt                                                                                  │
+    │@ 62fc20d (master) create test1.txt                                                                                   │
     │                                                                                                                      │
     │                                                                                                                      │
     │                                                                                                                      │
@@ -746,7 +746,7 @@ fn test_undo_garbage_collected_commit() -> eyre::Result<()> {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
         :
-        @ 62fc20d2 (master) create test1.txt
+        @ 62fc20d (master) create test1.txt
         "###);
     }
 
@@ -765,9 +765,9 @@ fn test_undo_garbage_collected_commit() -> eyre::Result<()> {
     insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
     ┌───────────────────────────────────────────────────┤ Commit graph ├───────────────────────────────────────────────────┐
     │:                                                                                                                     │
-    │O 62fc20d2 (master) create test1.txt                                                                                  │
+    │O 62fc20d (master) create test1.txt                                                                                   │
     │|                                                                                                                     │
-    │% 96d1c37a (manually hidden) <garbage collected>                                                                      │
+    │% 96d1c37 (manually hidden) <garbage collected>                                                                       │
     │                                                                                                                      │
     │                                                                                                                      │
     │                                                                                                                      │
@@ -794,12 +794,12 @@ fn test_undo_garbage_collected_commit() -> eyre::Result<()> {
         let (exit_code, stdout) = run_undo_events(&git, event_cursor)?;
         insta::assert_snapshot!(stdout, @r###"
         Will apply these actions:
-        1. Check out from 62fc20d2 create test1.txt
+        1. Check out from 62fc20d create test1.txt
                        to <commit not available: 96d1c37a3d4363611c49f7e52186e189a04c531f>
-        2. Move branch master from 62fc20d2 create test1.txt
-                                to 62fc20d2 create test1.txt
-        3. Move branch master from 62fc20d2 create test1.txt
-                                to 62fc20d2 create test1.txt
+        2. Move branch master from 62fc20d create test1.txt
+                                to 62fc20d create test1.txt
+        3. Move branch master from 62fc20d create test1.txt
+                                to 62fc20d create test1.txt
         Confirm? [yN] branchless: running command: <git-executable> checkout 96d1c37a3d4363611c49f7e52186e189a04c531f --detach
         Failed to check out commit: 96d1c37a3d4363611c49f7e52186e189a04c531f
         Applied 3 inverse events.
@@ -842,14 +842,14 @@ fn test_undo_noninteractive() -> eyre::Result<()> {
         )?;
         insta::assert_snapshot!(stdout, @r###"
         Will apply these actions:
-        1. Check out from 9ed8f9a2 bad message
-                       to 96d1c37a create test2.txt
-        2. Rewrite commit 9ed8f9a2 bad message
-                      as 96d1c37a create test2.txt
-        3. Hide commit 9ed8f9a2 bad message
+        1. Check out from 9ed8f9a bad message
+                       to 96d1c37 create test2.txt
+        2. Rewrite commit 9ed8f9a bad message
+                      as 96d1c37 create test2.txt
+        3. Hide commit 9ed8f9a bad message
            
-        4. Move branch master from 9ed8f9a2 bad message
-                                to 96d1c37a create test2.txt
+        4. Move branch master from 9ed8f9a bad message
+                                to 96d1c37 create test2.txt
         Confirm? [yN] Aborted.
         "###);
     }
@@ -858,7 +858,7 @@ fn test_undo_noninteractive() -> eyre::Result<()> {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
         :
-        @ 9ed8f9a2 (> master) bad message
+        @ 9ed8f9a (> master) bad message
         "###);
     }
 
@@ -873,21 +873,21 @@ fn test_undo_noninteractive() -> eyre::Result<()> {
         let stdout = trim_lines(stdout);
         insta::assert_snapshot!(stdout, @r###"
         Will apply these actions:
-        1. Check out from 9ed8f9a2 bad message
-                       to 96d1c37a create test2.txt
-        2. Rewrite commit 9ed8f9a2 bad message
-                      as 96d1c37a create test2.txt
-        3. Hide commit 9ed8f9a2 bad message
+        1. Check out from 9ed8f9a bad message
+                       to 96d1c37 create test2.txt
+        2. Rewrite commit 9ed8f9a bad message
+                      as 96d1c37 create test2.txt
+        3. Hide commit 9ed8f9a bad message
 
-        4. Move branch master from 9ed8f9a2 bad message
-                                to 96d1c37a create test2.txt
+        4. Move branch master from 9ed8f9a bad message
+                                to 96d1c37 create test2.txt
         Confirm? [yN] branchless: running command: <git-executable> checkout 96d1c37a3d4363611c49f7e52186e189a04c531f --detach
         :
-        O 62fc20d2 create test1.txt
+        O 62fc20d create test1.txt
         |\
-        | % 96d1c37a (rewritten as 9ed8f9a2) create test2.txt
+        | % 96d1c37 (rewritten as 9ed8f9a2) create test2.txt
         |
-        O 9ed8f9a2 (master) bad message
+        O 9ed8f9a (master) bad message
         Applied 4 inverse events.
         "###);
     }
@@ -896,7 +896,7 @@ fn test_undo_noninteractive() -> eyre::Result<()> {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
         :
-        @ 96d1c37a (master) create test2.txt
+        @ 96d1c37 (master) create test2.txt
         "###);
     }
 

@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - (#267) Aliases like `git amend` are now installed only if the user does not already have aliases with the same name. Thanks to @rslabbert for implementing this.
 - Improved performance up to 15x for `git restack` on large commit histories.
+- (#280) Use git2's get_short_oid function to avoide commit hash collision.
 
 ## [0.3.9] - 2022-02-08
 

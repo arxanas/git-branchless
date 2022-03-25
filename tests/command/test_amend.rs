@@ -22,18 +22,18 @@ fn test_amend_with_children() -> eyre::Result<()> {
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> reset
         Attempting rebase in-memory...
-        [1/1] Committed as: b51f01b6 create test3.txt
+        [1/1] Committed as: b51f01b create test3.txt
         branchless: processing 1 rewritten commit
         In-memory rebase succeeded.
         Finished restacking commits.
         No abandoned branches to restack.
-        O f777ecc9 (master) create initial.txt
+        O f777ecc (master) create initial.txt
         |
-        o 62fc20d2 create test1.txt
+        o 62fc20d create test1.txt
         |
-        @ 7ac317b9 create test2.txt
+        @ 7ac317b create test2.txt
         |
-        o b51f01b6 create test3.txt
+        o b51f01b create test3.txt
         Amended with 1 uncommitted change.
         "###);
     }
@@ -52,7 +52,7 @@ fn test_amend_with_children() -> eyre::Result<()> {
         branchless: running command: <git-executable> diff --quiet
         Attempting rebase in-memory...
         This operation would cause a merge conflict:
-        - (1 conflicting file) b51f01b6 create test3.txt
+        - (1 conflicting file) b51f01b create test3.txt
         To resolve merge conflicts, retry this operation with the --merge option.
         "###);
     }
@@ -76,11 +76,11 @@ fn test_amend_rename() -> eyre::Result<()> {
         branchless: running command: <git-executable> diff --quiet
         No abandoned commits to restack.
         No abandoned branches to restack.
-        O f777ecc9 (master) create initial.txt
+        O f777ecc (master) create initial.txt
         |
-        o 62fc20d2 create test1.txt
+        o 62fc20d create test1.txt
         |
-        @ f6b25538 create test2.txt
+        @ f6b2553 create test2.txt
         Amended with 2 staged changes.
         "###);
     }
@@ -112,11 +112,11 @@ fn test_amend_delete() -> eyre::Result<()> {
         branchless: running command: <git-executable> reset
         No abandoned commits to restack.
         No abandoned branches to restack.
-        O f777ecc9 (master) create initial.txt
+        O f777ecc (master) create initial.txt
         |
-        o 62fc20d2 create test1.txt
+        o 62fc20d create test1.txt
         |
-        @ f0f07277 create test2.txt
+        @ f0f0727 create test2.txt
         Amended with 1 uncommitted change.
         "###);
     }
@@ -155,11 +155,11 @@ fn test_amend_with_working_copy() -> eyre::Result<()> {
         branchless: running command: <git-executable> diff --quiet
         No abandoned commits to restack.
         No abandoned branches to restack.
-        O f777ecc9 (master) create initial.txt
+        O f777ecc (master) create initial.txt
         |
-        o 62fc20d2 create test1.txt
+        o 62fc20d create test1.txt
         |
-        @ f8e4ba1b create test2.txt
+        @ f8e4ba1 create test2.txt
         Amended with 1 staged change. (Some uncommitted changes were not amended.)
         "###);
     }
@@ -170,11 +170,11 @@ fn test_amend_with_working_copy() -> eyre::Result<()> {
         branchless: running command: <git-executable> reset
         No abandoned commits to restack.
         No abandoned branches to restack.
-        O f777ecc9 (master) create initial.txt
+        O f777ecc (master) create initial.txt
         |
-        o 62fc20d2 create test1.txt
+        o 62fc20d create test1.txt
         |
-        @ 2e69581c create test2.txt
+        @ 2e69581 create test2.txt
         Amended with 1 uncommitted change.
         "###);
     }
@@ -201,9 +201,9 @@ fn test_amend_head() -> eyre::Result<()> {
         branchless: running command: <git-executable> reset
         No abandoned commits to restack.
         No abandoned branches to restack.
-        O f777ecc9 (master) create initial.txt
+        O f777ecc (master) create initial.txt
         |
-        @ 3b98a960 create test1.txt
+        @ 3b98a96 create test1.txt
         Amended with 1 uncommitted change.
         "###);
     }
@@ -223,9 +223,9 @@ fn test_amend_head() -> eyre::Result<()> {
         branchless: running command: <git-executable> diff --quiet
         No abandoned commits to restack.
         No abandoned branches to restack.
-        O f777ecc9 (master) create initial.txt
+        O f777ecc (master) create initial.txt
         |
-        @ 685ef311 create test1.txt
+        @ 685ef31 create test1.txt
         Amended with 1 staged change.
         "###);
     }
@@ -256,11 +256,11 @@ fn test_amend_executable() -> eyre::Result<()> {
         branchless: running command: <git-executable> diff --quiet
         No abandoned commits to restack.
         No abandoned branches to restack.
-        O f777ecc9 (master) create initial.txt
+        O f777ecc (master) create initial.txt
         |
-        o 62fc20d2 create test1.txt
+        o 62fc20d create test1.txt
         |
-        @ f00ec4b5 create test2.txt
+        @ f00ec4b create test2.txt
         Amended with 1 staged change.
         "###);
     }

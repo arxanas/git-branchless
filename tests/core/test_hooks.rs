@@ -23,7 +23,7 @@ fn test_abandoned_commit_message() -> eyre::Result<()> {
         let (_stdout, stderr) = git.run(&["commit", "--amend", "-m", "amend test1"])?;
         insta::assert_snapshot!(stderr, @r###"
         branchless: processing 2 updates: branch master, ref HEAD
-        branchless: processed commit: 9e8dbe91 amend test1
+        branchless: processed commit: 9e8dbe9 amend test1
         branchless: processing 1 rewritten commit
         "###);
     }
@@ -36,7 +36,7 @@ fn test_abandoned_commit_message() -> eyre::Result<()> {
         let (_stdout, stderr) = git.run(&["commit", "--amend", "-m", "amend test1 again"])?;
         insta::assert_snapshot!(stderr, @r###"
         branchless: processing 1 update: ref HEAD
-        branchless: processed commit: c1e22fd6 amend test1 again
+        branchless: processed commit: c1e22fd amend test1 again
         branchless: processing 1 rewritten commit
         branchless: This operation abandoned 1 commit and 1 branch (master)!
         branchless: Consider running one of the following:
@@ -69,7 +69,7 @@ fn test_abandoned_branch_message() -> eyre::Result<()> {
         let (_stdout, stderr) = git.run(&["commit", "--amend", "-m", "amend test1"])?;
         insta::assert_snapshot!(stderr, @r###"
         branchless: processing 1 update: ref HEAD
-        branchless: processed commit: 9e8dbe91 amend test1
+        branchless: processed commit: 9e8dbe9 amend test1
         branchless: processing 1 rewritten commit
         branchless: This operation abandoned 2 branches (abc, master)!
         branchless: Consider running one of the following:
@@ -107,9 +107,9 @@ fn test_fixup_no_abandoned_commit_message() -> eyre::Result<()> {
         if git_version < GitVersion(2, 35, 0) {
             insta::assert_snapshot!(stderr, @r###"
             branchless: processing 1 update: ref HEAD
-            branchless: processed commit: a84541d7 # This is a combination of 2 commits. # This is the 1st commit message:
+            branchless: processed commit: a84541d # This is a combination of 2 commits. # This is the 1st commit message:
             branchless: processing 1 update: ref HEAD
-            branchless: processed commit: 7f023a10 create test1.txt
+            branchless: processed commit: 7f023a1 create test1.txt
             branchless: processing 3 rewritten commits
             Successfully rebased and updated detached HEAD.
             "###);
@@ -139,7 +139,7 @@ fn test_rebase_individual_commit() -> eyre::Result<()> {
         if git_version < GitVersion(2, 35, 0) {
             insta::assert_snapshot!(stderr, @r###"
             branchless: processing 1 update: ref HEAD
-            branchless: processed commit: f8d9985b create test2.txt
+            branchless: processed commit: f8d9985 create test2.txt
             branchless: processing 1 rewritten commit
             branchless: This operation abandoned 1 commit!
             branchless: Consider running one of the following:
