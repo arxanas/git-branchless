@@ -252,17 +252,21 @@ fn build_messages(
             .require_save(false)
             .edit(message.as_str())?
             .unwrap();
+
         if edited_message == message {
             return Ok(BuildRewordMessageResult::IdenticalMessage);
         }
-        edited_message
+
+        // clean up the commit message: remove comment lines, finish w/ a newline, etc
+        // TODO move this to git module
+        git2::message_prettify(edited_message, comment_char)?
     } else {
+        // ensure that CLI messages also end w/ a newline
+        if !message.ends_with('\n') {
+            message.push('\n');
+        }
         message
     };
-
-    // clean up the commit message: remove comment lines, finish w/ a newline, etc
-    // TODO ask if this should be here or if it should be moved to the git module per project wiki
-    let message = git2::message_prettify(message, comment_char)?;
 
     if message.trim().is_empty() {
         return Ok(BuildRewordMessageResult::EmptyMessage);
