@@ -98,7 +98,7 @@ fn test_reword_with_multiple_messages() -> eyre::Result<()> {
 }
 
 #[test]
-fn test_reword_removes_comment_lines_from_messages() -> eyre::Result<()> {
+fn test_reword_preserves_comment_lines_for_messages_on_cli() -> eyre::Result<()> {
     let git = make_git()?;
 
     if !git.supports_committer_date_is_author_date()? {
@@ -119,8 +119,12 @@ fn test_reword_removes_comment_lines_from_messages() -> eyre::Result<()> {
     // confirm the '#' messages aren't present
     let (stdout, _stderr) = git.run(&["log", "-n", "1", "--format=%h%n%B"])?;
     insta::assert_snapshot!(stdout, @r###"
-    2666020
+    11a0c54
     foo
+
+    # bar
+
+    #
 
     buz
     "###);
