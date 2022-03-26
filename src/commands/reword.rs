@@ -15,7 +15,7 @@ use crate::core::config::{get_comment_char, get_restack_preserve_timestamps};
 use crate::core::dag::{resolve_commits, CommitSet, Dag, ResolveCommitsResult};
 use crate::core::effects::Effects;
 use crate::core::eventlog::{EventLogDb, EventReplayer};
-use crate::core::formatting::{printable_styled_string, Glyphs};
+use crate::core::formatting::{printable_styled_string, Glyphs, Pluralize};
 use crate::core::node_descriptors::{render_node_descriptors, CommitOidDescriptor, NodeObject};
 use crate::core::rewrite::{
     execute_rebase_plan, BuildRebasePlanOptions, ExecuteRebasePlanOptions, ExecuteRebasePlanResult,
@@ -231,13 +231,34 @@ fn build_messages(
             },
             _ => {
                 // TODO(bulk edit) build a bulk edit message for multiple commits
-                format!(
-                    "{} Enter a commit message to apply to {} commits",
-                    comment_char.unwrap(),
-                    commits.len()
-                )
+                String::from("")
             }
         };
+
+        // If the original commit message didn't end w/ a newline, add one. This makes it easy to
+        // ensure that our "help" text will always be separated from the commit message by a blank
+        // line, and messages passing through Editor will end up with a newline appended anyway.
+        if !message_for_editor.ends_with('\n') {
+            message_for_editor.push('\n');
+        };
+
+        message_for_editor.push_str(
+            format!(
+                "\n\
+                {} Rewording: Please enter the commit message to apply to {}. Lines\n\
+                {} starting with '{}' will be ignored, and an empty message aborts rewording.",
+                comment_char,
+                Pluralize {
+                    determiner: Some(("this", "these")),
+                    amount: commits.len() as isize,
+                    unit: ("commit", "commits"),
+                },
+                comment_char,
+                comment_char,
+            )
+            .as_str(),
+        );
+
         (message_for_editor, true)
     } else {
         (message, false)
