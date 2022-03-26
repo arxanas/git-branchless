@@ -2,7 +2,7 @@
 
 use rayon::ThreadPoolBuilder;
 use std::collections::HashMap;
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 use std::fmt::Write;
 use std::time::SystemTime;
 
@@ -252,7 +252,7 @@ fn build_messages(
                 comment_char,
                 Pluralize {
                     determiner: Some(("this", "these")),
-                    amount: commits.len() as isize,
+                    amount: commits.len().try_into()?,
                     unit: ("commit", "commits"),
                 },
                 comment_char,
