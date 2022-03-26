@@ -44,6 +44,14 @@ use crate::git::tree::{dehydrate_tree, get_changed_paths_between_trees, hydrate_
 pub(super) fn wrap_git_error(error: git2::Error) -> eyre::Error {
     eyre::eyre!("Git error {:?}: {}", error.code(), error.message())
 }
+
+/// Clean up a message, removing extraneous whitespace plus comment lines starting with
+/// `comment_char`, and ensure that the message ends with a newline.
+pub fn message_prettify(message: &str, comment_char: char) -> eyre::Result<String> {
+    let message = git2::message_prettify(message, Some(comment_char as u8))?;
+    Ok(message)
+}
+
 /// A snapshot of information about a certain reference. Updates to the
 /// reference after this value is obtained are not reflected.
 ///
