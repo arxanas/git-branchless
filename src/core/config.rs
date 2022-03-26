@@ -41,12 +41,12 @@ pub fn get_main_branch_name(repo: &Repo) -> eyre::Result<String> {
 
 /// Get the default comment character.
 #[instrument]
-pub fn get_comment_char(repo: &Repo) -> eyre::Result<Option<u8>> {
-    let config = repo.get_readonly_config()?;
-    let comment_char: Option<String> = config.get("core.commentChar")?;
-    let comment_char = match comment_char {
-        Some(c) => Some(c.chars().next().unwrap() as u8),
-        None => git2::DEFAULT_COMMENT_CHAR,
+pub fn get_comment_char(repo: &Repo) -> eyre::Result<char> {
+    let from_config: Option<String> = repo.get_readonly_config()?.get("core.commentChar")?;
+    let comment_char = match from_config {
+        // Note that git also allows `core.commentChar="auto"`, which we do not currently support.
+        Some(comment_char) => comment_char.chars().next().unwrap(),
+        None => git2::DEFAULT_COMMENT_CHAR.unwrap() as char,
     };
     Ok(comment_char)
 }

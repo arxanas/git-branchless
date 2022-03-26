@@ -21,7 +21,9 @@ use crate::core::rewrite::{
     execute_rebase_plan, BuildRebasePlanOptions, ExecuteRebasePlanOptions, ExecuteRebasePlanResult,
     RebasePlanBuilder, RepoResource,
 };
-use crate::git::{CheckOutCommitOptions, Commit, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo};
+use crate::git::{
+    message_prettify, CheckOutCommitOptions, Commit, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo,
+};
 
 /// Reword a commit and restack it's descendants.
 #[instrument]
@@ -216,7 +218,7 @@ pub enum BuildRewordMessageResult {
 fn build_messages(
     messages: &[String],
     commits: &[Commit],
-    comment_char: Option<u8>,
+    comment_char: char,
 ) -> eyre::Result<BuildRewordMessageResult> {
     let message = messages.join("\n\n").trim().to_string();
 
@@ -278,9 +280,7 @@ fn build_messages(
             return Ok(BuildRewordMessageResult::IdenticalMessage);
         }
 
-        // clean up the commit message: remove comment lines, finish w/ a newline, etc
-        // TODO move this to git module
-        git2::message_prettify(edited_message, comment_char)?
+        message_prettify(edited_message.as_str(), comment_char)?
     } else {
         // ensure that CLI messages also end w/ a newline
         if !message.ends_with('\n') {
