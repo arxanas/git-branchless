@@ -142,9 +142,20 @@ pub fn reword(
     let result = execute_rebase_plan(effects, git_run_info, &repo, &rebase_plan, &execute_options)?;
 
     let exit_code = match result {
-        ExecuteRebasePlanResult::Succeeded { rewritten_oids } => {
+        ExecuteRebasePlanResult::Succeeded {
+            rewritten_oids: Some(rewritten_oids),
+        } => {
             render_status_report(&repo, effects, &commits, &rewritten_oids)?;
             0
+        }
+        ExecuteRebasePlanResult::Succeeded {
+            rewritten_oids: None,
+        } => {
+            writeln!(
+                effects.get_error_stream(),
+                "BUG: Succeeded rewording commits via on-disk rebase? But reword should be rebasing in-memory!"
+            )?;
+            1
         }
         ExecuteRebasePlanResult::DeclinedToMerge { merge_conflict: _ } => {
             writeln!(
@@ -214,8 +225,7 @@ fn build_messages(
             [commit] => match commit.get_message_raw()?.into_string() {
                 Ok(msg) => msg,
                 Err(_) => eyre::bail!(
-                    "Error decoding original message for commit: {:?}.\n\
-                    Aborting.",
+                    "Error decoding original message for commit: {:?}.",
                     commit.get_oid()
                 ),
             },

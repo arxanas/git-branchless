@@ -976,8 +976,7 @@ pub enum ExecuteRebasePlanResult {
     /// The rebase operation succeeded.
     Succeeded {
         /// Mapping from old OID to new/rewritten OID. Will always be empty for on disk rebases.
-        // TODO should this be an Option?
-        rewritten_oids: HashMap<NonZeroOid, MaybeZeroOid>,
+        rewritten_oids: Option<HashMap<NonZeroOid, MaybeZeroOid>>,
     },
 
     /// The rebase operation encounter a merge conflict, and it was not
@@ -1037,7 +1036,9 @@ pub fn execute_rebase_plan(
                 let rewritten_oids: HashMap<NonZeroOid, MaybeZeroOid> =
                     rewritten_oids.into_iter().collect();
                 writeln!(effects.get_output_stream(), "In-memory rebase succeeded.")?;
-                return Ok(ExecuteRebasePlanResult::Succeeded { rewritten_oids });
+                return Ok(ExecuteRebasePlanResult::Succeeded {
+                    rewritten_oids: Some(rewritten_oids),
+                });
             }
 
             RebaseInMemoryResult::CannotRebaseMergeCommit { commit_oid } => {
@@ -1102,7 +1103,7 @@ pub fn execute_rebase_plan(
         match rebase_on_disk(effects, git_run_info, repo, rebase_plan, options)? {
             Ok(0) => {
                 return Ok(ExecuteRebasePlanResult::Succeeded {
-                    rewritten_oids: Default::default(),
+                    rewritten_oids: None,
                 });
             }
             Ok(exit_code) => return Ok(ExecuteRebasePlanResult::Failed { exit_code }),
