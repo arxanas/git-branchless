@@ -55,14 +55,14 @@ pub fn reword(
         BuildRewordMessageResult::IdenticalMessage => {
             writeln!(
                 effects.get_output_stream(),
-                "The message wasn't edited; nothing to do. Stopping."
+                "Aborting. The message wasn't edited; nothing to do."
             )?;
             return Ok(1);
         }
         BuildRewordMessageResult::EmptyMessage => {
             writeln!(
                 effects.get_error_stream(),
-                "Error: the reworded message was empty. Stopping."
+                "Aborting reword due to empty commit message."
             )?;
             return Ok(1);
         }
@@ -77,18 +77,21 @@ pub fn reword(
 
         for root_commit in subtree_roots {
             let only_parent_id = root_commit.get_only_parent().map(|parent| parent.get_oid());
-            if only_parent_id == None {
-                eyre::bail!(
-                    "###
-                    Refusing to reword commit {}, which has {} parents.
-                    Rewording only supported for commits with 1 parent.
-                    Stopping; nothing reworded.
-                    ###",
-                    root_commit.get_oid(),
-                    root_commit.get_parents().len(),
-                );
-            }
-            builder.move_subtree(root_commit.get_oid(), only_parent_id.unwrap())?;
+            let only_parent_id = match only_parent_id {
+                Some(only_parent_id) => only_parent_id,
+                None => {
+                    writeln!(
+                        effects.get_error_stream(),
+                        "Refusing to reword commit {}, which has {} parents.\n\
+                        Rewording is only supported for commits with 1 parent.\n\
+                        Aborting.",
+                        root_commit.get_oid(),
+                        root_commit.get_parents().len(),
+                    )?;
+                    return Ok(1);
+                }
+            };
+            builder.move_subtree(root_commit.get_oid(), only_parent_id)?;
         }
 
         for commit in commits.iter() {
@@ -111,14 +114,9 @@ pub fn reword(
         )? {
             Ok(Some(rebase_plan)) => rebase_plan,
             Ok(None) => {
-                writeln!(
-                    effects.get_output_stream(),
-                    "###
-                    BUG: rebase plan indicates nothing to do, but rewording should always do something.
-                    Stopping; nothing reworded.
-                    ###"
-                )?;
-                return Ok(1);
+                eyre::bail!(
+                    "BUG: rebase plan indicates nothing to do, but rewording should always do something."
+                );
             }
             Err(err) => {
                 err.describe(effects, &repo)?;
@@ -146,7 +144,6 @@ pub fn reword(
     let exit_code = match result {
         ExecuteRebasePlanResult::Succeeded { rewritten_oids } => {
             render_status_report(&repo, effects, &commits, &rewritten_oids)?;
-
             0
         }
         ExecuteRebasePlanResult::DeclinedToMerge { merge_conflict: _ } => {
@@ -154,7 +151,6 @@ pub fn reword(
                 effects.get_error_stream(),
                 "BUG: Merge conflict detected, but rewording shouldn't cause any conflicts."
             )?;
-
             1
         }
         ExecuteRebasePlanResult::Failed { exit_code } => exit_code,
@@ -213,15 +209,13 @@ fn build_messages(
 ) -> eyre::Result<BuildRewordMessageResult> {
     let message = messages.join("\n\n").trim().to_string();
 
-    let (message, load_editor) = if message.is_empty() {
-        let message_for_editor = match commits.to_vec().as_slice() {
+    let (mut message, load_editor) = if message.is_empty() {
+        let mut message_for_editor = match commits {
             [commit] => match commit.get_message_raw()?.into_string() {
                 Ok(msg) => msg,
-                _ => eyre::bail!(
-                    "###
-                    Error decoding original message for commit: {:?}.
-                    Stopping; nothing reworded.
-                    ###",
+                Err(_) => eyre::bail!(
+                    "Error decoding original message for commit: {:?}.\n\
+                    Aborting.",
                     commit.get_oid()
                 ),
             },
@@ -317,13 +311,21 @@ fn render_status_report(
     let glyphs = Glyphs::detect();
     let num_commits = commits.len();
     for original_commit in commits {
-        let replacement_oid = match rewritten_oids.get(&original_commit.get_oid()).unwrap() {
-            MaybeZeroOid::NonZero(new_oid) => new_oid,
-            MaybeZeroOid::Zero => {
+        let replacement_oid = match rewritten_oids.get(&original_commit.get_oid()) {
+            Some(MaybeZeroOid::NonZero(new_oid)) => new_oid,
+            Some(MaybeZeroOid::Zero) => {
                 warn!(
                     "Encountered ZeroOid after success rewriting commit {}",
                     original_commit.get_oid()
                 );
+                continue;
+            }
+            None => {
+                writeln!(
+                    effects.get_error_stream(),
+                    "Warning: Could not find rewritten commit for {}",
+                    original_commit.get_oid(),
+                )?;
                 continue;
             }
         };
