@@ -16,7 +16,8 @@
 //!
 //! Then the branchless workflow may be for you instead.
 
-#![warn(clippy::all, missing_docs)]
+#![warn(missing_docs)]
+#![warn(clippy::all, clippy::as_conversions)]
 #![allow(clippy::too_many_arguments, clippy::blocks_in_if_conditions)]
 
 pub mod commands;

@@ -46,7 +46,7 @@ pub fn get_comment_char(repo: &Repo) -> eyre::Result<char> {
     let comment_char = match from_config {
         // Note that git also allows `core.commentChar="auto"`, which we do not currently support.
         Some(comment_char) => comment_char.chars().next().unwrap(),
-        None => git2::DEFAULT_COMMENT_CHAR.unwrap() as char,
+        None => char::from(git2::DEFAULT_COMMENT_CHAR.unwrap()),
     };
     Ok(comment_char)
 }
