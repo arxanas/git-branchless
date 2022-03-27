@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.10] - 2022-03-27
+
 NOTE: when installing this version with `--locked`, you may see a warning like this:
 
 ```
@@ -19,6 +21,7 @@ This is safe to ignore. We are waiting for an upstream dependency to be updated 
 
 - EXPERIMENTAL: created `git sync` command, which moves all commit stacks onto the main branch (if possible).
 - EXPERIMENTAL: created `git reword` command, which can rewrite commit messages anywhere in the commit tree.
+- EXPERIMENTAL: created `git branchless bug-report` command, which produces information that can be attached to an issue on Github.
 - The `--only-branches` option can be passed to `git smartlog` to only show commits which are on branches.
 - The `git move` command, and other commands which can move commits, now accepts the option `--no-deduplicate-commits` to skip commit deduplication.
 
@@ -32,7 +35,7 @@ This is safe to ignore. We are waiting for an upstream dependency to be updated 
 
 - (#267) Aliases like `git amend` are now installed only if the user does not already have aliases with the same name. Thanks to @rslabbert for implementing this.
 - Improved performance up to 15x for `git restack` on large commit histories.
-- (#280) Ambiguous commit hashes are no longer printed in output. (Additional characters of the hash will be appended as necessary.) Thanks to @yujonglee for fixing this.
+- (#280) Ambiguous commit hashes are no longer printed in output. (Additional characters of the hash will be appended as necessary.) Thanks to @yujong-lee for fixing this.
 
 ## [0.3.9] - 2022-02-08
 
