@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+NOTE: when installing this version with `--locked`, you may see a warning like this:
+
+```
+warning: package `crossbeam-channel v0.5.2` in Cargo.lock is yanked in registry `crates-io`, consider running without --locked
+```
+
+This is safe to ignore. We are waiting for an upstream dependency to be updated to resolve this warning. This is tracked in https://github.com/arxanas/git-branchless/issues/317.
+
 ### Added
 
 - EXPERIMENTAL: created `git sync` command, which moves all commit stacks onto the main branch (if possible).
