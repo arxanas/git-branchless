@@ -8,7 +8,6 @@
 //! garbage collection doesn't collect commits which branchless thinks are still
 //! active.
 
-use std::convert::TryInto;
 use std::ffi::OsStr;
 use std::fmt::Write;
 
@@ -106,7 +105,7 @@ pub fn gc(effects: &Effects) -> eyre::Result<()> {
     let dangling_references = find_dangling_references(&repo, &event_replayer, event_cursor)?;
     let num_dangling_references = Pluralize {
         determiner: None,
-        amount: dangling_references.len().try_into()?,
+        amount: dangling_references.len(),
         unit: ("dangling reference", "dangling references"),
     }
     .to_string();

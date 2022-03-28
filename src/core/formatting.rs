@@ -33,7 +33,7 @@ pub struct Pluralize<'a> {
     pub determiner: Option<(&'a str, &'a str)>,
 
     /// The amount of the quantity.
-    pub amount: isize,
+    pub amount: usize,
 
     /// The string to render after the amount if the amount is singular vs plural.
     pub unit: (&'a str, &'a str),

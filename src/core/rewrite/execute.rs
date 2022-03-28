@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
-use std::convert::TryInto;
+
 use std::ffi::{OsStr, OsString};
 use std::fmt::Write;
 use std::path::PathBuf;
@@ -296,7 +296,7 @@ impl MergeConflictInfo {
             effects.get_glyphs().bullet_point,
             Pluralize {
                 determiner: None,
-                amount: self.conflicting_paths.len().try_into()?,
+                amount: self.conflicting_paths.len(),
                 unit: ("conflicting file", "conflicting files"),
             },
             printable_styled_string(

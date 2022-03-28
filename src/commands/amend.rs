@@ -4,7 +4,6 @@
 //! that are already tracked in the repo. Following the amend,
 //! the command performs a restack.
 
-use std::convert::TryInto;
 use std::fmt::Write;
 use std::time::SystemTime;
 
@@ -140,7 +139,7 @@ pub fn amend(
         AmendFastOptions::FromIndex { paths } => {
             let staged_changes = Pluralize {
                 determiner: None,
-                amount: paths.len().try_into()?,
+                amount: paths.len(),
                 unit: ("staged change", "staged changes"),
             };
             let mut message = format!("Amended with {}.", staged_changes);
@@ -153,7 +152,7 @@ pub fn amend(
         AmendFastOptions::FromWorkingCopy { status_entries } => {
             let uncommitted_changes = Pluralize {
                 determiner: None,
-                amount: status_entries.len().try_into()?,
+                amount: status_entries.len(),
                 unit: ("uncommitted change", "uncommitted changes"),
             };
             writeln!(
