@@ -1,7 +1,7 @@
 //! Convenience commands to help the user move through a stack of commits.
 
 use std::collections::HashSet;
-use std::convert::TryInto;
+
 use std::ffi::OsString;
 use std::fmt::Write;
 use std::time::SystemTime;
@@ -208,13 +208,13 @@ fn advance(
         let pluralize = match command {
             Command::Next => Pluralize {
                 determiner: None,
-                amount: i.try_into()?,
+                amount: i,
                 unit: ("child", "children"),
             },
 
             Command::Prev => Pluralize {
                 determiner: None,
-                amount: i.try_into()?,
+                amount: i,
                 unit: ("parent", "parents"),
             },
         };

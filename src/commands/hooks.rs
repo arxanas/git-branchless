@@ -7,7 +7,6 @@
 //! The hooks are installed by the `branchless init` command. This module
 //! contains the implementations for the hooks.
 
-use std::convert::TryInto;
 use std::ffi::OsString;
 use std::fmt::Write;
 use std::io::{stdin, BufRead};
@@ -444,7 +443,7 @@ pub fn hook_reference_transaction(effects: &Effects, transaction_state: &str) ->
 
     let num_reference_updates = Pluralize {
         determiner: None,
-        amount: parsed_lines.len().try_into()?,
+        amount: parsed_lines.len(),
         unit: ("update", "updates"),
     };
     writeln!(

@@ -2,7 +2,7 @@
 
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
-use std::convert::TryInto;
+
 use std::ffi::{OsStr, OsString};
 use std::fmt::Write;
 use std::fs::File;
@@ -136,7 +136,7 @@ pub fn hook_post_rewrite(
     if !is_spurious_event {
         let message_rewritten_commits = Pluralize {
             determiner: None,
-            amount: rewritten_oids.len().try_into()?,
+            amount: rewritten_oids.len(),
             unit: ("rewritten commit", "rewritten commits"),
         }
         .to_string();
@@ -238,7 +238,7 @@ fn warn_abandoned(
                 warning_items.push(
                     Pluralize {
                         determiner: None,
-                        amount: num_abandoned_children.try_into()?,
+                        amount: num_abandoned_children,
                         unit: ("commit", "commits"),
                     }
                     .to_string(),
@@ -247,7 +247,7 @@ fn warn_abandoned(
             if num_abandoned_branches > 0 {
                 let abandoned_branch_count = Pluralize {
                     determiner: None,
-                    amount: num_abandoned_branches.try_into()?,
+                    amount: num_abandoned_branches,
                     unit: ("branch", "branches"),
                 }
                 .to_string();

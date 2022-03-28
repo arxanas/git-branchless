@@ -3,7 +3,6 @@
 //! This is accomplished by finding the events that have happened since a certain
 //! time and inverting them.
 
-use std::convert::TryInto;
 use std::ffi::OsString;
 use std::fmt::Write;
 use std::io::{stdin, BufRead, BufReader, Read};
@@ -710,7 +709,7 @@ fn undo_events(
 
     let num_inverse_events = Pluralize {
         determiner: None,
-        amount: inverse_events.len().try_into().unwrap(),
+        amount: inverse_events.len(),
         unit: ("inverse event", "inverse events"),
     }
     .to_string();

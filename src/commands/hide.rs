@@ -1,7 +1,6 @@
 //! Handle obsoleting commits when explicitly requested by the user (as opposed to
 //! automatically as the result of a rewrite operation).
 
-use std::convert::TryInto;
 use std::fmt::Write;
 use std::time::SystemTime;
 
@@ -93,7 +92,7 @@ pub fn hide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::Re
         "To unhide {}, run: git undo",
         Pluralize {
             determiner: Some(("this", "these")),
-            amount: num_commits.try_into()?,
+            amount: num_commits,
             unit: ("commit", "commits"),
         },
     )?;
@@ -175,7 +174,7 @@ pub fn unhide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::
         "To hide {}, run: git undo",
         Pluralize {
             determiner: Some(("this", "these")),
-            amount: num_commits.try_into()?,
+            amount: num_commits,
             unit: ("commit", "commits"),
         },
     )?;
