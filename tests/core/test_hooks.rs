@@ -241,7 +241,7 @@ fn test_merge_commit_recorded() -> eyre::Result<()> {
     let event_log_db = EventLogDb::new(&conn)?;
     let event_replayer = EventReplayer::from_event_log_db(&effects, &repo, &event_log_db)?;
     let events: Vec<Event> = get_event_replayer_events(&event_replayer)
-        .into_iter()
+        .iter()
         .cloned()
         .map(redact_event_timestamp)
         .collect();

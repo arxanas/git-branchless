@@ -1978,7 +1978,6 @@ fn test_move_dest_not_in_dag() -> eyre::Result<()> {
         cloned_repo.init_repo_with_options(&GitInitOptions {
             make_initial_commit: false,
             run_branchless_init: false,
-            ..Default::default()
         })?;
         cloned_repo.run(&["branchless", "init", "--main-branch", "other-branch"])?;
 

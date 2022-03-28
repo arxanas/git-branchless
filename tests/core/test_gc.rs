@@ -89,7 +89,7 @@ fn test_gc_reference_transaction() -> eyre::Result<()> {
     let events = event_log
         .get_events()?
         .into_iter()
-        .map(|event| redact_event_timestamp(event))
+        .map(redact_event_timestamp)
         .collect_vec();
     insta::assert_debug_snapshot!(events, @r###"
     [

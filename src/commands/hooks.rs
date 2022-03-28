@@ -296,7 +296,7 @@ mod reference_transaction {
                 old_oid: "123abc".parse()?,
                 new_oid: {
                     let oid: MaybeZeroOid = "456def".parse()?;
-                    oid.into()
+                    oid
                 },
                 ref_name: OsString::from("refs/heads/mybranch"),
             }
@@ -311,7 +311,7 @@ mod reference_transaction {
                     old_oid: "123abc".parse()?,
                     new_oid: {
                         let oid: MaybeZeroOid = "456def".parse()?;
-                        oid.into()
+                        oid
                     },
                     ref_name: OsString::from("ORIG_HEAD"),
                 }

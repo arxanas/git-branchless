@@ -26,7 +26,7 @@ fn run_select_past_event(
     let references_snapshot = repo.get_references_snapshot()?;
     let conn = repo.get_db_conn()?;
     let event_log_db: EventLogDb = EventLogDb::new(&conn)?;
-    let mut event_replayer = EventReplayer::from_event_log_db(&effects, &repo, &event_log_db)?;
+    let mut event_replayer = EventReplayer::from_event_log_db(&effects, repo, &event_log_db)?;
     let event_cursor = event_replayer.make_default_cursor();
     let dag = Dag::open_and_sync(
         &effects,
