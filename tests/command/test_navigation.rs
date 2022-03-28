@@ -9,8 +9,8 @@ use eyre::eyre;
 use branchless::testing::{make_git, Git, GitRunOptions};
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 
-const CARRIAGE_RETURN: &'static str = "\r";
-const END_OF_TEXT: &'static str = "\x03";
+const CARRIAGE_RETURN: &str = "\r";
+const END_OF_TEXT: &str = "\x03";
 
 #[test]
 fn test_prev() -> eyre::Result<()> {

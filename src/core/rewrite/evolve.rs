@@ -109,7 +109,7 @@ mod tests {
         let repo = git.get_repo()?;
         let conn = repo.get_db_conn()?;
         let event_log_db = EventLogDb::new(&conn)?;
-        let event_replayer = EventReplayer::from_event_log_db(&effects, &repo, &event_log_db)?;
+        let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
         let event_cursor = event_replayer.make_default_cursor();
 
         let rewrite_target = find_rewrite_target(&event_replayer, event_cursor, oid);
