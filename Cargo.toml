@@ -62,7 +62,7 @@ dialoguer = "0.10.0"
 eden_dag = { package = "esl01-dag", version = "0.2.1" }
 eyre = "0.6.7"
 git2 = { version = "0.14.2", default-features = false }
-indicatif = "0.17.0-beta.1"
+indicatif = "0.17.0-rc.10"
 itertools = "0.10.3"
 lazy_static = "1.4.0"
 man = "0.3.0"
