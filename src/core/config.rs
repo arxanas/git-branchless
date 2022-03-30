@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use tracing::instrument;
+use tracing::{instrument, warn};
 
 use crate::git::{ConfigRead, Repo};
 
@@ -49,6 +49,24 @@ pub fn get_comment_char(repo: &Repo) -> eyre::Result<char> {
         None => char::from(git2::DEFAULT_COMMENT_CHAR.unwrap()),
     };
     Ok(comment_char)
+}
+
+/// Get the commit template message, if any.
+#[instrument]
+pub fn get_commit_template(repo: &Repo) -> eyre::Result<Option<String>> {
+    let commit_template_path: Option<String> =
+        repo.get_readonly_config()?.get("commit.template")?;
+    let commit_template_path = match commit_template_path {
+        Some(commit_template_path) => commit_template_path,
+        None => return Ok(None),
+    };
+    match std::fs::read_to_string(&commit_template_path) {
+        Ok(contents) => Ok(Some(contents)),
+        Err(e) => {
+            warn!(?e, ?commit_template_path, "Could not read commit template");
+            Ok(None)
+        }
+    }
 }
 
 /// Get the default init branch name.

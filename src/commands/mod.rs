@@ -40,6 +40,7 @@ use crate::opts::Command;
 use crate::opts::Opts;
 use crate::opts::WrappedCommand;
 
+use self::reword::InitialCommitMessages;
 use self::smartlog::SmartlogOptions;
 
 fn rewrite_args(args: Vec<OsString>) -> Vec<OsString> {
@@ -223,7 +224,16 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
             move_options,
         } => restack::restack(&effects, &git_run_info, commits, &move_options)?,
 
-        Command::Reword { commits, messages } => {
+        Command::Reword {
+            commits,
+            messages,
+            discard,
+        } => {
+            let messages = if discard {
+                InitialCommitMessages::Discard
+            } else {
+                InitialCommitMessages::Messages(messages)
+            };
             reword::reword(&effects, commits, messages, &git_run_info)?
         }
 
