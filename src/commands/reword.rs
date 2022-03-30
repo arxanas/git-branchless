@@ -11,7 +11,7 @@ use eden_dag::DagAlgorithm;
 use eyre::Context;
 use tracing::{instrument, warn};
 
-use crate::core::config::{get_comment_char, get_restack_preserve_timestamps};
+use crate::core::config::{get_comment_char, get_commit_template, get_restack_preserve_timestamps};
 use crate::core::dag::{resolve_commits, CommitSet, Dag, ResolveCommitsResult};
 use crate::core::effects::Effects;
 use crate::core::eventlog::{EventLogDb, EventReplayer};
@@ -25,12 +25,22 @@ use crate::git::{
     message_prettify, CheckOutCommitOptions, Commit, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo,
 };
 
+/// The commit message(s) provided by the user.
+#[derive(Debug)]
+pub enum InitialCommitMessages {
+    /// The user wants to start with an empty (or template) message.
+    Discard,
+
+    /// The user provided explicit messages.
+    Messages(Vec<String>),
+}
+
 /// Reword a commit and restack it's descendants.
 #[instrument]
 pub fn reword(
     effects: &Effects,
     hashes: Vec<String>,
-    messages: Vec<String>,
+    messages: InitialCommitMessages,
     git_run_info: &GitRunInfo,
 ) -> eyre::Result<isize> {
     let repo = Repo::from_current_dir()?;
@@ -52,7 +62,7 @@ pub fn reword(
         None => return Ok(1),
     };
 
-    let messages = match build_messages(&messages, &commits, get_comment_char(&repo)?)? {
+    let messages = match build_messages(&repo, messages, &commits)? {
         BuildRewordMessageResult::Succeeded { messages } => messages,
         BuildRewordMessageResult::IdenticalMessage => {
             writeln!(
@@ -216,35 +226,50 @@ pub enum BuildRewordMessageResult {
 /// NonZeroOid to the relevant message.
 #[instrument]
 fn build_messages(
-    messages: &[String],
+    repo: &Repo,
+    messages: InitialCommitMessages,
     commits: &[Commit],
-    comment_char: char,
 ) -> eyre::Result<BuildRewordMessageResult> {
-    let message = messages.join("\n\n").trim().to_string();
+    let comment_char = get_comment_char(repo)?;
+    let (mut message, load_editor) = match messages {
+        InitialCommitMessages::Discard => {
+            let message: String = get_commit_template(repo)?.unwrap_or_default();
+            (message, true)
+        }
 
-    let (mut message, load_editor) = if message.is_empty() {
-        let mut message_for_editor = match commits {
-            [commit] => match commit.get_message_raw()?.into_string() {
-                Ok(msg) => msg,
-                Err(_) => eyre::bail!(
-                    "Error decoding original message for commit: {:?}.",
-                    commit.get_oid()
-                ),
-            },
-            _ => {
-                // TODO(bulk edit) build a bulk edit message for multiple commits
-                String::from("")
+        InitialCommitMessages::Messages(messages) => {
+            let message = messages.join("\n\n").trim().to_string();
+            if message.is_empty() {
+                let message = match commits {
+                    [commit] => match commit.get_message_raw()?.into_string() {
+                        Ok(msg) => msg,
+                        Err(_) => eyre::bail!(
+                            "Error decoding original message for commit: {:?}.",
+                            commit.get_oid()
+                        ),
+                    },
+                    _ => {
+                        // TODO(bulk edit) build a bulk edit message for multiple commits
+                        String::from("")
+                    }
+                };
+
+                (message, true)
+            } else {
+                (message, false)
             }
-        };
+        }
+    };
 
+    let message = if load_editor {
         // If the original commit message didn't end w/ a newline, add one. This makes it easy to
         // ensure that our "help" text will always be separated from the commit message by a blank
         // line, and messages passing through Editor will end up with a newline appended anyway.
-        if !message_for_editor.ends_with('\n') {
-            message_for_editor.push('\n');
+        if !message.ends_with('\n') {
+            message.push('\n');
         };
 
-        message_for_editor.push_str(
+        message.push_str(
             format!(
                 "\n\
                 {} Rewording: Please enter the commit message to apply to {}. Lines\n\
@@ -261,13 +286,7 @@ fn build_messages(
             .as_str(),
         );
 
-        (message_for_editor, true)
-    } else {
-        (message, false)
-    };
-
-    let message = if load_editor {
-        // Editor::edit() normally requires that the file being editted is saved before the editor
+        // Editor::edit() normally requires that the file being edited is saved before the editor
         // is closed. If it's not, it will return None; and in all other cases, it will return
         // Some(message). We don't care if the file has been saved, only if it hasn't changed, so
         // here we call `require_save(false)` and just ignore the None case.

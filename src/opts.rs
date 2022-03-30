@@ -294,6 +294,13 @@ pub enum Command {
         /// similar to `git commit`.
         #[clap(short = 'm', long = "message")]
         messages: Vec<String>,
+
+        /// Throw away the original commit messages.
+        ///
+        /// If `commit.template` is set, then the editor is pre-populated with
+        /// that; otherwise, the editor starts empty.
+        #[clap(short = 'd', long = "discard", conflicts_with("messages"))]
+        discard: bool,
     },
 
     /// Display a nice graph of the commits you've recently worked on.
