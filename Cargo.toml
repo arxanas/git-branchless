@@ -50,7 +50,7 @@ assert_cmd = "2.0.4"
 bugreport = "0.4.1"
 chashmap = "2.2.2"
 chrono = "0.4.19"
-clap = { version = "3.1.6", features = ["derive"] }
+clap = { version = "3.1.7", features = ["derive"] }
 color-eyre = "0.6.1"
 concolor = { version = "0.0.8", features = ["auto"] }
 console = "0.15.0"
