@@ -59,6 +59,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 use std::time::SystemTime;
 
+use eden_dag::DagAlgorithm;
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use tracing::{instrument, warn};
 
@@ -97,6 +98,13 @@ fn restack_commits(
     // large and we'll be throwing away most of them.
     let commits = commit_set_to_vec(&commit_set)?;
 
+    let public_commits = dag.query_public_commits()?;
+    let active_heads = dag.query_active_heads(
+        &public_commits,
+        &dag.observed_commits.difference(&dag.obsolete_commits),
+    )?;
+    let draft_commits = dag.query().range(public_commits, active_heads)?;
+
     struct RebaseInfo {
         dest_oid: NonZeroOid,
         abandoned_child_oids: Vec<NonZeroOid>,
@@ -104,8 +112,13 @@ fn restack_commits(
     let rebases: Vec<RebaseInfo> = {
         let mut result = Vec::new();
         for original_commit_oid in commits {
-            let abandoned_children =
-                find_abandoned_children(dag, event_replayer, event_cursor, original_commit_oid)?;
+            let abandoned_children = find_abandoned_children(
+                dag,
+                &draft_commits,
+                event_replayer,
+                event_cursor,
+                original_commit_oid,
+            )?;
             if let Some((rewritten_oid, abandoned_child_oids)) = abandoned_children {
                 result.push(RebaseInfo {
                     dest_oid: rewritten_oid,

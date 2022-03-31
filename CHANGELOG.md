@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added `--discard` flag to `git reword` to start with a clean commit message.
 
+### Fixed
+
+- (#326) `git restack` now restacks certain branch commits which it missed before.
+
 ## [0.3.10] - 2022-03-27
 
 NOTE: when installing this version with `--locked`, you may see a warning like this:
