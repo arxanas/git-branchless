@@ -506,3 +506,67 @@ fn test_restack_checked_out_branch() -> eyre::Result<()> {
 
     Ok(())
 }
+
+/// Regression test for https://github.com/arxanas/git-branchless/issues/325
+#[test]
+fn test_restack_non_observed_branch_commit() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+
+    git.commit_file("test1", 1)?;
+    let test2_oid = git.commit_file("test2", 2)?;
+    git.run(&["branch", "foo"])?;
+    git.run(&["checkout", "HEAD^"])?;
+    git.clear_event_log()?;
+    git.run(&["commit", "--amend", "-m", "test1 amended"])?;
+    git.run(&["checkout", "foo"])?;
+
+    {
+        let (stdout, _stderr) = git.run(&["restack"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        Attempting rebase in-memory...
+        [1/1] Committed as: 59e7581 create test2.txt
+        branchless: processing 2 updates: branch foo, branch master
+        branchless: processing 1 rewritten commit
+        branchless: running command: <git-executable> checkout foo
+        In-memory rebase succeeded.
+        Finished restacking commits.
+        No abandoned branches to restack.
+        :
+        @ 59e7581 (> foo, master) create test2.txt
+        "###);
+    }
+
+    git.run(&["reset", "--hard", &test2_oid.to_string()])?;
+    {
+        let (stdout, _stderr) = git.run(&["sl"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc create initial.txt
+        |\
+        : x 62fc20d (rewritten as 14042005) create test1.txt
+        : |
+        : % 96d1c37 (rewritten as 59e75818) (> foo) create test2.txt
+        :
+        O 59e7581 (master) create test2.txt
+        "###);
+    }
+
+    {
+        // If we didn't enable `branchless.restack.preserveTimestamps`, then
+        // this would have created another commit and moved `foo` to it. (Below,
+        // it just moves `foo`.) It's not clear what the best behavior here is;
+        // the user might not expect the restack operation to create duplicates
+        // of all descendant commits just because a branch pointed to one of
+        // those descendants.
+        let (stdout, _stderr) = git.run(&["restack"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        No abandoned commits to restack.
+        branchless: processing 1 update: branch foo
+        Finished restacking branches.
+        :
+        @ 59e7581 (> foo, master) create test2.txt
+        "###);
+    }
+
+    Ok(())
+}

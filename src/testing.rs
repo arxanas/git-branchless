@@ -487,6 +487,16 @@ stderr:
         self.run(&["add", file_path])?;
         Ok(())
     }
+
+    /// Clear the event log on disk. Currently-existing commits will not have
+    /// been observed by the new event log (once it's created by another
+    /// command).
+    #[instrument]
+    pub fn clear_event_log(&self) -> eyre::Result<()> {
+        let event_log_path = self.repo_path.join(".git/branchless/db.sqlite3");
+        std::fs::remove_file(event_log_path)?;
+        Ok(())
+    }
 }
 
 /// Wrapper around a `Git` instance which cleans up the repository once dropped.

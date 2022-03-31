@@ -11,6 +11,7 @@ use std::path::Path;
 use std::time::SystemTime;
 
 use console::style;
+use eden_dag::DagAlgorithm;
 use eyre::Context;
 use itertools::Itertools;
 use os_str_bytes::{OsStrBytes, OsStringBytes};
@@ -210,12 +211,24 @@ fn warn_abandoned(
         &references_snapshot,
     )?;
 
+    let public_commits = dag.query_public_commits()?;
+    let active_heads = dag.query_active_heads(
+        &public_commits,
+        &dag.observed_commits.difference(&dag.obsolete_commits),
+    )?;
+    let draft_commits = dag.query().range(public_commits, active_heads)?;
+
     let (all_abandoned_children, all_abandoned_branches) = {
         let mut all_abandoned_children: HashSet<NonZeroOid> = HashSet::new();
         let mut all_abandoned_branches: HashSet<&OsStr> = HashSet::new();
         for old_commit_oid in old_commit_oids {
-            let abandoned_result =
-                find_abandoned_children(&dag, &event_replayer, event_cursor, old_commit_oid)?;
+            let abandoned_result = find_abandoned_children(
+                &dag,
+                &draft_commits,
+                &event_replayer,
+                event_cursor,
+                old_commit_oid,
+            )?;
             let (_rewritten_oid, abandoned_children) = match abandoned_result {
                 Some(abandoned_result) => abandoned_result,
                 None => continue,

@@ -71,6 +71,7 @@ pub fn find_rewrite_target(
 #[instrument]
 pub fn find_abandoned_children(
     dag: &Dag,
+    draft_commits: &CommitSet,
     event_replayer: &EventReplayer,
     event_cursor: EventCursor,
     oid: NonZeroOid,
@@ -82,7 +83,7 @@ pub fn find_abandoned_children(
     };
 
     let children = dag.query().children(CommitSet::from(oid))?;
-    let children = children.intersection(&dag.observed_commits);
+    let children = children.intersection(draft_commits);
     let non_obsolete_children = children.difference(&dag.obsolete_commits);
     let non_obsolete_children_oids: Vec<NonZeroOid> = non_obsolete_children
         .iter()?
