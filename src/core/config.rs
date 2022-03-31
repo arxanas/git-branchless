@@ -57,9 +57,22 @@ pub fn get_commit_template(repo: &Repo) -> eyre::Result<Option<String>> {
     let commit_template_path: Option<String> =
         repo.get_readonly_config()?.get("commit.template")?;
     let commit_template_path = match commit_template_path {
-        Some(commit_template_path) => commit_template_path,
+        Some(commit_template_path) => PathBuf::from(commit_template_path),
         None => return Ok(None),
     };
+
+    let commit_template_path = if commit_template_path.is_relative() {
+        match repo.get_working_copy_path() {
+            Some(root) => root.join(commit_template_path),
+            None => {
+                warn!(?commit_template_path, "Commit template path was relative, but this repository does not have a working copy");
+                return Ok(None);
+            }
+        }
+    } else {
+        commit_template_path
+    };
+
     match std::fs::read_to_string(&commit_template_path) {
         Ok(contents) => Ok(Some(contents)),
         Err(e) => {

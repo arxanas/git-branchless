@@ -62,7 +62,19 @@ pub fn reword(
         None => return Ok(1),
     };
 
-    let messages = match build_messages(&repo, messages, &commits)? {
+    let edit_message_fn = |message: &str| {
+        // Editor::edit() normally requires that the file being edited is saved before the editor
+        // is closed. If it's not, it will return None; and in all other cases, it will return
+        // Some(message). We don't care if the file has been saved, only if it hasn't changed, so
+        // here we call `require_save(false)` and just ignore the None case.
+        let result = Editor::new()
+            .require_save(false)
+            .edit(message)?
+            .expect("`Editor::edit` should not return `None` when `require_save` is `false`");
+        Ok(result)
+    };
+
+    let messages = match build_messages(&repo, messages, &commits, edit_message_fn)? {
         BuildRewordMessageResult::Succeeded { messages } => messages,
         BuildRewordMessageResult::IdenticalMessage => {
             writeln!(
@@ -208,6 +220,7 @@ fn resolve_commits_from_hashes<'repo>(
 
 /// The result of building the reword message.
 #[must_use]
+#[derive(Debug)]
 pub enum BuildRewordMessageResult {
     /// The reworded message was built successfully.
     Succeeded {
@@ -224,11 +237,12 @@ pub enum BuildRewordMessageResult {
 
 /// Builds the message(s) that will be used for rewording. These are mapped from each commit's
 /// NonZeroOid to the relevant message.
-#[instrument]
+#[instrument(skip(edit_message_fn))]
 fn build_messages(
     repo: &Repo,
     messages: InitialCommitMessages,
     commits: &[Commit],
+    edit_message_fn: impl Fn(&str) -> eyre::Result<String>,
 ) -> eyre::Result<BuildRewordMessageResult> {
     let comment_char = get_comment_char(repo)?;
     let (mut message, load_editor) = match messages {
@@ -286,15 +300,7 @@ fn build_messages(
             .as_str(),
         );
 
-        // Editor::edit() normally requires that the file being edited is saved before the editor
-        // is closed. If it's not, it will return None; and in all other cases, it will return
-        // Some(message). We don't care if the file has been saved, only if it hasn't changed, so
-        // here we call `require_save(false)` and just ignore the None case.
-        let edited_message = Editor::new()
-            .require_save(false)
-            .edit(message.as_str())?
-            .unwrap();
-
+        let edited_message = edit_message_fn(&message)?;
         if edited_message == message {
             return Ok(BuildRewordMessageResult::IdenticalMessage);
         }
@@ -411,4 +417,65 @@ fn render_status_report(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::testing::make_git;
+
+    use super::*;
+
+    #[test]
+    fn test_reword_uses_commit_template() -> eyre::Result<()> {
+        let git = make_git()?;
+        git.init_repo()?;
+        let repo = git.get_repo()?;
+
+        let head_oid = git.commit_file("test1", 1)?;
+        let head_commit = repo.find_commit_or_fail(head_oid)?;
+
+        {
+            let result = build_messages(
+                &repo,
+                InitialCommitMessages::Discard,
+                &[head_commit.clone()],
+                |message| {
+                    insta::assert_snapshot!(message.trim(), @r###"
+                    # Rewording: Please enter the commit message to apply to this 1 commit. Lines
+                    # starting with '#' will be ignored, and an empty message aborts rewording.
+                    "###);
+                    Ok(message.to_string())
+                },
+            )?;
+            insta::assert_debug_snapshot!(result, @"IdenticalMessage");
+        }
+
+        git.run(&["config", "commit.template", "template.txt"])?;
+        git.write_file(
+            "template",
+            "\
+This is a template!
+",
+        )?;
+
+        {
+            let result = build_messages(
+                &repo,
+                InitialCommitMessages::Discard,
+                &[head_commit],
+                |message| {
+                    insta::assert_snapshot!(message.trim(), @r###"
+                    This is a template!
+
+                    # Rewording: Please enter the commit message to apply to this 1 commit. Lines
+                    # starting with '#' will be ignored, and an empty message aborts rewording.
+                    "###);
+                    Ok(message.to_string())
+                },
+            )?;
+            insta::assert_debug_snapshot!(result, @"IdenticalMessage");
+        }
+
+        Ok(())
+    }
 }
