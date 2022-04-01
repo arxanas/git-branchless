@@ -76,7 +76,7 @@ textwrap = "0.15.0"
 tracing = "0.1.32"
 tracing-chrome = "0.5.0"
 tracing-error = "0.2.0"
-tracing-subscriber = { version = "0.3.9", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3.10", features = ["env-filter"] }
 
 [target.'cfg(unix)'.dependencies]
 skim = "0.9.4"
