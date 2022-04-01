@@ -1,5 +1,6 @@
 //! Accesses repo-specific configuration.
 
+use std::ffi::OsString;
 use std::path::PathBuf;
 
 use tracing::{instrument, warn};
@@ -88,6 +89,29 @@ pub fn get_default_branch_name(repo: &Repo) -> eyre::Result<Option<String>> {
     let config = repo.get_readonly_config()?;
     let default_branch_name: Option<String> = config.get("init.defaultBranch")?;
     Ok(default_branch_name)
+}
+
+/// Get the configured editor, if any.
+///
+/// Because this is primarily intended for use w/ dialoguer::Editor, and it already considers
+/// several environment variables, we only need to consider git-specific config options: the
+/// `$GIT_EDITOR` environment var and the `core.editor` config setting. We do so in that order to
+/// match how git resolves the editor to use.
+///
+/// FMI see https://git-scm.com/docs/git-var#Documentation/git-var.txt-GITEDITOR
+#[instrument]
+pub fn get_editor(repo: &Repo) -> eyre::Result<Option<OsString>> {
+    let editor = std::env::var_os("GIT_EDITOR");
+    if editor != None {
+        return Ok(editor);
+    }
+
+    let config = repo.get_readonly_config()?;
+    let editor: Option<String> = config.get("core.editor")?;
+    match editor {
+        Some(editor) => Ok(Some(editor.into())),
+        None => Ok(None),
+    }
 }
 
 /// If `true`, when restacking a commit, do not update its timestamp to the
