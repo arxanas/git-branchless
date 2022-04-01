@@ -11,7 +11,9 @@ use eden_dag::DagAlgorithm;
 use eyre::Context;
 use tracing::{instrument, warn};
 
-use crate::core::config::{get_comment_char, get_commit_template, get_restack_preserve_timestamps};
+use crate::core::config::{
+    get_comment_char, get_commit_template, get_editor, get_restack_preserve_timestamps,
+};
 use crate::core::dag::{resolve_commits, CommitSet, Dag, ResolveCommitsResult};
 use crate::core::effects::Effects;
 use crate::core::eventlog::{EventLogDb, EventReplayer};
@@ -63,11 +65,12 @@ pub fn reword(
     };
 
     let edit_message_fn = |message: &str| {
-        // Editor::edit() normally requires that the file being edited is saved before the editor
-        // is closed. If it's not, it will return None; and in all other cases, it will return
-        // Some(message). We don't care if the file has been saved, only if it hasn't changed, so
-        // here we call `require_save(false)` and just ignore the None case.
-        let result = Editor::new()
+        let mut editor = Editor::new();
+        let editor = match get_editor(&repo)? {
+            Some(prog) => editor.executable(prog),
+            None => &mut editor,
+        };
+        let result = editor
             .require_save(false)
             .edit(message)?
             .expect("`Editor::edit` should not return `None` when `require_save` is `false`");
