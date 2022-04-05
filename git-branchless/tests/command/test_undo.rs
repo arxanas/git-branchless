@@ -840,7 +840,7 @@ fn test_undo_noninteractive() -> eyre::Result<()> {
         2. Rewrite commit 9ed8f9a bad message
                       as 96d1c37 create test2.txt
         3. Hide commit 9ed8f9a bad message
-           
+
         4. Move branch master from 9ed8f9a bad message
                                 to 96d1c37 create test2.txt
         Confirm? [yN] Aborted.
