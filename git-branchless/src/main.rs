@@ -1,3 +1,3 @@
 fn main() {
-    branchless::commands::main();
+    git_branchless::commands::main();
 }

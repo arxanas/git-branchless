@@ -10,16 +10,16 @@ use bugreport::report::ReportEntry;
 use itertools::Itertools;
 
 use crate::commands::smartlog::{make_smartlog_graph, render_graph};
-use crate::core::dag::Dag;
-use crate::core::effects::Effects;
-use crate::core::eventlog::{Event, EventCursor, EventLogDb, EventReplayer};
-use crate::core::formatting::{printable_styled_string, Glyphs};
-use crate::core::node_descriptors::{
+use lib::core::dag::Dag;
+use lib::core::effects::Effects;
+use lib::core::eventlog::{Event, EventCursor, EventLogDb, EventReplayer};
+use lib::core::formatting::{printable_styled_string, Glyphs};
+use lib::core::node_descriptors::{
     BranchesDescriptor, CommitMessageDescriptor, CommitOidDescriptor,
     DifferentialRevisionDescriptor, ObsolescenceExplanationDescriptor, Redactor,
     RelativeTimeDescriptor,
 };
-use crate::git::{GitRunInfo, Repo, RepoReferencesSnapshot, ResolvedReferenceInfo};
+use lib::git::{GitRunInfo, Repo, RepoReferencesSnapshot, ResolvedReferenceInfo};
 
 fn redact_event(redactor: &Redactor, event: &Event) -> String {
     let event = match event.clone() {

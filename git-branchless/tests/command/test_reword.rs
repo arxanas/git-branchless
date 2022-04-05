@@ -1,4 +1,4 @@
-use branchless::testing::make_git;
+use lib::testing::make_git;
 
 #[test]
 fn test_reword_head() -> eyre::Result<()> {

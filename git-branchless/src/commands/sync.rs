@@ -7,17 +7,17 @@ use eden_dag::DagAlgorithm;
 use itertools::Itertools;
 use rayon::ThreadPoolBuilder;
 
-use crate::core::config::get_restack_preserve_timestamps;
-use crate::core::dag::{resolve_commits, sort_commit_set, CommitSet, Dag, ResolveCommitsResult};
-use crate::core::effects::{Effects, OperationType};
-use crate::core::eventlog::{EventLogDb, EventReplayer};
-use crate::core::formatting::{printable_styled_string, Glyphs, StyledStringBuilder};
-use crate::core::rewrite::{
+use crate::opts::MoveOptions;
+use lib::core::config::get_restack_preserve_timestamps;
+use lib::core::dag::{resolve_commits, sort_commit_set, CommitSet, Dag, ResolveCommitsResult};
+use lib::core::effects::{Effects, OperationType};
+use lib::core::eventlog::{EventLogDb, EventReplayer};
+use lib::core::formatting::{printable_styled_string, Glyphs, StyledStringBuilder};
+use lib::core::rewrite::{
     execute_rebase_plan, BuildRebasePlanError, BuildRebasePlanOptions, ExecuteRebasePlanOptions,
     ExecuteRebasePlanResult, RebasePlan, RebasePlanBuilder, RepoResource,
 };
-use crate::git::{CheckOutCommitOptions, Commit, GitRunInfo, NonZeroOid, Repo};
-use crate::opts::MoveOptions;
+use lib::git::{CheckOutCommitOptions, Commit, GitRunInfo, NonZeroOid, Repo};
 
 fn get_stack_roots(dag: &Dag) -> eyre::Result<CommitSet> {
     let public_commits = dag.query_public_commits()?;

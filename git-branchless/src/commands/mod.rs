@@ -30,15 +30,15 @@ use tracing_subscriber::fmt as tracing_fmt;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
 
-use crate::core::config::env_vars::get_path_to_git;
-use crate::core::effects::Effects;
-use crate::core::formatting::Glyphs;
-use crate::git::GitRunInfo;
-use crate::git::NonZeroOid;
 use crate::opts::ColorSetting;
 use crate::opts::Command;
 use crate::opts::Opts;
 use crate::opts::WrappedCommand;
+use lib::core::config::env_vars::get_path_to_git;
+use lib::core::effects::Effects;
+use lib::core::formatting::Glyphs;
+use lib::git::GitRunInfo;
+use lib::git::NonZeroOid;
 
 use self::reword::InitialCommitMessages;
 use self::smartlog::SmartlogOptions;

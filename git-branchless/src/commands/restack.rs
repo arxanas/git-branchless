@@ -64,17 +64,17 @@ use rayon::{ThreadPool, ThreadPoolBuilder};
 use tracing::{instrument, warn};
 
 use crate::commands::smartlog::smartlog;
-use crate::core::config::get_restack_preserve_timestamps;
-use crate::core::dag::{commit_set_to_vec, resolve_commits, CommitSet, Dag, ResolveCommitsResult};
-use crate::core::effects::Effects;
-use crate::core::eventlog::{EventCursor, EventLogDb, EventReplayer};
-use crate::core::rewrite::{
+use crate::opts::MoveOptions;
+use lib::core::config::get_restack_preserve_timestamps;
+use lib::core::dag::{commit_set_to_vec, resolve_commits, CommitSet, Dag, ResolveCommitsResult};
+use lib::core::effects::Effects;
+use lib::core::eventlog::{EventCursor, EventLogDb, EventReplayer};
+use lib::core::rewrite::{
     execute_rebase_plan, find_abandoned_children, find_rewrite_target, move_branches,
     BuildRebasePlanOptions, ExecuteRebasePlanOptions, ExecuteRebasePlanResult, RebasePlanBuilder,
     RepoPool, RepoResource,
 };
-use crate::git::{CheckOutCommitOptions, GitRunInfo, NonZeroOid, Repo};
-use crate::opts::MoveOptions;
+use lib::git::{CheckOutCommitOptions, GitRunInfo, NonZeroOid, Repo};
 
 #[instrument(skip(commits))]
 fn restack_commits(

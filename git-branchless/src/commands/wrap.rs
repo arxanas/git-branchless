@@ -8,8 +8,8 @@ use std::time::SystemTime;
 use eyre::Context;
 use itertools::Itertools;
 
-use crate::core::eventlog::{EventLogDb, EventTransactionId, BRANCHLESS_TRANSACTION_ID_ENV_VAR};
-use crate::git::{GitRunInfo, Repo};
+use lib::core::eventlog::{EventLogDb, EventTransactionId, BRANCHLESS_TRANSACTION_ID_ENV_VAR};
+use lib::git::{GitRunInfo, Repo};
 
 fn pass_through_git_command_inner(
     git_run_info: &GitRunInfo,

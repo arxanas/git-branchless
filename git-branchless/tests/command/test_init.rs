@@ -4,9 +4,9 @@ use regex::Regex;
 
 use crate::util::trim_lines;
 
-use branchless::git::GitVersion;
-use branchless::testing::{make_git, GitInitOptions, GitRunOptions};
 use eyre::Context;
+use lib::git::GitVersion;
+use lib::testing::{make_git, GitInitOptions, GitRunOptions};
 
 #[test]
 fn test_hook_installed() -> eyre::Result<()> {
@@ -327,7 +327,7 @@ fn test_main_branch_not_found_error_message() -> eyre::Result<()> {
 
        0: branchless::git::repo::get_main_branch_oid with self=<Git repository at: "<repo-path>/.git/">
           at some/file/path.rs:123
-       1: branchless::commands::smartlog::smartlog with effects=<Output fancy=false> git_run_info=<GitRunInfo path_to_git="<git-executable>" working_directory="<repo-path>" env=not shown> options=SmartlogOptions { show_hidden_commits: false, only_show_branches: false }
+       1: git_branchless::commands::smartlog::smartlog with effects=<Output fancy=false> git_run_info=<GitRunInfo path_to_git="<git-executable>" working_directory="<repo-path>" env=not shown> options=SmartlogOptions { show_hidden_commits: false, only_show_branches: false }
           at some/file/path.rs:123
 
     Suggestion:

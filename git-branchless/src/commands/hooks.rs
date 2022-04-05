@@ -16,13 +16,13 @@ use eyre::Context;
 use itertools::Itertools;
 use tracing::{error, instrument, warn};
 
-use crate::commands::gc::mark_commit_reachable;
-use crate::core::eventlog::{should_ignore_ref_updates, Event, EventLogDb};
-use crate::core::formatting::{printable_styled_string, Glyphs, Pluralize};
-use crate::git::{CategorizedReferenceName, MaybeZeroOid, Repo};
+use lib::core::eventlog::{should_ignore_ref_updates, Event, EventLogDb};
+use lib::core::formatting::{printable_styled_string, Glyphs, Pluralize};
+use lib::core::gc::mark_commit_reachable;
+use lib::git::{CategorizedReferenceName, MaybeZeroOid, Repo};
 
-use crate::core::effects::Effects;
-pub use crate::core::rewrite::rewrite_hooks::{
+use lib::core::effects::Effects;
+pub use lib::core::rewrite::rewrite_hooks::{
     hook_drop_commit_if_empty, hook_post_rewrite, hook_register_extra_post_rewrite_hook,
     hook_skip_upstream_applied_commit,
 };
@@ -147,7 +147,7 @@ mod reference_transaction {
     use os_str_bytes::OsStringBytes;
     use tracing::{instrument, warn};
 
-    use crate::git::{MaybeZeroOid, Repo};
+    use lib::git::{MaybeZeroOid, Repo};
 
     #[instrument]
     fn parse_packed_refs_line(line: &[u8]) -> Option<(OsString, MaybeZeroOid)> {
@@ -286,7 +286,7 @@ mod reference_transaction {
     #[cfg(test)]
     #[test]
     fn test_parse_reference_transaction_line() -> eyre::Result<()> {
-        use crate::core::eventlog::should_ignore_ref_updates;
+        use lib::core::eventlog::should_ignore_ref_updates;
 
         let line = b"123abc 456def refs/heads/mybranch";
         assert_eq!(
@@ -495,7 +495,7 @@ pub fn hook_reference_transaction(effects: &Effects, transaction_state: &str) ->
 
 #[cfg(test)]
 mod tests {
-    use crate::testing::{make_git, GitRunOptions};
+    use lib::testing::{make_git, GitRunOptions};
 
     #[test]
     fn test_is_rebase_underway() -> eyre::Result<()> {

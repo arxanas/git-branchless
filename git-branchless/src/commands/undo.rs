@@ -18,21 +18,21 @@ use eyre::Context;
 use tracing::instrument;
 
 use crate::commands::smartlog::{make_smartlog_graph, render_graph};
-use crate::core::dag::Dag;
-use crate::core::effects::Effects;
-use crate::core::eventlog::{Event, EventCursor, EventLogDb, EventReplayer, EventTransactionId};
-use crate::core::formatting::{printable_styled_string, Glyphs, Pluralize, StyledStringBuilder};
-use crate::core::node_descriptors::{
+use crate::declare_views;
+use crate::tui::{with_siv, SingletonView};
+use lib::core::dag::Dag;
+use lib::core::effects::Effects;
+use lib::core::eventlog::{Event, EventCursor, EventLogDb, EventReplayer, EventTransactionId};
+use lib::core::formatting::{printable_styled_string, Glyphs, Pluralize, StyledStringBuilder};
+use lib::core::node_descriptors::{
     BranchesDescriptor, CommitMessageDescriptor, CommitOidDescriptor,
     DifferentialRevisionDescriptor, ObsolescenceExplanationDescriptor, Redactor,
     RelativeTimeDescriptor,
 };
-use crate::declare_views;
-use crate::git::{
+use lib::git::{
     check_out_commit, CategorizedReferenceName, CheckOutCommitOptions, GitRunInfo, MaybeZeroOid,
     Repo, ResolvedReferenceInfo,
 };
-use crate::tui::{with_siv, SingletonView};
 
 fn render_cursor_smartlog(
     effects: &Effects,
@@ -868,10 +868,10 @@ pub mod testing {
 
     use cursive::{CursiveRunnable, CursiveRunner};
 
-    use crate::core::dag::Dag;
-    use crate::core::effects::Effects;
-    use crate::core::eventlog::{EventCursor, EventLogDb, EventReplayer};
-    use crate::git::{GitRunInfo, Repo};
+    use lib::core::dag::Dag;
+    use lib::core::effects::Effects;
+    use lib::core::eventlog::{EventCursor, EventLogDb, EventReplayer};
+    use lib::git::{GitRunInfo, Repo};
 
     pub fn select_past_event(
         siv: CursiveRunner<CursiveRunnable>,
@@ -908,7 +908,7 @@ pub mod testing {
 mod tests {
     use super::*;
 
-    use crate::core::eventlog::testing::make_dummy_transaction_id;
+    use lib::core::eventlog::testing::make_dummy_transaction_id;
 
     #[test]
     fn test_optimize_inverse_events() -> eyre::Result<()> {
