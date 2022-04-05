@@ -1022,6 +1022,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "git-record"
+version = "0.1.0"
+dependencies = [
+ "cursive",
+ "cursive_buffered_backend",
+ "insta",
+ "tracing",
+]
+
+[[package]]
 name = "git-version"
 version = "0.3.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
