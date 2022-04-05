@@ -11,14 +11,14 @@ use eyre::Context;
 use itertools::Itertools;
 use tracing::instrument;
 
-use crate::commands::gc::mark_commit_reachable;
 use crate::commands::restack;
-use crate::core::config::get_restack_preserve_timestamps;
-use crate::core::effects::Effects;
-use crate::core::eventlog::{Event, EventLogDb};
-use crate::core::formatting::Pluralize;
-use crate::git::{AmendFastOptions, FileStatus, GitRunInfo, Repo};
 use crate::opts::MoveOptions;
+use lib::core::config::get_restack_preserve_timestamps;
+use lib::core::effects::Effects;
+use lib::core::eventlog::{Event, EventLogDb};
+use lib::core::formatting::Pluralize;
+use lib::core::gc::mark_commit_reachable;
+use lib::git::{AmendFastOptions, FileStatus, GitRunInfo, Repo};
 
 /// Amends the existing HEAD commit.
 #[instrument]

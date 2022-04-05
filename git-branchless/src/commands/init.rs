@@ -9,10 +9,10 @@ use eyre::Context;
 use path_slash::PathExt;
 use tracing::{instrument, warn};
 
-use crate::core::config::{get_core_hooks_path, get_default_branch_name};
-use crate::core::effects::Effects;
-use crate::git::{Config, ConfigRead, ConfigWrite, GitRunInfo, GitVersion, Repo};
 use crate::opts::write_man_pages;
+use lib::core::config::{get_core_hooks_path, get_default_branch_name};
+use lib::core::effects::Effects;
+use lib::git::{Config, ConfigRead, ConfigWrite, GitRunInfo, GitVersion, Repo};
 
 const ALL_HOOKS: &[(&str, &str)] = &[
     (

@@ -1,4 +1,4 @@
-use branchless::testing::{
+use lib::testing::{
     make_git, make_git_with_remote_repo, GitInitOptions, GitRunOptions, GitWrapperWithRemoteRepo,
 };
 
@@ -89,6 +89,7 @@ fn test_move_stick() -> eyre::Result<()> {
         [2/2] Committed as: a248207 create test4.txt
         branchless: processing 2 rewritten commits
         branchless: running command: <git-executable> checkout a248207402822b7396cabe0f1011d8a7ce7daf1b
+        branchless: running command: <git-executable> branchless smartlog
         :
         O 62fc20d create test1.txt
         |\
@@ -278,6 +279,7 @@ fn test_move_with_source_not_in_smartlog() -> eyre::Result<()> {
             branchless: processing 1 update: branch master
             branchless: processing 2 rewritten commits
             branchless: running command: <git-executable> checkout master
+            branchless: running command: <git-executable> branchless smartlog
             :
             O 62fc20d create test1.txt
             |\
@@ -460,6 +462,7 @@ fn test_move_base() -> eyre::Result<()> {
         [2/2] Committed as: cf5eb24 create test3.txt
         branchless: processing 2 rewritten commits
         branchless: running command: <git-executable> checkout master
+        branchless: running command: <git-executable> branchless smartlog
         :
         @ bf0d52a (> master) create test4.txt
         |
@@ -517,6 +520,7 @@ fn test_move_base_shared() -> eyre::Result<()> {
         [2/2] Committed as: 355e173 create test4.txt
         branchless: processing 2 rewritten commits
         branchless: running command: <git-executable> checkout 355e173bf9c5d2efac2e451da0cdad3fb82b869a
+        branchless: running command: <git-executable> branchless smartlog
         O f777ecc (master) create initial.txt
         |
         o 62fc20d create test1.txt
@@ -585,6 +589,7 @@ fn test_move_checkout_new_head() -> eyre::Result<()> {
         [1/1] Committed as: 96d1c37 create test2.txt
         branchless: processing 1 rewritten commit
         branchless: running command: <git-executable> checkout 96d1c37a3d4363611c49f7e52186e189a04c531f
+        branchless: running command: <git-executable> branchless smartlog
         :
         O 62fc20d (master) create test1.txt
         |
@@ -657,6 +662,7 @@ fn test_move_branch() -> eyre::Result<()> {
         branchless: processing 1 update: branch master
         branchless: processing 1 rewritten commit
         branchless: running command: <git-executable> checkout master
+        branchless: running command: <git-executable> branchless smartlog
         :
         @ 70deb1e (> master) create test3.txt
         In-memory rebase succeeded.
@@ -846,6 +852,7 @@ fn test_move_in_memory_gc() -> eyre::Result<()> {
         [1/1] Committed as: fe65c1f create test2.txt
         branchless: processing 1 rewritten commit
         branchless: running command: <git-executable> checkout fe65c1fe15584744e649b2c79d4cf9b0d878f92e
+        branchless: running command: <git-executable> branchless smartlog
         O f777ecc (master) create initial.txt
         |\
         | o 62fc20d create test1.txt
@@ -918,6 +925,7 @@ fn test_move_main_branch_commits() -> eyre::Result<()> {
         branchless: processing 1 update: branch master
         branchless: processing 3 rewritten commits
         branchless: running command: <git-executable> checkout master
+        branchless: running command: <git-executable> branchless smartlog
         :
         O 62fc20d create test1.txt
         |\
@@ -1104,6 +1112,7 @@ fn test_move_branches_after_move() -> eyre::Result<()> {
             branchless: processing 2 updates: branch bar, branch foo
             branchless: processing 3 rewritten commits
             branchless: running command: <git-executable> checkout 566e4341a4a9a930fc2bf7ccdfa168e9f266c34a
+            branchless: running command: <git-executable> branchless smartlog
             :
             O 62fc20d create test1.txt
             |\
@@ -1229,6 +1238,7 @@ fn test_move_no_reapply_upstream_commits() -> eyre::Result<()> {
             branchless: processing 1 update: branch should-be-deleted
             branchless: processing 2 rewritten commits
             branchless: running command: <git-executable> checkout fa46633239bfa767036e41a77b67258286e4ddb9
+            branchless: running command: <git-executable> branchless smartlog
             :
             O 047b7ad (master) create test1.txt
             |
@@ -1313,6 +1323,7 @@ fn test_move_no_reapply_squashed_commits() -> eyre::Result<()> {
             branchless: running command: <git-executable> checkout master
             Switched to branch 'master'
             branchless: processing checkout
+            branchless: running command: <git-executable> branchless smartlog
             :
             @ de4a1fe (> master) squashed test1 and test2
             Successfully rebased and updated detached HEAD.
@@ -1374,6 +1385,7 @@ fn test_move_no_reapply_squashed_commits() -> eyre::Result<()> {
             [2/2] Skipped now-empty commit: 12d361a create test2.txt
             branchless: processing 2 rewritten commits
             branchless: running command: <git-executable> checkout master
+            branchless: running command: <git-executable> branchless smartlog
             :
             @ de4a1fe (> master) squashed test1 and test2
             In-memory rebase succeeded.
@@ -1450,6 +1462,7 @@ fn test_move_delete_checked_out_branch() -> eyre::Result<()> {
             branchless: processing 1 update: ref HEAD
             HEAD is now at 91c5ce6 create test2.txt
             branchless: processing checkout
+            branchless: running command: <git-executable> branchless smartlog
             :
             @ 91c5ce6 (master) create test2.txt
             |
@@ -1495,6 +1508,7 @@ fn test_move_delete_checked_out_branch() -> eyre::Result<()> {
             branchless: processing 2 updates: branch more-work, branch work
             branchless: processing 3 rewritten commits
             branchless: running command: <git-executable> checkout 91c5ce63686889388daec1120bf57bea8a744bc2
+            branchless: running command: <git-executable> branchless smartlog
             :
             @ 91c5ce6 (master) create test2.txt
             |
@@ -1670,6 +1684,7 @@ fn test_move_merge_commit() -> eyre::Result<()> {
             branchless: processing 1 update: ref HEAD
             HEAD is now at 98b9119 create test3.txt
             branchless: processing checkout
+            branchless: running command: <git-executable> branchless smartlog
             O f777ecc create initial.txt
             |\
             | @ 98b9119 create test3.txt
@@ -1759,6 +1774,7 @@ fn test_move_merge_commit() -> eyre::Result<()> {
             branchless: processing 1 update: ref HEAD
             HEAD is now at 98b9119 create test3.txt
             branchless: processing checkout
+            branchless: running command: <git-executable> branchless smartlog
             O f777ecc create initial.txt
             |\
             | @ 98b9119 create test3.txt
@@ -1853,6 +1869,7 @@ fn test_move_orphaned_root() -> eyre::Result<()> {
             branchless: running command: <git-executable> checkout new-root
             Switched to branch 'new-root'
             branchless: processing checkout
+            branchless: running command: <git-executable> branchless smartlog
             :
             O 96d1c37 (master) create test2.txt
             |
@@ -1899,6 +1916,7 @@ fn test_move_orphaned_root() -> eyre::Result<()> {
             branchless: processing 1 update: branch new-root
             branchless: processing 2 rewritten commits
             branchless: running command: <git-executable> checkout new-root
+            branchless: running command: <git-executable> branchless smartlog
             :
             O 96d1c37 (master) create test2.txt
             |
@@ -1989,6 +2007,7 @@ fn test_move_dest_not_in_dag() -> eyre::Result<()> {
         branchless: processing 1 rewritten commit
         branchless: running command: <git-executable> checkout other-branch
         Your branch is up to date with 'origin/other-branch'.
+        branchless: running command: <git-executable> branchless smartlog
         :
         @ 70deb1e (> other-branch, remote origin/other-branch) create test3.txt
         In-memory rebase succeeded.
@@ -2153,6 +2172,7 @@ fn test_move_branch_on_merge_conflict_resolution() -> eyre::Result<()> {
         Previous HEAD position was 3632ef4 create test1.txt
         Switched to branch 'master'
         branchless: processing checkout
+        branchless: running command: <git-executable> branchless smartlog
         :
         @ 62fc20d (> master) create test1.txt
         |\

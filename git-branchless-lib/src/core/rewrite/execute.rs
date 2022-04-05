@@ -320,9 +320,9 @@ mod in_memory {
     use eyre::Context;
     use tracing::{instrument, warn};
 
-    use crate::commands::gc::mark_commit_reachable;
     use crate::core::effects::{Effects, OperationType};
     use crate::core::formatting::printable_styled_string;
+    use crate::core::gc::mark_commit_reachable;
     use crate::core::rewrite::execute::check_out_updated_head;
     use crate::core::rewrite::move_branches;
     use crate::core::rewrite::plan::{OidOrLabel, RebaseCommand, RebasePlan};

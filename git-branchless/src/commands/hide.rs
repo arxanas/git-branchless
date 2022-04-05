@@ -7,12 +7,12 @@ use std::time::SystemTime;
 use eden_dag::DagAlgorithm;
 use tracing::instrument;
 
-use crate::core::dag::{resolve_commits, sort_commit_set, CommitSet, Dag, ResolveCommitsResult};
-use crate::core::effects::Effects;
-use crate::core::eventlog::{CommitActivityStatus, Event};
-use crate::core::eventlog::{EventLogDb, EventReplayer};
-use crate::core::formatting::{printable_styled_string, Glyphs, Pluralize};
-use crate::git::Repo;
+use lib::core::dag::{resolve_commits, sort_commit_set, CommitSet, Dag, ResolveCommitsResult};
+use lib::core::effects::Effects;
+use lib::core::eventlog::{CommitActivityStatus, Event};
+use lib::core::eventlog::{EventLogDb, EventReplayer};
+use lib::core::formatting::{printable_styled_string, Glyphs, Pluralize};
+use lib::git::Repo;
 
 /// Hide the hashes provided on the command-line.
 #[instrument]

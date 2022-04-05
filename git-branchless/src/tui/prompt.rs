@@ -1,5 +1,5 @@
-use crate::core::node_descriptors::NodeDescriptor;
-use crate::git::{Commit, NonZeroOid};
+use lib::core::node_descriptors::NodeDescriptor;
+use lib::git::{Commit, NonZeroOid};
 
 /// Prompt the user to select a commit from the provided list
 /// of commits, and returns the OID of the selected commit.
@@ -32,9 +32,9 @@ mod skim {
 
     use itertools::Itertools;
 
-    use crate::core::formatting::{printable_styled_string, Glyphs};
-    use crate::core::node_descriptors::{render_node_descriptors, NodeDescriptor, NodeObject};
-    use crate::git::{Commit, NonZeroOid};
+    use lib::core::formatting::{printable_styled_string, Glyphs};
+    use lib::core::node_descriptors::{render_node_descriptors, NodeDescriptor, NodeObject};
+    use lib::git::{Commit, NonZeroOid};
 
     use skim::{
         prelude::SkimOptionsBuilder, AnsiString, DisplayContext, ItemPreview, Matches,

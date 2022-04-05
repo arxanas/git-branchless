@@ -4,4 +4,4 @@
 debug = 0
 
 [workspace]
-members = ["git-branchless"]
+members = ["git-branchless", "git-branchless-lib"]

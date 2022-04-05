@@ -5,14 +5,14 @@ use std::sync::{Arc, Mutex};
 
 use crate::util::trim_lines;
 
-use branchless::commands::undo::testing::{select_past_event, undo_events};
-use branchless::core::dag::Dag;
-use branchless::core::effects::Effects;
-use branchless::core::eventlog::{EventCursor, EventLogDb, EventReplayer};
-use branchless::core::formatting::Glyphs;
-use branchless::git::{GitRunInfo, GitVersion, Repo};
-use branchless::testing::{make_git, Git};
-use branchless::tui::testing::{screen_to_string, CursiveTestingBackend, CursiveTestingEvent};
+use git_branchless::commands::undo::testing::{select_past_event, undo_events};
+use git_branchless::tui::testing::{screen_to_string, CursiveTestingBackend, CursiveTestingEvent};
+use lib::core::dag::Dag;
+use lib::core::effects::Effects;
+use lib::core::eventlog::{EventCursor, EventLogDb, EventReplayer};
+use lib::core::formatting::Glyphs;
+use lib::git::{GitRunInfo, GitVersion, Repo};
+use lib::testing::{make_git, Git};
 
 use cursive::event::Key;
 use cursive::CursiveRunnable;
@@ -411,6 +411,7 @@ fn test_undo_move_refs() -> eyre::Result<()> {
         3. Move branch master from 96d1c37 create test2.txt
                                 to 62fc20d create test1.txt
         Confirm? [yN] branchless: running command: <git-executable> checkout 62fc20d2a290daea0d52bdc2ed2ad4be6491010e --detach
+        branchless: running command: <git-executable> branchless smartlog
         :
         @ 62fc20d create test1.txt
         |
@@ -640,6 +641,7 @@ fn test_undo_doesnt_make_working_dir_dirty() -> eyre::Result<()> {
         5. Delete branch foo at f777ecc create initial.txt
 
         Confirm? [yN] branchless: running command: <git-executable> checkout f777ecc9b0db5ed372b2615695191a8a17f79f24 --detach
+        branchless: running command: <git-executable> branchless smartlog
         @ f777ecc (foo) create initial.txt
         |
         O 62fc20d (bar, master) create test1.txt
@@ -834,7 +836,7 @@ fn test_undo_noninteractive() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run_with_options(
             &["undo"],
-            &branchless::testing::GitRunOptions {
+            &lib::testing::GitRunOptions {
                 expected_exit_code: 1,
                 input: Some("n".to_string()),
                 ..Default::default()
@@ -865,7 +867,7 @@ fn test_undo_noninteractive() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run_with_options(
             &["undo"],
-            &branchless::testing::GitRunOptions {
+            &lib::testing::GitRunOptions {
                 input: Some("y".to_string()),
                 ..Default::default()
             },
@@ -882,6 +884,7 @@ fn test_undo_noninteractive() -> eyre::Result<()> {
         4. Move branch master from 9ed8f9a bad message
                                 to 96d1c37 create test2.txt
         Confirm? [yN] branchless: running command: <git-executable> checkout 96d1c37a3d4363611c49f7e52186e189a04c531f --detach
+        branchless: running command: <git-executable> branchless smartlog
         :
         O 62fc20d create test1.txt
         |\

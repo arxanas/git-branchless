@@ -12,18 +12,18 @@ use eden_dag::DagAlgorithm;
 use tracing::{instrument, warn};
 
 use crate::commands::smartlog::make_smartlog_graph;
-use crate::core::config::get_next_interactive;
-use crate::core::dag::{sort_commit_set, CommitSet, Dag};
-use crate::core::effects::Effects;
-use crate::core::eventlog::{EventLogDb, EventReplayer};
-use crate::core::formatting::{printable_styled_string, Pluralize};
-use crate::core::node_descriptors::{
+use crate::opts::{CheckoutOptions, TraverseCommitsOptions};
+use crate::tui::prompt_select_commit;
+use lib::core::config::get_next_interactive;
+use lib::core::dag::{sort_commit_set, CommitSet, Dag};
+use lib::core::effects::Effects;
+use lib::core::eventlog::{EventLogDb, EventReplayer};
+use lib::core::formatting::{printable_styled_string, Pluralize};
+use lib::core::node_descriptors::{
     BranchesDescriptor, CommitMessageDescriptor, CommitOidDescriptor,
     DifferentialRevisionDescriptor, NodeDescriptor, Redactor, RelativeTimeDescriptor,
 };
-use crate::git::{check_out_commit, CheckOutCommitOptions, GitRunInfo, NonZeroOid, Repo};
-use crate::opts::{CheckoutOptions, TraverseCommitsOptions};
-use crate::tui::prompt_select_commit;
+use lib::git::{check_out_commit, CheckOutCommitOptions, GitRunInfo, NonZeroOid, Repo};
 
 /// The command being invoked, indicating which direction to traverse commits.
 #[derive(Clone, Copy, Debug)]

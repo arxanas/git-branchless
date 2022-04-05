@@ -1,4 +1,4 @@
-use branchless::testing::{make_git, GitRunOptions};
+use lib::testing::{make_git, GitRunOptions};
 
 #[test]
 fn test_hide_commit() -> eyre::Result<()> {

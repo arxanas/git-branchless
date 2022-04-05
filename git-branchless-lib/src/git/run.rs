@@ -15,7 +15,6 @@ use itertools::Itertools;
 use os_str_bytes::OsStrBytes;
 use tracing::instrument;
 
-use crate::commands::smartlog::smartlog;
 use crate::core::config::get_core_hooks_path;
 use crate::core::effects::{Effects, OperationType};
 use crate::core::eventlog::{EventTransactionId, BRANCHLESS_TRANSACTION_ID_ENV_VAR};
@@ -420,7 +419,10 @@ pub fn check_out_commit(
 
     if result == 0 {
         if *render_smartlog {
-            smartlog(effects, git_run_info, &Default::default())?;
+            let result = git_run_info.run(effects, event_tx_id, &["branchless", "smartlog"])?;
+            Ok(result)
+        } else {
+            Ok(result)
         }
     } else {
         writeln!(
@@ -438,8 +440,8 @@ pub fn check_out_commit(
                 )
             )?
         )?;
+        Ok(result)
     }
-    Ok(result)
 }
 
 #[cfg(test)]

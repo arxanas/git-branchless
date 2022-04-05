@@ -11,19 +11,19 @@ use eden_dag::DagAlgorithm;
 use eyre::Context;
 use tracing::{instrument, warn};
 
-use crate::core::config::{
+use lib::core::config::{
     get_comment_char, get_commit_template, get_editor, get_restack_preserve_timestamps,
 };
-use crate::core::dag::{resolve_commits, CommitSet, Dag, ResolveCommitsResult};
-use crate::core::effects::Effects;
-use crate::core::eventlog::{EventLogDb, EventReplayer};
-use crate::core::formatting::{printable_styled_string, Glyphs, Pluralize};
-use crate::core::node_descriptors::{render_node_descriptors, CommitOidDescriptor, NodeObject};
-use crate::core::rewrite::{
+use lib::core::dag::{resolve_commits, CommitSet, Dag, ResolveCommitsResult};
+use lib::core::effects::Effects;
+use lib::core::eventlog::{EventLogDb, EventReplayer};
+use lib::core::formatting::{printable_styled_string, Glyphs, Pluralize};
+use lib::core::node_descriptors::{render_node_descriptors, CommitOidDescriptor, NodeObject};
+use lib::core::rewrite::{
     execute_rebase_plan, BuildRebasePlanOptions, ExecuteRebasePlanOptions, ExecuteRebasePlanResult,
     RebasePlanBuilder, RepoResource,
 };
-use crate::git::{
+use lib::git::{
     message_prettify, CheckOutCommitOptions, Commit, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo,
 };
 
@@ -424,7 +424,7 @@ fn render_status_report(
 
 #[cfg(test)]
 mod tests {
-    use crate::testing::make_git;
+    use lib::testing::make_git;
 
     use super::*;
 

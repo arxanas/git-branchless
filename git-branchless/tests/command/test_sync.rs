@@ -1,6 +1,4 @@
-use branchless::testing::{
-    make_git, make_git_with_remote_repo, GitInitOptions, GitWrapperWithRemoteRepo,
-};
+use lib::testing::{make_git, make_git_with_remote_repo, GitInitOptions, GitWrapperWithRemoteRepo};
 
 #[test]
 fn test_sync_basic() -> eyre::Result<()> {

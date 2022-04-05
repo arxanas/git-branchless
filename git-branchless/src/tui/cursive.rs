@@ -6,7 +6,7 @@ use cursive::theme::{Color, PaletteColor};
 use cursive::{Cursive, CursiveRunnable, CursiveRunner};
 use cursive_buffered_backend::BufferedBackend;
 
-use crate::core::effects::Effects;
+use lib::core::effects::Effects;
 
 /// Create an instance of a `CursiveRunner`, and clean it up afterward.
 pub fn with_siv<T, F: FnOnce(Effects, CursiveRunner<CursiveRunnable>) -> eyre::Result<T>>(
@@ -46,8 +46,8 @@ pub trait SingletonView<V> {
 /// ```
 /// # use cursive::Cursive;
 /// # use cursive::views::{EditView, TextView};
-/// # use branchless::declare_views;
-/// # use branchless::tui::SingletonView;
+/// # use git_branchless::declare_views;
+/// # use git_branchless::tui::SingletonView;
 /// # fn main() {
 /// declare_views! {
 ///     SomeDisplayView => TextView,
