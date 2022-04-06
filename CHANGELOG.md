@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.11] - 2022-04-06
+
 ### Added
 
 - Added `--discard` flag to `git reword` to start with a clean commit message.
