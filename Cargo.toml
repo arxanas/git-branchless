@@ -6,3 +6,9 @@ debug = 0
 [workspace]
 default-members = ["git-branchless"]
 members = ["git-branchless", "git-branchless-lib"]
+
+[workspace.metadata.release]
+consolidate-commits = true
+consolidate-pushes = true
+push = false
+tag = false
