@@ -1,0 +1,80 @@
+# Originally from
+# https://github.com/martinvonz/jj/blob/028e6106f52978fdd120037d4b3db2f088cafcfa/.github/workflows/release.yml
+on:
+  release:
+    types: [created]
+
+permissions: read-all
+
+jobs:
+  build-release:
+    name: build-release
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        build: [linux-musl, macos, win-msvc]
+        include:
+          - build: linux-musl
+            os: ubuntu-20.04
+            target: x86_64-unknown-linux-musl
+          - build: macos
+            os: macos-11
+            target: x86_64-apple-darwin
+          - build: win-msvc
+            os: windows-2022
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@a12a3943b4bdde767164f792f33f40b04645d846
+
+      - name: Install packages (Ubuntu)
+        if: matrix.os == 'ubuntu-20.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xz-utils liblz4-tool musl-tools
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@16499b5e05bf2e26879000db0c1d13f7e13fa3af
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+          target: ${{ matrix.target }}
+
+      - name: Build release binary
+        uses: actions-rs/cargo@844f36862e911db73fe0815f00a4a2602c279505
+        with:
+          command: build
+          args: --target ${{ matrix.target }} --verbose --release
+
+      - name: Build archive
+        shell: bash
+        run: |
+          outdir="./target/${{ matrix.target }}/release"
+          staging="jj-${{ github.event.release.tag_name }}-${{ matrix.target }}"
+          mkdir -p "$staging"/complete
+          cp {README.md,LICENSE} "$staging/"
+          if [ "${{ matrix.os }}" = "windows-2022" ]; then
+            cp "target/${{ matrix.target }}/release/git-branchless.exe" "$staging/"
+            cd "$staging"
+            7z a "../$staging.zip" .
+            echo "ASSET=$staging.zip" >> $GITHUB_ENV
+          else
+            cp "target/${{ matrix.target }}/release/git-branchless" "$staging/"
+            tar czf "$staging.tar.gz" -C "$staging" .
+            echo "ASSET=$staging.tar.gz" >> $GITHUB_ENV
+          fi
+
+      - name: Upload release archive
+        uses: actions/upload-release-asset@e8f9f06c4b078e705bd2ea027f0926603fc9b4d5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: ${{ env.ASSET }}
+          asset_name: ${{ env.ASSET }}
+          asset_content_type: application/octet-stream
