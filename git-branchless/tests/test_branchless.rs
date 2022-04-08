@@ -38,7 +38,6 @@ fn test_commands() -> eyre::Result<()> {
         let (stdout, _stderr) = git.run(&["prev"])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> checkout f777ecc9b0db5ed372b2615695191a8a17f79f24
-        branchless: running command: <git-executable> branchless smartlog
         @ f777ecc create initial.txt
         |
         O 3df4b93 (master) create test.txt
@@ -49,7 +48,6 @@ fn test_commands() -> eyre::Result<()> {
         let (stdout, _stderr) = git.run(&["next"])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> checkout 3df4b9355b3b072aa6c50c6249bf32e289b3a661
-        branchless: running command: <git-executable> branchless smartlog
         :
         @ 3df4b93 (master) create test.txt
         "###);

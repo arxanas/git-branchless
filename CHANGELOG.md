@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - ReleaseDate
 
+### Fixed
+
+- Commands which automatically show the smartlog after them no longer show it in
+gray with ASCII glyphs. This reverts the behavior to that of before v0.3.11.
+
 ## [0.3.12] - 2022-04-08
 
 No changes.

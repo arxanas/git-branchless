@@ -379,7 +379,6 @@ fn test_restack_single_of_many_commits() -> eyre::Result<()> {
         branchless: processing 1 update: ref HEAD
         HEAD is now at 3bd716d updated test4
         branchless: processing checkout
-        branchless: running command: <git-executable> branchless smartlog
         :
         O 62fc20d (master) create test1.txt
         |\
