@@ -9,6 +9,7 @@ homepage = "https://github.com/arxanas/git-branchless"
 keywords = ["cli", "git"]
 license = "GPL-2.0-only"
 name = "git-branchless"
+readme = "../README.md"
 repository = "https://github.com/arxanas/git-branchless"
 rust-version = "1.56.0"
 version = "0.3.11"
