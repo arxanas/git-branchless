@@ -171,7 +171,7 @@ impl GitRunInfo {
     ///
     /// Returns the exit code of Git (non-zero signifies error).
     #[instrument]
-    #[must_use = "The return code for `run_git` must be checked"]
+    #[must_use = "The return code for `GitRunInfo::run` must be checked"]
     pub fn run<S: AsRef<OsStr> + std::fmt::Debug>(
         &self,
         effects: &Effects,
@@ -183,6 +183,46 @@ impl GitRunInfo {
             event_tx_id,
             args.iter().map(AsRef::as_ref).collect_vec().as_slice(),
         )
+    }
+
+    /// Run the provided command without wrapping it in an `Effects` operation.
+    /// This may clobber progress reporting, and is usually not what you want;
+    /// see [`GitRunInfo::run`] instead.
+    #[instrument]
+    #[must_use = "The return code for `GitRunInfo::run_direct_no_wrapping` must be checked"]
+    pub fn run_direct_no_wrapping(
+        &self,
+        event_tx_id: Option<EventTransactionId>,
+        args: &[impl AsRef<OsStr> + std::fmt::Debug],
+    ) -> eyre::Result<isize> {
+        let GitRunInfo {
+            path_to_git,
+            working_directory,
+            env,
+        } = self;
+
+        let mut command = Command::new(path_to_git);
+        command.current_dir(working_directory);
+        command.args(args);
+        command.env_clear();
+        command.envs(env.iter());
+        if let Some(event_tx_id) = event_tx_id {
+            command.env(BRANCHLESS_TRANSACTION_ID_ENV_VAR, event_tx_id.to_string());
+        }
+
+        let mut child = command.spawn().wrap_err("Spawning Git subprocess")?;
+        let exit_status = child
+            .wait()
+            .wrap_err("Waiting for Git subprocess to complete")?;
+
+        // On Unix, if the child process was terminated by a signal, we need to call
+        // some Unix-specific functions to access the signal that terminated it. For
+        // simplicity, just return `1` in those cases.
+        let exit_code = exit_status.code().unwrap_or(1);
+        let exit_code = exit_code
+            .try_into()
+            .wrap_err("Converting exit code from i32 to isize")?;
+        Ok(exit_code)
     }
 
     fn run_silent_inner(
@@ -419,7 +459,8 @@ pub fn check_out_commit(
 
     if result == 0 {
         if *render_smartlog {
-            let result = git_run_info.run(effects, event_tx_id, &["branchless", "smartlog"])?;
+            let result =
+                git_run_info.run_direct_no_wrapping(event_tx_id, &["branchless", "smartlog"])?;
             Ok(result)
         } else {
             Ok(result)
