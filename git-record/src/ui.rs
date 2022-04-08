@@ -123,11 +123,7 @@ impl<'a> Recorder<'a> {
                         }
                     }
 
-                    Hunk::Changed {
-                        before,
-                        after,
-                        parent,
-                    } => {
+                    Hunk::Changed { before, after } => {
                         global_changed_hunk_num += 1;
                         let description = format!(
                             "hunk {}/{} in current file, {}/{} total",
@@ -146,7 +142,6 @@ impl<'a> Recorder<'a> {
                             description,
                             before,
                             after,
-                            parent,
                         );
                     }
                 }
@@ -215,7 +210,6 @@ impl<'a> Recorder<'a> {
         hunk_description: String,
         before: &[HunkChangedLine],
         after: &[HunkChangedLine],
-        parent: &Option<&str>,
     ) {
         let mut hunk_view = LinearLayout::vertical();
         let hunk_key = HunkKey { file_num, hunk_num };
@@ -254,12 +248,6 @@ impl<'a> Recorder<'a> {
                     )
                     .child(TextView::new(line_contents)),
             );
-        }
-
-        if let Some(parent) = parent {
-            for line in parent.lines() {
-                hunk_view.add_child(TextView::new(format!("         {}", line)));
-            }
         }
 
         for (hunk_line_num, HunkChangedLine { is_selected, line }) in after.iter().enumerate() {
@@ -357,11 +345,7 @@ impl<'a> Recorder<'a> {
                     error!(?hunk_num, ?path, ?contents, "Invalid hunk num to change");
                     panic!("Invalid hunk num to change");
                 }
-                Hunk::Changed {
-                    before,
-                    after,
-                    parent: _,
-                } => (before, after),
+                Hunk::Changed { before, after } => (before, after),
             }
         };
 
@@ -404,11 +388,7 @@ fn iter_hunk_changed_lines<'a>(
     hunk: &'a Hunk<'a>,
 ) -> impl Iterator<Item = (HunkType, &'a HunkChangedLine<'a>)> {
     let iter: Box<dyn Iterator<Item = (HunkType, &HunkChangedLine)>> = match hunk {
-        Hunk::Changed {
-            before,
-            after,
-            parent: _,
-        } => Box::new(
+        Hunk::Changed { before, after } => Box::new(
             before
                 .iter()
                 .map(|changed_line| (HunkType::Before, changed_line))
@@ -692,7 +672,6 @@ mod tests {
                                     line: "after 2",
                                 },
                             ],
-                            parent: Some("parent 1\nparent 2\n"),
                         },
                     ],
                 },
@@ -718,8 +697,6 @@ mod tests {
         [X] hunk 1/1 in current file, 1/1 total
         [X] -before 1
         [X] -before 2
-        parent 1
-        parent 2
         [X] +after 1
         [ ] +after 2
         "###);
@@ -753,8 +730,6 @@ mod tests {
         [X] hunk 1/1 in current file, 1/1 total
         [X] -before 1
         [X] -before 2
-        parent 1
-        parent 2
         [X] +after 1
         [X] +after 2
         "###);
