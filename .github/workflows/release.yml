@@ -55,8 +55,7 @@ jobs:
         shell: bash
         run: |
           outdir="./target/${{ matrix.target }}/release"
-          staging="jj-${{ github.event.release.tag_name }}-${{ matrix.target }}"
-          mkdir -p "$staging"/complete
+          staging="git-branchless-${{ github.event.release.tag_name }}-${{ matrix.target }}"
           cp {README.md,LICENSE} "$staging/"
           if [ "${{ matrix.os }}" = "windows-2022" ]; then
             cp "target/${{ matrix.target }}/release/git-branchless.exe" "$staging/"
