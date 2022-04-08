@@ -25,7 +25,6 @@ pub enum Hunk<'a> {
     Changed {
         before: Vec<HunkChangedLine<'a>>,
         after: Vec<HunkChangedLine<'a>>,
-        parent: Option<&'a str>,
     },
 }
 
@@ -44,11 +43,7 @@ impl FileHunks<'_> {
                     acc_selected.push_str(contents);
                     acc_unselected.push_str(contents);
                 }
-                Hunk::Changed {
-                    before,
-                    after,
-                    parent: _,
-                } => {
+                Hunk::Changed { before, after } => {
                     for HunkChangedLine { is_selected, line } in before {
                         // Note the inverted condition here.
                         if !*is_selected {
@@ -118,7 +113,6 @@ fn main() {
                                 line: "after text 2",
                             },
                         ],
-                        parent: Some("parent line 1\nparent line 2\n"),
                     },
                     Hunk::Unchanged {
                         contents: "this is some trailing text\n",
@@ -154,7 +148,6 @@ fn main() {
                                 line: "after text 2",
                             },
                         ],
-                        parent: Some("parent line 1\nparent line 2\n"),
                     },
                     Hunk::Unchanged {
                         contents: "this is some trailing text\n",
