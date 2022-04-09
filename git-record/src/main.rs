@@ -1,3 +1,6 @@
+#![warn(clippy::all, clippy::as_conversions)]
+#![allow(clippy::too_many_arguments, clippy::blocks_in_if_conditions)]
+
 mod cursive_utils;
 mod tristate;
 mod ui;
@@ -83,9 +86,8 @@ pub enum RecordError {
 
 fn main() {
     let preamble = "this is some text\n".repeat(20);
-    let files = {
-        let mut acc = Vec::new();
-        acc.push((
+    let files = vec![
+        (
             PathBuf::from("foo/bar"),
             FileHunks {
                 hunks: vec![
@@ -119,13 +121,13 @@ fn main() {
                     },
                 ],
             },
-        ));
-        acc.push((
+        ),
+        (
             PathBuf::from("baz"),
             FileHunks {
                 hunks: vec![
                     Hunk::Unchanged {
-                        contents: &"Some leading text 1\nSome leading text 2\n",
+                        contents: "Some leading text 1\nSome leading text 2\n",
                     },
                     Hunk::Changed {
                         before: vec![
@@ -154,9 +156,8 @@ fn main() {
                     },
                 ],
             },
-        ));
-        acc
-    };
+        ),
+    ];
     let record_state = RecordState { files };
 
     // TODO: let user select backend

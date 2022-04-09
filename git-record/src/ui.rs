@@ -292,7 +292,7 @@ impl<'a> Recorder<'a> {
                         .with_state(Tristate::Checked)
                         .on_change({
                             let hunk_key = HunkKey { file_num, hunk_num };
-                            let main_tx = main_tx.clone();
+                            let main_tx = main_tx;
                             move |_, new_value| {
                                 if main_tx
                                     .send(Message::ToggleHunk(hunk_key, new_value))
@@ -588,7 +588,7 @@ impl<'a> EventDrivenCursiveApp for Recorder<'a> {
     ) {
         match message {
             Message::Init => {
-                let main_view = self.make_main_view(main_tx.clone());
+                let main_view = self.make_main_view(main_tx);
                 siv.add_layer(ScrollView::new(
                     // NB: you can't add `min_width` to the `ScrollView` itself,
                     // or else the scrollbar stops responding to clicks and
