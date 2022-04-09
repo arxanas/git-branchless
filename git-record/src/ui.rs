@@ -8,7 +8,7 @@ use cursive::views::{Checkbox, Dialog, HideableView, LinearLayout, ScrollView, T
 use cursive::{CursiveRunnable, CursiveRunner, View};
 use tracing::error;
 
-use crate::cursive_utils::EventDrivenCursiveApp;
+use crate::cursive_utils::{EventDrivenCursiveApp, EventDrivenCursiveAppExt};
 use crate::tristate::{Tristate, TristateBox};
 use crate::{FileHunks, Hunk, HunkChangedLine, RecordError, RecordState};
 
@@ -72,17 +72,25 @@ impl HunkLineKey {
     }
 }
 
+/// UI component to record the user's changes.
 pub struct Recorder<'a> {
     did_user_confirm_exit: bool,
     state: RecordState<'a>,
 }
 
 impl<'a> Recorder<'a> {
+    /// Constructor.
     pub fn new(state: RecordState<'a>) -> Self {
         Self {
             did_user_confirm_exit: false,
             state,
         }
+    }
+
+    /// Run the terminal user interface and have the user interactively select
+    /// changes.
+    pub fn run(self, siv: CursiveRunner<CursiveRunnable>) -> Result<RecordState<'a>, RecordError> {
+        EventDrivenCursiveAppExt::run(self, siv)
     }
 
     fn make_main_view(&self, main_tx: Sender<Message>) -> impl View {
@@ -713,7 +721,6 @@ mod tests {
     use crate::cursive_utils::testing::{
         screen_to_string, CursiveTestingBackend, CursiveTestingEvent,
     };
-    use crate::cursive_utils::EventDrivenCursiveAppExt;
 
     use super::*;
 

@@ -1,0 +1,98 @@
+use std::path::PathBuf;
+
+/// The state used to render the changes. This is passed into [`Recorder::new`]
+/// and then updated and returned with [`Recorder::run`].
+#[derive(Clone, Debug)]
+pub struct RecordState<'a> {
+    /// The state of each file. This is rendered in order, so you may want to
+    /// sort this list by path before providing it.
+    pub files: Vec<(PathBuf, FileHunks<'a>)>,
+}
+
+/// An error which occurred when attempting to record changes.
+#[derive(Clone, Debug)]
+pub enum RecordError {
+    /// The user cancelled the operation.
+    Cancelled,
+}
+
+/// The state of a file to be recorded.
+#[derive(Clone, Debug)]
+pub struct FileHunks<'a> {
+    /// The set of [`Hunk`]s inside the file.
+    pub hunks: Vec<Hunk<'a>>,
+}
+
+impl FileHunks<'_> {
+    /// Calculate the `(selected, unselected)` contents of the file. For
+    /// example, the first value would be suitable for staging or committing,
+    /// and the second value would be suitable for potentially recording again.
+    pub fn get_selected_contents(&self) -> (String, String) {
+        let mut acc_selected = String::new();
+        let mut acc_unselected = String::new();
+        for hunk in &self.hunks {
+            match hunk {
+                Hunk::Unchanged { contents } => {
+                    acc_selected.push_str(contents);
+                    acc_unselected.push_str(contents);
+                }
+                Hunk::Changed { before, after } => {
+                    for HunkChangedLine { is_selected, line } in before {
+                        // Note the inverted condition here.
+                        if !*is_selected {
+                            acc_selected.push_str(line);
+                            acc_selected.push('\n');
+                        } else {
+                            acc_unselected.push_str(line);
+                            acc_unselected.push('\n');
+                        }
+                    }
+
+                    for HunkChangedLine { is_selected, line } in after {
+                        if *is_selected {
+                            acc_selected.push_str(line);
+                            acc_selected.push('\n');
+                        } else {
+                            acc_unselected.push_str(line);
+                            acc_unselected.push('\n');
+                        }
+                    }
+                }
+            }
+        }
+        (acc_selected, acc_unselected)
+    }
+}
+
+/// A section of a file to be rendered and recorded.
+///
+/// Unlike typical `diff` terminology, here, a "hunk" can refer to either a
+/// changed or unchanged section of a file, not just a changed section.
+#[derive(Clone, Debug)]
+pub enum Hunk<'a> {
+    /// This section of the file is unchanged and just used for context.
+    Unchanged {
+        /// The contents of this section, including newlines.
+        contents: &'a str,
+    },
+
+    /// This section of the file is changed, and the user needs to select which
+    /// specific changed lines to record.
+    Changed {
+        /// The contents of the lines before the user change was made.
+        before: Vec<HunkChangedLine<'a>>,
+
+        /// The contents of the lines after the user change was made.
+        after: Vec<HunkChangedLine<'a>>,
+    },
+}
+
+/// A changed line inside a `Hunk`.
+#[derive(Clone, Debug)]
+pub struct HunkChangedLine<'a> {
+    /// Whether or not this line was selected to be recorded.
+    pub is_selected: bool,
+
+    /// The contents of the line, without a trailing newline.
+    pub line: &'a str,
+}

@@ -1,9 +1,18 @@
 [package]
-name = "git-record"
-version = "0.1.0"
+authors = ["Waleed Khan <me@waleedkhan.name>"]
+description = "UI component to interactively select changes to include in a commit."
 edition = "2021"
+keywords = ["git"]
+license = "MIT OR Apache-2.0"
+name = "git-record"
+repository = "https://github.com/arxanas/git-branchless"
+rust-version = "1.56.0"
+version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+name = "git_record"
 
 [dependencies]
 cursive = { version = "0.17.0", default-features = false, features = [
