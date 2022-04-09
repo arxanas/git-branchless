@@ -87,7 +87,7 @@ impl<'a> Recorder<'a> {
         }
     }
 
-    fn make_view(&self, main_tx: Sender<Message>) -> impl View {
+    fn make_main_view(&self, main_tx: Sender<Message>) -> impl View {
         let mut view = LinearLayout::vertical();
 
         let RecordState { files } = &self.state;
@@ -316,6 +316,84 @@ impl<'a> Recorder<'a> {
         view.add_child(HideableView::new(hunk_view));
     }
 
+    fn toggle_file(
+        &mut self,
+        siv: &mut CursiveRunner<CursiveRunnable>,
+        file_key: FileKey,
+        new_value: Tristate,
+    ) {
+        let FileKey { file_num } = file_key;
+        let (_path, file_hunks) = &mut self.state.files[file_num];
+
+        let new_value = match new_value {
+            Tristate::Unchecked => false,
+            Tristate::Partial => {
+                // Shouldn't happen.
+                true
+            }
+            Tristate::Checked => true,
+        };
+
+        let FileHunks { hunks } = file_hunks;
+        for (hunk_num, hunk) in hunks.iter_mut().enumerate() {
+            match hunk {
+                Hunk::Unchanged { contents: _ } => {
+                    // Do nothing.
+                }
+                Hunk::Changed { before, after } => {
+                    for (
+                        hunk_line_num,
+                        HunkChangedLine {
+                            is_selected,
+                            line: _,
+                        },
+                    ) in before.iter_mut().enumerate()
+                    {
+                        *is_selected = new_value;
+                        let hunk_line_key = HunkLineKey {
+                            file_num,
+                            hunk_num,
+                            hunk_type: HunkType::Before,
+                            hunk_line_num,
+                        };
+                        siv.call_on_name(&hunk_line_key.to_string(), |checkbox: &mut Checkbox| {
+                            checkbox.set_checked(new_value)
+                        });
+                    }
+
+                    for (
+                        hunk_line_num,
+                        HunkChangedLine {
+                            is_selected,
+                            line: _,
+                        },
+                    ) in after.iter_mut().enumerate()
+                    {
+                        *is_selected = new_value;
+                        let hunk_line_key = HunkLineKey {
+                            file_num,
+                            hunk_num,
+                            hunk_type: HunkType::After,
+                            hunk_line_num,
+                        };
+                        siv.call_on_name(&hunk_line_key.to_string(), |checkbox: &mut Checkbox| {
+                            checkbox.set_checked(new_value)
+                        });
+                    }
+                }
+            }
+
+            let hunk_key = HunkKey { file_num, hunk_num };
+            siv.call_on_name(&hunk_key.to_string(), |tristate_box: &mut TristateBox| {
+                tristate_box.set_state(if new_value {
+                    Tristate::Checked
+                } else {
+                    Tristate::Unchecked
+                });
+            });
+        }
+    }
+
     fn toggle_hunk(
         &mut self,
         siv: &mut CursiveRunner<CursiveRunnable>,
@@ -374,6 +452,79 @@ impl<'a> Recorder<'a> {
                 checkbox.set_checked(new_value);
             });
         }
+
+        self.refresh_file(siv, FileKey { file_num });
+    }
+
+    fn toggle_hunk_line(
+        &mut self,
+        siv: &mut CursiveRunner<CursiveRunnable>,
+        hunk_line_key: HunkLineKey,
+        new_value: bool,
+    ) {
+        let HunkLineKey {
+            file_num,
+            hunk_num,
+            hunk_type,
+            hunk_line_num,
+        } = hunk_line_key;
+
+        let (path, file_hunks) = &mut self.state.files[file_num];
+        let FileHunks { hunks } = file_hunks;
+        {
+            let hunk = &mut hunks[hunk_num];
+            let hunk_changed_lines = match (hunk, hunk_type) {
+                (Hunk::Unchanged { contents }, _) => {
+                    error!(?hunk_num, ?path, ?contents, "Invalid hunk num to change");
+                    panic!("Invalid hunk num to change");
+                }
+                (Hunk::Changed { before, .. }, HunkType::Before) => before,
+                (Hunk::Changed { after, .. }, HunkType::After) => after,
+            };
+            hunk_changed_lines[hunk_line_num].is_selected = new_value;
+        }
+
+        self.refresh_hunk(siv, HunkKey { file_num, hunk_num });
+        self.refresh_file(siv, FileKey { file_num });
+    }
+
+    fn refresh_hunk(&mut self, siv: &mut CursiveRunner<CursiveRunnable>, hunk_key: HunkKey) {
+        let HunkKey { file_num, hunk_num } = hunk_key;
+        let hunk = &mut self.state.files[file_num].1.hunks[hunk_num];
+
+        let hunk_selections = iter_hunk_changed_lines(hunk).map(
+            |(
+                _hunk_type,
+                HunkChangedLine {
+                    is_selected,
+                    line: _,
+                },
+            )| *is_selected,
+        );
+        let hunk_new_value = all_are_same_value(hunk_selections).into_tristate();
+        let hunk_key = HunkKey { file_num, hunk_num };
+        siv.call_on_name(&hunk_key.to_string(), |tristate_box: &mut TristateBox| {
+            tristate_box.set_state(hunk_new_value);
+        });
+    }
+
+    fn refresh_file(&mut self, siv: &mut CursiveRunner<CursiveRunnable>, file_key: FileKey) {
+        let FileKey { file_num } = file_key;
+        let file_hunks = &mut self.state.files[file_num].1;
+
+        let file_selections = iter_file_changed_lines(file_hunks).map(
+            |(
+                _hunk_type,
+                HunkChangedLine {
+                    is_selected,
+                    line: _,
+                },
+            )| *is_selected,
+        );
+        let file_new_value = all_are_same_value(file_selections).into_tristate();
+        siv.call_on_name(&file_key.to_string(), |tristate_box: &mut TristateBox| {
+            tristate_box.set_state(file_new_value);
+        });
     }
 }
 
@@ -439,88 +590,25 @@ impl<'a> EventDrivenCursiveApp for Recorder<'a> {
     ) {
         match message {
             Message::Init => {
-                let view = self.make_view(main_tx.clone());
+                let main_view = self.make_main_view(main_tx.clone());
                 siv.add_layer(ScrollView::new(
                     // NB: you can't add `min_width` to the `ScrollView` itself,
                     // or else the scrollbar stops responding to clicks and
                     // drags.
-                    view.min_width(80),
+                    main_view.min_width(80),
                 ));
             }
 
             Message::ToggleFile(file_key, new_value) => {
-                let new_value = match new_value {
-                    Tristate::Unchecked => false,
-                    Tristate::Partial => {
-                        // Shouldn't happen.
-                        true
-                    }
-                    Tristate::Checked => true,
-                };
-
-                // iter_file_changed_lines(hunks)
+                self.toggle_file(siv, file_key, new_value);
             }
 
             Message::ToggleHunk(hunk_key, new_value) => {
                 self.toggle_hunk(siv, hunk_key, new_value);
             }
 
-            Message::ToggleHunkLine(
-                HunkLineKey {
-                    file_num,
-                    hunk_num,
-                    hunk_type,
-                    hunk_line_num,
-                },
-                new_value,
-            ) => {
-                let (path, file_hunks) = &mut self.state.files[file_num];
-                let FileHunks { hunks } = file_hunks;
-                {
-                    let hunk = &mut hunks[hunk_num];
-                    let hunk_changed_lines = match (hunk, hunk_type) {
-                        (Hunk::Unchanged { contents }, _) => {
-                            error!(?hunk_num, ?path, ?contents, "Invalid hunk num to change");
-                            panic!("Invalid hunk num to change");
-                        }
-                        (Hunk::Changed { before, .. }, HunkType::Before) => before,
-                        (Hunk::Changed { after, .. }, HunkType::After) => after,
-                    };
-                    hunk_changed_lines[hunk_line_num].is_selected = new_value;
-                }
-
-                // Refresh parent hunk checkbox.
-                let hunk = &mut hunks[hunk_num];
-                let hunk_selections = iter_hunk_changed_lines(hunk).map(
-                    |(
-                        _hunk_type,
-                        HunkChangedLine {
-                            is_selected,
-                            line: _,
-                        },
-                    )| *is_selected,
-                );
-                let hunk_new_value = all_are_same_value(hunk_selections).into_tristate();
-                let hunk_key = HunkKey { file_num, hunk_num };
-                siv.call_on_name(&hunk_key.to_string(), |tristate_box: &mut TristateBox| {
-                    tristate_box.set_state(hunk_new_value);
-                });
-
-                // Refresh parent file checkbox.
-                let file_selections = iter_file_changed_lines(file_hunks).map(
-                    |(
-                        _hunk_type,
-                        HunkChangedLine {
-                            is_selected,
-                            line: _,
-                        },
-                    )| *is_selected,
-                );
-                let file_new_value = all_are_same_value(file_selections).into_tristate();
-                let file_key = FileKey { file_num };
-                siv.call_on_name(&file_key.to_string(), |tristate_box: &mut TristateBox| {
-                    tristate_box.set_state(file_new_value);
-                });
+            Message::ToggleHunkLine(hunk_line_key, new_value) => {
+                self.toggle_hunk_line(siv, hunk_line_key, new_value);
             }
 
             Message::Confirm => {
@@ -736,6 +824,206 @@ mod tests {
         insta::assert_debug_snapshot!(result, @r###"
         Err(
             Cancelled,
+        )
+        "###);
+    }
+
+    #[test]
+    fn test_hunk_toggle() {
+        let screenshot1 = Default::default();
+        let screenshot2 = Default::default();
+        let screenshot3 = Default::default();
+        let result = run_test(
+            example_record_state(),
+            vec![
+                CursiveTestingEvent::Event(Key::Down.into()), // move to hunk
+                CursiveTestingEvent::Event(' '.into()),       // toggle hunk
+                CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot1)),
+                CursiveTestingEvent::Event(Key::Down.into()), // move to line
+                CursiveTestingEvent::Event(' '.into()),       // toggle line
+                CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot2)),
+                CursiveTestingEvent::Event(Key::Up.into()), // move to hunk
+                CursiveTestingEvent::Event(' '.into()),     // toggle hunk
+                CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot3)),
+                CursiveTestingEvent::Event('c'.into()),
+            ],
+        );
+
+        insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
+        [ ] /foo
+        1 unchanged 1
+        2 unchanged 2
+        [ ] hunk 1/1 in current file, 1/1 total
+        [ ] -before 1
+        [ ] -before 2
+        [ ] +after 1
+        [ ] +after 2
+        "###);
+        insta::assert_snapshot!(screen_to_string(&screenshot2), @r###"
+        [~] /foo
+        1 unchanged 1
+        2 unchanged 2
+        [~] hunk 1/1 in current file, 1/1 total
+        [X] -before 1
+        [ ] -before 2
+        [ ] +after 1
+        [ ] +after 2
+        "###);
+        insta::assert_snapshot!(screen_to_string(&screenshot3), @r###"
+        [X] /foo
+        1 unchanged 1
+        2 unchanged 2
+        [X] hunk 1/1 in current file, 1/1 total
+        [X] -before 1
+        [X] -before 2
+        [X] +after 1
+        [X] +after 2
+        "###);
+        insta::assert_debug_snapshot!(result, @r###"
+        Ok(
+            RecordState {
+                files: [
+                    (
+                        "foo",
+                        FileHunks {
+                            hunks: [
+                                Unchanged {
+                                    contents: "unchanged 1\nunchanged 2\n",
+                                },
+                                Changed {
+                                    before: [
+                                        HunkChangedLine {
+                                            is_selected: true,
+                                            line: "before 1",
+                                        },
+                                        HunkChangedLine {
+                                            is_selected: true,
+                                            line: "before 2",
+                                        },
+                                    ],
+                                    after: [
+                                        HunkChangedLine {
+                                            is_selected: true,
+                                            line: "after 1",
+                                        },
+                                        HunkChangedLine {
+                                            is_selected: true,
+                                            line: "after 2",
+                                        },
+                                    ],
+                                },
+                            ],
+                        },
+                    ),
+                ],
+            },
+        )
+        "###);
+    }
+
+    #[test]
+    fn test_file_toggle() {
+        let screenshot1 = Default::default();
+        let screenshot2 = Default::default();
+        let screenshot3 = Default::default();
+        let screenshot4 = Default::default();
+        let result = run_test(
+            example_record_state(),
+            vec![
+                CursiveTestingEvent::Event(' '.into()), // toggle file
+                CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot1)),
+                CursiveTestingEvent::Event(Key::Down.into()), // move to hunk
+                CursiveTestingEvent::Event(' '.into()),       // toggle hunk
+                CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot2)),
+                CursiveTestingEvent::Event(Key::Down.into()), // move to line
+                CursiveTestingEvent::Event(' '.into()),       // toggle line
+                CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot3)),
+                CursiveTestingEvent::Event(Key::Up.into()),
+                CursiveTestingEvent::Event(Key::Up.into()), // move to file
+                CursiveTestingEvent::Event(' '.into()),     // toggle file
+                CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot4)),
+                CursiveTestingEvent::Event('c'.into()),
+            ],
+        );
+
+        insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
+        [X] /foo
+        1 unchanged 1
+        2 unchanged 2
+        [X] hunk 1/1 in current file, 1/1 total
+        [X] -before 1
+        [X] -before 2
+        [X] +after 1
+        [X] +after 2
+        "###);
+        insta::assert_snapshot!(screen_to_string(&screenshot2), @r###"
+        [ ] /foo
+        1 unchanged 1
+        2 unchanged 2
+        [ ] hunk 1/1 in current file, 1/1 total
+        [ ] -before 1
+        [ ] -before 2
+        [ ] +after 1
+        [ ] +after 2
+        "###);
+        insta::assert_snapshot!(screen_to_string(&screenshot3), @r###"
+        [~] /foo
+        1 unchanged 1
+        2 unchanged 2
+        [~] hunk 1/1 in current file, 1/1 total
+        [X] -before 1
+        [ ] -before 2
+        [ ] +after 1
+        [ ] +after 2
+        "###);
+        insta::assert_snapshot!(screen_to_string(&screenshot4), @r###"
+        [X] /foo
+        1 unchanged 1
+        2 unchanged 2
+        [X] hunk 1/1 in current file, 1/1 total
+        [X] -before 1
+        [X] -before 2
+        [X] +after 1
+        [X] +after 2
+        "###);
+        insta::assert_debug_snapshot!(result, @r###"
+        Ok(
+            RecordState {
+                files: [
+                    (
+                        "foo",
+                        FileHunks {
+                            hunks: [
+                                Unchanged {
+                                    contents: "unchanged 1\nunchanged 2\n",
+                                },
+                                Changed {
+                                    before: [
+                                        HunkChangedLine {
+                                            is_selected: true,
+                                            line: "before 1",
+                                        },
+                                        HunkChangedLine {
+                                            is_selected: true,
+                                            line: "before 2",
+                                        },
+                                    ],
+                                    after: [
+                                        HunkChangedLine {
+                                            is_selected: true,
+                                            line: "after 1",
+                                        },
+                                        HunkChangedLine {
+                                            is_selected: true,
+                                            line: "after 2",
+                                        },
+                                    ],
+                                },
+                            ],
+                        },
+                    ),
+                ],
+            },
         )
         "###);
     }
