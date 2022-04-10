@@ -33,8 +33,12 @@ impl FileHunks {
         for hunk in &self.hunks {
             match hunk {
                 Hunk::Unchanged { contents } => {
-                    acc_selected.push_str(contents);
-                    acc_unselected.push_str(contents);
+                    for line in contents {
+                        acc_selected.push_str(line);
+                        acc_selected.push('\n');
+                        acc_unselected.push_str(line);
+                        acc_unselected.push('\n');
+                    }
                 }
                 Hunk::Changed { before, after } => {
                     for HunkChangedLine { is_selected, line } in before {
@@ -72,8 +76,9 @@ impl FileHunks {
 pub enum Hunk {
     /// This section of the file is unchanged and just used for context.
     Unchanged {
-        /// The contents of this section, including newlines.
-        contents: String,
+        /// The contents of the lines in this section, with no trailing
+        /// newlines.
+        contents: Vec<String>,
     },
 
     /// This section of the file is changed, and the user needs to select which

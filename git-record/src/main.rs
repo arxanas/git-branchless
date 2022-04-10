@@ -12,13 +12,16 @@ use git_record::Recorder;
 use git_record::{FileHunks, Hunk, HunkChangedLine, RecordError, RecordState};
 
 fn main() {
-    let preamble = "this is some text\n".repeat(20);
     let files = vec![
         (
             PathBuf::from("foo/bar"),
             FileHunks {
                 hunks: vec![
-                    Hunk::Unchanged { contents: preamble },
+                    Hunk::Unchanged {
+                        contents: std::iter::repeat("this is some text".to_string())
+                            .take(20)
+                            .collect(),
+                    },
                     Hunk::Changed {
                         before: vec![
                             HunkChangedLine {
@@ -42,7 +45,7 @@ fn main() {
                         ],
                     },
                     Hunk::Unchanged {
-                        contents: "this is some trailing text\n".to_string(),
+                        contents: vec!["this is some trailing text".to_string()],
                     },
                 ],
             },
@@ -52,7 +55,10 @@ fn main() {
             FileHunks {
                 hunks: vec![
                     Hunk::Unchanged {
-                        contents: "Some leading text 1\nSome leading text 2\n".to_string(),
+                        contents: vec![
+                            "Some leading text 1".to_string(),
+                            "Some leading text 2".to_string(),
+                        ],
                     },
                     Hunk::Changed {
                         before: vec![
@@ -77,7 +83,7 @@ fn main() {
                         ],
                     },
                     Hunk::Unchanged {
-                        contents: "this is some trailing text\n".to_string(),
+                        contents: vec!["this is some trailing text".to_string()],
                     },
                 ],
             },
