@@ -18,33 +18,31 @@ fn main() {
             PathBuf::from("foo/bar"),
             FileHunks {
                 hunks: vec![
-                    Hunk::Unchanged {
-                        contents: &preamble,
-                    },
+                    Hunk::Unchanged { contents: preamble },
                     Hunk::Changed {
                         before: vec![
                             HunkChangedLine {
                                 is_selected: true,
-                                line: "before text 1",
+                                line: "before text 1".to_string(),
                             },
                             HunkChangedLine {
                                 is_selected: true,
-                                line: "before text 2",
+                                line: "before text 2".to_string(),
                             },
                         ],
                         after: vec![
                             HunkChangedLine {
                                 is_selected: true,
-                                line: "after text 1",
+                                line: "after text 1".to_string(),
                             },
                             HunkChangedLine {
                                 is_selected: false,
-                                line: "after text 2",
+                                line: "after text 2".to_string(),
                             },
                         ],
                     },
                     Hunk::Unchanged {
-                        contents: "this is some trailing text\n",
+                        contents: "this is some trailing text\n".to_string(),
                     },
                 ],
             },
@@ -54,32 +52,32 @@ fn main() {
             FileHunks {
                 hunks: vec![
                     Hunk::Unchanged {
-                        contents: "Some leading text 1\nSome leading text 2\n",
+                        contents: "Some leading text 1\nSome leading text 2\n".to_string(),
                     },
                     Hunk::Changed {
                         before: vec![
                             HunkChangedLine {
                                 is_selected: true,
-                                line: "before text 1",
+                                line: "before text 1".to_string(),
                             },
                             HunkChangedLine {
                                 is_selected: true,
-                                line: "before text 2",
+                                line: "before text 2".to_string(),
                             },
                         ],
                         after: vec![
                             HunkChangedLine {
                                 is_selected: true,
-                                line: "after text 1",
+                                line: "after text 1".to_string(),
                             },
                             HunkChangedLine {
                                 is_selected: true,
-                                line: "after text 2",
+                                line: "after text 2".to_string(),
                             },
                         ],
                     },
                     Hunk::Unchanged {
-                        contents: "this is some trailing text\n",
+                        contents: "this is some trailing text\n".to_string(),
                     },
                 ],
             },
