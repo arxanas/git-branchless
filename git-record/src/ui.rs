@@ -73,14 +73,14 @@ impl HunkLineKey {
 }
 
 /// UI component to record the user's changes.
-pub struct Recorder<'a> {
+pub struct Recorder {
     did_user_confirm_exit: bool,
-    state: RecordState<'a>,
+    state: RecordState,
 }
 
-impl<'a> Recorder<'a> {
+impl Recorder {
     /// Constructor.
-    pub fn new(state: RecordState<'a>) -> Self {
+    pub fn new(state: RecordState) -> Self {
         Self {
             did_user_confirm_exit: false,
             state,
@@ -89,7 +89,7 @@ impl<'a> Recorder<'a> {
 
     /// Run the terminal user interface and have the user interactively select
     /// changes.
-    pub fn run(self, siv: CursiveRunner<CursiveRunnable>) -> Result<RecordState<'a>, RecordError> {
+    pub fn run(self, siv: CursiveRunner<CursiveRunnable>) -> Result<RecordState, RecordError> {
         EventDrivenCursiveAppExt::run(self, siv)
     }
 
@@ -534,16 +534,14 @@ impl<'a> Recorder<'a> {
     }
 }
 
-fn iter_file_changed_lines<'a>(
-    hunks: &'a FileHunks<'a>,
-) -> impl Iterator<Item = (HunkType, &'a HunkChangedLine<'a>)> {
+fn iter_file_changed_lines(
+    hunks: &FileHunks,
+) -> impl Iterator<Item = (HunkType, &HunkChangedLine)> {
     let FileHunks { hunks } = hunks;
     hunks.iter().flat_map(iter_hunk_changed_lines)
 }
 
-fn iter_hunk_changed_lines<'a>(
-    hunk: &'a Hunk<'a>,
-) -> impl Iterator<Item = (HunkType, &'a HunkChangedLine<'a>)> {
+fn iter_hunk_changed_lines(hunk: &Hunk) -> impl Iterator<Item = (HunkType, &HunkChangedLine)> {
     let iter: Box<dyn Iterator<Item = (HunkType, &HunkChangedLine)>> = match hunk {
         Hunk::Changed { before, after } => Box::new(
             before
@@ -570,10 +568,10 @@ pub enum Message {
     Quit,
 }
 
-impl<'a> EventDrivenCursiveApp for Recorder<'a> {
+impl EventDrivenCursiveApp for Recorder {
     type Message = Message;
 
-    type Return = Result<RecordState<'a>, RecordError>;
+    type Return = Result<RecordState, RecordError>;
 
     fn get_init_message(&self) -> Self::Message {
         Message::Init
@@ -735,34 +733,34 @@ mod tests {
         recorder.run(siv.into_runner())
     }
 
-    fn example_record_state() -> RecordState<'static> {
+    fn example_record_state() -> RecordState {
         RecordState {
             files: vec![(
                 PathBuf::from("foo"),
                 FileHunks {
                     hunks: vec![
                         Hunk::Unchanged {
-                            contents: "unchanged 1\nunchanged 2\n",
+                            contents: "unchanged 1\nunchanged 2\n".to_string(),
                         },
                         Hunk::Changed {
                             before: vec![
                                 HunkChangedLine {
                                     is_selected: true,
-                                    line: "before 1",
+                                    line: "before 1".to_string(),
                                 },
                                 HunkChangedLine {
                                     is_selected: true,
-                                    line: "before 2",
+                                    line: "before 2".to_string(),
                                 },
                             ],
                             after: vec![
                                 HunkChangedLine {
                                     is_selected: true,
-                                    line: "after 1",
+                                    line: "after 1".to_string(),
                                 },
                                 HunkChangedLine {
                                     is_selected: false,
-                                    line: "after 2",
+                                    line: "after 2".to_string(),
                                 },
                             ],
                         },
