@@ -123,7 +123,7 @@ impl Recorder {
             for (hunk_num, hunk) in hunks.iter().enumerate() {
                 match hunk {
                     Hunk::Unchanged { contents } => {
-                        for line in contents.lines() {
+                        for line in contents {
                             line_num += 1;
                             file_view.add_child(TextView::new(format!("  {} {}", line_num, line)));
                         }
@@ -740,7 +740,7 @@ mod tests {
                 FileHunks {
                     hunks: vec![
                         Hunk::Unchanged {
-                            contents: "unchanged 1\nunchanged 2\n".to_string(),
+                            contents: vec!["unchanged 1".to_string(), "unchanged 2".to_string()],
                         },
                         Hunk::Changed {
                             before: vec![
@@ -891,7 +891,10 @@ mod tests {
                         FileHunks {
                             hunks: [
                                 Unchanged {
-                                    contents: "unchanged 1\nunchanged 2\n",
+                                    contents: [
+                                        "unchanged 1",
+                                        "unchanged 2",
+                                    ],
                                 },
                                 Changed {
                                     before: [
@@ -998,7 +1001,10 @@ mod tests {
                         FileHunks {
                             hunks: [
                                 Unchanged {
-                                    contents: "unchanged 1\nunchanged 2\n",
+                                    contents: [
+                                        "unchanged 1",
+                                        "unchanged 2",
+                                    ],
                                 },
                                 Changed {
                                     before: [
