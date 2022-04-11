@@ -833,6 +833,7 @@ fn test_undo_noninteractive() -> eyre::Result<()> {
                 ..Default::default()
             },
         )?;
+        let stdout = trim_lines(stdout);
         insta::assert_snapshot!(stdout, @r###"
         Will apply these actions:
         1. Check out from 9ed8f9a bad message
