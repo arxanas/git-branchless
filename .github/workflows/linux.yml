@@ -79,19 +79,31 @@ jobs:
       - name: Cache dependencies
         uses: Swatinem/rust-cache@cb2cf0cc7c5198d3364b9630e2c3d457f160790c
 
-      - name: Compile
-        run: cargo build --benches --tests
+      - name: Compile (all features)
+        run: cargo build --all-features --all-targets --workspace
 
+      # Don't test benches.
       - name: Run Rust tests (all features)
         timeout-minutes: 10
         run: |
           export TEST_GIT="$PWD"/git
           export TEST_GIT_EXEC_PATH=$(dirname "$TEST_GIT")
-          cargo test --all-features
+          cargo test --all-features --examples --tests --workspace
+
+      # Note that `--doc` can't be combined with other tests.
+      - name: Run Rust doc-tests (all features)
+        timeout-minutes: 10
+        run: |
+          export TEST_GIT="$PWD"/git
+          export TEST_GIT_EXEC_PATH=$(dirname "$TEST_GIT")
+          cargo test --all-features --doc --workspace
+
+      - name: Compile (no features)
+        run: cargo build --no-default-features --all-targets --workspace
 
       - name: Run Rust tests (no default features)
         timeout-minutes: 10
         run: |
           export TEST_GIT="$PWD"/git
           export TEST_GIT_EXEC_PATH=$(dirname "$TEST_GIT")
-          cargo test --no-default-features
+          cargo test --no-default-features --examples --tests --workspace
