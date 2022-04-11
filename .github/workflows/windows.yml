@@ -26,11 +26,11 @@ jobs:
         uses: Swatinem/rust-cache@cb2cf0cc7c5198d3364b9630e2c3d457f160790c
 
       - name: Compile
-        run: cargo build --benches --tests
+        run: cargo build --all-targets --workspace
 
       - name: Run tests
         timeout-minutes: 10
         run: |
           $env:TEST_GIT='C:\Program Files\Git\cmd\git.exe'
           $env:TEST_GIT_EXEC_PATH='C:\Program Files\Git\cmd'
-          cargo test
+          cargo test --examples --tests --workspace

@@ -41,4 +41,4 @@ jobs:
           export RUST_BACKTRACE=1
           export TEST_GIT=$(which git)
           export TEST_GIT_EXEC_PATH=$("$TEST_GIT" --exec-path)
-          cargo test
+          cargo test --workspace
