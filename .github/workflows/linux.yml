@@ -63,7 +63,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: "Download artifact: git"
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: git-${{ matrix.git-version }}
 
