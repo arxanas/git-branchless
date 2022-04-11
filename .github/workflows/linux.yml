@@ -46,7 +46,7 @@ jobs:
         run: tar -czf git.tar.gz git git-*
 
       - name: "Upload artifact: git"
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: git-${{ matrix.git-version }}
           path: git.tar.gz
