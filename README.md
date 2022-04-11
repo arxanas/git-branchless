@@ -1,7 +1,7 @@
 <p align="center"><img width="147" height="147" src="https://user-images.githubusercontent.com/454057/144287756-8570ba1b-b9f1-46de-9236-ca17db246856.png" alt="git-branchless logo" /></p>
 
-<h1 align="center">Branchless<sup>1</sup> workflow for Git</h1>
-<p align="center"><sup>1</sup> This suite of tools is 100% compatible with branches. If you think this is confusing, you can <a href="https://github.com/arxanas/git-branchless/discussions/284">suggest a new name here</a></p>
+<h1 align="center">Branchless workflow for Git</h1>
+<p align="center">(This suite of tools is 100% compatible with branches. If you think this is confusing, you can <a href="https://github.com/arxanas/git-branchless/discussions/284">suggest a new name here</a>.)</p>
 
 [![Linux](https://github.com/arxanas/git-branchless/actions/workflows/linux.yml/badge.svg)](https://github.com/arxanas/git-branchless/actions/workflows/linux.yml)
 [![Windows](https://github.com/arxanas/git-branchless/actions/workflows/windows.yml/badge.svg)](https://github.com/arxanas/git-branchless/actions/workflows/windows.yml)
