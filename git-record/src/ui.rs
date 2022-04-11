@@ -1,4 +1,3 @@
-use std::fmt::Display;
 use std::sync::mpsc::Sender;
 
 use cursive::event::Event;
@@ -24,10 +23,10 @@ pub struct FileKey {
     file_num: usize,
 }
 
-impl Display for FileKey {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl FileKey {
+    fn view_id(&self) -> String {
         let Self { file_num } = self;
-        write!(f, "FileKey({})", file_num)
+        format!("FileKey({})", file_num)
     }
 }
 
@@ -37,10 +36,10 @@ pub struct HunkKey {
     hunk_num: usize,
 }
 
-impl Display for HunkKey {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl HunkKey {
+    fn view_id(&self) -> String {
         let Self { file_num, hunk_num } = self;
-        write!(f, "HunkKey({},{})", *file_num, *hunk_num)
+        format!("HunkKey({},{})", *file_num, hunk_num)
     }
 }
 
@@ -52,16 +51,15 @@ pub struct HunkLineKey {
     hunk_line_num: usize,
 }
 
-impl Display for HunkLineKey {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl HunkLineKey {
+    fn view_id(&self) -> String {
         let Self {
             file_num,
             hunk_num,
             hunk_type,
             hunk_line_num,
         } = self;
-        write!(
-            f,
+        format!(
             "HunkLineKey({},{},{},{})",
             file_num,
             hunk_num,
@@ -180,7 +178,7 @@ impl<'a> Recorder<'a> {
                                     }
                                 }
                             })
-                            .with_name(file_key.to_string()),
+                            .with_name(file_key.view_id()),
                     )
                     .child(TextView::new({
                         let mut s = StyledString::new();
@@ -244,7 +242,7 @@ impl<'a> Recorder<'a> {
                                     }
                                 }
                             })
-                            .with_name(hunk_line_key.to_string()),
+                            .with_name(hunk_line_key.view_id()),
                     )
                     .child(TextView::new(line_contents)),
             );
@@ -279,7 +277,7 @@ impl<'a> Recorder<'a> {
                                     }
                                 }
                             })
-                            .with_name(hunk_line_key.to_string()),
+                            .with_name(hunk_line_key.view_id()),
                     )
                     .child(TextView::new(line_contents)),
             );
@@ -304,7 +302,7 @@ impl<'a> Recorder<'a> {
                                 }
                             }
                         })
-                        .with_name(hunk_key.to_string()),
+                        .with_name(hunk_key.view_id()),
                 )
                 .child(TextView::new({
                     let mut s = StyledString::new();
@@ -356,7 +354,7 @@ impl<'a> Recorder<'a> {
                             hunk_type: HunkType::Before,
                             hunk_line_num,
                         };
-                        siv.call_on_name(&hunk_line_key.to_string(), |checkbox: &mut Checkbox| {
+                        siv.call_on_name(&hunk_line_key.view_id(), |checkbox: &mut Checkbox| {
                             checkbox.set_checked(new_value)
                         });
                     }
@@ -376,7 +374,7 @@ impl<'a> Recorder<'a> {
                             hunk_type: HunkType::After,
                             hunk_line_num,
                         };
-                        siv.call_on_name(&hunk_line_key.to_string(), |checkbox: &mut Checkbox| {
+                        siv.call_on_name(&hunk_line_key.view_id(), |checkbox: &mut Checkbox| {
                             checkbox.set_checked(new_value)
                         });
                     }
@@ -384,7 +382,7 @@ impl<'a> Recorder<'a> {
             }
 
             let hunk_key = HunkKey { file_num, hunk_num };
-            siv.call_on_name(&hunk_key.to_string(), |tristate_box: &mut TristateBox| {
+            siv.call_on_name(&hunk_key.view_id(), |tristate_box: &mut TristateBox| {
                 tristate_box.set_state(if new_value {
                     Tristate::Checked
                 } else {
@@ -448,7 +446,7 @@ impl<'a> Recorder<'a> {
                 hunk_line_num,
             }));
         for hunk_line_key in hunk_line_keys {
-            siv.call_on_name(&hunk_line_key.to_string(), |checkbox: &mut Checkbox| {
+            siv.call_on_name(&hunk_line_key.view_id(), |checkbox: &mut Checkbox| {
                 checkbox.set_checked(new_value);
             });
         }
@@ -503,7 +501,7 @@ impl<'a> Recorder<'a> {
         );
         let hunk_new_value = all_are_same_value(hunk_selections).into_tristate();
         let hunk_key = HunkKey { file_num, hunk_num };
-        siv.call_on_name(&hunk_key.to_string(), |tristate_box: &mut TristateBox| {
+        siv.call_on_name(&hunk_key.view_id(), |tristate_box: &mut TristateBox| {
             tristate_box.set_state(hunk_new_value);
         });
     }
@@ -522,7 +520,7 @@ impl<'a> Recorder<'a> {
             )| *is_selected,
         );
         let file_new_value = all_are_same_value(file_selections).into_tristate();
-        siv.call_on_name(&file_key.to_string(), |tristate_box: &mut TristateBox| {
+        siv.call_on_name(&file_key.view_id(), |tristate_box: &mut TristateBox| {
             tristate_box.set_state(file_new_value);
         });
     }
