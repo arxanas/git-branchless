@@ -220,75 +220,34 @@ impl Recorder {
         let mut hunk_view = LinearLayout::vertical();
         let hunk_key = HunkKey { file_num, hunk_num };
 
-        for (hunk_line_num, HunkChangedLine { is_selected, line }) in before.iter().enumerate() {
-            *line_num += 1;
-            let line_contents = {
-                let mut s = StyledString::new();
-                s.append_styled(format!(" -{}", line), BaseColor::Red.dark());
-                s
-            };
+        for (hunk_line_num, hunk_changed_line) in before.iter().enumerate() {
             let hunk_line_key = HunkLineKey {
                 file_num,
                 hunk_num,
                 hunk_type: HunkType::Before,
                 hunk_line_num,
             };
-            hunk_view.add_child(
-                LinearLayout::horizontal()
-                    .child(TextView::new("    "))
-                    .child(
-                        Checkbox::new()
-                            .with_checked(*is_selected)
-                            .on_change({
-                                let main_tx = main_tx.clone();
-                                move |_, is_selected| {
-                                    if main_tx
-                                        .send(Message::ToggleHunkLine(hunk_line_key, is_selected))
-                                        .is_err()
-                                    {
-                                        // Do nothing.
-                                    }
-                                }
-                            })
-                            .with_name(hunk_line_key.view_id()),
-                    )
-                    .child(TextView::new(line_contents)),
-            );
+            hunk_view.add_child(self.make_changed_line_view(
+                main_tx.clone(),
+                line_num,
+                hunk_line_key,
+                hunk_changed_line,
+            ));
         }
 
-        for (hunk_line_num, HunkChangedLine { is_selected, line }) in after.iter().enumerate() {
-            let line_contents = {
-                let mut s = StyledString::new();
-                s.append_styled(format!(" +{}", line), BaseColor::Green.dark());
-                s
-            };
+        for (hunk_line_num, hunk_changed_line) in after.iter().enumerate() {
             let hunk_line_key = HunkLineKey {
                 file_num,
                 hunk_num,
                 hunk_type: HunkType::After,
                 hunk_line_num,
             };
-            hunk_view.add_child(
-                LinearLayout::horizontal()
-                    .child(TextView::new("    "))
-                    .child(
-                        Checkbox::new()
-                            .with_checked(*is_selected)
-                            .on_change({
-                                let main_tx = main_tx.clone();
-                                move |_, is_selected| {
-                                    if main_tx
-                                        .send(Message::ToggleHunkLine(hunk_line_key, is_selected))
-                                        .is_err()
-                                    {
-                                        // Do nothing.
-                                    }
-                                }
-                            })
-                            .with_name(hunk_line_key.view_id()),
-                    )
-                    .child(TextView::new(line_contents)),
-            );
+            hunk_view.add_child(self.make_changed_line_view(
+                main_tx.clone(),
+                line_num,
+                hunk_line_key,
+                hunk_changed_line,
+            ));
         }
 
         view.add_child(
@@ -320,6 +279,47 @@ impl Recorder {
                 })),
         );
         view.add_child(HideableView::new(hunk_view));
+    }
+
+    fn make_changed_line_view(
+        &self,
+        main_tx: Sender<Message>,
+        line_num: &mut usize,
+        hunk_line_key: HunkLineKey,
+        hunk_changed_line: &HunkChangedLine,
+    ) -> impl View {
+        let HunkChangedLine { is_selected, line } = hunk_changed_line;
+
+        *line_num += 1;
+        let line_contents = {
+            let (line, style) = match hunk_line_key.hunk_type {
+                HunkType::Before => (format!(" -{}", line), BaseColor::Red.dark()),
+                HunkType::After => (format!(" +{}", line), BaseColor::Green.dark()),
+            };
+            let mut s = StyledString::new();
+            s.append_styled(line, style);
+            s
+        };
+
+        LinearLayout::horizontal()
+            .child(TextView::new("    "))
+            .child(
+                Checkbox::new()
+                    .with_checked(*is_selected)
+                    .on_change({
+                        let main_tx = main_tx.clone();
+                        move |_, is_selected| {
+                            if main_tx
+                                .send(Message::ToggleHunkLine(hunk_line_key, is_selected))
+                                .is_err()
+                            {
+                                // Do nothing.
+                            }
+                        }
+                    })
+                    .with_name(hunk_line_key.view_id()),
+            )
+            .child(TextView::new(line_contents))
     }
 
     fn toggle_file(
