@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::sync::mpsc::Sender;
 
 use cursive::event::Event;
@@ -153,48 +154,7 @@ impl Recorder {
                 }
             }
 
-            view.add_child(
-                LinearLayout::horizontal()
-                    .child(
-                        TristateBox::new()
-                            .with_state({
-                                match all_are_same_value(iter_file_changed_lines(file_hunks).map(
-                                    |(
-                                        _hunk_type,
-                                        HunkChangedLine {
-                                            is_selected,
-                                            line: _,
-                                        },
-                                    )| is_selected,
-                                )) {
-                                    SameValueResult::Empty | SameValueResult::AllSame(true) => {
-                                        Tristate::Checked
-                                    }
-                                    SameValueResult::AllSame(false) => Tristate::Unchecked,
-                                    SameValueResult::SomeDifferent => Tristate::Partial,
-                                }
-                            })
-                            .on_change({
-                                let main_tx = main_tx.clone();
-                                move |_, new_value| {
-                                    let file_key = FileKey { file_num };
-                                    if main_tx
-                                        .send(Message::ToggleFile(file_key, new_value))
-                                        .is_err()
-                                    {
-                                        // Do nothing.
-                                    }
-                                }
-                            })
-                            .with_name(file_key.view_id()),
-                    )
-                    .child(TextView::new({
-                        let mut s = StyledString::new();
-                        s.append_plain(" /");
-                        s.append_styled(path.to_string_lossy(), Effect::Bold);
-                        s
-                    })),
-            );
+            view.add_child(self.make_file_view(main_tx.clone(), path, file_key, file_hunks));
             view.add_child(file_view);
             if file_num + 1 < files.len() {
                 // Render a spacer line. Note that an empty string won't render an
@@ -204,6 +164,54 @@ impl Recorder {
         }
 
         view
+    }
+
+    fn make_file_view(
+        &self,
+        main_tx: Sender<Message>,
+        path: &Path,
+        file_key: FileKey,
+        file_hunks: &FileHunks,
+    ) -> impl View {
+        LinearLayout::horizontal()
+            .child(
+                TristateBox::new()
+                    .with_state({
+                        match all_are_same_value(iter_file_changed_lines(file_hunks).map(
+                            |(
+                                _hunk_type,
+                                HunkChangedLine {
+                                    is_selected,
+                                    line: _,
+                                },
+                            )| is_selected,
+                        )) {
+                            SameValueResult::Empty | SameValueResult::AllSame(true) => {
+                                Tristate::Checked
+                            }
+                            SameValueResult::AllSame(false) => Tristate::Unchecked,
+                            SameValueResult::SomeDifferent => Tristate::Partial,
+                        }
+                    })
+                    .on_change({
+                        let main_tx = main_tx.clone();
+                        move |_, new_value| {
+                            if main_tx
+                                .send(Message::ToggleFile(file_key, new_value))
+                                .is_err()
+                            {
+                                // Do nothing.
+                            }
+                        }
+                    })
+                    .with_name(file_key.view_id()),
+            )
+            .child(TextView::new({
+                let mut s = StyledString::new();
+                s.append_plain(" /");
+                s.append_styled(path.to_string_lossy(), Effect::Bold);
+                s
+            }))
     }
 
     fn make_changed_hunk_views(
