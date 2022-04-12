@@ -177,21 +177,16 @@ impl Recorder {
             .child(
                 TristateBox::new()
                     .with_state({
-                        match all_are_same_value(iter_file_changed_lines(file_hunks).map(
+                        all_are_same_value(iter_file_changed_lines(file_hunks).map(
                             |(
                                 _hunk_type,
                                 HunkChangedLine {
                                     is_selected,
                                     line: _,
                                 },
-                            )| is_selected,
-                        )) {
-                            SameValueResult::Empty | SameValueResult::AllSame(true) => {
-                                Tristate::Checked
-                            }
-                            SameValueResult::AllSame(false) => Tristate::Unchecked,
-                            SameValueResult::SomeDifferent => Tristate::Partial,
-                        }
+                            )| *is_selected,
+                        ))
+                        .into_tristate()
                     })
                     .on_change({
                         let main_tx = main_tx.clone();
@@ -263,8 +258,15 @@ impl Recorder {
                 .child(TextView::new("  "))
                 .child(
                     TristateBox::new()
-                        // TODO: set this initial state correctly
-                        .with_state(Tristate::Checked)
+                        .with_state(
+                            all_are_same_value(before.iter().chain(after.iter()).map(
+                                |HunkChangedLine {
+                                     is_selected,
+                                     line: _,
+                                 }| { *is_selected },
+                            ))
+                            .into_tristate(),
+                        )
                         .on_change({
                             let hunk_key = HunkKey { file_num, hunk_num };
                             let main_tx = main_tx;
@@ -793,7 +795,7 @@ mod tests {
         [~] /foo
         1 unchanged 1
         2 unchanged 2
-        [X] hunk 1/1 in current file, 1/1 total
+        [~] hunk 1/1 in current file, 1/1 total
         [X] -before 1
         [X] -before 2
         [X] +after 1
@@ -844,23 +846,36 @@ mod tests {
         let screenshot1 = Default::default();
         let screenshot2 = Default::default();
         let screenshot3 = Default::default();
+        let screenshot4 = Default::default();
         let result = run_test(
             example_record_state(),
             vec![
                 CursiveTestingEvent::Event(Key::Down.into()), // move to hunk
                 CursiveTestingEvent::Event(' '.into()),       // toggle hunk
                 CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot1)),
+                CursiveTestingEvent::Event(' '.into()), // toggle hunk
+                CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot2)),
                 CursiveTestingEvent::Event(Key::Down.into()), // move to line
                 CursiveTestingEvent::Event(' '.into()),       // toggle line
-                CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot2)),
+                CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot3)),
                 CursiveTestingEvent::Event(Key::Up.into()), // move to hunk
                 CursiveTestingEvent::Event(' '.into()),     // toggle hunk
-                CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot3)),
+                CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot4)),
                 CursiveTestingEvent::Event('c'.into()),
             ],
         );
 
         insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
+        [X] /foo
+        1 unchanged 1
+        2 unchanged 2
+        [X] hunk 1/1 in current file, 1/1 total
+        [X] -before 1
+        [X] -before 2
+        [X] +after 1
+        [X] +after 2
+        "###);
+        insta::assert_snapshot!(screen_to_string(&screenshot2), @r###"
         [ ] /foo
         1 unchanged 1
         2 unchanged 2
@@ -870,7 +885,7 @@ mod tests {
         [ ] +after 1
         [ ] +after 2
         "###);
-        insta::assert_snapshot!(screen_to_string(&screenshot2), @r###"
+        insta::assert_snapshot!(screen_to_string(&screenshot3), @r###"
         [~] /foo
         1 unchanged 1
         2 unchanged 2
@@ -880,7 +895,7 @@ mod tests {
         [ ] +after 1
         [ ] +after 2
         "###);
-        insta::assert_snapshot!(screen_to_string(&screenshot3), @r###"
+        insta::assert_snapshot!(screen_to_string(&screenshot4), @r###"
         [X] /foo
         1 unchanged 1
         2 unchanged 2
@@ -1042,6 +1057,45 @@ mod tests {
                 ],
             },
         )
+        "###);
+    }
+
+    #[test]
+    fn test_initial_tristate_states() {
+        let state = {
+            let mut state = example_record_state();
+            let (_path, FileHunks { hunks }) = &mut state.files[0];
+            for hunk in hunks {
+                if let Hunk::Changed { before, after: _ } = hunk {
+                    before[0].is_selected = true;
+                }
+            }
+            state
+        };
+
+        let screenshot1 = Default::default();
+        let result = run_test(
+            state,
+            vec![
+                CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot1)),
+                CursiveTestingEvent::Event('q'.into()),
+                CursiveTestingEvent::Event(Key::Enter.into()),
+            ],
+        );
+        insta::assert_debug_snapshot!(result, @r###"
+        Err(
+            Cancelled,
+        )
+        "###);
+        insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
+        [~] /foo
+        1 unchanged 1
+        2 unchanged 2
+        [~] hunk 1/1 in current file, 1/1 total
+        [X] -before 1
+        [X] -before 2
+        [X] +after 1
+        [ ] +after 2
         "###);
     }
 }
