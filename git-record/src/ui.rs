@@ -100,96 +100,22 @@ impl Recorder {
 
         let RecordState { files } = &self.state;
 
-        let count_changed_hunks = |content: &FileContent| match content {
-            FileContent::Absent => unimplemented!(),
-            FileContent::Text { hunks } => hunks
-                .iter()
-                .filter(|hunk| match hunk {
-                    Hunk::Unchanged { .. } => false,
-                    Hunk::Changed { .. } => true,
-                })
-                .count(),
-        };
         let global_num_changed_hunks: usize = files
             .iter()
-            .map(|(_path, hunks)| count_changed_hunks(hunks))
+            .map(|(_path, file_content)| file_content.count_changed_hunks())
             .sum();
         let mut global_changed_hunk_num = 0;
 
         for (file_num, (path, file_content)) in files.iter().enumerate() {
             let file_key = FileKey { file_num };
-            let mut file_view = LinearLayout::vertical();
-            let mut line_num: usize = 1;
-            let local_num_changed_hunks = count_changed_hunks(file_content);
-
-            match file_content {
-                FileContent::Absent => unimplemented!(),
-                FileContent::Text { hunks } => {
-                    for (hunk_num, hunk) in hunks.iter().enumerate() {
-                        match hunk {
-                            Hunk::Unchanged { contents } => {
-                                const CONTEXT: usize = 2;
-
-                                // Add the trailing context for the previous hunk (if any).
-                                if hunk_num > 0 {
-                                    let end_index = min(CONTEXT, contents.len());
-                                    for (i, line) in contents[..end_index].iter().enumerate() {
-                                        file_view.add_child(TextView::new(format!(
-                                            "  {} {}",
-                                            line_num + i,
-                                            line
-                                        )));
-                                    }
-                                }
-
-                                // Add vertical ellipsis between hunks.
-                                if hunk_num > 0 && hunk_num + 1 < hunks.len() {
-                                    file_view.add_child(TextView::new(":"));
-                                }
-
-                                // Add the leading context for the next hunk (if any).
-                                if hunk_num + 1 < hunks.len() {
-                                    let start_index = contents.len().saturating_sub(CONTEXT);
-                                    for (i, line) in contents[start_index..].iter().enumerate() {
-                                        file_view.add_child(TextView::new(format!(
-                                            "  {} {}",
-                                            line_num + start_index + i,
-                                            line
-                                        )));
-                                    }
-                                }
-
-                                line_num += contents.len();
-                            }
-
-                            Hunk::Changed { before, after } => {
-                                global_changed_hunk_num += 1;
-                                let description = format!(
-                                    "hunk {}/{} in current file, {}/{} total",
-                                    hunk_num,
-                                    local_num_changed_hunks,
-                                    global_changed_hunk_num,
-                                    global_num_changed_hunks
-                                );
-
-                                self.make_changed_hunk_views(
-                                    main_tx.clone(),
-                                    &mut file_view,
-                                    file_num,
-                                    hunk_num,
-                                    description,
-                                    before,
-                                    after,
-                                );
-                                line_num += before.len();
-                            }
-                        }
-                    }
-                }
-            }
-
-            view.add_child(self.make_file_view(main_tx.clone(), path, file_key, file_content));
-            view.add_child(file_view);
+            view.add_child(self.make_file_view(
+                main_tx.clone(),
+                path,
+                file_key,
+                file_content,
+                &mut global_changed_hunk_num,
+                global_num_changed_hunks,
+            ));
             if file_num + 1 < files.len() {
                 // Render a spacer line. Note that an empty string won't render an
                 // empty line.
@@ -206,8 +132,16 @@ impl Recorder {
         path: &Path,
         file_key: FileKey,
         file_content: &FileContent,
+        global_changed_hunk_num: &mut usize,
+        global_num_changed_hunks: usize,
     ) -> impl View {
-        LinearLayout::horizontal()
+        let FileKey { file_num } = file_key;
+
+        let mut file_view = LinearLayout::vertical();
+        let mut line_num: usize = 1;
+        let local_num_changed_hunks = file_content.count_changed_hunks();
+
+        let file_header_view = LinearLayout::horizontal()
             .child(
                 TristateBox::new()
                     .with_state({
@@ -240,7 +174,76 @@ impl Recorder {
                 s.append_plain(" ");
                 s.append_styled(path.to_string_lossy(), Effect::Bold);
                 s
-            }))
+            }));
+        file_view.add_child(file_header_view);
+
+        match file_content {
+            FileContent::Absent => unimplemented!(),
+            FileContent::Text { hunks } => {
+                for (hunk_num, hunk) in hunks.iter().enumerate() {
+                    match hunk {
+                        Hunk::Unchanged { contents } => {
+                            const CONTEXT: usize = 2;
+
+                            // Add the trailing context for the previous hunk (if any).
+                            if hunk_num > 0 {
+                                let end_index = min(CONTEXT, contents.len());
+                                for (i, line) in contents[..end_index].iter().enumerate() {
+                                    file_view.add_child(TextView::new(format!(
+                                        "  {} {}",
+                                        line_num + i,
+                                        line
+                                    )));
+                                }
+                            }
+
+                            // Add vertical ellipsis between hunks.
+                            if hunk_num > 0 && hunk_num + 1 < hunks.len() {
+                                file_view.add_child(TextView::new(":"));
+                            }
+
+                            // Add the leading context for the next hunk (if any).
+                            if hunk_num + 1 < hunks.len() {
+                                let start_index = contents.len().saturating_sub(CONTEXT);
+                                for (i, line) in contents[start_index..].iter().enumerate() {
+                                    file_view.add_child(TextView::new(format!(
+                                        "  {} {}",
+                                        line_num + start_index + i,
+                                        line
+                                    )));
+                                }
+                            }
+
+                            line_num += contents.len();
+                        }
+
+                        Hunk::Changed { before, after } => {
+                            *global_changed_hunk_num += 1;
+                            let description = format!(
+                                "hunk {}/{} in current file, {}/{} total",
+                                hunk_num,
+                                local_num_changed_hunks,
+                                global_changed_hunk_num,
+                                global_num_changed_hunks
+                            );
+
+                            self.make_changed_hunk_views(
+                                main_tx.clone(),
+                                &mut file_view,
+                                file_num,
+                                hunk_num,
+                                description,
+                                before,
+                                after,
+                            );
+                            line_num += before.len();
+                        }
+                    }
+                }
+            }
+        }
+
+        file_view
     }
 
     fn make_changed_hunk_views(
