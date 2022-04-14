@@ -203,7 +203,7 @@ impl Recorder {
             )
             .child(TextView::new({
                 let mut s = StyledString::new();
-                s.append_plain(" /");
+                s.append_plain(" ");
                 s.append_styled(path.to_string_lossy(), Effect::Bold);
                 s
             }))
@@ -792,7 +792,7 @@ mod tests {
             ],
         );
         insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
-        [~] /foo
+        [~] foo
         1 unchanged 1
         2 unchanged 2
         [~] hunk 1/1 in current file, 1/1 total
@@ -825,7 +825,7 @@ mod tests {
             ],
         );
         insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
-        [X] /foo
+        [X] foo
         1 unchanged 1
         2 unchanged 2
         [X] hunk 1/1 in current file, 1/1 total
@@ -866,7 +866,7 @@ mod tests {
         );
 
         insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
-        [X] /foo
+        [X] foo
         1 unchanged 1
         2 unchanged 2
         [X] hunk 1/1 in current file, 1/1 total
@@ -876,7 +876,7 @@ mod tests {
         [X] +after 2
         "###);
         insta::assert_snapshot!(screen_to_string(&screenshot2), @r###"
-        [ ] /foo
+        [ ] foo
         1 unchanged 1
         2 unchanged 2
         [ ] hunk 1/1 in current file, 1/1 total
@@ -886,7 +886,7 @@ mod tests {
         [ ] +after 2
         "###);
         insta::assert_snapshot!(screen_to_string(&screenshot3), @r###"
-        [~] /foo
+        [~] foo
         1 unchanged 1
         2 unchanged 2
         [~] hunk 1/1 in current file, 1/1 total
@@ -896,7 +896,7 @@ mod tests {
         [ ] +after 2
         "###);
         insta::assert_snapshot!(screen_to_string(&screenshot4), @r###"
-        [X] /foo
+        [X] foo
         1 unchanged 1
         2 unchanged 2
         [X] hunk 1/1 in current file, 1/1 total
@@ -976,7 +976,7 @@ mod tests {
         );
 
         insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
-        [X] /foo
+        [X] foo
         1 unchanged 1
         2 unchanged 2
         [X] hunk 1/1 in current file, 1/1 total
@@ -986,7 +986,7 @@ mod tests {
         [X] +after 2
         "###);
         insta::assert_snapshot!(screen_to_string(&screenshot2), @r###"
-        [ ] /foo
+        [ ] foo
         1 unchanged 1
         2 unchanged 2
         [ ] hunk 1/1 in current file, 1/1 total
@@ -996,7 +996,7 @@ mod tests {
         [ ] +after 2
         "###);
         insta::assert_snapshot!(screen_to_string(&screenshot3), @r###"
-        [~] /foo
+        [~] foo
         1 unchanged 1
         2 unchanged 2
         [~] hunk 1/1 in current file, 1/1 total
@@ -1006,7 +1006,7 @@ mod tests {
         [ ] +after 2
         "###);
         insta::assert_snapshot!(screen_to_string(&screenshot4), @r###"
-        [X] /foo
+        [X] foo
         1 unchanged 1
         2 unchanged 2
         [X] hunk 1/1 in current file, 1/1 total
@@ -1088,7 +1088,7 @@ mod tests {
         )
         "###);
         insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
-        [~] /foo
+        [~] foo
         1 unchanged 1
         2 unchanged 2
         [~] hunk 1/1 in current file, 1/1 total
