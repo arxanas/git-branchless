@@ -1,3 +1,4 @@
+use std::cmp::min;
 use std::path::Path;
 use std::sync::mpsc::Sender;
 
@@ -117,17 +118,45 @@ impl Recorder {
         for (file_num, (path, file_hunks)) in files.iter().enumerate() {
             let file_key = FileKey { file_num };
             let mut file_view = LinearLayout::vertical();
-            let mut line_num: usize = 0;
+            let mut line_num: usize = 1;
             let local_num_changed_hunks = count_changed_hunks(file_hunks);
 
             let FileHunks { hunks } = file_hunks;
             for (hunk_num, hunk) in hunks.iter().enumerate() {
                 match hunk {
                     Hunk::Unchanged { contents } => {
-                        for line in contents {
-                            line_num += 1;
-                            file_view.add_child(TextView::new(format!("  {} {}", line_num, line)));
+                        const CONTEXT: usize = 2;
+
+                        // Add the trailing context for the previous hunk (if any).
+                        if hunk_num > 0 {
+                            let end_index = min(CONTEXT, contents.len());
+                            for (i, line) in contents[..end_index].iter().enumerate() {
+                                file_view.add_child(TextView::new(format!(
+                                    "  {} {}",
+                                    line_num + i,
+                                    line
+                                )));
+                            }
                         }
+
+                        // Add vertical ellipsis between hunks.
+                        if hunk_num > 0 && hunk_num + 1 < hunks.len() {
+                            file_view.add_child(TextView::new(":"));
+                        }
+
+                        // Add the leading context for the next hunk (if any).
+                        if hunk_num + 1 < hunks.len() {
+                            let start_index = contents.len().saturating_sub(CONTEXT);
+                            for (i, line) in contents[start_index..].iter().enumerate() {
+                                file_view.add_child(TextView::new(format!(
+                                    "  {} {}",
+                                    line_num + start_index + i,
+                                    line
+                                )));
+                            }
+                        }
+
+                        line_num += contents.len();
                     }
 
                     Hunk::Changed { before, after } => {
@@ -143,13 +172,13 @@ impl Recorder {
                         self.make_changed_hunk_views(
                             main_tx.clone(),
                             &mut file_view,
-                            &mut line_num,
                             file_num,
                             hunk_num,
                             description,
                             before,
                             after,
                         );
+                        line_num += before.len();
                     }
                 }
             }
@@ -213,7 +242,6 @@ impl Recorder {
         &self,
         main_tx: Sender<Message>,
         view: &mut LinearLayout,
-        line_num: &mut usize,
         file_num: usize,
         hunk_num: usize,
         hunk_description: String,
@@ -232,7 +260,6 @@ impl Recorder {
             };
             hunk_view.add_child(self.make_changed_line_view(
                 main_tx.clone(),
-                line_num,
                 hunk_line_key,
                 hunk_changed_line,
             ));
@@ -247,7 +274,6 @@ impl Recorder {
             };
             hunk_view.add_child(self.make_changed_line_view(
                 main_tx.clone(),
-                line_num,
                 hunk_line_key,
                 hunk_changed_line,
             ));
@@ -294,13 +320,11 @@ impl Recorder {
     fn make_changed_line_view(
         &self,
         main_tx: Sender<Message>,
-        line_num: &mut usize,
         hunk_line_key: HunkLineKey,
         hunk_changed_line: &HunkChangedLine,
     ) -> impl View {
         let HunkChangedLine { is_selected, line } = hunk_changed_line;
 
-        *line_num += 1;
         let line_contents = {
             let (line, style) = match hunk_line_key.hunk_type {
                 HunkType::Before => (format!(" -{}", line), BaseColor::Red.dark()),
@@ -1096,6 +1120,77 @@ mod tests {
         [X] -before 2
         [X] +after 1
         [ ] +after 2
+        "###);
+    }
+
+    #[test]
+    fn test_context() {
+        let state = RecordState {
+            files: vec![(
+                PathBuf::from("foo"),
+                FileHunks {
+                    hunks: vec![
+                        Hunk::Unchanged {
+                            contents: vec![
+                                "foo".to_string(),
+                                "bar".to_string(),
+                                "baz".to_string(),
+                                "qux".to_string(),
+                            ],
+                        },
+                        Hunk::Changed {
+                            before: vec![HunkChangedLine {
+                                is_selected: false,
+                                line: "changed 1".to_string(),
+                            }],
+                            after: vec![
+                                HunkChangedLine {
+                                    is_selected: false,
+                                    line: "changed 2".to_string(),
+                                },
+                                HunkChangedLine {
+                                    is_selected: false,
+                                    line: "changed 3".to_string(),
+                                },
+                            ],
+                        },
+                        Hunk::Unchanged {
+                            contents: vec![
+                                "foo".to_string(),
+                                "bar".to_string(),
+                                "baz".to_string(),
+                                "qux".to_string(),
+                            ],
+                        },
+                    ],
+                },
+            )],
+        };
+
+        let screenshot = Default::default();
+        let result = run_test(
+            state,
+            vec![
+                CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot)),
+                CursiveTestingEvent::Event('q'.into()),
+            ],
+        );
+
+        insta::assert_debug_snapshot!(result, @r###"
+        Err(
+            Cancelled,
+        )
+        "###);
+        insta::assert_snapshot!(screen_to_string(&screenshot), @r###"
+        [ ] foo
+        3 baz
+        4 qux
+        [ ] hunk 1/1 in current file, 1/1 total
+        [ ] -changed 1
+        [ ] +changed 2
+        [ ] +changed 3
+        6 foo
+        7 bar
         "###);
     }
 }
