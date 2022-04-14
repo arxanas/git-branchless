@@ -9,13 +9,13 @@ use cursive::CursiveRunnable;
 use cursive_buffered_backend::BufferedBackend;
 
 use git_record::Recorder;
-use git_record::{FileHunks, Hunk, HunkChangedLine, RecordError, RecordState};
+use git_record::{FileContent, Hunk, HunkChangedLine, RecordError, RecordState};
 
 fn main() {
     let files = vec![
         (
             PathBuf::from("foo/bar"),
-            FileHunks {
+            FileContent {
                 hunks: vec![
                     Hunk::Unchanged {
                         contents: std::iter::repeat("this is some text".to_string())
@@ -52,7 +52,7 @@ fn main() {
         ),
         (
             PathBuf::from("baz"),
-            FileHunks {
+            FileContent {
                 hunks: vec![
                     Hunk::Unchanged {
                         contents: vec![

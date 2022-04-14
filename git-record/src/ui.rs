@@ -12,7 +12,7 @@ use tracing::error;
 
 use crate::cursive_utils::{EventDrivenCursiveApp, EventDrivenCursiveAppExt};
 use crate::tristate::{Tristate, TristateBox};
-use crate::{FileHunks, Hunk, HunkChangedLine, RecordError, RecordState};
+use crate::{FileContent, Hunk, HunkChangedLine, RecordError, RecordState};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum HunkType {
@@ -100,7 +100,7 @@ impl Recorder {
 
         let RecordState { files } = &self.state;
 
-        let count_changed_hunks = |&FileHunks { ref hunks }| {
+        let count_changed_hunks = |&FileContent { ref hunks }| {
             hunks
                 .iter()
                 .filter(|hunk| match hunk {
@@ -115,13 +115,13 @@ impl Recorder {
             .sum();
         let mut global_changed_hunk_num = 0;
 
-        for (file_num, (path, file_hunks)) in files.iter().enumerate() {
+        for (file_num, (path, file_content)) in files.iter().enumerate() {
             let file_key = FileKey { file_num };
             let mut file_view = LinearLayout::vertical();
             let mut line_num: usize = 1;
-            let local_num_changed_hunks = count_changed_hunks(file_hunks);
+            let local_num_changed_hunks = count_changed_hunks(file_content);
 
-            let FileHunks { hunks } = file_hunks;
+            let FileContent { hunks } = file_content;
             for (hunk_num, hunk) in hunks.iter().enumerate() {
                 match hunk {
                     Hunk::Unchanged { contents } => {
@@ -183,7 +183,7 @@ impl Recorder {
                 }
             }
 
-            view.add_child(self.make_file_view(main_tx.clone(), path, file_key, file_hunks));
+            view.add_child(self.make_file_view(main_tx.clone(), path, file_key, file_content));
             view.add_child(file_view);
             if file_num + 1 < files.len() {
                 // Render a spacer line. Note that an empty string won't render an
@@ -200,13 +200,13 @@ impl Recorder {
         main_tx: Sender<Message>,
         path: &Path,
         file_key: FileKey,
-        file_hunks: &FileHunks,
+        file_content: &FileContent,
     ) -> impl View {
         LinearLayout::horizontal()
             .child(
                 TristateBox::new()
                     .with_state({
-                        all_are_same_value(iter_file_changed_lines(file_hunks).map(
+                        all_are_same_value(iter_file_changed_lines(file_content).map(
                             |(
                                 _hunk_type,
                                 HunkChangedLine {
@@ -363,7 +363,7 @@ impl Recorder {
         new_value: Tristate,
     ) {
         let FileKey { file_num } = file_key;
-        let (_path, file_hunks) = &mut self.state.files[file_num];
+        let (_path, file_content) = &mut self.state.files[file_num];
 
         let new_value = match new_value {
             Tristate::Unchecked => false,
@@ -374,7 +374,7 @@ impl Recorder {
             Tristate::Checked => true,
         };
 
-        let FileHunks { hunks } = file_hunks;
+        let FileContent { hunks } = file_content;
         for (hunk_num, hunk) in hunks.iter_mut().enumerate() {
             match hunk {
                 Hunk::Unchanged { contents: _ } => {
@@ -452,9 +452,9 @@ impl Recorder {
         };
 
         let (before, after) = {
-            let (path, hunks) = &mut self.state.files[file_num];
+            let (path, file_content) = &mut self.state.files[file_num];
             let hunk = {
-                let FileHunks { hunks } = hunks;
+                let FileContent { hunks } = file_content;
                 &mut hunks[hunk_num]
             };
 
@@ -509,8 +509,8 @@ impl Recorder {
             hunk_line_num,
         } = hunk_line_key;
 
-        let (path, file_hunks) = &mut self.state.files[file_num];
-        let FileHunks { hunks } = file_hunks;
+        let (path, file_content) = &mut self.state.files[file_num];
+        let FileContent { hunks } = file_content;
         {
             let hunk = &mut hunks[hunk_num];
             let hunk_changed_lines = match (hunk, hunk_type) {
@@ -569,9 +569,9 @@ impl Recorder {
 }
 
 fn iter_file_changed_lines(
-    hunks: &FileHunks,
+    file_content: &FileContent,
 ) -> impl Iterator<Item = (HunkType, &HunkChangedLine)> {
-    let FileHunks { hunks } = hunks;
+    let FileContent { hunks } = file_content;
     hunks.iter().flat_map(iter_hunk_changed_lines)
 }
 
@@ -771,7 +771,7 @@ mod tests {
         RecordState {
             files: vec![(
                 PathBuf::from("foo"),
-                FileHunks {
+                FileContent {
                     hunks: vec![
                         Hunk::Unchanged {
                             contents: vec!["unchanged 1".to_string(), "unchanged 2".to_string()],
@@ -935,7 +935,7 @@ mod tests {
                 files: [
                     (
                         "foo",
-                        FileHunks {
+                        FileContent {
                             hunks: [
                                 Unchanged {
                                     contents: [
@@ -1045,7 +1045,7 @@ mod tests {
                 files: [
                     (
                         "foo",
-                        FileHunks {
+                        FileContent {
                             hunks: [
                                 Unchanged {
                                     contents: [
@@ -1088,7 +1088,7 @@ mod tests {
     fn test_initial_tristate_states() {
         let state = {
             let mut state = example_record_state();
-            let (_path, FileHunks { hunks }) = &mut state.files[0];
+            let (_path, FileContent { hunks }) = &mut state.files[0];
             for hunk in hunks {
                 if let Hunk::Changed { before, after: _ } = hunk {
                     before[0].is_selected = true;
@@ -1128,7 +1128,7 @@ mod tests {
         let state = RecordState {
             files: vec![(
                 PathBuf::from("foo"),
-                FileHunks {
+                FileContent {
                     hunks: vec![
                         Hunk::Unchanged {
                             contents: vec![

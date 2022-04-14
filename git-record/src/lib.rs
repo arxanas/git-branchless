@@ -18,5 +18,5 @@ mod tristate;
 mod types;
 mod ui;
 
-pub use types::{FileHunks, Hunk, HunkChangedLine, RecordError, RecordState};
+pub use types::{FileContent, Hunk, HunkChangedLine, RecordError, RecordState};
 pub use ui::Recorder;

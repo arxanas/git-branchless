@@ -6,7 +6,7 @@ use std::path::PathBuf;
 pub struct RecordState {
     /// The state of each file. This is rendered in order, so you may want to
     /// sort this list by path before providing it.
-    pub files: Vec<(PathBuf, FileHunks)>,
+    pub files: Vec<(PathBuf, FileContent)>,
 }
 
 /// An error which occurred when attempting to record changes.
@@ -18,12 +18,12 @@ pub enum RecordError {
 
 /// The state of a file to be recorded.
 #[derive(Clone, Debug)]
-pub struct FileHunks {
+pub struct FileContent {
     /// The set of [`Hunk`]s inside the file.
     pub hunks: Vec<Hunk>,
 }
 
-impl FileHunks {
+impl FileContent {
     /// Calculate the `(selected, unselected)` contents of the file. For
     /// example, the first value would be suitable for staging or committing,
     /// and the second value would be suitable for potentially recording again.
