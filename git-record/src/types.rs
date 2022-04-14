@@ -30,6 +30,20 @@ pub enum FileContent {
 }
 
 impl FileContent {
+    /// Count the number of changed sections in this file.
+    pub fn count_changed_hunks(&self) -> usize {
+        match self {
+            FileContent::Absent => unimplemented!(),
+            FileContent::Text { hunks } => hunks
+                .iter()
+                .filter(|hunk| match hunk {
+                    Hunk::Unchanged { .. } => false,
+                    Hunk::Changed { .. } => true,
+                })
+                .count(),
+        }
+    }
+
     /// Calculate the `(selected, unselected)` contents of the file. For
     /// example, the first value would be suitable for staging or committing,
     /// and the second value would be suitable for potentially recording again.
