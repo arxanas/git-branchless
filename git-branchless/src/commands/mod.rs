@@ -1,19 +1,19 @@
 //! Sub-commands of `git-branchless`.
 
-pub mod amend;
-pub mod bug_report;
-pub mod gc;
-pub mod hide;
-pub mod hooks;
-pub mod init;
-pub mod r#move;
-pub mod navigation;
-pub mod restack;
-pub mod reword;
-pub mod smartlog;
-pub mod sync;
-pub mod undo;
-pub mod wrap;
+mod amend;
+mod bug_report;
+mod gc;
+mod hide;
+mod hooks;
+mod init;
+mod r#move;
+mod navigation;
+mod restack;
+mod reword;
+mod smartlog;
+mod sync;
+mod undo;
+mod wrap;
 
 use std::any::Any;
 use std::convert::TryInto;
@@ -375,4 +375,9 @@ fn install_tracing() -> eyre::Result<impl Drop> {
         .try_init()?;
 
     Ok(flush_guard)
+}
+
+/// Re-exports of internals for testing purposes.
+pub mod testing {
+    pub use crate::commands::undo::testing as undo;
 }
