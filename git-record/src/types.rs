@@ -18,9 +18,15 @@ pub enum RecordError {
 
 /// The state of a file to be recorded.
 #[derive(Clone, Debug)]
-pub struct FileContent {
-    /// The set of [`Hunk`]s inside the file.
-    pub hunks: Vec<Hunk>,
+pub enum FileContent {
+    /// The file didn't exist. (Perhaps it hasn't yet been created, or it was deleted.)
+    Absent,
+
+    /// The file contains textual content (a sequence of lines each ending with the newline character.)
+    Text {
+        /// The set of [`Hunk`]s inside the file.
+        hunks: Vec<Hunk>,
+    },
 }
 
 impl FileContent {
@@ -30,35 +36,40 @@ impl FileContent {
     pub fn get_selected_contents(&self) -> (String, String) {
         let mut acc_selected = String::new();
         let mut acc_unselected = String::new();
-        for hunk in &self.hunks {
-            match hunk {
-                Hunk::Unchanged { contents } => {
-                    for line in contents {
-                        acc_selected.push_str(line);
-                        acc_selected.push('\n');
-                        acc_unselected.push_str(line);
-                        acc_unselected.push('\n');
-                    }
-                }
-                Hunk::Changed { before, after } => {
-                    for HunkChangedLine { is_selected, line } in before {
-                        // Note the inverted condition here.
-                        if !*is_selected {
-                            acc_selected.push_str(line);
-                            acc_selected.push('\n');
-                        } else {
-                            acc_unselected.push_str(line);
-                            acc_unselected.push('\n');
+        match self {
+            FileContent::Absent => unimplemented!(),
+            FileContent::Text { hunks } => {
+                for hunk in hunks {
+                    match hunk {
+                        Hunk::Unchanged { contents } => {
+                            for line in contents {
+                                acc_selected.push_str(line);
+                                acc_selected.push('\n');
+                                acc_unselected.push_str(line);
+                                acc_unselected.push('\n');
+                            }
                         }
-                    }
+                        Hunk::Changed { before, after } => {
+                            for HunkChangedLine { is_selected, line } in before {
+                                // Note the inverted condition here.
+                                if !*is_selected {
+                                    acc_selected.push_str(line);
+                                    acc_selected.push('\n');
+                                } else {
+                                    acc_unselected.push_str(line);
+                                    acc_unselected.push('\n');
+                                }
+                            }
 
-                    for HunkChangedLine { is_selected, line } in after {
-                        if *is_selected {
-                            acc_selected.push_str(line);
-                            acc_selected.push('\n');
-                        } else {
-                            acc_unselected.push_str(line);
-                            acc_unselected.push('\n');
+                            for HunkChangedLine { is_selected, line } in after {
+                                if *is_selected {
+                                    acc_selected.push_str(line);
+                                    acc_selected.push('\n');
+                                } else {
+                                    acc_unselected.push_str(line);
+                                    acc_unselected.push('\n');
+                                }
+                            }
                         }
                     }
                 }

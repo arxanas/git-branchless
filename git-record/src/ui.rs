@@ -100,14 +100,15 @@ impl Recorder {
 
         let RecordState { files } = &self.state;
 
-        let count_changed_hunks = |&FileContent { ref hunks }| {
-            hunks
+        let count_changed_hunks = |content: &FileContent| match content {
+            FileContent::Absent => unimplemented!(),
+            FileContent::Text { hunks } => hunks
                 .iter()
                 .filter(|hunk| match hunk {
                     Hunk::Unchanged { .. } => false,
                     Hunk::Changed { .. } => true,
                 })
-                .count()
+                .count(),
         };
         let global_num_changed_hunks: usize = files
             .iter()
@@ -121,64 +122,68 @@ impl Recorder {
             let mut line_num: usize = 1;
             let local_num_changed_hunks = count_changed_hunks(file_content);
 
-            let FileContent { hunks } = file_content;
-            for (hunk_num, hunk) in hunks.iter().enumerate() {
-                match hunk {
-                    Hunk::Unchanged { contents } => {
-                        const CONTEXT: usize = 2;
+            match file_content {
+                FileContent::Absent => unimplemented!(),
+                FileContent::Text { hunks } => {
+                    for (hunk_num, hunk) in hunks.iter().enumerate() {
+                        match hunk {
+                            Hunk::Unchanged { contents } => {
+                                const CONTEXT: usize = 2;
 
-                        // Add the trailing context for the previous hunk (if any).
-                        if hunk_num > 0 {
-                            let end_index = min(CONTEXT, contents.len());
-                            for (i, line) in contents[..end_index].iter().enumerate() {
-                                file_view.add_child(TextView::new(format!(
-                                    "  {} {}",
-                                    line_num + i,
-                                    line
-                                )));
+                                // Add the trailing context for the previous hunk (if any).
+                                if hunk_num > 0 {
+                                    let end_index = min(CONTEXT, contents.len());
+                                    for (i, line) in contents[..end_index].iter().enumerate() {
+                                        file_view.add_child(TextView::new(format!(
+                                            "  {} {}",
+                                            line_num + i,
+                                            line
+                                        )));
+                                    }
+                                }
+
+                                // Add vertical ellipsis between hunks.
+                                if hunk_num > 0 && hunk_num + 1 < hunks.len() {
+                                    file_view.add_child(TextView::new(":"));
+                                }
+
+                                // Add the leading context for the next hunk (if any).
+                                if hunk_num + 1 < hunks.len() {
+                                    let start_index = contents.len().saturating_sub(CONTEXT);
+                                    for (i, line) in contents[start_index..].iter().enumerate() {
+                                        file_view.add_child(TextView::new(format!(
+                                            "  {} {}",
+                                            line_num + start_index + i,
+                                            line
+                                        )));
+                                    }
+                                }
+
+                                line_num += contents.len();
+                            }
+
+                            Hunk::Changed { before, after } => {
+                                global_changed_hunk_num += 1;
+                                let description = format!(
+                                    "hunk {}/{} in current file, {}/{} total",
+                                    hunk_num,
+                                    local_num_changed_hunks,
+                                    global_changed_hunk_num,
+                                    global_num_changed_hunks
+                                );
+
+                                self.make_changed_hunk_views(
+                                    main_tx.clone(),
+                                    &mut file_view,
+                                    file_num,
+                                    hunk_num,
+                                    description,
+                                    before,
+                                    after,
+                                );
+                                line_num += before.len();
                             }
                         }
-
-                        // Add vertical ellipsis between hunks.
-                        if hunk_num > 0 && hunk_num + 1 < hunks.len() {
-                            file_view.add_child(TextView::new(":"));
-                        }
-
-                        // Add the leading context for the next hunk (if any).
-                        if hunk_num + 1 < hunks.len() {
-                            let start_index = contents.len().saturating_sub(CONTEXT);
-                            for (i, line) in contents[start_index..].iter().enumerate() {
-                                file_view.add_child(TextView::new(format!(
-                                    "  {} {}",
-                                    line_num + start_index + i,
-                                    line
-                                )));
-                            }
-                        }
-
-                        line_num += contents.len();
-                    }
-
-                    Hunk::Changed { before, after } => {
-                        global_changed_hunk_num += 1;
-                        let description = format!(
-                            "hunk {}/{} in current file, {}/{} total",
-                            hunk_num,
-                            local_num_changed_hunks,
-                            global_changed_hunk_num,
-                            global_num_changed_hunks
-                        );
-
-                        self.make_changed_hunk_views(
-                            main_tx.clone(),
-                            &mut file_view,
-                            file_num,
-                            hunk_num,
-                            description,
-                            before,
-                            after,
-                        );
-                        line_num += before.len();
                     }
                 }
             }
@@ -374,63 +379,69 @@ impl Recorder {
             Tristate::Checked => true,
         };
 
-        let FileContent { hunks } = file_content;
-        for (hunk_num, hunk) in hunks.iter_mut().enumerate() {
-            match hunk {
-                Hunk::Unchanged { contents: _ } => {
-                    // Do nothing.
-                }
-                Hunk::Changed { before, after } => {
-                    for (
-                        hunk_line_num,
-                        HunkChangedLine {
-                            is_selected,
-                            line: _,
-                        },
-                    ) in before.iter_mut().enumerate()
-                    {
-                        *is_selected = new_value;
-                        let hunk_line_key = HunkLineKey {
-                            file_num,
-                            hunk_num,
-                            hunk_type: HunkType::Before,
-                            hunk_line_num,
-                        };
-                        siv.call_on_name(&hunk_line_key.view_id(), |checkbox: &mut Checkbox| {
-                            checkbox.set_checked(new_value)
-                        });
+        match file_content {
+            FileContent::Absent => unimplemented!(),
+            FileContent::Text { hunks } => {
+                for (hunk_num, hunk) in hunks.iter_mut().enumerate() {
+                    match hunk {
+                        Hunk::Unchanged { contents: _ } => {
+                            // Do nothing.
+                        }
+                        Hunk::Changed { before, after } => {
+                            for (
+                                hunk_line_num,
+                                HunkChangedLine {
+                                    is_selected,
+                                    line: _,
+                                },
+                            ) in before.iter_mut().enumerate()
+                            {
+                                *is_selected = new_value;
+                                let hunk_line_key = HunkLineKey {
+                                    file_num,
+                                    hunk_num,
+                                    hunk_type: HunkType::Before,
+                                    hunk_line_num,
+                                };
+                                siv.call_on_name(
+                                    &hunk_line_key.view_id(),
+                                    |checkbox: &mut Checkbox| checkbox.set_checked(new_value),
+                                );
+                            }
+
+                            for (
+                                hunk_line_num,
+                                HunkChangedLine {
+                                    is_selected,
+                                    line: _,
+                                },
+                            ) in after.iter_mut().enumerate()
+                            {
+                                *is_selected = new_value;
+                                let hunk_line_key = HunkLineKey {
+                                    file_num,
+                                    hunk_num,
+                                    hunk_type: HunkType::After,
+                                    hunk_line_num,
+                                };
+                                siv.call_on_name(
+                                    &hunk_line_key.view_id(),
+                                    |checkbox: &mut Checkbox| checkbox.set_checked(new_value),
+                                );
+                            }
+                        }
                     }
 
-                    for (
-                        hunk_line_num,
-                        HunkChangedLine {
-                            is_selected,
-                            line: _,
-                        },
-                    ) in after.iter_mut().enumerate()
-                    {
-                        *is_selected = new_value;
-                        let hunk_line_key = HunkLineKey {
-                            file_num,
-                            hunk_num,
-                            hunk_type: HunkType::After,
-                            hunk_line_num,
-                        };
-                        siv.call_on_name(&hunk_line_key.view_id(), |checkbox: &mut Checkbox| {
-                            checkbox.set_checked(new_value)
+                    let hunk_key = HunkKey { file_num, hunk_num };
+                    siv.call_on_name(&hunk_key.view_id(), |tristate_box: &mut TristateBox| {
+                        tristate_box.set_state(if new_value {
+                            Tristate::Checked
+                        } else {
+                            Tristate::Unchecked
                         });
-                    }
+                    });
                 }
             }
-
-            let hunk_key = HunkKey { file_num, hunk_num };
-            siv.call_on_name(&hunk_key.view_id(), |tristate_box: &mut TristateBox| {
-                tristate_box.set_state(if new_value {
-                    Tristate::Checked
-                } else {
-                    Tristate::Unchecked
-                });
-            });
         }
     }
 
@@ -453,17 +464,15 @@ impl Recorder {
 
         let (before, after) = {
             let (path, file_content) = &mut self.state.files[file_num];
-            let hunk = {
-                let FileContent { hunks } = file_content;
-                &mut hunks[hunk_num]
-            };
-
-            match hunk {
-                Hunk::Unchanged { contents } => {
-                    error!(?hunk_num, ?path, ?contents, "Invalid hunk num to change");
-                    panic!("Invalid hunk num to change");
-                }
-                Hunk::Changed { before, after } => (before, after),
+            match file_content {
+                FileContent::Absent => unimplemented!(),
+                FileContent::Text { hunks } => match &mut hunks[hunk_num] {
+                    Hunk::Unchanged { contents } => {
+                        error!(?hunk_num, ?path, ?contents, "Invalid hunk num to change");
+                        panic!("Invalid hunk num to change");
+                    }
+                    Hunk::Changed { before, after } => (before, after),
+                },
             }
         };
 
@@ -510,18 +519,20 @@ impl Recorder {
         } = hunk_line_key;
 
         let (path, file_content) = &mut self.state.files[file_num];
-        let FileContent { hunks } = file_content;
-        {
-            let hunk = &mut hunks[hunk_num];
-            let hunk_changed_lines = match (hunk, hunk_type) {
-                (Hunk::Unchanged { contents }, _) => {
-                    error!(?hunk_num, ?path, ?contents, "Invalid hunk num to change");
-                    panic!("Invalid hunk num to change");
-                }
-                (Hunk::Changed { before, .. }, HunkType::Before) => before,
-                (Hunk::Changed { after, .. }, HunkType::After) => after,
-            };
-            hunk_changed_lines[hunk_line_num].is_selected = new_value;
+        match file_content {
+            FileContent::Absent => unimplemented!(),
+            FileContent::Text { hunks } => {
+                let hunk = &mut hunks[hunk_num];
+                let hunk_changed_lines = match (hunk, hunk_type) {
+                    (Hunk::Unchanged { contents }, _) => {
+                        error!(?hunk_num, ?path, ?contents, "Invalid hunk num to change");
+                        panic!("Invalid hunk num to change");
+                    }
+                    (Hunk::Changed { before, .. }, HunkType::Before) => before,
+                    (Hunk::Changed { after, .. }, HunkType::After) => after,
+                };
+                hunk_changed_lines[hunk_line_num].is_selected = new_value;
+            }
         }
 
         self.refresh_hunk(siv, HunkKey { file_num, hunk_num });
@@ -530,22 +541,27 @@ impl Recorder {
 
     fn refresh_hunk(&mut self, siv: &mut CursiveRunner<CursiveRunnable>, hunk_key: HunkKey) {
         let HunkKey { file_num, hunk_num } = hunk_key;
-        let hunk = &mut self.state.files[file_num].1.hunks[hunk_num];
+        let (_path, file_content) = &mut self.state.files[file_num];
 
-        let hunk_selections = iter_hunk_changed_lines(hunk).map(
-            |(
-                _hunk_type,
-                HunkChangedLine {
-                    is_selected,
-                    line: _,
-                },
-            )| *is_selected,
-        );
-        let hunk_new_value = all_are_same_value(hunk_selections).into_tristate();
-        let hunk_key = HunkKey { file_num, hunk_num };
-        siv.call_on_name(&hunk_key.view_id(), |tristate_box: &mut TristateBox| {
-            tristate_box.set_state(hunk_new_value);
-        });
+        match file_content {
+            FileContent::Absent => unimplemented!(),
+            FileContent::Text { hunks } => {
+                let hunk_selections = iter_hunk_changed_lines(&hunks[hunk_num]).map(
+                    |(
+                        _hunk_type,
+                        HunkChangedLine {
+                            is_selected,
+                            line: _,
+                        },
+                    )| *is_selected,
+                );
+                let hunk_new_value = all_are_same_value(hunk_selections).into_tristate();
+                let hunk_key = HunkKey { file_num, hunk_num };
+                siv.call_on_name(&hunk_key.view_id(), |tristate_box: &mut TristateBox| {
+                    tristate_box.set_state(hunk_new_value);
+                });
+            }
+        }
     }
 
     fn refresh_file(&mut self, siv: &mut CursiveRunner<CursiveRunnable>, file_key: FileKey) {
@@ -571,8 +587,10 @@ impl Recorder {
 fn iter_file_changed_lines(
     file_content: &FileContent,
 ) -> impl Iterator<Item = (HunkType, &HunkChangedLine)> {
-    let FileContent { hunks } = file_content;
-    hunks.iter().flat_map(iter_hunk_changed_lines)
+    match file_content {
+        FileContent::Absent => unimplemented!(),
+        FileContent::Text { hunks } => hunks.iter().flat_map(iter_hunk_changed_lines),
+    }
 }
 
 fn iter_hunk_changed_lines(hunk: &Hunk) -> impl Iterator<Item = (HunkType, &HunkChangedLine)> {
@@ -771,7 +789,7 @@ mod tests {
         RecordState {
             files: vec![(
                 PathBuf::from("foo"),
-                FileContent {
+                FileContent::Text {
                     hunks: vec![
                         Hunk::Unchanged {
                             contents: vec!["unchanged 1".to_string(), "unchanged 2".to_string()],
@@ -935,7 +953,7 @@ mod tests {
                 files: [
                     (
                         "foo",
-                        FileContent {
+                        Text {
                             hunks: [
                                 Unchanged {
                                     contents: [
@@ -1045,7 +1063,7 @@ mod tests {
                 files: [
                     (
                         "foo",
-                        FileContent {
+                        Text {
                             hunks: [
                                 Unchanged {
                                     contents: [
@@ -1088,10 +1106,15 @@ mod tests {
     fn test_initial_tristate_states() {
         let state = {
             let mut state = example_record_state();
-            let (_path, FileContent { hunks }) = &mut state.files[0];
-            for hunk in hunks {
-                if let Hunk::Changed { before, after: _ } = hunk {
-                    before[0].is_selected = true;
+            let (_path, file_content) = &mut state.files[0];
+            match file_content {
+                FileContent::Absent => panic!("Example state should not have absent files"),
+                FileContent::Text { hunks } => {
+                    for hunk in hunks {
+                        if let Hunk::Changed { before, after: _ } = hunk {
+                            before[0].is_selected = true;
+                        }
+                    }
                 }
             }
             state
@@ -1128,7 +1151,7 @@ mod tests {
         let state = RecordState {
             files: vec![(
                 PathBuf::from("foo"),
-                FileContent {
+                FileContent::Text {
                     hunks: vec![
                         Hunk::Unchanged {
                             contents: vec![

@@ -15,7 +15,7 @@ fn main() {
     let files = vec![
         (
             PathBuf::from("foo/bar"),
-            FileContent {
+            FileContent::Text {
                 hunks: vec![
                     Hunk::Unchanged {
                         contents: std::iter::repeat("this is some text".to_string())
@@ -52,7 +52,7 @@ fn main() {
         ),
         (
             PathBuf::from("baz"),
-            FileContent {
+            FileContent::Text {
                 hunks: vec![
                     Hunk::Unchanged {
                         contents: vec![
