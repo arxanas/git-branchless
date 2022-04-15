@@ -382,6 +382,11 @@ pub fn hydrate_tree(
     Ok(make_non_zero_oid(tree_oid))
 }
 
+pub fn make_empty_tree(repo: &Repo) -> eyre::Result<Tree> {
+    let tree_oid = hydrate_tree(repo, None, Default::default())?;
+    repo.find_tree_or_fail(tree_oid)
+}
+
 /// `libgit2` raises an error if the entry isn't present, but that's often not
 /// an error condition here. We may be referring to a created or deleted path,
 /// which wouldn't exist in one of the pre-/post-patch trees.

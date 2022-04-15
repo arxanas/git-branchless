@@ -33,7 +33,8 @@ pub fn amend(
     let conn = repo.get_db_conn()?;
     let mut event_log_db = EventLogDb::new(&conn)?;
 
-    let head_oid = match repo.get_head_info()?.oid {
+    let head_info = repo.get_head_info()?;
+    let head_oid = match head_info.oid {
         Some(oid) => oid,
         None => {
             writeln!(
@@ -63,7 +64,10 @@ pub fn amend(
         };
         (opts, dirty_working_tree)
     } else {
-        let status = repo.get_status(git_run_info, Some(event_tx_id))?;
+        // TODO: use the snapshot to save the current working copy state for
+        // `git undo`.
+        let (_snapshot, status) =
+            repo.get_status(git_run_info, &index, &head_info, Some(event_tx_id))?;
         let entries_to_amend = status
             .into_iter()
             .filter(|entry| match entry.working_copy_status {
