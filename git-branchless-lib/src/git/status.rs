@@ -16,7 +16,7 @@ use super::{Commit, MaybeZeroOid, NonZeroOid, Repo, ResolvedReferenceInfo};
 /// A Git file status indicator.
 /// See <https://git-scm.com/docs/git-status#_short_format>.
 #[allow(missing_docs)]
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum FileStatus {
     Unmodified,
     Modified,
@@ -27,6 +27,24 @@ pub enum FileStatus {
     Unmerged,
     Untracked,
     Ignored,
+}
+
+impl FileStatus {
+    /// Determine if this status corresponds to a "changed" status, which means
+    /// that it should be included in a commit.
+    pub fn is_changed(&self) -> bool {
+        match self {
+            FileStatus::Added
+            | FileStatus::Copied
+            | FileStatus::Deleted
+            | FileStatus::Modified
+            | FileStatus::Renamed => true,
+            FileStatus::Ignored
+            | FileStatus::Unmerged
+            | FileStatus::Unmodified
+            | FileStatus::Untracked => false,
+        }
+    }
 }
 
 impl From<u8> for FileStatus {
@@ -124,7 +142,7 @@ impl FromStr for FileMode {
 }
 
 /// The status of a file in the repo.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StatusEntry {
     /// The status of the file in the index.
     pub index_status: FileStatus,

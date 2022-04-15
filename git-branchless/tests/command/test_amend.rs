@@ -49,7 +49,6 @@ fn test_amend_with_children() -> eyre::Result<()> {
             },
         )?;
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> diff --quiet
         Attempting rebase in-memory...
         This operation would cause a merge conflict:
         - (1 conflicting file) b51f01b create test3.txt
@@ -73,7 +72,6 @@ fn test_amend_rename() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["branchless", "amend"])?;
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> diff --quiet
         No abandoned commits to restack.
         No abandoned branches to restack.
         O f777ecc (master) create initial.txt
@@ -152,7 +150,6 @@ fn test_amend_with_working_copy() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["branchless", "amend"])?;
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> diff --quiet
         No abandoned commits to restack.
         No abandoned branches to restack.
         O f777ecc (master) create initial.txt
@@ -220,7 +217,6 @@ fn test_amend_head() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["branchless", "amend"])?;
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> diff --quiet
         No abandoned commits to restack.
         No abandoned branches to restack.
         O f777ecc (master) create initial.txt
@@ -253,7 +249,6 @@ fn test_amend_executable() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["branchless", "amend"])?;
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> diff --quiet
         No abandoned commits to restack.
         No abandoned branches to restack.
         O f777ecc (master) create initial.txt

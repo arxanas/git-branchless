@@ -19,7 +19,7 @@ use lib::core::effects::Effects;
 use lib::core::eventlog::{Event, EventLogDb};
 use lib::core::formatting::Pluralize;
 use lib::core::gc::mark_commit_reachable;
-use lib::git::{AmendFastOptions, FileStatus, GitRunInfo, Repo};
+use lib::git::{AmendFastOptions, GitRunInfo, Repo};
 
 /// Amends the existing HEAD commit.
 #[instrument]
@@ -56,36 +56,32 @@ pub fn amend(
     }
 
     let event_tx_id = event_log_db.make_transaction_id(now, "amend")?;
-    let staged_index_paths = repo.get_staged_paths()?;
-    let (opts, dirty_working_tree) = if !staged_index_paths.is_empty() {
-        let dirty_working_tree = repo.has_changed_files(effects, git_run_info)?;
-        let opts = AmendFastOptions::FromIndex {
-            paths: staged_index_paths.into_iter().collect_vec(),
-        };
-        (opts, dirty_working_tree)
+    let (_snapshot, status) =
+        repo.get_status(git_run_info, &index, &head_info, Some(event_tx_id))?;
+
+    // Note that there may be paths which are in both of these entries in the
+    // case that the given path has both staged and unstaged changes.
+    let staged_entries = status
+        .clone()
+        .into_iter()
+        .filter(|entry| entry.index_status.is_changed())
+        .collect_vec();
+    let unstaged_entries = status
+        .into_iter()
+        .filter(|entry| entry.working_copy_status.is_changed())
+        .collect_vec();
+
+    let opts = if !staged_entries.is_empty() {
+        AmendFastOptions::FromIndex {
+            paths: staged_entries
+                .into_iter()
+                .flat_map(|entry| entry.paths())
+                .collect(),
+        }
     } else {
-        // TODO: use the snapshot to save the current working copy state for
-        // `git undo`.
-        let (_snapshot, status) =
-            repo.get_status(git_run_info, &index, &head_info, Some(event_tx_id))?;
-        let entries_to_amend = status
-            .into_iter()
-            .filter(|entry| match entry.working_copy_status {
-                FileStatus::Added
-                | FileStatus::Copied
-                | FileStatus::Deleted
-                | FileStatus::Modified
-                | FileStatus::Renamed => true,
-                FileStatus::Ignored
-                | FileStatus::Unmerged
-                | FileStatus::Unmodified
-                | FileStatus::Untracked => false,
-            })
-            .collect_vec();
-        let opts = AmendFastOptions::FromWorkingCopy {
-            status_entries: entries_to_amend,
-        };
-        (opts, true)
+        AmendFastOptions::FromWorkingCopy {
+            status_entries: unstaged_entries.clone(),
+        }
     };
     if opts.is_empty() {
         writeln!(
@@ -150,7 +146,7 @@ pub fn amend(
             };
             let mut message = format!("Amended with {}.", staged_changes);
             // TODO: Include the number of uncommitted changes.
-            if dirty_working_tree {
+            if !unstaged_entries.is_empty() {
                 message += " (Some uncommitted changes were not amended.)";
             }
             writeln!(effects.get_output_stream(), "{}", message)?;
