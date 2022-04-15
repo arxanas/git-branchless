@@ -9,6 +9,7 @@ use std::time::SystemTime;
 
 use eyre::Context;
 use itertools::Itertools;
+use lib::core::rewrite::MergeConflictRemediation;
 use tracing::instrument;
 
 use crate::commands::restack;
@@ -130,6 +131,7 @@ pub fn amend(
         git_run_info,
         vec![head_oid.to_string()],
         move_options,
+        MergeConflictRemediation::Restack,
     )?;
     if restack_exit_code != 0 {
         return Ok(restack_exit_code);

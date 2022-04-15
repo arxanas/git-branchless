@@ -53,7 +53,7 @@ fn test_amend_with_children() -> eyre::Result<()> {
         Attempting rebase in-memory...
         This operation would cause a merge conflict:
         - (1 conflicting file) b51f01b create test3.txt
-        To resolve merge conflicts, retry this operation with the --merge option.
+        To resolve merge conflicts, run: git restack --merge
         "###);
     }
 

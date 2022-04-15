@@ -71,8 +71,8 @@ use lib::core::effects::Effects;
 use lib::core::eventlog::{EventCursor, EventLogDb, EventReplayer};
 use lib::core::rewrite::{
     execute_rebase_plan, find_abandoned_children, find_rewrite_target, move_branches,
-    BuildRebasePlanOptions, ExecuteRebasePlanOptions, ExecuteRebasePlanResult, RebasePlanBuilder,
-    RepoPool, RepoResource,
+    BuildRebasePlanOptions, ExecuteRebasePlanOptions, ExecuteRebasePlanResult,
+    MergeConflictRemediation, RebasePlanBuilder, RepoPool, RepoResource,
 };
 use lib::git::{CheckOutCommitOptions, GitRunInfo, NonZeroOid, Repo};
 
@@ -88,6 +88,7 @@ fn restack_commits(
     commits: Option<impl IntoIterator<Item = NonZeroOid>>,
     build_options: &BuildRebasePlanOptions,
     execute_options: &ExecuteRebasePlanOptions,
+    merge_conflict_remediation: MergeConflictRemediation,
 ) -> eyre::Result<isize> {
     let repo = repo_pool.try_create()?;
     let commit_set: CommitSet = match commits {
@@ -166,7 +167,7 @@ fn restack_commits(
         }
 
         ExecuteRebasePlanResult::DeclinedToMerge { merge_conflict } => {
-            merge_conflict.describe(effects, &repo)?;
+            merge_conflict.describe(effects, &repo, merge_conflict_remediation)?;
             Ok(1)
         }
 
@@ -245,6 +246,7 @@ pub fn restack(
     git_run_info: &GitRunInfo,
     commits: Vec<String>,
     move_options: &MoveOptions,
+    merge_conflict_remediation: MergeConflictRemediation,
 ) -> eyre::Result<isize> {
     let now = SystemTime::now();
     let repo = Repo::from_current_dir()?;
@@ -315,6 +317,7 @@ pub fn restack(
         commits,
         &build_options,
         &execute_options,
+        merge_conflict_remediation,
     )?;
     if result != 0 {
         return Ok(result);
