@@ -24,6 +24,7 @@ use std::time::SystemTime;
 use clap::Parser;
 use eyre::Context;
 use itertools::Itertools;
+use lib::core::rewrite::MergeConflictRemediation;
 use tracing_chrome::ChromeLayerBuilder;
 use tracing_error::ErrorLayer;
 use tracing_subscriber::fmt as tracing_fmt;
@@ -222,7 +223,13 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
         Command::Restack {
             commits,
             move_options,
-        } => restack::restack(&effects, &git_run_info, commits, &move_options)?,
+        } => restack::restack(
+            &effects,
+            &git_run_info,
+            commits,
+            &move_options,
+            MergeConflictRemediation::Retry,
+        )?,
 
         Command::Reword {
             commits,

@@ -272,6 +272,17 @@ pub fn check_out_updated_head(
     Ok(result)
 }
 
+/// What to suggest that the user do in order to resolve a merge conflict.
+#[derive(Copy, Clone, Debug)]
+pub enum MergeConflictRemediation {
+    /// Indicate that the user should retry the merge operation (but with
+    /// `--merge`).
+    Retry,
+
+    /// Indicate that the user should run `git restack --merge`.
+    Restack,
+}
+
 /// Information about a merge conflict that occurred while moving commits.
 #[derive(Debug)]
 pub struct MergeConflictInfo {
@@ -285,7 +296,12 @@ pub struct MergeConflictInfo {
 impl MergeConflictInfo {
     /// Describe the merge conflict in a user-friendly way and advise to rerun
     /// with `--merge`.
-    pub fn describe(&self, effects: &Effects, repo: &Repo) -> eyre::Result<()> {
+    pub fn describe(
+        &self,
+        effects: &Effects,
+        repo: &Repo,
+        remediation: MergeConflictRemediation,
+    ) -> eyre::Result<()> {
         writeln!(
             effects.get_output_stream(),
             "This operation would cause a merge conflict:"
@@ -304,10 +320,22 @@ impl MergeConflictInfo {
                 repo.friendly_describe_commit_from_oid(effects.get_glyphs(), self.commit_oid)?
             )?
         )?;
-        writeln!(
-            effects.get_output_stream(),
-            "To resolve merge conflicts, retry this operation with the --merge option."
-        )?;
+
+        match remediation {
+            MergeConflictRemediation::Retry => {
+                writeln!(
+                    effects.get_output_stream(),
+                    "To resolve merge conflicts, retry this operation with the --merge option."
+                )?;
+            }
+            MergeConflictRemediation::Restack => {
+                writeln!(
+                    effects.get_output_stream(),
+                    "To resolve merge conflicts, run: git restack --merge"
+                )?;
+            }
+        }
+
         Ok(())
     }
 }

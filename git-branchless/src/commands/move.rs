@@ -18,7 +18,7 @@ use lib::core::effects::Effects;
 use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::rewrite::{
     execute_rebase_plan, BuildRebasePlanOptions, ExecuteRebasePlanOptions, ExecuteRebasePlanResult,
-    RebasePlanBuilder, RepoResource,
+    MergeConflictRemediation, RebasePlanBuilder, RepoResource,
 };
 use lib::git::{GitRunInfo, NonZeroOid, Repo};
 
@@ -179,7 +179,7 @@ pub fn r#move(
         ExecuteRebasePlanResult::Succeeded { rewritten_oids: _ } => Ok(0),
 
         ExecuteRebasePlanResult::DeclinedToMerge { merge_conflict } => {
-            merge_conflict.describe(effects, &repo)?;
+            merge_conflict.describe(effects, &repo, MergeConflictRemediation::Retry)?;
             Ok(1)
         }
 

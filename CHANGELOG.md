@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Commands which automatically show the smartlog after them no longer show it in
 gray with ASCII glyphs. This reverts the behavior to that of before v0.3.11.
+- Adjusted the misleading suggestion that was printed when running a `git amend`
+invocation which produced merge conflicts.
 
 ## [0.3.12] - 2022-04-08
 
