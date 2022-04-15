@@ -10,6 +10,7 @@ use os_str_bytes::OsStringBytes;
 use tracing::{instrument, warn};
 
 use super::oid::make_non_zero_oid;
+use super::status::FileMode;
 use super::{MaybeZeroOid, NonZeroOid, Repo};
 
 pub struct TreeEntry<'repo> {
@@ -23,8 +24,8 @@ impl TreeEntry<'_> {
     }
 
     /// Get the object filemode for this tree entry.
-    pub fn get_filemode(&self) -> i32 {
-        self.inner.filemode()
+    pub fn get_filemode(&self) -> FileMode {
+        FileMode::from(self.inner.filemode())
     }
 }
 
@@ -299,11 +300,11 @@ pub fn get_changed_paths_between_trees(
 pub fn hydrate_tree(
     repo: &Repo,
     tree: Option<&Tree>,
-    entries: HashMap<PathBuf, Option<(NonZeroOid, i32)>>,
+    entries: HashMap<PathBuf, Option<(NonZeroOid, FileMode)>>,
 ) -> eyre::Result<NonZeroOid> {
     let (file_entries, dir_entries) = {
-        let mut file_entries: HashMap<PathBuf, Option<(NonZeroOid, i32)>> = HashMap::new();
-        let mut dir_entries: HashMap<PathBuf, HashMap<PathBuf, Option<(NonZeroOid, i32)>>> =
+        let mut file_entries: HashMap<PathBuf, Option<(NonZeroOid, FileMode)>> = HashMap::new();
+        let mut dir_entries: HashMap<PathBuf, HashMap<PathBuf, Option<(NonZeroOid, FileMode)>>> =
             HashMap::new();
         for (path, value) in entries {
             match path.components().collect_vec().as_slice() {
@@ -332,7 +333,7 @@ pub fn hydrate_tree(
         match file_value {
             Some((oid, file_mode)) => {
                 builder
-                    .insert(&file_name, oid.inner, file_mode)
+                    .insert(&file_name, oid.inner, file_mode.into())
                     .wrap_err_with(|| {
                         format!(
                             "Inserting file {:?} with OID: {:?}, file mode: {:?}",
@@ -396,13 +397,16 @@ fn remove_entry_if_exists(builder: &mut git2::TreeBuilder, name: &Path) -> eyre:
 /// If a provided path does not appear in the tree at all, then it's ignored.
 #[instrument]
 pub fn dehydrate_tree(repo: &Repo, tree: &Tree, paths: &[&Path]) -> eyre::Result<NonZeroOid> {
-    let entries: HashMap<PathBuf, Option<(NonZeroOid, i32)>> = paths
+    let entries: HashMap<PathBuf, Option<(NonZeroOid, FileMode)>> = paths
         .iter()
         .map(|path| -> eyre::Result<(PathBuf, _)> {
             let key = path.to_path_buf();
             match tree.inner.get_path(path) {
                 Ok(tree_entry) => {
-                    let value = Some((make_non_zero_oid(tree_entry.id()), tree_entry.filemode()));
+                    let value = Some((
+                        make_non_zero_oid(tree_entry.id()),
+                        FileMode::from(tree_entry.filemode()),
+                    ));
                     Ok((key, value))
                 }
                 Err(err) if err.code() == git2::ErrorCode::NotFound => Ok((key, None)),
@@ -465,7 +469,7 @@ mod tests {
                                 .get_oid_for_path(&PathBuf::from("foo.txt"))?
                                 .unwrap()
                                 .try_into()?,
-                            0o100644,
+                            FileMode::from(0o100644),
                         )),
                     );
                     result.insert(PathBuf::from("foo.txt"), None);

@@ -38,7 +38,7 @@ use crate::git::oid::{make_non_zero_oid, MaybeZeroOid, NonZeroOid};
 use crate::git::run::GitRunInfo;
 use crate::git::tree::{dehydrate_tree, get_changed_paths_between_trees, hydrate_tree, Tree};
 
-use super::status::{Index, IndexEntry};
+use super::status::{FileMode, Index, IndexEntry};
 use super::StatusEntry;
 
 /// Convert a `git2::Error` into an `eyre::Error` with an auto-generated message.
@@ -1002,40 +1002,33 @@ Either create it, or update the main branch setting by running:
                     conflicting_paths,
                 }));
             }
-            let rebased_entries: HashMap<PathBuf, Option<(NonZeroOid, i32)>> = changed_pathbufs
-                .into_iter()
-                .map(|changed_path| {
-                    let value = match rebased_index.get_entry(&changed_path) {
-                        Some(IndexEntry {
-                            oid: MaybeZeroOid::Zero,
-                            file_mode: _,
-                        }) => {
-                            warn!(
-                                ?patch_commit,
-                                ?changed_path,
-                                "BUG: index entry was zero. \
+            let rebased_entries: HashMap<PathBuf, Option<(NonZeroOid, FileMode)>> =
+                changed_pathbufs
+                    .into_iter()
+                    .map(|changed_path| {
+                        let value = match rebased_index.get_entry(&changed_path) {
+                            Some(IndexEntry {
+                                oid: MaybeZeroOid::Zero,
+                                file_mode: _,
+                            }) => {
+                                warn!(
+                                    ?patch_commit,
+                                    ?changed_path,
+                                    "BUG: index entry was zero. \
                                 This probably indicates that a removed path \
                                 was not handled correctly."
-                            );
-                            None
-                        }
-                        Some(IndexEntry {
-                            oid: MaybeZeroOid::NonZero(oid),
-                            file_mode,
-                        }) => {
-                            // `libgit2` uses u32 for file modes in index
-                            // entries, but i32 for file modes in tree entries
-                            // for some reason.
-                            let file_mode: i32 = file_mode
-                                .try_into()
-                                .expect("Could not convert file mode from u32 to i32");
-                            Some((oid, file_mode))
-                        }
-                        None => None,
-                    };
-                    (changed_path, value)
-                })
-                .collect();
+                                );
+                                None
+                            }
+                            Some(IndexEntry {
+                                oid: MaybeZeroOid::NonZero(oid),
+                                file_mode,
+                            }) => Some((oid, file_mode)),
+                            None => None,
+                        };
+                        (changed_path, value)
+                    })
+                    .collect();
             let rebased_tree_oid =
                 hydrate_tree(self, Some(&target_commit.get_tree()?), rebased_entries)?;
             self.find_tree(rebased_tree_oid)?
@@ -1175,7 +1168,7 @@ Either create it, or update the main branch setting by running:
         let repo_path = self
             .get_working_copy_path()
             .ok_or_else(|| eyre::eyre!("unable to get repo working copy path"))?;
-        let new_tree_entries: HashMap<PathBuf, Option<(NonZeroOid, i32)>> = match opts {
+        let new_tree_entries: HashMap<PathBuf, Option<(NonZeroOid, FileMode)>> = match opts {
             AmendFastOptions::FromWorkingCopy { status_entries } => status_entries
                 .iter()
                 .flat_map(|entry| {
@@ -1186,7 +1179,7 @@ Either create it, or update the main branch setting by running:
                         match self.inner.blob_path(file_path) {
                             Ok(oid) => Ok((
                                 path,
-                                Some((make_non_zero_oid(oid), entry.working_copy_file_mode.into())),
+                                Some((make_non_zero_oid(oid), entry.working_copy_file_mode)),
                             )),
                             // If the file doesn't exist, it needs to be explicitly marked as
                             // such, as a tombstone to override if the file exists in the parent tree.
@@ -1212,15 +1205,7 @@ Either create it, or update the main branch setting by running:
                             oid: MaybeZeroOid::NonZero(oid),
                             file_mode,
                             ..
-                        }) => Some((
-                            path.clone(),
-                            Some((
-                                oid,
-                                file_mode
-                                    .try_into()
-                                    .expect("Could not convert file mode from u32 to i32"),
-                            )),
-                        )),
+                        }) => Some((path.clone(), Some((oid, file_mode)))),
                         None => Some((path.clone(), None)),
                     })
                     .collect::<HashMap<_, _>>()
@@ -1228,7 +1213,7 @@ Either create it, or update the main branch setting by running:
         };
 
         // Merge the new path entries into the existing set of parent tree.
-        let amended_tree_entries: HashMap<PathBuf, Option<(NonZeroOid, i32)>> = changed_paths
+        let amended_tree_entries: HashMap<PathBuf, Option<(NonZeroOid, FileMode)>> = changed_paths
             .into_iter()
             .map(|changed_path| {
                 let value = match new_tree_entries.get(changed_path) {
