@@ -67,6 +67,24 @@ impl From<git2::FileMode> for FileMode {
     }
 }
 
+impl From<i32> for FileMode {
+    fn from(file_mode: i32) -> Self {
+        if file_mode == i32::from(git2::FileMode::Blob) {
+            FileMode::Blob
+        } else if file_mode == i32::from(git2::FileMode::BlobExecutable) {
+            FileMode::BlobExecutable
+        } else if file_mode == i32::from(git2::FileMode::Commit) {
+            FileMode::Commit
+        } else if file_mode == i32::from(git2::FileMode::Link) {
+            FileMode::Link
+        } else if file_mode == i32::from(git2::FileMode::Tree) {
+            FileMode::Tree
+        } else {
+            FileMode::Unreadable
+        }
+    }
+}
+
 impl From<FileMode> for i32 {
     fn from(file_mode: FileMode) -> Self {
         match file_mode {
@@ -192,7 +210,7 @@ impl TryFrom<&[u8]> for StatusEntry {
 
 pub struct IndexEntry {
     pub(super) oid: MaybeZeroOid,
-    pub(super) file_mode: u32,
+    pub(super) file_mode: FileMode,
 }
 
 pub struct Index {
@@ -213,7 +231,12 @@ impl Index {
     pub fn get_entry(&self, path: &Path) -> Option<IndexEntry> {
         self.inner.get_path(path, 0).map(|entry| IndexEntry {
             oid: entry.id.into(),
-            file_mode: entry.mode,
+            file_mode: {
+                // `libgit2` uses u32 for file modes in index entries, but i32
+                // for file modes in tree entries for some reason.
+                let mode = i32::try_from(entry.mode).unwrap();
+                FileMode::try_from(mode).unwrap()
+            },
         })
     }
 }
