@@ -273,7 +273,9 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
             commits,
         )?,
 
-        Command::Undo { interactive } => undo::undo(&effects, &git_run_info, interactive)?,
+        Command::Undo { interactive, yes } => {
+            undo::undo(&effects, &git_run_info, interactive, yes)?
+        }
 
         Command::Unhide { commits, recursive } => hide::unhide(&effects, commits, recursive)?,
 

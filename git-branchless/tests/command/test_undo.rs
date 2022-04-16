@@ -891,3 +891,28 @@ fn test_undo_noninteractive() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_undo_no_confirm() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+
+    git.init_repo()?;
+    git.commit_file("test1", 1)?;
+
+    {
+        let (stdout, _stderr) = git.run(&["undo", "--yes"])?;
+        let stdout = trim_lines(stdout);
+        insta::assert_snapshot!(stdout, @r###"
+        Will apply these actions:
+        1. Hide commit 62fc20d create test1.txt
+
+        Applied 1 inverse event.
+        "###);
+    }
+
+    Ok(())
+}
