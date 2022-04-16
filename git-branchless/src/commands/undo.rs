@@ -738,6 +738,7 @@ fn undo_events(
     event_log_db: &mut EventLogDb,
     event_replayer: &EventReplayer,
     event_cursor: EventCursor,
+    skip_confirmation: bool,
 ) -> eyre::Result<isize> {
     let now = SystemTime::now();
     let event_tx_id = event_log_db.make_transaction_id(now, "undo")?;
@@ -779,7 +780,9 @@ fn undo_events(
         )?;
     }
 
-    let confirmed = {
+    let confirmed = if skip_confirmation {
+        true
+    } else {
         write!(effects.get_output_stream(), "Confirm? [yN] ")?;
         let mut user_input = String::new();
         let mut reader = BufReader::new(in_);
@@ -905,6 +908,7 @@ pub fn undo(
     effects: &Effects,
     git_run_info: &GitRunInfo,
     interactive: bool,
+    skip_confirmation: bool,
 ) -> eyre::Result<isize> {
     let repo = Repo::from_current_dir()?;
     let references_snapshot = repo.get_references_snapshot()?;
@@ -947,6 +951,7 @@ pub fn undo(
         &mut event_log_db,
         &event_replayer,
         event_cursor,
+        skip_confirmation,
     )?;
     Ok(result)
 }
@@ -989,6 +994,7 @@ pub mod testing {
             event_log_db,
             event_replayer,
             event_cursor,
+            false,
         )
     }
 }

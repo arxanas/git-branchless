@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - ReleaseDate
 
+### Added
+
+- Added `--yes` option to `git undo` to skip confirmation.
+
 ### Fixed
 
 - Commands which automatically show the smartlog after them no longer show it in

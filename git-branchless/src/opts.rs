@@ -348,6 +348,10 @@ pub enum Command {
         /// before selecting one to return to.
         #[clap(short = 'i', long = "interactive")]
         interactive: bool,
+
+        /// Skip confirmation and apply changes immediately.
+        #[clap(short = 'y', long = "yes")]
+        yes: bool,
     },
 
     /// Unhide previously-hidden commits from the smartlog.
