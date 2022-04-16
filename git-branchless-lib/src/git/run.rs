@@ -407,15 +407,15 @@ impl GitRunInfo {
 
 /// Options for checking out a commit.
 #[derive(Clone, Debug)]
-pub struct CheckOutCommitOptions<'a> {
+pub struct CheckOutCommitOptions {
     /// Additional arguments to pass to `git checkout`.
-    pub additional_args: &'a [&'a str],
+    pub additional_args: Vec<OsString>,
 
     /// Whether or not to render the smartlog after the checkout has completed.
     pub render_smartlog: bool,
 }
 
-impl Default for CheckOutCommitOptions<'_> {
+impl Default for CheckOutCommitOptions {
     fn default() -> Self {
         Self {
             additional_args: Default::default(),

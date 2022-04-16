@@ -299,7 +299,7 @@ pub fn restack(
         force_on_disk,
         resolve_merge_conflicts,
         check_out_commit_options: CheckOutCommitOptions {
-            additional_args: &[],
+            additional_args: Default::default(),
             render_smartlog: false,
         },
     };

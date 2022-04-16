@@ -426,12 +426,12 @@ pub fn traverse_commits(
     };
 
     let additional_args = {
-        let mut args = Vec::new();
+        let mut args: Vec<OsString> = Vec::new();
         if merge {
-            args.push("--merge");
+            args.push("--merge".into());
         }
         if force {
-            args.push("--force")
+            args.push("--force".into())
         }
         args
     };
@@ -441,7 +441,7 @@ pub fn traverse_commits(
         None,
         Some(&current_oid),
         &CheckOutCommitOptions {
-            additional_args: additional_args.as_slice(),
+            additional_args,
             ..Default::default()
         },
     )
@@ -578,16 +578,16 @@ pub fn checkout(
     };
 
     let additional_args = {
-        let mut args = Vec::new();
+        let mut args: Vec<OsString> = Vec::new();
         if let Some(branch_name) = branch_name {
-            args.push("-b");
-            args.push(branch_name);
+            args.push("-b".into());
+            args.push(branch_name.into());
         }
         if *force {
-            args.push("-f");
+            args.push("-f".into());
         }
         if *merge {
-            args.push("-m");
+            args.push("-m".into());
         }
         args
     };
@@ -598,7 +598,7 @@ pub fn checkout(
         None,
         target.as_ref(),
         &CheckOutCommitOptions {
-            additional_args: additional_args.as_slice(),
+            additional_args,
             render_smartlog: true,
         },
     )?;
