@@ -610,24 +610,38 @@ fn inverse_event(
     Ok(inverse_event)
 }
 
-fn optimize_inverse_events(events: Vec<Event>) -> Vec<Event> {
-    let mut optimized_events = Vec::new();
-    let mut seen_checkout = false;
-    for event in events.into_iter().rev() {
+#[derive(Clone, Debug)]
+struct CheckoutTarget<'a> {
+    target: OsString,
+    options: CheckOutCommitOptions<'a>,
+}
+
+// TODO: extract checkout target here?
+fn extract_checkout_target(events: Vec<Event>) -> (Option<CheckoutTarget<'static>>, Vec<Event>) {
+    let mut new_events = Vec::new();
+    let mut checkout_target = None;
+    for event in events.into_iter() {
         match event {
-            Event::RefUpdateEvent { ref ref_name, .. } if ref_name == "HEAD" => {
-                if seen_checkout {
-                    continue;
-                } else {
-                    seen_checkout = true;
-                    optimized_events.push(event)
-                }
+            Event::RefUpdateEvent {
+                timestamp: _,
+                event_tx_id: _,
+                ref_name,
+                old_oid: _,
+                new_oid,
+                message: _,
+            } if ref_name == "HEAD" => {
+                checkout_target = Some(CheckoutTarget {
+                    target: new_oid.to_string().into(),
+                    options: CheckOutCommitOptions {
+                        additional_args: &["--detach"],
+                        render_smartlog: true,
+                    },
+                });
             }
-            event => optimized_events.push(event),
+            event => new_events.push(event),
         };
     }
-    optimized_events.reverse();
-    optimized_events
+    (checkout_target, new_events)
 }
 
 #[instrument(skip(in_))]
@@ -642,6 +656,7 @@ fn undo_events(
 ) -> eyre::Result<isize> {
     let now = SystemTime::now();
     let event_tx_id = event_log_db.make_transaction_id(now, "undo")?;
+    let head_info = repo.get_head_info()?;
     let inverse_events: Vec<Event> = event_replayer
         .get_events_since_cursor(event_cursor)
         .iter()
@@ -661,16 +676,6 @@ fn undo_events(
         })
         .map(|event| inverse_event(event.clone(), now, event_tx_id))
         .collect::<eyre::Result<Vec<Event>>>()?;
-    let mut inverse_events = optimize_inverse_events(inverse_events);
-
-    // Move any checkout operations to be first. Otherwise, we have the risk
-    // that `HEAD` is a symbolic reference pointing to another reference, and we
-    // update that reference. This would cause the working copy to become dirty
-    // from Git's perspective.
-    inverse_events.sort_by_key(|event| match event {
-        Event::RefUpdateEvent { ref_name, .. } if ref_name == "HEAD" => 0,
-        _ => 1,
-    });
 
     if inverse_events.is_empty() {
         writeln!(
@@ -679,7 +684,6 @@ fn undo_events(
         )?;
         return Ok(0);
     }
-
     writeln!(effects.get_output_stream(), "Will apply these actions:")?;
     let events = describe_events_numbered(effects.get_glyphs(), repo, &inverse_events)?;
     for line in events {
@@ -714,37 +718,12 @@ fn undo_events(
     }
     .to_string();
 
-    let mut result = 0;
-    for event in inverse_events.into_iter() {
+    let (checkout_target, filtered_events) = extract_checkout_target(inverse_events);
+    if checkout_target.is_some() {
+        repo.detach_head(&head_info)?;
+    }
+    for event in filtered_events.into_iter() {
         match event {
-            Event::RefUpdateEvent {
-                timestamp: _,
-                event_tx_id: _,
-                ref_name,
-                old_oid: _,
-                new_oid: MaybeZeroOid::NonZero(new_ref),
-                message: _,
-            } if ref_name == "HEAD" => {
-                let target_oid: OsString = new_ref.to_string().into();
-                // Most likely the user wanted to perform an actual checkout in
-                // this case, rather than just update `HEAD` (and be left with a
-                // dirty working copy). The `Git` command will update the event
-                // log appropriately, as it will invoke our hooks.
-                let exit_code = check_out_commit(
-                    effects,
-                    git_run_info,
-                    Some(event_tx_id),
-                    Some(target_oid.as_os_str()),
-                    &CheckOutCommitOptions {
-                        additional_args: &["--detach"],
-                        render_smartlog: true,
-                    },
-                )
-                .wrap_err("Updating to previous HEAD location")?;
-                if exit_code != 0 {
-                    result = exit_code;
-                }
-            }
             Event::RefUpdateEvent {
                 timestamp: _,
                 event_tx_id: _,
@@ -802,12 +781,26 @@ fn undo_events(
         }
     }
 
+    if let Some(CheckoutTarget { target, options }) = checkout_target {
+        let exit_code = check_out_commit(
+            effects,
+            git_run_info,
+            Some(event_tx_id),
+            Some(target),
+            &options,
+        )
+        .wrap_err("Updating to previous HEAD location")?;
+        if exit_code != 0 {
+            return Ok(exit_code);
+        }
+    }
+
     writeln!(
         effects.get_output_stream(),
         "Applied {}.",
         num_inverse_events
     )?;
-    Ok(result)
+    Ok(0)
 }
 
 /// Restore the repository to a previous state interactively.
@@ -931,15 +924,22 @@ mod tests {
                 message: None,
             },
         ];
-        let expected = vec![Event::RefUpdateEvent {
-            timestamp: 2.0,
-            event_tx_id,
-            ref_name: "HEAD".into(),
-            old_oid: MaybeZeroOid::NonZero("1".parse()?),
-            new_oid: MaybeZeroOid::NonZero("3".parse()?),
-            message: None,
-        }];
-        assert_eq!(optimize_inverse_events(input), expected);
+        insta::assert_debug_snapshot!(extract_checkout_target(input), @r###"
+        (
+            Some(
+                CheckoutTarget {
+                    target: "3000000000000000000000000000000000000000",
+                    options: CheckOutCommitOptions {
+                        additional_args: [
+                            "--detach",
+                        ],
+                        render_smartlog: true,
+                    },
+                },
+            ),
+            [],
+        )
+        "###);
         Ok(())
     }
 }
