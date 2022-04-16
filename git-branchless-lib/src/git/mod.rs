@@ -4,6 +4,7 @@ mod config;
 mod oid;
 mod repo;
 mod run;
+mod snapshot;
 mod status;
 mod tree;
 

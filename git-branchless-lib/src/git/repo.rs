@@ -38,7 +38,8 @@ use crate::git::oid::{make_non_zero_oid, MaybeZeroOid, NonZeroOid};
 use crate::git::run::GitRunInfo;
 use crate::git::tree::{dehydrate_tree, get_changed_paths_between_trees, hydrate_tree, Tree};
 
-use super::status::{FileMode, Index, IndexEntry, WorkingCopySnapshot};
+use super::snapshot::WorkingCopySnapshot;
+use super::status::{FileMode, Index, IndexEntry};
 use super::StatusEntry;
 
 /// Convert a `git2::Error` into an `eyre::Error` with an auto-generated message.
