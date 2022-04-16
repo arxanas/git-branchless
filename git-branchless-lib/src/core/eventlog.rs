@@ -165,6 +165,27 @@ pub enum Event {
         /// The OID of the commit that was unobsoleted.
         commit_oid: NonZeroOid,
     },
+
+    /// Represents a snapshot of the working copy made at a certain time,
+    /// typically before a potentially-destructive operation.
+    WorkingCopySnapshot {
+        /// The timestamp of the event.
+        timestamp: f64,
+
+        /// The transaction ID of the event.
+        event_tx_id: EventTransactionId,
+
+        /// The OID of the current HEAD commit.
+        head_oid: MaybeZeroOid,
+
+        /// The OID of the commit containing metadata about the working copy
+        /// snapshot.
+        commit_oid: NonZeroOid,
+
+        /// The name of the checked-out branch, if any. This should be a full
+        /// reference name like `refs/heads/foo`.
+        ref_name: Option<OsString>,
+    },
 }
 
 impl Event {
@@ -176,6 +197,7 @@ impl Event {
             Event::CommitEvent { timestamp, .. } => timestamp,
             Event::ObsoleteEvent { timestamp, .. } => timestamp,
             Event::UnobsoleteEvent { timestamp, .. } => timestamp,
+            Event::WorkingCopySnapshot { timestamp, .. } => timestamp,
         };
         SystemTime::UNIX_EPOCH + Duration::from_secs_f64(*timestamp)
     }
@@ -188,6 +210,7 @@ impl Event {
             Event::CommitEvent { event_tx_id, .. } => *event_tx_id,
             Event::ObsoleteEvent { event_tx_id, .. } => *event_tx_id,
             Event::UnobsoleteEvent { event_tx_id, .. } => *event_tx_id,
+            Event::WorkingCopySnapshot { event_tx_id, .. } => *event_tx_id,
         }
     }
 }
@@ -266,6 +289,22 @@ impl From<Event> for Row {
                 ref1: Some(commit_oid.to_string().into()),
                 ref2: None,
                 ref_name: None,
+                message: None,
+            },
+
+            Event::WorkingCopySnapshot {
+                timestamp,
+                event_tx_id: EventTransactionId(event_tx_id),
+                head_oid,
+                commit_oid,
+                ref_name,
+            } => Row {
+                timestamp,
+                event_tx_id,
+                type_: String::from("snapshot"),
+                ref1: Some(head_oid.to_string().into()),
+                ref2: Some(commit_oid.to_string().into()),
+                ref_name,
                 message: None,
             },
         }
@@ -353,6 +392,18 @@ fn try_from_row_helper(row: &Row) -> Result<Event, eyre::Error> {
                 timestamp,
                 event_tx_id,
                 commit_oid,
+            }
+        }
+
+        "snapshot" => {
+            let head_oid: MaybeZeroOid = get_oid(&ref1, "head OID")?;
+            let commit_oid: NonZeroOid = get_oid(&ref2, "commit OID")?.try_into()?;
+            Event::WorkingCopySnapshot {
+                timestamp,
+                event_tx_id,
+                head_oid,
+                commit_oid,
+                ref_name,
             }
         }
 
@@ -838,6 +889,11 @@ impl EventReplayer {
                     event: event.clone(),
                     event_classification: EventClassification::Show,
                 }),
+
+            Event::WorkingCopySnapshot { .. } => {
+                // Do nothing. A working copy snapshot doesn't imply that the
+                // commit has become active or inactive.
+            }
         };
     }
 
@@ -1098,6 +1154,15 @@ impl EventReplayer {
                     // doesn't have the corresponding `RefUpdateEvent`.
                     Event::CommitEvent { commit_oid, .. } => Some(*commit_oid),
 
+                    Event::WorkingCopySnapshot {
+                        head_oid: MaybeZeroOid::NonZero(head_oid),
+                        ..
+                    } => Some(*head_oid),
+                    Event::WorkingCopySnapshot {
+                        head_oid: MaybeZeroOid::Zero,
+                        ..
+                    } => None,
+
                     Event::RewriteEvent { .. }
                     | Event::ObsoleteEvent { .. }
                     | Event::UnobsoleteEvent { .. } => None,
@@ -1286,17 +1351,20 @@ pub mod testing {
         match event {
             Event::RewriteEvent {
                 ref mut timestamp, ..
-            } => *timestamp = 0.0,
-            Event::RefUpdateEvent {
+            }
+            | Event::RefUpdateEvent {
                 ref mut timestamp, ..
-            } => *timestamp = 0.0,
-            Event::CommitEvent {
+            }
+            | Event::CommitEvent {
                 ref mut timestamp, ..
-            } => *timestamp = 0.0,
-            Event::ObsoleteEvent {
+            }
+            | Event::ObsoleteEvent {
                 ref mut timestamp, ..
-            } => *timestamp = 0.0,
-            Event::UnobsoleteEvent {
+            }
+            | Event::UnobsoleteEvent {
+                ref mut timestamp, ..
+            }
+            | Event::WorkingCopySnapshot {
                 ref mut timestamp, ..
             } => *timestamp = 0.0,
         }

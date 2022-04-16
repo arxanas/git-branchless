@@ -286,7 +286,8 @@ impl<'a> NodeDescriptor for ObsolescenceExplanationDescriptor<'a> {
 
             Event::RefUpdateEvent { .. }
             | Event::CommitEvent { .. }
-            | Event::UnobsoleteEvent { .. } => None,
+            | Event::UnobsoleteEvent { .. }
+            | Event::WorkingCopySnapshot { .. } => None,
         };
         Ok(result)
     }

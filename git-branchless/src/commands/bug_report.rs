@@ -64,6 +64,23 @@ fn redact_event(redactor: &Redactor, event: &Event) -> String {
                 message,
             }
         }
+
+        Event::WorkingCopySnapshot {
+            timestamp,
+            event_tx_id,
+            head_oid,
+            commit_oid,
+            ref_name,
+        } => {
+            let ref_name = ref_name.map(|name| redactor.redact_ref_name(name));
+            Event::WorkingCopySnapshot {
+                timestamp,
+                event_tx_id,
+                head_oid,
+                commit_oid,
+                ref_name,
+            }
+        }
     };
 
     format!("{:?}", event)
