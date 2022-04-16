@@ -60,7 +60,8 @@ pub fn find_rewrite_target(
         | Event::RefUpdateEvent { .. }
         | Event::CommitEvent { .. }
         | Event::ObsoleteEvent { .. }
-        | Event::UnobsoleteEvent { .. } => None,
+        | Event::UnobsoleteEvent { .. }
+        | Event::WorkingCopySnapshot { .. } => None,
     }
 }
 

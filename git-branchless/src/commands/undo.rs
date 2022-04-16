@@ -297,6 +297,82 @@ fn describe_event(glyphs: &Glyphs, repo: &Repo, event: &Event) -> eyre::Result<V
                     .build(),
             ]
         }
+
+        Event::WorkingCopySnapshot {
+            timestamp: _,
+            event_tx_id: _,
+            head_oid: MaybeZeroOid::NonZero(head_oid),
+            commit_oid,
+            ref_name: Some(ref_name),
+        } => {
+            let branch_name = CategorizedReferenceName::new(ref_name);
+            vec![
+                StyledStringBuilder::new()
+                    .append_plain("Working copy checked out at ")
+                    .append_plain(branch_name.friendly_describe())
+                    .build(),
+                StyledStringBuilder::new()
+                    .append_plain("                pointing to ")
+                    .append(repo.friendly_describe_commit_from_oid(glyphs, *head_oid)?)
+                    .build(),
+                StyledStringBuilder::new()
+                    .append_plain("            backed up using ")
+                    .append(repo.friendly_describe_commit_from_oid(glyphs, *commit_oid)?)
+                    .build(),
+            ]
+        }
+
+        Event::WorkingCopySnapshot {
+            timestamp: _,
+            event_tx_id: _,
+            head_oid: MaybeZeroOid::NonZero(head_oid),
+            commit_oid,
+            ref_name: None,
+        } => {
+            vec![
+                StyledStringBuilder::new()
+                    .append_plain("Working copy checked out at ")
+                    .append(repo.friendly_describe_commit_from_oid(glyphs, *head_oid)?)
+                    .build(),
+                StyledStringBuilder::new()
+                    .append_plain("            backed up using ")
+                    .append(repo.friendly_describe_commit_from_oid(glyphs, *commit_oid)?)
+                    .build(),
+            ]
+        }
+
+        Event::WorkingCopySnapshot {
+            timestamp: _,
+            event_tx_id: _,
+            head_oid: MaybeZeroOid::Zero,
+            commit_oid,
+            ref_name: Some(ref_name),
+        } => {
+            let branch_name = CategorizedReferenceName::new(ref_name);
+            vec![
+                StyledStringBuilder::new()
+                    .append_plain("Working copy checked out at ")
+                    .append_plain(branch_name.friendly_describe())
+                    .build(),
+                StyledStringBuilder::new()
+                    .append_plain("            backed up using ")
+                    .append(repo.friendly_describe_commit_from_oid(glyphs, *commit_oid)?)
+                    .build(),
+            ]
+        }
+
+        Event::WorkingCopySnapshot {
+            timestamp: _,
+            event_tx_id: _,
+            head_oid: MaybeZeroOid::Zero,
+            commit_oid,
+            ref_name: None,
+        } => {
+            vec![StyledStringBuilder::new()
+                .append_plain("Working copy backed up using ")
+                .append(repo.friendly_describe_commit_from_oid(glyphs, *commit_oid)?)
+                .build()]
+        }
     };
     Ok(result)
 }
@@ -606,6 +682,15 @@ fn inverse_event(
             new_oid: old_ref,
             message: None,
         },
+
+        // This isn't really an "invertible" event, in that there's no way to
+        // calculate an inverse event that restores the working copy state to
+        // *before* this snapshot.
+        //
+        // Instead, we're indicating that to undo to the point in the past when
+        // this event occurred, we want to check out the working copy as it
+        // existed at that point in time.
+        event @ Event::WorkingCopySnapshot { .. } => event,
     };
     Ok(inverse_event)
 }
@@ -772,6 +857,17 @@ fn undo_events(
                 // Create or update the given reference.
                 repo.create_reference(&ref_name, new_oid, true, "branchless undo")?;
             }
+
+            Event::WorkingCopySnapshot {
+                timestamp: _,
+                event_tx_id: _,
+                head_oid,
+                commit_oid,
+                ref_name,
+            } => {
+                todo!("Use HEAD {head_oid:?}, branch {ref_name:?}, and commit {commit_oid:?} to check out a previous working copy state");
+            }
+
             Event::CommitEvent { .. }
             | Event::ObsoleteEvent { .. }
             | Event::UnobsoleteEvent { .. }
