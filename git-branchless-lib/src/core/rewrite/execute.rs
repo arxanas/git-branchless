@@ -971,7 +971,7 @@ mod on_disk {
 
 /// Options to use when executing a `RebasePlan`.
 #[derive(Clone, Debug)]
-pub struct ExecuteRebasePlanOptions<'a> {
+pub struct ExecuteRebasePlanOptions {
     /// The time which should be recorded for this event.
     pub now: SystemTime,
 
@@ -994,7 +994,7 @@ pub struct ExecuteRebasePlanOptions<'a> {
     pub resolve_merge_conflicts: bool,
 
     /// If `HEAD` was moved, the options for checking out the new `HEAD` commit.
-    pub check_out_commit_options: CheckOutCommitOptions<'a>,
+    pub check_out_commit_options: CheckOutCommitOptions,
 }
 
 /// The result of executing a rebase plan.

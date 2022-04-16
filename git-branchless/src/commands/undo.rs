@@ -696,13 +696,13 @@ fn inverse_event(
 }
 
 #[derive(Clone, Debug)]
-struct CheckoutTarget<'a> {
+struct CheckoutTarget {
     target: OsString,
-    options: CheckOutCommitOptions<'a>,
+    options: CheckOutCommitOptions,
 }
 
 // TODO: extract checkout target here?
-fn extract_checkout_target(events: Vec<Event>) -> (Option<CheckoutTarget<'static>>, Vec<Event>) {
+fn extract_checkout_target(events: Vec<Event>) -> (Option<CheckoutTarget>, Vec<Event>) {
     let mut new_events = Vec::new();
     let mut checkout_target = None;
     for event in events.into_iter() {
@@ -718,7 +718,7 @@ fn extract_checkout_target(events: Vec<Event>) -> (Option<CheckoutTarget<'static
                 checkout_target = Some(CheckoutTarget {
                     target: new_oid.to_string().into(),
                     options: CheckOutCommitOptions {
-                        additional_args: &["--detach"],
+                        additional_args: vec!["--detach".into()],
                         render_smartlog: true,
                     },
                 });
