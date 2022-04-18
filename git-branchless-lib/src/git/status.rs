@@ -373,7 +373,7 @@ mod tests {
         WorkingCopySnapshot {
             base_commit: Commit {
                 inner: Commit {
-                    id: d81f48b80fd19b38841af4eac007ba6590b10e67,
+                    id: 98d860e0cc6865538d5571e192705f8a090d95d8,
                     summary: "branchless: automated working copy commit",
                 },
             },
@@ -446,7 +446,7 @@ mod tests {
         WorkingCopySnapshot {
             base_commit: Commit {
                 inner: Commit {
-                    id: 36bf7dd554b962a63ee834c86c1da6607b353286,
+                    id: ff138a604cadfcd219d9a63b09b439af0fb0bafa,
                     summary: "branchless: automated working copy commit",
                 },
             },
