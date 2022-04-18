@@ -60,6 +60,7 @@ use std::fmt::Write;
 use std::time::SystemTime;
 
 use eden_dag::DagAlgorithm;
+use lib::core::check_out::CheckOutCommitOptions;
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use tracing::{instrument, warn};
 
@@ -74,7 +75,7 @@ use lib::core::rewrite::{
     BuildRebasePlanOptions, ExecuteRebasePlanOptions, ExecuteRebasePlanResult,
     MergeConflictRemediation, RebasePlanBuilder, RepoPool, RepoResource,
 };
-use lib::git::{CheckOutCommitOptions, GitRunInfo, NonZeroOid, Repo};
+use lib::git::{GitRunInfo, NonZeroOid, Repo};
 
 #[instrument(skip(commits))]
 fn restack_commits(

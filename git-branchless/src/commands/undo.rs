@@ -15,6 +15,7 @@ use cursive::utils::markup::StyledString;
 use cursive::views::{Dialog, EditView, LinearLayout, OnEventView, Panel, ScrollView, TextView};
 use cursive::{Cursive, CursiveRunnable, CursiveRunner};
 use eyre::Context;
+use lib::core::check_out::{check_out_commit, CheckOutCommitOptions};
 use tracing::instrument;
 
 use crate::commands::smartlog::{make_smartlog_graph, render_graph};
@@ -29,10 +30,7 @@ use lib::core::node_descriptors::{
     DifferentialRevisionDescriptor, ObsolescenceExplanationDescriptor, Redactor,
     RelativeTimeDescriptor,
 };
-use lib::git::{
-    check_out_commit, CategorizedReferenceName, CheckOutCommitOptions, GitRunInfo, MaybeZeroOid,
-    Repo, ResolvedReferenceInfo,
-};
+use lib::git::{CategorizedReferenceName, GitRunInfo, MaybeZeroOid, Repo, ResolvedReferenceInfo};
 
 fn render_cursor_smartlog(
     effects: &Effects,

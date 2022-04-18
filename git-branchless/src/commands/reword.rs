@@ -1,5 +1,6 @@
 //! Update commit messages
 
+use lib::core::check_out::CheckOutCommitOptions;
 use rayon::ThreadPoolBuilder;
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -23,9 +24,7 @@ use lib::core::rewrite::{
     execute_rebase_plan, BuildRebasePlanOptions, ExecuteRebasePlanOptions, ExecuteRebasePlanResult,
     RebasePlanBuilder, RepoResource,
 };
-use lib::git::{
-    message_prettify, CheckOutCommitOptions, Commit, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo,
-};
+use lib::git::{message_prettify, Commit, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo};
 
 /// The commit message(s) provided by the user.
 #[derive(Debug)]

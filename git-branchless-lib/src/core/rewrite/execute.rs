@@ -10,13 +10,11 @@ use eyre::Context;
 use os_str_bytes::OsStrBytes;
 use tracing::warn;
 
+use crate::core::check_out::{check_out_commit, CheckOutCommitOptions};
 use crate::core::effects::Effects;
 use crate::core::eventlog::EventTransactionId;
 use crate::core::formatting::{printable_styled_string, Pluralize};
-use crate::git::{
-    check_out_commit, CheckOutCommitOptions, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo,
-    ResolvedReferenceInfo,
-};
+use crate::git::{GitRunInfo, MaybeZeroOid, NonZeroOid, Repo, ResolvedReferenceInfo};
 
 use super::plan::RebasePlan;
 
