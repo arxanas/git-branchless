@@ -51,7 +51,7 @@ indicatif = "0.17.0-rc.10"
 itertools = "0.10.3"
 lazy_static = "1.4.0"
 os_str_bytes = "6.0.0"
-rayon = "1.5.1"
+rayon = "1.5.2"
 regex = "1.5.5"
 rusqlite = { version = "0.27.0", features = ["bundled"] }
 tempfile = "3.3.0"
