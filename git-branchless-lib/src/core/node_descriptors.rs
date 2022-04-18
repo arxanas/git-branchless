@@ -22,13 +22,11 @@ use crate::core::config::{
     get_commit_descriptors_branches, get_commit_descriptors_differential_revision,
     get_commit_descriptors_relative_time,
 };
-use crate::git::{
-    CategorizedReferenceName, Commit, NonZeroOid, Repo, RepoReferencesSnapshot,
-    ResolvedReferenceInfo,
-};
+use crate::git::{CategorizedReferenceName, Commit, NonZeroOid, Repo, ResolvedReferenceInfo};
 
 use super::eventlog::{Event, EventCursor, EventReplayer};
 use super::formatting::{Glyphs, StyledStringBuilder};
+use super::repo_ext::RepoReferencesSnapshot;
 use super::rewrite::find_rewrite_target;
 
 /// An object which can be rendered in the smartlog.

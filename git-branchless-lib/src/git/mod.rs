@@ -13,7 +13,7 @@ pub use oid::{MaybeZeroOid, NonZeroOid};
 pub use repo::{
     message_prettify, AmendFastOptions, Branch, CategorizedReferenceName, CherryPickFastError,
     CherryPickFastOptions, Commit, Diff, GitVersion, PatchId, Reference, ReferenceTarget, Repo,
-    RepoReferencesSnapshot, ResolvedReferenceInfo,
+    ResolvedReferenceInfo,
 };
 pub use run::GitRunInfo;
 pub use status::{FileStatus, StatusEntry};

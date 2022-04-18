@@ -6,6 +6,7 @@ use std::time::SystemTime;
 use eden_dag::DagAlgorithm;
 use itertools::Itertools;
 use lib::core::check_out::CheckOutCommitOptions;
+use lib::core::repo_ext::RepoExt;
 use rayon::ThreadPoolBuilder;
 
 use crate::opts::MoveOptions;

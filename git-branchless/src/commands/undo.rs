@@ -16,6 +16,7 @@ use cursive::views::{Dialog, EditView, LinearLayout, OnEventView, Panel, ScrollV
 use cursive::{Cursive, CursiveRunnable, CursiveRunner};
 use eyre::Context;
 use lib::core::check_out::{check_out_commit, CheckOutCommitOptions};
+use lib::core::repo_ext::RepoExt;
 use tracing::instrument;
 
 use crate::commands::smartlog::{make_smartlog_graph, render_graph};

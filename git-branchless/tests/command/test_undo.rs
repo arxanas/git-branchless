@@ -11,6 +11,7 @@ use lib::core::dag::Dag;
 use lib::core::effects::Effects;
 use lib::core::eventlog::{EventCursor, EventLogDb, EventReplayer};
 use lib::core::formatting::Glyphs;
+use lib::core::repo_ext::RepoExt;
 use lib::git::{GitRunInfo, GitVersion, Repo};
 use lib::testing::{make_git, Git};
 

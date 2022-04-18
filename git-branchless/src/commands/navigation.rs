@@ -10,6 +10,7 @@ use cursive::theme::BaseColor;
 use cursive::utils::markup::StyledString;
 use eden_dag::DagAlgorithm;
 use lib::core::check_out::{check_out_commit, CheckOutCommitOptions};
+use lib::core::repo_ext::RepoExt;
 use tracing::{instrument, warn};
 
 use crate::commands::smartlog::make_smartlog_graph;

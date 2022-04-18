@@ -6,6 +6,7 @@
 use std::fmt::Write;
 use std::time::SystemTime;
 
+use lib::core::repo_ext::RepoExt;
 use tracing::instrument;
 
 use lib::core::dag::Dag;

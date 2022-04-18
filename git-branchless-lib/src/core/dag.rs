@@ -15,7 +15,9 @@ use tracing::{instrument, trace, warn};
 
 use crate::core::effects::{Effects, OperationType};
 use crate::core::eventlog::{CommitActivityStatus, EventCursor, EventReplayer};
-use crate::git::{Commit, MaybeZeroOid, NonZeroOid, Repo, RepoReferencesSnapshot};
+use crate::git::{Commit, MaybeZeroOid, NonZeroOid, Repo};
+
+use super::repo_ext::RepoReferencesSnapshot;
 
 impl From<NonZeroOid> for eden_dag::VertexName {
     fn from(oid: NonZeroOid) -> Self {

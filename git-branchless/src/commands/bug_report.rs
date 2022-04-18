@@ -8,6 +8,7 @@ use bugreport::collector::{CollectionError, Collector};
 use bugreport::format::Markdown;
 use bugreport::report::ReportEntry;
 use itertools::Itertools;
+use lib::core::repo_ext::{RepoExt, RepoReferencesSnapshot};
 
 use crate::commands::smartlog::{make_smartlog_graph, render_graph};
 use lib::core::dag::Dag;
@@ -19,7 +20,7 @@ use lib::core::node_descriptors::{
     DifferentialRevisionDescriptor, ObsolescenceExplanationDescriptor, Redactor,
     RelativeTimeDescriptor,
 };
-use lib::git::{GitRunInfo, Repo, RepoReferencesSnapshot, ResolvedReferenceInfo};
+use lib::git::{GitRunInfo, Repo, ResolvedReferenceInfo};
 
 fn redact_event(redactor: &Redactor, event: &Event) -> String {
     let event = match event.clone() {
