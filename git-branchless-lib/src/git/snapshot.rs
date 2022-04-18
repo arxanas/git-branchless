@@ -91,9 +91,21 @@ branchless: automated working copy commit
         let commit_stage1 = repo.find_commit_or_fail(commit_stage1)?;
         let commit_stage2 = repo.find_commit_or_fail(commit_stage2)?;
         let commit_stage3 = repo.find_commit_or_fail(commit_stage3)?;
-        let parents = match &head_commit {
-            Some(head_commit) => vec![head_commit],
-            None => vec![],
+        let parents = {
+            // Add these commits as parents to ensure that they're kept live for
+            // as long as the snapshot commit itself is live.
+            let mut parents = vec![
+                &commit_stage0,
+                &commit_stage1,
+                &commit_stage2,
+                &commit_stage3,
+            ];
+            if let Some(head_commit) = &head_commit {
+                // Make the head commit the first parent, since that's
+                // conventionally the mainline parent.
+                parents.insert(0, head_commit);
+            }
+            parents
         };
         let commit_oid =
             repo.create_commit(None, &signature, &signature, &message, &tree, parents)?;
