@@ -5,6 +5,7 @@ use std::time::SystemTime;
 
 use eden_dag::DagAlgorithm;
 use itertools::Itertools;
+use lib::core::check_out::CheckOutCommitOptions;
 use rayon::ThreadPoolBuilder;
 
 use crate::opts::MoveOptions;
@@ -17,7 +18,7 @@ use lib::core::rewrite::{
     execute_rebase_plan, BuildRebasePlanError, BuildRebasePlanOptions, ExecuteRebasePlanOptions,
     ExecuteRebasePlanResult, RebasePlan, RebasePlanBuilder, RepoResource,
 };
-use lib::git::{CheckOutCommitOptions, Commit, GitRunInfo, NonZeroOid, Repo};
+use lib::git::{Commit, GitRunInfo, NonZeroOid, Repo};
 
 fn get_stack_roots(dag: &Dag) -> eyre::Result<CommitSet> {
     let public_commits = dag.query_public_commits()?;

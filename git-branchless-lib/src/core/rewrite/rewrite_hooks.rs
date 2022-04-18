@@ -18,14 +18,14 @@ use os_str_bytes::{OsStrBytes, OsStringBytes};
 use tempfile::NamedTempFile;
 use tracing::instrument;
 
+use crate::core::check_out::CheckOutCommitOptions;
 use crate::core::config::{get_restack_warn_abandoned, RESTACK_WARN_ABANDONED_CONFIG_KEY};
 use crate::core::dag::Dag;
 use crate::core::effects::Effects;
 use crate::core::eventlog::{Event, EventLogDb, EventReplayer};
 use crate::core::formatting::{printable_styled_string, Pluralize};
 use crate::git::{
-    CategorizedReferenceName, CheckOutCommitOptions, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo,
-    ResolvedReferenceInfo,
+    CategorizedReferenceName, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo, ResolvedReferenceInfo,
 };
 
 use super::execute::check_out_updated_head;

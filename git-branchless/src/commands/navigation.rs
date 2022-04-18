@@ -9,6 +9,7 @@ use std::time::SystemTime;
 use cursive::theme::BaseColor;
 use cursive::utils::markup::StyledString;
 use eden_dag::DagAlgorithm;
+use lib::core::check_out::{check_out_commit, CheckOutCommitOptions};
 use tracing::{instrument, warn};
 
 use crate::commands::smartlog::make_smartlog_graph;
@@ -23,7 +24,7 @@ use lib::core::node_descriptors::{
     BranchesDescriptor, CommitMessageDescriptor, CommitOidDescriptor,
     DifferentialRevisionDescriptor, NodeDescriptor, Redactor, RelativeTimeDescriptor,
 };
-use lib::git::{check_out_commit, CheckOutCommitOptions, GitRunInfo, NonZeroOid, Repo};
+use lib::git::{GitRunInfo, NonZeroOid, Repo};
 
 /// The command being invoked, indicating which direction to traverse commits.
 #[derive(Clone, Copy, Debug)]

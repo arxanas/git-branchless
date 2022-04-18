@@ -15,6 +15,6 @@ pub use repo::{
     CherryPickFastOptions, Commit, Diff, GitVersion, PatchId, Reference, ReferenceTarget, Repo,
     RepoReferencesSnapshot, ResolvedReferenceInfo,
 };
-pub use run::{check_out_commit, CheckOutCommitOptions, GitRunInfo};
+pub use run::GitRunInfo;
 pub use status::{FileStatus, StatusEntry};
 pub use tree::Tree;

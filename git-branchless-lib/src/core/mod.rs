@@ -1,5 +1,6 @@
 //! Core algorithms and data structures.
 
+pub mod check_out;
 pub mod config;
 pub mod dag;
 pub mod effects;
