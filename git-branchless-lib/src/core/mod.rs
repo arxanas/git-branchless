@@ -8,5 +8,6 @@ pub mod eventlog;
 pub mod formatting;
 pub mod gc;
 pub mod node_descriptors;
+pub mod repo_ext;
 pub mod rewrite;
 pub mod task;
