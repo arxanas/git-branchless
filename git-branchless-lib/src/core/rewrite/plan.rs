@@ -945,6 +945,7 @@ mod tests {
 
     use crate::core::eventlog::{EventLogDb, EventReplayer};
     use crate::core::formatting::Glyphs;
+    use crate::core::repo_ext::RepoExt;
     use crate::testing::make_git;
 
     use super::*;

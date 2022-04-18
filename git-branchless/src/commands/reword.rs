@@ -1,6 +1,7 @@
 //! Update commit messages
 
 use lib::core::check_out::CheckOutCommitOptions;
+use lib::core::repo_ext::RepoExt;
 use rayon::ThreadPoolBuilder;
 use std::collections::HashMap;
 use std::convert::TryFrom;

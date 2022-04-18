@@ -8,6 +8,7 @@ use std::fmt::Write;
 use std::time::SystemTime;
 
 use eden_dag::DagAlgorithm;
+use lib::core::repo_ext::RepoExt;
 use rayon::ThreadPoolBuilder;
 use tracing::instrument;
 

@@ -5,6 +5,7 @@ use branchless::core::dag::Dag;
 use branchless::core::effects::Effects;
 use branchless::core::eventlog::{EventLogDb, EventReplayer};
 use branchless::core::formatting::Glyphs;
+use branchless::core::repo_ext::RepoExt;
 use branchless::core::rewrite::{BuildRebasePlanOptions, RebasePlanBuilder, RepoResource};
 use branchless::git::{CherryPickFastOptions, Commit, Diff, Repo};
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};

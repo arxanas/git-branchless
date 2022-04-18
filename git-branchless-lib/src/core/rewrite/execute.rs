@@ -14,6 +14,7 @@ use crate::core::check_out::{check_out_commit, CheckOutCommitOptions};
 use crate::core::effects::Effects;
 use crate::core::eventlog::EventTransactionId;
 use crate::core::formatting::{printable_styled_string, Pluralize};
+use crate::core::repo_ext::RepoExt;
 use crate::git::{GitRunInfo, MaybeZeroOid, NonZeroOid, Repo, ResolvedReferenceInfo};
 
 use super::plan::RebasePlan;

@@ -18,15 +18,13 @@ use std::str::FromStr;
 use std::time::SystemTime;
 
 use chrono::{DateTime, Local, TimeZone, Utc};
-use color_eyre::Help;
 use cursive::theme::BaseColor;
 use cursive::utils::markup::StyledString;
-use eyre::{eyre, Context};
+use eyre::Context;
 use itertools::Itertools;
 use os_str_bytes::{OsStrBytes, OsStringBytes};
 use tracing::{instrument, warn};
 
-use crate::core::config::get_main_branch_name;
 use crate::core::effects::{Effects, OperationType};
 use crate::core::eventlog::EventTransactionId;
 use crate::core::formatting::{Glyphs, StyledStringBuilder};
@@ -175,19 +173,6 @@ impl AmendFastOptions {
             AmendFastOptions::FromWorkingCopy { status_entries } => status_entries.is_empty(),
         }
     }
-}
-
-/// A snapshot of all the positions of references we care about in the repository.
-#[derive(Debug)]
-pub struct RepoReferencesSnapshot {
-    /// The location of the `HEAD` reference. This may be `None` if `HEAD` is unborn.
-    pub head_oid: Option<NonZeroOid>,
-
-    /// The location of the main branch.
-    pub main_branch_oid: NonZeroOid,
-
-    /// A mapping from commit OID to the branches which point to that commit.
-    pub branch_oid_to_names: HashMap<NonZeroOid, HashSet<OsString>>,
 }
 
 /// Wrapper around `git2::Repository`.
@@ -365,107 +350,6 @@ impl Repo {
                 Ok(())
             }
         }
-    }
-
-    /// Get the `Reference` for the main branch for the repository.
-    pub fn get_main_branch_reference(&self) -> eyre::Result<Reference> {
-        let main_branch_name = get_main_branch_name(self)?;
-        match self.find_branch(&main_branch_name, git2::BranchType::Local)? {
-            Some(branch) => {
-                let upstream_branch = branch
-                    .inner
-                    .upstream()
-                    .map(|branch| Branch { inner: branch })
-                    .unwrap_or_else(|_| branch);
-                Ok(upstream_branch.into_reference())
-            }
-            None => match self.find_branch(&main_branch_name, git2::BranchType::Remote)? {
-                Some(branch) => Ok(branch.into_reference()),
-                None => {
-                    let suggestion = format!(
-                        r"
-The main branch {:?} could not be found in your repository
-at path: {:?}.
-These branches exist: {:?}
-Either create it, or update the main branch setting by running:
-
-    git config branchless.core.mainBranch <branch>
-",
-                        get_main_branch_name(self)?,
-                        self.get_path(),
-                        self.get_all_local_branches()?
-                            .into_iter()
-                            .map(|branch| {
-                                branch
-                                    .into_reference()
-                                    .get_name()
-                                    .map(|s| format!("{:?}", s))
-                            })
-                            .collect::<eyre::Result<Vec<String>>>()?,
-                    );
-                    Err(eyre!("Could not find repository main branch")
-                        .with_suggestion(|| suggestion))
-                }
-            },
-        }
-    }
-
-    /// Get the OID corresponding to the main branch.
-    #[instrument]
-    pub fn get_main_branch_oid(&self) -> eyre::Result<NonZeroOid> {
-        let main_branch_reference = self.get_main_branch_reference()?;
-        let commit = main_branch_reference.peel_to_commit()?;
-        match commit {
-            Some(commit) => Ok(commit.get_oid()),
-            None => eyre::bail!(
-                "Could not find commit pointed to by main branch: {:?}",
-                main_branch_reference.get_name()?
-            ),
-        }
-    }
-
-    /// Get a mapping from OID to the names of branches which point to that OID.
-    ///
-    /// The returned branch names include the `refs/heads/` prefix, so it must
-    /// be stripped if desired.
-    #[instrument]
-    pub fn get_branch_oid_to_names(&self) -> eyre::Result<HashMap<NonZeroOid, HashSet<OsString>>> {
-        let mut result: HashMap<NonZeroOid, HashSet<OsString>> = HashMap::new();
-        for branch in self.get_all_local_branches()? {
-            let reference = branch.into_reference();
-            let reference_name = reference.get_name()?;
-            let reference_info = self.resolve_reference(&reference)?;
-            if let Some(reference_oid) = reference_info.oid {
-                result
-                    .entry(reference_oid)
-                    .or_insert_with(HashSet::new)
-                    .insert(reference_name);
-            }
-        }
-
-        // The main branch may be a remote branch, in which case it won't be
-        // returned in the iteration above.
-        let main_branch_name = self.get_main_branch_reference()?.get_name()?;
-        let main_branch_oid = self.get_main_branch_oid()?;
-        result
-            .entry(main_branch_oid)
-            .or_insert_with(HashSet::new)
-            .insert(main_branch_name);
-
-        Ok(result)
-    }
-
-    /// Get the positions of references in the repository.
-    pub fn get_references_snapshot(&self) -> eyre::Result<RepoReferencesSnapshot> {
-        let head_oid = self.get_head_info()?.oid;
-        let main_branch_oid = self.get_main_branch_oid()?;
-        let branch_oid_to_names = self.get_branch_oid_to_names()?;
-
-        Ok(RepoReferencesSnapshot {
-            head_oid,
-            main_branch_oid,
-            branch_oid_to_names,
-        })
     }
 
     /// Detect if an interactive rebase has started but not completed.
@@ -1724,6 +1608,15 @@ impl<'repo> Branch<'repo> {
     /// not a direct reference (which is unusual).
     pub fn get_oid(&self) -> eyre::Result<Option<NonZeroOid>> {
         Ok(self.inner.get().target().map(make_non_zero_oid))
+    }
+
+    /// If this branch tracks a remote ("upstream") branch, return that branch.
+    pub fn get_upstream_branch(&self) -> eyre::Result<Option<Branch<'repo>>> {
+        match self.inner.upstream() {
+            Ok(upstream) => Ok(Some(Branch { inner: upstream })),
+            Err(err) if err.code() == git2::ErrorCode::NotFound => Ok(None),
+            Err(err) => Err(err.into()),
+        }
     }
 
     /// Convert the branch into its underlying `Reference`.

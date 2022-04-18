@@ -61,6 +61,7 @@ use std::time::SystemTime;
 
 use eden_dag::DagAlgorithm;
 use lib::core::check_out::CheckOutCommitOptions;
+use lib::core::repo_ext::RepoExt;
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use tracing::{instrument, warn};
 

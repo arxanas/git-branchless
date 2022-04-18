@@ -5,6 +5,7 @@ use std::fmt::Write;
 use std::time::SystemTime;
 
 use eden_dag::DagAlgorithm;
+use lib::core::repo_ext::RepoExt;
 use tracing::instrument;
 
 use lib::core::dag::{resolve_commits, sort_commit_set, CommitSet, Dag, ResolveCommitsResult};
