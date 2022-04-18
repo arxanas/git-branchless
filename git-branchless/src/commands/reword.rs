@@ -77,16 +77,16 @@ pub fn reword(
         Ok(result)
     };
 
-    let messages = match build_messages(&repo, messages, &commits, edit_message_fn)? {
-        BuildRewordMessageResult::Succeeded { messages } => messages,
-        BuildRewordMessageResult::IdenticalMessage => {
+    let messages = match prepare_messages(&repo, messages, &commits, edit_message_fn)? {
+        PrepareMessagesResult::Succeeded { messages } => messages,
+        PrepareMessagesResult::IdenticalMessage => {
             writeln!(
                 effects.get_output_stream(),
                 "Aborting. The message wasn't edited; nothing to do."
             )?;
             return Ok(1);
         }
-        BuildRewordMessageResult::EmptyMessage => {
+        PrepareMessagesResult::EmptyMessage => {
             writeln!(
                 effects.get_error_stream(),
                 "Aborting reword due to empty commit message."
@@ -231,29 +231,29 @@ fn resolve_commits_from_hashes<'repo>(
 /// The result of building the reword message.
 #[must_use]
 #[derive(Debug)]
-pub enum BuildRewordMessageResult {
+enum PrepareMessagesResult {
+    /// The reworded message was empty.
+    EmptyMessage,
+
+    /// The reworded message matches the original message.
+    IdenticalMessage,
+
     /// The reworded message was built successfully.
     Succeeded {
         /// The reworded messages for each commit.
         messages: HashMap<NonZeroOid, String>,
     },
-
-    /// The reworded message matches the original message.
-    IdenticalMessage,
-
-    /// The reworded message was empty.
-    EmptyMessage,
 }
 
-/// Builds the message(s) that will be used for rewording. These are mapped from each commit's
+/// Prepares the message(s) that will be used for rewording. These are mapped from each commit's
 /// NonZeroOid to the relevant message.
 #[instrument(skip(edit_message_fn))]
-fn build_messages(
+fn prepare_messages(
     repo: &Repo,
     messages: InitialCommitMessages,
     commits: &[Commit],
     edit_message_fn: impl Fn(&str) -> eyre::Result<String>,
-) -> eyre::Result<BuildRewordMessageResult> {
+) -> eyre::Result<PrepareMessagesResult> {
     let comment_char = get_comment_char(repo)?;
     let (mut message, load_editor) = match messages {
         InitialCommitMessages::Discard => {
@@ -312,7 +312,7 @@ fn build_messages(
 
         let edited_message = edit_message_fn(&message)?;
         if edited_message == message {
-            return Ok(BuildRewordMessageResult::IdenticalMessage);
+            return Ok(PrepareMessagesResult::IdenticalMessage);
         }
 
         message_prettify(edited_message.as_str(), comment_char)?
@@ -325,7 +325,7 @@ fn build_messages(
     };
 
     if message.trim().is_empty() {
-        return Ok(BuildRewordMessageResult::EmptyMessage);
+        return Ok(PrepareMessagesResult::EmptyMessage);
     }
 
     // TODO(bulk edit) process message if it looks like a bulk edit message
@@ -342,7 +342,7 @@ fn build_messages(
         .map(|commit| (commit.get_oid(), message.clone()))
         .collect();
 
-    Ok(BuildRewordMessageResult::Succeeded { messages })
+    Ok(PrepareMessagesResult::Succeeded { messages })
 }
 
 /// Return the root commits for given a list of commits. This is the list of commits that have *no*
@@ -445,7 +445,7 @@ mod tests {
         let head_commit = repo.find_commit_or_fail(head_oid)?;
 
         {
-            let result = build_messages(
+            let result = prepare_messages(
                 &repo,
                 InitialCommitMessages::Discard,
                 &[head_commit.clone()],
@@ -469,7 +469,7 @@ This is a template!
         )?;
 
         {
-            let result = build_messages(
+            let result = prepare_messages(
                 &repo,
                 InitialCommitMessages::Discard,
                 &[head_commit],
