@@ -344,9 +344,16 @@ fn prepare_messages(
     };
 
     let mut message = if discard_messages {
-        // TODO how should this work w/ bulk editing & --discard? just repeat the template, or perhaps show
-        // template w/ original message commented out?
-        message
+        // FIXME should this also show the original message (commented out)?
+        commits
+            .iter()
+            .map(|commit| match commit.get_short_oid() {
+                Ok(oid) => oid,
+                Err(_) => panic!("Could not get short OID for commit: {:?}", commit.get_oid()),
+            })
+            .map(|hash| format!("++ reword {}\n{}", hash, message.clone()))
+            .collect::<Vec<String>>()
+            .join("\n")
     } else {
         // TODO what order are they listed in? (dag.sort()?)
         commits
@@ -614,6 +621,8 @@ mod tests {
                 &[head_commit.clone()],
                 |message| {
                     insta::assert_snapshot!(message.trim(), @r###"
+                    ++ reword 62fc20d
+
                     # Rewording: Please enter the commit message to apply to this 1 commit. Lines
                     # starting with '#' will be ignored, and an empty message aborts rewording.
                     "###);
@@ -638,6 +647,7 @@ This is a template!
                 &[head_commit],
                 |message| {
                     insta::assert_snapshot!(message.trim(), @r###"
+                    ++ reword 62fc20d
                     This is a template!
 
                     # Rewording: Please enter the commit message to apply to this 1 commit. Lines
