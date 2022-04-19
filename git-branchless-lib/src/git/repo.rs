@@ -1621,6 +1621,20 @@ pub struct Branch<'repo> {
     inner: git2::Branch<'repo>,
 }
 
+impl std::fmt::Debug for Branch<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "<Branch name={:?}>",
+            String::from_utf8_lossy(
+                self.inner
+                    .name_bytes()
+                    .unwrap_or(b"(could not get branch name)")
+            ),
+        )
+    }
+}
+
 impl<'repo> Branch<'repo> {
     /// Get the OID pointed to by the branch. Returns `None` if the branch is
     /// not a direct reference (which is unusual).
@@ -1629,6 +1643,7 @@ impl<'repo> Branch<'repo> {
     }
 
     /// If this branch tracks a remote ("upstream") branch, return that branch.
+    #[instrument]
     pub fn get_upstream_branch(&self) -> eyre::Result<Option<Branch<'repo>>> {
         match self.inner.upstream() {
             Ok(upstream) => Ok(Some(Branch { inner: upstream })),
@@ -1900,6 +1915,18 @@ mod tests {
         }
         "###);
         insta::assert_debug_snapshot!(tree.inner.iter().map(|entry| (entry.name().unwrap().to_string(), entry.id().to_string())).collect_vec(), @"[]");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_branch_debug() -> eyre::Result<()> {
+        let git = make_git()?;
+        git.init_repo()?;
+
+        let repo = git.get_repo()?;
+        let branch = repo.find_branch("master", BranchType::Local)?.unwrap();
+        insta::assert_debug_snapshot!(branch, @r###"<Branch name="master">"###);
 
         Ok(())
     }
