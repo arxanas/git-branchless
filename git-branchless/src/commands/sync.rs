@@ -193,6 +193,7 @@ pub fn sync(
                 &effects,
                 git_run_info,
                 &repo,
+                &event_log_db,
                 &rebase_plan,
                 &execute_options,
             )?;

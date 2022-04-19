@@ -12,7 +12,7 @@ use tracing::warn;
 
 use crate::core::check_out::{check_out_commit, CheckOutCommitOptions};
 use crate::core::effects::Effects;
-use crate::core::eventlog::EventTransactionId;
+use crate::core::eventlog::{EventLogDb, EventTransactionId};
 use crate::core::formatting::{printable_styled_string, Pluralize};
 use crate::core::repo_ext::RepoExt;
 use crate::git::{GitRunInfo, MaybeZeroOid, NonZeroOid, Repo, ResolvedReferenceInfo};
@@ -137,6 +137,7 @@ pub fn check_out_updated_head(
     effects: &Effects,
     git_run_info: &GitRunInfo,
     repo: &Repo,
+    event_log_db: &EventLogDb,
     event_tx_id: EventTransactionId,
     rewritten_oids: &HashMap<NonZeroOid, MaybeZeroOid>,
     previous_head_info: &ResolvedReferenceInfo,
@@ -264,6 +265,7 @@ pub fn check_out_updated_head(
     let result = check_out_commit(
         effects,
         git_run_info,
+        event_log_db,
         Some(event_tx_id),
         Some(&checkout_target),
         check_out_commit_options,
@@ -348,6 +350,7 @@ mod in_memory {
     use tracing::{instrument, warn};
 
     use crate::core::effects::{Effects, OperationType};
+    use crate::core::eventlog::EventLogDb;
     use crate::core::formatting::printable_styled_string;
     use crate::core::gc::mark_commit_reachable;
     use crate::core::rewrite::execute::check_out_updated_head;
@@ -673,6 +676,7 @@ mod in_memory {
         effects: &Effects,
         git_run_info: &GitRunInfo,
         repo: &Repo,
+        event_log_db: &EventLogDb,
         rewritten_oids: &[(NonZeroOid, MaybeZeroOid)],
         skipped_head_updated_oid: Option<NonZeroOid>,
         options: &ExecuteRebasePlanOptions,
@@ -733,6 +737,7 @@ mod in_memory {
             effects,
             git_run_info,
             repo,
+            event_log_db,
             *event_tx_id,
             &rewritten_oids_map,
             &head_info,
@@ -1027,6 +1032,7 @@ pub fn execute_rebase_plan(
     effects: &Effects,
     git_run_info: &GitRunInfo,
     repo: &Repo,
+    event_log_db: &EventLogDb,
     rebase_plan: &RebasePlan,
     options: &ExecuteRebasePlanOptions,
 ) -> eyre::Result<ExecuteRebasePlanResult> {
@@ -1056,6 +1062,7 @@ pub fn execute_rebase_plan(
                     effects,
                     git_run_info,
                     repo,
+                    event_log_db,
                     &rewritten_oids,
                     new_head_oid,
                     options,

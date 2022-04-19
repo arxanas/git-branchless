@@ -166,6 +166,7 @@ pub fn hook_post_rewrite(
             effects,
             git_run_info,
             &repo,
+            &event_log_db,
             event_tx_id,
             &rewritten_oids,
             &previous_head_info,

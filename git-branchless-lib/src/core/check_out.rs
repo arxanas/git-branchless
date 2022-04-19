@@ -10,7 +10,7 @@ use tracing::instrument;
 use crate::git::{CategorizedReferenceName, GitRunInfo};
 
 use super::effects::Effects;
-use super::eventlog::EventTransactionId;
+use super::eventlog::{EventLogDb, EventTransactionId};
 use super::formatting::printable_styled_string;
 
 /// Options for checking out a commit.
@@ -38,6 +38,7 @@ impl Default for CheckOutCommitOptions {
 pub fn check_out_commit(
     effects: &Effects,
     git_run_info: &GitRunInfo,
+    _event_log_db: &EventLogDb,
     event_tx_id: Option<EventTransactionId>,
     target: Option<impl AsRef<OsStr> + std::fmt::Debug>,
     options: &CheckOutCommitOptions,
