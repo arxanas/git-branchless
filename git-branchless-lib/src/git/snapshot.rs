@@ -1,3 +1,26 @@
+//! Implementation of working copy snapshots. The ideas are based off of those
+//! in Jujutsu: https://github.com/martinvonz/jj/blob/main/docs/working-copy.md
+//!
+//! Normally, Git only tracks committed changes via commits, and a subset of
+//! information about uncommitted changes via the index. This module implements
+//! "working copy snapshots", which are enough to reproduce the entire tracked
+//! contents of the working copy, including staged changes and files with merge
+//! conflicts.
+//!
+//! Untracked changes are not handled by this module. The changes might contain
+//! sensitive data which we don't want to accidentally store in Git, or might be
+//! very large and cause performance issues if committed.
+//!
+//! There are two main reasons to implement working copy snapshots:
+//!
+//!  1. To support enhanced undo features. For example, you should be able to
+//!  jump back into merge conflict resolution which was happening at some past
+//!  time.
+//!  2. To unify the implementations of operations across commits and the
+//!  working copy. For example, a `git split` command which splits one commit
+//!  into multiple could also be used to split the working copy into multiple
+//!  commits.
+
 use std::collections::HashMap;
 
 use crate::core::formatting::Pluralize;
@@ -11,10 +34,30 @@ use super::{Commit, MaybeZeroOid, NonZeroOid, Repo, ResolvedReferenceInfo, Statu
 /// given point in time. This means that it can include changes in any stage.
 #[derive(Clone, Debug)]
 pub struct WorkingCopySnapshot<'repo> {
+    /// The commit which contains the metadata about the `HEAD` commit and all
+    /// the "stage commits" included in this snapshot.
+    ///
+    /// This commit itself contains identical content to the `HEAD` commit (if
+    /// any). The `HEAD` commit (if any) is this commit's first parent.
+    ///
+    /// The stage commits each correspond to one of the possible stages in the
+    /// index. If a file is not present in that stage, it's assumed that it's
+    /// unchanged from the `HEAD` commit at the time which the snapshot was
+    /// taken.
+    ///
+    /// The metadata is stored in the commit message.
     pub base_commit: Commit<'repo>,
+
+    /// The index contents at stage 0 (unstaged).
     pub commit_stage0: Commit<'repo>,
+
+    /// The index contents at stage 1 (staged).
     pub commit_stage1: Commit<'repo>,
+
+    /// The index contents at stage 2 ("ours").
     pub commit_stage2: Commit<'repo>,
+
+    /// The index contents at stage 3 ("theirs", i.e. the commit being merged in).
     pub commit_stage3: Commit<'repo>,
 }
 
