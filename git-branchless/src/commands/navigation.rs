@@ -440,6 +440,7 @@ pub fn traverse_commits(
     check_out_commit(
         effects,
         git_run_info,
+        &event_log_db,
         None,
         Some(&current_oid),
         &CheckOutCommitOptions {
@@ -597,6 +598,7 @@ pub fn checkout(
     let exit_code = check_out_commit(
         effects,
         git_run_info,
+        &event_log_db,
         None,
         target.as_ref(),
         &CheckOutCommitOptions {

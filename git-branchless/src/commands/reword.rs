@@ -166,7 +166,14 @@ pub fn reword(
             render_smartlog: false,
         },
     };
-    let result = execute_rebase_plan(effects, git_run_info, &repo, &rebase_plan, &execute_options)?;
+    let result = execute_rebase_plan(
+        effects,
+        git_run_info,
+        &repo,
+        &event_log_db,
+        &rebase_plan,
+        &execute_options,
+    )?;
 
     let exit_code = match result {
         ExecuteRebasePlanResult::Succeeded {

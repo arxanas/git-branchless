@@ -168,7 +168,14 @@ pub fn r#move(
                 resolve_merge_conflicts,
                 check_out_commit_options: Default::default(),
             };
-            execute_rebase_plan(effects, git_run_info, &repo, &rebase_plan, &options)?
+            execute_rebase_plan(
+                effects,
+                git_run_info,
+                &repo,
+                &event_log_db,
+                &rebase_plan,
+                &options,
+            )?
         }
         Err(err) => {
             err.describe(effects, &repo)?;

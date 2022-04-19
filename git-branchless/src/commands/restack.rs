@@ -81,10 +81,11 @@ use lib::git::{GitRunInfo, NonZeroOid, Repo};
 #[instrument(skip(commits))]
 fn restack_commits(
     effects: &Effects,
-    pool: &ThreadPool,
+    thread_pool: &ThreadPool,
     repo_pool: &RepoPool,
     dag: &Dag,
     event_replayer: &EventReplayer,
+    event_log_db: &EventLogDb,
     event_cursor: EventCursor,
     git_run_info: &GitRunInfo,
     commits: Option<impl IntoIterator<Item = NonZeroOid>>,
@@ -143,7 +144,7 @@ fn restack_commits(
                 builder.move_subtree(child_oid, dest_oid)?;
             }
         }
-        let rebase_plan = match builder.build(effects, pool, repo_pool, build_options)? {
+        let rebase_plan = match builder.build(effects, thread_pool, repo_pool, build_options)? {
             Ok(Some(rebase_plan)) => rebase_plan,
             Ok(None) => {
                 writeln!(
@@ -160,8 +161,14 @@ fn restack_commits(
         rebase_plan
     };
 
-    let execute_rebase_plan_result =
-        execute_rebase_plan(effects, git_run_info, &repo, &rebase_plan, execute_options)?;
+    let execute_rebase_plan_result = execute_rebase_plan(
+        effects,
+        git_run_info,
+        &repo,
+        event_log_db,
+        &rebase_plan,
+        execute_options,
+    )?;
     match execute_rebase_plan_result {
         ExecuteRebasePlanResult::Succeeded { rewritten_oids: _ } => {
             writeln!(effects.get_output_stream(), "Finished restacking commits.")?;
@@ -314,6 +321,7 @@ pub fn restack(
         &repo_pool,
         &dag,
         &event_replayer,
+        &event_log_db,
         event_cursor,
         git_run_info,
         commits,
