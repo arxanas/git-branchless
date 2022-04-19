@@ -114,7 +114,7 @@ pub fn hook_post_rewrite(
 
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
-    let mut event_log_db = EventLogDb::new(&conn)?;
+    let event_log_db = EventLogDb::new(&conn)?;
     let event_tx_id = event_log_db.make_transaction_id(now, "hook-post-rewrite")?;
 
     let (rewritten_oids, events) = {

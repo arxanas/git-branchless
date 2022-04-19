@@ -31,7 +31,7 @@ pub fn amend(
     let now = SystemTime::now();
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
-    let mut event_log_db = EventLogDb::new(&conn)?;
+    let event_log_db = EventLogDb::new(&conn)?;
 
     let head_info = repo.get_head_info()?;
     let head_oid = match head_info.oid {
