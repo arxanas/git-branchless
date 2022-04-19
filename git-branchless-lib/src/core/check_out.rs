@@ -7,7 +7,7 @@ use cursive::theme::BaseColor;
 use cursive::utils::markup::StyledString;
 use tracing::instrument;
 
-use crate::git::{CategorizedReferenceName, GitRunInfo};
+use crate::git::{CategorizedReferenceName, GitRunInfo, Repo};
 
 use super::effects::Effects;
 use super::eventlog::{EventLogDb, EventTransactionId};
@@ -38,6 +38,7 @@ impl Default for CheckOutCommitOptions {
 pub fn check_out_commit(
     effects: &Effects,
     git_run_info: &GitRunInfo,
+    _repo: &Repo,
     _event_log_db: &EventLogDb,
     event_tx_id: Option<EventTransactionId>,
     target: Option<impl AsRef<OsStr> + std::fmt::Debug>,

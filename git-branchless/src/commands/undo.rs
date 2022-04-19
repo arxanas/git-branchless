@@ -883,6 +883,7 @@ fn undo_events(
         let exit_code = check_out_commit(
             effects,
             git_run_info,
+            repo,
             event_log_db,
             Some(event_tx_id),
             Some(target),
