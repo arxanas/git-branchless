@@ -265,6 +265,7 @@ pub fn check_out_updated_head(
     let result = check_out_commit(
         effects,
         git_run_info,
+        repo,
         event_log_db,
         Some(event_tx_id),
         Some(&checkout_target),
