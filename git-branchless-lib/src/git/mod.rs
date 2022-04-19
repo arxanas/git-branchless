@@ -16,5 +16,6 @@ pub use repo::{
     ResolvedReferenceInfo,
 };
 pub use run::GitRunInfo;
+pub use snapshot::WorkingCopySnapshot;
 pub use status::{FileStatus, StatusEntry};
 pub use tree::Tree;

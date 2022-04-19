@@ -21,6 +21,7 @@ use chrono::{DateTime, Local, TimeZone, Utc};
 use cursive::theme::BaseColor;
 use cursive::utils::markup::StyledString;
 use eyre::Context;
+use git2::message_trailers_bytes;
 use itertools::Itertools;
 use os_str_bytes::{OsStrBytes, OsStringBytes};
 use tracing::{instrument, warn};
@@ -1301,6 +1302,23 @@ impl<'repo> Commit<'repo> {
     pub fn get_tree(&self) -> eyre::Result<Tree> {
         let tree = self.inner.tree().wrap_err("Getting tree object")?;
         Ok(Tree { inner: tree })
+    }
+
+    /// Get the "trailer" metadata from this commit's message. These are strings
+    /// like `Signed-off-by: foo` which appear at the end of the commit message.
+    #[instrument]
+    pub fn get_trailers(&self) -> eyre::Result<Vec<(String, String)>> {
+        let message = self.get_message_raw()?;
+        let mut result = Vec::new();
+        for (k, v) in message_trailers_bytes(message)
+            .context("Reading message trailers")?
+            .iter()
+        {
+            if let (Ok(k), Ok(v)) = (std::str::from_utf8(k), std::str::from_utf8(v)) {
+                result.push((k.to_owned(), v.to_owned()));
+            }
+        }
+        Ok(result)
     }
 
     /// Print a one-line description of this commit containing its OID and
