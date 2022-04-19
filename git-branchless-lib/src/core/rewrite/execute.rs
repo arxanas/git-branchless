@@ -267,7 +267,7 @@ pub fn check_out_updated_head(
         git_run_info,
         repo,
         event_log_db,
-        Some(event_tx_id),
+        event_tx_id,
         Some(&checkout_target),
         check_out_commit_options,
     )?;

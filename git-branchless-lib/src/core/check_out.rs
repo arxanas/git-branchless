@@ -40,7 +40,7 @@ pub fn check_out_commit(
     git_run_info: &GitRunInfo,
     _repo: &Repo,
     _event_log_db: &EventLogDb,
-    event_tx_id: Option<EventTransactionId>,
+    event_tx_id: EventTransactionId,
     target: Option<impl AsRef<OsStr> + std::fmt::Debug>,
     options: &CheckOutCommitOptions,
 ) -> eyre::Result<isize> {
@@ -65,12 +65,12 @@ pub fn check_out_commit(
         args.extend(additional_args.iter().map(OsStr::new));
         args
     };
-    let result = git_run_info.run(effects, event_tx_id, args.as_slice())?;
+    let result = git_run_info.run(effects, Some(event_tx_id), args.as_slice())?;
 
     if result == 0 {
         if *render_smartlog {
             let result =
-                git_run_info.run_direct_no_wrapping(event_tx_id, &["branchless", "smartlog"])?;
+                git_run_info.run_direct_no_wrapping(Some(event_tx_id), &["branchless", "smartlog"])?;
             Ok(result)
         } else {
             Ok(result)

@@ -344,11 +344,19 @@ pub fn traverse_commits(
         }
     };
 
+    let now = SystemTime::now();
     let repo = Repo::from_current_dir()?;
     let head_info = repo.get_head_info()?;
     let references_snapshot = repo.get_references_snapshot()?;
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
+    let event_tx_id = event_log_db.make_transaction_id(
+        now,
+        match command {
+            Command::Next => "next",
+            Command::Prev => "prev",
+        },
+    )?;
     let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
     let event_cursor = event_replayer.make_default_cursor();
     let dag = Dag::open_and_sync(
@@ -442,7 +450,7 @@ pub fn traverse_commits(
         git_run_info,
         &repo,
         &event_log_db,
-        None,
+        event_tx_id,
         Some(&current_oid),
         &CheckOutCommitOptions {
             additional_args,
@@ -529,11 +537,13 @@ pub fn checkout(
         target,
     } = checkout_options;
 
+    let now = SystemTime::now();
     let repo = Repo::from_current_dir()?;
     let head_info = repo.get_head_info()?;
     let references_snapshot = repo.get_references_snapshot()?;
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
+    let event_tx_id = event_log_db.make_transaction_id(now, "checkout")?;
     let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
     let event_cursor = event_replayer.make_default_cursor();
     let dag = Dag::open_and_sync(
@@ -601,7 +611,7 @@ pub fn checkout(
         git_run_info,
         &repo,
         &event_log_db,
-        None,
+        event_tx_id,
         target.as_ref(),
         &CheckOutCommitOptions {
             additional_args,
