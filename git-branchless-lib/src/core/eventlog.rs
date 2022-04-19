@@ -490,7 +490,7 @@ impl<'conn> EventLogDb<'conn> {
     /// Args:
     /// * events: The events to add.
     #[instrument]
-    pub fn add_events(&mut self, events: Vec<Event>) -> eyre::Result<()> {
+    pub fn add_events(&self, events: Vec<Event>) -> eyre::Result<()> {
         let tx = self.conn.unchecked_transaction()?;
         for event in events {
             let Row {
