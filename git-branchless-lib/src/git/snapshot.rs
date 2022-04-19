@@ -22,6 +22,9 @@
 //!  commits.
 
 use std::collections::HashMap;
+use std::str::FromStr;
+
+use tracing::instrument;
 
 use crate::core::formatting::Pluralize;
 
@@ -62,6 +65,7 @@ pub struct WorkingCopySnapshot<'repo> {
 }
 
 impl<'repo> WorkingCopySnapshot<'repo> {
+    #[instrument]
     pub(super) fn create(
         repo: &'repo Repo,
         index: &Index,
@@ -162,6 +166,59 @@ branchless: automated working copy commit
         })
     }
 
+    /// Attempt to load the provided commit as if it were the base commit for a
+    /// [`WorkingCopySnapshot`]. Returns `None` if it was not.
+    #[instrument]
+    pub fn try_from_base_commit<'a>(
+        repo: &'repo Repo,
+        base_commit: &'a Commit<'repo>,
+    ) -> eyre::Result<Option<WorkingCopySnapshot<'repo>>> {
+        let trailers = base_commit.get_trailers()?;
+        let find_commit = |stage: Stage| -> eyre::Result<Option<Commit>> {
+            for (k, v) in trailers.iter() {
+                if k != stage.get_trailer() {
+                    continue;
+                }
+
+                let oid = NonZeroOid::from_str(v);
+                let oid = match oid {
+                    Ok(oid) => oid,
+                    Err(_) => continue,
+                };
+
+                let result = repo.find_commit_or_fail(oid)?;
+                return Ok(Some(result));
+            }
+            Ok(None)
+        };
+
+        let commit_stage0 = match find_commit(Stage::Stage0)? {
+            Some(commit) => commit,
+            None => return Ok(None),
+        };
+        let commit_stage1 = match find_commit(Stage::Stage1)? {
+            Some(commit) => commit,
+            None => return Ok(None),
+        };
+        let commit_stage2 = match find_commit(Stage::Stage2)? {
+            Some(commit) => commit,
+            None => return Ok(None),
+        };
+        let commit_stage3 = match find_commit(Stage::Stage3)? {
+            Some(commit) => commit,
+            None => return Ok(None),
+        };
+
+        Ok(Some(WorkingCopySnapshot {
+            base_commit: base_commit.to_owned(),
+            commit_stage0,
+            commit_stage1,
+            commit_stage2,
+            commit_stage3,
+        }))
+    }
+
+    #[instrument]
     fn create_commit_for_stage(
         repo: &Repo,
         index: &Index,
