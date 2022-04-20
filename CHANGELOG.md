@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Added `--yes` option to `git undo` to skip confirmation.
+- Added bulk edit mode to `git reword` to allow updating multiple, individual commit messages at once.
 
 ### Fixed
 
