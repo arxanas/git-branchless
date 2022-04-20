@@ -6,8 +6,11 @@ use rayon::ThreadPoolBuilder;
 use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 use std::fmt::Write;
+use std::fs::File;
+use std::io::Write as OtherWrite;
 use std::time::SystemTime;
 
+use chrono::Local;
 use dialoguer::Editor;
 use eden_dag::DagAlgorithm;
 use eyre::Context;
@@ -82,7 +85,7 @@ pub fn reword(
         PrepareMessagesResult::IdenticalMessage => {
             writeln!(
                 effects.get_output_stream(),
-                "Aborting. The message wasn't edited; nothing to do."
+                "Aborting. The message was not edited; nothing to do."
             )?;
             return Ok(1);
         }
@@ -145,6 +148,10 @@ pub fn reword(
                     duplicates.join(", ")
                 )?;
             }
+            writeln!(
+                effects.get_error_stream(),
+                "Your edited message has been saved to .git/REWORD_EDITMSG for review and/or manual recovery."
+            )?;
             return Ok(1);
         }
     };
@@ -448,7 +455,27 @@ fn prepare_messages(
             missing.push(short_oid);
         }
 
-        // TODO save message to temp file?
+        let mut w = File::create(repo.get_path().join("REWORD_EDITMSG"))?;
+        writeln!(
+            &mut w,
+            "{} This file was created by `git branchless reword` at {}\n\
+        {} You can use it to recover any edits you had made to the included commit {}.\n\
+        {} If you don't need (or don't recognize) these edits, it is safe to delete this file.\n\
+        \n\
+        {}
+        ",
+            comment_char,
+            Local::now().to_rfc2822(),
+            comment_char,
+            if commits.len() == 1 {
+                "message"
+            } else {
+                "messages"
+            },
+            comment_char,
+            edited_message
+        )?;
+
         return Ok(PrepareMessagesResult::MismatchedCommits {
             duplicates: parsed_messages.duplicates,
             missing,
