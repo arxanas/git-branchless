@@ -54,6 +54,7 @@ jobs:
         with:
           profile: minimal
           toolchain: 1.56.0
+          override: true
 
       - uses: actions/checkout@v3
         with:

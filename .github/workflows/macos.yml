@@ -28,6 +28,7 @@ jobs:
         with:
           profile: minimal
           toolchain: 1.56.0
+          override: true
 
       - name: Cache dependencies
         uses: Swatinem/rust-cache@cb2cf0cc7c5198d3364b9630e2c3d457f160790c
