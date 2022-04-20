@@ -48,10 +48,16 @@ pub(super) fn wrap_git_error(error: git2::Error) -> eyre::Error {
 
 /// Clean up a message, removing extraneous whitespace plus comment lines starting with
 /// `comment_char`, and ensure that the message ends with a newline.
-pub fn message_prettify(message: &str, comment_char: char) -> eyre::Result<String> {
-    let comment_char = u32::from(comment_char);
-    let comment_char = u8::try_from(comment_char).wrap_err("comment char was not ASCII")?;
-    let message = git2::message_prettify(message, Some(comment_char))?;
+pub fn message_prettify(message: &str, comment_char: Option<char>) -> eyre::Result<String> {
+    let comment_char = match comment_char {
+        Some(ch) => {
+            let ch = u32::from(ch);
+            let ch = u8::try_from(ch).wrap_err("comment char was not ASCII")?;
+            Some(ch)
+        }
+        None => None,
+    };
+    let message = git2::message_prettify(message, comment_char)?;
     Ok(message)
 }
 
