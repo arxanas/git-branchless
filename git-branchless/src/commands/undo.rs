@@ -867,7 +867,12 @@ fn undo_events(
                 commit_oid,
                 ref_name,
             } => {
-                todo!("Use HEAD {head_oid:?}, branch {ref_name:?}, and commit {commit_oid:?} to check out a previous working copy state");
+                todo!(
+                    "Use HEAD {head_oid:?}, branch {ref_name:?}, and commit {commit_oid:?} to check out a previous working copy state",
+                    head_oid = head_oid,
+                    ref_name = ref_name,
+                    commit_oid = commit_oid
+                );
             }
 
             Event::CommitEvent { .. }
