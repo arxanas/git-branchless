@@ -342,58 +342,57 @@ fn prepare_messages(
         return Ok(PrepareMessagesResult::Succeeded { messages });
     };
 
-    let mut message = if discard_messages {
-        // FIXME should this also show the original message (commented out)?
-        commits
-            .iter()
-            .map(|commit| match commit.get_short_oid() {
-                Ok(oid) => oid,
-                Err(_) => panic!("Could not get short OID for commit: {:?}", commit.get_oid()),
-            })
-            .map(|hash| format!("++ reword {}\n{}", hash, message.clone()))
-            .collect::<Vec<String>>()
-            .join("\n")
+    let possible_template_message = message.trim();
+    let possible_template_message = if possible_template_message.is_empty() {
+        String::from("\n")
     } else {
-        // TODO what order are they listed in? (dag.sort()?)
-        commits
-            .iter()
-            .map(
-                |commit| match (commit.get_short_oid(), commit.get_message_raw()) {
-                    (Ok(oid), Ok(msg)) => (oid, msg),
-                    (Err(_), Ok(_)) => {
-                        panic!("Could not get short OID for commit: {:?}", commit.get_oid())
-                    }
-                    (Ok(_), Err(_)) => {
-                        panic!(
-                            "Could not get raw message for commit: {:?}",
-                            commit.get_oid()
-                        )
-                    }
-                    (Err(_), Err(_)) => panic!(
-                        "Could not get short OID or raw message for commit: {:?}",
-                        commit.get_oid()
-                    ),
-                },
-            )
-            .map(|(hash, msg)| match msg.into_string() {
-                Ok(msg) => (hash, msg),
-                Err(_) => panic!("Could not decode original message for commit: {}", hash),
-            })
-            .map(|(hash, msg)| format!("++ reword {}\n{}", hash, msg))
-            .collect::<Vec<String>>()
-            .join("\n")
+        format!("{}\n\n", possible_template_message)
     };
+    let possible_template_message = possible_template_message.as_str();
+    let discarded_message_header = format!("{} Original message:\n{} ", comment_char, comment_char);
+    let discarded_message_header = discarded_message_header.as_str();
+    let discarded_message_padding = format!("\n{} ", comment_char);
+    let discarded_message_padding = discarded_message_padding.as_str();
+
+    let mut message = String::new();
+    for commit in commits.iter() {
+        let oid = commit.get_short_oid()?;
+
+        let original_message = commit
+            .get_message_raw()?
+            .to_str()
+            .ok_or_else(|| {
+                eyre::eyre!(
+                    "Could not decode commit message for commit: {:?}",
+                    commit.get_oid()
+                )
+            })?
+            .trim()
+            .to_string();
+
+        let msg = if discard_messages {
+            [
+                possible_template_message,
+                discarded_message_header,
+                original_message
+                    .split('\n')
+                    .collect::<Vec<&str>>()
+                    .join(discarded_message_padding)
+                    .as_str(),
+            ]
+            .concat()
+        } else {
+            original_message
+        };
+
+        message.push_str(format!("++ reword {}\n{}\n\n", oid, msg).as_str());
+    }
 
     message.push_str(
         format!(
-            "{}\
+            "\
                 {} Rewording: Please enter the commit {} to apply to {}. Lines\n\
                 {} starting with '{}' will be ignored, and an empty message aborts rewording.",
-            if message.ends_with('\n') {
-                "\n"
-            } else {
-                "\n\n"
-            },
             comment_char,
             match commits.len() {
                 1 => "message",
@@ -621,6 +620,9 @@ mod tests {
                     insta::assert_snapshot!(message.trim(), @r###"
                     ++ reword 62fc20d
 
+                    # Original message:
+                    # create test1.txt
+
                     # Rewording: Please enter the commit message to apply to this 1 commit. Lines
                     # starting with '#' will be ignored, and an empty message aborts rewording.
                     "###);
@@ -647,6 +649,9 @@ This is a template!
                     insta::assert_snapshot!(message.trim(), @r###"
                     ++ reword 62fc20d
                     This is a template!
+
+                    # Original message:
+                    # create test1.txt
 
                     # Rewording: Please enter the commit message to apply to this 1 commit. Lines
                     # starting with '#' will be ignored, and an empty message aborts rewording.
