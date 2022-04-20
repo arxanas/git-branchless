@@ -255,75 +255,68 @@ fn prepare_messages(
     edit_message_fn: impl Fn(&str) -> eyre::Result<String>,
 ) -> eyre::Result<PrepareMessagesResult> {
     let comment_char = get_comment_char(repo)?;
-    let (mut message, load_editor) = match messages {
+
+    let (message, load_editor, discard_messages) = match messages {
         InitialCommitMessages::Discard => {
-            let message: String = get_commit_template(repo)?.unwrap_or_default();
-            (message, true)
+            (get_commit_template(repo)?.unwrap_or_default(), true, true)
         }
-
-        InitialCommitMessages::Messages(messages) => {
-            let message = messages.join("\n\n").trim().to_string();
-            if message.is_empty() {
-                let message = match commits {
-                    [commit] => match commit.get_message_raw()?.into_string() {
-                        Ok(msg) => msg,
-                        Err(_) => eyre::bail!(
-                            "Error decoding original message for commit: {:?}.",
-                            commit.get_oid()
-                        ),
-                    },
-                    _ => {
-                        // TODO(bulk edit) build a bulk edit message for multiple commits
-                        String::from("")
-                    }
-                };
-
-                (message, true)
-            } else {
-                (message, false)
-            }
+        InitialCommitMessages::Messages(ref messages) => {
+            let message = messages.clone().join("\n\n");
+            let message = message.trim();
+            (message.to_string(), message.is_empty(), false)
         }
     };
 
-    let message = if load_editor {
-        // If the original commit message didn't end w/ a newline, add one. This makes it easy to
-        // ensure that our "help" text will always be separated from the commit message by a blank
-        // line, and messages passing through Editor will end up with a newline appended anyway.
-        if !message.ends_with('\n') {
-            message.push('\n');
-        };
+    if !load_editor {
+        let message = message_prettify(message.as_str(), None)?;
 
-        message.push_str(
-            format!(
-                "\n\
+        if message.trim().is_empty() {
+            return Ok(PrepareMessagesResult::EmptyMessage);
+        }
+
+        let messages = commits
+            .iter()
+            .map(|commit| (commit.get_oid(), message.clone()))
+            .collect();
+
+        return Ok(PrepareMessagesResult::Succeeded { messages });
+    };
+
+    let mut message = if discard_messages {
+        message
+    } else {
+        // TODO(bulk edit) build a bulk edit message for multiple commits
+        String::from("")
+    };
+
+    message.push_str(
+        format!(
+            "{}\
                 {} Rewording: Please enter the commit message to apply to {}. Lines\n\
                 {} starting with '{}' will be ignored, and an empty message aborts rewording.",
-                comment_char,
-                Pluralize {
-                    determiner: Some(("this", "these")),
-                    amount: commits.len(),
-                    unit: ("commit", "commits"),
-                },
-                comment_char,
-                comment_char,
-            )
-            .as_str(),
-        );
+            if message.ends_with('\n') {
+                "\n"
+            } else {
+                "\n\n"
+            },
+            comment_char,
+            Pluralize {
+                determiner: Some(("this", "these")),
+                amount: commits.len(),
+                unit: ("commit", "commits"),
+            },
+            comment_char,
+            comment_char,
+        )
+        .as_str(),
+    );
 
-        let edited_message = edit_message_fn(&message)?;
-        if edited_message == message {
-            return Ok(PrepareMessagesResult::IdenticalMessage);
-        }
+    let edited_message = edit_message_fn(&message)?;
+    if edited_message == message {
+        return Ok(PrepareMessagesResult::IdenticalMessage);
+    }
 
-        message_prettify(edited_message.as_str(), comment_char)?
-    } else {
-        // ensure that CLI messages also end w/ a newline
-        if !message.ends_with('\n') {
-            message.push('\n');
-        }
-        message
-    };
-
+    let message = message_prettify(edited_message.as_str(), Some(comment_char))?;
     if message.trim().is_empty() {
         return Ok(PrepareMessagesResult::EmptyMessage);
     }
