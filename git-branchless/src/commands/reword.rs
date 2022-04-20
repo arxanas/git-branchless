@@ -16,7 +16,7 @@ use tracing::{instrument, warn};
 use lib::core::config::{
     get_comment_char, get_commit_template, get_editor, get_restack_preserve_timestamps,
 };
-use lib::core::dag::{resolve_commits, CommitSet, Dag, ResolveCommitsResult};
+use lib::core::dag::{resolve_commits, sort_commit_set, CommitSet, Dag, ResolveCommitsResult};
 use lib::core::effects::Effects;
 use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::formatting::{printable_styled_string, Glyphs, Pluralize};
@@ -279,6 +279,10 @@ fn resolve_commits_from_hashes<'repo>(
             return Ok(None);
         }
     };
+
+    let commit_set = commits.iter().map(|c| c.get_oid()).collect::<CommitSet>();
+    let commits = sort_commit_set(repo, dag, &commit_set)?;
+
     Ok(Some(commits))
 }
 
