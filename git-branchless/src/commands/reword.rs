@@ -16,7 +16,7 @@ use tracing::{instrument, warn};
 use lib::core::config::{
     get_comment_char, get_commit_template, get_editor, get_restack_preserve_timestamps,
 };
-use lib::core::dag::{resolve_commits, CommitSet, Dag, ResolveCommitsResult};
+use lib::core::dag::{resolve_commits, sort_commit_set, CommitSet, Dag, ResolveCommitsResult};
 use lib::core::effects::Effects;
 use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::formatting::{printable_styled_string, Glyphs, Pluralize};
@@ -280,6 +280,23 @@ fn resolve_commits_from_hashes<'repo>(
             return Ok(None);
         }
     };
+
+    // To sort the commits, we have to go from Commits -> OIDs -> CommitSet -> sort() -> Commits
+    // This helps us present a more deterministic message in the editor if, for example, the hashes
+    // specified on the CLI are in a haphazard order.
+    #[allow(clippy::needless_collect)]
+    let commit_oids = commits
+        .iter()
+        .map(|c| c.get_oid())
+        .collect::<Vec<NonZeroOid>>();
+    let commit_set = CommitSet::from_iter(
+        commit_oids
+            .into_iter()
+            .map(eden_dag::VertexName::from)
+            .map(Ok),
+    );
+    let commits = sort_commit_set(repo, dag, &commit_set)?;
+
     Ok(Some(commits))
 }
 
