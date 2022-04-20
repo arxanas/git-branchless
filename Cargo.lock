@@ -968,6 +968,7 @@ dependencies = [
  "anyhow",
  "assert_cmd",
  "bugreport",
+ "chrono",
  "clap 3.1.9",
  "color-eyre",
  "console",
