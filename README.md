@@ -3,13 +3,27 @@
 <h1 align="center">Branchless workflow for Git</h1>
 <p align="center">(This suite of tools is 100% compatible with branches. If you think this is confusing, you can <a href="https://github.com/arxanas/git-branchless/discussions/284">suggest a new name here</a>.)</p>
 
-[![Linux](https://github.com/arxanas/git-branchless/actions/workflows/linux.yml/badge.svg)](https://github.com/arxanas/git-branchless/actions/workflows/linux.yml)
-[![Windows](https://github.com/arxanas/git-branchless/actions/workflows/windows.yml/badge.svg)](https://github.com/arxanas/git-branchless/actions/workflows/windows.yml)
-[![macOS](https://github.com/arxanas/git-branchless/actions/workflows/macos.yml/badge.svg)](https://github.com/arxanas/git-branchless/actions/workflows/macos.yml)
-[![Nix on Linux](https://github.com/arxanas/git-branchless/actions/workflows/nix-linux.yml/badge.svg)](https://github.com/arxanas/git-branchless/actions/workflows/nix-linux.yml)
-[![crates.io](https://img.shields.io/crates/v/git-branchless)](https://crates.io/crates/git-branchless)
+<hr />
 
-[![GitHub Discussions](https://img.shields.io/github/discussions/arxanas/git-branchless)](https://github.com/arxanas/git-branchless/discussions) [![Discord](https://img.shields.io/discord/915309546984050709)](https://discord.gg/caYQBJ82A4)
+<table align="center">
+  <tbody>
+    <tr>
+      <td><a href="https://github.com/arxanas/git-branchless/actions/workflows/linux.yml"><img alt="Linux build status" src="https://github.com/arxanas/git-branchless/actions/workflows/linux.yml/badge.svg" /></a></td>
+      <td><a href="https://github.com/arxanas/git-branchless/actions/workflows/windows.yml"><img alt="Windows build status" src="https://github.com/arxanas/git-branchless/actions/workflows/windows.yml/badge.svg" /></a></td>
+      <td><a href="https://github.com/arxanas/git-branchless/actions/workflows/macos.yml"><img alt="macOS build status" src="https://github.com/arxanas/git-branchless/actions/workflows/macos.yml/badge.svg" /></a></td>
+      <td><a alt="Nix on Linus build status" href="https://github.com/arxanas/git-branchless/actions/workflows/nix-linux.yml"><img src="https://github.com/arxanas/git-branchless/actions/workflows/nix-linux.yml/badge.svg" /></a></td>
+    </tr>
+    <tr>
+      <td><a alt="Package version" href="https://crates.io/crates/git-branchless"><img src="https://img.shields.io/crates/v/git-branchless" /></a></td>
+      <td><a href="https://github.com/arxanas/git-branchless/discussions"><img alt="Github Discussions" src="https://img.shields.io/github/discussions/arxanas/git-branchless" /></a></td>
+      <td><a href="https://discord.gg/caYQBJ82A4"><img alt="Discord" src="https://img.shields.io/discord/915309546984050709" /></a></td>
+    </tr>
+  </tbody>
+</table>
+
+<hr />
+
+<p align="center"><a href="#table-of-contents">▼ Jump to table of contents ▼</a></p>
 
 ## About
 
