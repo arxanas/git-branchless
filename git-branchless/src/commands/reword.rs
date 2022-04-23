@@ -410,9 +410,13 @@ fn prepare_messages(
     message.push_str(
         format!(
             "\
-                {} Rewording: Please enter the commit message to apply to {}. Lines\n\
+                {} Rewording: Please enter the commit {} to apply to {}. Lines\n\
                 {} starting with '{}' will be ignored, and an empty message aborts rewording.",
             comment_char,
+            match commits.len() {
+                1 => "message",
+                _ => "messages",
+            },
             Pluralize {
                 determiner: Some(("this", "these")),
                 amount: commits.len(),
@@ -510,16 +514,10 @@ fn parse_bulk_edit_message(
     commits: &[Commit],
     comment_char: char,
 ) -> eyre::Result<ParseMessageResult> {
-    // a map of short OID to full OID
-    let commits_oids: HashMap<String, NonZeroOid> = commits
-        .iter()
-        .map(|commit| {
-            let short_oid = commit
-                .get_short_oid()
-                .unwrap_or_else(|_| panic!("Could not get short OID for {}", commit.get_oid()));
-            (short_oid, commit.get_oid())
-        })
-        .collect();
+    let mut commits_oids = HashMap::new();
+    for commit in commits.iter() {
+        commits_oids.insert(commit.get_short_oid()?, commit.get_oid());
+    }
 
     // split the bulk message into (hash, msg) tuples
     let msgs = message
@@ -729,7 +727,7 @@ This is a template!
                     ++ reword 96d1c37
                     create test2.txt
 
-                    # Rewording: Please enter the commit message to apply to these 2 commits. Lines
+                    # Rewording: Please enter the commit messages to apply to these 2 commits. Lines
                     # starting with '#' will be ignored, and an empty message aborts rewording.
                     "###);
                     Ok(message.to_string())
