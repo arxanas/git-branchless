@@ -35,7 +35,7 @@ mod graph {
     use lib::core::effects::{Effects, OperationType};
     use lib::core::eventlog::{EventCursor, EventReplayer};
     use lib::core::node_descriptors::NodeObject;
-    use lib::git::Commit;
+    use lib::git::{Commit, Time};
     use lib::git::{NonZeroOid, Repo};
 
     /// Node contained in the smartlog commit graph.
@@ -198,7 +198,7 @@ mod graph {
     /// Sort children nodes of the commit graph in a standard order, for determinism
     /// in output.
     fn sort_children(graph: &mut SmartlogGraph) {
-        let commit_times: HashMap<NonZeroOid, Option<git2::Time>> = graph
+        let commit_times: HashMap<NonZeroOid, Option<Time>> = graph
             .iter()
             .map(|(oid, node)| {
                 (

@@ -1259,7 +1259,7 @@ impl<'repo> Commit<'repo> {
     }
 
     /// Get the commit time of this commit.
-    pub fn get_time(&self) -> git2::Time {
+    pub fn get_time(&self) -> Time {
         self.inner.time()
     }
 
@@ -1614,7 +1614,11 @@ impl<'a> CategorizedReferenceName<'a> {
     }
 }
 
-type BranchType = git2::BranchType;
+/// Re-export of [`git2::BranchType`]. This might change to be an opaque type later.
+pub type BranchType = git2::BranchType;
+
+/// Re-export of [`git2::Time`]. This might change to be an opaque type later.
+pub type Time = git2::Time;
 
 /// Represents a Git branch.
 pub struct Branch<'repo> {

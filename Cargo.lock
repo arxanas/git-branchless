@@ -977,7 +977,6 @@ dependencies = [
  "esl01-dag",
  "eyre",
  "git-branchless-lib",
- "git2",
  "insta",
  "itertools 0.10.3",
  "lazy_static",
