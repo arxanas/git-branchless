@@ -11,13 +11,46 @@
 
 [![GitHub Discussions](https://img.shields.io/github/discussions/arxanas/git-branchless)](https://github.com/arxanas/git-branchless/discussions) [![Discord](https://img.shields.io/discord/915309546984050709)](https://discord.gg/caYQBJ82A4)
 
-`git-branchless` is a suite of tools to help you **visualize**, **navigate**, **manipulate**, and **repair** your commit graph. It's based off of the branchless Mercurial workflows at large companies such as Google and Facebook.
+## About
 
+`git-branchless` is a suite of tools which enhances Git in several ways:
+
+It **makes Git easier to use**, both for novices and for power users. Examples:
+
+  - [`git undo`](https://github.com/arxanas/git-branchless/wiki/Command:-git-undo): a general-purpose undo command.
+  - [The smartlog](https://github.com/arxanas/git-branchless/wiki/Command:-git-smartlog): a convenient visualization tool.
+  - [`git restack`](https://github.com/arxanas/git-branchless/wiki/Command:-git-restack): to repair broken commit graphs.
+  - [Speculative merges](https://github.com/arxanas/git-branchless/wiki/Concepts#speculative-merges): to avoid being caught off-guard by merge conflicts.
+
+It **adds more flexibility** for power users. Examples:
+
+  - [Patch-stack workflows](https://jg.gg/2018/09/29/stacked-diffs-versus-pull-requests/): strong support for "patch-stack" workflows as used by the Linux and Git projects, as well as at many large tech companies. (This is how Git was "meant" to be used.)
+  - [Prototyping and experimenting workflows](https://github.com/arxanas/git-branchless/wiki/Workflow:-divergent-development): strong support for prototyping and experimental work via "divergent" development.
+  - [`git sync`](https://github.com/arxanas/git-branchless/wiki/Command:-git-sync): to rebase all local commit stacks and branches without having to check them out first.
+  - [`git move`](https://github.com/arxanas/git-branchless/wiki/Command:-git-move): The ability to move subtrees rather than "sticks" while cleaning up old branches, not touching the working copy, etc.
+  - [Anonymous branching](https://github.com/arxanas/git-branchless/wiki/Concepts#anonymous-branching): reduces the overhead of branching for experimental work.
+  - In-memory operations: to modify the commit graph without having to check out the commits in question.
+  - [`git next/prev`](https://github.com/arxanas/git-branchless/wiki/Command:-git-next,-git-prev): to quickly jump between commits and branches in a commit stack.
+  - [`git co -i/--interactive`](https://github.com/arxanas/git-branchless/wiki/Command:-git-co): to interactively select a commit to check out.
+
+It **provides faster operations** for large repositories and monorepos, particularly at large tech companies. Examples:
+  - Performance tested: benchmarked on [torvalds/linux](https://github.com/torvalds/linux) (1M+ commits) and [mozilla/gecko-dev](https://github.com/mozilla/gecko-dev) (700k+ commits).
+  - Operates in-memory: avoids touching the working copy by default (which can slow down `git status` or invalidate build artifacts).
+  - [Sparse indexes](https://github.blog/2021-11-10-make-your-monorepo-feel-small-with-gits-sparse-index/): uses a custom implementation of sparse indexes for fast commit and merge operations.
+  - [Segmented changelog DAG](https://github.com/quark-zju/gitrevset/issues/1): for efficient queries on the commit graph, such as merge-base calculation in O(log n) instead of O(n).
+  - Ahead-of-time compiled: written in an ahead-of-time compiled language with good runtime performance (Rust).
+  - Multithreading: distributes work across multiple CPU cores where appropriate.
+  - To my knowledge, `git-branchless` provides the *fastest* implementation of rebase among Git tools and UIs, for the above reasons.
+
+See also the [User guide](https://github.com/arxanas/git-branchless/wiki) and [Design goals](https://github.com/arxanas/git-branchless/wiki/Design-goals).
+
+## Table of contents
+
+- [About](#about)
 - [Demos](#demos)
   - [Repair](#repair)
   - [Visualize](#visualize)
   - [Manipulate](#manipulate)
-- [About](#about)
 - [Installation](#installation)
 - [Status](#status)
 - [Related tools](https://github.com/arxanas/git-branchless/wiki/Related-tools)
@@ -110,12 +143,6 @@ Interactive rebasing with `git rebase -i` is fully supported, but it has a coupl
 When you use `git rebase -i` with `git-branchless`, you will be prompted to repair your commit graph if you abandon any commits.
 
 </details>
-
-## About
-
-The branchless workflow is designed for use in a repository with a **single main branch** that all commits are rebased onto, but works with other setups as well. It improves developer velocity by encouraging fast and frequent commits, and helps developers operate on these commits fearlessly (see [Design goals](https://github.com/arxanas/git-branchless/wiki/Design-goals)).
-
-In the branchless workflow, the commits you're working on are inferred based on your activity, so you no longer need branches to keep track of them. Nonetheless, branches are sometimes convenient, and `git-branchless` fully supports them. If you prefer, you can continue to use your normal workflow and benefit from features like `git sl` or `git undo` without going entirely branchless.
 
 ## Installation
 
