@@ -11,9 +11,9 @@ mod tree;
 pub use config::{Config, ConfigRead, ConfigValue, ConfigWrite};
 pub use oid::{MaybeZeroOid, NonZeroOid};
 pub use repo::{
-    message_prettify, AmendFastOptions, Branch, CategorizedReferenceName, CherryPickFastError,
-    CherryPickFastOptions, Commit, Diff, GitVersion, PatchId, Reference, ReferenceTarget, Repo,
-    ResolvedReferenceInfo,
+    message_prettify, AmendFastOptions, Branch, BranchType, CategorizedReferenceName,
+    CherryPickFastError, CherryPickFastOptions, Commit, Diff, GitVersion, PatchId, Reference,
+    ReferenceTarget, Repo, ResolvedReferenceInfo, Time,
 };
 pub use run::GitRunInfo;
 pub use snapshot::WorkingCopySnapshot;

@@ -12,7 +12,7 @@ use tracing::{instrument, warn};
 use crate::opts::write_man_pages;
 use lib::core::config::{get_core_hooks_path, get_default_branch_name};
 use lib::core::effects::Effects;
-use lib::git::{Config, ConfigRead, ConfigWrite, GitRunInfo, GitVersion, Repo};
+use lib::git::{BranchType, Config, ConfigRead, ConfigWrite, GitRunInfo, GitVersion, Repo};
 
 const ALL_HOOKS: &[(&str, &str)] = &[
     (
@@ -299,7 +299,7 @@ fn install_alias(
 fn detect_main_branch_name(repo: &Repo) -> eyre::Result<Option<String>> {
     if let Some(default_branch_name) = get_default_branch_name(repo)? {
         if repo
-            .find_branch(&default_branch_name, git2::BranchType::Local)?
+            .find_branch(&default_branch_name, BranchType::Local)?
             .is_some()
         {
             return Ok(Some(default_branch_name));
@@ -315,10 +315,7 @@ fn detect_main_branch_name(repo: &Repo) -> eyre::Result<Option<String>> {
         "development",
         "trunk",
     ] {
-        if repo
-            .find_branch(branch_name, git2::BranchType::Local)?
-            .is_some()
-        {
+        if repo.find_branch(branch_name, BranchType::Local)?.is_some() {
             return Ok(Some(branch_name.to_string()));
         }
     }
