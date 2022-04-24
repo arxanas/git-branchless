@@ -349,21 +349,42 @@ fn prepare_messages(
         return Ok(PrepareMessagesResult::EmptyMessage);
     }
 
-    // TODO(bulk edit) process message if it looks like a bulk edit message
-    // - break it apart in separate messages
-    // - parse the marker lines into hashes
-    // - map hashes into NonZeroOid
-    // - create a map with OIDs as keys and relevant messages as values
-    // - confirm that we have edits for the right set of commits
-    //     - just those spec'd on the CLI, no more no less
-    //     - no duplicates
-
-    let messages: HashMap<NonZeroOid, String> = commits
-        .iter()
-        .map(|commit| (commit.get_oid(), message.clone()))
-        .collect();
+    let messages = parse_bulk_edit_message(message, commits, comment_char)?;
 
     Ok(PrepareMessagesResult::Succeeded { messages })
+}
+
+fn parse_bulk_edit_message(
+    message: String,
+    commits: &[Commit],
+    comment_char: char,
+) -> eyre::Result<HashMap<NonZeroOid, String>> {
+    // a map of short OID to full OID
+    let commits: HashMap<String, NonZeroOid> = commits
+        .iter()
+        .map(|commit| {
+            let short_oid = commit
+                .get_short_oid()
+                .unwrap_or_else(|_| panic!("Could not get short OID for {}", commit.get_oid()));
+            (short_oid, commit.get_oid())
+        })
+        .collect();
+
+    // split the bulk message into (hash, msg) tuples
+    let messages = message
+        .split("++ reword")
+        .filter_map(|msg| msg.split_once('\n'))
+        .map(|(hash, msg)| (commits.get(hash.trim()), msg))
+        .filter(|(oid, _)| oid.is_some())
+        .map(|(oid, msg)| {
+            (
+                *oid.unwrap(),
+                message_prettify(msg, Some(comment_char)).expect("TODO"),
+            )
+        })
+        .collect();
+
+    Ok(messages)
 }
 
 /// Return the root commits for given a list of commits. This is the list of commits that have *no*
@@ -542,6 +563,44 @@ This is a template!
             )?;
             insta::assert_debug_snapshot!(result, @"IdenticalMessage");
         }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_parse_bulk_edit_message() -> eyre::Result<()> {
+        let git = make_git()?;
+        git.init_repo()?;
+        let repo = git.get_repo()?;
+
+        let test1_oid = git.commit_file("test1", 1)?;
+        let test2_oid = git.commit_file("test2", 2)?;
+        let test1_commit = repo.find_commit_or_fail(test1_oid)?;
+        let test2_commit = repo.find_commit_or_fail(test2_oid)?;
+
+        {
+            let result = parse_bulk_edit_message(
+                String::from(
+                    "++ reword 62fc20d\n\
+                create test1.txt\n\
+                \n\
+                ++ reword 96d1c37\n\
+                create test2.txt\n",
+                ),
+                &[test1_commit.clone(), test2_commit.clone()],
+                '#',
+            )?;
+
+            assert_eq!(2, result.len());
+            match result.get(&test1_oid) {
+                Some(msg) => assert_eq!("create test1.txt\n", msg.as_str()),
+                None => panic!("Parsed messages did not contain {:?}", test1_oid),
+            };
+            match result.get(&test2_oid) {
+                Some(msg) => assert_eq!("create test2.txt\n", msg.as_str()),
+                None => panic!("Parsed messages did not contain {:?}", test2_oid),
+            };
+        };
 
         Ok(())
     }
