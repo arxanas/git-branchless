@@ -382,13 +382,19 @@ fn prepare_messages(
     let mut message = String::new();
     for commit in commits.iter() {
         let oid = commit.get_short_oid()?;
-        let original_message = commit.get_message_raw()?.into_string().unwrap_or_else(|_| {
-            panic!(
-                "Could not get raw message for commit: {:?}",
-                commit.get_oid()
-            )
-        });
-        let original_message = original_message.trim().to_string();
+
+        let original_message = commit
+            .get_message_raw()?
+            .to_str()
+            .ok_or_else(|| {
+                eyre::eyre!(
+                    "Could not decode commit message for commit: {:?}",
+                    commit.get_oid()
+                )
+            })?
+            .trim()
+            .to_string();
+
         let msg = if discard_messages {
             [
                 possible_template_message,
