@@ -283,10 +283,38 @@ fn prepare_messages(
     };
 
     let mut message = if discard_messages {
+        // TODO how should this work w/ bulk editing & --discard? just repeat the template, or perhaps show
+        // template w/ original message commented out?
         message
     } else {
-        // TODO(bulk edit) build a bulk edit message for multiple commits
-        String::from("")
+        // TODO what order are they listed in? (dag.sort()?)
+        commits
+            .iter()
+            .map(
+                |commit| match (commit.get_short_oid(), commit.get_message_raw()) {
+                    (Ok(oid), Ok(msg)) => (oid, msg),
+                    (Err(_), Ok(_)) => {
+                        panic!("Could not get short OID for commit: {:?}", commit.get_oid())
+                    }
+                    (Ok(_), Err(_)) => {
+                        panic!(
+                            "Could not get raw message for commit: {:?}",
+                            commit.get_oid()
+                        )
+                    }
+                    (Err(_), Err(_)) => panic!(
+                        "Could not get short OID or raw message for commit: {:?}",
+                        commit.get_oid()
+                    ),
+                },
+            )
+            .map(|(hash, msg)| match msg.into_string() {
+                Ok(msg) => (hash, msg),
+                Err(_) => panic!("Could not decode original message for commit: {}", hash),
+            })
+            .map(|(hash, msg)| format!("++ reword {}\n{}", hash, msg))
+            .collect::<Vec<String>>()
+            .join("\n")
     };
 
     message.push_str(
@@ -471,6 +499,42 @@ This is a template!
                     This is a template!
 
                     # Rewording: Please enter the commit message to apply to this 1 commit. Lines
+                    # starting with '#' will be ignored, and an empty message aborts rewording.
+                    "###);
+                    Ok(message.to_string())
+                },
+            )?;
+            insta::assert_debug_snapshot!(result, @"IdenticalMessage");
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_reword_builds_multi_commit_messages() -> eyre::Result<()> {
+        let git = make_git()?;
+        git.init_repo()?;
+        let repo = git.get_repo()?;
+
+        let test1_oid = git.commit_file("test1", 1)?;
+        let test2_oid = git.commit_file("test2", 2)?;
+        let test1_commit = repo.find_commit_or_fail(test1_oid)?;
+        let test2_commit = repo.find_commit_or_fail(test2_oid)?;
+
+        {
+            let result = prepare_messages(
+                &repo,
+                InitialCommitMessages::Messages([].to_vec()),
+                &[test1_commit.clone(), test2_commit.clone()],
+                |message| {
+                    insta::assert_snapshot!(message.trim(), @r###"
+                    ++ reword 62fc20d
+                    create test1.txt
+
+                    ++ reword 96d1c37
+                    create test2.txt
+
+                    # Rewording: Please enter the commit message to apply to these 2 commits. Lines
                     # starting with '#' will be ignored, and an empty message aborts rewording.
                     "###);
                     Ok(message.to_string())
