@@ -3,7 +3,8 @@
 use lib::core::check_out::CheckOutCommitOptions;
 use lib::core::repo_ext::RepoExt;
 use rayon::ThreadPoolBuilder;
-use std::collections::{HashMap, HashSet};
+#[allow(unused_imports)]
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::convert::TryFrom;
 use std::fmt::Write;
 use std::fs::File;
@@ -97,31 +98,29 @@ pub fn reword(
             return Ok(1);
         }
         PrepareMessagesResult::MismatchedCommits {
-            duplicates,
-            missing,
-            unexpected,
+            mut duplicates,
+            mut missing,
+            mut unexpected,
         } => {
             writeln!(
                 effects.get_error_stream(),
                 "Aborting reword due to mismatched inputs."
             )?;
             if !missing.is_empty() {
+                missing.sort_unstable();
                 writeln!(
                     effects.get_error_stream(),
-                    "{} specified on the command line, but {} not found in the edited message:\n{}",
+                    "{} specified on the command line, but not found in the edited message:\n{}",
                     Pluralize {
                         determiner: Some(("This", "These")),
                         amount: missing.len(),
                         unit: ("commit was", "commits were"),
                     },
-                    match missing.len() {
-                        1 => "was",
-                        _ => "were",
-                    },
                     missing.join(", ")
                 )?;
             }
             if !unexpected.is_empty() {
+                unexpected.sort_unstable();
                 writeln!(
                     effects.get_error_stream(),
                     "{} found in the edited message, but {} not expected:\n{}",
@@ -138,6 +137,7 @@ pub fn reword(
                 )?;
             }
             if !duplicates.is_empty() {
+                duplicates.sort_unstable();
                 writeln!(
                     effects.get_error_stream(),
                     "{} found in the edited message multiple times:\n{}",
@@ -452,15 +452,16 @@ fn prepare_messages(
             .map(|commit| (commit.get_oid(), commit))
             .collect();
 
-        let missing: Vec<String> = input_oids
-            .difference(&parsed_oids)
-            .filter_map(|oid| commits.get(oid))
-            .map(|commit| {
-                commit
-                    .get_short_oid()
-                    .unwrap_or_else(|_| panic!("Could not get short OID for {}", commit.get_oid()))
-            })
-            .collect();
+        let mut missing = Vec::new();
+        for oid in input_oids.difference(&parsed_oids) {
+            let short_oid = match commits.get(oid) {
+                Some(commit) => commit.get_short_oid()?,
+                None => eyre::bail!(
+                    "BUG: failed to retrieve known-good parsed OID from list of known-good input OIDs."
+                ),
+            };
+            missing.push(short_oid);
+        }
 
         let mut w = File::create(repo.get_path().join("REWORD_EDITMSG"))?;
         writeln!(
@@ -751,7 +752,7 @@ This is a template!
         let test2_commit = repo.find_commit_or_fail(test2_oid)?;
 
         {
-            let result = parse_bulk_edit_message(
+            let mut result = parse_bulk_edit_message(
                 String::from(
                     "++ reword 62fc20d\n\
                 create test1.txt\n\
@@ -763,18 +764,24 @@ This is a template!
                 '#',
             )?;
 
-            assert_eq!(2, result.messages.len());
-            match result.messages.get(&test1_oid) {
-                Some(msg) => assert_eq!("create test1.txt\n", msg.as_str()),
-                None => panic!("Parsed messages did not contain {:?}", test1_oid),
-            };
-            match result.messages.get(&test2_oid) {
-                Some(msg) => assert_eq!("create test2.txt\n", msg.as_str()),
-                None => panic!("Parsed messages did not contain {:?}", test2_oid),
-            };
+            // Convert the messages HashMap into the sorted map for testing
+            let messages: BTreeMap<_, _> = result.messages.iter().collect();
+            insta::assert_debug_snapshot!(messages, @r###"
+                {
+                    NonZeroOid(62fc20d2a290daea0d52bdc2ed2ad4be6491010e): "create test1.txt\n",
+                    NonZeroOid(96d1c37a3d4363611c49f7e52186e189a04c531f): "create test2.txt\n",
+                }"###
+            );
 
-            assert!(result.duplicates.is_empty());
-            assert!(result.unexpected.is_empty());
+            // clear the messages map b/c its contents have already been tested
+            result.messages.clear();
+            insta::assert_debug_snapshot!(result, @r###"
+                ParseMessageResult {
+                    duplicates: [],
+                    messages: {},
+                    unexpected: [],
+                }"###
+            );
         };
 
         Ok(())
@@ -790,7 +797,7 @@ This is a template!
         let test1_commit = repo.find_commit_or_fail(test1_oid)?;
 
         {
-            let mut result = parse_bulk_edit_message(
+            let result = parse_bulk_edit_message(
                 String::from(
                     "++ reword 62fc20d\n\
                 create test1.txt\n\
@@ -806,22 +813,18 @@ This is a template!
                 '#',
             )?;
 
-            assert_eq!(1, result.messages.len());
-            match result.messages.get(&test1_oid) {
-                Some(msg) => assert_eq!("create test1.txt\n", msg.as_str()),
-                None => panic!("Parsed messages did not contain {:?}", test1_oid),
-            };
-
-            assert_eq!(1, result.duplicates.len());
-            result.duplicates.pop().map_or_else(
-                || panic!("No duplicate hashes found!"),
-                |hash| assert_eq!("62fc20d", hash.as_str()),
-            );
-
-            assert_eq!(1, result.unexpected.len());
-            result.unexpected.pop().map_or_else(
-                || panic!("No unexpected hashes found!"),
-                |hash| assert_eq!("abc123", hash.as_str()),
+            insta::assert_debug_snapshot!(result, @r###"
+                ParseMessageResult {
+                    duplicates: [
+                        "62fc20d",
+                    ],
+                    messages: {
+                        NonZeroOid(62fc20d2a290daea0d52bdc2ed2ad4be6491010e): "create test1.txt\n",
+                    },
+                    unexpected: [
+                        "abc123",
+                    ],
+                }"###
             );
         };
 
