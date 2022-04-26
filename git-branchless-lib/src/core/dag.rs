@@ -139,43 +139,29 @@ impl Dag {
             branch_oid_to_names,
         } = references_snapshot;
 
-        let obsolete_commits = CommitSet::from_iter(
-            observed_commits
-                .iter()
-                .copied()
-                .filter(|commit_oid| {
-                    match event_replayer
-                        .get_cursor_commit_activity_status(event_cursor, *commit_oid)
-                    {
-                        CommitActivityStatus::Active | CommitActivityStatus::Inactive => false,
-                        CommitActivityStatus::Obsolete => true,
-                    }
-                })
-                .map(CommitVertex::from)
-                .map(Ok)
-                .collect_vec(),
-        );
+        let obsolete_commits: CommitSet = observed_commits
+            .iter()
+            .copied()
+            .filter(|commit_oid| {
+                match event_replayer.get_cursor_commit_activity_status(event_cursor, *commit_oid) {
+                    CommitActivityStatus::Active | CommitActivityStatus::Inactive => false,
+                    CommitActivityStatus::Obsolete => true,
+                }
+            })
+            .collect();
 
         let dag_dir = repo.get_dag_dir();
         std::fs::create_dir_all(&dag_dir).wrap_err("Creating .git/branchless/dag dir")?;
         let dag = eden_dag::Dag::open(&dag_dir)
             .wrap_err_with(|| format!("Opening DAG directory at: {:?}", &dag_dir))?;
 
-        let observed_commits =
-            CommitSet::from_iter(observed_commits.into_iter().map(CommitVertex::from).map(Ok));
+        let observed_commits: CommitSet = observed_commits.into_iter().collect();
         let head_commit = match head_oid {
             Some(head_oid) => CommitSet::from(*head_oid),
             None => CommitSet::empty(),
         };
         let main_branch_commit = CommitSet::from(*main_branch_oid);
-        let branch_commits = CommitSet::from_iter(
-            branch_oid_to_names
-                .keys()
-                .copied()
-                .map(CommitVertex::from)
-                .map(Ok)
-                .collect_vec(),
-        );
+        let branch_commits: CommitSet = branch_oid_to_names.keys().copied().collect();
 
         Ok(Self {
             inner: dag,
@@ -516,7 +502,7 @@ pub fn resolve_commits<'repo>(
         effects,
         repo,
         CommitSet::empty(),
-        CommitSet::from_iter(commit_oids.into_iter().map(CommitVertex::from).map(Ok)),
+        commit_oids.into_iter().collect::<CommitSet>(),
     )?;
     Ok(ResolveCommitsResult::Ok { commits })
 }
