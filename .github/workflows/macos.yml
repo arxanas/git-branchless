@@ -17,7 +17,7 @@ env:
 
 jobs:
   run-tests:
-    if: startsWith(github.head_ref, 'ci-')
+    if: startsWith(github.head_ref, 'ci-') || github.head_ref == ''
     runs-on: macos-latest
 
     steps:
