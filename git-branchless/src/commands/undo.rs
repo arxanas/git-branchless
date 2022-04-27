@@ -84,9 +84,8 @@ fn render_cursor_smartlog(
 }
 
 fn describe_event(glyphs: &Glyphs, repo: &Repo, event: &Event) -> eyre::Result<Vec<StyledString>> {
-    // Links to https://github.com/arxanas/git-branchless/issues/57
     const EMPTY_EVENT_MESSAGE: &str =
-        "This may be an unsupported use-case; see https://git.io/J0b7z";
+        "This may be an unsupported use-case; see https://github.com/arxanas/git-branchless/issues/57";
 
     let result = match event {
         Event::CommitEvent {

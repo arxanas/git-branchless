@@ -698,7 +698,7 @@ fn test_git_bisect_produces_empty_event() -> eyre::Result<()> {
     ┌──────────────────────────────────────────────────────┤ Events ├──────────────────────────────────────────────────────┐
     │Repo after transaction 3 (event 4). Press 'h' for help, 'q' to quit.                                                  │
     │1. Empty event for BISECT_HEAD                                                                                        │
-    │   This may be an unsupported use-case; see https://git.io/J0b7z                                                      │
+    │   This may be an unsupported use-case; see https://github.com/arxanas/git-branchless/issues/57                       │
     └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
     "###);
 
