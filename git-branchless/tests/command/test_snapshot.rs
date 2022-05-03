@@ -66,7 +66,8 @@ fn test_restore_snapshot_basic() -> eyre::Result<()> {
 
     let snapshot_oid = {
         let (snapshot_oid, stderr) = git.run(&["branchless", "snapshot", "create"])?;
-        insta::assert_snapshot!(stderr, @"");
+        insta::assert_snapshot!(stderr, @"branchless: creating working copy snapshot
+");
         NonZeroOid::from_str(snapshot_oid.trim())?
     };
 
@@ -88,6 +89,7 @@ fn test_restore_snapshot_basic() -> eyre::Result<()> {
         ])?;
         let stdout = trim_lines(stdout);
         insta::assert_snapshot!(stderr, @r###"
+        branchless: restoring from snapshot
         branchless: processing 2 updates: branch master, ref HEAD
         branchless: processing 1 update: ref HEAD
         HEAD is now at a7fcc8e branchless: automated working copy commit (2 changes)
@@ -178,7 +180,8 @@ fn test_restore_snapshot_deleted_files() -> eyre::Result<()> {
 
     let snapshot_oid = {
         let (snapshot_oid, stderr) = git.run(&["branchless", "snapshot", "create"])?;
-        insta::assert_snapshot!(stderr, @"");
+        insta::assert_snapshot!(stderr, @"branchless: creating working copy snapshot
+");
         NonZeroOid::from_str(snapshot_oid.trim())?
     };
 
@@ -197,6 +200,7 @@ fn test_restore_snapshot_deleted_files() -> eyre::Result<()> {
         ])?;
         let stdout = trim_lines(stdout);
         insta::assert_snapshot!(stderr, @r###"
+        branchless: restoring from snapshot
         branchless: processing 2 updates: branch master, ref HEAD
         branchless: processing 1 update: ref HEAD
         HEAD is now at b2884a5 branchless: automated working copy commit (2 changes)
@@ -250,7 +254,8 @@ fn test_restore_snapshot_delete_file_only_in_index() -> eyre::Result<()> {
 
     let snapshot_oid = {
         let (snapshot_oid, stderr) = git.run(&["branchless", "snapshot", "create"])?;
-        insta::assert_snapshot!(stderr, @"");
+        insta::assert_snapshot!(stderr, @"branchless: creating working copy snapshot
+");
         NonZeroOid::from_str(snapshot_oid.trim())?
     };
 
@@ -269,6 +274,7 @@ fn test_restore_snapshot_delete_file_only_in_index() -> eyre::Result<()> {
         ])?;
         let stdout = trim_lines(stdout);
         insta::assert_snapshot!(stderr, @r###"
+        branchless: restoring from snapshot
         branchless: processing 2 updates: branch master, ref HEAD
         branchless: processing 1 update: ref HEAD
         HEAD is now at 3613cc1 branchless: automated working copy commit (1 change)
@@ -308,7 +314,8 @@ fn test_restore_snapshot_respect_untracked_changes() -> eyre::Result<()> {
 
     let snapshot_oid = {
         let (snapshot_oid, stderr) = git.run(&["branchless", "snapshot", "create"])?;
-        insta::assert_snapshot!(stderr, @"");
+        insta::assert_snapshot!(stderr, @"branchless: creating working copy snapshot
+");
         NonZeroOid::from_str(snapshot_oid.trim())?
     };
 
@@ -334,6 +341,7 @@ fn test_restore_snapshot_respect_untracked_changes() -> eyre::Result<()> {
             },
         )?;
         insta::assert_snapshot!(stderr, @r###"
+        branchless: restoring from snapshot
         branchless: processing 1 update: ref HEAD
         error: The following untracked working tree files would be overwritten by checkout:
         	test1.txt
@@ -398,7 +406,8 @@ fn test_snapshot_merge_conflict() -> eyre::Result<()> {
 
     let snapshot_oid = {
         let (stdout, stderr) = git.run(&["branchless", "snapshot", "create"])?;
-        insta::assert_snapshot!(stderr, @"");
+        insta::assert_snapshot!(stderr, @"branchless: creating working copy snapshot
+");
         NonZeroOid::from_str(stdout.trim())?
     };
 

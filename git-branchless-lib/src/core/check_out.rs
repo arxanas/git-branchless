@@ -63,7 +63,7 @@ pub fn check_out_commit(
         }
     };
 
-    create_snapshot(git_run_info, repo, event_log_db, event_tx_id)?;
+    create_snapshot(effects, git_run_info, repo, event_log_db, event_tx_id)?;
 
     let args = {
         let mut args = vec![OsStr::new("checkout")];
@@ -125,11 +125,17 @@ pub fn check_out_commit(
 /// caller would be responsible for discarding local changes (which might or
 /// might not be the natural next step for the operation).
 pub fn create_snapshot<'repo>(
+    effects: &Effects,
     git_run_info: &GitRunInfo,
     repo: &'repo Repo,
     event_log_db: &EventLogDb,
     event_tx_id: EventTransactionId,
 ) -> eyre::Result<WorkingCopySnapshot<'repo>> {
+    writeln!(
+        effects.get_error_stream(),
+        "branchless: creating working copy snapshot"
+    )?;
+
     let head_info = repo.get_head_info()?;
     let index = repo.get_index()?;
     let (snapshot, _status) =
@@ -160,6 +166,11 @@ pub fn restore_snapshot(
     event_tx_id: EventTransactionId,
     snapshot: &WorkingCopySnapshot,
 ) -> eyre::Result<ExitCode> {
+    writeln!(
+        effects.get_error_stream(),
+        "branchless: restoring from snapshot"
+    )?;
+
     // Discard any working copy changes. The caller is responsible for having
     // snapshotted them if necessary.
     let exit_code = git_run_info.run(effects, Some(event_tx_id), &["reset", "--hard", "HEAD"])?;

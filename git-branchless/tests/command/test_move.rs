@@ -506,6 +506,7 @@ fn test_move_base_shared() -> eyre::Result<()> {
     {
         let (stdout, stderr) = git.run(&["move", "-b", "HEAD", "-d", &test2_oid.to_string()])?;
         insta::assert_snapshot!(stderr, @r###"
+        branchless: creating working copy snapshot
         Previous HEAD position was a248207 create test4.txt
         branchless: processing 1 update: ref HEAD
         HEAD is now at 355e173 create test4.txt
@@ -816,6 +817,7 @@ fn test_move_in_memory_gc() -> eyre::Result<()> {
             "--in-memory",
         ])?;
         insta::assert_snapshot!(stderr, @r###"
+        branchless: creating working copy snapshot
         Previous HEAD position was 96d1c37 create test2.txt
         branchless: processing 1 update: ref HEAD
         HEAD is now at fe65c1f create test2.txt
@@ -1091,6 +1093,7 @@ fn test_move_branches_after_move() -> eyre::Result<()> {
                 &test1_oid.to_string(),
             ])?;
             insta::assert_snapshot!(stderr, @r###"
+            branchless: creating working copy snapshot
             Previous HEAD position was f81d55c create test5.txt
             branchless: processing 1 update: ref HEAD
             HEAD is now at 566e434 create test5.txt
@@ -1217,11 +1220,12 @@ fn test_move_no_reapply_upstream_commits() -> eyre::Result<()> {
             let (stdout, stderr) =
                 git.run(&["move", "--in-memory", "-b", "HEAD", "-d", "master"])?;
             insta::assert_snapshot!(stderr, @r###"
-        Previous HEAD position was 96d1c37 create test2.txt
-        branchless: processing 1 update: ref HEAD
-        HEAD is now at fa46633 create test2.txt
-        branchless: processing checkout
-        "###);
+            branchless: creating working copy snapshot
+            Previous HEAD position was 96d1c37 create test2.txt
+            branchless: processing 1 update: ref HEAD
+            HEAD is now at fa46633 create test2.txt
+            branchless: processing checkout
+            "###);
             insta::assert_snapshot!(stdout, @r###"
             Attempting rebase in-memory...
             [1/2] Skipped commit (was already applied upstream): 62fc20d create test1.txt
@@ -1310,6 +1314,7 @@ fn test_move_no_reapply_squashed_commits() -> eyre::Result<()> {
             Executing: git branchless hook-detect-empty-commit 96d1c37a3d4363611c49f7e52186e189a04c531f
             Executing: git branchless hook-register-extra-post-rewrite-hook
             branchless: processing 4 rewritten commits
+            branchless: creating working copy snapshot
             branchless: running command: <git-executable> checkout master
             Switched to branch 'master'
             branchless: processing checkout
@@ -1365,9 +1370,10 @@ fn test_move_no_reapply_squashed_commits() -> eyre::Result<()> {
                 "master",
             ])?;
             insta::assert_snapshot!(stderr, @r###"
-        Switched to branch 'master'
-        branchless: processing checkout
-        "###);
+            branchless: creating working copy snapshot
+            Switched to branch 'master'
+            branchless: processing checkout
+            "###);
             insta::assert_snapshot!(stdout, @r###"
             Attempting rebase in-memory...
             [1/2] Skipped now-empty commit: e7bcdd6 create test1.txt
@@ -1445,6 +1451,7 @@ fn test_move_delete_checked_out_branch() -> eyre::Result<()> {
             Executing: git branchless hook-register-extra-post-rewrite-hook
             branchless: processing 3 rewritten commits
             branchless: processing 2 updates: branch more-work, branch work
+            branchless: creating working copy snapshot
             branchless: running command: <git-executable> checkout 91c5ce63686889388daec1120bf57bea8a744bc2
             Previous HEAD position was 012efd6 create test3.txt
             branchless: processing 1 update: ref HEAD
@@ -1482,11 +1489,12 @@ fn test_move_delete_checked_out_branch() -> eyre::Result<()> {
             let (stdout, stderr) =
                 git.run(&["move", "--in-memory", "-b", "HEAD", "-d", "master"])?;
             insta::assert_snapshot!(stderr, @r###"
-        Previous HEAD position was 96d1c37 create test2.txt
-        branchless: processing 1 update: ref HEAD
-        HEAD is now at 91c5ce6 create test2.txt
-        branchless: processing checkout
-        "###);
+            branchless: creating working copy snapshot
+            Previous HEAD position was 96d1c37 create test2.txt
+            branchless: processing 1 update: ref HEAD
+            HEAD is now at 91c5ce6 create test2.txt
+            branchless: processing checkout
+            "###);
             insta::assert_snapshot!(stdout, @r###"
             Attempting rebase in-memory...
             [1/3] Skipped commit (was already applied upstream): 62fc20d create test1.txt
@@ -1665,6 +1673,7 @@ fn test_move_merge_commit() -> eyre::Result<()> {
             branchless: processing 1 update: ref refs/rewritten/merge-parent-3
             Executing: git branchless hook-register-extra-post-rewrite-hook
             branchless: processing 2 rewritten commits
+            branchless: creating working copy snapshot
             branchless: running command: <git-executable> checkout 98b9119d16974f372e76cb64a3b77c528fc0b18b
             Previous HEAD position was 96a2c4b Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
             branchless: processing 1 update: ref HEAD
@@ -1754,6 +1763,7 @@ fn test_move_merge_commit() -> eyre::Result<()> {
             branchless: processing 1 update: ref refs/rewritten/merge-parent-3
             Executing: git branchless hook-register-extra-post-rewrite-hook
             branchless: processing 2 rewritten commits
+            branchless: creating working copy snapshot
             branchless: running command: <git-executable> checkout 98b9119d16974f372e76cb64a3b77c528fc0b18b
             Previous HEAD position was 96a2c4b Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
             branchless: processing 1 update: ref HEAD
@@ -1850,6 +1860,7 @@ fn test_move_orphaned_root() -> eyre::Result<()> {
             Executing: git branchless hook-register-extra-post-rewrite-hook
             branchless: processing 3 rewritten commits
             branchless: processing 1 update: branch new-root
+            branchless: creating working copy snapshot
             branchless: running command: <git-executable> checkout new-root
             Switched to branch 'new-root'
             branchless: processing checkout
@@ -1888,6 +1899,7 @@ fn test_move_orphaned_root() -> eyre::Result<()> {
         {
             let (stdout, stderr) = git.run(&["move", "--in-memory", "-d", "master"])?;
             insta::assert_snapshot!(stderr, @r###"
+            branchless: creating working copy snapshot
             Previous HEAD position was fc09f3d create test3.txt
             Switched to branch 'new-root'
             branchless: processing checkout
@@ -2149,6 +2161,7 @@ fn test_move_branch_on_merge_conflict_resolution() -> eyre::Result<()> {
         Executing: git branchless hook-detect-empty-commit aec59174640c3e3dbb92fdade0bc44ca31552a85
         Executing: git branchless hook-register-extra-post-rewrite-hook
         branchless: processing 1 rewritten commit
+        branchless: creating working copy snapshot
         branchless: running command: <git-executable> checkout master
         Previous HEAD position was 3632ef4 create test1.txt
         Switched to branch 'master'
