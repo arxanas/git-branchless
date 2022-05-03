@@ -9,6 +9,7 @@ use std::time::SystemTime;
 
 use eden_dag::DagAlgorithm;
 use lib::core::repo_ext::RepoExt;
+use lib::util::ExitCode;
 use rayon::ThreadPoolBuilder;
 use tracing::instrument;
 
@@ -60,7 +61,7 @@ pub fn r#move(
     dest: Option<String>,
     base: Option<String>,
     move_options: &MoveOptions,
-) -> eyre::Result<isize> {
+) -> eyre::Result<ExitCode> {
     let repo = Repo::from_current_dir()?;
     let head_oid = repo.get_head_info()?.oid;
     let (source, should_resolve_base_commit) = match (source, base) {
@@ -69,7 +70,7 @@ pub fn r#move(
                 effects.get_output_stream(),
                 "The --source and --base options cannot both be provided."
             )?;
-            return Ok(1);
+            return Ok(ExitCode(1));
         }
         (Some(source), None) => (source, false),
         (None, Some(base)) => (base, true),
@@ -78,7 +79,7 @@ pub fn r#move(
                 Some(oid) => oid,
                 None => {
                     writeln!(effects.get_output_stream(), "No --source or --base argument was provided, and no OID for HEAD is available as a default")?;
-                    return Ok(1);
+                    return Ok(ExitCode(1));
                 }
             };
             (source_oid.to_string(), true)
@@ -90,7 +91,7 @@ pub fn r#move(
             Some(oid) => oid.to_string(),
             None => {
                 writeln!(effects.get_output_stream(), "No --dest argument was provided, and no OID for HEAD is available as a default")?;
-                return Ok(1);
+                return Ok(ExitCode(1));
             }
         },
     };
@@ -116,7 +117,7 @@ pub fn r#move(
             },
             ResolveCommitsResult::CommitNotFound { commit } => {
                 writeln!(effects.get_output_stream(), "Commit not found: {}", commit)?;
-                return Ok(1);
+                return Ok(ExitCode(1));
             }
         };
 
@@ -156,7 +157,7 @@ pub fn r#move(
     let result = match rebase_plan {
         Ok(None) => {
             writeln!(effects.get_output_stream(), "Nothing to do.")?;
-            return Ok(0);
+            return Ok(ExitCode(0));
         }
         Ok(Some(rebase_plan)) => {
             let options = ExecuteRebasePlanOptions {
@@ -179,16 +180,16 @@ pub fn r#move(
         }
         Err(err) => {
             err.describe(effects, &repo)?;
-            return Ok(1);
+            return Ok(ExitCode(1));
         }
     };
 
     match result {
-        ExecuteRebasePlanResult::Succeeded { rewritten_oids: _ } => Ok(0),
+        ExecuteRebasePlanResult::Succeeded { rewritten_oids: _ } => Ok(ExitCode(0)),
 
         ExecuteRebasePlanResult::DeclinedToMerge { merge_conflict } => {
             merge_conflict.describe(effects, &repo, MergeConflictRemediation::Retry)?;
-            Ok(1)
+            Ok(ExitCode(1))
         }
 
         ExecuteRebasePlanResult::Failed { exit_code } => Ok(exit_code),

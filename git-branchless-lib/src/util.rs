@@ -2,6 +2,22 @@
 
 use std::path::PathBuf;
 
+/// Represents the code to exit the process with.
+#[must_use]
+#[derive(Copy, Clone, Debug)]
+pub struct ExitCode(pub isize);
+
+impl ExitCode {
+    /// Determine whether or not this exit code represents a successful
+    /// termination.
+    pub fn is_success(&self) -> bool {
+        match self {
+            ExitCode(0) => true,
+            ExitCode(_) => false,
+        }
+    }
+}
+
 /// Returns a path for a given file, searching through PATH to find it.
 pub fn get_from_path(exe_name: &str) -> Option<PathBuf> {
     std::env::var_os("PATH").and_then(|paths| {

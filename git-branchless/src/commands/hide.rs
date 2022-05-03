@@ -6,6 +6,7 @@ use std::time::SystemTime;
 
 use eden_dag::DagAlgorithm;
 use lib::core::repo_ext::RepoExt;
+use lib::util::ExitCode;
 use tracing::instrument;
 
 use lib::core::dag::{resolve_commits, sort_commit_set, CommitSet, Dag, ResolveCommitsResult};
@@ -17,7 +18,7 @@ use lib::git::Repo;
 
 /// Hide the hashes provided on the command-line.
 #[instrument]
-pub fn hide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::Result<isize> {
+pub fn hide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::Result<ExitCode> {
     let now = SystemTime::now();
     let glyphs = Glyphs::detect();
     let repo = Repo::from_current_dir()?;
@@ -39,7 +40,7 @@ pub fn hide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::Re
         ResolveCommitsResult::Ok { commits } => commits,
         ResolveCommitsResult::CommitNotFound { commit: hash } => {
             writeln!(effects.get_output_stream(), "Commit not found: {}", hash)?;
-            return Ok(1);
+            return Ok(ExitCode(1));
         }
     };
 
@@ -98,12 +99,12 @@ pub fn hide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::Re
         },
     )?;
 
-    Ok(0)
+    Ok(ExitCode(0))
 }
 
 /// Unhide the hashes provided on the command-line.
 #[instrument]
-pub fn unhide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::Result<isize> {
+pub fn unhide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::Result<ExitCode> {
     let now = SystemTime::now();
     let glyphs = Glyphs::detect();
     let repo = Repo::from_current_dir()?;
@@ -125,7 +126,7 @@ pub fn unhide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::
         ResolveCommitsResult::Ok { commits } => commits,
         ResolveCommitsResult::CommitNotFound { commit: hash } => {
             writeln!(effects.get_output_stream(), "Commit not found: {}", hash)?;
-            return Ok(1);
+            return Ok(ExitCode(1));
         }
     };
 
@@ -180,5 +181,5 @@ pub fn unhide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::
         },
     )?;
 
-    Ok(0)
+    Ok(ExitCode(0))
 }

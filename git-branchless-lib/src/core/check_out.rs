@@ -9,6 +9,7 @@ use cursive::utils::markup::StyledString;
 use tracing::instrument;
 
 use crate::git::{CategorizedReferenceName, GitRunInfo, MaybeZeroOid, Repo, WorkingCopySnapshot};
+use crate::util::ExitCode;
 
 use super::effects::Effects;
 use super::eventlog::{Event, EventLogDb, EventTransactionId};
@@ -44,7 +45,7 @@ pub fn check_out_commit(
     event_tx_id: EventTransactionId,
     target: Option<impl AsRef<OsStr> + std::fmt::Debug>,
     options: &CheckOutCommitOptions,
-) -> eyre::Result<isize> {
+) -> eyre::Result<ExitCode> {
     let CheckOutCommitOptions {
         additional_args,
         render_smartlog,
@@ -83,7 +84,7 @@ pub fn check_out_commit(
     };
     let result = git_run_info.run(effects, Some(event_tx_id), args.as_slice())?;
 
-    if result != 0 {
+    if !result.is_success() {
         writeln!(
             effects.get_output_stream(),
             "{}",

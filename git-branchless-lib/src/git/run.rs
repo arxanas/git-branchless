@@ -17,7 +17,7 @@ use crate::core::config::get_core_hooks_path;
 use crate::core::effects::{Effects, OperationType};
 use crate::core::eventlog::{EventTransactionId, BRANCHLESS_TRANSACTION_ID_ENV_VAR};
 use crate::git::repo::Repo;
-use crate::util::get_sh;
+use crate::util::{get_sh, ExitCode};
 
 /// Path to the `git` executable on disk to be executed.
 #[derive(Clone)]
@@ -100,7 +100,7 @@ impl GitRunInfo {
         effects: &Effects,
         event_tx_id: Option<EventTransactionId>,
         args: &[&OsStr],
-    ) -> eyre::Result<isize> {
+    ) -> eyre::Result<ExitCode> {
         let GitRunInfo {
             path_to_git,
             working_directory,
@@ -149,10 +149,11 @@ impl GitRunInfo {
         // On Unix, if the child process was terminated by a signal, we need to call
         // some Unix-specific functions to access the signal that terminated it. For
         // simplicity, just return `1` in those cases.
-        let exit_code = exit_status.code().unwrap_or(1);
-        let exit_code = exit_code
+        let exit_code: i32 = exit_status.code().unwrap_or(1);
+        let exit_code: isize = exit_code
             .try_into()
             .wrap_err("Converting exit code from i32 to isize")?;
+        let exit_code = ExitCode(exit_code);
         Ok(exit_code)
     }
 
@@ -172,7 +173,7 @@ impl GitRunInfo {
         effects: &Effects,
         event_tx_id: Option<EventTransactionId>,
         args: &[S],
-    ) -> eyre::Result<isize> {
+    ) -> eyre::Result<ExitCode> {
         self.run_inner(
             effects,
             event_tx_id,
@@ -189,7 +190,7 @@ impl GitRunInfo {
         &self,
         event_tx_id: Option<EventTransactionId>,
         args: &[impl AsRef<OsStr> + std::fmt::Debug],
-    ) -> eyre::Result<isize> {
+    ) -> eyre::Result<ExitCode> {
         let GitRunInfo {
             path_to_git,
             working_directory,
@@ -213,10 +214,11 @@ impl GitRunInfo {
         // On Unix, if the child process was terminated by a signal, we need to call
         // some Unix-specific functions to access the signal that terminated it. For
         // simplicity, just return `1` in those cases.
-        let exit_code = exit_status.code().unwrap_or(1);
-        let exit_code = exit_code
+        let exit_code: i32 = exit_status.code().unwrap_or(1);
+        let exit_code: isize = exit_code
             .try_into()
             .wrap_err("Converting exit code from i32 to isize")?;
+        let exit_code = ExitCode(exit_code);
         Ok(exit_code)
     }
 

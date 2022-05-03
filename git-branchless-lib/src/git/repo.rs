@@ -585,7 +585,7 @@ impl Repo {
             None,
             &["diff", "--quiet"],
         )?;
-        if exit_code == 0 {
+        if exit_code.is_success() {
             Ok(false)
         } else {
             Ok(true)

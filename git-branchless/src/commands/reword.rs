@@ -2,6 +2,7 @@
 
 use lib::core::check_out::CheckOutCommitOptions;
 use lib::core::repo_ext::RepoExt;
+use lib::util::ExitCode;
 use rayon::ThreadPoolBuilder;
 use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
@@ -47,7 +48,7 @@ pub fn reword(
     hashes: Vec<String>,
     messages: InitialCommitMessages,
     git_run_info: &GitRunInfo,
-) -> eyre::Result<isize> {
+) -> eyre::Result<ExitCode> {
     let repo = Repo::from_current_dir()?;
     let references_snapshot = repo.get_references_snapshot()?;
     let conn = repo.get_db_conn()?;
@@ -64,7 +65,7 @@ pub fn reword(
 
     let commits = match resolve_commits_from_hashes(&repo, &mut dag, effects, hashes)? {
         Some(commits) => commits,
-        None => return Ok(1),
+        None => return Ok(ExitCode(1)),
     };
 
     let edit_message_fn = |message: &str| {
@@ -87,14 +88,14 @@ pub fn reword(
                 effects.get_output_stream(),
                 "Aborting. The message was not edited; nothing to do."
             )?;
-            return Ok(1);
+            return Ok(ExitCode(1));
         }
         PrepareMessagesResult::EmptyMessage => {
             writeln!(
                 effects.get_error_stream(),
                 "Aborting reword due to empty commit message."
             )?;
-            return Ok(1);
+            return Ok(ExitCode(1));
         }
         PrepareMessagesResult::MismatchedCommits {
             mut duplicates,
@@ -152,7 +153,7 @@ pub fn reword(
                 effects.get_error_stream(),
                 "Your edited message has been saved to .git/REWORD_EDITMSG for review and/or manual recovery."
             )?;
-            return Ok(1);
+            return Ok(ExitCode(1));
         }
     };
 
@@ -176,7 +177,7 @@ pub fn reword(
                         root_commit.get_oid(),
                         root_commit.get_parents().len(),
                     )?;
-                    return Ok(1);
+                    return Ok(ExitCode(1));
                 }
             };
             builder.move_subtree(root_commit.get_oid(), only_parent_id)?;
@@ -208,7 +209,7 @@ pub fn reword(
             }
             Err(err) => {
                 err.describe(effects, &repo)?;
-                return Ok(1);
+                return Ok(ExitCode(1));
             }
         }
     };
@@ -241,7 +242,7 @@ pub fn reword(
             rewritten_oids: Some(rewritten_oids),
         } => {
             render_status_report(&repo, effects, &commits, &rewritten_oids)?;
-            0
+            ExitCode(0)
         }
         ExecuteRebasePlanResult::Succeeded {
             rewritten_oids: None,
@@ -250,14 +251,14 @@ pub fn reword(
                 effects.get_error_stream(),
                 "BUG: Succeeded rewording commits via on-disk rebase? But reword should be rebasing in-memory!"
             )?;
-            1
+            ExitCode(1)
         }
         ExecuteRebasePlanResult::DeclinedToMerge { merge_conflict: _ } => {
             writeln!(
                 effects.get_error_stream(),
                 "BUG: Merge conflict detected, but rewording shouldn't cause any conflicts."
             )?;
-            1
+            ExitCode(1)
         }
         ExecuteRebasePlanResult::Failed { exit_code } => exit_code,
     };

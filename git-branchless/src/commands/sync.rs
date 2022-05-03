@@ -7,6 +7,7 @@ use eden_dag::DagAlgorithm;
 use itertools::Itertools;
 use lib::core::check_out::CheckOutCommitOptions;
 use lib::core::repo_ext::RepoExt;
+use lib::util::ExitCode;
 use rayon::ThreadPoolBuilder;
 
 use crate::opts::MoveOptions;
@@ -47,7 +48,7 @@ pub fn sync(
     force: bool,
     move_options: &MoveOptions,
     commits: Vec<String>,
-) -> eyre::Result<isize> {
+) -> eyre::Result<ExitCode> {
     let glyphs = Glyphs::detect();
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
@@ -57,7 +58,7 @@ pub fn sync(
 
     if update_refs {
         let exit_code = git_run_info.run(effects, Some(event_tx_id), &["fetch", "--all"])?;
-        if exit_code != 0 {
+        if !exit_code.is_success() {
             return Ok(exit_code);
         }
     }
@@ -77,7 +78,7 @@ pub fn sync(
         ResolveCommitsResult::Ok { commits } => commits,
         ResolveCommitsResult::CommitNotFound { commit } => {
             writeln!(effects.get_output_stream(), "Commit not found: {}", commit)?;
-            return Ok(1);
+            return Ok(ExitCode(1));
         }
     };
     let root_commits = if commits.is_empty() {
@@ -151,7 +152,7 @@ pub fn sync(
             Ok(root_commit_and_plans) => root_commit_and_plans,
             Err(err) => {
                 err.describe(effects, &repo)?;
-                return Ok(1);
+                return Ok(ExitCode(1));
             }
         }
     };
@@ -250,5 +251,5 @@ pub fn sync(
         )?;
     }
 
-    Ok(0)
+    Ok(ExitCode(0))
 }

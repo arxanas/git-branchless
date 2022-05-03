@@ -17,6 +17,7 @@ use cursive::{Cursive, CursiveRunnable, CursiveRunner};
 use eyre::Context;
 use lib::core::check_out::{check_out_commit, CheckOutCommitOptions};
 use lib::core::repo_ext::RepoExt;
+use lib::util::ExitCode;
 use tracing::instrument;
 
 use crate::commands::smartlog::{make_smartlog_graph, render_graph};
@@ -737,7 +738,7 @@ fn undo_events(
     event_replayer: &EventReplayer,
     event_cursor: EventCursor,
     skip_confirmation: bool,
-) -> eyre::Result<isize> {
+) -> eyre::Result<ExitCode> {
     let now = SystemTime::now();
     let event_tx_id = event_log_db.make_transaction_id(now, "undo")?;
     let head_info = repo.get_head_info()?;
@@ -766,7 +767,7 @@ fn undo_events(
             effects.get_output_stream(),
             "No undo actions to apply, exiting."
         )?;
-        return Ok(0);
+        return Ok(ExitCode(0));
     }
     writeln!(effects.get_output_stream(), "Will apply these actions:")?;
     let events = describe_events_numbered(effects.get_glyphs(), repo, &inverse_events)?;
@@ -794,7 +795,7 @@ fn undo_events(
     };
     if !confirmed {
         writeln!(effects.get_output_stream(), "Aborted.")?;
-        return Ok(1);
+        return Ok(ExitCode(1));
     }
 
     let num_inverse_events = Pluralize {
@@ -894,7 +895,7 @@ fn undo_events(
             &options,
         )
         .wrap_err("Updating to previous HEAD location")?;
-        if exit_code != 0 {
+        if !exit_code.is_success() {
             return Ok(exit_code);
         }
     }
@@ -904,7 +905,7 @@ fn undo_events(
         "Applied {}.",
         num_inverse_events
     )?;
-    Ok(0)
+    Ok(ExitCode(0))
 }
 
 /// Restore the repository to a previous state interactively.
@@ -914,7 +915,7 @@ pub fn undo(
     git_run_info: &GitRunInfo,
     interactive: bool,
     skip_confirmation: bool,
-) -> eyre::Result<isize> {
+) -> eyre::Result<ExitCode> {
     let repo = Repo::from_current_dir()?;
     let references_snapshot = repo.get_references_snapshot()?;
     let conn = repo.get_db_conn()?;
@@ -941,7 +942,7 @@ pub fn undo(
             })?;
             match result {
                 Some(event_cursor) => event_cursor,
-                None => return Ok(0),
+                None => return Ok(ExitCode(0)),
             }
         } else {
             event_replayer.advance_cursor_by_transaction(event_replayer.make_default_cursor(), -1)
@@ -971,6 +972,7 @@ pub mod testing {
     use lib::core::effects::Effects;
     use lib::core::eventlog::{EventCursor, EventLogDb, EventReplayer};
     use lib::git::{GitRunInfo, Repo};
+    use lib::util::ExitCode;
 
     pub fn select_past_event(
         siv: CursiveRunner<CursiveRunnable>,
@@ -990,7 +992,7 @@ pub mod testing {
         event_log_db: &mut EventLogDb,
         event_replayer: &EventReplayer,
         event_cursor: EventCursor,
-    ) -> eyre::Result<isize> {
+    ) -> eyre::Result<ExitCode> {
         super::undo_events(
             in_,
             effects,
