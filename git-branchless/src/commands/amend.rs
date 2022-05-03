@@ -10,6 +10,7 @@ use std::time::SystemTime;
 use eyre::Context;
 use itertools::Itertools;
 use lib::core::rewrite::MergeConflictRemediation;
+use lib::util::ExitCode;
 use tracing::instrument;
 
 use crate::commands::restack;
@@ -27,7 +28,7 @@ pub fn amend(
     effects: &Effects,
     git_run_info: &GitRunInfo,
     move_options: &MoveOptions,
-) -> eyre::Result<isize> {
+) -> eyre::Result<ExitCode> {
     let now = SystemTime::now();
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
@@ -41,7 +42,7 @@ pub fn amend(
                 effects.get_output_stream(),
                 "No commit is currently checked out. Check out a commit to amend and then try again.",
             )?;
-            return Ok(1);
+            return Ok(ExitCode(1));
         }
     };
     let head_commit = repo.find_commit_or_fail(head_oid)?;
@@ -52,7 +53,7 @@ pub fn amend(
             effects.get_output_stream(),
             "Cannot amend, because there are unresolved merge conflicts. Resolve the merge conflicts and try again."
         )?;
-        return Ok(1);
+        return Ok(ExitCode(1));
     }
 
     let event_tx_id = event_log_db.make_transaction_id(now, "amend")?;
@@ -88,7 +89,7 @@ pub fn amend(
             effects.get_output_stream(),
             "There are no uncommitted or staged changes. Nothing to amend."
         )?;
-        return Ok(0);
+        return Ok(ExitCode(0));
     }
 
     let amended_tree = repo.amend_fast(&head_commit, &opts)?;
@@ -123,7 +124,10 @@ pub fn amend(
 
     if let AmendFastOptions::FromWorkingCopy { .. } = opts {
         // TODO(#201): Figure out a way to perform "fast amend" on the working copy without needing a reset.
-        git_run_info.run(effects, Some(event_tx_id), &["reset"])?;
+        let exit_code = git_run_info.run(effects, Some(event_tx_id), &["reset"])?;
+        if !exit_code.is_success() {
+            return Ok(exit_code);
+        }
     }
 
     let restack_exit_code = restack::restack(
@@ -133,7 +137,7 @@ pub fn amend(
         move_options,
         MergeConflictRemediation::Restack,
     )?;
-    if restack_exit_code != 0 {
+    if !restack_exit_code.is_success() {
         return Ok(restack_exit_code);
     }
 
@@ -164,5 +168,5 @@ pub fn amend(
             )?;
         }
     }
-    Ok(0)
+    Ok(ExitCode(0))
 }

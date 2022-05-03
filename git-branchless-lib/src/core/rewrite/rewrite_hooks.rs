@@ -173,7 +173,7 @@ pub fn hook_post_rewrite(
             skipped_head_updated_oid,
             &CheckOutCommitOptions::default(),
         )?;
-        if exit_code != 0 {
+        if !exit_code.is_success() {
             eyre::bail!("Could not check out your updated `HEAD` commit.");
         }
     }

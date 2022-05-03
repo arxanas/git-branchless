@@ -16,6 +16,7 @@ use crate::core::eventlog::{EventLogDb, EventTransactionId};
 use crate::core::formatting::{printable_styled_string, Pluralize};
 use crate::core::repo_ext::RepoExt;
 use crate::git::{GitRunInfo, MaybeZeroOid, NonZeroOid, Repo, ResolvedReferenceInfo};
+use crate::util::ExitCode;
 
 use super::plan::RebasePlan;
 
@@ -143,7 +144,7 @@ pub fn check_out_updated_head(
     previous_head_info: &ResolvedReferenceInfo,
     skipped_head_updated_oid: Option<NonZeroOid>,
     check_out_commit_options: &CheckOutCommitOptions,
-) -> eyre::Result<isize> {
+) -> eyre::Result<ExitCode> {
     let checkout_target: ResolvedReferenceInfo = match previous_head_info {
         ResolvedReferenceInfo {
             oid: None,
@@ -235,14 +236,14 @@ pub fn check_out_updated_head(
 
     let head_info = repo.get_head_info()?;
     if head_info == checkout_target {
-        return Ok(0);
+        return Ok(ExitCode(0));
     }
 
     let checkout_target: Cow<OsStr> = match &checkout_target {
         ResolvedReferenceInfo {
             oid: None,
             reference_name: None,
-        } => return Ok(0),
+        } => return Ok(ExitCode(0)),
 
         ResolvedReferenceInfo {
             oid: Some(oid),
@@ -360,6 +361,7 @@ mod in_memory {
     use crate::git::{
         CherryPickFastError, CherryPickFastOptions, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo,
     };
+    use crate::util::ExitCode;
 
     use super::{ExecuteRebasePlanOptions, MergeConflictInfo};
 
@@ -681,7 +683,7 @@ mod in_memory {
         rewritten_oids: &[(NonZeroOid, MaybeZeroOid)],
         skipped_head_updated_oid: Option<NonZeroOid>,
         options: &ExecuteRebasePlanOptions,
-    ) -> eyre::Result<isize> {
+    ) -> eyre::Result<ExitCode> {
         let ExecuteRebasePlanOptions {
             now: _,
             event_tx_id,
@@ -762,6 +764,7 @@ mod on_disk {
     use crate::core::rewrite::plan::RebasePlan;
     use crate::core::rewrite::rewrite_hooks::save_original_head_info;
     use crate::git::{GitRunInfo, Repo};
+    use crate::util::ExitCode;
 
     use super::ExecuteRebasePlanOptions;
 
@@ -948,7 +951,7 @@ mod on_disk {
         repo: &Repo,
         rebase_plan: &RebasePlan,
         options: &ExecuteRebasePlanOptions,
-    ) -> eyre::Result<Result<isize, Error>> {
+    ) -> eyre::Result<Result<ExitCode, Error>> {
         let ExecuteRebasePlanOptions {
             // `git rebase` will make its own timestamp.
             now: _,
@@ -1023,7 +1026,7 @@ pub enum ExecuteRebasePlanResult {
     Failed {
         /// The exit code to exit with. (This value may have been obtained from
         /// a subcommand invocation.)
-        exit_code: isize,
+        exit_code: ExitCode,
     },
 }
 
@@ -1059,7 +1062,14 @@ pub fn execute_rebase_plan(
                 rewritten_oids,
                 new_head_oid,
             } => {
-                post_rebase_in_memory(
+                // Ignore the return code, as it probably indicates that the
+                // checkout failed (which might happen if the user has changes
+                // which don't merge cleanly). The user can resolve that
+                // themselves.
+                //
+                // FIXME: we may still want to propagate the exit code to the
+                // caller.
+                let ExitCode(_exit_code) = post_rebase_in_memory(
                     effects,
                     git_run_info,
                     repo,
@@ -1068,6 +1078,7 @@ pub fn execute_rebase_plan(
                     new_head_oid,
                     options,
                 )?;
+
                 let rewritten_oids: HashMap<NonZeroOid, MaybeZeroOid> =
                     rewritten_oids.into_iter().collect();
                 writeln!(effects.get_output_stream(), "In-memory rebase succeeded.")?;
@@ -1127,7 +1138,9 @@ pub fn execute_rebase_plan(
                 effects.get_output_stream(),
                 "Aborting since an in-memory rebase was requested."
             )?;
-            return Ok(ExecuteRebasePlanResult::Failed { exit_code: 1 });
+            return Ok(ExecuteRebasePlanResult::Failed {
+                exit_code: ExitCode(1),
+            });
         } else {
             writeln!(effects.get_output_stream(), "Trying again on-disk...")?;
         }
@@ -1136,7 +1149,7 @@ pub fn execute_rebase_plan(
     if !force_in_memory {
         use on_disk::*;
         match rebase_on_disk(effects, git_run_info, repo, rebase_plan, options)? {
-            Ok(0) => {
+            Ok(ExitCode(0)) => {
                 return Ok(ExecuteRebasePlanResult::Succeeded {
                     rewritten_oids: None,
                 });
@@ -1151,7 +1164,9 @@ in your working copy which might be overwritten as a result.
 Commit your changes and then try again.
 "
                 )?;
-                return Ok(ExecuteRebasePlanResult::Failed { exit_code: 1 });
+                return Ok(ExecuteRebasePlanResult::Failed {
+                    exit_code: ExitCode(1),
+                });
             }
             Err(Error::OperationAlreadyInProgress { operation_type }) => {
                 writeln!(
@@ -1164,7 +1179,9 @@ Commit your changes and then try again.
                     "Run git {0} --continue or git {0} --abort to resolve it and proceed.",
                     operation_type
                 )?;
-                return Ok(ExecuteRebasePlanResult::Failed { exit_code: 1 });
+                return Ok(ExecuteRebasePlanResult::Failed {
+                    exit_code: ExitCode(1),
+                });
             }
         }
     }

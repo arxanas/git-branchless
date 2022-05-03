@@ -9,6 +9,7 @@ use bugreport::format::Markdown;
 use bugreport::report::ReportEntry;
 use itertools::Itertools;
 use lib::core::repo_ext::{RepoExt, RepoReferencesSnapshot};
+use lib::util::ExitCode;
 
 use crate::commands::smartlog::{make_smartlog_graph, render_graph};
 use lib::core::dag::Dag;
@@ -233,7 +234,7 @@ impl Collector for EventCollector {
 }
 
 /// Generate information suitable for inclusion in a bug report.
-pub fn bug_report(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<isize> {
+pub fn bug_report(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<ExitCode> {
     use bugreport::collector::*;
     bugreport!()
         .info(SoftwareVersion::default())
@@ -247,5 +248,5 @@ pub fn bug_report(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<
         })
         .print::<Markdown>();
 
-    Ok(0)
+    Ok(ExitCode(0))
 }

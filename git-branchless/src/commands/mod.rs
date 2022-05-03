@@ -25,6 +25,7 @@ use clap::Parser;
 use eyre::Context;
 use itertools::Itertools;
 use lib::core::rewrite::MergeConflictRemediation;
+use lib::util::ExitCode;
 use tracing_chrome::ChromeLayerBuilder;
 use tracing_error::ErrorLayer;
 use tracing_subscriber::fmt as tracing_fmt;
@@ -112,7 +113,7 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
     };
     let effects = Effects::new(color);
 
-    let exit_code = match command {
+    let ExitCode(exit_code) = match command {
         Command::Amend { move_options } => amend::amend(&effects, &git_run_info, &move_options)?,
 
         Command::BugReport => bug_report::bug_report(&effects, &git_run_info)?,
@@ -123,7 +124,7 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
 
         Command::Gc | Command::HookPreAutoGc => {
             gc::gc(&effects)?;
-            0
+            ExitCode(0)
         }
 
         Command::Hide { commits, recursive } => hide::hide(&effects, commits, recursive)?,
@@ -131,7 +132,7 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
         Command::HookDetectEmptyCommit { old_commit_oid } => {
             let old_commit_oid: NonZeroOid = old_commit_oid.parse()?;
             hooks::hook_drop_commit_if_empty(&effects, old_commit_oid)?;
-            0
+            ExitCode(0)
         }
 
         Command::HookPostCheckout {
@@ -145,38 +146,38 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
                 &current_commit,
                 is_branch_checkout,
             )?;
-            0
+            ExitCode(0)
         }
 
         Command::HookPostCommit => {
             hooks::hook_post_commit(&effects)?;
-            0
+            ExitCode(0)
         }
 
         Command::HookPostMerge { is_squash_merge } => {
             hooks::hook_post_merge(&effects, is_squash_merge)?;
-            0
+            ExitCode(0)
         }
 
         Command::HookPostRewrite { rewrite_type } => {
             hooks::hook_post_rewrite(&effects, &git_run_info, &rewrite_type)?;
-            0
+            ExitCode(0)
         }
 
         Command::HookReferenceTransaction { transaction_state } => {
             hooks::hook_reference_transaction(&effects, &transaction_state)?;
-            0
+            ExitCode(0)
         }
 
         Command::HookRegisterExtraPostRewriteHook => {
             hooks::hook_register_extra_post_rewrite_hook()?;
-            0
+            ExitCode(0)
         }
 
         Command::HookSkipUpstreamAppliedCommit { commit_oid } => {
             let commit_oid: NonZeroOid = commit_oid.parse()?;
             hooks::hook_skip_upstream_applied_commit(&effects, commit_oid)?;
-            0
+            ExitCode(0)
         }
 
         Command::Init {
@@ -184,7 +185,7 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
             main_branch_name,
         } => {
             init::init(&effects, &git_run_info, main_branch_name.as_deref())?;
-            0
+            ExitCode(0)
         }
 
         Command::Init {
@@ -192,7 +193,7 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
             main_branch_name: _,
         } => {
             init::uninstall(&effects)?;
-            0
+            ExitCode(0)
         }
 
         Command::Move {
@@ -256,7 +257,7 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
                     only_show_branches,
                 },
             )?;
-            0
+            ExitCode(0)
         }
 
         Command::Sync {

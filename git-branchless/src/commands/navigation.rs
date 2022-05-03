@@ -11,6 +11,7 @@ use cursive::utils::markup::StyledString;
 use eden_dag::DagAlgorithm;
 use lib::core::check_out::{check_out_commit, CheckOutCommitOptions};
 use lib::core::repo_ext::RepoExt;
+use lib::util::ExitCode;
 use tracing::{instrument, warn};
 
 use crate::commands::smartlog::make_smartlog_graph;
@@ -304,7 +305,7 @@ pub fn traverse_commits(
     git_run_info: &GitRunInfo,
     command: Command,
     options: &TraverseCommitsOptions,
-) -> eyre::Result<isize> {
+) -> eyre::Result<ExitCode> {
     let TraverseCommitsOptions {
         num_commits,
         all_the_way,
@@ -396,7 +397,7 @@ pub fn traverse_commits(
         towards,
     )?;
     let current_oid = match current_oid {
-        None => return Ok(1),
+        None => return Ok(ExitCode(1)),
         Some(current_oid) => current_oid,
     };
 
@@ -528,7 +529,7 @@ pub fn checkout(
     effects: &Effects,
     git_run_info: &GitRunInfo,
     checkout_options: &CheckoutOptions,
-) -> eyre::Result<isize> {
+) -> eyre::Result<ExitCode> {
     let CheckoutOptions {
         interactive: _,
         branch_name,
@@ -586,7 +587,7 @@ pub fn checkout(
                 ],
             )? {
                 Some(oid) => Some(oid.to_string()),
-                None => return Ok(1),
+                None => return Ok(ExitCode(1)),
             }
         }
     };

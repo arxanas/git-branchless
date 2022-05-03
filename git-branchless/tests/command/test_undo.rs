@@ -17,6 +17,7 @@ use lib::testing::{make_git, Git};
 
 use cursive::event::Key;
 use cursive::CursiveRunnable;
+use lib::util::ExitCode;
 
 fn run_select_past_event(
     repo: &Repo,
@@ -60,7 +61,7 @@ fn run_undo_events(git: &Git, event_cursor: EventCursor) -> eyre::Result<(isize,
         env: git.get_base_env(0).into_iter().collect(),
     };
 
-    let exit_code = undo_events(
+    let ExitCode(exit_code) = undo_events(
         &mut in_,
         &Effects::new_from_buffer_for_test(glyphs, &stdout, &stderr),
         &repo,
