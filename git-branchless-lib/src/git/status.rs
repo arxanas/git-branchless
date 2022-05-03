@@ -373,7 +373,7 @@ mod tests {
         WorkingCopySnapshot {
             base_commit: Commit {
                 inner: Commit {
-                    id: 61072697087bbb714e3bed806ebd1d3e162fc906,
+                    id: 1de8f6ab5daafbf3f522a3ed5d65a551c78a29ea,
                     summary: "branchless: automated working copy commit",
                 },
             },
@@ -385,6 +385,12 @@ mod tests {
                     },
                 },
             ),
+            commit_unstaged: Commit {
+                inner: Commit {
+                    id: 428260eed0b9a234827fbc529428fb9b44917e7e,
+                    summary: "branchless: automated working copy commit (0 changes)",
+                },
+            },
             commit_stage0: Commit {
                 inner: Commit {
                     id: 428260eed0b9a234827fbc529428fb9b44917e7e,
@@ -454,7 +460,7 @@ mod tests {
         WorkingCopySnapshot {
             base_commit: Commit {
                 inner: Commit {
-                    id: 990798274806557837dbf2c3faa27f4a5e68f420,
+                    id: 7ea9239c26ca8c0bccd4255885dc1b1933098698,
                     summary: "branchless: automated working copy commit",
                 },
             },
@@ -466,6 +472,12 @@ mod tests {
                     },
                 },
             ),
+            commit_unstaged: Commit {
+                inner: Commit {
+                    id: 688137fdeb4c51f87d90789a848349edb707765e,
+                    summary: "branchless: automated working copy commit (1 change)",
+                },
+            },
             commit_stage0: Commit {
                 inner: Commit {
                     id: 1b6c0923419bab0907c2b20a076817845c39dae8,
