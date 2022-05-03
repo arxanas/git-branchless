@@ -1073,21 +1073,17 @@ impl Repo {
             AmendFastOptions::FromWorkingCopy { status_entries } => status_entries
                 .iter()
                 .flat_map(|entry| {
-                    entry.paths().into_iter().map(move |path| {
-                        let file_path = &repo_path.join(&path);
-                        // Try to create a new blob OID based on the current on-disk
-                        // contents of the file in the working copy.
-                        match self.inner.blob_path(file_path) {
-                            Ok(oid) => Ok((
-                                path,
-                                Some((make_non_zero_oid(oid), entry.working_copy_file_mode)),
-                            )),
-                            // If the file doesn't exist, it needs to be explicitly marked as
-                            // such, as a tombstone to override if the file exists in the parent tree.
-                            Err(err) if err.code() == git2::ErrorCode::NotFound => Ok((path, None)),
-                            Err(other) => Err(eyre::eyre!(other)),
-                        }
-                    })
+                    entry.paths().into_iter().map(
+                        move |path| -> eyre::Result<(PathBuf, Option<(NonZeroOid, FileMode)>)> {
+                            let file_path = &repo_path.join(&path);
+                            // Try to create a new blob OID based on the current on-disk
+                            // contents of the file in the working copy.
+                            let entry = self
+                                .create_blob_from_path(file_path)?
+                                .map(|oid| (oid, entry.working_copy_file_mode));
+                            Ok((path, entry))
+                        },
+                    )
                 })
                 .collect::<Result<HashMap<_, _>, _>>()?,
             AmendFastOptions::FromIndex { paths } => {

@@ -42,22 +42,35 @@ impl std::fmt::Debug for GitRunInfo {
     }
 }
 
+/// Options for invoking Git.
 pub struct GitRunOpts {
     /// If set, a non-zero exit code will be treated as an error.
-    treat_git_failure_as_error: bool,
+    pub treat_git_failure_as_error: bool,
+
+    /// A vector of bytes to write to the Git process's stdin. If `None`,
+    /// nothing is written to stdin.
+    pub stdin: Option<Vec<u8>>,
 }
 
 impl Default for GitRunOpts {
     fn default() -> Self {
         Self {
             treat_git_failure_as_error: true,
+            stdin: None,
         }
     }
 }
 
+/// The result of invoking Git.
+#[must_use]
 pub struct GitRunResult {
+    /// The exit code of the process.
     pub exit_code: i32,
+
+    /// The stdout contents written by the invocation.
     pub stdout: Vec<u8>,
+
+    /// The stderr contents written by the invocation.
     pub stderr: Vec<u8>,
 }
 
@@ -236,6 +249,7 @@ impl GitRunInfo {
         } = self;
         let GitRunOpts {
             treat_git_failure_as_error,
+            stdin,
         } = opts;
 
         // Prefer running in the working copy path to the repo path, because
@@ -266,7 +280,27 @@ impl GitRunInfo {
         if let Some(event_tx_id) = event_tx_id {
             command.env(BRANCHLESS_TRANSACTION_ID_ENV_VAR, event_tx_id.to_string());
         }
-        let output = command.output().wrap_err("Spawning Git subprocess")?;
+
+        if stdin.is_some() {
+            command.stdin(Stdio::piped());
+        }
+        command.stdout(Stdio::piped());
+        command.stderr(Stdio::piped());
+
+        let mut child = command.spawn().wrap_err("Spawning Git subprocess")?;
+
+        if let Some(stdin) = stdin {
+            child
+                .stdin
+                .as_mut()
+                .unwrap()
+                .write_all(&stdin)
+                .wrap_err("Writing process stdin")?;
+        }
+
+        let output = child
+            .wait_with_output()
+            .wrap_err("Spawning Git subprocess")?;
         let result = GitRunResult {
             // On Unix, if the child process was terminated by a signal, we need to call
             // some Unix-specific functions to access the signal that terminated it. For
@@ -469,6 +503,7 @@ mod tests {
             &["some-nonexistent-command"],
             GitRunOpts {
                 treat_git_failure_as_error: true,
+                stdin: None,
             },
         );
         assert_debug_snapshot!(result, @r###"
@@ -483,6 +518,7 @@ mod tests {
             &["some-nonexistent-command"],
             GitRunOpts {
                 treat_git_failure_as_error: false,
+                stdin: None,
             },
         );
         assert_debug_snapshot!(result, @r###"
