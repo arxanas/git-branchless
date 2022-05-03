@@ -307,15 +307,15 @@ fn describe_event(glyphs: &Glyphs, repo: &Repo, event: &Event) -> eyre::Result<V
             let branch_name = CategorizedReferenceName::new(ref_name);
             vec![
                 StyledStringBuilder::new()
-                    .append_plain("Working copy checked out at ")
+                    .append_plain("Restore snapshot for ")
                     .append_plain(branch_name.friendly_describe())
                     .build(),
                 StyledStringBuilder::new()
-                    .append_plain("                pointing to ")
+                    .append_plain("         pointing to ")
                     .append(repo.friendly_describe_commit_from_oid(glyphs, *head_oid)?)
                     .build(),
                 StyledStringBuilder::new()
-                    .append_plain("            backed up using ")
+                    .append_plain("     backed up using ")
                     .append(repo.friendly_describe_commit_from_oid(glyphs, *commit_oid)?)
                     .build(),
             ]
@@ -330,11 +330,11 @@ fn describe_event(glyphs: &Glyphs, repo: &Repo, event: &Event) -> eyre::Result<V
         } => {
             vec![
                 StyledStringBuilder::new()
-                    .append_plain("Working copy checked out at ")
+                    .append_plain("Restore snapshot for ")
                     .append(repo.friendly_describe_commit_from_oid(glyphs, *head_oid)?)
                     .build(),
                 StyledStringBuilder::new()
-                    .append_plain("            backed up using ")
+                    .append_plain("     backed up using ")
                     .append(repo.friendly_describe_commit_from_oid(glyphs, *commit_oid)?)
                     .build(),
             ]
@@ -350,11 +350,11 @@ fn describe_event(glyphs: &Glyphs, repo: &Repo, event: &Event) -> eyre::Result<V
             let branch_name = CategorizedReferenceName::new(ref_name);
             vec![
                 StyledStringBuilder::new()
-                    .append_plain("Working copy checked out at ")
+                    .append_plain("Restore snapshot for ")
                     .append_plain(branch_name.friendly_describe())
                     .build(),
                 StyledStringBuilder::new()
-                    .append_plain("            backed up using ")
+                    .append_plain("     backed up using ")
                     .append(repo.friendly_describe_commit_from_oid(glyphs, *commit_oid)?)
                     .build(),
             ]
@@ -368,7 +368,7 @@ fn describe_event(glyphs: &Glyphs, repo: &Repo, event: &Event) -> eyre::Result<V
             ref_name: None,
         } => {
             vec![StyledStringBuilder::new()
-                .append_plain("Working copy backed up using ")
+                .append_plain("Restore snapshot backed up using ")
                 .append(repo.friendly_describe_commit_from_oid(glyphs, *commit_oid)?)
                 .build()]
         }
@@ -700,11 +700,12 @@ struct CheckoutTarget {
     options: CheckOutCommitOptions,
 }
 
-// TODO: extract checkout target here?
-fn extract_checkout_target(events: Vec<Event>) -> (Option<CheckoutTarget>, Vec<Event>) {
+fn extract_checkout_target(
+    events: &[Event],
+) -> eyre::Result<(Option<CheckoutTarget>, Vec<&Event>)> {
     let mut new_events = Vec::new();
     let mut checkout_target = None;
-    for event in events.into_iter() {
+    for event in events.iter() {
         match event {
             Event::RefUpdateEvent {
                 timestamp: _,
@@ -722,10 +723,34 @@ fn extract_checkout_target(events: Vec<Event>) -> (Option<CheckoutTarget>, Vec<E
                     },
                 });
             }
+
+            Event::WorkingCopySnapshot {
+                timestamp: _,
+                event_tx_id: _,
+                head_oid: _,
+                commit_oid,
+                ref_name,
+            } => {
+                checkout_target = Some(CheckoutTarget {
+                    target: commit_oid.to_string().into(),
+                    options: CheckOutCommitOptions {
+                        additional_args: match ref_name {
+                            Some(ref_name) => {
+                                let branch_name = CategorizedReferenceName::new(ref_name);
+                                vec!["-B".into(), branch_name.remove_prefix()?]
+                            }
+                            None => Default::default(),
+                        },
+                        render_smartlog: true,
+                    },
+                })
+            }
+
             event => new_events.push(event),
         };
     }
-    (checkout_target, new_events)
+
+    Ok((checkout_target, new_events))
 }
 
 #[instrument(skip(in_))]
@@ -805,7 +830,7 @@ fn undo_events(
     }
     .to_string();
 
-    let (checkout_target, filtered_events) = extract_checkout_target(inverse_events);
+    let (checkout_target, filtered_events) = extract_checkout_target(&inverse_events)?;
     if checkout_target.is_some() {
         repo.detach_head(&head_info)?;
     }
@@ -828,7 +853,7 @@ fn undo_events(
                 old_oid: MaybeZeroOid::NonZero(_),
                 new_oid: MaybeZeroOid::Zero,
                 message: _,
-            } => match repo.find_reference(&ref_name)? {
+            } => match repo.find_reference(ref_name)? {
                 Some(mut reference) => {
                     reference.delete().wrap_err("Applying `RefUpdateEvent`")?;
                 }
@@ -857,29 +882,18 @@ fn undo_events(
                 message: _,
             } => {
                 // Create or update the given reference.
-                repo.create_reference(&ref_name, new_oid, true, "branchless undo")?;
+                repo.create_reference(ref_name, *new_oid, true, "branchless undo")?;
             }
 
-            Event::WorkingCopySnapshot {
-                timestamp: _,
-                event_tx_id: _,
-                head_oid,
-                commit_oid,
-                ref_name,
-            } => {
-                todo!(
-                    "Use HEAD {head_oid:?}, branch {ref_name:?}, and commit {commit_oid:?} to check out a previous working copy state",
-                    head_oid = head_oid,
-                    ref_name = ref_name,
-                    commit_oid = commit_oid
-                );
+            Event::WorkingCopySnapshot { .. } => {
+                // Should be handled as the checkout target already.
             }
 
             Event::CommitEvent { .. }
             | Event::ObsoleteEvent { .. }
             | Event::UnobsoleteEvent { .. }
             | Event::RewriteEvent { .. } => {
-                event_log_db.add_events(vec![event])?;
+                event_log_db.add_events(vec![event.clone()])?;
             }
         }
     }
@@ -1033,7 +1047,7 @@ mod tests {
                 message: None,
             },
         ];
-        insta::assert_debug_snapshot!(extract_checkout_target(input), @r###"
+        insta::assert_debug_snapshot!(extract_checkout_target(&input)?, @r###"
         (
             Some(
                 CheckoutTarget {
