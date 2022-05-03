@@ -171,11 +171,13 @@ impl TryFrom<&[u8]> for StatusEntry {
             /// Parses an entry of the git porcelain v2 status format.
             /// See https://git-scm.com/docs/git-status#_porcelain_format_version_2
             static ref STATUS_PORCELAIN_V2_REGEXP: Regex = Regex::new(concat!(
-                r#"^(1|2) (?P<index_status>[\w.])(?P<working_copy_status>[\w.]) "#, // Prefix and status indicators.
-                r#"[\w.]+ "#,                                                       // Submodule state.
-                r#"(\d{6} ){2}(?P<working_copy_filemode>\d{6}) "#,                  // HEAD, Index, and Working Copy file modes.
-                r#"([\w\d]+ ){2,3}"#,                                               // HEAD and Index object IDs, and optionally the rename/copy score.
-                r#"(?P<path>[^\x00]+)(\x00(?P<orig_path>[^\x00]+))?$"#              // Path and original path (for renames/copies).
+                r#"^(?P<prefix>1|2|u) "#,                                    // Prefix.
+                r#"(?P<index_status>[\w.])(?P<working_copy_status>[\w.]) "#, // Status indicators.
+                r#"[\w.]+ "#,                                                // Submodule state.
+                r#"(\d{6} ){2,3}(?P<working_copy_filemode>\d{6}) "#,         // HEAD, Index, and Working Copy file modes;
+                                                                             // or stage1, stage2, stage3, and working copy file modes.
+                r#"([\w\d]+ ){2,3}"#,                                        // HEAD and Index object IDs, and optionally the rename/copy score.
+                r#"(?P<path>[^\x00]+)(\x00(?P<orig_path>[^\x00]+))?$"#       // Path and original path (for renames/copies).
             ))
             .expect("porcelain v2 status line regex");
         }
@@ -184,11 +186,14 @@ impl TryFrom<&[u8]> for StatusEntry {
             .captures(line)
             .ok_or_else(|| eyre::eyre!("unable to parse status line into parts"))?;
 
-        let index_status: FileStatus = status_line_parts
-            .name("index_status")
-            .and_then(|m| m.as_bytes().iter().next().copied())
-            .ok_or_else(|| eyre::eyre!("no index status indicator"))?
-            .into();
+        let index_status: FileStatus = match status_line_parts.name("prefix") {
+            Some(m) if m.as_bytes() == b"u" => FileStatus::Unmerged,
+            _ => status_line_parts
+                .name("index_status")
+                .and_then(|m| m.as_bytes().iter().next().copied())
+                .ok_or_else(|| eyre::eyre!("no index status indicator"))?
+                .into(),
+        };
         let working_copy_status: FileStatus = status_line_parts
             .name("working_copy_status")
             .and_then(|m| m.as_bytes().iter().next().copied())
@@ -226,7 +231,8 @@ impl TryFrom<&[u8]> for StatusEntry {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+/// The possible stages for items in the index.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Stage {
     Stage0,
     Stage1,
@@ -305,7 +311,7 @@ mod tests {
     #[test]
     fn test_parse_status_line() {
         assert_eq!(
-            TryInto::<StatusEntry>::try_into(
+            StatusEntry::try_from(
                 "1 .M N... 100644 100644 100644 51fcbe2362663a19d132767b69c2c7829023f3da 51fcbe2362663a19d132767b69c2c7829023f3da repo.rs".as_bytes(),
             ).unwrap(),
             StatusEntry {
@@ -318,7 +324,7 @@ mod tests {
         );
 
         assert_eq!(
-            TryInto::<StatusEntry>::try_into(
+            StatusEntry::try_from(
                 "1 A. N... 100755 100755 100755 51fcbe2362663a19d132767b69c2c7829023f3da 51fcbe2362663a19d132767b69c2c7829023f3da repo.rs".as_bytes(),
             ).unwrap(),
             StatusEntry {
@@ -330,7 +336,7 @@ mod tests {
             }
         );
 
-        let entry: StatusEntry = TryInto::<StatusEntry>::try_into(
+        let entry: StatusEntry = StatusEntry::try_from(
             "2 RD N... 100644 100644 100644 9daeafb9864cf43055ae93beb0afd6c7d144bfa4 9daeafb9864cf43055ae93beb0afd6c7d144bfa4 R100 new_file.rs\x00old_file.rs".as_bytes(),
         ).unwrap();
         assert_eq!(
@@ -346,6 +352,19 @@ mod tests {
         assert_eq!(
             entry.paths(),
             vec![PathBuf::from("new_file.rs"), PathBuf::from("old_file.rs")]
+        );
+
+        assert_eq!(
+            StatusEntry::try_from(
+                "u A. N... 100755 100755 100755 100755 51fcbe2362663a19d132767b69c2c7829023f3da 51fcbe2362663a19d132767b69c2c7829023f3da 9daeafb9864cf43055ae93beb0afd6c7d144bfa4 repo.rs".as_bytes(),
+            ).unwrap(),
+            StatusEntry {
+                index_status: FileStatus::Unmerged,
+                working_copy_status: FileStatus::Unmodified,
+                path: "repo.rs".into(),
+                orig_path: None,
+                working_copy_file_mode: FileMode::BlobExecutable,
+            }
         );
     }
 
