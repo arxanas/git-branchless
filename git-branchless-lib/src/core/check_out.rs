@@ -15,6 +15,7 @@ use crate::git::{
 };
 use crate::util::ExitCode;
 
+use super::config::get_undo_create_snapshots;
 use super::effects::Effects;
 use super::eventlog::{Event, EventLogDb, EventTransactionId};
 use super::formatting::printable_styled_string;
@@ -63,7 +64,9 @@ pub fn check_out_commit(
         }
     };
 
-    create_snapshot(effects, git_run_info, repo, event_log_db, event_tx_id)?;
+    if get_undo_create_snapshots(repo)? {
+        create_snapshot(effects, git_run_info, repo, event_log_db, event_tx_id)?;
+    }
 
     let args = {
         let mut args = vec![OsStr::new("checkout")];

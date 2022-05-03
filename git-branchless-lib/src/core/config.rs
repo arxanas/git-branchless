@@ -114,6 +114,14 @@ pub fn get_editor(repo: &Repo) -> eyre::Result<Option<OsString>> {
     }
 }
 
+/// If `true`, create working copy snapshots automatically after certain
+/// operations.
+#[instrument]
+pub fn get_undo_create_snapshots(repo: &Repo) -> eyre::Result<bool> {
+    repo.get_readonly_config()?
+        .get_or("branchless.undo.createSnapshots", true)
+}
+
 /// If `true`, when restacking a commit, do not update its timestamp to the
 /// current time.
 #[instrument]
