@@ -620,8 +620,8 @@ impl Repo {
         // See https://git-scm.com/docs/git-status#_porcelain_format_version_2
         while let Some(line_prefix) = status_bytes.peek() {
             let line = match line_prefix {
-                // Ordinary change entry.
-                b'1' => {
+                // Ordinary change entry or unmerged entry.
+                b'1' | b'u' => {
                     let line = status_bytes
                         .by_ref()
                         .take_while(not_null_terminator)
@@ -640,7 +640,7 @@ impl Repo {
                 }
                 _ => eyre::bail!("unknown status line prefix: {}", line_prefix),
             };
-            let entry = line.as_slice().try_into()?;
+            let entry: StatusEntry = line.as_slice().try_into()?;
             statuses.push(entry);
         }
 
