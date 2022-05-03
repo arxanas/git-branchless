@@ -31,9 +31,10 @@ use crate::core::formatting::Pluralize;
 use super::repo::Signature;
 use super::status::{Index, IndexEntry, Stage};
 use super::tree::{hydrate_tree, make_empty_tree};
-use super::{Commit, MaybeZeroOid, NonZeroOid, Repo, ResolvedReferenceInfo, StatusEntry};
+use super::{Commit, MaybeZeroOid, NonZeroOid, Repo, ResolvedReferenceInfo, StatusEntry, Tree};
 
 const BRANCHLESS_HEAD_TRAILER: &str = "Branchless-head";
+const BRANCHLESS_UNSTAGED_TRAILER: &str = "Branchless-unstaged";
 
 /// A special `Commit` which represents the status of the working copy at a
 /// given point in time. This means that it can include changes in any stage.
@@ -59,16 +60,21 @@ pub struct WorkingCopySnapshot<'repo> {
     /// no commits have yet been made.
     pub head_commit: Option<Commit<'repo>>,
 
-    /// The index contents at stage 0 (unstaged).
+    /// The unstaged changes in the working copy.
+    pub commit_unstaged: Commit<'repo>,
+
+    /// The index contents at stage 0 (normal staged changes).
     pub commit_stage0: Commit<'repo>,
 
-    /// The index contents at stage 1 (staged).
+    /// The index contents at stage 1. For a merge conflict, this corresponds to
+    /// the contents of the file at the common ancestor of the merged commits.
     pub commit_stage1: Commit<'repo>,
 
     /// The index contents at stage 2 ("ours").
     pub commit_stage2: Commit<'repo>,
 
-    /// The index contents at stage 3 ("theirs", i.e. the commit being merged in).
+    /// The index contents at stage 3 ("theirs", i.e. the commit being merged
+    /// in).
     pub commit_stage3: Commit<'repo>,
 }
 
@@ -87,6 +93,48 @@ impl<'repo> WorkingCopySnapshot<'repo> {
         let head_commit_oid: MaybeZeroOid = match &head_commit {
             Some(head_commit) => MaybeZeroOid::NonZero(head_commit.get_oid()),
             None => MaybeZeroOid::Zero,
+        };
+
+        let commit_unstaged_oid: NonZeroOid = {
+            let changed_paths: Vec<_> = status_entries
+                .iter()
+                .cloned()
+                .filter(|entry| entry.working_copy_status.is_changed())
+                .flat_map(|entry| {
+                    let mut result = vec![(entry.path, entry.working_copy_file_mode)];
+                    if let Some(orig_path) = entry.orig_path {
+                        result.push((orig_path, entry.working_copy_file_mode));
+                    }
+                    result
+                })
+                .collect();
+            let num_changes = changed_paths.len();
+
+            let head_commit = match &head_commit {
+                Some(head_commit) => head_commit,
+                None => unimplemented!("Cannot snapshot unstaged changes for unborn HEAD"),
+            };
+            let base_tree = head_commit.get_tree()?;
+            let hydrate_entries = {
+                let mut result = HashMap::new();
+                for (path, file_mode) in changed_paths {
+                    let blob_oid = repo.create_blob_from_path(&path)?;
+                    let entry = blob_oid.map(|blob_oid| (blob_oid, file_mode));
+                    result.insert(path, entry);
+                }
+                result
+            };
+            let tree_unstaged = {
+                let tree_oid = hydrate_tree(repo, Some(&base_tree), hydrate_entries)?;
+                repo.find_tree_or_fail(tree_oid)?
+            };
+
+            Self::create_commit_for_unstaged_changes(
+                repo,
+                head_commit,
+                &tree_unstaged,
+                num_changes,
+            )?
         };
 
         let commit_stage0 = Self::create_commit_for_stage(
@@ -128,9 +176,12 @@ branchless: automated working copy commit
 {}: {}
 {}: {}
 {}: {}
+{}: {}
 ",
             BRANCHLESS_HEAD_TRAILER,
             head_commit_oid,
+            BRANCHLESS_UNSTAGED_TRAILER,
+            commit_unstaged_oid,
             Stage::Stage0.get_trailer(),
             commit_stage0,
             Stage::Stage1.get_trailer(),
@@ -175,6 +226,7 @@ branchless: automated working copy commit
         Ok(WorkingCopySnapshot {
             base_commit: repo.find_commit_or_fail(commit_oid)?,
             head_commit: head_commit.clone(),
+            commit_unstaged: repo.find_commit_or_fail(commit_unstaged_oid)?,
             commit_stage0,
             commit_stage1,
             commit_stage2,
@@ -210,6 +262,10 @@ branchless: automated working copy commit
         };
 
         let head_commit = find_commit(BRANCHLESS_HEAD_TRAILER)?;
+        let commit_unstaged = match find_commit(BRANCHLESS_UNSTAGED_TRAILER)? {
+            Some(commit) => commit,
+            None => return Ok(None),
+        };
         let commit_stage0 = match find_commit(Stage::Stage0.get_trailer())? {
             Some(commit) => commit,
             None => return Ok(None),
@@ -230,11 +286,41 @@ branchless: automated working copy commit
         Ok(Some(WorkingCopySnapshot {
             base_commit: base_commit.to_owned(),
             head_commit,
+            commit_unstaged,
             commit_stage0,
             commit_stage1,
             commit_stage2,
             commit_stage3,
         }))
+    }
+
+    fn make_message(num_changes: usize) -> String {
+        format!(
+            "branchless: automated working copy commit ({})",
+            Pluralize {
+                determiner: None,
+                amount: num_changes,
+                unit: ("change", "changes"),
+            },
+        )
+    }
+
+    fn create_commit_for_unstaged_changes(
+        repo: &Repo,
+        parent_commit: &Commit,
+        tree: &Tree,
+        num_changes: usize,
+    ) -> eyre::Result<NonZeroOid> {
+        let signature = Signature::automated()?;
+        let message = Self::make_message(num_changes);
+        repo.create_commit(
+            None,
+            &signature,
+            &signature,
+            &message,
+            tree,
+            vec![parent_commit],
+        )
     }
 
     #[instrument]
@@ -274,14 +360,7 @@ branchless: automated working copy commit
         let tree_oid = hydrate_tree(repo, parent_tree.as_ref(), updated_entries)?;
         let tree = repo.find_tree_or_fail(tree_oid)?;
         let signature = Signature::automated()?;
-        let message = format!(
-            "branchless: automated working copy commit ({})",
-            Pluralize {
-                determiner: None,
-                amount: num_stage_changes,
-                unit: ("change", "changes"),
-            },
-        );
+        let message = Self::make_message(num_stage_changes);
         let commit_oid = repo.create_commit(
             None,
             &signature,

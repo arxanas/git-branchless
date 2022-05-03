@@ -774,6 +774,17 @@ impl Repo {
         }
     }
 
+    /// Read a file from disk and create a blob corresponding to its contents.
+    /// If the file doesn't exist on disk, returns `None` instead.
+    #[instrument]
+    pub fn create_blob_from_path(&self, path: &Path) -> eyre::Result<Option<NonZeroOid>> {
+        match self.inner.blob_path(path) {
+            Ok(oid) => Ok(Some(make_non_zero_oid(oid))),
+            Err(err) if err.code() == git2::ErrorCode::NotFound => Ok(None),
+            Err(err) => Err(wrap_git_error(err)),
+        }
+    }
+
     /// Create a new commit.
     #[instrument]
     pub fn create_commit(
