@@ -796,6 +796,7 @@ fn test_navigation_merge() -> eyre::Result<()> {
         Failed to check out commit: 25497cb08387d7d20aa741398b73ce7f924afdb5
         "###);
         insta::assert_snapshot!(stderr, @r###"
+        branchless: creating working copy snapshot
         error: Your local changes to the following files would be overwritten by checkout:
         	conflicting.txt
         Please commit your changes or stash them before you switch branches.
@@ -859,6 +860,7 @@ fn test_navigation_force() -> eyre::Result<()> {
         Failed to check out commit: 25497cb08387d7d20aa741398b73ce7f924afdb5
         "###);
         insta::assert_snapshot!(stderr, @r###"
+        branchless: creating working copy snapshot
         error: Your local changes to the following files would be overwritten by checkout:
         	conflicting.txt
         Please commit your changes or stash them before you switch branches.

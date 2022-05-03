@@ -39,8 +39,10 @@ fn test_sync_basic() -> eyre::Result<()> {
     {
         let (stdout, stderr) = git.run(&["sync"])?;
         insta::assert_snapshot!(stderr, @r###"
+        branchless: creating working copy snapshot
         Switched to branch 'master'
         branchless: processing checkout
+        branchless: creating working copy snapshot
         Switched to branch 'master'
         branchless: processing checkout
         "###);

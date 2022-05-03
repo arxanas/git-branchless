@@ -19,7 +19,7 @@ pub fn create(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<Exit
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
     let event_tx_id = event_log_db.make_transaction_id(SystemTime::now(), "snapshot create")?;
-    let snapshot = create_snapshot(git_run_info, &repo, &event_log_db, event_tx_id)?;
+    let snapshot = create_snapshot(effects, git_run_info, &repo, &event_log_db, event_tx_id)?;
     writeln!(
         effects.get_output_stream(),
         "{}",
