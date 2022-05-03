@@ -163,15 +163,18 @@ pub enum Command {
     },
 
     /// Internal use.
+    #[clap(hide = true)]
     HookDetectEmptyCommit {
         /// The OID of the commit currently being applied, to be checked for emptiness.
         old_commit_oid: String,
     },
 
     /// Internal use.
+    #[clap(hide = true)]
     HookPreAutoGc,
 
     /// Internal use.
+    #[clap(hide = true)]
     HookPostCheckout {
         /// The previous commit OID.
         previous_commit: String,
@@ -184,30 +187,36 @@ pub enum Command {
     },
 
     /// Internal use.
+    #[clap(hide = true)]
     HookPostCommit,
 
     /// Internal use.
+    #[clap(hide = true)]
     HookPostMerge {
         /// Whether or not this is a squash merge. See githooks(5).
         is_squash_merge: isize,
     },
 
     /// Internal use.
+    #[clap(hide = true)]
     HookPostRewrite {
         /// One of `amend` or `rebase`.
         rewrite_type: String,
     },
 
     /// Internal use.
+    #[clap(hide = true)]
     HookReferenceTransaction {
         /// One of `prepared`, `committed`, or `aborted`. See githooks(5).
         transaction_state: String,
     },
 
     /// Internal use.
+    #[clap(hide = true)]
     HookRegisterExtraPostRewriteHook,
 
     /// Internal use.
+    #[clap(hide = true)]
     HookSkipUpstreamAppliedCommit {
         /// The OID of the commit that was skipped.
         commit_oid: String,
