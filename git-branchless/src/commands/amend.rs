@@ -20,7 +20,7 @@ use lib::core::effects::Effects;
 use lib::core::eventlog::{Event, EventLogDb};
 use lib::core::formatting::Pluralize;
 use lib::core::gc::mark_commit_reachable;
-use lib::git::{AmendFastOptions, GitRunInfo, Repo};
+use lib::git::{AmendFastOptions, GitRunInfo, MaybeZeroOid, Repo, ResolvedReferenceInfo};
 
 /// Amends the existing HEAD commit.
 #[instrument]
@@ -30,6 +30,7 @@ pub fn amend(
     move_options: &MoveOptions,
 ) -> eyre::Result<ExitCode> {
     let now = SystemTime::now();
+    let timestamp = now.duration_since(SystemTime::UNIX_EPOCH)?.as_secs_f64();
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
@@ -57,8 +58,21 @@ pub fn amend(
     }
 
     let event_tx_id = event_log_db.make_transaction_id(now, "amend")?;
-    let (_snapshot, status) =
+    let (snapshot, status) =
         repo.get_status(git_run_info, &index, &head_info, Some(event_tx_id))?;
+    {
+        let ResolvedReferenceInfo {
+            oid,
+            reference_name,
+        } = head_info;
+        event_log_db.add_events(vec![Event::WorkingCopySnapshot {
+            timestamp,
+            event_tx_id,
+            head_oid: MaybeZeroOid::from(oid),
+            commit_oid: snapshot.base_commit.get_oid(),
+            ref_name: reference_name.map(|name| name.into_owned()),
+        }])?;
+    }
 
     // Note that there may be paths which are in both of these entries in the
     // case that the given path has both staged and unstaged changes.
@@ -93,7 +107,6 @@ pub fn amend(
     }
 
     let amended_tree = repo.amend_fast(&head_commit, &opts)?;
-    let timestamp = now.duration_since(SystemTime::UNIX_EPOCH)?.as_secs_f64();
 
     let (author, committer) = (head_commit.get_author(), head_commit.get_committer());
     let (author, committer) = if get_restack_preserve_timestamps(&repo)? {
