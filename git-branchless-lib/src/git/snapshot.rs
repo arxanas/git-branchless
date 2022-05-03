@@ -33,6 +33,8 @@ use super::status::{Index, IndexEntry, Stage};
 use super::tree::{hydrate_tree, make_empty_tree};
 use super::{Commit, MaybeZeroOid, NonZeroOid, Repo, ResolvedReferenceInfo, StatusEntry};
 
+const BRANCHLESS_HEAD_TRAILER: &str = "Branchless-head";
+
 /// A special `Commit` which represents the status of the working copy at a
 /// given point in time. This means that it can include changes in any stage.
 #[derive(Clone, Debug)]
@@ -50,6 +52,12 @@ pub struct WorkingCopySnapshot<'repo> {
     ///
     /// The metadata is stored in the commit message.
     pub base_commit: Commit<'repo>,
+
+    /// The commit that was checked out at the time of this snapshot. It's
+    /// possible that *no* commit was checked out (called an "unborn HEAD").
+    /// This could happen when the repository has been freshly initialized, but
+    /// no commits have yet been made.
+    pub head_commit: Option<Commit<'repo>>,
 
     /// The index contents at stage 0 (unstaged).
     pub commit_stage0: Commit<'repo>,
@@ -75,6 +83,10 @@ impl<'repo> WorkingCopySnapshot<'repo> {
         let head_commit = match head_info.oid {
             Some(oid) => Some(repo.find_commit_or_fail(oid)?),
             None => None,
+        };
+        let head_commit_oid: MaybeZeroOid = match &head_commit {
+            Some(head_commit) => MaybeZeroOid::NonZero(head_commit.get_oid()),
+            None => MaybeZeroOid::Zero,
         };
 
         let commit_stage0 = Self::create_commit_for_stage(
@@ -115,7 +127,10 @@ branchless: automated working copy commit
 {}: {}
 {}: {}
 {}: {}
+{}: {}
 ",
+            BRANCHLESS_HEAD_TRAILER,
+            head_commit_oid,
             Stage::Stage0.get_trailer(),
             commit_stage0,
             Stage::Stage1.get_trailer(),
@@ -159,6 +174,7 @@ branchless: automated working copy commit
 
         Ok(WorkingCopySnapshot {
             base_commit: repo.find_commit_or_fail(commit_oid)?,
+            head_commit: head_commit.clone(),
             commit_stage0,
             commit_stage1,
             commit_stage2,
@@ -174,15 +190,16 @@ branchless: automated working copy commit
         base_commit: &'a Commit<'repo>,
     ) -> eyre::Result<Option<WorkingCopySnapshot<'repo>>> {
         let trailers = base_commit.get_trailers()?;
-        let find_commit = |stage: Stage| -> eyre::Result<Option<Commit>> {
+        let find_commit = |trailer: &str| -> eyre::Result<Option<Commit>> {
             for (k, v) in trailers.iter() {
-                if k != stage.get_trailer() {
+                if k != trailer {
                     continue;
                 }
 
-                let oid = NonZeroOid::from_str(v);
+                let oid = MaybeZeroOid::from_str(v);
                 let oid = match oid {
-                    Ok(oid) => oid,
+                    Ok(MaybeZeroOid::NonZero(oid)) => oid,
+                    Ok(MaybeZeroOid::Zero) => return Ok(None),
                     Err(_) => continue,
                 };
 
@@ -192,25 +209,27 @@ branchless: automated working copy commit
             Ok(None)
         };
 
-        let commit_stage0 = match find_commit(Stage::Stage0)? {
+        let head_commit = find_commit(BRANCHLESS_HEAD_TRAILER)?;
+        let commit_stage0 = match find_commit(Stage::Stage0.get_trailer())? {
             Some(commit) => commit,
             None => return Ok(None),
         };
-        let commit_stage1 = match find_commit(Stage::Stage1)? {
+        let commit_stage1 = match find_commit(Stage::Stage1.get_trailer())? {
             Some(commit) => commit,
             None => return Ok(None),
         };
-        let commit_stage2 = match find_commit(Stage::Stage2)? {
+        let commit_stage2 = match find_commit(Stage::Stage2.get_trailer())? {
             Some(commit) => commit,
             None => return Ok(None),
         };
-        let commit_stage3 = match find_commit(Stage::Stage3)? {
+        let commit_stage3 = match find_commit(Stage::Stage3.get_trailer())? {
             Some(commit) => commit,
             None => return Ok(None),
         };
 
         Ok(Some(WorkingCopySnapshot {
             base_commit: base_commit.to_owned(),
+            head_commit,
             commit_stage0,
             commit_stage1,
             commit_stage2,
