@@ -11,6 +11,7 @@ mod navigation;
 mod restack;
 mod reword;
 mod smartlog;
+mod snapshot;
 mod sync;
 mod undo;
 mod wrap;
@@ -35,6 +36,7 @@ use tracing_subscriber::EnvFilter;
 use crate::opts::ColorSetting;
 use crate::opts::Command;
 use crate::opts::Opts;
+use crate::opts::SnapshotSubcommand;
 use crate::opts::WrappedCommand;
 use lib::core::config::env_vars::get_path_to_git;
 use lib::core::effects::Effects;
@@ -259,6 +261,13 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
             )?;
             ExitCode(0)
         }
+
+        Command::Snapshot { subcommand } => match subcommand {
+            SnapshotSubcommand::Create => snapshot::create(&effects, &git_run_info)?,
+            SnapshotSubcommand::Restore { snapshot_oid } => {
+                snapshot::restore(&effects, &git_run_info, snapshot_oid)?
+            }
+        },
 
         Command::Sync {
             update_refs,

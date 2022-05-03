@@ -131,6 +131,46 @@ fn test_amend_delete() -> eyre::Result<()> {
 }
 
 #[test]
+fn test_amend_delete_only_in_index() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    git.init_repo()?;
+    git.detach_head()?;
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+
+    git.run(&["rm", "--cached", "test1.txt"])?;
+    {
+        let (stdout, _stderr) = git.run(&["branchless", "amend"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        No abandoned commits to restack.
+        No abandoned branches to restack.
+        O f777ecc (master) create initial.txt
+        |
+        o 62fc20d create test1.txt
+        |
+        @ f0f0727 create test2.txt
+        Amended with 1 staged change.
+        "###);
+    }
+    {
+        let (stdout, _stderr) = git.run(&["show", "--raw", "--oneline", "HEAD"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        f0f0727 create test2.txt
+        :100644 000000 7432a8f 0000000 D	test1.txt
+        :000000 100644 0000000 4e512d2 A	test2.txt
+        "###);
+    }
+    {
+        let (stdout, _stderr) = git.run(&["status", "--porcelain=2"])?;
+        insta::assert_snapshot!(stdout, @"? test1.txt
+");
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_amend_with_working_copy() -> eyre::Result<()> {
     let git = make_git()?;
 

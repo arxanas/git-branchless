@@ -6,9 +6,13 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use cursive::theme::BaseColor;
 use cursive::utils::markup::StyledString;
+use eyre::Context;
 use tracing::instrument;
 
-use crate::git::{CategorizedReferenceName, GitRunInfo, MaybeZeroOid, Repo, WorkingCopySnapshot};
+use crate::git::{
+    CategorizedReferenceName, GitRunInfo, GitRunOpts, GitRunResult, MaybeZeroOid, Repo, Stage,
+    WorkingCopySnapshot,
+};
 use crate::util::ExitCode;
 
 use super::effects::Effects;
@@ -59,20 +63,7 @@ pub fn check_out_commit(
         }
     };
 
-    // Create new working copy snapshot.
-    {
-        let head_info = repo.get_head_info()?;
-        let index = repo.get_index()?;
-        let (snapshot, _status) =
-            repo.get_status(git_run_info, &index, &head_info, Some(event_tx_id))?;
-        event_log_db.add_events(vec![Event::WorkingCopySnapshot {
-            timestamp: SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs_f64(),
-            event_tx_id,
-            head_oid: MaybeZeroOid::from(head_info.oid),
-            commit_oid: snapshot.base_commit.get_oid(),
-            ref_name: head_info.reference_name.map(|name| name.into_owned()),
-        }])?;
-    }
+    create_snapshot(git_run_info, repo, event_log_db, event_tx_id)?;
 
     let args = {
         let mut args = vec![OsStr::new("checkout")];
@@ -82,9 +73,9 @@ pub fn check_out_commit(
         args.extend(additional_args.iter().map(OsStr::new));
         args
     };
-    let result = git_run_info.run(effects, Some(event_tx_id), args.as_slice())?;
+    let exit_code = git_run_info.run(effects, Some(event_tx_id), args.as_slice())?;
 
-    if !result.is_success() {
+    if !exit_code.is_success() {
         writeln!(
             effects.get_output_stream(),
             "{}",
@@ -100,7 +91,7 @@ pub fn check_out_commit(
                 )
             )?
         )?;
-        return Ok(result);
+        return Ok(exit_code);
     }
 
     // Determine if we currently have a snapshot checked out, and, if so,
@@ -110,20 +101,162 @@ pub fn check_out_commit(
         if let Some(head_oid) = head_info.oid {
             let head_commit = repo.find_commit_or_fail(head_oid)?;
             if let Some(snapshot) = WorkingCopySnapshot::try_from_base_commit(repo, &head_commit)? {
-                restore_snapshot(repo, &snapshot)?;
+                let exit_code =
+                    restore_snapshot(effects, git_run_info, repo, event_tx_id, &snapshot)?;
+                if !exit_code.is_success() {
+                    return Ok(exit_code);
+                }
             }
         }
     }
 
     if *render_smartlog {
-        let result =
+        let exit_code =
             git_run_info.run_direct_no_wrapping(Some(event_tx_id), &["branchless", "smartlog"])?;
-        Ok(result)
+        Ok(exit_code)
     } else {
-        Ok(result)
+        Ok(exit_code)
     }
 }
 
-fn restore_snapshot(_repo: &Repo, _snapshot: &WorkingCopySnapshot) -> eyre::Result<()> {
-    todo!();
+/// Create a working copy snapshot containing the working copy's current contents.
+///
+/// The working copy contents are not changed by this operation. That is, the
+/// caller would be responsible for discarding local changes (which might or
+/// might not be the natural next step for the operation).
+pub fn create_snapshot<'repo>(
+    git_run_info: &GitRunInfo,
+    repo: &'repo Repo,
+    event_log_db: &EventLogDb,
+    event_tx_id: EventTransactionId,
+) -> eyre::Result<WorkingCopySnapshot<'repo>> {
+    let head_info = repo.get_head_info()?;
+    let index = repo.get_index()?;
+    let (snapshot, _status) =
+        repo.get_status(git_run_info, &index, &head_info, Some(event_tx_id))?;
+    event_log_db.add_events(vec![Event::WorkingCopySnapshot {
+        timestamp: SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs_f64(),
+        event_tx_id,
+        head_oid: MaybeZeroOid::from(head_info.oid),
+        commit_oid: snapshot.base_commit.get_oid(),
+        ref_name: head_info.reference_name.map(|name| name.into_owned()),
+    }])?;
+    Ok(snapshot)
+}
+
+/// Restore the given snapshot's contents into the working copy.
+///
+/// All tracked working copy contents are **discarded**, so the caller should
+/// take a snapshot of them first, or otherwise ensure that the user's work is
+/// not lost.
+///
+/// If there are untracked changes in the working copy, they are left intact,
+/// *unless* they would conflict with the working copy snapshot contents. In
+/// that case, the operation is aborted.
+pub fn restore_snapshot(
+    effects: &Effects,
+    git_run_info: &GitRunInfo,
+    repo: &Repo,
+    event_tx_id: EventTransactionId,
+    snapshot: &WorkingCopySnapshot,
+) -> eyre::Result<ExitCode> {
+    // Discard any working copy changes. The caller is responsible for having
+    // snapshotted them if necessary.
+    let exit_code = git_run_info.run(effects, Some(event_tx_id), &["reset", "--hard", "HEAD"])?;
+    if !exit_code.is_success() {
+        return Ok(exit_code);
+    }
+
+    // Check out the unstaged changes. Note that we don't call `git reset --hard
+    // <target>` directly as part of the previous step, and instead do this
+    // two-step process. This second `git checkout` is so that untracked files
+    // don't get thrown away as part of checking out the snapshot, but instead
+    // abort the procedure.
+    let exit_code = git_run_info.run(
+        effects,
+        Some(event_tx_id),
+        &["checkout", &snapshot.commit_unstaged.get_oid().to_string()],
+    )?;
+    if !exit_code.is_success() {
+        // FIXME: it might be worth attempting to un-check-out this commit?
+        return Ok(exit_code);
+    }
+
+    // Restore any unstaged changes. They're already present in the working
+    // copy, so we just have to adjust `HEAD`.
+    match &snapshot.head_commit {
+        Some(head_commit) => {
+            let exit_code = git_run_info.run(
+                effects,
+                Some(event_tx_id),
+                &["reset", &head_commit.get_oid().to_string()],
+            )?;
+            if !exit_code.is_success() {
+                return Ok(exit_code);
+            }
+        }
+        None => {
+            unimplemented!("Cannot restore snapshot of commit with no HEAD");
+        }
+    }
+
+    // Check out any staged changes. libgit2 doesn't offer a good way of
+    // updating the index for higher stages, so we use `git update-index`
+    // directly.
+    let update_index_script = {
+        let mut buf = Vec::new();
+        for (stage, commit) in [
+            (Stage::Stage0, &snapshot.commit_stage0),
+            (Stage::Stage1, &snapshot.commit_stage1),
+            (Stage::Stage2, &snapshot.commit_stage2),
+            (Stage::Stage3, &snapshot.commit_stage3),
+        ] {
+            let changed_paths = match repo.get_paths_touched_by_commit(commit)? {
+                Some(changed_paths) => changed_paths,
+                None => continue,
+            };
+            for path in changed_paths {
+                use std::io::Write;
+
+                let tree = commit.get_tree()?;
+                let tree_entry = tree.get_path(&path)?;
+
+                let is_deleted = tree_entry.is_none();
+                if is_deleted {
+                    write!(
+                        &mut buf,
+                        "0 {zero} 0\t{path}\0",
+                        zero = MaybeZeroOid::Zero,
+                        path = path.display(),
+                    )?;
+                }
+
+                if let Some(tree_entry) = tree_entry {
+                    write!(
+                        &mut buf,
+                        "{mode} {sha1} {stage}\t{path}\0",
+                        mode = tree_entry.get_filemode().to_string(),
+                        sha1 = tree_entry.get_oid(),
+                        stage = i32::from(stage),
+                        path = path.display(),
+                    )?;
+                }
+            }
+        }
+        buf
+    };
+
+    let GitRunResult { .. } = git_run_info
+        .run_silent(
+            repo,
+            Some(event_tx_id),
+            &["update-index", "-z", "--index-info"],
+            GitRunOpts {
+                treat_git_failure_as_error: true,
+                stdin: Some(update_index_script),
+            },
+        )
+        .wrap_err("Updating index")?;
+
+    Ok(ExitCode(0))
 }

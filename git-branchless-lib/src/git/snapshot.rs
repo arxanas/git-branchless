@@ -27,11 +27,12 @@ use std::str::FromStr;
 use tracing::instrument;
 
 use crate::core::formatting::Pluralize;
+use crate::git::FileStatus;
 
 use super::repo::Signature;
-use super::status::{Index, IndexEntry, Stage};
+use super::status::{FileMode, Index, IndexEntry, Stage};
 use super::tree::{hydrate_tree, make_empty_tree};
-use super::{Commit, MaybeZeroOid, NonZeroOid, Repo, ResolvedReferenceInfo, StatusEntry, Tree};
+use super::{Commit, MaybeZeroOid, NonZeroOid, Repo, ResolvedReferenceInfo, StatusEntry};
 
 const BRANCHLESS_HEAD_TRAILER: &str = "Branchless-head";
 const BRANCHLESS_UNSTAGED_TRAILER: &str = "Branchless-unstaged";
@@ -42,9 +43,6 @@ const BRANCHLESS_UNSTAGED_TRAILER: &str = "Branchless-unstaged";
 pub struct WorkingCopySnapshot<'repo> {
     /// The commit which contains the metadata about the `HEAD` commit and all
     /// the "stage commits" included in this snapshot.
-    ///
-    /// This commit itself contains identical content to the `HEAD` commit (if
-    /// any). The `HEAD` commit (if any) is this commit's first parent.
     ///
     /// The stage commits each correspond to one of the possible stages in the
     /// index. If a file is not present in that stage, it's assumed that it's
@@ -96,45 +94,7 @@ impl<'repo> WorkingCopySnapshot<'repo> {
         };
 
         let commit_unstaged_oid: NonZeroOid = {
-            let changed_paths: Vec<_> = status_entries
-                .iter()
-                .cloned()
-                .filter(|entry| entry.working_copy_status.is_changed())
-                .flat_map(|entry| {
-                    let mut result = vec![(entry.path, entry.working_copy_file_mode)];
-                    if let Some(orig_path) = entry.orig_path {
-                        result.push((orig_path, entry.working_copy_file_mode));
-                    }
-                    result
-                })
-                .collect();
-            let num_changes = changed_paths.len();
-
-            let head_commit = match &head_commit {
-                Some(head_commit) => head_commit,
-                None => unimplemented!("Cannot snapshot unstaged changes for unborn HEAD"),
-            };
-            let base_tree = head_commit.get_tree()?;
-            let hydrate_entries = {
-                let mut result = HashMap::new();
-                for (path, file_mode) in changed_paths {
-                    let blob_oid = repo.create_blob_from_path(&path)?;
-                    let entry = blob_oid.map(|blob_oid| (blob_oid, file_mode));
-                    result.insert(path, entry);
-                }
-                result
-            };
-            let tree_unstaged = {
-                let tree_oid = hydrate_tree(repo, Some(&base_tree), hydrate_entries)?;
-                repo.find_tree_or_fail(tree_oid)?
-            };
-
-            Self::create_commit_for_unstaged_changes(
-                repo,
-                head_commit,
-                &tree_unstaged,
-                num_changes,
-            )?
+            Self::create_commit_for_unstaged_changes(repo, head_commit.as_ref(), status_entries)?
         };
 
         let commit_stage0 = Self::create_commit_for_stage(
@@ -307,10 +267,66 @@ branchless: automated working copy commit
 
     fn create_commit_for_unstaged_changes(
         repo: &Repo,
-        parent_commit: &Commit,
-        tree: &Tree,
-        num_changes: usize,
+        head_commit: Option<&Commit>,
+        status_entries: &[StatusEntry],
     ) -> eyre::Result<NonZeroOid> {
+        let changed_paths: Vec<_> = status_entries
+            .iter()
+            .cloned()
+            .filter(|entry| {
+                // The working copy status is reported with respect to the
+                // staged changes, not to the `HEAD` commit. That means that if
+                // the working copy status is reported as modified and the
+                // staged status is reported as unmodified, there actually *was*
+                // a change on disk that we need to detect.
+                //
+                // On the other hand, if both are reported as modified, it's
+                // possible that there's *only* a staged change.
+                //
+                // Thus, we simply take all status entries that might refer to a
+                // file which has changed since `HEAD`. Later, we'll recompute
+                // the blobs for those files and hydrate the tree object. If it
+                // wasn't actually changed, then no harm will be done and that
+                // entry in the tree will also be unchanged.
+                entry.working_copy_status.is_changed() || entry.index_status.is_changed()
+            })
+            .flat_map(|entry| {
+                entry
+                    .paths()
+                    .into_iter()
+                    .map(move |path| (path, entry.working_copy_file_mode))
+            })
+            .collect();
+        let num_changes = changed_paths.len();
+
+        let head_commit = match &head_commit {
+            Some(head_commit) => head_commit,
+            None => unimplemented!("Cannot snapshot unstaged changes for unborn HEAD"),
+        };
+        let head_tree = head_commit.get_tree()?;
+        let hydrate_entries = {
+            let mut result = HashMap::new();
+            for (path, file_mode) in changed_paths {
+                let entry = if file_mode == FileMode::Unreadable {
+                    // If the file was deleted from the index, it's possible
+                    // that it might still exist on disk. However, if the mode
+                    // is `Unreadable`, that means that we should ignore its
+                    // existence on disk because it's no longer being tracked by
+                    // the index.
+                    None
+                } else {
+                    repo.create_blob_from_path(&path)?
+                        .map(|blob_oid| (blob_oid, file_mode))
+                };
+                result.insert(path, entry);
+            }
+            result
+        };
+        let tree_unstaged = {
+            let tree_oid = hydrate_tree(repo, Some(&head_tree), hydrate_entries)?;
+            repo.find_tree_or_fail(tree_oid)?
+        };
+
         let signature = Signature::automated()?;
         let message = Self::make_message(num_changes);
         repo.create_commit(
@@ -318,8 +334,8 @@ branchless: automated working copy commit
             &signature,
             &signature,
             &message,
-            tree,
-            vec![parent_commit],
+            &tree_unstaged,
+            vec![head_commit],
         )
     }
 
@@ -327,38 +343,66 @@ branchless: automated working copy commit
     fn create_commit_for_stage(
         repo: &Repo,
         index: &Index,
-        parent_commit: Option<&Commit>,
+        head_commit: Option<&Commit>,
         status_entries: &[StatusEntry],
         stage: Stage,
     ) -> eyre::Result<NonZeroOid> {
         let mut updated_entries = HashMap::new();
-        let mut num_stage_changes = 0;
-        for StatusEntry { path, .. } in status_entries {
+        for StatusEntry {
+            path, index_status, ..
+        } in status_entries
+        {
             let index_entry = index.get_entry_in_stage(path, stage);
-            if index_entry.is_some() {
-                num_stage_changes += 1;
-            }
 
             let entry = match index_entry {
+                None => match (stage, index_status) {
+                    // Stage 0 should have a copy of every file in the working
+                    // tree, so the absence of that file now means that it was
+                    // staged as deleted.
+                    (Stage::Stage0, _) => None,
+
+                    // If this file was in a state of conflict, then having
+                    // failed to find it in the index means that it was deleted
+                    // in this stage.
+                    (Stage::Stage1 | Stage::Stage2 | Stage::Stage3, FileStatus::Unmerged) => None,
+
+                    // If this file wasn't in a state of conflict, then we
+                    // should use the HEAD entry for this stage.
+                    (
+                        Stage::Stage1 | Stage::Stage2 | Stage::Stage3,
+                        FileStatus::Added
+                        | FileStatus::Copied
+                        | FileStatus::Deleted
+                        | FileStatus::Ignored
+                        | FileStatus::Modified
+                        | FileStatus::Renamed
+                        | FileStatus::Unmodified
+                        | FileStatus::Untracked,
+                    ) => continue,
+                },
+
                 Some(IndexEntry {
                     oid: MaybeZeroOid::Zero,
                     file_mode: _,
-                })
-                | None => None,
+                }) => None,
+
                 Some(IndexEntry {
                     oid: MaybeZeroOid::NonZero(oid),
                     file_mode,
                 }) => Some((oid, file_mode)),
             };
+
             updated_entries.insert(path.clone(), entry);
         }
 
-        let parent_tree = match parent_commit {
-            Some(parent_commit) => Some(parent_commit.get_tree()?),
+        let num_stage_changes = updated_entries.len();
+        let head_tree = match head_commit {
+            Some(head_commit) => Some(head_commit.get_tree()?),
             None => None,
         };
-        let tree_oid = hydrate_tree(repo, parent_tree.as_ref(), updated_entries)?;
+        let tree_oid = hydrate_tree(repo, head_tree.as_ref(), updated_entries)?;
         let tree = repo.find_tree_or_fail(tree_oid)?;
+
         let signature = Signature::automated()?;
         let message = Self::make_message(num_stage_changes);
         let commit_oid = repo.create_commit(
@@ -367,7 +411,7 @@ branchless: automated working copy commit
             &signature,
             &message,
             &tree,
-            match parent_commit {
+            match head_commit {
                 Some(parent_commit) => vec![parent_commit],
                 None => vec![],
             },

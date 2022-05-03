@@ -1,6 +1,7 @@
 //! The command-line options for `git-branchless`.
 
 use clap::{ArgEnum, Args, Command as ClapCommand, IntoApp, Parser};
+use lib::git::NonZeroOid;
 use man::Arg;
 use std::path::{Path, PathBuf};
 
@@ -323,6 +324,14 @@ pub enum Command {
         only_show_branches: bool,
     },
 
+    #[clap(hide = true)]
+    /// Manage working copy snapshots.
+    Snapshot {
+        /// The subcommand to run.
+        #[clap(subcommand)]
+        subcommand: SnapshotSubcommand,
+    },
+
     /// Move any local commit stacks on top of the main branch.
     Sync {
         /// Run `git fetch` to update remote references before carrying out the
@@ -417,6 +426,22 @@ pub struct Opts {
     /// The `git-branchless` subcommand to run.
     #[clap(subcommand)]
     pub command: Command,
+}
+
+/// `snapshot` subcommands.
+#[derive(Parser)]
+pub enum SnapshotSubcommand {
+    /// Create a new snapshot containing the working copy contents, and then
+    /// reset the working copy to the current `HEAD` commit.
+    ///
+    /// On success, prints the snapshot commit hash to stdout.
+    Create,
+
+    /// Restore the working copy contents from the provided snapshot.
+    Restore {
+        /// The commit hash for the snapshot.
+        snapshot_oid: NonZeroOid,
+    },
 }
 
 /// Generate and write man-pages into the specified directory.

@@ -62,7 +62,7 @@ impl From<u8> for FileStatus {
     }
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum FileMode {
     Unreadable,
     Tree,
@@ -133,6 +133,19 @@ impl FromStr for FileMode {
             _ => eyre::bail!("unknown file mode: {}", file_mode),
         };
         Ok(file_mode)
+    }
+}
+
+impl ToString for FileMode {
+    fn to_string(&self) -> String {
+        match self {
+            FileMode::Unreadable => "000000".to_string(),
+            FileMode::Tree => "040000".to_string(),
+            FileMode::Blob => "100644".to_string(),
+            FileMode::BlobExecutable => "100755".to_string(),
+            FileMode::Link => "120000".to_string(),
+            FileMode::Commit => "160000".to_string(),
+        }
     }
 }
 
@@ -232,11 +245,18 @@ impl TryFrom<&[u8]> for StatusEntry {
 }
 
 /// The possible stages for items in the index.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug)]
 pub enum Stage {
+    /// Normal staged change.
     Stage0,
+
+    /// For a merge conflict, the contents of the file at the common ancestor of the merged commits.
     Stage1,
+
+    /// "Our" changes.
     Stage2,
+
+    /// "Their" changes (from the commit being merged in).
     Stage3,
 }
 
@@ -262,6 +282,7 @@ impl From<Stage> for i32 {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct IndexEntry {
     pub(super) oid: MaybeZeroOid,
     pub(super) file_mode: FileMode,
@@ -479,7 +500,7 @@ mod tests {
         WorkingCopySnapshot {
             base_commit: Commit {
                 inner: Commit {
-                    id: 7ea9239c26ca8c0bccd4255885dc1b1933098698,
+                    id: 961a7abbff1fab1cf26fc873729977a5a4c647ac,
                     summary: "branchless: automated working copy commit",
                 },
             },
@@ -493,31 +514,31 @@ mod tests {
             ),
             commit_unstaged: Commit {
                 inner: Commit {
-                    id: 688137fdeb4c51f87d90789a848349edb707765e,
-                    summary: "branchless: automated working copy commit (1 change)",
+                    id: d9e064f80a0d27b05e16371418190580f77765f3,
+                    summary: "branchless: automated working copy commit (4 changes)",
                 },
             },
             commit_stage0: Commit {
                 inner: Commit {
-                    id: 1b6c0923419bab0907c2b20a076817845c39dae8,
-                    summary: "branchless: automated working copy commit (1 change)",
+                    id: c8daa21ee2b95ee410c635b1b62294c0e0776718,
+                    summary: "branchless: automated working copy commit (3 changes)",
                 },
             },
             commit_stage1: Commit {
                 inner: Commit {
-                    id: 944ef4f6dff4ae9f07f0e3dac3ef7e7d9333ba94,
+                    id: 428260eed0b9a234827fbc529428fb9b44917e7e,
                     summary: "branchless: automated working copy commit (0 changes)",
                 },
             },
             commit_stage2: Commit {
                 inner: Commit {
-                    id: 944ef4f6dff4ae9f07f0e3dac3ef7e7d9333ba94,
+                    id: 428260eed0b9a234827fbc529428fb9b44917e7e,
                     summary: "branchless: automated working copy commit (0 changes)",
                 },
             },
             commit_stage3: Commit {
                 inner: Commit {
-                    id: 944ef4f6dff4ae9f07f0e3dac3ef7e7d9333ba94,
+                    id: 428260eed0b9a234827fbc529428fb9b44917e7e,
                     summary: "branchless: automated working copy commit (0 changes)",
                 },
             },

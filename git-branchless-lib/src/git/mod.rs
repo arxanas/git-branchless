@@ -15,7 +15,7 @@ pub use repo::{
     CherryPickFastError, CherryPickFastOptions, Commit, Diff, GitVersion, PatchId, Reference,
     ReferenceTarget, Repo, ResolvedReferenceInfo, Time,
 };
-pub use run::GitRunInfo;
+pub use run::{GitRunInfo, GitRunOpts, GitRunResult};
 pub use snapshot::WorkingCopySnapshot;
-pub use status::{FileStatus, StatusEntry};
+pub use status::{FileStatus, Stage, StatusEntry};
 pub use tree::Tree;
