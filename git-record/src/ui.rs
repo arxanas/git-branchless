@@ -349,7 +349,6 @@ impl Recorder {
                 Checkbox::new()
                     .with_checked(*is_selected)
                     .on_change({
-                        let main_tx = main_tx.clone();
                         move |_, is_selected| {
                             if main_tx
                                 .send(Message::ToggleHunkLine(hunk_line_key, is_selected))
