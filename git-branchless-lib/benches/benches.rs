@@ -17,7 +17,7 @@ fn get_repo() -> Repo {
     Repo::from_dir(&PathBuf::from(repo_dir)).unwrap()
 }
 
-fn nth_parent<'repo>(commit: Commit<'repo>, n: usize) -> Commit<'repo> {
+fn nth_parent(commit: Commit, n: usize) -> Commit {
     let mut commit = commit.clone();
     for _i in 0..n {
         commit = match commit.get_parents().first() {
