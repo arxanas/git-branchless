@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use crate::core::config::env_vars::{get_git_exec_path, get_path_to_git, TEST_GIT};
-use crate::git::{GitVersion, NonZeroOid, Repo};
+use crate::git::{GitRunInfo, GitVersion, NonZeroOid, Repo};
 use crate::util::get_sh;
 
 use eyre::Context;
@@ -431,6 +431,16 @@ stderr:
     pub fn get_version(&self) -> eyre::Result<GitVersion> {
         let (version_str, _stderr) = self.run(&["version"])?;
         version_str.parse()
+    }
+
+    /// Get the `GitRunInfo` to use for this repository.
+    #[instrument]
+    pub fn get_git_run_info(&self) -> GitRunInfo {
+        GitRunInfo {
+            path_to_git: self.path_to_git.clone(),
+            working_directory: self.repo_path.clone(),
+            env: self.get_base_env(0).into_iter().collect(),
+        }
     }
 
     /// Determine if the Git executable supports the `reference-transaction`
