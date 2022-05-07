@@ -19,4 +19,5 @@ cursive_buffered_backend = "0.6.0"
 tracing = "0.1.34"
 
 [dev-dependencies]
+eyre = "0.6.8"
 insta = "1.14.0"
