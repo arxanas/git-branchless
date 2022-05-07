@@ -59,7 +59,7 @@ pub fn amend(
 
     let event_tx_id = event_log_db.make_transaction_id(now, "amend")?;
     let (snapshot, status) =
-        repo.get_status(git_run_info, &index, &head_info, Some(event_tx_id))?;
+        repo.get_status(effects, git_run_info, &index, &head_info, Some(event_tx_id))?;
     {
         let ResolvedReferenceInfo {
             oid,

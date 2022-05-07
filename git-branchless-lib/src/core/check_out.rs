@@ -142,7 +142,7 @@ pub fn create_snapshot<'repo>(
     let head_info = repo.get_head_info()?;
     let index = repo.get_index()?;
     let (snapshot, _status) =
-        repo.get_status(git_run_info, &index, &head_info, Some(event_tx_id))?;
+        repo.get_status(effects, git_run_info, &index, &head_info, Some(event_tx_id))?;
     event_log_db.add_events(vec![Event::WorkingCopySnapshot {
         timestamp: SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs_f64(),
         event_tx_id,

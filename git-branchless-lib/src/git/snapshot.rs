@@ -440,7 +440,9 @@ branchless: automated working copy commit
 mod tests {
     use std::time::SystemTime;
 
+    use crate::core::effects::Effects;
     use crate::core::eventlog::EventLogDb;
+    use crate::core::formatting::Glyphs;
     use crate::testing::{make_git, GitRunOptions};
 
     #[test]
@@ -461,6 +463,8 @@ mod tests {
             },
         )?;
 
+        let glyphs = Glyphs::text();
+        let effects = Effects::new_suppress_for_test(glyphs);
         let git_run_info = git.get_git_run_info();
         let repo = git.get_repo()?;
         let index = repo.get_index()?;
@@ -468,8 +472,13 @@ mod tests {
         let event_log_db = EventLogDb::new(&conn)?;
         let event_tx_id = event_log_db.make_transaction_id(SystemTime::now(), "testing")?;
         let head_info = repo.get_head_info()?;
-        let (snapshot, status) =
-            repo.get_status(&git_run_info, &index, &head_info, Some(event_tx_id))?;
+        let (snapshot, status) = repo.get_status(
+            &effects,
+            &git_run_info,
+            &index,
+            &head_info,
+            Some(event_tx_id),
+        )?;
         insta::assert_debug_snapshot!(status, @r###"
         [
             StatusEntry {
