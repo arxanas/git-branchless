@@ -29,8 +29,9 @@ use tracing::instrument;
 use crate::core::formatting::Pluralize;
 use crate::git::FileStatus;
 
+use super::index::{Index, IndexEntry, Stage};
 use super::repo::Signature;
-use super::status::{FileMode, Index, IndexEntry, Stage};
+use super::status::FileMode;
 use super::tree::{hydrate_tree, make_empty_tree};
 use super::{Commit, MaybeZeroOid, NonZeroOid, Repo, ResolvedReferenceInfo, StatusEntry};
 

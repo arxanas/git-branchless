@@ -1,12 +1,10 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::str::FromStr;
 
 use lazy_static::lazy_static;
 use os_str_bytes::OsStrBytes;
 use regex::bytes::Regex;
 use tracing::{instrument, warn};
-
-use super::MaybeZeroOid;
 
 /// A Git file status indicator.
 /// See <https://git-scm.com/docs/git-status#_short_format>.
@@ -62,6 +60,8 @@ impl From<u8> for FileStatus {
     }
 }
 
+/// Wrapper around [git2::FileMode].
+#[allow(missing_docs)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum FileMode {
     Unreadable,
@@ -113,6 +113,12 @@ impl From<FileMode> for i32 {
             FileMode::Tree => git2::FileMode::Tree.into(),
             FileMode::Unreadable => git2::FileMode::Unreadable.into(),
         }
+    }
+}
+
+impl From<FileMode> for u32 {
+    fn from(file_mode: FileMode) -> Self {
+        i32::from(file_mode).try_into().unwrap()
     }
 }
 
@@ -241,84 +247,6 @@ impl TryFrom<&[u8]> for StatusEntry {
                     .expect("unable to convert orig_path to PathBuf")
             }),
         })
-    }
-}
-
-/// The possible stages for items in the index.
-#[derive(Copy, Clone, Debug)]
-pub enum Stage {
-    /// Normal staged change.
-    Stage0,
-
-    /// For a merge conflict, the contents of the file at the common ancestor of the merged commits.
-    Stage1,
-
-    /// "Our" changes.
-    Stage2,
-
-    /// "Their" changes (from the commit being merged in).
-    Stage3,
-}
-
-impl Stage {
-    pub(super) fn get_trailer(&self) -> &'static str {
-        match self {
-            Stage::Stage0 => "Branchless-stage-0",
-            Stage::Stage1 => "Branchless-stage-1",
-            Stage::Stage2 => "Branchless-stage-2",
-            Stage::Stage3 => "Branchless-stage-3",
-        }
-    }
-}
-
-impl From<Stage> for i32 {
-    fn from(stage: Stage) -> Self {
-        match stage {
-            Stage::Stage0 => 0,
-            Stage::Stage1 => 1,
-            Stage::Stage2 => 2,
-            Stage::Stage3 => 3,
-        }
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct IndexEntry {
-    pub(super) oid: MaybeZeroOid,
-    pub(super) file_mode: FileMode,
-}
-
-pub struct Index {
-    pub(super) inner: git2::Index,
-}
-
-impl std::fmt::Debug for Index {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<Index>")
-    }
-}
-
-impl Index {
-    pub fn has_conflicts(&self) -> bool {
-        self.inner.has_conflicts()
-    }
-
-    pub fn get_entry(&self, path: &Path) -> Option<IndexEntry> {
-        self.get_entry_in_stage(path, Stage::Stage0)
-    }
-
-    pub fn get_entry_in_stage(&self, path: &Path, stage: Stage) -> Option<IndexEntry> {
-        self.inner
-            .get_path(path, i32::from(stage))
-            .map(|entry| IndexEntry {
-                oid: entry.id.into(),
-                file_mode: {
-                    // `libgit2` uses u32 for file modes in index entries, but
-                    // i32 for file modes in tree entries for some reason.
-                    let mode = i32::try_from(entry.mode).unwrap();
-                    FileMode::try_from(mode).unwrap()
-                },
-            })
     }
 }
 

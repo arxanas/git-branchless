@@ -6,12 +6,11 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use cursive::theme::BaseColor;
 use cursive::utils::markup::StyledString;
-use eyre::Context;
 use tracing::instrument;
 
 use crate::git::{
-    CategorizedReferenceName, GitRunInfo, GitRunOpts, GitRunResult, MaybeZeroOid, Repo, Stage,
-    WorkingCopySnapshot,
+    update_index, CategorizedReferenceName, GitRunInfo, MaybeZeroOid, Repo, Stage,
+    UpdateIndexCommand, WorkingCopySnapshot,
 };
 use crate::util::ExitCode;
 
@@ -214,11 +213,9 @@ pub fn restore_snapshot(
         }
     }
 
-    // Check out any staged changes. libgit2 doesn't offer a good way of
-    // updating the index for higher stages, so we use `git update-index`
-    // directly.
+    // Check out the staged changes.
     let update_index_script = {
-        let mut buf = Vec::new();
+        let mut commands = Vec::new();
         for (stage, commit) in [
             (Stage::Stage0, &snapshot.commit_stage0),
             (Stage::Stage1, &snapshot.commit_stage1),
@@ -230,47 +227,34 @@ pub fn restore_snapshot(
                 None => continue,
             };
             for path in changed_paths {
-                use std::io::Write;
-
                 let tree = commit.get_tree()?;
                 let tree_entry = tree.get_path(&path)?;
 
                 let is_deleted = tree_entry.is_none();
                 if is_deleted {
-                    write!(
-                        &mut buf,
-                        "0 {zero} 0\t{path}\0",
-                        zero = MaybeZeroOid::Zero,
-                        path = path.display(),
-                    )?;
+                    commands.push(UpdateIndexCommand::Delete { path: path.clone() })
                 }
 
                 if let Some(tree_entry) = tree_entry {
-                    write!(
-                        &mut buf,
-                        "{mode} {sha1} {stage}\t{path}\0",
-                        mode = tree_entry.get_filemode().to_string(),
-                        sha1 = tree_entry.get_oid(),
-                        stage = i32::from(stage),
-                        path = path.display(),
-                    )?;
+                    commands.push(UpdateIndexCommand::Update {
+                        path,
+                        stage,
+                        mode: tree_entry.get_filemode(),
+                        oid: tree_entry.get_oid(),
+                    })
                 }
             }
         }
-        buf
+        commands
     };
-
-    let GitRunResult { .. } = git_run_info
-        .run_silent(
-            repo,
-            Some(event_tx_id),
-            &["update-index", "-z", "--index-info"],
-            GitRunOpts {
-                treat_git_failure_as_error: true,
-                stdin: Some(update_index_script),
-            },
-        )
-        .wrap_err("Updating index")?;
+    let index = repo.get_index()?;
+    update_index(
+        git_run_info,
+        repo,
+        &index,
+        event_tx_id,
+        &update_index_script,
+    )?;
 
     Ok(ExitCode(0))
 }
