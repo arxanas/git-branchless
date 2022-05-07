@@ -95,6 +95,7 @@ fn test_restore_snapshot_basic() -> eyre::Result<()> {
         HEAD is now at a7fcc8e branchless: automated working copy commit (2 changes)
         branchless: processing checkout
         branchless: processing 1 update: ref HEAD
+        branchless: processing 1 update: branch master
         "###);
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> reset --hard HEAD
@@ -104,6 +105,8 @@ fn test_restore_snapshot_basic() -> eyre::Result<()> {
         Unstaged changes after reset:
         M	test1.txt
         M	test2.txt
+        branchless: running command: <git-executable> update-ref refs/heads/master 96d1c37a3d4363611c49f7e52186e189a04c531f
+        branchless: running command: <git-executable> symbolic-ref HEAD refs/heads/master
         "###);
     }
 
@@ -111,7 +114,7 @@ fn test_restore_snapshot_basic() -> eyre::Result<()> {
         let (stdout, _stderr) = git.run(&["status", "-vv"])?;
         let stdout = trim_lines(stdout);
         insta::assert_snapshot!(stdout, @r###"
-        HEAD detached from a7fcc8e
+        On branch master
         Changes to be committed:
           (use "git restore --staged <file>..." to unstage)
         	modified:   test2.txt
@@ -206,6 +209,7 @@ fn test_restore_snapshot_deleted_files() -> eyre::Result<()> {
         HEAD is now at b2884a5 branchless: automated working copy commit (2 changes)
         branchless: processing checkout
         branchless: processing 1 update: ref HEAD
+        branchless: processing 1 update: branch master
         "###);
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> reset --hard HEAD
@@ -215,6 +219,8 @@ fn test_restore_snapshot_deleted_files() -> eyre::Result<()> {
         Unstaged changes after reset:
         D	test1.txt
         D	test2.txt
+        branchless: running command: <git-executable> update-ref refs/heads/master 96d1c37a3d4363611c49f7e52186e189a04c531f
+        branchless: running command: <git-executable> symbolic-ref HEAD refs/heads/master
         "###);
     }
 
@@ -280,6 +286,7 @@ fn test_restore_snapshot_delete_file_only_in_index() -> eyre::Result<()> {
         HEAD is now at 3613cc1 branchless: automated working copy commit (1 change)
         branchless: processing checkout
         branchless: processing 1 update: ref HEAD
+        branchless: processing 1 update: branch master
         "###);
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> reset --hard HEAD
@@ -288,6 +295,8 @@ fn test_restore_snapshot_delete_file_only_in_index() -> eyre::Result<()> {
         branchless: running command: <git-executable> reset 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
         Unstaged changes after reset:
         D	test1.txt
+        branchless: running command: <git-executable> update-ref refs/heads/master 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
+        branchless: running command: <git-executable> symbolic-ref HEAD refs/heads/master
         "###);
     }
 
@@ -432,6 +441,8 @@ fn test_snapshot_merge_conflict() -> eyre::Result<()> {
         HEAD is now at 588fac3 delete test2.txt
         branchless: running command: <git-executable> checkout d97b03def12b6915970bca193d5633f04be55299
         branchless: running command: <git-executable> reset 588fac31cba846f7278a95e1361c45118be90c6c
+        branchless: running command: <git-executable> update-ref refs/heads/change 588fac31cba846f7278a95e1361c45118be90c6c
+        branchless: running command: <git-executable> symbolic-ref HEAD refs/heads/change
         "###);
     }
 
@@ -439,7 +450,7 @@ fn test_snapshot_merge_conflict() -> eyre::Result<()> {
         let (stdout, _stderr) = git.run(&["status", "-vv"])?;
         let stdout = trim_lines(stdout);
         insta::assert_snapshot!(stdout, @r###"
-        HEAD detached from d97b03d
+        On branch change
         Unmerged paths:
           (use "git restore --staged <file>..." to unstage)
           (use "git add/rm <file>..." as appropriate to mark resolution)

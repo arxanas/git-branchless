@@ -342,7 +342,7 @@ mod tests {
         WorkingCopySnapshot {
             base_commit: Commit {
                 inner: Commit {
-                    id: 1de8f6ab5daafbf3f522a3ed5d65a551c78a29ea,
+                    id: 8ad51b400f9464de74af00ea118758c62e566e62,
                     summary: "branchless: automated working copy commit",
                 },
             },
@@ -353,6 +353,9 @@ mod tests {
                         summary: "create test1.txt",
                     },
                 },
+            ),
+            head_reference_name: Some(
+                "refs/heads/master",
             ),
             commit_unstaged: Commit {
                 inner: Commit {
@@ -431,7 +434,7 @@ mod tests {
         WorkingCopySnapshot {
             base_commit: Commit {
                 inner: Commit {
-                    id: 961a7abbff1fab1cf26fc873729977a5a4c647ac,
+                    id: f49a0b751d31eb67a04fc2dab4dc777140bc716a,
                     summary: "branchless: automated working copy commit",
                 },
             },
@@ -442,6 +445,9 @@ mod tests {
                         summary: "create test1.txt",
                     },
                 },
+            ),
+            head_reference_name: Some(
+                "refs/heads/master",
             ),
             commit_unstaged: Commit {
                 inner: Commit {

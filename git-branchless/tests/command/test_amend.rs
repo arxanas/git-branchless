@@ -412,18 +412,18 @@ fn test_amend_undo() -> eyre::Result<()> {
                       as c0bdfb5 create file1.txt
         4. Restore snapshot for branch master
                     pointing to c0bdfb5 create file1.txt
-                backed up using 80541b9 branchless: automated working copy commit
-        branchless: running command: <git-executable> checkout 80541b9359e6a5eae4dda625a279cbac68a61f93 -B master
+                backed up using eb5b991 branchless: automated working copy commit
+        branchless: running command: <git-executable> checkout eb5b99143276588c4c77e3bac94a6d476006c3f5 -B master
         branchless: running command: <git-executable> reset --hard HEAD
-        HEAD is now at 80541b9 branchless: automated working copy commit
+        HEAD is now at eb5b991 branchless: automated working copy commit
         branchless: running command: <git-executable> checkout 2e64218453f1f35f651c7e385cb5969966530f64
         branchless: running command: <git-executable> reset c0bdfb5ba33c02bba2aa451efe2f220f12232408
         Unstaged changes after reset:
         M	file1.txt
+        branchless: running command: <git-executable> update-ref refs/heads/master c0bdfb5ba33c02bba2aa451efe2f220f12232408
+        branchless: running command: <git-executable> symbolic-ref HEAD refs/heads/master
         :
-        @ c0bdfb5 create file1.txt
-        |
-        O 80541b9 (master) branchless: automated working copy commit
+        @ c0bdfb5 (> master) create file1.txt
         Applied 4 inverse events.
         "###);
     }
@@ -431,7 +431,7 @@ fn test_amend_undo() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["status", "-vv"])?;
         insta::assert_snapshot!(stdout, @r###"
-        HEAD detached from 2e64218
+        On branch master
         Changes not staged for commit:
           (use "git add <file>..." to update what will be committed)
           (use "git restore <file>..." to discard changes in working directory)
@@ -447,6 +447,14 @@ fn test_amend_undo() -> eyre::Result<()> {
         -file1 contents
         +new contents
         no changes added to commit (use "git add" and/or "git commit -a")
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        @ c0bdfb5 (> master) create file1.txt
         "###);
     }
 
