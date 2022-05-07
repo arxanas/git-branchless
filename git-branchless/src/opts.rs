@@ -293,6 +293,9 @@ pub enum Command {
         move_options: MoveOptions,
     },
 
+    /// Create a commit by interactively selecting which changes to include.
+    Record,
+
     /// Reword commits.
     Reword {
         /// Zero or more commits to reword. If not provided, defaults to "HEAD".

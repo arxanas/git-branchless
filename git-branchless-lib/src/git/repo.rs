@@ -40,7 +40,7 @@ use crate::git::tree::{dehydrate_tree, get_changed_paths_between_trees, hydrate_
 use super::index::{Index, IndexEntry};
 use super::snapshot::WorkingCopySnapshot;
 use super::status::FileMode;
-use super::StatusEntry;
+use super::{Diff, StatusEntry};
 
 /// Convert a `git2::Error` into an `eyre::Error` with an auto-generated message.
 pub(super) fn wrap_git_error(error: git2::Error) -> eyre::Error {
@@ -777,6 +777,27 @@ impl Repo {
         }
     }
 
+    /// Look up a blob with the given OID. Returns `None` if not found.
+    #[instrument]
+    pub fn find_blob(&self, oid: NonZeroOid) -> eyre::Result<Option<Blob>> {
+        match self.inner.find_blob(oid.inner) {
+            Ok(blob) => Ok(Some(Blob { inner: blob })),
+            Err(err) if err.code() == git2::ErrorCode::NotFound => Ok(None),
+            Err(err) => Err(wrap_git_error(err)),
+        }
+    }
+
+    /// Like `find_blob`, but raises a generic error if the blob could not be
+    /// found.
+    #[instrument]
+    pub fn find_blob_or_fail(&self, oid: NonZeroOid) -> eyre::Result<Blob> {
+        match self.find_blob(oid) {
+            Ok(Some(blob)) => Ok(blob),
+            Ok(None) => eyre::bail!("Could not find blob with OID: {:?}", oid),
+            Err(err) => Err(err),
+        }
+    }
+
     /// Look up the commit with the given OID and render a friendly description
     /// of it, or render an error message if not found.
     pub fn friendly_describe_commit_from_oid(
@@ -805,6 +826,17 @@ impl Repo {
             Err(err) if err.code() == git2::ErrorCode::NotFound => Ok(None),
             Err(err) => Err(wrap_git_error(err)),
         }
+    }
+
+    /// Create a blob corresponding to the provided byte slice.
+    #[instrument]
+    pub fn create_blob_from_contents(&self, contents: &[u8]) -> eyre::Result<NonZeroOid> {
+        let oid = self
+            .inner
+            .blob(contents)
+            .map_err(wrap_git_error)
+            .context("Writing blob")?;
+        Ok(make_non_zero_oid(oid))
     }
 
     /// Create a new commit.
@@ -1226,11 +1258,6 @@ impl<'repo> Signature<'repo> {
     }
 }
 
-/// A diff between two trees/commits.
-pub struct Diff<'repo> {
-    inner: git2::Diff<'repo>,
-}
-
 /// A checksum of the diff induced by a given commit, used for duplicate commit
 /// detection.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -1455,6 +1482,16 @@ impl<'repo> Commit<'repo> {
             )
             .map_err(wrap_git_error)?;
         Ok(make_non_zero_oid(oid))
+    }
+}
+
+pub struct Blob<'repo> {
+    inner: git2::Blob<'repo>,
+}
+
+impl<'repo> Blob<'repo> {
+    pub fn get_content(&self) -> &[u8] {
+        self.inner.content()
     }
 }
 
