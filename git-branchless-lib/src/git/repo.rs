@@ -431,8 +431,6 @@ impl Repo {
         effects: &Effects,
         commit: &Commit,
     ) -> eyre::Result<Option<Diff>> {
-        let (_effects, _progress) = effects.start_operation(OperationType::CalculateDiff);
-
         let changed_paths = match self.get_paths_touched_by_commit(commit)? {
             None => return Ok(None),
             Some(changed_paths) => changed_paths,
@@ -449,16 +447,35 @@ impl Repo {
 
         let parent = dehydrated_commit.get_only_parent();
         let parent_tree = match &parent {
-            Some(parent) => Some(parent.get_tree()?.inner.clone()),
+            Some(parent) => Some(parent.get_tree()?),
             None => None,
         };
         let current_tree = dehydrated_commit.get_tree()?;
+        let diff = self.get_diff_between_trees(effects, parent_tree.as_ref(), &current_tree)?;
+        Ok(Some(diff))
+    }
+
+    /// Get the diff between two trees. This is more performant than calling
+    /// libgit2's `diff_tree_to_tree` directly since it dehydrates commits
+    /// before diffing them.
+    #[instrument]
+    pub fn get_diff_between_trees(
+        &self,
+        effects: &Effects,
+        old_tree: Option<&Tree>,
+        new_tree: &Tree,
+    ) -> eyre::Result<Diff> {
+        let (effects, _progress) = effects.start_operation(OperationType::CalculateDiff);
+        let _effects = effects;
+
+        let old_tree = old_tree.map(|tree| &tree.inner);
+        let new_tree = Some(&new_tree.inner);
 
         let diff = self
             .inner
-            .diff_tree_to_tree(parent_tree.as_ref(), Some(&current_tree.inner), None)
-            .wrap_err_with(|| format!("Calculating diff between: {:?}", commit))?;
-        Ok(Some(Diff { inner: diff }))
+            .diff_tree_to_tree(old_tree, new_tree, None)
+            .map_err(wrap_git_error)?;
+        Ok(Diff { inner: diff })
     }
 
     /// Returns the set of paths currently staged to the repository's index.
