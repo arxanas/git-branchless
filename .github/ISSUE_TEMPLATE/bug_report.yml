@@ -31,24 +31,6 @@ body:
     description: What actually happened?
 
 - type: input
-  id: git-branchless-version
-  attributes:
-    label: Version of `git-branchless`
-    description: Paste the output of `git branchless --version` here.
-    placeholder: "Example: git-branchless 0.3.7"
-  validations:
-    required: true
-
-- type: input
-  id: git-version
-  attributes:
-    label: Version of `git`
-    description: Paste the output of `git version` here.
-    placeholder: "Example: git version 2.28.0"
-  validations:
-    required: true
-
-- type: input
   id: rustc-version
   attributes:
     label: Version of `rustc`
@@ -61,4 +43,21 @@ body:
     label: Automated bug report
     description: |
       Paste the output of `git branchless bug-report` here.
-      If that subcommand doesn't exist, leave this field blank.
+      If that subcommand doesn't exist, or if you don't want to share its output, leave this field blank.
+
+- type: input
+  id: git-branchless-version
+  attributes:
+    label: Version of `git-branchless`
+    description: |
+      Paste the output of `git branchless --version` here. Only necessary if you didn't use `git branchless bug-report`.
+    placeholder: "Example: git-branchless 0.3.7"
+
+- type: input
+  id: git-version
+  attributes:
+    label: Version of `git`
+    description: |
+      Paste the output of `git version` here. Only necessary if you didn't use `git branchless bug-report`.
+    placeholder: "Example: git version 2.28.0"
+
