@@ -324,7 +324,6 @@ impl Index {
 
 #[cfg(test)]
 mod tests {
-    use crate::git::GitRunInfo;
     use crate::testing::make_git;
 
     use super::*;
@@ -392,11 +391,7 @@ mod tests {
     #[test]
     fn test_get_status() -> eyre::Result<()> {
         let git = make_git()?;
-        let git_run_info = GitRunInfo {
-            path_to_git: git.path_to_git.clone(),
-            working_directory: git.repo_path.clone(),
-            env: git.get_base_env(0).into_iter().collect(),
-        };
+        let git_run_info = git.get_git_run_info();
         git.init_repo()?;
         git.commit_file("test1", 1)?;
 
@@ -408,6 +403,7 @@ mod tests {
             &repo.get_head_info()?,
             None,
         )?;
+        assert!(!snapshot.has_conflicts()?);
         assert_eq!(status, vec![]);
         insta::assert_debug_snapshot!(snapshot, @r###"
         WorkingCopySnapshot {
@@ -470,6 +466,7 @@ mod tests {
             &repo.get_head_info()?,
             None,
         )?;
+        assert!(!snapshot.has_conflicts()?);
         assert_eq!(
             status,
             vec![

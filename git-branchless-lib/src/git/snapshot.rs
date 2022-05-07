@@ -265,6 +265,7 @@ branchless: automated working copy commit
         )
     }
 
+    #[instrument]
     fn create_commit_for_unstaged_changes(
         repo: &Repo,
         head_commit: Option<&Commit>,
@@ -417,5 +418,71 @@ branchless: automated working copy commit
             },
         )?;
         Ok(commit_oid)
+    }
+
+    /// Determine whether this snapshot corresponded to a working copy state
+    /// that had unresolved merge conflicts.
+    #[instrument]
+    pub fn has_conflicts(&self) -> eyre::Result<bool> {
+        let base_tree = self.base_commit.get_tree()?;
+        let base_oid = base_tree.get_oid();
+        let stage1_tree = self.commit_stage1.get_tree()?;
+        let stage2_tree = self.commit_stage2.get_tree()?;
+        let stage3_tree = self.commit_stage3.get_tree()?;
+
+        Ok(!(base_oid == stage1_tree.get_oid()
+            && base_oid == stage2_tree.get_oid()
+            && base_oid == stage3_tree.get_oid()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::SystemTime;
+
+    use crate::core::eventlog::EventLogDb;
+    use crate::testing::{make_git, GitRunOptions};
+
+    #[test]
+    fn test_has_conflicts() -> eyre::Result<()> {
+        let git = make_git()?;
+        git.init_repo()?;
+
+        git.commit_file("test1", 1)?;
+        git.commit_file("test2", 2)?;
+        git.run(&["checkout", "HEAD^"])?;
+        git.commit_file_with_contents("test2", 2, "conflicting contents")?;
+
+        git.run_with_options(
+            &["merge", "master"],
+            &GitRunOptions {
+                expected_exit_code: 1,
+                ..Default::default()
+            },
+        )?;
+
+        let git_run_info = git.get_git_run_info();
+        let repo = git.get_repo()?;
+        let index = repo.get_index()?;
+        let conn = repo.get_db_conn()?;
+        let event_log_db = EventLogDb::new(&conn)?;
+        let event_tx_id = event_log_db.make_transaction_id(SystemTime::now(), "testing")?;
+        let head_info = repo.get_head_info()?;
+        let (snapshot, status) =
+            repo.get_status(&git_run_info, &index, &head_info, Some(event_tx_id))?;
+        insta::assert_debug_snapshot!(status, @r###"
+        [
+            StatusEntry {
+                index_status: Unmerged,
+                working_copy_status: Added,
+                working_copy_file_mode: Blob,
+                path: "test2.txt",
+                orig_path: None,
+            },
+        ]
+        "###);
+        assert!(snapshot.has_conflicts()?);
+
+        Ok(())
     }
 }
