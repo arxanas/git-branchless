@@ -8,6 +8,7 @@ mod hooks;
 mod init;
 mod r#move;
 mod navigation;
+mod record;
 mod restack;
 mod reword;
 mod smartlog;
@@ -233,6 +234,8 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
             &move_options,
             MergeConflictRemediation::Retry,
         )?,
+
+        Command::Record => record::record(&effects, &git_run_info)?,
 
         Command::Reword {
             commits,
