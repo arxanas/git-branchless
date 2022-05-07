@@ -6,6 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use cursive::theme::BaseColor;
 use cursive::utils::markup::StyledString;
+use eyre::Context;
 use tracing::instrument;
 
 use crate::git::{
@@ -175,7 +176,9 @@ pub fn restore_snapshot(
 
     // Discard any working copy changes. The caller is responsible for having
     // snapshotted them if necessary.
-    let exit_code = git_run_info.run(effects, Some(event_tx_id), &["reset", "--hard", "HEAD"])?;
+    let exit_code = git_run_info
+        .run(effects, Some(event_tx_id), &["reset", "--hard", "HEAD"])
+        .wrap_err("Discarding working copy changes")?;
     if !exit_code.is_success() {
         return Ok(exit_code);
     }
@@ -185,11 +188,13 @@ pub fn restore_snapshot(
     // two-step process. This second `git checkout` is so that untracked files
     // don't get thrown away as part of checking out the snapshot, but instead
     // abort the procedure.
-    let exit_code = git_run_info.run(
-        effects,
-        Some(event_tx_id),
-        &["checkout", &snapshot.commit_unstaged.get_oid().to_string()],
-    )?;
+    let exit_code = git_run_info
+        .run(
+            effects,
+            Some(event_tx_id),
+            &["checkout", &snapshot.commit_unstaged.get_oid().to_string()],
+        )
+        .wrap_err("Checking out unstaged changes (fail if conflict)")?;
     if !exit_code.is_success() {
         // FIXME: it might be worth attempting to un-check-out this commit?
         return Ok(exit_code);
@@ -199,11 +204,13 @@ pub fn restore_snapshot(
     // copy, so we just have to adjust `HEAD`.
     match &snapshot.head_commit {
         Some(head_commit) => {
-            let exit_code = git_run_info.run(
-                effects,
-                Some(event_tx_id),
-                &["reset", &head_commit.get_oid().to_string()],
-            )?;
+            let exit_code = git_run_info
+                .run(
+                    effects,
+                    Some(event_tx_id),
+                    &["reset", &head_commit.get_oid().to_string()],
+                )
+                .wrap_err("Update HEAD for unstaged changes")?;
             if !exit_code.is_success() {
                 return Ok(exit_code);
             }
@@ -255,6 +262,36 @@ pub fn restore_snapshot(
         event_tx_id,
         &update_index_script,
     )?;
+
+    // If the snapshot had a branch, then we've just checked out the branch to
+    // the base commit, but it should point to the head commit.  Move it there.
+    if let Some(ref_name) = &snapshot.head_reference_name {
+        let head_oid = match &snapshot.head_commit {
+            Some(head_commit) => MaybeZeroOid::NonZero(head_commit.get_oid()),
+            None => MaybeZeroOid::Zero,
+        };
+        let exit_code = git_run_info
+            .run(
+                effects,
+                Some(event_tx_id),
+                &["update-ref", ref_name, &head_oid.to_string()],
+            )
+            .context("Restoring snapshot branch")?;
+        if !exit_code.is_success() {
+            return Ok(exit_code);
+        }
+
+        let exit_code = git_run_info
+            .run(
+                effects,
+                Some(event_tx_id),
+                &["symbolic-ref", "HEAD", ref_name],
+            )
+            .context("Checking out snapshot branch")?;
+        if !exit_code.is_success() {
+            return Ok(exit_code);
+        }
+    }
 
     Ok(ExitCode(0))
 }

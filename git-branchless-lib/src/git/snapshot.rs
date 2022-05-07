@@ -24,6 +24,7 @@
 use std::collections::HashMap;
 use std::str::FromStr;
 
+use os_str_bytes::OsStringBytes;
 use tracing::instrument;
 
 use crate::core::formatting::Pluralize;
@@ -36,6 +37,7 @@ use super::tree::{hydrate_tree, make_empty_tree};
 use super::{Commit, MaybeZeroOid, NonZeroOid, Repo, ResolvedReferenceInfo, StatusEntry};
 
 const BRANCHLESS_HEAD_TRAILER: &str = "Branchless-head";
+const BRANCHLESS_HEAD_REF_TRAILER: &str = "Branchless-head-ref";
 const BRANCHLESS_UNSTAGED_TRAILER: &str = "Branchless-unstaged";
 
 /// A special `Commit` which represents the status of the working copy at a
@@ -58,6 +60,10 @@ pub struct WorkingCopySnapshot<'repo> {
     /// This could happen when the repository has been freshly initialized, but
     /// no commits have yet been made.
     pub head_commit: Option<Commit<'repo>>,
+
+    /// The branch that was checked out at the time of this snapshot, if any.
+    /// This includes the `refs/heads/` prefix.
+    pub head_reference_name: Option<String>,
 
     /// The unstaged changes in the working copy.
     pub commit_unstaged: Commit<'repo>,
@@ -92,6 +98,15 @@ impl<'repo> WorkingCopySnapshot<'repo> {
         let head_commit_oid: MaybeZeroOid = match &head_commit {
             Some(head_commit) => MaybeZeroOid::NonZero(head_commit.get_oid()),
             None => MaybeZeroOid::Zero,
+        };
+
+        let head_reference_name: Option<String> = match &head_info.reference_name {
+            Some(reference_name) => {
+                let reference_name = reference_name.clone().into_owned();
+                let reference_name = String::from_utf8(reference_name.into_raw_vec());
+                reference_name.ok()
+            }
+            None => None,
         };
 
         let commit_unstaged_oid: NonZeroOid = {
@@ -138,9 +153,12 @@ branchless: automated working copy commit
 {}: {}
 {}: {}
 {}: {}
+{}: {}
 ",
             BRANCHLESS_HEAD_TRAILER,
             head_commit_oid,
+            BRANCHLESS_HEAD_REF_TRAILER,
+            head_reference_name.as_deref().unwrap_or_default(),
             BRANCHLESS_UNSTAGED_TRAILER,
             commit_unstaged_oid,
             Stage::Stage0.get_trailer(),
@@ -187,6 +205,7 @@ branchless: automated working copy commit
         Ok(WorkingCopySnapshot {
             base_commit: repo.find_commit_or_fail(commit_oid)?,
             head_commit: head_commit.clone(),
+            head_reference_name,
             commit_unstaged: repo.find_commit_or_fail(commit_unstaged_oid)?,
             commit_stage0,
             commit_stage1,
@@ -227,6 +246,14 @@ branchless: automated working copy commit
             Some(commit) => commit,
             None => return Ok(None),
         };
+        let head_reference_name = trailers.iter().find_map(|(k, v)| {
+            if k == BRANCHLESS_HEAD_REF_TRAILER {
+                Some(v.to_owned())
+            } else {
+                None
+            }
+        });
+
         let commit_stage0 = match find_commit(Stage::Stage0.get_trailer())? {
             Some(commit) => commit,
             None => return Ok(None),
@@ -247,6 +274,7 @@ branchless: automated working copy commit
         Ok(Some(WorkingCopySnapshot {
             base_commit: base_commit.to_owned(),
             head_commit,
+            head_reference_name,
             commit_unstaged,
             commit_stage0,
             commit_stage1,
