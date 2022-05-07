@@ -612,11 +612,15 @@ impl Repo {
     /// Returns the current status of the repo index and working copy.
     pub fn get_status(
         &self,
+        effects: &Effects,
         git_run_info: &GitRunInfo,
         index: &Index,
         head_info: &ResolvedReferenceInfo,
         event_tx_id: Option<EventTransactionId>,
     ) -> eyre::Result<(WorkingCopySnapshot, Vec<StatusEntry>)> {
+        let (effects, _progress) = effects.start_operation(OperationType::QueryWorkingCopy);
+        let _effects = effects;
+
         let output = git_run_info
             .run_silent(
                 self,

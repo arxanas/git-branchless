@@ -33,6 +33,7 @@ pub enum OperationType {
     InitializeRebase,
     MakeGraph,
     ProcessEvents,
+    QueryWorkingCopy,
     ReadingFromCache,
     RebaseCommits,
     RunGitCommand(Arc<String>),
@@ -59,6 +60,7 @@ impl ToString for OperationType {
             OperationType::InitializeRebase => "Initializing rebase",
             OperationType::MakeGraph => "Examining local history",
             OperationType::ProcessEvents => "Processing events",
+            OperationType::QueryWorkingCopy => "Querying the working copy",
             OperationType::ReadingFromCache => "Reading from cache",
             OperationType::RebaseCommits => "Rebasing commits",
             OperationType::RunGitCommand(command) => {

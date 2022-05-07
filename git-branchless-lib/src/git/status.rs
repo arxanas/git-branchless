@@ -324,6 +324,8 @@ impl Index {
 
 #[cfg(test)]
 mod tests {
+    use crate::core::effects::Effects;
+    use crate::core::formatting::Glyphs;
     use crate::testing::make_git;
 
     use super::*;
@@ -395,9 +397,12 @@ mod tests {
         git.init_repo()?;
         git.commit_file("test1", 1)?;
 
+        let glyphs = Glyphs::text();
+        let effects = Effects::new_suppress_for_test(glyphs);
         let repo = git.get_repo()?;
 
         let (snapshot, status) = repo.get_status(
+            &effects,
             &git_run_info,
             &repo.get_index()?,
             &repo.get_head_info()?,
@@ -461,6 +466,7 @@ mod tests {
         git.run(&["mv", "test1.txt", "renamed.txt"])?;
 
         let (snapshot, status) = repo.get_status(
+            &effects,
             &git_run_info,
             &repo.get_index()?,
             &repo.get_head_info()?,
