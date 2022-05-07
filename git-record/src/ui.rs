@@ -140,6 +140,7 @@ impl Recorder {
         let mut file_view = LinearLayout::vertical();
         let mut line_num: usize = 1;
         let local_num_changed_hunks = file_content.count_changed_hunks();
+        let mut local_changed_hunk_num = 0;
 
         let file_header_view = LinearLayout::horizontal()
             .child(
@@ -218,10 +219,11 @@ impl Recorder {
                         }
 
                         Hunk::Changed { before, after } => {
+                            local_changed_hunk_num += 1;
                             *global_changed_hunk_num += 1;
                             let description = format!(
                                 "hunk {}/{} in current file, {}/{} total",
-                                hunk_num,
+                                local_changed_hunk_num,
                                 local_num_changed_hunks,
                                 global_changed_hunk_num,
                                 global_num_changed_hunks
@@ -1217,5 +1219,58 @@ mod tests {
         6 foo
         7 bar
         "###);
+    }
+
+    #[test]
+    fn test_render_multiple_hunks() -> eyre::Result<()> {
+        let mut state = example_record_state();
+        let hunks = {
+            let (_, file_contents) = &state.files[0];
+            match file_contents {
+                FileContent::Absent => panic!("should be text"),
+                FileContent::Text { hunks } => hunks.clone(),
+            }
+        };
+        state.files[0].1 = FileContent::Text {
+            hunks: [hunks.clone(), hunks].concat(),
+        };
+
+        let screenshot = Default::default();
+        let result = run_test(
+            state,
+            vec![
+                CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot)),
+                CursiveTestingEvent::Event('q'.into()),
+                CursiveTestingEvent::Event(Key::Enter.into()),
+            ],
+        );
+
+        insta::assert_debug_snapshot!(result, @r###"
+        Err(
+            Cancelled,
+        )
+        "###);
+        insta::assert_snapshot!(screen_to_string(&screenshot), @r###"
+        [~] foo
+        1 unchanged 1
+        2 unchanged 2
+        [~] hunk 1/2 in current file, 1/2 total
+        [X] -before 1
+        [X] -before 2
+        [X] +after 1
+        [ ] +after 2
+        5 unchanged 1
+        6 unchanged 2
+        :
+        5 unchanged 1
+        6 unchanged 2
+        [~] hunk 2/2 in current file, 2/2 total
+        [X] -before 1
+        [X] -before 2
+        [X] +after 1
+        [ ] +after 2
+        "###);
+
+        Ok(())
     }
 }
