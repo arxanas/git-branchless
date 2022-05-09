@@ -61,7 +61,7 @@ pub fn process_diff_for_record(
         }),
         None,
     )
-    .context("Iterating over diff")?;
+    .wrap_err("Iterating over diff")?;
 
     let hunks = std::mem::take(&mut *hunks.lock().unwrap());
     let mut result = Vec::new();
@@ -70,7 +70,7 @@ pub fn process_diff_for_record(
             let oid = MaybeZeroOid::from(oid);
             let oid = NonZeroOid::try_from(oid)?;
             let contents = repo.find_blob_or_fail(oid)?.get_content().to_vec();
-            let contents = String::from_utf8(contents).context("Decoding old file contents")?;
+            let contents = String::from_utf8(contents).wrap_err("Decoding old file contents")?;
             let lines: Vec<String> = contents.lines().map(|line| line.to_owned()).collect();
             Ok(lines)
         };
