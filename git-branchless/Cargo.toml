@@ -26,7 +26,7 @@ cursive = { version = "0.18.0", default-features = false, features = [
   "crossterm-backend",
 ] }
 cursive_buffered_backend = "0.6.0"
-dialoguer = "0.10.0"
+dialoguer = "0.10.1"
 eden_dag = { package = "esl01-dag", version = "0.2.1" }
 eyre = "0.6.8"
 git-record = { version = "0.1", path = "../git-record" }
