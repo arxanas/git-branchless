@@ -70,13 +70,14 @@ pub fn reword(
 
     let edit_message_fn = |message: &str| {
         let mut editor = Editor::new();
-        let editor = match get_editor(&repo)? {
-            Some(prog) => editor.executable(prog),
-            None => &mut editor,
+        let (editor, editor_program) = match get_editor(git_run_info, &repo)? {
+            Some(editor_program) => (editor.executable(&editor_program), editor_program),
+            None => (&mut editor, "<default>".into()),
         };
         let result = editor
             .require_save(false)
-            .edit(message)?
+            .edit(message)
+            .with_context(|| format!("Invoking editor: '{}'", editor_program.to_string_lossy()))?
             .expect("`Editor::edit` should not return `None` when `require_save` is `false`");
         Ok(result)
     };
