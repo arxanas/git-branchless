@@ -49,6 +49,7 @@ pub(super) fn wrap_git_error(error: git2::Error) -> eyre::Error {
 
 /// Clean up a message, removing extraneous whitespace plus comment lines starting with
 /// `comment_char`, and ensure that the message ends with a newline.
+#[instrument]
 pub fn message_prettify(message: &str, comment_char: Option<char>) -> eyre::Result<String> {
     let comment_char = match comment_char {
         Some(ch) => {
@@ -1273,6 +1274,7 @@ pub struct Commit<'repo> {
 
 impl<'repo> Commit<'repo> {
     /// Get the object ID of the commit.
+    #[instrument]
     pub fn get_oid(&self) -> NonZeroOid {
         NonZeroOid {
             inner: self.inner.id(),
@@ -1280,17 +1282,20 @@ impl<'repo> Commit<'repo> {
     }
 
     /// Get the short object ID of the commit.
+    #[instrument]
     pub fn get_short_oid(&self) -> eyre::Result<String> {
         Ok(String::from_utf8_lossy(&self.inner.clone().into_object().short_id()?).to_string())
     }
 
     /// Get the object IDs of the parents of this commit.
+    #[instrument]
     pub fn get_parent_oids(&self) -> Vec<NonZeroOid> {
         self.inner.parent_ids().map(make_non_zero_oid).collect()
     }
 
     /// Get the parent OID of this commit if there is exactly one parent, or
     /// `None` otherwise.
+    #[instrument]
     pub fn get_only_parent_oid(&self) -> Option<NonZeroOid> {
         match self.get_parent_oids().as_slice() {
             [] | [_, _, ..] => None,
@@ -1299,11 +1304,13 @@ impl<'repo> Commit<'repo> {
     }
 
     /// Get the number of parents of this commit.
+    #[instrument]
     pub fn get_parent_count(&self) -> usize {
         self.inner.parent_count()
     }
 
     /// Get the parent commits of this commit.
+    #[instrument]
     pub fn get_parents(&self) -> Vec<Commit<'repo>> {
         self.inner
             .parents()
@@ -1313,6 +1320,7 @@ impl<'repo> Commit<'repo> {
 
     /// Get the parent of this commit if there is exactly one parent, or `None`
     /// otherwise.
+    #[instrument]
     pub fn get_only_parent(&self) -> Option<Commit<'repo>> {
         match self.get_parents().as_slice() {
             [] | [_, _, ..] => None,
@@ -1321,11 +1329,13 @@ impl<'repo> Commit<'repo> {
     }
 
     /// Get the commit time of this commit.
+    #[instrument]
     pub fn get_time(&self) -> Time {
         self.inner.time()
     }
 
     /// Get the summary (first line) of the commit message.
+    #[instrument]
     pub fn get_summary(&self) -> eyre::Result<OsString> {
         match self.inner.summary_bytes() {
             Some(summary) => Ok(OsString::from_raw_vec(summary.into())?),
@@ -1334,18 +1344,21 @@ impl<'repo> Commit<'repo> {
     }
 
     /// Get the commit message with some whitespace trimmed.
+    #[instrument]
     pub fn get_message_pretty(&self) -> eyre::Result<OsString> {
         let message = OsString::from_raw_vec(self.inner.message_bytes().into())?;
         Ok(message)
     }
 
     /// Get the commit message, without any whitespace trimmed.
+    #[instrument]
     pub fn get_message_raw(&self) -> eyre::Result<OsString> {
         let message = OsString::from_raw_vec(self.inner.message_raw_bytes().into())?;
         Ok(message)
     }
 
     /// Get the author of this commit.
+    #[instrument]
     pub fn get_author(&self) -> Signature {
         Signature {
             inner: self.inner.author(),
@@ -1353,6 +1366,7 @@ impl<'repo> Commit<'repo> {
     }
 
     /// Get the committer of this commit.
+    #[instrument]
     pub fn get_committer(&self) -> Signature {
         Signature {
             inner: self.inner.committer(),
@@ -1443,6 +1457,7 @@ impl<'repo> Commit<'repo> {
 
     /// Determine if this commit added, removed, or changed the entry at the
     /// provided file path.
+    #[instrument]
     pub fn contains_touched_path(&self, path: &Path) -> eyre::Result<Option<bool>> {
         let parent = match self.get_only_parent() {
             None => return Ok(None),

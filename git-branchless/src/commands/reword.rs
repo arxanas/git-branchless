@@ -68,9 +68,14 @@ pub fn reword(
         None => return Ok(ExitCode(1)),
     };
 
-    let edit_message_fn = |message: &str| {
+    #[instrument]
+    fn edit_message_fn_inner(
+        git_run_info: &GitRunInfo,
+        repo: &Repo,
+        message: &str,
+    ) -> eyre::Result<String> {
         let mut editor = Editor::new();
-        let (editor, editor_program) = match get_editor(git_run_info, &repo)? {
+        let (editor, editor_program) = match get_editor(git_run_info, repo)? {
             Some(editor_program) => (editor.executable(&editor_program), editor_program),
             None => (&mut editor, "<default>".into()),
         };
@@ -80,7 +85,8 @@ pub fn reword(
             .with_context(|| format!("Invoking editor: '{}'", editor_program.to_string_lossy()))?
             .expect("`Editor::edit` should not return `None` when `require_save` is `false`");
         Ok(result)
-    };
+    }
+    let edit_message_fn = |message: &str| edit_message_fn_inner(git_run_info, &repo, message);
 
     let messages = match prepare_messages(&repo, messages, &commits, edit_message_fn)? {
         PrepareMessagesResult::Succeeded { messages } => messages,
@@ -457,7 +463,8 @@ fn prepare_messages(
             missing.push(short_oid);
         }
 
-        let mut w = File::create(repo.get_path().join("REWORD_EDITMSG"))?;
+        let mut w = File::create(repo.get_path().join("REWORD_EDITMSG"))
+            .context("Creating REWORD_EDITMSG file")?;
         writeln!(
             &mut w,
             "{} This file was created by `git branchless reword` at {}\n\
@@ -504,6 +511,7 @@ struct ParseMessageResult {
     unexpected: Vec<String>,
 }
 
+#[instrument]
 fn parse_bulk_edit_message(
     message: String,
     commits: &[Commit],
@@ -548,6 +556,7 @@ fn parse_bulk_edit_message(
 /// Return the root commits for given a list of commits. This is the list of commits that have *no*
 /// ancestors also in the list. The idea is to find the minimum number of subtrees that much be
 /// rebased to include all of our rewording.
+#[instrument]
 fn find_subtree_roots<'repo>(
     repo: &'repo Repo,
     dag: &Dag,
@@ -572,6 +581,7 @@ fn find_subtree_roots<'repo>(
 }
 
 /// Print a basic status report of what commits were reworded.
+#[instrument]
 fn render_status_report(
     repo: &Repo,
     effects: &Effects,
