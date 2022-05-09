@@ -7,6 +7,7 @@ use std::time::SystemTime;
 
 use cursive::theme::BaseColor;
 use cursive::utils::markup::StyledString;
+use eyre::Context;
 use lib::core::check_out::{create_snapshot, restore_snapshot};
 use lib::core::effects::Effects;
 use lib::core::eventlog::EventLogDb;
@@ -31,12 +32,14 @@ pub fn create(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<Exit
         exit_code,
         stdout: _,
         stderr: _,
-    } = git_run_info.run_silent(
-        &repo,
-        Some(event_tx_id),
-        &["reset", "--hard", "HEAD"],
-        Default::default(),
-    )?;
+    } = git_run_info
+        .run_silent(
+            &repo,
+            Some(event_tx_id),
+            &["reset", "--hard", "HEAD"],
+            Default::default(),
+        )
+        .wrap_err("Discarding working copy")?;
 
     if exit_code != 0 {
         writeln!(

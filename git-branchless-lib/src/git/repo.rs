@@ -629,7 +629,8 @@ impl Repo {
                 event_tx_id,
                 &["status", "--porcelain=v2", "--untracked-files=no", "-z"],
                 Default::default(),
-            )?
+            )
+            .wrap_err("Querying status")?
             .stdout;
 
         let not_null_terminator = |c: &u8| *c != 0_u8;
@@ -836,7 +837,7 @@ impl Repo {
             .inner
             .blob(contents)
             .map_err(wrap_git_error)
-            .context("Writing blob")?;
+            .wrap_err("Writing blob")?;
         Ok(make_non_zero_oid(oid))
     }
 
@@ -1387,7 +1388,7 @@ impl<'repo> Commit<'repo> {
         let message = self.get_message_raw()?;
         let mut result = Vec::new();
         for (k, v) in message_trailers_bytes(message)
-            .context("Reading message trailers")?
+            .wrap_err("Reading message trailers")?
             .iter()
         {
             if let (Ok(k), Ok(v)) = (std::str::from_utf8(k), std::str::from_utf8(v)) {
