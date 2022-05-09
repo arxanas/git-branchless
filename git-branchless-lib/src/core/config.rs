@@ -3,9 +3,10 @@
 use std::ffi::OsString;
 use std::path::PathBuf;
 
+use eyre::Context;
 use tracing::{instrument, warn};
 
-use crate::git::{ConfigRead, Repo};
+use crate::git::{ConfigRead, GitRunInfo, GitRunOpts, Repo};
 
 /// Get the path where Git hooks are stored on disk.
 #[instrument]
@@ -100,7 +101,21 @@ pub fn get_default_branch_name(repo: &Repo) -> eyre::Result<Option<String>> {
 ///
 /// FMI see https://git-scm.com/docs/git-var#Documentation/git-var.txt-GITEDITOR
 #[instrument]
-pub fn get_editor(repo: &Repo) -> eyre::Result<Option<OsString>> {
+pub fn get_editor(git_run_info: &GitRunInfo, repo: &Repo) -> eyre::Result<Option<OsString>> {
+    if let Ok(result) =
+        git_run_info.run_silent(repo, None, &["var", "GIT_EDITOR"], GitRunOpts::default())
+    {
+        if result.exit_code == 0 {
+            let editor =
+                std::str::from_utf8(&result.stdout).context("Decoding git var output as UTF-8")?;
+            let editor = editor.trim_end();
+            let editor = OsString::from(editor);
+            return Ok(Some(editor));
+        } else {
+            warn!(?result, "`git var` invocation failed");
+        }
+    }
+
     let editor = std::env::var_os("GIT_EDITOR");
     if editor != None {
         return Ok(editor);
