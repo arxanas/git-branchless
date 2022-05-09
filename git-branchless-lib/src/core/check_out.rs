@@ -216,7 +216,7 @@ pub fn restore_snapshot(
             }
         }
         None => {
-            unimplemented!("Cannot restore snapshot of commit with no HEAD");
+            // Do nothing. The branch, if any, will be restored later below.
         }
     }
 

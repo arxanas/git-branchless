@@ -329,11 +329,7 @@ branchless: automated working copy commit
             .collect();
         let num_changes = changed_paths.len();
 
-        let head_commit = match &head_commit {
-            Some(head_commit) => head_commit,
-            None => unimplemented!("Cannot snapshot unstaged changes for unborn HEAD"),
-        };
-        let head_tree = head_commit.get_tree()?;
+        let head_tree = head_commit.map(|commit| commit.get_tree()).transpose()?;
         let hydrate_entries = {
             let mut result = HashMap::new();
             for (path, file_mode) in changed_paths {
@@ -353,7 +349,7 @@ branchless: automated working copy commit
             result
         };
         let tree_unstaged = {
-            let tree_oid = hydrate_tree(repo, Some(&head_tree), hydrate_entries)?;
+            let tree_oid = hydrate_tree(repo, head_tree.as_ref(), hydrate_entries)?;
             repo.find_tree_or_fail(tree_oid)?
         };
 
@@ -365,7 +361,7 @@ branchless: automated working copy commit
             &signature,
             &message,
             &tree_unstaged,
-            vec![head_commit],
+            Vec::from_iter(head_commit),
         )
     }
 

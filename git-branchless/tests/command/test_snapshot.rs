@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use lib::git::NonZeroOid;
-use lib::testing::{make_git, GitRunOptions};
+use lib::testing::{make_git, GitInitOptions, GitRunOptions};
 
 use crate::util::trim_lines;
 
@@ -458,6 +458,75 @@ fn test_snapshot_merge_conflict() -> eyre::Result<()> {
 
         * Unmerged path test2.txt
         no changes added to commit (use "git add" and/or "git commit -a")
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_snapshot_restore_unborn_head() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo_with_options(&GitInitOptions {
+        make_initial_commit: false,
+        run_branchless_init: false,
+    })?;
+
+    git.run(&["branchless", "init", "--main-branch", "master"])?;
+
+    {
+        let (stdout, _stderr) = git.run(&["status", "-vv"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        On branch master
+
+        No commits yet
+
+        nothing to commit (create/copy files and use "git add" to track)
+        "###);
+    }
+
+    let snapshot_oid = {
+        let (snapshot_oid, stderr) = git.run(&["branchless", "snapshot", "create"])?;
+        insta::assert_snapshot!(stderr, @"branchless: creating working copy snapshot
+");
+        NonZeroOid::from_str(snapshot_oid.trim())?
+    };
+
+    git.commit_file("test1", 1)?;
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @"@ 6118a39 (> master) create test1.txt
+");
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&[
+            "branchless",
+            "snapshot",
+            "restore",
+            &snapshot_oid.to_string(),
+        ])?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> reset --hard HEAD
+        HEAD is now at 6118a39 create test1.txt
+        branchless: running command: <git-executable> checkout 535e13df3331cf7d7f35b9a936e824f13a8820e9
+        branchless: running command: <git-executable> update-ref refs/heads/master 0000000000000000000000000000000000000000
+        branchless: running command: <git-executable> symbolic-ref HEAD refs/heads/master
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["status", "-vv"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        On branch master
+
+        No commits yet
+
+        nothing to commit (create/copy files and use "git add" to track)
         "###);
     }
 
