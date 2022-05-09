@@ -36,7 +36,7 @@ pub fn create(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<Exit
         .run_silent(
             &repo,
             Some(event_tx_id),
-            &["reset", "--hard", "HEAD"],
+            &["reset", "--hard", "HEAD", "--"],
             Default::default(),
         )
         .wrap_err("Discarding working copy")?;
