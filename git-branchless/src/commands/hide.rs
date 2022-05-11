@@ -9,13 +9,15 @@ use lib::core::repo_ext::RepoExt;
 use lib::util::ExitCode;
 use tracing::instrument;
 
-use lib::core::dag::{resolve_commits, sort_commit_set, CommitSet, Dag, ResolveCommitsResult};
+use lib::core::dag::{sort_commit_set, CommitSet, Dag};
 use lib::core::effects::Effects;
 use lib::core::eventlog::{CommitActivityStatus, Event};
 use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::formatting::{printable_styled_string, Glyphs, Pluralize};
 use lib::core::rewrite::move_branches;
 use lib::git::{CategorizedReferenceName, GitRunInfo, MaybeZeroOid, Repo};
+
+use crate::revset::{resolve_commits, ResolveCommitsResult};
 
 /// Hide the hashes provided on the command-line.
 #[instrument]

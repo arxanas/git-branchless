@@ -4,6 +4,7 @@
 mod ast;
 mod eval;
 mod parser;
+mod resolve;
 
 #[rustfmt::skip]
 #[allow(clippy::all, clippy::as_conversions)]
@@ -12,3 +13,4 @@ mod grammar;
 pub use ast::Expr;
 pub use eval::eval;
 pub use parser::parse;
+pub use resolve::{resolve_commits, ResolveCommitsResult};

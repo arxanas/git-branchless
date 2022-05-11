@@ -11,8 +11,9 @@ use lib::util::ExitCode;
 use rayon::ThreadPoolBuilder;
 
 use crate::opts::MoveOptions;
+use crate::revset::{resolve_commits, ResolveCommitsResult};
 use lib::core::config::get_restack_preserve_timestamps;
-use lib::core::dag::{resolve_commits, sort_commit_set, CommitSet, Dag, ResolveCommitsResult};
+use lib::core::dag::{sort_commit_set, CommitSet, Dag};
 use lib::core::effects::{Effects, OperationType};
 use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::formatting::{printable_styled_string, Glyphs, StyledStringBuilder};

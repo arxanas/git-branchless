@@ -20,7 +20,7 @@ use tracing::{instrument, warn};
 use lib::core::config::{
     get_comment_char, get_commit_template, get_editor, get_restack_preserve_timestamps,
 };
-use lib::core::dag::{resolve_commits, sort_commit_set, CommitSet, Dag, ResolveCommitsResult};
+use lib::core::dag::{sort_commit_set, CommitSet, Dag};
 use lib::core::effects::Effects;
 use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::formatting::{printable_styled_string, Glyphs, Pluralize};
@@ -30,6 +30,8 @@ use lib::core::rewrite::{
     RebasePlanBuilder, RepoResource,
 };
 use lib::git::{message_prettify, Commit, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo};
+
+use crate::revset::{resolve_commits, ResolveCommitsResult};
 
 /// The commit message(s) provided by the user.
 #[derive(Debug)]
