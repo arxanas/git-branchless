@@ -1,5 +1,5 @@
 // auto-generated: "lalrpop 0.19.8"
-// sha3: 3b3e95a31c913e799c869126ae6612c266f8c740f896a72c2af8268778fa5afd
+// sha3: e4697a13cd51d01c3f8513c46ecd4c697164148fc6db6c2ec19f26b577ecd66e
 use super::ast::Expr;
 #[allow(unused_extern_crates)]
 extern crate lalrpop_util as __lalrpop_util;
@@ -300,7 +300,7 @@ mod __parse__Expr {
             r###""and""###,
             r###""or""###,
             r###""|""###,
-            r###"r#"[a-zA-Z0-9/_$@.]+"#"###,
+            r###"r#"[a-zA-Z0-9/_$@.-]+"#"###,
             r###"r#"\\x22([^\\x22\\x5c]|\\x5c.)*\\x22"#"###,
         ];
         __TERMINAL.iter().enumerate().filter_map(|(index, terminal)| {
@@ -1582,7 +1582,7 @@ mod __parse__Expr {
         _: core::marker::PhantomData<(&'input ())>,
     ) -> (usize, usize)
     {
-        // Symbol1 = r#"[a-zA-Z0-9/_$@.]+"# => ActionFn(27);
+        // Symbol1 = r#"[a-zA-Z0-9/_$@.-]+"# => ActionFn(27);
         let __sym0 = __pop_Variant0(__symbols);
         let __start = __sym0.0.clone();
         let __end = __sym0.2.clone();
@@ -1638,7 +1638,7 @@ mod __intern_token {
     extern crate alloc;
     pub fn new_builder() -> __lalrpop_util::lexer::MatcherBuilder {
         let __strs: &[(&str, bool)] = &[
-            ("^([\\$\\.-9@-Z_a-z]+)", false),
+            ("^([\\$\\--9@-Z_a-z]+)", false),
             ("^(\"([\u{0}-!\\#-\\[\\]-\u{10ffff}]|\\\\[\u{0}-\t\u{b}-\u{10ffff}])*\")", false),
             ("^(%)", false),
             ("^(\\&)", false),

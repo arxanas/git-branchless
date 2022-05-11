@@ -36,7 +36,7 @@ fn test_query_parse_error() -> eyre::Result<()> {
         )?;
         insta::assert_snapshot!(stderr, @r###"
         Parse error for expression 'foo(': parse error: Unrecognized EOF found at 4
-        Expected one of "(", ")", "::", r#"[a-zA-Z0-9/_$@.]+"# or r#"\\x22([^\\x22\\x5c]|\\x5c.)*\\x22"#
+        Expected one of "(", ")", "::", r#"[a-zA-Z0-9/_$@.-]+"# or r#"\\x22([^\\x22\\x5c]|\\x5c.)*\\x22"#
         "###);
         insta::assert_snapshot!(stdout, @"");
     }

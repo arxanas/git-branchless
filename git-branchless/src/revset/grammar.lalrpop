@@ -106,5 +106,5 @@ Symbol2: String = {
 }
 
 Symbol1: String = {
-    r"[a-zA-Z0-9/_$@.]+" => <>.to_string(),
+    r"[a-zA-Z0-9/_$@.-]+" => <>.to_string(),
 }
