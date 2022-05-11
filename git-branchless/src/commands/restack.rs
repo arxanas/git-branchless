@@ -68,8 +68,9 @@ use tracing::{instrument, warn};
 
 use crate::commands::smartlog::smartlog;
 use crate::opts::MoveOptions;
+use crate::revset::{resolve_commits, ResolveCommitsResult};
 use lib::core::config::get_restack_preserve_timestamps;
-use lib::core::dag::{commit_set_to_vec, resolve_commits, CommitSet, Dag, ResolveCommitsResult};
+use lib::core::dag::{commit_set_to_vec, CommitSet, Dag};
 use lib::core::effects::Effects;
 use lib::core::eventlog::{EventCursor, EventLogDb, EventReplayer};
 use lib::core::rewrite::{

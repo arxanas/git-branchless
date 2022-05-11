@@ -14,8 +14,9 @@ use rayon::ThreadPoolBuilder;
 use tracing::instrument;
 
 use crate::opts::MoveOptions;
+use crate::revset::{resolve_commits, ResolveCommitsResult};
 use lib::core::config::get_restack_preserve_timestamps;
-use lib::core::dag::{resolve_commits, CommitSet, Dag, ResolveCommitsResult};
+use lib::core::dag::{CommitSet, Dag};
 use lib::core::effects::Effects;
 use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::rewrite::{
