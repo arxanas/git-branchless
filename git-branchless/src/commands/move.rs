@@ -110,17 +110,20 @@ pub fn r#move(
         &references_snapshot,
     )?;
 
-    let (source_oid, dest_oid) =
-        match resolve_commits(effects, &repo, &mut dag, vec![source, dest])? {
-            ResolveCommitsResult::Ok { commits } => match &commits.as_slice() {
-                [source_commit, dest_commit] => (source_commit.get_oid(), dest_commit.get_oid()),
-                _ => eyre::bail!("Unexpected number of returns values from resolve_commits"),
-            },
-            ResolveCommitsResult::CommitNotFound { commit } => {
-                writeln!(effects.get_output_stream(), "Commit not found: {}", commit)?;
-                return Ok(ExitCode(1));
-            }
-        };
+    let source_oid = match resolve_commits(effects, &repo, &mut dag, vec![source])? {
+        ResolveCommitsResult::Ok { commits } => commits[0].get_oid(),
+        ResolveCommitsResult::CommitNotFound { commit } => {
+            writeln!(effects.get_output_stream(), "Commit not found: {}", commit)?;
+            return Ok(ExitCode(1));
+        }
+    };
+    let dest_oid = match resolve_commits(effects, &repo, &mut dag, vec![dest])? {
+        ResolveCommitsResult::Ok { commits } => commits[0].get_oid(),
+        ResolveCommitsResult::CommitNotFound { commit } => {
+            writeln!(effects.get_output_stream(), "Commit not found: {}", commit)?;
+            return Ok(ExitCode(1));
+        }
+    };
 
     let source_oid = if should_resolve_base_commit {
         let merge_base_oid = dag.get_one_merge_base_oid(effects, &repo, source_oid, dest_oid)?;
