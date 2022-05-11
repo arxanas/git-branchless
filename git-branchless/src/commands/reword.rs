@@ -404,7 +404,12 @@ fn prepare_messages(
             original_message
         };
 
-        message.push_str(format!("++ reword {}\n{}\n\n", oid, msg).as_str());
+        let msg = if commits.len() == 1 {
+            format!("{}\n\n", msg)
+        } else {
+            format!("++ reword {}\n{}\n\n", oid, msg)
+        };
+        message.push_str(msg.as_str());
     }
 
     message.push_str(
@@ -521,6 +526,14 @@ fn parse_bulk_edit_message(
     for commit in commits.iter() {
         commits_oids.insert(commit.get_short_oid()?, commit.get_oid());
     }
+
+    let message = match commits {
+        // For single commits, add the marker line, but only if the user hasn't already done so.
+        [only_commit] if !message.contains("++ reword") => {
+            format!("++ reword {}\n{}", only_commit.get_short_oid()?, message)
+        }
+        _ => message,
+    };
 
     // split the bulk message into (hash, msg) tuples
     let msgs = message
@@ -661,7 +674,6 @@ mod tests {
                 &[head_commit.clone()],
                 |message| {
                     insta::assert_snapshot!(message.trim(), @r###"
-                    ++ reword 62fc20d
 
                     # Original message:
                     # create test1.txt
@@ -690,7 +702,6 @@ This is a template!
                 &[head_commit],
                 |message| {
                     insta::assert_snapshot!(message.trim(), @r###"
-                    ++ reword 62fc20d
                     This is a template!
 
                     # Original message:
