@@ -1,6 +1,8 @@
 use std::borrow::Borrow;
+use std::sync::Arc;
 
 use eden_dag::DagAlgorithm;
+use lib::core::effects::{Effects, OperationType};
 use thiserror::Error;
 
 use lib::core::dag::{CommitSet, Dag};
@@ -11,8 +13,9 @@ use super::Expr;
 
 #[derive(Debug)]
 struct Context<'a> {
+    effects: &'a Effects,
     repo: &'a Repo,
-    dag: &'a Dag,
+    dag: &'a mut Dag,
 }
 
 #[derive(Debug, Error)]
@@ -38,9 +41,17 @@ pub type EvalResult = Result<CommitSet, EvalError>;
 
 /// Evaluate the provided revset expression.
 #[instrument]
-pub fn eval(repo: &Repo, dag: &Dag, expr: &Expr) -> EvalResult {
-    let mut ctx = Context { repo, dag };
-    eval_inner(&mut ctx, expr)
+pub fn eval(effects: &Effects, repo: &Repo, dag: &mut Dag, expr: &Expr) -> EvalResult {
+    let (effects, _progress) =
+        effects.start_operation(OperationType::EvaluateRevset(Arc::new(expr.to_string())));
+
+    let mut ctx = Context {
+        effects: &effects,
+        repo,
+        dag,
+    };
+    let commits = eval_inner(&mut ctx, expr)?;
+    Ok(commits)
 }
 
 #[instrument]
@@ -96,7 +107,7 @@ fn eval_inner(ctx: &mut Context, expr: &Expr) -> EvalResult {
     }
 }
 
-fn eval_name(ctx: &mut Context, name: &str) -> Result<CommitSet, EvalError> {
+fn eval_name(ctx: &mut Context, name: &str) -> EvalResult {
     if name == "." || name == "@" {
         let head_info = ctx.repo.get_head_info();
         if let Ok(ResolvedReferenceInfo {
@@ -109,19 +120,29 @@ fn eval_name(ctx: &mut Context, name: &str) -> Result<CommitSet, EvalError> {
     }
 
     let commit = ctx.repo.revparse_single_commit(name);
-    match commit {
+    let commit_set = match commit {
         Ok(Some(commit)) => {
             let commit_set: CommitSet = commit.get_oid().into();
-            Ok(commit_set)
+            commit_set
         }
-        Ok(None) | Err(_) => Err(EvalError::UnboundName {
-            name: name.to_owned(),
-        }),
-    }
+        Ok(None) | Err(_) => {
+            return Err(EvalError::UnboundName {
+                name: name.to_owned(),
+            })
+        }
+    };
+
+    ctx.dag.sync_from_oids(
+        ctx.effects,
+        ctx.repo,
+        CommitSet::empty(),
+        commit_set.clone(),
+    )?;
+    Ok(commit_set)
 }
 
 #[instrument]
-fn eval1(ctx: &mut Context, function_name: &str, args: &[Expr]) -> Result<CommitSet, EvalError> {
+fn eval1(ctx: &mut Context, function_name: &str, args: &[Expr]) -> EvalResult {
     match args {
         [expr] => {
             let lhs = eval_inner(ctx, expr)?;
@@ -186,7 +207,7 @@ mod tests {
         let event_replayer = EventReplayer::from_event_log_db(&effects, &repo, &event_log_db)?;
         let event_cursor = event_replayer.make_default_cursor();
         let references_snapshot = repo.get_references_snapshot()?;
-        let dag = Dag::open_and_sync(
+        let mut dag = Dag::open_and_sync(
             &effects,
             &repo,
             &event_replayer,
@@ -201,7 +222,7 @@ mod tests {
                 Expr::Name(test2_oid.to_string()),
             ],
         );
-        insta::assert_debug_snapshot!(eval(&repo, &dag, &expr), @r###"
+        insta::assert_debug_snapshot!(eval(&effects, &repo, &mut dag, &expr), @r###"
         Ok(
             <or
               <static [

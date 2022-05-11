@@ -1,6 +1,6 @@
 use std::fmt::Write;
 
-use lib::core::dag::{union_all, CommitSet, Dag};
+use lib::core::dag::{CommitSet, Dag};
 use lib::core::effects::Effects;
 use lib::git::Repo;
 use tracing::instrument;
@@ -66,14 +66,11 @@ pub fn resolve_commits(
             expr: revset.clone(),
             source: err,
         })?;
-        let commit_set = eval(repo, dag, &expr).map_err(|err| ResolveError::EvalError {
+        let commits = eval(effects, repo, dag, &expr).map_err(|err| ResolveError::EvalError {
             expr: revset.clone(),
             source: err,
         })?;
-        commit_sets.push(commit_set)
+        commit_sets.push(commits);
     }
-
-    dag.sync_from_oids(effects, repo, CommitSet::empty(), union_all(&commit_sets))
-        .map_err(|err| ResolveError::DagError { source: err })?;
     Ok(commit_sets)
 }

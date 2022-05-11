@@ -13,8 +13,8 @@ fn test_query() -> eyre::Result<()> {
         let (stdout, stderr) = git.run(&["branchless", "query", ".^::"])?;
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
-        96d1c37a3d4363611c49f7e52186e189a04c531f
         70deb1e28791d8e7dd5a1f0c871a51b91282562f
+        96d1c37a3d4363611c49f7e52186e189a04c531f
         "###);
     }
 

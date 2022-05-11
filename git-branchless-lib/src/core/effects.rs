@@ -24,6 +24,7 @@ pub enum OperationType {
     CheckForCycles,
     ConstrainCommits,
     DetectDuplicateCommits,
+    EvaluateRevset(Arc<String>),
     FilterByTouchedPaths,
     FilterCommits,
     FindPathToMergeBase,
@@ -37,6 +38,7 @@ pub enum OperationType {
     ReadingFromCache,
     RebaseCommits,
     RunGitCommand(Arc<String>),
+    SortCommits,
     SyncCommits,
     UpdateCommitGraph,
     WalkCommits,
@@ -51,6 +53,9 @@ impl ToString for OperationType {
             OperationType::CheckForCycles => "Checking for cycles",
             OperationType::ConstrainCommits => "Creating commit constraints",
             OperationType::DetectDuplicateCommits => "Checking for duplicate commits",
+            OperationType::EvaluateRevset(revset) => {
+                return format!("Evaluating revset: {}", revset);
+            }
             OperationType::FilterByTouchedPaths => "Filtering upstream commits by touched paths",
             OperationType::FilterCommits => "Filtering commits",
             OperationType::FindPathToMergeBase => "Finding path to merge-base",
@@ -66,6 +71,7 @@ impl ToString for OperationType {
             OperationType::RunGitCommand(command) => {
                 return format!("Running Git command: {}", &command)
             }
+            OperationType::SortCommits => "Sorting commits",
             OperationType::SyncCommits => "Syncing commit stacks",
             OperationType::UpdateCommitGraph => "Updating commit graph",
             OperationType::WalkCommits => "Walking commits",

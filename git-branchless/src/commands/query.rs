@@ -1,7 +1,8 @@
 use std::fmt::Write;
 
-use lib::core::dag::{sort_commit_set, Dag};
-use lib::core::effects::Effects;
+use eden_dag::DagAlgorithm;
+use lib::core::dag::{commit_set_to_vec, Dag};
+use lib::core::effects::{Effects, OperationType};
 use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::repo_ext::RepoExt;
 use lib::git::{GitRunInfo, Repo};
@@ -39,9 +40,15 @@ pub fn query(
         }
     };
 
-    let commits = sort_commit_set(&repo, &dag, &commit_set)?;
-    for commit in commits {
-        writeln!(effects.get_output_stream(), "{}", commit.get_oid())?;
+    let commit_oids = {
+        let (effects, _progress) = effects.start_operation(OperationType::SortCommits);
+        let _effects = effects;
+
+        dag.query().sort(&commit_set)?;
+        commit_set_to_vec(&commit_set)?
+    };
+    for commit_oid in commit_oids {
+        writeln!(effects.get_output_stream(), "{}", commit_oid)?;
     }
 
     Ok(ExitCode(0))
