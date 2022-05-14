@@ -198,6 +198,105 @@ fn test_branches_always_visible() -> eyre::Result<()> {
 }
 
 #[test]
+fn test_hide_delete_branches() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    git.init_repo()?;
+    git.detach_head()?;
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+    git.run(&["branch", "test"])?;
+    git.run(&["checkout", "master"])?;
+
+    let (stdout, _stderr) = git.run(&["hide", "--delete-branches", "test", "test^"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    Hid commit: 62fc20d create test1.txt
+    Hid commit: 96d1c37 create test2.txt
+    branchless: processing 1 update: branch test
+    Deleted 1 branch: test
+    To unhide these 2 commits and restore 1 branch, run: git undo
+    "###);
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        @ f777ecc (> master) create initial.txt
+        "###);
+    }
+
+    git.run_with_options(
+        &["undo"],
+        &GitRunOptions {
+            input: Some("y".to_string()),
+            ..Default::default()
+        },
+    )?;
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        @ f777ecc (> master) create initial.txt
+        |
+        o 62fc20d create test1.txt
+        |
+        o 96d1c37 (test) create test2.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_hide_delete_multiple_branches() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    git.init_repo()?;
+    git.detach_head()?;
+    let test1_oid = git.commit_file("test1", 1)?;
+    git.run(&["checkout", "master"])?;
+    git.detach_head()?;
+    let test2_oid = git.commit_file("test2", 2)?;
+    git.run(&["checkout", "master"])?;
+    // These branches are created "out of order" to confirm the sorting in the output/snapshot.
+    git.run(&["branch", "test-def", &test1_oid.to_string()])?;
+    git.run(&["branch", "test-abc", &test2_oid.to_string()])?;
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        @ f777ecc (> master) create initial.txt
+        |\
+        | o 62fc20d (test-def) create test1.txt
+        |
+        o fe65c1f (test-abc) create test2.txt
+        "###);
+    }
+
+    let (stdout, _stderr) = git.run(&[
+        "hide",
+        "--delete-branches",
+        &test1_oid.to_string(),
+        &test2_oid.to_string(),
+    ])?;
+    insta::assert_snapshot!(stdout, @r###"
+    Hid commit: 62fc20d create test1.txt
+    Hid commit: fe65c1f create test2.txt
+    branchless: processing 2 updates: branch test-abc, branch test-def
+    Deleted 2 branches: test-abc, test-def
+    To unhide these 2 commits and restore 2 branches, run: git undo
+    "###);
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        @ f777ecc (> master) create initial.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_unhide() -> eyre::Result<()> {
     let git = make_git()?;
 

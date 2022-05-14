@@ -14,11 +14,18 @@ use lib::core::effects::Effects;
 use lib::core::eventlog::{CommitActivityStatus, Event};
 use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::formatting::{printable_styled_string, Glyphs, Pluralize};
-use lib::git::{CategorizedReferenceName, Repo};
+use lib::core::rewrite::move_branches;
+use lib::git::{CategorizedReferenceName, GitRunInfo, MaybeZeroOid, Repo};
 
 /// Hide the hashes provided on the command-line.
 #[instrument]
-pub fn hide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::Result<ExitCode> {
+pub fn hide(
+    effects: &Effects,
+    git_run_info: &GitRunInfo,
+    hashes: Vec<String>,
+    delete_branches: bool,
+    recursive: bool,
+) -> eyre::Result<ExitCode> {
     let now = SystemTime::now();
     let glyphs = Glyphs::detect();
     let repo = Repo::from_current_dir()?;
@@ -89,6 +96,22 @@ pub fn hide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::Re
         }
     }
 
+    if delete_branches {
+        // Delete any branches pointing to any of the hidden commits by "moving" them from their
+        // current OID to a Zero OID.
+        let abandoned_branches = commits
+            .iter()
+            .map(|commit| (commit.get_oid(), MaybeZeroOid::Zero))
+            .collect();
+        move_branches(
+            effects,
+            git_run_info,
+            &repo,
+            event_tx_id,
+            &abandoned_branches,
+        )?;
+    }
+
     let mut abandoned_branches: Vec<String> = commits
         .iter()
         .filter_map(|commit| {
@@ -101,9 +124,17 @@ pub fn hide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::Re
         .collect();
     if !abandoned_branches.is_empty() {
         abandoned_branches.sort_unstable();
+        // This message will look like either of these:
+        // Abandoned X branches: <branches>
+        // Deleted X branches: <branches>
         writeln!(
             effects.get_output_stream(),
-            "Abandoned {}: {}",
+            "{} {}: {}",
+            if delete_branches {
+                "Deleted"
+            } else {
+                "Abandoned"
+            },
             Pluralize {
                 determiner: None,
                 amount: abandoned_branches.len(),
@@ -113,14 +144,29 @@ pub fn hide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::Re
         )?;
     }
 
+    // This message will look like either of these:
+    // To unhide these X commits, run: git undo
+    // To unhide these X commits and restore X branches, run: git undo
+    let delete_branches_message = match delete_branches {
+        true => format!(
+            " and restore {}",
+            Pluralize {
+                determiner: None,
+                amount: abandoned_branches.len(),
+                unit: ("branch", "branches"),
+            }
+        ),
+        false => String::new(),
+    };
     writeln!(
         effects.get_output_stream(),
-        "To unhide {}, run: git undo",
+        "To unhide {}{}, run: git undo",
         Pluralize {
             determiner: Some(("this", "these")),
             amount: num_commits,
             unit: ("commit", "commits"),
         },
+        delete_branches_message
     )?;
 
     Ok(ExitCode(0))

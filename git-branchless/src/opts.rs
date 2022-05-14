@@ -157,6 +157,10 @@ pub enum Command {
         /// Can either be hashes, like `abc123`, or ref-specs, like `HEAD^`.
         commits: Vec<String>,
 
+        /// Also delete any branches that are abandoned as a result of this hide.
+        #[clap(short = 'D', long = "delete-branches")]
+        delete_branches: bool,
+
         /// Also recursively hide all visible children commits of the provided
         /// commits.
         #[clap(short = 'r', long = "recursive")]
