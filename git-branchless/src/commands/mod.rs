@@ -130,7 +130,11 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
             ExitCode(0)
         }
 
-        Command::Hide { commits, recursive } => hide::hide(&effects, commits, recursive)?,
+        Command::Hide {
+            commits,
+            delete_branches,
+            recursive,
+        } => hide::hide(&effects, &git_run_info, commits, delete_branches, recursive)?,
 
         Command::HookDetectEmptyCommit { old_commit_oid } => {
             let old_commit_oid: NonZeroOid = old_commit_oid.parse()?;
