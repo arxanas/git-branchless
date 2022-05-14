@@ -14,7 +14,7 @@ use lib::core::effects::Effects;
 use lib::core::eventlog::{CommitActivityStatus, Event};
 use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::formatting::{printable_styled_string, Glyphs, Pluralize};
-use lib::git::Repo;
+use lib::git::{CategorizedReferenceName, Repo};
 
 /// Hide the hashes provided on the command-line.
 #[instrument]
@@ -73,11 +73,11 @@ pub fn hide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::Re
 
     let cursor = event_replayer.make_default_cursor();
     let num_commits = commits.len();
-    for commit in commits {
+    for commit in commits.iter() {
         writeln!(
             effects.get_output_stream(),
             "Hid commit: {}",
-            printable_styled_string(&glyphs, commit.friendly_describe(&glyphs)?)?
+            printable_styled_string(&glyphs, commit.friendly_describe(&glyphs)?)?,
         )?;
         if let CommitActivityStatus::Obsolete =
             event_replayer.get_cursor_commit_activity_status(cursor, commit.get_oid())
@@ -87,6 +87,30 @@ pub fn hide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::Re
                 "(It was already hidden, so this operation had no effect.)"
             )?;
         }
+    }
+
+    let mut abandoned_branches: Vec<String> = commits
+        .iter()
+        .filter_map(|commit| {
+            references_snapshot
+                .branch_oid_to_names
+                .get(&commit.get_oid())
+        })
+        .flatten()
+        .map(|branch_name| CategorizedReferenceName::new(branch_name).render_suffix())
+        .collect();
+    if !abandoned_branches.is_empty() {
+        abandoned_branches.sort_unstable();
+        writeln!(
+            effects.get_output_stream(),
+            "Abandoned {}: {}",
+            Pluralize {
+                determiner: None,
+                amount: abandoned_branches.len(),
+                unit: ("branch", "branches"),
+            },
+            abandoned_branches.join(", ")
+        )?;
     }
 
     writeln!(

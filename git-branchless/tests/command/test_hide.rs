@@ -168,7 +168,14 @@ fn test_branches_always_visible() -> eyre::Result<()> {
     git.run(&["branch", "test"])?;
     git.run(&["checkout", "master"])?;
 
-    git.run(&["hide", "test", "test^"])?;
+    let (stdout, _stderr) = git.run(&["hide", "test", "test^"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    Hid commit: 62fc20d create test1.txt
+    Hid commit: 96d1c37 create test2.txt
+    Abandoned 1 branch: test
+    To unhide these 2 commits, run: git undo
+    "###);
+
     {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"

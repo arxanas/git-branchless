@@ -22,6 +22,7 @@ fn test_commands() -> eyre::Result<()> {
         let (stdout, _stderr) = git.run(&["hide", "3df4b935"])?;
         insta::assert_snapshot!(stdout, @r###"
         Hid commit: 3df4b93 create test.txt
+        Abandoned 1 branch: master
         To unhide this 1 commit, run: git undo
         "###);
     }
