@@ -442,8 +442,6 @@ impl GitRunInfo {
 
 #[cfg(test)]
 mod tests {
-    use insta::assert_debug_snapshot;
-
     use super::{GitRunInfo, GitRunOpts};
     use crate::testing::make_git;
 
