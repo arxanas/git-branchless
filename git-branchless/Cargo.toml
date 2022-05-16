@@ -36,7 +36,7 @@ lib = { package = "git-branchless-lib", version = "0.3.10", path = "../git-branc
 man = "0.3.0"
 os_str_bytes = "6.0.0"
 path-slash = "0.1.4"
-rayon = "1.5.2"
+rayon = "1.5.3"
 regex = "1.5.5"
 rusqlite = { version = "0.27.0", features = ["bundled"] }
 tracing = "0.1.34"
