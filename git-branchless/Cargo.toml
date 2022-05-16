@@ -34,7 +34,7 @@ itertools = "0.10.3"
 lazy_static = "1.4.0"
 lib = { package = "git-branchless-lib", version = "0.3.10", path = "../git-branchless-lib" }
 man = "0.3.0"
-os_str_bytes = "6.0.0"
+os_str_bytes = "6.0.1"
 path-slash = "0.1.4"
 rayon = "1.5.2"
 regex = "1.5.5"
