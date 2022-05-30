@@ -53,7 +53,7 @@ itertools = "0.10.3"
 lazy_static = "1.4.0"
 os_str_bytes = "6.1.0"
 rayon = "1.5.3"
-regex = "1.5.5"
+regex = "1.5.6"
 rusqlite = { version = "0.27.0", features = ["bundled"] }
 tempfile = "3.3.0"
 textwrap = "0.15.0"
