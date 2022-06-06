@@ -67,7 +67,7 @@ use rayon::{ThreadPool, ThreadPoolBuilder};
 use tracing::{instrument, warn};
 
 use crate::commands::smartlog::smartlog;
-use crate::opts::MoveOptions;
+use crate::opts::{MoveOptions, Revset};
 use crate::revset::resolve_commits;
 use lib::core::config::get_restack_preserve_timestamps;
 use lib::core::dag::{commit_set_to_vec, union_all, CommitSet, Dag};
@@ -258,7 +258,7 @@ fn restack_branches(
 pub fn restack(
     effects: &Effects,
     git_run_info: &GitRunInfo,
-    commits: Vec<String>,
+    revsets: Vec<Revset>,
     move_options: &MoveOptions,
     merge_conflict_remediation: MergeConflictRemediation,
 ) -> eyre::Result<ExitCode> {
@@ -279,7 +279,7 @@ pub fn restack(
         &references_snapshot,
     )?;
 
-    let commit_sets = match resolve_commits(effects, &repo, &mut dag, commits) {
+    let commit_sets = match resolve_commits(effects, &repo, &mut dag, revsets) {
         Ok(commit_sets) => commit_sets,
         Err(err) => {
             err.describe(effects)?;

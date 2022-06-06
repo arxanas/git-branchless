@@ -8,13 +8,14 @@ use lib::git::{GitRunInfo, Repo};
 use lib::util::ExitCode;
 use tracing::instrument;
 
+use crate::opts::Revset;
 use crate::revset::resolve_commits;
 
 #[instrument]
 pub fn query(
     effects: &Effects,
     git_run_info: &GitRunInfo,
-    query: String,
+    query: Revset,
 ) -> eyre::Result<ExitCode> {
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
