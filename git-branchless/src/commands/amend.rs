@@ -14,7 +14,7 @@ use lib::util::ExitCode;
 use tracing::instrument;
 
 use crate::commands::restack;
-use crate::opts::MoveOptions;
+use crate::opts::{MoveOptions, Revset};
 use lib::core::config::get_restack_preserve_timestamps;
 use lib::core::effects::Effects;
 use lib::core::eventlog::{Event, EventLogDb};
@@ -146,7 +146,7 @@ pub fn amend(
     let restack_exit_code = restack::restack(
         effects,
         git_run_info,
-        vec![head_oid.to_string()],
+        vec![Revset(head_oid.to_string())],
         move_options,
         MergeConflictRemediation::Restack,
     )?;

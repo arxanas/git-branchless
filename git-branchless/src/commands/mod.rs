@@ -132,10 +132,10 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
         }
 
         Command::Hide {
-            commits,
+            revsets,
             delete_branches,
             recursive,
-        } => hide::hide(&effects, &git_run_info, commits, delete_branches, recursive)?,
+        } => hide::hide(&effects, &git_run_info, revsets, delete_branches, recursive)?,
 
         Command::HookDetectEmptyCommit { old_commit_oid } => {
             let old_commit_oid: NonZeroOid = old_commit_oid.parse()?;
@@ -229,15 +229,15 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
             &traverse_commits_options,
         )?,
 
-        Command::Query { query } => query::query(&effects, &git_run_info, query)?,
+        Command::Query { revset } => query::query(&effects, &git_run_info, revset)?,
 
         Command::Restack {
-            commits,
+            commits: revsets,
             move_options,
         } => restack::restack(
             &effects,
             &git_run_info,
-            commits,
+            revsets,
             &move_options,
             MergeConflictRemediation::Retry,
         )?,
@@ -245,7 +245,7 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
         Command::Record => record::record(&effects, &git_run_info)?,
 
         Command::Reword {
-            commits,
+            revsets,
             messages,
             discard,
         } => {
@@ -254,7 +254,7 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
             } else {
                 InitialCommitMessages::Messages(messages)
             };
-            reword::reword(&effects, commits, messages, &git_run_info)?
+            reword::reword(&effects, revsets, messages, &git_run_info)?
         }
 
         Command::Smartlog {
@@ -283,21 +283,21 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
             update_refs,
             force,
             move_options,
-            commits,
+            revsets,
         } => sync::sync(
             &effects,
             &git_run_info,
             update_refs,
             force,
             &move_options,
-            commits,
+            revsets,
         )?,
 
         Command::Undo { interactive, yes } => {
             undo::undo(&effects, &git_run_info, interactive, yes)?
         }
 
-        Command::Unhide { commits, recursive } => hide::unhide(&effects, commits, recursive)?,
+        Command::Unhide { revsets, recursive } => hide::unhide(&effects, revsets, recursive)?,
 
         Command::Wrap {
             git_executable: explicit_git_executable,

@@ -13,7 +13,7 @@ use lib::util::ExitCode;
 use rayon::ThreadPoolBuilder;
 use tracing::instrument;
 
-use crate::opts::MoveOptions;
+use crate::opts::{MoveOptions, Revset};
 use crate::revset::resolve_commits;
 use lib::core::config::get_restack_preserve_timestamps;
 use lib::core::dag::{commit_set_to_vec, CommitSet, Dag};
@@ -58,9 +58,9 @@ fn resolve_base_commit(
 pub fn r#move(
     effects: &Effects,
     git_run_info: &GitRunInfo,
-    source: Option<String>,
-    dest: Option<String>,
-    base: Option<String>,
+    source: Option<Revset>,
+    dest: Option<Revset>,
+    base: Option<Revset>,
     move_options: &MoveOptions,
 ) -> eyre::Result<ExitCode> {
     let repo = Repo::from_current_dir()?;
@@ -83,13 +83,13 @@ pub fn r#move(
                     return Ok(ExitCode(1));
                 }
             };
-            (source_oid.to_string(), true)
+            (Revset(source_oid.to_string()), true)
         }
     };
     let dest = match dest {
         Some(dest) => dest,
         None => match head_oid {
-            Some(oid) => oid.to_string(),
+            Some(oid) => Revset(oid.to_string()),
             None => {
                 writeln!(effects.get_output_stream(), "No --dest argument was provided, and no OID for HEAD is available as a default")?;
                 return Ok(ExitCode(1));
@@ -115,11 +115,12 @@ pub fn r#move(
             Ok(commit_sets) => match commit_set_to_vec(&commit_sets[0])?.as_slice() {
                 [only_commit_oid] => *only_commit_oid,
                 other => {
+                    let Revset(expr) = source;
                     writeln!(
                         effects.get_error_stream(),
                         "Expected revset to expand to exactly 1 commit (got {}): {}",
                         other.len(),
-                        source
+                        expr,
                     )?;
                     return Ok(ExitCode(1));
                 }
@@ -129,15 +130,16 @@ pub fn r#move(
                 return Ok(ExitCode(1));
             }
         };
-    let dest_oid: NonZeroOid = match resolve_commits(effects, &repo, &mut dag, vec![dest]) {
+    let dest_oid: NonZeroOid = match resolve_commits(effects, &repo, &mut dag, vec![dest.clone()]) {
         Ok(commit_sets) => match commit_set_to_vec(&commit_sets[0])?.as_slice() {
             [only_commit_oid] => *only_commit_oid,
             other => {
+                let Revset(expr) = dest;
                 writeln!(
                     effects.get_error_stream(),
                     "Expected revset to expand to exactly 1 commit (got {}): {}",
                     other.len(),
-                    source
+                    expr,
                 )?;
                 return Ok(ExitCode(1));
             }

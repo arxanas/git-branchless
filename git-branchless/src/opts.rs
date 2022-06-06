@@ -4,6 +4,20 @@ use clap::{ArgEnum, Args, Command as ClapCommand, IntoApp, Parser};
 use lib::git::NonZeroOid;
 use man::Arg;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
+
+/// A revset expression. Can be a commit hash, branch name, or one of the
+/// various revset functions.
+#[derive(Clone, Debug)]
+pub struct Revset(pub String);
+
+impl FromStr for Revset {
+    type Err = std::convert::Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self(s.to_string()))
+    }
+}
 
 /// A command wrapped by `git-branchless wrap`. The arguments are forwarded to
 /// `git`.
@@ -153,9 +167,7 @@ pub enum Command {
     /// Hide the provided commits from the smartlog.
     Hide {
         /// Zero or more commits to hide.
-        ///
-        /// Can either be hashes, like `abc123`, or ref-specs, like `HEAD^`.
-        commits: Vec<String>,
+        revsets: Vec<Revset>,
 
         /// Also delete any branches that are abandoned as a result of this hide.
         #[clap(short = 'D', long = "delete-branches")]
@@ -254,18 +266,18 @@ pub enum Command {
         /// The source commit to move. This commit, and all of its descendants,
         /// will be moved.
         #[clap(short = 's', long = "source")]
-        source: Option<String>,
+        source: Option<Revset>,
 
         /// A commit inside a subtree to move. The entire subtree, starting from
         /// the main branch, will be moved, not just the commits descending from
         /// this commit.
         #[clap(short = 'b', long = "base", conflicts_with = "source")]
-        base: Option<String>,
+        base: Option<Revset>,
 
         /// The destination commit to move all source commits onto. If not
         /// provided, defaults to the current commit.
         #[clap(short = 'd', long = "dest")]
-        dest: Option<String>,
+        dest: Option<Revset>,
 
         /// Options for moving commits.
         #[clap(flatten)]
@@ -289,14 +301,14 @@ pub enum Command {
     /// Query the commit graph using the "revset" DSL.
     Query {
         /// The query to execute.
-        query: String,
+        revset: Revset,
     },
 
     /// Fix up commits abandoned by a previous rewrite operation.
     Restack {
         /// The IDs of the abandoned commits whose descendants should be
         /// restacked. If not provided, all abandoned commits are restacked.
-        commits: Vec<String>,
+        commits: Vec<Revset>,
 
         /// Options for moving commits.
         #[clap(flatten)]
@@ -311,7 +323,7 @@ pub enum Command {
         /// Zero or more commits to reword. If not provided, defaults to "HEAD".
         ///
         /// Can either be hashes, like `abc123`, or ref-specs, like `HEAD^`.
-        commits: Vec<String>,
+        revsets: Vec<Revset>,
 
         /// Message to apply to commits. Multiple messages will be combined as separate paragraphs,
         /// similar to `git commit`.
@@ -368,9 +380,7 @@ pub enum Command {
 
         /// The commits whose stacks will be moved on top of the main branch. If
         /// no commits are provided, all draft commits will be synced.
-        ///
-        /// Can either be hashes, like `abc123`, or ref-specs, like `HEAD^`.
-        commits: Vec<String>,
+        revsets: Vec<Revset>,
     },
 
     /// Browse or return to a previous state of the repository.
@@ -388,9 +398,7 @@ pub enum Command {
     /// Unhide previously-hidden commits from the smartlog.
     Unhide {
         /// Zero or more commits to unhide.
-        ///
-        /// Can either be hashes, like `abc123`, or ref-specs, like `HEAD^`.
-        commits: Vec<String>,
+        revsets: Vec<Revset>,
 
         /// Also recursively unhide all children commits of the provided commits.
         #[clap(short = 'r', long = "recursive")]

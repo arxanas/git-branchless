@@ -31,6 +31,7 @@ use lib::core::rewrite::{
 };
 use lib::git::{message_prettify, Commit, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo};
 
+use crate::opts::Revset;
 use crate::revset::resolve_commits;
 
 /// The commit message(s) provided by the user.
@@ -43,11 +44,11 @@ pub enum InitialCommitMessages {
     Messages(Vec<String>),
 }
 
-/// Reword a commit and restack it's descendants.
+/// Reword a commit and restack its descendants.
 #[instrument]
 pub fn reword(
     effects: &Effects,
-    hashes: Vec<String>,
+    revsets: Vec<Revset>,
     messages: InitialCommitMessages,
     git_run_info: &GitRunInfo,
 ) -> eyre::Result<ExitCode> {
@@ -65,7 +66,7 @@ pub fn reword(
         &references_snapshot,
     )?;
 
-    let commits = match resolve_commits_from_hashes(&repo, &mut dag, effects, hashes)? {
+    let commits = match resolve_commits_from_hashes(&repo, &mut dag, effects, revsets)? {
         Some(commits) => commits,
         None => return Ok(ExitCode(1)),
     };
@@ -280,12 +281,12 @@ fn resolve_commits_from_hashes<'repo>(
     repo: &'repo Repo,
     dag: &mut Dag,
     effects: &Effects,
-    hashes: Vec<String>,
+    revsets: Vec<Revset>,
 ) -> eyre::Result<Option<Vec<Commit<'repo>>>> {
-    let hashes = if hashes.is_empty() {
-        vec!["HEAD".to_string()]
+    let hashes = if revsets.is_empty() {
+        vec![Revset("HEAD".to_string())]
     } else {
-        hashes
+        revsets
     };
 
     let commit_sets = match resolve_commits(effects, repo, dag, hashes) {

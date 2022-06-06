@@ -10,7 +10,7 @@ use lib::core::repo_ext::RepoExt;
 use lib::util::ExitCode;
 use rayon::ThreadPoolBuilder;
 
-use crate::opts::MoveOptions;
+use crate::opts::{MoveOptions, Revset};
 use crate::revset::resolve_commits;
 use lib::core::config::get_restack_preserve_timestamps;
 use lib::core::dag::{sort_commit_set, union_all, CommitSet, Dag};
@@ -48,7 +48,7 @@ pub fn sync(
     update_refs: bool,
     force: bool,
     move_options: &MoveOptions,
-    commits: Vec<String>,
+    revsets: Vec<Revset>,
 ) -> eyre::Result<ExitCode> {
     let glyphs = Glyphs::detect();
     let repo = Repo::from_current_dir()?;
@@ -75,7 +75,7 @@ pub fn sync(
         &references_snapshot,
     )?;
 
-    let commit_sets = match resolve_commits(effects, &repo, &mut dag, commits) {
+    let commit_sets = match resolve_commits(effects, &repo, &mut dag, revsets) {
         Ok(commit_sets) => commit_sets,
         Err(err) => {
             err.describe(effects)?;

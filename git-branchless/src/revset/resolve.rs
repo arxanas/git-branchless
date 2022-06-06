@@ -5,6 +5,8 @@ use lib::core::effects::Effects;
 use lib::git::Repo;
 use tracing::instrument;
 
+use crate::opts::Revset;
+
 use super::eval::EvalError;
 use super::parser::ParseError;
 use super::{eval, parse};
@@ -56,10 +58,10 @@ pub fn resolve_commits(
     effects: &Effects,
     repo: &Repo,
     dag: &mut Dag,
-    revsets: Vec<String>,
+    revsets: Vec<Revset>,
 ) -> Result<Vec<CommitSet>, ResolveError> {
     let mut commit_sets = Vec::new();
-    for revset in revsets {
+    for Revset(revset) in revsets {
         let expr = parse(&revset).map_err(|err| ResolveError::ParseError {
             expr: revset.clone(),
             source: err,
