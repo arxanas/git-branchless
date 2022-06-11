@@ -56,9 +56,9 @@ fn test_hide_bad_commit() -> eyre::Result<()> {
                 ..Default::default()
             },
         )?;
-        insta::assert_snapshot!(stderr, @"");
-        insta::assert_snapshot!(stdout, @"Commit not found: abc123
+        insta::assert_snapshot!(stderr, @"Evaluation error for expression 'abc123': name is not defined: 'abc123'
 ");
+        insta::assert_snapshot!(stdout, @"");
     }
 
     Ok(())

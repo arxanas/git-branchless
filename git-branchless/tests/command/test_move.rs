@@ -2199,3 +2199,31 @@ fn test_move_branch_on_merge_conflict_resolution() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_move_multiple() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+    git.run(&["checkout", "-b", "foo"])?;
+    git.commit_file("test3", 3)?;
+    git.run(&["checkout", "-b", "bar", "HEAD^"])?;
+    git.commit_file("test4", 4)?;
+
+    {
+        let (stdout, stderr) = git.run_with_options(
+            &["move", "-s", "foo | bar", "-d", ".^^^"],
+            &GitRunOptions {
+                expected_exit_code: 1,
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stderr, @"Expected revset to expand to exactly 1 commit (got 2): foo | bar
+");
+        insta::assert_snapshot!(stdout, @"");
+    }
+
+    Ok(())
+}
