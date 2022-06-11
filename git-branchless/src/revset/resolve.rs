@@ -1,15 +1,15 @@
 use itertools::Itertools;
-use lib::core::dag::{CommitSet, Dag};
+use lib::core::dag::{union_all, CommitSet, Dag};
 use lib::core::effects::Effects;
-use lib::git::{Commit, Repo};
+use lib::git::Repo;
 use tracing::instrument;
 
 /// The result of attempting to resolve commits.
-pub enum ResolveCommitsResult<'repo> {
+pub enum ResolveCommitsResult {
     /// All commits were successfully resolved.
     Ok {
         /// The resolved commit sets, in the order that they were passed in.
-        commits: Vec<Commit<'repo>>,
+        commit_sets: Vec<CommitSet>,
     },
 
     /// The first commit which couldn't be resolved.
@@ -30,7 +30,7 @@ pub fn resolve_commits<'repo>(
     repo: &'repo Repo,
     dag: &mut Dag,
     hashes: Vec<String>,
-) -> eyre::Result<ResolveCommitsResult<'repo>> {
+) -> eyre::Result<ResolveCommitsResult> {
     let mut commits = Vec::new();
     for hash in hashes {
         let commit = match repo.revparse_single_commit(&hash)? {
@@ -40,12 +40,11 @@ pub fn resolve_commits<'repo>(
         commits.push(commit)
     }
 
-    let commit_oids = commits.iter().map(|commit| commit.get_oid()).collect_vec();
-    dag.sync_from_oids(
-        effects,
-        repo,
-        CommitSet::empty(),
-        commit_oids.into_iter().collect::<CommitSet>(),
-    )?;
-    Ok(ResolveCommitsResult::Ok { commits })
+    let commit_sets = commits
+        .iter()
+        .map(|commit| commit.get_oid())
+        .map(CommitSet::from)
+        .collect_vec();
+    dag.sync_from_oids(effects, repo, CommitSet::empty(), union_all(&commit_sets))?;
+    Ok(ResolveCommitsResult::Ok { commit_sets })
 }

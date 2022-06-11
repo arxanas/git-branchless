@@ -3,7 +3,7 @@
 //! Under the hood, this makes use of Git's advanced rebase functionality, which
 //! is also used to preserve merge commits using the `--rebase-merges` option.
 
-use std::convert::TryFrom;
+use std::convert::{TryFrom, TryInto};
 use std::fmt::Write;
 use std::time::SystemTime;
 
@@ -110,15 +110,15 @@ pub fn r#move(
         &references_snapshot,
     )?;
 
-    let source_oid = match resolve_commits(effects, &repo, &mut dag, vec![source])? {
-        ResolveCommitsResult::Ok { commits } => commits[0].get_oid(),
+    let source_oid: NonZeroOid = match resolve_commits(effects, &repo, &mut dag, vec![source])? {
+        ResolveCommitsResult::Ok { commit_sets } => commit_sets[0].first()?.unwrap().try_into()?,
         ResolveCommitsResult::CommitNotFound { commit } => {
             writeln!(effects.get_output_stream(), "Commit not found: {}", commit)?;
             return Ok(ExitCode(1));
         }
     };
-    let dest_oid = match resolve_commits(effects, &repo, &mut dag, vec![dest])? {
-        ResolveCommitsResult::Ok { commits } => commits[0].get_oid(),
+    let dest_oid: NonZeroOid = match resolve_commits(effects, &repo, &mut dag, vec![dest])? {
+        ResolveCommitsResult::Ok { commit_sets } => commit_sets[0].first()?.unwrap().try_into()?,
         ResolveCommitsResult::CommitNotFound { commit } => {
             writeln!(effects.get_output_stream(), "Commit not found: {}", commit)?;
             return Ok(ExitCode(1));

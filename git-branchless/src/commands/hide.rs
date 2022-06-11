@@ -9,7 +9,7 @@ use lib::core::repo_ext::RepoExt;
 use lib::util::ExitCode;
 use tracing::instrument;
 
-use lib::core::dag::{sort_commit_set, CommitSet, Dag};
+use lib::core::dag::{sort_commit_set, union_all, Dag};
 use lib::core::effects::Effects;
 use lib::core::eventlog::{CommitActivityStatus, Event};
 use lib::core::eventlog::{EventLogDb, EventReplayer};
@@ -44,20 +44,15 @@ pub fn hide(
         &references_snapshot,
     )?;
 
-    let commits = resolve_commits(effects, &repo, &mut dag, hashes)?;
-    let commits = match commits {
-        ResolveCommitsResult::Ok { commits } => commits,
+    let commit_sets = match resolve_commits(effects, &repo, &mut dag, hashes)? {
+        ResolveCommitsResult::Ok { commit_sets } => commit_sets,
         ResolveCommitsResult::CommitNotFound { commit: hash } => {
             writeln!(effects.get_output_stream(), "Commit not found: {}", hash)?;
             return Ok(ExitCode(1));
         }
     };
 
-    let commits: CommitSet = commits
-        .into_iter()
-        .map(|commit| commit.get_oid())
-        .rev()
-        .collect();
+    let commits = union_all(&commit_sets);
     let commits = if recursive {
         dag.query()
             .descendants(commits)?
@@ -193,16 +188,15 @@ pub fn unhide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::
         &references_snapshot,
     )?;
 
-    let commits = resolve_commits(effects, &repo, &mut dag, hashes)?;
-    let commits = match commits {
-        ResolveCommitsResult::Ok { commits } => commits,
+    let commit_sets = match resolve_commits(effects, &repo, &mut dag, hashes)? {
+        ResolveCommitsResult::Ok { commit_sets } => commit_sets,
         ResolveCommitsResult::CommitNotFound { commit: hash } => {
             writeln!(effects.get_output_stream(), "Commit not found: {}", hash)?;
             return Ok(ExitCode(1));
         }
     };
 
-    let commits: CommitSet = commits.into_iter().map(|commit| commit.get_oid()).collect();
+    let commits = union_all(&commit_sets);
     let commits = if recursive {
         dag.query()
             .descendants(commits)?

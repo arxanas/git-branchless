@@ -72,6 +72,13 @@ pub fn commit_set_to_vec(commit_set: &CommitSet) -> eyre::Result<Vec<NonZeroOid>
     Ok(result)
 }
 
+/// Union together a list of [CommitSet]s.
+pub fn union_all(commits: &[CommitSet]) -> CommitSet {
+    commits
+        .iter()
+        .fold(CommitSet::empty(), |acc, elem| acc.union(elem))
+}
+
 /// Interface to access the directed acyclic graph (DAG) representing Git's
 /// commit graph. Based on the Eden SCM DAG.
 pub struct Dag {
