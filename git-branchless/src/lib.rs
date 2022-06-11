@@ -22,4 +22,5 @@
 
 pub mod commands;
 pub mod opts;
+pub mod revset;
 pub mod tui;
