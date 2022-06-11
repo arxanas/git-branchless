@@ -56,7 +56,7 @@ fn test_hide_bad_commit() -> eyre::Result<()> {
                 ..Default::default()
             },
         )?;
-        insta::assert_snapshot!(stderr, @"Evaluation error for expression 'abc123': name is not defined: 'abc123'
+        insta::assert_snapshot!(stderr, @"Evaluation error for expression 'abc123': no commit, branch, or reference with the name 'abc123' could be found
 ");
         insta::assert_snapshot!(stdout, @"");
     }

@@ -61,7 +61,7 @@ fn test_query_eval_error() -> eyre::Result<()> {
                 ..Default::default()
             },
         )?;
-        insta::assert_snapshot!(stderr, @"Evaluation error for expression 'foo': name is not defined: 'foo'
+        insta::assert_snapshot!(stderr, @"Evaluation error for expression 'foo': no commit, branch, or reference with the name 'foo' could be found
 ");
         insta::assert_snapshot!(stdout, @"");
     }
@@ -93,7 +93,7 @@ fn test_query_legacy_git_syntax() -> eyre::Result<()> {
                 ..Default::default()
             },
         )?;
-        insta::assert_snapshot!(stderr, @"Evaluation error for expression 'foo-@': name is not defined: 'foo-@'
+        insta::assert_snapshot!(stderr, @"Evaluation error for expression 'foo-@': no commit, branch, or reference with the name 'foo-@' could be found
 ");
         insta::assert_snapshot!(stdout, @"");
     }
