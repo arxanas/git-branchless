@@ -13,6 +13,7 @@ mod command {
     mod test_init;
     mod test_move;
     mod test_navigation;
+    mod test_query;
     mod test_restack;
     mod test_reword;
     mod test_smartlog;

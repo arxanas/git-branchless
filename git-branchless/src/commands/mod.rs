@@ -8,6 +8,7 @@ mod hooks;
 mod init;
 mod r#move;
 mod navigation;
+mod query;
 mod record;
 mod restack;
 mod reword;
@@ -227,6 +228,8 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
             navigation::Command::Prev,
             &traverse_commits_options,
         )?,
+
+        Command::Query { query } => query::query(&effects, &git_run_info, query)?,
 
         Command::Restack {
             commits,

@@ -981,6 +981,7 @@ dependencies = [
  "git-record",
  "insta",
  "itertools 0.10.3",
+ "lalrpop-util",
  "lazy_static",
  "man",
  "os_str_bytes",
@@ -990,6 +991,7 @@ dependencies = [
  "regex",
  "rusqlite",
  "skim",
+ "thiserror",
  "tracing",
  "tracing-chrome",
  "tracing-error",
@@ -1258,6 +1260,15 @@ name = "json"
 version = "0.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "078e285eafdfb6c4b434e0d31e8cfcb5115b651496faca5749b88fafd4f23bfd"
+
+[[package]]
+name = "lalrpop-util"
+version = "0.19.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bcf796c978e9b4d983414f4caedc9273aa33ee214c5b887bd55fde84c85d2dc4"
+dependencies = [
+ "regex",
+]
 
 [[package]]
 name = "lazy_static"

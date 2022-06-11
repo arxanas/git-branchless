@@ -286,6 +286,12 @@ pub enum Command {
         traverse_commits_options: TraverseCommitsOptions,
     },
 
+    /// Query the commit graph using the "revset" DSL.
+    Query {
+        /// The query to execute.
+        query: String,
+    },
+
     /// Fix up commits abandoned by a previous rewrite operation.
     Restack {
         /// The IDs of the abandoned commits whose descendants should be

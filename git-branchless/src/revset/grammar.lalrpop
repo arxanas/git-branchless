@@ -1,0 +1,110 @@
+/// This grammar is originally sourced from
+/// https://github.com/quark-zju/gitrevset/blob/50234203913331641aae1d479b5f861869f39cda/src/parser/grammar.rs
+/// licensed under GPL-2.
+
+use super::ast::Expr;
+
+// Binary Operator Precedence (highest to lowest):
+// BinOp1: : ..
+// BinOp2: & and % -
+// BinOp3: | + or
+
+grammar;
+
+pub Expr = Expr4;
+
+Expr4: Expr = {
+    <a:Expr4> <op:BinOp3> <b:Expr3> => Expr::Fn(op.into(), vec![a, b]),
+    Expr3,
+};
+
+BinOp3: &'static str = {
+    "|" => "union",
+    "+" => "union",
+    "or" => "union",
+};
+
+Expr3: Expr = {
+    <a:Expr3> <op:BinOp2> <b:Expr2> => Expr::Fn(op.into(), vec![a, b]),
+    Expr2,
+};
+
+BinOp2: &'static str = {
+    "&" => "intersection",
+    "and" => "intersection",
+    "-" => "difference",
+    "%" => "only",
+};
+
+Expr2: Expr = {
+    <a:Expr2> <op:BinOp1> <b:Expr15> => Expr::Fn(op.into(), vec![a, b]),
+    Expr15,
+};
+
+BinOp1: &'static str = {
+    ":" => "range",
+    ".." => "range",
+};
+
+Expr15: Expr = {
+    <pre:(<Prefix>)*> <e:Expr1> => {
+        let mut e = e;
+        for v in pre { e = Expr::Fn(v.into(), vec![e]); }
+        e
+    },
+}
+
+Expr1: Expr = {
+    <e:Expr0> <post:(<Postfix>)*> => {
+        let mut e = e;
+        for v in post { e = Expr::Fn(v.into(), vec![e]); }
+        e
+    },
+}
+
+Expr0: Expr = {
+    Symbol2 => Expr::Name(<>),
+    <f:Symbol1> "(" <args:(Expr ",")*> <last:Expr?> ")" => {
+        // Function call.
+        let mut arg_list: Vec<Expr> = args.into_iter().map(|(e, _)| e).collect();
+        if let Some(last_arg) = last { arg_list.push(last_arg); }
+        Expr::Fn(f.into(), arg_list)
+    },
+    "(" <Expr> ")"
+};
+
+Prefix: &'static str = {
+    // negation unimplemented for now
+    // "!" => "negate",
+    // "not " => "negate",
+
+    "::" => "ancestors",
+}
+
+Postfix: &'static str = {
+    "::" => "descendants",
+    "^" => "parents",
+}
+
+Symbol2: String = {
+    Symbol1 => <>,
+    <escaped:r"\x22([^\x22\x5c]|\x5c.)*\x22"> => {
+        // Escaped string.
+        let mut result = String::with_capacity(escaped.len());
+        let mut prev = '_';
+        for ch in escaped[1..escaped.len()-1].chars() {
+            match (prev, ch) {
+                ('\\', 'n') => result.push('\n'),
+                ('\\', _) => result.push(ch),
+                (_, '\\') => (),
+                (_, _) => result.push(ch),
+            }
+            prev = ch;
+        }
+        result
+    },
+}
+
+Symbol1: String = {
+    r"[a-zA-Z0-9/_$@.]+" => <>.to_string(),
+}
