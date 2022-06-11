@@ -151,9 +151,16 @@ fn test_sync_pull() -> eyre::Result<()> {
 
     {
         let (stdout, _stderr) = cloned_repo.run(&["sync", "-p"])?;
+        let stdout: String = stdout
+            .lines()
+            .into_iter()
+            .filter(|line|
+                // The `Fetching <remote>` lines seems to be gone as of Git v2.36.
+                !line.contains("Fetching"))
+            .map(|line| format!("{}\n", line))
+            .collect();
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> fetch --all
-        Fetching origin
         Attempting rebase in-memory...
         [1/1] Committed as: 8e521a1 create test3.txt
         branchless: processing 1 update: branch foo
