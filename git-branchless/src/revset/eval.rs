@@ -20,7 +20,7 @@ struct Context<'a> {
 
 #[derive(Debug, Error)]
 pub enum EvalError {
-    #[error("name is not defined: '{name}'")]
+    #[error("no commit, branch, or reference with the name '{name}' could be found")]
     UnboundName { name: String },
 
     #[error("invalid number of arguments to {function_name}: expected {expected_arity} but got {actual_arity}")]
