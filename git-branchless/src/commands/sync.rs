@@ -11,7 +11,7 @@ use lib::util::ExitCode;
 use rayon::ThreadPoolBuilder;
 
 use crate::opts::MoveOptions;
-use crate::revset::{resolve_commits, ResolveCommitsResult};
+use crate::revset::resolve_commits;
 use lib::core::config::get_restack_preserve_timestamps;
 use lib::core::dag::{sort_commit_set, union_all, CommitSet, Dag};
 use lib::core::effects::{Effects, OperationType};
@@ -75,10 +75,10 @@ pub fn sync(
         &references_snapshot,
     )?;
 
-    let commit_sets = match resolve_commits(effects, &repo, &mut dag, commits)? {
-        ResolveCommitsResult::Ok { commit_sets } => commit_sets,
-        ResolveCommitsResult::CommitNotFound { commit } => {
-            writeln!(effects.get_output_stream(), "Commit not found: {}", commit)?;
+    let commit_sets = match resolve_commits(effects, &repo, &mut dag, commits) {
+        Ok(commit_sets) => commit_sets,
+        Err(err) => {
+            err.describe(effects)?;
             return Ok(ExitCode(1));
         }
     };

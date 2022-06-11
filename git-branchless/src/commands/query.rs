@@ -8,7 +8,7 @@ use lib::git::{GitRunInfo, Repo};
 use lib::util::ExitCode;
 use tracing::instrument;
 
-use crate::revset;
+use crate::revset::resolve_commits;
 
 #[instrument]
 pub fn query(
@@ -22,7 +22,7 @@ pub fn query(
     let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
     let event_cursor = event_replayer.make_default_cursor();
     let references_snapshot = repo.get_references_snapshot()?;
-    let dag = Dag::open_and_sync(
+    let mut dag = Dag::open_and_sync(
         effects,
         &repo,
         &event_replayer,
@@ -30,18 +30,10 @@ pub fn query(
         &references_snapshot,
     )?;
 
-    let expr = match revset::parse(&query) {
-        Ok(expr) => expr,
+    let commit_set = match resolve_commits(effects, &repo, &mut dag, vec![query]) {
+        Ok(commit_sets) => commit_sets[0].clone(),
         Err(err) => {
-            writeln!(effects.get_error_stream(), "{}", err)?;
-            return Ok(ExitCode(1));
-        }
-    };
-
-    let commit_set = match revset::eval(&repo, &dag, &expr) {
-        Ok(commit_set) => commit_set,
-        Err(err) => {
-            writeln!(effects.get_error_stream(), "{}", err)?;
+            err.describe(effects)?;
             return Ok(ExitCode(1));
         }
     };

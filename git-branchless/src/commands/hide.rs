@@ -17,7 +17,7 @@ use lib::core::formatting::{printable_styled_string, Glyphs, Pluralize};
 use lib::core::rewrite::move_branches;
 use lib::git::{CategorizedReferenceName, GitRunInfo, MaybeZeroOid, Repo};
 
-use crate::revset::{resolve_commits, ResolveCommitsResult};
+use crate::revset::resolve_commits;
 
 /// Hide the hashes provided on the command-line.
 #[instrument]
@@ -44,10 +44,10 @@ pub fn hide(
         &references_snapshot,
     )?;
 
-    let commit_sets = match resolve_commits(effects, &repo, &mut dag, hashes)? {
-        ResolveCommitsResult::Ok { commit_sets } => commit_sets,
-        ResolveCommitsResult::CommitNotFound { commit: hash } => {
-            writeln!(effects.get_output_stream(), "Commit not found: {}", hash)?;
+    let commit_sets = match resolve_commits(effects, &repo, &mut dag, hashes) {
+        Ok(commit_sets) => commit_sets,
+        Err(err) => {
+            err.describe(effects)?;
             return Ok(ExitCode(1));
         }
     };
@@ -188,10 +188,10 @@ pub fn unhide(effects: &Effects, hashes: Vec<String>, recursive: bool) -> eyre::
         &references_snapshot,
     )?;
 
-    let commit_sets = match resolve_commits(effects, &repo, &mut dag, hashes)? {
-        ResolveCommitsResult::Ok { commit_sets } => commit_sets,
-        ResolveCommitsResult::CommitNotFound { commit: hash } => {
-            writeln!(effects.get_output_stream(), "Commit not found: {}", hash)?;
+    let commit_sets = match resolve_commits(effects, &repo, &mut dag, hashes) {
+        Ok(commit_sets) => commit_sets,
+        Err(err) => {
+            err.describe(effects)?;
             return Ok(ExitCode(1));
         }
     };

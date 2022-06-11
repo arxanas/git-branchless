@@ -31,7 +31,7 @@ use lib::core::rewrite::{
 };
 use lib::git::{message_prettify, Commit, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo};
 
-use crate::revset::{resolve_commits, ResolveCommitsResult};
+use crate::revset::resolve_commits;
 
 /// The commit message(s) provided by the user.
 #[derive(Debug)]
@@ -288,10 +288,10 @@ fn resolve_commits_from_hashes<'repo>(
         hashes
     };
 
-    let commit_sets = match resolve_commits(effects, repo, dag, hashes)? {
-        ResolveCommitsResult::Ok { commit_sets } => commit_sets,
-        ResolveCommitsResult::CommitNotFound { commit: hash } => {
-            writeln!(effects.get_output_stream(), "Commit not found: {}", hash)?;
+    let commit_sets = match resolve_commits(effects, repo, dag, hashes) {
+        Ok(commit_sets) => commit_sets,
+        Err(err) => {
+            err.describe(effects)?;
             return Ok(None);
         }
     };

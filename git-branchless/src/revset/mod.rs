@@ -13,4 +13,4 @@ mod grammar;
 pub use ast::Expr;
 pub use eval::eval;
 pub use parser::parse;
-pub use resolve::{resolve_commits, ResolveCommitsResult};
+pub use resolve::resolve_commits;
