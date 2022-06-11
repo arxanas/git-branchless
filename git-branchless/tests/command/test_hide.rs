@@ -49,14 +49,16 @@ fn test_hide_bad_commit() -> eyre::Result<()> {
     git.init_repo()?;
 
     {
-        let (stdout, _stderr) = git.run_with_options(
+        let (stdout, stderr) = git.run_with_options(
             &["hide", "abc123"],
             &GitRunOptions {
                 expected_exit_code: 1,
                 ..Default::default()
             },
         )?;
-        insta::assert_snapshot!(stdout, @"Commit not found: abc123");
+        insta::assert_snapshot!(stderr, @"");
+        insta::assert_snapshot!(stdout, @"Commit not found: abc123
+");
     }
 
     Ok(())

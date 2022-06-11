@@ -13,7 +13,7 @@ use rayon::ThreadPoolBuilder;
 use crate::opts::MoveOptions;
 use crate::revset::{resolve_commits, ResolveCommitsResult};
 use lib::core::config::get_restack_preserve_timestamps;
-use lib::core::dag::{sort_commit_set, CommitSet, Dag};
+use lib::core::dag::{sort_commit_set, union_all, CommitSet, Dag};
 use lib::core::effects::{Effects, OperationType};
 use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::formatting::{printable_styled_string, Glyphs, StyledStringBuilder};
@@ -75,18 +75,17 @@ pub fn sync(
         &references_snapshot,
     )?;
 
-    let commits = match resolve_commits(effects, &repo, &mut dag, commits)? {
-        ResolveCommitsResult::Ok { commits } => commits,
+    let commit_sets = match resolve_commits(effects, &repo, &mut dag, commits)? {
+        ResolveCommitsResult::Ok { commit_sets } => commit_sets,
         ResolveCommitsResult::CommitNotFound { commit } => {
             writeln!(effects.get_output_stream(), "Commit not found: {}", commit)?;
             return Ok(ExitCode(1));
         }
     };
-    let root_commits = if commits.is_empty() {
+    let root_commits = if commit_sets.is_empty() {
         get_stack_roots(&dag)?
     } else {
-        let commits: CommitSet = commits.into_iter().map(|commit| commit.get_oid()).collect();
-        dag.query().roots(commits)?
+        dag.query().roots(union_all(&commit_sets))?
     };
     let root_commits = sort_commit_set(&repo, &dag, &root_commits)?;
 

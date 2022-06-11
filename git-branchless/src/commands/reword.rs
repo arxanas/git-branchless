@@ -20,7 +20,7 @@ use tracing::{instrument, warn};
 use lib::core::config::{
     get_comment_char, get_commit_template, get_editor, get_restack_preserve_timestamps,
 };
-use lib::core::dag::{sort_commit_set, CommitSet, Dag};
+use lib::core::dag::{sort_commit_set, union_all, CommitSet, Dag};
 use lib::core::effects::Effects;
 use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::formatting::{printable_styled_string, Glyphs, Pluralize};
@@ -288,16 +288,15 @@ fn resolve_commits_from_hashes<'repo>(
         hashes
     };
 
-    let commits = resolve_commits(effects, repo, dag, hashes)?;
-    let commits = match commits {
-        ResolveCommitsResult::Ok { commits } => commits,
+    let commit_sets = match resolve_commits(effects, repo, dag, hashes)? {
+        ResolveCommitsResult::Ok { commit_sets } => commit_sets,
         ResolveCommitsResult::CommitNotFound { commit: hash } => {
             writeln!(effects.get_output_stream(), "Commit not found: {}", hash)?;
             return Ok(None);
         }
     };
 
-    let commit_set = commits.iter().map(|c| c.get_oid()).collect::<CommitSet>();
+    let commit_set = union_all(&commit_sets);
     let commits = sort_commit_set(repo, dag, &commit_set)?;
 
     Ok(Some(commits))
