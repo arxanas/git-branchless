@@ -549,6 +549,15 @@ impl Repo {
 
     /// Attempt to parse the user-provided object descriptor.
     pub fn revparse_single_commit(&self, spec: &str) -> eyre::Result<Option<Commit>> {
+        if spec.ends_with('@') && spec.len() > 1 {
+            // Weird bug in `libgit2`; it seems that it treats a name like
+            // `foo-@` the same as `@`, and ignores the leading `foo`.
+            eyre::bail!(
+                "Unsupported spec: {} (ends with @, which is buggy in libgit2)",
+                spec
+            );
+        }
+
         match self.inner.revparse_single(spec) {
             Ok(object) => match object.into_commit() {
                 Ok(commit) => Ok(Some(Commit { inner: commit })),
