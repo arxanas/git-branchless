@@ -33,33 +33,33 @@ pub enum WrappedCommand {
 pub struct MoveOptions {
     /// Only attempt to perform an in-memory rebase. If it fails, do not
     /// attempt an on-disk rebase.
-    #[clap(long = "in-memory", conflicts_with_all(&["force-on-disk", "merge"]))]
+    #[clap(action, long = "in-memory", conflicts_with_all(&["force-on-disk", "merge"]))]
     pub force_in_memory: bool,
 
     /// Skip attempting to use an in-memory rebase, and try an
     /// on-disk rebase directly.
-    #[clap(long = "on-disk")]
+    #[clap(action, long = "on-disk")]
     pub force_on_disk: bool,
 
     /// Don't attempt to deduplicate commits. Normally, a commit with the same
     /// contents as another commit which has already been applied to the target
     /// branch is skipped. If set, this flag skips that check.
-    #[clap(long = "no-deduplicate-commits", parse(from_flag = std::ops::Not::not))]
+    #[clap(action(clap::ArgAction::SetFalse), long = "no-deduplicate-commits")]
     pub detect_duplicate_commits_via_patch_id: bool,
 
     /// Attempt to resolve merge conflicts, if any. If a merge conflict
     /// occurs and this option is not set, the operation is aborted.
-    #[clap(name = "merge", short = 'm', long = "merge")]
+    #[clap(action, name = "merge", short = 'm', long = "merge")]
     pub resolve_merge_conflicts: bool,
 
     /// Debugging option. Print the constraints used to create the rebase
     /// plan before executing it.
-    #[clap(long = "debug-dump-rebase-constraints")]
+    #[clap(action, long = "debug-dump-rebase-constraints")]
     pub dump_rebase_constraints: bool,
 
     /// Debugging option. Print the rebase plan that will be executed before
     /// executing it.
-    #[clap(long = "debug-dump-rebase-plan")]
+    #[clap(action, long = "debug-dump-rebase-plan")]
     pub dump_rebase_plan: bool,
 }
 
@@ -69,27 +69,29 @@ pub struct TraverseCommitsOptions {
     /// The number of commits to traverse.
     ///
     /// If not provided, defaults to 1.
+    #[clap(value_parser)]
     pub num_commits: Option<usize>,
 
     /// Traverse as many commits as possible.
-    #[clap(short = 'a', long = "all")]
+    #[clap(action, short = 'a', long = "all")]
     pub all_the_way: bool,
 
     /// Move the specified number of branches rather than commits.
-    #[clap(short = 'b', long = "branch")]
+    #[clap(action, short = 'b', long = "branch")]
     pub move_by_branches: bool,
 
     /// When encountering multiple next commits, choose the oldest.
-    #[clap(short = 'o', long = "oldest")]
+    #[clap(action, short = 'o', long = "oldest")]
     pub oldest: bool,
 
     /// When encountering multiple next commits, choose the newest.
-    #[clap(short = 'n', long = "newest", conflicts_with("oldest"))]
+    #[clap(action, short = 'n', long = "newest", conflicts_with("oldest"))]
     pub newest: bool,
 
     /// When encountering multiple next commits, interactively prompt which to
     /// advance to.
     #[clap(
+        action,
         short = 'i',
         long = "interactive",
         conflicts_with("newest"),
@@ -99,12 +101,12 @@ pub struct TraverseCommitsOptions {
 
     /// If the local changes conflict with the destination commit, attempt to
     /// merge them.
-    #[clap(short = 'm', long = "merge")]
+    #[clap(action, short = 'm', long = "merge")]
     pub merge: bool,
 
     /// If the local changes conflict with the destination commit, discard them.
     /// (Use with caution!)
-    #[clap(short = 'f', long = "force", conflicts_with("merge"))]
+    #[clap(action, short = 'f', long = "force", conflicts_with("merge"))]
     pub force: bool,
 }
 
@@ -112,22 +114,22 @@ pub struct TraverseCommitsOptions {
 #[derive(Args, Debug)]
 pub struct CheckoutOptions {
     /// Interactively select a commit to check out.
-    #[clap(short = 'i', long = "interactive")]
+    #[clap(action, short = 'i', long = "interactive")]
     pub interactive: bool,
 
     /// When checking out the target commit, also create a branch with the
     /// provided name pointing to that commit.
-    #[clap(short = 'b', long = "branch")]
+    #[clap(value_parser, short = 'b', long = "branch")]
     pub branch_name: Option<String>,
 
     /// Forcibly switch commits, discarding any working copy changes if
     /// necessary.
-    #[clap(short = 'f', long = "force")]
+    #[clap(action, short = 'f', long = "force")]
     pub force: bool,
 
     /// If the current working copy changes do not apply cleanly to the
     /// target commit, start merge conflict resolution instead of aborting.
-    #[clap(short = 'm', long = "merge", conflicts_with("force"))]
+    #[clap(action, short = 'm', long = "merge", conflicts_with("force"))]
     pub merge: bool,
 
     /// The commit or branch to check out.
@@ -137,6 +139,7 @@ pub struct CheckoutOptions {
     ///
     /// If this is provided and the `--interactive` flag is passed, this
     /// text is used to pre-fill the interactive commit selector.
+    #[clap(value_parser)]
     pub target: Option<String>,
 }
 
@@ -167,15 +170,16 @@ pub enum Command {
     /// Hide the provided commits from the smartlog.
     Hide {
         /// Zero or more commits to hide.
+        #[clap(value_parser)]
         revsets: Vec<Revset>,
 
         /// Also delete any branches that are abandoned as a result of this hide.
-        #[clap(short = 'D', long = "delete-branches")]
+        #[clap(action, short = 'D', long = "delete-branches")]
         delete_branches: bool,
 
         /// Also recursively hide all visible children commits of the provided
         /// commits.
-        #[clap(short = 'r', long = "recursive")]
+        #[clap(action, short = 'r', long = "recursive")]
         recursive: bool,
     },
 
@@ -183,6 +187,7 @@ pub enum Command {
     #[clap(hide = true)]
     HookDetectEmptyCommit {
         /// The OID of the commit currently being applied, to be checked for emptiness.
+        #[clap(value_parser)]
         old_commit_oid: String,
     },
 
@@ -194,12 +199,15 @@ pub enum Command {
     #[clap(hide = true)]
     HookPostCheckout {
         /// The previous commit OID.
+        #[clap(value_parser)]
         previous_commit: String,
 
         /// The current commit OID.
+        #[clap(value_parser)]
         current_commit: String,
 
         /// Whether or not this was a branch checkout (versus a file checkout).
+        #[clap(value_parser)]
         is_branch_checkout: isize,
     },
 
@@ -211,6 +219,7 @@ pub enum Command {
     #[clap(hide = true)]
     HookPostMerge {
         /// Whether or not this is a squash merge. See githooks(5).
+        #[clap(value_parser)]
         is_squash_merge: isize,
     },
 
@@ -218,6 +227,7 @@ pub enum Command {
     #[clap(hide = true)]
     HookPostRewrite {
         /// One of `amend` or `rebase`.
+        #[clap(value_parser)]
         rewrite_type: String,
     },
 
@@ -225,6 +235,7 @@ pub enum Command {
     #[clap(hide = true)]
     HookReferenceTransaction {
         /// One of `prepared`, `committed`, or `aborted`. See githooks(5).
+        #[clap(value_parser)]
         transaction_state: String,
     },
 
@@ -236,20 +247,21 @@ pub enum Command {
     #[clap(hide = true)]
     HookSkipUpstreamAppliedCommit {
         /// The OID of the commit that was skipped.
+        #[clap(value_parser)]
         commit_oid: String,
     },
 
     /// Initialize the branchless workflow for this repository.
     Init {
         /// Uninstall the branchless workflow instead of initializing it.
-        #[clap(long = "uninstall")]
+        #[clap(action, long = "uninstall")]
         uninstall: bool,
 
         /// Use the provided name as the name of the main branch.
         ///
         /// If not set, it will be auto-detected. If it can't be auto-detected,
         /// then you will be prompted to enter a value for the main branch name.
-        #[clap(long = "main-branch", conflicts_with = "uninstall")]
+        #[clap(value_parser, long = "main-branch", conflicts_with = "uninstall")]
         main_branch_name: Option<String>,
     },
 
@@ -265,18 +277,18 @@ pub enum Command {
     Move {
         /// The source commit to move. This commit, and all of its descendants,
         /// will be moved.
-        #[clap(short = 's', long = "source")]
+        #[clap(value_parser, short = 's', long = "source")]
         source: Option<Revset>,
 
         /// A commit inside a subtree to move. The entire subtree, starting from
         /// the main branch, will be moved, not just the commits descending from
         /// this commit.
-        #[clap(short = 'b', long = "base", conflicts_with = "source")]
+        #[clap(value_parser, short = 'b', long = "base", conflicts_with = "source")]
         base: Option<Revset>,
 
         /// The destination commit to move all source commits onto. If not
         /// provided, defaults to the current commit.
-        #[clap(short = 'd', long = "dest")]
+        #[clap(value_parser, short = 'd', long = "dest")]
         dest: Option<Revset>,
 
         /// Options for moving commits.
@@ -301,6 +313,7 @@ pub enum Command {
     /// Query the commit graph using the "revset" DSL.
     Query {
         /// The query to execute.
+        #[clap(value_parser)]
         revset: Revset,
     },
 
@@ -308,6 +321,7 @@ pub enum Command {
     Restack {
         /// The IDs of the abandoned commits whose descendants should be
         /// restacked. If not provided, all abandoned commits are restacked.
+        #[clap(value_parser)]
         commits: Vec<Revset>,
 
         /// Options for moving commits.
@@ -323,29 +337,30 @@ pub enum Command {
         /// Zero or more commits to reword. If not provided, defaults to "HEAD".
         ///
         /// Can either be hashes, like `abc123`, or ref-specs, like `HEAD^`.
+        #[clap(value_parser)]
         revsets: Vec<Revset>,
 
         /// Message to apply to commits. Multiple messages will be combined as separate paragraphs,
         /// similar to `git commit`.
-        #[clap(short = 'm', long = "message")]
+        #[clap(value_parser, short = 'm', long = "message")]
         messages: Vec<String>,
 
         /// Throw away the original commit messages.
         ///
         /// If `commit.template` is set, then the editor is pre-populated with
         /// that; otherwise, the editor starts empty.
-        #[clap(short = 'd', long = "discard", conflicts_with("messages"))]
+        #[clap(action, short = 'd', long = "discard", conflicts_with("messages"))]
         discard: bool,
     },
 
     /// Display a nice graph of the commits you've recently worked on.
     Smartlog {
         /// Also show commits which have been hidden.
-        #[clap(long = "hidden")]
+        #[clap(action, long = "hidden")]
         show_hidden_commits: bool,
 
         /// Only show commits that exist on a branch.
-        #[clap(long = "only-branches", conflicts_with = "show-hidden-commits")]
+        #[clap(action, long = "only-branches", conflicts_with = "show-hidden-commits")]
         only_show_branches: bool,
     },
 
@@ -362,6 +377,7 @@ pub enum Command {
         /// Run `git fetch` to update remote references before carrying out the
         /// sync.
         #[clap(
+            action,
             short = 'p',
             long = "pull",
             visible_short_alias = 'u',
@@ -371,7 +387,7 @@ pub enum Command {
 
         /// Force rebasing commits even if they're already based on top of their
         /// destination.
-        #[clap(short = 'f', long = "force")]
+        #[clap(action, short = 'f', long = "force")]
         force: bool,
 
         /// Options for moving commits.
@@ -380,6 +396,7 @@ pub enum Command {
 
         /// The commits whose stacks will be moved on top of the main branch. If
         /// no commits are provided, all draft commits will be synced.
+        #[clap(value_parser)]
         revsets: Vec<Revset>,
     },
 
@@ -387,28 +404,29 @@ pub enum Command {
     Undo {
         /// Interactively browse through previous states of the repository
         /// before selecting one to return to.
-        #[clap(short = 'i', long = "interactive")]
+        #[clap(action, short = 'i', long = "interactive")]
         interactive: bool,
 
         /// Skip confirmation and apply changes immediately.
-        #[clap(short = 'y', long = "yes")]
+        #[clap(action, short = 'y', long = "yes")]
         yes: bool,
     },
 
     /// Unhide previously-hidden commits from the smartlog.
     Unhide {
         /// Zero or more commits to unhide.
+        #[clap(value_parser)]
         revsets: Vec<Revset>,
 
         /// Also recursively unhide all children commits of the provided commits.
-        #[clap(short = 'r', long = "recursive")]
+        #[clap(action, short = 'r', long = "recursive")]
         recursive: bool,
     },
 
     /// Wrap a Git command inside a branchless transaction.
     Wrap {
         /// The `git` executable to invoke.
-        #[clap(long = "git-executable")]
+        #[clap(value_parser, long = "git-executable")]
         git_executable: Option<PathBuf>,
 
         /// The arguments to pass to `git`.
@@ -437,11 +455,11 @@ pub enum ColorSetting {
 pub struct Opts {
     /// Change to the given directory before executing the rest of the program.
     /// (The option is called `-C` for symmetry with Git.)
-    #[clap(short = 'C')]
+    #[clap(value_parser, short = 'C')]
     pub working_directory: Option<PathBuf>,
 
     /// Flag to force enable or disable terminal colors.
-    #[clap(long = "color", arg_enum)]
+    #[clap(value_parser, long = "color", arg_enum)]
     pub color: Option<ColorSetting>,
 
     /// The `git-branchless` subcommand to run.
@@ -461,6 +479,7 @@ pub enum SnapshotSubcommand {
     /// Restore the working copy contents from the provided snapshot.
     Restore {
         /// The commit hash for the snapshot.
+        #[clap(value_parser)]
         snapshot_oid: NonZeroOid,
     },
 }
