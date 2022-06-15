@@ -31,7 +31,7 @@ mod graph {
     use eden_dag::DagAlgorithm;
     use tracing::instrument;
 
-    use lib::core::dag::{commit_set_to_vec, CommitSet, Dag};
+    use lib::core::dag::{commit_set_to_vec_unsorted, CommitSet, Dag};
     use lib::core::effects::{Effects, OperationType};
     use lib::core::eventlog::{EventCursor, EventReplayer};
     use lib::core::node_descriptors::NodeObject;
@@ -175,7 +175,7 @@ mod graph {
             let mut links = Vec::new();
             for child_oid in non_main_node_oids {
                 let parent_vertexes = dag.query().parents(CommitSet::from(*child_oid))?;
-                let parent_oids = commit_set_to_vec(&parent_vertexes)?;
+                let parent_oids = commit_set_to_vec_unsorted(&parent_vertexes)?;
                 for parent_oid in parent_oids {
                     if graph.contains_key(&parent_oid) {
                         links.push((*child_oid, parent_oid))

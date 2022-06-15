@@ -70,7 +70,7 @@ use crate::commands::smartlog::smartlog;
 use crate::opts::{MoveOptions, Revset};
 use crate::revset::resolve_commits;
 use lib::core::config::get_restack_preserve_timestamps;
-use lib::core::dag::{commit_set_to_vec, union_all, CommitSet, Dag};
+use lib::core::dag::{commit_set_to_vec_unsorted, union_all, CommitSet, Dag};
 use lib::core::effects::Effects;
 use lib::core::eventlog::{EventCursor, EventLogDb, EventReplayer};
 use lib::core::rewrite::{
@@ -102,7 +102,7 @@ fn restack_commits(
     };
     // Don't use `sort_commit_set` since the set of obsolete commits may be very
     // large and we'll be throwing away most of them.
-    let commits = commit_set_to_vec(&commit_set)?;
+    let commits = commit_set_to_vec_unsorted(&commit_set)?;
 
     let public_commits = dag.query_public_commits()?;
     let active_heads = dag.query_active_heads(
@@ -289,7 +289,7 @@ pub fn restack(
         None
     } else {
         Some(
-            commit_set_to_vec(&union_all(&commit_sets))?
+            commit_set_to_vec_unsorted(&union_all(&commit_sets))?
                 .into_iter()
                 .collect(),
         )

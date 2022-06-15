@@ -16,7 +16,7 @@ use tracing::instrument;
 use crate::opts::{MoveOptions, Revset};
 use crate::revset::resolve_commits;
 use lib::core::config::get_restack_preserve_timestamps;
-use lib::core::dag::{commit_set_to_vec, CommitSet, Dag};
+use lib::core::dag::{commit_set_to_vec_unsorted, CommitSet, Dag};
 use lib::core::effects::Effects;
 use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::rewrite::{
@@ -110,7 +110,7 @@ pub fn r#move(
 
     let source_oid: NonZeroOid =
         match resolve_commits(effects, &repo, &mut dag, vec![source.clone()]) {
-            Ok(commit_sets) => match commit_set_to_vec(&commit_sets[0])?.as_slice() {
+            Ok(commit_sets) => match commit_set_to_vec_unsorted(&commit_sets[0])?.as_slice() {
                 [only_commit_oid] => *only_commit_oid,
                 other => {
                     let Revset(expr) = source;
@@ -129,7 +129,7 @@ pub fn r#move(
             }
         };
     let dest_oid: NonZeroOid = match resolve_commits(effects, &repo, &mut dag, vec![dest.clone()]) {
-        Ok(commit_sets) => match commit_set_to_vec(&commit_sets[0])?.as_slice() {
+        Ok(commit_sets) => match commit_set_to_vec_unsorted(&commit_sets[0])?.as_slice() {
             [only_commit_oid] => *only_commit_oid,
             other => {
                 let Revset(expr) = dest;
