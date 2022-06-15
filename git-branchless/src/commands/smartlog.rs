@@ -124,8 +124,6 @@ mod graph {
         effects: &Effects,
         repo: &'repo Repo,
         dag: &Dag,
-        event_replayer: &EventReplayer,
-        event_cursor: EventCursor,
         public_commits: &CommitSet,
         active_heads: &CommitSet,
     ) -> eyre::Result<SmartlogGraph<'repo>> {
@@ -244,15 +242,7 @@ mod graph {
 
             let active_heads = dag.query_active_heads(&public_commits, &observed_commits)?;
 
-            walk_from_active_heads(
-                &effects,
-                repo,
-                dag,
-                event_replayer,
-                event_cursor,
-                &public_commits,
-                &active_heads,
-            )?
+            walk_from_active_heads(&effects, repo, dag, &public_commits, &active_heads)?
         };
         sort_children(&mut graph);
         Ok(graph)
