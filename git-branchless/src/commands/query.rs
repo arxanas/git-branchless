@@ -2,7 +2,7 @@ use std::fmt::Write;
 
 use eden_dag::DagAlgorithm;
 use itertools::Itertools;
-use lib::core::dag::{commit_set_to_vec, Dag};
+use lib::core::dag::{commit_set_to_vec_unsorted, Dag};
 use lib::core::effects::{Effects, OperationType};
 use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::repo_ext::RepoExt;
@@ -49,7 +49,7 @@ pub fn query(
 
             let commit_set = dag.query().sort(&commit_set)?;
             let commit_set = commit_set.intersection(&dag.branch_commits);
-            commit_set_to_vec(&commit_set)?
+            commit_set_to_vec_unsorted(&commit_set)?
         };
         let ref_names = commit_oids
             .into_iter()
@@ -70,7 +70,7 @@ pub fn query(
             let _effects = effects;
 
             let commit_set = dag.query().sort(&commit_set)?;
-            commit_set_to_vec(&commit_set)?
+            commit_set_to_vec_unsorted(&commit_set)?
         };
         for commit_oid in commit_oids {
             writeln!(effects.get_output_stream(), "{}", commit_oid)?;

@@ -61,7 +61,7 @@ impl FromIterator<NonZeroOid> for CommitSet {
 
 /// Eagerly convert a `CommitSet` into a `Vec<NonZeroOid>` by iterating over it.
 #[instrument]
-pub fn commit_set_to_vec(commit_set: &CommitSet) -> eyre::Result<Vec<NonZeroOid>> {
+pub fn commit_set_to_vec_unsorted(commit_set: &CommitSet) -> eyre::Result<Vec<NonZeroOid>> {
     let mut result = Vec::new();
     for vertex in commit_set.iter().wrap_err("Iterating commit set")? {
         let vertex = vertex.wrap_err("Evaluating vertex")?;
@@ -414,7 +414,7 @@ pub fn sort_commit_set<'repo>(
     dag: &Dag,
     commit_set: &CommitSet,
 ) -> eyre::Result<Vec<Commit<'repo>>> {
-    let commit_oids = commit_set_to_vec(commit_set)?;
+    let commit_oids = commit_set_to_vec_unsorted(commit_set)?;
     let mut commits: Vec<Commit> = {
         let mut commits = Vec::new();
         for commit_oid in commit_oids {

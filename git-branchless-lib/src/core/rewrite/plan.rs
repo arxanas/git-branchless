@@ -10,7 +10,7 @@ use itertools::Itertools;
 use rayon::{prelude::*, ThreadPool};
 use tracing::{instrument, warn};
 
-use crate::core::dag::{commit_set_to_vec, CommitSet, Dag};
+use crate::core::dag::{commit_set_to_vec_unsorted, CommitSet, Dag};
 use crate::core::effects::{Effects, OperationType};
 use crate::core::formatting::printable_styled_string;
 use crate::core::rewrite::{RepoPool, RepoResource};
@@ -234,7 +234,7 @@ impl BuildRebasePlanError {
                         char3,
                         printable_styled_string(
                             glyphs,
-                            repo.friendly_describe_commit_from_oid(glyphs, *oid)?
+                            repo.friendly_describe_commit_from_oid(glyphs, *oid)?,
                         )?,
                     )?;
                 }
@@ -489,7 +489,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
             .query()
             .children(CommitSet::from(current_oid))?
             .intersection(visible_commits);
-        let children_oids = commit_set_to_vec(&children_oids)?;
+        let children_oids = commit_set_to_vec_unsorted(&children_oids)?;
         for child_oid in children_oids {
             acc.push(Constraint {
                 parent_oid: current_oid,
