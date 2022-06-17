@@ -38,6 +38,14 @@ pub fn process_diff_for_record(
         &mut |delta, _| {
             let mut deltas = deltas.lock().unwrap();
             deltas.insert(
+                delta.old_file().path().unwrap().into(),
+                Delta {
+                    old_oid: delta.old_file().id(),
+                    new_oid: delta.new_file().id(),
+                    hunks: Default::default(),
+                },
+            );
+            deltas.insert(
                 delta.new_file().path().unwrap().into(),
                 Delta {
                     old_oid: delta.old_file().id(),
@@ -77,6 +85,12 @@ pub fn process_diff_for_record(
             new_oid,
             hunks,
         } = delta;
+
+        if new_oid.is_zero() {
+            result.push((path, FileContent::Absent));
+            continue;
+        }
+
         let hunks = {
             let mut hunks = hunks;
             hunks.sort_by_key(|hunk| (hunk.old_start, hunk.old_lines));
