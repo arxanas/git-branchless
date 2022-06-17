@@ -1,11 +1,12 @@
 use std::fmt::Write;
 
 use eden_dag::DagAlgorithm;
+use itertools::Itertools;
 use lib::core::dag::{commit_set_to_vec, Dag};
 use lib::core::effects::{Effects, OperationType};
 use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::repo_ext::RepoExt;
-use lib::git::{GitRunInfo, Repo};
+use lib::git::{CategorizedReferenceName, GitRunInfo, Repo};
 use lib::util::ExitCode;
 use tracing::instrument;
 
@@ -17,6 +18,7 @@ pub fn query(
     effects: &Effects,
     git_run_info: &GitRunInfo,
     query: Revset,
+    show_branches: bool,
 ) -> eyre::Result<ExitCode> {
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
@@ -40,15 +42,39 @@ pub fn query(
         }
     };
 
-    let commit_oids = {
-        let (effects, _progress) = effects.start_operation(OperationType::SortCommits);
-        let _effects = effects;
+    if show_branches {
+        let commit_oids = {
+            let (effects, _progress) = effects.start_operation(OperationType::SortCommits);
+            let _effects = effects;
 
-        dag.query().sort(&commit_set)?;
-        commit_set_to_vec(&commit_set)?
-    };
-    for commit_oid in commit_oids {
-        writeln!(effects.get_output_stream(), "{}", commit_oid)?;
+            let commit_set = dag.query().sort(&commit_set)?;
+            let commit_set = commit_set.intersection(&dag.branch_commits);
+            commit_set_to_vec(&commit_set)?
+        };
+        let ref_names = commit_oids
+            .into_iter()
+            .flat_map(
+                |oid| match references_snapshot.branch_oid_to_names.get(&oid) {
+                    Some(branch_names) => branch_names.iter().sorted().collect_vec(),
+                    None => Vec::new(),
+                },
+            )
+            .collect_vec();
+        for ref_name in ref_names {
+            let ref_name = CategorizedReferenceName::new(ref_name);
+            writeln!(effects.get_output_stream(), "{}", ref_name.render_suffix())?;
+        }
+    } else {
+        let commit_oids = {
+            let (effects, _progress) = effects.start_operation(OperationType::SortCommits);
+            let _effects = effects;
+
+            let commit_set = dag.query().sort(&commit_set)?;
+            commit_set_to_vec(&commit_set)?
+        };
+        for commit_oid in commit_oids {
+            writeln!(effects.get_output_stream(), "{}", commit_oid)?;
+        }
     }
 
     Ok(ExitCode(0))
