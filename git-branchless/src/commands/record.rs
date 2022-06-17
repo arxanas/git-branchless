@@ -43,7 +43,13 @@ pub fn record(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<Exit
         let (effects, _progress) = effects.start_operation(OperationType::CalculateDiff);
         let old_tree = snapshot.commit_stage0.get_tree()?;
         let new_tree = snapshot.commit_unstaged.get_tree()?;
-        let diff = repo.get_diff_between_trees(&effects, Some(&old_tree), &new_tree, 3)?;
+        let diff = repo.get_diff_between_trees(
+            &effects,
+            Some(&old_tree),
+            &new_tree,
+            // We manually add context to the git-record output, so suppress the context lines here.
+            0,
+        )?;
         process_diff_for_record(&repo, &diff)?
     };
     let record_state = if files.is_empty() {
