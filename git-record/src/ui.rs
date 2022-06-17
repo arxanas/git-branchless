@@ -796,27 +796,30 @@ mod tests {
                 FileContent::Text {
                     hunks: vec![
                         Hunk::Unchanged {
-                            contents: vec!["unchanged 1".to_string(), "unchanged 2".to_string()],
+                            contents: vec![
+                                "unchanged 1\n".to_string(),
+                                "unchanged 2\n".to_string(),
+                            ],
                         },
                         Hunk::Changed {
                             before: vec![
                                 HunkChangedLine {
                                     is_selected: true,
-                                    line: "before 1".to_string(),
+                                    line: "before 1\n".to_string(),
                                 },
                                 HunkChangedLine {
                                     is_selected: true,
-                                    line: "before 2".to_string(),
+                                    line: "before 2\n".to_string(),
                                 },
                             ],
                             after: vec![
                                 HunkChangedLine {
                                     is_selected: true,
-                                    line: "after 1".to_string(),
+                                    line: "after 1\n".to_string(),
                                 },
                                 HunkChangedLine {
                                     is_selected: false,
-                                    line: "after 2".to_string(),
+                                    line: "after 2\n".to_string(),
                                 },
                             ],
                         },
@@ -961,29 +964,29 @@ mod tests {
                             hunks: [
                                 Unchanged {
                                     contents: [
-                                        "unchanged 1",
-                                        "unchanged 2",
+                                        "unchanged 1\n",
+                                        "unchanged 2\n",
                                     ],
                                 },
                                 Changed {
                                     before: [
                                         HunkChangedLine {
                                             is_selected: true,
-                                            line: "before 1",
+                                            line: "before 1\n",
                                         },
                                         HunkChangedLine {
                                             is_selected: true,
-                                            line: "before 2",
+                                            line: "before 2\n",
                                         },
                                     ],
                                     after: [
                                         HunkChangedLine {
                                             is_selected: true,
-                                            line: "after 1",
+                                            line: "after 1\n",
                                         },
                                         HunkChangedLine {
                                             is_selected: true,
-                                            line: "after 2",
+                                            line: "after 2\n",
                                         },
                                     ],
                                 },
@@ -1071,29 +1074,29 @@ mod tests {
                             hunks: [
                                 Unchanged {
                                     contents: [
-                                        "unchanged 1",
-                                        "unchanged 2",
+                                        "unchanged 1\n",
+                                        "unchanged 2\n",
                                     ],
                                 },
                                 Changed {
                                     before: [
                                         HunkChangedLine {
                                             is_selected: true,
-                                            line: "before 1",
+                                            line: "before 1\n",
                                         },
                                         HunkChangedLine {
                                             is_selected: true,
-                                            line: "before 2",
+                                            line: "before 2\n",
                                         },
                                     ],
                                     after: [
                                         HunkChangedLine {
                                             is_selected: true,
-                                            line: "after 1",
+                                            line: "after 1\n",
                                         },
                                         HunkChangedLine {
                                             is_selected: true,
-                                            line: "after 2",
+                                            line: "after 2\n",
                                         },
                                     ],
                                 },
