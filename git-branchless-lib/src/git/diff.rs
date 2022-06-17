@@ -28,12 +28,18 @@ pub fn process_diff_for_record(
     let Diff { inner: diff } = diff;
 
     #[derive(Clone, Debug)]
+    enum DeltaFileContent {
+        Hunks(Vec<GitHunk>),
+        Binary,
+    }
+
+    #[derive(Clone, Debug)]
     struct Delta {
         old_oid: git2::Oid,
         old_file_mode: git2::FileMode,
         new_oid: git2::Oid,
         new_file_mode: git2::FileMode,
-        hunks: Vec<GitHunk>,
+        content: DeltaFileContent,
     }
     let deltas: Arc<Mutex<HashMap<PathBuf, Delta>>> = Default::default();
     diff.foreach(
@@ -46,28 +52,48 @@ pub fn process_diff_for_record(
                 old_file_mode: delta.old_file().mode(),
                 new_oid: delta.new_file().id(),
                 new_file_mode: delta.new_file().mode(),
-                hunks: Default::default(),
+                content: DeltaFileContent::Hunks(Default::default()),
             };
             deltas.insert(old_file, delta.clone());
             deltas.insert(new_file, delta);
             true
         },
         Some(&mut |delta, _| {
-            todo!(
-                "Binary diffing not implemented (for file: {:?})",
-                delta.new_file()
-            )
+            let mut deltas = deltas.lock().unwrap();
+
+            let old_file = delta.old_file().path().unwrap().into();
+            let new_file = delta.new_file().path().unwrap().into();
+            let delta = Delta {
+                old_oid: delta.old_file().id(),
+                old_file_mode: delta.old_file().mode(),
+                new_oid: delta.new_file().id(),
+                new_file_mode: delta.new_file().mode(),
+                content: DeltaFileContent::Binary,
+            };
+            deltas.insert(old_file, delta.clone());
+            deltas.insert(new_file, delta);
+            true
         }),
         Some(&mut |delta, hunk| {
             let path = delta.new_file().path().unwrap(); // @nocommit should
                                                          // we be using only new_file here?
             let mut deltas = deltas.lock().unwrap();
-            deltas.get_mut(path).unwrap().hunks.push(GitHunk {
-                old_start: hunk.old_start().try_into().unwrap(),
-                old_lines: hunk.old_lines().try_into().unwrap(),
-                new_start: hunk.new_start().try_into().unwrap(),
-                new_lines: hunk.new_lines().try_into().unwrap(),
-            });
+            match &mut deltas.get_mut(path).unwrap().content {
+                DeltaFileContent::Hunks(hunks) => {
+                    hunks.push(GitHunk {
+                        old_start: hunk.old_start().try_into().unwrap(),
+                        old_lines: hunk.old_lines().try_into().unwrap(),
+                        new_start: hunk.new_start().try_into().unwrap(),
+                        new_lines: hunk.new_lines().try_into().unwrap(),
+                    });
+                }
+                DeltaFileContent::Binary => {
+                    panic!(
+                        "File {:?} got a hunk callback, but it was a binary file",
+                        path
+                    )
+                }
+            }
             true
         }),
         None,
@@ -82,7 +108,7 @@ pub fn process_diff_for_record(
             old_file_mode,
             new_oid,
             new_file_mode,
-            hunks,
+            content,
         } = delta;
 
         if new_oid.is_zero() {
@@ -90,10 +116,15 @@ pub fn process_diff_for_record(
             continue;
         }
 
-        let hunks = {
-            let mut hunks = hunks;
-            hunks.sort_by_key(|hunk| (hunk.old_start, hunk.old_lines));
-            hunks
+        let hunks = match content {
+            DeltaFileContent::Binary => {
+                result.push((path, FileContent::Binary));
+                continue;
+            }
+            DeltaFileContent::Hunks(mut hunks) => {
+                hunks.sort_by_key(|hunk| (hunk.old_start, hunk.old_lines));
+                hunks
+            }
         };
         let get_lines_from_blob = |oid| -> eyre::Result<Vec<String>> {
             let oid = MaybeZeroOid::from(oid);

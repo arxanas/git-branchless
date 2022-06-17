@@ -179,7 +179,7 @@ impl Recorder {
         file_view.add_child(file_header_view);
 
         match file_content {
-            FileContent::Absent => unimplemented!(),
+            FileContent::Absent | FileContent::Binary => unimplemented!(),
             FileContent::Text { file_mode, hunks } => {
                 // FIXME: render the file mode
                 let _ = file_mode;
@@ -387,7 +387,7 @@ impl Recorder {
         };
 
         match file_content {
-            FileContent::Absent => unimplemented!(),
+            FileContent::Absent | FileContent::Binary => unimplemented!(),
             FileContent::Text {
                 file_mode: _,
                 hunks,
@@ -475,7 +475,7 @@ impl Recorder {
         let (before, after) = {
             let (path, file_content) = &mut self.state.files[file_num];
             match file_content {
-                FileContent::Absent => unimplemented!(),
+                FileContent::Absent | FileContent::Binary => unimplemented!(),
                 FileContent::Text {
                     file_mode: _,
                     hunks,
@@ -533,7 +533,7 @@ impl Recorder {
 
         let (path, file_content) = &mut self.state.files[file_num];
         match file_content {
-            FileContent::Absent => unimplemented!(),
+            FileContent::Absent | FileContent::Binary => unimplemented!(),
             FileContent::Text {
                 file_mode: _,
                 hunks,
@@ -560,7 +560,7 @@ impl Recorder {
         let (_path, file_content) = &mut self.state.files[file_num];
 
         match file_content {
-            FileContent::Absent => unimplemented!(),
+            FileContent::Absent | FileContent::Binary => unimplemented!(),
             FileContent::Text {
                 file_mode: _,
                 hunks,
@@ -607,7 +607,7 @@ fn iter_file_changed_lines(
     file_content: &FileContent,
 ) -> impl Iterator<Item = (HunkType, &HunkChangedLine)> {
     match file_content {
-        FileContent::Absent => unimplemented!(),
+        FileContent::Absent | FileContent::Binary => unimplemented!(),
         FileContent::Text {
             file_mode: _,
             hunks,
@@ -1143,6 +1143,7 @@ mod tests {
             let (_path, file_content) = &mut state.files[0];
             match file_content {
                 FileContent::Absent => panic!("Example state should not have absent files"),
+                FileContent::Binary => panic!("Example state should not have binary files"),
                 FileContent::Text {
                     file_mode: _,
                     hunks,
@@ -1261,7 +1262,7 @@ mod tests {
         let (file_mode, hunks) = {
             let (_, file_contents) = &state.files[0];
             match file_contents {
-                FileContent::Absent => panic!("should be text"),
+                FileContent::Absent | FileContent::Binary => panic!("should be text"),
                 FileContent::Text { file_mode, hunks } => (file_mode, hunks.clone()),
             }
         };

@@ -22,6 +22,9 @@ pub enum FileContent {
     /// The file didn't exist. (Perhaps it hasn't yet been created, or it was deleted.)
     Absent,
 
+    /// The file contained undisplayable binary content.
+    Binary,
+
     /// The file contains textual content (a sequence of lines each ending with the newline character.)
     Text {
         /// The file modes before and after the change.
@@ -36,7 +39,7 @@ impl FileContent {
     /// Count the number of changed sections in this file.
     pub fn count_changed_hunks(&self) -> usize {
         match self {
-            FileContent::Absent => unimplemented!(),
+            FileContent::Absent | FileContent::Binary => unimplemented!(),
             FileContent::Text {
                 file_mode: _,
                 hunks,
@@ -57,7 +60,7 @@ impl FileContent {
         let mut acc_selected = String::new();
         let mut acc_unselected = String::new();
         match self {
-            FileContent::Absent => unimplemented!(),
+            FileContent::Absent | FileContent::Binary => unimplemented!(),
             FileContent::Text {
                 file_mode: _,
                 hunks,
