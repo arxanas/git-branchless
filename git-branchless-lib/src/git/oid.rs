@@ -4,6 +4,7 @@ use std::fmt::Display;
 use std::str::FromStr;
 
 use eyre::Context;
+use tracing::instrument;
 
 use crate::git::repo::wrap_git_error;
 
@@ -35,6 +36,7 @@ impl Display for NonZeroOid {
 impl TryFrom<MaybeZeroOid> for NonZeroOid {
     type Error = eyre::Error;
 
+    #[instrument]
     fn try_from(value: MaybeZeroOid) -> Result<Self, Self::Error> {
         match value {
             MaybeZeroOid::NonZero(non_zero_oid) => Ok(non_zero_oid),
@@ -46,6 +48,7 @@ impl TryFrom<MaybeZeroOid> for NonZeroOid {
 impl TryFrom<OsString> for NonZeroOid {
     type Error = eyre::Error;
 
+    #[instrument]
     fn try_from(value: OsString) -> Result<Self, Self::Error> {
         let value: &OsStr = &value;
         value.try_into()
@@ -55,6 +58,7 @@ impl TryFrom<OsString> for NonZeroOid {
 impl TryFrom<&OsStr> for NonZeroOid {
     type Error = eyre::Error;
 
+    #[instrument]
     fn try_from(value: &OsStr) -> Result<Self, Self::Error> {
         let oid: MaybeZeroOid = value.try_into()?;
         match oid {
@@ -67,6 +71,7 @@ impl TryFrom<&OsStr> for NonZeroOid {
 impl TryFrom<&[u8]> for NonZeroOid {
     type Error = eyre::Error;
 
+    #[instrument]
     fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
         let oid = MaybeZeroOid::try_from(value)?;
         NonZeroOid::try_from(oid)
@@ -76,6 +81,7 @@ impl TryFrom<&[u8]> for NonZeroOid {
 impl FromStr for NonZeroOid {
     type Err = eyre::Error;
 
+    #[instrument]
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         let oid: MaybeZeroOid = value.parse()?;
         match oid {

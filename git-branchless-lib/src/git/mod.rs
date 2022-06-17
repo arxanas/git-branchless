@@ -22,4 +22,4 @@ pub use repo::{
 pub use run::{GitRunInfo, GitRunOpts, GitRunResult};
 pub use snapshot::WorkingCopySnapshot;
 pub use status::{FileMode, FileStatus, StatusEntry};
-pub use tree::Tree;
+pub use tree::{dehydrate_tree, hydrate_tree, Tree};

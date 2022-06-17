@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 use eyre::Context;
 use git_record::{FileContent, Hunk, HunkChangedLine};
 
-use super::{MaybeZeroOid, NonZeroOid, Repo};
+use super::{MaybeZeroOid, Repo};
 
 /// A diff between two trees/commits.
 pub struct Diff<'repo> {
@@ -13,7 +13,7 @@ pub struct Diff<'repo> {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct GitHunk {
+struct GitHunk {
     old_start: usize,
     old_lines: usize,
     new_start: usize,
@@ -27,18 +27,23 @@ pub fn process_diff_for_record(
 ) -> eyre::Result<Vec<(PathBuf, FileContent)>> {
     let Diff { inner: diff } = diff;
 
-    type Value = (git2::Oid, git2::Oid, Vec<GitHunk>);
-    let hunks: Arc<Mutex<HashMap<PathBuf, Value>>> = Default::default();
+    #[derive(Debug)]
+    struct Delta {
+        old_oid: git2::Oid,
+        new_oid: git2::Oid,
+        hunks: Vec<GitHunk>,
+    }
+    let deltas: Arc<Mutex<HashMap<PathBuf, Delta>>> = Default::default();
     diff.foreach(
         &mut |delta, _| {
-            let mut hunks = hunks.lock().unwrap();
-            hunks.insert(
+            let mut deltas = deltas.lock().unwrap();
+            deltas.insert(
                 delta.new_file().path().unwrap().into(),
-                (
-                    delta.old_file().id(),
-                    delta.new_file().id(),
-                    Default::default(),
-                ),
+                Delta {
+                    old_oid: delta.old_file().id(),
+                    new_oid: delta.new_file().id(),
+                    hunks: Default::default(),
+                },
             );
             true
         },
@@ -49,9 +54,10 @@ pub fn process_diff_for_record(
             )
         }),
         Some(&mut |delta, hunk| {
-            let path = delta.new_file().path().unwrap();
-            let mut hunks = hunks.lock().unwrap();
-            hunks.get_mut(path).unwrap().2.push(GitHunk {
+            let path = delta.new_file().path().unwrap(); // @nocommit should
+                                                         // we be using only new_file here?
+            let mut deltas = deltas.lock().unwrap();
+            deltas.get_mut(path).unwrap().hunks.push(GitHunk {
                 old_start: hunk.old_start().try_into().unwrap(),
                 old_lines: hunk.old_lines().try_into().unwrap(),
                 new_start: hunk.new_start().try_into().unwrap(),
@@ -61,24 +67,49 @@ pub fn process_diff_for_record(
         }),
         None,
     )
-    .wrap_err("Iterating over diff")?;
+    .wrap_err("Iterating over diff deltas")?;
 
-    let hunks = std::mem::take(&mut *hunks.lock().unwrap());
+    let deltas = std::mem::take(&mut *deltas.lock().unwrap());
     let mut result = Vec::new();
-    for (path, (old_oid, new_oid, hunks)) in hunks {
+    for (path, delta) in deltas {
+        let Delta {
+            old_oid,
+            new_oid,
+            hunks,
+        } = delta;
+        let hunks = {
+            let mut hunks = hunks;
+            hunks.sort_by_key(|hunk| (hunk.old_start, hunk.old_lines));
+            hunks
+        };
         let get_lines_from_blob = |oid| -> eyre::Result<Vec<String>> {
             let oid = MaybeZeroOid::from(oid);
-            let oid = NonZeroOid::try_from(oid)?;
-            let contents = repo.find_blob_or_fail(oid)?.get_content().to_vec();
-            let contents = String::from_utf8(contents).wrap_err("Decoding old file contents")?;
-            let lines: Vec<String> = contents.lines().map(|line| line.to_owned()).collect();
-            Ok(lines)
+            match oid {
+                MaybeZeroOid::Zero => Ok(Default::default()),
+                MaybeZeroOid::NonZero(oid) => {
+                    let contents = repo.find_blob_or_fail(oid)?.get_content().to_vec();
+                    let contents =
+                        String::from_utf8(contents).wrap_err("Decoding old file contents")?;
+                    let lines: Vec<String> = contents
+                        .split_inclusive('\n')
+                        .map(|line| line.to_owned())
+                        .collect();
+                    Ok(lines)
+                }
+            }
         };
-        repo.inner.blob_path(&path)?;
+
+        // FIXME: should we rely on the caller to add the file contents to
+        // the ODB?
+        match repo.inner.blob_path(&path) {
+            Ok(_) => {}
+            Err(err) if err.code() == git2::ErrorCode::NotFound => {}
+            Err(err) => return Err(err.into()),
+        }
         let before_lines = get_lines_from_blob(old_oid)?;
         let after_lines = get_lines_from_blob(new_oid)?;
 
-        let mut before_line_idx = 0;
+        let mut unchanged_hunk_line_idx = 0;
         let mut file_hunks = Vec::new();
         for hunk in hunks {
             let GitHunk {
@@ -87,14 +118,64 @@ pub fn process_diff_for_record(
                 new_start,
                 new_lines,
             } = hunk;
-            if before_line_idx < old_start {
+
+            // The line numbers are one-indexed.
+            let (old_start, old_is_empty) = if old_start == 0 && old_lines == 0 {
+                (0, true)
+            } else {
+                assert!(old_start > 0);
+                (old_start - 1, false)
+            };
+            let new_start = if new_start == 0 && new_lines == 0 {
+                0
+            } else {
+                assert!(new_start > 0);
+                new_start - 1
+            };
+
+            // If we're starting a new hunk, first paste in any unchanged
+            // lines since the last hunk (from the old version of the file).
+            if unchanged_hunk_line_idx <= old_start {
+                let end = if old_lines == 0 && !old_is_empty {
+                    // Insertions are indicated with `old_lines == 0`, but in
+                    // those cases, the inserted line is *after* the provided
+                    // line number.
+                    old_start + 1
+                } else {
+                    old_start
+                };
                 file_hunks.push(Hunk::Unchanged {
-                    contents: before_lines[before_line_idx..old_start].to_vec(),
+                    contents: before_lines[unchanged_hunk_line_idx..end].to_vec(),
                 });
-                before_line_idx = old_start + old_lines - 1;
+                unchanged_hunk_line_idx = end + old_lines;
             }
+
+            let before_idx_start = old_start;
+            let before_idx_end = before_idx_start + old_lines;
+            assert!(
+                before_idx_end <= before_lines.len(),
+                "before_idx_end {end} was not in range [0, {len}): {hunk:?}, path: {path:?}; lines {start}-... are: {lines:?}",
+                start = before_idx_start,
+                end = before_idx_end,
+                len = before_lines.len(),
+                hunk = hunk,
+                path = path,
+                lines = &before_lines[before_idx_start..],
+            );
+            let after_idx_start = new_start;
+            let after_idx_end = after_idx_start + new_lines;
+            assert!(
+                after_idx_end <= after_lines.len(),
+                "after_idx_end {end} was not in range [0, {len}): {hunk:?}, path: {path:?}; lines {start}-... are: {lines:?}",
+                start = after_idx_start,
+                end = after_idx_end,
+                len = after_lines.len(),
+                hunk = hunk,
+                path = path,
+                lines  = &after_lines[after_idx_start..],
+            );
             file_hunks.push(Hunk::Changed {
-                before: before_lines[old_start..old_start + old_lines - 1]
+                before: before_lines[before_idx_start..before_idx_end]
                     .iter()
                     .cloned()
                     .map(|line| HunkChangedLine {
@@ -102,7 +183,7 @@ pub fn process_diff_for_record(
                         line,
                     })
                     .collect(),
-                after: after_lines[new_start..new_start + new_lines - 1]
+                after: after_lines[after_idx_start..after_idx_end]
                     .iter()
                     .cloned()
                     .map(|line| HunkChangedLine {
@@ -110,11 +191,12 @@ pub fn process_diff_for_record(
                         line,
                     })
                     .collect(),
-            })
+            });
         }
-        if before_line_idx < before_lines.len() {
+
+        if unchanged_hunk_line_idx < before_lines.len() {
             file_hunks.push(Hunk::Unchanged {
-                contents: before_lines[before_line_idx..].to_vec(),
+                contents: before_lines[unchanged_hunk_line_idx..].to_vec(),
             });
         }
         result.push((path, FileContent::Text { hunks: file_hunks }));

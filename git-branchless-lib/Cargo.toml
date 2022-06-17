@@ -30,6 +30,12 @@ required-features = ["integration-test-bin"]
 test = true
 
 [[bin]]
+name = "git-branchless-regression-test-record"
+path = "bin/testing/regression_test_record.rs"
+required-features = ["integration-test-bin"]
+test = true
+
+[[bin]]
 name = "git-branchless-profile-changed-paths"
 path = "bin/testing/profile_changed_paths.rs"
 required-features = ["integration-test-bin"]

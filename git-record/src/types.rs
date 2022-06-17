@@ -58,9 +58,7 @@ impl FileContent {
                         Hunk::Unchanged { contents } => {
                             for line in contents {
                                 acc_selected.push_str(line);
-                                acc_selected.push('\n');
                                 acc_unselected.push_str(line);
-                                acc_unselected.push('\n');
                             }
                         }
                         Hunk::Changed { before, after } => {
@@ -68,20 +66,16 @@ impl FileContent {
                                 // Note the inverted condition here.
                                 if !*is_selected {
                                     acc_selected.push_str(line);
-                                    acc_selected.push('\n');
                                 } else {
                                     acc_unselected.push_str(line);
-                                    acc_unselected.push('\n');
                                 }
                             }
 
                             for HunkChangedLine { is_selected, line } in after {
                                 if *is_selected {
                                     acc_selected.push_str(line);
-                                    acc_selected.push('\n');
                                 } else {
                                     acc_unselected.push_str(line);
-                                    acc_unselected.push('\n');
                                 }
                             }
                         }
@@ -101,18 +95,20 @@ impl FileContent {
 pub enum Hunk {
     /// This section of the file is unchanged and just used for context.
     Unchanged {
-        /// The contents of the lines in this section, with no trailing
-        /// newlines.
+        /// The contents of the lines in this section. Each line includes its
+        /// trailing newline character(s), if any.
         contents: Vec<String>,
     },
 
     /// This section of the file is changed, and the user needs to select which
     /// specific changed lines to record.
     Changed {
-        /// The contents of the lines before the user change was made.
+        /// The contents of the lines before the user change was made. Each line
+        /// includes its trailing newline character(s), if any.
         before: Vec<HunkChangedLine>,
 
-        /// The contents of the lines after the user change was made.
+        /// The contents of the lines after the user change was made. Each line
+        /// includes its trailing newline character(s), if any.
         after: Vec<HunkChangedLine>,
     },
 }
@@ -123,6 +119,7 @@ pub struct HunkChangedLine {
     /// Whether or not this line was selected to be recorded.
     pub is_selected: bool,
 
-    /// The contents of the line, without a trailing newline.
+    /// The contents of the line, including its trailing newline character(s),
+    /// if any.
     pub line: String,
 }
