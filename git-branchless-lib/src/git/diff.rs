@@ -126,19 +126,23 @@ pub fn process_diff_for_record(
                 hunks
             }
         };
-        let get_lines_from_blob = |oid| -> eyre::Result<Vec<String>> {
+        let get_lines_from_blob = |oid| -> eyre::Result<Option<Vec<String>>> {
             let oid = MaybeZeroOid::from(oid);
             match oid {
                 MaybeZeroOid::Zero => Ok(Default::default()),
                 MaybeZeroOid::NonZero(oid) => {
                     let contents = repo.find_blob_or_fail(oid)?.get_content().to_vec();
-                    let contents =
-                        String::from_utf8(contents).wrap_err("Decoding old file contents")?;
+                    let contents = match String::from_utf8(contents) {
+                        Ok(contents) => contents,
+                        Err(_) => {
+                            return Ok(None);
+                        }
+                    };
                     let lines: Vec<String> = contents
                         .split_inclusive('\n')
                         .map(|line| line.to_owned())
                         .collect();
-                    Ok(lines)
+                    Ok(Some(lines))
                 }
             }
         };
@@ -150,8 +154,20 @@ pub fn process_diff_for_record(
             Err(err) if err.code() == git2::ErrorCode::NotFound => {}
             Err(err) => return Err(err.into()),
         }
-        let before_lines = get_lines_from_blob(old_oid)?;
-        let after_lines = get_lines_from_blob(new_oid)?;
+        let before_lines = match get_lines_from_blob(old_oid)? {
+            Some(lines) => lines,
+            None => {
+                result.push((path, FileContent::Binary));
+                continue;
+            }
+        };
+        let after_lines = match get_lines_from_blob(new_oid)? {
+            Some(lines) => lines,
+            None => {
+                result.push((path, FileContent::Binary));
+                continue;
+            }
+        };
 
         let mut unchanged_hunk_line_idx = 0;
         let mut file_hunks = Vec::new();
