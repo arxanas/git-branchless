@@ -49,7 +49,10 @@ fn main() -> eyre::Result<()> {
             for (_, file_content) in &mut entries {
                 match file_content {
                     FileContent::Absent => {}
-                    FileContent::Text { hunks } => {
+                    FileContent::Text {
+                        file_mode: _,
+                        hunks,
+                    } => {
                         for hunk in hunks {
                             match hunk {
                                 Hunk::Unchanged { contents: _ } => {}
@@ -73,10 +76,15 @@ fn main() -> eyre::Result<()> {
             .map(|(path, file_content)| {
                 let value = match file_content {
                     FileContent::Absent => None,
-                    FileContent::Text { .. } => {
+                    FileContent::Text {
+                        file_mode: (_old_file_mode, new_file_mode),
+                        hunks: _,
+                    } => {
                         let (selected, _unselected) = file_content.get_selected_contents();
                         let blob_oid = repo.create_blob_from_contents(selected.as_bytes())?;
-                        Some((blob_oid, FileMode::Blob))
+                        let file_mode = i32::try_from(new_file_mode).unwrap();
+                        let file_mode = FileMode::from(file_mode);
+                        Some((blob_oid, file_mode))
                     }
                 };
                 Ok((path, value))

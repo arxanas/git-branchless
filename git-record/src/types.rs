@@ -24,6 +24,9 @@ pub enum FileContent {
 
     /// The file contains textual content (a sequence of lines each ending with the newline character.)
     Text {
+        /// The file modes before and after the change.
+        file_mode: (usize, usize),
+
         /// The set of [`Hunk`]s inside the file.
         hunks: Vec<Hunk>,
     },
@@ -34,7 +37,10 @@ impl FileContent {
     pub fn count_changed_hunks(&self) -> usize {
         match self {
             FileContent::Absent => unimplemented!(),
-            FileContent::Text { hunks } => hunks
+            FileContent::Text {
+                file_mode: _,
+                hunks,
+            } => hunks
                 .iter()
                 .filter(|hunk| match hunk {
                     Hunk::Unchanged { .. } => false,
@@ -52,7 +58,10 @@ impl FileContent {
         let mut acc_unselected = String::new();
         match self {
             FileContent::Absent => unimplemented!(),
-            FileContent::Text { hunks } => {
+            FileContent::Text {
+                file_mode: _,
+                hunks,
+            } => {
                 for hunk in hunks {
                     match hunk {
                         Hunk::Unchanged { contents } => {

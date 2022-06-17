@@ -16,6 +16,7 @@ fn main() {
         (
             PathBuf::from("foo/bar"),
             FileContent::Text {
+                file_mode: (0o100644, 0o100644),
                 hunks: vec![
                     Hunk::Unchanged {
                         contents: std::iter::repeat("this is some text".to_string())
@@ -53,6 +54,7 @@ fn main() {
         (
             PathBuf::from("baz"),
             FileContent::Text {
+                file_mode: (0o100644, 0o100644),
                 hunks: vec![
                     Hunk::Unchanged {
                         contents: vec![
