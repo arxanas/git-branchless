@@ -48,7 +48,7 @@ fn main() -> eyre::Result<()> {
             let mut entries = process_diff_for_record(&repo, &diff)?;
             for (_, file_content) in &mut entries {
                 match file_content {
-                    FileContent::Absent => {}
+                    FileContent::Absent | FileContent::Binary => {}
                     FileContent::Text {
                         file_mode: _,
                         hunks,
@@ -76,6 +76,15 @@ fn main() -> eyre::Result<()> {
             .map(|(path, file_content)| {
                 let value = match file_content {
                     FileContent::Absent => None,
+                    FileContent::Binary => {
+                        let entry = new_tree.get_path(&path)?;
+                        match entry {
+                            Some(tree_entry) => {
+                                Some((tree_entry.get_oid(), tree_entry.get_filemode()))
+                            }
+                            None => None,
+                        }
+                    }
                     FileContent::Text {
                         file_mode: (_old_file_mode, new_file_mode),
                         hunks: _,
