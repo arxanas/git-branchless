@@ -54,7 +54,7 @@ struct Row {
 ///
 /// Unlike in a database, there is no specific guarantee that an event
 /// transaction is an atomic unit of work.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct EventTransactionId(isize);
 
 impl ToString for EventTransactionId {
@@ -703,7 +703,7 @@ struct EventInfo {
 /// Thus, all events before to the cursor are considered to be in effect,
 /// and all events after the cursor are considered to not have happened
 /// yet.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct EventCursor {
     event_id: isize,
 }

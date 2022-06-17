@@ -250,8 +250,8 @@ impl Config {
             }
             result => result,
         };
-        let result = result.map_err(wrap_git_error)?;
-        Ok(result)
+        result.map_err(wrap_git_error)?;
+        Ok(())
     }
 }
 

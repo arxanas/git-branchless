@@ -542,8 +542,8 @@ fn delete_isolated_config(
         }
         result => result,
     };
-    let result = result.wrap_err("Deleting isolated config")?;
-    Ok(result)
+    result.wrap_err("Deleting isolated config")?;
+    Ok(())
 }
 
 /// Initialize `git-branchless` in the current repo.

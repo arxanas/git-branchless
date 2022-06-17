@@ -310,8 +310,7 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
                 },
                 None => git_run_info,
             };
-            let exit_code = wrap::wrap(&git_run_info, args.as_slice())?;
-            exit_code
+            wrap::wrap(&git_run_info, args.as_slice())?
         }
     };
 
