@@ -37,13 +37,11 @@ fn resolve_base_commit(
                 .query()
                 .range(CommitSet::from(merge_base_oid), CommitSet::from(oid))?;
             let roots = dag.query().roots(range.clone())?;
-            let bases = dag.query().children(roots)?.intersection(&range);
-            bases
+            dag.query().children(roots)?.intersection(&range)
         }
         None => {
             let ancestors = dag.query().ancestors(CommitSet::from(oid))?;
-            let bases = dag.query().roots(ancestors)?;
-            bases
+            dag.query().roots(ancestors)?
         }
     };
 

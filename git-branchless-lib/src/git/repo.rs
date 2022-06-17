@@ -1698,7 +1698,7 @@ impl<'a> CategorizedReferenceName<'a> {
     /// `branch` to the description.
     pub fn friendly_describe(&self) -> String {
         let name = self.render_suffix();
-        let name = match self {
+        match self {
             CategorizedReferenceName::LocalBranch { .. } => {
                 format!("branch {}", name)
             }
@@ -1706,8 +1706,7 @@ impl<'a> CategorizedReferenceName<'a> {
                 format!("remote branch {}", name)
             }
             CategorizedReferenceName::OtherRef { .. } => format!("ref {}", name),
-        };
-        name
+        }
     }
 }
 

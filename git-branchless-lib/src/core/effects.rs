@@ -530,7 +530,8 @@ impl Effects {
 
     fn on_notify_progress_inc(&self, operation_key: &OperationKey, increment: usize) {
         let mut root_operation = self.root_operation.lock().unwrap();
-        let operation_state = match root_operation.get_child(operation_key) {
+        let operation = root_operation.get_child(operation_key);
+        let operation_state = match operation {
             Some(operation_state) => operation_state,
             None => return,
         };
@@ -539,7 +540,8 @@ impl Effects {
 
     fn on_set_message(&self, operation_key: &OperationKey, message: String) {
         let mut root_operation = self.root_operation.lock().unwrap();
-        let operation_state = match root_operation.get_child(operation_key) {
+        let operation = root_operation.get_child(operation_key);
+        let operation_state = match operation {
             Some(operation_state) => operation_state,
             None => return,
         };
@@ -555,7 +557,8 @@ impl Effects {
         let now = Instant::now();
         let mut root_operation = self.root_operation.lock().unwrap();
 
-        let operation_state = match root_operation.get_child(operation_key) {
+        let operation = root_operation.get_child(operation_key);
+        let operation_state = match operation {
             Some(operation_state) => operation_state,
             None => {
                 warn!("Progress operation not started");
@@ -633,7 +636,8 @@ trait WriteProgress {
         // `ProgressBar` is included in a `MultiProgress`, it doesn't matter
         // which of them we call `println` on. The output will be printed above
         // the `MultiProgress` regardless.
-        match root_operation.children.get(0) {
+        let operation = root_operation.children.get(0);
+        match operation {
             None => {
                 // There's no progress meters, so we can write directly to
                 // stdout. Note that we don't style output here; instead, we

@@ -120,7 +120,7 @@ pub mod testing {
         screen: RefCell<Screen>,
     }
 
-    impl<'screenshot> CursiveTestingBackend {
+    impl CursiveTestingBackend {
         /// Construct the testing backend with the provided set of events.
         pub fn init(events: Vec<CursiveTestingEvent>) -> Box<dyn Backend> {
             Box::new(CursiveTestingBackend {

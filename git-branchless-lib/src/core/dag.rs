@@ -334,7 +334,7 @@ impl Dag {
 
     /// Conduct an arbitrary query against the DAG.
     pub fn query(&self) -> &eden_dag::Dag {
-        &*self.inner.borrow()
+        self.inner.borrow()
     }
 
     /// Return the set of commits which are public (checked into the main branch).

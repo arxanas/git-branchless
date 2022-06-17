@@ -146,7 +146,7 @@ fn restack_commits(
                 builder.move_subtree(child_oid, dest_oid)?;
             }
         }
-        let rebase_plan = match builder.build(effects, thread_pool, repo_pool, build_options)? {
+        match builder.build(effects, thread_pool, repo_pool, build_options)? {
             Ok(Some(rebase_plan)) => rebase_plan,
             Ok(None) => {
                 writeln!(
@@ -159,8 +159,7 @@ fn restack_commits(
                 err.describe(effects, &repo)?;
                 return Ok(ExitCode(1));
             }
-        };
-        rebase_plan
+        }
     };
 
     let execute_rebase_plan_result = execute_rebase_plan(

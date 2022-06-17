@@ -123,7 +123,8 @@ impl<R: Resource> ResourcePool<R> {
                 .resources
                 .lock()
                 .expect("Poisoned mutex for ResourcePool");
-            match resources.pop() {
+            let resource = resources.pop();
+            match resource {
                 Some(resource) => resource,
                 None => self.factory.try_create()?,
             }
