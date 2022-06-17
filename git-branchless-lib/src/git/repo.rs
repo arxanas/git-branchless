@@ -21,7 +21,7 @@ use chrono::{DateTime, Local, TimeZone, Utc};
 use cursive::theme::BaseColor;
 use cursive::utils::markup::StyledString;
 use eyre::Context;
-use git2::message_trailers_bytes;
+use git2::{message_trailers_bytes, DiffOptions};
 use itertools::Itertools;
 use os_str_bytes::{OsStrBytes, OsStringBytes};
 use tracing::{instrument, warn};
@@ -453,7 +453,7 @@ impl Repo {
             None => None,
         };
         let current_tree = dehydrated_commit.get_tree()?;
-        let diff = self.get_diff_between_trees(effects, parent_tree.as_ref(), &current_tree)?;
+        let diff = self.get_diff_between_trees(effects, parent_tree.as_ref(), &current_tree, 3)?;
         Ok(Some(diff))
     }
 
@@ -466,6 +466,7 @@ impl Repo {
         effects: &Effects,
         old_tree: Option<&Tree>,
         new_tree: &Tree,
+        num_context_lines: usize,
     ) -> eyre::Result<Diff> {
         let (effects, _progress) = effects.start_operation(OperationType::CalculateDiff);
         let _effects = effects;
@@ -475,7 +476,11 @@ impl Repo {
 
         let diff = self
             .inner
-            .diff_tree_to_tree(old_tree, new_tree, None)
+            .diff_tree_to_tree(
+                old_tree,
+                new_tree,
+                Some(DiffOptions::new().context_lines(num_context_lines.try_into().unwrap())),
+            )
             .map_err(wrap_git_error)?;
         Ok(Diff { inner: diff })
     }
