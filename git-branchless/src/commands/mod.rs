@@ -229,7 +229,10 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
             &traverse_commits_options,
         )?,
 
-        Command::Query { revset } => query::query(&effects, &git_run_info, revset)?,
+        Command::Query {
+            revset,
+            show_branches,
+        } => query::query(&effects, &git_run_info, revset, show_branches)?,
 
         Command::Restack {
             commits: revsets,

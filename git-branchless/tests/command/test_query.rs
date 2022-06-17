@@ -100,3 +100,30 @@ fn test_query_legacy_git_syntax() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_query_branches() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+
+    git.commit_file("test1", 1)?;
+    git.run(&["branch", "foo"])?;
+    git.commit_file("test2", 2)?;
+    git.commit_file("test3", 3)?;
+
+    {
+        let (stdout, _stderr) = git.run(&["branchless", "query", "-b", "."])?;
+        insta::assert_snapshot!(stdout, @"master
+");
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["branchless", "query", "-b", "::."])?;
+        insta::assert_snapshot!(stdout, @r###"
+        master
+        foo
+        "###);
+    }
+
+    Ok(())
+}

@@ -315,6 +315,10 @@ pub enum Command {
         /// The query to execute.
         #[clap(value_parser)]
         revset: Revset,
+
+        /// Print the branches attached to the resulting commits, rather than the commits themselves.
+        #[clap(action, short = 'b', long = "--branches")]
+        show_branches: bool,
     },
 
     /// Fix up commits abandoned by a previous rewrite operation.
