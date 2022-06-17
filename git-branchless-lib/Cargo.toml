@@ -6,7 +6,7 @@ keywords = ["git"]
 license = "GPL-2.0-only"
 name = "git-branchless-lib"
 repository = "https://github.com/arxanas/git-branchless"
-rust-version = "1.56.0"
+rust-version = "1.61.0"
 version = "0.3.12"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
