@@ -27,32 +27,29 @@ pub fn process_diff_for_record(
 ) -> eyre::Result<Vec<(PathBuf, FileContent)>> {
     let Diff { inner: diff } = diff;
 
-    #[derive(Debug)]
+    #[derive(Clone, Debug)]
     struct Delta {
         old_oid: git2::Oid,
+        old_file_mode: git2::FileMode,
         new_oid: git2::Oid,
+        new_file_mode: git2::FileMode,
         hunks: Vec<GitHunk>,
     }
     let deltas: Arc<Mutex<HashMap<PathBuf, Delta>>> = Default::default();
     diff.foreach(
         &mut |delta, _| {
             let mut deltas = deltas.lock().unwrap();
-            deltas.insert(
-                delta.old_file().path().unwrap().into(),
-                Delta {
-                    old_oid: delta.old_file().id(),
-                    new_oid: delta.new_file().id(),
-                    hunks: Default::default(),
-                },
-            );
-            deltas.insert(
-                delta.new_file().path().unwrap().into(),
-                Delta {
-                    old_oid: delta.old_file().id(),
-                    new_oid: delta.new_file().id(),
-                    hunks: Default::default(),
-                },
-            );
+            let old_file = delta.old_file().path().unwrap().into();
+            let new_file = delta.new_file().path().unwrap().into();
+            let delta = Delta {
+                old_oid: delta.old_file().id(),
+                old_file_mode: delta.old_file().mode(),
+                new_oid: delta.new_file().id(),
+                new_file_mode: delta.new_file().mode(),
+                hunks: Default::default(),
+            };
+            deltas.insert(old_file, delta.clone());
+            deltas.insert(new_file, delta);
             true
         },
         Some(&mut |delta, _| {
@@ -82,7 +79,9 @@ pub fn process_diff_for_record(
     for (path, delta) in deltas {
         let Delta {
             old_oid,
+            old_file_mode,
             new_oid,
+            new_file_mode,
             hunks,
         } = delta;
 
@@ -213,7 +212,16 @@ pub fn process_diff_for_record(
                 contents: before_lines[unchanged_hunk_line_idx..].to_vec(),
             });
         }
-        result.push((path, FileContent::Text { hunks: file_hunks }));
+        result.push((
+            path,
+            FileContent::Text {
+                file_mode: (
+                    u32::from(old_file_mode).try_into().unwrap(),
+                    u32::from(new_file_mode).try_into().unwrap(),
+                ),
+                hunks: file_hunks,
+            },
+        ));
     }
     Ok(result)
 }

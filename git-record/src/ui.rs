@@ -180,7 +180,10 @@ impl Recorder {
 
         match file_content {
             FileContent::Absent => unimplemented!(),
-            FileContent::Text { hunks } => {
+            FileContent::Text { file_mode, hunks } => {
+                // FIXME: render the file mode
+                let _ = file_mode;
+
                 for (hunk_num, hunk) in hunks.iter().enumerate() {
                     match hunk {
                         Hunk::Unchanged { contents } => {
@@ -385,7 +388,10 @@ impl Recorder {
 
         match file_content {
             FileContent::Absent => unimplemented!(),
-            FileContent::Text { hunks } => {
+            FileContent::Text {
+                file_mode: _,
+                hunks,
+            } => {
                 for (hunk_num, hunk) in hunks.iter_mut().enumerate() {
                     match hunk {
                         Hunk::Unchanged { contents: _ } => {
@@ -470,7 +476,10 @@ impl Recorder {
             let (path, file_content) = &mut self.state.files[file_num];
             match file_content {
                 FileContent::Absent => unimplemented!(),
-                FileContent::Text { hunks } => match &mut hunks[hunk_num] {
+                FileContent::Text {
+                    file_mode: _,
+                    hunks,
+                } => match &mut hunks[hunk_num] {
                     Hunk::Unchanged { contents } => {
                         error!(?hunk_num, ?path, ?contents, "Invalid hunk num to change");
                         panic!("Invalid hunk num to change");
@@ -525,7 +534,10 @@ impl Recorder {
         let (path, file_content) = &mut self.state.files[file_num];
         match file_content {
             FileContent::Absent => unimplemented!(),
-            FileContent::Text { hunks } => {
+            FileContent::Text {
+                file_mode: _,
+                hunks,
+            } => {
                 let hunk = &mut hunks[hunk_num];
                 let hunk_changed_lines = match (hunk, hunk_type) {
                     (Hunk::Unchanged { contents }, _) => {
@@ -549,7 +561,10 @@ impl Recorder {
 
         match file_content {
             FileContent::Absent => unimplemented!(),
-            FileContent::Text { hunks } => {
+            FileContent::Text {
+                file_mode: _,
+                hunks,
+            } => {
                 let hunk_selections = iter_hunk_changed_lines(&hunks[hunk_num]).map(
                     |(
                         _hunk_type,
@@ -593,7 +608,10 @@ fn iter_file_changed_lines(
 ) -> impl Iterator<Item = (HunkType, &HunkChangedLine)> {
     match file_content {
         FileContent::Absent => unimplemented!(),
-        FileContent::Text { hunks } => hunks.iter().flat_map(iter_hunk_changed_lines),
+        FileContent::Text {
+            file_mode: _,
+            hunks,
+        } => hunks.iter().flat_map(iter_hunk_changed_lines),
     }
 }
 
@@ -794,6 +812,7 @@ mod tests {
             files: vec![(
                 PathBuf::from("foo"),
                 FileContent::Text {
+                    file_mode: (0o100644, 0o100644),
                     hunks: vec![
                         Hunk::Unchanged {
                             contents: vec![
@@ -961,6 +980,10 @@ mod tests {
                     (
                         "foo",
                         Text {
+                            file_mode: (
+                                33188,
+                                33188,
+                            ),
                             hunks: [
                                 Unchanged {
                                     contents: [
@@ -1071,6 +1094,10 @@ mod tests {
                     (
                         "foo",
                         Text {
+                            file_mode: (
+                                33188,
+                                33188,
+                            ),
                             hunks: [
                                 Unchanged {
                                     contents: [
@@ -1116,7 +1143,10 @@ mod tests {
             let (_path, file_content) = &mut state.files[0];
             match file_content {
                 FileContent::Absent => panic!("Example state should not have absent files"),
-                FileContent::Text { hunks } => {
+                FileContent::Text {
+                    file_mode: _,
+                    hunks,
+                } => {
                     for hunk in hunks {
                         if let Hunk::Changed { before, after: _ } = hunk {
                             before[0].is_selected = true;
@@ -1159,6 +1189,7 @@ mod tests {
             files: vec![(
                 PathBuf::from("foo"),
                 FileContent::Text {
+                    file_mode: (0o100644, 0o100644),
                     hunks: vec![
                         Hunk::Unchanged {
                             contents: vec![
@@ -1227,14 +1258,15 @@ mod tests {
     #[test]
     fn test_render_multiple_hunks() -> eyre::Result<()> {
         let mut state = example_record_state();
-        let hunks = {
+        let (file_mode, hunks) = {
             let (_, file_contents) = &state.files[0];
             match file_contents {
                 FileContent::Absent => panic!("should be text"),
-                FileContent::Text { hunks } => hunks.clone(),
+                FileContent::Text { file_mode, hunks } => (file_mode, hunks.clone()),
             }
         };
         state.files[0].1 = FileContent::Text {
+            file_mode: *file_mode,
             hunks: [hunks.clone(), hunks].concat(),
         };
 
