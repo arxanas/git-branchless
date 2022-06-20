@@ -50,7 +50,7 @@ tracing-subscriber = { version = "0.3.11", features = ["env-filter"] }
 skim = "0.9.4"
 
 [dev-dependencies]
-anyhow = "1.0.57"
+anyhow = "1.0.58"
 assert_cmd = "2.0.4"
 insta = "1.14.1"
 portable-pty = "0.7.0"
