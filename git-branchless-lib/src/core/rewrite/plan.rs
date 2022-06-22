@@ -120,16 +120,199 @@ impl ToString for RebaseCommand {
     }
 }
 
+/// Represents the commits (as OIDs) that will be used to build a rebase plan.
+#[derive(Clone, Debug)]
+struct ConstraintGraph<'repo> {
+    dag: &'repo Dag,
+
+    /// This is a mapping from `x` to `y` if `x` must be applied before `y`
+    inner: HashMap<NonZeroOid, HashSet<NonZeroOid>>,
+}
+
+impl<'repo> ConstraintGraph<'repo> {
+    pub fn new(dag: &'repo Dag) -> Self {
+        Self {
+            dag,
+            inner: HashMap::new(),
+        }
+    }
+
+    pub fn add_constraints(&mut self, constraints: &Vec<Constraint>) {
+        for constraint in constraints {
+            match constraint {
+                Constraint::ImmediateChild {
+                    parent_oid: _,
+                    child_oid: _,
+                } => todo!(),
+
+                Constraint::ChildAndDescendants {
+                    parent_oid,
+                    child_oid,
+                } => {
+                    self.inner
+                        .entry(*parent_oid)
+                        .or_default()
+                        .insert(*child_oid);
+                }
+            }
+        }
+    }
+
+    #[instrument]
+    fn collect_descendants(
+        &self,
+        visible_commits: &CommitSet,
+        acc: &mut Vec<Constraint>,
+        current_oid: NonZeroOid,
+    ) -> eyre::Result<()> {
+        let children_oids = self
+            .dag
+            .query()
+            .children(CommitSet::from(current_oid))?
+            .intersection(visible_commits);
+        let children_oids = commit_set_to_vec_unsorted(&children_oids)?;
+        for child_oid in children_oids {
+            acc.push(Constraint::ChildAndDescendants {
+                parent_oid: current_oid,
+                child_oid,
+            });
+            self.collect_descendants(visible_commits, acc, child_oid)?;
+        }
+        Ok(())
+    }
+
+    /// Add additional edges to the constraint graph for each descendant commit
+    /// of a referred-to commit. This adds enough information to the constraint
+    /// graph that it now represents the actual end-state commit graph that we
+    /// want to create, not just a list of constraints.
+    fn add_descendant_constraints(&mut self, effects: &Effects) -> eyre::Result<()> {
+        let (effects, progress) = effects.start_operation(OperationType::ConstrainCommits);
+        let _effects = effects;
+
+        let all_descendants_of_constrained_nodes = {
+            let public_commits = self.dag.query_public_commits()?;
+            let active_heads = self.dag.query_active_heads(
+                &public_commits,
+                &self
+                    .dag
+                    .observed_commits
+                    .difference(&self.dag.obsolete_commits),
+            )?;
+            let visible_commits = self.dag.query().ancestors(active_heads)?;
+
+            let mut acc = Vec::new();
+            let parents = self.commits_to_move();
+            progress.notify_progress(0, parents.len());
+            for parent_oid in parents {
+                self.collect_descendants(&visible_commits, &mut acc, parent_oid)?;
+                progress.notify_progress_inc(1);
+            }
+            acc
+        };
+
+        self.add_constraints(&all_descendants_of_constrained_nodes);
+        Ok(())
+    }
+
+    fn check_for_cycles_helper(
+        &self,
+        path: &mut Vec<NonZeroOid>,
+        current_oid: NonZeroOid,
+    ) -> Result<(), BuildRebasePlanError> {
+        if path.contains(&current_oid) {
+            path.push(current_oid);
+            return Err(BuildRebasePlanError::ConstraintCycle {
+                cycle_oids: path.clone(),
+            });
+        }
+
+        path.push(current_oid);
+        if let Some(child_oids) = self.commits_to_move_to(&current_oid) {
+            for child_oid in child_oids.iter().sorted() {
+                self.check_for_cycles_helper(path, *child_oid)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn check_for_cycles(&self, effects: &Effects) -> Result<(), BuildRebasePlanError> {
+        let (effects, _progress) = effects.start_operation(OperationType::CheckForCycles);
+        let _effects = effects;
+
+        // FIXME: O(n^2) algorithm.
+        for oid in self.parents().iter().sorted() {
+            self.check_for_cycles_helper(&mut Vec::new(), *oid)?;
+        }
+        Ok(())
+    }
+
+    fn find_roots(&self) -> Vec<Constraint> {
+        let unconstrained_nodes = {
+            let mut unconstrained_nodes: HashSet<NonZeroOid> = self.parents().into_iter().collect();
+            for child_oid in self.commits_to_move() {
+                unconstrained_nodes.remove(&child_oid);
+            }
+            unconstrained_nodes
+        };
+        let mut root_edges: Vec<Constraint> = unconstrained_nodes
+            .into_iter()
+            .filter_map(|unconstrained_oid| {
+                self.commits_to_move_to(&unconstrained_oid).map(|children| {
+                    children
+                        .into_iter()
+                        .map(move |child_oid| Constraint::ChildAndDescendants {
+                            parent_oid: unconstrained_oid,
+                            child_oid,
+                        })
+                })
+            })
+            .flatten()
+            .collect();
+        root_edges.sort_unstable();
+        root_edges
+    }
+
+    fn get_constraints_sorted_for_debug(&self) -> Vec<(NonZeroOid, Vec<NonZeroOid>)> {
+        self.parents()
+            .iter()
+            .map(|parent_oid| {
+                (
+                    *parent_oid,
+                    self.commits_to_move_to(parent_oid)
+                        .map_or(Vec::new(), |children| {
+                            children.into_iter().sorted().collect_vec()
+                        }),
+                )
+            })
+            .sorted()
+            .collect_vec()
+    }
+
+    /// All of the parent (aka destination) OIDs
+    pub fn parents(&self) -> Vec<NonZeroOid> {
+        self.inner.keys().copied().collect_vec()
+    }
+
+    /// All of the constrained children. This is set of all commits which need
+    /// to be rebased. Consequently, their OIDs will change.
+    pub fn commits_to_move(&self) -> HashSet<NonZeroOid> {
+        self.inner.values().flatten().copied().collect()
+    }
+
+    /// All of the constrained children being moved to a particular parent..
+    pub fn commits_to_move_to(&self, parent_oid: &NonZeroOid) -> Option<Vec<NonZeroOid>> {
+        self.inner
+            .get(parent_oid)
+            .map(|child_oids| child_oids.iter().copied().collect())
+    }
+}
+
 /// Mutable state modified while building the rebase plan.
 #[derive(Clone, Debug)]
-struct BuildState {
-    /// Copy of `initial_constraints` in `RebasePlanBuilder` but with any
-    /// implied constraints added (such as for descendant commits).
-    constraint_graph: HashMap<NonZeroOid, HashSet<NonZeroOid>>,
-
-    /// The set of all commits which need to be rebased. Consequently, their
-    /// OIDs will change.
-    commits_to_move: HashSet<NonZeroOid>,
+struct BuildState<'repo> {
+    /// Contains all of `initial_constraints` (in `RebasePlanBuilder`) plus
+    /// any implied constraints added (such as for descendant commits).
+    constraints: ConstraintGraph<'repo>,
 
     /// When we're rebasing a commit with OID X, its commit hash will change to
     /// some OID X', which we don't know ahead of time. However, we may still
@@ -327,7 +510,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
                     })
                     .map(|parent_oid| -> Option<OidOrLabel> {
                         let does_parent_commit_need_rebase =
-                            state.commits_to_move.contains(&parent_oid);
+                            state.constraints.commits_to_move().contains(&parent_oid);
                         if does_parent_commit_need_rebase {
                             // Since the parent commit will be rebased, it will
                             // also have a new OID, so we need to address it by
@@ -384,20 +567,16 @@ impl<'repo> RebasePlanBuilder<'repo> {
             acc
         };
 
-        let child_commits: Vec<Commit> = {
-            let mut child_oids: Vec<NonZeroOid> = state
-                .constraint_graph
-                .entry(current_commit.get_oid())
-                .or_default()
-                .iter()
-                .copied()
-                .collect();
-            child_oids.sort_unstable();
-            child_oids
-                .into_iter()
-                .map(|child_oid| repo.find_commit_or_fail(child_oid))
-                .try_collect()?
-        };
+        let child_commits: Vec<Commit> = state
+            .constraints
+            .commits_to_move_to(&current_commit.get_oid())
+            .map_or(Ok(Vec::new()), |mut child_oids| {
+                child_oids.sort_unstable();
+                child_oids
+                    .into_iter()
+                    .map(|child_oid| repo.find_commit_or_fail(child_oid))
+                    .try_collect()
+            })?;
 
         let acc = {
             if child_commits
@@ -494,164 +673,6 @@ impl<'repo> RebasePlanBuilder<'repo> {
         Ok(())
     }
 
-    #[instrument]
-    fn collect_descendants(
-        &self,
-        visible_commits: &CommitSet,
-        acc: &mut Vec<Constraint>,
-        current_oid: NonZeroOid,
-    ) -> eyre::Result<()> {
-        let children_oids = self
-            .dag
-            .query()
-            .children(CommitSet::from(current_oid))?
-            .intersection(visible_commits);
-        let children_oids = commit_set_to_vec_unsorted(&children_oids)?;
-        for child_oid in children_oids {
-            acc.push(Constraint::ChildAndDescendants {
-                parent_oid: current_oid,
-                child_oid,
-            });
-            self.collect_descendants(visible_commits, acc, child_oid)?;
-        }
-        Ok(())
-    }
-
-    /// Add additional edges to the constraint graph for each descendant commit
-    /// of a referred-to commit. This adds enough information to the constraint
-    /// graph that it now represents the actual end-state commit graph that we
-    /// want to create, not just a list of constraints.
-    fn add_descendant_constraints(
-        &self,
-        effects: &Effects,
-        state: &mut BuildState,
-    ) -> eyre::Result<()> {
-        let (effects, progress) = effects.start_operation(OperationType::ConstrainCommits);
-        let _effects = effects;
-
-        let all_descendants_of_constrained_nodes = {
-            let public_commits = self.dag.query_public_commits()?;
-            let active_heads = self.dag.query_active_heads(
-                &public_commits,
-                &self
-                    .dag
-                    .observed_commits
-                    .difference(&self.dag.obsolete_commits),
-            )?;
-            let visible_commits = self.dag.query().ancestors(active_heads)?;
-
-            let mut acc = Vec::new();
-            let parents = state
-                .constraint_graph
-                .values()
-                .flatten()
-                .cloned()
-                .collect_vec();
-            progress.notify_progress(0, parents.len());
-            for parent_oid in parents {
-                self.collect_descendants(&visible_commits, &mut acc, parent_oid)?;
-                progress.notify_progress_inc(1);
-            }
-            acc
-        };
-
-        for constraint in all_descendants_of_constrained_nodes {
-            match constraint {
-                Constraint::ImmediateChild {
-                    parent_oid: _,
-                    child_oid: _,
-                } => todo!(),
-
-                Constraint::ChildAndDescendants {
-                    parent_oid,
-                    child_oid,
-                } => {
-                    state
-                        .constraint_graph
-                        .entry(parent_oid)
-                        .or_default()
-                        .insert(child_oid);
-                }
-            }
-        }
-
-        state.commits_to_move = state.constraint_graph.values().flatten().copied().collect();
-        Ok(())
-    }
-
-    fn check_for_cycles_helper(
-        &self,
-        state: &BuildState,
-        path: &mut Vec<NonZeroOid>,
-        current_oid: NonZeroOid,
-    ) -> Result<(), BuildRebasePlanError> {
-        if path.contains(&current_oid) {
-            path.push(current_oid);
-            return Err(BuildRebasePlanError::ConstraintCycle {
-                cycle_oids: path.clone(),
-            });
-        }
-
-        path.push(current_oid);
-        if let Some(child_oids) = state.constraint_graph.get(&current_oid) {
-            for child_oid in child_oids.iter().sorted() {
-                self.check_for_cycles_helper(state, path, *child_oid)?;
-            }
-        }
-        Ok(())
-    }
-
-    fn check_for_cycles(
-        &self,
-        state: &BuildState,
-        effects: &Effects,
-    ) -> Result<(), BuildRebasePlanError> {
-        let (effects, _progress) = effects.start_operation(OperationType::CheckForCycles);
-        let _effects = effects;
-
-        // FIXME: O(n^2) algorithm.
-        for oid in state.constraint_graph.keys().sorted() {
-            self.check_for_cycles_helper(state, &mut Vec::new(), *oid)?;
-        }
-        Ok(())
-    }
-
-    fn find_roots(&self, state: &BuildState) -> Vec<Constraint> {
-        let unconstrained_nodes = {
-            let mut unconstrained_nodes: HashSet<NonZeroOid> =
-                state.constraint_graph.keys().copied().collect();
-            for child_oid in state.constraint_graph.values().flatten() {
-                unconstrained_nodes.remove(child_oid);
-            }
-            unconstrained_nodes
-        };
-        let mut root_edges: Vec<Constraint> = unconstrained_nodes
-            .into_iter()
-            .flat_map(|unconstrained_oid| {
-                state.constraint_graph[&unconstrained_oid]
-                    .iter()
-                    .copied()
-                    .map(move |child_oid| Constraint::ChildAndDescendants {
-                        parent_oid: unconstrained_oid,
-                        child_oid,
-                    })
-            })
-            .collect();
-        root_edges.sort_unstable();
-        root_edges
-    }
-
-    fn get_constraints_sorted_for_debug(
-        state: &BuildState,
-    ) -> Vec<(&NonZeroOid, Vec<&NonZeroOid>)> {
-        state
-            .constraint_graph
-            .iter()
-            .map(|(k, v)| (k, v.iter().sorted().collect_vec()))
-            .sorted()
-            .collect_vec()
-    }
-
     /// Create the rebase plan. Returns `None` if there were no commands in the rebase plan.
     pub fn build(
         &self,
@@ -665,24 +686,10 @@ impl<'repo> RebasePlanBuilder<'repo> {
             dump_rebase_plan,
             detect_duplicate_commits_via_patch_id,
         } = options;
-        let constraint_graph: HashMap<NonZeroOid, HashSet<NonZeroOid>> = self
-            .initial_constraints
-            .iter()
-            .map(|constraint| match constraint {
-                Constraint::ImmediateChild {
-                    parent_oid,
-                    child_oid,
-                }
-                | Constraint::ChildAndDescendants {
-                    parent_oid,
-                    child_oid,
-                } => (*parent_oid, *child_oid),
-            })
-            .into_grouping_map()
-            .collect();
+        let mut constraints = ConstraintGraph::new(self.dag);
+        constraints.add_constraints(&self.initial_constraints);
         let mut state = BuildState {
-            constraint_graph,
-            commits_to_move: Default::default(), // filled in by `add_descendant_constraints`
+            constraints,
             used_labels: Default::default(),
             merge_commit_parent_labels: Default::default(),
         };
@@ -694,25 +701,25 @@ impl<'repo> RebasePlanBuilder<'repo> {
             // be suppressed.
             println!(
                 "Rebase constraints before adding descendants: {:#?}",
-                Self::get_constraints_sorted_for_debug(&state),
+                state.constraints.get_constraints_sorted_for_debug(),
             );
         }
-        self.add_descendant_constraints(&effects, &mut state)?;
+        state.constraints.add_descendant_constraints(&effects)?;
         if *dump_rebase_constraints {
             // For test: don't print to `effects.get_output_stream()`, as it will
             // be suppressed.
             println!(
                 "Rebase constraints after adding descendants: {:#?}",
-                Self::get_constraints_sorted_for_debug(&state),
+                state.constraints.get_constraints_sorted_for_debug(),
             );
         }
 
-        if let Err(err) = self.check_for_cycles(&state, &effects) {
+        if let Err(err) = state.constraints.check_for_cycles(&effects) {
             return Ok(Err(err));
         }
 
         let repo = repo_pool.try_create()?;
-        let roots = self.find_roots(&state);
+        let roots = state.constraints.find_roots();
         let mut acc = Vec::new();
         let mut first_dest_oid = None;
         for constraint in roots {
@@ -789,12 +796,9 @@ impl<'repo> RebasePlanBuilder<'repo> {
                 | RebaseCommand::SkipUpstreamAppliedCommit { commit_oid } => Some(*commit_oid),
             })
             .collect();
-        let missing_commit_oids: HashSet<NonZeroOid> = state
-            .constraint_graph
-            .values()
-            .flatten()
-            .copied()
-            .collect::<HashSet<NonZeroOid>>()
+        let missing_commit_oids = state
+            .constraints
+            .commits_to_move()
             .sub(&included_commit_oids);
         if !missing_commit_oids.is_empty() {
             warn!(
@@ -828,7 +832,8 @@ impl<'repo> RebasePlanBuilder<'repo> {
             Some(merge_base_oid) => merge_base_oid,
         };
 
-        let touched_commit_oids = state.constraint_graph.values().flatten().copied().collect();
+        let touched_commit_oids: Vec<NonZeroOid> =
+            state.constraints.commits_to_move().into_iter().collect();
 
         let path = self
             .dag
