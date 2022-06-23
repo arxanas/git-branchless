@@ -281,9 +281,10 @@ impl GitRunInfo {
             command.env(BRANCHLESS_TRANSACTION_ID_ENV_VAR, event_tx_id.to_string());
         }
 
-        if stdin.is_some() {
-            command.stdin(Stdio::piped());
-        }
+        command.stdin(match stdin {
+            Some(_) => Stdio::piped(),
+            None => Stdio::null(),
+        });
         command.stdout(Stdio::piped());
         command.stderr(Stdio::piped());
 
