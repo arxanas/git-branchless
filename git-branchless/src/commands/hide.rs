@@ -1,6 +1,7 @@
 //! Handle obsoleting commits when explicitly requested by the user (as opposed to
 //! automatically as the result of a rewrite operation).
 
+use std::collections::HashMap;
 use std::fmt::Write;
 use std::time::SystemTime;
 
@@ -15,7 +16,7 @@ use lib::core::eventlog::{CommitActivityStatus, Event};
 use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::formatting::{printable_styled_string, Glyphs, Pluralize};
 use lib::core::rewrite::move_branches;
-use lib::git::{CategorizedReferenceName, GitRunInfo, MaybeZeroOid, Repo};
+use lib::git::{CategorizedReferenceName, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo};
 
 use crate::opts::Revset;
 use crate::revset::resolve_commits;
@@ -95,12 +96,20 @@ pub fn hide(
     }
 
     if delete_branches {
+        // Save current HEAD info *before* deleting any branches.
+        let head_info = repo.get_head_info()?;
+
         // Delete any branches pointing to any of the hidden commits by "moving" them from their
         // current OID to a Zero OID.
-        let abandoned_branches = commits
+        let abandoned_branches: HashMap<NonZeroOid, MaybeZeroOid> = commits
             .iter()
             .map(|commit| (commit.get_oid(), MaybeZeroOid::Zero))
             .collect();
+        if let Some(head_oid) = head_info.oid {
+            if abandoned_branches.contains_key(&head_oid) {
+                repo.detach_head(&head_info)?;
+            }
+        }
         move_branches(
             effects,
             git_run_info,

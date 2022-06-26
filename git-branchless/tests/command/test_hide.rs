@@ -299,6 +299,37 @@ fn test_hide_delete_multiple_branches() -> eyre::Result<()> {
 }
 
 #[test]
+fn test_hide_delete_checked_out_branch() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    git.init_repo()?;
+    git.run(&["checkout", "-b", "test"])?;
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+
+    let (stdout, _stderr) = git.run(&["hide", "--delete-branches", "test"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    Hid commit: 96d1c37 create test2.txt
+    branchless: processing 1 update: branch test
+    Deleted 1 branch: test
+    To unhide this 1 commit and restore 1 branch, run: git undo
+    "###);
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        o 62fc20d create test1.txt
+        |
+        % 96d1c37 (manually hidden) create test2.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_unhide() -> eyre::Result<()> {
     let git = make_git()?;
 
