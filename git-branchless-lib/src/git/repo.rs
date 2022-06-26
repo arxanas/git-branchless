@@ -346,7 +346,7 @@ impl Repo {
     }
 
     /// Detach `HEAD` by making it point directly to its current OID, rather
-    /// than to a branch. If `HEAD` is already detached, logs a warning.
+    /// than to a branch. If `HEAD` is unborn, logs a warning.
     #[instrument]
     pub fn detach_head(&self, head_info: &ResolvedReferenceInfo) -> eyre::Result<()> {
         match head_info.oid {
