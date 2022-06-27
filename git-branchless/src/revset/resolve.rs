@@ -67,7 +67,7 @@ pub fn resolve_commits(
         if let Ok(Some(commit)) = repo.revparse_single_commit(&revset) {
             let commit_set = CommitSet::from(commit.get_oid());
             dag.sync_from_oids(effects, repo, CommitSet::empty(), commit_set.clone())
-                .map_err(|err| ResolveError::DagError { source: err })?;
+                .map_err(|err| ResolveError::OtherError { source: err })?;
             commit_sets.push(commit_set);
             continue;
         }

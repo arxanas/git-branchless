@@ -35,6 +35,9 @@ pub enum EvalError {
         #[from]
         from: eden_dag::Error,
     },
+
+    #[error(transparent)]
+    OtherError(eyre::Error),
 }
 
 pub type EvalResult = Result<CommitSet, EvalError>;
@@ -132,12 +135,14 @@ fn eval_name(ctx: &mut Context, name: &str) -> EvalResult {
         }
     };
 
-    ctx.dag.sync_from_oids(
-        ctx.effects,
-        ctx.repo,
-        CommitSet::empty(),
-        commit_set.clone(),
-    )?;
+    ctx.dag
+        .sync_from_oids(
+            ctx.effects,
+            ctx.repo,
+            CommitSet::empty(),
+            commit_set.clone(),
+        )
+        .map_err(EvalError::OtherError)?;
     Ok(commit_set)
 }
 

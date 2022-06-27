@@ -2096,7 +2096,7 @@ fn test_move_orig_head_no_symbolic_reference() -> eyre::Result<()> {
 }
 
 #[test]
-fn test_move_standalone_no_create_gc_refs() -> eyre::Result<()> {
+fn test_move_standalone_create_gc_refs() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo_with_options(&GitInitOptions {
@@ -2107,21 +2107,22 @@ fn test_move_standalone_no_create_gc_refs() -> eyre::Result<()> {
     git.run(&["checkout", "HEAD^"])?;
     git.commit_file("test2", 2)?;
 
-    let show_refs_output = {
+    {
         let (stdout, _stderr) = git.run(&["show-ref"])?;
         insta::assert_snapshot!(stdout, @"62fc20d2a290daea0d52bdc2ed2ad4be6491010e refs/heads/master
 ");
-        stdout
-    };
+    }
 
     git.run(&["branchless", "move", "-d", &test1_oid.to_string()])?;
 
     {
         let (stdout, _stderr) = git.run(&["show-ref"])?;
         insta::assert_snapshot!(stdout, @r###"
+        62fc20d2a290daea0d52bdc2ed2ad4be6491010e refs/branchless/62fc20d2a290daea0d52bdc2ed2ad4be6491010e
+        96d1c37a3d4363611c49f7e52186e189a04c531f refs/branchless/96d1c37a3d4363611c49f7e52186e189a04c531f
+        fe65c1fe15584744e649b2c79d4cf9b0d878f92e refs/branchless/fe65c1fe15584744e649b2c79d4cf9b0d878f92e
         62fc20d2a290daea0d52bdc2ed2ad4be6491010e refs/heads/master
         "###);
-        assert!(stdout == show_refs_output);
     }
 
     Ok(())
