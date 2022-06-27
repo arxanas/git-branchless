@@ -43,7 +43,12 @@ pub fn find_dangling_references<'repo>(
             CommitActivityStatus::Active => {
                 // Do nothing.
             }
-            CommitActivityStatus::Inactive | CommitActivityStatus::Obsolete => {
+            CommitActivityStatus::Inactive => {
+                // This commit hasn't been observed, but it's possible that the user expected it
+                // to remain. Do nothing. See https://github.com/arxanas/git-branchless/issues/412.
+            }
+            CommitActivityStatus::Obsolete => {
+                // This commit was explicitly hidden by some operation.
                 result.push(reference)
             }
         }
@@ -57,30 +62,31 @@ pub fn find_dangling_references<'repo>(
 /// collection mechanism until first garbage-collected by branchless itself
 /// (using the `gc` function).
 ///
+/// If the commit does not exist (such as if it was already garbage-collected), then this is a no-op.
+///
 /// Args:
 /// * `repo`: The Git repository.
 /// * `commit_oid`: The commit OID to mark as reachable.
 #[instrument]
 pub fn mark_commit_reachable(repo: &Repo, commit_oid: NonZeroOid) -> eyre::Result<()> {
-    if !repo.get_config_path().exists() {
-        // Don't create garbage collection references for users who don't appear
-        // to have run `git branchless init` in this repository, since they may
-        // not want their tooling (such as `tig`) polluted by extra references.
-        // See https://github.com/arxanas/git-branchless/issues/183
-        return Ok(());
-    }
-
     let ref_name = format!("refs/branchless/{}", commit_oid);
     eyre::ensure!(
         Reference::is_valid_name(&ref_name),
         format!("Invalid ref name to mark commit as reachable: {}", ref_name)
     );
-    repo.create_reference(
-        OsStr::new(&ref_name),
-        commit_oid,
-        true,
-        "branchless: marking commit as reachable",
-    )
-    .wrap_err("Creating reference")?;
+
+    // NB: checking for the commit first with `find_commit` is racy, as the `create_reference` call
+    // could still fail if the commit is deleted by then, but it's too hard to propagate whether the
+    // commit was not found from `create_reference`.
+    if repo.find_commit(commit_oid)?.is_some() {
+        repo.create_reference(
+            OsStr::new(&ref_name),
+            commit_oid,
+            true,
+            "branchless: marking commit as reachable",
+        )
+        .wrap_err("Creating reference")?;
+    }
+
     Ok(())
 }

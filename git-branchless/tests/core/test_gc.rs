@@ -2,7 +2,7 @@ use itertools::Itertools;
 use lib::core::eventlog::testing::redact_event_timestamp;
 use lib::core::eventlog::EventLogDb;
 use lib::git::GitVersion;
-use lib::testing::make_git;
+use lib::testing::{make_git, GitInitOptions};
 
 #[test]
 fn test_gc() -> eyre::Result<()> {
@@ -206,6 +206,68 @@ fn test_gc_reference_transaction() -> eyre::Result<()> {
         },
     ]
     "###);
+
+    Ok(())
+}
+
+#[test]
+fn test_gc_no_init() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo_with_options(&GitInitOptions {
+        run_branchless_init: false,
+        ..Default::default()
+    })?;
+
+    git.detach_head()?;
+    let test1_oid = git.commit_file("test1", 1)?;
+
+    {
+        let (stdout, _stderr) = git.run(&["branchless", "smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        @ 62fc20d create test1.txt
+        "###);
+    }
+
+    git.run(&["checkout", "HEAD~"])?;
+    {
+        let (stdout, stderr) = git.run(&["gc", "--prune=now"])?;
+        insta::assert_snapshot!(stderr, @"");
+        insta::assert_snapshot!(stdout, @"");
+    }
+
+    git.run(&["checkout", &test1_oid.to_string()])?;
+    {
+        let (stdout, _stderr) = git.run(&["branchless", "smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        @ 62fc20d create test1.txt
+        "###);
+    }
+
+    git.run(&["checkout", "HEAD~"])?;
+    git.run(&["branchless", "gc"])?;
+    {
+        let (stdout, stderr) = git.run(&["gc", "--prune=now"])?;
+        insta::assert_snapshot!(stderr, @"");
+        insta::assert_snapshot!(stdout, @"");
+    }
+
+    git.run(&["checkout", &test1_oid.to_string()])?;
+    {
+        let (stdout, _stderr) = git.run(&["branchless", "smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        @ 62fc20d create test1.txt
+        "###);
+    }
 
     Ok(())
 }

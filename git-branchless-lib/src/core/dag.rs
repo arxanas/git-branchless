@@ -15,6 +15,7 @@ use tracing::{instrument, trace, warn};
 
 use crate::core::effects::{Effects, OperationType};
 use crate::core::eventlog::{CommitActivityStatus, EventCursor, EventReplayer};
+use crate::core::gc::mark_commit_reachable;
 use crate::git::{Commit, MaybeZeroOid, NonZeroOid, Repo};
 
 use super::repo_ext::RepoReferencesSnapshot;
@@ -25,13 +26,23 @@ impl From<NonZeroOid> for eden_dag::VertexName {
     }
 }
 
-impl TryFrom<eden_dag::VertexName> for NonZeroOid {
+impl TryFrom<eden_dag::VertexName> for MaybeZeroOid {
     type Error = eyre::Error;
 
     fn try_from(value: eden_dag::VertexName) -> Result<Self, Self::Error> {
         let oid = git2::Oid::from_bytes(value.as_ref())?;
         let oid = MaybeZeroOid::from(oid);
-        NonZeroOid::try_from(oid)
+        Ok(oid)
+    }
+}
+
+impl TryFrom<eden_dag::VertexName> for NonZeroOid {
+    type Error = eyre::Error;
+
+    fn try_from(value: eden_dag::VertexName) -> Result<Self, Self::Error> {
+        let oid = MaybeZeroOid::try_from(value)?;
+        let oid = NonZeroOid::try_from(oid)?;
+        Ok(oid)
     }
 }
 
@@ -181,7 +192,8 @@ impl Dag {
     }
 
     /// This function's code adapted from `GitDag`, licensed under GPL-2.
-    fn sync(&mut self, effects: &Effects, repo: &Repo) -> eden_dag::Result<()> {
+    #[instrument]
+    fn sync(&mut self, effects: &Effects, repo: &Repo) -> eyre::Result<()> {
         let master_heads = self.main_branch_commit.clone();
         let non_master_heads = self
             .observed_commits
@@ -191,15 +203,45 @@ impl Dag {
     }
 
     /// Update the DAG with the given heads.
+    #[instrument]
     pub fn sync_from_oids(
         &mut self,
         effects: &Effects,
         repo: &Repo,
         master_heads: CommitSet,
         non_master_heads: CommitSet,
-    ) -> eden_dag::Result<()> {
+    ) -> eyre::Result<()> {
         let (effects, _progress) = effects.start_operation(OperationType::UpdateCommitGraph);
         let _effects = effects;
+
+        for head in master_heads.iter().context("Iterating master heads")? {
+            let head = head.context("Accessing master head")?;
+            let head = MaybeZeroOid::try_from(head)?;
+            match head {
+                MaybeZeroOid::Zero => {
+                    // Do nothing.
+                }
+                MaybeZeroOid::NonZero(oid) => {
+                    mark_commit_reachable(repo, oid).context("Marking master head as reachable")?;
+                }
+            }
+        }
+        for head in non_master_heads
+            .iter()
+            .context("Iterating non-master heads")?
+        {
+            let head = head.context("Accessing non-master head")?;
+            let head = MaybeZeroOid::try_from(head)?;
+            match head {
+                MaybeZeroOid::Zero => {
+                    // Do nothing.
+                }
+                MaybeZeroOid::NonZero(oid) => {
+                    mark_commit_reachable(repo, oid)
+                        .context("Marking non-master head as reachable")?;
+                }
+            }
+        }
 
         let parent_func = |v: CommitVertex| -> eden_dag::Result<Vec<CommitVertex>> {
             use eden_dag::errors::BackendError;
