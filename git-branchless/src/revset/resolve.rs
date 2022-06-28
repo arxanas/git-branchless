@@ -80,6 +80,15 @@ pub fn resolve_commits(
             expr: revset.clone(),
             source: err,
         })?;
+
+        // Note that commits which are identified by `revparse_single_commit`
+        // above will still be returned in the result. This ends up resulting in
+        // fairly intuitive behavior: addressing a commit directly by hash (or
+        // simple revset expression, such as `HEAD^`) will result in it being
+        // returned, but not when using a revset expression like
+        // `descendants(@)`.
+        let commits = commits.difference(&dag.obsolete_commits);
+
         commit_sets.push(commits);
     }
     Ok(commit_sets)
