@@ -2120,7 +2120,6 @@ fn test_move_standalone_create_gc_refs() -> eyre::Result<()> {
         insta::assert_snapshot!(stdout, @r###"
         62fc20d2a290daea0d52bdc2ed2ad4be6491010e refs/branchless/62fc20d2a290daea0d52bdc2ed2ad4be6491010e
         96d1c37a3d4363611c49f7e52186e189a04c531f refs/branchless/96d1c37a3d4363611c49f7e52186e189a04c531f
-        fe65c1fe15584744e649b2c79d4cf9b0d878f92e refs/branchless/fe65c1fe15584744e649b2c79d4cf9b0d878f92e
         62fc20d2a290daea0d52bdc2ed2ad4be6491010e refs/heads/master
         "###);
     }

@@ -29,6 +29,7 @@ mod graph {
     use std::ops::Deref;
 
     use eden_dag::DagAlgorithm;
+    use lib::core::gc::mark_commit_reachable;
     use tracing::instrument;
 
     use lib::core::dag::{commit_set_to_vec_unsorted, CommitSet, Dag};
@@ -241,6 +242,9 @@ mod graph {
             };
 
             let active_heads = dag.query_active_heads(&public_commits, &observed_commits)?;
+            for oid in commit_set_to_vec_unsorted(&active_heads)? {
+                mark_commit_reachable(repo, oid)?;
+            }
 
             walk_from_active_heads(&effects, repo, dag, &public_commits, &active_heads)?
         };
