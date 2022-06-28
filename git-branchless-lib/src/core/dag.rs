@@ -15,7 +15,6 @@ use tracing::{instrument, trace, warn};
 
 use crate::core::effects::{Effects, OperationType};
 use crate::core::eventlog::{CommitActivityStatus, EventCursor, EventReplayer};
-use crate::core::gc::mark_commit_reachable;
 use crate::git::{Commit, MaybeZeroOid, NonZeroOid, Repo};
 
 use super::repo_ext::RepoReferencesSnapshot;
@@ -213,35 +212,6 @@ impl Dag {
     ) -> eyre::Result<()> {
         let (effects, _progress) = effects.start_operation(OperationType::UpdateCommitGraph);
         let _effects = effects;
-
-        for head in master_heads.iter().context("Iterating master heads")? {
-            let head = head.context("Accessing master head")?;
-            let head = MaybeZeroOid::try_from(head)?;
-            match head {
-                MaybeZeroOid::Zero => {
-                    // Do nothing.
-                }
-                MaybeZeroOid::NonZero(oid) => {
-                    mark_commit_reachable(repo, oid).context("Marking master head as reachable")?;
-                }
-            }
-        }
-        for head in non_master_heads
-            .iter()
-            .context("Iterating non-master heads")?
-        {
-            let head = head.context("Accessing non-master head")?;
-            let head = MaybeZeroOid::try_from(head)?;
-            match head {
-                MaybeZeroOid::Zero => {
-                    // Do nothing.
-                }
-                MaybeZeroOid::NonZero(oid) => {
-                    mark_commit_reachable(repo, oid)
-                        .context("Marking non-master head as reachable")?;
-                }
-            }
-        }
 
         let parent_func = |v: CommitVertex| -> eden_dag::Result<Vec<CommitVertex>> {
             use eden_dag::errors::BackendError;
