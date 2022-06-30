@@ -460,3 +460,56 @@ fn test_amend_undo() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_amend_undo_detached_head() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    git.detach_head()?;
+    git.commit_file("file1", 1)?;
+    git.write_file("file1", "new contents\n")?;
+
+    {
+        let (stdout, _stderr) = git.run(&["amend"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> reset
+        No abandoned commits to restack.
+        No abandoned branches to restack.
+        O f777ecc (master) create initial.txt
+        |
+        @ 94b1077 create file1.txt
+        Amended with 1 uncommitted change.
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["undo", "-y"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        Will apply these actions:
+        1. Check out from 94b1077 create file1.txt
+                       to 94b1077 create file1.txt
+        2. Rewrite commit 94b1077 create file1.txt
+                      as c0bdfb5 create file1.txt
+        3. Restore snapshot for c0bdfb5 create file1.txt
+                backed up using 55e9304 branchless: automated working copy snapshot
+        branchless: running command: <git-executable> checkout 55e9304c975103af25622dca880679182506f49f
+        branchless: running command: <git-executable> reset --hard HEAD
+        HEAD is now at 55e9304 branchless: automated working copy snapshot
+        branchless: running command: <git-executable> checkout 7b6d0f10f68cf5df3de91f062c565e45f1b28006
+        branchless: running command: <git-executable> reset c0bdfb5ba33c02bba2aa451efe2f220f12232408
+        Unstaged changes after reset:
+        M	file1.txt
+        O f777ecc (master) create initial.txt
+        |
+        @ c0bdfb5 create file1.txt
+        Applied 3 inverse events.
+        "###);
+    }
+
+    Ok(())
+}
