@@ -21,6 +21,7 @@
 //!  into multiple could also be used to split the working copy into multiple
 //!  commits.
 
+use itertools::Itertools;
 use std::collections::HashMap;
 use std::str::FromStr;
 
@@ -142,33 +143,32 @@ impl<'repo> WorkingCopySnapshot<'repo> {
             Stage::Stage3,
         )?;
 
+        let trailers = {
+            let mut result = vec![(BRANCHLESS_HEAD_TRAILER, head_commit_oid.to_string())];
+            if let Some(head_reference_name) = &head_reference_name {
+                result.push((BRANCHLESS_HEAD_REF_TRAILER, head_reference_name.clone()));
+            }
+            result.extend([
+                (BRANCHLESS_UNSTAGED_TRAILER, commit_unstaged_oid.to_string()),
+                (Stage::Stage0.get_trailer(), commit_stage0.to_string()),
+                (Stage::Stage1.get_trailer(), commit_stage1.to_string()),
+                (Stage::Stage2.get_trailer(), commit_stage2.to_string()),
+                (Stage::Stage3.get_trailer(), commit_stage3.to_string()),
+            ]);
+            result
+        };
         let signature = Signature::automated()?;
         let message = format!(
             "\
 branchless: automated working copy snapshot
 
-{}: {}
-{}: {}
-{}: {}
-{}: {}
-{}: {}
-{}: {}
-{}: {}
+{}
 ",
-            BRANCHLESS_HEAD_TRAILER,
-            head_commit_oid,
-            BRANCHLESS_HEAD_REF_TRAILER,
-            head_reference_name.as_deref().unwrap_or_default(),
-            BRANCHLESS_UNSTAGED_TRAILER,
-            commit_unstaged_oid,
-            Stage::Stage0.get_trailer(),
-            commit_stage0,
-            Stage::Stage1.get_trailer(),
-            commit_stage1,
-            Stage::Stage2.get_trailer(),
-            commit_stage2,
-            Stage::Stage3.get_trailer(),
-            commit_stage3,
+            trailers
+                .into_iter()
+                .map(|(name, value)| format!("{name}: {value}"))
+                .collect_vec()
+                .join("\n"),
         );
 
         // Use the current HEAD as the tree for parent commit, so that we can
