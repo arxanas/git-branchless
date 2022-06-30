@@ -360,6 +360,11 @@ pub enum Command {
         /// formatting or refactoring changes.
         #[clap(long)]
         reparent: bool,
+
+        /// Select changes to include interactively, rather than using the
+        /// current staged/unstaged changes.
+        #[clap(action, short('i'), long("--interactive"))]
+        interactive: bool,
     },
 
     /// Gather information about recent operations to upload as part of a bug
