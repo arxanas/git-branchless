@@ -421,7 +421,7 @@ impl std::fmt::Debug for Dag {
 /// being unorderable, sort them using a deterministic tie-breaking function.
 /// Commits which have been garbage collected and are no longer available in the
 /// repository are omitted.
-pub fn sort_commit_set<'repo>(
+pub fn sorted_commit_set<'repo>(
     repo: &'repo Repo,
     dag: &Dag,
     commit_set: &CommitSet,

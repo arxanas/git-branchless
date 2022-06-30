@@ -13,7 +13,7 @@ use rayon::ThreadPoolBuilder;
 use crate::opts::{MoveOptions, Revset};
 use crate::revset::resolve_commits;
 use lib::core::config::get_restack_preserve_timestamps;
-use lib::core::dag::{sort_commit_set, union_all, CommitSet, Dag};
+use lib::core::dag::{sorted_commit_set, union_all, CommitSet, Dag};
 use lib::core::effects::{Effects, OperationType};
 use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::formatting::{printable_styled_string, Glyphs, StyledStringBuilder};
@@ -87,7 +87,7 @@ pub fn sync(
     } else {
         dag.query().roots(union_all(&commit_sets))?
     };
-    let root_commits = sort_commit_set(&repo, &dag, &root_commits)?;
+    let root_commits = sorted_commit_set(&repo, &dag, &root_commits)?;
 
     let MoveOptions {
         force_in_memory,
