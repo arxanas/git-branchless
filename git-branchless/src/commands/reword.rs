@@ -20,7 +20,7 @@ use tracing::{instrument, warn};
 use lib::core::config::{
     get_comment_char, get_commit_template, get_editor, get_restack_preserve_timestamps,
 };
-use lib::core::dag::{sort_commit_set, union_all, CommitSet, Dag};
+use lib::core::dag::{sorted_commit_set, union_all, CommitSet, Dag};
 use lib::core::effects::Effects;
 use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::formatting::{printable_styled_string, Glyphs, Pluralize};
@@ -298,7 +298,7 @@ fn resolve_commits_from_hashes<'repo>(
     };
 
     let commit_set = union_all(&commit_sets);
-    let commits = sort_commit_set(repo, dag, &commit_set)?;
+    let commits = sorted_commit_set(repo, dag, &commit_set)?;
 
     Ok(Some(commits))
 }

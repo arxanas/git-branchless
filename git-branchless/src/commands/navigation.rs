@@ -18,7 +18,7 @@ use crate::commands::smartlog::make_smartlog_graph;
 use crate::opts::{CheckoutOptions, TraverseCommitsOptions};
 use crate::tui::prompt_select_commit;
 use lib::core::config::get_next_interactive;
-use lib::core::dag::{sort_commit_set, CommitSet, Dag};
+use lib::core::dag::{sorted_commit_set, CommitSet, Dag};
 use lib::core::effects::Effects;
 use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::formatting::{printable_styled_string, Pluralize};
@@ -137,7 +137,7 @@ fn advance(
                     } => descendant_branches()?,
                 };
 
-                sort_commit_set(repo, dag, &children)?
+                sorted_commit_set(repo, dag, &children)?
             }
 
             Command::Prev => {
@@ -185,7 +185,7 @@ fn advance(
                     } => ancestor_branches()?,
                 };
 
-                sort_commit_set(repo, dag, &parents)?
+                sorted_commit_set(repo, dag, &parents)?
             }
         };
 
