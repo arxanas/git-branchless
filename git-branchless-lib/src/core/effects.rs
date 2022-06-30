@@ -527,12 +527,22 @@ impl Effects {
     }
 
     fn on_notify_progress(&self, operation_key: &OperationKey, current: usize, total: usize) {
+        match self.dest {
+            OutputDest::Stdout => {}
+            OutputDest::Suppress | OutputDest::BufferForTest { .. } => return,
+        }
+
         let mut root_operation = self.root_operation.lock().unwrap();
         let operation_state = root_operation.get_or_create_child(operation_key);
         operation_state.set_progress(current, total);
     }
 
     fn on_notify_progress_inc(&self, operation_key: &OperationKey, increment: usize) {
+        match self.dest {
+            OutputDest::Stdout => {}
+            OutputDest::Suppress | OutputDest::BufferForTest { .. } => return,
+        }
+
         let mut root_operation = self.root_operation.lock().unwrap();
         let operation = root_operation.get_child(operation_key);
         let operation_state = match operation {
@@ -543,6 +553,11 @@ impl Effects {
     }
 
     fn on_set_message(&self, operation_key: &OperationKey, message: String) {
+        match self.dest {
+            OutputDest::Stdout => {}
+            OutputDest::Suppress | OutputDest::BufferForTest { .. } => return,
+        }
+
         let mut root_operation = self.root_operation.lock().unwrap();
         let operation = root_operation.get_child(operation_key);
         let operation_state = match operation {
