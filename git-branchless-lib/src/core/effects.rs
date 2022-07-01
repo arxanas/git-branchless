@@ -37,6 +37,7 @@ pub enum OperationType {
     QueryWorkingCopy,
     ReadingFromCache,
     RebaseCommits,
+    RepairBranches,
     RepairCommits,
     RunGitCommand(Arc<String>),
     SortCommits,
@@ -69,6 +70,7 @@ impl ToString for OperationType {
             OperationType::QueryWorkingCopy => "Querying the working copy",
             OperationType::ReadingFromCache => "Reading from cache",
             OperationType::RebaseCommits => "Rebasing commits",
+            OperationType::RepairBranches => "Checking for broken branches",
             OperationType::RepairCommits => "Checking for broken commits",
             OperationType::RunGitCommand(command) => {
                 return format!("Running Git command: {}", &command)

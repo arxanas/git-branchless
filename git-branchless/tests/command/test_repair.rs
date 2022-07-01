@@ -1,6 +1,6 @@
 use std::ffi::OsStr;
 
-use lib::testing::make_git;
+use lib::{git::BranchType, testing::make_git};
 
 #[test]
 fn test_repair_broken_commit() -> eyre::Result<()> {
@@ -34,8 +34,10 @@ fn test_repair_broken_commit() -> eyre::Result<()> {
 
     {
         let (stdout, _stderr) = git.run(&["branchless", "repair"])?;
-        insta::assert_snapshot!(stdout, @"Found and repaired 1 broken commit.
-");
+        insta::assert_snapshot!(stdout, @r###"
+        Found and repaired 1 broken commit.
+        Found and repaired 0 broken branches.
+        "###);
     }
 
     {
@@ -54,5 +56,40 @@ fn test_repair_broken_commit() -> eyre::Result<()> {
 
 #[test]
 fn test_repair_broken_branch() -> eyre::Result<()> {
-    todo!();
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    git.commit_file("test1", 1)?;
+    git.run(&["branch", "foo"])?;
+
+    let repo = git.get_repo()?;
+    repo.find_branch("foo", BranchType::Local)?
+        .unwrap()
+        .into_reference()
+        .delete()?;
+
+    {
+        let (stdout, _stderr) = git.run(&["branchless", "repair"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        Found and repaired 0 broken commits.
+        Found and repaired 1 broken branch.
+        "###);
+    }
+
+    {
+        // Advance the event cursor so that we can write `--event-id=-1` below.
+        git.commit_file("test2", 2)?;
+
+        let (stdout, _stderr) = git.run(&["smartlog", "--event-id=-1"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        @ 96d1c37 (> master) create test2.txt
+        "###);
+    }
+
+    Ok(())
 }
