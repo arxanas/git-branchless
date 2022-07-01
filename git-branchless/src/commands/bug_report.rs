@@ -23,6 +23,8 @@ use lib::core::node_descriptors::{
 };
 use lib::git::{GitRunInfo, Repo, ResolvedReferenceInfo};
 
+use super::init::{determine_hook_path, Hook, ALL_HOOKS};
+
 fn redact_event(redactor: &Redactor, event: &Event) -> String {
     let event = match event.clone() {
         // Explicitly list all variants and fields here so we're forced to audit it if we add any.
@@ -239,6 +241,74 @@ impl Collector for EventCollector {
     }
 }
 
+struct HookCollector;
+
+fn collect_hooks() -> eyre::Result<ReportEntry> {
+    let repo = Repo::from_current_dir()?;
+    let hook_contents = {
+        let mut result = Vec::new();
+        for (hook_type, _content) in ALL_HOOKS {
+            let hook_path = match determine_hook_path(&repo, hook_type)? {
+                Hook::RegularHook { path } | Hook::MultiHook { path } => path,
+            };
+            let hook_contents = match std::fs::read_to_string(hook_path) {
+                Ok(hook_contents) => hook_contents,
+                Err(err) if err.kind() == std::io::ErrorKind::NotFound => "<not found>".to_string(),
+                Err(err) => return Err(err.into()),
+            };
+            result.push((hook_type, hook_contents));
+        }
+        result
+    };
+    let num_hooks = hook_contents.len();
+    let hook_lines = {
+        let mut result = Vec::new();
+        for (hook_type, hook_contents) in hook_contents {
+            result.push(format!("##### Hook `{hook_type}`"));
+            result.push("".to_string());
+            result.push("```".to_string());
+
+            match hook_contents.strip_suffix('\n') {
+                Some(hook_contents) => {
+                    result.push(hook_contents.to_string());
+                }
+                None => {
+                    result.push(hook_contents);
+                    result.push("<missing newline>".to_string());
+                }
+            }
+
+            result.push("```".to_string());
+        }
+        result
+    };
+
+    Ok(ReportEntry::Text(format!(
+        "
+<details>
+<summary>Show {} hooks</summary>
+
+{}
+
+</details>",
+        num_hooks,
+        hook_lines.join("\n")
+    )))
+}
+
+impl Collector for HookCollector {
+    fn description(&self) -> &str {
+        "Hooks"
+    }
+
+    fn collect(
+        &mut self,
+        _crate_info: &bugreport::CrateInfo,
+    ) -> Result<ReportEntry, CollectionError> {
+        collect_hooks().map_err(|e| CollectionError::CouldNotRetrieve(format!("Error: {}", e)))
+    }
+}
+
 /// Generate information suitable for inclusion in a bug report.
 pub fn bug_report(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<ExitCode> {
     use bugreport::collector::*;
@@ -248,6 +318,7 @@ pub fn bug_report(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<
         .info(CommandLine::default())
         .info(EnvironmentVariables::list(&["SHELL", "EDITOR"]))
         .info(CommandOutput::new("Git version", "git", &["version"]))
+        .info(HookCollector)
         .info(EventCollector {
             effects: effects.clone(),
             git_run_info: git_run_info.clone(),

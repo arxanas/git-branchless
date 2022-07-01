@@ -29,13 +29,88 @@ fn test_bug_report() -> eyre::Result<()> {
         let stdout = redact_timestamp(stdout);
 
         // Exclude the platform-specific information for this test.
-        let stdout = match stdout.split_once("#### Events") {
+        let stdout = match stdout.split_once("#### Hooks") {
             Some((_, stdout)) => stdout,
             None => &stdout,
         };
         let stdout = stdout.trim();
 
         insta::assert_snapshot!(stdout, @r###"
+        <details>
+        <summary>Show 6 hooks</summary>
+
+        ##### Hook `post-commit`
+
+        ```
+        #!/bin/sh
+        ## START BRANCHLESS CONFIG
+
+        git branchless hook-post-commit "$@"
+
+        ## END BRANCHLESS CONFIG
+        ```
+        ##### Hook `post-merge`
+
+        ```
+        #!/bin/sh
+        ## START BRANCHLESS CONFIG
+
+        git branchless hook-post-merge "$@"
+
+        ## END BRANCHLESS CONFIG
+        ```
+        ##### Hook `post-rewrite`
+
+        ```
+        #!/bin/sh
+        ## START BRANCHLESS CONFIG
+
+        git branchless hook-post-rewrite "$@"
+
+        ## END BRANCHLESS CONFIG
+        ```
+        ##### Hook `post-checkout`
+
+        ```
+        #!/bin/sh
+        ## START BRANCHLESS CONFIG
+
+        git branchless hook-post-checkout "$@"
+
+        ## END BRANCHLESS CONFIG
+        ```
+        ##### Hook `pre-auto-gc`
+
+        ```
+        #!/bin/sh
+        ## START BRANCHLESS CONFIG
+
+        git branchless hook-pre-auto-gc "$@"
+
+        ## END BRANCHLESS CONFIG
+        ```
+        ##### Hook `reference-transaction`
+
+        ```
+        #!/bin/sh
+        ## START BRANCHLESS CONFIG
+
+        # Avoid canceling the reference transaction in the case that `branchless` fails
+        # for whatever reason.
+        git branchless hook-reference-transaction "$@" || (
+        echo 'branchless: Failed to process reference transaction!'
+        echo 'branchless: Some events (e.g. branch updates) may have been lost.'
+        echo 'branchless: This is a bug. Please report it.'
+        )
+
+        ## END BRANCHLESS CONFIG
+        ```
+
+        </details>
+
+        #### Events
+
+
         <details>
         <summary>Show 5 events</summary>
 
