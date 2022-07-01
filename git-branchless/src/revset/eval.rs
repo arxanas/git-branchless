@@ -155,6 +155,12 @@ fn eval_inner(ctx: &mut Context, expr: &Expr) -> EvalResult {
                 Ok(ctx.dag.query().parents(expr)?)
             }
 
+            "draft" => {
+                eval0(ctx, name, args)?;
+                let draft_commits = ctx.query_draft_commits()?;
+                Ok(draft_commits.clone())
+            }
+
             "stack" => {
                 eval0(ctx, name, args)?;
                 let draft_commits = ctx.query_draft_commits()?;
@@ -349,6 +355,47 @@ mod tests {
             insta::assert_debug_snapshot!(sorted_commit_set(&repo, &dag, &result), @r###"
             Ok(
                 [
+                    Commit {
+                        inner: Commit {
+                            id: 848121cb21bf9af8b064c91bc8930bd16d624a22,
+                            summary: "create test5.txt",
+                        },
+                    },
+                    Commit {
+                        inner: Commit {
+                            id: f0abf649939928fe5475179fd84e738d3d3725dc,
+                            summary: "create test6.txt",
+                        },
+                    },
+                    Commit {
+                        inner: Commit {
+                            id: ba07500a4adc661dc06a748d200ef92120e1b355,
+                            summary: "create test7.txt",
+                        },
+                    },
+                ],
+            )
+            "###);
+        }
+
+        {
+            let expr = Expr::Fn(Cow::Borrowed("draft"), vec![]);
+            let result = eval(&effects, &repo, &mut dag, &expr)?;
+            insta::assert_debug_snapshot!(sorted_commit_set(&repo, &dag, &result), @r###"
+            Ok(
+                [
+                    Commit {
+                        inner: Commit {
+                            id: 96d1c37a3d4363611c49f7e52186e189a04c531f,
+                            summary: "create test2.txt",
+                        },
+                    },
+                    Commit {
+                        inner: Commit {
+                            id: 70deb1e28791d8e7dd5a1f0c871a51b91282562f,
+                            summary: "create test3.txt",
+                        },
+                    },
                     Commit {
                         inner: Commit {
                             id: 848121cb21bf9af8b064c91bc8930bd16d624a22,
