@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - EXPERIMENTAL: created `git branchless query` to use with revsets.
 - EXPERIMENTAL: working copy snapshots are created before potentially-destructive operations in order to improve the capabilities of `git undo`.
   - Working copy snapshots are taken by default. Disable by setting `branchless.undo.createSnapshots` to `false`.
+- Created the `git branchless repair` command, which is occasionally useful for cleaning up garbage-collected commits from the smartlog.
 - Added `--yes` option to `git undo` to skip confirmation.
 - Added bulk edit mode to `git reword` to allow updating multiple, individual commit messages at once.
 - (#399) Added `--delete-branches` option to `git hide`.
