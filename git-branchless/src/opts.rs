@@ -321,6 +321,10 @@ pub enum Command {
         show_branches: bool,
     },
 
+    /// Restore internal invariants by reconciling the internal operation log
+    /// with the state of the Git repository.
+    Repair,
+
     /// Fix up commits abandoned by a previous rewrite operation.
     Restack {
         /// The IDs of the abandoned commits whose descendants should be
