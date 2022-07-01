@@ -984,6 +984,7 @@ dependencies = [
  "lalrpop-util",
  "lazy_static",
  "man",
+ "once_cell",
  "os_str_bytes",
  "path-slash",
  "portable-pty",

@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use eden_dag::DagAlgorithm;
 use lib::core::effects::{Effects, OperationType};
+use once_cell::unsync::OnceCell;
 use thiserror::Error;
 
 use lib::core::dag::{CommitSet, Dag};
@@ -16,6 +17,54 @@ struct Context<'a> {
     effects: &'a Effects,
     repo: &'a Repo,
     dag: &'a mut Dag,
+    public_commits: OnceCell<CommitSet>,
+    active_heads: OnceCell<CommitSet>,
+    draft_commits: OnceCell<CommitSet>,
+}
+
+impl Context<'_> {
+    #[instrument]
+    pub fn query_public_commits(&self) -> Result<&CommitSet, EvalError> {
+        self.public_commits.get_or_try_init(|| {
+            let public_commits = self
+                .dag
+                .query_public_commits()
+                .map_err(EvalError::OtherError)?;
+            Ok(public_commits)
+        })
+    }
+
+    #[instrument]
+    pub fn query_active_heads(&self) -> Result<&CommitSet, EvalError> {
+        self.active_heads.get_or_try_init(|| {
+            let public_commits = self.query_public_commits()?;
+            let active_heads = self
+                .dag
+                .query_active_heads(
+                    public_commits,
+                    &self
+                        .dag
+                        .observed_commits
+                        .difference(&self.dag.obsolete_commits),
+                )
+                .map_err(EvalError::OtherError)?;
+            Ok(active_heads)
+        })
+    }
+
+    #[instrument]
+    pub fn query_draft_commits(&self) -> Result<&CommitSet, EvalError> {
+        self.draft_commits.get_or_try_init(|| {
+            let public_commits = self.query_public_commits()?;
+            let active_heads = self.query_active_heads()?;
+            Ok(self
+                .dag
+                .query()
+                // @nocommit FIXME: use `only`?
+                .range(public_commits.clone(), active_heads.clone())?
+                .difference(public_commits))
+        })
+    }
 }
 
 #[derive(Debug, Error)]
@@ -52,6 +101,9 @@ pub fn eval(effects: &Effects, repo: &Repo, dag: &mut Dag, expr: &Expr) -> EvalR
         effects: &effects,
         repo,
         dag,
+        public_commits: Default::default(),
+        active_heads: Default::default(),
+        draft_commits: Default::default(),
     };
     let commits = eval_inner(&mut ctx, expr)?;
     Ok(commits)
@@ -103,6 +155,33 @@ fn eval_inner(ctx: &mut Context, expr: &Expr) -> EvalResult {
                 Ok(ctx.dag.query().parents(expr)?)
             }
 
+            "stack" => {
+                eval0(ctx, name, args)?;
+                let draft_commits = ctx.query_draft_commits()?;
+                let stack_roots = ctx.dag.query().roots(draft_commits.clone())?;
+                let stack_ancestors = ctx
+                    .dag
+                    .query()
+                    .range(stack_roots, ctx.dag.head_commit.clone())?;
+                let stack = ctx
+                    .dag
+                    .query()
+                    // Note that for a graph like
+                    //
+                    // ```
+                    // O
+                    // |
+                    // o A
+                    // | \
+                    // |  o B
+                    // |
+                    // @ C
+                    // ```
+                    // this will return `{A, B, C}`, not just `{A, C}`.
+                    .range(stack_ancestors, draft_commits.clone())?;
+                Ok(stack)
+            }
+
             name => Err(EvalError::UnboundName {
                 name: name.to_owned(),
             }),
@@ -147,6 +226,19 @@ fn eval_name(ctx: &mut Context, name: &str) -> EvalResult {
 }
 
 #[instrument]
+fn eval0(ctx: &mut Context, function_name: &str, args: &[Expr]) -> Result<(), EvalError> {
+    match args {
+        [] => Ok(()),
+
+        args => Err(EvalError::ArityMismatch {
+            function_name: function_name.to_string(),
+            expected_arity: 0,
+            actual_arity: args.len(),
+        }),
+    }
+}
+
+#[instrument]
 fn eval1(ctx: &mut Context, function_name: &str, args: &[Expr]) -> EvalResult {
     match args {
         [expr] => {
@@ -187,6 +279,7 @@ fn eval2(
 mod tests {
     use std::borrow::Cow;
 
+    use lib::core::dag::sorted_commit_set;
     use lib::core::effects::Effects;
     use lib::core::eventlog::{EventLogDb, EventReplayer};
     use lib::core::formatting::Glyphs;
@@ -202,8 +295,17 @@ mod tests {
         git.init_repo()?;
 
         let test1_oid = git.commit_file("test1", 1)?;
+        git.detach_head()?;
         let test2_oid = git.commit_file("test2", 2)?;
         let _test3_oid = git.commit_file("test3", 3)?;
+
+        git.run(&["checkout", "master"])?;
+        git.commit_file("test4", 4)?;
+        git.detach_head()?;
+        git.commit_file("test5", 5)?;
+        git.commit_file("test6", 6)?;
+        git.run(&["checkout", "HEAD~"])?;
+        git.commit_file("test7", 7)?;
 
         let effects = Effects::new_suppress_for_test(Glyphs::text());
         let repo = git.get_repo()?;
@@ -220,14 +322,15 @@ mod tests {
             &references_snapshot,
         )?;
 
-        let expr = Expr::Fn(
-            Cow::Borrowed("union"),
-            vec![
-                Expr::Name(test1_oid.to_string()),
-                Expr::Name(test2_oid.to_string()),
-            ],
-        );
-        insta::assert_debug_snapshot!(eval(&effects, &repo, &mut dag, &expr), @r###"
+        {
+            let expr = Expr::Fn(
+                Cow::Borrowed("union"),
+                vec![
+                    Expr::Name(test1_oid.to_string()),
+                    Expr::Name(test2_oid.to_string()),
+                ],
+            );
+            insta::assert_debug_snapshot!(eval(&effects, &repo, &mut dag, &expr), @r###"
         Ok(
             <or
               <static [
@@ -238,6 +341,36 @@ mod tests {
               ]>>,
         )
         "###);
+        }
+
+        {
+            let expr = Expr::Fn(Cow::Borrowed("stack"), vec![]);
+            let result = eval(&effects, &repo, &mut dag, &expr)?;
+            insta::assert_debug_snapshot!(sorted_commit_set(&repo, &dag, &result), @r###"
+            Ok(
+                [
+                    Commit {
+                        inner: Commit {
+                            id: 848121cb21bf9af8b064c91bc8930bd16d624a22,
+                            summary: "create test5.txt",
+                        },
+                    },
+                    Commit {
+                        inner: Commit {
+                            id: f0abf649939928fe5475179fd84e738d3d3725dc,
+                            summary: "create test6.txt",
+                        },
+                    },
+                    Commit {
+                        inner: Commit {
+                            id: ba07500a4adc661dc06a748d200ef92120e1b355,
+                            summary: "create test7.txt",
+                        },
+                    },
+                ],
+            )
+            "###);
+        }
 
         Ok(())
     }
