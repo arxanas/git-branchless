@@ -10,6 +10,7 @@ mod r#move;
 mod navigation;
 mod query;
 mod record;
+mod repair;
 mod restack;
 mod reword;
 mod smartlog;
@@ -233,6 +234,8 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
             revset,
             show_branches,
         } => query::query(&effects, &git_run_info, revset, show_branches)?,
+
+        Command::Repair => repair::repair(&effects)?,
 
         Command::Restack {
             commits: revsets,
