@@ -3,6 +3,7 @@
 //! The set of commits that are still being worked on is inferred from the event
 //! log; see the `eventlog` module.
 
+use std::cmp::Ordering;
 use std::fmt::Write;
 use std::time::SystemTime;
 
@@ -521,6 +522,11 @@ mod render {
 
         /// Whether to only show commits on branches.
         pub only_show_branches: bool,
+
+        /// The point in time at which to show the smartlog. If not provided,
+        /// renders the smartlog as of the current time. If negative, is treated
+        /// as an offset from the current event.
+        pub event_id: Option<isize>,
     }
 }
 
@@ -534,15 +540,29 @@ pub fn smartlog(
     let SmartlogOptions {
         show_hidden_commits,
         only_show_branches,
+        event_id,
     } = options;
 
     let repo = Repo::from_dir(&git_run_info.working_directory)?;
     let head_info = repo.get_head_info()?;
-    let references_snapshot = repo.get_references_snapshot()?;
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
     let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
-    let event_cursor = event_replayer.make_default_cursor();
+    let (references_snapshot, event_cursor) = {
+        let default_cursor = event_replayer.make_default_cursor();
+        match event_id {
+            None => (repo.get_references_snapshot()?, default_cursor),
+            Some(event_id) => {
+                let event_cursor = match event_id.cmp(&0) {
+                    Ordering::Less => event_replayer.advance_cursor(default_cursor, *event_id),
+                    Ordering::Equal | Ordering::Greater => event_replayer.make_cursor(*event_id),
+                };
+                let references_snapshot =
+                    event_replayer.get_references_snapshot(&repo, event_cursor)?;
+                (references_snapshot, event_cursor)
+            }
+        }
+    };
     let dag = Dag::open_and_sync(
         effects,
         &repo,

@@ -2,6 +2,7 @@ use std::fmt::Write;
 use std::{collections::HashSet, time::SystemTime};
 
 use itertools::Itertools;
+use lib::git::MaybeZeroOid;
 use lib::{
     core::{
         effects::{Effects, OperationType},
@@ -34,6 +35,30 @@ pub fn repair(effects: &Effects) -> eyre::Result<ExitCode> {
         result
     };
 
+    let broken_branches = {
+        let (effects, progress) = effects.start_operation(OperationType::RepairBranches);
+        let _effects = effects;
+        let references_snapshot = event_replayer.get_references_snapshot(&repo, event_cursor)?;
+        let branch_names = references_snapshot
+            .branch_oid_to_names
+            .into_iter()
+            .flat_map(|(oid, reference_names)| {
+                reference_names
+                    .into_iter()
+                    .map(move |reference_name| (oid, reference_name))
+            })
+            .collect_vec();
+        progress.notify_progress(0, branch_names.len());
+        let mut result = HashSet::new();
+        for (oid, reference_name) in branch_names {
+            if repo.find_reference(&reference_name)?.is_none() {
+                result.insert((oid, reference_name));
+            }
+            progress.notify_progress_inc(1);
+        }
+        result
+    };
+
     let now = SystemTime::now();
     let timestamp = now.duration_since(SystemTime::UNIX_EPOCH)?.as_secs_f64();
     let event_tx_id = event_log_db.make_transaction_id(now, "repair")?;
@@ -47,8 +72,19 @@ pub fn repair(effects: &Effects) -> eyre::Result<ExitCode> {
             commit_oid,
         })
         .collect_vec();
+    let num_broken_branches = broken_branches.len();
+    let branch_events = broken_branches
+        .into_iter()
+        .map(|(old_oid, reference_name)| Event::RefUpdateEvent {
+            timestamp,
+            event_tx_id,
+            ref_name: reference_name.to_owned(),
+            old_oid: MaybeZeroOid::NonZero(old_oid),
+            new_oid: MaybeZeroOid::Zero,
+            message: None,
+        });
 
-    let events = commit_events;
+    let events = commit_events.into_iter().chain(branch_events).collect_vec();
     event_log_db.add_events(events)?;
     writeln!(
         effects.get_output_stream(),
@@ -57,6 +93,15 @@ pub fn repair(effects: &Effects) -> eyre::Result<ExitCode> {
             determiner: None,
             amount: num_broken_commits,
             unit: ("broken commit", "broken commits")
+        }
+    )?;
+    writeln!(
+        effects.get_output_stream(),
+        "Found and repaired {}.",
+        Pluralize {
+            determiner: None,
+            amount: num_broken_branches,
+            unit: ("broken branch", "broken branches")
         }
     )?;
 

@@ -370,6 +370,12 @@ pub enum Command {
         /// Only show commits that exist on a branch.
         #[clap(action, long = "only-branches", conflicts_with = "show-hidden-commits")]
         only_show_branches: bool,
+
+        /// The point in time at which to show the smartlog. If not provided,
+        /// renders the smartlog as of the current time. If negative, is treated
+        /// as an offset from the current event.
+        #[clap(value_parser, long = "event-id")]
+        event_id: Option<isize>,
     },
 
     #[clap(hide = true)]

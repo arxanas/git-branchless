@@ -325,9 +325,7 @@ fn test_main_branch_not_found_error_message() -> eyre::Result<()> {
 
       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ SPANTRACE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-       0: branchless::core::repo_ext::get_main_branch_oid with self=<Git repository at: "<repo-path>/.git/">
-          at some/file/path.rs:123
-       1: git_branchless::commands::smartlog::smartlog with effects=<Output fancy=false> git_run_info=<GitRunInfo path_to_git="<git-executable>" working_directory="<repo-path>" env=not shown> options=SmartlogOptions { show_hidden_commits: false, only_show_branches: false }
+       0: git_branchless::commands::smartlog::smartlog with effects=<Output fancy=false> git_run_info=<GitRunInfo path_to_git="<git-executable>" working_directory="<repo-path>" env=not shown> options=SmartlogOptions { show_hidden_commits: false, only_show_branches: false, event_id: None }
           at some/file/path.rs:123
 
     Suggestion:
