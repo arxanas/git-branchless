@@ -91,6 +91,7 @@ fn redact_event(redactor: &Redactor, event: &Event) -> String {
 fn describe_event_cursor(
     now: SystemTime,
     repo: &Repo,
+    event_log_db: &EventLogDb,
     event_replayer: &EventReplayer,
     dag: &Dag,
     head_info: &ResolvedReferenceInfo,
@@ -100,11 +101,15 @@ fn describe_event_cursor(
 ) -> eyre::Result<Vec<String>> {
     let event_description_lines = match event_replayer.get_tx_events_before_cursor(event_cursor) {
         Some((event_id, events)) => {
+            let event_tx_id = events[0].get_event_tx_id();
+            let transaction_message = event_log_db
+                .get_transaction_message(event_tx_id)
+                .unwrap_or_else(|_err| "<failed to query>".to_string());
             let mut lines = vec![
                 format!(
-                    "##### Event ID: {}, transaction ID: {}",
+                    "##### Event ID: {}, transaction ID: {} (message: {transaction_message})",
                     event_id,
-                    events[0].get_event_tx_id().to_string()
+                    event_tx_id.to_string()
                 ),
                 "".to_string(),
             ];
@@ -191,6 +196,7 @@ fn collect_events(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<
         let lines = describe_event_cursor(
             now,
             &repo,
+            &event_log_db,
             &event_replayer,
             &dag,
             &head_info,
