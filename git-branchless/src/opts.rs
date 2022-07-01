@@ -323,7 +323,11 @@ pub enum Command {
 
     /// Restore internal invariants by reconciling the internal operation log
     /// with the state of the Git repository.
-    Repair,
+    Repair {
+        /// Apply changes.
+        #[clap(action(clap::ArgAction::SetFalse), long = "no-dry-run")]
+        dry_run: bool,
+    },
 
     /// Fix up commits abandoned by a previous rewrite operation.
     Restack {

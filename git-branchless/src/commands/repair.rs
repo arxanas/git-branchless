@@ -2,7 +2,7 @@ use std::fmt::Write;
 use std::{collections::HashSet, time::SystemTime};
 
 use itertools::Itertools;
-use lib::git::MaybeZeroOid;
+use lib::git::{CategorizedReferenceName, MaybeZeroOid};
 use lib::{
     core::{
         effects::{Effects, OperationType},
@@ -13,7 +13,7 @@ use lib::{
     util::ExitCode,
 };
 
-pub fn repair(effects: &Effects) -> eyre::Result<ExitCode> {
+pub fn repair(effects: &Effects, dry_run: bool) -> eyre::Result<ExitCode> {
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
@@ -65,45 +65,69 @@ pub fn repair(effects: &Effects) -> eyre::Result<ExitCode> {
 
     let num_broken_commits = broken_commits.len();
     let commit_events = broken_commits
-        .into_iter()
+        .iter()
         .map(|commit_oid| Event::ObsoleteEvent {
             timestamp,
             event_tx_id,
-            commit_oid,
+            commit_oid: *commit_oid,
         })
         .collect_vec();
     let num_broken_branches = broken_branches.len();
-    let branch_events = broken_branches
-        .into_iter()
-        .map(|(old_oid, reference_name)| Event::RefUpdateEvent {
-            timestamp,
-            event_tx_id,
-            ref_name: reference_name.to_owned(),
-            old_oid: MaybeZeroOid::NonZero(old_oid),
-            new_oid: MaybeZeroOid::Zero,
-            message: None,
-        });
+    let branch_events =
+        broken_branches
+            .iter()
+            .map(|(old_oid, reference_name)| Event::RefUpdateEvent {
+                timestamp,
+                event_tx_id,
+                ref_name: reference_name.to_owned(),
+                old_oid: MaybeZeroOid::NonZero(*old_oid),
+                new_oid: MaybeZeroOid::Zero,
+                message: None,
+            });
 
-    let events = commit_events.into_iter().chain(branch_events).collect_vec();
-    event_log_db.add_events(events)?;
-    writeln!(
-        effects.get_output_stream(),
-        "Found and repaired {}.",
-        Pluralize {
-            determiner: None,
-            amount: num_broken_commits,
-            unit: ("broken commit", "broken commits")
-        }
-    )?;
-    writeln!(
-        effects.get_output_stream(),
-        "Found and repaired {}.",
-        Pluralize {
-            determiner: None,
-            amount: num_broken_branches,
-            unit: ("broken branch", "broken branches")
-        }
-    )?;
+    if !dry_run {
+        let events = commit_events.into_iter().chain(branch_events).collect_vec();
+        event_log_db.add_events(events)?;
+    }
+
+    if num_broken_commits > 0 {
+        writeln!(
+            effects.get_output_stream(),
+            "Found and repaired {}: {}",
+            Pluralize {
+                determiner: None,
+                amount: num_broken_commits,
+                unit: ("broken commit", "broken commits")
+            },
+            broken_commits.into_iter().sorted().join(", "),
+        )?;
+    }
+    if num_broken_branches > 0 {
+        writeln!(
+            effects.get_output_stream(),
+            "Found and repaired {}: {}",
+            Pluralize {
+                determiner: None,
+                amount: num_broken_branches,
+                unit: ("broken branch", "broken branches")
+            },
+            broken_branches
+                .into_iter()
+                .map(
+                    |(_oid, reference_name)| CategorizedReferenceName::new(&reference_name)
+                        .render_suffix()
+                )
+                .sorted()
+                .join(", "),
+        )?;
+    }
+
+    if dry_run {
+        writeln!(
+            effects.get_output_stream(),
+            "(This was a dry-run; run with --no-dry-run to apply changes.)"
+        )?;
+    }
 
     Ok(ExitCode(0))
 }
