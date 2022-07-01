@@ -235,7 +235,7 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
             show_branches,
         } => query::query(&effects, &git_run_info, revset, show_branches)?,
 
-        Command::Repair => repair::repair(&effects)?,
+        Command::Repair { dry_run } => repair::repair(&effects, dry_run)?,
 
         Command::Restack {
             commits: revsets,

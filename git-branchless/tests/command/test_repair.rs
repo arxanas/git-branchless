@@ -33,11 +33,9 @@ fn test_repair_broken_commit() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["branchless", "repair"])?;
-        insta::assert_snapshot!(stdout, @r###"
-        Found and repaired 1 broken commit.
-        Found and repaired 0 broken branches.
-        "###);
+        let (stdout, _stderr) = git.run(&["branchless", "repair", "--no-dry-run"])?;
+        insta::assert_snapshot!(stdout, @"Found and repaired 1 broken commit: 70deb1e28791d8e7dd5a1f0c871a51b91282562f
+");
     }
 
     {
@@ -73,11 +71,9 @@ fn test_repair_broken_branch() -> eyre::Result<()> {
         .delete()?;
 
     {
-        let (stdout, _stderr) = git.run(&["branchless", "repair"])?;
-        insta::assert_snapshot!(stdout, @r###"
-        Found and repaired 0 broken commits.
-        Found and repaired 1 broken branch.
-        "###);
+        let (stdout, _stderr) = git.run(&["branchless", "repair", "--no-dry-run"])?;
+        insta::assert_snapshot!(stdout, @"Found and repaired 1 broken branch: foo
+");
     }
 
     {
