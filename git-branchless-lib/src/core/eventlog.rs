@@ -626,6 +626,26 @@ ORDER BY rowid ASC
     ) -> eyre::Result<EventTransactionId> {
         self.make_transaction_id_inner(now, message.as_ref())
     }
+
+    /// Get the message associated with the given transaction.
+    pub fn get_transaction_message(&self, event_tx_id: EventTransactionId) -> eyre::Result<String> {
+        let EventTransactionId(event_tx_id) = event_tx_id;
+        let mut stmt = self.conn.prepare(
+            "
+SELECT message
+FROM event_transactions
+WHERE event_tx_id = :event_tx_id
+",
+        )?;
+        let result: String = stmt.query_row(
+            rusqlite::named_params![":event_tx_id": event_tx_id,],
+            |row| {
+                let message: String = row.get("message")?;
+                Ok(message)
+            },
+        )?;
+        Ok(result)
+    }
 }
 
 /// Determine whether a given reference is used to keep a commit alive.
