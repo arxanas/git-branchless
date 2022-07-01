@@ -14,7 +14,7 @@ use lib::core::config::{get_core_hooks_path, get_default_branch_name};
 use lib::core::effects::Effects;
 use lib::git::{BranchType, Config, ConfigRead, ConfigWrite, GitRunInfo, GitVersion, Repo};
 
-const ALL_HOOKS: &[(&str, &str)] = &[
+pub const ALL_HOOKS: &[(&str, &str)] = &[
     (
         "post-commit",
         r#"
@@ -77,7 +77,7 @@ const ALL_ALIASES: &[(&str, &str)] = &[
 ];
 
 #[derive(Debug)]
-enum Hook {
+pub enum Hook {
     /// Regular Git hook.
     RegularHook { path: PathBuf },
 
@@ -86,7 +86,7 @@ enum Hook {
 }
 
 #[instrument]
-fn determine_hook_path(repo: &Repo, hook_type: &str) -> eyre::Result<Hook> {
+pub fn determine_hook_path(repo: &Repo, hook_type: &str) -> eyre::Result<Hook> {
     let multi_hooks_path = repo.get_path().join("hooks_multi");
     let hook = if multi_hooks_path.exists() {
         let path = multi_hooks_path
