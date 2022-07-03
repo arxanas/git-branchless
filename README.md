@@ -8,15 +8,16 @@
 <table align="center">
   <tbody>
     <tr>
-      <td><a href="https://github.com/arxanas/git-branchless/actions/workflows/linux.yml"><img alt="Linux build status" src="https://github.com/arxanas/git-branchless/actions/workflows/linux.yml/badge.svg" /></a></td>
-      <td><a href="https://github.com/arxanas/git-branchless/actions/workflows/windows.yml"><img alt="Windows build status" src="https://github.com/arxanas/git-branchless/actions/workflows/windows.yml/badge.svg" /></a></td>
-      <td><a href="https://github.com/arxanas/git-branchless/actions/workflows/macos.yml"><img alt="macOS build status" src="https://github.com/arxanas/git-branchless/actions/workflows/macos.yml/badge.svg" /></a></td>
-      <td><a alt="Nix on Linus build status" href="https://github.com/arxanas/git-branchless/actions/workflows/nix-linux.yml"><img src="https://github.com/arxanas/git-branchless/actions/workflows/nix-linux.yml/badge.svg" /></a></td>
+      <td align="center"><a href="https://github.com/arxanas/git-branchless/actions/workflows/linux.yml"><img alt="Linux build status" src="https://github.com/arxanas/git-branchless/actions/workflows/linux.yml/badge.svg" /></a></td>
+      <td align="center"><a href="https://github.com/arxanas/git-branchless/actions/workflows/windows.yml"><img alt="Windows build status" src="https://github.com/arxanas/git-branchless/actions/workflows/windows.yml/badge.svg" /></a></td>
+      <td align="center"><a href="https://github.com/arxanas/git-branchless/actions/workflows/macos.yml"><img alt="macOS build status" src="https://github.com/arxanas/git-branchless/actions/workflows/macos.yml/badge.svg" /></a></td>
+      <td align="center"><a alt="Nix on Linus build status" href="https://github.com/arxanas/git-branchless/actions/workflows/nix-linux.yml"><img src="https://github.com/arxanas/git-branchless/actions/workflows/nix-linux.yml/badge.svg" /></a></td>
     </tr>
     <tr>
-      <td><a alt="Package version" href="https://crates.io/crates/git-branchless"><img src="https://img.shields.io/crates/v/git-branchless" /></a></td>
-      <td><a href="https://github.com/arxanas/git-branchless/discussions"><img alt="Github Discussions" src="https://img.shields.io/github/discussions/arxanas/git-branchless" /></a></td>
-      <td><a href="https://discord.gg/caYQBJ82A4"><img alt="Discord" src="https://img.shields.io/discord/915309546984050709" /></a></td>
+      <td align="center"><a alt="Package version" href="https://crates.io/crates/git-branchless"><img src="https://img.shields.io/crates/v/git-branchless" /></a></td>
+      <td align="center"><a href="https://github.com/arxanas/git-branchless/discussions"><img alt="Github Discussions" src="https://img.shields.io/github/discussions/arxanas/git-branchless" /></a></td>
+      <td align="center"><a href="https://discord.gg/caYQBJ82A4"><img alt="Discord" src="https://img.shields.io/discord/915309546984050709" /></a></td>
+      <td align="center"><a href="https://gitpod.io/#https://github.com/arxanas/git-branchless/"><img height="20" src="https://gitpod.io/button/open-in-gitpod.svg" /></a></td>
     </tr>
   </tbody>
 </table>
