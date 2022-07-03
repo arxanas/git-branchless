@@ -342,8 +342,8 @@ mod tests {
         WorkingCopySnapshot {
             base_commit: Commit {
                 inner: Commit {
-                    id: 8ad51b400f9464de74af00ea118758c62e566e62,
-                    summary: "branchless: automated working copy commit",
+                    id: ad8334119626cc9aee5322f9ed35273de834ea36,
+                    summary: "branchless: automated working copy snapshot",
                 },
             },
             head_commit: Some(
@@ -359,32 +359,32 @@ mod tests {
             ),
             commit_unstaged: Commit {
                 inner: Commit {
-                    id: 428260eed0b9a234827fbc529428fb9b44917e7e,
-                    summary: "branchless: automated working copy commit (0 changes)",
+                    id: cd8605eef8b78e22427fa3846f1a23f95e88aa7e,
+                    summary: "branchless: working copy snapshot data: 0 unstaged changes",
                 },
             },
             commit_stage0: Commit {
                 inner: Commit {
-                    id: 428260eed0b9a234827fbc529428fb9b44917e7e,
-                    summary: "branchless: automated working copy commit (0 changes)",
+                    id: a4edb48b44f5b19d0c2c25fd65251d0bfaba68c1,
+                    summary: "branchless: working copy snapshot data: 0 changes in stage 0",
                 },
             },
             commit_stage1: Commit {
                 inner: Commit {
-                    id: 428260eed0b9a234827fbc529428fb9b44917e7e,
-                    summary: "branchless: automated working copy commit (0 changes)",
+                    id: e1e0c856237e53e2c889a723ee7ec50a21c1f952,
+                    summary: "branchless: working copy snapshot data: 0 changes in stage 1",
                 },
             },
             commit_stage2: Commit {
                 inner: Commit {
-                    id: 428260eed0b9a234827fbc529428fb9b44917e7e,
-                    summary: "branchless: automated working copy commit (0 changes)",
+                    id: e5dda473c3266aafa14b827b1a009e35a3c61679,
+                    summary: "branchless: working copy snapshot data: 0 changes in stage 2",
                 },
             },
             commit_stage3: Commit {
                 inner: Commit {
-                    id: 428260eed0b9a234827fbc529428fb9b44917e7e,
-                    summary: "branchless: automated working copy commit (0 changes)",
+                    id: 19b98ca24cc7b241122593fc1a9307e24e26a846,
+                    summary: "branchless: working copy snapshot data: 0 changes in stage 3",
                 },
             },
         }
@@ -434,8 +434,8 @@ mod tests {
         WorkingCopySnapshot {
             base_commit: Commit {
                 inner: Commit {
-                    id: f49a0b751d31eb67a04fc2dab4dc777140bc716a,
-                    summary: "branchless: automated working copy commit",
+                    id: 401b3743f29e041c9c88a5f51a058582940a3be5,
+                    summary: "branchless: automated working copy snapshot",
                 },
             },
             head_commit: Some(
@@ -451,32 +451,32 @@ mod tests {
             ),
             commit_unstaged: Commit {
                 inner: Commit {
-                    id: d9e064f80a0d27b05e16371418190580f77765f3,
-                    summary: "branchless: automated working copy commit (4 changes)",
+                    id: 8f4827eba90e1ce5bbd0d76fc29d587c8ad9135e,
+                    summary: "branchless: working copy snapshot data: 4 unstaged changes",
                 },
             },
             commit_stage0: Commit {
                 inner: Commit {
-                    id: c8daa21ee2b95ee410c635b1b62294c0e0776718,
-                    summary: "branchless: automated working copy commit (3 changes)",
+                    id: cdb88c2f2e1c271ba6227f4da2e4647ec6663646,
+                    summary: "branchless: working copy snapshot data: 3 changes in stage 0",
                 },
             },
             commit_stage1: Commit {
                 inner: Commit {
-                    id: 428260eed0b9a234827fbc529428fb9b44917e7e,
-                    summary: "branchless: automated working copy commit (0 changes)",
+                    id: e1e0c856237e53e2c889a723ee7ec50a21c1f952,
+                    summary: "branchless: working copy snapshot data: 0 changes in stage 1",
                 },
             },
             commit_stage2: Commit {
                 inner: Commit {
-                    id: 428260eed0b9a234827fbc529428fb9b44917e7e,
-                    summary: "branchless: automated working copy commit (0 changes)",
+                    id: e5dda473c3266aafa14b827b1a009e35a3c61679,
+                    summary: "branchless: working copy snapshot data: 0 changes in stage 2",
                 },
             },
             commit_stage3: Commit {
                 inner: Commit {
-                    id: 428260eed0b9a234827fbc529428fb9b44917e7e,
-                    summary: "branchless: automated working copy commit (0 changes)",
+                    id: 19b98ca24cc7b241122593fc1a9307e24e26a846,
+                    summary: "branchless: working copy snapshot data: 0 changes in stage 3",
                 },
             },
         }
