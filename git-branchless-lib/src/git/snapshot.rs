@@ -145,7 +145,7 @@ impl<'repo> WorkingCopySnapshot<'repo> {
         let signature = Signature::automated()?;
         let message = format!(
             "\
-branchless: automated working copy commit
+branchless: automated working copy snapshot
 
 {}: {}
 {}: {}
@@ -283,17 +283,6 @@ branchless: automated working copy commit
         }))
     }
 
-    fn make_message(num_changes: usize) -> String {
-        format!(
-            "branchless: automated working copy commit ({})",
-            Pluralize {
-                determiner: None,
-                amount: num_changes,
-                unit: ("change", "changes"),
-            },
-        )
-    }
-
     #[instrument]
     fn create_commit_for_unstaged_changes(
         repo: &Repo,
@@ -354,7 +343,14 @@ branchless: automated working copy commit
         };
 
         let signature = Signature::automated()?;
-        let message = Self::make_message(num_changes);
+        let message = format!(
+            "branchless: working copy snapshot data: {}",
+            Pluralize {
+                determiner: None,
+                amount: num_changes,
+                unit: ("unstaged change", "unstaged changes"),
+            }
+        );
         repo.create_commit(
             None,
             &signature,
@@ -430,7 +426,17 @@ branchless: automated working copy commit
         let tree = repo.find_tree_or_fail(tree_oid)?;
 
         let signature = Signature::automated()?;
-        let message = Self::make_message(num_stage_changes);
+        let message = format!(
+            "branchless: working copy snapshot data: {}",
+            Pluralize {
+                determiner: None,
+                amount: num_stage_changes,
+                unit: (
+                    &format!("change in stage {}", i32::from(stage)),
+                    &format!("changes in stage {}", i32::from(stage)),
+                ),
+            }
+        );
         let commit_oid = repo.create_commit(
             None,
             &signature,

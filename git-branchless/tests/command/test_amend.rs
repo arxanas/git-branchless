@@ -412,11 +412,11 @@ fn test_amend_undo() -> eyre::Result<()> {
                       as c0bdfb5 create file1.txt
         4. Restore snapshot for branch master
                     pointing to c0bdfb5 create file1.txt
-                backed up using eb5b991 branchless: automated working copy commit
-        branchless: running command: <git-executable> checkout eb5b99143276588c4c77e3bac94a6d476006c3f5 -B master
+                backed up using 4416dc0 branchless: automated working copy snapshot
+        branchless: running command: <git-executable> checkout 4416dc07ff5adcc1601f93362ab9924d78d3b05a -B master
         branchless: running command: <git-executable> reset --hard HEAD
-        HEAD is now at eb5b991 branchless: automated working copy commit
-        branchless: running command: <git-executable> checkout 2e64218453f1f35f651c7e385cb5969966530f64
+        HEAD is now at 4416dc0 branchless: automated working copy snapshot
+        branchless: running command: <git-executable> checkout 7b6d0f10f68cf5df3de91f062c565e45f1b28006
         branchless: running command: <git-executable> reset c0bdfb5ba33c02bba2aa451efe2f220f12232408
         Unstaged changes after reset:
         M	file1.txt
