@@ -60,9 +60,7 @@ impl Context<'_> {
             Ok(self
                 .dag
                 .query()
-                // @nocommit FIXME: use `only`?
-                .range(public_commits.clone(), active_heads.clone())?
-                .difference(public_commits))
+                .only(active_heads.clone(), public_commits.clone())?)
         })
     }
 }
