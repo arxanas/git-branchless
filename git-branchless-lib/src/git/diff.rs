@@ -75,8 +75,7 @@ pub fn process_diff_for_record(
             true
         }),
         Some(&mut |delta, hunk| {
-            let path = delta.new_file().path().unwrap(); // @nocommit should
-                                                         // we be using only new_file here?
+            let path = delta.new_file().path().unwrap();
             let mut deltas = deltas.lock().unwrap();
             match &mut deltas.get_mut(path).unwrap().content {
                 DeltaFileContent::Hunks(hunks) => {
