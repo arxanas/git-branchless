@@ -11,27 +11,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- EXPERIMENTAL: created the `git record` command, which opens an interactive change selector for committing.
-- EXPERIMENTAL: support for [revset expressions](https://github.com/arxanas/git-branchless/wiki/Reference:-Revsets) in most commands.
-- EXPERIMENTAL: created `git branchless query` to use with revsets.
-- EXPERIMENTAL: working copy snapshots are created before potentially-destructive operations in order to improve the capabilities of `git undo`.
+- EXPERIMENTAL: (#382) Working copy snapshots are created before potentially-destructive operations in order to improve the capabilities of `git undo`.
   - Working copy snapshots are taken by default. Disable by setting `branchless.undo.createSnapshots` to `false`.
-- Created the `git branchless repair` command, which is occasionally useful for cleaning up garbage-collected commits from the smartlog.
+- EXPERIMENTAL: (#391) created the `git record` command, which opens an interactive change selector for committing.
 - Added `--yes` option to `git undo` to skip confirmation.
-- Added bulk edit mode to `git reword` to allow updating multiple, individual commit messages at once.
+- (#366) Added bulk edit mode to `git reword` to allow updating multiple, individual commit messages at once.
+- (#398) Added support for [revset expressions](https://github.com/arxanas/git-branchless/wiki/Reference:-Revsets) in most commands.
+  - Created the `git branchless query` command to dump the results of revset queries.
 - (#399) Added `--delete-branches` option to `git hide`.
+- (#435) Created the `git branchless repair` command, which is occasionally useful for cleaning up garbage-collected commits from the smartlog.
 
 ### Changed
 
-- BREAKING: Rust v1.61 or later is required to build.
+- BREAKING: (#422) Rust v1.61 or later is required to build.
 - (#397) When editing only a single commit message with `git reword`, the marker line is omitted.
 
 ### Fixed
 
-- Commands which automatically show the smartlog after them no longer show it in
-gray with ASCII glyphs. This reverts the behavior to that of before v0.3.11.
-- Adjusted the misleading suggestion that was printed when running a `git amend`
-invocation which produced merge conflicts.
+- (#342) Commands which automatically show the smartlog after them no longer show it in gray with ASCII glyphs. This reverts the behavior to that of before v0.3.11.
+- (#358) Adjusted the misleading suggestion that was printed when running a `git amend` invocation which produced merge conflicts.
+- (#359) Fixed the `smartlog` output when running `git undo`. Previously, it showed the smartlog as if you were still at the `HEAD` location before the `git undo`.
+- (#387) `git reword` now reads from `$GIT_EDITOR`, etc. via the `git var` command.
 - (#418) When running `git smartlog` or similar, any commits which would show up are now kept live for garbage-collection purposes, even if `git-branchless` didn't observe them being committed.
 
 ## [0.3.12] - 2022-04-08
