@@ -646,7 +646,7 @@ fn render_status_report(
     if num_commits != 1 {
         writeln!(
             effects.get_output_stream(),
-            "Reworded {} commits with same message. If this was unintentional, run: git undo",
+            "Reworded {} commits. If this was unintentional, run: git undo",
             num_commits,
         )?;
     }
