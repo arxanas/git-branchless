@@ -117,6 +117,141 @@ fn test_move_stick() -> eyre::Result<()> {
 }
 
 #[test]
+fn test_move_insert_stick() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    let test1_oid = git.commit_file("test1", 1)?;
+    git.detach_head()?;
+
+    git.commit_file("test2", 2)?;
+    let test3_oid = git.commit_file("test3", 3)?;
+    git.commit_file("test4", 4)?;
+
+    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    :
+    O 62fc20d (master) create test1.txt
+    |
+    o 96d1c37 create test2.txt
+    |
+    o 70deb1e create test3.txt
+    |
+    @ 355e173 create test4.txt
+    "###);
+
+    // --on-disk
+    {
+        let git = git.duplicate_repo()?;
+        git.run(&[
+            "move",
+            "--on-disk",
+            "--insert",
+            "-s",
+            &test3_oid.to_string(),
+            "-d",
+            &test1_oid.to_string(),
+        ])?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d (master) create test1.txt
+        |
+        o 4838e49 create test3.txt
+        |
+        @ a248207 create test4.txt
+        |
+        o 5a436ed create test2.txt
+        "###);
+    }
+
+    // --in-memory
+    {
+        let (stdout, _stderr) = git.run(&[
+            "move",
+            "--in-memory",
+            "--insert",
+            // "--debug-dump-rebase-constraints",
+            "--debug-dump-rebase-plan",
+            "-s",
+            &test3_oid.to_string(),
+            "-d",
+            &test1_oid.to_string(),
+        ])?;
+        insta::assert_snapshot!(stdout, @r###"
+        Rebase plan: Some(
+            RebasePlan {
+                first_dest_oid: NonZeroOid(62fc20d2a290daea0d52bdc2ed2ad4be6491010e),
+                commands: [
+                    Reset {
+                        target: Oid(
+                            NonZeroOid(62fc20d2a290daea0d52bdc2ed2ad4be6491010e),
+                        ),
+                    },
+                    Pick {
+                        original_commit_oid: NonZeroOid(70deb1e28791d8e7dd5a1f0c871a51b91282562f),
+                        commit_to_apply_oid: NonZeroOid(70deb1e28791d8e7dd5a1f0c871a51b91282562f),
+                    },
+                    DetectEmptyCommit {
+                        commit_oid: NonZeroOid(70deb1e28791d8e7dd5a1f0c871a51b91282562f),
+                    },
+                    Pick {
+                        original_commit_oid: NonZeroOid(355e173bf9c5d2efac2e451da0cdad3fb82b869a),
+                        commit_to_apply_oid: NonZeroOid(355e173bf9c5d2efac2e451da0cdad3fb82b869a),
+                    },
+                    DetectEmptyCommit {
+                        commit_oid: NonZeroOid(355e173bf9c5d2efac2e451da0cdad3fb82b869a),
+                    },
+                    Pick {
+                        original_commit_oid: NonZeroOid(96d1c37a3d4363611c49f7e52186e189a04c531f),
+                        commit_to_apply_oid: NonZeroOid(96d1c37a3d4363611c49f7e52186e189a04c531f),
+                    },
+                    DetectEmptyCommit {
+                        commit_oid: NonZeroOid(96d1c37a3d4363611c49f7e52186e189a04c531f),
+                    },
+                    RegisterExtraPostRewriteHook,
+                ],
+            },
+        )
+        Attempting rebase in-memory...
+        [1/3] Committed as: 4838e49 create test3.txt
+        [2/3] Committed as: a248207 create test4.txt
+        [3/3] Committed as: 5a436ed create test2.txt
+        branchless: processing 3 rewritten commits
+        branchless: running command: <git-executable> checkout a248207402822b7396cabe0f1011d8a7ce7daf1b
+        :
+        O 62fc20d (master) create test1.txt
+        |
+        o 4838e49 create test3.txt
+        |
+        @ a248207 create test4.txt
+        |
+        o 5a436ed create test2.txt
+        In-memory rebase succeeded.
+        "###);
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d (master) create test1.txt
+        |
+        o 4838e49 create test3.txt
+        |
+        @ a248207 create test4.txt
+        |
+        o 5a436ed create test2.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_move_tree() -> eyre::Result<()> {
     let git = make_git()?;
 
@@ -184,6 +319,90 @@ fn test_move_tree() -> eyre::Result<()> {
             | @ b1f9efa create test5.txt
             |
             O 96d1c37 (master) create test2.txt
+            "###);
+        }
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_move_insert_tree() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    let test1_oid = git.commit_file("test1", 1)?;
+    git.detach_head()?;
+    git.commit_file("test2", 2)?;
+
+    git.run(&["checkout", &test1_oid.to_string()])?;
+    git.commit_file("test3", 3)?;
+    let test4_oid = git.commit_file("test4", 4)?;
+
+    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    :
+    O 62fc20d (master) create test1.txt
+    |\
+    | o 96d1c37 create test2.txt
+    |
+    o 4838e49 create test3.txt
+    |
+    @ a248207 create test4.txt
+    "###);
+
+    // --on-disk
+    {
+        let git = git.duplicate_repo()?;
+        git.run(&[
+            "move",
+            "--on-disk",
+            "--insert",
+            "-s",
+            &test4_oid.to_string(),
+            "-d",
+            &test1_oid.to_string(),
+        ])?;
+        {
+            let (stdout, _stderr) = git.run(&["smartlog"])?;
+            insta::assert_snapshot!(stdout, @r###"
+            :
+            O 62fc20d (master) create test1.txt
+            |
+            @ bf0d52a create test4.txt
+            |\
+            | o 44352d0 create test2.txt
+            |
+            o 0a4a701 create test3.txt
+            "###);
+        }
+    }
+
+    // in-memory
+    {
+        git.run(&[
+            "move",
+            "--insert",
+            "-s",
+            &test4_oid.to_string(),
+            "-d",
+            &test1_oid.to_string(),
+        ])?;
+        {
+            let (stdout, _stderr) = git.run(&["smartlog"])?;
+            insta::assert_snapshot!(stdout, @r###"
+            :
+            O 62fc20d (master) create test1.txt
+            |
+            @ bf0d52a create test4.txt
+            |\
+            | o 44352d0 create test2.txt
+            |
+            o 0a4a701 create test3.txt
             "###);
         }
     }
