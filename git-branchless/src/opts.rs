@@ -291,6 +291,11 @@ pub enum Command {
         #[clap(value_parser, short = 'd', long = "dest")]
         dest: Option<Revset>,
 
+        /// Insert the subtree between the destination and it's children, if any.
+        /// Only supported if the moved subtree has a single head.
+        #[clap(action, short = 'I', long = "insert")]
+        insert: bool,
+
         /// Options for moving commits.
         #[clap(flatten)]
         move_options: MoveOptions,

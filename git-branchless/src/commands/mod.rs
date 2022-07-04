@@ -209,8 +209,17 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
             source,
             dest,
             base,
+            insert,
             move_options,
-        } => r#move::r#move(&effects, &git_run_info, source, dest, base, &move_options)?,
+        } => r#move::r#move(
+            &effects,
+            &git_run_info,
+            source,
+            dest,
+            base,
+            insert,
+            &move_options,
+        )?,
 
         Command::Next {
             traverse_commits_options,

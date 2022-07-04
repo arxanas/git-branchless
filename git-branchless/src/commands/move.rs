@@ -59,6 +59,7 @@ pub fn r#move(
     source: Option<Revset>,
     dest: Option<Revset>,
     base: Option<Revset>,
+    insert: bool,
     move_options: &MoveOptions,
 ) -> eyre::Result<ExitCode> {
     let repo = Repo::from_current_dir()?;
@@ -169,7 +170,56 @@ pub fn r#move(
     let repo_pool = RepoResource::new_pool(&repo)?;
     let rebase_plan = {
         let mut builder = RebasePlanBuilder::new(&dag);
+
         builder.move_subtree(source_oid, dest_oid)?;
+
+        if insert {
+            let source_head = {
+                let source_heads: CommitSet = dag
+                    .query()
+                    .heads(dag.query().descendants(CommitSet::from(source_oid))?)?;
+                match commit_set_to_vec_unsorted(&source_heads)?[..] {
+                    [oid] => oid,
+                    _ => {
+                        writeln!(
+                            effects.get_output_stream(),
+                            "The --insert flag cannot be used when moving subtrees with multiple heads."
+                        )?;
+                        return Ok(ExitCode(1));
+                    }
+                }
+            };
+
+            let dest_children: CommitSet = dag
+                .query()
+                .children(CommitSet::from(dest_oid))?
+                .difference(&dag.obsolete_commits);
+
+            for dest_child in commit_set_to_vec_unsorted(&dest_children)? {
+                if dag
+                    .query()
+                    .is_ancestor(dest_child.into(), source_oid.into())?
+                {
+                    // If this child subtree actually contains the source
+                    // subtree being moved, then we should only move the commit
+                    // range *up to* the source subtree, not the entire child
+                    // subtree.
+                    let source_parent = match dag.get_only_parent_oid(source_oid) {
+                        Ok(oid) => oid,
+                        Err(_) => {
+                            writeln!(
+                                    effects.get_output_stream(),
+                                    "The --insert flag can only be used when moving subtrees with exactly 1 parent."
+                                )?;
+                            return Ok(ExitCode(1));
+                        }
+                    };
+                    builder.move_range(dest_child, source_parent, source_head)?;
+                } else {
+                    builder.move_subtree(dest_child, source_head)?;
+                }
+            }
+        }
         builder.build(
             effects,
             &pool,
