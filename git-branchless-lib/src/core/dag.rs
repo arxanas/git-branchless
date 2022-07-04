@@ -308,6 +308,18 @@ impl Dag {
         }
     }
 
+    /// Get the parent OID for the given OID. Returns an error if the given OID
+    /// does not have exactly 1 parent.
+    #[instrument]
+    pub fn get_only_parent_oid(&self, oid: NonZeroOid) -> eyre::Result<NonZeroOid> {
+        let parents: CommitSet = self.inner.parents(CommitSet::from(oid))?;
+        match commit_set_to_vec_unsorted(&parents)?[..] {
+            [oid] => Ok(oid),
+            [] => Err(eyre::eyre!("Commit {} has no parents.", oid)),
+            _ => Err(eyre::eyre!("Commit {} has more than 1 parents.", oid)),
+        }
+    }
+
     /// Get the range of OIDs from `parent_oid` to `child_oid`. Note that there
     /// may be more than one path; in that case, the OIDs are returned in a
     /// topologically-sorted order.

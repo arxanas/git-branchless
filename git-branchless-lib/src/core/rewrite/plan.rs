@@ -137,18 +137,25 @@ impl<'repo> ConstraintGraph<'repo> {
         }
     }
 
-    pub fn add_constraints(&mut self, constraints: &Vec<Constraint>) {
+    pub fn add_constraints(&mut self, constraints: &Vec<Constraint>) -> eyre::Result<()> {
         for constraint in constraints {
             match constraint {
-                Constraint::ImmediateChild {
-                    parent_oid: _,
-                    child_oid: _,
-                } => todo!(),
+                Constraint::MoveChildren {
+                    parent_of_oid: _,
+                    children_of_oid: _,
+                } => {
+                    // do nothing; these will be handled in the next pass
+                }
 
-                Constraint::ChildAndDescendants {
+                Constraint::MoveSubtree {
                     parent_oid,
                     child_oid,
                 } => {
+                    // remove previous (if any) constraints on commit
+                    for commits in self.inner.values_mut() {
+                        commits.remove(child_oid);
+                    }
+
                     self.inner
                         .entry(*parent_oid)
                         .or_default()
@@ -156,6 +163,60 @@ impl<'repo> ConstraintGraph<'repo> {
                 }
             }
         }
+
+        let range_heads: HashSet<&NonZeroOid> = constraints
+            .iter()
+            .filter_map(|c| match c {
+                Constraint::MoveSubtree {
+                    parent_oid: _,
+                    child_oid: _,
+                } => None,
+                Constraint::MoveChildren {
+                    parent_of_oid: _,
+                    children_of_oid,
+                } => Some(children_of_oid),
+            })
+            .collect();
+
+        for constraint in constraints {
+            match constraint {
+                Constraint::MoveChildren {
+                    parent_of_oid,
+                    children_of_oid,
+                } => {
+                    let mut parent_oid = self.dag.get_only_parent_oid(*parent_of_oid)?;
+                    let commits_to_move = self.commits_to_move();
+
+                    // If parent_oid is part of another range and is itself
+                    // constrained, keep looking for an unconstrained ancestor.
+                    while range_heads.contains(&parent_oid) && commits_to_move.contains(&parent_oid)
+                    {
+                        parent_oid = self.dag.get_only_parent_oid(parent_oid)?;
+                    }
+
+                    let commits_to_move: CommitSet = commits_to_move.into_iter().collect();
+                    let source_children: CommitSet = self
+                        .dag
+                        .query()
+                        .children(CommitSet::from(*children_of_oid))?
+                        .difference(&self.dag.obsolete_commits)
+                        .difference(&commits_to_move);
+
+                    for child_oid in commit_set_to_vec_unsorted(&source_children)? {
+                        self.inner.entry(parent_oid).or_default().insert(child_oid);
+                    }
+                }
+
+                Constraint::MoveSubtree {
+                    parent_oid: _,
+                    child_oid: _,
+                } => {
+                    // do nothing; these were handled in the first pass
+                }
+            }
+        }
+
+        Ok(())
     }
 
     #[instrument]
@@ -172,7 +233,10 @@ impl<'repo> ConstraintGraph<'repo> {
             .intersection(visible_commits);
         let children_oids = commit_set_to_vec_unsorted(&children_oids)?;
         for child_oid in children_oids {
-            acc.push(Constraint::ChildAndDescendants {
+            if self.commits_to_move().contains(&child_oid) {
+                continue;
+            }
+            acc.push(Constraint::MoveSubtree {
                 parent_oid: current_oid,
                 child_oid,
             });
@@ -210,7 +274,7 @@ impl<'repo> ConstraintGraph<'repo> {
             acc
         };
 
-        self.add_constraints(&all_descendants_of_constrained_nodes);
+        self.add_constraints(&all_descendants_of_constrained_nodes)?;
         Ok(())
     }
 
@@ -260,7 +324,7 @@ impl<'repo> ConstraintGraph<'repo> {
                 self.commits_to_move_to(&unconstrained_oid).map(|children| {
                     children
                         .into_iter()
-                        .map(move |child_oid| Constraint::ChildAndDescendants {
+                        .map(move |child_oid| Constraint::MoveSubtree {
                             parent_oid: unconstrained_oid,
                             child_oid,
                         })
@@ -352,17 +416,16 @@ pub struct RebasePlanBuilder<'repo> {
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum Constraint {
-    /// Indicates that `child` should be moved on top of `parent`. Any
-    /// descendants of `child` should be reparented using this commit's nearest
-    /// unmoved ancestor.
-    ImmediateChild {
-        parent_oid: NonZeroOid,
-        child_oid: NonZeroOid,
+    /// Indicates that the children of `children_of` should be moved on top of
+    /// nearest unmoved ancestor of `parent_of`.
+    MoveChildren {
+        parent_of_oid: NonZeroOid,
+        children_of_oid: NonZeroOid,
     },
 
     /// Indicates that `child` and all of its descendants should be moved on top
     /// of `parent`.
-    ChildAndDescendants {
+    MoveSubtree {
         parent_oid: NonZeroOid,
         child_oid: NonZeroOid,
     },
@@ -647,11 +710,42 @@ impl<'repo> RebasePlanBuilder<'repo> {
         source_oid: NonZeroOid,
         dest_oid: NonZeroOid,
     ) -> eyre::Result<()> {
-        self.initial_constraints
-            .push(Constraint::ChildAndDescendants {
-                parent_oid: dest_oid,
-                child_oid: source_oid,
-            });
+        self.initial_constraints.push(Constraint::MoveSubtree {
+            parent_oid: dest_oid,
+            child_oid: source_oid,
+        });
+        Ok(())
+    }
+
+    /// Generate a sequence of rebase steps that cause the commit at
+    /// `source_oid` to be rebased on top of `dest_oid`, and for the descendants
+    /// of `source_oid` to be rebased on top of its parent.
+    pub fn move_commit(
+        &mut self,
+        source_oid: NonZeroOid,
+        dest_oid: NonZeroOid,
+    ) -> eyre::Result<()> {
+        self.move_range(source_oid, source_oid, dest_oid)
+    }
+
+    /// Generate a sequence of rebase steps that cause the range from
+    /// `source_oid` to `end_oid` to be rebased on top of `dest_oid`, and for
+    /// the descendants of `end_oid` to be rebased on top of the parent of
+    /// `source_oid`.
+    pub fn move_range(
+        &mut self,
+        source_oid: NonZeroOid,
+        end_oid: NonZeroOid,
+        dest_oid: NonZeroOid,
+    ) -> eyre::Result<()> {
+        self.initial_constraints.push(Constraint::MoveSubtree {
+            parent_oid: dest_oid,
+            child_oid: source_oid,
+        });
+        self.initial_constraints.push(Constraint::MoveChildren {
+            parent_of_oid: source_oid,
+            children_of_oid: end_oid,
+        });
         Ok(())
     }
 
@@ -687,7 +781,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
             detect_duplicate_commits_via_patch_id,
         } = options;
         let mut constraints = ConstraintGraph::new(self.dag);
-        constraints.add_constraints(&self.initial_constraints);
+        constraints.add_constraints(&self.initial_constraints)?;
         let mut state = BuildState {
             constraints,
             used_labels: Default::default(),
@@ -724,14 +818,14 @@ impl<'repo> RebasePlanBuilder<'repo> {
         let mut first_dest_oid = None;
         for constraint in roots {
             let (parent_oid, child_oid) = match constraint {
-                Constraint::ImmediateChild {
-                    parent_oid,
-                    child_oid,
-                }
-                | Constraint::ChildAndDescendants {
+                Constraint::MoveSubtree {
                     parent_oid,
                     child_oid,
                 } => (parent_oid, child_oid),
+                Constraint::MoveChildren {
+                    parent_of_oid: _,
+                    children_of_oid: _,
+                } => eyre::bail!("BUG: Invalid constraint encountered while preparing rebase plan.\nThis should be unreachable."),
             };
             first_dest_oid.get_or_insert(parent_oid);
             acc.push(RebaseCommand::Reset {
@@ -998,13 +1092,18 @@ impl<'repo> RebasePlanBuilder<'repo> {
 #[cfg(test)]
 mod tests {
     use std::sync::Mutex;
+    use std::time::SystemTime;
 
     use rayon::ThreadPoolBuilder;
 
+    use crate::core::check_out::CheckOutCommitOptions;
     use crate::core::eventlog::{EventLogDb, EventReplayer};
     use crate::core::formatting::Glyphs;
     use crate::core::repo_ext::RepoExt;
-    use crate::testing::make_git;
+    use crate::core::rewrite::{
+        execute_rebase_plan, ExecuteRebasePlanOptions, ExecuteRebasePlanResult,
+    };
+    use crate::testing::{make_git, Git};
 
     use super::*;
 
@@ -1053,6 +1152,635 @@ mod tests {
         let _ignored: Option<RebasePlan> = result;
         assert!(builder.touched_paths_cache.contains_key(&test1_oid));
         assert!(builder2.touched_paths_cache.contains_key(&test1_oid));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_plan_moving_subtree_again_overrides_previous_move() -> eyre::Result<()> {
+        let git = make_git()?;
+        git.init_repo()?;
+        git.detach_head()?;
+        let test1_oid = git.commit_file("test1", 1)?;
+        let test2_oid = git.commit_file("test2", 2)?;
+        git.commit_file("test3", 3)?;
+        let test4_oid = git.commit_file("test4", 4)?;
+
+        create_and_execute_plan(&git, move |builder: &mut RebasePlanBuilder| {
+            builder.move_subtree(test4_oid, test1_oid)?;
+            builder.move_subtree(test4_oid, test2_oid)?;
+            Ok(())
+        })?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        o 62fc20d create test1.txt
+        |
+        o 96d1c37 create test2.txt
+        |\
+        | @ 8556cef create test4.txt
+        |
+        o 70deb1e create test3.txt
+        "###);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_plan_moving_subtree_within_moved_subtree() -> eyre::Result<()> {
+        let git = make_git()?;
+        git.init_repo()?;
+        git.detach_head()?;
+        let test1_oid = git.commit_file("test1", 1)?;
+        git.commit_file("test2", 2)?;
+        let test3_oid = git.commit_file("test3", 3)?;
+        let test4_oid = git.commit_file("test4", 4)?;
+
+        create_and_execute_plan(&git, move |builder: &mut RebasePlanBuilder| {
+            builder.move_subtree(test3_oid, test1_oid)?;
+            builder.move_subtree(test4_oid, test1_oid)?;
+            Ok(())
+        })?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        o 62fc20d create test1.txt
+        |\
+        | @ 8e71a64 create test4.txt
+        |\
+        | o ad2c2fc create test3.txt
+        |
+        o 96d1c37 create test2.txt
+        "###);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_plan_moving_subtree_within_moved_subtree_in_other_order() -> eyre::Result<()> {
+        let git = make_git()?;
+        git.init_repo()?;
+        git.detach_head()?;
+        let test1_oid = git.commit_file("test1", 1)?;
+        git.commit_file("test2", 2)?;
+        let test3_oid = git.commit_file("test3", 3)?;
+        let test4_oid = git.commit_file("test4", 4)?;
+
+        create_and_execute_plan(&git, move |builder: &mut RebasePlanBuilder| {
+            builder.move_subtree(test4_oid, test1_oid)?;
+            builder.move_subtree(test3_oid, test1_oid)?;
+            Ok(())
+        })?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        o 62fc20d create test1.txt
+        |\
+        | @ 8e71a64 create test4.txt
+        |\
+        | o ad2c2fc create test3.txt
+        |
+        o 96d1c37 create test2.txt
+        "###);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_plan_moving_commit_again_overrides_previous_move() -> eyre::Result<()> {
+        let git = make_git()?;
+        git.init_repo()?;
+        git.detach_head()?;
+        let test1_oid = git.commit_file("test1", 1)?;
+        let test2_oid = git.commit_file("test2", 2)?;
+        git.commit_file("test3", 3)?;
+        let test4_oid = git.commit_file("test4", 4)?;
+
+        create_and_execute_plan(&git, move |builder: &mut RebasePlanBuilder| {
+            builder.move_commit(test4_oid, test1_oid)?;
+            builder.move_commit(test4_oid, test2_oid)?;
+            Ok(())
+        })?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        o 62fc20d create test1.txt
+        |
+        o 96d1c37 create test2.txt
+        |\
+        | @ 8556cef create test4.txt
+        |
+        o 70deb1e create test3.txt
+        "###);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_plan_moving_nonconsecutive_commits() -> eyre::Result<()> {
+        let git = make_git()?;
+        git.init_repo()?;
+        git.detach_head()?;
+        let test1_oid = git.commit_file("test1", 1)?;
+        git.commit_file("test2", 2)?;
+        let test3_oid = git.commit_file("test3", 3)?;
+        git.commit_file("test4", 4)?;
+        let test5_oid = git.commit_file("test5", 5)?;
+        git.commit_file("test6", 6)?;
+
+        git.run(&["smartlog"])?;
+
+        create_and_execute_plan(&git, move |builder: &mut RebasePlanBuilder| {
+            builder.move_commit(test3_oid, test1_oid)?;
+            builder.move_commit(test5_oid, test1_oid)?;
+            Ok(())
+        })?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        o 62fc20d create test1.txt
+        |\
+        | o 4ec3989 create test5.txt
+        |\
+        | o ad2c2fc create test3.txt
+        |
+        o 96d1c37 create test2.txt
+        |
+        o 8556cef create test4.txt
+        |
+        @ 0a34830 create test6.txt
+        "###);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_plan_moving_consecutive_commits() -> eyre::Result<()> {
+        let git = make_git()?;
+        git.init_repo()?;
+        git.detach_head()?;
+        let test1_oid = git.commit_file("test1", 1)?;
+        git.commit_file("test2", 2)?;
+        let test3_oid = git.commit_file("test3", 3)?;
+        let test4_oid = git.commit_file("test4", 4)?;
+        git.commit_file("test5", 5)?;
+
+        create_and_execute_plan(&git, move |builder: &mut RebasePlanBuilder| {
+            builder.move_commit(test3_oid, test1_oid)?;
+            builder.move_commit(test4_oid, test1_oid)?;
+            Ok(())
+        })?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        o 62fc20d create test1.txt
+        |\
+        | o 8e71a64 create test4.txt
+        |\
+        | o ad2c2fc create test3.txt
+        |
+        o 96d1c37 create test2.txt
+        |
+        @ f26f28e create test5.txt
+        "###);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_plan_moving_consecutive_commits_in_other_order() -> eyre::Result<()> {
+        let git = make_git()?;
+        git.init_repo()?;
+        git.detach_head()?;
+        let test1_oid = git.commit_file("test1", 1)?;
+        git.commit_file("test2", 2)?;
+        let test3_oid = git.commit_file("test3", 3)?;
+        let test4_oid = git.commit_file("test4", 4)?;
+        git.commit_file("test5", 5)?;
+
+        create_and_execute_plan(&git, move |builder: &mut RebasePlanBuilder| {
+            builder.move_commit(test4_oid, test1_oid)?;
+            builder.move_commit(test3_oid, test1_oid)?;
+            Ok(())
+        })?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        o 62fc20d create test1.txt
+        |\
+        | o 8e71a64 create test4.txt
+        |\
+        | o ad2c2fc create test3.txt
+        |
+        o 96d1c37 create test2.txt
+        |
+        @ f26f28e create test5.txt
+        "###);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_plan_moving_commit_and_one_child_leaves_other_child() -> eyre::Result<()> {
+        let git = make_git()?;
+        git.init_repo()?;
+        git.detach_head()?;
+        let test1_oid = git.commit_file("test1", 1)?;
+        git.commit_file("test2", 2)?;
+        let test3_oid = git.commit_file("test3", 3)?;
+        git.detach_head()?;
+        let test4_oid = git.commit_file("test4", 4)?;
+        git.run(&["checkout", &test3_oid.to_string()])?;
+        git.commit_file("test5", 5)?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        o 62fc20d create test1.txt
+        |
+        o 96d1c37 create test2.txt
+        |
+        o 70deb1e create test3.txt
+        |\
+        | o 355e173 create test4.txt
+        |
+        @ 9ea1b36 create test5.txt
+        "###);
+
+        create_and_execute_plan(&git, move |builder: &mut RebasePlanBuilder| {
+            builder.move_commit(test3_oid, test1_oid)?;
+            builder.move_commit(test4_oid, test1_oid)?;
+            Ok(())
+        })?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        o 62fc20d create test1.txt
+        |\
+        | o 8e71a64 create test4.txt
+        |\
+        | o ad2c2fc create test3.txt
+        |
+        o 96d1c37 create test2.txt
+        |
+        @ f26f28e create test5.txt
+        "###);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_plan_moving_commit_add_then_giving_it_a_child() -> eyre::Result<()> {
+        let git = make_git()?;
+        git.init_repo()?;
+        git.detach_head()?;
+        let test1_oid = git.commit_file("test1", 1)?;
+        git.commit_file("test2", 2)?;
+        let test3_oid = git.commit_file("test3", 3)?;
+        git.commit_file("test4", 4)?;
+        let test5_oid = git.commit_file("test5", 5)?;
+
+        create_and_execute_plan(&git, move |builder: &mut RebasePlanBuilder| {
+            builder.move_commit(test3_oid, test1_oid)?;
+            builder.move_commit(test5_oid, test3_oid)?;
+            Ok(())
+        })?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        o 62fc20d create test1.txt
+        |\
+        | o ad2c2fc create test3.txt
+        | |
+        | @ ee4aebf create test5.txt
+        |
+        o 96d1c37 create test2.txt
+        |
+        o 8556cef create test4.txt
+        "###);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_plan_moving_range_again_overrides_previous_move() -> eyre::Result<()> {
+        let git = make_git()?;
+        git.init_repo()?;
+        git.detach_head()?;
+        let test1_oid = git.commit_file("test1", 1)?;
+        let test2_oid = git.commit_file("test2", 2)?;
+        git.commit_file("test3", 3)?;
+        let test4_oid = git.commit_file("test4", 4)?;
+        let test5_oid = git.commit_file("test5", 5)?;
+        git.commit_file("test6", 6)?;
+
+        create_and_execute_plan(&git, move |builder: &mut RebasePlanBuilder| {
+            builder.move_range(test4_oid, test5_oid, test1_oid)?;
+            builder.move_range(test4_oid, test5_oid, test2_oid)?;
+            Ok(())
+        })?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        o 62fc20d create test1.txt
+        |
+        o 96d1c37 create test2.txt
+        |\
+        | o 8556cef create test4.txt
+        | |
+        | o 566236a create test5.txt
+        |
+        o 70deb1e create test3.txt
+        |
+        @ 35928ae create test6.txt
+        "###);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_plan_moving_range_and_then_partial_beginning_range_again() -> eyre::Result<()> {
+        let git = make_git()?;
+        git.init_repo()?;
+        git.detach_head()?;
+        let test1_oid = git.commit_file("test1", 1)?;
+        git.commit_file("test2", 2)?;
+        let test3_oid = git.commit_file("test3", 3)?;
+        let test4_oid = git.commit_file("test4", 4)?;
+        let test5_oid = git.commit_file("test5", 5)?;
+        git.commit_file("test6", 6)?;
+
+        create_and_execute_plan(&git, move |builder: &mut RebasePlanBuilder| {
+            builder.move_range(test3_oid, test5_oid, test1_oid)?;
+            builder.move_range(test3_oid, test4_oid, test1_oid)?;
+            Ok(())
+        })?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+
+        // FIXME This output is correct mathematically, but feels like it should
+        // be incorrect. What *should* we be doing if the user moves 2 ranges w/
+        // the same source/root oid but different end oids??
+        //
+        // NOTE See also the next test for the other case: where the end of the
+        // range is moved again. That *does* feel correct.
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        o 62fc20d create test1.txt
+        |\
+        | o ad2c2fc create test3.txt
+        | |
+        | o 2b45b52 create test4.txt
+        |
+        o 96d1c37 create test2.txt
+        |\
+        | @ 99a62a3 create test6.txt
+        |
+        o f26f28e create test5.txt
+        "###);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_plan_moving_range_and_then_partial_ending_range_again() -> eyre::Result<()> {
+        let git = make_git()?;
+        git.init_repo()?;
+        git.detach_head()?;
+        let test1_oid = git.commit_file("test1", 1)?;
+        git.commit_file("test2", 2)?;
+        let test3_oid = git.commit_file("test3", 3)?;
+        let test4_oid = git.commit_file("test4", 4)?;
+        let test5_oid = git.commit_file("test5", 5)?;
+        git.commit_file("test6", 6)?;
+
+        create_and_execute_plan(&git, move |builder: &mut RebasePlanBuilder| {
+            builder.move_range(test3_oid, test5_oid, test1_oid)?;
+            builder.move_range(test4_oid, test5_oid, test1_oid)?;
+            Ok(())
+        })?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        o 62fc20d create test1.txt
+        |\
+        | o 8e71a64 create test4.txt
+        | |
+        | o 3d57d30 create test5.txt
+        |\
+        | o ad2c2fc create test3.txt
+        |
+        o 96d1c37 create test2.txt
+        |
+        @ 99a62a3 create test6.txt
+        "###);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_plan_moving_subtree_and_commit_within_subtree() -> eyre::Result<()> {
+        let git = make_git()?;
+        git.init_repo()?;
+        git.detach_head()?;
+        let test1_oid = git.commit_file("test1", 1)?;
+        let _test2_oid = git.commit_file("test2", 2)?;
+        let test3_oid = git.commit_file("test3", 3)?;
+        let test4_oid = git.commit_file("test4", 4)?;
+        let _test5_oid = git.commit_file("test5", 5)?;
+
+        create_and_execute_plan(&git, move |builder: &mut RebasePlanBuilder| {
+            builder.move_subtree(test3_oid, test1_oid)?;
+            builder.move_commit(test4_oid, test1_oid)?;
+            Ok(())
+        })?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        o 62fc20d create test1.txt
+        |\
+        | o 8e71a64 create test4.txt
+        |\
+        | o ad2c2fc create test3.txt
+        | |
+        | @ ee4aebf create test5.txt
+        |
+        o 96d1c37 create test2.txt
+        "###);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_plan_moving_subtree_and_then_its_parent_commit() -> eyre::Result<()> {
+        let git = make_git()?;
+        git.init_repo()?;
+        git.detach_head()?;
+        let test1_oid = git.commit_file("test1", 1)?;
+        let _test2_oid = git.commit_file("test2", 2)?;
+        let test3_oid = git.commit_file("test3", 3)?;
+        let test4_oid = git.commit_file("test4", 4)?;
+        let _test5_oid = git.commit_file("test5", 5)?;
+
+        create_and_execute_plan(&git, move |builder: &mut RebasePlanBuilder| {
+            builder.move_subtree(test4_oid, test1_oid)?;
+            builder.move_commit(test3_oid, test1_oid)?;
+            Ok(())
+        })?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        o 62fc20d create test1.txt
+        |\
+        | o 8e71a64 create test4.txt
+        | |
+        | @ 3d57d30 create test5.txt
+        |\
+        | o ad2c2fc create test3.txt
+        |
+        o 96d1c37 create test2.txt
+        "###);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_plan_moving_subtree_to_descendant_of_itself() -> eyre::Result<()> {
+        let git = make_git()?;
+        git.init_repo()?;
+        git.detach_head()?;
+        let _test1_oid = git.commit_file("test1", 1)?;
+        let test2_oid = git.commit_file("test2", 2)?;
+        let test3_oid = git.commit_file("test3", 3)?;
+        let _test4_oid = git.commit_file("test4", 4)?;
+        let test5_oid = git.commit_file("test5", 5)?;
+
+        create_and_execute_plan(&git, move |builder: &mut RebasePlanBuilder| {
+            builder.move_subtree(test3_oid, test5_oid)?;
+            builder.move_subtree(test5_oid, test2_oid)?;
+            Ok(())
+        })?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        o 62fc20d create test1.txt
+        |
+        o 96d1c37 create test2.txt
+        |
+        @ f26f28e create test5.txt
+        |
+        o 2b42d9c create test3.txt
+        |
+        o c533a65 create test4.txt
+        "###);
+
+        Ok(())
+    }
+
+    /// Helper function to handle the boilerplate involved in creating, building
+    /// and executing the rebase plan.
+    fn create_and_execute_plan(
+        git: &Git,
+        builder_callback_fn: impl Fn(&mut RebasePlanBuilder) -> eyre::Result<()>,
+    ) -> eyre::Result<()> {
+        let effects = Effects::new_suppress_for_test(Glyphs::text());
+        let repo = git.get_repo()?;
+        let conn = repo.get_db_conn()?;
+        let event_log_db = EventLogDb::new(&conn)?;
+        let event_replayer = EventReplayer::from_event_log_db(&effects, &repo, &event_log_db)?;
+        let event_cursor = event_replayer.make_default_cursor();
+        let references_snapshot = repo.get_references_snapshot()?;
+        let dag = Dag::open_and_sync(
+            &effects,
+            &repo,
+            &event_replayer,
+            event_cursor,
+            &references_snapshot,
+        )?;
+
+        let pool = ThreadPoolBuilder::new().build()?;
+        let repo_pool = RepoPool::new(RepoResource {
+            repo: Mutex::new(repo.try_clone()?),
+        });
+        let mut builder = RebasePlanBuilder::new(&dag);
+
+        builder_callback_fn(&mut builder)?;
+
+        let build_result = builder.build(
+            &effects,
+            &pool,
+            &repo_pool,
+            &BuildRebasePlanOptions {
+                dump_rebase_constraints: false,
+                dump_rebase_plan: false,
+                detect_duplicate_commits_via_patch_id: true,
+            },
+        )?;
+
+        let rebase_plan = match build_result {
+            Ok(None) => return Ok(()),
+            Ok(Some(rebase_plan)) => rebase_plan,
+            Err(rebase_plan_error) => {
+                eyre::bail!("Error building rebase plan: {:#?}", rebase_plan_error)
+            }
+        };
+
+        let now = SystemTime::UNIX_EPOCH;
+        let options = ExecuteRebasePlanOptions {
+            now,
+            event_tx_id: event_log_db.make_transaction_id(now, "test plan")?,
+            preserve_timestamps: false,
+            force_in_memory: true,
+            force_on_disk: false,
+            resolve_merge_conflicts: false,
+            check_out_commit_options: CheckOutCommitOptions {
+                additional_args: Default::default(),
+                render_smartlog: false,
+            },
+        };
+        let git_run_info = git.get_git_run_info();
+        let result = execute_rebase_plan(
+            &effects,
+            &git_run_info,
+            &repo,
+            &event_log_db,
+            &rebase_plan,
+            &options,
+        )?;
+        assert!(matches!(
+            result,
+            ExecuteRebasePlanResult::Succeeded { rewritten_oids: _ }
+        ));
 
         Ok(())
     }
