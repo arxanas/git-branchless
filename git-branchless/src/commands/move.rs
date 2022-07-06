@@ -3,6 +3,7 @@
 //! Under the hood, this makes use of Git's advanced rebase functionality, which
 //! is also used to preserve merge commits using the `--rebase-merges` option.
 
+use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fmt::Write;
 use std::time::SystemTime;
@@ -59,6 +60,7 @@ pub fn r#move(
     sources: Vec<Revset>,
     dest: Option<Revset>,
     bases: Vec<Revset>,
+    ranges: Vec<Revset>,
     insert: bool,
     move_options: &MoveOptions,
 ) -> eyre::Result<ExitCode> {
@@ -103,6 +105,52 @@ pub fn r#move(
             return Ok(ExitCode(1));
         }
     };
+    let range_oids = {
+        let mut range_oids: HashMap<NonZeroOid, NonZeroOid> = HashMap::new();
+        for range in ranges.iter() {
+            let commit_set = match resolve_commits(effects, &repo, &mut dag, vec![range.clone()]) {
+                Ok(commit_sets) => union_all(&commit_sets),
+                Err(err) => {
+                    err.describe(effects)?;
+                    return Ok(ExitCode(1));
+                }
+            };
+
+            let source_roots: CommitSet = dag.query().roots(commit_set.clone())?;
+            let source_root = match commit_set_to_vec_unsorted(&source_roots)?.as_slice() {
+                [oid] => *oid,
+                other => {
+                    let Revset(expr) = range;
+                    writeln!(
+                        effects.get_error_stream(),
+                        // FIXME wrap this @ 80 chars
+                        "The --range flag can only be used to move ranges with exactly 1 root (got {}): {}",
+                        other.len(),
+                        expr
+                    )?;
+                    return Ok(ExitCode(1));
+                }
+            };
+            let source_heads: CommitSet = dag.query().heads(commit_set)?;
+            let source_head = match commit_set_to_vec_unsorted(&source_heads)?.as_slice() {
+                [oid] => *oid,
+                other => {
+                    let Revset(expr) = range;
+                    writeln!(
+                    effects.get_error_stream(),
+                        // FIXME wrap this @ 80 chars
+                        "The --range flag can only be used to move ranges with exactly 1 head (got {}): {}",
+                        other.len(),
+                        expr
+                    )?;
+                    return Ok(ExitCode(1));
+                }
+            };
+            range_oids.insert(source_root, source_head);
+        }
+        range_oids
+    };
+
     let dest_oid: NonZeroOid = match resolve_commits(effects, &repo, &mut dag, vec![dest.clone()]) {
         Ok(commit_sets) => match commit_set_to_vec_unsorted(&commit_sets[0])?.as_slice() {
             [only_commit_oid] => *only_commit_oid,
@@ -134,11 +182,11 @@ pub fn r#move(
     };
     let source_oids = source_oids.union(&base_oids);
 
-    let source_oids = if source_oids.is_empty()? {
+    let source_oids = if source_oids.is_empty()? && range_oids.is_empty() {
         match head_oid {
             Some(head_oid) => CommitSet::from(head_oid),
             None => {
-                writeln!(effects.get_output_stream(), "No --source or --base arguments were provided, and no OID for HEAD is available as a default")?;
+                writeln!(effects.get_output_stream(), "No --source, --base or --range arguments were provided, and no OID for HEAD is available as a default")?;
                 return Ok(ExitCode(1));
             }
         }
@@ -164,6 +212,30 @@ pub fn r#move(
         let source_roots = dag.query().roots(source_oids.clone())?;
         for source_root in commit_set_to_vec_unsorted(&source_roots)? {
             builder.move_subtree(source_root, dest_oid)?;
+        }
+
+        for (range_root, range_head) in range_oids.iter() {
+            let source_parent = match dag.get_only_parent_oid(*range_root) {
+                Ok(oid) => oid,
+                Err(_) => {
+                    writeln!(
+                        effects.get_output_stream(),
+                        "The --range flag can only be used to move ranges with exactly 1 parent."
+                    )?;
+                    return Ok(ExitCode(1));
+                }
+            };
+
+            let range_children: CommitSet = dag
+                .query()
+                .children(CommitSet::from(*range_head))?
+                .difference(&dag.obsolete_commits);
+
+            for range_child in commit_set_to_vec_unsorted(&range_children)? {
+                builder.move_subtree(range_child, source_parent)?;
+            }
+
+            builder.move_range(*range_root, *range_head, dest_oid)?;
         }
 
         if insert {
@@ -197,7 +269,7 @@ pub fn r#move(
                         // subtree being moved, then we should only move the commit
                         // range *up to* the source subtree, not the entire child
                         // subtree.
-                        let source_parent = match dag.get_only_parent_oid(source_root.into()) {
+                        let source_parent = match dag.get_only_parent_oid(source_root) {
                             Ok(oid) => oid,
                             Err(_) => {
                                 writeln!(

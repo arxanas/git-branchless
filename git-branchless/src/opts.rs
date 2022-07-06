@@ -291,6 +291,17 @@ pub enum Command {
         )]
         base: Vec<Revset>,
 
+        /// The range of commits to move. This range must have only 1 parent, 1
+        /// root and 1 head. Any children of the range will be moved onto the
+        /// range's parent.
+        #[clap(
+            action(clap::ArgAction::Append),
+            short = 'r',
+            long = "range",
+            conflicts_with_all(&["source", "base"])
+        )]
+        range: Vec<Revset>,
+
         /// The destination commit to move all source commits onto. If not
         /// provided, defaults to the current commit.
         #[clap(value_parser, short = 'd', long = "dest")]

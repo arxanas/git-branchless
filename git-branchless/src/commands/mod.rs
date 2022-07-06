@@ -209,6 +209,7 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
             source,
             dest,
             base,
+            range,
             insert,
             move_options,
         } => r#move::r#move(
@@ -217,6 +218,7 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
             source,
             dest,
             base,
+            range,
             insert,
             &move_options,
         )?,
