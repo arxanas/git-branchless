@@ -302,6 +302,16 @@ pub enum Command {
         )]
         range: Vec<Revset>,
 
+        /// The single commit to move. Any children of the commit will be moved
+        /// onto its parent.
+        #[clap(
+            action(clap::ArgAction::Append),
+            short = 'e',
+            long = "exact",
+            conflicts_with_all(&["source", "base", "range"])
+        )]
+        exact: Vec<Revset>,
+
         /// The destination commit to move all source commits onto. If not
         /// provided, defaults to the current commit.
         #[clap(value_parser, short = 'd', long = "dest")]

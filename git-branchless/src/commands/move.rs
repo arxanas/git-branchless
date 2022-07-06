@@ -61,6 +61,7 @@ pub fn r#move(
     dest: Option<Revset>,
     bases: Vec<Revset>,
     ranges: Vec<Revset>,
+    exacts: Vec<Revset>,
     insert: bool,
     move_options: &MoveOptions,
 ) -> eyre::Result<ExitCode> {
@@ -148,6 +149,18 @@ pub fn r#move(
             };
             range_oids.insert(source_root, source_head);
         }
+
+        let exact_oids: CommitSet = match resolve_commits(effects, &repo, &mut dag, exacts) {
+            Ok(commit_sets) => union_all(&commit_sets),
+            Err(err) => {
+                err.describe(effects)?;
+                return Ok(ExitCode(1));
+            }
+        };
+        for exact_oid in commit_set_to_vec_unsorted(&exact_oids)? {
+            range_oids.insert(exact_oid, exact_oid);
+        }
+
         range_oids
     };
 
@@ -220,7 +233,7 @@ pub fn r#move(
                 Err(_) => {
                     writeln!(
                         effects.get_output_stream(),
-                        "The --range flag can only be used to move ranges with exactly 1 parent."
+                        "The --range and --exact flag can only be used to move ranges or commits with exactly 1 parent.",
                     )?;
                     return Ok(ExitCode(1));
                 }
