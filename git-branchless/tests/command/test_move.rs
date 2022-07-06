@@ -2026,6 +2026,102 @@ fn test_move_merge_commit() -> eyre::Result<()> {
 }
 
 #[test]
+fn test_move_merge_commit_both_parents() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    git.detach_head()?;
+    let test1_oid = git.commit_file("test1", 1)?;
+    let _test2_oid = git.commit_file("test2", 2)?;
+    let test3_oid = git.commit_file("test3", 3)?;
+    let test4_oid = git.commit_file("test4", 4)?;
+    git.run(&["checkout", "HEAD~"])?;
+    git.commit_file("test5", 5)?;
+    git.run(&["merge", &test4_oid.to_string()])?;
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        o 62fc20d create test1.txt
+        |
+        o 96d1c37 create test2.txt
+        |
+        o 70deb1e create test3.txt
+        |\
+        | o 355e173 create test4.txt
+        | |
+        | @ 8fb706a Merge commit '355e173bf9c5d2efac2e451da0cdad3fb82b869a' into HEAD
+        |
+        o 9ea1b36 create test5.txt
+        |
+        @ 8fb706a Merge commit '355e173bf9c5d2efac2e451da0cdad3fb82b869a' into HEAD
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&[
+            "move",
+            "-s",
+            &test3_oid.to_string(),
+            "-d",
+            &test1_oid.to_string(),
+        ])?;
+        // FIXME: this operation should successfully move the merge commit.
+        insta::assert_snapshot!(stdout, @r###"
+        Attempting rebase in-memory...
+        [1/3] Committed as: 4838e49 create test3.txt
+        [2/3] Committed as: a248207 create test4.txt
+        [3/3] Committed as: b1f9efa create test5.txt
+        branchless: processing 3 rewritten commits
+        branchless: This operation abandoned 1 commit!
+        branchless: Consider running one of the following:
+        branchless:   - git restack: re-apply the abandoned commits/branches
+        branchless:     (this is most likely what you want to do)
+        branchless:   - git smartlog: assess the situation
+        branchless:   - git hide [<commit>...]: hide the commits from the smartlog
+        branchless:   - git undo: undo the operation
+        branchless:   - git config branchless.restack.warnAbandoned false: suppress this message
+        In-memory rebase succeeded.
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        o 62fc20d create test1.txt
+        |\
+        | o 96d1c37 create test2.txt
+        | |
+        | x 70deb1e (rewritten as 4838e49b) create test3.txt
+        | |\
+        | | x 355e173 (rewritten as a2482074) create test4.txt
+        | | |
+        | | @ 8fb706a Merge commit '355e173bf9c5d2efac2e451da0cdad3fb82b869a' into HEAD
+        | |
+        | x 9ea1b36 (rewritten as b1f9efa0) create test5.txt
+        | |
+        | @ 8fb706a Merge commit '355e173bf9c5d2efac2e451da0cdad3fb82b869a' into HEAD
+        |
+        o 4838e49 create test3.txt
+        |\
+        | o a248207 create test4.txt
+        |
+        o b1f9efa create test5.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_move_orphaned_root() -> eyre::Result<()> {
     let git = make_git()?;
 
