@@ -125,6 +125,14 @@ fn test_query_branches() -> eyre::Result<()> {
         "###);
     }
 
+    {
+        let (stdout, _stderr) = git.run(&["branchless", "query", "branches()"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        70deb1e28791d8e7dd5a1f0c871a51b91282562f
+        62fc20d2a290daea0d52bdc2ed2ad4be6491010e
+        "###);
+    }
+
     Ok(())
 }
 
