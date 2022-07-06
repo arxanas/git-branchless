@@ -18,6 +18,14 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
+      - name: Forbid nocommit string
+        run: |
+          if results=$(git grep --column --line-number --only-matching '@''nocommit'); then
+            echo "$results"
+            awk <<<"$results" -F ':' '{ print "::error file=" $1 ",line=" $2 ",col=" $3 "::Illegal string: " $4 }'
+            exit 1
+          fi
+
       - name: Set up Rust
         uses: actions-rs/toolchain@v1
         with:
