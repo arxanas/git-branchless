@@ -232,7 +232,21 @@ pub fn r#move(
                 .difference(&dag.obsolete_commits);
 
             for range_child in commit_set_to_vec_unsorted(&range_children)? {
-                builder.move_subtree(range_child, source_parent)?;
+                // If the range being extracted has any child commits, then we
+                // need to move each of those subtrees up to the parent commit
+                // of the range. If, however, we're inserting the range and the
+                // destination commit is in one of those subtrees, then we
+                // should only move the commits from the root of that child
+                // subtree up to (and including) the destination commmit.
+                if insert
+                    && dag
+                        .query()
+                        .is_ancestor(range_child.into(), dest_oid.into())?
+                {
+                    builder.move_range(range_child, dest_oid, source_parent)?;
+                } else {
+                    builder.move_subtree(range_child, source_parent)?;
+                }
             }
 
             builder.move_range(*range_root, *range_head, dest_oid)?;
@@ -240,14 +254,17 @@ pub fn r#move(
 
         if insert {
             let source_head = {
-                let source_heads: CommitSet =
-                    dag.query().heads(dag.query().descendants(source_oids)?)?;
-                match commit_set_to_vec_unsorted(&source_heads)?[..] {
-                    [oid] => oid,
+                let range_heads: CommitSet = range_oids.values().cloned().into_iter().collect();
+                let source_heads: CommitSet = dag
+                    .query()
+                    .heads(dag.query().descendants(source_oids)?)?
+                    .union(&range_heads);
+                match commit_set_to_vec_unsorted(&source_heads)?.as_slice() {
+                    [oid] => *oid,
                     _ => {
                         writeln!(
                             effects.get_output_stream(),
-                            "The --insert flag cannot be used when moving subtrees with multiple heads."
+                            "The --insert flag cannot be used when moving subtrees or ranges with multiple heads."
                         )?;
                         return Ok(ExitCode(1));
                     }
@@ -259,6 +276,8 @@ pub fn r#move(
                 .children(CommitSet::from(dest_oid))?
                 .difference(&dag.obsolete_commits);
 
+            let range_roots: CommitSet = range_oids.keys().cloned().into_iter().collect();
+            let source_roots = source_roots.union(&range_roots);
             for dest_child in commit_set_to_vec_unsorted(&dest_children)? {
                 for source_root in commit_set_to_vec_unsorted(&source_roots)? {
                     if dag

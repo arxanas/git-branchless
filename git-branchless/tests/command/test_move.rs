@@ -335,6 +335,92 @@ fn test_move_range_stick() -> eyre::Result<()> {
 }
 
 #[test]
+fn test_move_insert_range_stick() -> eyre::Result<()> {
+    let git = make_git()?;
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+    git.commit_file("test1", 1)?;
+    git.detach_head()?;
+    let test2_oid = git.commit_file("test2", 2)?;
+    let test3_oid = git.commit_file("test3", 3)?;
+    let test4_oid = git.commit_file("test4", 4)?;
+    git.commit_file("test5", 5)?;
+
+    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    :
+    O 62fc20d (master) create test1.txt
+    |
+    o 96d1c37 create test2.txt
+    |
+    o 70deb1e create test3.txt
+    |
+    o 355e173 create test4.txt
+    |
+    @ f81d55c create test5.txt
+    "###);
+
+    // --on-disk
+    {
+        let git = git.duplicate_repo()?;
+        git.run(&[
+            "move",
+            "--on-disk",
+            "--insert",
+            "--range",
+            &format!("{}:{}", test2_oid, test3_oid),
+            "-d",
+            &test4_oid.to_string(),
+        ])?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d (master) create test1.txt
+        |
+        o bf0d52a create test4.txt
+        |
+        o 44352d0 create test2.txt
+        |
+        o cf5eb24 create test3.txt
+        |
+        @ 4acfdad create test5.txt
+        "###);
+    }
+
+    // --in-memory
+    {
+        git.run(&[
+            "move",
+            "--in-memory",
+            "--insert",
+            "--range",
+            &format!("{}:{}", test2_oid, test3_oid),
+            "-d",
+            &test4_oid.to_string(),
+        ])?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d (master) create test1.txt
+        |
+        o bf0d52a create test4.txt
+        |
+        o 44352d0 create test2.txt
+        |
+        o cf5eb24 create test3.txt
+        |
+        @ 4acfdad create test5.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_move_tree() -> eyre::Result<()> {
     let git = make_git()?;
 
