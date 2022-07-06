@@ -56,35 +56,15 @@ fn resolve_base_commit(
 pub fn r#move(
     effects: &Effects,
     git_run_info: &GitRunInfo,
-    source: Option<Revset>,
+    sources: Vec<Revset>,
     dest: Option<Revset>,
-    base: Option<Revset>,
+    bases: Vec<Revset>,
     insert: bool,
     move_options: &MoveOptions,
 ) -> eyre::Result<ExitCode> {
     let repo = Repo::from_current_dir()?;
     let head_oid = repo.get_head_info()?.oid;
-    let (source, should_resolve_base_commits) = match (source, base) {
-        (Some(_), Some(_)) => {
-            writeln!(
-                effects.get_output_stream(),
-                "The --source and --base options cannot both be provided."
-            )?;
-            return Ok(ExitCode(1));
-        }
-        (Some(source), None) => (source, false),
-        (None, Some(base)) => (base, true),
-        (None, None) => {
-            let source_oid = match head_oid {
-                Some(oid) => oid,
-                None => {
-                    writeln!(effects.get_output_stream(), "No --source or --base argument was provided, and no OID for HEAD is available as a default")?;
-                    return Ok(ExitCode(1));
-                }
-            };
-            (Revset(source_oid.to_string()), true)
-        }
-    };
+
     let dest = match dest {
         Some(dest) => dest,
         None => match head_oid {
@@ -109,14 +89,20 @@ pub fn r#move(
         &references_snapshot,
     )?;
 
-    let source_oids: CommitSet =
-        match resolve_commits(effects, &repo, &mut dag, vec![source.clone()]) {
-            Ok(commit_sets) => union_all(&commit_sets),
-            Err(err) => {
-                err.describe(effects)?;
-                return Ok(ExitCode(1));
-            }
-        };
+    let source_oids: CommitSet = match resolve_commits(effects, &repo, &mut dag, sources) {
+        Ok(commit_sets) => union_all(&commit_sets),
+        Err(err) => {
+            err.describe(effects)?;
+            return Ok(ExitCode(1));
+        }
+    };
+    let base_oids: CommitSet = match resolve_commits(effects, &repo, &mut dag, bases) {
+        Ok(commit_sets) => union_all(&commit_sets),
+        Err(err) => {
+            err.describe(effects)?;
+            return Ok(ExitCode(1));
+        }
+    };
     let dest_oid: NonZeroOid = match resolve_commits(effects, &repo, &mut dag, vec![dest.clone()]) {
         Ok(commit_sets) => match commit_set_to_vec_unsorted(&commit_sets[0])?.as_slice() {
             [only_commit_oid] => *only_commit_oid,
@@ -137,15 +123,25 @@ pub fn r#move(
         }
     };
 
-    let source_oids = if should_resolve_base_commits {
+    let base_oids = {
         let mut result = Vec::new();
-        for source_oid in commit_set_to_vec_unsorted(&source_oids)? {
-            let merge_base_oid =
-                dag.get_one_merge_base_oid(effects, &repo, source_oid, dest_oid)?;
-            let base_commit_oid = resolve_base_commit(&dag, merge_base_oid, source_oid)?;
+        for base_oid in commit_set_to_vec_unsorted(&base_oids)? {
+            let merge_base_oid = dag.get_one_merge_base_oid(effects, &repo, base_oid, dest_oid)?;
+            let base_commit_oid = resolve_base_commit(&dag, merge_base_oid, base_oid)?;
             result.push(CommitSet::from(base_commit_oid))
         }
         union_all(&result)
+    };
+    let source_oids = source_oids.union(&base_oids);
+
+    let source_oids = if source_oids.is_empty()? {
+        match head_oid {
+            Some(head_oid) => CommitSet::from(head_oid),
+            None => {
+                writeln!(effects.get_output_stream(), "No --source or --base arguments were provided, and no OID for HEAD is available as a default")?;
+                return Ok(ExitCode(1));
+            }
+        }
     } else {
         source_oids
     };
