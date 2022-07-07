@@ -153,6 +153,11 @@ fn eval_inner(ctx: &mut Context, expr: &Expr) -> EvalResult {
                 Ok(ctx.dag.query().parents(expr)?)
             }
 
+            "branches" => {
+                eval0(ctx, name, args)?;
+                Ok(ctx.dag.branch_commits.clone())
+            }
+
             "draft" => {
                 eval0(ctx, name, args)?;
                 let draft_commits = ctx.query_draft_commits()?;
