@@ -16,7 +16,7 @@ use tracing::instrument;
 use crate::opts::{MoveOptions, Revset};
 use crate::revset::resolve_commits;
 use lib::core::config::get_restack_preserve_timestamps;
-use lib::core::dag::{commit_set_to_vec_unsorted, CommitSet, Dag};
+use lib::core::dag::{commit_set_to_vec_unsorted, union_all, CommitSet, Dag};
 use lib::core::effects::Effects;
 use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::rewrite::{
@@ -64,7 +64,7 @@ pub fn r#move(
 ) -> eyre::Result<ExitCode> {
     let repo = Repo::from_current_dir()?;
     let head_oid = repo.get_head_info()?.oid;
-    let (source, should_resolve_base_commit) = match (source, base) {
+    let (source, should_resolve_base_commits) = match (source, base) {
         (Some(_), Some(_)) => {
             writeln!(
                 effects.get_output_stream(),
@@ -109,21 +109,9 @@ pub fn r#move(
         &references_snapshot,
     )?;
 
-    let source_oid: NonZeroOid =
+    let source_oids: CommitSet =
         match resolve_commits(effects, &repo, &mut dag, vec![source.clone()]) {
-            Ok(commit_sets) => match commit_set_to_vec_unsorted(&commit_sets[0])?.as_slice() {
-                [only_commit_oid] => *only_commit_oid,
-                other => {
-                    let Revset(expr) = source;
-                    writeln!(
-                        effects.get_error_stream(),
-                        "Expected revset to expand to exactly 1 commit (got {}): {}",
-                        other.len(),
-                        expr,
-                    )?;
-                    return Ok(ExitCode(1));
-                }
-            },
+            Ok(commit_sets) => union_all(&commit_sets),
             Err(err) => {
                 err.describe(effects)?;
                 return Ok(ExitCode(1));
@@ -149,11 +137,17 @@ pub fn r#move(
         }
     };
 
-    let source_oid = if should_resolve_base_commit {
-        let merge_base_oid = dag.get_one_merge_base_oid(effects, &repo, source_oid, dest_oid)?;
-        resolve_base_commit(&dag, merge_base_oid, source_oid)?
+    let source_oids = if should_resolve_base_commits {
+        let mut result = Vec::new();
+        for source_oid in commit_set_to_vec_unsorted(&source_oids)? {
+            let merge_base_oid =
+                dag.get_one_merge_base_oid(effects, &repo, source_oid, dest_oid)?;
+            let base_commit_oid = resolve_base_commit(&dag, merge_base_oid, source_oid)?;
+            result.push(CommitSet::from(base_commit_oid))
+        }
+        union_all(&result)
     } else {
-        source_oid
+        source_oids
     };
 
     let MoveOptions {
@@ -171,13 +165,15 @@ pub fn r#move(
     let rebase_plan = {
         let mut builder = RebasePlanBuilder::new(&dag);
 
-        builder.move_subtree(source_oid, dest_oid)?;
+        let source_roots = dag.query().roots(source_oids.clone())?;
+        for source_root in commit_set_to_vec_unsorted(&source_roots)? {
+            builder.move_subtree(source_root, dest_oid)?;
+        }
 
         if insert {
             let source_head = {
-                let source_heads: CommitSet = dag
-                    .query()
-                    .heads(dag.query().descendants(CommitSet::from(source_oid))?)?;
+                let source_heads: CommitSet =
+                    dag.query().heads(dag.query().descendants(source_oids)?)?;
                 match commit_set_to_vec_unsorted(&source_heads)?[..] {
                     [oid] => oid,
                     _ => {
@@ -196,27 +192,29 @@ pub fn r#move(
                 .difference(&dag.obsolete_commits);
 
             for dest_child in commit_set_to_vec_unsorted(&dest_children)? {
-                if dag
-                    .query()
-                    .is_ancestor(dest_child.into(), source_oid.into())?
-                {
-                    // If this child subtree actually contains the source
-                    // subtree being moved, then we should only move the commit
-                    // range *up to* the source subtree, not the entire child
-                    // subtree.
-                    let source_parent = match dag.get_only_parent_oid(source_oid) {
-                        Ok(oid) => oid,
-                        Err(_) => {
-                            writeln!(
+                for source_root in commit_set_to_vec_unsorted(&source_roots)? {
+                    if dag
+                        .query()
+                        .is_ancestor(dest_child.into(), source_root.into())?
+                    {
+                        // If this child subtree actually contains the source
+                        // subtree being moved, then we should only move the commit
+                        // range *up to* the source subtree, not the entire child
+                        // subtree.
+                        let source_parent = match dag.get_only_parent_oid(source_root.into()) {
+                            Ok(oid) => oid,
+                            Err(_) => {
+                                writeln!(
                                     effects.get_output_stream(),
                                     "The --insert flag can only be used when moving subtrees with exactly 1 parent."
                                 )?;
-                            return Ok(ExitCode(1));
-                        }
-                    };
-                    builder.move_range(dest_child, source_parent, source_head)?;
-                } else {
-                    builder.move_subtree(dest_child, source_head)?;
+                                return Ok(ExitCode(1));
+                            }
+                        };
+                        builder.move_range(dest_child, source_parent, source_head)?;
+                    } else {
+                        builder.move_subtree(dest_child, source_head)?;
+                    }
                 }
             }
         }
