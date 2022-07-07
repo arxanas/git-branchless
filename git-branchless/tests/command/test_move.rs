@@ -2516,28 +2516,88 @@ fn test_move_branch_on_merge_conflict_resolution() -> eyre::Result<()> {
 }
 
 #[test]
-fn test_move_multiple() -> eyre::Result<()> {
+fn test_move_revset() -> eyre::Result<()> {
     let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
     git.init_repo()?;
 
     git.commit_file("test1", 1)?;
+    git.detach_head()?;
     git.commit_file("test2", 2)?;
-    git.run(&["checkout", "-b", "foo"])?;
     git.commit_file("test3", 3)?;
-    git.run(&["checkout", "-b", "bar", "HEAD^"])?;
+    git.run(&["checkout", "--detach", "master"])?;
     git.commit_file("test4", 4)?;
+    git.run(&["checkout", "master"])?;
+    git.commit_file("test5", 5)?;
 
     {
-        let (stdout, stderr) = git.run_with_options(
-            &["move", "-s", "foo | bar", "-d", ".^^^"],
-            &GitRunOptions {
-                expected_exit_code: 1,
-                ..Default::default()
-            },
-        )?;
-        insta::assert_snapshot!(stderr, @"Expected revset to expand to exactly 1 commit (got 2): foo | bar
-");
-        insta::assert_snapshot!(stdout, @"");
+        let (stdout, _stderr) = git.run(&["move", "-s", "draft()", "-d", "master"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        Attempting rebase in-memory...
+        [1/3] Committed as: d895922 create test2.txt
+        [2/3] Committed as: f387c23 create test3.txt
+        [3/3] Committed as: 9cb6a30 create test4.txt
+        branchless: processing 3 rewritten commits
+        branchless: running command: <git-executable> checkout master
+        :
+        @ ea7aa06 (> master) create test5.txt
+        |\
+        | o d895922 create test2.txt
+        | |
+        | o f387c23 create test3.txt
+        |
+        o 9cb6a30 create test4.txt
+        In-memory rebase succeeded.
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_move_revset_non_continguous() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    git.commit_file("test1", 1)?;
+    git.detach_head()?;
+    let test2_oid = git.commit_file("test2", 2)?;
+    git.commit_file("test3", 3)?;
+    let test4_oid = git.commit_file("test4", 4)?;
+
+    {
+        let (stdout, _stderr) = git.run(&[
+            "move",
+            "-s",
+            &format!("{test2_oid} | {test4_oid}"),
+            "-d",
+            "master^",
+        ])?;
+        insta::assert_snapshot!(stdout, @r###"
+        Attempting rebase in-memory...
+        [1/3] Committed as: 8f7aef5 create test4.txt
+        [2/3] Committed as: fe65c1f create test2.txt
+        [3/3] Committed as: 0206717 create test3.txt
+        branchless: processing 3 rewritten commits
+        branchless: running command: <git-executable> checkout 8f7aef57d66466a6e0737ae10f67cd98ddecdc66
+        O f777ecc create initial.txt
+        |\
+        | o fe65c1f create test2.txt
+        | |
+        | o 0206717 create test3.txt
+        |\
+        | @ 8f7aef5 create test4.txt
+        |
+        O 62fc20d (master) create test1.txt
+        In-memory rebase succeeded.
+        "###);
     }
 
     Ok(())
