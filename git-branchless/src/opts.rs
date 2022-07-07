@@ -277,14 +277,19 @@ pub enum Command {
     Move {
         /// The source commit to move. This commit, and all of its descendants,
         /// will be moved.
-        #[clap(value_parser, short = 's', long = "source")]
-        source: Option<Revset>,
+        #[clap(action(clap::ArgAction::Append), short = 's', long = "source")]
+        source: Vec<Revset>,
 
         /// A commit inside a subtree to move. The entire subtree, starting from
         /// the main branch, will be moved, not just the commits descending from
         /// this commit.
-        #[clap(value_parser, short = 'b', long = "base", conflicts_with = "source")]
-        base: Option<Revset>,
+        #[clap(
+            action(clap::ArgAction::Append),
+            short = 'b',
+            long = "base",
+            conflicts_with = "source"
+        )]
+        base: Vec<Revset>,
 
         /// The destination commit to move all source commits onto. If not
         /// provided, defaults to the current commit.
