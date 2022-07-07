@@ -20,6 +20,6 @@ pub use repo::{
     ReferenceTarget, Repo, ResolvedReferenceInfo, Time,
 };
 pub use run::{GitRunInfo, GitRunOpts, GitRunResult};
-pub use snapshot::WorkingCopySnapshot;
+pub use snapshot::{WorkingCopyChangesType, WorkingCopySnapshot};
 pub use status::{FileMode, FileStatus, StatusEntry};
 pub use tree::{dehydrate_tree, hydrate_tree, Tree};

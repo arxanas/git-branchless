@@ -254,6 +254,7 @@ impl TryFrom<&[u8]> for StatusEntry {
 mod tests {
     use crate::core::effects::Effects;
     use crate::core::formatting::Glyphs;
+    use crate::git::WorkingCopyChangesType;
     use crate::testing::make_git;
 
     use super::*;
@@ -336,7 +337,10 @@ mod tests {
             &repo.get_head_info()?,
             None,
         )?;
-        assert!(!snapshot.has_conflicts()?);
+        assert_eq!(
+            snapshot.get_working_copy_changes_type()?,
+            WorkingCopyChangesType::None
+        );
         assert_eq!(status, vec![]);
         insta::assert_debug_snapshot!(snapshot, @r###"
         WorkingCopySnapshot {
@@ -403,7 +407,10 @@ mod tests {
             &repo.get_head_info()?,
             None,
         )?;
-        assert!(!snapshot.has_conflicts()?);
+        assert_eq!(
+            snapshot.get_working_copy_changes_type()?,
+            WorkingCopyChangesType::Staged
+        );
         assert_eq!(
             status,
             vec![
@@ -434,7 +441,7 @@ mod tests {
         WorkingCopySnapshot {
             base_commit: Commit {
                 inner: Commit {
-                    id: 401b3743f29e041c9c88a5f51a058582940a3be5,
+                    id: e378f780ff4d810e12d36e89334d8971d7add0d1,
                     summary: "branchless: automated working copy snapshot",
                 },
             },
@@ -457,7 +464,7 @@ mod tests {
             },
             commit_stage0: Commit {
                 inner: Commit {
-                    id: cdb88c2f2e1c271ba6227f4da2e4647ec6663646,
+                    id: ccfd588cf59116f67664ac718c404b09fc9e35d2,
                     summary: "branchless: working copy snapshot data: 3 changes in stage 0",
                 },
             },

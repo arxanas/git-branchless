@@ -13,6 +13,7 @@ use lib::core::effects::{Effects, OperationType};
 use lib::core::eventlog::EventLogDb;
 use lib::git::{
     process_diff_for_record, update_index, FileMode, GitRunInfo, Repo, Stage, UpdateIndexCommand,
+    WorkingCopyChangesType,
 };
 use lib::util::ExitCode;
 
@@ -28,16 +29,26 @@ pub fn record(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<Exit
         let (snapshot, _status) =
             repo.get_status(effects, git_run_info, &index, &head_info, Some(event_tx_id))?;
 
-        if snapshot.has_conflicts()? {
-            writeln!(
-                effects.get_output_stream(),
-                "Cannot select changes while there are unresolved merge conflicts."
-            )?;
-            writeln!(
-                effects.get_output_stream(),
-                "Resolve them and try again. Aborting."
-            )?;
-            return Ok(ExitCode(1));
+        match snapshot.get_working_copy_changes_type()? {
+            WorkingCopyChangesType::None => {
+                writeln!(
+                    effects.get_output_stream(),
+                    "There are no changes to tracked files in the working copy to commit."
+                )?;
+                return Ok(ExitCode(0));
+            }
+            WorkingCopyChangesType::Unstaged | WorkingCopyChangesType::Staged => {}
+            WorkingCopyChangesType::Conflicts => {
+                writeln!(
+                    effects.get_output_stream(),
+                    "Cannot commit changes while there are unresolved merge conflicts."
+                )?;
+                writeln!(
+                    effects.get_output_stream(),
+                    "Resolve them and try again. Aborting."
+                )?;
+                return Ok(ExitCode(1));
+            }
         }
 
         let (effects, _progress) = effects.start_operation(OperationType::CalculateDiff);
@@ -52,12 +63,7 @@ pub fn record(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<Exit
         )?;
         process_diff_for_record(&repo, &diff)?
     };
-    let record_state = if files.is_empty() {
-        println!("There are no unstaged changes to select.");
-        return Ok(ExitCode(0));
-    } else {
-        RecordState { files }
-    };
+    let record_state = RecordState { files };
 
     let siv = CursiveRunnable::new(|| -> io::Result<_> {
         // Use crossterm to ensure that we support Windows.
