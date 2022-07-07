@@ -10,26 +10,32 @@ use git_record::Recorder;
 use git_record::{RecordError, RecordState};
 use itertools::Itertools;
 use lib::core::effects::{Effects, OperationType};
-use lib::core::eventlog::EventLogDb;
+use lib::core::eventlog::{EventLogDb, EventTransactionId};
 use lib::git::{
     process_diff_for_record, update_index, FileMode, GitRunInfo, Repo, Stage, UpdateIndexCommand,
-    WorkingCopyChangesType,
+    WorkingCopyChangesType, WorkingCopySnapshot,
 };
 use lib::util::ExitCode;
 
-pub fn record(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<ExitCode> {
+pub fn record(
+    effects: &Effects,
+    git_run_info: &GitRunInfo,
+    message: Option<String>,
+    interactive: bool,
+) -> eyre::Result<ExitCode> {
     let repo = Repo::from_dir(&git_run_info.working_directory)?;
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
     let event_tx_id = event_log_db.make_transaction_id(SystemTime::now(), "record")?;
 
-    let files = {
+    let (snapshot, working_copy_changes_type) = {
         let head_info = repo.get_head_info()?;
         let index = repo.get_index()?;
         let (snapshot, _status) =
             repo.get_status(effects, git_run_info, &index, &head_info, Some(event_tx_id))?;
 
-        match snapshot.get_working_copy_changes_type()? {
+        let working_copy_changes_type = snapshot.get_working_copy_changes_type()?;
+        match working_copy_changes_type {
             WorkingCopyChangesType::None => {
                 writeln!(
                     effects.get_output_stream(),
@@ -50,7 +56,54 @@ pub fn record(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<Exit
                 return Ok(ExitCode(1));
             }
         }
+        (snapshot, working_copy_changes_type)
+    };
 
+    if interactive {
+        if working_copy_changes_type == WorkingCopyChangesType::Staged {
+            writeln!(
+                effects.get_output_stream(),
+                "Cannot select changes interactively while there are already staged changes."
+            )?;
+            writeln!(
+                effects.get_output_stream(),
+                "Either commit or unstage your changes and try again. Aborting."
+            )?;
+            Ok(ExitCode(1))
+        } else {
+            record_interactive(
+                effects,
+                git_run_info,
+                &repo,
+                &snapshot,
+                event_tx_id,
+                message.as_deref(),
+            )
+        }
+    } else {
+        let args = {
+            let mut args = vec!["commit"];
+            if let Some(message) = &message {
+                args.extend(["--message", message]);
+            }
+            if working_copy_changes_type == WorkingCopyChangesType::Unstaged {
+                args.push("--all");
+            }
+            args
+        };
+        git_run_info.run_direct_no_wrapping(Some(event_tx_id), &args)
+    }
+}
+
+fn record_interactive(
+    effects: &Effects,
+    git_run_info: &GitRunInfo,
+    repo: &Repo,
+    snapshot: &WorkingCopySnapshot,
+    event_tx_id: EventTransactionId,
+    message: Option<&str>,
+) -> eyre::Result<ExitCode> {
+    let files = {
         let (effects, _progress) = effects.start_operation(OperationType::CalculateDiff);
         let old_tree = snapshot.commit_stage0.get_tree()?;
         let new_tree = snapshot.commit_unstaged.get_tree()?;
@@ -61,7 +114,7 @@ pub fn record(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<Exit
             // We manually add context to the git-record output, so suppress the context lines here.
             0,
         )?;
-        process_diff_for_record(&repo, &diff)?
+        process_diff_for_record(repo, &diff)?
     };
     let record_state = RecordState { files };
 
@@ -100,11 +153,18 @@ pub fn record(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<Exit
     let index = repo.get_index()?;
     update_index(
         git_run_info,
-        &repo,
+        repo,
         &index,
         event_tx_id,
         &update_index_script,
     )?;
 
-    git_run_info.run_direct_no_wrapping(Some(event_tx_id), &["commit"])
+    let args = {
+        let mut args = vec!["commit"];
+        if let Some(message) = message {
+            args.extend(["--message", message]);
+        }
+        args
+    };
+    git_run_info.run_direct_no_wrapping(Some(event_tx_id), &args)
 }
