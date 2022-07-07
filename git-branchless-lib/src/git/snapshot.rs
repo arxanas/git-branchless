@@ -84,6 +84,23 @@ pub struct WorkingCopySnapshot<'repo> {
     pub commit_stage3: Commit<'repo>,
 }
 
+/// The type of changes in the working copy, if any.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum WorkingCopyChangesType {
+    /// There are no changes to tracked files in the working copy.
+    None,
+
+    /// There are unstaged changes to tracked files in the working copy.
+    Unstaged,
+
+    /// There are staged changes to tracked files in the working copy. (There may also be unstaged
+    /// changes.)
+    Staged,
+
+    /// The working copy has unresolved merge conflicts.
+    Conflicts,
+}
+
 impl<'repo> WorkingCopySnapshot<'repo> {
     #[instrument]
     pub(super) fn create(
@@ -451,19 +468,29 @@ branchless: automated working copy snapshot
         Ok(commit_oid)
     }
 
-    /// Determine whether this snapshot corresponded to a working copy state
-    /// that had unresolved merge conflicts.
+    /// Determine what kind of changes to the working copy the user made in this snapshot.
     #[instrument]
-    pub fn has_conflicts(&self) -> eyre::Result<bool> {
+    pub fn get_working_copy_changes_type(&self) -> eyre::Result<WorkingCopyChangesType> {
         let base_tree = self.base_commit.get_tree()?;
         let base_oid = base_tree.get_oid();
+        let unstaged_tree = self.commit_unstaged.get_tree()?;
+        let stage0_tree = self.commit_stage0.get_tree()?;
         let stage1_tree = self.commit_stage1.get_tree()?;
         let stage2_tree = self.commit_stage2.get_tree()?;
         let stage3_tree = self.commit_stage3.get_tree()?;
 
-        Ok(!(base_oid == stage1_tree.get_oid()
-            && base_oid == stage2_tree.get_oid()
-            && base_oid == stage3_tree.get_oid()))
+        if base_oid != stage1_tree.get_oid()
+            || base_oid != stage2_tree.get_oid()
+            || base_oid != stage3_tree.get_oid()
+        {
+            Ok(WorkingCopyChangesType::Conflicts)
+        } else if base_oid != stage0_tree.get_oid() {
+            Ok(WorkingCopyChangesType::Staged)
+        } else if base_oid != unstaged_tree.get_oid() {
+            Ok(WorkingCopyChangesType::Unstaged)
+        } else {
+            Ok(WorkingCopyChangesType::None)
+        }
     }
 }
 
@@ -474,6 +501,7 @@ mod tests {
     use crate::core::effects::Effects;
     use crate::core::eventlog::EventLogDb;
     use crate::core::formatting::Glyphs;
+    use crate::git::WorkingCopyChangesType;
     use crate::testing::{make_git, GitRunOptions};
 
     #[test]
@@ -521,7 +549,10 @@ mod tests {
             },
         ]
         "###);
-        assert!(snapshot.has_conflicts()?);
+        assert_eq!(
+            snapshot.get_working_copy_changes_type()?,
+            WorkingCopyChangesType::Conflicts
+        );
 
         Ok(())
     }

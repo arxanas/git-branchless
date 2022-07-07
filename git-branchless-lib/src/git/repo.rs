@@ -241,9 +241,10 @@ impl Repo {
 
     /// Get the index file for this repository.
     pub fn get_index(&self) -> eyre::Result<Index> {
-        Ok(Index {
-            inner: self.inner.index()?,
-        })
+        let mut index = self.inner.index()?;
+        // If we call `get_index` twice in a row, it seems to return the same index contents, even if the on-disk index has changed.
+        index.read(false)?;
+        Ok(Index { inner: index })
     }
 
     /// Get the configuration object for the repository.
@@ -1909,7 +1910,7 @@ mod tests {
         insta::assert_debug_snapshot!(tree, @r###"
         Tree {
             inner: Tree {
-                id: 01deb7745d411223bbf6b9cb1abaeed451bb25a0,
+                id: 1c15b79a72c3285df172fcfdaceedb7259283eb5,
             },
         }
         "###);
@@ -1917,7 +1918,7 @@ mod tests {
         [
             (
                 "initial.txt",
-                "5c41c3d7e736911dbbd53d62c10292b9bc78f838",
+                "53cd9398c8a2d92f18d279c6cad3f5dde67235e7",
             ),
         ]
         "###);
