@@ -352,7 +352,17 @@ pub enum Command {
     },
 
     /// Create a commit by interactively selecting which changes to include.
-    Record,
+    Record {
+        /// The commit message to use. If not provided, will be prompted to provide a commit message
+        /// interactively.
+        #[clap(value_parser, short = 'm', long = "message")]
+        message: Option<String>,
+
+        /// Select changes to include interactively, rather than using the
+        /// current staged/unstaged changes.
+        #[clap(action, short = 'i', long = "interactive")]
+        interactive: bool,
+    },
 
     /// Reword commits.
     Reword {

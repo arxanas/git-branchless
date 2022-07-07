@@ -257,7 +257,10 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
             MergeConflictRemediation::Retry,
         )?,
 
-        Command::Record => record::record(&effects, &git_run_info)?,
+        Command::Record {
+            message,
+            interactive,
+        } => record::record(&effects, &git_run_info, message, interactive)?,
 
         Command::Reword {
             revsets,
