@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - EXPERIMENTAL: (#382) Working copy snapshots are created before potentially-destructive operations in order to improve the capabilities of `git undo`.
   - Working copy snapshots are taken by default. Disable by setting `branchless.undo.createSnapshots` to `false`.
 - EXPERIMENTAL: (#391) created the `git record` command, which opens an interactive change selector for committing.
+- Numerous updates to `git branchless move`:
+  - (#400) Added `--insert` option to to insert the moved subtree or commits into the commit tree between the destination commit and its children, if any.
+  - (#450) Added `--exact` option to move a specific set of commits elsewhere in the commit tree. They will be removed from their current location and any unmoved children (if any) will be moved to their closest unmoved ancestor. The moved commits will maintain their overall ancestry structure.
+  - (#447) `--source`, `--base` and `--exact` options can all be provided multiple times to move multiple subtress, ranges and/or commits to the destination.
 - Added `--yes` option to `git undo` to skip confirmation.
 - (#366) Added bulk edit mode to `git reword` to allow updating multiple, individual commit messages at once.
 - (#398) Added support for [revset expressions](https://github.com/arxanas/git-branchless/wiki/Reference:-Revsets) in most commands.
