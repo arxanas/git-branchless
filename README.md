@@ -24,7 +24,10 @@
 
 <hr />
 
-<p align="center"><a href="#table-of-contents">▼ Jump to table of contents ▼</a></p>
+<p align="center">
+<a href="#installation">▼ Jump to installation ▼</a><br />
+<a href="#table-of-contents">▼ Jump to table of contents ▼</a>
+</p>
 
 ## About
 
