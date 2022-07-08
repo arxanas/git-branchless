@@ -35,7 +35,7 @@
 
 It **makes Git easier to use**, both for novices and for power users. Examples:
 
-  - [`git undo`](https://github.com/arxanas/git-branchless/wiki/Command:-git-undo): a general-purpose undo command.
+  - [`git undo`](https://github.com/arxanas/git-branchless/wiki/Command:-git-undo): a general-purpose undo command. See the blog post <a href="https://blog.waleedkhan.name/git-undo/"><i>git undo: We can do better</i></a>.
   - [The smartlog](https://github.com/arxanas/git-branchless/wiki/Command:-git-smartlog): a convenient visualization tool.
   - [`git restack`](https://github.com/arxanas/git-branchless/wiki/Command:-git-restack): to repair broken commit graphs.
   - [Speculative merges](https://github.com/arxanas/git-branchless/wiki/Concepts#speculative-merges): to avoid being caught off-guard by merge conflicts.
@@ -52,6 +52,7 @@ It **adds more flexibility** for power users. Examples:
   - [`git co -i/--interactive`](https://github.com/arxanas/git-branchless/wiki/Command:-git-co): to interactively select a commit to check out.
 
 It **provides faster operations** for large repositories and monorepos, particularly at large tech companies. Examples:
+  - See the blog post <a href="https://blog.waleedkhan.name/in-memory-rebases/"><i>Lightning-fast rebases with git-move</i></a>.
   - Performance tested: benchmarked on [torvalds/linux](https://github.com/torvalds/linux) (1M+ commits) and [mozilla/gecko-dev](https://github.com/mozilla/gecko-dev) (700k+ commits).
   - Operates in-memory: avoids touching the working copy by default (which can slow down `git status` or invalidate build artifacts).
   - [Sparse indexes](https://github.blog/2021-11-10-make-your-monorepo-feel-small-with-gits-sparse-index/): uses a custom implementation of sparse indexes for fast commit and merge operations.
