@@ -421,6 +421,51 @@ impl Dag {
         };
         Ok(Some(path))
     }
+
+    /// Given a CommitSet, return a list of CommitSets, each representing a
+    /// connected component of the set.
+    ///
+    /// For example, if the DAG contains commits A-B-C-D-E-F and the given
+    /// CommitSet contains `B, C, E`, this will return 2 `CommitSet`s: 1
+    /// containing `B, C` and another containing only `E`
+    #[instrument]
+    pub fn get_connected_components(&self, commit_set: &CommitSet) -> eyre::Result<Vec<CommitSet>> {
+        let mut components: Vec<CommitSet> = Vec::new();
+        let mut component = CommitSet::empty();
+        let mut commits_to_connect = commit_set.clone();
+
+        // FIXME: O(n^2) algorithm (
+        // FMI see https://github.com/arxanas/git-branchless/pull/450#issuecomment-1188391763
+        for commit in commit_set_to_vec_unsorted(commit_set)? {
+            if commits_to_connect.is_empty()? {
+                break;
+            }
+
+            if !commits_to_connect.contains(&commit.into())? {
+                continue;
+            }
+
+            let mut commits = CommitSet::from(commit);
+            while !commits.is_empty()? {
+                component = component.union(&commits);
+                commits_to_connect = commits_to_connect.difference(&commits);
+
+                let parents = self.query().parents(commits.clone())?;
+                let children = self.query().children(commits.clone())?;
+                commits = parents.union(&children).intersection(&commits_to_connect);
+            }
+
+            components.push(component);
+            component = CommitSet::empty();
+        }
+
+        let connected_commits = union_all(&components);
+        assert_eq!(commit_set.count()?, connected_commits.count()?);
+        let connected_commits = commit_set.intersection(&connected_commits);
+        assert_eq!(commit_set.count()?, connected_commits.count()?);
+
+        Ok(components)
+    }
 }
 
 impl std::fmt::Debug for Dag {
