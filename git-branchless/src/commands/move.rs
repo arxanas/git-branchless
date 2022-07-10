@@ -171,7 +171,7 @@ pub fn r#move(
         if insert {
             let source_head = {
                 let source_heads: CommitSet =
-                    dag.query().heads(dag.query().descendants(source_oids)?)?;
+                    dag.query().heads(dag.query().descendants(source_oids.clone())?)?;
                 match commit_set_to_vec_unsorted(&source_heads)?[..] {
                     [oid] => oid,
                     _ => {
@@ -187,7 +187,9 @@ pub fn r#move(
             let dest_children: CommitSet = dag
                 .query()
                 .children(CommitSet::from(dest_oid))?
-                .difference(&dag.obsolete_commits);
+                .difference(&dag.obsolete_commits)
+                // In case a source OID is already a child of dest_oid.
+                .difference(&source_oids);
 
             for dest_child in commit_set_to_vec_unsorted(&dest_children)? {
                 for source_root in commit_set_to_vec_unsorted(&source_roots)? {
