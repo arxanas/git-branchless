@@ -327,6 +327,52 @@ fn test_move_tree() -> eyre::Result<()> {
 }
 
 #[test]
+fn test_move_insert_in_place() -> eyre::Result<()> {
+    let git = make_git()?;
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+    let test1_oid = git.commit_file("test1", 1)?;
+    git.detach_head()?;
+    let test2_oid = git.commit_file("test2", 2)?;
+    git.run(&["checkout", "HEAD^"])?;
+    git.commit_file("test3", 3)?;
+
+    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    :
+    O 62fc20d (master) create test1.txt
+    |\
+    | o 96d1c37 create test2.txt
+    |
+    @ 4838e49 create test3.txt
+    "###);
+
+    git.run(&[
+        "move",
+        "--insert",
+        "-s",
+        &test2_oid.to_string(),
+        "-d",
+        &test1_oid.to_string(),
+    ])?;
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d (master) create test1.txt
+        |
+        o 96d1c37 create test2.txt
+        |
+        @ 70deb1e create test3.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_move_insert_tree() -> eyre::Result<()> {
     let git = make_git()?;
 
