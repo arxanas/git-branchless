@@ -13,6 +13,7 @@ use tracing::error;
 
 use crate::cursive_utils::{EventDrivenCursiveApp, EventDrivenCursiveAppExt};
 use crate::tristate::{Tristate, TristateBox};
+use crate::views::ListView2;
 use crate::{FileState, RecordError, RecordState, Section, SectionChangedLine};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -100,7 +101,7 @@ impl<'a> Recorder<'a> {
     }
 
     fn make_main_view(&self, main_tx: Sender<Message>) -> impl View {
-        let mut view = LinearLayout::vertical();
+        let mut view = ListView2::new();
 
         let RecordState { file_states } = &self.state;
 
@@ -112,18 +113,21 @@ impl<'a> Recorder<'a> {
 
         for (file_num, (path, file_state)) in file_states.iter().enumerate() {
             let file_key = FileKey { file_num };
-            view.add_child(self.make_file_view(
-                main_tx.clone(),
-                path,
-                file_key,
-                file_state,
-                &mut global_changed_section_num,
-                global_num_changed_sections,
-            ));
+            view.add_child(
+                "",
+                self.make_file_view(
+                    main_tx.clone(),
+                    path,
+                    file_key,
+                    file_state,
+                    &mut global_changed_section_num,
+                    global_num_changed_sections,
+                ),
+            );
             if file_num + 1 < file_states.len() {
                 // Render a spacer line. Note that an empty string won't render an
                 // empty line.
-                view.add_child(TextView::new(" "));
+                view.add_child("", TextView::new(" "));
             }
         }
 
@@ -141,7 +145,7 @@ impl<'a> Recorder<'a> {
     ) -> impl View {
         let FileKey { file_num } = file_key;
 
-        let mut file_view = LinearLayout::vertical();
+        let mut file_view = ListView2::new();
         let mut line_num: usize = 1;
         let local_num_changed_sections = file_state.count_changed_sections();
         let mut local_changed_section_num = 0;
@@ -171,7 +175,7 @@ impl<'a> Recorder<'a> {
                 s.append_styled(path.to_string_lossy(), Effect::Bold);
                 s
             }));
-        file_view.add_child(file_header_view);
+        file_view.add_child("", file_header_view);
 
         let FileState {
             file_mode: _,
@@ -186,28 +190,26 @@ impl<'a> Recorder<'a> {
                     if section_num > 0 {
                         let end_index = min(CONTEXT, contents.len());
                         for (i, line) in contents[..end_index].iter().enumerate() {
-                            file_view.add_child(TextView::new(format!(
-                                "  {} {}",
-                                line_num + i,
-                                line
-                            )));
+                            file_view.add_child(
+                                " ",
+                                TextView::new(format!("  {} {}", line_num + i, line)),
+                            );
                         }
                     }
 
                     // Add vertical ellipsis between sections.
                     if section_num > 0 && section_num + 1 < sections.len() {
-                        file_view.add_child(TextView::new(":"));
+                        file_view.add_child("", TextView::new(":"));
                     }
 
                     // Add the leading context for the next section (if any).
                     if section_num + 1 < sections.len() {
                         let start_index = contents.len().saturating_sub(CONTEXT);
                         for (i, line) in contents[start_index..].iter().enumerate() {
-                            file_view.add_child(TextView::new(format!(
-                                "  {} {}",
-                                line_num + start_index + i,
-                                line
-                            )));
+                            file_view.add_child(
+                                "",
+                                TextView::new(format!("  {} {}", line_num + start_index + i, line)),
+                            );
                         }
                     }
 
@@ -272,14 +274,14 @@ impl<'a> Recorder<'a> {
     fn make_changed_section_views(
         &self,
         main_tx: Sender<Message>,
-        view: &mut LinearLayout,
+        view: &mut ListView2,
         file_num: usize,
         section_num: usize,
         section_description: String,
         before: &[SectionChangedLine],
         after: &[SectionChangedLine],
     ) {
-        let mut section_view = LinearLayout::vertical();
+        let mut section_view = ListView2::new();
         let section_key = SectionKey {
             file_num,
             section_num,
@@ -292,11 +294,14 @@ impl<'a> Recorder<'a> {
                 section_type: SectionChangedLineType::Before,
                 section_line_num,
             };
-            section_view.add_child(self.make_changed_line_view(
-                main_tx.clone(),
-                section_line_key,
-                section_changed_line,
-            ));
+            section_view.add_child(
+                "    ",
+                self.make_changed_line_view(
+                    main_tx.clone(),
+                    section_line_key,
+                    section_changed_line,
+                ),
+            );
         }
 
         for (section_line_num, section_changed_line) in after.iter().enumerate() {
@@ -306,16 +311,19 @@ impl<'a> Recorder<'a> {
                 section_type: SectionChangedLineType::After,
                 section_line_num,
             };
-            section_view.add_child(self.make_changed_line_view(
-                main_tx.clone(),
-                section_line_key,
-                section_changed_line,
-            ));
+            section_view.add_child(
+                "    ",
+                self.make_changed_line_view(
+                    main_tx.clone(),
+                    section_line_key,
+                    section_changed_line,
+                ),
+            );
         }
 
         view.add_child(
+            "  ",
             LinearLayout::horizontal()
-                .child(TextView::new("  "))
                 .child(
                     TristateBox::new()
                         .with_state(
@@ -351,7 +359,7 @@ impl<'a> Recorder<'a> {
                     s
                 })),
         );
-        view.add_child(HideableView::new(section_view));
+        view.add_child("", HideableView::new(section_view));
     }
 
     fn make_changed_line_view(
@@ -373,7 +381,6 @@ impl<'a> Recorder<'a> {
         };
 
         LinearLayout::horizontal()
-            .child(TextView::new("    "))
             .child(
                 Checkbox::new()
                     .with_checked(*is_selected)

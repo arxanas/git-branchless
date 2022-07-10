@@ -17,6 +17,7 @@ mod cursive_utils;
 mod tristate;
 mod types;
 mod ui;
+mod views;
 
 pub use cursive_utils::testing;
 pub use types::{FileState, RecordError, RecordState, Section, SectionChangedLine};
