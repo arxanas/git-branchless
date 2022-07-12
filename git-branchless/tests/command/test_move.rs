@@ -412,7 +412,7 @@ fn test_move_exact_range_stick() -> eyre::Result<()> {
 }
 
 #[test]
-fn test_move_exact_noncontiguous_singles_stick() -> eyre::Result<()> {
+fn test_move_exact_noncontiguous_commits_stick() -> eyre::Result<()> {
     let git = make_git()?;
     if !git.supports_committer_date_is_author_date()? {
         return Ok(());
@@ -740,6 +740,465 @@ fn test_move_exact_contiguous_and_noncontiguous_stick() -> eyre::Result<()> {
         o b1f9efa create test5.txt
         |
         o 500c9b3 create test6.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_move_exact_insert_stick() -> eyre::Result<()> {
+    let git = make_git()?;
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+    let test1_oid = git.commit_file("test1", 1)?;
+    git.detach_head()?;
+    git.commit_file("test2", 2)?;
+    let test3_oid = git.commit_file("test3", 3)?;
+    git.commit_file("test4", 4)?;
+
+    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    :
+    O 62fc20d (master) create test1.txt
+    |
+    o 96d1c37 create test2.txt
+    |
+    o 70deb1e create test3.txt
+    |
+    @ 355e173 create test4.txt
+    "###);
+
+    // --on-disk
+    {
+        let git = git.duplicate_repo()?;
+        git.run(&[
+            "move",
+            "--on-disk",
+            "--insert",
+            "--exact",
+            &test3_oid.to_string(),
+            "-d",
+            &test1_oid.to_string(),
+        ])?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d (master) create test1.txt
+        |
+        o 4838e49 create test3.txt
+        |
+        o d742fb9 create test2.txt
+        |
+        @ 8fcf7dd create test4.txt
+        "###);
+    }
+
+    // --in-memory
+    {
+        git.run(&[
+            "move",
+            "--in-memory",
+            "--insert",
+            "--exact",
+            &test3_oid.to_string(),
+            "-d",
+            &test1_oid.to_string(),
+        ])?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d (master) create test1.txt
+        |
+        o 4838e49 create test3.txt
+        |
+        o d742fb9 create test2.txt
+        |
+        @ 8fcf7dd create test4.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_move_exact_insert_swap() -> eyre::Result<()> {
+    let git = make_git()?;
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+    git.commit_file("test1", 1)?;
+    git.detach_head()?;
+
+    let test2_oid = git.commit_file("test2", 2)?;
+    let test3_oid = git.commit_file("test3", 3)?;
+    git.commit_file("test4", 4)?;
+
+    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    :
+    O 62fc20d (master) create test1.txt
+    |
+    o 96d1c37 create test2.txt
+    |
+    o 70deb1e create test3.txt
+    |
+    @ 355e173 create test4.txt
+    "###);
+
+    // --on-disk
+    {
+        let git = git.duplicate_repo()?;
+        git.run(&[
+            "move",
+            "--on-disk",
+            "--insert",
+            "--exact",
+            &test2_oid.to_string(),
+            "-d",
+            &test3_oid.to_string(),
+        ])?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d (master) create test1.txt
+        |
+        o 4838e49 create test3.txt
+        |
+        o d742fb9 create test2.txt
+        |
+        @ 8fcf7dd create test4.txt
+        "###);
+    }
+
+    // --in-memory
+    {
+        git.run(&[
+            "move",
+            "--in-memory",
+            "--insert",
+            "--exact",
+            &test2_oid.to_string(),
+            "-d",
+            &test3_oid.to_string(),
+        ])?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d (master) create test1.txt
+        |
+        o 4838e49 create test3.txt
+        |
+        o d742fb9 create test2.txt
+        |
+        @ 8fcf7dd create test4.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_move_exact_insert_with_siblings() -> eyre::Result<()> {
+    let git = make_git()?;
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+    let test1_oid = git.commit_file("test1", 1)?;
+    git.detach_head()?;
+    git.commit_file("test2", 2)?;
+    let test3_oid = git.commit_file("test3", 3)?;
+    git.run(&["checkout", "HEAD^"])?;
+    git.commit_file("test4", 4)?;
+
+    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    :
+    O 62fc20d (master) create test1.txt
+    |
+    o 96d1c37 create test2.txt
+    |\
+    | o 70deb1e create test3.txt
+    |
+    @ f57e36f create test4.txt
+    "###);
+
+    // --on-disk
+    {
+        let git = git.duplicate_repo()?;
+        git.run(&[
+            "move",
+            "--on-disk",
+            "--insert",
+            "--exact",
+            &test3_oid.to_string(),
+            "-d",
+            &test1_oid.to_string(),
+        ])?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d (master) create test1.txt
+        |
+        o 4838e49 create test3.txt
+        |
+        o d742fb9 create test2.txt
+        |
+        @ 8fcf7dd create test4.txt
+        "###);
+    }
+
+    // --in-memory
+    {
+        git.run(&[
+            "move",
+            "--in-memory",
+            "--insert",
+            "--exact",
+            &test3_oid.to_string(),
+            "-d",
+            &test1_oid.to_string(),
+        ])?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d (master) create test1.txt
+        |
+        o 4838e49 create test3.txt
+        |
+        o d742fb9 create test2.txt
+        |
+        @ 8fcf7dd create test4.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_move_insert_range_stick() -> eyre::Result<()> {
+    let git = make_git()?;
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+    git.commit_file("test1", 1)?;
+    git.detach_head()?;
+    let test2_oid = git.commit_file("test2", 2)?;
+    let test3_oid = git.commit_file("test3", 3)?;
+    let test4_oid = git.commit_file("test4", 4)?;
+    git.commit_file("test5", 5)?;
+
+    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    :
+    O 62fc20d (master) create test1.txt
+    |
+    o 96d1c37 create test2.txt
+    |
+    o 70deb1e create test3.txt
+    |
+    o 355e173 create test4.txt
+    |
+    @ f81d55c create test5.txt
+    "###);
+
+    // --on-disk
+    {
+        let git = git.duplicate_repo()?;
+        git.run(&[
+            "move",
+            "--on-disk",
+            "--insert",
+            "--exact",
+            &format!("{}:{}", test2_oid, test3_oid),
+            "-d",
+            &test4_oid.to_string(),
+        ])?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d (master) create test1.txt
+        |
+        o bf0d52a create test4.txt
+        |
+        o 44352d0 create test2.txt
+        |
+        o cf5eb24 create test3.txt
+        |
+        @ 4acfdad create test5.txt
+        "###);
+    }
+
+    // --in-memory
+    {
+        git.run(&[
+            "move",
+            "--in-memory",
+            "--insert",
+            "--exact",
+            &format!("{}:{}", test2_oid, test3_oid),
+            "-d",
+            &test4_oid.to_string(),
+        ])?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d (master) create test1.txt
+        |
+        o bf0d52a create test4.txt
+        |
+        o 44352d0 create test2.txt
+        |
+        o cf5eb24 create test3.txt
+        |
+        @ 4acfdad create test5.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_move_insert_exact_noncontiguous_ranges_stick() -> eyre::Result<()> {
+    let git = make_git()?;
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+    let test1_oid = git.commit_file("test1", 1)?;
+    git.detach_head()?;
+    git.commit_file("test2", 2)?;
+    let test3_oid = git.commit_file("test3", 3)?;
+    let test4_oid = git.commit_file("test4", 4)?;
+    git.commit_file("test5", 5)?;
+    let test6_oid = git.commit_file("test6", 6)?;
+    let test7_oid = git.commit_file("test7", 7)?;
+    git.commit_file("test8", 8)?;
+    let test9_oid = git.commit_file("test9", 9)?;
+    let test10_oid = git.commit_file("test10", 10)?;
+    git.commit_file("test11", 11)?;
+
+    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    :
+    O 62fc20d (master) create test1.txt
+    |
+    o 96d1c37 create test2.txt
+    |
+    o 70deb1e create test3.txt
+    |
+    o 355e173 create test4.txt
+    |
+    o f81d55c create test5.txt
+    |
+    o 2831fb5 create test6.txt
+    |
+    o c8933b3 create test7.txt
+    |
+    o 1edbaa1 create test8.txt
+    |
+    o 384010f create test9.txt
+    |
+    o 52ebfa0 create test10.txt
+    |
+    @ b22a15b create test11.txt
+    "###);
+
+    // --on-disk
+    {
+        let git = git.duplicate_repo()?;
+        git.run(&[
+            "move",
+            "--on-disk",
+            "--insert",
+            "--exact",
+            &format!(
+                "{}:{} + {}:{} + {}:{}",
+                test3_oid, test4_oid, test6_oid, test7_oid, test9_oid, test10_oid
+            ),
+            "-d",
+            &test1_oid.to_string(),
+        ])?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d (master) create test1.txt
+        |
+        o 4838e49 create test3.txt
+        |
+        o a248207 create test4.txt
+        |
+        o 133f783 create test6.txt
+        |
+        o c603422 create test7.txt
+        |
+        o 9c7387c create test9.txt
+        |
+        o fed2ec4 create test10.txt
+        |
+        o 324a4c2 create test2.txt
+        |
+        o e7c49ca create test5.txt
+        |
+        o acad4bd create test8.txt
+        |
+        @ 85ceeac create test11.txt
+        "###);
+    }
+
+    // --in-memory
+    {
+        git.run(&[
+            "move",
+            "--in-memory",
+            "--insert",
+            "--exact",
+            &format!(
+                "{}:{} + {}:{} + {}:{}",
+                test3_oid, test4_oid, test6_oid, test7_oid, test9_oid, test10_oid
+            ),
+            "-d",
+            &test1_oid.to_string(),
+        ])?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d (master) create test1.txt
+        |
+        o 4838e49 create test3.txt
+        |
+        o a248207 create test4.txt
+        |
+        o 133f783 create test6.txt
+        |
+        o c603422 create test7.txt
+        |
+        o 9c7387c create test9.txt
+        |
+        o fed2ec4 create test10.txt
+        |
+        o 324a4c2 create test2.txt
+        |
+        o e7c49ca create test5.txt
+        |
+        o acad4bd create test8.txt
+        |
+        @ 85ceeac create test11.txt
         "###);
     }
 

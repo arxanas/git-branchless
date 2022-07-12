@@ -321,7 +321,21 @@ pub fn r#move(
                 .difference(&dag.obsolete_commits);
 
             for component_child in commit_set_to_vec_unsorted(&component_children)? {
-                builder.move_subtree(component_child, component_parent)?;
+                // If the range being extracted has any child commits, then we
+                // need to move each of those subtrees up to the parent commit
+                // of the range. If, however, we're inserting the range and the
+                // destination commit is in one of those subtrees, then we
+                // should only move the commits from the root of that child
+                // subtree up to (and including) the destination commmit.
+                if insert
+                    && dag
+                        .query()
+                        .is_ancestor(component_child.into(), component_dest_oid.into())?
+                {
+                    builder.move_range(component_child, component_dest_oid, component_parent)?;
+                } else {
+                    builder.move_subtree(component_child, component_parent)?;
+                }
             }
 
             builder.move_range(component_root, component_head, component_dest_oid)?;
@@ -329,56 +343,65 @@ pub fn r#move(
 
         if insert {
             let source_head = {
+                let exact_head = if component_roots.is_empty() {
+                    CommitSet::empty()
+                } else {
+                    // As long as component_roots has been sorted topologically,
+                    // we only need to compare adjacent elements to confirm a
+                    // single lineage.
+                    for i in 1..component_roots.len() {
+                        if !dag
+                            .query()
+                            .is_ancestor(component_roots[i - 1].into(), component_roots[i].into())?
+                        {
+                            writeln!(
+                                effects.get_output_stream(),
+                                "The --insert and --exact flags can only be used together when moving commits or\n\
+                                 ranges that form a single lineage, but {} is not an ancestor of {}.",
+                                component_roots[i - 1],
+                                component_roots[i]
+                            )?;
+                            return Ok(ExitCode(1));
+                        }
+                    }
+
+                    let head_component = exact_components
+                        .get(&component_roots[component_roots.len() - 1])
+                        .unwrap()
+                        .clone();
+                    dag.query().heads(head_component)?
+                };
                 let source_heads: CommitSet = dag
                     .query()
-                    .heads(dag.query().descendants(source_oids.clone())?)?;
-                match commit_set_to_vec_unsorted(&source_heads)?[..] {
-                    [oid] => oid,
+                    .heads(dag.query().descendants(source_oids.clone())?)?
+                    .union(&exact_head);
+                match commit_set_to_vec_unsorted(&source_heads)?.as_slice() {
+                    [oid] => *oid,
                     _ => {
                         writeln!(
                             effects.get_output_stream(),
-                            "The --insert flag cannot be used when moving subtrees with multiple heads."
+                            "The --insert flag cannot be used when moving subtrees or ranges with multiple heads."
                         )?;
                         return Ok(ExitCode(1));
                     }
                 }
             };
 
+            let exact_components = exact_components
+                .values()
+                .cloned()
+                .collect::<Vec<CommitSet>>();
+            let exact_oids = union_all(&exact_components);
+            // Children of dest_oid that are not themselves being moved.
             let dest_children: CommitSet = dag
                 .query()
                 .children(CommitSet::from(dest_oid))?
-                .difference(&dag.obsolete_commits)
-                // In case a source OID is already a child of dest_oid.
-                .difference(&source_oids);
+                .difference(&source_oids)
+                .difference(&exact_oids)
+                .difference(&dag.obsolete_commits);
 
             for dest_child in commit_set_to_vec_unsorted(&dest_children)? {
-                for source_root in commit_set_to_vec_unsorted(&source_roots)? {
-                    if dag
-                        .query()
-                        .is_ancestor(dest_child.into(), source_root.into())?
-                    {
-                        // FIXME this is moving sibling commits up to dest_oid
-                        // but should be leaving them in place
-
-                        // If this child subtree actually contains the source
-                        // subtree being moved, then we should only move the commit
-                        // range *up to* the source subtree, not the entire child
-                        // subtree.
-                        let source_parent = match dag.get_only_parent_oid(source_root) {
-                            Ok(oid) => oid,
-                            Err(_) => {
-                                writeln!(
-                                    effects.get_output_stream(),
-                                    "The --insert flag can only be used when moving subtrees with exactly 1 parent."
-                                )?;
-                                return Ok(ExitCode(1));
-                            }
-                        };
-                        builder.move_range(dest_child, source_parent, source_head)?;
-                    } else {
-                        builder.move_subtree(dest_child, source_head)?;
-                    }
-                }
+                builder.move_subtree(dest_child, source_head)?;
             }
         }
         builder.build(
