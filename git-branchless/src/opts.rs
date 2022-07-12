@@ -291,6 +291,17 @@ pub enum Command {
         )]
         base: Vec<Revset>,
 
+        /// A set of specific commits to move. These will be removed from their
+        /// current locations and any unmoved children will be moved to their
+        /// nearest unmoved ancestor.
+        #[clap(
+            action(clap::ArgAction::Append),
+            short = 'x',
+            long = "exact",
+            conflicts_with_all(&["source", "base"])
+        )]
+        exact: Vec<Revset>,
+
         /// The destination commit to move all source commits onto. If not
         /// provided, defaults to the current commit.
         #[clap(value_parser, short = 'd', long = "dest")]
