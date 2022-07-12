@@ -3,6 +3,7 @@
 //! Under the hood, this makes use of Git's advanced rebase functionality, which
 //! is also used to preserve merge commits using the `--rebase-merges` option.
 
+use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fmt::Write;
 use std::time::SystemTime;
@@ -16,7 +17,7 @@ use tracing::instrument;
 use crate::opts::{MoveOptions, Revset};
 use crate::revset::resolve_commits;
 use lib::core::config::get_restack_preserve_timestamps;
-use lib::core::dag::{commit_set_to_vec_unsorted, union_all, CommitSet, Dag};
+use lib::core::dag::{commit_set_to_vec_unsorted, sorted_commit_set, union_all, CommitSet, Dag};
 use lib::core::effects::Effects;
 use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::rewrite::{
@@ -59,10 +60,12 @@ pub fn r#move(
     sources: Vec<Revset>,
     dest: Option<Revset>,
     bases: Vec<Revset>,
+    exacts: Vec<Revset>,
     insert: bool,
     move_options: &MoveOptions,
 ) -> eyre::Result<ExitCode> {
-    let should_sources_default_to_head = sources.is_empty() && bases.is_empty();
+    let should_sources_default_to_head =
+        sources.is_empty() && bases.is_empty() && exacts.is_empty();
 
     let repo = Repo::from_current_dir()?;
     let head_oid = repo.get_head_info()?.oid;
@@ -105,6 +108,63 @@ pub fn r#move(
             return Ok(ExitCode(1));
         }
     };
+    let exact_components = match resolve_commits(effects, &repo, &mut dag, exacts) {
+        Ok(commit_sets) => {
+            let exact_oids = union_all(&commit_sets);
+            let mut components: HashMap<NonZeroOid, CommitSet> = HashMap::new();
+
+            for component in dag.get_connected_components(&exact_oids)?.into_iter() {
+                let component_roots = dag.query().roots(component.clone())?;
+                let component_root = match commit_set_to_vec_unsorted(&component_roots)?.as_slice()
+                {
+                    [only_commit_oid] => *only_commit_oid,
+                    _ => {
+                        writeln!(
+                            effects.get_error_stream(),
+                            "The --exact flag can only be used to move ranges with exactly 1 root.\n\
+                             Received range with {} roots: {:?}",
+                            component_roots.count()?,
+                            component_roots
+                        )?;
+                        return Ok(ExitCode(1));
+                    }
+                };
+
+                let component_parents = dag.query().parents(CommitSet::from(component_root))?;
+                if component_parents.count()? != 1 {
+                    writeln!(
+                        effects.get_output_stream(),
+                        "The --exact flag can only be used to move ranges or commits with exactly 1 parent.\n\
+                         Received range with {} parents: {:?}",
+                        component_parents.count()?,
+                        component_parents
+                    )?;
+                    return Ok(ExitCode(1));
+                };
+
+                let component_heads = dag.query().heads(component.clone())?;
+                if component_heads.count()? != 1 {
+                    writeln!(
+                        effects.get_error_stream(),
+                        "The --exact flag can only be used to move ranges with exactly 1 head.\n\
+                         Received range with {} heads: {:?}",
+                        component_heads.count()?,
+                        component_heads
+                    )?;
+                    return Ok(ExitCode(1));
+                };
+
+                components.insert(component_root, component);
+            }
+
+            components
+        }
+        Err(err) => {
+            err.describe(effects)?;
+            return Ok(ExitCode(1));
+        }
+    };
+
     let dest_oid: NonZeroOid = match resolve_commits(effects, &repo, &mut dag, vec![dest.clone()]) {
         Ok(commit_sets) => match commit_set_to_vec_unsorted(&commit_sets[0])?.as_slice() {
             [only_commit_oid] => *only_commit_oid,
@@ -168,10 +228,110 @@ pub fn r#move(
             builder.move_subtree(source_root, dest_oid)?;
         }
 
+        let component_roots: CommitSet = exact_components.keys().cloned().collect();
+        let component_roots: Vec<NonZeroOid> = sorted_commit_set(&repo, &dag, &component_roots)?
+            .iter()
+            .map(|commit| commit.get_oid())
+            .collect();
+        for component_root in component_roots.iter().cloned() {
+            let component = exact_components.get(&component_root).unwrap();
+            // We've already established that each component only has 1 root and 1
+            // head, so we can be a bit cavelier w/ our Ok/Err handling
+            let component_head =
+                NonZeroOid::try_from(dag.query().heads(component.clone())?.first()?.unwrap())?;
+
+            // Find the non-inclusive ancestor components of the current root
+            let mut possible_destinations: Vec<NonZeroOid> = vec![];
+            for root in component_roots.iter().cloned() {
+                let component = exact_components.get(&root).unwrap();
+                if !component.contains(&component_root.into())?
+                    && dag
+                        .query()
+                        .is_ancestor(root.into(), component_root.into())?
+                {
+                    possible_destinations.push(root);
+                }
+            }
+
+            let component_dest_oid = if possible_destinations.is_empty() {
+                dest_oid
+            } else {
+                // If there was a merge commit somewhere outside of the selected
+                // components, then it's possible that the current component
+                // could have multiple possible parents.
+                //
+                // To check for this, we can confirm that the nearest
+                // destination component is an ancestor of the previous (ie next
+                // nearest). This works because possible_destinations is made
+                // from component_roots, which has been sorted topologically; so
+                // each included component should "come after" the previous
+                // component.
+                for i in 1..possible_destinations.len() {
+                    if !dag.query().is_ancestor(
+                        possible_destinations[i - 1].into(),
+                        possible_destinations[i].into(),
+                    )? {
+                        writeln!(
+                            effects.get_output_stream(),
+                            "This operation cannot be completed because the {} at {}\n\
+                              has multiple possible parents also being moved. Please retry this operation\n\
+                              without this {}, or with only 1 possible parent.",
+                            if component.count()? == 1 {
+                                "commit"
+                            } else {
+                                "range of commits rooted"
+                            },
+                            component_root,
+                            if component.count()? == 1 {
+                                "commit"
+                            } else {
+                                "range of commits"
+                            },
+                        )?;
+                        return Ok(ExitCode(1));
+                    }
+                }
+
+                let nearest_component = exact_components
+                    .get(&possible_destinations[possible_destinations.len() - 1])
+                    .unwrap();
+                // The current component could be descended from any commit
+                // in nearest_component, not just it's head.
+                let dest_ancestor = dag
+                    .query()
+                    .ancestors(CommitSet::from(component_head))?
+                    .intersection(nearest_component);
+                match dag.query().heads(dest_ancestor.clone())?.first()? {
+                    Some(head) => NonZeroOid::try_from(head)?,
+                    None => dest_oid,
+                }
+            };
+
+            // Again, we've already confirmed that each component has but 1 parent
+            let component_parent = NonZeroOid::try_from(
+                dag.query()
+                    .parents(CommitSet::from(component_root))?
+                    .first()?
+                    .unwrap(),
+            )?;
+            let component_children: CommitSet = dag
+                .query()
+                .children(component.clone())?
+                .difference(component)
+                .difference(&dag.obsolete_commits);
+
+            for component_child in commit_set_to_vec_unsorted(&component_children)? {
+                builder.move_subtree(component_child, component_parent)?;
+            }
+
+            builder.move_range(component_root, component_head, component_dest_oid)?;
+        }
+
         if insert {
             let source_head = {
-                let source_heads: CommitSet =
-                    dag.query().heads(dag.query().descendants(source_oids.clone())?)?;
+                let source_heads: CommitSet = dag
+                    .query()
+                    .heads(dag.query().descendants(source_oids.clone())?)?;
                 match commit_set_to_vec_unsorted(&source_heads)?[..] {
                     [oid] => oid,
                     _ => {
@@ -197,6 +357,9 @@ pub fn r#move(
                         .query()
                         .is_ancestor(dest_child.into(), source_root.into())?
                     {
+                        // FIXME this is moving sibling commits up to dest_oid
+                        // but should be leaving them in place
+
                         // If this child subtree actually contains the source
                         // subtree being moved, then we should only move the commit
                         // range *up to* the source subtree, not the entire child

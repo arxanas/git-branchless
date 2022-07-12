@@ -252,6 +252,501 @@ fn test_move_insert_stick() -> eyre::Result<()> {
 }
 
 #[test]
+fn test_move_exact_single_stick() -> eyre::Result<()> {
+    let git = make_git()?;
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+    let test1_oid = git.commit_file("test1", 1)?;
+    git.detach_head()?;
+    git.commit_file("test2", 2)?;
+    let test3_oid = git.commit_file("test3", 3)?;
+    git.commit_file("test4", 4)?;
+
+    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    :
+    O 62fc20d (master) create test1.txt
+    |
+    o 96d1c37 create test2.txt
+    |
+    o 70deb1e create test3.txt
+    |
+    @ 355e173 create test4.txt
+    "###);
+
+    // --on-disk
+    {
+        let git = git.duplicate_repo()?;
+        git.run(&[
+            "move",
+            "--on-disk",
+            "--exact",
+            &test3_oid.to_string(),
+            "-d",
+            &test1_oid.to_string(),
+        ])?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d (master) create test1.txt
+        |\
+        | o 96d1c37 create test2.txt
+        | |
+        | @ f57e36f create test4.txt
+        |
+        o 4838e49 create test3.txt
+        "###);
+    }
+
+    // --in-memory
+    {
+        git.run(&[
+            "move",
+            "--in-memory",
+            "--exact",
+            &test3_oid.to_string(),
+            "-d",
+            &test1_oid.to_string(),
+        ])?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d (master) create test1.txt
+        |\
+        | o 96d1c37 create test2.txt
+        | |
+        | @ f57e36f create test4.txt
+        |
+        o 4838e49 create test3.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_move_exact_range_stick() -> eyre::Result<()> {
+    let git = make_git()?;
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+    git.commit_file("test1", 1)?;
+    git.detach_head()?;
+    let test2_oid = git.commit_file("test2", 2)?;
+    let test3_oid = git.commit_file("test3", 3)?;
+    let test4_oid = git.commit_file("test4", 4)?;
+    git.commit_file("test5", 5)?;
+    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    :
+    O 62fc20d (master) create test1.txt
+    |
+    o 96d1c37 create test2.txt
+    |
+    o 70deb1e create test3.txt
+    |
+    o 355e173 create test4.txt
+    |
+    @ f81d55c create test5.txt
+    "###);
+
+    // --on-disk
+    {
+        let git = git.duplicate_repo()?;
+        git.run(&[
+            "move",
+            "--on-disk",
+            "--exact",
+            &format!("{}:{}", test2_oid, test3_oid),
+            "-d",
+            &test4_oid.to_string(),
+        ])?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d (master) create test1.txt
+        |
+        o bf0d52a create test4.txt
+        |\
+        | o 44352d0 create test2.txt
+        | |
+        | o cf5eb24 create test3.txt
+        |
+        @ 848121c create test5.txt
+        "###);
+    }
+
+    // --in-memory
+    {
+        git.run(&[
+            "move",
+            "--in-memory",
+            "--exact",
+            &format!("{}:{}", test2_oid, test3_oid),
+            "-d",
+            &test4_oid.to_string(),
+        ])?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d (master) create test1.txt
+        |
+        o bf0d52a create test4.txt
+        |\
+        | o 44352d0 create test2.txt
+        | |
+        | o cf5eb24 create test3.txt
+        |
+        @ 848121c create test5.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_move_exact_noncontiguous_singles_stick() -> eyre::Result<()> {
+    let git = make_git()?;
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+    let test1_oid = git.commit_file("test1", 1)?;
+    git.detach_head()?;
+    git.commit_file("test2", 2)?;
+    let test3_oid = git.commit_file("test3", 3)?;
+    git.commit_file("test4", 4)?;
+    let test5_oid = git.commit_file("test5", 5)?;
+    git.commit_file("test6", 6)?;
+    let test7_oid = git.commit_file("test7", 7)?;
+    git.commit_file("test8", 8)?;
+
+    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    :
+    O 62fc20d (master) create test1.txt
+    |
+    o 96d1c37 create test2.txt
+    |
+    o 70deb1e create test3.txt
+    |
+    o 355e173 create test4.txt
+    |
+    o f81d55c create test5.txt
+    |
+    o 2831fb5 create test6.txt
+    |
+    o c8933b3 create test7.txt
+    |
+    @ 1edbaa1 create test8.txt
+    "###);
+
+    // --on-disk
+    {
+        let git = git.duplicate_repo()?;
+        git.run(&[
+            "move",
+            "--on-disk",
+            "--exact",
+            &format!("{} + {} + {}", test3_oid, test5_oid, test7_oid),
+            "-d",
+            &test1_oid.to_string(),
+        ])?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d (master) create test1.txt
+        |\
+        | o 96d1c37 create test2.txt
+        | |
+        | o f57e36f create test4.txt
+        | |
+        | o d0c8705 create test6.txt
+        | |
+        | @ c458f41 create test8.txt
+        |
+        o 4838e49 create test3.txt
+        |
+        o b1f9efa create test5.txt
+        |
+        o 8577a96 create test7.txt
+        "###);
+    }
+
+    // --in-memory
+    {
+        git.run(&[
+            "move",
+            "--in-memory",
+            "--exact",
+            &format!("{} + {} + {}", test3_oid, test5_oid, test7_oid),
+            "-d",
+            &test1_oid.to_string(),
+        ])?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d (master) create test1.txt
+        |\
+        | o 96d1c37 create test2.txt
+        | |
+        | o f57e36f create test4.txt
+        | |
+        | o d0c8705 create test6.txt
+        | |
+        | @ c458f41 create test8.txt
+        |
+        o 4838e49 create test3.txt
+        |
+        o b1f9efa create test5.txt
+        |
+        o 8577a96 create test7.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_move_exact_noncontiguous_ranges_stick() -> eyre::Result<()> {
+    let git = make_git()?;
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+    let test1_oid = git.commit_file("test1", 1)?;
+    git.detach_head()?;
+    git.commit_file("test2", 2)?;
+    let test3_oid = git.commit_file("test3", 3)?;
+    let test4_oid = git.commit_file("test4", 4)?;
+    git.commit_file("test5", 5)?;
+    let test6_oid = git.commit_file("test6", 6)?;
+    let test7_oid = git.commit_file("test7", 7)?;
+    git.commit_file("test8", 8)?;
+    let test9_oid = git.commit_file("test9", 9)?;
+    let test10_oid = git.commit_file("test10", 10)?;
+    git.commit_file("test11", 11)?;
+
+    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    :
+    O 62fc20d (master) create test1.txt
+    |
+    o 96d1c37 create test2.txt
+    |
+    o 70deb1e create test3.txt
+    |
+    o 355e173 create test4.txt
+    |
+    o f81d55c create test5.txt
+    |
+    o 2831fb5 create test6.txt
+    |
+    o c8933b3 create test7.txt
+    |
+    o 1edbaa1 create test8.txt
+    |
+    o 384010f create test9.txt
+    |
+    o 52ebfa0 create test10.txt
+    |
+    @ b22a15b create test11.txt
+    "###);
+
+    // --on-disk
+    {
+        let git = git.duplicate_repo()?;
+        git.run(&[
+            "move",
+            "--on-disk",
+            "--exact",
+            &format!(
+                "{}:{} + {}:{} + {}:{}",
+                test3_oid, test4_oid, test6_oid, test7_oid, test9_oid, test10_oid
+            ),
+            "-d",
+            &test1_oid.to_string(),
+        ])?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d (master) create test1.txt
+        |\
+        | o 96d1c37 create test2.txt
+        | |
+        | o d2e18e3 create test5.txt
+        | |
+        | o a50e00a create test8.txt
+        | |
+        | @ dceb23f create test11.txt
+        |
+        o 4838e49 create test3.txt
+        |
+        o a248207 create test4.txt
+        |
+        o 133f783 create test6.txt
+        |
+        o c603422 create test7.txt
+        |
+        o 9c7387c create test9.txt
+        |
+        o fed2ec4 create test10.txt
+        "###);
+    }
+
+    // --in-memory
+    {
+        git.run(&[
+            "move",
+            "--in-memory",
+            "--exact",
+            &format!(
+                "{}:{} + {}:{} + {}:{}",
+                test3_oid, test4_oid, test6_oid, test7_oid, test9_oid, test10_oid
+            ),
+            "-d",
+            &test1_oid.to_string(),
+        ])?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d (master) create test1.txt
+        |\
+        | o 96d1c37 create test2.txt
+        | |
+        | o d2e18e3 create test5.txt
+        | |
+        | o a50e00a create test8.txt
+        | |
+        | @ dceb23f create test11.txt
+        |
+        o 4838e49 create test3.txt
+        |
+        o a248207 create test4.txt
+        |
+        o 133f783 create test6.txt
+        |
+        o c603422 create test7.txt
+        |
+        o 9c7387c create test9.txt
+        |
+        o fed2ec4 create test10.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_move_exact_contiguous_and_noncontiguous_stick() -> eyre::Result<()> {
+    let git = make_git()?;
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+    let test1_oid = git.commit_file("test1", 1)?;
+    git.detach_head()?;
+    git.commit_file("test2", 2)?;
+    let test3_oid = git.commit_file("test3", 3)?;
+    git.commit_file("test4", 4)?;
+    let test5_oid = git.commit_file("test5", 5)?;
+    let test6_oid = git.commit_file("test6", 6)?;
+    git.commit_file("test7", 7)?;
+
+    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    :
+    O 62fc20d (master) create test1.txt
+    |
+    o 96d1c37 create test2.txt
+    |
+    o 70deb1e create test3.txt
+    |
+    o 355e173 create test4.txt
+    |
+    o f81d55c create test5.txt
+    |
+    o 2831fb5 create test6.txt
+    |
+    @ c8933b3 create test7.txt
+    "###);
+
+    // --on-disk
+    {
+        let git = git.duplicate_repo()?;
+        git.run(&[
+            "move",
+            "--on-disk",
+            "--exact",
+            &format!("{} + {}:{}", test3_oid, test5_oid, test6_oid),
+            "-d",
+            &test1_oid.to_string(),
+        ])?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d (master) create test1.txt
+        |\
+        | o 96d1c37 create test2.txt
+        | |
+        | o f57e36f create test4.txt
+        | |
+        | @ c538d3e create test7.txt
+        |
+        o 4838e49 create test3.txt
+        |
+        o b1f9efa create test5.txt
+        |
+        o 500c9b3 create test6.txt
+        "###);
+    }
+
+    // --in-memory
+    {
+        git.run(&[
+            "move",
+            "--in-memory",
+            "--exact",
+            &format!("{} + {}:{}", test3_oid, test5_oid, test6_oid),
+            "-d",
+            &test1_oid.to_string(),
+        ])?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d (master) create test1.txt
+        |\
+        | o 96d1c37 create test2.txt
+        | |
+        | o f57e36f create test4.txt
+        | |
+        | @ c538d3e create test7.txt
+        |
+        o 4838e49 create test3.txt
+        |
+        o b1f9efa create test5.txt
+        |
+        o 500c9b3 create test6.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
 fn test_move_tree() -> eyre::Result<()> {
     let git = make_git()?;
 
@@ -452,6 +947,646 @@ fn test_move_insert_tree() -> eyre::Result<()> {
             "###);
         }
     }
+
+    Ok(())
+}
+
+#[test]
+fn test_move_exact_range_tree() -> eyre::Result<()> {
+    let git = make_git()?;
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+    git.commit_file("test1", 1)?;
+    git.detach_head()?;
+    let test2_oid = git.commit_file("test2", 2)?;
+    let test3_oid = git.commit_file("test3", 3)?;
+    let test4_oid = git.commit_file("test4", 4)?;
+    git.run(&["checkout", &test3_oid.to_string()])?;
+    git.commit_file("test5", 5)?;
+
+    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    :
+    O 62fc20d (master) create test1.txt
+    |
+    o 96d1c37 create test2.txt
+    |
+    o 70deb1e create test3.txt
+    |\
+    | o 355e173 create test4.txt
+    |
+    @ 9ea1b36 create test5.txt
+    "###);
+
+    // --on-disk
+    {
+        let git = git.duplicate_repo()?;
+        git.run(&[
+            "move",
+            "--on-disk",
+            "--exact",
+            &format!("{}:{}", test2_oid, test3_oid),
+            "-d",
+            &test4_oid.to_string(),
+        ])?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d (master) create test1.txt
+        |\
+        | o bf0d52a create test4.txt
+        | |
+        | o 44352d0 create test2.txt
+        | |
+        | o cf5eb24 create test3.txt
+        |
+        @ ea7aa06 create test5.txt
+        "###);
+    }
+
+    // in-memory
+    {
+        git.run(&[
+            "move",
+            "--exact",
+            &format!("{}:{}", test2_oid, test3_oid),
+            "-d",
+            &test4_oid.to_string(),
+        ])?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d (master) create test1.txt
+        |\
+        | o bf0d52a create test4.txt
+        | |
+        | o 44352d0 create test2.txt
+        | |
+        | o cf5eb24 create test3.txt
+        |
+        @ ea7aa06 create test5.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_move_exact_range_with_leaves() -> eyre::Result<()> {
+    let git = make_git()?;
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+    git.commit_file("test1", 1)?;
+    git.detach_head()?;
+    let test2_oid = git.commit_file("test2", 2)?;
+    let test3_oid = git.commit_file("test3", 3)?;
+    git.commit_file("test4", 4)?;
+    git.run(&["checkout", &test3_oid.to_string()])?;
+    let test5_oid = git.commit_file("test5", 5)?;
+
+    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    :
+    O 62fc20d (master) create test1.txt
+    |
+    o 96d1c37 create test2.txt
+    |
+    o 70deb1e create test3.txt
+    |\
+    | o 355e173 create test4.txt
+    |
+    @ 9ea1b36 create test5.txt
+    "###);
+
+    // --on-disk
+    {
+        let git = git.duplicate_repo()?;
+        git.run(&[
+            "move",
+            "--on-disk",
+            "--exact",
+            &format!("{}+{}", test3_oid, test5_oid),
+            "-d",
+            &test2_oid.to_string(),
+        ])?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d (master) create test1.txt
+        |
+        o 96d1c37 create test2.txt
+        |\
+        | o 70deb1e create test3.txt
+        | |
+        | @ 9ea1b36 create test5.txt
+        |
+        o f57e36f create test4.txt
+        "###);
+    }
+
+    // in-memory
+    {
+        git.run(&[
+            "move",
+            "--exact",
+            &format!("{}+{}", test3_oid, test5_oid),
+            "-d",
+            &test2_oid.to_string(),
+        ])?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d (master) create test1.txt
+        |
+        o 96d1c37 create test2.txt
+        |\
+        | o 70deb1e create test3.txt
+        | |
+        | @ 9ea1b36 create test5.txt
+        |
+        o f57e36f create test4.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_move_exact_range_just_leaves() -> eyre::Result<()> {
+    let git = make_git()?;
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+    git.commit_file("test1", 1)?;
+    git.detach_head()?;
+    let test2_oid = git.commit_file("test2", 2)?;
+    git.commit_file("test3", 3)?;
+    let test4_oid = git.commit_file("test4", 4)?;
+    git.run(&["checkout", "HEAD^"])?;
+    let test5_oid = git.commit_file("test5", 5)?;
+
+    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    :
+    O 62fc20d (master) create test1.txt
+    |
+    o 96d1c37 create test2.txt
+    |
+    o 70deb1e create test3.txt
+    |\
+    | o 355e173 create test4.txt
+    |
+    @ 9ea1b36 create test5.txt
+    "###);
+
+    // --on-disk
+    {
+        let git = git.duplicate_repo()?;
+        git.run(&[
+            "move",
+            "--on-disk",
+            "--exact",
+            &format!("{}+{}", test4_oid, test5_oid),
+            "-d",
+            &test2_oid.to_string(),
+        ])?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d (master) create test1.txt
+        |
+        o 96d1c37 create test2.txt
+        |\
+        | o 70deb1e create test3.txt
+        |\
+        | o f57e36f create test4.txt
+        |
+        @ d2e18e3 create test5.txt
+        "###);
+    }
+
+    // in-memory
+    {
+        git.run(&[
+            "move",
+            "--exact",
+            &format!("{}+{}", test4_oid, test5_oid),
+            "-d",
+            &test2_oid.to_string(),
+        ])?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d (master) create test1.txt
+        |
+        o 96d1c37 create test2.txt
+        |\
+        | o 70deb1e create test3.txt
+        |\
+        | o f57e36f create test4.txt
+        |
+        @ d2e18e3 create test5.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_move_exact_range_with_leaves_and_descendent_components() -> eyre::Result<()> {
+    let git = make_git()?;
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+    git.commit_file("test1", 1)?;
+    git.detach_head()?;
+    let test2_oid = git.commit_file("test2", 2)?;
+    let test3_oid = git.commit_file("test3", 3)?;
+    git.commit_file("test4", 4)?;
+    let test5_oid = git.commit_file("test5", 5)?;
+    git.run(&["checkout", &test3_oid.to_string()])?;
+    let test6_oid = git.commit_file("test6", 6)?;
+
+    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    :
+    O 62fc20d (master) create test1.txt
+    |
+    o 96d1c37 create test2.txt
+    |
+    o 70deb1e create test3.txt
+    |\
+    | o 355e173 create test4.txt
+    | |
+    | o f81d55c create test5.txt
+    |
+    @ eaf39e9 create test6.txt
+    "###);
+
+    // --on-disk
+    {
+        let git = git.duplicate_repo()?;
+        git.run(&[
+            "move",
+            "--on-disk",
+            "--exact",
+            &format!("{}+{}+{}", test3_oid, test5_oid, test6_oid),
+            "-d",
+            &test2_oid.to_string(),
+        ])?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d (master) create test1.txt
+        |
+        o 96d1c37 create test2.txt
+        |\
+        | o 70deb1e create test3.txt
+        | |\
+        | | o 9ea1b36 create test5.txt
+        | |
+        | @ eaf39e9 create test6.txt
+        |
+        o f57e36f create test4.txt
+        "###);
+    }
+
+    // in-memory
+    {
+        git.run(&[
+            "move",
+            "--exact",
+            &format!("{}+{}+{}", test3_oid, test5_oid, test6_oid),
+            "-d",
+            &test2_oid.to_string(),
+        ])?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d (master) create test1.txt
+        |
+        o 96d1c37 create test2.txt
+        |\
+        | o 70deb1e create test3.txt
+        | |\
+        | | o 9ea1b36 create test5.txt
+        | |
+        | @ eaf39e9 create test6.txt
+        |
+        o f57e36f create test4.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_move_exact_ranges_with_merge_commits_betwixt_not_supported() -> eyre::Result<()> {
+    let git = make_git()?;
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+    let test1_oid = git.commit_file("test1", 1)?;
+    git.detach_head()?;
+    let test2_oid = git.commit_file("test2", 2)?;
+    let test3_oid = git.commit_file("test3", 3)?;
+    git.run(&["checkout", &test1_oid.to_string()])?;
+    let test4_oid = git.commit_file("test4", 4)?;
+    git.commit_file("test5", 5)?;
+    git.run(&["merge", &test3_oid.to_string()])?;
+    let test6_oid = git.commit_file("test6", 6)?;
+
+    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    :
+    O 62fc20d (master) create test1.txt
+    |\
+    | o 96d1c37 create test2.txt
+    | |
+    | o 70deb1e create test3.txt
+    | |
+    | o 01a3b9b Merge commit '70deb1e28791d8e7dd5a1f0c871a51b91282562f' into HEAD
+    | |
+    | @ 8fb4e4a create test6.txt
+    |
+    o bf0d52a create test4.txt
+    |
+    o 848121c create test5.txt
+    |
+    o 01a3b9b Merge commit '70deb1e28791d8e7dd5a1f0c871a51b91282562f' into HEAD
+    |
+    @ 8fb4e4a create test6.txt
+    "###);
+
+    let (stdout, stderr) = git.run_with_options(
+        &[
+            "move",
+            "--exact",
+            &format!("{}+{}+{}", test2_oid, test4_oid, test6_oid),
+            "-d",
+            &test2_oid.to_string(),
+        ],
+        &GitRunOptions {
+            expected_exit_code: 1,
+            ..Default::default()
+        },
+    )?;
+    insta::assert_snapshot!(stderr, @"");
+    insta::assert_snapshot!(stdout, @r###"
+    This operation cannot be completed because the commit at 8fb4e4aded06dd3b97723794474832a928370f9a
+    has multiple possible parents also being moved. Please retry this operation
+    without this commit, or with only 1 possible parent.
+    "###);
+
+    Ok(())
+}
+
+#[test]
+fn test_move_exact_range_one_side_of_merged_stack_without_base_and_merge_commits(
+) -> eyre::Result<()> {
+    let git = make_git()?;
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+    let test1_oid = git.commit_file("test1", 1)?;
+    git.detach_head()?;
+    let test2_oid = git.commit_file("test2", 2)?;
+    let test3_oid = git.commit_file("test3", 3)?;
+    let test4_oid = git.commit_file("test4", 4)?;
+    git.run(&["checkout", &test2_oid.to_string()])?;
+    git.commit_file("test5", 5)?;
+    git.commit_file("test6", 6)?;
+    git.run(&["merge", &test4_oid.to_string()])?;
+
+    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    :
+    O 62fc20d (master) create test1.txt
+    |
+    o 96d1c37 create test2.txt
+    |\
+    | o 70deb1e create test3.txt
+    | |
+    | o 355e173 create test4.txt
+    | |
+    | @ 178e00f Merge commit '355e173bf9c5d2efac2e451da0cdad3fb82b869a' into HEAD
+    |
+    o d2e18e3 create test5.txt
+    |
+    o d43fec8 create test6.txt
+    |
+    @ 178e00f Merge commit '355e173bf9c5d2efac2e451da0cdad3fb82b869a' into HEAD
+    "###);
+
+    git.run(&[
+        "move",
+        "--exact",
+        &format!("{}+{}", test3_oid, test4_oid),
+        "-d",
+        &test1_oid.to_string(),
+    ])?;
+
+    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    // FIXME: This output is correct except for a known issue involving moving
+    // merge commits. (See `test_move_merge_commit_both_parents`.)
+    insta::assert_snapshot!(stdout, @r###"
+    :
+    O 62fc20d (master) create test1.txt
+    |\
+    | o 96d1c37 create test2.txt
+    | |\
+    | | x 70deb1e (rewritten as 4838e49b) create test3.txt
+    | | |
+    | | x 355e173 (rewritten as a2482074) create test4.txt
+    | | |
+    | | @ 178e00f Merge commit '355e173bf9c5d2efac2e451da0cdad3fb82b869a' into HEAD
+    | |
+    | o d2e18e3 create test5.txt
+    | |
+    | o d43fec8 create test6.txt
+    | |
+    | @ 178e00f Merge commit '355e173bf9c5d2efac2e451da0cdad3fb82b869a' into HEAD
+    |
+    o 4838e49 create test3.txt
+    |
+    o a248207 create test4.txt
+    "###);
+
+    Ok(())
+}
+
+#[test]
+fn test_move_exact_range_one_side_of_merged_stack_including_base_and_merge_commits(
+) -> eyre::Result<()> {
+    let git = make_git()?;
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+    let test1_oid = git.commit_file("test1", 1)?;
+    git.detach_head()?;
+    let test2_oid = git.commit_file("test2", 2)?;
+    let test3_oid = git.commit_file("test3", 3)?;
+    let test4_oid = git.commit_file("test4", 4)?;
+    git.run(&["checkout", &test2_oid.to_string()])?;
+    git.commit_file("test5", 5)?;
+    git.commit_file("test6", 6)?;
+    git.run(&["merge", &test4_oid.to_string()])?;
+
+    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    :
+    O 62fc20d (master) create test1.txt
+    |
+    o 96d1c37 create test2.txt
+    |\
+    | o 70deb1e create test3.txt
+    | |
+    | o 355e173 create test4.txt
+    | |
+    | @ 178e00f Merge commit '355e173bf9c5d2efac2e451da0cdad3fb82b869a' into HEAD
+    |
+    o d2e18e3 create test5.txt
+    |
+    o d43fec8 create test6.txt
+    |
+    @ 178e00f Merge commit '355e173bf9c5d2efac2e451da0cdad3fb82b869a' into HEAD
+    "###);
+
+    git.run(&[
+        "move",
+        "--exact",
+        &format!("{}+{}+{}+{}", test2_oid, test3_oid, test4_oid, "178e00f"),
+        "-d",
+        &test1_oid.to_string(),
+    ])?;
+
+    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    // FIXME: This output is correct except for a known issue involving moving
+    // merge commits. (See `test_move_merge_commit_both_parents`.)
+    insta::assert_snapshot!(stdout, @r###"
+    :
+    O 62fc20d (master) create test1.txt
+    |\
+    | o 96d1c37 create test2.txt
+    | |\
+    | | o 70deb1e create test3.txt
+    | | |
+    | | o 355e173 create test4.txt
+    | | |
+    | | @ 178e00f Merge commit '355e173bf9c5d2efac2e451da0cdad3fb82b869a' into HEAD
+    | |
+    | x d2e18e3 (rewritten as ea7aa064) create test5.txt
+    | |
+    | x d43fec8 (rewritten as da42aeb4) create test6.txt
+    | |
+    | @ 178e00f Merge commit '355e173bf9c5d2efac2e451da0cdad3fb82b869a' into HEAD
+    |
+    o ea7aa06 create test5.txt
+    |
+    o da42aeb create test6.txt
+    "###);
+
+    Ok(())
+}
+
+#[test]
+fn test_move_exact_range_two_partial_components_of_merged_stack() -> eyre::Result<()> {
+    let git = make_git()?;
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+    let test1_oid = git.commit_file("test1", 1)?;
+    git.detach_head()?;
+    let test2_oid = git.commit_file("test2", 2)?;
+    git.commit_file("test3", 3)?;
+    let test4_oid = git.commit_file("test4", 4)?;
+    git.run(&["checkout", &test2_oid.to_string()])?;
+    let test5_oid = git.commit_file("test5", 5)?;
+    git.commit_file("test6", 6)?;
+    git.run(&["merge", &test4_oid.to_string()])?;
+
+    // Given this graph: 1-2-3-4-7
+    //                      \5-6/
+    // Moving 2,3,6,7 (leaving 4,5) should produce:
+    // 1-2-3
+    //  | \6-7
+    //  +4
+    //  \5
+    // FIXME Is it Ok that 3&7 are no longer directly connected?
+
+    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    :
+    O 62fc20d (master) create test1.txt
+    |
+    o 96d1c37 create test2.txt
+    |\
+    | o 70deb1e create test3.txt
+    | |
+    | o 355e173 create test4.txt
+    | |
+    | @ 178e00f Merge commit '355e173bf9c5d2efac2e451da0cdad3fb82b869a' into HEAD
+    |
+    o d2e18e3 create test5.txt
+    |
+    o d43fec8 create test6.txt
+    |
+    @ 178e00f Merge commit '355e173bf9c5d2efac2e451da0cdad3fb82b869a' into HEAD
+    "###);
+
+    git.run(&[
+        "move",
+        "--exact",
+        &format!("{}:: - {} - {}", test2_oid, test4_oid, test5_oid),
+        "-d",
+        &test1_oid.to_string(),
+    ])?;
+
+    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    // FIXME: This output is correct except for a known issue involving moving
+    // merge commits. (See `test_move_merge_commit_both_parents`.)
+    insta::assert_snapshot!(stdout, @r###"
+    :
+    O 62fc20d (master) create test1.txt
+    |\
+    | o 96d1c37 create test2.txt
+    | |\
+    | | o 70deb1e create test3.txt
+    | | |\
+    | | | x 355e173 (rewritten as bf0d52a6) create test4.txt
+    | | | |
+    | | | @ 178e00f Merge commit '355e173bf9c5d2efac2e451da0cdad3fb82b869a' into HEAD
+    | | |
+    | | o eaf39e9 create test6.txt
+    | |
+    | x d2e18e3 (rewritten as ea7aa064) create test5.txt
+    | |
+    | x d43fec8 (rewritten as eaf39e91) create test6.txt
+    | |
+    | @ 178e00f Merge commit '355e173bf9c5d2efac2e451da0cdad3fb82b869a' into HEAD
+    |\
+    | o bf0d52a create test4.txt
+    |
+    o ea7aa06 create test5.txt
+    "###);
 
     Ok(())
 }
