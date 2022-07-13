@@ -179,7 +179,9 @@ impl Recorder {
         file_view.add_child(file_header_view);
 
         match file_content {
-            FileContent::Absent | FileContent::Binary => unimplemented!(),
+            FileContent::Absent | FileContent::Binary => {
+                unimplemented!("make_file_view for absent/binary files")
+            }
             FileContent::Text { file_mode, hunks } => {
                 // FIXME: render the file mode
                 let _ = file_mode;
@@ -387,7 +389,9 @@ impl Recorder {
         };
 
         match file_content {
-            FileContent::Absent | FileContent::Binary => unimplemented!(),
+            FileContent::Absent | FileContent::Binary => {
+                unimplemented!("toggle_file for absent/binary files")
+            }
             FileContent::Text {
                 file_mode: _,
                 hunks,
@@ -475,7 +479,9 @@ impl Recorder {
         let (before, after) = {
             let (path, file_content) = &mut self.state.files[file_num];
             match file_content {
-                FileContent::Absent | FileContent::Binary => unimplemented!(),
+                FileContent::Absent | FileContent::Binary => {
+                    unimplemented!("toggle_hunk for absent/binary files")
+                }
                 FileContent::Text {
                     file_mode: _,
                     hunks,
@@ -533,7 +539,9 @@ impl Recorder {
 
         let (path, file_content) = &mut self.state.files[file_num];
         match file_content {
-            FileContent::Absent | FileContent::Binary => unimplemented!(),
+            FileContent::Absent | FileContent::Binary => {
+                unimplemented!("toggle_hunk_line for absent/binary files")
+            }
             FileContent::Text {
                 file_mode: _,
                 hunks,
@@ -560,7 +568,9 @@ impl Recorder {
         let (_path, file_content) = &mut self.state.files[file_num];
 
         match file_content {
-            FileContent::Absent | FileContent::Binary => unimplemented!(),
+            FileContent::Absent | FileContent::Binary => {
+                unimplemented!("refresh_hunk for absent/binary files")
+            }
             FileContent::Text {
                 file_mode: _,
                 hunks,
@@ -607,7 +617,9 @@ fn iter_file_changed_lines(
     file_content: &FileContent,
 ) -> impl Iterator<Item = (HunkType, &HunkChangedLine)> {
     match file_content {
-        FileContent::Absent | FileContent::Binary => unimplemented!(),
+        FileContent::Absent | FileContent::Binary => {
+            unimplemented!("iter_file_changed_lines for absent/binary files")
+        }
         FileContent::Text {
             file_mode: _,
             hunks,

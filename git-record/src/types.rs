@@ -39,7 +39,9 @@ impl FileContent {
     /// Count the number of changed sections in this file.
     pub fn count_changed_hunks(&self) -> usize {
         match self {
-            FileContent::Absent | FileContent::Binary => unimplemented!(),
+            FileContent::Absent | FileContent::Binary => {
+                unimplemented!("count_changed_hunks for absent/binary files")
+            }
             FileContent::Text {
                 file_mode: _,
                 hunks,
@@ -60,7 +62,9 @@ impl FileContent {
         let mut acc_selected = String::new();
         let mut acc_unselected = String::new();
         match self {
-            FileContent::Absent | FileContent::Binary => unimplemented!(),
+            FileContent::Absent | FileContent::Binary => {
+                unimplemented!("get_selected_contents for absent/binary files")
+            }
             FileContent::Text {
                 file_mode: _,
                 hunks,
