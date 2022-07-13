@@ -6,7 +6,7 @@ use std::path::PathBuf;
 pub struct RecordState {
     /// The state of each file. This is rendered in order, so you may want to
     /// sort this list by path before providing it.
-    pub files: Vec<(PathBuf, FileContent)>,
+    pub file_states: Vec<(PathBuf, FileState)>,
 }
 
 /// An error which occurred when attempting to record changes.
@@ -18,7 +18,7 @@ pub enum RecordError {
 
 /// The state of a file to be recorded.
 #[derive(Clone, Debug)]
-pub enum FileContent {
+pub enum FileState {
     /// The file didn't exist. (Perhaps it hasn't yet been created, or it was deleted.)
     Absent,
 
@@ -35,14 +35,14 @@ pub enum FileContent {
     },
 }
 
-impl FileContent {
+impl FileState {
     /// Count the number of changed sections in this file.
     pub fn count_changed_hunks(&self) -> usize {
         match self {
-            FileContent::Absent | FileContent::Binary => {
+            FileState::Absent | FileState::Binary => {
                 unimplemented!("count_changed_hunks for absent/binary files")
             }
-            FileContent::Text {
+            FileState::Text {
                 file_mode: _,
                 hunks,
             } => hunks
@@ -62,10 +62,10 @@ impl FileContent {
         let mut acc_selected = String::new();
         let mut acc_unselected = String::new();
         match self {
-            FileContent::Absent | FileContent::Binary => {
+            FileState::Absent | FileState::Binary => {
                 unimplemented!("get_selected_contents for absent/binary files")
             }
-            FileContent::Text {
+            FileState::Text {
                 file_mode: _,
                 hunks,
             } => {

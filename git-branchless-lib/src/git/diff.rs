@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use eyre::Context;
-use git_record::{FileContent, Hunk, HunkChangedLine};
+use git_record::{FileState, Hunk, HunkChangedLine};
 
 use super::{MaybeZeroOid, Repo};
 
@@ -24,7 +24,7 @@ struct GitHunk {
 pub fn process_diff_for_record(
     repo: &Repo,
     diff: &Diff,
-) -> eyre::Result<Vec<(PathBuf, FileContent)>> {
+) -> eyre::Result<Vec<(PathBuf, FileState)>> {
     let Diff { inner: diff } = diff;
 
     #[derive(Clone, Debug)]
@@ -111,13 +111,13 @@ pub fn process_diff_for_record(
         } = delta;
 
         if new_oid.is_zero() {
-            result.push((path, FileContent::Absent));
+            result.push((path, FileState::Absent));
             continue;
         }
 
         let hunks = match content {
             DeltaFileContent::Binary => {
-                result.push((path, FileContent::Binary));
+                result.push((path, FileState::Binary));
                 continue;
             }
             DeltaFileContent::Hunks(mut hunks) => {
@@ -156,14 +156,14 @@ pub fn process_diff_for_record(
         let before_lines = match get_lines_from_blob(old_oid)? {
             Some(lines) => lines,
             None => {
-                result.push((path, FileContent::Binary));
+                result.push((path, FileState::Binary));
                 continue;
             }
         };
         let after_lines = match get_lines_from_blob(new_oid)? {
             Some(lines) => lines,
             None => {
-                result.push((path, FileContent::Binary));
+                result.push((path, FileState::Binary));
                 continue;
             }
         };
@@ -260,7 +260,7 @@ pub fn process_diff_for_record(
         }
         result.push((
             path,
-            FileContent::Text {
+            FileState::Text {
                 file_mode: (
                     u32::from(old_file_mode).try_into().unwrap(),
                     u32::from(new_file_mode).try_into().unwrap(),

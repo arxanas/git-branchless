@@ -12,7 +12,7 @@ use tracing::error;
 
 use crate::cursive_utils::{EventDrivenCursiveApp, EventDrivenCursiveAppExt};
 use crate::tristate::{Tristate, TristateBox};
-use crate::{FileContent, Hunk, HunkChangedLine, RecordError, RecordState};
+use crate::{FileState, Hunk, HunkChangedLine, RecordError, RecordState};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum HunkType {
@@ -98,25 +98,25 @@ impl Recorder {
     fn make_main_view(&self, main_tx: Sender<Message>) -> impl View {
         let mut view = LinearLayout::vertical();
 
-        let RecordState { files } = &self.state;
+        let RecordState { file_states } = &self.state;
 
-        let global_num_changed_hunks: usize = files
+        let global_num_changed_hunks: usize = file_states
             .iter()
-            .map(|(_path, file_content)| file_content.count_changed_hunks())
+            .map(|(_path, file_state)| file_state.count_changed_hunks())
             .sum();
         let mut global_changed_hunk_num = 0;
 
-        for (file_num, (path, file_content)) in files.iter().enumerate() {
+        for (file_num, (path, file_state)) in file_states.iter().enumerate() {
             let file_key = FileKey { file_num };
             view.add_child(self.make_file_view(
                 main_tx.clone(),
                 path,
                 file_key,
-                file_content,
+                file_state,
                 &mut global_changed_hunk_num,
                 global_num_changed_hunks,
             ));
-            if file_num + 1 < files.len() {
+            if file_num + 1 < file_states.len() {
                 // Render a spacer line. Note that an empty string won't render an
                 // empty line.
                 view.add_child(TextView::new(" "));
@@ -131,7 +131,7 @@ impl Recorder {
         main_tx: Sender<Message>,
         path: &Path,
         file_key: FileKey,
-        file_content: &FileContent,
+        file_state: &FileState,
         global_changed_hunk_num: &mut usize,
         global_num_changed_hunks: usize,
     ) -> impl View {
@@ -139,14 +139,14 @@ impl Recorder {
 
         let mut file_view = LinearLayout::vertical();
         let mut line_num: usize = 1;
-        let local_num_changed_hunks = file_content.count_changed_hunks();
+        let local_num_changed_hunks = file_state.count_changed_hunks();
         let mut local_changed_hunk_num = 0;
 
         let file_header_view = LinearLayout::horizontal()
             .child(
                 TristateBox::new()
                     .with_state({
-                        all_are_same_value(iter_file_changed_lines(file_content).map(
+                        all_are_same_value(iter_file_changed_lines(file_state).map(
                             |(
                                 _hunk_type,
                                 HunkChangedLine {
@@ -178,11 +178,11 @@ impl Recorder {
             }));
         file_view.add_child(file_header_view);
 
-        match file_content {
-            FileContent::Absent | FileContent::Binary => {
+        match file_state {
+            FileState::Absent | FileState::Binary => {
                 unimplemented!("make_file_view for absent/binary files")
             }
-            FileContent::Text { file_mode, hunks } => {
+            FileState::Text { file_mode, hunks } => {
                 // FIXME: render the file mode
                 let _ = file_mode;
 
@@ -377,7 +377,7 @@ impl Recorder {
         new_value: Tristate,
     ) {
         let FileKey { file_num } = file_key;
-        let (_path, file_content) = &mut self.state.files[file_num];
+        let (_path, file_state) = &mut self.state.file_states[file_num];
 
         let new_value = match new_value {
             Tristate::Unchecked => false,
@@ -388,11 +388,11 @@ impl Recorder {
             Tristate::Checked => true,
         };
 
-        match file_content {
-            FileContent::Absent | FileContent::Binary => {
+        match file_state {
+            FileState::Absent | FileState::Binary => {
                 unimplemented!("toggle_file for absent/binary files")
             }
-            FileContent::Text {
+            FileState::Text {
                 file_mode: _,
                 hunks,
             } => {
@@ -477,12 +477,12 @@ impl Recorder {
         };
 
         let (before, after) = {
-            let (path, file_content) = &mut self.state.files[file_num];
-            match file_content {
-                FileContent::Absent | FileContent::Binary => {
+            let (path, file_state) = &mut self.state.file_states[file_num];
+            match file_state {
+                FileState::Absent | FileState::Binary => {
                     unimplemented!("toggle_hunk for absent/binary files")
                 }
-                FileContent::Text {
+                FileState::Text {
                     file_mode: _,
                     hunks,
                 } => match &mut hunks[hunk_num] {
@@ -537,12 +537,12 @@ impl Recorder {
             hunk_line_num,
         } = hunk_line_key;
 
-        let (path, file_content) = &mut self.state.files[file_num];
-        match file_content {
-            FileContent::Absent | FileContent::Binary => {
+        let (path, file_state) = &mut self.state.file_states[file_num];
+        match file_state {
+            FileState::Absent | FileState::Binary => {
                 unimplemented!("toggle_hunk_line for absent/binary files")
             }
-            FileContent::Text {
+            FileState::Text {
                 file_mode: _,
                 hunks,
             } => {
@@ -565,13 +565,13 @@ impl Recorder {
 
     fn refresh_hunk(&mut self, siv: &mut CursiveRunner<CursiveRunnable>, hunk_key: HunkKey) {
         let HunkKey { file_num, hunk_num } = hunk_key;
-        let (_path, file_content) = &mut self.state.files[file_num];
+        let (_path, file_state) = &mut self.state.file_states[file_num];
 
-        match file_content {
-            FileContent::Absent | FileContent::Binary => {
+        match file_state {
+            FileState::Absent | FileState::Binary => {
                 unimplemented!("refresh_hunk for absent/binary files")
             }
-            FileContent::Text {
+            FileState::Text {
                 file_mode: _,
                 hunks,
             } => {
@@ -595,7 +595,7 @@ impl Recorder {
 
     fn refresh_file(&mut self, siv: &mut CursiveRunner<CursiveRunnable>, file_key: FileKey) {
         let FileKey { file_num } = file_key;
-        let file_hunks = &mut self.state.files[file_num].1;
+        let file_hunks = &mut self.state.file_states[file_num].1;
 
         let file_selections = iter_file_changed_lines(file_hunks).map(
             |(
@@ -614,13 +614,13 @@ impl Recorder {
 }
 
 fn iter_file_changed_lines(
-    file_content: &FileContent,
+    file_state: &FileState,
 ) -> impl Iterator<Item = (HunkType, &HunkChangedLine)> {
-    match file_content {
-        FileContent::Absent | FileContent::Binary => {
+    match file_state {
+        FileState::Absent | FileState::Binary => {
             unimplemented!("iter_file_changed_lines for absent/binary files")
         }
-        FileContent::Text {
+        FileState::Text {
             file_mode: _,
             hunks,
         } => hunks.iter().flat_map(iter_hunk_changed_lines),
@@ -708,10 +708,10 @@ impl EventDrivenCursiveApp for Recorder {
 
             Message::Quit => {
                 let has_changes = {
-                    let RecordState { files } = &self.state;
-                    let changed_lines = files
+                    let RecordState { file_states } = &self.state;
+                    let changed_lines = file_states
                         .iter()
-                        .flat_map(|(_, hunks)| iter_file_changed_lines(hunks))
+                        .flat_map(|(_, file_state)| iter_file_changed_lines(file_state))
                         .map(
                             |(
                                 _hunk_type,
@@ -821,9 +821,9 @@ mod tests {
 
     fn example_record_state() -> RecordState {
         RecordState {
-            files: vec![(
+            file_states: vec![(
                 PathBuf::from("foo"),
-                FileContent::Text {
+                FileState::Text {
                     file_mode: (0o100644, 0o100644),
                     hunks: vec![
                         Hunk::Unchanged {
@@ -988,7 +988,7 @@ mod tests {
         insta::assert_debug_snapshot!(result, @r###"
         Ok(
             RecordState {
-                files: [
+                file_states: [
                     (
                         "foo",
                         Text {
@@ -1102,7 +1102,7 @@ mod tests {
         insta::assert_debug_snapshot!(result, @r###"
         Ok(
             RecordState {
-                files: [
+                file_states: [
                     (
                         "foo",
                         Text {
@@ -1152,11 +1152,11 @@ mod tests {
     fn test_initial_tristate_states() {
         let state = {
             let mut state = example_record_state();
-            let (_path, file_content) = &mut state.files[0];
-            match file_content {
-                FileContent::Absent => panic!("Example state should not have absent files"),
-                FileContent::Binary => panic!("Example state should not have binary files"),
-                FileContent::Text {
+            let (_path, file_state) = &mut state.file_states[0];
+            match file_state {
+                FileState::Absent => panic!("Example state should not have absent files"),
+                FileState::Binary => panic!("Example state should not have binary files"),
+                FileState::Text {
                     file_mode: _,
                     hunks,
                 } => {
@@ -1199,9 +1199,9 @@ mod tests {
     #[test]
     fn test_context() {
         let state = RecordState {
-            files: vec![(
+            file_states: vec![(
                 PathBuf::from("foo"),
-                FileContent::Text {
+                FileState::Text {
                     file_mode: (0o100644, 0o100644),
                     hunks: vec![
                         Hunk::Unchanged {
@@ -1272,13 +1272,13 @@ mod tests {
     fn test_render_multiple_hunks() -> eyre::Result<()> {
         let mut state = example_record_state();
         let (file_mode, hunks) = {
-            let (_, file_contents) = &state.files[0];
-            match file_contents {
-                FileContent::Absent | FileContent::Binary => panic!("should be text"),
-                FileContent::Text { file_mode, hunks } => (file_mode, hunks.clone()),
+            let (_, file_state) = &state.file_states[0];
+            match file_state {
+                FileState::Absent | FileState::Binary => panic!("should be text"),
+                FileState::Text { file_mode, hunks } => (file_mode, hunks.clone()),
             }
         };
-        state.files[0].1 = FileContent::Text {
+        state.file_states[0].1 = FileState::Text {
             file_mode: *file_mode,
             hunks: [hunks.clone(), hunks].concat(),
         };
