@@ -216,7 +216,7 @@ pub mod testing {
             .iter()
             .map(|row| {
                 let line: String = row.iter().collect();
-                line.trim().to_owned() + "\n"
+                line.trim_end().to_owned() + "\n"
             })
             .collect::<String>()
             .trim()

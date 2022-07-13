@@ -873,13 +873,13 @@ mod tests {
         );
         insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
         [~] foo
-        1 unchanged 1
-        2 unchanged 2
-        [~] hunk 1/1 in current file, 1/1 total
-        [X] -before 1
-        [X] -before 2
-        [X] +after 1
-        [ ] +after 2
+                              1 unchanged 1
+                              2 unchanged 2
+                              [~] hunk 1/1 in current file, 1/1 total
+                                [X] -before 1
+                                [X] -before 2
+                                [X] +after 1
+                                [ ] +after 2
         "###);
         insta::assert_debug_snapshot!(result, @r###"
         Err(
@@ -906,13 +906,13 @@ mod tests {
         );
         insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
         [X] foo
-        1 unchanged 1
-        2 unchanged 2
-        [X] hunk 1/1 in current file, 1/1 total
-        [X] -before 1
-        [X] -before 2
-        [X] +after 1
-        [X] +after 2
+                              1 unchanged 1
+                              2 unchanged 2
+                              [X] hunk 1/1 in current file, 1/1 total
+                                [X] -before 1
+                                [X] -before 2
+                                [X] +after 1
+                                [X] +after 2
         "###);
         insta::assert_debug_snapshot!(result, @r###"
         Err(
@@ -947,43 +947,43 @@ mod tests {
 
         insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
         [X] foo
-        1 unchanged 1
-        2 unchanged 2
-        [X] hunk 1/1 in current file, 1/1 total
-        [X] -before 1
-        [X] -before 2
-        [X] +after 1
-        [X] +after 2
+                              1 unchanged 1
+                              2 unchanged 2
+                              [X] hunk 1/1 in current file, 1/1 total
+                                [X] -before 1
+                                [X] -before 2
+                                [X] +after 1
+                                [X] +after 2
         "###);
         insta::assert_snapshot!(screen_to_string(&screenshot2), @r###"
         [ ] foo
-        1 unchanged 1
-        2 unchanged 2
-        [ ] hunk 1/1 in current file, 1/1 total
-        [ ] -before 1
-        [ ] -before 2
-        [ ] +after 1
-        [ ] +after 2
+                              1 unchanged 1
+                              2 unchanged 2
+                              [ ] hunk 1/1 in current file, 1/1 total
+                                [ ] -before 1
+                                [ ] -before 2
+                                [ ] +after 1
+                                [ ] +after 2
         "###);
         insta::assert_snapshot!(screen_to_string(&screenshot3), @r###"
         [~] foo
-        1 unchanged 1
-        2 unchanged 2
-        [~] hunk 1/1 in current file, 1/1 total
-        [X] -before 1
-        [ ] -before 2
-        [ ] +after 1
-        [ ] +after 2
+                              1 unchanged 1
+                              2 unchanged 2
+                              [~] hunk 1/1 in current file, 1/1 total
+                                [X] -before 1
+                                [ ] -before 2
+                                [ ] +after 1
+                                [ ] +after 2
         "###);
         insta::assert_snapshot!(screen_to_string(&screenshot4), @r###"
         [X] foo
-        1 unchanged 1
-        2 unchanged 2
-        [X] hunk 1/1 in current file, 1/1 total
-        [X] -before 1
-        [X] -before 2
-        [X] +after 1
-        [X] +after 2
+                              1 unchanged 1
+                              2 unchanged 2
+                              [X] hunk 1/1 in current file, 1/1 total
+                                [X] -before 1
+                                [X] -before 2
+                                [X] +after 1
+                                [X] +after 2
         "###);
         insta::assert_debug_snapshot!(result, @r###"
         Ok(
@@ -1061,43 +1061,43 @@ mod tests {
 
         insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
         [X] foo
-        1 unchanged 1
-        2 unchanged 2
-        [X] hunk 1/1 in current file, 1/1 total
-        [X] -before 1
-        [X] -before 2
-        [X] +after 1
-        [X] +after 2
+                              1 unchanged 1
+                              2 unchanged 2
+                              [X] hunk 1/1 in current file, 1/1 total
+                                [X] -before 1
+                                [X] -before 2
+                                [X] +after 1
+                                [X] +after 2
         "###);
         insta::assert_snapshot!(screen_to_string(&screenshot2), @r###"
         [ ] foo
-        1 unchanged 1
-        2 unchanged 2
-        [ ] hunk 1/1 in current file, 1/1 total
-        [ ] -before 1
-        [ ] -before 2
-        [ ] +after 1
-        [ ] +after 2
+                              1 unchanged 1
+                              2 unchanged 2
+                              [ ] hunk 1/1 in current file, 1/1 total
+                                [ ] -before 1
+                                [ ] -before 2
+                                [ ] +after 1
+                                [ ] +after 2
         "###);
         insta::assert_snapshot!(screen_to_string(&screenshot3), @r###"
         [~] foo
-        1 unchanged 1
-        2 unchanged 2
-        [~] hunk 1/1 in current file, 1/1 total
-        [X] -before 1
-        [ ] -before 2
-        [ ] +after 1
-        [ ] +after 2
+                              1 unchanged 1
+                              2 unchanged 2
+                              [~] hunk 1/1 in current file, 1/1 total
+                                [X] -before 1
+                                [ ] -before 2
+                                [ ] +after 1
+                                [ ] +after 2
         "###);
         insta::assert_snapshot!(screen_to_string(&screenshot4), @r###"
         [X] foo
-        1 unchanged 1
-        2 unchanged 2
-        [X] hunk 1/1 in current file, 1/1 total
-        [X] -before 1
-        [X] -before 2
-        [X] +after 1
-        [X] +after 2
+                              1 unchanged 1
+                              2 unchanged 2
+                              [X] hunk 1/1 in current file, 1/1 total
+                                [X] -before 1
+                                [X] -before 2
+                                [X] +after 1
+                                [X] +after 2
         "###);
         insta::assert_debug_snapshot!(result, @r###"
         Ok(
@@ -1186,13 +1186,13 @@ mod tests {
         "###);
         insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
         [~] foo
-        1 unchanged 1
-        2 unchanged 2
-        [~] hunk 1/1 in current file, 1/1 total
-        [X] -before 1
-        [X] -before 2
-        [X] +after 1
-        [ ] +after 2
+                              1 unchanged 1
+                              2 unchanged 2
+                              [~] hunk 1/1 in current file, 1/1 total
+                                [X] -before 1
+                                [X] -before 2
+                                [X] +after 1
+                                [ ] +after 2
         "###);
     }
 
@@ -1257,14 +1257,14 @@ mod tests {
         "###);
         insta::assert_snapshot!(screen_to_string(&screenshot), @r###"
         [ ] foo
-        3 baz
-        4 qux
-        [ ] hunk 1/1 in current file, 1/1 total
-        [ ] -changed 1
-        [ ] +changed 2
-        [ ] +changed 3
-        6 foo
-        7 bar
+                              3 baz
+                              4 qux
+                              [ ] hunk 1/1 in current file, 1/1 total
+                                [ ] -changed 1
+                                [ ] +changed 2
+                                [ ] +changed 3
+                              6 foo
+                              7 bar
         "###);
     }
 
@@ -1300,23 +1300,23 @@ mod tests {
         "###);
         insta::assert_snapshot!(screen_to_string(&screenshot), @r###"
         [~] foo
-        1 unchanged 1
-        2 unchanged 2
-        [~] hunk 1/2 in current file, 1/2 total
-        [X] -before 1
-        [X] -before 2
-        [X] +after 1
-        [ ] +after 2
-        5 unchanged 1
-        6 unchanged 2
-        :
-        5 unchanged 1
-        6 unchanged 2
-        [~] hunk 2/2 in current file, 2/2 total
-        [X] -before 1
-        [X] -before 2
-        [X] +after 1
-        [ ] +after 2
+                              1 unchanged 1
+                              2 unchanged 2
+                              [~] hunk 1/2 in current file, 1/2 total
+                                [X] -before 1
+                                [X] -before 2
+                                [X] +after 1
+                                [ ] +after 2
+                              5 unchanged 1
+                              6 unchanged 2
+                            :
+                              5 unchanged 1
+                              6 unchanged 2
+                              [~] hunk 2/2 in current file, 2/2 total
+                                [X] -before 1
+                                [X] -before 2
+                                [X] +after 1
+                                [ ] +after 2
         "###);
 
         Ok(())
