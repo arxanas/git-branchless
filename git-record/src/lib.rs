@@ -18,5 +18,6 @@ mod tristate;
 mod types;
 mod ui;
 
+pub use cursive_utils::testing;
 pub use types::{FileContent, Hunk, HunkChangedLine, RecordError, RecordState};
 pub use ui::Recorder;
