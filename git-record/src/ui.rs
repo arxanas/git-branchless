@@ -233,7 +233,7 @@ impl Recorder {
                             local_changed_section_num += 1;
                             *global_changed_section_num += 1;
                             let description = format!(
-                                "hunk {}/{} in current file, {}/{} total",
+                                "section {}/{} in current file, {}/{} total",
                                 local_changed_section_num,
                                 local_num_changed_sections,
                                 global_changed_section_num,
@@ -604,7 +604,7 @@ impl Recorder {
     ) {
         let SectionKey {
             file_num,
-            section_num: sectoin_num,
+            section_num,
         } = section_key;
         let (_path, file_state) = &mut self.state.file_states[file_num];
 
@@ -616,7 +616,7 @@ impl Recorder {
                 file_mode: _,
                 sections,
             } => {
-                let section_selections = iter_section_changed_lines(&sections[sectoin_num]).map(
+                let section_selections = iter_section_changed_lines(&sections[section_num]).map(
                     |(
                         _section_changed_line_type,
                         SectionChangedLine {
@@ -628,7 +628,7 @@ impl Recorder {
                 let section_new_value = all_are_same_value(section_selections).into_tristate();
                 let section_key = SectionKey {
                     file_num,
-                    section_num: sectoin_num,
+                    section_num,
                 };
                 siv.call_on_name(&section_key.view_id(), |tristate_box: &mut TristateBox| {
                     tristate_box.set_state(section_new_value);
@@ -922,7 +922,7 @@ mod tests {
         [~] foo
                               1 unchanged 1
                               2 unchanged 2
-                              [~] hunk 1/1 in current file, 1/1 total
+                              [~] section 1/1 in current file, 1/1 total
                                 [X] -before 1
                                 [X] -before 2
                                 [X] +after 1
@@ -955,7 +955,7 @@ mod tests {
         [X] foo
                               1 unchanged 1
                               2 unchanged 2
-                              [X] hunk 1/1 in current file, 1/1 total
+                              [X] section 1/1 in current file, 1/1 total
                                 [X] -before 1
                                 [X] -before 2
                                 [X] +after 1
@@ -996,7 +996,7 @@ mod tests {
         [X] foo
                               1 unchanged 1
                               2 unchanged 2
-                              [X] hunk 1/1 in current file, 1/1 total
+                              [X] section 1/1 in current file, 1/1 total
                                 [X] -before 1
                                 [X] -before 2
                                 [X] +after 1
@@ -1006,7 +1006,7 @@ mod tests {
         [ ] foo
                               1 unchanged 1
                               2 unchanged 2
-                              [ ] hunk 1/1 in current file, 1/1 total
+                              [ ] section 1/1 in current file, 1/1 total
                                 [ ] -before 1
                                 [ ] -before 2
                                 [ ] +after 1
@@ -1016,7 +1016,7 @@ mod tests {
         [~] foo
                               1 unchanged 1
                               2 unchanged 2
-                              [~] hunk 1/1 in current file, 1/1 total
+                              [~] section 1/1 in current file, 1/1 total
                                 [X] -before 1
                                 [ ] -before 2
                                 [ ] +after 1
@@ -1026,7 +1026,7 @@ mod tests {
         [X] foo
                               1 unchanged 1
                               2 unchanged 2
-                              [X] hunk 1/1 in current file, 1/1 total
+                              [X] section 1/1 in current file, 1/1 total
                                 [X] -before 1
                                 [X] -before 2
                                 [X] +after 1
@@ -1110,7 +1110,7 @@ mod tests {
         [X] foo
                               1 unchanged 1
                               2 unchanged 2
-                              [X] hunk 1/1 in current file, 1/1 total
+                              [X] section 1/1 in current file, 1/1 total
                                 [X] -before 1
                                 [X] -before 2
                                 [X] +after 1
@@ -1120,7 +1120,7 @@ mod tests {
         [ ] foo
                               1 unchanged 1
                               2 unchanged 2
-                              [ ] hunk 1/1 in current file, 1/1 total
+                              [ ] section 1/1 in current file, 1/1 total
                                 [ ] -before 1
                                 [ ] -before 2
                                 [ ] +after 1
@@ -1130,7 +1130,7 @@ mod tests {
         [~] foo
                               1 unchanged 1
                               2 unchanged 2
-                              [~] hunk 1/1 in current file, 1/1 total
+                              [~] section 1/1 in current file, 1/1 total
                                 [X] -before 1
                                 [ ] -before 2
                                 [ ] +after 1
@@ -1140,7 +1140,7 @@ mod tests {
         [X] foo
                               1 unchanged 1
                               2 unchanged 2
-                              [X] hunk 1/1 in current file, 1/1 total
+                              [X] section 1/1 in current file, 1/1 total
                                 [X] -before 1
                                 [X] -before 2
                                 [X] +after 1
@@ -1235,7 +1235,7 @@ mod tests {
         [~] foo
                               1 unchanged 1
                               2 unchanged 2
-                              [~] hunk 1/1 in current file, 1/1 total
+                              [~] section 1/1 in current file, 1/1 total
                                 [X] -before 1
                                 [X] -before 2
                                 [X] +after 1
@@ -1306,7 +1306,7 @@ mod tests {
         [ ] foo
                               3 baz
                               4 qux
-                              [ ] hunk 1/1 in current file, 1/1 total
+                              [ ] section 1/1 in current file, 1/1 total
                                 [ ] -changed 1
                                 [ ] +changed 2
                                 [ ] +changed 3
@@ -1352,7 +1352,7 @@ mod tests {
         [~] foo
                               1 unchanged 1
                               2 unchanged 2
-                              [~] hunk 1/2 in current file, 1/2 total
+                              [~] section 1/2 in current file, 1/2 total
                                 [X] -before 1
                                 [X] -before 2
                                 [X] +after 1
@@ -1362,7 +1362,7 @@ mod tests {
                             :
                               5 unchanged 1
                               6 unchanged 2
-                              [~] hunk 2/2 in current file, 2/2 total
+                              [~] section 2/2 in current file, 2/2 total
                                 [X] -before 1
                                 [X] -before 2
                                 [X] +after 1
