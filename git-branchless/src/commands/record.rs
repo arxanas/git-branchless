@@ -103,7 +103,7 @@ fn record_interactive(
     event_tx_id: EventTransactionId,
     message: Option<&str>,
 ) -> eyre::Result<ExitCode> {
-    let files = {
+    let file_states = {
         let (effects, _progress) = effects.start_operation(OperationType::CalculateDiff);
         let old_tree = snapshot.commit_stage0.get_tree()?;
         let new_tree = snapshot.commit_unstaged.get_tree()?;
@@ -116,7 +116,7 @@ fn record_interactive(
         )?;
         process_diff_for_record(repo, &diff)?
     };
-    let record_state = RecordState { files };
+    let record_state = RecordState { file_states };
 
     let siv = CursiveRunnable::new(|| -> io::Result<_> {
         // Use crossterm to ensure that we support Windows.
@@ -127,7 +127,9 @@ fn record_interactive(
 
     let recorder = Recorder::new(record_state);
     let result = recorder.run(siv);
-    let RecordState { files: result } = match result {
+    let RecordState {
+        file_states: result,
+    } = match result {
         Ok(result) => result,
         Err(RecordError::Cancelled) => {
             println!("Aborted.");
@@ -137,8 +139,8 @@ fn record_interactive(
 
     let update_index_script: Vec<UpdateIndexCommand> = result
         .into_iter()
-        .map(|(path, file_content)| -> eyre::Result<UpdateIndexCommand> {
-            let (selected, _unselected) = file_content.get_selected_contents();
+        .map(|(path, file_state)| -> eyre::Result<UpdateIndexCommand> {
+            let (selected, _unselected) = file_state.get_selected_contents();
             let oid = repo.create_blob_from_contents(selected.as_bytes())?;
             let command = UpdateIndexCommand::Update {
                 path,

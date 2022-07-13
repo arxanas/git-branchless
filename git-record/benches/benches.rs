@@ -5,7 +5,7 @@ use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use cursive::CursiveRunnable;
 use git_record::{
     testing::{CursiveTestingBackend, CursiveTestingEvent},
-    FileContent, Hunk, HunkChangedLine, RecordState, Recorder,
+    FileState, Hunk, HunkChangedLine, RecordState, Recorder,
 };
 
 fn bench_record(c: &mut Criterion) {
@@ -18,9 +18,9 @@ fn bench_record(c: &mut Criterion) {
             is_selected: false,
             line: "foo\n".to_string(),
         };
-        let files = vec![(
+        let file_states = vec![(
             PathBuf::from("foo"),
-            FileContent::Text {
+            FileState::Text {
                 file_mode: (0o100644, 0o100644),
                 hunks: vec![Hunk::Changed {
                     before: vec![before_hunk; 1000],
@@ -28,7 +28,7 @@ fn bench_record(c: &mut Criterion) {
                 }],
             },
         )];
-        let record_state = RecordState { files };
+        let record_state = RecordState { file_states };
         b.iter_batched(
             || {
                 let siv = CursiveRunnable::new::<Infallible, _>(move || {

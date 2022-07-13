@@ -9,13 +9,13 @@ use cursive::CursiveRunnable;
 use cursive_buffered_backend::BufferedBackend;
 
 use git_record::Recorder;
-use git_record::{FileContent, Hunk, HunkChangedLine, RecordError, RecordState};
+use git_record::{FileState, Hunk, HunkChangedLine, RecordError, RecordState};
 
 fn main() {
-    let files = vec![
+    let file_states = vec![
         (
             PathBuf::from("foo/bar"),
-            FileContent::Text {
+            FileState::Text {
                 file_mode: (0o100644, 0o100644),
                 hunks: vec![
                     Hunk::Unchanged {
@@ -53,7 +53,7 @@ fn main() {
         ),
         (
             PathBuf::from("baz"),
-            FileContent::Text {
+            FileState::Text {
                 file_mode: (0o100644, 0o100644),
                 hunks: vec![
                     Hunk::Unchanged {
@@ -91,7 +91,7 @@ fn main() {
             },
         ),
     ];
-    let record_state = RecordState { files };
+    let record_state = RecordState { file_states };
 
     let siv = CursiveRunnable::new(|| -> io::Result<_> {
         // Use crossterm to ensure that we support Windows.
@@ -104,9 +104,9 @@ fn main() {
     let result = recorder.run(siv);
     match result {
         Ok(result) => {
-            let RecordState { files } = result;
+            let RecordState { file_states } = result;
             let mut is_first = true;
-            for (path, file_hunks) in files {
+            for (path, file_hunks) in file_states {
                 if is_first {
                     is_first = false;
                 } else {

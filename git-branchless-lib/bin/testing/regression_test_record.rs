@@ -8,7 +8,7 @@ use branchless::core::effects::Effects;
 use branchless::core::formatting::Glyphs;
 use branchless::git::{hydrate_tree, process_diff_for_record, FileMode, Repo};
 use eyre::Context;
-use git_record::{FileContent, Hunk};
+use git_record::{FileState, Hunk};
 
 fn main() -> eyre::Result<()> {
     let path_to_repo = std::env::var("PATH_TO_REPO")
@@ -46,10 +46,10 @@ fn main() -> eyre::Result<()> {
 
         let entries = {
             let mut entries = process_diff_for_record(&repo, &diff)?;
-            for (_, file_content) in &mut entries {
-                match file_content {
-                    FileContent::Absent | FileContent::Binary => {}
-                    FileContent::Text {
+            for (_, file_state) in &mut entries {
+                match file_state {
+                    FileState::Absent | FileState::Binary => {}
+                    FileState::Text {
                         file_mode: _,
                         hunks,
                     } => {
@@ -73,10 +73,10 @@ fn main() -> eyre::Result<()> {
         };
         let entries: HashMap<_, _> = entries
             .into_iter()
-            .map(|(path, file_content)| {
-                let value = match file_content {
-                    FileContent::Absent => None,
-                    FileContent::Binary => {
+            .map(|(path, file_state)| {
+                let value = match file_state {
+                    FileState::Absent => None,
+                    FileState::Binary => {
                         let entry = new_tree.get_path(&path)?;
                         match entry {
                             Some(tree_entry) => {
@@ -85,11 +85,11 @@ fn main() -> eyre::Result<()> {
                             None => None,
                         }
                     }
-                    FileContent::Text {
+                    FileState::Text {
                         file_mode: (_old_file_mode, new_file_mode),
                         hunks: _,
                     } => {
-                        let (selected, _unselected) = file_content.get_selected_contents();
+                        let (selected, _unselected) = file_state.get_selected_contents();
                         let blob_oid = repo.create_blob_from_contents(selected.as_bytes())?;
                         let file_mode = i32::try_from(new_file_mode).unwrap();
                         let file_mode = FileMode::from(file_mode);
