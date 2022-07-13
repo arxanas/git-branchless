@@ -5,16 +5,16 @@ use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use cursive::CursiveRunnable;
 use git_record::{
     testing::{CursiveTestingBackend, CursiveTestingEvent},
-    FileState, Hunk, HunkChangedLine, RecordState, Recorder,
+    FileState, RecordState, Recorder, Section, SectionChangedLine,
 };
 
 fn bench_record(c: &mut Criterion) {
-    c.bench_function("toogle line", |b| {
-        let before_hunk = HunkChangedLine {
+    c.bench_function("toggle line", |b| {
+        let before_line = SectionChangedLine {
             is_selected: false,
             line: "foo\n".to_string(),
         };
-        let after_hunk = HunkChangedLine {
+        let after_line = SectionChangedLine {
             is_selected: false,
             line: "foo\n".to_string(),
         };
@@ -22,9 +22,9 @@ fn bench_record(c: &mut Criterion) {
             PathBuf::from("foo"),
             FileState::Text {
                 file_mode: (0o100644, 0o100644),
-                hunks: vec![Hunk::Changed {
-                    before: vec![before_hunk; 1000],
-                    after: vec![after_hunk; 1000],
+                sections: vec![Section::Changed {
+                    before: vec![before_line; 1000],
+                    after: vec![after_line; 1000],
                 }],
             },
         )];

@@ -30,26 +30,26 @@ pub enum FileState {
         /// The file modes before and after the change.
         file_mode: (usize, usize),
 
-        /// The set of [`Hunk`]s inside the file.
-        hunks: Vec<Hunk>,
+        /// The set of [`Section`]s inside the file.
+        sections: Vec<Section>,
     },
 }
 
 impl FileState {
     /// Count the number of changed sections in this file.
-    pub fn count_changed_hunks(&self) -> usize {
+    pub fn count_changed_sections(&self) -> usize {
         match self {
             FileState::Absent | FileState::Binary => {
-                unimplemented!("count_changed_hunks for absent/binary files")
+                unimplemented!("count_changed_sections for absent/binary files")
             }
             FileState::Text {
                 file_mode: _,
-                hunks,
-            } => hunks
+                sections,
+            } => sections
                 .iter()
-                .filter(|hunk| match hunk {
-                    Hunk::Unchanged { .. } => false,
-                    Hunk::Changed { .. } => true,
+                .filter(|section| match section {
+                    Section::Unchanged { .. } => false,
+                    Section::Changed { .. } => true,
                 })
                 .count(),
         }
@@ -67,18 +67,18 @@ impl FileState {
             }
             FileState::Text {
                 file_mode: _,
-                hunks,
+                sections,
             } => {
-                for hunk in hunks {
-                    match hunk {
-                        Hunk::Unchanged { contents } => {
+                for section in sections {
+                    match section {
+                        Section::Unchanged { contents } => {
                             for line in contents {
                                 acc_selected.push_str(line);
                                 acc_unselected.push_str(line);
                             }
                         }
-                        Hunk::Changed { before, after } => {
-                            for HunkChangedLine { is_selected, line } in before {
+                        Section::Changed { before, after } => {
+                            for SectionChangedLine { is_selected, line } in before {
                                 // Note the inverted condition here.
                                 if !*is_selected {
                                     acc_selected.push_str(line);
@@ -87,7 +87,7 @@ impl FileState {
                                 }
                             }
 
-                            for HunkChangedLine { is_selected, line } in after {
+                            for SectionChangedLine { is_selected, line } in after {
                                 if *is_selected {
                                     acc_selected.push_str(line);
                                 } else {
@@ -104,11 +104,8 @@ impl FileState {
 }
 
 /// A section of a file to be rendered and recorded.
-///
-/// Unlike typical `diff` terminology, here, a "hunk" can refer to either a
-/// changed or unchanged section of a file, not just a changed section.
 #[derive(Clone, Debug)]
-pub enum Hunk {
+pub enum Section {
     /// This section of the file is unchanged and just used for context.
     Unchanged {
         /// The contents of the lines in this section. Each line includes its
@@ -121,17 +118,17 @@ pub enum Hunk {
     Changed {
         /// The contents of the lines before the user change was made. Each line
         /// includes its trailing newline character(s), if any.
-        before: Vec<HunkChangedLine>,
+        before: Vec<SectionChangedLine>,
 
         /// The contents of the lines after the user change was made. Each line
         /// includes its trailing newline character(s), if any.
-        after: Vec<HunkChangedLine>,
+        after: Vec<SectionChangedLine>,
     },
 }
 
-/// A changed line inside a `Hunk`.
+/// A changed line inside a `Section`.
 #[derive(Clone, Debug)]
-pub struct HunkChangedLine {
+pub struct SectionChangedLine {
     /// Whether or not this line was selected to be recorded.
     pub is_selected: bool,
 

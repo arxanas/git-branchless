@@ -9,7 +9,7 @@ use cursive::CursiveRunnable;
 use cursive_buffered_backend::BufferedBackend;
 
 use git_record::Recorder;
-use git_record::{FileState, Hunk, HunkChangedLine, RecordError, RecordState};
+use git_record::{FileState, RecordError, RecordState, Section, SectionChangedLine};
 
 fn main() {
     let file_states = vec![
@@ -17,35 +17,35 @@ fn main() {
             PathBuf::from("foo/bar"),
             FileState::Text {
                 file_mode: (0o100644, 0o100644),
-                hunks: vec![
-                    Hunk::Unchanged {
+                sections: vec![
+                    Section::Unchanged {
                         contents: std::iter::repeat("this is some text".to_string())
                             .take(20)
                             .collect(),
                     },
-                    Hunk::Changed {
+                    Section::Changed {
                         before: vec![
-                            HunkChangedLine {
+                            SectionChangedLine {
                                 is_selected: true,
                                 line: "before text 1".to_string(),
                             },
-                            HunkChangedLine {
+                            SectionChangedLine {
                                 is_selected: true,
                                 line: "before text 2".to_string(),
                             },
                         ],
                         after: vec![
-                            HunkChangedLine {
+                            SectionChangedLine {
                                 is_selected: true,
                                 line: "after text 1".to_string(),
                             },
-                            HunkChangedLine {
+                            SectionChangedLine {
                                 is_selected: false,
                                 line: "after text 2".to_string(),
                             },
                         ],
                     },
-                    Hunk::Unchanged {
+                    Section::Unchanged {
                         contents: vec!["this is some trailing text".to_string()],
                     },
                 ],
@@ -55,36 +55,36 @@ fn main() {
             PathBuf::from("baz"),
             FileState::Text {
                 file_mode: (0o100644, 0o100644),
-                hunks: vec![
-                    Hunk::Unchanged {
+                sections: vec![
+                    Section::Unchanged {
                         contents: vec![
                             "Some leading text 1".to_string(),
                             "Some leading text 2".to_string(),
                         ],
                     },
-                    Hunk::Changed {
+                    Section::Changed {
                         before: vec![
-                            HunkChangedLine {
+                            SectionChangedLine {
                                 is_selected: true,
                                 line: "before text 1".to_string(),
                             },
-                            HunkChangedLine {
+                            SectionChangedLine {
                                 is_selected: true,
                                 line: "before text 2".to_string(),
                             },
                         ],
                         after: vec![
-                            HunkChangedLine {
+                            SectionChangedLine {
                                 is_selected: true,
                                 line: "after text 1".to_string(),
                             },
-                            HunkChangedLine {
+                            SectionChangedLine {
                                 is_selected: true,
                                 line: "after text 2".to_string(),
                             },
                         ],
                     },
-                    Hunk::Unchanged {
+                    Section::Unchanged {
                         contents: vec!["this is some trailing text".to_string()],
                     },
                 ],
@@ -106,7 +106,7 @@ fn main() {
         Ok(result) => {
             let RecordState { file_states } = result;
             let mut is_first = true;
-            for (path, file_hunks) in file_states {
+            for (path, file_state) in file_states {
                 if is_first {
                     is_first = false;
                 } else {
@@ -114,7 +114,7 @@ fn main() {
                 }
 
                 println!("Path {} will have these final contents:", path.display());
-                let (selected, _unselected) = file_hunks.get_selected_contents();
+                let (selected, _unselected) = file_state.get_selected_contents();
                 print!("{}", selected);
             }
         }

@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use eyre::Context;
-use git_record::{FileState, Hunk, HunkChangedLine};
+use git_record::{FileState, Section, SectionChangedLine};
 
 use super::{MaybeZeroOid, Repo};
 
@@ -203,7 +203,7 @@ pub fn process_diff_for_record(
                 } else {
                     old_start
                 };
-                file_hunks.push(Hunk::Unchanged {
+                file_hunks.push(Section::Unchanged {
                     contents: before_lines[unchanged_hunk_line_idx..end].to_vec(),
                 });
                 unchanged_hunk_line_idx = end + old_lines;
@@ -233,11 +233,11 @@ pub fn process_diff_for_record(
                 path = path,
                 lines  = &after_lines[after_idx_start..],
             );
-            file_hunks.push(Hunk::Changed {
+            file_hunks.push(Section::Changed {
                 before: before_lines[before_idx_start..before_idx_end]
                     .iter()
                     .cloned()
-                    .map(|line| HunkChangedLine {
+                    .map(|line| SectionChangedLine {
                         is_selected: false,
                         line,
                     })
@@ -245,7 +245,7 @@ pub fn process_diff_for_record(
                 after: after_lines[after_idx_start..after_idx_end]
                     .iter()
                     .cloned()
-                    .map(|line| HunkChangedLine {
+                    .map(|line| SectionChangedLine {
                         is_selected: false,
                         line,
                     })
@@ -254,7 +254,7 @@ pub fn process_diff_for_record(
         }
 
         if unchanged_hunk_line_idx < before_lines.len() {
-            file_hunks.push(Hunk::Unchanged {
+            file_hunks.push(Section::Unchanged {
                 contents: before_lines[unchanged_hunk_line_idx..].to_vec(),
             });
         }
@@ -265,7 +265,7 @@ pub fn process_diff_for_record(
                     u32::from(old_file_mode).try_into().unwrap(),
                     u32::from(new_file_mode).try_into().unwrap(),
                 ),
-                hunks: file_hunks,
+                sections: file_hunks,
             },
         ));
     }
