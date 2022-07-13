@@ -12,7 +12,7 @@ use tracing::error;
 
 use crate::cursive_utils::{EventDrivenCursiveApp, EventDrivenCursiveAppExt};
 use crate::tristate::{Tristate, TristateBox};
-use crate::{FileState, Hunk, HunkChangedLine, RecordError, RecordState};
+use crate::{FileState, RecordError, RecordState, Section, SectionChangedLine};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum HunkType {
@@ -102,7 +102,7 @@ impl Recorder {
 
         let global_num_changed_hunks: usize = file_states
             .iter()
-            .map(|(_path, file_state)| file_state.count_changed_hunks())
+            .map(|(_path, file_state)| file_state.count_changed_sections())
             .sum();
         let mut global_changed_hunk_num = 0;
 
@@ -139,7 +139,7 @@ impl Recorder {
 
         let mut file_view = LinearLayout::vertical();
         let mut line_num: usize = 1;
-        let local_num_changed_hunks = file_state.count_changed_hunks();
+        let local_num_changed_hunks = file_state.count_changed_sections();
         let mut local_changed_hunk_num = 0;
 
         let file_header_view = LinearLayout::horizontal()
@@ -149,7 +149,7 @@ impl Recorder {
                         all_are_same_value(iter_file_changed_lines(file_state).map(
                             |(
                                 _hunk_type,
-                                HunkChangedLine {
+                                SectionChangedLine {
                                     is_selected,
                                     line: _,
                                 },
@@ -182,13 +182,16 @@ impl Recorder {
             FileState::Absent | FileState::Binary => {
                 unimplemented!("make_file_view for absent/binary files")
             }
-            FileState::Text { file_mode, hunks } => {
+            FileState::Text {
+                file_mode,
+                sections,
+            } => {
                 // FIXME: render the file mode
                 let _ = file_mode;
 
-                for (hunk_num, hunk) in hunks.iter().enumerate() {
-                    match hunk {
-                        Hunk::Unchanged { contents } => {
+                for (hunk_num, section) in sections.iter().enumerate() {
+                    match section {
+                        Section::Unchanged { contents } => {
                             const CONTEXT: usize = 2;
 
                             // Add the trailing context for the previous hunk (if any).
@@ -204,12 +207,12 @@ impl Recorder {
                             }
 
                             // Add vertical ellipsis between hunks.
-                            if hunk_num > 0 && hunk_num + 1 < hunks.len() {
+                            if hunk_num > 0 && hunk_num + 1 < sections.len() {
                                 file_view.add_child(TextView::new(":"));
                             }
 
                             // Add the leading context for the next hunk (if any).
-                            if hunk_num + 1 < hunks.len() {
+                            if hunk_num + 1 < sections.len() {
                                 let start_index = contents.len().saturating_sub(CONTEXT);
                                 for (i, line) in contents[start_index..].iter().enumerate() {
                                     file_view.add_child(TextView::new(format!(
@@ -223,7 +226,7 @@ impl Recorder {
                             line_num += contents.len();
                         }
 
-                        Hunk::Changed { before, after } => {
+                        Section::Changed { before, after } => {
                             local_changed_hunk_num += 1;
                             *global_changed_hunk_num += 1;
                             let description = format!(
@@ -260,8 +263,8 @@ impl Recorder {
         file_num: usize,
         hunk_num: usize,
         hunk_description: String,
-        before: &[HunkChangedLine],
-        after: &[HunkChangedLine],
+        before: &[SectionChangedLine],
+        after: &[SectionChangedLine],
     ) {
         let mut hunk_view = LinearLayout::vertical();
         let hunk_key = HunkKey { file_num, hunk_num };
@@ -280,7 +283,7 @@ impl Recorder {
             ));
         }
 
-        for (hunk_line_num, hunk_changed_line) in after.iter().enumerate() {
+        for (hunk_line_num, section_changed_line) in after.iter().enumerate() {
             let hunk_line_key = HunkLineKey {
                 file_num,
                 hunk_num,
@@ -290,7 +293,7 @@ impl Recorder {
             hunk_view.add_child(self.make_changed_line_view(
                 main_tx.clone(),
                 hunk_line_key,
-                hunk_changed_line,
+                section_changed_line,
             ));
         }
 
@@ -301,7 +304,7 @@ impl Recorder {
                     TristateBox::new()
                         .with_state(
                             all_are_same_value(before.iter().chain(after.iter()).map(
-                                |HunkChangedLine {
+                                |SectionChangedLine {
                                      is_selected,
                                      line: _,
                                  }| { *is_selected },
@@ -336,9 +339,9 @@ impl Recorder {
         &self,
         main_tx: Sender<Message>,
         hunk_line_key: HunkLineKey,
-        hunk_changed_line: &HunkChangedLine,
+        hunk_changed_line: &SectionChangedLine,
     ) -> impl View {
-        let HunkChangedLine { is_selected, line } = hunk_changed_line;
+        let SectionChangedLine { is_selected, line } = hunk_changed_line;
 
         let line_contents = {
             let (line, style) = match hunk_line_key.hunk_type {
@@ -394,17 +397,17 @@ impl Recorder {
             }
             FileState::Text {
                 file_mode: _,
-                hunks,
+                sections,
             } => {
-                for (hunk_num, hunk) in hunks.iter_mut().enumerate() {
-                    match hunk {
-                        Hunk::Unchanged { contents: _ } => {
+                for (hunk_num, section) in sections.iter_mut().enumerate() {
+                    match section {
+                        Section::Unchanged { contents: _ } => {
                             // Do nothing.
                         }
-                        Hunk::Changed { before, after } => {
+                        Section::Changed { before, after } => {
                             for (
                                 hunk_line_num,
-                                HunkChangedLine {
+                                SectionChangedLine {
                                     is_selected,
                                     line: _,
                                 },
@@ -425,7 +428,7 @@ impl Recorder {
 
                             for (
                                 hunk_line_num,
-                                HunkChangedLine {
+                                SectionChangedLine {
                                     is_selected,
                                     line: _,
                                 },
@@ -484,13 +487,13 @@ impl Recorder {
                 }
                 FileState::Text {
                     file_mode: _,
-                    hunks,
-                } => match &mut hunks[hunk_num] {
-                    Hunk::Unchanged { contents } => {
+                    sections,
+                } => match &mut sections[hunk_num] {
+                    Section::Unchanged { contents } => {
                         error!(?hunk_num, ?path, ?contents, "Invalid hunk num to change");
                         panic!("Invalid hunk num to change");
                     }
-                    Hunk::Changed { before, after } => (before, after),
+                    Section::Changed { before, after } => (before, after),
                 },
             }
         };
@@ -544,16 +547,16 @@ impl Recorder {
             }
             FileState::Text {
                 file_mode: _,
-                hunks,
+                sections,
             } => {
-                let hunk = &mut hunks[hunk_num];
-                let hunk_changed_lines = match (hunk, hunk_type) {
-                    (Hunk::Unchanged { contents }, _) => {
+                let section = &mut sections[hunk_num];
+                let hunk_changed_lines = match (section, hunk_type) {
+                    (Section::Unchanged { contents }, _) => {
                         error!(?hunk_num, ?path, ?contents, "Invalid hunk num to change");
                         panic!("Invalid hunk num to change");
                     }
-                    (Hunk::Changed { before, .. }, HunkType::Before) => before,
-                    (Hunk::Changed { after, .. }, HunkType::After) => after,
+                    (Section::Changed { before, .. }, HunkType::Before) => before,
+                    (Section::Changed { after, .. }, HunkType::After) => after,
                 };
                 hunk_changed_lines[hunk_line_num].is_selected = new_value;
             }
@@ -573,12 +576,12 @@ impl Recorder {
             }
             FileState::Text {
                 file_mode: _,
-                hunks,
+                sections,
             } => {
-                let hunk_selections = iter_hunk_changed_lines(&hunks[hunk_num]).map(
+                let hunk_selections = iter_section_changed_lines(&sections[hunk_num]).map(
                     |(
                         _hunk_type,
-                        HunkChangedLine {
+                        SectionChangedLine {
                             is_selected,
                             line: _,
                         },
@@ -595,12 +598,12 @@ impl Recorder {
 
     fn refresh_file(&mut self, siv: &mut CursiveRunner<CursiveRunnable>, file_key: FileKey) {
         let FileKey { file_num } = file_key;
-        let file_hunks = &mut self.state.file_states[file_num].1;
+        let file_state = &mut self.state.file_states[file_num].1;
 
-        let file_selections = iter_file_changed_lines(file_hunks).map(
+        let file_selections = iter_file_changed_lines(file_state).map(
             |(
                 _hunk_type,
-                HunkChangedLine {
+                SectionChangedLine {
                     is_selected,
                     line: _,
                 },
@@ -615,21 +618,23 @@ impl Recorder {
 
 fn iter_file_changed_lines(
     file_state: &FileState,
-) -> impl Iterator<Item = (HunkType, &HunkChangedLine)> {
+) -> impl Iterator<Item = (HunkType, &SectionChangedLine)> {
     match file_state {
         FileState::Absent | FileState::Binary => {
             unimplemented!("iter_file_changed_lines for absent/binary files")
         }
         FileState::Text {
             file_mode: _,
-            hunks,
-        } => hunks.iter().flat_map(iter_hunk_changed_lines),
+            sections,
+        } => sections.iter().flat_map(iter_section_changed_lines),
     }
 }
 
-fn iter_hunk_changed_lines(hunk: &Hunk) -> impl Iterator<Item = (HunkType, &HunkChangedLine)> {
-    let iter: Box<dyn Iterator<Item = (HunkType, &HunkChangedLine)>> = match hunk {
-        Hunk::Changed { before, after } => Box::new(
+fn iter_section_changed_lines(
+    section: &Section,
+) -> impl Iterator<Item = (HunkType, &SectionChangedLine)> {
+    let iter: Box<dyn Iterator<Item = (HunkType, &SectionChangedLine)>> = match section {
+        Section::Changed { before, after } => Box::new(
             before
                 .iter()
                 .map(|changed_line| (HunkType::Before, changed_line))
@@ -639,7 +644,7 @@ fn iter_hunk_changed_lines(hunk: &Hunk) -> impl Iterator<Item = (HunkType, &Hunk
                         .map(|changed_line| (HunkType::After, changed_line)),
                 ),
         ),
-        Hunk::Unchanged { contents: _ } => Box::new(std::iter::empty()),
+        Section::Unchanged { contents: _ } => Box::new(std::iter::empty()),
     };
     iter
 }
@@ -715,7 +720,7 @@ impl EventDrivenCursiveApp for Recorder {
                         .map(
                             |(
                                 _hunk_type,
-                                HunkChangedLine {
+                                SectionChangedLine {
                                     is_selected,
                                     line: _,
                                 },
@@ -825,30 +830,30 @@ mod tests {
                 PathBuf::from("foo"),
                 FileState::Text {
                     file_mode: (0o100644, 0o100644),
-                    hunks: vec![
-                        Hunk::Unchanged {
+                    sections: vec![
+                        Section::Unchanged {
                             contents: vec![
                                 "unchanged 1\n".to_string(),
                                 "unchanged 2\n".to_string(),
                             ],
                         },
-                        Hunk::Changed {
+                        Section::Changed {
                             before: vec![
-                                HunkChangedLine {
+                                SectionChangedLine {
                                     is_selected: true,
                                     line: "before 1\n".to_string(),
                                 },
-                                HunkChangedLine {
+                                SectionChangedLine {
                                     is_selected: true,
                                     line: "before 2\n".to_string(),
                                 },
                             ],
                             after: vec![
-                                HunkChangedLine {
+                                SectionChangedLine {
                                     is_selected: true,
                                     line: "after 1\n".to_string(),
                                 },
-                                HunkChangedLine {
+                                SectionChangedLine {
                                     is_selected: false,
                                     line: "after 2\n".to_string(),
                                 },
@@ -996,7 +1001,7 @@ mod tests {
                                 33188,
                                 33188,
                             ),
-                            hunks: [
+                            sections: [
                                 Unchanged {
                                     contents: [
                                         "unchanged 1\n",
@@ -1005,21 +1010,21 @@ mod tests {
                                 },
                                 Changed {
                                     before: [
-                                        HunkChangedLine {
+                                        SectionChangedLine {
                                             is_selected: true,
                                             line: "before 1\n",
                                         },
-                                        HunkChangedLine {
+                                        SectionChangedLine {
                                             is_selected: true,
                                             line: "before 2\n",
                                         },
                                     ],
                                     after: [
-                                        HunkChangedLine {
+                                        SectionChangedLine {
                                             is_selected: true,
                                             line: "after 1\n",
                                         },
-                                        HunkChangedLine {
+                                        SectionChangedLine {
                                             is_selected: true,
                                             line: "after 2\n",
                                         },
@@ -1110,7 +1115,7 @@ mod tests {
                                 33188,
                                 33188,
                             ),
-                            hunks: [
+                            sections: [
                                 Unchanged {
                                     contents: [
                                         "unchanged 1\n",
@@ -1119,21 +1124,21 @@ mod tests {
                                 },
                                 Changed {
                                     before: [
-                                        HunkChangedLine {
+                                        SectionChangedLine {
                                             is_selected: true,
                                             line: "before 1\n",
                                         },
-                                        HunkChangedLine {
+                                        SectionChangedLine {
                                             is_selected: true,
                                             line: "before 2\n",
                                         },
                                     ],
                                     after: [
-                                        HunkChangedLine {
+                                        SectionChangedLine {
                                             is_selected: true,
                                             line: "after 1\n",
                                         },
-                                        HunkChangedLine {
+                                        SectionChangedLine {
                                             is_selected: true,
                                             line: "after 2\n",
                                         },
@@ -1158,10 +1163,10 @@ mod tests {
                 FileState::Binary => panic!("Example state should not have binary files"),
                 FileState::Text {
                     file_mode: _,
-                    hunks,
+                    sections,
                 } => {
-                    for hunk in hunks {
-                        if let Hunk::Changed { before, after: _ } = hunk {
+                    for section in sections {
+                        if let Section::Changed { before, after: _ } = section {
                             before[0].is_selected = true;
                         }
                     }
@@ -1203,8 +1208,8 @@ mod tests {
                 PathBuf::from("foo"),
                 FileState::Text {
                     file_mode: (0o100644, 0o100644),
-                    hunks: vec![
-                        Hunk::Unchanged {
+                    sections: vec![
+                        Section::Unchanged {
                             contents: vec![
                                 "foo".to_string(),
                                 "bar".to_string(),
@@ -1212,23 +1217,23 @@ mod tests {
                                 "qux".to_string(),
                             ],
                         },
-                        Hunk::Changed {
-                            before: vec![HunkChangedLine {
+                        Section::Changed {
+                            before: vec![SectionChangedLine {
                                 is_selected: false,
                                 line: "changed 1".to_string(),
                             }],
                             after: vec![
-                                HunkChangedLine {
+                                SectionChangedLine {
                                     is_selected: false,
                                     line: "changed 2".to_string(),
                                 },
-                                HunkChangedLine {
+                                SectionChangedLine {
                                     is_selected: false,
                                     line: "changed 3".to_string(),
                                 },
                             ],
                         },
-                        Hunk::Unchanged {
+                        Section::Unchanged {
                             contents: vec![
                                 "foo".to_string(),
                                 "bar".to_string(),
@@ -1269,18 +1274,21 @@ mod tests {
     }
 
     #[test]
-    fn test_render_multiple_hunks() -> eyre::Result<()> {
+    fn test_render_multiple_sections() -> eyre::Result<()> {
         let mut state = example_record_state();
-        let (file_mode, hunks) = {
+        let (file_mode, sections) = {
             let (_, file_state) = &state.file_states[0];
             match file_state {
                 FileState::Absent | FileState::Binary => panic!("should be text"),
-                FileState::Text { file_mode, hunks } => (file_mode, hunks.clone()),
+                FileState::Text {
+                    file_mode,
+                    sections,
+                } => (file_mode, sections.clone()),
             }
         };
         state.file_states[0].1 = FileState::Text {
             file_mode: *file_mode,
-            hunks: [hunks.clone(), hunks].concat(),
+            sections: [sections.clone(), sections].concat(),
         };
 
         let screenshot = Default::default();

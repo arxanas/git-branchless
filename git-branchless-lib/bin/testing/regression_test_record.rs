@@ -8,7 +8,7 @@ use branchless::core::effects::Effects;
 use branchless::core::formatting::Glyphs;
 use branchless::git::{hydrate_tree, process_diff_for_record, FileMode, Repo};
 use eyre::Context;
-use git_record::{FileState, Hunk};
+use git_record::{FileState, Section};
 
 fn main() -> eyre::Result<()> {
     let path_to_repo = std::env::var("PATH_TO_REPO")
@@ -51,12 +51,12 @@ fn main() -> eyre::Result<()> {
                     FileState::Absent | FileState::Binary => {}
                     FileState::Text {
                         file_mode: _,
-                        hunks,
+                        sections,
                     } => {
-                        for hunk in hunks {
-                            match hunk {
-                                Hunk::Unchanged { contents: _ } => {}
-                                Hunk::Changed { before, after } => {
+                        for section in sections {
+                            match section {
+                                Section::Unchanged { contents: _ } => {}
+                                Section::Changed { before, after } => {
                                     for changed_line in before {
                                         changed_line.is_selected = true;
                                     }
@@ -87,7 +87,7 @@ fn main() -> eyre::Result<()> {
                     }
                     FileState::Text {
                         file_mode: (_old_file_mode, new_file_mode),
-                        hunks: _,
+                        sections: _,
                     } => {
                         let (selected, _unselected) = file_state.get_selected_contents();
                         let blob_oid = repo.create_blob_from_contents(selected.as_bytes())?;
