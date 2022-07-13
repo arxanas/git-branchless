@@ -95,7 +95,6 @@ impl<T: EventDrivenCursiveApp + UnwindSafe + RefUnwindSafe> EventDrivenCursiveAp
 }
 
 /// Testing helpers for interactive interfaces.
-#[cfg(test)]
 pub mod testing {
     use std::borrow::Borrow;
     use std::cell::RefCell;
