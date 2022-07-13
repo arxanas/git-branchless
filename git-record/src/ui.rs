@@ -15,7 +15,7 @@ use crate::tristate::{Tristate, TristateBox};
 use crate::{FileState, RecordError, RecordState, Section, SectionChangedLine};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum HunkType {
+pub enum SectionChangedLineType {
     Before,
     After,
 }
@@ -33,43 +33,46 @@ impl FileKey {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct HunkKey {
+pub struct SectionKey {
     file_num: usize,
-    hunk_num: usize,
+    section_num: usize,
 }
 
-impl HunkKey {
+impl SectionKey {
     fn view_id(&self) -> String {
-        let Self { file_num, hunk_num } = self;
-        format!("HunkKey({},{})", *file_num, hunk_num)
+        let Self {
+            file_num,
+            section_num,
+        } = self;
+        format!("HunkKey({},{})", *file_num, section_num)
     }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub struct HunkLineKey {
+pub struct SectionLineKey {
     file_num: usize,
-    hunk_num: usize,
-    hunk_type: HunkType,
-    hunk_line_num: usize,
+    section_num: usize,
+    section_type: SectionChangedLineType,
+    section_line_num: usize,
 }
 
-impl HunkLineKey {
+impl SectionLineKey {
     fn view_id(&self) -> String {
         let Self {
             file_num,
-            hunk_num,
-            hunk_type,
-            hunk_line_num,
+            section_num,
+            section_type,
+            section_line_num,
         } = self;
         format!(
             "HunkLineKey({},{},{},{})",
             file_num,
-            hunk_num,
-            match hunk_type {
-                HunkType::Before => "B",
-                HunkType::After => "A",
+            section_num,
+            match section_type {
+                SectionChangedLineType::Before => "B",
+                SectionChangedLineType::After => "A",
             },
-            hunk_line_num
+            section_line_num
         )
     }
 }
@@ -100,11 +103,11 @@ impl Recorder {
 
         let RecordState { file_states } = &self.state;
 
-        let global_num_changed_hunks: usize = file_states
+        let global_num_changed_sections: usize = file_states
             .iter()
             .map(|(_path, file_state)| file_state.count_changed_sections())
             .sum();
-        let mut global_changed_hunk_num = 0;
+        let mut global_changed_section_num = 0;
 
         for (file_num, (path, file_state)) in file_states.iter().enumerate() {
             let file_key = FileKey { file_num };
@@ -113,8 +116,8 @@ impl Recorder {
                 path,
                 file_key,
                 file_state,
-                &mut global_changed_hunk_num,
-                global_num_changed_hunks,
+                &mut global_changed_section_num,
+                global_num_changed_sections,
             ));
             if file_num + 1 < file_states.len() {
                 // Render a spacer line. Note that an empty string won't render an
@@ -132,15 +135,15 @@ impl Recorder {
         path: &Path,
         file_key: FileKey,
         file_state: &FileState,
-        global_changed_hunk_num: &mut usize,
-        global_num_changed_hunks: usize,
+        global_changed_section_num: &mut usize,
+        global_num_changed_sections: usize,
     ) -> impl View {
         let FileKey { file_num } = file_key;
 
         let mut file_view = LinearLayout::vertical();
         let mut line_num: usize = 1;
-        let local_num_changed_hunks = file_state.count_changed_sections();
-        let mut local_changed_hunk_num = 0;
+        let local_num_changed_sections = file_state.count_changed_sections();
+        let mut local_changed_section_num = 0;
 
         let file_header_view = LinearLayout::horizontal()
             .child(
@@ -148,7 +151,7 @@ impl Recorder {
                     .with_state({
                         all_are_same_value(iter_file_changed_lines(file_state).map(
                             |(
-                                _hunk_type,
+                                _section_changed_line_type,
                                 SectionChangedLine {
                                     is_selected,
                                     line: _,
@@ -189,13 +192,13 @@ impl Recorder {
                 // FIXME: render the file mode
                 let _ = file_mode;
 
-                for (hunk_num, section) in sections.iter().enumerate() {
+                for (section_num, section) in sections.iter().enumerate() {
                     match section {
                         Section::Unchanged { contents } => {
                             const CONTEXT: usize = 2;
 
-                            // Add the trailing context for the previous hunk (if any).
-                            if hunk_num > 0 {
+                            // Add the trailing context for the previous section (if any).
+                            if section_num > 0 {
                                 let end_index = min(CONTEXT, contents.len());
                                 for (i, line) in contents[..end_index].iter().enumerate() {
                                     file_view.add_child(TextView::new(format!(
@@ -206,13 +209,13 @@ impl Recorder {
                                 }
                             }
 
-                            // Add vertical ellipsis between hunks.
-                            if hunk_num > 0 && hunk_num + 1 < sections.len() {
+                            // Add vertical ellipsis between sections.
+                            if section_num > 0 && section_num + 1 < sections.len() {
                                 file_view.add_child(TextView::new(":"));
                             }
 
-                            // Add the leading context for the next hunk (if any).
-                            if hunk_num + 1 < sections.len() {
+                            // Add the leading context for the next section (if any).
+                            if section_num + 1 < sections.len() {
                                 let start_index = contents.len().saturating_sub(CONTEXT);
                                 for (i, line) in contents[start_index..].iter().enumerate() {
                                     file_view.add_child(TextView::new(format!(
@@ -227,21 +230,21 @@ impl Recorder {
                         }
 
                         Section::Changed { before, after } => {
-                            local_changed_hunk_num += 1;
-                            *global_changed_hunk_num += 1;
+                            local_changed_section_num += 1;
+                            *global_changed_section_num += 1;
                             let description = format!(
                                 "hunk {}/{} in current file, {}/{} total",
-                                local_changed_hunk_num,
-                                local_num_changed_hunks,
-                                global_changed_hunk_num,
-                                global_num_changed_hunks
+                                local_changed_section_num,
+                                local_num_changed_sections,
+                                global_changed_section_num,
+                                global_num_changed_sections
                             );
 
-                            self.make_changed_hunk_views(
+                            self.make_changed_section_views(
                                 main_tx.clone(),
                                 &mut file_view,
                                 file_num,
-                                hunk_num,
+                                section_num,
                                 description,
                                 before,
                                 after,
@@ -256,43 +259,46 @@ impl Recorder {
         file_view
     }
 
-    fn make_changed_hunk_views(
+    fn make_changed_section_views(
         &self,
         main_tx: Sender<Message>,
         view: &mut LinearLayout,
         file_num: usize,
-        hunk_num: usize,
-        hunk_description: String,
+        section_num: usize,
+        section_description: String,
         before: &[SectionChangedLine],
         after: &[SectionChangedLine],
     ) {
-        let mut hunk_view = LinearLayout::vertical();
-        let hunk_key = HunkKey { file_num, hunk_num };
+        let mut section_view = LinearLayout::vertical();
+        let section_key = SectionKey {
+            file_num,
+            section_num,
+        };
 
-        for (hunk_line_num, hunk_changed_line) in before.iter().enumerate() {
-            let hunk_line_key = HunkLineKey {
+        for (section_line_num, section_changed_line) in before.iter().enumerate() {
+            let section_line_key = SectionLineKey {
                 file_num,
-                hunk_num,
-                hunk_type: HunkType::Before,
-                hunk_line_num,
+                section_num,
+                section_type: SectionChangedLineType::Before,
+                section_line_num,
             };
-            hunk_view.add_child(self.make_changed_line_view(
+            section_view.add_child(self.make_changed_line_view(
                 main_tx.clone(),
-                hunk_line_key,
-                hunk_changed_line,
+                section_line_key,
+                section_changed_line,
             ));
         }
 
-        for (hunk_line_num, section_changed_line) in after.iter().enumerate() {
-            let hunk_line_key = HunkLineKey {
+        for (section_line_num, section_changed_line) in after.iter().enumerate() {
+            let section_line_key = SectionLineKey {
                 file_num,
-                hunk_num,
-                hunk_type: HunkType::After,
-                hunk_line_num,
+                section_num,
+                section_type: SectionChangedLineType::After,
+                section_line_num,
             };
-            hunk_view.add_child(self.make_changed_line_view(
+            section_view.add_child(self.make_changed_line_view(
                 main_tx.clone(),
-                hunk_line_key,
+                section_line_key,
                 section_changed_line,
             ));
         }
@@ -312,41 +318,44 @@ impl Recorder {
                             .into_tristate(),
                         )
                         .on_change({
-                            let hunk_key = HunkKey { file_num, hunk_num };
+                            let section_key = SectionKey {
+                                file_num,
+                                section_num,
+                            };
                             let main_tx = main_tx;
                             move |_, new_value| {
                                 if main_tx
-                                    .send(Message::ToggleHunk(hunk_key, new_value))
+                                    .send(Message::ToggleHunk(section_key, new_value))
                                     .is_err()
                                 {
                                     // Do nothing.
                                 }
                             }
                         })
-                        .with_name(hunk_key.view_id()),
+                        .with_name(section_key.view_id()),
                 )
                 .child(TextView::new({
                     let mut s = StyledString::new();
                     s.append_plain(" ");
-                    s.append_plain(hunk_description);
+                    s.append_plain(section_description);
                     s
                 })),
         );
-        view.add_child(HideableView::new(hunk_view));
+        view.add_child(HideableView::new(section_view));
     }
 
     fn make_changed_line_view(
         &self,
         main_tx: Sender<Message>,
-        hunk_line_key: HunkLineKey,
-        hunk_changed_line: &SectionChangedLine,
+        section_line_key: SectionLineKey,
+        section_changed_line: &SectionChangedLine,
     ) -> impl View {
-        let SectionChangedLine { is_selected, line } = hunk_changed_line;
+        let SectionChangedLine { is_selected, line } = section_changed_line;
 
         let line_contents = {
-            let (line, style) = match hunk_line_key.hunk_type {
-                HunkType::Before => (format!(" -{}", line), BaseColor::Red.dark()),
-                HunkType::After => (format!(" +{}", line), BaseColor::Green.dark()),
+            let (line, style) = match section_line_key.section_type {
+                SectionChangedLineType::Before => (format!(" -{}", line), BaseColor::Red.dark()),
+                SectionChangedLineType::After => (format!(" +{}", line), BaseColor::Green.dark()),
             };
             let mut s = StyledString::new();
             s.append_styled(line, style);
@@ -361,14 +370,14 @@ impl Recorder {
                     .on_change({
                         move |_, is_selected| {
                             if main_tx
-                                .send(Message::ToggleHunkLine(hunk_line_key, is_selected))
+                                .send(Message::ToggleHunkLine(section_line_key, is_selected))
                                 .is_err()
                             {
                                 // Do nothing.
                             }
                         }
                     })
-                    .with_name(hunk_line_key.view_id()),
+                    .with_name(section_line_key.view_id()),
             )
             .child(TextView::new(line_contents))
     }
@@ -399,14 +408,14 @@ impl Recorder {
                 file_mode: _,
                 sections,
             } => {
-                for (hunk_num, section) in sections.iter_mut().enumerate() {
+                for (section_num, section) in sections.iter_mut().enumerate() {
                     match section {
                         Section::Unchanged { contents: _ } => {
                             // Do nothing.
                         }
                         Section::Changed { before, after } => {
                             for (
-                                hunk_line_num,
+                                section_line_num,
                                 SectionChangedLine {
                                     is_selected,
                                     line: _,
@@ -414,20 +423,20 @@ impl Recorder {
                             ) in before.iter_mut().enumerate()
                             {
                                 *is_selected = new_value;
-                                let hunk_line_key = HunkLineKey {
+                                let section_line_key = SectionLineKey {
                                     file_num,
-                                    hunk_num,
-                                    hunk_type: HunkType::Before,
-                                    hunk_line_num,
+                                    section_num,
+                                    section_type: SectionChangedLineType::Before,
+                                    section_line_num,
                                 };
                                 siv.call_on_name(
-                                    &hunk_line_key.view_id(),
+                                    &section_line_key.view_id(),
                                     |checkbox: &mut Checkbox| checkbox.set_checked(new_value),
                                 );
                             }
 
                             for (
-                                hunk_line_num,
+                                section_line_num,
                                 SectionChangedLine {
                                     is_selected,
                                     line: _,
@@ -435,22 +444,25 @@ impl Recorder {
                             ) in after.iter_mut().enumerate()
                             {
                                 *is_selected = new_value;
-                                let hunk_line_key = HunkLineKey {
+                                let section_line_key = SectionLineKey {
                                     file_num,
-                                    hunk_num,
-                                    hunk_type: HunkType::After,
-                                    hunk_line_num,
+                                    section_num,
+                                    section_type: SectionChangedLineType::After,
+                                    section_line_num,
                                 };
                                 siv.call_on_name(
-                                    &hunk_line_key.view_id(),
+                                    &section_line_key.view_id(),
                                     |checkbox: &mut Checkbox| checkbox.set_checked(new_value),
                                 );
                             }
                         }
                     }
 
-                    let hunk_key = HunkKey { file_num, hunk_num };
-                    siv.call_on_name(&hunk_key.view_id(), |tristate_box: &mut TristateBox| {
+                    let section_key = SectionKey {
+                        file_num,
+                        section_num,
+                    };
+                    siv.call_on_name(&section_key.view_id(), |tristate_box: &mut TristateBox| {
                         tristate_box.set_state(if new_value {
                             Tristate::Checked
                         } else {
@@ -462,13 +474,16 @@ impl Recorder {
         }
     }
 
-    fn toggle_hunk(
+    fn toggle_section(
         &mut self,
         siv: &mut CursiveRunner<CursiveRunnable>,
-        hunk_key: HunkKey,
+        section_key: SectionKey,
         new_value: Tristate,
     ) {
-        let HunkKey { file_num, hunk_num } = hunk_key;
+        let SectionKey {
+            file_num,
+            section_num,
+        } = section_key;
 
         let new_value = match new_value {
             Tristate::Unchecked => false,
@@ -483,15 +498,20 @@ impl Recorder {
             let (path, file_state) = &mut self.state.file_states[file_num];
             match file_state {
                 FileState::Absent | FileState::Binary => {
-                    unimplemented!("toggle_hunk for absent/binary files")
+                    unimplemented!("toggle_section for absent/binary files")
                 }
                 FileState::Text {
                     file_mode: _,
                     sections,
-                } => match &mut sections[hunk_num] {
+                } => match &mut sections[section_num] {
                     Section::Unchanged { contents } => {
-                        error!(?hunk_num, ?path, ?contents, "Invalid hunk num to change");
-                        panic!("Invalid hunk num to change");
+                        error!(
+                            ?section_num,
+                            ?path,
+                            ?contents,
+                            "Invalid section num to change"
+                        );
+                        panic!("Invalid section num to change");
                     }
                     Section::Changed { before, after } => (before, after),
                 },
@@ -505,21 +525,21 @@ impl Recorder {
         for changed_line in after.iter_mut() {
             changed_line.is_selected = new_value;
         }
-        let hunk_line_keys = (0..before.len())
-            .map(|hunk_line_num| HunkLineKey {
+        let section_line_keys = (0..before.len())
+            .map(|section_line_num| SectionLineKey {
                 file_num,
-                hunk_num,
-                hunk_type: HunkType::Before,
-                hunk_line_num,
+                section_num,
+                section_type: SectionChangedLineType::Before,
+                section_line_num,
             })
-            .chain((0..after.len()).map(|hunk_line_num| HunkLineKey {
+            .chain((0..after.len()).map(|section_line_num| SectionLineKey {
                 file_num,
-                hunk_num,
-                hunk_type: HunkType::After,
-                hunk_line_num,
+                section_num,
+                section_type: SectionChangedLineType::After,
+                section_line_num,
             }));
-        for hunk_line_key in hunk_line_keys {
-            siv.call_on_name(&hunk_line_key.view_id(), |checkbox: &mut Checkbox| {
+        for section_line_key in section_line_keys {
+            siv.call_on_name(&section_line_key.view_id(), |checkbox: &mut Checkbox| {
                 checkbox.set_checked(new_value);
             });
         }
@@ -527,70 +547,91 @@ impl Recorder {
         self.refresh_file(siv, FileKey { file_num });
     }
 
-    fn toggle_hunk_line(
+    fn toggle_section_line(
         &mut self,
         siv: &mut CursiveRunner<CursiveRunnable>,
-        hunk_line_key: HunkLineKey,
+        section_line_key: SectionLineKey,
         new_value: bool,
     ) {
-        let HunkLineKey {
+        let SectionLineKey {
             file_num,
-            hunk_num,
-            hunk_type,
-            hunk_line_num,
-        } = hunk_line_key;
+            section_num,
+            section_type,
+            section_line_num,
+        } = section_line_key;
 
         let (path, file_state) = &mut self.state.file_states[file_num];
         match file_state {
             FileState::Absent | FileState::Binary => {
-                unimplemented!("toggle_hunk_line for absent/binary files")
+                unimplemented!("toggle_section for absent/binary files")
             }
             FileState::Text {
                 file_mode: _,
                 sections,
             } => {
-                let section = &mut sections[hunk_num];
-                let hunk_changed_lines = match (section, hunk_type) {
+                let section = &mut sections[section_num];
+                let section_changed_lines = match (section, section_type) {
                     (Section::Unchanged { contents }, _) => {
-                        error!(?hunk_num, ?path, ?contents, "Invalid hunk num to change");
-                        panic!("Invalid hunk num to change");
+                        error!(
+                            ?section_num,
+                            ?path,
+                            ?contents,
+                            "Invalid section num to change"
+                        );
+                        panic!("Invalid section num to change");
                     }
-                    (Section::Changed { before, .. }, HunkType::Before) => before,
-                    (Section::Changed { after, .. }, HunkType::After) => after,
+                    (Section::Changed { before, .. }, SectionChangedLineType::Before) => before,
+                    (Section::Changed { after, .. }, SectionChangedLineType::After) => after,
                 };
-                hunk_changed_lines[hunk_line_num].is_selected = new_value;
+                section_changed_lines[section_line_num].is_selected = new_value;
             }
         }
 
-        self.refresh_hunk(siv, HunkKey { file_num, hunk_num });
+        self.refresh_section(
+            siv,
+            SectionKey {
+                file_num,
+                section_num,
+            },
+        );
         self.refresh_file(siv, FileKey { file_num });
     }
 
-    fn refresh_hunk(&mut self, siv: &mut CursiveRunner<CursiveRunnable>, hunk_key: HunkKey) {
-        let HunkKey { file_num, hunk_num } = hunk_key;
+    fn refresh_section(
+        &mut self,
+        siv: &mut CursiveRunner<CursiveRunnable>,
+        section_key: SectionKey,
+    ) {
+        let SectionKey {
+            file_num,
+            section_num: sectoin_num,
+        } = section_key;
         let (_path, file_state) = &mut self.state.file_states[file_num];
 
         match file_state {
             FileState::Absent | FileState::Binary => {
-                unimplemented!("refresh_hunk for absent/binary files")
+                unimplemented!("refresh_section for absent/binary files")
             }
             FileState::Text {
                 file_mode: _,
                 sections,
             } => {
-                let hunk_selections = iter_section_changed_lines(&sections[hunk_num]).map(
+                let section_selections = iter_section_changed_lines(&sections[sectoin_num]).map(
                     |(
-                        _hunk_type,
+                        _section_changed_line_type,
                         SectionChangedLine {
                             is_selected,
                             line: _,
                         },
                     )| *is_selected,
                 );
-                let hunk_new_value = all_are_same_value(hunk_selections).into_tristate();
-                let hunk_key = HunkKey { file_num, hunk_num };
-                siv.call_on_name(&hunk_key.view_id(), |tristate_box: &mut TristateBox| {
-                    tristate_box.set_state(hunk_new_value);
+                let section_new_value = all_are_same_value(section_selections).into_tristate();
+                let section_key = SectionKey {
+                    file_num,
+                    section_num: sectoin_num,
+                };
+                siv.call_on_name(&section_key.view_id(), |tristate_box: &mut TristateBox| {
+                    tristate_box.set_state(section_new_value);
                 });
             }
         }
@@ -602,7 +643,7 @@ impl Recorder {
 
         let file_selections = iter_file_changed_lines(file_state).map(
             |(
-                _hunk_type,
+                _section_changed_line_type,
                 SectionChangedLine {
                     is_selected,
                     line: _,
@@ -618,7 +659,7 @@ impl Recorder {
 
 fn iter_file_changed_lines(
     file_state: &FileState,
-) -> impl Iterator<Item = (HunkType, &SectionChangedLine)> {
+) -> impl Iterator<Item = (SectionChangedLineType, &SectionChangedLine)> {
     match file_state {
         FileState::Absent | FileState::Binary => {
             unimplemented!("iter_file_changed_lines for absent/binary files")
@@ -632,20 +673,21 @@ fn iter_file_changed_lines(
 
 fn iter_section_changed_lines(
     section: &Section,
-) -> impl Iterator<Item = (HunkType, &SectionChangedLine)> {
-    let iter: Box<dyn Iterator<Item = (HunkType, &SectionChangedLine)>> = match section {
-        Section::Changed { before, after } => Box::new(
-            before
-                .iter()
-                .map(|changed_line| (HunkType::Before, changed_line))
-                .chain(
-                    after
-                        .iter()
-                        .map(|changed_line| (HunkType::After, changed_line)),
-                ),
-        ),
-        Section::Unchanged { contents: _ } => Box::new(std::iter::empty()),
-    };
+) -> impl Iterator<Item = (SectionChangedLineType, &SectionChangedLine)> {
+    let iter: Box<dyn Iterator<Item = (SectionChangedLineType, &SectionChangedLine)>> =
+        match section {
+            Section::Changed { before, after } => Box::new(
+                before
+                    .iter()
+                    .map(|changed_line| (SectionChangedLineType::Before, changed_line))
+                    .chain(
+                        after
+                            .iter()
+                            .map(|changed_line| (SectionChangedLineType::After, changed_line)),
+                    ),
+            ),
+            Section::Unchanged { contents: _ } => Box::new(std::iter::empty()),
+        };
     iter
 }
 
@@ -653,8 +695,8 @@ fn iter_section_changed_lines(
 pub enum Message {
     Init,
     ToggleFile(FileKey, Tristate),
-    ToggleHunk(HunkKey, Tristate),
-    ToggleHunkLine(HunkLineKey, bool),
+    ToggleHunk(SectionKey, Tristate),
+    ToggleHunkLine(SectionLineKey, bool),
     Confirm,
     Quit,
 }
@@ -698,12 +740,12 @@ impl EventDrivenCursiveApp for Recorder {
                 self.toggle_file(siv, file_key, new_value);
             }
 
-            Message::ToggleHunk(hunk_key, new_value) => {
-                self.toggle_hunk(siv, hunk_key, new_value);
+            Message::ToggleHunk(section_key, new_value) => {
+                self.toggle_section(siv, section_key, new_value);
             }
 
-            Message::ToggleHunkLine(hunk_line_key, new_value) => {
-                self.toggle_hunk_line(siv, hunk_line_key, new_value);
+            Message::ToggleHunkLine(section_line_key, new_value) => {
+                self.toggle_section_line(siv, section_line_key, new_value);
             }
 
             Message::Confirm => {
@@ -719,7 +761,7 @@ impl EventDrivenCursiveApp for Recorder {
                         .flat_map(|(_, file_state)| iter_file_changed_lines(file_state))
                         .map(
                             |(
-                                _hunk_type,
+                                _section_changed_line_type,
                                 SectionChangedLine {
                                     is_selected,
                                     line: _,
@@ -899,7 +941,7 @@ mod tests {
         let result = run_test(
             example_record_state(),
             vec![
-                CursiveTestingEvent::Event(Key::Down.into()), // hunk
+                CursiveTestingEvent::Event(Key::Down.into()), // section
                 CursiveTestingEvent::Event(Key::Down.into()), // before 1
                 CursiveTestingEvent::Event(Key::Down.into()), // before 2
                 CursiveTestingEvent::Event(Key::Down.into()), // after 1
@@ -927,7 +969,7 @@ mod tests {
     }
 
     #[test]
-    fn test_hunk_toggle() {
+    fn test_section_toggle() {
         let screenshot1 = Default::default();
         let screenshot2 = Default::default();
         let screenshot3 = Default::default();
@@ -935,16 +977,16 @@ mod tests {
         let result = run_test(
             example_record_state(),
             vec![
-                CursiveTestingEvent::Event(Key::Down.into()), // move to hunk
-                CursiveTestingEvent::Event(' '.into()),       // toggle hunk
+                CursiveTestingEvent::Event(Key::Down.into()), // move to section
+                CursiveTestingEvent::Event(' '.into()),       // toggle section
                 CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot1)),
-                CursiveTestingEvent::Event(' '.into()), // toggle hunk
+                CursiveTestingEvent::Event(' '.into()), // toggle section
                 CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot2)),
                 CursiveTestingEvent::Event(Key::Down.into()), // move to line
                 CursiveTestingEvent::Event(' '.into()),       // toggle line
                 CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot3)),
-                CursiveTestingEvent::Event(Key::Up.into()), // move to hunk
-                CursiveTestingEvent::Event(' '.into()),     // toggle hunk
+                CursiveTestingEvent::Event(Key::Up.into()), // move to section
+                CursiveTestingEvent::Event(' '.into()),     // toggle section
                 CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot4)),
                 CursiveTestingEvent::Event('c'.into()),
             ],
@@ -1050,8 +1092,8 @@ mod tests {
             vec![
                 CursiveTestingEvent::Event(' '.into()), // toggle file
                 CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot1)),
-                CursiveTestingEvent::Event(Key::Down.into()), // move to hunk
-                CursiveTestingEvent::Event(' '.into()),       // toggle hunk
+                CursiveTestingEvent::Event(Key::Down.into()), // move to section
+                CursiveTestingEvent::Event(' '.into()),       // toggle section
                 CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot2)),
                 CursiveTestingEvent::Event(Key::Down.into()), // move to line
                 CursiveTestingEvent::Event(' '.into()),       // toggle line
