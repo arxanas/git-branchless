@@ -3,6 +3,6 @@
 mod cursive;
 mod prompt;
 
-pub use self::cursive::testing;
 pub use self::cursive::{with_siv, SingletonView};
+pub use git_record::testing;
 pub use prompt::prompt_select_commit;
