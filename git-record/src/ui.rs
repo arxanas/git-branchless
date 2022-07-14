@@ -181,77 +181,76 @@ impl Recorder {
             }));
         file_view.add_child(file_header_view);
 
-        match file_state {
-            FileState::Absent | FileState::Binary => {
-                unimplemented!("make_file_view for absent/binary files")
-            }
-            FileState::Text {
-                file_mode,
-                sections,
-            } => {
-                // FIXME: render the file mode
-                let _ = file_mode;
+        let FileState {
+            file_mode: _,
+            sections,
+        } = file_state;
+        for (section_num, section) in sections.iter().enumerate() {
+            match section {
+                Section::Unchanged { contents } => {
+                    const CONTEXT: usize = 2;
 
-                for (section_num, section) in sections.iter().enumerate() {
-                    match section {
-                        Section::Unchanged { contents } => {
-                            const CONTEXT: usize = 2;
-
-                            // Add the trailing context for the previous section (if any).
-                            if section_num > 0 {
-                                let end_index = min(CONTEXT, contents.len());
-                                for (i, line) in contents[..end_index].iter().enumerate() {
-                                    file_view.add_child(TextView::new(format!(
-                                        "  {} {}",
-                                        line_num + i,
-                                        line
-                                    )));
-                                }
-                            }
-
-                            // Add vertical ellipsis between sections.
-                            if section_num > 0 && section_num + 1 < sections.len() {
-                                file_view.add_child(TextView::new(":"));
-                            }
-
-                            // Add the leading context for the next section (if any).
-                            if section_num + 1 < sections.len() {
-                                let start_index = contents.len().saturating_sub(CONTEXT);
-                                for (i, line) in contents[start_index..].iter().enumerate() {
-                                    file_view.add_child(TextView::new(format!(
-                                        "  {} {}",
-                                        line_num + start_index + i,
-                                        line
-                                    )));
-                                }
-                            }
-
-                            line_num += contents.len();
-                        }
-
-                        Section::Changed { before, after } => {
-                            local_changed_section_num += 1;
-                            *global_changed_section_num += 1;
-                            let description = format!(
-                                "section {}/{} in current file, {}/{} total",
-                                local_changed_section_num,
-                                local_num_changed_sections,
-                                global_changed_section_num,
-                                global_num_changed_sections
-                            );
-
-                            self.make_changed_section_views(
-                                main_tx.clone(),
-                                &mut file_view,
-                                file_num,
-                                section_num,
-                                description,
-                                before,
-                                after,
-                            );
-                            line_num += before.len();
+                    // Add the trailing context for the previous section (if any).
+                    if section_num > 0 {
+                        let end_index = min(CONTEXT, contents.len());
+                        for (i, line) in contents[..end_index].iter().enumerate() {
+                            file_view.add_child(TextView::new(format!(
+                                "  {} {}",
+                                line_num + i,
+                                line
+                            )));
                         }
                     }
+
+                    // Add vertical ellipsis between sections.
+                    if section_num > 0 && section_num + 1 < sections.len() {
+                        file_view.add_child(TextView::new(":"));
+                    }
+
+                    // Add the leading context for the next section (if any).
+                    if section_num + 1 < sections.len() {
+                        let start_index = contents.len().saturating_sub(CONTEXT);
+                        for (i, line) in contents[start_index..].iter().enumerate() {
+                            file_view.add_child(TextView::new(format!(
+                                "  {} {}",
+                                line_num + start_index + i,
+                                line
+                            )));
+                        }
+                    }
+
+                    line_num += contents.len();
+                }
+
+                Section::Changed { before, after } => {
+                    local_changed_section_num += 1;
+                    *global_changed_section_num += 1;
+                    let description = format!(
+                        "section {}/{} in current file, {}/{} total",
+                        local_changed_section_num,
+                        local_num_changed_sections,
+                        global_changed_section_num,
+                        global_num_changed_sections
+                    );
+
+                    self.make_changed_section_views(
+                        main_tx.clone(),
+                        &mut file_view,
+                        file_num,
+                        section_num,
+                        description,
+                        before,
+                        after,
+                    );
+                    line_num += before.len();
+                }
+
+                Section::FileMode {
+                    is_selected: _,
+                    before: _,
+                    after: _,
+                } => {
+                    unimplemented!("make_file_view with Section::FileMode");
                 }
             }
         }
@@ -400,77 +399,76 @@ impl Recorder {
             Tristate::Checked => true,
         };
 
-        match file_state {
-            FileState::Absent | FileState::Binary => {
-                unimplemented!("toggle_file for absent/binary files")
-            }
-            FileState::Text {
-                file_mode: _,
-                sections,
-            } => {
-                for (section_num, section) in sections.iter_mut().enumerate() {
-                    match section {
-                        Section::Unchanged { contents: _ } => {
-                            // Do nothing.
-                        }
-                        Section::Changed { before, after } => {
-                            for (
-                                section_line_num,
-                                SectionChangedLine {
-                                    is_selected,
-                                    line: _,
-                                },
-                            ) in before.iter_mut().enumerate()
-                            {
-                                *is_selected = new_value;
-                                let section_line_key = SectionLineKey {
-                                    file_num,
-                                    section_num,
-                                    section_type: SectionChangedLineType::Before,
-                                    section_line_num,
-                                };
-                                siv.call_on_name(
-                                    &section_line_key.view_id(),
-                                    |checkbox: &mut Checkbox| checkbox.set_checked(new_value),
-                                );
-                            }
-
-                            for (
-                                section_line_num,
-                                SectionChangedLine {
-                                    is_selected,
-                                    line: _,
-                                },
-                            ) in after.iter_mut().enumerate()
-                            {
-                                *is_selected = new_value;
-                                let section_line_key = SectionLineKey {
-                                    file_num,
-                                    section_num,
-                                    section_type: SectionChangedLineType::After,
-                                    section_line_num,
-                                };
-                                siv.call_on_name(
-                                    &section_line_key.view_id(),
-                                    |checkbox: &mut Checkbox| checkbox.set_checked(new_value),
-                                );
-                            }
-                        }
+        let FileState {
+            file_mode: _,
+            sections,
+        } = file_state;
+        for (section_num, section) in sections.iter_mut().enumerate() {
+            match section {
+                Section::Unchanged { contents: _ } => {
+                    // Do nothing.
+                }
+                Section::Changed { before, after } => {
+                    for (
+                        section_line_num,
+                        SectionChangedLine {
+                            is_selected,
+                            line: _,
+                        },
+                    ) in before.iter_mut().enumerate()
+                    {
+                        *is_selected = new_value;
+                        let section_line_key = SectionLineKey {
+                            file_num,
+                            section_num,
+                            section_type: SectionChangedLineType::Before,
+                            section_line_num,
+                        };
+                        siv.call_on_name(&section_line_key.view_id(), |checkbox: &mut Checkbox| {
+                            checkbox.set_checked(new_value)
+                        });
                     }
 
-                    let section_key = SectionKey {
-                        file_num,
-                        section_num,
-                    };
-                    siv.call_on_name(&section_key.view_id(), |tristate_box: &mut TristateBox| {
-                        tristate_box.set_state(if new_value {
-                            Tristate::Checked
-                        } else {
-                            Tristate::Unchecked
+                    for (
+                        section_line_num,
+                        SectionChangedLine {
+                            is_selected,
+                            line: _,
+                        },
+                    ) in after.iter_mut().enumerate()
+                    {
+                        *is_selected = new_value;
+                        let section_line_key = SectionLineKey {
+                            file_num,
+                            section_num,
+                            section_type: SectionChangedLineType::After,
+                            section_line_num,
+                        };
+                        siv.call_on_name(&section_line_key.view_id(), |checkbox: &mut Checkbox| {
+                            checkbox.set_checked(new_value)
                         });
-                    });
+                    }
+                }
+                Section::FileMode {
+                    is_selected: _,
+                    before: _,
+                    after: _,
+                } => {
+                    unimplemented!("toggle_file for Section::FileMode");
                 }
             }
+
+            let section_key = SectionKey {
+                file_num,
+                section_num,
+            };
+            siv.call_on_name(&section_key.view_id(), |tristate_box: &mut TristateBox| {
+                tristate_box.set_state(if new_value {
+                    Tristate::Checked
+                } else {
+                    Tristate::Unchecked
+                });
+            });
         }
     }
 
@@ -495,26 +493,31 @@ impl Recorder {
         };
 
         let (before, after) = {
-            let (path, file_state) = &mut self.state.file_states[file_num];
-            match file_state {
-                FileState::Absent | FileState::Binary => {
-                    unimplemented!("toggle_section for absent/binary files")
-                }
-                FileState::Text {
+            let (
+                path,
+                FileState {
                     file_mode: _,
                     sections,
-                } => match &mut sections[section_num] {
-                    Section::Unchanged { contents } => {
-                        error!(
-                            ?section_num,
-                            ?path,
-                            ?contents,
-                            "Invalid section num to change"
-                        );
-                        panic!("Invalid section num to change");
-                    }
-                    Section::Changed { before, after } => (before, after),
                 },
+            ) = &mut self.state.file_states[file_num];
+            match &mut sections[section_num] {
+                Section::Unchanged { contents } => {
+                    error!(
+                        ?section_num,
+                        ?path,
+                        ?contents,
+                        "Invalid section num to change"
+                    );
+                    panic!("Invalid section num to change");
+                }
+                Section::Changed { before, after } => (before, after),
+                Section::FileMode {
+                    is_selected: _,
+                    before: _,
+                    after: _,
+                } => {
+                    unimplemented!("toggle_section for Section::FileMode");
+                }
             }
         };
 
@@ -560,32 +563,36 @@ impl Recorder {
             section_line_num,
         } = section_line_key;
 
-        let (path, file_state) = &mut self.state.file_states[file_num];
-        match file_state {
-            FileState::Absent | FileState::Binary => {
-                unimplemented!("toggle_section for absent/binary files")
-            }
-            FileState::Text {
+        let (
+            path,
+            FileState {
                 file_mode: _,
                 sections,
-            } => {
-                let section = &mut sections[section_num];
-                let section_changed_lines = match (section, section_type) {
-                    (Section::Unchanged { contents }, _) => {
-                        error!(
-                            ?section_num,
-                            ?path,
-                            ?contents,
-                            "Invalid section num to change"
-                        );
-                        panic!("Invalid section num to change");
-                    }
-                    (Section::Changed { before, .. }, SectionChangedLineType::Before) => before,
-                    (Section::Changed { after, .. }, SectionChangedLineType::After) => after,
-                };
-                section_changed_lines[section_line_num].is_selected = new_value;
+            },
+        ) = &mut self.state.file_states[file_num];
+        let section = &mut sections[section_num];
+        let section_changed_lines = match (section, section_type) {
+            (Section::Unchanged { contents }, _) => {
+                error!(
+                    ?section_num,
+                    ?path,
+                    ?contents,
+                    "Invalid section num to change"
+                );
+                panic!("Invalid section num to change");
             }
-        }
+            (Section::Changed { before, .. }, SectionChangedLineType::Before) => before,
+            (Section::Changed { after, .. }, SectionChangedLineType::After) => after,
+            (
+                Section::FileMode {
+                    is_selected: _,
+                    before: _,
+                    after: _,
+                },
+                _,
+            ) => unimplemented!("toggle_section_line for Section::FileMode"),
+        };
+        section_changed_lines[section_line_num].is_selected = new_value;
 
         self.refresh_section(
             siv,
@@ -606,35 +613,31 @@ impl Recorder {
             file_num,
             section_num,
         } = section_key;
-        let (_path, file_state) = &mut self.state.file_states[file_num];
-
-        match file_state {
-            FileState::Absent | FileState::Binary => {
-                unimplemented!("refresh_section for absent/binary files")
-            }
-            FileState::Text {
+        let (
+            _path,
+            FileState {
                 file_mode: _,
                 sections,
-            } => {
-                let section_selections = iter_section_changed_lines(&sections[section_num]).map(
-                    |(
-                        _section_changed_line_type,
-                        SectionChangedLine {
-                            is_selected,
-                            line: _,
-                        },
-                    )| *is_selected,
-                );
-                let section_new_value = all_are_same_value(section_selections).into_tristate();
-                let section_key = SectionKey {
-                    file_num,
-                    section_num,
-                };
-                siv.call_on_name(&section_key.view_id(), |tristate_box: &mut TristateBox| {
-                    tristate_box.set_state(section_new_value);
-                });
-            }
-        }
+            },
+        ) = &mut self.state.file_states[file_num];
+
+        let section_selections = iter_section_changed_lines(&sections[section_num]).map(
+            |(
+                _section_changed_line_type,
+                SectionChangedLine {
+                    is_selected,
+                    line: _,
+                },
+            )| *is_selected,
+        );
+        let section_new_value = all_are_same_value(section_selections).into_tristate();
+        let section_key = SectionKey {
+            file_num,
+            section_num,
+        };
+        siv.call_on_name(&section_key.view_id(), |tristate_box: &mut TristateBox| {
+            tristate_box.set_state(section_new_value);
+        });
     }
 
     fn refresh_file(&mut self, siv: &mut CursiveRunner<CursiveRunnable>, file_key: FileKey) {
@@ -660,15 +663,11 @@ impl Recorder {
 fn iter_file_changed_lines(
     file_state: &FileState,
 ) -> impl Iterator<Item = (SectionChangedLineType, &SectionChangedLine)> {
-    match file_state {
-        FileState::Absent | FileState::Binary => {
-            unimplemented!("iter_file_changed_lines for absent/binary files")
-        }
-        FileState::Text {
-            file_mode: _,
-            sections,
-        } => sections.iter().flat_map(iter_section_changed_lines),
-    }
+    let FileState {
+        file_mode: _,
+        sections,
+    } = file_state;
+    sections.iter().flat_map(iter_section_changed_lines)
 }
 
 fn iter_section_changed_lines(
@@ -687,6 +686,11 @@ fn iter_section_changed_lines(
                     ),
             ),
             Section::Unchanged { contents: _ } => Box::new(std::iter::empty()),
+            Section::FileMode {
+                is_selected: _,
+                before: _,
+                after: _,
+            } => unimplemented!("iter_section_changed_lines for Section::FileMode"),
         };
     iter
 }
@@ -870,8 +874,8 @@ mod tests {
         RecordState {
             file_states: vec![(
                 PathBuf::from("foo"),
-                FileState::Text {
-                    file_mode: (0o100644, 0o100644),
+                FileState {
+                    file_mode: None,
                     sections: vec![
                         Section::Unchanged {
                             contents: vec![
@@ -1038,11 +1042,8 @@ mod tests {
                 file_states: [
                     (
                         "foo",
-                        Text {
-                            file_mode: (
-                                33188,
-                                33188,
-                            ),
+                        FileState {
+                            file_mode: None,
                             sections: [
                                 Unchanged {
                                     contents: [
@@ -1152,11 +1153,8 @@ mod tests {
                 file_states: [
                     (
                         "foo",
-                        Text {
-                            file_mode: (
-                                33188,
-                                33188,
-                            ),
+                        FileState {
+                            file_mode: None,
                             sections: [
                                 Unchanged {
                                     contents: [
@@ -1199,19 +1197,16 @@ mod tests {
     fn test_initial_tristate_states() {
         let state = {
             let mut state = example_record_state();
-            let (_path, file_state) = &mut state.file_states[0];
-            match file_state {
-                FileState::Absent => panic!("Example state should not have absent files"),
-                FileState::Binary => panic!("Example state should not have binary files"),
-                FileState::Text {
+            let (
+                _path,
+                FileState {
                     file_mode: _,
                     sections,
-                } => {
-                    for section in sections {
-                        if let Section::Changed { before, after: _ } = section {
-                            before[0].is_selected = true;
-                        }
-                    }
+                },
+            ) = &mut state.file_states[0];
+            for section in sections {
+                if let Section::Changed { before, after: _ } = section {
+                    before[0].is_selected = true;
                 }
             }
             state
@@ -1248,8 +1243,8 @@ mod tests {
         let state = RecordState {
             file_states: vec![(
                 PathBuf::from("foo"),
-                FileState::Text {
-                    file_mode: (0o100644, 0o100644),
+                FileState {
+                    file_mode: None,
                     sections: vec![
                         Section::Unchanged {
                             contents: vec![
@@ -1318,20 +1313,11 @@ mod tests {
     #[test]
     fn test_render_multiple_sections() -> eyre::Result<()> {
         let mut state = example_record_state();
-        let (file_mode, sections) = {
-            let (_, file_state) = &state.file_states[0];
-            match file_state {
-                FileState::Absent | FileState::Binary => panic!("should be text"),
-                FileState::Text {
-                    file_mode,
-                    sections,
-                } => (file_mode, sections.clone()),
-            }
+        let sections = {
+            let (_, FileState { sections, .. }) = &state.file_states[0];
+            sections.clone()
         };
-        state.file_states[0].1 = FileState::Text {
-            file_mode: *file_mode,
-            sections: [sections.clone(), sections].concat(),
-        };
+        state.file_states[0].1.sections = [sections.clone(), sections].concat();
 
         let screenshot = Default::default();
         let result = run_test(

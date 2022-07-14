@@ -20,8 +20,8 @@ fn bench_record(c: &mut Criterion) {
         };
         let file_states = vec![(
             PathBuf::from("foo"),
-            FileState::Text {
-                file_mode: (0o100644, 0o100644),
+            FileState {
+                file_mode: None,
                 sections: vec![Section::Changed {
                     before: vec![before_line; 1000],
                     after: vec![after_line; 1000],

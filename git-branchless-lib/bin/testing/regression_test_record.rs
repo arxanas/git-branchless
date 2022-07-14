@@ -46,25 +46,31 @@ fn main() -> eyre::Result<()> {
 
         let entries = {
             let mut entries = process_diff_for_record(&repo, &diff)?;
-            for (_, file_state) in &mut entries {
-                match file_state {
-                    FileState::Absent | FileState::Binary => {}
-                    FileState::Text {
-                        file_mode: _,
-                        sections,
-                    } => {
-                        for section in sections {
-                            match section {
-                                Section::Unchanged { contents: _ } => {}
-                                Section::Changed { before, after } => {
-                                    for changed_line in before {
-                                        changed_line.is_selected = true;
-                                    }
-                                    for changed_line in after {
-                                        changed_line.is_selected = true;
-                                    }
-                                }
+            for (
+                _,
+                FileState {
+                    file_mode: _,
+                    sections,
+                },
+            ) in &mut entries
+            {
+                for section in sections {
+                    match section {
+                        Section::Unchanged { contents: _ } => {}
+                        Section::Changed { before, after } => {
+                            for changed_line in before {
+                                changed_line.is_selected = true;
                             }
+                            for changed_line in after {
+                                changed_line.is_selected = true;
+                            }
+                        }
+                        Section::FileMode {
+                            is_selected: _,
+                            before: _,
+                            after: _,
+                        } => {
+                            unimplemented!("selecting Section::FileMode");
                         }
                     }
                 }
@@ -74,27 +80,15 @@ fn main() -> eyre::Result<()> {
         let entries: HashMap<_, _> = entries
             .into_iter()
             .map(|(path, file_state)| {
-                let value = match file_state {
-                    FileState::Absent => None,
-                    FileState::Binary => {
-                        let entry = new_tree.get_path(&path)?;
-                        match entry {
-                            Some(tree_entry) => {
-                                Some((tree_entry.get_oid(), tree_entry.get_filemode()))
-                            }
-                            None => None,
-                        }
-                    }
-                    FileState::Text {
-                        file_mode: (_old_file_mode, new_file_mode),
-                        sections: _,
-                    } => {
-                        let (selected, _unselected) = file_state.get_selected_contents();
-                        let blob_oid = repo.create_blob_from_contents(selected.as_bytes())?;
-                        let file_mode = i32::try_from(new_file_mode).unwrap();
-                        let file_mode = FileMode::from(file_mode);
-                        Some((blob_oid, file_mode))
-                    }
+                let value = {
+                    let new_file_mode = file_state
+                        .get_file_mode()
+                        .expect("File mode should have been set");
+                    let (selected, _unselected) = file_state.get_selected_contents();
+                    let blob_oid = repo.create_blob_from_contents(selected.as_bytes())?;
+                    let file_mode = i32::try_from(new_file_mode).unwrap();
+                    let file_mode = FileMode::from(file_mode);
+                    Some((blob_oid, file_mode))
                 };
                 Ok((path, value))
             })
