@@ -149,16 +149,7 @@ impl<'a> Recorder<'a> {
             .child(
                 TristateBox::new()
                     .with_state({
-                        all_are_same_value(iter_file_changed_lines(file_state).map(
-                            |(
-                                _section_changed_line_type,
-                                SectionChangedLine {
-                                    is_selected,
-                                    line: _,
-                                },
-                            )| is_selected,
-                        ))
-                        .into_tristate()
+                        all_are_same_value(iter_file_selections(file_state)).into_tristate()
                     })
                     .on_change({
                         let main_tx = main_tx.clone();
@@ -621,15 +612,7 @@ impl<'a> Recorder<'a> {
             },
         ) = &mut self.state.file_states[file_num];
 
-        let section_selections = iter_section_changed_lines(&sections[section_num]).map(
-            |(
-                _section_changed_line_type,
-                SectionChangedLine {
-                    is_selected,
-                    line: _,
-                },
-            )| is_selected,
-        );
+        let section_selections = iter_section_selections(&sections[section_num]);
         let section_new_value = all_are_same_value(section_selections).into_tristate();
         let section_key = SectionKey {
             file_num,
@@ -644,15 +627,7 @@ impl<'a> Recorder<'a> {
         let FileKey { file_num } = file_key;
         let file_state = &mut self.state.file_states[file_num].1;
 
-        let file_selections = iter_file_changed_lines(file_state).map(
-            |(
-                _section_changed_line_type,
-                SectionChangedLine {
-                    is_selected,
-                    line: _,
-                },
-            )| is_selected,
-        );
+        let file_selections = iter_file_selections(file_state);
         let file_new_value = all_are_same_value(file_selections).into_tristate();
         siv.call_on_name(&file_key.view_id(), |tristate_box: &mut TristateBox| {
             tristate_box.set_state(file_new_value);
@@ -660,28 +635,21 @@ impl<'a> Recorder<'a> {
     }
 }
 
-fn iter_file_changed_lines<'a>(
-    file_state: &'a FileState,
-) -> impl Iterator<Item = (SectionChangedLineType, SectionChangedLine<'a>)> + 'a {
+fn iter_file_selections<'a>(file_state: &'a FileState) -> impl Iterator<Item = bool> + 'a {
     let FileState {
         file_mode: _,
         sections,
     } = file_state;
-    sections.iter().flat_map(iter_section_changed_lines)
+    sections.iter().flat_map(iter_section_selections)
 }
 
-fn iter_section_changed_lines<'a>(
-    section: &'a Section,
-) -> impl Iterator<Item = (SectionChangedLineType, SectionChangedLine<'a>)> + 'a {
-    let iter: Box<dyn Iterator<Item = (SectionChangedLineType, SectionChangedLine)>> = match section
-    {
+fn iter_section_selections<'a>(section: &'a Section) -> impl Iterator<Item = bool> + 'a {
+    let iter: Box<dyn Iterator<Item = bool>> = match section {
         Section::Changed { before, after } => Box::new(
             before
                 .iter()
-                .map(|changed_line| (SectionChangedLineType::Before, changed_line.borrow_line()))
-                .chain(after.iter().map(|changed_line| {
-                    (SectionChangedLineType::After, changed_line.borrow_line())
-                })),
+                .map(|changed_line| changed_line.is_selected)
+                .chain(after.iter().map(|changed_line| changed_line.is_selected)),
         ),
         Section::Unchanged { contents: _ } => Box::new(std::iter::empty()),
         Section::FileMode {
@@ -760,16 +728,7 @@ impl<'a> EventDrivenCursiveApp for Recorder<'a> {
                     let RecordState { file_states } = &self.state;
                     let changed_lines = file_states
                         .iter()
-                        .flat_map(|(_, file_state)| iter_file_changed_lines(file_state))
-                        .map(
-                            |(
-                                _section_changed_line_type,
-                                SectionChangedLine {
-                                    is_selected,
-                                    line: _,
-                                },
-                            )| is_selected,
-                        );
+                        .flat_map(|(_, file_state)| iter_file_selections(file_state));
                     match all_are_same_value(changed_lines) {
                         SameValueResult::Empty | SameValueResult::AllSame(_) => false,
                         SameValueResult::SomeDifferent => true,
