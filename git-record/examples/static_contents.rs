@@ -15,8 +15,8 @@ fn main() {
     let file_states = vec![
         (
             PathBuf::from("foo/bar"),
-            FileState::Text {
-                file_mode: (0o100644, 0o100644),
+            FileState {
+                file_mode: None,
                 sections: vec![
                     Section::Unchanged {
                         contents: std::iter::repeat("this is some text".to_string())
@@ -53,8 +53,8 @@ fn main() {
         ),
         (
             PathBuf::from("baz"),
-            FileState::Text {
-                file_mode: (0o100644, 0o100644),
+            FileState {
+                file_mode: None,
                 sections: vec![
                     Section::Unchanged {
                         contents: vec![

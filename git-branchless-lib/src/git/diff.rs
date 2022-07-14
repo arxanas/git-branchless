@@ -111,13 +111,13 @@ pub fn process_diff_for_record(
         } = delta;
 
         if new_oid.is_zero() {
-            result.push((path, FileState::Absent));
+            result.push((path, FileState::absent()));
             continue;
         }
 
         let hunks = match content {
             DeltaFileContent::Binary => {
-                result.push((path, FileState::Binary));
+                result.push((path, FileState::binary()));
                 continue;
             }
             DeltaFileContent::Hunks(mut hunks) => {
@@ -156,14 +156,14 @@ pub fn process_diff_for_record(
         let before_lines = match get_lines_from_blob(old_oid)? {
             Some(lines) => lines,
             None => {
-                result.push((path, FileState::Binary));
+                result.push((path, FileState::binary()));
                 continue;
             }
         };
         let after_lines = match get_lines_from_blob(new_oid)? {
             Some(lines) => lines,
             None => {
-                result.push((path, FileState::Binary));
+                result.push((path, FileState::binary()));
                 continue;
             }
         };
@@ -258,14 +258,23 @@ pub fn process_diff_for_record(
                 contents: before_lines[unchanged_hunk_line_idx..].to_vec(),
             });
         }
+
+        let old_file_mode: usize = u32::from(old_file_mode).try_into().unwrap();
+        let new_file_mode: usize = u32::from(new_file_mode).try_into().unwrap();
+        let file_mode_section = if old_file_mode != new_file_mode {
+            vec![Section::FileMode {
+                is_selected: false,
+                before: old_file_mode,
+                after: new_file_mode,
+            }]
+        } else {
+            vec![]
+        };
         result.push((
             path,
-            FileState::Text {
-                file_mode: (
-                    u32::from(old_file_mode).try_into().unwrap(),
-                    u32::from(new_file_mode).try_into().unwrap(),
-                ),
-                sections: file_hunks,
+            FileState {
+                file_mode: Some(old_file_mode),
+                sections: [file_mode_section, file_hunks].concat().to_vec(),
             },
         ));
     }
