@@ -1,9 +1,11 @@
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use eyre::Context;
 use git_record::{FileState, Section, SectionChangedLine};
+use itertools::Itertools;
 
 use super::{MaybeZeroOid, Repo};
 
@@ -24,7 +26,7 @@ struct GitHunk {
 pub fn process_diff_for_record(
     repo: &Repo,
     diff: &Diff,
-) -> eyre::Result<Vec<(PathBuf, FileState)>> {
+) -> eyre::Result<Vec<(PathBuf, FileState<'static>)>> {
     let Diff { inner: diff } = diff;
 
     #[derive(Clone, Debug)]
@@ -204,7 +206,11 @@ pub fn process_diff_for_record(
                     old_start
                 };
                 file_hunks.push(Section::Unchanged {
-                    contents: before_lines[unchanged_hunk_line_idx..end].to_vec(),
+                    contents: before_lines[unchanged_hunk_line_idx..end]
+                        .iter()
+                        .cloned()
+                        .map(Cow::Owned)
+                        .collect_vec(),
                 });
                 unchanged_hunk_line_idx = end + old_lines;
             }
@@ -239,7 +245,7 @@ pub fn process_diff_for_record(
                     .cloned()
                     .map(|line| SectionChangedLine {
                         is_selected: false,
-                        line,
+                        line: Cow::Owned(line),
                     })
                     .collect(),
                 after: after_lines[after_idx_start..after_idx_end]
@@ -247,7 +253,7 @@ pub fn process_diff_for_record(
                     .cloned()
                     .map(|line| SectionChangedLine {
                         is_selected: false,
-                        line,
+                        line: Cow::Owned(line),
                     })
                     .collect(),
             });
@@ -255,7 +261,11 @@ pub fn process_diff_for_record(
 
         if unchanged_hunk_line_idx < before_lines.len() {
             file_hunks.push(Section::Unchanged {
-                contents: before_lines[unchanged_hunk_line_idx..].to_vec(),
+                contents: before_lines[unchanged_hunk_line_idx..]
+                    .iter()
+                    .cloned()
+                    .map(Cow::Owned)
+                    .collect(),
             });
         }
 

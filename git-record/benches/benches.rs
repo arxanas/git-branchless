@@ -1,4 +1,4 @@
-use std::{convert::Infallible, path::PathBuf};
+use std::{borrow::Cow, convert::Infallible, path::PathBuf};
 
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 
@@ -12,11 +12,11 @@ fn bench_record(c: &mut Criterion) {
     c.bench_function("toggle line", |b| {
         let before_line = SectionChangedLine {
             is_selected: false,
-            line: "foo\n".to_string(),
+            line: Cow::Borrowed("foo\n"),
         };
         let after_line = SectionChangedLine {
             is_selected: false,
-            line: "foo\n".to_string(),
+            line: Cow::Borrowed("foo\n"),
         };
         let file_states = vec![(
             PathBuf::from("foo"),
