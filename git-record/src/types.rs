@@ -54,10 +54,7 @@ impl FileState<'_> {
             .iter()
             .filter(|section| match section {
                 Section::Unchanged { .. } => false,
-                Section::Changed { .. } => true,
-                Section::FileMode { .. } => {
-                    unimplemented!("count_changed_sections for Section::FileMode")
-                }
+                Section::Changed { .. } | Section::FileMode { .. } => true,
             })
             .count()
     }
@@ -131,7 +128,7 @@ impl FileState<'_> {
                     before: _,
                     after: _,
                 } => {
-                    unimplemented!("get_selected_contents for Section::FileMode");
+                    // Do nothing; the caller should use `get_file_mode` to get this information.
                 }
             }
         }

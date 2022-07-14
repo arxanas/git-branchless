@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::cmp::min;
 use std::path::Path;
 use std::sync::mpsc::Sender;
@@ -653,10 +654,19 @@ fn iter_section_selections<'a>(section: &'a Section) -> impl Iterator<Item = boo
         ),
         Section::Unchanged { contents: _ } => Box::new(std::iter::empty()),
         Section::FileMode {
-            is_selected: _,
-            before: _,
-            after: _,
-        } => unimplemented!("iter_section_changed_lines for Section::FileMode"),
+            is_selected,
+            before,
+            after,
+        } => Box::new(
+            vec![(
+                SectionChangedLineType::After,
+                SectionChangedLine {
+                    is_selected: *is_selected,
+                    line: Cow::Owned(format!("File mode change: {before:#o} -> {after:#o}")),
+                },
+            )]
+            .into_iter(),
+        ),
     };
     iter
 }
@@ -1311,6 +1321,37 @@ mod tests {
                                 [X] +after 1
                                 [ ] +after 2
         "###);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_file_mode_section() -> eyre::Result<()> {
+        let state = RecordState {
+            file_states: vec![(
+                "foo".into(),
+                FileState {
+                    file_mode: Some(0o100644),
+                    sections: vec![Section::FileMode {
+                        is_selected: false,
+                        before: 0o100644,
+                        after: 0o100755,
+                    }],
+                },
+            )],
+        };
+
+        let screenshot = Default::default();
+        let result = run_test(
+            state,
+            vec![
+                CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot)),
+                CursiveTestingEvent::Event('q'.into()),
+                CursiveTestingEvent::Event(Key::Enter.into()),
+            ],
+        );
+
+        insta::assert_snapshot!(screen_to_string(&screenshot), @"");
 
         Ok(())
     }
