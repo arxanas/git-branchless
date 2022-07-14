@@ -78,14 +78,14 @@ impl SectionLineKey {
 }
 
 /// UI component to record the user's changes.
-pub struct Recorder {
+pub struct Recorder<'a> {
     did_user_confirm_exit: bool,
-    state: RecordState,
+    state: RecordState<'a>,
 }
 
-impl Recorder {
+impl<'a> Recorder<'a> {
     /// Constructor.
-    pub fn new(state: RecordState) -> Self {
+    pub fn new(state: RecordState<'a>) -> Self {
         Self {
             did_user_confirm_exit: false,
             state,
@@ -94,7 +94,7 @@ impl Recorder {
 
     /// Run the terminal user interface and have the user interactively select
     /// changes.
-    pub fn run(self, siv: CursiveRunner<CursiveRunnable>) -> Result<RecordState, RecordError> {
+    pub fn run(self, siv: CursiveRunner<CursiveRunnable>) -> Result<RecordState<'a>, RecordError> {
         EventDrivenCursiveAppExt::run(self, siv)
     }
 
@@ -156,7 +156,7 @@ impl Recorder {
                                     is_selected,
                                     line: _,
                                 },
-                            )| *is_selected,
+                            )| is_selected,
                         ))
                         .into_tristate()
                     })
@@ -628,7 +628,7 @@ impl Recorder {
                     is_selected,
                     line: _,
                 },
-            )| *is_selected,
+            )| is_selected,
         );
         let section_new_value = all_are_same_value(section_selections).into_tristate();
         let section_key = SectionKey {
@@ -651,7 +651,7 @@ impl Recorder {
                     is_selected,
                     line: _,
                 },
-            )| *is_selected,
+            )| is_selected,
         );
         let file_new_value = all_are_same_value(file_selections).into_tristate();
         siv.call_on_name(&file_key.view_id(), |tristate_box: &mut TristateBox| {
@@ -660,9 +660,9 @@ impl Recorder {
     }
 }
 
-fn iter_file_changed_lines(
-    file_state: &FileState,
-) -> impl Iterator<Item = (SectionChangedLineType, &SectionChangedLine)> {
+fn iter_file_changed_lines<'a>(
+    file_state: &'a FileState,
+) -> impl Iterator<Item = (SectionChangedLineType, SectionChangedLine<'a>)> + 'a {
     let FileState {
         file_mode: _,
         sections,
@@ -670,28 +670,26 @@ fn iter_file_changed_lines(
     sections.iter().flat_map(iter_section_changed_lines)
 }
 
-fn iter_section_changed_lines(
-    section: &Section,
-) -> impl Iterator<Item = (SectionChangedLineType, &SectionChangedLine)> {
-    let iter: Box<dyn Iterator<Item = (SectionChangedLineType, &SectionChangedLine)>> =
-        match section {
-            Section::Changed { before, after } => Box::new(
-                before
-                    .iter()
-                    .map(|changed_line| (SectionChangedLineType::Before, changed_line))
-                    .chain(
-                        after
-                            .iter()
-                            .map(|changed_line| (SectionChangedLineType::After, changed_line)),
-                    ),
-            ),
-            Section::Unchanged { contents: _ } => Box::new(std::iter::empty()),
-            Section::FileMode {
-                is_selected: _,
-                before: _,
-                after: _,
-            } => unimplemented!("iter_section_changed_lines for Section::FileMode"),
-        };
+fn iter_section_changed_lines<'a>(
+    section: &'a Section,
+) -> impl Iterator<Item = (SectionChangedLineType, SectionChangedLine<'a>)> + 'a {
+    let iter: Box<dyn Iterator<Item = (SectionChangedLineType, SectionChangedLine)>> = match section
+    {
+        Section::Changed { before, after } => Box::new(
+            before
+                .iter()
+                .map(|changed_line| (SectionChangedLineType::Before, changed_line.borrow_line()))
+                .chain(after.iter().map(|changed_line| {
+                    (SectionChangedLineType::After, changed_line.borrow_line())
+                })),
+        ),
+        Section::Unchanged { contents: _ } => Box::new(std::iter::empty()),
+        Section::FileMode {
+            is_selected: _,
+            before: _,
+            after: _,
+        } => unimplemented!("iter_section_changed_lines for Section::FileMode"),
+    };
     iter
 }
 
@@ -705,10 +703,10 @@ pub enum Message {
     Quit,
 }
 
-impl EventDrivenCursiveApp for Recorder {
+impl<'a> EventDrivenCursiveApp for Recorder<'a> {
     type Message = Message;
 
-    type Return = Result<RecordState, RecordError>;
+    type Return = Result<RecordState<'a>, RecordError>;
 
     fn get_init_message(&self) -> Self::Message {
         Message::Init
@@ -847,9 +845,9 @@ where
 
 #[cfg(test)]
 mod tests {
-    use std::convert::Infallible;
     use std::path::PathBuf;
     use std::rc::Rc;
+    use std::{borrow::Cow, convert::Infallible};
 
     use cursive::event::Key;
 
@@ -870,7 +868,7 @@ mod tests {
         recorder.run(siv.into_runner())
     }
 
-    fn example_record_state() -> RecordState {
+    fn example_record_state() -> RecordState<'static> {
         RecordState {
             file_states: vec![(
                 PathBuf::from("foo"),
@@ -879,29 +877,29 @@ mod tests {
                     sections: vec![
                         Section::Unchanged {
                             contents: vec![
-                                "unchanged 1\n".to_string(),
-                                "unchanged 2\n".to_string(),
+                                Cow::Borrowed("unchanged 1\n"),
+                                Cow::Borrowed("unchanged 2\n"),
                             ],
                         },
                         Section::Changed {
                             before: vec![
                                 SectionChangedLine {
                                     is_selected: true,
-                                    line: "before 1\n".to_string(),
+                                    line: Cow::Borrowed("before 1\n"),
                                 },
                                 SectionChangedLine {
                                     is_selected: true,
-                                    line: "before 2\n".to_string(),
+                                    line: Cow::Borrowed("before 2\n"),
                                 },
                             ],
                             after: vec![
                                 SectionChangedLine {
                                     is_selected: true,
-                                    line: "after 1\n".to_string(),
+                                    line: Cow::Borrowed("after 1\n"),
                                 },
                                 SectionChangedLine {
                                     is_selected: false,
-                                    line: "after 2\n".to_string(),
+                                    line: Cow::Borrowed("after 2\n"),
                                 },
                             ],
                         },
@@ -1248,34 +1246,34 @@ mod tests {
                     sections: vec![
                         Section::Unchanged {
                             contents: vec![
-                                "foo".to_string(),
-                                "bar".to_string(),
-                                "baz".to_string(),
-                                "qux".to_string(),
+                                Cow::Borrowed("foo"),
+                                Cow::Borrowed("bar"),
+                                Cow::Borrowed("baz"),
+                                Cow::Borrowed("qux"),
                             ],
                         },
                         Section::Changed {
                             before: vec![SectionChangedLine {
                                 is_selected: false,
-                                line: "changed 1".to_string(),
+                                line: Cow::Borrowed("changed 1"),
                             }],
                             after: vec![
                                 SectionChangedLine {
                                     is_selected: false,
-                                    line: "changed 2".to_string(),
+                                    line: Cow::Borrowed("changed 2"),
                                 },
                                 SectionChangedLine {
                                     is_selected: false,
-                                    line: "changed 3".to_string(),
+                                    line: Cow::Borrowed("changed 3"),
                                 },
                             ],
                         },
                         Section::Unchanged {
                             contents: vec![
-                                "foo".to_string(),
-                                "bar".to_string(),
-                                "baz".to_string(),
-                                "qux".to_string(),
+                                Cow::Borrowed("foo"),
+                                Cow::Borrowed("bar"),
+                                Cow::Borrowed("baz"),
+                                Cow::Borrowed("qux"),
                             ],
                         },
                     ],

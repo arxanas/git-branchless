@@ -1,6 +1,7 @@
 #![warn(clippy::all, clippy::as_conversions)]
 #![allow(clippy::too_many_arguments, clippy::blocks_in_if_conditions)]
 
+use std::borrow::Cow;
 use std::io;
 use std::path::PathBuf;
 
@@ -19,7 +20,7 @@ fn main() {
                 file_mode: None,
                 sections: vec![
                     Section::Unchanged {
-                        contents: std::iter::repeat("this is some text".to_string())
+                        contents: std::iter::repeat(Cow::Borrowed("this is some text"))
                             .take(20)
                             .collect(),
                     },
@@ -27,26 +28,26 @@ fn main() {
                         before: vec![
                             SectionChangedLine {
                                 is_selected: true,
-                                line: "before text 1".to_string(),
+                                line: Cow::Borrowed("before text 1"),
                             },
                             SectionChangedLine {
                                 is_selected: true,
-                                line: "before text 2".to_string(),
+                                line: Cow::Borrowed("before text 2"),
                             },
                         ],
                         after: vec![
                             SectionChangedLine {
                                 is_selected: true,
-                                line: "after text 1".to_string(),
+                                line: Cow::Borrowed("after text 1"),
                             },
                             SectionChangedLine {
                                 is_selected: false,
-                                line: "after text 2".to_string(),
+                                line: Cow::Borrowed("after text 2"),
                             },
                         ],
                     },
                     Section::Unchanged {
-                        contents: vec!["this is some trailing text".to_string()],
+                        contents: vec![Cow::Borrowed("this is some trailing text")],
                     },
                 ],
             },
@@ -58,34 +59,34 @@ fn main() {
                 sections: vec![
                     Section::Unchanged {
                         contents: vec![
-                            "Some leading text 1".to_string(),
-                            "Some leading text 2".to_string(),
+                            Cow::Borrowed("Some leading text 1"),
+                            Cow::Borrowed("Some leading text 2"),
                         ],
                     },
                     Section::Changed {
                         before: vec![
                             SectionChangedLine {
                                 is_selected: true,
-                                line: "before text 1".to_string(),
+                                line: Cow::Borrowed("before text 1"),
                             },
                             SectionChangedLine {
                                 is_selected: true,
-                                line: "before text 2".to_string(),
+                                line: Cow::Borrowed("before text 2"),
                             },
                         ],
                         after: vec![
                             SectionChangedLine {
                                 is_selected: true,
-                                line: "after text 1".to_string(),
+                                line: Cow::Borrowed("after text 1"),
                             },
                             SectionChangedLine {
                                 is_selected: true,
-                                line: "after text 2".to_string(),
+                                line: Cow::Borrowed("after text 2"),
                             },
                         ],
                     },
                     Section::Unchanged {
-                        contents: vec!["this is some trailing text".to_string()],
+                        contents: vec![Cow::Borrowed("this is some trailing text")],
                     },
                 ],
             },
