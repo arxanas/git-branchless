@@ -242,7 +242,26 @@ impl<'a> Recorder<'a> {
                     before: _,
                     after: _,
                 } => {
-                    unimplemented!("make_file_view with Section::FileMode");
+                    local_changed_section_num += 1;
+                    *global_changed_section_num += 1;
+                    let description = format!(
+                        "section {}/{} in current file, {}/{} total",
+                        local_changed_section_num,
+                        local_num_changed_sections,
+                        global_changed_section_num,
+                        global_num_changed_sections
+                    );
+
+                    // @nocommit
+                    // self.make_changed_section_views(
+                    //     main_tx.clone(),
+                    //     &mut file_view,
+                    //     file_num,
+                    //     section_num,
+                    //     description,
+                    //     before,
+                    //     after,
+                    // );
                 }
             }
         }
@@ -655,18 +674,9 @@ fn iter_section_selections<'a>(section: &'a Section) -> impl Iterator<Item = boo
         Section::Unchanged { contents: _ } => Box::new(std::iter::empty()),
         Section::FileMode {
             is_selected,
-            before,
-            after,
-        } => Box::new(
-            vec![(
-                SectionChangedLineType::After,
-                SectionChangedLine {
-                    is_selected: *is_selected,
-                    line: Cow::Owned(format!("File mode change: {before:#o} -> {after:#o}")),
-                },
-            )]
-            .into_iter(),
-        ),
+            before: _,
+            after: _,
+        } => Box::new(vec![*is_selected].into_iter()),
     };
     iter
 }
