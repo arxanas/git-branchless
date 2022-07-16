@@ -1,7 +1,9 @@
-use std::borrow::Borrow;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use eden_dag::DagAlgorithm;
+use itertools::Itertools;
+use lazy_static::lazy_static;
 use lib::core::effects::{Effects, OperationType};
 use once_cell::unsync::OnceCell;
 use thiserror::Error;
@@ -70,6 +72,15 @@ pub enum EvalError {
     #[error("no commit, branch, or reference with the name '{name}' could be found")]
     UnboundName { name: String },
 
+    #[error(
+        "no function with the name '{name}' could be found; these functions are available: {}",
+        available_names.join(", "),
+    )]
+    UnboundFunction {
+        name: String,
+        available_names: Vec<&'static str>,
+    },
+
     #[error("invalid number of arguments to {function_name}: expected {expected_arity} but got {actual_arity}")]
     ArityMismatch {
         function_name: String,
@@ -111,90 +122,7 @@ pub fn eval(effects: &Effects, repo: &Repo, dag: &mut Dag, expr: &Expr) -> EvalR
 fn eval_inner(ctx: &mut Context, expr: &Expr) -> EvalResult {
     match expr {
         Expr::Name(name) => eval_name(ctx, name),
-
-        Expr::Fn(name, args) => match name.borrow() {
-            "union" => {
-                let (lhs, rhs) = eval2(ctx, name, args)?;
-                Ok(lhs.union(&rhs))
-            }
-
-            "intersection" => {
-                let (lhs, rhs) = eval2(ctx, name, args)?;
-                Ok(lhs.intersection(&rhs))
-            }
-
-            "difference" => {
-                let (lhs, rhs) = eval2(ctx, name, args)?;
-                Ok(lhs.difference(&rhs))
-            }
-
-            "only" => {
-                let (lhs, rhs) = eval2(ctx, name, args)?;
-                Ok(ctx.dag.query().only(lhs, rhs)?)
-            }
-
-            "range" => {
-                let (lhs, rhs) = eval2(ctx, name, args)?;
-                Ok(ctx.dag.query().range(lhs, rhs)?)
-            }
-
-            "ancestors" => {
-                let expr = eval1(ctx, name, args)?;
-                Ok(ctx.dag.query().ancestors(expr)?)
-            }
-
-            "descendants" => {
-                let expr = eval1(ctx, name, args)?;
-                Ok(ctx.dag.query().descendants(expr)?)
-            }
-
-            "parents" => {
-                let expr = eval1(ctx, name, args)?;
-                Ok(ctx.dag.query().parents(expr)?)
-            }
-
-            "branches" => {
-                eval0(ctx, name, args)?;
-                Ok(ctx.dag.branch_commits.clone())
-            }
-
-            "draft" => {
-                eval0(ctx, name, args)?;
-                let draft_commits = ctx.query_draft_commits()?;
-                Ok(draft_commits.clone())
-            }
-
-            "stack" => {
-                eval0(ctx, name, args)?;
-                let draft_commits = ctx.query_draft_commits()?;
-                let stack_roots = ctx.dag.query().roots(draft_commits.clone())?;
-                let stack_ancestors = ctx
-                    .dag
-                    .query()
-                    .range(stack_roots, ctx.dag.head_commit.clone())?;
-                let stack = ctx
-                    .dag
-                    .query()
-                    // Note that for a graph like
-                    //
-                    // ```
-                    // O
-                    // |
-                    // o A
-                    // | \
-                    // |  o B
-                    // |
-                    // @ C
-                    // ```
-                    // this will return `{A, B, C}`, not just `{A, C}`.
-                    .range(stack_ancestors, draft_commits.clone())?;
-                Ok(stack)
-            }
-
-            name => Err(EvalError::UnboundName {
-                name: name.to_owned(),
-            }),
-        },
+        Expr::Fn(name, args) => eval_fn(ctx, name, args),
     }
 }
 
@@ -232,6 +160,105 @@ fn eval_name(ctx: &mut Context, name: &str) -> EvalResult {
         )
         .map_err(EvalError::OtherError)?;
     Ok(commit_set)
+}
+
+fn eval_fn(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+    fn fn_union(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+        let (lhs, rhs) = eval2(ctx, name, args)?;
+        Ok(lhs.union(&rhs))
+    }
+    fn fn_intersection(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+        let (lhs, rhs) = eval2(ctx, name, args)?;
+        Ok(lhs.intersection(&rhs))
+    }
+    fn fn_difference(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+        let (lhs, rhs) = eval2(ctx, name, args)?;
+        Ok(lhs.difference(&rhs))
+    }
+    fn fn_only(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+        let (lhs, rhs) = eval2(ctx, name, args)?;
+        Ok(ctx.dag.query().only(lhs, rhs)?)
+    }
+    fn fn_range(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+        let (lhs, rhs) = eval2(ctx, name, args)?;
+        Ok(ctx.dag.query().range(lhs, rhs)?)
+    }
+    fn fn_ancestors(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+        let expr = eval1(ctx, name, args)?;
+        Ok(ctx.dag.query().ancestors(expr)?)
+    }
+    fn fn_descendants(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+        let expr = eval1(ctx, name, args)?;
+        Ok(ctx.dag.query().descendants(expr)?)
+    }
+    fn fn_parents(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+        let expr = eval1(ctx, name, args)?;
+        Ok(ctx.dag.query().parents(expr)?)
+    }
+    fn fn_branches(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+        eval0(ctx, name, args)?;
+        Ok(ctx.dag.branch_commits.clone())
+    }
+    fn fn_draft(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+        eval0(ctx, name, args)?;
+        let draft_commits = ctx.query_draft_commits()?;
+        Ok(draft_commits.clone())
+    }
+    fn fn_stack(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+        eval0(ctx, name, args)?;
+        let draft_commits = ctx.query_draft_commits()?;
+        let stack_roots = ctx.dag.query().roots(draft_commits.clone())?;
+        let stack_ancestors = ctx
+            .dag
+            .query()
+            .range(stack_roots, ctx.dag.head_commit.clone())?;
+        let stack = ctx
+            .dag
+            .query()
+            // Note that for a graph like
+            //
+            // ```
+            // O
+            // |
+            // o A
+            // | \
+            // |  o B
+            // |
+            // @ C
+            // ```
+            // this will return `{A, B, C}`, not just `{A, C}`.
+            .range(stack_ancestors, draft_commits.clone())?;
+        Ok(stack)
+    }
+
+    type FnType = &'static (dyn Fn(&mut Context, &str, &[Expr]) -> EvalResult + Sync);
+    lazy_static! {
+        static ref FUNCTIONS: HashMap<&'static str, FnType> = {
+            let functions: &[(&'static str, FnType)] = &[
+                ("union", &fn_union),
+                ("intersection", &fn_intersection),
+                ("difference", &fn_difference),
+                ("only", &fn_only),
+                ("range", &fn_range),
+                ("ancestors", &fn_ancestors),
+                ("descendants", &fn_descendants),
+                ("parents", &fn_parents),
+                ("branches", &fn_branches),
+                ("draft", &fn_draft),
+                ("stack", &fn_stack),
+            ];
+            functions.iter().cloned().collect()
+        };
+    }
+
+    let function = FUNCTIONS
+        .get(name)
+        .ok_or_else(|| EvalError::UnboundFunction {
+            name: name.to_owned(),
+            available_names: FUNCTIONS.keys().sorted().copied().collect(),
+        })?;
+
+    function(ctx, name, args)
 }
 
 #[instrument]

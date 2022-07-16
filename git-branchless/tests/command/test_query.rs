@@ -66,6 +66,19 @@ fn test_query_eval_error() -> eyre::Result<()> {
         insta::assert_snapshot!(stdout, @"");
     }
 
+    {
+        let (stdout, stderr) = git.run_with_options(
+            &["branchless", "query", "foo()"],
+            &GitRunOptions {
+                expected_exit_code: 1,
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stderr, @"Evaluation error for expression 'foo()': no function with the name 'foo' could be found; these functions are available: ancestors, branches, descendants, difference, draft, intersection, only, parents, range, stack, union
+");
+        insta::assert_snapshot!(stdout, @"");
+    }
+
     Ok(())
 }
 
