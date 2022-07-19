@@ -142,18 +142,6 @@ pub fn r#move(
                     return Ok(ExitCode(1));
                 };
 
-                let component_heads = dag.query().heads(component.clone())?;
-                if component_heads.count()? != 1 {
-                    writeln!(
-                        effects.get_error_stream(),
-                        "The --exact flag can only be used to move ranges with exactly 1 head.\n\
-                         Received range with {} heads: {:?}",
-                        component_heads.count()?,
-                        component_heads
-                    )?;
-                    return Ok(ExitCode(1));
-                };
-
                 components.insert(component_root, component);
             }
 
@@ -235,10 +223,6 @@ pub fn r#move(
             .collect();
         for component_root in component_roots.iter().cloned() {
             let component = exact_components.get(&component_root).unwrap();
-            // We've already established that each component only has 1 root and 1
-            // head, so we can be a bit cavelier w/ our Ok/Err handling
-            let component_head =
-                NonZeroOid::try_from(dag.query().heads(component.clone())?.first()?.unwrap())?;
 
             // Find the non-inclusive ancestor components of the current root
             let mut possible_destinations: Vec<NonZeroOid> = vec![];
@@ -299,7 +283,7 @@ pub fn r#move(
                 // in nearest_component, not just it's head.
                 let dest_ancestor = dag
                     .query()
-                    .ancestors(CommitSet::from(component_head))?
+                    .ancestors(CommitSet::from(component_root))?
                     .intersection(nearest_component);
                 match dag.query().heads(dest_ancestor.clone())?.first()? {
                     Some(head) => NonZeroOid::try_from(head)?,
@@ -338,7 +322,7 @@ pub fn r#move(
                 }
             }
 
-            builder.move_range(component_root, component_head, component_dest_oid)?;
+            builder.move_subtree(component_root, component_dest_oid)?;
         }
 
         if insert {
