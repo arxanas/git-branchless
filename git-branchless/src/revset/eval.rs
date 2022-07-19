@@ -195,6 +195,18 @@ fn eval_fn(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
         let expr = eval1(ctx, name, args)?;
         Ok(ctx.dag.query().parents(expr)?)
     }
+    fn fn_children(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+        let expr = eval1(ctx, name, args)?;
+        Ok(ctx.dag.query().children(expr)?)
+    }
+    fn fn_roots(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+        let expr = eval1(ctx, name, args)?;
+        Ok(ctx.dag.query().roots(expr)?)
+    }
+    fn fn_heads(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+        let expr = eval1(ctx, name, args)?;
+        Ok(ctx.dag.query().heads(expr)?)
+    }
     fn fn_branches(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
         eval0(ctx, name, args)?;
         Ok(ctx.dag.branch_commits.clone())
@@ -243,6 +255,9 @@ fn eval_fn(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
                 ("ancestors", &fn_ancestors),
                 ("descendants", &fn_descendants),
                 ("parents", &fn_parents),
+                ("children", &fn_children),
+                ("roots", &fn_roots),
+                ("heads", &fn_heads),
                 ("branches", &fn_branches),
                 ("draft", &fn_draft),
                 ("stack", &fn_stack),
