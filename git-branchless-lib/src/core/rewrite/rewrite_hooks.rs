@@ -19,7 +19,7 @@ use tempfile::NamedTempFile;
 use tracing::instrument;
 
 use crate::core::check_out::CheckOutCommitOptions;
-use crate::core::config::{get_restack_warn_abandoned, RESTACK_WARN_ABANDONED_CONFIG_KEY};
+use crate::core::config::{get_hint_enabled, print_hint_suppression_notice, Hint};
 use crate::core::dag::Dag;
 use crate::core::effects::Effects;
 use crate::core::eventlog::{Event, EventLogDb, EventReplayer};
@@ -178,15 +178,18 @@ pub fn hook_post_rewrite(
         }
     }
 
-    let should_check_abandoned_commits = get_restack_warn_abandoned(&repo)?;
+    let should_check_abandoned_commits = get_hint_enabled(&repo, Hint::RestackWarnAbandoned)?;
     if should_check_abandoned_commits && !is_spurious_event {
-        warn_abandoned(
+        let printed_hint = warn_abandoned(
             effects,
             &repo,
             &conn,
             &event_log_db,
             rewritten_oids.keys().copied(),
         )?;
+        if printed_hint {
+            print_hint_suppression_notice(effects, Hint::RestackWarnAbandoned)?;
+        }
     }
 
     Ok(())
@@ -199,7 +202,7 @@ fn warn_abandoned(
     conn: &rusqlite::Connection,
     event_log_db: &EventLogDb,
     old_commit_oids: impl IntoIterator<Item = NonZeroOid>,
-) -> eyre::Result<()> {
+) -> eyre::Result<bool> {
     // The caller will have added events to the event log database, so make sure
     // to construct a fresh `EventReplayer` here.
     let references_snapshot = repo.get_references_snapshot()?;
@@ -296,22 +299,17 @@ branchless:     (this is most likely what you want to do)
 branchless:   - {git_smartlog}: assess the situation
 branchless:   - {git_hide} [<commit>...]: hide the commits from the smartlog
 branchless:   - {git_undo}: undo the operation
-branchless:   - {config_command}: suppress this message
 ",
             warning_message = warning_message,
             git_smartlog = style("git smartlog").bold(),
             git_restack = style("git restack").bold(),
             git_hide = style("git hide").bold(),
             git_undo = style("git undo").bold(),
-            config_command = style(format!(
-                "git config {} false",
-                RESTACK_WARN_ABANDONED_CONFIG_KEY
-            ))
-            .bold(),
         );
+        Ok(true)
+    } else {
+        Ok(false)
     }
-
-    Ok(())
 }
 
 const ORIGINAL_HEAD_OID_FILE_NAME: &str = "branchless_original_head_oid";

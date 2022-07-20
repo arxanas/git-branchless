@@ -1,12 +1,16 @@
 //! Accesses repo-specific configuration.
 
 use std::ffi::OsString;
+use std::fmt::Write;
 use std::path::PathBuf;
 
+use console::style;
 use eyre::Context;
 use tracing::{instrument, warn};
 
 use crate::git::{ConfigRead, GitRunInfo, GitRunOpts, Repo};
+
+use super::effects::Effects;
 
 /// Get the path where Git hooks are stored on disk.
 #[instrument]
@@ -153,17 +157,6 @@ pub fn get_next_interactive(repo: &Repo) -> eyre::Result<bool> {
         .get_or("branchless.next.interactive", false)
 }
 
-/// Config key for `get_restack_warn_abandoned`.
-pub const RESTACK_WARN_ABANDONED_CONFIG_KEY: &str = "branchless.restack.warnAbandoned";
-
-/// If `true`, when a rewrite event happens which abandons commits, warn the user
-/// and tell them to run `git restack`.
-#[instrument]
-pub fn get_restack_warn_abandoned(repo: &Repo) -> eyre::Result<bool> {
-    repo.get_readonly_config()?
-        .get_or(RESTACK_WARN_ABANDONED_CONFIG_KEY, true)
-}
-
 /// If `true`, show branches pointing to each commit in the smartlog.
 #[instrument]
 pub fn get_commit_descriptors_branches(repo: &Repo) -> eyre::Result<bool> {
@@ -183,6 +176,41 @@ pub fn get_commit_descriptors_differential_revision(repo: &Repo) -> eyre::Result
 pub fn get_commit_descriptors_relative_time(repo: &Repo) -> eyre::Result<bool> {
     repo.get_readonly_config()?
         .get_or("branchless.commitDescriptors.relativeTime", true)
+}
+
+/// Config key for `get_restack_warn_abandoned`.
+pub const RESTACK_WARN_ABANDONED_CONFIG_KEY: &str = "branchless.restack.warnAbandoned";
+
+/// Possible hint types.
+#[derive(Clone, Debug)]
+pub enum Hint {
+    /// Suggest running `git restack` when a commit is abandoned as part of a `rewrite` event.
+    RestackWarnAbandoned,
+}
+
+impl Hint {
+    fn get_config_key(&self) -> &'static str {
+        match self {
+            Hint::RestackWarnAbandoned => "branchless.hint.restackWarnAbandoned",
+        }
+    }
+}
+
+/// Determine if a given hint is enabled.
+pub fn get_hint_enabled(repo: &Repo, hint: Hint) -> eyre::Result<bool> {
+    repo.get_readonly_config()?
+        .get_or(hint.get_config_key(), true)
+}
+
+/// Print instructions explaining how to disable a given hint.
+pub fn print_hint_suppression_notice(effects: &Effects, hint: Hint) -> eyre::Result<()> {
+    writeln!(
+        effects.get_output_stream(),
+        "{}: disable this hint by running: git config --global {} false",
+        style("hint").blue().bold(),
+        hint.get_config_key(),
+    )?;
+    Ok(())
 }
 
 /// Environment variables which affect the functioning of `git-branchless`.

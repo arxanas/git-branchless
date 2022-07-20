@@ -45,7 +45,7 @@ fn test_abandoned_commit_message() -> eyre::Result<()> {
         branchless:   - git smartlog: assess the situation
         branchless:   - git hide [<commit>...]: hide the commits from the smartlog
         branchless:   - git undo: undo the operation
-        branchless:   - git config branchless.restack.warnAbandoned false: suppress this message
+        hint: disable this hint by running: git config --global branchless.hint.restackWarnAbandoned false
         "###);
     }
 
@@ -78,7 +78,7 @@ fn test_abandoned_branch_message() -> eyre::Result<()> {
         branchless:   - git smartlog: assess the situation
         branchless:   - git hide [<commit>...]: hide the commits from the smartlog
         branchless:   - git undo: undo the operation
-        branchless:   - git config branchless.restack.warnAbandoned false: suppress this message
+        hint: disable this hint by running: git config --global branchless.hint.restackWarnAbandoned false
         "###);
     }
 
