@@ -8,6 +8,7 @@ use std::convert::TryFrom;
 use std::fmt::Write;
 use std::time::SystemTime;
 
+use console::style;
 use eden_dag::DagAlgorithm;
 use lib::core::repo_ext::RepoExt;
 use lib::util::ExitCode;
@@ -16,7 +17,9 @@ use tracing::instrument;
 
 use crate::opts::{MoveOptions, Revset};
 use crate::revset::resolve_commits;
-use lib::core::config::get_restack_preserve_timestamps;
+use lib::core::config::{
+    get_hint_enabled, get_restack_preserve_timestamps, print_hint_suppression_notice, Hint,
+};
 use lib::core::dag::{commit_set_to_vec_unsorted, sorted_commit_set, union_all, CommitSet, Dag};
 use lib::core::effects::Effects;
 use lib::core::eventlog::{EventLogDb, EventReplayer};
@@ -64,8 +67,11 @@ pub fn r#move(
     insert: bool,
     move_options: &MoveOptions,
 ) -> eyre::Result<ExitCode> {
-    let should_sources_default_to_head =
-        sources.is_empty() && bases.is_empty() && exacts.is_empty();
+    let sources_provided = !sources.is_empty();
+    let bases_provided = !bases.is_empty();
+    let exacts_provided = !exacts.is_empty();
+    let dest_provided = dest.is_some();
+    let should_sources_default_to_head = !sources_provided && !bases_provided && !exacts_provided;
 
     let repo = Repo::from_current_dir()?;
     let head_oid = repo.get_head_info()?.oid;
@@ -194,6 +200,35 @@ pub fn r#move(
         union_all(&result)
     };
     let source_oids = source_oids.union(&base_oids);
+
+    if let Some(head_oid) = head_oid {
+        if get_hint_enabled(&repo, Hint::MoveImplicitHeadArgument)? {
+            let should_warn_base = !sources_provided
+                && bases_provided
+                && base_oids.contains(&head_oid.into())?
+                && base_oids.count()? == 1;
+            if should_warn_base {
+                writeln!(
+                    effects.get_output_stream(),
+                    "{}: you can omit the --base flag in this case, as it defaults to HEAD",
+                    style("hint").blue().bold()
+                )?;
+            }
+
+            let should_warn_dest = dest_provided && dest_oid == head_oid;
+            if should_warn_dest {
+                writeln!(
+                    effects.get_output_stream(),
+                    "{}: you can omit the --dest flag in this case, as it defaults to HEAD",
+                    style("hint").blue().bold()
+                )?;
+            }
+
+            if should_warn_base || should_warn_dest {
+                print_hint_suppression_notice(effects, Hint::MoveImplicitHeadArgument)?;
+            }
+        }
+    }
     drop(base_oids);
 
     let MoveOptions {

@@ -189,6 +189,9 @@ pub enum Hint {
 
     /// Suggest running `git restack` when the smartlog prints an abandoned commit.
     SmartlogFixAbandoned,
+
+    /// Suggest omitting arguments when they would default to `HEAD`.
+    MoveImplicitHeadArgument,
 }
 
 impl Hint {
@@ -196,6 +199,7 @@ impl Hint {
         match self {
             Hint::RestackWarnAbandoned => "branchless.hint.restackWarnAbandoned",
             Hint::SmartlogFixAbandoned => "branchless.hint.smartlogFixAbandoned",
+            Hint::MoveImplicitHeadArgument => "branchless.hint.moveImplicitHeadArgument",
         }
     }
 }
