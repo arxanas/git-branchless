@@ -1,3 +1,4 @@
+use crate::util::extract_hint_command;
 use lib::testing::{
     make_git, make_git_with_remote_repo, GitInitOptions, GitRunOptions, GitWrapperWithRemoteRepo,
 };
@@ -3289,6 +3290,8 @@ fn test_move_no_reapply_squashed_commits() -> eyre::Result<()> {
             Successfully rebased and updated detached HEAD.
             "###);
             insta::assert_snapshot!(stdout, @r###"
+            hint: you can omit the --dest flag in this case, as it defaults to HEAD
+            hint: disable this hint by running: git config --global branchless.hint.moveImplicitHeadArgument false
             branchless: running command: <git-executable> diff --quiet
             Calling Git for on-disk rebase...
             branchless: running command: <git-executable> rebase --continue
@@ -3341,6 +3344,8 @@ fn test_move_no_reapply_squashed_commits() -> eyre::Result<()> {
             branchless: processing checkout
             "###);
             insta::assert_snapshot!(stdout, @r###"
+            hint: you can omit the --dest flag in this case, as it defaults to HEAD
+            hint: disable this hint by running: git config --global branchless.hint.moveImplicitHeadArgument false
             Attempting rebase in-memory...
             [1/2] Skipped now-empty commit: e7bcdd6 create test1.txt
             [2/2] Skipped now-empty commit: 12d361a create test2.txt
@@ -4286,6 +4291,8 @@ fn test_move_revset() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["move", "-s", "draft()", "-d", "master"])?;
         insta::assert_snapshot!(stdout, @r###"
+        hint: you can omit the --dest flag in this case, as it defaults to HEAD
+        hint: disable this hint by running: git config --global branchless.hint.moveImplicitHeadArgument false
         Attempting rebase in-memory...
         [1/3] Committed as: d895922 create test2.txt
         [2/3] Committed as: f387c23 create test3.txt
@@ -4346,6 +4353,94 @@ fn test_move_revset_non_continguous() -> eyre::Result<()> {
         | @ 8f7aef5 create test4.txt
         |
         O 62fc20d (master) create test1.txt
+        In-memory rebase succeeded.
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_move_hint() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    git.commit_file("test1", 1)?;
+    git.detach_head()?;
+    let test2_oid = git.commit_file("test2", 2)?;
+    let test3_oid = git.commit_file("test3", 3)?;
+    git.run(&["checkout", "HEAD^^"])?;
+
+    let hint_command = {
+        let git = git.duplicate_repo()?;
+
+        let dest_hint_command = {
+            let (stdout, _stderr) = git.run(&["move", "-s", &test3_oid.to_string(), "-d", "."])?;
+            insta::assert_snapshot!(stdout, @r###"
+        hint: you can omit the --dest flag in this case, as it defaults to HEAD
+        hint: disable this hint by running: git config --global branchless.hint.moveImplicitHeadArgument false
+        Attempting rebase in-memory...
+        [1/1] Committed as: 4838e49 create test3.txt
+        branchless: processing 1 rewritten commit
+        In-memory rebase succeeded.
+        "###);
+            extract_hint_command(&stdout)
+        };
+
+        let base_hint_command = {
+            git.run(&["next", "--newest"])?;
+            let (stdout, _stderr) = git.run(&["move", "-b", ".", "-d", &test2_oid.to_string()])?;
+            insta::assert_snapshot!(stdout, @r###"
+        hint: you can omit the --base flag in this case, as it defaults to HEAD
+        hint: disable this hint by running: git config --global branchless.hint.moveImplicitHeadArgument false
+        Attempting rebase in-memory...
+        [1/1] Committed as: 70deb1e create test3.txt
+        branchless: processing 1 rewritten commit
+        branchless: running command: <git-executable> checkout 70deb1e28791d8e7dd5a1f0c871a51b91282562f
+        :
+        O 62fc20d (master) create test1.txt
+        |
+        o 96d1c37 create test2.txt
+        |
+        @ 70deb1e create test3.txt
+        In-memory rebase succeeded.
+        "###);
+            extract_hint_command(&stdout)
+        };
+
+        assert_eq!(base_hint_command, dest_hint_command);
+        base_hint_command
+    };
+
+    git.run(&hint_command)?;
+
+    {
+        let (stdout, _stderr) = git.run(&["move", "-s", &test3_oid.to_string(), "-d", "."])?;
+        insta::assert_snapshot!(stdout, @r###"
+        Attempting rebase in-memory...
+        [1/1] Committed as: 4838e49 create test3.txt
+        branchless: processing 1 rewritten commit
+        In-memory rebase succeeded.
+        "###);
+    }
+    {
+        git.run(&["next", "--newest"])?;
+        let (stdout, _stderr) = git.run(&["move", "-b", ".", "-d", &test2_oid.to_string()])?;
+        insta::assert_snapshot!(stdout, @r###"
+        Attempting rebase in-memory...
+        [1/1] Committed as: 70deb1e create test3.txt
+        branchless: processing 1 rewritten commit
+        branchless: running command: <git-executable> checkout 70deb1e28791d8e7dd5a1f0c871a51b91282562f
+        :
+        O 62fc20d (master) create test1.txt
+        |
+        o 96d1c37 create test2.txt
+        |
+        @ 70deb1e create test3.txt
         In-memory rebase succeeded.
         "###);
     }
