@@ -148,7 +148,7 @@ fn test_rebase_individual_commit() -> eyre::Result<()> {
             branchless:   - git smartlog: assess the situation
             branchless:   - git hide [<commit>...]: hide the commits from the smartlog
             branchless:   - git undo: undo the operation
-            branchless:   - git config branchless.restack.warnAbandoned false: suppress this message
+            hint: disable this hint by running: git config --global branchless.hint.restackWarnAbandoned false
             Successfully rebased and updated detached HEAD.
             "###);
         }

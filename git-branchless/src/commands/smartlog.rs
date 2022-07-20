@@ -7,13 +7,16 @@ use std::cmp::Ordering;
 use std::fmt::Write;
 use std::time::SystemTime;
 
+use console::style;
+use lib::core::config::{get_hint_enabled, print_hint_suppression_notice, Hint};
 use lib::core::repo_ext::RepoExt;
+use lib::core::rewrite::find_rewrite_target;
 use tracing::instrument;
 
 use lib::core::dag::Dag;
 use lib::core::effects::Effects;
 use lib::core::eventlog::{EventLogDb, EventReplayer};
-use lib::core::formatting::printable_styled_string;
+use lib::core::formatting::{printable_styled_string, Pluralize};
 use lib::core::node_descriptors::{
     BranchesDescriptor, CommitMessageDescriptor, CommitOidDescriptor,
     DifferentialRevisionDescriptor, ObsolescenceExplanationDescriptor, Redactor,
@@ -603,6 +606,40 @@ pub fn smartlog(
             "{}",
             printable_styled_string(effects.get_glyphs(), line)?
         )?;
+    }
+
+    if get_hint_enabled(&repo, Hint::SmartlogFixAbandoned)? {
+        let num_abandoned_children = graph
+            .nodes
+            .iter()
+            .filter_map(|(oid, node)| {
+                if node.is_obsolete
+                    && find_rewrite_target(&event_replayer, event_cursor, *oid).is_some()
+                {
+                    Some(node.children.iter())
+                } else {
+                    None
+                }
+            })
+            .count();
+        if num_abandoned_children > 0 {
+            writeln!(
+                effects.get_output_stream(),
+                "{}: there {} in your commit graph",
+                style("hint").blue().bold(),
+                Pluralize {
+                    determiner: Some(("is", "are")),
+                    amount: num_abandoned_children,
+                    unit: ("abandoned commit", "abandoned commits"),
+                },
+            )?;
+            writeln!(
+                effects.get_output_stream(),
+                "{}: to fix this, run: git restack",
+                style("hint").blue().bold(),
+            )?;
+            print_hint_suppression_notice(effects, Hint::SmartlogFixAbandoned)?;
+        }
     }
 
     Ok(())

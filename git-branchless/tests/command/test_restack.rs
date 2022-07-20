@@ -50,6 +50,9 @@ fn test_restack_amended_commit() -> eyre::Result<()> {
         o 96d1c37 create test2.txt
         |
         o 70deb1e create test3.txt
+        hint: there is 1 abandoned commit in your commit graph
+        hint: to fix this, run: git restack
+        hint: disable this hint by running: git config --global branchless.hint.smartlogFixAbandoned false
         "###);
     }
 
@@ -165,6 +168,9 @@ fn test_amended_initial_commit() -> eyre::Result<()> {
         X f777ecc (rewritten as 9a9f929a) create initial.txt
         |
         O 62fc20d (master) create test1.txt
+        hint: there is 1 abandoned commit in your commit graph
+        hint: to fix this, run: git restack
+        hint: disable this hint by running: git config --global branchless.hint.smartlogFixAbandoned false
         "###);
     }
 
@@ -362,6 +368,9 @@ fn test_restack_single_of_many_commits() -> eyre::Result<()> {
         x bf0d52a (rewritten as 3bd716d5) create test4.txt
         |
         o 848121c create test5.txt
+        hint: there are 2 abandoned commits in your commit graph
+        hint: to fix this, run: git restack
+        hint: disable this hint by running: git config --global branchless.hint.smartlogFixAbandoned false
         "###);
     }
 
@@ -392,6 +401,9 @@ fn test_restack_single_of_many_commits() -> eyre::Result<()> {
         x bf0d52a (rewritten as 3bd716d5) create test4.txt
         |
         o 848121c create test5.txt
+        hint: there is 1 abandoned commit in your commit graph
+        hint: to fix this, run: git restack
+        hint: disable this hint by running: git config --global branchless.hint.smartlogFixAbandoned false
         Successfully rebased and updated detached HEAD.
         "###);
         insta::assert_snapshot!(stdout, @r###"
@@ -412,6 +424,9 @@ fn test_restack_single_of_many_commits() -> eyre::Result<()> {
         x bf0d52a (rewritten as 3bd716d5) create test4.txt
         |
         o 848121c create test5.txt
+        hint: there is 1 abandoned commit in your commit graph
+        hint: to fix this, run: git restack
+        hint: disable this hint by running: git config --global branchless.hint.smartlogFixAbandoned false
         "###);
     }
 
@@ -549,6 +564,9 @@ fn test_restack_non_observed_branch_commit() -> eyre::Result<()> {
         : % 96d1c37 (rewritten as 59e75818) (> foo) create test2.txt
         :
         O 59e7581 (master) create test2.txt
+        hint: there are 2 abandoned commits in your commit graph
+        hint: to fix this, run: git restack
+        hint: disable this hint by running: git config --global branchless.hint.smartlogFixAbandoned false
         "###);
     }
 
