@@ -1983,6 +1983,9 @@ fn test_move_exact_range_one_side_of_merged_stack_without_base_and_merge_commits
     o 4838e49 create test3.txt
     |
     o a248207 create test4.txt
+    hint: there are 2 abandoned commits in your commit graph
+    hint: to fix this, run: git restack
+    hint: disable this hint by running: git config --global branchless.hint.smartlogFixAbandoned false
     "###);
 
     Ok(())
@@ -2058,6 +2061,9 @@ fn test_move_exact_range_one_side_of_merged_stack_including_base_and_merge_commi
     o ea7aa06 create test5.txt
     |
     o da42aeb create test6.txt
+    hint: there are 2 abandoned commits in your commit graph
+    hint: to fix this, run: git restack
+    hint: disable this hint by running: git config --global branchless.hint.smartlogFixAbandoned false
     "###);
 
     Ok(())
@@ -2143,6 +2149,9 @@ fn test_move_exact_range_two_partial_components_of_merged_stack() -> eyre::Resul
     | o bf0d52a create test4.txt
     |
     o ea7aa06 create test5.txt
+    hint: there are 3 abandoned commits in your commit graph
+    hint: to fix this, run: git restack
+    hint: disable this hint by running: git config --global branchless.hint.smartlogFixAbandoned false
     "###);
 
     Ok(())
@@ -3824,7 +3833,7 @@ fn test_move_merge_commit_both_parents() -> eyre::Result<()> {
         branchless:   - git smartlog: assess the situation
         branchless:   - git hide [<commit>...]: hide the commits from the smartlog
         branchless:   - git undo: undo the operation
-        hint: disable this hint by running: git config --global branchless.hint.restackWarnAbandoned
+        hint: disable this hint by running: git config --global branchless.hint.restackWarnAbandoned false
         In-memory rebase succeeded.
         "###);
     }
@@ -3853,6 +3862,9 @@ fn test_move_merge_commit_both_parents() -> eyre::Result<()> {
         | o a248207 create test4.txt
         |
         o b1f9efa create test5.txt
+        hint: there are 3 abandoned commits in your commit graph
+        hint: to fix this, run: git restack
+        hint: disable this hint by running: git config --global branchless.hint.smartlogFixAbandoned false
         "###);
     }
 

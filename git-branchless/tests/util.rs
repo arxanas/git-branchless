@@ -4,6 +4,7 @@ use std::thread;
 use std::time::Duration;
 
 use eyre::eyre;
+use itertools::Itertools;
 use lib::testing::Git;
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 
@@ -134,4 +135,20 @@ Screen contents:
     // );
 
     Ok(())
+}
+
+pub fn extract_hint_command(stdout: &str) -> Vec<String> {
+    let hint_command = stdout
+        .split_once("disable this hint by running: ")
+        .map(|(_first, second)| second)
+        .unwrap()
+        .split('\n')
+        .next()
+        .unwrap();
+    hint_command
+        .split(' ')
+        .skip(1) // "git"
+        .filter(|s| s != &"--global")
+        .map(|s| s.to_owned())
+        .collect_vec()
 }

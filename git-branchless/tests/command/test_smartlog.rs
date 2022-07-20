@@ -1,3 +1,4 @@
+use crate::util::extract_hint_command;
 use lib::testing::{
     make_git, make_git_with_remote_repo, GitInitOptions, GitRunOptions, GitWrapperWithRemoteRepo,
 };
@@ -374,6 +375,9 @@ fn test_show_rewritten_commit_hash() -> eyre::Result<()> {
         X 62fc20d (rewritten as 2ebe0950) create test1.txt
         |
         O 96d1c37 (master) create test2.txt
+        hint: there is 1 abandoned commit in your commit graph
+        hint: to fix this, run: git restack
+        hint: disable this hint by running: git config --global branchless.hint.smartlogFixAbandoned false
         "###);
     }
 
@@ -423,6 +427,9 @@ fn test_show_hidden_commits() -> eyre::Result<()> {
         | x cb8137a (manually hidden) amended test2
         |
         x 96d1c37 (rewritten as cb8137ad) create test2.txt
+        hint: there is 1 abandoned commit in your commit graph
+        hint: to fix this, run: git restack
+        hint: disable this hint by running: git config --global branchless.hint.smartlogFixAbandoned false
         "###);
     }
 
@@ -543,6 +550,55 @@ fn test_active_non_head_main_branch_commit() -> eyre::Result<()> {
         O 70deb1e (remote origin/master) create test3.txt
         |
         @ 355e173 (> master) create test4.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_smartlog_hint_abandoned() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+    git.run(&["checkout", "HEAD^"])?;
+    git.run(&["commit", "--amend", "-m", "amended test1"])?;
+
+    let hint_command = {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc create initial.txt
+        |\
+        | @ ae94dc2 amended test1
+        |
+        X 62fc20d (rewritten as ae94dc2a) create test1.txt
+        |
+        O 96d1c37 (master) create test2.txt
+        hint: there is 1 abandoned commit in your commit graph
+        hint: to fix this, run: git restack
+        hint: disable this hint by running: git config --global branchless.hint.smartlogFixAbandoned false
+        "###);
+        extract_hint_command(&stdout)
+    };
+
+    git.run(&hint_command)?;
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc create initial.txt
+        |\
+        | @ ae94dc2 amended test1
+        |
+        X 62fc20d (rewritten as ae94dc2a) create test1.txt
+        |
+        O 96d1c37 (master) create test2.txt
         "###);
     }
 
