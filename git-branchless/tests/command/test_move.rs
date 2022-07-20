@@ -3824,7 +3824,7 @@ fn test_move_merge_commit_both_parents() -> eyre::Result<()> {
         branchless:   - git smartlog: assess the situation
         branchless:   - git hide [<commit>...]: hide the commits from the smartlog
         branchless:   - git undo: undo the operation
-        branchless:   - git config branchless.restack.warnAbandoned false: suppress this message
+        hint: disable this hint by running: git config --global branchless.hint.restackWarnAbandoned
         In-memory rebase succeeded.
         "###);
     }
