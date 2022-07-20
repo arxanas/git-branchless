@@ -27,7 +27,6 @@ pub use render::{render_graph, SmartlogOptions};
 mod graph {
     use std::collections::HashMap;
     use std::convert::TryFrom;
-    use std::ops::Deref;
 
     use eden_dag::DagAlgorithm;
     use lib::core::gc::mark_commit_reachable;
@@ -80,7 +79,7 @@ mod graph {
 
     /// Graph of commits that the user is working on.
     pub struct SmartlogGraph<'repo> {
-        nodes: HashMap<NonZeroOid, Node<'repo>>,
+        pub nodes: HashMap<NonZeroOid, Node<'repo>>,
     }
 
     impl<'repo> SmartlogGraph<'repo> {
@@ -104,14 +103,6 @@ mod graph {
     impl std::fmt::Debug for SmartlogGraph<'_> {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             write!(f, "<CommitGraph len={}>", self.nodes.len())
-        }
-    }
-
-    impl<'repo> Deref for SmartlogGraph<'repo> {
-        type Target = HashMap<NonZeroOid, Node<'repo>>;
-
-        fn deref(&self) -> &Self::Target {
-            &self.nodes
         }
     }
 
@@ -199,6 +190,7 @@ mod graph {
     /// in output.
     fn sort_children(graph: &mut SmartlogGraph) {
         let commit_times: HashMap<NonZeroOid, Option<Time>> = graph
+            .nodes
             .iter()
             .map(|(oid, node)| {
                 (
@@ -285,6 +277,7 @@ mod render {
         graph: &SmartlogGraph,
     ) -> Vec<NonZeroOid> {
         let mut root_commit_oids: Vec<NonZeroOid> = graph
+            .nodes
             .iter()
             .filter(|(_oid, node)| node.parent.is_none())
             .map(|(oid, _node)| oid)
@@ -335,7 +328,7 @@ mod render {
         current_oid: NonZeroOid,
         last_child_line_char: Option<&str>,
     ) -> eyre::Result<Vec<StyledString>> {
-        let current_node = &graph[&current_oid];
+        let current_node = &graph.nodes[&current_oid];
         let is_head = Some(current_oid) == head_oid;
 
         let text = render_node_descriptors(glyphs, &current_node.object, commit_descriptors)?;
@@ -366,7 +359,7 @@ mod render {
         let children: Vec<_> = current_node
             .children
             .iter()
-            .filter(|child_oid| graph.contains_key(child_oid))
+            .filter(|child_oid| graph.nodes.contains_key(child_oid))
             .copied()
             .collect();
         for (child_idx, child_oid) in children.iter().enumerate() {
