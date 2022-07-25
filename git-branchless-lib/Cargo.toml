@@ -70,7 +70,7 @@ tracing-subscriber = { version = "0.3.11", features = ["env-filter"] }
 
 [dev-dependencies]
 criterion = { version = "0.3.6", features = ["html_reports"] }
-insta = "1.15.0"
+insta = "1.16.0"
 lazy_static = "1.4.0"
 portable-pty = "0.7.0"
 vt100 = "0.15.1"
