@@ -22,7 +22,7 @@ chrono = "0.4.19"
 clap = { version = "3.2.12", features = ["derive"] }
 color-eyre = "0.6.2"
 console = "0.15.0"
-cursive = { version = "0.18.0", default-features = false, features = [
+cursive = { version = "0.19.0", default-features = false, features = [
   "crossterm-backend",
 ] }
 cursive_buffered_backend = "0.6.0"
