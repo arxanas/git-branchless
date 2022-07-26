@@ -1,3 +1,5 @@
+use lazy_static::lazy_static;
+use regex::Regex;
 use thiserror::Error;
 use tracing::instrument;
 
@@ -15,9 +17,20 @@ pub enum ParseError {
 /// To update the grammar, modify `grammar.lalrpop`.
 #[instrument]
 pub fn parse(s: &str) -> Result<Expr, ParseError> {
-    ExprParser::new()
-        .parse(s)
-        .map_err(|err| ParseError::ParseError(err.to_string()))
+    ExprParser::new().parse(s).map_err(|err| {
+        let message = err.to_string();
+
+        // HACK: `lalrpop` doesn't let us customize the text of the string
+        // literal token, so replace it after the fact.
+        lazy_static! {
+            static ref OBJECT_RE: Regex = Regex::new("r#\"\\[[^\"]+\"#").unwrap();
+            static ref STRING_LITERAL_RE: Regex = Regex::new("r#\"\\\\[^\"]+\"#").unwrap();
+        }
+        let message = OBJECT_RE.replace(&message, "a commit/branch/tag");
+        let message = STRING_LITERAL_RE.replace(&message, "a string literal");
+
+        ParseError::ParseError(message.into_owned())
+    })
 }
 
 #[cfg(test)]
@@ -43,7 +56,7 @@ mod tests {
         insta::assert_debug_snapshot!(parse("foo |"), @r###"
         Err(
             ParseError(
-                "Unrecognized EOF found at 5\nExpected one of \"!\", \"(\", \"::\", \"not \", r#\"[a-zA-Z0-9/_$@.-]+\"# or r#\"\\\\x22([^\\\\x22\\\\x5c]|\\\\x5c.)*\\\\x22\"#",
+                "Unrecognized EOF found at 5\nExpected one of \"!\", \"(\", \"::\", \"not \", a commit/branch/tag or a string literal",
             ),
         )
         "###);
