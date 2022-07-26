@@ -6,6 +6,9 @@ use man::Arg;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
+/// The default set of commits to show in the smartlog.
+pub const SMARTLOG_DEFAULT_REVSET: &str = "draft() | branches()";
+
 /// A revset expression. Can be a commit hash, branch name, or one of the
 /// various revset functions.
 #[derive(Clone, Debug)]
@@ -410,7 +413,7 @@ pub enum Command {
 
         /// The commits to render. These commits and their ancestors up to the
         /// main branch will be rendered.
-        #[clap(value_parser, default_value = "draft()")]
+        #[clap(value_parser, default_value = SMARTLOG_DEFAULT_REVSET)]
         revset: Revset,
     },
 

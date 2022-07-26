@@ -292,7 +292,7 @@ mod render {
     use lib::core::node_descriptors::{render_node_descriptors, NodeDescriptor};
     use lib::git::{NonZeroOid, Repo};
 
-    use crate::opts::Revset;
+    use crate::opts::{Revset, SMARTLOG_DEFAULT_REVSET};
 
     use super::graph::SmartlogGraph;
 
@@ -561,7 +561,7 @@ mod render {
             Self {
                 show_hidden_commits: Default::default(),
                 event_id: Default::default(),
-                revset: Revset("draft()".to_string()),
+                revset: Revset(SMARTLOG_DEFAULT_REVSET.to_string()),
             }
         }
     }
