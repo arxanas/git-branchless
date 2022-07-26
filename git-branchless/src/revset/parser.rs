@@ -12,13 +12,7 @@ pub enum ParseError {
 
 /// Parse a string representing a revset expression into an [Expr].
 ///
-/// To update the grammar, make a change to `grammar.lalrpop`, then run
-///
-/// ```text
-///  lalrpop path/to/grammar.lalrpop
-/// ```
-///
-/// to regenerate the source file.
+/// To update the grammar, modify `grammar.lalrpop`.
 #[instrument]
 pub fn parse(s: &str) -> Result<Expr, ParseError> {
     ExprParser::new()

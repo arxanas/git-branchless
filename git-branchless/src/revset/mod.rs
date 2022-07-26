@@ -6,11 +6,14 @@ mod eval;
 mod parser;
 mod resolve;
 
-#[rustfmt::skip]
-#[allow(clippy::all, clippy::as_conversions)]
-mod grammar;
-
 pub use ast::Expr;
 pub use eval::eval;
 pub use parser::parse;
 pub use resolve::resolve_commits;
+
+use lalrpop_util::lalrpop_mod;
+lalrpop_mod!(
+    #[allow(clippy::all, clippy::as_conversions)]
+    grammar,
+    "/revset/grammar.rs"
+);
