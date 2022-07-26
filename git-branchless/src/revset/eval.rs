@@ -330,15 +330,31 @@ fn eval2(
 mod tests {
     use std::borrow::Cow;
 
-    use lib::core::dag::sorted_commit_set;
+    use lib::core::dag::commit_set_to_vec_unsorted;
     use lib::core::effects::Effects;
     use lib::core::eventlog::{EventLogDb, EventReplayer};
     use lib::core::formatting::Glyphs;
     use lib::core::repo_ext::RepoExt;
+    use lib::git::Commit;
     use lib::testing::make_git;
 
     use super::*;
     use crate::revset::Expr;
+
+    fn eval_and_sort<'a>(
+        effects: &Effects,
+        repo: &'a Repo,
+        dag: &mut Dag,
+        expr: &Expr,
+    ) -> eyre::Result<Vec<Commit<'a>>> {
+        let result = eval(effects, repo, dag, expr)?;
+        let mut commits: Vec<Commit> = commit_set_to_vec_unsorted(&result)?
+            .into_iter()
+            .map(|oid| repo.find_commit_or_fail(oid))
+            .try_collect()?;
+        commits.sort_by_key(|commit| (commit.get_message_pretty().unwrap(), commit.get_time()));
+        Ok(commits)
+    }
 
     #[test]
     fn test_eval() -> eyre::Result<()> {
@@ -381,23 +397,29 @@ mod tests {
                     Expr::Name(test2_oid.to_string()),
                 ],
             );
-            insta::assert_debug_snapshot!(eval(&effects, &repo, &mut dag, &expr), @r###"
-        Ok(
-            <or
-              <static [
-                  62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
-              ]>
-              <static [
-                  96d1c37a3d4363611c49f7e52186e189a04c531f,
-              ]>>,
-        )
-        "###);
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            Ok(
+                [
+                    Commit {
+                        inner: Commit {
+                            id: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
+                            summary: "create test1.txt",
+                        },
+                    },
+                    Commit {
+                        inner: Commit {
+                            id: 96d1c37a3d4363611c49f7e52186e189a04c531f,
+                            summary: "create test2.txt",
+                        },
+                    },
+                ],
+            )
+            "###);
         }
 
         {
             let expr = Expr::Fn(Cow::Borrowed("stack"), vec![]);
-            let result = eval(&effects, &repo, &mut dag, &expr)?;
-            insta::assert_debug_snapshot!(sorted_commit_set(&repo, &dag, &result), @r###"
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
             Ok(
                 [
                     Commit {
@@ -425,42 +447,39 @@ mod tests {
 
         {
             let expr = Expr::Fn(Cow::Borrowed("draft"), vec![]);
-            let result = eval(&effects, &repo, &mut dag, &expr)?;
-            insta::assert_debug_snapshot!(sorted_commit_set(&repo, &dag, &result), @r###"
-            Ok(
-                [
-                    Commit {
-                        inner: Commit {
-                            id: 96d1c37a3d4363611c49f7e52186e189a04c531f,
-                            summary: "create test2.txt",
-                        },
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr)?, @r###"
+            [
+                Commit {
+                    inner: Commit {
+                        id: 96d1c37a3d4363611c49f7e52186e189a04c531f,
+                        summary: "create test2.txt",
                     },
-                    Commit {
-                        inner: Commit {
-                            id: 70deb1e28791d8e7dd5a1f0c871a51b91282562f,
-                            summary: "create test3.txt",
-                        },
+                },
+                Commit {
+                    inner: Commit {
+                        id: 70deb1e28791d8e7dd5a1f0c871a51b91282562f,
+                        summary: "create test3.txt",
                     },
-                    Commit {
-                        inner: Commit {
-                            id: 848121cb21bf9af8b064c91bc8930bd16d624a22,
-                            summary: "create test5.txt",
-                        },
+                },
+                Commit {
+                    inner: Commit {
+                        id: 848121cb21bf9af8b064c91bc8930bd16d624a22,
+                        summary: "create test5.txt",
                     },
-                    Commit {
-                        inner: Commit {
-                            id: f0abf649939928fe5475179fd84e738d3d3725dc,
-                            summary: "create test6.txt",
-                        },
+                },
+                Commit {
+                    inner: Commit {
+                        id: f0abf649939928fe5475179fd84e738d3d3725dc,
+                        summary: "create test6.txt",
                     },
-                    Commit {
-                        inner: Commit {
-                            id: ba07500a4adc661dc06a748d200ef92120e1b355,
-                            summary: "create test7.txt",
-                        },
+                },
+                Commit {
+                    inner: Commit {
+                        id: ba07500a4adc661dc06a748d200ef92120e1b355,
+                        summary: "create test7.txt",
                     },
-                ],
-            )
+                },
+            ]
             "###);
         }
 
