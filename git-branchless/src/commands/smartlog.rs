@@ -234,12 +234,38 @@ mod graph {
             let public_commits = dag.query_public_commits()?;
 
             let observed_commits = if remove_commits {
-                observed_commits.difference(&dag.obsolete_commits)
+                let observed_heads = dag.query().heads(observed_commits.clone())?;
+                let obsolete_commits = dag
+                    .query()
+                    .only(dag.obsolete_commits.clone(), observed_commits.clone())?;
+                // .only(observed_heads, dag.obsolete_commits.clone())?;
+                observed_commits.clone()
+                // observed_commits.difference(&obsolete_commits)
+                // .only(dag.obsolete_commits.clone(), observed_heads)?
+                // let always_visible_commits = dag
+                //     .query()
+                //     .only(observed_commits.clone(), public_commits.clone())?
+                //     .union(&dag.head_commit)
+                //     .union(&dag.main_branch_commit)
+                //     .union(&dag.branch_commits);
+                // observed_commits
+                //     .difference(&dag.obsolete_commits.difference(&always_visible_commits))
             } else {
                 observed_commits.clone()
             };
 
-            let active_heads = dag.query_active_heads(&public_commits, &observed_commits)?;
+            // let active_heads = dag.query_active_heads(&public_commits, &observed_commits)?;
+            // let active_commits = observed_commits.clone();
+            // let active_heads = dag.query().heads(active_commits)?;
+            // let active_heads = active_heads.difference(&public_commits);
+
+            let anomalous_main_branch_commits = dag.obsolete_commits.intersection(&public_commits);
+            let active_heads = observed_commits
+                .union(&dag.head_commit)
+                // .union(&dag.branch_commits)
+                .union(&dag.main_branch_commit)
+                .union(&anomalous_main_branch_commits);
+
             for oid in commit_set_to_vec_unsorted(&active_heads)? {
                 mark_commit_reachable(repo, oid)?;
             }
