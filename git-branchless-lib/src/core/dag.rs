@@ -478,6 +478,15 @@ impl std::fmt::Debug for Dag {
 /// being unorderable, sort them using a deterministic tie-breaking function.
 /// Commits which have been garbage collected and are no longer available in the
 /// repository are omitted.
+///
+/// FIXME: this function does not use a total ordering for the sort, which could
+/// mean that it produces incorrect results. Suppose that we have a graph with
+/// parentage relationships A < B, B < C, A < D. Since D is not directly
+/// comparable with B or C, it's possible that we calculate D < B and D > C,
+/// which violates transitivity (D < B and B < C implies that D < C).
+///
+/// We only use this function to produce deterministic output, so in practice,
+/// it doesn't seem to have a serious impact.
 pub fn sorted_commit_set<'repo>(
     repo: &'repo Repo,
     dag: &Dag,
