@@ -21,6 +21,7 @@ struct Context<'a> {
     dag: &'a mut Dag,
     public_commits: OnceCell<CommitSet>,
     active_heads: OnceCell<CommitSet>,
+    active_commits: OnceCell<CommitSet>,
     draft_commits: OnceCell<CommitSet>,
 }
 
@@ -51,6 +52,15 @@ impl Context<'_> {
                 )
                 .map_err(EvalError::OtherError)?;
             Ok(active_heads)
+        })
+    }
+
+    #[instrument]
+    pub fn query_active_commits(&self) -> Result<&CommitSet, EvalError> {
+        self.active_commits.get_or_try_init(|| {
+            let active_heads = self.query_active_heads()?;
+            let active_commits = self.dag.query().ancestors(active_heads.clone())?;
+            Ok(active_commits)
         })
     }
 
@@ -112,6 +122,7 @@ pub fn eval(effects: &Effects, repo: &Repo, dag: &mut Dag, expr: &Expr) -> EvalR
         dag,
         public_commits: Default::default(),
         active_heads: Default::default(),
+        active_commits: Default::default(),
         draft_commits: Default::default(),
     };
     let commits = eval_inner(&mut ctx, expr)?;
@@ -183,6 +194,11 @@ fn eval_fn(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
         let (lhs, rhs) = eval2(ctx, name, args)?;
         Ok(ctx.dag.query().range(lhs, rhs)?)
     }
+    fn fn_negate(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+        let expr = eval1(ctx, name, args)?;
+        let active_commits = ctx.query_active_commits()?;
+        Ok(active_commits.difference(&expr))
+    }
     fn fn_ancestors(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
         let expr = eval1(ctx, name, args)?;
         Ok(ctx.dag.query().ancestors(expr)?)
@@ -252,6 +268,7 @@ fn eval_fn(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
                 ("difference", &fn_difference),
                 ("only", &fn_only),
                 ("range", &fn_range),
+                ("negate", &fn_negate),
                 ("ancestors", &fn_ancestors),
                 ("descendants", &fn_descendants),
                 ("parents", &fn_parents),
@@ -447,39 +464,72 @@ mod tests {
 
         {
             let expr = Expr::Fn(Cow::Borrowed("draft"), vec![]);
-            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr)?, @r###"
-            [
-                Commit {
-                    inner: Commit {
-                        id: 96d1c37a3d4363611c49f7e52186e189a04c531f,
-                        summary: "create test2.txt",
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            Ok(
+                [
+                    Commit {
+                        inner: Commit {
+                            id: 96d1c37a3d4363611c49f7e52186e189a04c531f,
+                            summary: "create test2.txt",
+                        },
                     },
-                },
-                Commit {
-                    inner: Commit {
-                        id: 70deb1e28791d8e7dd5a1f0c871a51b91282562f,
-                        summary: "create test3.txt",
+                    Commit {
+                        inner: Commit {
+                            id: 70deb1e28791d8e7dd5a1f0c871a51b91282562f,
+                            summary: "create test3.txt",
+                        },
                     },
-                },
-                Commit {
-                    inner: Commit {
-                        id: 848121cb21bf9af8b064c91bc8930bd16d624a22,
-                        summary: "create test5.txt",
+                    Commit {
+                        inner: Commit {
+                            id: 848121cb21bf9af8b064c91bc8930bd16d624a22,
+                            summary: "create test5.txt",
+                        },
                     },
-                },
-                Commit {
-                    inner: Commit {
-                        id: f0abf649939928fe5475179fd84e738d3d3725dc,
-                        summary: "create test6.txt",
+                    Commit {
+                        inner: Commit {
+                            id: f0abf649939928fe5475179fd84e738d3d3725dc,
+                            summary: "create test6.txt",
+                        },
                     },
-                },
-                Commit {
-                    inner: Commit {
-                        id: ba07500a4adc661dc06a748d200ef92120e1b355,
-                        summary: "create test7.txt",
+                    Commit {
+                        inner: Commit {
+                            id: ba07500a4adc661dc06a748d200ef92120e1b355,
+                            summary: "create test7.txt",
+                        },
                     },
-                },
-            ]
+                ],
+            )
+            "###);
+        }
+
+        {
+            let expr = Expr::Fn(
+                Cow::Borrowed("negate"),
+                vec![Expr::Fn(Cow::Borrowed("draft"), vec![])],
+            );
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            Ok(
+                [
+                    Commit {
+                        inner: Commit {
+                            id: f777ecc9b0db5ed372b2615695191a8a17f79f24,
+                            summary: "create initial.txt",
+                        },
+                    },
+                    Commit {
+                        inner: Commit {
+                            id: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
+                            summary: "create test1.txt",
+                        },
+                    },
+                    Commit {
+                        inner: Commit {
+                            id: bf0d52a607f693201512a43b6b5a70b2a275e0ad,
+                            summary: "create test4.txt",
+                        },
+                    },
+                ],
+            )
             "###);
         }
 
