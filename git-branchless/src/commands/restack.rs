@@ -278,7 +278,8 @@ pub fn restack(
         &references_snapshot,
     )?;
 
-    let commit_sets = match resolve_commits(effects, &repo, &mut dag, revsets) {
+    let commit_sets = match resolve_commits(effects, &repo, &mut dag, &references_snapshot, revsets)
+    {
         Ok(commit_sets) => commit_sets,
         Err(err) => {
             err.describe(effects)?;

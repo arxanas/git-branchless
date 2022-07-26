@@ -100,21 +100,29 @@ pub fn r#move(
         &references_snapshot,
     )?;
 
-    let source_oids: CommitSet = match resolve_commits(effects, &repo, &mut dag, sources) {
-        Ok(commit_sets) => union_all(&commit_sets),
-        Err(err) => {
-            err.describe(effects)?;
-            return Ok(ExitCode(1));
-        }
-    };
-    let base_oids: CommitSet = match resolve_commits(effects, &repo, &mut dag, bases) {
-        Ok(commit_sets) => union_all(&commit_sets),
-        Err(err) => {
-            err.describe(effects)?;
-            return Ok(ExitCode(1));
-        }
-    };
-    let exact_components = match resolve_commits(effects, &repo, &mut dag, exacts) {
+    let source_oids: CommitSet =
+        match resolve_commits(effects, &repo, &mut dag, &references_snapshot, sources) {
+            Ok(commit_sets) => union_all(&commit_sets),
+            Err(err) => {
+                err.describe(effects)?;
+                return Ok(ExitCode(1));
+            }
+        };
+    let base_oids: CommitSet =
+        match resolve_commits(effects, &repo, &mut dag, &references_snapshot, bases) {
+            Ok(commit_sets) => union_all(&commit_sets),
+            Err(err) => {
+                err.describe(effects)?;
+                return Ok(ExitCode(1));
+            }
+        };
+    let exact_components = match resolve_commits(
+        effects,
+        &repo,
+        &mut dag,
+        &references_snapshot,
+        exacts,
+    ) {
         Ok(commit_sets) => {
             let exact_oids = union_all(&commit_sets);
             let mut components: HashMap<NonZeroOid, CommitSet> = HashMap::new();
@@ -159,7 +167,13 @@ pub fn r#move(
         }
     };
 
-    let dest_oid: NonZeroOid = match resolve_commits(effects, &repo, &mut dag, vec![dest.clone()]) {
+    let dest_oid: NonZeroOid = match resolve_commits(
+        effects,
+        &repo,
+        &mut dag,
+        &references_snapshot,
+        vec![dest.clone()],
+    ) {
         Ok(commit_sets) => match commit_set_to_vec_unsorted(&commit_sets[0])?.as_slice() {
             [only_commit_oid] => *only_commit_oid,
             other => {

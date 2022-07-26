@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::ffi::OsString;
 use std::num::ParseIntError;
 use std::sync::Arc;
 
@@ -8,11 +9,12 @@ use eyre::Context as EyreContext;
 use itertools::Itertools;
 use lazy_static::lazy_static;
 use lib::core::effects::{Effects, OperationType};
+use lib::core::repo_ext::RepoReferencesSnapshot;
 use once_cell::unsync::OnceCell;
 use thiserror::Error;
 
 use lib::core::dag::{CommitSet, Dag};
-use lib::git::{Repo, ResolvedReferenceInfo};
+use lib::git::Repo;
 use tracing::instrument;
 
 use super::Expr;
@@ -22,6 +24,7 @@ struct Context<'a> {
     effects: &'a Effects,
     repo: &'a Repo,
     dag: &'a mut Dag,
+    references_snapshot: &'a RepoReferencesSnapshot,
     public_commits: OnceCell<CommitSet>,
     active_heads: OnceCell<CommitSet>,
     active_commits: OnceCell<CommitSet>,
@@ -127,7 +130,13 @@ pub type EvalResult = Result<CommitSet, EvalError>;
 
 /// Evaluate the provided revset expression.
 #[instrument]
-pub fn eval(effects: &Effects, repo: &Repo, dag: &mut Dag, expr: &Expr) -> EvalResult {
+pub fn eval(
+    effects: &Effects,
+    repo: &Repo,
+    dag: &mut Dag,
+    references_snapshot: &RepoReferencesSnapshot,
+    expr: &Expr,
+) -> EvalResult {
     let (effects, _progress) =
         effects.start_operation(OperationType::EvaluateRevset(Arc::new(expr.to_string())));
 
@@ -135,6 +144,7 @@ pub fn eval(effects: &Effects, repo: &Repo, dag: &mut Dag, expr: &Expr) -> EvalR
         effects: &effects,
         repo,
         dag,
+        references_snapshot,
         public_commits: Default::default(),
         active_heads: Default::default(),
         active_commits: Default::default(),
@@ -154,14 +164,25 @@ fn eval_inner(ctx: &mut Context, expr: &Expr) -> EvalResult {
 
 fn eval_name(ctx: &mut Context, name: &str) -> EvalResult {
     if name == "." || name == "@" {
-        let head_info = ctx.repo.get_head_info();
-        if let Ok(ResolvedReferenceInfo {
-            oid: Some(oid),
-            reference_name: _,
-        }) = head_info
-        {
-            return Ok(oid.into());
-        }
+        return Ok(CommitSet::from_iter(
+            ctx.references_snapshot.head_oid.map(|oid| Ok(oid.into())),
+        ));
+    }
+
+    let branch_name = OsString::from(format!("refs/heads/{name}"));
+    if let Some(branch_oid) =
+        ctx.references_snapshot
+            .branch_oid_to_names
+            .iter()
+            .find_map(|(k, v)| {
+                if v.contains(&branch_name) {
+                    Some(*k)
+                } else {
+                    None
+                }
+            })
+    {
+        return Ok(CommitSet::from(branch_oid));
     }
 
     let commit = ctx.repo.revparse_single_commit(name);
@@ -240,7 +261,13 @@ fn eval_fn(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     }
     fn fn_branches(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
         eval0(ctx, name, args)?;
-        Ok(ctx.dag.branch_commits.clone())
+        Ok(ctx
+            .references_snapshot
+            .branch_oid_to_names
+            .keys()
+            .copied()
+            .map(|oid| oid.into())
+            .collect())
     }
     fn fn_nthparent(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
         let (lhs, n) = eval_number_rhs(ctx, name, args)?;
@@ -444,7 +471,8 @@ mod tests {
         dag: &mut Dag,
         expr: &Expr,
     ) -> eyre::Result<Vec<Commit<'a>>> {
-        let result = eval(effects, repo, dag, expr)?;
+        let references_snapshot = repo.get_references_snapshot()?;
+        let result = eval(effects, repo, dag, &references_snapshot, expr)?;
         let mut commits: Vec<Commit> = commit_set_to_vec_unsorted(&result)?
             .into_iter()
             .map(|oid| repo.find_commit_or_fail(oid))

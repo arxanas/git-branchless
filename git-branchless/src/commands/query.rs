@@ -34,13 +34,14 @@ pub fn query(
         &references_snapshot,
     )?;
 
-    let commit_set = match resolve_commits(effects, &repo, &mut dag, vec![query]) {
-        Ok(commit_sets) => commit_sets[0].clone(),
-        Err(err) => {
-            err.describe(effects)?;
-            return Ok(ExitCode(1));
-        }
-    };
+    let commit_set =
+        match resolve_commits(effects, &repo, &mut dag, &references_snapshot, vec![query]) {
+            Ok(commit_sets) => commit_sets[0].clone(),
+            Err(err) => {
+                err.describe(effects)?;
+                return Ok(ExitCode(1));
+            }
+        };
 
     if show_branches {
         let commit_oids = {

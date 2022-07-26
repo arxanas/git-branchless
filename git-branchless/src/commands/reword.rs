@@ -289,7 +289,8 @@ fn resolve_commits_from_hashes<'repo>(
         revsets
     };
 
-    let commit_sets = match resolve_commits(effects, repo, dag, hashes) {
+    let references_snapshot = repo.get_references_snapshot()?;
+    let commit_sets = match resolve_commits(effects, repo, dag, &references_snapshot, hashes) {
         Ok(commit_sets) => commit_sets,
         Err(err) => {
             err.describe(effects)?;

@@ -2,6 +2,7 @@ use std::fmt::Write;
 
 use lib::core::dag::{CommitSet, Dag};
 use lib::core::effects::Effects;
+use lib::core::repo_ext::RepoReferencesSnapshot;
 use lib::git::Repo;
 use tracing::instrument;
 
@@ -58,6 +59,7 @@ pub fn resolve_commits(
     effects: &Effects,
     repo: &Repo,
     dag: &mut Dag,
+    references_snapshot: &RepoReferencesSnapshot,
     revsets: Vec<Revset>,
 ) -> Result<Vec<CommitSet>, ResolveError> {
     let mut commit_sets = Vec::new();
@@ -66,9 +68,11 @@ pub fn resolve_commits(
             expr: revset.clone(),
             source: err,
         })?;
-        let commits = eval(effects, repo, dag, &expr).map_err(|err| ResolveError::EvalError {
-            expr: revset.clone(),
-            source: err,
+        let commits = eval(effects, repo, dag, references_snapshot, &expr).map_err(|err| {
+            ResolveError::EvalError {
+                expr: revset.clone(),
+                source: err,
+            }
         })?;
         commit_sets.push(commits);
     }

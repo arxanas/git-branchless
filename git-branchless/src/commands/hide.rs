@@ -46,7 +46,8 @@ pub fn hide(
         &references_snapshot,
     )?;
 
-    let commit_sets = match resolve_commits(effects, &repo, &mut dag, revsets) {
+    let commit_sets = match resolve_commits(effects, &repo, &mut dag, &references_snapshot, revsets)
+    {
         Ok(commit_sets) => commit_sets,
         Err(err) => {
             err.describe(effects)?;
@@ -198,7 +199,8 @@ pub fn unhide(effects: &Effects, revsets: Vec<Revset>, recursive: bool) -> eyre:
         &references_snapshot,
     )?;
 
-    let commit_sets = match resolve_commits(effects, &repo, &mut dag, revsets) {
+    let commit_sets = match resolve_commits(effects, &repo, &mut dag, &references_snapshot, revsets)
+    {
         Ok(commit_sets) => commit_sets,
         Err(err) => {
             err.describe(effects)?;
