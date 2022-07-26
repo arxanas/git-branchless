@@ -74,10 +74,8 @@ Expr0: Expr = {
 };
 
 Prefix: &'static str = {
-    // negation unimplemented for now
-    // "!" => "negate",
-    // "not " => "negate",
-
+    "!" => "negate",
+    "not " => "negate",
     "::" => "ancestors",
 }
 

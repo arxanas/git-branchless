@@ -36,7 +36,7 @@ fn test_query_parse_error() -> eyre::Result<()> {
         )?;
         insta::assert_snapshot!(stderr, @r###"
         Parse error for expression 'foo(': parse error: Unrecognized EOF found at 4
-        Expected one of "(", ")", "::", r#"[a-zA-Z0-9/_$@.-]+"# or r#"\\x22([^\\x22\\x5c]|\\x5c.)*\\x22"#
+        Expected one of "!", "(", ")", "::", "not ", r#"[a-zA-Z0-9/_$@.-]+"# or r#"\\x22([^\\x22\\x5c]|\\x5c.)*\\x22"#
         "###);
         insta::assert_snapshot!(stdout, @"");
     }
@@ -74,7 +74,7 @@ fn test_query_eval_error() -> eyre::Result<()> {
                 ..Default::default()
             },
         )?;
-        insta::assert_snapshot!(stderr, @"Evaluation error for expression 'foo()': no function with the name 'foo' could be found; these functions are available: ancestors, branches, children, descendants, difference, draft, heads, intersection, only, parents, range, roots, stack, union
+        insta::assert_snapshot!(stderr, @"Evaluation error for expression 'foo()': no function with the name 'foo' could be found; these functions are available: ancestors, branches, children, descendants, difference, draft, heads, intersection, negate, only, parents, range, roots, stack, union
 ");
         insta::assert_snapshot!(stdout, @"");
     }

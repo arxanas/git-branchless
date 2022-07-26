@@ -43,7 +43,7 @@ mod tests {
         insta::assert_debug_snapshot!(parse("foo |"), @r###"
         Err(
             ParseError(
-                "Unrecognized EOF found at 5\nExpected one of \"(\", \"::\", r#\"[a-zA-Z0-9/_$@.-]+\"# or r#\"\\\\x22([^\\\\x22\\\\x5c]|\\\\x5c.)*\\\\x22\"#",
+                "Unrecognized EOF found at 5\nExpected one of \"!\", \"(\", \"::\", \"not \", r#\"[a-zA-Z0-9/_$@.-]+\"# or r#\"\\\\x22([^\\\\x22\\\\x5c]|\\\\x5c.)*\\\\x22\"#",
             ),
         )
         "###);
