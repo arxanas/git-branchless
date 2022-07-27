@@ -37,7 +37,7 @@ jobs:
         run: cargo build --benches --tests
 
       - name: Run tests
-        timeout-minutes: 10
+        timeout-minutes: 15
         run: |
           export RUST_BACKTRACE=1
           export TEST_GIT=$(which git)
