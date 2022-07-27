@@ -1,7 +1,10 @@
 use std::collections::HashMap;
+use std::convert::TryFrom;
+use std::num::ParseIntError;
 use std::sync::Arc;
 
 use eden_dag::DagAlgorithm;
+use eyre::Context as EyreContext;
 use itertools::Itertools;
 use lazy_static::lazy_static;
 use lib::core::effects::{Effects, OperationType};
@@ -98,6 +101,18 @@ pub enum EvalError {
         actual_arity: usize,
     },
 
+    #[error("expected {expr} to evaluate to 1 element, but got {actual_len}")]
+    ExpectedSingletonSet { expr: String, actual_len: usize },
+
+    #[error("not an integer: {from}")]
+    ParseInt {
+        #[from]
+        from: ParseIntError,
+    },
+
+    #[error("expected an integer, but got a call to function: {function_name}")]
+    ExpectedNumberNotFunction { function_name: String },
+
     #[error("query error: {from}")]
     DagError {
         #[from]
@@ -133,7 +148,7 @@ pub fn eval(effects: &Effects, repo: &Repo, dag: &mut Dag, expr: &Expr) -> EvalR
 fn eval_inner(ctx: &mut Context, expr: &Expr) -> EvalResult {
     match expr {
         Expr::Name(name) => eval_name(ctx, name),
-        Expr::Fn(name, args) => eval_fn(ctx, name, args),
+        Expr::FunctionCall(name, args) => eval_fn(ctx, name, args),
     }
 }
 
@@ -194,7 +209,7 @@ fn eval_fn(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
         let (lhs, rhs) = eval2(ctx, name, args)?;
         Ok(ctx.dag.query().range(lhs, rhs)?)
     }
-    fn fn_negate(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+    fn fn_not(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
         let expr = eval1(ctx, name, args)?;
         let active_commits = ctx.query_active_commits()?;
         Ok(active_commits.difference(&expr))
@@ -226,6 +241,45 @@ fn eval_fn(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     fn fn_branches(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
         eval0(ctx, name, args)?;
         Ok(ctx.dag.branch_commits.clone())
+    }
+    fn fn_nthparent(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+        let (lhs, n) = eval_number_rhs(ctx, name, args)?;
+        let mut result = Vec::new();
+        for vertex in lhs
+            .iter()
+            .wrap_err("Iterating commit set")
+            .map_err(EvalError::OtherError)?
+        {
+            let vertex = vertex
+                .wrap_err("Evaluating vertex")
+                .map_err(EvalError::OtherError)?;
+            if let Some(n) = n.checked_sub(1) {
+                let parents = ctx.dag.query().parent_names(vertex)?;
+                if let Some(parent) = parents.get(n) {
+                    result.push(Ok(parent.clone()))
+                }
+            }
+        }
+        Ok(CommitSet::from_iter(result.into_iter()))
+    }
+    fn fn_nthancestor(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+        let (lhs, n) = eval_number_rhs(ctx, name, args)?;
+        let n: u64 = u64::try_from(n).unwrap();
+        let mut result = Vec::new();
+        for vertex in lhs
+            .iter()
+            .wrap_err("Iterating commit set")
+            .map_err(EvalError::OtherError)?
+        {
+            let vertex = vertex
+                .wrap_err("Evaluating vertex")
+                .map_err(EvalError::OtherError)?;
+            let ancestor = ctx.dag.query().first_ancestor_nth(vertex, n);
+            if let Ok(ancestor) = ancestor {
+                result.push(Ok(ancestor.clone()))
+            }
+        }
+        Ok(CommitSet::from_iter(result.into_iter()))
     }
     fn fn_draft(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
         eval0(ctx, name, args)?;
@@ -268,7 +322,7 @@ fn eval_fn(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
                 ("difference", &fn_difference),
                 ("only", &fn_only),
                 ("range", &fn_range),
-                ("negate", &fn_negate),
+                ("not", &fn_not),
                 ("ancestors", &fn_ancestors),
                 ("descendants", &fn_descendants),
                 ("parents", &fn_parents),
@@ -276,6 +330,8 @@ fn eval_fn(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
                 ("roots", &fn_roots),
                 ("heads", &fn_heads),
                 ("branches", &fn_branches),
+                ("nthparent", &fn_nthparent),
+                ("nthancestor", &fn_nthancestor),
                 ("draft", &fn_draft),
                 ("stack", &fn_stack),
             ];
@@ -343,6 +399,30 @@ fn eval2(
     }
 }
 
+fn eval_number_rhs(
+    ctx: &mut Context,
+    function_name: &str,
+    args: &[Expr],
+) -> Result<(CommitSet, usize), EvalError> {
+    match args {
+        [lhs, Expr::Name(name)] => {
+            let lhs = eval_inner(ctx, lhs)?;
+            let number: usize = { name.parse()? };
+            Ok((lhs, number))
+        }
+
+        [_lhs, Expr::FunctionCall(name, _args)] => Err(EvalError::ExpectedNumberNotFunction {
+            function_name: name.clone().into_owned(),
+        }),
+
+        args => Err(EvalError::ArityMismatch {
+            function_name: function_name.to_string(),
+            expected_arity: 2,
+            actual_arity: args.len(),
+        }),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::borrow::Cow;
@@ -389,7 +469,7 @@ mod tests {
         git.commit_file("test5", 5)?;
         git.commit_file("test6", 6)?;
         git.run(&["checkout", "HEAD~"])?;
-        git.commit_file("test7", 7)?;
+        let test7_oid = git.commit_file("test7", 7)?;
 
         let effects = Effects::new_suppress_for_test(Glyphs::text());
         let repo = git.get_repo()?;
@@ -407,11 +487,11 @@ mod tests {
         )?;
 
         {
-            let expr = Expr::Fn(
+            let expr = Expr::FunctionCall(
                 Cow::Borrowed("union"),
                 vec![
-                    Expr::Name(test1_oid.to_string()),
-                    Expr::Name(test2_oid.to_string()),
+                    Expr::Name(Cow::Owned(test1_oid.to_string())),
+                    Expr::Name(Cow::Owned(test2_oid.to_string())),
                 ],
             );
             insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
@@ -435,7 +515,7 @@ mod tests {
         }
 
         {
-            let expr = Expr::Fn(Cow::Borrowed("stack"), vec![]);
+            let expr = Expr::FunctionCall(Cow::Borrowed("stack"), vec![]);
             insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
             Ok(
                 [
@@ -463,7 +543,7 @@ mod tests {
         }
 
         {
-            let expr = Expr::Fn(Cow::Borrowed("draft"), vec![]);
+            let expr = Expr::FunctionCall(Cow::Borrowed("draft"), vec![]);
             insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
             Ok(
                 [
@@ -503,9 +583,9 @@ mod tests {
         }
 
         {
-            let expr = Expr::Fn(
-                Cow::Borrowed("negate"),
-                vec![Expr::Fn(Cow::Borrowed("draft"), vec![])],
+            let expr = Expr::FunctionCall(
+                Cow::Borrowed("not"),
+                vec![Expr::FunctionCall(Cow::Borrowed("draft"), vec![])],
             );
             insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
             Ok(
@@ -522,6 +602,50 @@ mod tests {
                             summary: "create test1.txt",
                         },
                     },
+                    Commit {
+                        inner: Commit {
+                            id: bf0d52a607f693201512a43b6b5a70b2a275e0ad,
+                            summary: "create test4.txt",
+                        },
+                    },
+                ],
+            )
+            "###);
+        }
+
+        {
+            let expr = Expr::FunctionCall(
+                Cow::Borrowed("nthparent"),
+                vec![
+                    Expr::Name(Cow::Owned(test7_oid.to_string())),
+                    Expr::Name(Cow::Borrowed("1")),
+                ],
+            );
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            Ok(
+                [
+                    Commit {
+                        inner: Commit {
+                            id: 848121cb21bf9af8b064c91bc8930bd16d624a22,
+                            summary: "create test5.txt",
+                        },
+                    },
+                ],
+            )
+            "###);
+        }
+
+        {
+            let expr = Expr::FunctionCall(
+                Cow::Borrowed("nthancestor"),
+                vec![
+                    Expr::Name(Cow::Owned(test7_oid.to_string())),
+                    Expr::Name(Cow::Borrowed("2")),
+                ],
+            );
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            Ok(
+                [
                     Commit {
                         inner: Commit {
                             id: bf0d52a607f693201512a43b6b5a70b2a275e0ad,

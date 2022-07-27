@@ -23,8 +23,29 @@ pub fn parse(s: &str) -> Result<Expr, ParseError> {
         // HACK: `lalrpop` doesn't let us customize the text of the string
         // literal token, so replace it after the fact.
         lazy_static! {
-            static ref OBJECT_RE: Regex = Regex::new("r#\"\\[[^\"]+\"#").unwrap();
-            static ref STRING_LITERAL_RE: Regex = Regex::new("r#\"\\\\[^\"]+\"#").unwrap();
+            // NOTE: the `lalrpop` output contains Rust raw string literals, so
+            // we need to match those as well. However, the `#` character is
+            // interpreted by insignificant-whitespace mode as a comment, so we
+            // use `\x23` instead.
+            static ref OBJECT_RE: Regex = Regex::new(
+                r###"(?x)
+                    r\x23"
+                    \(
+                    \[
+                    [^"]+
+                    "\x23
+                "###
+            )
+            .unwrap();
+            static ref STRING_LITERAL_RE: Regex = Regex::new(
+                r###"(?x)
+                    r\x23"
+                    \\
+                    [^"]+
+                    "\x23
+                "###
+            )
+            .unwrap();
         }
         let message = OBJECT_RE.replace(&message, "a commit/branch/tag");
         let message = STRING_LITERAL_RE.replace(&message, "a string literal");
@@ -39,8 +60,140 @@ mod tests {
 
     #[test]
     fn test_revset_parser() -> eyre::Result<()> {
+        insta::assert_debug_snapshot!(parse("hello"), @r###"
+        Ok(
+            Name(
+                "hello",
+            ),
+        )
+        "###);
+        Ok(())
+    }
+
+    #[test]
+    fn test_revset_parse_function_calls() -> eyre::Result<()> {
+        insta::assert_debug_snapshot!(parse("foo()"), @r###"
+        Ok(
+            FunctionCall(
+                "foo",
+                [],
+            ),
+        )
+        "###);
+        insta::assert_debug_snapshot!(parse("foo(bar)"), @r###"
+        Ok(
+            FunctionCall(
+                "foo",
+                [
+                    Name(
+                        "bar",
+                    ),
+                ],
+            ),
+        )
+        "###);
+        insta::assert_debug_snapshot!(parse("foo(bar, baz)"), @r###"
+        Ok(
+            FunctionCall(
+                "foo",
+                [
+                    Name(
+                        "bar",
+                    ),
+                    Name(
+                        "baz",
+                    ),
+                ],
+            ),
+        )
+        "###);
+        insta::assert_debug_snapshot!(parse("foo(bar, baz,)"), @r###"
+        Ok(
+            FunctionCall(
+                "foo",
+                [
+                    Name(
+                        "bar",
+                    ),
+                    Name(
+                        "baz",
+                    ),
+                ],
+            ),
+        )
+        "###);
+        insta::assert_debug_snapshot!(parse("foo(,)"), @r###"
+        Err(
+            ParseError(
+                "Unrecognized token `,` found at 4:5\nExpected one of \"(\", \")\", \"..\", \":\", \"::\", a commit/branch/tag or a string literal",
+            ),
+        )
+        "###);
+        insta::assert_debug_snapshot!(parse("foo(,bar)"), @r###"
+        Err(
+            ParseError(
+                "Unrecognized token `,` found at 4:5\nExpected one of \"(\", \")\", \"..\", \":\", \"::\", a commit/branch/tag or a string literal",
+            ),
+        )
+        "###);
+        insta::assert_debug_snapshot!(parse("foo(bar,,)"), @r###"
+        Err(
+            ParseError(
+                "Unrecognized token `,` found at 8:9\nExpected one of \"(\", \")\", \"..\", \":\", \"::\", a commit/branch/tag or a string literal",
+            ),
+        )
+        "###);
+        Ok(())
+    }
+
+    #[test]
+    fn test_revset_parse_set_operators() -> eyre::Result<()> {
+        insta::assert_debug_snapshot!(parse("foo | bar & bar"), @r###"
+        Ok(
+            FunctionCall(
+                "union",
+                [
+                    Name(
+                        "foo",
+                    ),
+                    FunctionCall(
+                        "intersection",
+                        [
+                            Name(
+                                "bar",
+                            ),
+                            Name(
+                                "bar",
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+        )
+        "###);
+        insta::assert_debug_snapshot!(parse("foo & bar | bar")?, @r###"
+        FunctionCall(
+            "union",
+            [
+                FunctionCall(
+                    "intersection",
+                    [
+                        Name(
+                            "foo",
+                        ),
+                        Name(
+                            "bar",
+                        ),
+                    ],
+                ),
+                Name(
+                    "bar",
+                ),
+            ],
+        )
+        "###);
         insta::assert_debug_snapshot!(parse("foo | bar")?, @r###"
-        Fn(
+        FunctionCall(
             "union",
             [
                 Name(
@@ -52,18 +205,82 @@ mod tests {
             ],
         )
         "###);
-
+        insta::assert_debug_snapshot!(parse("foo | bar - baz")?, @r###"
+        FunctionCall(
+            "union",
+            [
+                Name(
+                    "foo",
+                ),
+                FunctionCall(
+                    "difference",
+                    [
+                        Name(
+                            "bar",
+                        ),
+                        Name(
+                            "baz",
+                        ),
+                    ],
+                ),
+            ],
+        )
+        "###);
         insta::assert_debug_snapshot!(parse("foo |"), @r###"
         Err(
             ParseError(
-                "Unrecognized EOF found at 5\nExpected one of \"!\", \"(\", \"::\", \"not \", a commit/branch/tag or a string literal",
+                "Unrecognized EOF found at 5\nExpected one of \"..\", \":\", \"::\", a commit/branch/tag or a string literal",
+            ),
+        )
+        "###);
+        Ok(())
+    }
+
+    #[test]
+    fn test_revset_parse_range_operator() -> eyre::Result<()> {
+        insta::assert_debug_snapshot!(parse("foo:bar"), @r###"
+        Ok(
+            FunctionCall(
+                "range",
+                [
+                    Name(
+                        "foo",
+                    ),
+                    Name(
+                        "bar",
+                    ),
+                ],
+            ),
+        )
+        "###);
+        insta::assert_debug_snapshot!(parse("foo:"), @r###"
+        Ok(
+            FunctionCall(
+                "descendants",
+                [
+                    Name(
+                        "foo",
+                    ),
+                ],
+            ),
+        )
+        "###);
+        insta::assert_debug_snapshot!(parse(":foo"), @r###"
+        Ok(
+            FunctionCall(
+                "ancestors",
+                [
+                    Name(
+                        "foo",
+                    ),
+                ],
             ),
         )
         "###);
 
         insta::assert_debug_snapshot!(parse("foo-bar/baz:qux-grault"), @r###"
         Ok(
-            Fn(
+            FunctionCall(
                 "range",
                 [
                     Name(
@@ -71,6 +288,252 @@ mod tests {
                     ),
                     Name(
                         "qux-grault",
+                    ),
+                ],
+            ),
+        )
+        "###);
+
+        insta::assert_debug_snapshot!(parse("foo..bar"), @r###"
+        Ok(
+            FunctionCall(
+                "only",
+                [
+                    Name(
+                        "bar",
+                    ),
+                    Name(
+                        "foo",
+                    ),
+                ],
+            ),
+        )
+        "###);
+        insta::assert_debug_snapshot!(parse("foo.."), @r###"
+        Ok(
+            FunctionCall(
+                "only",
+                [
+                    Name(
+                        ".",
+                    ),
+                    Name(
+                        "foo",
+                    ),
+                ],
+            ),
+        )
+        "###);
+        insta::assert_debug_snapshot!(parse("..bar"), @r###"
+        Ok(
+            FunctionCall(
+                "only",
+                [
+                    Name(
+                        "bar",
+                    ),
+                    Name(
+                        ".",
+                    ),
+                ],
+            ),
+        )
+        "###);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_revset_parse_string() -> eyre::Result<()> {
+        insta::assert_debug_snapshot!(parse(r#" "" "#), @r###"
+        Ok(
+            Name(
+                "",
+            ),
+        )
+        "###);
+        insta::assert_debug_snapshot!(parse(r#" "foo" "#), @r###"
+        Ok(
+            Name(
+                "foo",
+            ),
+        )
+        "###);
+        insta::assert_debug_snapshot!(parse(r#" "foo bar" "#), @r###"
+        Ok(
+            Name(
+                "foo bar",
+            ),
+        )
+        "###);
+        insta::assert_debug_snapshot!(parse(r#" "foo\nbar\\baz" "#), @r###"
+        Ok(
+            Name(
+                "foo\nba\r\\\\baz",
+            ),
+        )
+        "###);
+        insta::assert_debug_snapshot!(parse(r#" 'foo\nbar\\baz' "#), @r###"
+        Ok(
+            Name(
+                "foo\nba\r\\\\baz",
+            ),
+        )
+        "###);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_revset_parse_parentheses() -> eyre::Result<()> {
+        insta::assert_debug_snapshot!(parse("((foo()))"), @r###"
+        Ok(
+            FunctionCall(
+                "foo",
+                [],
+            ),
+        )
+        "###);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_revset_parse_git_revision_syntax() -> eyre::Result<()> {
+        insta::assert_debug_snapshot!(parse("foo:bar^"), @r###"
+        Ok(
+            FunctionCall(
+                "range",
+                [
+                    Name(
+                        "foo",
+                    ),
+                    FunctionCall(
+                        "nthparent",
+                        [
+                            Name(
+                                "bar",
+                            ),
+                            Name(
+                                "1",
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+        )
+        "###);
+        insta::assert_debug_snapshot!(parse("foo|bar^"), @r###"
+        Ok(
+            FunctionCall(
+                "union",
+                [
+                    Name(
+                        "foo",
+                    ),
+                    FunctionCall(
+                        "nthparent",
+                        [
+                            Name(
+                                "bar",
+                            ),
+                            Name(
+                                "1",
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+        )
+        "###);
+        insta::assert_debug_snapshot!(parse("foo:bar^3"), @r###"
+        Ok(
+            FunctionCall(
+                "range",
+                [
+                    Name(
+                        "foo",
+                    ),
+                    FunctionCall(
+                        "nthparent",
+                        [
+                            Name(
+                                "bar",
+                            ),
+                            Name(
+                                "3",
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+        )
+        "###);
+
+        insta::assert_debug_snapshot!(parse("foo:bar~"), @r###"
+        Ok(
+            FunctionCall(
+                "range",
+                [
+                    Name(
+                        "foo",
+                    ),
+                    FunctionCall(
+                        "nthancestor",
+                        [
+                            Name(
+                                "bar",
+                            ),
+                            Name(
+                                "1",
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+        )
+        "###);
+        insta::assert_debug_snapshot!(parse("foo|bar~"), @r###"
+        Ok(
+            FunctionCall(
+                "union",
+                [
+                    Name(
+                        "foo",
+                    ),
+                    FunctionCall(
+                        "nthancestor",
+                        [
+                            Name(
+                                "bar",
+                            ),
+                            Name(
+                                "1",
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+        )
+        "###);
+        insta::assert_debug_snapshot!(parse("foo:bar~3"), @r###"
+        Ok(
+            FunctionCall(
+                "range",
+                [
+                    Name(
+                        "foo",
+                    ),
+                    FunctionCall(
+                        "nthancestor",
+                        [
+                            Name(
+                                "bar",
+                            ),
+                            Name(
+                                "3",
+                            ),
+                        ],
                     ),
                 ],
             ),

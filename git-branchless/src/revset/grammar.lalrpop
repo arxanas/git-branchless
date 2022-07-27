@@ -1,108 +1,98 @@
-/// This grammar is originally sourced from
-/// https://github.com/quark-zju/gitrevset/blob/50234203913331641aae1d479b5f861869f39cda/src/parser/grammar.rs
-/// licensed under GPL-2.
-
+use std::borrow::Cow;
 use super::ast::Expr;
-
-// Binary Operator Precedence (highest to lowest):
-// BinOp1: : ..
-// BinOp2: & and % -
-// BinOp3: | + or
 
 grammar;
 
-pub Expr = Expr4;
+// Below implements a hierarchy of operator precedences. The lower-numbered
+// `Expr`s bind less tightly than the higher-numbered `Expr`s.
 
-Expr4: Expr = {
-    <a:Expr4> <op:BinOp3> <b:Expr3> => Expr::Fn(op.into(), vec![a, b]),
-    Expr3,
-};
-
-BinOp3: &'static str = {
-    "|" => "union",
-    "+" => "union",
-    "or" => "union",
-};
-
-Expr3: Expr = {
-    <a:Expr3> <op:BinOp2> <b:Expr2> => Expr::Fn(op.into(), vec![a, b]),
-    Expr2,
-};
-
-BinOp2: &'static str = {
-    "&" => "intersection",
-    "and" => "intersection",
-    "-" => "difference",
-    "%" => "only",
-};
-
-Expr2: Expr = {
-    <a:Expr2> <op:BinOp1> <b:Expr15> => Expr::Fn(op.into(), vec![a, b]),
-    Expr15,
-};
-
-BinOp1: &'static str = {
-    ":" => "range",
-    ".." => "range",
-};
-
-Expr15: Expr = {
-    <pre:(<Prefix>)*> <e:Expr1> => {
-        let mut e = e;
-        for v in pre { e = Expr::Fn(v.into(), vec![e]); }
-        e
-    },
+pub Expr: Expr<'input> = {
+    "(" <Expr> ")",
+    <lhs:Expr> "|"  <rhs:Expr2> => Expr::FunctionCall(Cow::Borrowed("union"), vec![lhs, rhs]),
+    <lhs:Expr> "+"  <rhs:Expr2> => Expr::FunctionCall(Cow::Borrowed("union"), vec![lhs, rhs]),
+    <lhs:Expr> "or" <rhs:Expr2> => Expr::FunctionCall(Cow::Borrowed("union"), vec![lhs, rhs]),
+    <Expr2>,
 }
 
-Expr1: Expr = {
-    <e:Expr0> <post:(<Postfix>)*> => {
-        let mut e = e;
-        for v in post { e = Expr::Fn(v.into(), vec![e]); }
-        e
-    },
+Expr2: Expr<'input> = {
+    <lhs:Expr2> "&"   <rhs:Expr3> => Expr::FunctionCall(Cow::Borrowed("intersection"), vec![lhs, rhs]),
+    <lhs:Expr2> "and" <rhs:Expr3> => Expr::FunctionCall(Cow::Borrowed("intersection"), vec![lhs, rhs]),
+    <lhs:Expr2> "-"   <rhs:Expr3> => Expr::FunctionCall(Cow::Borrowed("difference"),   vec![lhs, rhs]),
+    <lhs:Expr2> "%"   <rhs:Expr3> => Expr::FunctionCall(Cow::Borrowed("only"),         vec![lhs, rhs]),
+    <Expr3>
 }
 
-Expr0: Expr = {
-    Symbol2 => Expr::Name(<>),
-    <f:Symbol1> "(" <args:(Expr ",")*> <last:Expr?> ")" => {
-        // Function call.
-        let mut arg_list: Vec<Expr> = args.into_iter().map(|(e, _)| e).collect();
-        if let Some(last_arg) = last { arg_list.push(last_arg); }
-        Expr::Fn(f.into(), arg_list)
-    },
-    "(" <Expr> ")"
-};
+Expr3: Expr<'input> = {
+    <lhs:Expr3> ":"  <rhs:Expr4> =>  Expr::FunctionCall(Cow::Borrowed("range"),       vec![lhs, rhs]),
+    <lhs:Expr3> ":"              =>  Expr::FunctionCall(Cow::Borrowed("descendants"), vec![lhs,    ]),
+                ":"  <rhs:Expr4> =>  Expr::FunctionCall(Cow::Borrowed("ancestors"),   vec![     rhs]),
 
-Prefix: &'static str = {
-    "!" => "negate",
-    "not " => "negate",
-    "::" => "ancestors",
+    // For Mercurial users' familiarity.
+    <lhs:Expr3> "::"  <rhs:Expr4> =>  Expr::FunctionCall(Cow::Borrowed("range"),       vec![lhs, rhs]),
+    <lhs:Expr3> "::"              =>  Expr::FunctionCall(Cow::Borrowed("descendants"), vec![lhs,    ]),
+                "::"  <rhs:Expr4> =>  Expr::FunctionCall(Cow::Borrowed("ancestors"),   vec![     rhs]),
+
+    // Note that the LHS and RHS are passed in opposite order to `only`.
+    <lhs:Expr3> ".." <rhs:Expr4> =>  Expr::FunctionCall(Cow::Borrowed("only"), vec![rhs, lhs]),
+    <lhs:Expr3> ".."             =>  Expr::FunctionCall(Cow::Borrowed("only"), vec![Expr::Name(Cow::Borrowed(".")), lhs]),
+                ".." <rhs:Expr4> =>  Expr::FunctionCall(Cow::Borrowed("only"), vec![rhs, Expr::Name(Cow::Borrowed("."))]),
+
+    <Expr4>
 }
 
-Postfix: &'static str = {
-    "::" => "descendants",
-    "^" => "parents",
+Expr4: Expr<'input> = {
+    <lhs:Expr4> "^"            => Expr::FunctionCall(Cow::Borrowed("nthparent"), vec![lhs, Expr::Name(Cow::Borrowed("1"))]),
+    <lhs:Expr4> "^" <rhs:Name> => Expr::FunctionCall(Cow::Borrowed("nthparent"), vec![lhs, Expr::Name(rhs)]),
+
+    <lhs:Expr4> "~"            => Expr::FunctionCall(Cow::Borrowed("nthancestor"), vec![lhs, Expr::Name(Cow::Borrowed("1"))]),
+    <lhs:Expr4> "~" <rhs:Name> => Expr::FunctionCall(Cow::Borrowed("nthancestor"), vec![lhs, Expr::Name(rhs)]),
+
+    <Expr5>
 }
 
-Symbol2: String = {
-    Symbol1 => <>,
-    <escaped:r"\x22([^\x22\x5c]|\x5c.)*\x22"> => {
-        // Escaped string.
-        let mut result = String::with_capacity(escaped.len());
-        let mut prev = '_';
-        for ch in escaped[1..escaped.len()-1].chars() {
-            match (prev, ch) {
-                ('\\', 'n') => result.push('\n'),
-                ('\\', _) => result.push(ch),
-                (_, '\\') => (),
-                (_, _) => result.push(ch),
+Expr5: Expr<'input> = {
+    <name:Name> "(" <args:FunctionArgs> ")" => Expr::FunctionCall(name, args),
+    <name:Name>                             => Expr::Name(name),
+}
+
+Name: Cow<'input, str> = {
+    // NOTE: `.` is an alternative for `HEAD`.
+    <s:r"([a-zA-Z0-9_$@/-]+|\.)"> => Cow::Borrowed(&s),
+
+    // Escaping is not supported in LALROP regex literals.
+    // \x22 = double-quote.
+    // \x27 = single-quote.
+    // \x5c = backslash
+    <s:r"\x22([^\x22]|\x5c.)*\x22|\x27([^\x22]|\x5c.)*\x27"> => {
+        assert!(s.len() >= 2, "There should be at least quote characters in the string literal, got: {}", s);
+
+        let mut result = String::new();
+        let mut last_char_was_backslash = false;
+        for c in s.chars().skip(1) {
+            if last_char_was_backslash {
+                result.push(match c {
+                    'n' => '\n',
+                    'r' => '\r',
+                    't' => '\t',
+                    c => c,
+                });
+            } else if c == '\\' {
+                last_char_was_backslash = true;
+            } else {
+                result.push(c);
             }
-            prev = ch;
         }
-        result
+        result.pop();
+        Cow::Owned(result)
     },
 }
 
-Symbol1: String = {
-    r"[a-zA-Z0-9/_$@.-]+" => <>.to_string(),
+FunctionArgs: Vec<Expr<'input>> = {
+    <exprs:(<Expr> ",")*> <last_expr:Expr?> => {
+        let mut exprs = exprs;
+        if let Some(last_expr) = last_expr {
+            exprs.push(last_expr);
+        }
+        exprs
+    }
 }
