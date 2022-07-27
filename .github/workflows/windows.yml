@@ -30,7 +30,7 @@ jobs:
         run: cargo build --all-targets --workspace
 
       - name: Run tests
-        timeout-minutes: 10
+        timeout-minutes: 15
         run: |
           $env:TEST_GIT='C:\Program Files\Git\cmd\git.exe'
           $env:TEST_GIT_EXEC_PATH='C:\Program Files\Git\cmd'
