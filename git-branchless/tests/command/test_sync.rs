@@ -98,19 +98,6 @@ fn test_sync_up_to_date() -> eyre::Result<()> {
 ");
     }
 
-    {
-        let (stdout, stderr) = git.run(&["sync", "-f"])?;
-        insta::assert_snapshot!(stderr, @"");
-        insta::assert_snapshot!(stdout, @r###"
-        Attempting rebase in-memory...
-        [1/2] Committed as: 70deb1e create test3.txt
-        [2/2] Committed as: 355e173 create test4.txt
-        branchless: processing 2 rewritten commits
-        In-memory rebase succeeded.
-        Synced 70deb1e create test3.txt
-        "###);
-    }
-
     Ok(())
 }
 

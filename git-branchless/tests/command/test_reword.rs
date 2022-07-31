@@ -20,7 +20,7 @@ fn test_reword_head() -> eyre::Result<()> {
     @ 96d1c37 (> master) create test2.txt
     "###);
 
-    git.run(&["reword", "--message", "foo"])?;
+    git.run(&["reword", "--force-rewrite", "--message", "foo"])?;
 
     let (stdout, _stderr) = git.run(&["smartlog"])?;
     insta::assert_snapshot!(stdout, @r###"
@@ -54,7 +54,7 @@ fn test_reword_current_commit_not_head() -> eyre::Result<()> {
     O 96d1c37 (master) create test2.txt
     "###);
 
-    git.run(&["reword", "--message", "foo"])?;
+    git.run(&["reword", "--force-rewrite", "--message", "foo"])?;
 
     let (stdout, _stderr) = git.run(&["smartlog"])?;
     insta::assert_snapshot!(stdout, @r###"
@@ -83,7 +83,7 @@ fn test_reword_with_multiple_messages() -> eyre::Result<()> {
     create test1.txt
     "###);
 
-    git.run(&["reword", "-m", "foo", "-m", "bar"])?;
+    git.run(&["reword", "-f", "-m", "foo", "-m", "bar"])?;
 
     let (stdout, _stderr) = git.run(&["log", "-n", "1", "--format=%h%n%B"])?;
     insta::assert_snapshot!(stdout, @r###"
@@ -114,7 +114,9 @@ fn test_reword_preserves_comment_lines_for_messages_on_cli() -> eyre::Result<()>
     "###);
 
     // try adding several messages that start w/ '#'
-    git.run(&["reword", "-m", "foo", "-m", "# bar", "-m", "#", "-m", "buz"])?;
+    git.run(&[
+        "reword", "-f", "-m", "foo", "-m", "# bar", "-m", "#", "-m", "buz",
+    ])?;
 
     // confirm the '#' messages aren't present
     let (stdout, _stderr) = git.run(&["log", "-n", "1", "--format=%h%n%B"])?;
@@ -152,7 +154,7 @@ fn test_reword_non_head_commit() -> eyre::Result<()> {
     @ 96d1c37 (> master) create test2.txt
     "###);
 
-    git.run(&["reword", "HEAD^", "--message", "bar"])?;
+    git.run(&["reword", "HEAD^", "--force-rewrite", "--message", "bar"])?;
 
     let (stdout, _stderr) = git.run(&["smartlog"])?;
     insta::assert_snapshot!(stdout, @r###"
@@ -185,7 +187,14 @@ fn test_reword_multiple_commits_on_same_branch() -> eyre::Result<()> {
     @ 96d1c37 (> master) create test2.txt
     "###);
 
-    let (_stdout, _stderr) = git.run(&["reword", "HEAD", "HEAD^", "--message", "foo"])?;
+    let (_stdout, _stderr) = git.run(&[
+        "reword",
+        "HEAD",
+        "HEAD^",
+        "--force-rewrite",
+        "--message",
+        "foo",
+    ])?;
 
     let (stdout, _stderr) = git.run(&["smartlog"])?;
     insta::assert_snapshot!(stdout, @r###"

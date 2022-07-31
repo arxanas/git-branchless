@@ -267,6 +267,7 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
         Command::Reword {
             revsets,
             messages,
+            force_rewrite_public_commits,
             discard,
         } => {
             let messages = if discard {
@@ -274,7 +275,13 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
             } else {
                 InitialCommitMessages::Messages(messages)
             };
-            reword::reword(&effects, revsets, messages, &git_run_info)?
+            reword::reword(
+                &effects,
+                revsets,
+                messages,
+                &git_run_info,
+                force_rewrite_public_commits,
+            )?
         }
 
         Command::Smartlog {
@@ -300,17 +307,9 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
 
         Command::Sync {
             update_refs,
-            force,
             move_options,
             revsets,
-        } => sync::sync(
-            &effects,
-            &git_run_info,
-            update_refs,
-            force,
-            &move_options,
-            revsets,
-        )?,
+        } => sync::sync(&effects, &git_run_info, update_refs, &move_options, revsets)?,
 
         Command::Undo { interactive, yes } => {
             undo::undo(&effects, &git_run_info, interactive, yes)?

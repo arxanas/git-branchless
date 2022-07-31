@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - BREAKING: (#422) Rust v1.61 or later is required to build.
 - BREAKING: (#472) `git smartlog` no longer supports the `--only-branches` option. Instead, use `git smartlog 'branches()'`.
+- BREAKING: (#479) `git move` will abort when trying to move public commits; you now have to pass `--force`.
 - (#397) When editing only a single commit message with `git reword`, the marker line is omitted.
 
 ### Fixed

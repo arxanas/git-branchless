@@ -232,6 +232,7 @@ pub fn r#move(
     drop(base_oids);
 
     let MoveOptions {
+        force_rewrite_public_commits,
         force_in_memory,
         force_on_disk,
         detect_duplicate_commits_via_patch_id,
@@ -428,6 +429,7 @@ pub fn r#move(
             &pool,
             &repo_pool,
             &BuildRebasePlanOptions {
+                force_rewrite_public_commits,
                 dump_rebase_constraints,
                 dump_rebase_plan,
                 detect_duplicate_commits_via_patch_id,

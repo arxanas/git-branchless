@@ -12,7 +12,7 @@ use tracing::{instrument, warn};
 
 use crate::core::dag::{commit_set_to_vec_unsorted, CommitSet, Dag};
 use crate::core::effects::{Effects, OperationType};
-use crate::core::formatting::printable_styled_string;
+use crate::core::formatting::{printable_styled_string, Pluralize};
 use crate::core::rewrite::{RepoPool, RepoResource};
 use crate::core::task::ResourcePool;
 use crate::git::{Commit, NonZeroOid, PatchId, Repo};
@@ -310,6 +310,28 @@ impl<'repo> ConstraintGraph<'repo> {
         Ok(())
     }
 
+    fn check_for_rewriting_public_commits(
+        &self,
+        force: bool,
+    ) -> eyre::Result<Result<(), BuildRebasePlanError>> {
+        let commits_to_move = self
+            .inner
+            .values()
+            .flatten()
+            .copied()
+            .collect::<CommitSet>();
+        let public_commits = self.dag.query_public_commits()?;
+        let public_commits_to_move = commits_to_move.intersection(&public_commits);
+        let public_commits_to_move = self.dag.query().sort(&public_commits_to_move)?;
+        if !public_commits_to_move.is_empty()? && !force {
+            Ok(Err(BuildRebasePlanError::MovePublicCommits {
+                public_commits_to_move,
+            }))
+        } else {
+            Ok(Ok(()))
+        }
+    }
+
     fn find_roots(&self) -> Vec<Constraint> {
         let unconstrained_nodes = {
             let mut unconstrained_nodes: HashSet<NonZeroOid> = self.parents().into_iter().collect();
@@ -434,6 +456,10 @@ enum Constraint {
 /// Options used to build a rebase plan.
 #[derive(Debug)]
 pub struct BuildRebasePlanOptions {
+    /// Force rewriting public commits, even though other users may have access
+    /// to those commits.
+    pub force_rewrite_public_commits: bool,
+
     /// Print the rebase constraints for debugging.
     pub dump_rebase_constraints: bool,
 
@@ -453,6 +479,12 @@ pub enum BuildRebasePlanError {
     ConstraintCycle {
         /// The OIDs of the commits in the cycle. The first and the last OIDs are the same.
         cycle_oids: Vec<NonZeroOid>,
+    },
+
+    /// The user was trying to move public commits.
+    MovePublicCommits {
+        /// The public commits which the user was trying to move.
+        public_commits_to_move: CommitSet,
     },
 }
 
@@ -496,6 +528,33 @@ impl BuildRebasePlanError {
                         )?,
                     )?;
                 }
+            }
+
+            BuildRebasePlanError::MovePublicCommits {
+                public_commits_to_move,
+            } => {
+                let example_bad_commit_oid = public_commits_to_move.first()?.ok_or_else(|| {
+                    eyre::eyre!("BUG: could not get OID of a public commit to move")
+                })?;
+                let example_bad_commit_oid = NonZeroOid::try_from(example_bad_commit_oid)?;
+                let example_bad_commit = repo.find_commit_or_fail(example_bad_commit_oid)?;
+                writeln!(
+                    effects.get_output_stream(),
+                    "\
+You are trying to rewrite {}, such as: {}
+It is generally not advised to rewrite public commits, because your
+collaborators will have difficulty merging your changes.
+Retry with -f/--force to proceed anyways.",
+                    Pluralize {
+                        determiner: None,
+                        amount: public_commits_to_move.count()?,
+                        unit: ("public commit", "public commits")
+                    },
+                    printable_styled_string(
+                        effects.get_glyphs(),
+                        example_bad_commit.friendly_describe(effects.get_glyphs())?
+                    )?,
+                )?;
             }
         }
         Ok(())
@@ -776,6 +835,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
         options: &BuildRebasePlanOptions,
     ) -> eyre::Result<Result<Option<RebasePlan>, BuildRebasePlanError>> {
         let BuildRebasePlanOptions {
+            force_rewrite_public_commits,
             dump_rebase_constraints,
             dump_rebase_plan,
             detect_duplicate_commits_via_patch_id,
@@ -809,6 +869,12 @@ impl<'repo> RebasePlanBuilder<'repo> {
         }
 
         if let Err(err) = state.constraints.check_for_cycles(&effects) {
+            return Ok(Err(err));
+        }
+        if let Err(err) = state
+            .constraints
+            .check_for_rewriting_public_commits(*force_rewrite_public_commits)?
+        {
             return Ok(Err(err));
         }
 
@@ -1143,6 +1209,7 @@ mod tests {
             &pool,
             &repo_pool,
             &BuildRebasePlanOptions {
+                force_rewrite_public_commits: true,
                 dump_rebase_constraints: false,
                 dump_rebase_plan: false,
                 detect_duplicate_commits_via_patch_id: true,
@@ -1792,6 +1859,7 @@ mod tests {
             &pool,
             &repo_pool,
             &BuildRebasePlanOptions {
+                force_rewrite_public_commits: false,
                 dump_rebase_constraints: false,
                 dump_rebase_plan: false,
                 detect_duplicate_commits_via_patch_id: true,

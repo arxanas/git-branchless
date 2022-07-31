@@ -46,7 +46,6 @@ pub fn sync(
     effects: &Effects,
     git_run_info: &GitRunInfo,
     update_refs: bool,
-    force: bool,
     move_options: &MoveOptions,
     revsets: Vec<Revset>,
 ) -> eyre::Result<ExitCode> {
@@ -90,6 +89,7 @@ pub fn sync(
     let root_commits = sorted_commit_set(&repo, &dag, &root_commits)?;
 
     let MoveOptions {
+        force_rewrite_public_commits,
         force_in_memory,
         force_on_disk,
         detect_duplicate_commits_via_patch_id,
@@ -121,7 +121,7 @@ pub fn sync(
 
                         let only_parent_id =
                             root_commit.get_only_parent().map(|parent| parent.get_oid());
-                        if only_parent_id == Some(references_snapshot.main_branch_oid) && !force {
+                        if only_parent_id == Some(references_snapshot.main_branch_oid) {
                             return Ok(Ok((root_commit_oid, None)));
                         }
 
@@ -134,6 +134,7 @@ pub fn sync(
                             &pool,
                             &repo_pool,
                             &BuildRebasePlanOptions {
+                                force_rewrite_public_commits,
                                 detect_duplicate_commits_via_patch_id,
                                 dump_rebase_constraints,
                                 dump_rebase_plan,
