@@ -353,6 +353,5 @@ pub fn restack(
         return Ok(exit_code);
     }
 
-    smartlog(effects, git_run_info, &Default::default())?;
-    Ok(exit_code)
+    smartlog(effects, git_run_info, &Default::default())
 }

@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - BREAKING: (#422) Rust v1.61 or later is required to build.
+- BREAKING: (#472) `git smartlog` no longer supports the `--only-branches` option. Instead, use `git smartlog 'branches()'`.
 - (#397) When editing only a single commit message with `git reword`, the marker line is omitted.
 
 ### Fixed

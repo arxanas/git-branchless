@@ -279,20 +279,17 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
 
         Command::Smartlog {
             show_hidden_commits,
-            only_show_branches,
             event_id,
-        } => {
-            smartlog::smartlog(
-                &effects,
-                &git_run_info,
-                &SmartlogOptions {
-                    show_hidden_commits,
-                    only_show_branches,
-                    event_id,
-                },
-            )?;
-            ExitCode(0)
-        }
+            revset,
+        } => smartlog::smartlog(
+            &effects,
+            &git_run_info,
+            &SmartlogOptions {
+                show_hidden_commits,
+                event_id,
+                revset,
+            },
+        )?,
 
         Command::Snapshot { subcommand } => match subcommand {
             SnapshotSubcommand::Create => snapshot::create(&effects, &git_run_info)?,

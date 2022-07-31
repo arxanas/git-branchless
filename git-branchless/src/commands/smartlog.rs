@@ -5,15 +5,17 @@
 
 use std::cmp::Ordering;
 use std::fmt::Write;
+use std::mem::swap;
 use std::time::SystemTime;
 
 use console::style;
 use lib::core::config::{get_hint_enabled, print_hint_suppression_notice, Hint};
 use lib::core::repo_ext::RepoExt;
 use lib::core::rewrite::find_rewrite_target;
+use lib::util::ExitCode;
 use tracing::instrument;
 
-use lib::core::dag::Dag;
+use lib::core::dag::{CommitSet, Dag};
 use lib::core::effects::Effects;
 use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::formatting::{printable_styled_string, Pluralize};
@@ -26,6 +28,8 @@ use lib::git::{GitRunInfo, Repo};
 
 pub use graph::{make_smartlog_graph, SmartlogGraph};
 pub use render::{render_graph, SmartlogOptions};
+
+use crate::revset::resolve_commits;
 
 mod graph {
     use std::collections::HashMap;
@@ -50,7 +54,7 @@ mod graph {
 
         /// The OID of the parent node in the smartlog commit graph.
         ///
-        /// This is different from inspecting `commit.parents()`, since the smartlog
+        /// This is different from inspecting `commit.parents()`,& since the smartlog
         /// will hide most nodes from the commit graph, including parent nodes.
         pub parent: Option<NonZeroOid>,
 
@@ -219,8 +223,8 @@ mod graph {
         dag: &Dag,
         event_replayer: &EventReplayer,
         event_cursor: EventCursor,
+        observed_commits: &CommitSet,
         remove_commits: bool,
-        only_branches: bool,
     ) -> eyre::Result<SmartlogGraph<'repo>> {
         let (effects, _progress) = effects.start_operation(OperationType::MakeGraph);
 
@@ -229,12 +233,10 @@ mod graph {
 
             let public_commits = dag.query_public_commits()?;
 
-            let observed_commits = if only_branches {
-                dag.branch_commits.clone()
-            } else if remove_commits {
-                dag.observed_commits.difference(&dag.obsolete_commits)
+            let observed_commits = if remove_commits {
+                observed_commits.difference(&dag.obsolete_commits)
             } else {
-                dag.observed_commits.clone()
+                observed_commits.clone()
             };
 
             let active_heads = dag.query_active_heads(&public_commits, &observed_commits)?;
@@ -263,6 +265,8 @@ mod render {
     use lib::core::formatting::{Glyphs, StyledStringBuilder};
     use lib::core::node_descriptors::{render_node_descriptors, NodeDescriptor};
     use lib::git::{NonZeroOid, Repo};
+
+    use crate::opts::Revset;
 
     use super::graph::SmartlogGraph;
 
@@ -510,19 +514,30 @@ mod render {
     }
 
     /// Options for rendering the smartlog.
-    #[derive(Debug, Default)]
+    #[derive(Debug)]
     pub struct SmartlogOptions {
         /// Whether to also show commits in the smartlog which would normally not be
         /// visible.
         pub show_hidden_commits: bool,
 
-        /// Whether to only show commits on branches.
-        pub only_show_branches: bool,
-
         /// The point in time at which to show the smartlog. If not provided,
         /// renders the smartlog as of the current time. If negative, is treated
         /// as an offset from the current event.
         pub event_id: Option<isize>,
+
+        /// The commits to render. These commits and their ancestors up to the
+        /// main branch will be rendered.
+        pub revset: Revset,
+    }
+
+    impl Default for SmartlogOptions {
+        fn default() -> Self {
+            Self {
+                show_hidden_commits: Default::default(),
+                event_id: Default::default(),
+                revset: Revset("draft()".to_string()),
+            }
+        }
     }
 }
 
@@ -532,11 +547,11 @@ pub fn smartlog(
     effects: &Effects,
     git_run_info: &GitRunInfo,
     options: &SmartlogOptions,
-) -> eyre::Result<()> {
+) -> eyre::Result<ExitCode> {
     let SmartlogOptions {
         show_hidden_commits,
-        only_show_branches,
         event_id,
+        revset,
     } = options;
 
     let repo = Repo::from_dir(&git_run_info.working_directory)?;
@@ -559,7 +574,7 @@ pub fn smartlog(
             }
         }
     };
-    let dag = Dag::open_and_sync(
+    let mut dag = Dag::open_and_sync(
         effects,
         &repo,
         &event_replayer,
@@ -567,14 +582,44 @@ pub fn smartlog(
         &references_snapshot,
     )?;
 
+    let observed_commits = {
+        // For the purpose of resolving the revset expression, we may
+        // temporarily clear the DAG's obsolete commit set. However, when we
+        // render the smartlog later, we want to have the original obsolete
+        // commit set so that we can correctly identify which of the nodes are
+        // obsolete commits.
+        let mut old_obsolete_commits = CommitSet::empty();
+        if *show_hidden_commits {
+            swap(&mut dag.obsolete_commits, &mut old_obsolete_commits);
+        }
+        let observed_commits = match resolve_commits(effects, &repo, &mut dag, vec![revset.clone()])
+        {
+            Ok(result) => match result.as_slice() {
+                [commit_set] => commit_set.clone(),
+                other => panic!(
+                    "Expected exactly 1 result from resolve commits, got: {:?}",
+                    other
+                ),
+            },
+            Err(err) => {
+                err.describe(effects)?;
+                return Ok(ExitCode(1));
+            }
+        };
+        if *show_hidden_commits {
+            swap(&mut dag.obsolete_commits, &mut old_obsolete_commits);
+        }
+        observed_commits
+    };
+
     let graph = make_smartlog_graph(
         effects,
         &repo,
         &dag,
         &event_replayer,
         event_cursor,
+        &observed_commits,
         !show_hidden_commits,
-        *only_show_branches,
     )?;
 
     let lines = render_graph(
@@ -608,7 +653,7 @@ pub fn smartlog(
         )?;
     }
 
-    if get_hint_enabled(&repo, Hint::SmartlogFixAbandoned)? {
+    if !show_hidden_commits && get_hint_enabled(&repo, Hint::SmartlogFixAbandoned)? {
         let num_abandoned_children = graph
             .nodes
             .iter()
@@ -642,5 +687,5 @@ pub fn smartlog(
         }
     }
 
-    Ok(())
+    Ok(ExitCode(0))
 }
