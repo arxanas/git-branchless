@@ -67,6 +67,7 @@ fn bench_rebase_plan(c: &mut Criterion) {
                         &pool,
                         &repo_pool,
                         &BuildRebasePlanOptions {
+                            force_rewrite_public_commits: true,
                             dump_rebase_constraints: false,
                             dump_rebase_plan: false,
                             detect_duplicate_commits_via_patch_id: true,

@@ -31,6 +31,11 @@ pub enum WrappedCommand {
 /// Options for moving commits.
 #[derive(Args, Debug)]
 pub struct MoveOptions {
+    /// Force moving public commits, even though other people may have access to
+    /// those commits.
+    #[clap(action, short = 'f', long = "force-rewrite", visible_alias = "fr")]
+    pub force_rewrite_public_commits: bool,
+
     /// Only attempt to perform an in-memory rebase. If it fails, do not
     /// attempt an on-disk rebase.
     #[clap(action, long = "in-memory", conflicts_with_all(&["force-on-disk", "merge"]))]
@@ -383,6 +388,11 @@ pub enum Command {
         #[clap(value_parser)]
         revsets: Vec<Revset>,
 
+        /// Force rewording public commits, even though other people may have access to
+        /// those commits.
+        #[clap(action, short = 'f', long = "force-rewrite", visible_alias = "fr")]
+        force_rewrite_public_commits: bool,
+
         /// Message to apply to commits. Multiple messages will be combined as separate paragraphs,
         /// similar to `git commit`.
         #[clap(value_parser, short = 'm', long = "message")]
@@ -434,11 +444,6 @@ pub enum Command {
             visible_alias = "--update"
         )]
         update_refs: bool,
-
-        /// Force rebasing commits even if they're already based on top of their
-        /// destination.
-        #[clap(action, short = 'f', long = "force")]
-        force: bool,
 
         /// Options for moving commits.
         #[clap(flatten)]

@@ -51,6 +51,7 @@ pub fn reword(
     revsets: Vec<Revset>,
     messages: InitialCommitMessages,
     git_run_info: &GitRunInfo,
+    force_rewrite_public_commits: bool,
 ) -> eyre::Result<ExitCode> {
     let repo = Repo::from_current_dir()?;
     let references_snapshot = repo.get_references_snapshot()?;
@@ -206,6 +207,7 @@ pub fn reword(
             &pool,
             &repo_pool,
             &BuildRebasePlanOptions {
+                force_rewrite_public_commits,
                 dump_rebase_constraints: false,
                 dump_rebase_plan: false,
                 detect_duplicate_commits_via_patch_id: false,

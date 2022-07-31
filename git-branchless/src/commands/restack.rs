@@ -296,6 +296,7 @@ pub fn restack(
     };
 
     let MoveOptions {
+        force_rewrite_public_commits,
         force_in_memory,
         force_on_disk,
         detect_duplicate_commits_via_patch_id,
@@ -304,6 +305,7 @@ pub fn restack(
         dump_rebase_plan,
     } = *move_options;
     let build_options = BuildRebasePlanOptions {
+        force_rewrite_public_commits,
         dump_rebase_constraints,
         dump_rebase_plan,
         detect_duplicate_commits_via_patch_id,

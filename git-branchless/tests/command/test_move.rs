@@ -2180,6 +2180,7 @@ fn test_move_with_source_not_in_smartlog() -> eyre::Result<()> {
         git.run(&[
             "move",
             "--on-disk",
+            "-f",
             "-s",
             &test3_oid.to_string(),
             "-d",
@@ -2206,6 +2207,7 @@ fn test_move_with_source_not_in_smartlog() -> eyre::Result<()> {
                 "move",
                 "--in-memory",
                 "--debug-dump-rebase-plan",
+                "-f",
                 "-s",
                 &test3_oid.to_string(),
                 "-d",
@@ -2598,6 +2600,7 @@ fn test_move_branch() -> eyre::Result<()> {
             "--debug-dump-rebase-plan",
             "-d",
             &test2_oid.to_string(),
+            "-f",
         ])?;
         insta::assert_snapshot!(stdout, @r###"
         Rebase plan: Some(
@@ -2874,6 +2877,7 @@ fn test_move_main_branch_commits() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&[
             "move",
+            "-f",
             "-s",
             &test3_oid.to_string(),
             "-d",
@@ -4063,7 +4067,7 @@ fn test_move_dest_not_in_dag() -> eyre::Result<()> {
         })?;
         cloned_repo.run(&["branchless", "init", "--main-branch", "other-branch"])?;
 
-        let (stdout, _stderr) = cloned_repo.run(&["move", "-d", "origin/master"])?;
+        let (stdout, _stderr) = cloned_repo.run(&["move", "-d", "origin/master", "-f"])?;
         insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
         [1/1] Committed as: 70deb1e create test3.txt
@@ -4134,7 +4138,7 @@ fn test_move_orig_head_no_symbolic_reference() -> eyre::Result<()> {
 
     git.run(&["checkout", "-b", "foo"])?;
     // Force `ORIG_HEAD` to be written to disk.
-    git.run(&["move", "-d", "HEAD^", "--on-disk"])?;
+    git.run(&["move", "-f", "-d", "HEAD^", "--on-disk"])?;
     git.detach_head()?;
 
     {
@@ -4441,6 +4445,54 @@ fn test_move_hint() -> eyre::Result<()> {
         o 96d1c37 create test2.txt
         |
         @ 70deb1e create test3.txt
+        In-memory rebase succeeded.
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_move_public_commit() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+
+    {
+        let (stdout, _stderr) = git.run_with_options(
+            &["move", "-x", ".^"],
+            &GitRunOptions {
+                expected_exit_code: 1,
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stdout, @r###"
+        You are trying to rewrite 2 public commits, such as: 96d1c37 create test2.txt
+        It is generally not advised to rewrite public commits, because your
+        collaborators will have difficulty merging your changes.
+        Retry with -f/--force to proceed anyways.
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["move", "-x", ".^", "-f"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        Attempting rebase in-memory...
+        [1/2] Committed as: fe65c1f create test2.txt
+        [2/2] Committed as: 0770943 create test1.txt
+        branchless: processing 1 update: branch master
+        branchless: processing 2 rewritten commits
+        branchless: running command: <git-executable> checkout master
+        :
+        @ fe65c1f (> master) create test2.txt
+        |
+        o 0770943 create test1.txt
         In-memory rebase succeeded.
         "###);
     }
