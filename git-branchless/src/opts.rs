@@ -402,15 +402,16 @@ pub enum Command {
         #[clap(action, long = "hidden")]
         show_hidden_commits: bool,
 
-        /// Only show commits that exist on a branch.
-        #[clap(action, long = "only-branches", conflicts_with = "show-hidden-commits")]
-        only_show_branches: bool,
-
         /// The point in time at which to show the smartlog. If not provided,
         /// renders the smartlog as of the current time. If negative, is treated
         /// as an offset from the current event.
         #[clap(value_parser, long = "event-id")]
         event_id: Option<isize>,
+
+        /// The commits to render. These commits and their ancestors up to the
+        /// main branch will be rendered.
+        #[clap(value_parser, default_value = "draft()")]
+        revset: Revset,
     },
 
     #[clap(hide = true)]

@@ -410,15 +410,20 @@ fn test_show_hidden_commits() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
-    git.commit_file("test1", 1)?;
+    let test1_oid = git.commit_file("test1", 1)?;
     git.detach_head()?;
-    git.commit_file("test2", 2)?;
+    let test2_oid = git.commit_file("test2", 2)?;
     git.run(&["commit", "--amend", "-m", "amended test2"])?;
+    let test2_oid_amended = git.get_repo()?.get_head_info()?.oid.unwrap();
     git.run(&["hide", "HEAD"])?;
     git.run(&["checkout", "HEAD^"])?;
 
     {
-        let (stdout, stderr) = git.run(&["smartlog", "--hidden"])?;
+        let (stdout, stderr) = git.run(&[
+            "smartlog",
+            "--hidden",
+            &format!("{test1_oid} + {test2_oid} + {test2_oid_amended}"),
+        ])?;
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
         :
@@ -427,9 +432,6 @@ fn test_show_hidden_commits() -> eyre::Result<()> {
         | x cb8137a (manually hidden) amended test2
         |
         x 96d1c37 (rewritten as cb8137ad) create test2.txt
-        hint: there is 1 abandoned commit in your commit graph
-        hint: to fix this, run: git restack
-        hint: disable this hint by running: git config --global branchless.hint.smartlogFixAbandoned false
         "###);
     }
 
@@ -488,7 +490,7 @@ fn test_show_only_branches() -> eyre::Result<()> {
 
     // just branches (normal and hidden) but no non-branch heads
     {
-        let (stdout, _stderr) = git.run(&["smartlog", "--only-branches"])?;
+        let (stdout, _stderr) = git.run(&["smartlog", "branches()"])?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d create test1.txt

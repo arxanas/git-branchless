@@ -561,8 +561,8 @@ pub fn checkout(
         &dag,
         &event_replayer,
         event_cursor,
+        &dag.observed_commits,
         true,
-        false,
     )?;
 
     let initial_query = get_initial_query(checkout_options);
