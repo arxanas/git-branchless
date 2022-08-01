@@ -1069,6 +1069,7 @@ dependencies = [
  "insta",
  "itertools 0.10.3",
  "lazy_static",
+ "once_cell",
  "os_str_bytes",
  "portable-pty",
  "rayon",
@@ -1216,9 +1217,9 @@ dependencies = [
 
 [[package]]
 name = "indicatif"
-version = "0.17.0-rc.11"
+version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4017d0ce94b8e91e29d2c78ed891e57e5ec3dc4371820a9d96abab4af09eb8ad"
+checksum = "fcc42b206e70d86ec03285b123e65a5458c92027d1fb2ae3555878b8113b3ddf"
 dependencies = [
  "console",
  "number_prefix",

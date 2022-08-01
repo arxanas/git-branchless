@@ -311,18 +311,21 @@ impl OperationState {
     pub fn tick(&self, nesting_level: usize) {
         lazy_static! {
             static ref CHECKMARK: String = console::style("✓").green().to_string();
-            static ref IN_PROGRESS_SPINNER_STYLE: ProgressStyle =
-                ProgressStyle::default_spinner().template("{prefix}{spinner} {wide_msg}").unwrap();
-            static ref IN_PROGRESS_BAR_STYLE: ProgressStyle =
+            static ref IN_PROGRESS_SPINNER_STYLE: Arc<Mutex<ProgressStyle>> =
+                Arc::new(Mutex::new(ProgressStyle::default_spinner().template("{prefix}{spinner} {wide_msg}").unwrap()));
+            static ref IN_PROGRESS_BAR_STYLE: Arc<Mutex<ProgressStyle>> =
                 // indicatif places the cursor at the end of the line, which may
                 // be visible in the terminal, so we add a space at the end of
                 // the line so that the length number isn't overlapped by the
                 // cursor.
-                ProgressStyle::default_bar().template("{prefix}{spinner} {wide_msg} {bar} {pos}/{len} ").unwrap();
-            static ref FINISHED_PROGRESS_STYLE: ProgressStyle = IN_PROGRESS_SPINNER_STYLE
+                Arc::new(Mutex::new(ProgressStyle::default_bar().template("{prefix}{spinner} {wide_msg} {bar} {pos}/{len} ").unwrap()));
+            static ref FINISHED_PROGRESS_STYLE: Arc<Mutex<ProgressStyle>> = Arc::new(Mutex::new(IN_PROGRESS_SPINNER_STYLE
+                .clone()
+                .lock()
+                .unwrap()
                 .clone()
                 // Requires at least two tick values, so just pass the same one twice.
-                .tick_strings(&[&CHECKMARK, &CHECKMARK]);
+                .tick_strings(&[&CHECKMARK, &CHECKMARK])));
         }
 
         let elapsed_duration = match self.start_times.iter().min() {
@@ -335,9 +338,9 @@ impl OperationState {
 
         self.progress_bar
             .set_style(match (self.start_times.as_slice(), self.has_meter) {
-                ([], _) => FINISHED_PROGRESS_STYLE.clone(),
-                ([..], false) => IN_PROGRESS_SPINNER_STYLE.clone(),
-                ([..], true) => IN_PROGRESS_BAR_STYLE.clone(),
+                ([], _) => FINISHED_PROGRESS_STYLE.lock().unwrap().clone(),
+                ([..], false) => IN_PROGRESS_SPINNER_STYLE.lock().unwrap().clone(),
+                ([..], true) => IN_PROGRESS_BAR_STYLE.lock().unwrap().clone(),
             });
         // Both `set_message` and `set_prefix` implicitly call
         // `ProgressBar::tick` and force a redraw.
