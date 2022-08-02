@@ -233,3 +233,54 @@ fn test_sync_specific_commit() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_sync_no_delete_main_branch() -> eyre::Result<()> {
+    let GitWrapperWithRemoteRepo {
+        temp_dir: _guard,
+        original_repo,
+        cloned_repo,
+    } = make_git_with_remote_repo()?;
+
+    original_repo.init_repo()?;
+    original_repo.commit_file("test1", 1)?;
+    original_repo.commit_file("test2", 2)?;
+    original_repo.run(&["checkout", "-b", "foo"])?;
+    original_repo.commit_file("test3", 3)?;
+
+    original_repo.clone_repo_into(&cloned_repo, &["--branch", "master"])?;
+    cloned_repo.init_repo_with_options(&GitInitOptions {
+        make_initial_commit: false,
+        ..Default::default()
+    })?;
+    cloned_repo.run(&["reset", "--hard", "HEAD^"])?;
+
+    // Simulate landing the commit upstream with a potentially different commit
+    // hash.
+    cloned_repo.run(&["cherry-pick", "origin/master"])?;
+    cloned_repo.run(&["commit", "--amend", "-m", "updated commit message"])?;
+
+    {
+        let (stdout, _stderr) = cloned_repo.run(&["sync"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        Attempting rebase in-memory...
+        [1/1] Skipped commit (was already applied upstream): 6ffd720 updated commit message
+        branchless: processing 1 update: branch master
+        branchless: processing 1 rewritten commit
+        branchless: running command: <git-executable> checkout master
+        Your branch is up to date with 'origin/master'.
+        In-memory rebase succeeded.
+        Synced 6ffd720 updated commit message
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = cloned_repo.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        @ 96d1c37 (> master, remote origin/master) create test2.txt
+        "###);
+    }
+
+    Ok(())
+}

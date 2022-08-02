@@ -215,7 +215,7 @@ pub fn check_out_updated_head(
             reference_name:
                 Some(ResolvedReferenceName {
                     local_name,
-                    upstream_name: _,
+                    upstream_name,
                 }),
         } => {
             // Find the reference at current time to see if it still exists.
@@ -238,11 +238,33 @@ pub fn check_out_updated_head(
                 }
 
                 None => {
+                    let reference_name = match upstream_name
+                        .as_ref()
+                        .map(|name| repo.find_reference(name))
+                        .transpose()?
+                    {
+                        Some(None) | None => None,
+                        Some(Some(upstream_reference)) => {
+                            match upstream_reference.peel_to_commit()? {
+                                None => None,
+                                Some(commit) => {
+                                    repo.create_reference(
+                                        local_name,
+                                        commit.get_oid(),
+                                        true,
+                                        "branchless: recreating main branch",
+                                    )?;
+                                    Some(local_name.clone())
+                                }
+                            }
+                        }
+                    };
+
                     // The branch was deleted because it pointed to a skipped
                     // commit. Get the new location for `HEAD`.
                     CheckoutTarget {
                         oid: skipped_head_updated_oid,
-                        reference_name: None,
+                        reference_name,
                     }
                 }
             }
