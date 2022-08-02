@@ -3,7 +3,6 @@
 //! These are rendered inline in the smartlog, between the commit hash and the
 //! commit message.
 
-use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
 use std::ffi::OsString;
@@ -22,7 +21,10 @@ use crate::core::config::{
     get_commit_descriptors_branches, get_commit_descriptors_differential_revision,
     get_commit_descriptors_relative_time,
 };
-use crate::git::{CategorizedReferenceName, Commit, NonZeroOid, Repo, ResolvedReferenceInfo};
+use crate::git::{
+    CategorizedReferenceName, Commit, NonZeroOid, Repo, ResolvedReferenceInfo,
+    ResolvedReferenceName,
+};
 
 use super::eventlog::{Event, EventCursor, EventReplayer};
 use super::formatting::{Glyphs, StyledStringBuilder};
@@ -347,8 +349,13 @@ impl<'a> NodeDescriptor for BranchesDescriptor<'a> {
             let mut branch_names: Vec<String> = branch_names
                 .into_iter()
                 .map(|branch_name| {
-                    let is_checked_out_branch =
-                        self.head_info.reference_name == Some(Cow::Borrowed(&branch_name));
+                    let is_checked_out_branch = match &self.head_info.reference_name {
+                        Some(ResolvedReferenceName {
+                            local_name,
+                            upstream_name: _,
+                        }) => local_name.eq(&branch_name),
+                        None => false,
+                    };
                     let icon = if is_checked_out_branch {
                         format!("{} ", glyphs.branch_arrow)
                     } else {

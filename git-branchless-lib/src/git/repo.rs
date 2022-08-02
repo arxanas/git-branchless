@@ -88,27 +88,18 @@ pub struct ResolvedReferenceInfo<'a> {
 
     /// The name of the reference that `HEAD` points to symbolically. If `HEAD`
     /// is detached, then this is `None`.
-    pub reference_name: Option<Cow<'a, OsStr>>,
+    pub reference_name: Option<ResolvedReferenceName<'a>>,
 }
 
-impl<'a> ResolvedReferenceInfo<'a> {
-    /// Get the name of the branch, if any. Returns `None` if `HEAD` is
-    /// detached.  The `refs/heads/` prefix, if any, is stripped.
-    pub fn get_branch_name(&self) -> eyre::Result<Option<OsString>> {
-        let reference_name: &OsStr = match &self.reference_name {
-            Some(reference_name) => reference_name,
-            None => return Ok(None),
-        };
+/// Information about a reference at a given point in time.
+#[derive(Debug, PartialEq, Eq)]
+pub struct ResolvedReferenceName<'a> {
+    /// The name of the reference.
+    pub local_name: Cow<'a, OsStr>,
 
-        let reference_name_bytes = reference_name.to_raw_bytes();
-        match reference_name_bytes.strip_prefix(b"refs/heads/") {
-            None => Ok(Some(reference_name.to_owned())),
-            Some(branch_name) => {
-                let branch_name = OsStringBytes::from_raw_vec(branch_name.to_vec())?;
-                Ok(Some(branch_name))
-            }
-        }
-    }
+    /// If this reference was a branch with an upstream, the name of the
+    /// reference for the upstream branch.
+    pub upstream_name: Option<OsString>,
 }
 
 /// The parsed version of Git.
@@ -308,10 +299,17 @@ impl Repo {
     #[instrument]
     pub fn resolve_reference(&self, reference: &Reference) -> eyre::Result<ResolvedReferenceInfo> {
         let oid = reference.peel_to_commit()?.map(|commit| commit.get_oid());
-        let reference_name: Option<OsString> = match reference.inner.kind() {
+        let reference_name: Option<ResolvedReferenceName> = match reference.inner.kind() {
             Some(git2::ReferenceType::Direct) => None,
             Some(git2::ReferenceType::Symbolic) => match reference.inner.symbolic_target_bytes() {
-                Some(name) => Some(OsStringBytes::from_raw_vec(name.to_vec())?),
+                Some(name) => {
+                    let local_name: OsString = OsStringBytes::from_raw_vec(name.to_vec())?;
+                    let upstream_name = self.resolve_upstream_reference_name(&local_name)?;
+                    Some(ResolvedReferenceName {
+                        local_name: Cow::Owned(local_name),
+                        upstream_name,
+                    })
+                }
                 None => eyre::bail!(
                     "Reference was resolved to OID: {:?}, but its name could not be decoded: {:?}",
                     oid,
@@ -322,8 +320,39 @@ impl Repo {
         };
         Ok(ResolvedReferenceInfo {
             oid,
-            reference_name: reference_name.map(Cow::Owned),
+            reference_name,
         })
+    }
+
+    fn resolve_upstream_reference_name(
+        &self,
+        reference_name: &OsStr,
+    ) -> eyre::Result<Option<OsString>> {
+        let categorized_reference_name = CategorizedReferenceName::new(reference_name);
+        match categorized_reference_name {
+            CategorizedReferenceName::RemoteBranch { .. }
+            | CategorizedReferenceName::OtherRef { .. } => return Ok(None),
+            CategorizedReferenceName::LocalBranch { .. } => {}
+        }
+
+        let branch_name = categorized_reference_name.remove_prefix()?;
+        let branch_name = match branch_name.to_str() {
+            Some(branch_name) => branch_name,
+            None => return Ok(None),
+        };
+
+        let branch = match self.find_branch(branch_name, BranchType::Local)? {
+            Some(branch) => branch,
+            None => return Ok(None),
+        };
+
+        let upstream_branch = match branch.get_upstream_branch()? {
+            Some(upstream_branch) => upstream_branch,
+            None => return Ok(None),
+        };
+
+        let upstream_reference_name = upstream_branch.into_reference().get_name()?;
+        Ok(Some(upstream_reference_name))
     }
 
     /// Get the OID for the repository's `HEAD` reference.

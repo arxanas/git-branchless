@@ -27,6 +27,7 @@ use crate::core::formatting::{printable_styled_string, Pluralize};
 use crate::core::repo_ext::RepoExt;
 use crate::git::{
     CategorizedReferenceName, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo, ResolvedReferenceInfo,
+    ResolvedReferenceName,
 };
 
 use super::execute::check_out_updated_head;
@@ -322,7 +323,7 @@ pub fn save_original_head_info(repo: &Repo, head_info: &ResolvedReferenceInfo) -
     let ResolvedReferenceInfo {
         oid,
         reference_name,
-    } = head_info;
+    } = &head_info;
 
     if let Some(oid) = oid {
         let dest_file_name = repo
@@ -331,11 +332,15 @@ pub fn save_original_head_info(repo: &Repo, head_info: &ResolvedReferenceInfo) -
         std::fs::write(dest_file_name, oid.to_string()).wrap_err("Writing head OID")?;
     }
 
-    if let Some(head_name) = reference_name {
+    if let Some(ResolvedReferenceName {
+        local_name,
+        upstream_name: _,
+    }) = reference_name
+    {
         let dest_file_name = repo
             .get_rebase_state_dir_path()
             .join(ORIGINAL_HEAD_FILE_NAME);
-        std::fs::write(dest_file_name, head_name.to_raw_bytes()).wrap_err("Writing head name")?;
+        std::fs::write(dest_file_name, local_name.to_raw_bytes()).wrap_err("Writing head name")?;
     }
 
     Ok(())
@@ -359,10 +364,16 @@ fn load_original_head_info(repo: &Repo) -> eyre::Result<ResolvedReferenceInfo> {
             .get_rebase_state_dir_path()
             .join(ORIGINAL_HEAD_FILE_NAME);
         match std::fs::read(source_file_name) {
-            Ok(reference_name) => Some(Cow::Owned(
-                OsStringBytes::from_raw_vec(reference_name)
-                    .wrap_err("Decoding original head name")?,
-            )),
+            Ok(reference_name) => {
+                let local_name = Cow::Owned(
+                    OsStringBytes::from_raw_vec(reference_name)
+                        .wrap_err("Decoding original head name")?,
+                );
+                Some(ResolvedReferenceName {
+                    local_name,
+                    upstream_name: None,
+                })
+            }
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => None,
             Err(err) => return Err(err.into()),
         }

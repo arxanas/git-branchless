@@ -15,7 +15,10 @@ use crate::core::effects::Effects;
 use crate::core::eventlog::{EventLogDb, EventTransactionId};
 use crate::core::formatting::{printable_styled_string, Pluralize};
 use crate::core::repo_ext::RepoExt;
-use crate::git::{GitRunInfo, MaybeZeroOid, NonZeroOid, Repo, ResolvedReferenceInfo};
+use crate::git::{
+    CategorizedReferenceName, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo, ResolvedReferenceInfo,
+    ResolvedReferenceName,
+};
 use crate::util::ExitCode;
 
 use super::plan::RebasePlan;
@@ -145,13 +148,17 @@ pub fn check_out_updated_head(
     skipped_head_updated_oid: Option<NonZeroOid>,
     check_out_commit_options: &CheckOutCommitOptions,
 ) -> eyre::Result<ExitCode> {
-    let checkout_target: ResolvedReferenceInfo = match previous_head_info {
+    struct CheckoutTarget<'a> {
+        oid: Option<NonZeroOid>,
+        reference_name: Option<Cow<'a, OsStr>>,
+    }
+    let checkout_target = match previous_head_info {
         ResolvedReferenceInfo {
             oid: None,
             reference_name: None,
         } => {
             // Head was unborn, so no need to check out a new branch.
-            ResolvedReferenceInfo {
+            CheckoutTarget {
                 oid: skipped_head_updated_oid,
                 reference_name: None,
             }
@@ -159,13 +166,17 @@ pub fn check_out_updated_head(
 
         ResolvedReferenceInfo {
             oid: None,
-            reference_name: Some(reference_name),
+            reference_name:
+                Some(ResolvedReferenceName {
+                    local_name,
+                    upstream_name: _,
+                }),
         } => {
             // Head was unborn but a branch was checked out. Not sure if this
             // can happen, but if so, just use that branch.
-            ResolvedReferenceInfo {
+            CheckoutTarget {
                 oid: None,
-                reference_name: Some(Cow::Borrowed(reference_name)),
+                reference_name: Some(Cow::Borrowed(local_name)),
             }
         }
 
@@ -177,21 +188,21 @@ pub fn check_out_updated_head(
             match rewritten_oids.get(previous_head_oid) {
                 Some(MaybeZeroOid::NonZero(oid)) => {
                     // This OID was rewritten, so check out the new version of the commit.
-                    ResolvedReferenceInfo {
+                    CheckoutTarget {
                         oid: Some(*oid),
                         reference_name: None,
                     }
                 }
                 Some(MaybeZeroOid::Zero) => {
                     // The commit was skipped. Get the new location for `HEAD`.
-                    ResolvedReferenceInfo {
+                    CheckoutTarget {
                         oid: skipped_head_updated_oid,
                         reference_name: None,
                     }
                 }
                 None => {
                     // This OID was not rewritten, so check it out again.
-                    ResolvedReferenceInfo {
+                    CheckoutTarget {
                         oid: Some(*previous_head_oid),
                         reference_name: None,
                     }
@@ -201,10 +212,14 @@ pub fn check_out_updated_head(
 
         ResolvedReferenceInfo {
             oid: Some(_),
-            reference_name: Some(reference_name),
+            reference_name:
+                Some(ResolvedReferenceName {
+                    local_name,
+                    upstream_name: _,
+                }),
         } => {
             // Find the reference at current time to see if it still exists.
-            match repo.find_reference(reference_name)? {
+            match repo.find_reference(local_name)? {
                 Some(reference) => {
                     // The branch moved, so we need to make sure that we are
                     // still checked out to it.
@@ -216,16 +231,16 @@ pub fn check_out_updated_head(
                     // * In-memory rebases will detach `HEAD` before proceeding,
                     // so we need to reattach it if necessary.
                     let oid = repo.resolve_reference(&reference)?.oid;
-                    ResolvedReferenceInfo {
+                    CheckoutTarget {
                         oid,
-                        reference_name: Some(Cow::Borrowed(reference_name)),
+                        reference_name: Some(Cow::Borrowed(local_name)),
                     }
                 }
 
                 None => {
                     // The branch was deleted because it pointed to a skipped
                     // commit. Get the new location for `HEAD`.
-                    ResolvedReferenceInfo {
+                    CheckoutTarget {
                         oid: skipped_head_updated_oid,
                         reference_name: None,
                     }
@@ -234,31 +249,46 @@ pub fn check_out_updated_head(
         }
     };
 
-    let head_info = repo.get_head_info()?;
-    if head_info == checkout_target {
-        return Ok(ExitCode(0));
+    {
+        let CheckoutTarget {
+            oid,
+            reference_name,
+        } = &checkout_target;
+        let head_info = repo.get_head_info()?;
+        if &head_info.oid == oid
+            && &head_info
+                .reference_name
+                .map(|reference_name| reference_name.local_name)
+                == reference_name
+        {
+            return Ok(ExitCode(0));
+        }
     }
 
     let checkout_target: Cow<OsStr> = match &checkout_target {
-        ResolvedReferenceInfo {
+        CheckoutTarget {
             oid: None,
             reference_name: None,
         } => return Ok(ExitCode(0)),
 
-        ResolvedReferenceInfo {
+        CheckoutTarget {
             oid: Some(oid),
             reference_name: None,
         } => Cow::Owned(OsString::from(oid.to_string())),
 
-        ResolvedReferenceInfo {
+        CheckoutTarget {
             oid: _,
             reference_name: Some(reference_name),
         } => {
             // FIXME: we could check to see if the OIDs are the same and, if so,
             // reattach or detach `HEAD` manually without having to call `git checkout`.
-            match checkout_target.get_branch_name()? {
-                Some(branch_name) => Cow::Owned(branch_name),
-                None => Cow::Borrowed(reference_name),
+            let categorized_reference_name = CategorizedReferenceName::new(reference_name);
+            match categorized_reference_name {
+                CategorizedReferenceName::LocalBranch { .. } => {
+                    Cow::Owned(categorized_reference_name.remove_prefix()?)
+                }
+                CategorizedReferenceName::RemoteBranch { .. }
+                | CategorizedReferenceName::OtherRef { .. } => Cow::Borrowed(reference_name),
             }
         }
     };
@@ -763,7 +793,7 @@ mod on_disk {
     use crate::core::rewrite::plan::RebaseCommand;
     use crate::core::rewrite::plan::RebasePlan;
     use crate::core::rewrite::rewrite_hooks::save_original_head_info;
-    use crate::git::{GitRunInfo, Repo};
+    use crate::git::{GitRunInfo, Repo, ResolvedReferenceName};
     use crate::util::ExitCode;
 
     use super::ExecuteRebasePlanOptions;
@@ -843,11 +873,14 @@ mod on_disk {
             let head_name_file_path = rebase_state_dir.join("head-name");
             std::fs::write(
                 &head_name_file_path,
-                head_info
-                    .reference_name
-                    .as_deref()
-                    .unwrap_or_else(|| OsStr::new("detached HEAD"))
-                    .to_raw_bytes(),
+                match &head_info.reference_name {
+                    Some(ResolvedReferenceName {
+                        local_name,
+                        upstream_name: _,
+                    }) => local_name,
+                    None => OsStr::new("detached HEAD"),
+                }
+                .to_raw_bytes(),
             )
             .wrap_err_with(|| format!("Writing head-name to: {:?}", &head_name_file_path))?;
 

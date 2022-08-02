@@ -148,7 +148,9 @@ pub fn create_snapshot<'repo>(
         event_tx_id,
         head_oid: MaybeZeroOid::from(head_info.oid),
         commit_oid: snapshot.base_commit.get_oid(),
-        ref_name: head_info.reference_name.map(|name| name.into_owned()),
+        ref_name: head_info
+            .reference_name
+            .map(|reference_name| reference_name.local_name.into_owned()),
     }])?;
     Ok(snapshot)
 }

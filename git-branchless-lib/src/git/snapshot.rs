@@ -35,7 +35,10 @@ use super::index::{Index, IndexEntry, Stage};
 use super::repo::Signature;
 use super::status::FileMode;
 use super::tree::{hydrate_tree, make_empty_tree};
-use super::{Commit, MaybeZeroOid, NonZeroOid, Repo, ResolvedReferenceInfo, StatusEntry};
+use super::{
+    Commit, MaybeZeroOid, NonZeroOid, Repo, ResolvedReferenceInfo, ResolvedReferenceName,
+    StatusEntry,
+};
 
 const BRANCHLESS_HEAD_TRAILER: &str = "Branchless-head";
 const BRANCHLESS_HEAD_REF_TRAILER: &str = "Branchless-head-ref";
@@ -119,8 +122,11 @@ impl<'repo> WorkingCopySnapshot<'repo> {
         };
 
         let head_reference_name: Option<String> = match &head_info.reference_name {
-            Some(reference_name) => {
-                let reference_name = reference_name.clone().into_owned();
+            Some(ResolvedReferenceName {
+                local_name,
+                upstream_name: _,
+            }) => {
+                let reference_name = local_name.clone().into_owned();
                 let reference_name = String::from_utf8(reference_name.into_raw_vec());
                 reference_name.ok()
             }

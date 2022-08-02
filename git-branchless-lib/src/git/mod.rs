@@ -17,7 +17,7 @@ pub use oid::{MaybeZeroOid, NonZeroOid};
 pub use repo::{
     message_prettify, AmendFastOptions, Branch, BranchType, CategorizedReferenceName,
     CherryPickFastError, CherryPickFastOptions, Commit, GitVersion, PatchId, Reference,
-    ReferenceTarget, Repo, ResolvedReferenceInfo, Time,
+    ReferenceTarget, Repo, ResolvedReferenceInfo, ResolvedReferenceName, Time,
 };
 pub use run::{GitRunInfo, GitRunOpts, GitRunResult};
 pub use snapshot::{WorkingCopyChangesType, WorkingCopySnapshot};
