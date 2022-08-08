@@ -45,7 +45,7 @@ test = true
 anyhow = "1.0.60"
 assert_cmd = "2.0.4"
 chashmap = "2.2.2"
-chrono = "0.4.19"
+chrono = "0.4.20"
 color-eyre = "0.6.2"
 concolor = { version = "0.0.8", features = ["auto"] }
 console = "0.15.0"
