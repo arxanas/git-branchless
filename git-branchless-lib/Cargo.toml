@@ -42,7 +42,7 @@ required-features = ["integration-test-bin"]
 test = true
 
 [dependencies]
-anyhow = "1.0.59"
+anyhow = "1.0.60"
 assert_cmd = "2.0.4"
 chashmap = "2.2.2"
 chrono = "0.4.19"
