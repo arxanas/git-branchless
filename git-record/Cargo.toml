@@ -19,7 +19,7 @@ harness = false
 cursive = { version = "0.19.0", default-features = false, features = [
   "crossterm-backend",
 ] }
-cursive_buffered_backend = "0.6.0"
+cursive_buffered_backend = "0.6.1"
 tracing = "0.1.35"
 
 [dev-dependencies]

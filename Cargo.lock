@@ -558,9 +558,9 @@ dependencies = [
 
 [[package]]
 name = "cursive_buffered_backend"
-version = "0.6.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "68c7725a87b0a5240427917d645d279669fa8bb523cd920d2c442da7ef8b769d"
+checksum = "e902dfdc09ca6729606f45a5ce6ce4ef9637fc257e8b11ca7806fc9aabd03cf7"
 dependencies = [
  "cursive_core",
  "enumset",
