@@ -25,4 +25,4 @@ tracing = "0.1.35"
 [dev-dependencies]
 criterion = "0.3.6"
 eyre = "0.6.8"
-insta = "1.16.0"
+insta = "1.18.0"
