@@ -91,10 +91,13 @@ pub enum EvalError {
         available_names: Vec<&'static str>,
     },
 
-    #[error("invalid number of arguments to {function_name}: expected {expected_arity} but got {actual_arity}")]
+    #[error(
+        "invalid number of arguments to {function_name}: expected {} but got {actual_arity}",
+        expected_arities.iter().map(|arity| arity.to_string()).collect::<Vec<_>>().join("/"),
+    )]
     ArityMismatch {
         function_name: String,
-        expected_arity: usize,
+        expected_arities: Vec<usize>,
         actual_arity: usize,
     },
 
@@ -207,7 +210,7 @@ pub(super) fn eval0(
 
         args => Err(EvalError::ArityMismatch {
             function_name: function_name.to_string(),
-            expected_arity: 0,
+            expected_arities: vec![0],
             actual_arity: args.len(),
         }),
     }
@@ -216,14 +219,14 @@ pub(super) fn eval0(
 #[instrument]
 pub(super) fn eval1(ctx: &mut Context, function_name: &str, args: &[Expr]) -> EvalResult {
     match args {
-        [expr] => {
-            let lhs = eval_inner(ctx, expr)?;
+        [arg] => {
+            let lhs = eval_inner(ctx, arg)?;
             Ok(lhs)
         }
 
         args => Err(EvalError::ArityMismatch {
             function_name: function_name.to_string(),
-            expected_arity: 1,
+            expected_arities: vec![1],
             actual_arity: args.len(),
         }),
     }
@@ -244,7 +247,7 @@ pub(super) fn eval2(
 
         args => Err(EvalError::ArityMismatch {
             function_name: function_name.to_string(),
-            expected_arity: 2,
+            expected_arities: vec![2],
             actual_arity: args.len(),
         }),
     }
@@ -268,7 +271,7 @@ pub(super) fn eval_number_rhs(
 
         args => Err(EvalError::ArityMismatch {
             function_name: function_name.to_string(),
-            expected_arity: 2,
+            expected_arities: vec![2],
             actual_arity: args.len(),
         }),
     }
