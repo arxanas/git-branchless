@@ -31,7 +31,7 @@ cursive_buffered_backend = "0.6.1"
 dialoguer = "0.10.1"
 eden_dag = { package = "esl01-dag", version = "0.2.1" }
 eyre = "0.6.8"
-git-record = { version = "0.1", path = "../git-record" }
+git-record = { version = "0.2", path = "../git-record" }
 glob = "0.3.0"
 itertools = "0.10.3"
 lalrpop-util = { version = "0.19.8", features = ["lexer"] }
