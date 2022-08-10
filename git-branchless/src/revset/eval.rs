@@ -616,7 +616,7 @@ mod tests {
 
         {
             let expr = Expr::FunctionCall(
-                Cow::Borrowed("nthparent"),
+                Cow::Borrowed("parents.nth"),
                 vec![
                     Expr::Name(Cow::Owned(test7_oid.to_string())),
                     Expr::Name(Cow::Borrowed("1")),
@@ -638,7 +638,7 @@ mod tests {
 
         {
             let expr = Expr::FunctionCall(
-                Cow::Borrowed("nthancestor"),
+                Cow::Borrowed("ancestors.nth"),
                 vec![
                     Expr::Name(Cow::Owned(test7_oid.to_string())),
                     Expr::Name(Cow::Borrowed("2")),

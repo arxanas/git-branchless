@@ -100,7 +100,7 @@ impl Pattern {
                 let delta = match interval {
                     Interval::Seconds(seconds) => RelativeDuration::seconds(seconds.into()),
                     Interval::Days(days) => RelativeDuration::days(days.into()),
-                    Interval::Months(months) => RelativeDuration::months(months.into()),
+                    Interval::Months(months) => RelativeDuration::months(months),
                 };
                 let date = Local::now().naive_local() + delta;
                 return Ok(date);

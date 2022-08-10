@@ -41,11 +41,11 @@ Expr3: Expr<'input> = {
 }
 
 Expr4: Expr<'input> = {
-    <lhs:Expr4> "^"            => Expr::FunctionCall(Cow::Borrowed("nthparent"), vec![lhs, Expr::Name(Cow::Borrowed("1"))]),
-    <lhs:Expr4> "^" <rhs:Name> => Expr::FunctionCall(Cow::Borrowed("nthparent"), vec![lhs, Expr::Name(rhs)]),
+    <lhs:Expr4> "^"            => Expr::FunctionCall(Cow::Borrowed("parents.nth"), vec![lhs, Expr::Name(Cow::Borrowed("1"))]),
+    <lhs:Expr4> "^" <rhs:Name> => Expr::FunctionCall(Cow::Borrowed("parents.nth"), vec![lhs, Expr::Name(rhs)]),
 
-    <lhs:Expr4> "~"            => Expr::FunctionCall(Cow::Borrowed("nthancestor"), vec![lhs, Expr::Name(Cow::Borrowed("1"))]),
-    <lhs:Expr4> "~" <rhs:Name> => Expr::FunctionCall(Cow::Borrowed("nthancestor"), vec![lhs, Expr::Name(rhs)]),
+    <lhs:Expr4> "~"            => Expr::FunctionCall(Cow::Borrowed("ancestors.nth"), vec![lhs, Expr::Name(Cow::Borrowed("1"))]),
+    <lhs:Expr4> "~" <rhs:Name> => Expr::FunctionCall(Cow::Borrowed("ancestors.nth"), vec![lhs, Expr::Name(rhs)]),
 
     <Expr5>
 }
