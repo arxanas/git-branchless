@@ -42,6 +42,10 @@ lazy_static! {
             ("stack", &fn_stack),
             ("message", &fn_message),
             ("paths.changed", &fn_path_changed),
+            ("author.name", &fn_author_name),
+            ("author.email", &fn_author_email),
+            ("committer.name", &fn_committer_name),
+            ("committer.email", &fn_committer_email),
         ];
         functions.iter().cloned().collect()
     };
@@ -283,5 +287,65 @@ fn fn_path_changed(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
             });
             Ok(result)
         }),
+    )
+}
+
+fn fn_author_name(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+    let pattern = eval1_pattern(ctx, name, args)?;
+    make_pattern_matcher(
+        ctx,
+        name,
+        args,
+        Box::new(
+            move |_repo: &Repo, commit: &Commit| match commit.get_author().get_name() {
+                Some(name) => Ok(pattern.matches_text(name)),
+                None => Ok(false),
+            },
+        ),
+    )
+}
+
+fn fn_author_email(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+    let pattern = eval1_pattern(ctx, name, args)?;
+    make_pattern_matcher(
+        ctx,
+        name,
+        args,
+        Box::new(
+            move |_repo: &Repo, commit: &Commit| match commit.get_author().get_email() {
+                Some(name) => Ok(pattern.matches_text(name)),
+                None => Ok(false),
+            },
+        ),
+    )
+}
+
+fn fn_committer_name(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+    let pattern = eval1_pattern(ctx, name, args)?;
+    make_pattern_matcher(
+        ctx,
+        name,
+        args,
+        Box::new(
+            move |_repo: &Repo, commit: &Commit| match commit.get_committer().get_name() {
+                Some(name) => Ok(pattern.matches_text(name)),
+                None => Ok(false),
+            },
+        ),
+    )
+}
+
+fn fn_committer_email(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+    let pattern = eval1_pattern(ctx, name, args)?;
+    make_pattern_matcher(
+        ctx,
+        name,
+        args,
+        Box::new(
+            move |_repo: &Repo, commit: &Commit| match commit.get_committer().get_email() {
+                Some(name) => Ok(pattern.matches_text(name)),
+                None => Ok(false),
+            },
+        ),
     )
 }
