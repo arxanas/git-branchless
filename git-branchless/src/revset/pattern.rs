@@ -78,7 +78,7 @@ impl Pattern {
 
 pub(super) trait PatternMatcher: Sync + Send {
     fn get_description(&self) -> &str;
-    fn matches_commit(&self, commit: &Commit) -> Result<bool, PatternError>;
+    fn matches_commit(&self, repo: &Repo, commit: &Commit) -> Result<bool, PatternError>;
 }
 
 pub(super) fn make_pattern_matcher_set(
@@ -135,7 +135,7 @@ pub(super) fn make_pattern_matcher_set(
                                 .find_commit_or_fail(commit_oid)
                                 .map_err(make_dag_backend_error)?;
                             if matcher
-                                .matches_commit(&commit)
+                                .matches_commit(&*repo, &commit)
                                 .map_err(make_dag_backend_error)?
                             {
                                 acc.push(commit_oid);
@@ -172,7 +172,7 @@ pub(super) fn make_pattern_matcher_set(
                 .find_commit_or_fail(oid)
                 .map_err(make_dag_backend_error)?;
             let result = matcher
-                .matches_commit(&commit)
+                .matches_commit(&*repo, &commit)
                 .map_err(make_dag_backend_error)?;
             Ok(result)
         },
