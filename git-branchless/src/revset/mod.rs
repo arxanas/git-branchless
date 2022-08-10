@@ -2,6 +2,7 @@
 //! Jujutsu.
 
 mod ast;
+mod builtins;
 mod eval;
 mod parser;
 mod resolve;
