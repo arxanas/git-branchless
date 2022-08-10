@@ -217,6 +217,26 @@ pub(super) fn eval0(
 }
 
 #[instrument]
+pub(super) fn eval0_or_1(
+    ctx: &mut Context,
+    function_name: &str,
+    args: &[Expr],
+) -> Result<Option<CommitSet>, EvalError> {
+    match args {
+        [] => Ok(None),
+        [expr] => {
+            let arg = eval_inner(ctx, expr)?;
+            Ok(Some(arg))
+        }
+        args => Err(EvalError::ArityMismatch {
+            function_name: function_name.to_string(),
+            expected_arities: vec![0, 1],
+            actual_arity: args.len(),
+        }),
+    }
+}
+
+#[instrument]
 pub(super) fn eval1(ctx: &mut Context, function_name: &str, args: &[Expr]) -> EvalResult {
     match args {
         [arg] => {
@@ -389,6 +409,31 @@ mod tests {
                         inner: Commit {
                             id: ba07500a4adc661dc06a748d200ef92120e1b355,
                             summary: "create test7.txt",
+                        },
+                    },
+                ],
+            )
+            "###);
+        }
+
+        {
+            let expr = Expr::FunctionCall(
+                Cow::Borrowed("stack"),
+                vec![Expr::Name(Cow::Owned(test2_oid.to_string()))],
+            );
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            Ok(
+                [
+                    Commit {
+                        inner: Commit {
+                            id: 96d1c37a3d4363611c49f7e52186e189a04c531f,
+                            summary: "create test2.txt",
+                        },
+                    },
+                    Commit {
+                        inner: Commit {
+                            id: 70deb1e28791d8e7dd5a1f0c871a51b91282562f,
+                            summary: "create test3.txt",
                         },
                     },
                 ],

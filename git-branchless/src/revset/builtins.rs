@@ -6,7 +6,9 @@ use std::convert::TryFrom;
 use eyre::Context as EyreContext;
 use lazy_static::lazy_static;
 
-use super::eval::{eval0, eval1, eval2, eval_number_rhs, Context, EvalError, EvalResult};
+use super::eval::{
+    eval0, eval0_or_1, eval1, eval2, eval_number_rhs, Context, EvalError, EvalResult,
+};
 use super::Expr;
 
 type FnType = &'static (dyn Fn(&mut Context, &str, &[Expr]) -> EvalResult + Sync);
@@ -149,13 +151,10 @@ fn fn_draft(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
 }
 
 fn fn_stack(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
-    eval0(ctx, name, args)?;
+    let arg = eval0_or_1(ctx, name, args)?.unwrap_or_else(|| ctx.dag.head_commit.clone());
     let draft_commits = ctx.query_draft_commits()?;
     let stack_roots = ctx.dag.query().roots(draft_commits.clone())?;
-    let stack_ancestors = ctx
-        .dag
-        .query()
-        .range(stack_roots, ctx.dag.head_commit.clone())?;
+    let stack_ancestors = ctx.dag.query().range(stack_roots, arg)?;
     let stack = ctx
         .dag
         .query()
