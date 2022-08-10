@@ -677,6 +677,37 @@ mod tests {
             "###);
         }
 
+        {
+            let expr = Expr::FunctionCall(
+                Cow::Borrowed("paths.changed"),
+                vec![Expr::Name(Cow::Borrowed("glob:test[1-3].txt"))],
+            );
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            Ok(
+                [
+                    Commit {
+                        inner: Commit {
+                            id: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
+                            summary: "create test1.txt",
+                        },
+                    },
+                    Commit {
+                        inner: Commit {
+                            id: 96d1c37a3d4363611c49f7e52186e189a04c531f,
+                            summary: "create test2.txt",
+                        },
+                    },
+                    Commit {
+                        inner: Commit {
+                            id: 70deb1e28791d8e7dd5a1f0c871a51b91282562f,
+                            summary: "create test3.txt",
+                        },
+                    },
+                ],
+            )
+            "###);
+        }
+
         Ok(())
     }
 }

@@ -1,6 +1,6 @@
 use eden_dag::DagAlgorithm;
 use lib::core::dag::CommitSet;
-use lib::git::Commit;
+use lib::git::{Commit, Repo};
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -41,6 +41,7 @@ lazy_static! {
             ("draft", &fn_draft),
             ("stack", &fn_stack),
             ("message", &fn_message),
+            ("paths.changed", &fn_path_changed),
         ];
         functions.iter().cloned().collect()
     };
@@ -193,7 +194,7 @@ fn fn_stack(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     Ok(stack)
 }
 
-type MatcherFn = dyn Fn(&Commit) -> Result<bool, PatternError> + Sync + Send;
+type MatcherFn = dyn Fn(&Repo, &Commit) -> Result<bool, PatternError> + Sync + Send;
 
 fn make_pattern_matcher(
     ctx: &mut Context,
@@ -211,8 +212,8 @@ fn make_pattern_matcher(
             &self.expr
         }
 
-        fn matches_commit(&self, commit: &Commit) -> Result<bool, PatternError> {
-            (self.f)(commit)
+        fn matches_commit(&self, repo: &Repo, commit: &Commit) -> Result<bool, PatternError> {
+            (self.f)(repo, commit)
         }
     }
 
@@ -230,7 +231,7 @@ fn fn_message(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
         ctx,
         name,
         args,
-        Box::new(move |commit| {
+        Box::new(move |_repo, commit| {
             let message = commit.get_message_raw().map_err(PatternError::Repo)?;
             let message = match message.to_str() {
                 Some(message) => message,
@@ -244,6 +245,43 @@ fn fn_message(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
                 }
             };
             Ok(pattern.matches_text(message))
+        }),
+    )
+}
+
+fn fn_path_changed(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+    let pattern = eval1_pattern(ctx, name, args)?;
+    make_pattern_matcher(
+        ctx,
+        name,
+        args,
+        Box::new(move |repo: &Repo, commit: &Commit| {
+            let touched_paths = match repo
+                .get_paths_touched_by_commit(commit)
+                .map_err(PatternError::Repo)?
+            {
+                Some(touched_paths) => touched_paths,
+                None => {
+                    // FIXME: it might be more intuitive to check all changed
+                    // paths with respect to any parent.
+                    return Ok(false);
+                }
+            };
+            let result = touched_paths.into_iter().any(|path| {
+                let path = match path.to_str() {
+                    Some(path) => path,
+                    None => {
+                        warn!(
+                            ?commit,
+                            ?path,
+                            "Commit message could not be decoded as UTF-8"
+                        );
+                        return false;
+                    }
+                };
+                pattern.matches_text(path)
+            });
+            Ok(result)
         }),
     )
 }
