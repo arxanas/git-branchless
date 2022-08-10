@@ -1,14 +1,20 @@
 use eden_dag::DagAlgorithm;
 use lib::core::dag::CommitSet;
+use lib::git::Commit;
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::convert::TryFrom;
+use tracing::warn;
 
 use eyre::Context as EyreContext;
 use lazy_static::lazy_static;
 
+use crate::revset::pattern::{PatternError, PatternMatcher};
+
 use super::eval::{
-    eval0, eval0_or_1, eval1, eval2, eval_number_rhs, Context, EvalError, EvalResult,
+    eval0, eval0_or_1, eval1, eval1_pattern, eval2, eval_number_rhs, Context, EvalError, EvalResult,
 };
+use super::pattern::make_pattern_matcher_set;
 use super::Expr;
 
 type FnType = &'static (dyn Fn(&mut Context, &str, &[Expr]) -> EvalResult + Sync);
@@ -34,6 +40,7 @@ lazy_static! {
             ("nthancestor", &fn_nthancestor),
             ("draft", &fn_draft),
             ("stack", &fn_stack),
+            ("message", &fn_message),
         ];
         functions.iter().cloned().collect()
     };
@@ -184,4 +191,59 @@ fn fn_stack(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
         // this will return `{A, B, C}`, not just `{A, C}`.
         .range(stack_ancestors, draft_commits.clone())?;
     Ok(stack)
+}
+
+type MatcherFn = dyn Fn(&Commit) -> Result<bool, PatternError> + Sync + Send;
+
+fn make_pattern_matcher(
+    ctx: &mut Context,
+    name: &str,
+    args: &[Expr],
+    f: Box<MatcherFn>,
+) -> Result<CommitSet, EvalError> {
+    struct Matcher {
+        expr: String,
+        f: Box<MatcherFn>,
+    }
+
+    impl PatternMatcher for Matcher {
+        fn get_description(&self) -> &str {
+            &self.expr
+        }
+
+        fn matches_commit(&self, commit: &Commit) -> Result<bool, PatternError> {
+            (self.f)(commit)
+        }
+    }
+
+    let matcher = Matcher {
+        expr: Expr::FunctionCall(Cow::Borrowed(name), args.to_vec()).to_string(),
+        f,
+    };
+    let matcher = make_pattern_matcher_set(ctx, ctx.repo, Box::new(matcher))?;
+    Ok(matcher)
+}
+
+fn fn_message(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+    let pattern = eval1_pattern(ctx, name, args)?;
+    make_pattern_matcher(
+        ctx,
+        name,
+        args,
+        Box::new(move |commit| {
+            let message = commit.get_message_raw().map_err(PatternError::Repo)?;
+            let message = match message.to_str() {
+                Some(message) => message,
+                None => {
+                    warn!(
+                        ?commit,
+                        ?message,
+                        "Commit message could not be decoded as UTF-8"
+                    );
+                    return Ok(false);
+                }
+            };
+            Ok(pattern.matches_text(message))
+        }),
+    )
 }

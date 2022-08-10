@@ -5,6 +5,7 @@ mod ast;
 mod builtins;
 mod eval;
 mod parser;
+mod pattern;
 mod resolve;
 
 pub use ast::Expr;

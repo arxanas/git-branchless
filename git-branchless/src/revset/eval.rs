@@ -1,6 +1,8 @@
+use std::fmt::Display;
 use std::num::ParseIntError;
 use std::sync::Arc;
 
+use eden_dag::errors::BackendError;
 use eden_dag::DagAlgorithm;
 use itertools::Itertools;
 use lib::core::effects::{Effects, OperationType};
@@ -12,6 +14,7 @@ use lib::git::{Repo, ResolvedReferenceInfo};
 use tracing::instrument;
 
 use super::builtins::FUNCTIONS;
+use super::pattern::{Pattern, PatternError};
 use super::Expr;
 
 #[derive(Debug)]
@@ -113,6 +116,12 @@ pub enum EvalError {
     #[error("expected an integer, but got a call to function: {function_name}")]
     ExpectedNumberNotFunction { function_name: String },
 
+    #[error("expected a text-matching pattern, but got a call to function: {function_name}")]
+    ExpectedPatternNotFunction { function_name: String },
+
+    #[error(transparent)]
+    PatternError(#[from] PatternError),
+
     #[error("query error: {from}")]
     DagError {
         #[from]
@@ -121,6 +130,12 @@ pub enum EvalError {
 
     #[error(transparent)]
     OtherError(eyre::Error),
+}
+
+pub(super) fn make_dag_backend_error(error: impl Display) -> eden_dag::Error {
+    let error = format!("error: {}", error);
+    let error = BackendError::Generic(error);
+    eden_dag::Error::Backend(Box::new(error))
 }
 
 pub type EvalResult = Result<CommitSet, EvalError>;
@@ -243,6 +258,26 @@ pub(super) fn eval1(ctx: &mut Context, function_name: &str, args: &[Expr]) -> Ev
             let lhs = eval_inner(ctx, arg)?;
             Ok(lhs)
         }
+
+        args => Err(EvalError::ArityMismatch {
+            function_name: function_name.to_string(),
+            expected_arities: vec![1],
+            actual_arity: args.len(),
+        }),
+    }
+}
+
+pub(super) fn eval1_pattern(
+    _ctx: &mut Context,
+    function_name: &str,
+    args: &[Expr],
+) -> Result<Pattern, EvalError> {
+    match args {
+        [Expr::Name(pattern)] => Ok(Pattern::new(pattern)?),
+
+        [Expr::FunctionCall(name, _args)] => Err(EvalError::ExpectedNumberNotFunction {
+            function_name: name.clone().into_owned(),
+        }),
 
         args => Err(EvalError::ArityMismatch {
             function_name: function_name.to_string(),
@@ -608,6 +643,25 @@ mod tests {
                     Expr::Name(Cow::Owned(test7_oid.to_string())),
                     Expr::Name(Cow::Borrowed("2")),
                 ],
+            );
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            Ok(
+                [
+                    Commit {
+                        inner: Commit {
+                            id: bf0d52a607f693201512a43b6b5a70b2a275e0ad,
+                            summary: "create test4.txt",
+                        },
+                    },
+                ],
+            )
+            "###);
+        }
+
+        {
+            let expr = Expr::FunctionCall(
+                Cow::Borrowed("message"),
+                vec![Expr::Name(Cow::Borrowed("test4"))],
             );
             insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
             Ok(
