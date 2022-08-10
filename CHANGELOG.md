@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - ReleaseDate
 
+## [0.4.0] - 2022-08-09
+
 ### Added
 
 - Numerous updates to `git branchless move`:
