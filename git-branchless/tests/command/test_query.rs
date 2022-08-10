@@ -74,8 +74,9 @@ fn test_query_eval_error() -> eyre::Result<()> {
                 ..Default::default()
             },
         )?;
-        insta::assert_snapshot!(stderr, @"Evaluation error for expression 'foo()': no function with the name 'foo' could be found; these functions are available: ancestors, branches, children, descendants, difference, draft, heads, intersection, not, nthancestor, nthparent, only, parents, range, roots, stack, union
-");
+        insta::assert_snapshot!(stderr, @r###"
+        Evaluation error for expression 'foo()': no function with the name 'foo' could be found; these functions are available: all, ancestors, branches, children, descendants, difference, draft, heads, intersection, none, not, nthancestor, nthparent, only, parents, range, roots, stack, union
+        "###);
         insta::assert_snapshot!(stdout, @"");
     }
 
