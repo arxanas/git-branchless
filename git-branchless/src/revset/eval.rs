@@ -361,6 +361,73 @@ mod tests {
         )?;
 
         {
+            let expr = Expr::FunctionCall(Cow::Borrowed("all"), vec![]);
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            Ok(
+                [
+                    Commit {
+                        inner: Commit {
+                            id: f777ecc9b0db5ed372b2615695191a8a17f79f24,
+                            summary: "create initial.txt",
+                        },
+                    },
+                    Commit {
+                        inner: Commit {
+                            id: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
+                            summary: "create test1.txt",
+                        },
+                    },
+                    Commit {
+                        inner: Commit {
+                            id: 96d1c37a3d4363611c49f7e52186e189a04c531f,
+                            summary: "create test2.txt",
+                        },
+                    },
+                    Commit {
+                        inner: Commit {
+                            id: 70deb1e28791d8e7dd5a1f0c871a51b91282562f,
+                            summary: "create test3.txt",
+                        },
+                    },
+                    Commit {
+                        inner: Commit {
+                            id: bf0d52a607f693201512a43b6b5a70b2a275e0ad,
+                            summary: "create test4.txt",
+                        },
+                    },
+                    Commit {
+                        inner: Commit {
+                            id: 848121cb21bf9af8b064c91bc8930bd16d624a22,
+                            summary: "create test5.txt",
+                        },
+                    },
+                    Commit {
+                        inner: Commit {
+                            id: f0abf649939928fe5475179fd84e738d3d3725dc,
+                            summary: "create test6.txt",
+                        },
+                    },
+                    Commit {
+                        inner: Commit {
+                            id: ba07500a4adc661dc06a748d200ef92120e1b355,
+                            summary: "create test7.txt",
+                        },
+                    },
+                ],
+            )
+            "###);
+        }
+
+        {
+            let expr = Expr::FunctionCall(Cow::Borrowed("none"), vec![]);
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            Ok(
+                [],
+            )
+            "###);
+        }
+
+        {
             let expr = Expr::FunctionCall(
                 Cow::Borrowed("union"),
                 vec![

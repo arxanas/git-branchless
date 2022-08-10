@@ -15,6 +15,8 @@ type FnType = &'static (dyn Fn(&mut Context, &str, &[Expr]) -> EvalResult + Sync
 lazy_static! {
     pub(super) static ref FUNCTIONS: HashMap<&'static str, FnType> = {
         let functions: &[(&'static str, FnType)] = &[
+            ("all", &fn_all),
+            ("none", &fn_none),
             ("union", &fn_union),
             ("intersection", &fn_intersection),
             ("difference", &fn_difference),
@@ -35,6 +37,16 @@ lazy_static! {
         ];
         functions.iter().cloned().collect()
     };
+}
+
+fn fn_all(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+    eval0(ctx, name, args)?;
+    Ok(ctx.query_active_commits()?.clone())
+}
+
+fn fn_none(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+    eval0(ctx, name, args)?;
+    Ok(CommitSet::empty())
 }
 
 fn fn_union(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
