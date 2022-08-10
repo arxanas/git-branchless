@@ -1262,6 +1262,14 @@ impl<'repo> Signature<'repo> {
         self.inner.when()
     }
 
+    pub fn get_name(&self) -> Option<&str> {
+        self.inner.name()
+    }
+
+    pub fn get_email(&self) -> Option<&str> {
+        self.inner.email()
+    }
+
     /// Return the friendly formatted name and email of the signature.
     pub fn friendly_describe(&self) -> Option<String> {
         let name = self.inner.name();

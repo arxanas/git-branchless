@@ -342,7 +342,7 @@ mod tests {
     use lib::core::formatting::Glyphs;
     use lib::core::repo_ext::RepoExt;
     use lib::git::Commit;
-    use lib::testing::make_git;
+    use lib::testing::{make_git, GitRunOptions};
 
     use super::*;
     use crate::revset::Expr;
@@ -701,6 +701,145 @@ mod tests {
                         inner: Commit {
                             id: 70deb1e28791d8e7dd5a1f0c871a51b91282562f,
                             summary: "create test3.txt",
+                        },
+                    },
+                ],
+            )
+            "###);
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_eval_author_committer() -> eyre::Result<()> {
+        let git = make_git()?;
+        git.init_repo()?;
+
+        git.write_file("test1", "test\n")?;
+        git.run(&["add", "test1.txt"])?;
+        git.run_with_options(
+            &["commit", "-m", "test1"],
+            &GitRunOptions {
+                env: {
+                    [
+                        ("GIT_AUTHOR_NAME", "Foo"),
+                        ("GIT_AUTHOR_EMAIL", "foo@example.com"),
+                        ("GIT_COMMITTER_NAME", "Bar"),
+                        ("GIT_COMMITTER_EMAIL", "bar@example.com"),
+                    ]
+                    .iter()
+                    .map(|(k, v)| (k.to_string(), v.to_string()))
+                    .collect()
+                },
+                ..Default::default()
+            },
+        )?;
+
+        git.write_file("test2", "test\n")?;
+        git.run(&["add", "test2.txt"])?;
+        git.run_with_options(
+            &["commit", "-m", "test2"],
+            &GitRunOptions {
+                env: {
+                    [
+                        ("GIT_AUTHOR_NAME", "Bar"),
+                        ("GIT_AUTHOR_EMAIL", "bar@example.com"),
+                        ("GIT_COMMITTER_NAME", "Foo"),
+                        ("GIT_COMMITTER_EMAIL", "foo@example.com"),
+                    ]
+                    .iter()
+                    .map(|(k, v)| (k.to_string(), v.to_string()))
+                    .collect()
+                },
+                ..Default::default()
+            },
+        )?;
+
+        let effects = Effects::new_suppress_for_test(Glyphs::text());
+        let repo = git.get_repo()?;
+        let conn = repo.get_db_conn()?;
+        let event_log_db = EventLogDb::new(&conn)?;
+        let event_replayer = EventReplayer::from_event_log_db(&effects, &repo, &event_log_db)?;
+        let event_cursor = event_replayer.make_default_cursor();
+        let references_snapshot = repo.get_references_snapshot()?;
+        let mut dag = Dag::open_and_sync(
+            &effects,
+            &repo,
+            &event_replayer,
+            event_cursor,
+            &references_snapshot,
+        )?;
+
+        {
+            let expr = Expr::FunctionCall(
+                Cow::Borrowed("author.name"),
+                vec![Expr::Name(Cow::Borrowed("Foo"))],
+            );
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            Ok(
+                [
+                    Commit {
+                        inner: Commit {
+                            id: 9ee1994c0737c221efc07acd8d73590d336ee46d,
+                            summary: "test1",
+                        },
+                    },
+                ],
+            )
+            "###);
+        }
+
+        {
+            let expr = Expr::FunctionCall(
+                Cow::Borrowed("author.email"),
+                vec![Expr::Name(Cow::Borrowed("foo"))],
+            );
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            Ok(
+                [
+                    Commit {
+                        inner: Commit {
+                            id: 9ee1994c0737c221efc07acd8d73590d336ee46d,
+                            summary: "test1",
+                        },
+                    },
+                ],
+            )
+            "###);
+        }
+
+        {
+            let expr = Expr::FunctionCall(
+                Cow::Borrowed("committer.name"),
+                vec![Expr::Name(Cow::Borrowed("Foo"))],
+            );
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            Ok(
+                [
+                    Commit {
+                        inner: Commit {
+                            id: 05ff2fc6b3e7917ac6800b18077c211e173e8fb4,
+                            summary: "test2",
+                        },
+                    },
+                ],
+            )
+            "###);
+        }
+
+        {
+            let expr = Expr::FunctionCall(
+                Cow::Borrowed("committer.email"),
+                vec![Expr::Name(Cow::Borrowed("foo"))],
+            );
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            Ok(
+                [
+                    Commit {
+                        inner: Commit {
+                            id: 05ff2fc6b3e7917ac6800b18077c211e173e8fb4,
+                            summary: "test2",
                         },
                     },
                 ],
