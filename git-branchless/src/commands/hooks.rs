@@ -91,15 +91,16 @@ fn hook_post_commit_common(effects: &Effects, hook_name: &str) -> eyre::Result<(
     mark_commit_reachable(&repo, commit_oid)
         .wrap_err("Marking commit as reachable for GC purposes")?;
 
-    let timestamp = commit.get_time().seconds();
+    let timestamp = commit.get_time().to_system_time()?;
 
     // Potentially lossy conversion. The semantics are to round to the nearest
     // possible float:
     // https://doc.rust-lang.org/reference/expressions/operator-expr.html#semantics.
     // We don't rely on the timestamp's correctness for anything, so this is
     // okay.
-    #[allow(clippy::as_conversions)]
-    let timestamp = timestamp as f64;
+    let timestamp = timestamp
+        .duration_since(SystemTime::UNIX_EPOCH)?
+        .as_secs_f64();
 
     let event_tx_id = event_log_db.make_transaction_id(now, hook_name)?;
     event_log_db.add_events(vec![Event::CommitEvent {

@@ -13,11 +13,12 @@ use std::borrow::{Borrow, Cow};
 use std::collections::{HashMap, HashSet};
 use std::convert::{TryFrom, TryInto};
 use std::ffi::{OsStr, OsString};
+use std::ops::Add;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
-use chrono::{DateTime, Local, TimeZone, Utc};
+use chrono::NaiveDateTime;
 use cursive::theme::BaseColor;
 use cursive::utils::markup::StyledString;
 use eyre::Context;
@@ -1258,8 +1259,10 @@ impl<'repo> Signature<'repo> {
     }
 
     /// Get the time when this signature was applied.
-    pub fn get_time(&self) -> git2::Time {
-        self.inner.when()
+    pub fn get_time(&self) -> Time {
+        Time {
+            inner: self.inner.when(),
+        }
     }
 
     pub fn get_name(&self) -> Option<&str> {
@@ -1355,7 +1358,9 @@ impl<'repo> Commit<'repo> {
     /// Get the commit time of this commit.
     #[instrument]
     pub fn get_time(&self) -> Time {
-        self.inner.time()
+        Time {
+            inner: self.inner.time(),
+        }
     }
 
     /// Get the summary (first line) of the commit message.
@@ -1442,8 +1447,7 @@ impl<'repo> Commit<'repo> {
     /// its OID, author, commit time, and message.
     #[instrument]
     pub fn friendly_preview(&self) -> eyre::Result<StyledString> {
-        let commit_time = Utc.timestamp(self.get_time().seconds(), 0);
-        let commit_time: DateTime<Local> = DateTime::from(commit_time);
+        let commit_time = self.get_time().to_naive_date_time();
         let preview = StyledStringBuilder::from_lines(vec![
             StyledStringBuilder::new()
                 .append_styled(
@@ -1727,8 +1731,23 @@ impl<'a> CategorizedReferenceName<'a> {
 /// Re-export of [`git2::BranchType`]. This might change to be an opaque type later.
 pub type BranchType = git2::BranchType;
 
-/// Re-export of [`git2::Time`]. This might change to be an opaque type later.
-pub type Time = git2::Time;
+/// A timestamp as used in a [`Signature`].
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Time {
+    inner: git2::Time,
+}
+
+impl Time {
+    /// Calculate the associated [`SystemTime`].
+    pub fn to_system_time(&self) -> eyre::Result<SystemTime> {
+        Ok(SystemTime::UNIX_EPOCH.add(Duration::from_secs(self.inner.seconds().try_into()?)))
+    }
+
+    /// Calculate the associated [`NaiveDateTime`].
+    pub fn to_naive_date_time(&self) -> NaiveDateTime {
+        NaiveDateTime::from_timestamp(self.inner.seconds(), 0)
+    }
+}
 
 /// Represents a Git branch.
 pub struct Branch<'repo> {

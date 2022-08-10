@@ -211,7 +211,7 @@ mod graph {
             .collect();
         for node in graph.nodes.values_mut() {
             node.children
-                .sort_by_key(|child_oid| (commit_times[child_oid], child_oid.to_string()));
+                .sort_by_key(|child_oid| (&commit_times[child_oid], child_oid.to_string()));
         }
     }
 
