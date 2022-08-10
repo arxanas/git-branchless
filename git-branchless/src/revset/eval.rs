@@ -811,6 +811,49 @@ mod tests {
 
         {
             let expr = Expr::FunctionCall(
+                Cow::Borrowed("author.date"),
+                vec![Expr::Name(Cow::Borrowed("before:today"))],
+            );
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            Ok(
+                [
+                    Commit {
+                        inner: Commit {
+                            id: f777ecc9b0db5ed372b2615695191a8a17f79f24,
+                            summary: "create initial.txt",
+                        },
+                    },
+                    Commit {
+                        inner: Commit {
+                            id: 9ee1994c0737c221efc07acd8d73590d336ee46d,
+                            summary: "test1",
+                        },
+                    },
+                    Commit {
+                        inner: Commit {
+                            id: 05ff2fc6b3e7917ac6800b18077c211e173e8fb4,
+                            summary: "test2",
+                        },
+                    },
+                ],
+            )
+            "###);
+        }
+
+        {
+            let expr = Expr::FunctionCall(
+                Cow::Borrowed("author.date"),
+                vec![Expr::Name(Cow::Borrowed("after:yesterday"))],
+            );
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            Ok(
+                [],
+            )
+            "###);
+        }
+
+        {
+            let expr = Expr::FunctionCall(
                 Cow::Borrowed("committer.name"),
                 vec![Expr::Name(Cow::Borrowed("Foo"))],
             );
@@ -843,6 +886,49 @@ mod tests {
                         },
                     },
                 ],
+            )
+            "###);
+        }
+
+        {
+            let expr = Expr::FunctionCall(
+                Cow::Borrowed("committer.date"),
+                vec![Expr::Name(Cow::Borrowed("before:today"))],
+            );
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            Ok(
+                [
+                    Commit {
+                        inner: Commit {
+                            id: f777ecc9b0db5ed372b2615695191a8a17f79f24,
+                            summary: "create initial.txt",
+                        },
+                    },
+                    Commit {
+                        inner: Commit {
+                            id: 9ee1994c0737c221efc07acd8d73590d336ee46d,
+                            summary: "test1",
+                        },
+                    },
+                    Commit {
+                        inner: Commit {
+                            id: 05ff2fc6b3e7917ac6800b18077c211e173e8fb4,
+                            summary: "test2",
+                        },
+                    },
+                ],
+            )
+            "###);
+        }
+
+        {
+            let expr = Expr::FunctionCall(
+                Cow::Borrowed("committer.date"),
+                vec![Expr::Name(Cow::Borrowed("after:yesterday"))],
+            );
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            Ok(
+                [],
             )
             "###);
         }

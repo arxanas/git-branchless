@@ -44,8 +44,10 @@ lazy_static! {
             ("paths.changed", &fn_path_changed),
             ("author.name", &fn_author_name),
             ("author.email", &fn_author_email),
+            ("author.date", &fn_author_date),
             ("committer.name", &fn_committer_name),
             ("committer.email", &fn_committer_email),
+            ("committer.date", &fn_committer_date),
         ];
         functions.iter().cloned().collect()
     };
@@ -320,6 +322,19 @@ fn fn_author_email(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     )
 }
 
+fn fn_author_date(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+    let pattern = eval1_pattern(ctx, name, args)?;
+    make_pattern_matcher(
+        ctx,
+        name,
+        args,
+        Box::new(move |_repo: &Repo, commit: &Commit| {
+            let time = commit.get_author().get_time();
+            Ok(pattern.matches_date(&time))
+        }),
+    )
+}
+
 fn fn_committer_name(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     let pattern = eval1_pattern(ctx, name, args)?;
     make_pattern_matcher(
@@ -347,5 +362,18 @@ fn fn_committer_email(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResul
                 None => Ok(false),
             },
         ),
+    )
+}
+
+fn fn_committer_date(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+    let pattern = eval1_pattern(ctx, name, args)?;
+    make_pattern_matcher(
+        ctx,
+        name,
+        args,
+        Box::new(move |_repo: &Repo, commit: &Commit| {
+            let time = commit.get_committer().get_time();
+            Ok(pattern.matches_date(&time))
+        }),
     )
 }

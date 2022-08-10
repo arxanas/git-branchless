@@ -7,9 +7,8 @@ use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
 use std::ffi::OsString;
-use std::ops::Add;
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, SystemTime};
+use std::time::SystemTime;
 
 use cursive::theme::BaseColor;
 use cursive::utils::markup::StyledString;
@@ -511,9 +510,7 @@ impl NodeDescriptor for RelativeTimeDescriptor {
             NodeObject::GarbageCollected { oid: _ } => return Ok(None),
         };
 
-        let previous_time = SystemTime::UNIX_EPOCH
-            .add(Duration::from_secs(commit.get_time().seconds().try_into()?));
-        let description = Self::describe_time_delta(self.now, previous_time)?;
+        let description = Self::describe_time_delta(self.now, commit.get_time().to_system_time()?)?;
         let result = StyledString::styled(description, BaseColor::Green.dark());
         Ok(Some(result))
     }
@@ -521,7 +518,10 @@ impl NodeDescriptor for RelativeTimeDescriptor {
 
 #[cfg(test)]
 mod tests {
-    use std::ops::Sub;
+    use std::{
+        ops::{Add, Sub},
+        time::Duration,
+    };
 
     use super::*;
 

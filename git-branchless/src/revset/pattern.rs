@@ -3,13 +3,16 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+use chrono::{Local, NaiveDateTime};
+use chrono_english::{parse_date_string, parse_duration, DateError, Dialect, Interval};
+use chronoutil::RelativeDuration;
 use lib::{
     core::{
         dag::{CommitSet, CommitVertex},
         effects::{Effects, OperationType},
         rewrite::RepoResource,
     },
-    git::{Commit, NonZeroOid, Repo},
+    git::{Commit, NonZeroOid, Repo, Time},
 };
 use rayon::prelude::{ParallelBridge, ParallelIterator};
 use regex::Regex;
@@ -24,6 +27,8 @@ pub(super) enum Pattern {
     Substring(String),
     Glob(glob::Pattern),
     Regex(regex::Regex),
+    Before(NaiveDateTime),
+    After(NaiveDateTime),
 }
 
 #[derive(Debug, Error)]
@@ -38,10 +43,13 @@ pub enum PatternError {
     Eval(#[from] Box<EvalError>),
 
     #[error("failed to query repo: {0}")]
-    Repo(eyre::Error),
+    Repo(#[source] eyre::Error),
 
     #[error("failed to construct matcher object: {0}")]
-    ConstructMatcher(eyre::Error),
+    ConstructMatcher(#[source] eyre::Error),
+
+    #[error("failed to parse date: {0}")]
+    Date(#[from] DateError),
 }
 
 impl Pattern {
@@ -51,6 +59,17 @@ impl Pattern {
             Pattern::Substring(pattern) => subject.contains(pattern),
             Pattern::Glob(pattern) => pattern.matches(subject),
             Pattern::Regex(pattern) => pattern.is_match(subject),
+            Pattern::Before(_) | Pattern::After(_) => false,
+        }
+    }
+
+    pub fn matches_date(&self, time: &Time) -> bool {
+        match self {
+            Pattern::Exact(_) | Pattern::Substring(_) | Pattern::Glob(_) | Pattern::Regex(_) => {
+                false
+            }
+            Pattern::Before(date) => &time.to_naive_date_time() <= date,
+            Pattern::After(date) => &time.to_naive_date_time() >= date,
         }
     }
 
@@ -72,6 +91,34 @@ impl Pattern {
             let pattern = Regex::new(pattern)?;
             return Ok(Pattern::Regex(pattern));
         }
+
+        fn parse_date(pattern: &str) -> Result<NaiveDateTime, PatternError> {
+            if let Ok(date) = parse_date_string(pattern, Local::now(), Dialect::Us) {
+                return Ok(date.naive_local());
+            }
+            if let Ok(interval) = parse_duration(pattern) {
+                let delta = match interval {
+                    Interval::Seconds(seconds) => RelativeDuration::seconds(seconds.into()),
+                    Interval::Days(days) => RelativeDuration::days(days.into()),
+                    Interval::Months(months) => RelativeDuration::months(months.into()),
+                };
+                let date = Local::now().naive_local() + delta;
+                return Ok(date);
+            }
+            Err(PatternError::ConstructMatcher(eyre::eyre!(
+                "cannot parse date: {pattern}"
+            )))
+        }
+
+        if let Some(pattern) = pattern.strip_prefix("before:") {
+            let date = parse_date(pattern)?;
+            return Ok(Pattern::Before(date));
+        }
+        if let Some(pattern) = pattern.strip_prefix("after:") {
+            let date = parse_date(pattern)?;
+            return Ok(Pattern::After(date));
+        }
+
         Ok(Pattern::Substring(pattern.to_owned()))
     }
 }

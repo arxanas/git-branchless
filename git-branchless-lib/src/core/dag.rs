@@ -15,7 +15,7 @@ use tracing::{instrument, trace, warn};
 
 use crate::core::effects::{Effects, OperationType};
 use crate::core::eventlog::{CommitActivityStatus, EventCursor, EventReplayer};
-use crate::git::{Commit, MaybeZeroOid, NonZeroOid, Repo};
+use crate::git::{Commit, MaybeZeroOid, NonZeroOid, Repo, Time};
 
 use super::repo_ext::RepoReferencesSnapshot;
 
@@ -503,7 +503,7 @@ pub fn sorted_commit_set<'repo>(
         commits
     };
 
-    let commit_times: HashMap<NonZeroOid, git2::Time> = commits
+    let commit_times: HashMap<NonZeroOid, Time> = commits
         .iter()
         .map(|commit| (commit.get_oid(), commit.get_time()))
         .collect();
@@ -539,8 +539,8 @@ pub fn sorted_commit_set<'repo>(
             return Ordering::Greater;
         }
 
-        (commit_times[&lhs.get_oid()], lhs.get_oid())
-            .cmp(&(commit_times[&rhs.get_oid()], rhs.get_oid()))
+        (&commit_times[&lhs.get_oid()], lhs.get_oid())
+            .cmp(&(&commit_times[&rhs.get_oid()], rhs.get_oid()))
     });
 
     Ok(commits)
