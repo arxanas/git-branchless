@@ -244,7 +244,8 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
         Command::Query {
             revset,
             show_branches,
-        } => query::query(&effects, &git_run_info, revset, show_branches)?,
+            raw,
+        } => query::query(&effects, &git_run_info, revset, show_branches, raw)?,
 
         Command::Repair { dry_run } => repair::repair(&effects, dry_run)?,
 

@@ -5,6 +5,7 @@ use itertools::Itertools;
 use lib::core::dag::{commit_set_to_vec_unsorted, Dag};
 use lib::core::effects::{Effects, OperationType};
 use lib::core::eventlog::{EventLogDb, EventReplayer};
+use lib::core::formatting::printable_styled_string;
 use lib::core::repo_ext::RepoExt;
 use lib::git::{CategorizedReferenceName, GitRunInfo, Repo};
 use lib::util::ExitCode;
@@ -19,6 +20,7 @@ pub fn query(
     git_run_info: &GitRunInfo,
     query: Revset,
     show_branches: bool,
+    raw: bool,
 ) -> eyre::Result<ExitCode> {
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
@@ -73,7 +75,19 @@ pub fn query(
             commit_set_to_vec_unsorted(&commit_set)?
         };
         for commit_oid in commit_oids {
-            writeln!(effects.get_output_stream(), "{}", commit_oid)?;
+            if raw {
+                writeln!(effects.get_output_stream(), "{}", commit_oid)?;
+            } else {
+                let commit = repo.find_commit_or_fail(commit_oid)?;
+                writeln!(
+                    effects.get_output_stream(),
+                    "{}",
+                    printable_styled_string(
+                        effects.get_glyphs(),
+                        commit.friendly_describe(effects.get_glyphs())?
+                    )?,
+                )?;
+            }
         }
     }
 

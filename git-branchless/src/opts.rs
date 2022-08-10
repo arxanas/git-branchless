@@ -343,8 +343,13 @@ pub enum Command {
         revset: Revset,
 
         /// Print the branches attached to the resulting commits, rather than the commits themselves.
-        #[clap(action, short = 'b', long = "--branches")]
+        #[clap(action, short = 'b', long = "branches")]
         show_branches: bool,
+
+        /// Print the OID of each matching commit, one per line. This output is
+        /// stable for use in scripts.
+        #[clap(action, short = 'r', long = "raw", conflicts_with("show-branches"))]
+        raw: bool,
     },
 
     /// Restore internal invariants by reconciling the internal operation log
