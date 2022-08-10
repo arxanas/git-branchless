@@ -30,14 +30,14 @@ lazy_static! {
             ("range", &fn_range),
             ("not", &fn_not),
             ("ancestors", &fn_ancestors),
+            ("ancestors.nth", &fn_nthancestor),
             ("descendants", &fn_descendants),
             ("parents", &fn_parents),
+            ("parents.nth", &fn_parents_nth),
             ("children", &fn_children),
             ("roots", &fn_roots),
             ("heads", &fn_heads),
             ("branches", &fn_branches),
-            ("nthparent", &fn_nthparent),
-            ("nthancestor", &fn_nthancestor),
             ("draft", &fn_draft),
             ("stack", &fn_stack),
             ("message", &fn_message),
@@ -129,7 +129,7 @@ fn fn_branches(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     Ok(ctx.dag.branch_commits.clone())
 }
 
-fn fn_nthparent(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+fn fn_parents_nth(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     let (lhs, n) = eval_number_rhs(ctx, name, args)?;
     let mut result = Vec::new();
     for vertex in lhs

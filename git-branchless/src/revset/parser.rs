@@ -409,7 +409,7 @@ mod tests {
                         "foo",
                     ),
                     FunctionCall(
-                        "nthparent",
+                        "parents.nth",
                         [
                             Name(
                                 "bar",
@@ -432,7 +432,7 @@ mod tests {
                         "foo",
                     ),
                     FunctionCall(
-                        "nthparent",
+                        "parents.nth",
                         [
                             Name(
                                 "bar",
@@ -455,7 +455,7 @@ mod tests {
                         "foo",
                     ),
                     FunctionCall(
-                        "nthparent",
+                        "parents.nth",
                         [
                             Name(
                                 "bar",
@@ -479,7 +479,7 @@ mod tests {
                         "foo",
                     ),
                     FunctionCall(
-                        "nthancestor",
+                        "ancestors.nth",
                         [
                             Name(
                                 "bar",
@@ -502,7 +502,7 @@ mod tests {
                         "foo",
                     ),
                     FunctionCall(
-                        "nthancestor",
+                        "ancestors.nth",
                         [
                             Name(
                                 "bar",
@@ -525,7 +525,7 @@ mod tests {
                         "foo",
                     ),
                     FunctionCall(
-                        "nthancestor",
+                        "ancestors.nth",
                         [
                             Name(
                                 "bar",
