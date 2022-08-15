@@ -219,7 +219,7 @@ pub(super) fn make_pattern_matcher_set(
                 .find_commit_or_fail(oid)
                 .map_err(make_dag_backend_error)?;
             let result = matcher
-                .matches_commit(&*repo, &commit)
+                .matches_commit(repo, &commit)
                 .map_err(make_dag_backend_error)?;
             Ok(result)
         },

@@ -15,12 +15,14 @@ pub enum Tristate {
     Checked,
 }
 
+type TristateBoxChangeFn = dyn Fn(&mut Cursive, Tristate);
+
 /// Three-state checkable box.
 pub struct TristateBox {
     state: Tristate,
     enabled: bool,
 
-    on_change: Option<Rc<dyn Fn(&mut Cursive, Tristate)>>,
+    on_change: Option<Rc<TristateBoxChangeFn>>,
 }
 
 impl TristateBox {
