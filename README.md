@@ -135,7 +135,7 @@ Visualize your commit history with the smartlog (`git sl`):
 </p>
 
 <details>
-<summary>Why not `git log --graph`?</summary>
+<summary>Why not <code>git log --graph</code>?</summary>
 
 `git log --graph` only shows commits which have branches attached with them. If you prefer to work without branches, then `git log --graph` won't work for you.
 
@@ -152,14 +152,14 @@ Edit your commit graph without fear:
 </p>
 
 <details>
-<summary>Why not `git rebase -i`?</summary>
+<summary>Why not <code>git rebase --interactive</code>?</summary>
 
-Interactive rebasing with `git rebase -i` is fully supported, but it has a couple of shortcomings:
+Interactive rebasing with `git rebase --interactive` is fully supported, but it has a couple of shortcomings:
 
-- `git rebase -i` can only repair linear series of commits, not trees. If you modify a commit with multiple children, then you have to be sure to rebase all of the other children commits appropriately.
+- `git rebase --interactive` can only repair linear series of commits, not trees. If you modify a commit with multiple children, then you have to be sure to rebase all of the other children commits appropriately.
 - You have to commit to a plan of action before starting the rebase. For some use-cases, it can be easier to operate on individual commits at a time, rather than an entire series of commits all at once.
 
-When you use `git rebase -i` with `git-branchless`, you will be prompted to repair your commit graph if you abandon any commits.
+When you use `git rebase --interactive` with `git-branchless`, you will be prompted to repair your commit graph if you abandon any commits.
 
 </details>
 
