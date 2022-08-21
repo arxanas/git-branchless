@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - (#508) Added `exactly(<revset>, n)` revset function to allow assertions on the number of commits within a set.
+- (#509) User defined [revset aliases](https://github.com/arxanas/git-branchless/wiki/Reference:-Revsets#Aliases).
 
 ### Changed
 

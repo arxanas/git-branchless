@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fmt::Display;
 use std::num::ParseIntError;
 use std::sync::Arc;
@@ -11,10 +12,11 @@ use thiserror::Error;
 
 use lib::core::dag::{CommitSet, Dag};
 use lib::core::formatting::Pluralize;
-use lib::git::{Repo, ResolvedReferenceInfo};
+use lib::git::{ConfigRead, Repo, ResolvedReferenceInfo};
 use tracing::instrument;
 
 use super::builtins::FUNCTIONS;
+use super::parser::{parse, ParseError};
 use super::pattern::{Pattern, PatternError};
 use super::Expr;
 
@@ -119,6 +121,9 @@ pub enum EvalError {
         actual_len: usize,
     },
 
+    #[error("failed to parse alias expression '{alias}'\n{source}")]
+    ParseAlias { alias: String, source: ParseError },
+
     #[error("not an integer: {from}")]
     ParseInt {
         #[from]
@@ -216,14 +221,36 @@ pub(super) fn eval_name(ctx: &mut Context, name: &str) -> EvalResult {
 }
 
 pub(super) fn eval_fn(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
-    let function = FUNCTIONS
-        .get(name)
-        .ok_or_else(|| EvalError::UnboundFunction {
-            name: name.to_owned(),
-            available_names: FUNCTIONS.keys().sorted().copied().collect(),
-        })?;
+    if let Some(function) = FUNCTIONS.get(name) {
+        return function(ctx, name, args);
+    }
 
-    function(ctx, name, args)
+    let alias_key = format!("branchless.revsets.alias.{}", name);
+    let alias_template: Option<String> = ctx
+        .repo
+        .get_readonly_config()
+        .map_err(EvalError::OtherError)?
+        .get(alias_key)
+        .map_err(EvalError::OtherError)?;
+    if let Some(alias_template) = alias_template {
+        let alias_expr = parse(&alias_template).map_err(|err| EvalError::ParseAlias {
+            alias: alias_template.clone(),
+            source: err,
+        })?;
+        let arg_map: HashMap<String, Expr> = args
+            .iter()
+            .enumerate()
+            .map(|(i, arg)| (format!("${}", i + 1), arg.clone()))
+            .collect();
+        let alias_expr = alias_expr.replace_names(&arg_map);
+        let commits = eval_inner(ctx, &alias_expr);
+        return commits;
+    }
+
+    Err(EvalError::UnboundFunction {
+        name: name.to_owned(),
+        available_names: FUNCTIONS.keys().sorted().copied().collect(),
+    })
 }
 
 #[instrument]
@@ -1032,6 +1059,140 @@ mod tests {
             insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
             Ok(
                 [],
+            )
+            "###);
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_eval_aliases() -> eyre::Result<()> {
+        let git = make_git()?;
+        git.init_repo()?;
+
+        git.detach_head()?;
+        let _test1_oid = git.commit_file("test1", 1)?;
+        let _test2_oid = git.commit_file("test2", 2)?;
+        let _test3_oid = git.commit_file("test3", 3)?;
+
+        let effects = Effects::new_suppress_for_test(Glyphs::text());
+        let repo = git.get_repo()?;
+        let conn = repo.get_db_conn()?;
+        let event_log_db = EventLogDb::new(&conn)?;
+        let event_replayer = EventReplayer::from_event_log_db(&effects, &repo, &event_log_db)?;
+        let event_cursor = event_replayer.make_default_cursor();
+        let references_snapshot = repo.get_references_snapshot()?;
+        let mut dag = Dag::open_and_sync(
+            &effects,
+            &repo,
+            &event_replayer,
+            event_cursor,
+            &references_snapshot,
+        )?;
+
+        {
+            git.run(&[
+                "config",
+                "branchless.revsets.alias.simpleAlias",
+                "roots($1)",
+            ])?;
+
+            let expr = Expr::FunctionCall(
+                Cow::Borrowed("simpleAlias"),
+                vec![Expr::FunctionCall(Cow::Borrowed("stack"), vec![])],
+            );
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            Ok(
+                [
+                    Commit {
+                        inner: Commit {
+                            id: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
+                            summary: "create test1.txt",
+                        },
+                    },
+                ],
+            )
+            "###);
+        }
+
+        {
+            git.run(&[
+                "config",
+                "branchless.revsets.alias.complexAlias",
+                "children($1) & parents($1)",
+            ])?;
+
+            let expr = Expr::FunctionCall(
+                Cow::Borrowed("complexAlias"),
+                vec![Expr::FunctionCall(Cow::Borrowed("stack"), vec![])],
+            );
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            Ok(
+                [
+                    Commit {
+                        inner: Commit {
+                            id: 96d1c37a3d4363611c49f7e52186e189a04c531f,
+                            summary: "create test2.txt",
+                        },
+                    },
+                ],
+            )
+            "###);
+        }
+
+        {
+            git.run(&["config", "branchless.revsets.alias.parseError", "foo("])?;
+
+            let (_stdout, _stderr) = git.run_with_options(
+                &["query", "parseError()"],
+                &GitRunOptions {
+                    expected_exit_code: 1,
+                    ..Default::default()
+                },
+            )?;
+            insta::assert_snapshot!(_stderr, @r###"
+            Evaluation error for expression 'parseError()': failed to parse alias expression 'foo('
+            parse error: Unrecognized EOF found at 4
+            Expected one of "(", ")", "..", ":", "::", a commit/branch/tag or a string literal
+            "###);
+        }
+
+        {
+            // Check for macro hygiene: arguments from outer nested aliases
+            // should not be available inside inner aliases.
+            //
+            // 1. User input: `outerAlias(a, b)` (2 arguments provided)
+            // 2. Expands to: `innerAlias(a)` (only uses 1 arg)
+            // 3. Expands to: `builtin(a, $2)` (uses 2 args)
+            //
+            // In this case, there is no $2 available for step 3, so we want to
+            // ensure that $2 is not resolved from step 1 and that it instead
+            // fails.
+            git.run(&[
+                "config",
+                "branchless.revsets.alias.outerAlias",
+                "innerAlias($1)",
+            ])?;
+
+            git.run(&[
+                "config",
+                "branchless.revsets.alias.innerAlias",
+                "intersection($1, $2)",
+            ])?;
+
+            let expr = Expr::FunctionCall(
+                Cow::Borrowed("outerAlias"),
+                vec![
+                    Expr::FunctionCall(Cow::Borrowed("stack"), vec![]),
+                    Expr::FunctionCall(Cow::Borrowed("nonsense"), vec![]),
+                ],
+            );
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            Err(
+                UnboundName {
+                    name: "$2",
+                },
             )
             "###);
         }
