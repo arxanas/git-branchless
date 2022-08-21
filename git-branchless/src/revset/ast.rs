@@ -1,4 +1,5 @@
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::fmt::Display;
 
 /// A node in the parsed AST.
@@ -22,6 +23,26 @@ impl Display for Expr<'_> {
                     write!(f, "{}", arg)?;
                 }
                 write!(f, ")")
+            }
+        }
+    }
+}
+
+impl<'input> Expr<'input> {
+    /// Replace names in this expression with arbitrary expressions.
+    ///
+    /// Given a HashMap of names to Expr's, build a new Expr by crawling this
+    /// one and replacing any names contained in the map with the corresponding
+    /// Expr.
+    pub fn replace_names(&self, map: &HashMap<String, Expr<'input>>) -> Expr<'input> {
+        match self {
+            Expr::Name(name) => match map.get(&name.to_string()) {
+                Some(expr) => expr.clone(),
+                None => self.clone(),
+            },
+            Expr::FunctionCall(name, args) => {
+                let args = args.iter().map(|arg| arg.replace_names(map)).collect();
+                Expr::FunctionCall(name.clone(), args)
             }
         }
     }
