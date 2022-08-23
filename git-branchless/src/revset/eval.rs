@@ -10,6 +10,7 @@ use once_cell::unsync::OnceCell;
 use thiserror::Error;
 
 use lib::core::dag::{CommitSet, Dag};
+use lib::core::formatting::Pluralize;
 use lib::git::{Repo, ResolvedReferenceInfo};
 use tracing::instrument;
 
@@ -104,8 +105,19 @@ pub enum EvalError {
         actual_arity: usize,
     },
 
-    #[error("expected {expr} to evaluate to 1 element, but got {actual_len}")]
-    ExpectedSingletonSet { expr: String, actual_len: usize },
+    #[error(
+        "expected '{expr}' to evaluate to {}, but got {actual_len}",
+        Pluralize {
+            determiner: None,
+            amount: *expected_len,
+            unit: ("element", "elements"),
+        }
+    )]
+    UnexpectedSetLength {
+        expr: String,
+        expected_len: usize,
+        actual_len: usize,
+    },
 
     #[error("not an integer: {from}")]
     ParseInt {
@@ -704,6 +716,59 @@ mod tests {
                         },
                     },
                 ],
+            )
+            "###);
+        }
+
+        {
+            let expr = Expr::FunctionCall(
+                Cow::Borrowed("exactly"),
+                vec![
+                    Expr::FunctionCall(Cow::Borrowed("stack"), vec![]),
+                    Expr::Name(Cow::Borrowed("3")),
+                ],
+            );
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            Ok(
+                [
+                    Commit {
+                        inner: Commit {
+                            id: 848121cb21bf9af8b064c91bc8930bd16d624a22,
+                            summary: "create test5.txt",
+                        },
+                    },
+                    Commit {
+                        inner: Commit {
+                            id: f0abf649939928fe5475179fd84e738d3d3725dc,
+                            summary: "create test6.txt",
+                        },
+                    },
+                    Commit {
+                        inner: Commit {
+                            id: ba07500a4adc661dc06a748d200ef92120e1b355,
+                            summary: "create test7.txt",
+                        },
+                    },
+                ],
+            )
+            "###);
+        }
+
+        {
+            let expr = Expr::FunctionCall(
+                Cow::Borrowed("exactly"),
+                vec![
+                    Expr::FunctionCall(Cow::Borrowed("stack"), vec![]),
+                    Expr::Name(Cow::Borrowed("2")),
+                ],
+            );
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            Err(
+                UnexpectedSetLength {
+                    expr: "stack()",
+                    expected_len: 2,
+                    actual_len: 3,
+                },
             )
             "###);
         }
