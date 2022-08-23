@@ -691,6 +691,44 @@ mod tests {
 
         {
             let expr = Expr::FunctionCall(
+                Cow::Borrowed("message"),
+                vec![Expr::Name(Cow::Borrowed("exact:create test4.txt"))],
+            );
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            Ok(
+                [
+                    Commit {
+                        inner: Commit {
+                            id: bf0d52a607f693201512a43b6b5a70b2a275e0ad,
+                            summary: "create test4.txt",
+                        },
+                    },
+                ],
+            )
+            "###);
+        }
+
+        {
+            let expr = Expr::FunctionCall(
+                Cow::Borrowed("message"),
+                vec![Expr::Name(Cow::Borrowed("regex:^create test4.txt$"))],
+            );
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            Ok(
+                [
+                    Commit {
+                        inner: Commit {
+                            id: bf0d52a607f693201512a43b6b5a70b2a275e0ad,
+                            summary: "create test4.txt",
+                        },
+                    },
+                ],
+            )
+            "###);
+        }
+
+        {
+            let expr = Expr::FunctionCall(
                 Cow::Borrowed("paths.changed"),
                 vec![Expr::Name(Cow::Borrowed("glob:test[1-3].txt"))],
             );

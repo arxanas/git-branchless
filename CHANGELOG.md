@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - (#512) Fixed so that the setting for `--color` is now respected.
 - (#512) Fixed so that you can pass `--color` anywhere in the command-line, not just before the subcommand.
+- (#507) The `messages()` revset function now ignores trailing newlines in commit messages.
 
 ## [0.4.0] - 2022-08-09
 
