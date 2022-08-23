@@ -48,6 +48,7 @@ lazy_static! {
             ("committer.name", &fn_committer_name),
             ("committer.email", &fn_committer_email),
             ("committer.date", &fn_committer_date),
+            ("exactly", &fn_exactly),
         ];
         functions.iter().cloned().collect()
     };
@@ -376,4 +377,22 @@ fn fn_committer_date(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult
             Ok(pattern.matches_date(&time))
         }),
     )
+}
+
+fn fn_exactly(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+    let (lhs, expected_len) = eval_number_rhs(ctx, name, args)?;
+    let actual_len: usize = lhs
+        .count()
+        .wrap_err("Counting commit set")
+        .map_err(EvalError::OtherError)?;
+
+    if actual_len == expected_len {
+        Ok(lhs)
+    } else {
+        Err(EvalError::UnexpectedSetLength {
+            expr: format!("{}", args[0]),
+            expected_len,
+            actual_len,
+        })
+    }
 }

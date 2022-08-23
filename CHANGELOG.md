@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - ReleaseDate
 
+### Added
+
+- (#508) Added `exactly(<revset>, n)` revset function to allow assertions on the number of commits within a set.
+
 ### Changed
 
 - (#512) Fixed so that the setting for `--color` is now respected.
