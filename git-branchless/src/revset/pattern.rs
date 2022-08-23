@@ -54,6 +54,7 @@ pub enum PatternError {
 
 impl Pattern {
     pub fn matches_text(&self, subject: &str) -> bool {
+        let subject = subject.strip_suffix('\n').unwrap_or(subject);
         match self {
             Pattern::Exact(pattern) => pattern == subject,
             Pattern::Substring(pattern) => subject.contains(pattern),
