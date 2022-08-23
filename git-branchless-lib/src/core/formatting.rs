@@ -370,6 +370,13 @@ fn render_style_as_ansi(content: &str, style: Style) -> eyre::Result<String> {
         output
     };
 
+    // `StyledObject` will try to do its own detection of whether or not it
+    // should render ANSI escape codes. Disable that detection and use whatever
+    // we've determined, so that the user can force color on or off. (The caller
+    // will only call this function if the user wants color, so we pass `true`.)
+    // See https://github.com/arxanas/git-branchless/issues/506
+    let output = output.force_styling(true);
+
     Ok(output.to_string())
 }
 
