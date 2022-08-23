@@ -515,11 +515,11 @@ pub enum ColorSetting {
 pub struct Opts {
     /// Change to the given directory before executing the rest of the program.
     /// (The option is called `-C` for symmetry with Git.)
-    #[clap(value_parser, short = 'C')]
+    #[clap(value_parser, short = 'C', global = true)]
     pub working_directory: Option<PathBuf>,
 
     /// Flag to force enable or disable terminal colors.
-    #[clap(value_parser, long = "color", arg_enum)]
+    #[clap(value_parser, long = "color", arg_enum, global = true)]
     pub color: Option<ColorSetting>,
 
     /// The `git-branchless` subcommand to run.
