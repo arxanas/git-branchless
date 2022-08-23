@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - ReleaseDate
 
+### Changed
+
+- (#512) Fixed so that the setting for `--color` is now respected.
+
 ## [0.4.0] - 2022-08-09
 
 ### Added
