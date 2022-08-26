@@ -1,13 +1,11 @@
-use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 
-use std::ffi::{OsStr, OsString};
+use std::ffi::OsString;
 use std::fmt::Write;
 use std::path::PathBuf;
 use std::time::SystemTime;
 
 use eyre::Context;
-use os_str_bytes::OsStrBytes;
 use tracing::warn;
 
 use crate::core::check_out::{check_out_commit, CheckOutCommitOptions};
@@ -15,7 +13,9 @@ use crate::core::effects::Effects;
 use crate::core::eventlog::{EventLogDb, EventTransactionId};
 use crate::core::formatting::{printable_styled_string, Pluralize};
 use crate::core::repo_ext::RepoExt;
-use crate::git::{GitRunInfo, MaybeZeroOid, NonZeroOid, Repo, ResolvedReferenceInfo};
+use crate::git::{
+    GitRunInfo, MaybeZeroOid, NonZeroOid, ReferenceName, Repo, ResolvedReferenceInfo,
+};
 use crate::util::ExitCode;
 
 use super::plan::RebasePlan;
@@ -37,7 +37,7 @@ pub fn move_branches<'a>(
     // first error, but we don't know which references we successfully committed
     // in that case. Instead, we just do things non-atomically and record which
     // ones succeeded. See https://github.com/libgit2/libgit2/issues/5918
-    let mut branch_moves: Vec<(NonZeroOid, MaybeZeroOid, &OsStr)> = Vec::new();
+    let mut branch_moves: Vec<(NonZeroOid, MaybeZeroOid, &ReferenceName)> = Vec::new();
     let mut branch_move_err: Option<eyre::Error> = None;
     'outer: for (old_oid, names) in branch_oid_to_names.iter() {
         let new_oid = match rewritten_oids_map.get(old_oid) {
@@ -62,14 +62,17 @@ pub fn move_branches<'a>(
                     }
                 };
 
-                for name in names {
-                    if let Err(err) =
-                        repo.create_reference(name, new_commit.get_oid(), true, "move branches")
-                    {
+                for reference_name in names {
+                    if let Err(err) = repo.create_reference(
+                        reference_name,
+                        new_commit.get_oid(),
+                        true,
+                        "move branches",
+                    ) {
                         branch_move_err = Some(err);
                         break 'outer;
                     }
-                    branch_moves.push((*old_oid, MaybeZeroOid::NonZero(*new_oid), name));
+                    branch_moves.push((*old_oid, MaybeZeroOid::NonZero(*new_oid), reference_name));
                 }
             }
 
@@ -96,21 +99,12 @@ pub fn move_branches<'a>(
         }
     }
 
-    let branch_moves_stdin: Vec<u8> = branch_moves
+    let branch_moves_stdin: String = branch_moves
         .into_iter()
-        .flat_map(|(old_oid, new_oid, name)| {
-            let mut line = Vec::new();
-            line.extend(old_oid.to_string().as_bytes());
-            line.push(b' ');
-            line.extend(new_oid.to_string().as_bytes());
-            line.push(b' ');
-            line.extend(name.to_raw_bytes().iter());
-            line.push(b'\n');
-            line
+        .map(|(old_oid, new_oid, name)| {
+            format!("{old_oid} {new_oid} {name}\n", name = name.as_str())
         })
         .collect();
-    let branch_moves_stdin =
-        OsStrBytes::from_raw_bytes(branch_moves_stdin).wrap_err("Encoding branch moves stdin")?;
     let branch_moves_stdin = OsString::from(branch_moves_stdin);
     git_run_info.run_hook(
         effects,
@@ -165,7 +159,7 @@ pub fn check_out_updated_head(
             // can happen, but if so, just use that branch.
             ResolvedReferenceInfo {
                 oid: None,
-                reference_name: Some(Cow::Borrowed(reference_name)),
+                reference_name: Some(reference_name.clone()),
             }
         }
 
@@ -218,7 +212,7 @@ pub fn check_out_updated_head(
                     let oid = repo.resolve_reference(&reference)?.oid;
                     ResolvedReferenceInfo {
                         oid,
-                        reference_name: Some(Cow::Borrowed(reference_name)),
+                        reference_name: Some(reference_name.clone()),
                     }
                 }
 
@@ -239,7 +233,7 @@ pub fn check_out_updated_head(
         return Ok(ExitCode(0));
     }
 
-    let checkout_target: Cow<OsStr> = match &checkout_target {
+    let checkout_target: ReferenceName = match &checkout_target {
         ResolvedReferenceInfo {
             oid: None,
             reference_name: None,
@@ -248,7 +242,7 @@ pub fn check_out_updated_head(
         ResolvedReferenceInfo {
             oid: Some(oid),
             reference_name: None,
-        } => Cow::Owned(OsString::from(oid.to_string())),
+        } => oid.to_string().into(),
 
         ResolvedReferenceInfo {
             oid: _,
@@ -256,10 +250,11 @@ pub fn check_out_updated_head(
         } => {
             // FIXME: we could check to see if the OIDs are the same and, if so,
             // reattach or detach `HEAD` manually without having to call `git checkout`.
-            match checkout_target.get_branch_name()? {
-                Some(branch_name) => Cow::Owned(branch_name),
-                None => Cow::Borrowed(reference_name),
-            }
+            let checkout_target = match checkout_target.get_branch_name()? {
+                Some(branch_name) => branch_name,
+                None => reference_name.as_str(),
+            };
+            checkout_target.into()
         }
     };
 
@@ -269,7 +264,7 @@ pub fn check_out_updated_head(
         repo,
         event_log_db,
         event_tx_id,
-        Some(&checkout_target),
+        Some(checkout_target.as_str()),
         check_out_commit_options,
     )?;
     Ok(result)
@@ -752,11 +747,9 @@ mod in_memory {
 }
 
 mod on_disk {
-    use std::ffi::OsStr;
     use std::fmt::Write;
 
     use eyre::Context;
-    use os_str_bytes::OsStrBytes;
     use tracing::instrument;
 
     use crate::core::effects::{Effects, OperationType};
@@ -845,9 +838,9 @@ mod on_disk {
                 &head_name_file_path,
                 head_info
                     .reference_name
-                    .as_deref()
-                    .unwrap_or_else(|| OsStr::new("detached HEAD"))
-                    .to_raw_bytes(),
+                    .as_ref()
+                    .map(|reference_name| reference_name.as_str())
+                    .unwrap_or("detached HEAD"),
             )
             .wrap_err_with(|| format!("Writing head-name to: {:?}", &head_name_file_path))?;
 

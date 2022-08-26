@@ -252,7 +252,9 @@ fn test_merge_commit_recorded() -> eyre::Result<()> {
             event_tx_id: EventTransactionId(
                 1,
             ),
-            ref_name: "HEAD",
+            ref_name: ReferenceName(
+                "HEAD",
+            ),
             old_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
             new_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
             message: None,
@@ -262,7 +264,9 @@ fn test_merge_commit_recorded() -> eyre::Result<()> {
             event_tx_id: EventTransactionId(
                 1,
             ),
-            ref_name: "refs/heads/master",
+            ref_name: ReferenceName(
+                "refs/heads/master",
+            ),
             old_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
             new_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
             message: None,
@@ -279,7 +283,9 @@ fn test_merge_commit_recorded() -> eyre::Result<()> {
             event_tx_id: EventTransactionId(
                 3,
             ),
-            ref_name: "HEAD",
+            ref_name: ReferenceName(
+                "HEAD",
+            ),
             old_oid: 0000000000000000000000000000000000000000,
             new_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
             message: None,
@@ -289,7 +295,9 @@ fn test_merge_commit_recorded() -> eyre::Result<()> {
             event_tx_id: EventTransactionId(
                 4,
             ),
-            ref_name: "HEAD",
+            ref_name: ReferenceName(
+                "HEAD",
+            ),
             old_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
             new_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
             message: None,
@@ -299,7 +307,9 @@ fn test_merge_commit_recorded() -> eyre::Result<()> {
             event_tx_id: EventTransactionId(
                 5,
             ),
-            ref_name: "HEAD",
+            ref_name: ReferenceName(
+                "HEAD",
+            ),
             old_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
             new_oid: fe65c1fe15584744e649b2c79d4cf9b0d878f92e,
             message: None,
@@ -316,7 +326,9 @@ fn test_merge_commit_recorded() -> eyre::Result<()> {
             event_tx_id: EventTransactionId(
                 8,
             ),
-            ref_name: "HEAD",
+            ref_name: ReferenceName(
+                "HEAD",
+            ),
             old_oid: fe65c1fe15584744e649b2c79d4cf9b0d878f92e,
             new_oid: 91a5ccb4feefba38b0ffa4911c5c3f6c225f662e,
             message: None,

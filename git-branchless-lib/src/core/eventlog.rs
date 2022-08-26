@@ -8,7 +8,6 @@
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::convert::{TryFrom, TryInto};
-use std::ffi::{OsStr, OsString};
 
 use std::str::FromStr;
 use std::time::{Duration, SystemTime};
@@ -18,7 +17,7 @@ use tracing::{error, instrument};
 
 use crate::core::effects::{Effects, OperationType};
 use crate::core::repo_ext::RepoExt;
-use crate::git::{CategorizedReferenceName, MaybeZeroOid, NonZeroOid, Repo};
+use crate::git::{CategorizedReferenceName, MaybeZeroOid, NonZeroOid, ReferenceName, Repo};
 
 use super::repo_ext::RepoReferencesSnapshot;
 
@@ -32,10 +31,10 @@ struct Row {
     timestamp: f64,
     type_: String,
     event_tx_id: isize,
-    ref1: Option<OsString>,
-    ref2: Option<OsString>,
-    ref_name: Option<OsString>,
-    message: Option<OsString>,
+    ref1: Option<ReferenceName>,
+    ref2: Option<ReferenceName>,
+    ref_name: Option<ReferenceName>,
+    message: Option<ReferenceName>,
 }
 
 /// The ID associated with the transactions that created an event.
@@ -111,7 +110,7 @@ pub enum Event {
         /// The full name of the reference that was updated.
         ///
         /// For example, `HEAD` or `refs/heads/master`.
-        ref_name: OsString,
+        ref_name: ReferenceName,
 
         /// The old referent OID.
         old_oid: MaybeZeroOid,
@@ -120,7 +119,7 @@ pub enum Event {
         new_oid: MaybeZeroOid,
 
         /// A message associated with the rewrite, if any.
-        message: Option<OsString>,
+        message: Option<ReferenceName>,
     },
 
     /// Indicate that the user made a commit.
@@ -185,7 +184,7 @@ pub enum Event {
 
         /// The name of the checked-out branch, if any. This should be a full
         /// reference name like `refs/heads/foo`.
-        ref_name: Option<OsString>,
+        ref_name: Option<ReferenceName>,
     },
 }
 
@@ -228,8 +227,8 @@ impl From<Event> for Row {
                 timestamp,
                 event_tx_id,
                 type_: String::from("rewrite"),
-                ref1: Some(old_commit_oid.to_string().into()),
-                ref2: Some(new_commit_oid.to_string().into()),
+                ref1: Some(old_commit_oid.into()),
+                ref2: Some(new_commit_oid.into()),
                 ref_name: None,
                 message: None,
             },
@@ -245,8 +244,8 @@ impl From<Event> for Row {
                 timestamp,
                 event_tx_id,
                 type_: String::from("ref-move"),
-                ref1: Some(old_oid.to_string().into()),
-                ref2: Some(new_oid.to_string().into()),
+                ref1: Some(old_oid.into()),
+                ref2: Some(new_oid.into()),
                 ref_name: Some(ref_name),
                 message,
             },
@@ -259,7 +258,7 @@ impl From<Event> for Row {
                 timestamp,
                 event_tx_id,
                 type_: String::from("commit"),
-                ref1: Some(commit_oid.to_string().into()),
+                ref1: Some(commit_oid.into()),
                 ref2: None,
                 ref_name: None,
                 message: None,
@@ -273,7 +272,7 @@ impl From<Event> for Row {
                 timestamp,
                 event_tx_id,
                 type_: String::from("hide"), // historical name
-                ref1: Some(commit_oid.to_string().into()),
+                ref1: Some(commit_oid.into()),
                 ref2: None,
                 ref_name: None,
                 message: None,
@@ -287,7 +286,7 @@ impl From<Event> for Row {
                 timestamp,
                 event_tx_id,
                 type_: String::from("unhide"), // historical name
-                ref1: Some(commit_oid.to_string().into()),
+                ref1: Some(commit_oid.into()),
                 ref2: None,
                 ref_name: None,
                 message: None,
@@ -304,7 +303,7 @@ impl From<Event> for Row {
                 event_tx_id,
                 type_: String::from("snapshot"),
                 ref1: Some(head_oid.to_string().into()),
-                ref2: Some(commit_oid.to_string().into()),
+                ref2: Some(commit_oid.into()),
                 ref_name,
                 message: None,
             },
@@ -325,22 +324,20 @@ fn try_from_row_helper(row: &Row) -> Result<Event, eyre::Error> {
     } = row;
     let event_tx_id = EventTransactionId(event_tx_id);
 
-    let get_oid = |oid_str: &Option<OsString>, oid_name: &str| -> eyre::Result<MaybeZeroOid> {
-        match oid_str {
-            Some(oid_str) => match oid_str.to_str() {
-                Some(oid_str) => {
-                    let oid: MaybeZeroOid = oid_str.parse()?;
+    let get_oid =
+        |reference_name: &Option<ReferenceName>, oid_name: &str| -> eyre::Result<MaybeZeroOid> {
+            match reference_name {
+                Some(reference_name) => {
+                    let oid: MaybeZeroOid = reference_name.as_str().parse()?;
                     Ok(oid)
                 }
-                None => eyre::bail!("Invalid OID for reference name: {:?}", oid_str),
-            },
-            None => Err(eyre::eyre!(
-                "OID '{}' was `None` for event type '{}'",
-                oid_name,
-                type_
-            )),
-        }
-    };
+                None => Err(eyre::eyre!(
+                    "OID '{}' was `None` for event type '{}'",
+                    oid_name,
+                    type_
+                )),
+            }
+        };
 
     let event = match type_.as_str() {
         "rewrite" => {
@@ -363,8 +360,8 @@ fn try_from_row_helper(row: &Row) -> Result<Event, eyre::Error> {
                 timestamp,
                 event_tx_id,
                 ref_name,
-                old_oid: ref1.try_into()?,
-                new_oid: ref2.try_into()?,
+                old_oid: ref1.as_str().parse()?,
+                new_oid: ref2.as_str().parse()?,
                 message,
             }
         }
@@ -503,13 +500,10 @@ impl<'conn> EventLogDb<'conn> {
                 message,
             } = Row::from(event);
 
-            // FIXME: it would be ideal to use BLOBs to store the reference
-            // names instead of TEXT, so that we can represent esoteric
-            // reference names (which are derived from path names).
-            let ref1 = ref1.map(|x| x.to_string_lossy().into_owned());
-            let ref2 = ref2.map(|x| x.to_string_lossy().into_owned());
-            let ref_name = ref_name.map(|x| x.to_string_lossy().into_owned());
-            let message = message.map(|x| x.to_string_lossy().into_owned());
+            let ref1 = ref1.as_ref().map(|x| x.as_str());
+            let ref2 = ref2.as_ref().map(|x| x.as_str());
+            let ref_name = ref_name.as_ref().map(|x| x.as_str());
+            let message = message.as_ref().map(|x| x.as_str());
 
             tx.execute(
                 "
@@ -565,10 +559,10 @@ ORDER BY rowid ASC
                     timestamp,
                     event_tx_id,
                     type_,
-                    ref_name: ref_name.map(OsString::from),
-                    ref1: old_ref.map(OsString::from),
-                    ref2: new_ref.map(OsString::from),
-                    message: message.map(OsString::from),
+                    ref_name: ref_name.map(ReferenceName::from),
+                    ref1: old_ref.map(ReferenceName::from),
+                    ref2: new_ref.map(ReferenceName::from),
+                    message: message.map(ReferenceName::from),
                 })
             })?
             .collect();
@@ -650,33 +644,24 @@ WHERE event_tx_id = :event_tx_id
 
 /// Determine whether a given reference is used to keep a commit alive.
 ///
-/// Args:
-/// * `ref_name`: The name of the reference.
-///
 /// Returns: Whether or not the given reference is used internally to keep the
 /// commit alive, so that it's not collected by Git's garbage collection
 /// mechanism.
-pub fn is_gc_ref(ref_name: &OsStr) -> bool {
-    match ref_name.to_str() {
-        None => false,
-        Some(ref_name) => ref_name.starts_with("refs/branchless/"),
-    }
+pub fn is_gc_ref(reference_name: &ReferenceName) -> bool {
+    reference_name.as_str().starts_with("refs/branchless/")
 }
 
 /// Determines whether or not updates to the given reference should be ignored.
 ///
-/// Args:
-/// * `ref_name`: The name of the reference to check.
-///
 /// Returns: Whether or not updates to the given reference should be ignored.
-pub fn should_ignore_ref_updates(ref_name: &OsStr) -> bool {
-    if is_gc_ref(ref_name) {
+pub fn should_ignore_ref_updates(reference_name: &ReferenceName) -> bool {
+    if is_gc_ref(reference_name) {
         return true;
     }
 
     matches!(
-        ref_name.to_str(),
-        Some("ORIG_HEAD" | "CHERRY_PICK" | "REBASE_HEAD" | "CHERRY_PICK_HEAD" | "FETCH_HEAD")
+        reference_name.as_str(),
+        "ORIG_HEAD" | "CHERRY_PICK" | "REBASE_HEAD" | "CHERRY_PICK_HEAD" | "FETCH_HEAD"
     )
 }
 
@@ -737,7 +722,7 @@ pub struct EventReplayer {
     events: Vec<Event>,
 
     /// The name of the reference representing the main branch.
-    main_branch_reference_name: OsString,
+    main_branch_reference_name: ReferenceName,
 
     /// The events that have affected each commit.
     commit_history: HashMap<NonZeroOid, Vec<EventInfo>>,
@@ -747,7 +732,7 @@ pub struct EventReplayer {
     ///
     /// If an entry is not present, it was either never observed, or it most
     /// recently changed to point to the zero hash (i.e. it was deleted).
-    ref_locations: HashMap<OsString, NonZeroOid>,
+    ref_locations: HashMap<ReferenceName, NonZeroOid>,
 }
 
 impl std::fmt::Debug for EventReplayer {
@@ -762,7 +747,7 @@ impl std::fmt::Debug for EventReplayer {
 }
 
 impl EventReplayer {
-    fn new_inner(main_branch_reference_name: OsString) -> Self {
+    fn new(main_branch_reference_name: ReferenceName) -> Self {
         EventReplayer {
             id_counter: 0,
             events: vec![],
@@ -770,10 +755,6 @@ impl EventReplayer {
             commit_history: HashMap::new(),
             ref_locations: HashMap::new(),
         }
-    }
-
-    fn new(main_branch_reference_name: impl Into<OsString>) -> Self {
-        Self::new_inner(main_branch_reference_name.into())
     }
 
     /// Construct the replayer from all the events in the database.
@@ -1167,7 +1148,7 @@ impl EventReplayer {
                         ref_name,
                         new_oid: MaybeZeroOid::NonZero(new_oid),
                         ..
-                    } if ref_name == "HEAD" => Some(*new_oid),
+                    } if ref_name.as_str() == "HEAD" => Some(*new_oid),
                     Event::RefUpdateEvent { .. } => None,
 
                     // Not strictly necessary, but helps to compensate in case
@@ -1194,7 +1175,7 @@ impl EventReplayer {
     fn get_cursor_branch_oid(
         &self,
         cursor: EventCursor,
-        reference_name: &OsStr,
+        reference_name: &ReferenceName,
     ) -> eyre::Result<Option<NonZeroOid>> {
         let cursor_event_id: usize = cursor.event_id.try_into().unwrap();
         let oid = self.events[0..cursor_event_id]
@@ -1205,7 +1186,7 @@ impl EventReplayer {
                     ref_name,
                     new_oid: MaybeZeroOid::NonZero(new_oid),
                     ..
-                } if *ref_name == reference_name => Some(*new_oid),
+                } if ref_name == reference_name => Some(*new_oid),
                 _ => None,
             });
         Ok(oid)
@@ -1254,8 +1235,8 @@ impl EventReplayer {
         &self,
         cursor: EventCursor,
         repo: &Repo,
-    ) -> eyre::Result<HashMap<NonZeroOid, HashSet<OsString>>> {
-        let mut ref_name_to_oid: HashMap<&OsString, NonZeroOid> = HashMap::new();
+    ) -> eyre::Result<HashMap<NonZeroOid, HashSet<ReferenceName>>> {
+        let mut ref_name_to_oid: HashMap<&ReferenceName, NonZeroOid> = HashMap::new();
         let cursor_event_id: usize = cursor.event_id.try_into().unwrap();
         for event in self.events[..cursor_event_id].iter() {
             match event {
@@ -1277,7 +1258,7 @@ impl EventReplayer {
             }
         }
 
-        let mut result: HashMap<NonZeroOid, HashSet<OsString>> = HashMap::new();
+        let mut result: HashMap<NonZeroOid, HashSet<ReferenceName>> = HashMap::new();
         for (ref_name, ref_oid) in ref_name_to_oid.iter() {
             if let CategorizedReferenceName::LocalBranch { .. } =
                 CategorizedReferenceName::new(ref_name)
@@ -1413,12 +1394,12 @@ mod tests {
             event_tx_id,
             commit_oid: NonZeroOid::from_str("abc")?,
         };
-        let mut replayer = EventReplayer::new("refs/heads/master");
+        let mut replayer = EventReplayer::new("refs/heads/master".into());
         replayer.process_event(&meaningful_event);
         replayer.process_event(&Event::RefUpdateEvent {
             timestamp: 0.0,
             event_tx_id,
-            ref_name: OsString::from("ORIG_HEAD"),
+            ref_name: ReferenceName::from("ORIG_HEAD"),
             old_oid: MaybeZeroOid::from_str("abc")?,
             new_oid: MaybeZeroOid::from_str("def")?,
             message: None,
@@ -1426,7 +1407,7 @@ mod tests {
         replayer.process_event(&Event::RefUpdateEvent {
             timestamp: 0.0,
             event_tx_id,
-            ref_name: OsString::from("CHERRY_PICK_HEAD"),
+            ref_name: ReferenceName::from("CHERRY_PICK_HEAD"),
             old_oid: MaybeZeroOid::Zero,
             new_oid: MaybeZeroOid::Zero,
             message: None,
@@ -1488,7 +1469,7 @@ mod tests {
 
     #[test]
     fn test_advance_cursor_by_transaction() -> eyre::Result<()> {
-        let mut event_replayer = EventReplayer::new("refs/heads/master");
+        let mut event_replayer = EventReplayer::new("refs/heads/master".into());
         for (timestamp, event_tx_id) in (0..).zip(&[1, 1, 2, 2, 3, 4]) {
             let timestamp: f64 = timestamp.try_into()?;
             event_replayer.process_event(&Event::UnobsoleteEvent {

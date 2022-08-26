@@ -3,17 +3,14 @@
 //! These are rendered inline in the smartlog, between the commit hash and the
 //! commit message.
 
-use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::convert::TryInto;
-use std::ffi::OsString;
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
 use cursive::theme::BaseColor;
 use cursive::utils::markup::StyledString;
 use lazy_static::lazy_static;
-use os_str_bytes::OsStrBytes;
 use regex::Regex;
 use tracing::instrument;
 
@@ -21,7 +18,9 @@ use crate::core::config::{
     get_commit_descriptors_branches, get_commit_descriptors_differential_revision,
     get_commit_descriptors_relative_time,
 };
-use crate::git::{CategorizedReferenceName, Commit, NonZeroOid, Repo, ResolvedReferenceInfo};
+use crate::git::{
+    CategorizedReferenceName, Commit, NonZeroOid, ReferenceName, Repo, ResolvedReferenceInfo,
+};
 
 use super::eventlog::{Event, EventCursor, EventReplayer};
 use super::formatting::{Glyphs, StyledStringBuilder};
@@ -75,16 +74,16 @@ pub enum Redactor {
     Enabled {
         /// A set of ref names which *shouldn't* be redacted. For example, the
         /// main branch should probably keep its name.
-        preserved_ref_names: HashSet<OsString>,
+        preserved_ref_names: HashSet<ReferenceName>,
 
         /// A mapping from ref name to its redacted version.
-        ref_names: Arc<Mutex<HashMap<OsString, OsString>>>,
+        ref_names: Arc<Mutex<HashMap<ReferenceName, ReferenceName>>>,
     },
 }
 
 impl Redactor {
     /// Constructor.
-    pub fn new(preserved_ref_names: HashSet<OsString>) -> Self {
+    pub fn new(preserved_ref_names: HashSet<ReferenceName>) -> Self {
         Self::Enabled {
             preserved_ref_names,
             ref_names: Default::default(),
@@ -92,16 +91,14 @@ impl Redactor {
     }
 
     /// Redact the given ref name, if appropriate.
-    pub fn redact_ref_name(&self, ref_name: OsString) -> OsString {
+    pub fn redact_ref_name(&self, ref_name: ReferenceName) -> ReferenceName {
         match self {
             Redactor::Disabled => ref_name,
             Redactor::Enabled {
                 preserved_ref_names,
                 ref_names,
             } => {
-                if preserved_ref_names.contains(&ref_name)
-                    || !ref_name.to_raw_bytes().contains(&b'/')
-                {
+                if preserved_ref_names.contains(&ref_name) || !ref_name.as_str().contains('/') {
                     return ref_name;
                 }
 
@@ -294,7 +291,7 @@ impl<'a> NodeDescriptor for ObsolescenceExplanationDescriptor<'a> {
 #[derive(Debug)]
 pub struct BranchesDescriptor<'a> {
     is_enabled: bool,
-    head_info: &'a ResolvedReferenceInfo<'a>,
+    head_info: &'a ResolvedReferenceInfo,
     references_snapshot: &'a RepoReferencesSnapshot,
     redactor: &'a Redactor,
 }
@@ -328,7 +325,7 @@ impl<'a> NodeDescriptor for BranchesDescriptor<'a> {
             return Ok(None);
         }
 
-        let branch_names: HashSet<OsString> = match self
+        let branch_names: HashSet<ReferenceName> = match self
             .references_snapshot
             .branch_oid_to_names
             .get(&object.get_oid())
@@ -347,7 +344,7 @@ impl<'a> NodeDescriptor for BranchesDescriptor<'a> {
                 .into_iter()
                 .map(|branch_name| {
                     let is_checked_out_branch =
-                        self.head_info.reference_name == Some(Cow::Borrowed(&branch_name));
+                        self.head_info.reference_name.as_ref() == Some(&branch_name);
                     let icon = if is_checked_out_branch {
                         format!("{} ", glyphs.branch_arrow)
                     } else {

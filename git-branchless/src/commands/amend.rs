@@ -70,7 +70,7 @@ pub fn amend(
             event_tx_id,
             head_oid: MaybeZeroOid::from(oid),
             commit_oid: snapshot.base_commit.get_oid(),
-            ref_name: reference_name.map(|name| name.into_owned()),
+            ref_name: reference_name,
         }])?;
     }
 

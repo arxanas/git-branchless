@@ -98,7 +98,9 @@ fn test_gc_reference_transaction() -> eyre::Result<()> {
             event_tx_id: EventTransactionId(
                 1,
             ),
-            ref_name: "HEAD",
+            ref_name: ReferenceName(
+                "HEAD",
+            ),
             old_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
             new_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
             message: None,
@@ -108,7 +110,9 @@ fn test_gc_reference_transaction() -> eyre::Result<()> {
             event_tx_id: EventTransactionId(
                 1,
             ),
-            ref_name: "refs/heads/master",
+            ref_name: ReferenceName(
+                "refs/heads/master",
+            ),
             old_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
             new_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
             message: None,
@@ -125,7 +129,9 @@ fn test_gc_reference_transaction() -> eyre::Result<()> {
             event_tx_id: EventTransactionId(
                 3,
             ),
-            ref_name: "HEAD",
+            ref_name: ReferenceName(
+                "HEAD",
+            ),
             old_oid: 0000000000000000000000000000000000000000,
             new_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
             message: None,
@@ -135,7 +141,9 @@ fn test_gc_reference_transaction() -> eyre::Result<()> {
             event_tx_id: EventTransactionId(
                 4,
             ),
-            ref_name: "HEAD",
+            ref_name: ReferenceName(
+                "HEAD",
+            ),
             old_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
             new_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
             message: None,
@@ -145,7 +153,9 @@ fn test_gc_reference_transaction() -> eyre::Result<()> {
             event_tx_id: EventTransactionId(
                 5,
             ),
-            ref_name: "HEAD",
+            ref_name: ReferenceName(
+                "HEAD",
+            ),
             old_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
             new_oid: 96d1c37a3d4363611c49f7e52186e189a04c531f,
             message: None,
@@ -169,7 +179,9 @@ fn test_gc_reference_transaction() -> eyre::Result<()> {
             event_tx_id: EventTransactionId(
                 8,
             ),
-            ref_name: "HEAD",
+            ref_name: ReferenceName(
+                "HEAD",
+            ),
             old_oid: 0000000000000000000000000000000000000000,
             new_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
             message: None,
@@ -179,7 +191,9 @@ fn test_gc_reference_transaction() -> eyre::Result<()> {
             event_tx_id: EventTransactionId(
                 9,
             ),
-            ref_name: "HEAD",
+            ref_name: ReferenceName(
+                "HEAD",
+            ),
             old_oid: 96d1c37a3d4363611c49f7e52186e189a04c531f,
             new_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
             message: None,
@@ -189,7 +203,9 @@ fn test_gc_reference_transaction() -> eyre::Result<()> {
             event_tx_id: EventTransactionId(
                 10,
             ),
-            ref_name: "refs/heads/master",
+            ref_name: ReferenceName(
+                "refs/heads/master",
+            ),
             old_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
             new_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
             message: None,
@@ -199,7 +215,9 @@ fn test_gc_reference_transaction() -> eyre::Result<()> {
             event_tx_id: EventTransactionId(
                 11,
             ),
-            ref_name: "refs/heads/master",
+            ref_name: ReferenceName(
+                "refs/heads/master",
+            ),
             old_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
             new_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
             message: None,

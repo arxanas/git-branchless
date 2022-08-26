@@ -3,7 +3,6 @@
 //! This is accomplished by finding the events that have happened since a certain
 //! time and inverting them.
 
-use std::ffi::OsString;
 use std::fmt::Write;
 use std::io::{stdin, BufRead, BufReader, Read};
 use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
@@ -150,7 +149,7 @@ fn describe_event(glyphs: &Glyphs, repo: &Repo, event: &Event) -> eyre::Result<V
             old_oid: MaybeZeroOid::Zero,
             new_oid: MaybeZeroOid::NonZero(new_oid),
             message: _,
-        } if ref_name == "HEAD" => {
+        } if ref_name.as_str() == "HEAD" => {
             // Not sure if this can happen. When a repo is created, maybe?
             vec![
                 StyledStringBuilder::new()
@@ -168,7 +167,7 @@ fn describe_event(glyphs: &Glyphs, repo: &Repo, event: &Event) -> eyre::Result<V
             old_oid: MaybeZeroOid::NonZero(old_oid),
             new_oid: MaybeZeroOid::NonZero(new_oid),
             message: _,
-        } if ref_name == "HEAD" => {
+        } if ref_name.as_str() == "HEAD" => {
             vec![
                 StyledStringBuilder::new()
                     .append_plain("Check out from ")
@@ -696,7 +695,7 @@ fn inverse_event(
 
 #[derive(Clone, Debug)]
 struct CheckoutTarget {
-    target: OsString,
+    target: String,
     options: CheckOutCommitOptions,
 }
 
@@ -714,9 +713,9 @@ fn extract_checkout_target(
                 old_oid: _,
                 new_oid,
                 message: _,
-            } if ref_name == "HEAD" => {
+            } if ref_name.as_str() == "HEAD" => {
                 checkout_target = Some(CheckoutTarget {
-                    target: new_oid.to_string().into(),
+                    target: new_oid.to_string(),
                     options: CheckOutCommitOptions {
                         additional_args: vec!["--detach".into()],
                         render_smartlog: true,
@@ -732,12 +731,12 @@ fn extract_checkout_target(
                 ref_name,
             } => {
                 checkout_target = Some(CheckoutTarget {
-                    target: commit_oid.to_string().into(),
+                    target: commit_oid.to_string(),
                     options: CheckOutCommitOptions {
                         additional_args: match ref_name {
                             Some(ref_name) => {
                                 let branch_name = CategorizedReferenceName::new(ref_name);
-                                vec!["-B".into(), branch_name.remove_prefix()?]
+                                vec!["-B".into(), branch_name.remove_prefix()?.into()]
                             }
                             None => Default::default(),
                         },
@@ -781,7 +780,7 @@ fn undo_events(
                     old_oid: MaybeZeroOid::Zero,
                     new_oid: _,
                     message: _,
-                } if ref_name == "HEAD"
+                } if ref_name.as_str() == "HEAD"
             )
         })
         .map(|event| inverse_event(event.clone(), now, event_tx_id))
@@ -861,7 +860,7 @@ fn undo_events(
                     writeln!(
                         effects.get_output_stream(),
                         "Reference {} did not exist, not deleting it.",
-                        ref_name.to_string_lossy()
+                        ref_name.as_str()
                     )?;
                 }
             },
@@ -905,7 +904,7 @@ fn undo_events(
             repo,
             event_log_db,
             event_tx_id,
-            Some(target),
+            Some(&target),
             &options,
         )
         .wrap_err("Updating to previous HEAD location")?;

@@ -10,7 +10,7 @@ use eyre::Context;
 use tracing::instrument;
 
 use crate::git::{
-    update_index, CategorizedReferenceName, GitRunInfo, MaybeZeroOid, Repo, Stage,
+    update_index, CategorizedReferenceName, GitRunInfo, MaybeZeroOid, ReferenceName, Repo, Stage,
     UpdateIndexCommand, WorkingCopySnapshot,
 };
 use crate::util::ExitCode;
@@ -48,7 +48,7 @@ pub fn check_out_commit(
     repo: &Repo,
     event_log_db: &EventLogDb,
     event_tx_id: EventTransactionId,
-    target: Option<impl AsRef<OsStr> + std::fmt::Debug>,
+    target: Option<&str>,
     options: &CheckOutCommitOptions,
 ) -> eyre::Result<ExitCode> {
     let CheckOutCommitOptions {
@@ -59,7 +59,8 @@ pub fn check_out_commit(
     let target = match target {
         None => None,
         Some(target) => {
-            let categorized_target = CategorizedReferenceName::new(target.as_ref());
+            let reference_name = ReferenceName::from(target);
+            let categorized_target = CategorizedReferenceName::new(&reference_name);
             Some(categorized_target.remove_prefix()?)
         }
     };
@@ -71,7 +72,7 @@ pub fn check_out_commit(
     let args = {
         let mut args = vec![OsStr::new("checkout")];
         if let Some(target) = &target {
-            args.push(target);
+            args.push(OsStr::new(target.as_str()));
         }
         args.extend(additional_args.iter().map(OsStr::new));
         args
@@ -86,8 +87,7 @@ pub fn check_out_commit(
                 effects.get_glyphs(),
                 StyledString::styled(
                     match target {
-                        Some(target) =>
-                            format!("Failed to check out commit: {}", target.to_string_lossy()),
+                        Some(target) => format!("Failed to check out commit: {target}"),
                         None => "Failed to check out commit".to_string(),
                     },
                     BaseColor::Red.light()
@@ -148,7 +148,7 @@ pub fn create_snapshot<'repo>(
         event_tx_id,
         head_oid: MaybeZeroOid::from(head_info.oid),
         commit_oid: snapshot.base_commit.get_oid(),
-        ref_name: head_info.reference_name.map(|name| name.into_owned()),
+        ref_name: head_info.reference_name,
     }])?;
     Ok(snapshot)
 }
@@ -274,7 +274,7 @@ pub fn restore_snapshot(
             .run(
                 effects,
                 Some(event_tx_id),
-                &["update-ref", ref_name, &head_oid.to_string()],
+                &["update-ref", ref_name.as_str(), &head_oid.to_string()],
             )
             .context("Restoring snapshot branch")?;
         if !exit_code.is_success() {
@@ -285,7 +285,7 @@ pub fn restore_snapshot(
             .run(
                 effects,
                 Some(event_tx_id),
-                &["symbolic-ref", "HEAD", ref_name],
+                &["symbolic-ref", "HEAD", ref_name.as_str()],
             )
             .context("Checking out snapshot branch")?;
         if !exit_code.is_success() {
