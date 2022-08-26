@@ -1,12 +1,11 @@
 //! Helper functions on [`Repo`].
 
 use std::collections::{HashMap, HashSet};
-use std::ffi::OsString;
 
 use color_eyre::Help;
 use tracing::instrument;
 
-use crate::git::{NonZeroOid, Reference, Repo};
+use crate::git::{NonZeroOid, Reference, ReferenceName, Repo};
 
 use super::config::get_main_branch_name;
 
@@ -20,7 +19,7 @@ pub struct RepoReferencesSnapshot {
     pub main_branch_oid: NonZeroOid,
 
     /// A mapping from commit OID to the branches which point to that commit.
-    pub branch_oid_to_names: HashMap<NonZeroOid, HashSet<OsString>>,
+    pub branch_oid_to_names: HashMap<NonZeroOid, HashSet<ReferenceName>>,
 }
 
 /// Helper functions on [`Repo`].
@@ -35,7 +34,7 @@ pub trait RepoExt {
     ///
     /// The returned branch names include the `refs/heads/` prefix, so it must
     /// be stripped if desired.
-    fn get_branch_oid_to_names(&self) -> eyre::Result<HashMap<NonZeroOid, HashSet<OsString>>>;
+    fn get_branch_oid_to_names(&self) -> eyre::Result<HashMap<NonZeroOid, HashSet<ReferenceName>>>;
 
     /// Get the positions of references in the repository.
     fn get_references_snapshot(&self) -> eyre::Result<RepoReferencesSnapshot>;
@@ -94,8 +93,8 @@ Either create it, or update the main branch setting by running:
     }
 
     #[instrument]
-    fn get_branch_oid_to_names(&self) -> eyre::Result<HashMap<NonZeroOid, HashSet<OsString>>> {
-        let mut result: HashMap<NonZeroOid, HashSet<OsString>> = HashMap::new();
+    fn get_branch_oid_to_names(&self) -> eyre::Result<HashMap<NonZeroOid, HashSet<ReferenceName>>> {
+        let mut result: HashMap<NonZeroOid, HashSet<ReferenceName>> = HashMap::new();
         for branch in self.get_all_local_branches()? {
             let reference = branch.into_reference();
             let reference_name = reference.get_name()?;

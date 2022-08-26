@@ -25,7 +25,6 @@ use itertools::Itertools;
 use std::collections::HashMap;
 use std::str::FromStr;
 
-use os_str_bytes::OsStringBytes;
 use tracing::instrument;
 
 use crate::core::formatting::Pluralize;
@@ -35,7 +34,9 @@ use super::index::{Index, IndexEntry, Stage};
 use super::repo::Signature;
 use super::status::FileMode;
 use super::tree::{hydrate_tree, make_empty_tree};
-use super::{Commit, MaybeZeroOid, NonZeroOid, Repo, ResolvedReferenceInfo, StatusEntry};
+use super::{
+    Commit, MaybeZeroOid, NonZeroOid, ReferenceName, Repo, ResolvedReferenceInfo, StatusEntry,
+};
 
 const BRANCHLESS_HEAD_TRAILER: &str = "Branchless-head";
 const BRANCHLESS_HEAD_REF_TRAILER: &str = "Branchless-head-ref";
@@ -64,7 +65,7 @@ pub struct WorkingCopySnapshot<'repo> {
 
     /// The branch that was checked out at the time of this snapshot, if any.
     /// This includes the `refs/heads/` prefix.
-    pub head_reference_name: Option<String>,
+    pub head_reference_name: Option<ReferenceName>,
 
     /// The unstaged changes in the working copy.
     pub commit_unstaged: Commit<'repo>,
@@ -117,15 +118,7 @@ impl<'repo> WorkingCopySnapshot<'repo> {
             Some(head_commit) => MaybeZeroOid::NonZero(head_commit.get_oid()),
             None => MaybeZeroOid::Zero,
         };
-
-        let head_reference_name: Option<String> = match &head_info.reference_name {
-            Some(reference_name) => {
-                let reference_name = reference_name.clone().into_owned();
-                let reference_name = String::from_utf8(reference_name.into_raw_vec());
-                reference_name.ok()
-            }
-            None => None,
-        };
+        let head_reference_name: Option<ReferenceName> = head_info.reference_name.clone();
 
         let commit_unstaged_oid: NonZeroOid = {
             Self::create_commit_for_unstaged_changes(repo, head_commit.as_ref(), status_entries)?
@@ -163,7 +156,10 @@ impl<'repo> WorkingCopySnapshot<'repo> {
         let trailers = {
             let mut result = vec![(BRANCHLESS_HEAD_TRAILER, head_commit_oid.to_string())];
             if let Some(head_reference_name) = &head_reference_name {
-                result.push((BRANCHLESS_HEAD_REF_TRAILER, head_reference_name.clone()));
+                result.push((
+                    BRANCHLESS_HEAD_REF_TRAILER,
+                    head_reference_name.as_str().to_owned(),
+                ));
             }
             result.extend([
                 (BRANCHLESS_UNSTAGED_TRAILER, commit_unstaged_oid.to_string()),
@@ -265,7 +261,7 @@ branchless: automated working copy snapshot
         };
         let head_reference_name = trailers.iter().find_map(|(k, v)| {
             if k == BRANCHLESS_HEAD_REF_TRAILER {
-                Some(v.to_owned())
+                Some(ReferenceName::from(v.as_str()))
             } else {
                 None
             }

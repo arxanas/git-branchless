@@ -359,7 +359,9 @@ mod tests {
                 },
             ),
             head_reference_name: Some(
-                "refs/heads/master",
+                ReferenceName(
+                    "refs/heads/master",
+                ),
             ),
             commit_unstaged: Commit {
                 inner: Commit {
@@ -454,7 +456,9 @@ mod tests {
                 },
             ),
             head_reference_name: Some(
-                "refs/heads/master",
+                ReferenceName(
+                    "refs/heads/master",
+                ),
             ),
             commit_unstaged: Commit {
                 inner: Commit {

@@ -8,8 +8,6 @@
 //! garbage collection doesn't collect commits which branchless thinks are still
 //! active.
 
-use std::ffi::OsStr;
-
 use eyre::Context;
 use tracing::instrument;
 
@@ -80,7 +78,7 @@ pub fn mark_commit_reachable(repo: &Repo, commit_oid: NonZeroOid) -> eyre::Resul
     // commit was not found from `create_reference`.
     if repo.find_commit(commit_oid)?.is_some() {
         repo.create_reference(
-            OsStr::new(&ref_name),
+            &ref_name.into(),
             commit_oid,
             true,
             "branchless: marking commit as reachable",

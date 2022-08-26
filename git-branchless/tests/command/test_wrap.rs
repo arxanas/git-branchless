@@ -41,7 +41,9 @@ fn test_wrap_rebase_in_transaction() -> eyre::Result<()> {
                 event_tx_id: EventTransactionId(
                     1,
                 ),
-                ref_name: "refs/heads/foo",
+                ref_name: ReferenceName(
+                    "refs/heads/foo",
+                ),
                 old_oid: 0000000000000000000000000000000000000000,
                 new_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
                 message: None,
@@ -51,7 +53,9 @@ fn test_wrap_rebase_in_transaction() -> eyre::Result<()> {
                 event_tx_id: EventTransactionId(
                     2,
                 ),
-                ref_name: "HEAD",
+                ref_name: ReferenceName(
+                    "HEAD",
+                ),
                 old_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
                 new_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
                 message: None,
@@ -61,7 +65,9 @@ fn test_wrap_rebase_in_transaction() -> eyre::Result<()> {
                 event_tx_id: EventTransactionId(
                     3,
                 ),
-                ref_name: "HEAD",
+                ref_name: ReferenceName(
+                    "HEAD",
+                ),
                 old_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
                 new_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
                 message: None,
@@ -71,7 +77,9 @@ fn test_wrap_rebase_in_transaction() -> eyre::Result<()> {
                 event_tx_id: EventTransactionId(
                     3,
                 ),
-                ref_name: "refs/heads/foo",
+                ref_name: ReferenceName(
+                    "refs/heads/foo",
+                ),
                 old_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
                 new_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
                 message: None,
@@ -88,7 +96,9 @@ fn test_wrap_rebase_in_transaction() -> eyre::Result<()> {
                 event_tx_id: EventTransactionId(
                     5,
                 ),
-                ref_name: "HEAD",
+                ref_name: ReferenceName(
+                    "HEAD",
+                ),
                 old_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
                 new_oid: 96d1c37a3d4363611c49f7e52186e189a04c531f,
                 message: None,
@@ -98,7 +108,9 @@ fn test_wrap_rebase_in_transaction() -> eyre::Result<()> {
                 event_tx_id: EventTransactionId(
                     5,
                 ),
-                ref_name: "refs/heads/foo",
+                ref_name: ReferenceName(
+                    "refs/heads/foo",
+                ),
                 old_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
                 new_oid: 96d1c37a3d4363611c49f7e52186e189a04c531f,
                 message: None,
@@ -115,7 +127,9 @@ fn test_wrap_rebase_in_transaction() -> eyre::Result<()> {
                 event_tx_id: EventTransactionId(
                     7,
                 ),
-                ref_name: "HEAD",
+                ref_name: ReferenceName(
+                    "HEAD",
+                ),
                 old_oid: 96d1c37a3d4363611c49f7e52186e189a04c531f,
                 new_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
                 message: None,
@@ -125,7 +139,9 @@ fn test_wrap_rebase_in_transaction() -> eyre::Result<()> {
                 event_tx_id: EventTransactionId(
                     8,
                 ),
-                ref_name: "HEAD",
+                ref_name: ReferenceName(
+                    "HEAD",
+                ),
                 old_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
                 new_oid: 96d1c37a3d4363611c49f7e52186e189a04c531f,
                 message: None,
@@ -135,7 +151,9 @@ fn test_wrap_rebase_in_transaction() -> eyre::Result<()> {
                 event_tx_id: EventTransactionId(
                     8,
                 ),
-                ref_name: "HEAD",
+                ref_name: ReferenceName(
+                    "HEAD",
+                ),
                 old_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
                 new_oid: 96d1c37a3d4363611c49f7e52186e189a04c531f,
                 message: None,
@@ -145,7 +163,9 @@ fn test_wrap_rebase_in_transaction() -> eyre::Result<()> {
                 event_tx_id: EventTransactionId(
                     8,
                 ),
-                ref_name: "refs/heads/master",
+                ref_name: ReferenceName(
+                    "refs/heads/master",
+                ),
                 old_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
                 new_oid: 96d1c37a3d4363611c49f7e52186e189a04c531f,
                 message: None,
@@ -154,123 +174,143 @@ fn test_wrap_rebase_in_transaction() -> eyre::Result<()> {
         "###);
     } else if git_version < GitVersion(2, 35, 0) {
         insta::assert_debug_snapshot!(events, @r###"
-    [
-        RefUpdateEvent {
-            timestamp: 0.0,
-            event_tx_id: EventTransactionId(
-                1,
-            ),
-            ref_name: "refs/heads/foo",
-            old_oid: 0000000000000000000000000000000000000000,
-            new_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
-            message: None,
-        },
-        RefUpdateEvent {
-            timestamp: 0.0,
-            event_tx_id: EventTransactionId(
-                2,
-            ),
-            ref_name: "HEAD",
-            old_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
-            new_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
-            message: None,
-        },
-        RefUpdateEvent {
-            timestamp: 0.0,
-            event_tx_id: EventTransactionId(
-                3,
-            ),
-            ref_name: "HEAD",
-            old_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
-            new_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
-            message: None,
-        },
-        RefUpdateEvent {
-            timestamp: 0.0,
-            event_tx_id: EventTransactionId(
-                3,
-            ),
-            ref_name: "refs/heads/foo",
-            old_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
-            new_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
-            message: None,
-        },
-        CommitEvent {
-            timestamp: 0.0,
-            event_tx_id: EventTransactionId(
-                4,
-            ),
-            commit_oid: NonZeroOid(62fc20d2a290daea0d52bdc2ed2ad4be6491010e),
-        },
-        RefUpdateEvent {
-            timestamp: 0.0,
-            event_tx_id: EventTransactionId(
-                5,
-            ),
-            ref_name: "HEAD",
-            old_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
-            new_oid: 96d1c37a3d4363611c49f7e52186e189a04c531f,
-            message: None,
-        },
-        RefUpdateEvent {
-            timestamp: 0.0,
-            event_tx_id: EventTransactionId(
-                5,
-            ),
-            ref_name: "refs/heads/foo",
-            old_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
-            new_oid: 96d1c37a3d4363611c49f7e52186e189a04c531f,
-            message: None,
-        },
-        CommitEvent {
-            timestamp: 0.0,
-            event_tx_id: EventTransactionId(
-                6,
-            ),
-            commit_oid: NonZeroOid(96d1c37a3d4363611c49f7e52186e189a04c531f),
-        },
-        RefUpdateEvent {
-            timestamp: 0.0,
-            event_tx_id: EventTransactionId(
-                7,
-            ),
-            ref_name: "HEAD",
-            old_oid: 96d1c37a3d4363611c49f7e52186e189a04c531f,
-            new_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
-            message: None,
-        },
-        RefUpdateEvent {
-            timestamp: 0.0,
-            event_tx_id: EventTransactionId(
-                8,
-            ),
-            ref_name: "HEAD",
-            old_oid: 0000000000000000000000000000000000000000,
-            new_oid: 96d1c37a3d4363611c49f7e52186e189a04c531f,
-            message: None,
-        },
-        RefUpdateEvent {
-            timestamp: 0.0,
-            event_tx_id: EventTransactionId(
-                8,
-            ),
-            ref_name: "HEAD",
-            old_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
-            new_oid: 96d1c37a3d4363611c49f7e52186e189a04c531f,
-            message: None,
-        },
-        RefUpdateEvent {
-            timestamp: 0.0,
-            event_tx_id: EventTransactionId(
-                8,
-            ),
-            ref_name: "refs/heads/master",
-            old_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
-            new_oid: 96d1c37a3d4363611c49f7e52186e189a04c531f,
-            message: None,
-        },
-    ]
-    "###);
+        [
+            RefUpdateEvent {
+                timestamp: 0.0,
+                event_tx_id: EventTransactionId(
+                    1,
+                ),
+                ref_name: ReferenceName(
+                    "refs/heads/foo",
+                ),
+                old_oid: 0000000000000000000000000000000000000000,
+                new_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
+                message: None,
+            },
+            RefUpdateEvent {
+                timestamp: 0.0,
+                event_tx_id: EventTransactionId(
+                    2,
+                ),
+                ref_name: ReferenceName(
+                    "HEAD",
+                ),
+                old_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
+                new_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
+                message: None,
+            },
+            RefUpdateEvent {
+                timestamp: 0.0,
+                event_tx_id: EventTransactionId(
+                    3,
+                ),
+                ref_name: ReferenceName(
+                    "HEAD",
+                ),
+                old_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
+                new_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
+                message: None,
+            },
+            RefUpdateEvent {
+                timestamp: 0.0,
+                event_tx_id: EventTransactionId(
+                    3,
+                ),
+                ref_name: ReferenceName(
+                    "refs/heads/foo",
+                ),
+                old_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
+                new_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
+                message: None,
+            },
+            CommitEvent {
+                timestamp: 0.0,
+                event_tx_id: EventTransactionId(
+                    4,
+                ),
+                commit_oid: NonZeroOid(62fc20d2a290daea0d52bdc2ed2ad4be6491010e),
+            },
+            RefUpdateEvent {
+                timestamp: 0.0,
+                event_tx_id: EventTransactionId(
+                    5,
+                ),
+                ref_name: ReferenceName(
+                    "HEAD",
+                ),
+                old_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
+                new_oid: 96d1c37a3d4363611c49f7e52186e189a04c531f,
+                message: None,
+            },
+            RefUpdateEvent {
+                timestamp: 0.0,
+                event_tx_id: EventTransactionId(
+                    5,
+                ),
+                ref_name: ReferenceName(
+                    "refs/heads/foo",
+                ),
+                old_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
+                new_oid: 96d1c37a3d4363611c49f7e52186e189a04c531f,
+                message: None,
+            },
+            CommitEvent {
+                timestamp: 0.0,
+                event_tx_id: EventTransactionId(
+                    6,
+                ),
+                commit_oid: NonZeroOid(96d1c37a3d4363611c49f7e52186e189a04c531f),
+            },
+            RefUpdateEvent {
+                timestamp: 0.0,
+                event_tx_id: EventTransactionId(
+                    7,
+                ),
+                ref_name: ReferenceName(
+                    "HEAD",
+                ),
+                old_oid: 96d1c37a3d4363611c49f7e52186e189a04c531f,
+                new_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
+                message: None,
+            },
+            RefUpdateEvent {
+                timestamp: 0.0,
+                event_tx_id: EventTransactionId(
+                    8,
+                ),
+                ref_name: ReferenceName(
+                    "HEAD",
+                ),
+                old_oid: 0000000000000000000000000000000000000000,
+                new_oid: 96d1c37a3d4363611c49f7e52186e189a04c531f,
+                message: None,
+            },
+            RefUpdateEvent {
+                timestamp: 0.0,
+                event_tx_id: EventTransactionId(
+                    8,
+                ),
+                ref_name: ReferenceName(
+                    "HEAD",
+                ),
+                old_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
+                new_oid: 96d1c37a3d4363611c49f7e52186e189a04c531f,
+                message: None,
+            },
+            RefUpdateEvent {
+                timestamp: 0.0,
+                event_tx_id: EventTransactionId(
+                    8,
+                ),
+                ref_name: ReferenceName(
+                    "refs/heads/master",
+                ),
+                old_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
+                new_oid: 96d1c37a3d4363611c49f7e52186e189a04c531f,
+                message: None,
+            },
+        ]
+        "###);
     }
 
     Ok(())

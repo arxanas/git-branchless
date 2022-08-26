@@ -7,7 +7,6 @@
 //! The hooks are installed by the `branchless init` command. This module
 //! contains the implementations for the hooks.
 
-use std::ffi::OsString;
 use std::fmt::Write;
 use std::io::{stdin, BufRead};
 use std::time::SystemTime;
@@ -19,7 +18,7 @@ use tracing::{error, instrument, warn};
 use lib::core::eventlog::{should_ignore_ref_updates, Event, EventLogDb};
 use lib::core::formatting::{printable_styled_string, Glyphs, Pluralize};
 use lib::core::gc::mark_commit_reachable;
-use lib::git::{CategorizedReferenceName, MaybeZeroOid, Repo};
+use lib::git::{CategorizedReferenceName, MaybeZeroOid, ReferenceName, Repo};
 
 use lib::core::effects::Effects;
 pub use lib::core::rewrite::rewrite_hooks::{
@@ -60,7 +59,7 @@ pub fn hook_post_checkout(
             let oid: MaybeZeroOid = current_head_oid.parse()?;
             oid
         },
-        ref_name: OsString::from("HEAD"),
+        ref_name: ReferenceName::from("HEAD"),
         message: None,
     }])?;
     Ok(())
@@ -137,37 +136,34 @@ pub fn hook_post_merge(effects: &Effects, _is_squash_merge: isize) -> eyre::Resu
 
 mod reference_transaction {
     use std::collections::HashMap;
-    use std::convert::TryInto;
-    use std::ffi::OsString;
     use std::fs::File;
-    use std::io::{BufRead, BufReader, Cursor};
+    use std::io::{BufRead, BufReader};
     use std::str::FromStr;
 
     use eyre::Context;
+    use itertools::Itertools;
     use lazy_static::lazy_static;
-    use os_str_bytes::OsStringBytes;
     use tracing::{instrument, warn};
 
-    use lib::git::{MaybeZeroOid, Repo};
+    use lib::git::{MaybeZeroOid, ReferenceName, Repo};
 
     #[instrument]
-    fn parse_packed_refs_line(line: &[u8]) -> Option<(OsString, MaybeZeroOid)> {
+    fn parse_packed_refs_line(line: &str) -> Option<(ReferenceName, MaybeZeroOid)> {
         if line.is_empty() {
             return None;
         }
-        if line[0] == b'#' {
+        if line.starts_with('#') {
             // The leading `# pack-refs with:` pragma.
             return None;
         }
-        if !(b'0'..b'9').contains(&line[0]) && !(b'a'..b'f').contains(&line[0]) {
+        if !line.starts_with(|c: char| c.is_ascii_hexdigit()) {
             // The leading `# pack-refs with:` pragma.
             warn!(?line, "Unrecognized pack-refs line starting character");
             return None;
         }
 
         lazy_static! {
-            static ref RE: regex::bytes::Regex =
-                regex::bytes::Regex::new(r"^([^ ]+) (.+)$").unwrap();
+            static ref RE: regex::Regex = regex::Regex::new(r"^([^ ]+) (.+)$").unwrap();
         };
         match RE.captures(line) {
             None => {
@@ -177,13 +173,6 @@ mod reference_transaction {
 
             Some(captures) => {
                 let oid = &captures[1];
-                let oid = match std::str::from_utf8(oid) {
-                    Ok(oid) => oid,
-                    Err(err) => {
-                        warn!(?oid, ?err, "Could not parse OID for pack-refs line");
-                        return None;
-                    }
-                };
                 let oid = match MaybeZeroOid::from_str(oid) {
                     Ok(oid) => oid,
                     Err(err) => {
@@ -193,17 +182,7 @@ mod reference_transaction {
                 };
 
                 let reference_name = &captures[2];
-                let reference_name = match OsStringBytes::from_raw_vec(reference_name.to_vec()) {
-                    Ok(reference_name) => reference_name,
-                    Err(err) => {
-                        warn!(
-                            ?reference_name,
-                            ?err,
-                            "Could not parse reference name for pack-refs line"
-                        );
-                        return None;
-                    }
-                };
+                let reference_name = ReferenceName::from(reference_name);
 
                 Some((reference_name, oid))
             }
@@ -215,14 +194,16 @@ mod reference_transaction {
     fn test_parse_packed_refs_line() {
         use super::*;
 
-        let line: &[u8] = b"1234567812345678123456781234567812345678 refs/foo/bar";
-        let name = OsString::from("refs/foo/bar");
+        let line = "1234567812345678123456781234567812345678 refs/foo/bar";
+        let name = ReferenceName::from("refs/foo/bar");
         let oid = MaybeZeroOid::from_str("1234567812345678123456781234567812345678").unwrap();
         assert_eq!(parse_packed_refs_line(line), Some((name, oid)));
     }
 
     #[instrument]
-    pub fn read_packed_refs_file(repo: &Repo) -> eyre::Result<HashMap<OsString, MaybeZeroOid>> {
+    pub fn read_packed_refs_file(
+        repo: &Repo,
+    ) -> eyre::Result<HashMap<ReferenceName, MaybeZeroOid>> {
         let packed_refs_file_path = repo.get_packed_refs_path();
         let file = match File::open(&packed_refs_file_path) {
             Ok(file) => file,
@@ -232,7 +213,7 @@ mod reference_transaction {
 
         let reader = BufReader::new(file);
         let mut result = HashMap::new();
-        for line in reader.split(b'\n') {
+        for line in reader.lines() {
             let line = line.wrap_err("Reading line from packed-refs")?;
             if line.is_empty() {
                 continue;
@@ -246,34 +227,21 @@ mod reference_transaction {
 
     #[derive(Debug, PartialEq, Eq)]
     pub struct ParsedReferenceTransactionLine {
-        pub ref_name: OsString,
+        pub ref_name: ReferenceName,
         pub old_oid: MaybeZeroOid,
         pub new_oid: MaybeZeroOid,
     }
 
     #[instrument]
     pub fn parse_reference_transaction_line(
-        line: &[u8],
+        line: &str,
     ) -> eyre::Result<ParsedReferenceTransactionLine> {
-        let cursor = Cursor::new(line);
-        let fields = {
-            let mut fields = Vec::new();
-            for field in cursor.split(b' ') {
-                let field = field.wrap_err("Reading reference-transaction field")?;
-                let field = OsString::from_raw_vec(field)
-                    .wrap_err("Decoding reference-transaction field")?;
-                fields.push(field);
-            }
-            fields
-        };
+        let fields = line.split(' ').collect_vec();
         match fields.as_slice() {
             [old_value, new_value, ref_name] => Ok(ParsedReferenceTransactionLine {
-                ref_name: ref_name.clone(),
-                old_oid: old_value.as_os_str().try_into()?,
-                new_oid: {
-                    let oid: MaybeZeroOid = new_value.as_os_str().try_into()?;
-                    oid
-                },
+                ref_name: ReferenceName::from(*ref_name),
+                old_oid: MaybeZeroOid::from_str(*old_value)?,
+                new_oid: MaybeZeroOid::from_str(*new_value)?,
             }),
             _ => {
                 eyre::bail!(
@@ -289,7 +257,7 @@ mod reference_transaction {
     fn test_parse_reference_transaction_line() -> eyre::Result<()> {
         use lib::core::eventlog::should_ignore_ref_updates;
 
-        let line = b"123abc 456def refs/heads/mybranch";
+        let line = "123abc 456def refs/heads/mybranch";
         assert_eq!(
             parse_reference_transaction_line(line)?,
             ParsedReferenceTransactionLine {
@@ -298,28 +266,25 @@ mod reference_transaction {
                     let oid: MaybeZeroOid = "456def".parse()?;
                     oid
                 },
-                ref_name: OsString::from("refs/heads/mybranch"),
+                ref_name: ReferenceName::from("refs/heads/mybranch"),
             }
         );
 
         {
-            let line = b"123abc 456def ORIG_HEAD";
+            let line = "123abc 456def ORIG_HEAD";
             let parsed_line = parse_reference_transaction_line(line)?;
             assert_eq!(
                 parsed_line,
                 ParsedReferenceTransactionLine {
                     old_oid: "123abc".parse()?,
-                    new_oid: {
-                        let oid: MaybeZeroOid = "456def".parse()?;
-                        oid
-                    },
-                    ref_name: OsString::from("ORIG_HEAD"),
+                    new_oid: "456def".parse()?,
+                    ref_name: ReferenceName::from("ORIG_HEAD"),
                 }
             );
             assert!(should_ignore_ref_updates(&parsed_line.ref_name));
         }
 
-        let line = b"there are not three fields here";
+        let line = "there are not three fields here";
         assert!(parse_reference_transaction_line(line).is_err());
 
         Ok(())
@@ -352,7 +317,7 @@ mod reference_transaction {
     #[instrument]
     pub fn fix_packed_reference_oid(
         repo: &Repo,
-        packed_references: &HashMap<OsString, MaybeZeroOid>,
+        packed_references: &HashMap<ReferenceName, MaybeZeroOid>,
         parsed_line: ParsedReferenceTransactionLine,
     ) -> ParsedReferenceTransactionLine {
         match parsed_line {
@@ -421,10 +386,17 @@ pub fn hook_reference_transaction(effects: &Effects, transaction_state: &str) ->
                 Ok(line) => line,
                 Err(_) => return None,
             };
-            match parse_reference_transaction_line(line.as_slice()) {
+            let line = match std::str::from_utf8(&line) {
+                Ok(line) => line,
+                Err(err) => {
+                    error!(?err, ?line, "Could not parse reference-transaction line");
+                    return None;
+                }
+            };
+            match parse_reference_transaction_line(line) {
                 Ok(line) => Some(line),
                 Err(err) => {
-                    error!(?err, "Could not parse reference-transaction-line");
+                    error!(?err, ?line, "Could not parse reference-transaction-line");
                     None
                 }
             }

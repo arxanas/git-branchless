@@ -16,6 +16,7 @@ use std::ffi::{OsStr, OsString};
 use std::ops::Add;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
+use std::string::FromUtf8Error;
 use std::time::{Duration, SystemTime};
 
 use chrono::NaiveDateTime;
@@ -25,6 +26,7 @@ use eyre::Context;
 use git2::{message_trailers_bytes, DiffOptions};
 use itertools::Itertools;
 use os_str_bytes::{OsStrBytes, OsStringBytes};
+use thiserror::Error;
 use tracing::{instrument, warn};
 
 use crate::core::effects::{Effects, OperationType};
@@ -82,33 +84,29 @@ pub fn message_prettify(message: &str, comment_char: Option<char>) -> eyre::Resu
 /// when a repository has been freshly initialized, but no commits have been
 /// made, for example.
 #[derive(Debug, PartialEq, Eq)]
-pub struct ResolvedReferenceInfo<'a> {
+pub struct ResolvedReferenceInfo {
     /// The OID of the commit that `HEAD` points to. If `HEAD` is unborn, then
     /// this is `None`.
     pub oid: Option<NonZeroOid>,
 
     /// The name of the reference that `HEAD` points to symbolically. If `HEAD`
     /// is detached, then this is `None`.
-    pub reference_name: Option<Cow<'a, OsStr>>,
+    pub reference_name: Option<ReferenceName>,
 }
 
-impl<'a> ResolvedReferenceInfo<'a> {
+impl ResolvedReferenceInfo {
     /// Get the name of the branch, if any. Returns `None` if `HEAD` is
-    /// detached.  The `refs/heads/` prefix, if any, is stripped.
-    pub fn get_branch_name(&self) -> eyre::Result<Option<OsString>> {
-        let reference_name: &OsStr = match &self.reference_name {
-            Some(reference_name) => reference_name,
+    /// detached. The `refs/heads/` prefix, if any, is stripped.
+    pub fn get_branch_name(&self) -> eyre::Result<Option<&str>> {
+        let reference_name = match &self.reference_name {
+            Some(reference_name) => reference_name.as_str(),
             None => return Ok(None),
         };
-
-        let reference_name_bytes = reference_name.to_raw_bytes();
-        match reference_name_bytes.strip_prefix(b"refs/heads/") {
-            None => Ok(Some(reference_name.to_owned())),
-            Some(branch_name) => {
-                let branch_name = OsStringBytes::from_raw_vec(branch_name.to_vec())?;
-                Ok(Some(branch_name))
-            }
-        }
+        Ok(Some(
+            reference_name
+                .strip_prefix("refs/heads/")
+                .unwrap_or(reference_name),
+        ))
     }
 }
 
@@ -309,10 +307,10 @@ impl Repo {
     #[instrument]
     pub fn resolve_reference(&self, reference: &Reference) -> eyre::Result<ResolvedReferenceInfo> {
         let oid = reference.peel_to_commit()?.map(|commit| commit.get_oid());
-        let reference_name: Option<OsString> = match reference.inner.kind() {
+        let reference_name: Option<ReferenceName> = match reference.inner.kind() {
             Some(git2::ReferenceType::Direct) => None,
             Some(git2::ReferenceType::Symbolic) => match reference.inner.symbolic_target_bytes() {
-                Some(name) => Some(OsStringBytes::from_raw_vec(name.to_vec())?),
+                Some(name) => Some(ReferenceName::from_bytes(name.to_vec())?),
                 None => eyre::bail!(
                     "Reference was resolved to OID: {:?}, but its name could not be decoded: {:?}",
                     oid,
@@ -323,14 +321,14 @@ impl Repo {
         };
         Ok(ResolvedReferenceInfo {
             oid,
-            reference_name: reference_name.map(Cow::Owned),
+            reference_name,
         })
     }
 
     /// Get the OID for the repository's `HEAD` reference.
     #[instrument]
     pub fn get_head_info(&self) -> eyre::Result<ResolvedReferenceInfo> {
-        match self.find_reference(OsStr::new("HEAD"))? {
+        match self.find_reference(&"HEAD".into())? {
             Some(reference) => self.resolve_reference(&reference),
             None => Ok(ResolvedReferenceInfo {
                 oid: None,
@@ -692,36 +690,22 @@ impl Repo {
     #[instrument]
     pub fn create_reference(
         &self,
-        name: &OsStr,
+        name: &ReferenceName,
         oid: NonZeroOid,
         force: bool,
         log_message: &str,
     ) -> eyre::Result<Reference> {
-        let name = match name.to_str() {
-            Some(name) => name,
-            None => eyre::bail!(
-                "Reference name is not a UTF-8 string (libgit2 limitation): {:?}",
-                name
-            ),
-        };
         let reference = self
             .inner
-            .reference(name, oid.inner, force, log_message)
+            .reference(name.as_str(), oid.inner, force, log_message)
             .map_err(wrap_git_error)?;
         Ok(Reference { inner: reference })
     }
 
     /// Look up a reference with the given name. Returns `None` if not found.
     #[instrument]
-    pub fn find_reference(&self, name: &OsStr) -> eyre::Result<Option<Reference>> {
-        let name = match name.to_str() {
-            Some(name) => name,
-            None => eyre::bail!(
-                "Reference name is not a UTF-8 string (libgit2 limitation): {:?}",
-                name
-            ),
-        };
-        match self.inner.find_reference(name) {
+    pub fn find_reference(&self, name: &ReferenceName) -> eyre::Result<Option<Reference>> {
+        match self.inner.find_reference(name.as_str()) {
             Ok(reference) => Ok(Some(Reference { inner: reference })),
             Err(err) if err.code() == git2::ErrorCode::NotFound => Ok(None),
             Err(err) => Err(wrap_git_error(err)),
@@ -1555,6 +1539,62 @@ pub enum ReferenceTarget<'a> {
     },
 }
 
+#[derive(Debug, Error)]
+pub enum ReferenceNameError {
+    #[error("reference name was not valid UTF-8: {0}")]
+    InvalidUtf8(FromUtf8Error),
+}
+
+/// The name of a reference, like `refs/heads/master`.
+#[derive(Clone, Debug, PartialOrd, Ord, PartialEq, Eq, Hash)]
+pub struct ReferenceName(String);
+
+impl ReferenceName {
+    /// Create a reference name from the provided bytestring. Non-UTF-8 references are not supported.
+    #[instrument]
+    pub fn from_bytes(bytes: Vec<u8>) -> Result<ReferenceName, ReferenceNameError> {
+        let reference_name = String::from_utf8(bytes).map_err(ReferenceNameError::InvalidUtf8)?;
+        Ok(Self(reference_name))
+    }
+
+    /// View this reference name as a string. (This is a zero-cost conversion.)
+    #[instrument]
+    pub fn as_str(&self) -> &str {
+        let Self(reference_name) = self;
+        reference_name
+    }
+}
+
+impl From<&str> for ReferenceName {
+    fn from(s: &str) -> Self {
+        ReferenceName(s.to_owned())
+    }
+}
+
+impl From<String> for ReferenceName {
+    fn from(s: String) -> Self {
+        ReferenceName(s)
+    }
+}
+
+impl From<NonZeroOid> for ReferenceName {
+    fn from(oid: NonZeroOid) -> Self {
+        Self::from(oid.to_string())
+    }
+}
+
+impl From<MaybeZeroOid> for ReferenceName {
+    fn from(oid: MaybeZeroOid) -> Self {
+        Self::from(oid.to_string())
+    }
+}
+
+impl AsRef<str> for ReferenceName {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
 /// Represents a reference to an object.
 pub struct Reference<'repo> {
     inner: git2::Reference<'repo>,
@@ -1578,8 +1618,9 @@ impl<'repo> Reference<'repo> {
     /// Given a reference name which is an OID, convert the string into an `Oid`
     /// object. If the `Oid` was zero, returns `None`.
     #[instrument]
-    pub fn name_to_oid(ref_name: &OsStr) -> eyre::Result<Option<NonZeroOid>> {
-        let oid: MaybeZeroOid = ref_name.try_into()?;
+    pub fn name_to_oid(reference_name: &ReferenceName) -> eyre::Result<Option<NonZeroOid>> {
+        let ReferenceName(reference_name) = reference_name;
+        let oid: MaybeZeroOid = reference_name.parse()?;
         match oid {
             MaybeZeroOid::NonZero(oid) => Ok(Some(oid)),
             MaybeZeroOid::Zero => Ok(None),
@@ -1588,9 +1629,8 @@ impl<'repo> Reference<'repo> {
 
     /// Get the name of this reference.
     #[instrument]
-    pub fn get_name(&self) -> eyre::Result<OsString> {
-        let name = OsStringBytes::from_raw_vec(self.inner.name_bytes().into())
-            .wrap_err("Decoding reference name")?;
+    pub fn get_name(&self) -> eyre::Result<ReferenceName> {
+        let name = ReferenceName::from_bytes(self.inner.name_bytes().to_vec())?;
         Ok(name)
     }
     /// Get the commit object pointed to by this reference. Returns `None` if
@@ -1625,7 +1665,7 @@ pub enum CategorizedReferenceName<'a> {
     /// The reference represents a local branch.
     LocalBranch {
         /// The full name of the reference.
-        name: &'a OsStr,
+        name: &'a str,
 
         /// The string `refs/heads/`.
         prefix: &'static str,
@@ -1634,7 +1674,7 @@ pub enum CategorizedReferenceName<'a> {
     /// The reference represents a remote branch.
     RemoteBranch {
         /// The full name of the reference.
-        name: &'a OsStr,
+        name: &'a str,
 
         /// The string `refs/remotes/`.
         prefix: &'static str,
@@ -1643,20 +1683,20 @@ pub enum CategorizedReferenceName<'a> {
     /// Some other kind of reference which isn't a branch at all.
     OtherRef {
         /// The full name of the reference.
-        name: &'a OsStr,
+        name: &'a str,
     },
 }
 
 impl<'a> CategorizedReferenceName<'a> {
     /// Categorize the provided reference name.
-    pub fn new(name: &'a OsStr) -> Self {
-        let bytes = name.to_raw_bytes();
-        if bytes.starts_with(b"refs/heads/") {
+    pub fn new(name: &'a ReferenceName) -> Self {
+        let name = name.as_str();
+        if name.starts_with("refs/heads/") {
             Self::LocalBranch {
                 name,
                 prefix: "refs/heads/",
             }
-        } else if bytes.starts_with(b"refs/remotes/") {
+        } else if name.starts_with("refs/remotes/") {
             Self::RemoteBranch {
                 name,
                 prefix: "refs/remotes/",
@@ -1667,22 +1707,15 @@ impl<'a> CategorizedReferenceName<'a> {
     }
 
     /// Remove the prefix from the reference name. May raise an error if the
-    /// result couldn't be encoded as an `OsString` (probably shouldn't
-    /// happen?).
+    /// result couldn't be encoded as an `String` (shouldn't happen).
     #[instrument]
-    pub fn remove_prefix(&self) -> eyre::Result<OsString> {
+    pub fn remove_prefix(&self) -> eyre::Result<String> {
         let (name, prefix): (_, &'static str) = match self {
             Self::LocalBranch { name, prefix } => (name, prefix),
             Self::RemoteBranch { name, prefix } => (name, prefix),
             Self::OtherRef { name } => (name, ""),
         };
-        let bytes = name.to_raw_bytes();
-        let bytes = match bytes.strip_prefix(prefix.as_bytes()) {
-            Some(bytes) => Vec::from(bytes),
-            None => Vec::from(bytes),
-        };
-        let result = OsString::from_raw_vec(bytes)?;
-        Ok(result)
+        Ok(name.strip_prefix(prefix).unwrap_or(name).to_owned())
     }
 
     /// Render the full name of the reference, including its prefix, lossily as
@@ -1693,7 +1726,7 @@ impl<'a> CategorizedReferenceName<'a> {
             Self::RemoteBranch { name, prefix: _ } => name,
             Self::OtherRef { name } => name,
         };
-        name.to_string_lossy().into_owned()
+        (*name).to_owned()
     }
 
     /// Render only the suffix of the reference name lossily as a `String`. The
@@ -1705,11 +1738,7 @@ impl<'a> CategorizedReferenceName<'a> {
             Self::RemoteBranch { name, prefix } => (name, prefix),
             Self::OtherRef { name } => (name, ""),
         };
-        let name = name.to_string_lossy();
-        match name.strip_prefix(prefix) {
-            Some(name) => name.to_string(),
-            None => name.into_owned(),
-        }
+        name.strip_prefix(prefix).unwrap_or(name).to_owned()
     }
 
     /// Render the reference name lossily, and prepend a helpful string like

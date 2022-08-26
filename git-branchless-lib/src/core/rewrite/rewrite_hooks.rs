@@ -1,9 +1,7 @@
 //! Hooks used to have Git call back into `git-branchless` for various functionality.
 
-use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 
-use std::ffi::{OsStr, OsString};
 use std::fmt::Write;
 use std::fs::File;
 use std::io::{stdin, BufRead, BufReader, Read, Write as WriteIo};
@@ -14,7 +12,6 @@ use console::style;
 use eden_dag::DagAlgorithm;
 use eyre::Context;
 use itertools::Itertools;
-use os_str_bytes::{OsStrBytes, OsStringBytes};
 use tempfile::NamedTempFile;
 use tracing::instrument;
 
@@ -26,7 +23,8 @@ use crate::core::eventlog::{Event, EventLogDb, EventReplayer};
 use crate::core::formatting::{printable_styled_string, Pluralize};
 use crate::core::repo_ext::RepoExt;
 use crate::git::{
-    CategorizedReferenceName, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo, ResolvedReferenceInfo,
+    CategorizedReferenceName, GitRunInfo, MaybeZeroOid, NonZeroOid, ReferenceName, Repo,
+    ResolvedReferenceInfo,
 };
 
 use super::execute::check_out_updated_head;
@@ -225,7 +223,7 @@ fn warn_abandoned(
 
     let (all_abandoned_children, all_abandoned_branches) = {
         let mut all_abandoned_children: HashSet<NonZeroOid> = HashSet::new();
-        let mut all_abandoned_branches: HashSet<&OsStr> = HashSet::new();
+        let mut all_abandoned_branches: HashSet<&str> = HashSet::new();
         for old_commit_oid in old_commit_oids {
             let abandoned_result = find_abandoned_children(
                 &dag,
@@ -241,7 +239,8 @@ fn warn_abandoned(
             all_abandoned_children.extend(abandoned_children.iter());
             if let Some(branch_names) = references_snapshot.branch_oid_to_names.get(&old_commit_oid)
             {
-                all_abandoned_branches.extend(branch_names.iter().map(OsString::as_os_str));
+                all_abandoned_branches
+                    .extend(branch_names.iter().map(|branch_name| branch_name.as_str()));
             }
         }
         (all_abandoned_children, all_abandoned_branches)
@@ -271,8 +270,10 @@ fn warn_abandoned(
                 .to_string();
 
                 let mut all_abandoned_branches: Vec<String> = all_abandoned_branches
-                    .iter()
-                    .map(|branch_name| CategorizedReferenceName::new(branch_name).render_suffix())
+                    .into_iter()
+                    .map(|branch_name| {
+                        CategorizedReferenceName::new(&branch_name.into()).render_suffix()
+                    })
                     .collect();
                 all_abandoned_branches.sort_unstable();
                 let abandoned_branches_list = all_abandoned_branches.join(", ");
@@ -335,7 +336,7 @@ pub fn save_original_head_info(repo: &Repo, head_info: &ResolvedReferenceInfo) -
         let dest_file_name = repo
             .get_rebase_state_dir_path()
             .join(ORIGINAL_HEAD_FILE_NAME);
-        std::fs::write(dest_file_name, head_name.to_raw_bytes()).wrap_err("Writing head name")?;
+        std::fs::write(dest_file_name, head_name.as_str()).wrap_err("Writing head name")?;
     }
 
     Ok(())
@@ -359,10 +360,7 @@ fn load_original_head_info(repo: &Repo) -> eyre::Result<ResolvedReferenceInfo> {
             .get_rebase_state_dir_path()
             .join(ORIGINAL_HEAD_FILE_NAME);
         match std::fs::read(source_file_name) {
-            Ok(reference_name) => Some(Cow::Owned(
-                OsStringBytes::from_raw_vec(reference_name)
-                    .wrap_err("Decoding original head name")?,
-            )),
+            Ok(reference_name) => Some(ReferenceName::from_bytes(reference_name)?),
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => None,
             Err(err) => return Err(err.into()),
         }
@@ -468,7 +466,7 @@ pub fn hook_drop_commit_if_empty(
     )?;
     repo.set_head(only_parent_oid)?;
 
-    let orig_head_oid = match repo.find_reference(&OsString::from("ORIG_HEAD"))? {
+    let orig_head_oid = match repo.find_reference(&"ORIG_HEAD".into())? {
         Some(orig_head_reference) => orig_head_reference
             .peel_to_commit()?
             .map(|orig_head_commit| orig_head_commit.get_oid()),
@@ -506,7 +504,7 @@ pub fn hook_skip_upstream_applied_commit(
         )?
     )?;
 
-    if let Some(orig_head_reference) = repo.find_reference(OsStr::new("ORIG_HEAD"))? {
+    if let Some(orig_head_reference) = repo.find_reference(&"ORIG_HEAD".into())? {
         let resolved_orig_head = repo.resolve_reference(&orig_head_reference)?;
         if let Some(original_head_oid) = resolved_orig_head.oid {
             if original_head_oid == commit_oid {

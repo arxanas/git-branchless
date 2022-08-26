@@ -401,14 +401,14 @@ pub fn traverse_commits(
         Some(current_oid) => current_oid,
     };
 
-    let current_oid: OsString = match distance {
+    let current_oid: String = match distance {
         Distance::AllTheWay {
             move_by_branches: false,
         }
         | Distance::NumCommits {
             amount: _,
             move_by_branches: false,
-        } => current_oid.to_string().into(),
+        } => current_oid.to_string(),
 
         Distance::AllTheWay {
             move_by_branches: true,
@@ -425,13 +425,13 @@ pub fn traverse_commits(
 
             if branches.is_empty() {
                 warn!(?current_oid, "No branches attached to commit with OID");
-                current_oid.to_string().into()
+                current_oid.to_string()
             } else if branches.len() == 1 {
                 let branch = branches.iter().next().unwrap();
-                branch.clone()
+                branch.as_str().to_owned()
             } else {
                 // It's ambiguous which branch the user wants; just check out the commit directly.
-                current_oid.to_string().into()
+                current_oid.to_string()
             }
         }
     };
@@ -613,7 +613,7 @@ pub fn checkout(
         &repo,
         &event_log_db,
         event_tx_id,
-        target.as_ref(),
+        target.as_deref(),
         &CheckOutCommitOptions {
             additional_args,
             render_smartlog: true,

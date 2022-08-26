@@ -37,7 +37,9 @@ fn test_git_v2_31_events() -> eyre::Result<()> {
             event_tx_id: EventTransactionId(
                 1,
             ),
-            ref_name: "refs/heads/test1",
+            ref_name: ReferenceName(
+                "refs/heads/test1",
+            ),
             old_oid: 0000000000000000000000000000000000000000,
             new_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
             message: None,
@@ -47,7 +49,9 @@ fn test_git_v2_31_events() -> eyre::Result<()> {
             event_tx_id: EventTransactionId(
                 2,
             ),
-            ref_name: "HEAD",
+            ref_name: ReferenceName(
+                "HEAD",
+            ),
             old_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
             new_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
             message: None,
@@ -57,7 +61,9 @@ fn test_git_v2_31_events() -> eyre::Result<()> {
             event_tx_id: EventTransactionId(
                 3,
             ),
-            ref_name: "HEAD",
+            ref_name: ReferenceName(
+                "HEAD",
+            ),
             old_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
             new_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
             message: None,
@@ -67,7 +73,9 @@ fn test_git_v2_31_events() -> eyre::Result<()> {
             event_tx_id: EventTransactionId(
                 3,
             ),
-            ref_name: "refs/heads/test1",
+            ref_name: ReferenceName(
+                "refs/heads/test1",
+            ),
             old_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
             new_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
             message: None,
@@ -84,7 +92,9 @@ fn test_git_v2_31_events() -> eyre::Result<()> {
             event_tx_id: EventTransactionId(
                 5,
             ),
-            ref_name: "HEAD",
+            ref_name: ReferenceName(
+                "HEAD",
+            ),
             old_oid: 0000000000000000000000000000000000000000,
             new_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
             message: None,
@@ -94,7 +104,9 @@ fn test_git_v2_31_events() -> eyre::Result<()> {
             event_tx_id: EventTransactionId(
                 6,
             ),
-            ref_name: "HEAD",
+            ref_name: ReferenceName(
+                "HEAD",
+            ),
             old_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
             new_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
             message: None,
@@ -104,7 +116,9 @@ fn test_git_v2_31_events() -> eyre::Result<()> {
             event_tx_id: EventTransactionId(
                 7,
             ),
-            ref_name: "HEAD",
+            ref_name: ReferenceName(
+                "HEAD",
+            ),
             old_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24,
             new_oid: fe65c1fe15584744e649b2c79d4cf9b0d878f92e,
             message: None,
@@ -128,7 +142,9 @@ fn test_git_v2_31_events() -> eyre::Result<()> {
             event_tx_id: EventTransactionId(
                 10,
             ),
-            ref_name: "refs/heads/test1",
+            ref_name: ReferenceName(
+                "refs/heads/test1",
+            ),
             old_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
             new_oid: 0000000000000000000000000000000000000000,
             message: None,
