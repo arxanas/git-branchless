@@ -9,6 +9,7 @@ use std::mem::swap;
 use std::time::SystemTime;
 
 use console::style;
+use eden_dag::DagAlgorithm;
 use lib::core::config::{get_hint_enabled, print_hint_suppression_notice, Hint};
 use lib::core::repo_ext::RepoExt;
 use lib::core::rewrite::find_rewrite_target;
@@ -654,19 +655,21 @@ pub fn smartlog(
     }
 
     if !show_hidden_commits && get_hint_enabled(&repo, Hint::SmartlogFixAbandoned)? {
-        let num_abandoned_children = graph
+        let commits_with_abandoned_children: CommitSet = graph
             .nodes
             .iter()
             .filter_map(|(oid, node)| {
                 if node.is_obsolete
                     && find_rewrite_target(&event_replayer, event_cursor, *oid).is_some()
                 {
-                    Some(node.children.iter())
+                    Some(*oid)
                 } else {
                     None
                 }
             })
-            .count();
+            .collect();
+        let children = dag.query().children(commits_with_abandoned_children)?;
+        let num_abandoned_children = children.difference(&dag.obsolete_commits).count()?;
         if num_abandoned_children > 0 {
             writeln!(
                 effects.get_output_stream(),
