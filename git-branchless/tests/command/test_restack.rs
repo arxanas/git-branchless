@@ -564,9 +564,6 @@ fn test_restack_non_observed_branch_commit() -> eyre::Result<()> {
         : % 96d1c37 (rewritten as 59e75818) (> foo) create test2.txt
         :
         O 59e7581 (master) create test2.txt
-        hint: there are 2 abandoned commits in your commit graph
-        hint: to fix this, run: git restack
-        hint: disable this hint by running: git config --global branchless.hint.smartlogFixAbandoned false
         "###);
     }
 

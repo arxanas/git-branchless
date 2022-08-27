@@ -606,3 +606,30 @@ fn test_smartlog_hint_abandoned() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_smartlog_hint_abandoned_except_current_commit() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    let test1_oid = git.commit_file("test1", 1)?;
+    git.run(&["commit", "--amend", "--message", "amended test1"])?;
+    git.run(&["checkout", &test1_oid.to_string()])?;
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc create initial.txt
+        |\
+        | % 62fc20d (rewritten as ae94dc2a) create test1.txt
+        |
+        O ae94dc2 (master) amended test1
+        "###);
+    }
+
+    Ok(())
+}

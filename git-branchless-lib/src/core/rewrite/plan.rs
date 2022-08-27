@@ -1817,7 +1817,7 @@ mod tests {
         x 9ea1b36 (rewritten as 2b47b505) create test5.txt
         |
         o 8fb706a Merge commit '355e173bf9c5d2efac2e451da0cdad3fb82b869a' into HEAD
-        hint: there are 3 abandoned commits in your commit graph
+        hint: there is 1 abandoned commit in your commit graph
         hint: to fix this, run: git restack
         hint: disable this hint by running: git config --global branchless.hint.smartlogFixAbandoned false
         "###);
