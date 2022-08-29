@@ -544,7 +544,7 @@ impl BuildRebasePlanError {
 You are trying to rewrite {}, such as: {}
 It is generally not advised to rewrite public commits, because your
 collaborators will have difficulty merging your changes.
-Retry with -f/--force to proceed anyways.",
+Retry with -f/--force-rewrite to proceed anyways.",
                     Pluralize {
                         determiner: None,
                         amount: public_commits_to_move.count()?,
