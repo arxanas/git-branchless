@@ -57,7 +57,7 @@ git-record = { version = "0.2", path = "../git-record" }
 indicatif = "0.17.0-rc.11"
 itertools = "0.10.3"
 lazy_static = "1.4.0"
-os_str_bytes = "6.2.0"
+os_str_bytes = "6.3.0"
 rayon = "1.5.3"
 regex = "1.6.0"
 rusqlite = { version = "0.28.0", features = ["bundled"] }
