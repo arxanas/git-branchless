@@ -336,7 +336,14 @@ pub enum Command {
         traverse_commits_options: TraverseCommitsOptions,
     },
 
-    /// Query the commit graph using the "revset" DSL.
+    /// Query the commit graph using the "revset" language and print matching
+    /// commits.
+    ///
+    /// See https://github.com/arxanas/git-branchless/wiki/Reference:-Revsets to
+    /// learn more about revsets.
+    ///
+    /// The outputted commits are guaranteed to be topologically sorted, with
+    /// ancestor commits appearing first.
     Query {
         /// The query to execute.
         #[clap(value_parser)]
