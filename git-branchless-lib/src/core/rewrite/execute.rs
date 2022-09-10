@@ -8,7 +8,7 @@ use bstr::BString;
 use eyre::Context;
 use tracing::warn;
 
-use crate::core::check_out::{check_out_commit, CheckOutCommitOptions};
+use crate::core::check_out::{check_out_commit, CheckOutCommitOptions, CheckoutTarget};
 use crate::core::effects::Effects;
 use crate::core::eventlog::{EventLogDb, EventTransactionId};
 use crate::core::formatting::{printable_styled_string, Pluralize};
@@ -233,7 +233,7 @@ pub fn check_out_updated_head(
         return Ok(ExitCode(0));
     }
 
-    let checkout_target: ReferenceName = match &checkout_target {
+    let checkout_target: CheckoutTarget = match &checkout_target {
         ResolvedReferenceInfo {
             oid: None,
             reference_name: None,
@@ -242,7 +242,7 @@ pub fn check_out_updated_head(
         ResolvedReferenceInfo {
             oid: Some(oid),
             reference_name: None,
-        } => oid.to_string().into(),
+        } => CheckoutTarget::Oid(*oid),
 
         ResolvedReferenceInfo {
             oid: _,
@@ -254,7 +254,7 @@ pub fn check_out_updated_head(
                 Some(branch_name) => branch_name,
                 None => reference_name.as_str(),
             };
-            checkout_target.into()
+            CheckoutTarget::Reference(ReferenceName::from(checkout_target))
         }
     };
 
@@ -264,7 +264,7 @@ pub fn check_out_updated_head(
         repo,
         event_log_db,
         event_tx_id,
-        Some(checkout_target.as_str()),
+        Some(checkout_target),
         check_out_commit_options,
     )?;
     Ok(result)

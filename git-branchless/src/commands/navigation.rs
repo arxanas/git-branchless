@@ -9,7 +9,7 @@ use std::time::SystemTime;
 use cursive::theme::BaseColor;
 use cursive::utils::markup::StyledString;
 use eden_dag::DagAlgorithm;
-use lib::core::check_out::{check_out_commit, CheckOutCommitOptions};
+use lib::core::check_out::{check_out_commit, CheckOutCommitOptions, CheckoutTarget};
 use lib::core::repo_ext::RepoExt;
 use lib::util::ExitCode;
 use tracing::{instrument, warn};
@@ -401,14 +401,14 @@ pub fn traverse_commits(
         Some(current_oid) => current_oid,
     };
 
-    let current_oid: String = match distance {
+    let checkout_target: CheckoutTarget = match distance {
         Distance::AllTheWay {
             move_by_branches: false,
         }
         | Distance::NumCommits {
             amount: _,
             move_by_branches: false,
-        } => current_oid.to_string(),
+        } => CheckoutTarget::Oid(current_oid),
 
         Distance::AllTheWay {
             move_by_branches: true,
@@ -425,13 +425,13 @@ pub fn traverse_commits(
 
             if branches.is_empty() {
                 warn!(?current_oid, "No branches attached to commit with OID");
-                current_oid.to_string()
+                CheckoutTarget::Oid(current_oid)
             } else if branches.len() == 1 {
                 let branch = branches.iter().next().unwrap();
-                branch.as_str().to_owned()
+                CheckoutTarget::Reference(branch.to_owned())
             } else {
                 // It's ambiguous which branch the user wants; just check out the commit directly.
-                current_oid.to_string()
+                CheckoutTarget::Oid(current_oid)
             }
         }
     };
@@ -452,7 +452,7 @@ pub fn traverse_commits(
         &repo,
         &event_log_db,
         event_tx_id,
-        Some(&current_oid),
+        Some(checkout_target),
         &CheckOutCommitOptions {
             additional_args,
             ..Default::default()
@@ -566,8 +566,8 @@ pub fn checkout(
     )?;
 
     let initial_query = get_initial_query(checkout_options);
-    let target = match initial_query {
-        None => target.clone(),
+    let target: Option<CheckoutTarget> = match initial_query {
+        None => target.clone().map(CheckoutTarget::Unknown),
         Some(initial_query) => {
             match prompt_select_commit(
                 None,
@@ -586,7 +586,7 @@ pub fn checkout(
                     &mut CommitMessageDescriptor::new(&Redactor::Disabled)?,
                 ],
             )? {
-                Some(oid) => Some(oid.to_string()),
+                Some(oid) => Some(CheckoutTarget::Oid(oid)),
                 None => return Ok(ExitCode(1)),
             }
         }
@@ -613,7 +613,7 @@ pub fn checkout(
         &repo,
         &event_log_db,
         event_tx_id,
-        target.as_deref(),
+        target,
         &CheckOutCommitOptions {
             additional_args,
             render_smartlog: true,
