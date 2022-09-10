@@ -14,7 +14,7 @@ use cursive::utils::markup::StyledString;
 use cursive::views::{Dialog, EditView, LinearLayout, OnEventView, Panel, ScrollView, TextView};
 use cursive::{Cursive, CursiveRunnable, CursiveRunner};
 use eyre::Context;
-use lib::core::check_out::{check_out_commit, CheckOutCommitOptions};
+use lib::core::check_out::{check_out_commit, CheckOutCommitOptions, CheckoutTarget};
 use lib::core::repo_ext::RepoExt;
 use lib::util::ExitCode;
 use tracing::instrument;
@@ -694,14 +694,14 @@ fn inverse_event(
 }
 
 #[derive(Clone, Debug)]
-struct CheckoutTarget {
-    target: String,
+struct UndoCheckoutTarget {
+    target: CheckoutTarget,
     options: CheckOutCommitOptions,
 }
 
 fn extract_checkout_target(
     events: &[Event],
-) -> eyre::Result<(Option<CheckoutTarget>, Vec<&Event>)> {
+) -> eyre::Result<(Option<UndoCheckoutTarget>, Vec<&Event>)> {
     let mut new_events = Vec::new();
     let mut checkout_target = None;
     for event in events.iter() {
@@ -711,11 +711,11 @@ fn extract_checkout_target(
                 event_tx_id: _,
                 ref_name,
                 old_oid: _,
-                new_oid,
+                new_oid: MaybeZeroOid::NonZero(new_oid),
                 message: _,
             } if ref_name.as_str() == "HEAD" => {
-                checkout_target = Some(CheckoutTarget {
-                    target: new_oid.to_string(),
+                checkout_target = Some(UndoCheckoutTarget {
+                    target: CheckoutTarget::Oid(*new_oid),
                     options: CheckOutCommitOptions {
                         additional_args: vec!["--detach".into()],
                         render_smartlog: true,
@@ -730,8 +730,8 @@ fn extract_checkout_target(
                 commit_oid,
                 ref_name,
             } => {
-                checkout_target = Some(CheckoutTarget {
-                    target: commit_oid.to_string(),
+                checkout_target = Some(UndoCheckoutTarget {
+                    target: CheckoutTarget::Oid(*commit_oid),
                     options: CheckOutCommitOptions {
                         additional_args: match ref_name {
                             Some(ref_name) => {
@@ -897,14 +897,14 @@ fn undo_events(
         }
     }
 
-    if let Some(CheckoutTarget { target, options }) = checkout_target {
+    if let Some(UndoCheckoutTarget { target, options }) = checkout_target {
         let exit_code = check_out_commit(
             effects,
             git_run_info,
             repo,
             event_log_db,
             event_tx_id,
-            Some(&target),
+            Some(target),
             &options,
         )
         .wrap_err("Updating to previous HEAD location")?;
@@ -1049,8 +1049,10 @@ mod tests {
         insta::assert_debug_snapshot!(extract_checkout_target(&input)?, @r###"
         (
             Some(
-                CheckoutTarget {
-                    target: "3000000000000000000000000000000000000000",
+                UndoCheckoutTarget {
+                    target: Oid(
+                        NonZeroOid(3000000000000000000000000000000000000000),
+                    ),
                     options: CheckOutCommitOptions {
                         additional_args: [
                             "--detach",

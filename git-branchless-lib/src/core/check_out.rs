@@ -10,8 +10,8 @@ use eyre::Context;
 use tracing::instrument;
 
 use crate::git::{
-    update_index, CategorizedReferenceName, GitRunInfo, MaybeZeroOid, ReferenceName, Repo, Stage,
-    UpdateIndexCommand, WorkingCopySnapshot,
+    update_index, CategorizedReferenceName, GitRunInfo, MaybeZeroOid, NonZeroOid, ReferenceName,
+    Repo, Stage, UpdateIndexCommand, WorkingCopySnapshot,
 };
 use crate::util::ExitCode;
 
@@ -19,6 +19,21 @@ use super::config::get_undo_create_snapshots;
 use super::effects::Effects;
 use super::eventlog::{Event, EventLogDb, EventTransactionId};
 use super::formatting::printable_styled_string;
+
+/// An entity to check out.
+#[derive(Clone, Debug)]
+pub enum CheckoutTarget {
+    /// A commit addressed directly by OID.
+    Oid(NonZeroOid),
+
+    /// A reference. If the reference is a branch, then the branch will be
+    /// checked out.
+    Reference(ReferenceName),
+
+    /// The type of checkout target is not known, as it was provided from the
+    /// user and we haven't resolved it ourselves.
+    Unknown(String),
+}
 
 /// Options for checking out a commit.
 #[derive(Clone, Debug)]
@@ -48,7 +63,7 @@ pub fn check_out_commit(
     repo: &Repo,
     event_log_db: &EventLogDb,
     event_tx_id: EventTransactionId,
-    target: Option<&str>,
+    target: Option<CheckoutTarget>,
     options: &CheckOutCommitOptions,
 ) -> eyre::Result<ExitCode> {
     let CheckOutCommitOptions {
@@ -58,11 +73,12 @@ pub fn check_out_commit(
 
     let target = match target {
         None => None,
-        Some(target) => {
-            let reference_name = ReferenceName::from(target);
+        Some(CheckoutTarget::Reference(reference_name)) => {
             let categorized_target = CategorizedReferenceName::new(&reference_name);
             Some(categorized_target.remove_prefix()?)
         }
+        Some(CheckoutTarget::Oid(oid)) => Some(oid.to_string()),
+        Some(CheckoutTarget::Unknown(target)) => Some(target),
     };
 
     if get_undo_create_snapshots(repo)? {
