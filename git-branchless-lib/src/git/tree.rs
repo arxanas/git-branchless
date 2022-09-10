@@ -1,12 +1,11 @@
 use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
-use std::ffi::OsString;
 use std::iter::FromIterator;
 use std::path::{Path, PathBuf};
 
+use bstr::ByteVec;
 use eyre::Context;
 use itertools::Itertools;
-use os_str_bytes::OsStringBytes;
 use tracing::{instrument, warn};
 
 use super::oid::make_non_zero_oid;
@@ -149,11 +148,10 @@ fn get_changed_paths_between_trees_internal(
             })
         };
 
-        let full_entry_path = || -> Vec<PathBuf> {
-            let entry_name: OsString = OsStringBytes::from_raw_vec(entry_name.to_vec()).unwrap();
+        let full_entry_path = || -> eyre::Result<Vec<PathBuf>> {
             let mut full_entry_path = current_path.to_vec();
-            full_entry_path.push(PathBuf::from(entry_name));
-            full_entry_path
+            full_entry_path.push(entry_name.to_vec().into_path_buf()?);
+            Ok(full_entry_path)
         };
         match (classify_entry(lhs_entry)?, classify_entry(rhs_entry)?) {
             (ClassifiedEntry::Absent, ClassifiedEntry::Absent) => {
@@ -168,21 +166,21 @@ fn get_changed_paths_between_trees_internal(
                     // Unchanged file, do nothing.
                 } else {
                     // Changed file.
-                    acc.push(full_entry_path());
+                    acc.push(full_entry_path()?);
                 }
             }
 
             (ClassifiedEntry::Absent, ClassifiedEntry::NotATree(_, _))
             | (ClassifiedEntry::NotATree(_, _), ClassifiedEntry::Absent) => {
                 // Added, removed, or changed file.
-                acc.push(full_entry_path());
+                acc.push(full_entry_path()?);
             }
 
             (ClassifiedEntry::Absent, ClassifiedEntry::Tree(tree_oid, _))
             | (ClassifiedEntry::Tree(tree_oid, _), ClassifiedEntry::Absent) => {
                 // A directory was added or removed. Add all entries from that
                 // directory.
-                let full_entry_path = full_entry_path();
+                let full_entry_path = full_entry_path()?;
                 let tree = get_tree(tree_oid)?;
                 get_changed_paths_between_trees_internal(
                     repo,
@@ -197,7 +195,7 @@ fn get_changed_paths_between_trees_internal(
             | (ClassifiedEntry::Tree(tree_oid, _), ClassifiedEntry::NotATree(_, _)) => {
                 // A file was changed into a directory. Add both the file and
                 // all subdirectory entries as changed entries.
-                let full_entry_path = full_entry_path();
+                let full_entry_path = full_entry_path()?;
                 let tree = get_tree(tree_oid)?;
                 get_changed_paths_between_trees_internal(
                     repo,
@@ -228,7 +226,7 @@ fn get_changed_paths_between_trees_internal(
 
                     (true, false) => {
                         // Only the directory changed, but none of its contents.
-                        acc.push(full_entry_path());
+                        acc.push(full_entry_path()?);
                     }
 
                     (false, true) => {
@@ -240,7 +238,7 @@ fn get_changed_paths_between_trees_internal(
                         get_changed_paths_between_trees_internal(
                             repo,
                             acc,
-                            &full_entry_path(),
+                            &full_entry_path()?,
                             Some(&lhs_tree.inner),
                             Some(&rhs_tree.inner),
                         )?;
@@ -249,7 +247,7 @@ fn get_changed_paths_between_trees_internal(
                     (false, false) => {
                         let lhs_tree = get_tree(lhs_tree_oid)?;
                         let rhs_tree = get_tree(rhs_tree_oid)?;
-                        let full_entry_path = full_entry_path();
+                        let full_entry_path = full_entry_path()?;
 
                         get_changed_paths_between_trees_internal(
                             repo,

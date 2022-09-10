@@ -1,10 +1,10 @@
 use std::collections::{HashMap, HashSet};
 
-use std::ffi::OsString;
 use std::fmt::Write;
 use std::path::PathBuf;
 use std::time::SystemTime;
 
+use bstr::BString;
 use eyre::Context;
 use tracing::warn;
 
@@ -105,7 +105,7 @@ pub fn move_branches<'a>(
             format!("{old_oid} {new_oid} {name}\n", name = name.as_str())
         })
         .collect();
-    let branch_moves_stdin = OsString::from(branch_moves_stdin);
+    let branch_moves_stdin = BString::from(branch_moves_stdin);
     git_run_info.run_hook(
         effects,
         repo,
@@ -340,9 +340,9 @@ impl MergeConflictInfo {
 
 mod in_memory {
     use std::collections::HashMap;
-    use std::ffi::OsString;
     use std::fmt::Write;
 
+    use bstr::{BString, ByteSlice};
     use eyre::Context;
     use tracing::{instrument, warn};
 
@@ -522,7 +522,7 @@ mod in_memory {
                     };
 
                     let commit_message = commit_to_apply.get_message_raw()?;
-                    let commit_message = commit_message.to_str().ok_or_else(|| {
+                    let commit_message = commit_message.to_str().with_context(|| {
                         eyre::eyre!(
                             "Could not decode commit message for commit: {:?}",
                             commit_to_apply_oid
@@ -721,7 +721,7 @@ mod in_memory {
             .iter()
             .map(|(old_oid, new_oid)| format!("{} {}\n", old_oid, new_oid))
             .collect();
-        let post_rewrite_stdin = OsString::from(post_rewrite_stdin);
+        let post_rewrite_stdin = BString::from(post_rewrite_stdin);
         git_run_info.run_hook(
             effects,
             repo,

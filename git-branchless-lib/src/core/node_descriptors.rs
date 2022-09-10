@@ -8,6 +8,7 @@ use std::convert::TryInto;
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
+use bstr::{ByteSlice, ByteVec};
 use cursive::theme::BaseColor;
 use cursive::utils::markup::StyledString;
 use lazy_static::lazy_static;
@@ -222,7 +223,10 @@ impl<'a> NodeDescriptor for CommitMessageDescriptor<'a> {
         object: &NodeObject,
     ) -> eyre::Result<Option<StyledString>> {
         let summary = match object {
-            NodeObject::Commit { commit } => commit.get_summary()?.to_string_lossy().into_owned(),
+            NodeObject::Commit { commit } => {
+                let summary = commit.get_summary()?.to_vec();
+                summary.into_string_lossy()
+            }
             NodeObject::GarbageCollected { oid: _ } => "<garbage collected>".to_string(),
         };
         let summary = self.redactor.redact_commit_summary(summary);
@@ -428,7 +432,7 @@ impl<'a> NodeDescriptor for DifferentialRevisionDescriptor<'a> {
             NodeObject::GarbageCollected { oid: _ } => return Ok(None),
         };
 
-        let diff_number = match extract_diff_number(&commit.get_message_raw()?.to_string_lossy()) {
+        let diff_number = match extract_diff_number(&commit.get_message_raw()?.to_str_lossy()) {
             Some(diff_number) => diff_number,
             None => return Ok(None),
         };

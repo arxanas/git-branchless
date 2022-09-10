@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use branchless::core::effects::Effects;
 use branchless::core::formatting::Glyphs;
 use branchless::git::{hydrate_tree, process_diff_for_record, FileMode, Repo};
+use bstr::ByteSlice;
 use eyre::Context;
 use git_record::{FileState, Section};
 
@@ -100,7 +101,7 @@ fn main() -> eyre::Result<()> {
             let author = current_commit.get_author();
             let committer = current_commit.get_committer();
             let message = current_commit.get_message_raw()?;
-            let message = message.to_string_lossy();
+            let message = message.to_str_lossy();
             let parents = current_commit.get_parents();
             let actual_oid = repo.create_commit(
                 None,

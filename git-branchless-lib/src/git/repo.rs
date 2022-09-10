@@ -12,20 +12,20 @@
 use std::borrow::{Borrow, Cow};
 use std::collections::{HashMap, HashSet};
 use std::convert::{TryFrom, TryInto};
-use std::ffi::{OsStr, OsString};
+use std::ffi::OsStr;
 use std::ops::Add;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::string::FromUtf8Error;
 use std::time::{Duration, SystemTime};
 
+use bstr::{BString, ByteSlice, ByteVec};
 use chrono::NaiveDateTime;
 use cursive::theme::BaseColor;
 use cursive::utils::markup::StyledString;
 use eyre::Context;
 use git2::{message_trailers_bytes, DiffOptions};
 use itertools::Itertools;
-use os_str_bytes::{OsStrBytes, OsStringBytes};
 use thiserror::Error;
 use tracing::{instrument, warn};
 
@@ -944,14 +944,13 @@ impl Repo {
                     {
                         let conflict = conflict.wrap_err("Getting conflicting path")?;
                         if let Some(ancestor) = conflict.ancestor {
-                            result
-                                .insert(PathBuf::from(OsStrBytes::from_raw_bytes(ancestor.path)?));
+                            result.insert(ancestor.path.into_path_buf()?);
                         }
                         if let Some(our) = conflict.our {
-                            result.insert(PathBuf::from(OsStrBytes::from_raw_bytes(our.path)?));
+                            result.insert(our.path.into_path_buf()?);
                         }
                         if let Some(their) = conflict.their {
-                            result.insert(PathBuf::from(OsStrBytes::from_raw_bytes(their.path)?));
+                            result.insert(their.path.into_path_buf()?);
                         }
                     }
                     result
@@ -1349,25 +1348,23 @@ impl<'repo> Commit<'repo> {
 
     /// Get the summary (first line) of the commit message.
     #[instrument]
-    pub fn get_summary(&self) -> eyre::Result<OsString> {
+    pub fn get_summary(&self) -> eyre::Result<BString> {
         match self.inner.summary_bytes() {
-            Some(summary) => Ok(OsString::from_raw_vec(summary.into())?),
+            Some(summary) => Ok(BString::from(summary)),
             None => eyre::bail!("Could not read summary for commit: {:?}", self.get_oid()),
         }
     }
 
     /// Get the commit message with some whitespace trimmed.
     #[instrument]
-    pub fn get_message_pretty(&self) -> eyre::Result<OsString> {
-        let message = OsString::from_raw_vec(self.inner.message_bytes().into())?;
-        Ok(message)
+    pub fn get_message_pretty(&self) -> eyre::Result<BString> {
+        Ok(BString::from(self.inner.message_bytes()))
     }
 
     /// Get the commit message, without any whitespace trimmed.
     #[instrument]
-    pub fn get_message_raw(&self) -> eyre::Result<OsString> {
-        let message = OsString::from_raw_vec(self.inner.message_raw_bytes().into())?;
-        Ok(message)
+    pub fn get_message_raw(&self) -> eyre::Result<BString> {
+        Ok(BString::from(self.inner.message_raw_bytes()))
     }
 
     /// Get the author of this commit.
@@ -1398,6 +1395,9 @@ impl<'repo> Commit<'repo> {
     #[instrument]
     pub fn get_trailers(&self) -> eyre::Result<Vec<(String, String)>> {
         let message = self.get_message_raw()?;
+        let message = message
+            .to_str()
+            .with_context(|| format!("Decoding message for commit {self:?}"))?;
         let mut result = Vec::new();
         for (k, v) in message_trailers_bytes(message)
             .wrap_err("Reading message trailers")?
@@ -1450,7 +1450,7 @@ impl<'repo> Commit<'repo> {
             ),
             StyledString::styled(format!("Date:\t{}", commit_time), BaseColor::Green.light()),
             StyledString::plain(textwrap::indent(
-                &self.get_message_pretty()?.to_string_lossy(),
+                &self.get_message_pretty()?.to_str_lossy(),
                 "    ",
             )),
         ]);
