@@ -11,6 +11,7 @@ use std::fs::File;
 use std::io::Write as OtherWrite;
 use std::time::SystemTime;
 
+use bstr::ByteSlice;
 use chrono::Local;
 use dialoguer::Editor;
 use eden_dag::DagAlgorithm;
@@ -384,7 +385,7 @@ fn prepare_messages(
         let original_message = commit
             .get_message_raw()?
             .to_str()
-            .ok_or_else(|| {
+            .with_context(|| {
                 eyre::eyre!(
                     "Could not decode commit message for commit: {:?}",
                     commit.get_oid()

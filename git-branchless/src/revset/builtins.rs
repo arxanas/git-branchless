@@ -1,3 +1,4 @@
+use bstr::ByteSlice;
 use eden_dag::DagAlgorithm;
 use lib::core::dag::CommitSet;
 use lib::git::{Commit, Repo};
@@ -241,11 +242,12 @@ fn fn_message(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
         Box::new(move |_repo, commit| {
             let message = commit.get_message_raw().map_err(PatternError::Repo)?;
             let message = match message.to_str() {
-                Some(message) => message,
-                None => {
+                Ok(message) => message,
+                Err(err) => {
                     warn!(
                         ?commit,
                         ?message,
+                        ?err,
                         "Commit message could not be decoded as UTF-8"
                     );
                     return Ok(false);

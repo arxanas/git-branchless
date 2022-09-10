@@ -94,7 +94,7 @@ version = "2.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "93ae1ddd39efd67689deb1979d80bad3bf7f2b09c6e6117c8d1f2443b5e2f83e"
 dependencies = [
- "bstr",
+ "bstr 0.2.17",
  "doc-comment",
  "predicates",
  "predicates-core",
@@ -175,6 +175,18 @@ checksum = "ba3569f383e8f1598449f1a423e72e99569137b47740b1da11ef19af3d5c3223"
 dependencies = [
  "lazy_static",
  "memchr",
+ "regex-automata",
+ "serde",
+]
+
+[[package]]
+name = "bstr"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11aee792a41973cf54c837d6f344e35a03076328831b01ef30a14d965d47bfbc"
+dependencies = [
+ "memchr",
+ "once_cell",
  "regex-automata",
  "serde",
 ]
@@ -569,7 +581,7 @@ version = "1.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "22813a6dc45b335f9bade10bf7271dc477e81113e89eb251a0bc2a8a81c536e1"
 dependencies = [
- "bstr",
+ "bstr 0.2.17",
  "csv-core",
  "itoa 0.4.8",
  "ryu",
@@ -1061,6 +1073,7 @@ version = "0.4.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
+ "bstr 1.0.0",
  "bugreport",
  "chrono",
  "chrono-english",
@@ -1083,7 +1096,6 @@ dependencies = [
  "lazy_static",
  "man",
  "once_cell",
- "os_str_bytes",
  "path-slash",
  "portable-pty",
  "rayon",
@@ -1104,6 +1116,7 @@ version = "0.4.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
+ "bstr 1.0.0",
  "chashmap",
  "chrono",
  "color-eyre",
@@ -1120,13 +1133,13 @@ dependencies = [
  "itertools 0.10.3",
  "lazy_static",
  "once_cell",
- "os_str_bytes",
  "portable-pty",
  "rayon",
  "regex",
  "rusqlite",
  "tempfile",
  "textwrap 0.15.0",
+ "thiserror",
  "tracing",
  "tracing-chrome",
  "tracing-error",
@@ -1704,12 +1717,9 @@ checksum = "0ab1bc2a289d34bd04a330323ac98a1b4bc82c9d9fcb1e66b63caa84da26b575"
 
 [[package]]
 name = "os_str_bytes"
-version = "6.2.0"
+version = "6.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "648001efe5d5c0102d8cea768e348da85d90af8ba91f0bea908f157951493cd4"
-dependencies = [
- "memchr",
-]
+checksum = "9ff7415e9ae3fff1225851df9e0d9e4e5479f947619774677a63572e55e80eff"
 
 [[package]]
 name = "owning_ref"
@@ -2926,7 +2936,7 @@ version = "1.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
- "cfg-if 0.1.10",
+ "cfg-if 1.0.0",
  "rand 0.8.5",
  "static_assertions",
 ]

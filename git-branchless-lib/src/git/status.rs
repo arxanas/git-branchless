@@ -1,8 +1,8 @@
 use std::path::PathBuf;
 use std::str::FromStr;
 
+use bstr::ByteVec;
 use lazy_static::lazy_static;
-use os_str_bytes::OsStrBytes;
 use regex::bytes::Regex;
 use tracing::{instrument, warn};
 
@@ -240,12 +240,10 @@ impl TryFrom<&[u8]> for StatusEntry {
             index_status,
             working_copy_status,
             working_copy_file_mode,
-            path: PathBuf::from(OsStrBytes::from_raw_bytes(path)?),
-            orig_path: orig_path.map(|orig_path| {
-                OsStrBytes::from_raw_bytes(orig_path)
-                    .map(PathBuf::from)
-                    .expect("unable to convert orig_path to PathBuf")
-            }),
+            path: path.to_vec().into_path_buf()?,
+            orig_path: orig_path
+                .map(|orig_path| orig_path.to_vec().into_path_buf())
+                .transpose()?,
         })
     }
 }

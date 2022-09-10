@@ -8,9 +8,9 @@ use std::process::{Command, ExitStatus, Stdio};
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 
+use bstr::BString;
 use eyre::{eyre, Context};
 use itertools::Itertools;
-use os_str_bytes::OsStrBytes;
 use tracing::instrument;
 
 use crate::core::config::get_core_hooks_path;
@@ -348,7 +348,7 @@ impl GitRunInfo {
         hook_name: &str,
         event_tx_id: EventTransactionId,
         args: &[&str],
-        stdin: Option<OsString>,
+        stdin: Option<BString>,
     ) -> eyre::Result<()> {
         let hook_dir = get_core_hooks_path(repo)?;
         if !hook_dir.exists() {
@@ -400,7 +400,7 @@ impl GitRunInfo {
                     .stdin
                     .as_mut()
                     .unwrap()
-                    .write_all(&stdin.to_raw_bytes())
+                    .write_all(&stdin)
                     .wrap_err("Writing hook process stdin")?;
             }
 
@@ -428,7 +428,7 @@ impl GitRunInfo {
         hook_name: &str,
         event_tx_id: EventTransactionId,
         args: &[S],
-        stdin: Option<OsString>,
+        stdin: Option<BString>,
     ) -> eyre::Result<()> {
         self.run_hook_inner(
             effects,
