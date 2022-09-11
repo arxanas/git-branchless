@@ -1,12 +1,14 @@
 use std::collections::HashSet;
 use std::path::PathBuf;
 
-use branchless::core::dag::Dag;
+use branchless::core::dag::{CommitSet, Dag};
 use branchless::core::effects::Effects;
 use branchless::core::eventlog::{EventLogDb, EventReplayer};
 use branchless::core::formatting::Glyphs;
 use branchless::core::repo_ext::RepoExt;
-use branchless::core::rewrite::{BuildRebasePlanOptions, RebasePlanBuilder, RepoResource};
+use branchless::core::rewrite::{
+    BuildRebasePlanOptions, RebasePlanBuilder, RebasePlanPermissions, RepoResource,
+};
 use branchless::git::{CherryPickFastOptions, Commit, Diff, Repo};
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use rayon::ThreadPoolBuilder;
@@ -54,7 +56,20 @@ fn bench_rebase_plan(c: &mut Criterion) {
         let pool = ThreadPoolBuilder::new().build().unwrap();
         let repo_pool = RepoResource::new_pool(&repo).unwrap();
 
-        let mut builder = RebasePlanBuilder::new(&dag);
+        let options = BuildRebasePlanOptions {
+            force_rewrite_public_commits: true,
+            dump_rebase_constraints: false,
+            dump_rebase_plan: false,
+            detect_duplicate_commits_via_patch_id: true,
+        };
+        let permissions = RebasePlanPermissions::verify_rewrite_set(
+            &dag,
+            &options,
+            &CommitSet::from(later_commit.get_oid()),
+        )
+        .unwrap()
+        .unwrap();
+        let mut builder = RebasePlanBuilder::new(&dag, permissions);
         builder
             .move_subtree(later_commit.get_oid(), earlier_commit.get_oid())
             .unwrap();
@@ -62,17 +77,7 @@ fn bench_rebase_plan(c: &mut Criterion) {
             || builder.clone(),
             |builder| {
                 builder
-                    .build(
-                        &effects,
-                        &pool,
-                        &repo_pool,
-                        &BuildRebasePlanOptions {
-                            force_rewrite_public_commits: true,
-                            dump_rebase_constraints: false,
-                            dump_rebase_plan: false,
-                            detect_duplicate_commits_via_patch_id: true,
-                        },
-                    )
+                    .build(&effects, &pool, &repo_pool, &options)
                     .unwrap()
                     .unwrap()
                     .unwrap()

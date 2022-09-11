@@ -25,7 +25,7 @@ use lib::core::effects::Effects;
 use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::rewrite::{
     execute_rebase_plan, BuildRebasePlanOptions, ExecuteRebasePlanOptions, ExecuteRebasePlanResult,
-    MergeConflictRemediation, RebasePlanBuilder, RepoResource,
+    MergeConflictRemediation, RebasePlanBuilder, RebasePlanPermissions, RepoResource,
 };
 use lib::git::{GitRunInfo, NonZeroOid, Repo};
 
@@ -245,7 +245,21 @@ pub fn r#move(
     let pool = ThreadPoolBuilder::new().build()?;
     let repo_pool = RepoResource::new_pool(&repo)?;
     let rebase_plan = {
-        let mut builder = RebasePlanBuilder::new(&dag);
+        let options = BuildRebasePlanOptions {
+            force_rewrite_public_commits,
+            dump_rebase_constraints,
+            dump_rebase_plan,
+            detect_duplicate_commits_via_patch_id,
+        };
+        let permissions =
+            match RebasePlanPermissions::verify_rewrite_set(&dag, &options, &source_oids)? {
+                Ok(permissions) => permissions,
+                Err(err) => {
+                    err.describe(effects, &repo)?;
+                    return Ok(ExitCode(1));
+                }
+            };
+        let mut builder = RebasePlanBuilder::new(&dag, permissions);
 
         let source_roots = dag.query().roots(source_oids.clone())?;
         for source_root in commit_set_to_vec_unsorted(&source_roots)? {
@@ -424,17 +438,7 @@ pub fn r#move(
                 builder.move_subtree(dest_child, source_head)?;
             }
         }
-        builder.build(
-            effects,
-            &pool,
-            &repo_pool,
-            &BuildRebasePlanOptions {
-                force_rewrite_public_commits,
-                dump_rebase_constraints,
-                dump_rebase_plan,
-                detect_duplicate_commits_via_patch_id,
-            },
-        )?
+        builder.build(effects, &pool, &repo_pool, &options)?
     };
     let result = match rebase_plan {
         Ok(None) => {

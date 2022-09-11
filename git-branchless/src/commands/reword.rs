@@ -28,7 +28,7 @@ use lib::core::formatting::{printable_styled_string, Glyphs, Pluralize};
 use lib::core::node_descriptors::{render_node_descriptors, CommitOidDescriptor, NodeObject};
 use lib::core::rewrite::{
     execute_rebase_plan, BuildRebasePlanOptions, ExecuteRebasePlanOptions, ExecuteRebasePlanResult,
-    RebasePlanBuilder, RepoResource,
+    RebasePlanBuilder, RebasePlanPermissions, RepoResource,
 };
 use lib::git::{message_prettify, Commit, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo};
 
@@ -71,6 +71,23 @@ pub fn reword(
     let commits = match resolve_commits_from_hashes(&repo, &mut dag, effects, revsets)? {
         Some(commits) => commits,
         None => return Ok(ExitCode(1)),
+    };
+    let build_options = BuildRebasePlanOptions {
+        force_rewrite_public_commits,
+        dump_rebase_constraints: false,
+        dump_rebase_plan: false,
+        detect_duplicate_commits_via_patch_id: false,
+    };
+    let permissions = match RebasePlanPermissions::verify_rewrite_set(
+        &dag,
+        &build_options,
+        &commits.iter().map(|commit| commit.get_oid()).collect(),
+    )? {
+        Ok(permissions) => permissions,
+        Err(err) => {
+            err.describe(effects, &repo)?;
+            return Ok(ExitCode(1));
+        }
     };
 
     #[instrument]
@@ -174,7 +191,7 @@ pub fn reword(
     let rebase_plan = {
         let pool = ThreadPoolBuilder::new().build()?;
         let repo_pool = RepoResource::new_pool(&repo)?;
-        let mut builder = RebasePlanBuilder::new(&dag);
+        let mut builder = RebasePlanBuilder::new(&dag, permissions);
 
         for root_commit in subtree_roots {
             let only_parent_id = root_commit.get_only_parent().map(|parent| parent.get_oid());
@@ -203,17 +220,7 @@ pub fn reword(
             builder.replace_commit(commit.get_oid(), replacement_oid)?;
         }
 
-        match builder.build(
-            effects,
-            &pool,
-            &repo_pool,
-            &BuildRebasePlanOptions {
-                force_rewrite_public_commits,
-                dump_rebase_constraints: false,
-                dump_rebase_plan: false,
-                detect_duplicate_commits_via_patch_id: false,
-            },
-        )? {
+        match builder.build(effects, &pool, &repo_pool, &build_options)? {
             Ok(Some(rebase_plan)) => rebase_plan,
             Ok(None) => {
                 eyre::bail!(

@@ -1,4 +1,4 @@
-use lib::testing::make_git;
+use lib::testing::{make_git, GitRunOptions};
 
 #[test]
 fn test_reword_head() -> eyre::Result<()> {
@@ -305,6 +305,32 @@ fn test_reword_across_branches() -> eyre::Result<()> {
     |
     @ 8648fbd create test5.txt
     "###);
+
+    Ok(())
+}
+
+#[test]
+fn test_reword_exit_early_public_commit() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    git.init_repo()?;
+    git.commit_file("test1", 1)?;
+
+    {
+        let (stdout, _stderr) = git.run_with_options(
+            &["reword"],
+            &GitRunOptions {
+                expected_exit_code: 1,
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stdout, @r###"
+        You are trying to rewrite 1 public commit, such as: 62fc20d create test1.txt
+        It is generally not advised to rewrite public commits, because your
+        collaborators will have difficulty merging your changes.
+        Retry with -f/--force-rewrite to proceed anyways.
+        "###);
+    }
 
     Ok(())
 }

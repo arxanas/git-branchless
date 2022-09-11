@@ -76,7 +76,7 @@ use lib::core::eventlog::{EventCursor, EventLogDb, EventReplayer};
 use lib::core::rewrite::{
     execute_rebase_plan, find_abandoned_children, find_rewrite_target, move_branches,
     BuildRebasePlanOptions, ExecuteRebasePlanOptions, ExecuteRebasePlanResult,
-    MergeConflictRemediation, RebasePlanBuilder, RepoPool, RepoResource,
+    MergeConflictRemediation, RebasePlanBuilder, RebasePlanPermissions, RepoPool, RepoResource,
 };
 use lib::git::{GitRunInfo, NonZeroOid, Repo};
 
@@ -136,7 +136,26 @@ fn restack_commits(
     };
 
     let rebase_plan = {
-        let mut builder = RebasePlanBuilder::new(dag);
+        let permissions = match RebasePlanPermissions::verify_rewrite_set(
+            dag,
+            build_options,
+            &rebases
+                .iter()
+                .flat_map(
+                    |RebaseInfo {
+                         dest_oid: _,
+                         abandoned_child_oids,
+                     }| abandoned_child_oids.iter().copied(),
+                )
+                .collect(),
+        )? {
+            Ok(permissions) => permissions,
+            Err(err) => {
+                err.describe(effects, &repo)?;
+                return Ok(ExitCode(1));
+            }
+        };
+        let mut builder = RebasePlanBuilder::new(dag, permissions);
         for RebaseInfo {
             dest_oid,
             abandoned_child_oids,
