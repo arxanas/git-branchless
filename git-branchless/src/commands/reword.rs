@@ -220,7 +220,7 @@ pub fn reword(
             builder.replace_commit(commit.get_oid(), replacement_oid)?;
         }
 
-        match builder.build(effects, &pool, &repo_pool, &build_options)? {
+        match builder.build(effects, &pool, &repo_pool)? {
             Ok(Some(rebase_plan)) => rebase_plan,
             Ok(None) => {
                 eyre::bail!(

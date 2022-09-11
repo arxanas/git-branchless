@@ -165,7 +165,7 @@ fn restack_commits(
                 builder.move_subtree(child_oid, dest_oid)?;
             }
         }
-        match builder.build(effects, thread_pool, repo_pool, build_options)? {
+        match builder.build(effects, thread_pool, repo_pool)? {
             Ok(Some(rebase_plan)) => rebase_plan,
             Ok(None) => {
                 writeln!(

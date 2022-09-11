@@ -122,43 +122,69 @@ impl ToString for RebaseCommand {
 
 /// A token representing that the rebase plan has been checked for validity.
 #[derive(Clone, Debug)]
-pub struct RebasePlanPermissions {
-    _inner: (),
+pub struct RebasePlanPermissions<'a> {
+    build_options: &'a BuildRebasePlanOptions,
+    allowed_commits: CommitSet,
 }
 
-impl RebasePlanPermissions {
+impl<'a> RebasePlanPermissions<'a> {
     /// Construct a new `RebasePlanPermissions`.
     pub fn verify_rewrite_set(
         dag: &Dag,
-        options: &BuildRebasePlanOptions,
+        build_options: &'a BuildRebasePlanOptions,
         commits: &CommitSet,
     ) -> eyre::Result<Result<Self, BuildRebasePlanError>> {
-        if !options.force_rewrite_public_commits {
-            let public_commits = dag.query_public_commits()?;
-            let public_commits_to_move = public_commits.intersection(commits);
+        // This isn't necessary for correctness, but helps to produce a better
+        // error message which indicates the magnitude of the issue.
+        let commits = dag.query().descendants(commits.clone())?;
+
+        let public_commits = dag.query_public_commits()?;
+        if !build_options.force_rewrite_public_commits {
+            let public_commits_to_move = public_commits.intersection(&commits);
             if !public_commits_to_move.is_empty()? {
                 return Ok(Err(BuildRebasePlanError::MovePublicCommits {
                     public_commits_to_move,
                 }));
             }
         }
-        Ok(Ok(RebasePlanPermissions { _inner: () }))
+
+        let allowed_commits = dag.query().range(
+            commits.clone(),
+            commits.union(&dag.query_active_heads(&public_commits, &dag.observed_commits)?),
+        )?;
+        Ok(Ok(RebasePlanPermissions {
+            build_options,
+            allowed_commits,
+        }))
+    }
+
+    #[cfg(test)]
+    fn omnipotent_for_test(
+        dag: &Dag,
+        build_options: &'a BuildRebasePlanOptions,
+    ) -> eyre::Result<Self> {
+        Ok(Self {
+            build_options,
+            allowed_commits: dag.query().all()?,
+        })
     }
 }
 
 /// Represents the commits (as OIDs) that will be used to build a rebase plan.
 #[derive(Clone, Debug)]
-struct ConstraintGraph<'repo> {
-    dag: &'repo Dag,
+struct ConstraintGraph<'a> {
+    dag: &'a Dag,
+    permissions: &'a RebasePlanPermissions<'a>,
 
     /// This is a mapping from `x` to `y` if `x` must be applied before `y`
     inner: HashMap<NonZeroOid, HashSet<NonZeroOid>>,
 }
 
-impl<'repo> ConstraintGraph<'repo> {
-    pub fn new(dag: &'repo Dag) -> Self {
+impl<'a> ConstraintGraph<'a> {
+    pub fn new(dag: &'a Dag, permissions: &'a RebasePlanPermissions) -> Self {
         Self {
             dag,
+            permissions,
             inner: HashMap::new(),
         }
     }
@@ -336,22 +362,16 @@ impl<'repo> ConstraintGraph<'repo> {
         Ok(())
     }
 
-    fn check_for_rewriting_public_commits(
-        &self,
-        force: bool,
-    ) -> eyre::Result<Result<(), BuildRebasePlanError>> {
-        let commits_to_move = self
-            .inner
-            .values()
-            .flatten()
-            .copied()
-            .collect::<CommitSet>();
-        let public_commits = self.dag.query_public_commits()?;
-        let public_commits_to_move = commits_to_move.intersection(&public_commits);
-        let public_commits_to_move = self.dag.query().sort(&public_commits_to_move)?;
-        if !public_commits_to_move.is_empty()? && !force {
-            Ok(Err(BuildRebasePlanError::MovePublicCommits {
-                public_commits_to_move,
+    fn check_permissions(&self) -> eyre::Result<Result<(), BuildRebasePlanError>> {
+        let RebasePlanPermissions {
+            build_options: _,
+            allowed_commits,
+        } = &self.permissions;
+        let commits_to_move: CommitSet = self.commits_to_move().into_iter().collect();
+        let illegal_commits_to_move = commits_to_move.difference(allowed_commits);
+        if !illegal_commits_to_move.is_empty()? {
+            Ok(Err(BuildRebasePlanError::MoveIllegalCommits {
+                illegal_commits_to_move,
             }))
         } else {
             Ok(Ok(()))
@@ -446,8 +466,9 @@ struct BuildState<'repo> {
 /// Builder for a rebase plan. Unlike regular Git rebases, a `git-branchless`
 /// rebase plan can move multiple unrelated subtrees to unrelated destinations.
 #[derive(Clone, Debug)]
-pub struct RebasePlanBuilder<'repo> {
-    dag: &'repo Dag,
+pub struct RebasePlanBuilder<'a> {
+    dag: &'a Dag,
+    permissions: RebasePlanPermissions<'a>,
 
     /// The constraints specified by the caller.
     initial_constraints: Vec<Constraint>,
@@ -511,6 +532,13 @@ pub enum BuildRebasePlanError {
     MovePublicCommits {
         /// The public commits which the user was trying to move.
         public_commits_to_move: CommitSet,
+    },
+
+    /// The user was trying to move commits that weren't verified before the
+    /// rebase plan was built. This probably indicates a bug in the code.
+    MoveIllegalCommits {
+        /// The illegal commits which the user was trying to move.
+        illegal_commits_to_move: CommitSet,
     },
 }
 
@@ -582,17 +610,30 @@ Retry with -f/--force-rewrite to proceed anyways.",
                     )?,
                 )?;
             }
+
+            BuildRebasePlanError::MoveIllegalCommits {
+                illegal_commits_to_move,
+            } => {
+                writeln!(
+                    effects.get_output_stream(),
+                    "\
+BUG: The following commits were planned to be moved but not verified:
+{:?}
+This is a bug. Please report it.",
+                    commit_set_to_vec_unsorted(illegal_commits_to_move)
+                )?;
+            }
         }
         Ok(())
     }
 }
 
-impl<'repo> RebasePlanBuilder<'repo> {
+impl<'a> RebasePlanBuilder<'a> {
     /// Constructor.
-    pub fn new(dag: &'repo Dag, permissions: RebasePlanPermissions) -> Self {
-        let _permissions = permissions;
+    pub fn new(dag: &'a Dag, permissions: RebasePlanPermissions<'a>) -> Self {
         RebasePlanBuilder {
             dag,
+            permissions,
             initial_constraints: Default::default(),
             replacement_commits: Default::default(),
             touched_paths_cache: Default::default(),
@@ -859,15 +900,8 @@ impl<'repo> RebasePlanBuilder<'repo> {
         effects: &Effects,
         pool: &ThreadPool,
         repo_pool: &ResourcePool<RepoResource>,
-        options: &BuildRebasePlanOptions,
     ) -> eyre::Result<Result<Option<RebasePlan>, BuildRebasePlanError>> {
-        let BuildRebasePlanOptions {
-            force_rewrite_public_commits,
-            dump_rebase_constraints,
-            dump_rebase_plan,
-            detect_duplicate_commits_via_patch_id,
-        } = options;
-        let mut constraints = ConstraintGraph::new(self.dag);
+        let mut constraints = ConstraintGraph::new(self.dag, &self.permissions);
         constraints.add_constraints(&self.initial_constraints)?;
         let mut state = BuildState {
             constraints,
@@ -877,6 +911,12 @@ impl<'repo> RebasePlanBuilder<'repo> {
 
         let (effects, _progress) = effects.start_operation(OperationType::BuildRebasePlan);
 
+        let BuildRebasePlanOptions {
+            force_rewrite_public_commits: _,
+            dump_rebase_constraints,
+            dump_rebase_plan,
+            detect_duplicate_commits_via_patch_id,
+        } = self.permissions.build_options;
         if *dump_rebase_constraints {
             // For test: don't print to `effects.get_output_stream()`, as it will
             // be suppressed.
@@ -898,10 +938,7 @@ impl<'repo> RebasePlanBuilder<'repo> {
         if let Err(err) = state.constraints.check_for_cycles(&effects) {
             return Ok(Err(err));
         }
-        if let Err(err) = state
-            .constraints
-            .check_for_rewriting_public_commits(*force_rewrite_public_commits)?
-        {
+        if let Err(err) = state.constraints.check_permissions()? {
             return Ok(Err(err));
         }
 
@@ -1072,10 +1109,10 @@ impl<'repo> RebasePlanBuilder<'repo> {
         effects: &Effects,
         pool: &ThreadPool,
         repo_pool: &RepoPool,
-        repo: &'repo Repo,
+        repo: &'a Repo,
         path: Vec<NonZeroOid>,
         touched_commit_oids: Vec<NonZeroOid>,
-    ) -> eyre::Result<Vec<Commit<'repo>>> {
+    ) -> eyre::Result<Vec<Commit<'a>>> {
         let (effects, _progress) = effects.start_operation(OperationType::FilterCommits);
 
         let touched_commits: Vec<Commit> = touched_commit_oids
@@ -1224,7 +1261,13 @@ mod tests {
             &references_snapshot,
         )?;
 
-        let permissions = RebasePlanPermissions { _inner: () };
+        let build_options = BuildRebasePlanOptions {
+            force_rewrite_public_commits: true,
+            dump_rebase_constraints: false,
+            dump_rebase_plan: false,
+            detect_duplicate_commits_via_patch_id: true,
+        };
+        let permissions = RebasePlanPermissions::omnipotent_for_test(&dag, &build_options)?;
         let pool = ThreadPoolBuilder::new().build()?;
         let repo_pool = RepoPool::new(RepoResource {
             repo: Mutex::new(repo.try_clone()?),
@@ -1232,17 +1275,7 @@ mod tests {
         let mut builder = RebasePlanBuilder::new(&dag, permissions);
         let builder2 = builder.clone();
         builder.move_subtree(test3_oid, test1_oid)?;
-        let result = builder.build(
-            &effects,
-            &pool,
-            &repo_pool,
-            &BuildRebasePlanOptions {
-                force_rewrite_public_commits: true,
-                dump_rebase_constraints: false,
-                dump_rebase_plan: false,
-                detect_duplicate_commits_via_patch_id: true,
-            },
-        )?;
+        let result = builder.build(&effects, &pool, &repo_pool)?;
         let result = result.unwrap();
         let _ignored: Option<RebasePlan> = result;
         assert!(builder.touched_paths_cache.contains_key(&test1_oid));
@@ -1879,18 +1912,18 @@ mod tests {
             repo: Mutex::new(repo.try_clone()?),
         });
 
-        let options = BuildRebasePlanOptions {
+        let build_options = BuildRebasePlanOptions {
             force_rewrite_public_commits: false,
             dump_rebase_constraints: false,
             dump_rebase_plan: false,
             detect_duplicate_commits_via_patch_id: true,
         };
-        let permissions = RebasePlanPermissions { _inner: () };
+        let permissions = RebasePlanPermissions::omnipotent_for_test(&dag, &build_options)?;
         let mut builder = RebasePlanBuilder::new(&dag, permissions);
 
         builder_callback_fn(&mut builder)?;
 
-        let build_result = builder.build(&effects, &pool, &repo_pool, &options)?;
+        let build_result = builder.build(&effects, &pool, &repo_pool)?;
 
         let rebase_plan = match build_result {
             Ok(None) => return Ok(()),
