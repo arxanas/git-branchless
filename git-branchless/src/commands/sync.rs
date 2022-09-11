@@ -147,8 +147,7 @@ pub fn sync(
                             root_commit.get_oid(),
                             references_snapshot.main_branch_oid,
                         )?;
-                        let rebase_plan =
-                            builder.build(effects, &pool, &repo_pool, &build_options)?;
+                        let rebase_plan = builder.build(effects, &pool, &repo_pool)?;
                         Ok(rebase_plan.map(|rebase_plan| (root_commit_oid, rebase_plan)))
                     },
                 )

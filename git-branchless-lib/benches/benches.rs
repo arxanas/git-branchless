@@ -56,7 +56,7 @@ fn bench_rebase_plan(c: &mut Criterion) {
         let pool = ThreadPoolBuilder::new().build().unwrap();
         let repo_pool = RepoResource::new_pool(&repo).unwrap();
 
-        let options = BuildRebasePlanOptions {
+        let build_options = BuildRebasePlanOptions {
             force_rewrite_public_commits: true,
             dump_rebase_constraints: false,
             dump_rebase_plan: false,
@@ -64,7 +64,7 @@ fn bench_rebase_plan(c: &mut Criterion) {
         };
         let permissions = RebasePlanPermissions::verify_rewrite_set(
             &dag,
-            &options,
+            &build_options,
             &CommitSet::from(later_commit.get_oid()),
         )
         .unwrap()
@@ -77,7 +77,7 @@ fn bench_rebase_plan(c: &mut Criterion) {
             || builder.clone(),
             |builder| {
                 builder
-                    .build(&effects, &pool, &repo_pool, &options)
+                    .build(&effects, &pool, &repo_pool)
                     .unwrap()
                     .unwrap()
                     .unwrap()

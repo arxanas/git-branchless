@@ -245,20 +245,32 @@ pub fn r#move(
     let pool = ThreadPoolBuilder::new().build()?;
     let repo_pool = RepoResource::new_pool(&repo)?;
     let rebase_plan = {
-        let options = BuildRebasePlanOptions {
+        let build_options = BuildRebasePlanOptions {
             force_rewrite_public_commits,
             dump_rebase_constraints,
             dump_rebase_plan,
             detect_duplicate_commits_via_patch_id,
         };
-        let permissions =
-            match RebasePlanPermissions::verify_rewrite_set(&dag, &options, &source_oids)? {
+        let permissions = {
+            let commits_to_move = source_oids.clone();
+            let commits_to_move = commits_to_move.union(&union_all(
+                &exact_components.values().cloned().collect::<Vec<_>>(),
+            ));
+            let commits_to_move = if insert {
+                commits_to_move.union(&dag.query().children(CommitSet::from(dest_oid))?)
+            } else {
+                commits_to_move
+            };
+
+            match RebasePlanPermissions::verify_rewrite_set(&dag, &build_options, &commits_to_move)?
+            {
                 Ok(permissions) => permissions,
                 Err(err) => {
                     err.describe(effects, &repo)?;
                     return Ok(ExitCode(1));
                 }
-            };
+            }
+        };
         let mut builder = RebasePlanBuilder::new(&dag, permissions);
 
         let source_roots = dag.query().roots(source_oids.clone())?;
@@ -438,7 +450,7 @@ pub fn r#move(
                 builder.move_subtree(dest_child, source_head)?;
             }
         }
-        builder.build(effects, &pool, &repo_pool, &options)?
+        builder.build(effects, &pool, &repo_pool)?
     };
     let result = match rebase_plan {
         Ok(None) => {
