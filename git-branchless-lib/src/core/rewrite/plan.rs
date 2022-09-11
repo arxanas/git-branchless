@@ -120,6 +120,32 @@ impl ToString for RebaseCommand {
     }
 }
 
+/// A token representing that the rebase plan has been checked for validity.
+#[derive(Clone, Debug)]
+pub struct RebasePlanPermissions {
+    _inner: (),
+}
+
+impl RebasePlanPermissions {
+    /// Construct a new `RebasePlanPermissions`.
+    pub fn verify_rewrite_set(
+        dag: &Dag,
+        options: &BuildRebasePlanOptions,
+        commits: &CommitSet,
+    ) -> eyre::Result<Result<Self, BuildRebasePlanError>> {
+        if !options.force_rewrite_public_commits {
+            let public_commits = dag.query_public_commits()?;
+            let public_commits_to_move = public_commits.intersection(commits);
+            if !public_commits_to_move.is_empty()? {
+                return Ok(Err(BuildRebasePlanError::MovePublicCommits {
+                    public_commits_to_move,
+                }));
+            }
+        }
+        Ok(Ok(RebasePlanPermissions { _inner: () }))
+    }
+}
+
 /// Represents the commits (as OIDs) that will be used to build a rebase plan.
 #[derive(Clone, Debug)]
 struct ConstraintGraph<'repo> {
@@ -563,7 +589,8 @@ Retry with -f/--force-rewrite to proceed anyways.",
 
 impl<'repo> RebasePlanBuilder<'repo> {
     /// Constructor.
-    pub fn new(dag: &'repo Dag) -> Self {
+    pub fn new(dag: &'repo Dag, permissions: RebasePlanPermissions) -> Self {
+        let _permissions = permissions;
         RebasePlanBuilder {
             dag,
             initial_constraints: Default::default(),
@@ -1197,11 +1224,12 @@ mod tests {
             &references_snapshot,
         )?;
 
+        let permissions = RebasePlanPermissions { _inner: () };
         let pool = ThreadPoolBuilder::new().build()?;
         let repo_pool = RepoPool::new(RepoResource {
             repo: Mutex::new(repo.try_clone()?),
         });
-        let mut builder = RebasePlanBuilder::new(&dag);
+        let mut builder = RebasePlanBuilder::new(&dag, permissions);
         let builder2 = builder.clone();
         builder.move_subtree(test3_oid, test1_oid)?;
         let result = builder.build(
@@ -1850,21 +1878,19 @@ mod tests {
         let repo_pool = RepoPool::new(RepoResource {
             repo: Mutex::new(repo.try_clone()?),
         });
-        let mut builder = RebasePlanBuilder::new(&dag);
+
+        let options = BuildRebasePlanOptions {
+            force_rewrite_public_commits: false,
+            dump_rebase_constraints: false,
+            dump_rebase_plan: false,
+            detect_duplicate_commits_via_patch_id: true,
+        };
+        let permissions = RebasePlanPermissions { _inner: () };
+        let mut builder = RebasePlanBuilder::new(&dag, permissions);
 
         builder_callback_fn(&mut builder)?;
 
-        let build_result = builder.build(
-            &effects,
-            &pool,
-            &repo_pool,
-            &BuildRebasePlanOptions {
-                force_rewrite_public_commits: false,
-                dump_rebase_constraints: false,
-                dump_rebase_plan: false,
-                detect_duplicate_commits_via_patch_id: true,
-            },
-        )?;
+        let build_result = builder.build(&effects, &pool, &repo_pool, &options)?;
 
         let rebase_plan = match build_result {
             Ok(None) => return Ok(()),

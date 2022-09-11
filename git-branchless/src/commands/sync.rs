@@ -19,7 +19,7 @@ use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::formatting::{printable_styled_string, Glyphs, StyledStringBuilder};
 use lib::core::rewrite::{
     execute_rebase_plan, BuildRebasePlanError, BuildRebasePlanOptions, ExecuteRebasePlanOptions,
-    ExecuteRebasePlanResult, RebasePlan, RebasePlanBuilder, RepoResource,
+    ExecuteRebasePlanResult, RebasePlan, RebasePlanBuilder, RebasePlanPermissions, RepoResource,
 };
 use lib::git::{Commit, GitRunInfo, NonZeroOid, Repo};
 
@@ -81,12 +81,12 @@ pub fn sync(
             return Ok(ExitCode(1));
         }
     };
-    let root_commits = if commit_sets.is_empty() {
+    let root_commit_oids = if commit_sets.is_empty() {
         get_stack_roots(&dag)?
     } else {
         dag.query().roots(union_all(&commit_sets))?
     };
-    let root_commits = sorted_commit_set(&repo, &dag, &root_commits)?;
+    let root_commits = sorted_commit_set(&repo, &dag, &root_commit_oids)?;
 
     let MoveOptions {
         force_rewrite_public_commits,
@@ -100,7 +100,25 @@ pub fn sync(
     let pool = ThreadPoolBuilder::new().build()?;
     let repo_pool = RepoResource::new_pool(&repo)?;
     let root_commit_and_plans: Vec<(NonZeroOid, Option<RebasePlan>)> = {
-        let builder = RebasePlanBuilder::new(&dag);
+        let build_options = BuildRebasePlanOptions {
+            force_rewrite_public_commits,
+            detect_duplicate_commits_via_patch_id,
+            dump_rebase_constraints,
+            dump_rebase_plan,
+        };
+        let permissions = match RebasePlanPermissions::verify_rewrite_set(
+            &dag,
+            &build_options,
+            &root_commit_oids,
+        )? {
+            Ok(permissions) => permissions,
+            Err(err) => {
+                err.describe(effects, &repo)?;
+                return Ok(ExitCode(1));
+            }
+        };
+        let builder = RebasePlanBuilder::new(&dag, permissions);
+
         let root_commit_oids = root_commits
             .into_iter()
             .map(|commit| commit.get_oid())
@@ -129,17 +147,8 @@ pub fn sync(
                             root_commit.get_oid(),
                             references_snapshot.main_branch_oid,
                         )?;
-                        let rebase_plan = builder.build(
-                            effects,
-                            &pool,
-                            &repo_pool,
-                            &BuildRebasePlanOptions {
-                                force_rewrite_public_commits,
-                                detect_duplicate_commits_via_patch_id,
-                                dump_rebase_constraints,
-                                dump_rebase_plan,
-                            },
-                        )?;
+                        let rebase_plan =
+                            builder.build(effects, &pool, &repo_pool, &build_options)?;
                         Ok(rebase_plan.map(|rebase_plan| (root_commit_oid, rebase_plan)))
                     },
                 )

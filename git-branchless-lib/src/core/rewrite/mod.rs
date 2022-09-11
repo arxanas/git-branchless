@@ -12,7 +12,10 @@ pub use execute::{
     execute_rebase_plan, move_branches, ExecuteRebasePlanOptions, ExecuteRebasePlanResult,
     MergeConflictInfo, MergeConflictRemediation,
 };
-pub use plan::{BuildRebasePlanError, BuildRebasePlanOptions, RebasePlan, RebasePlanBuilder};
+pub use plan::{
+    BuildRebasePlanError, BuildRebasePlanOptions, RebasePlan, RebasePlanBuilder,
+    RebasePlanPermissions,
+};
 use tracing::instrument;
 
 use crate::core::task::{Resource, ResourcePool};
