@@ -71,7 +71,7 @@ fn bench_rebase_plan(c: &mut Criterion) {
         .unwrap();
         let mut builder = RebasePlanBuilder::new(&dag, permissions);
         builder
-            .move_subtree(later_commit.get_oid(), earlier_commit.get_oid())
+            .move_subtree(later_commit.get_oid(), vec![earlier_commit.get_oid()])
             .unwrap();
         b.iter_batched(
             || builder.clone(),

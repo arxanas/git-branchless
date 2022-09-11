@@ -250,7 +250,7 @@ pub fn reword(
                     return Ok(ExitCode(1));
                 }
             };
-            builder.move_subtree(root_commit.get_oid(), only_parent_id)?;
+            builder.move_subtree(root_commit.get_oid(), vec![only_parent_id])?;
         }
 
         for commit in commits.iter() {
