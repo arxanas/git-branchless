@@ -380,6 +380,36 @@ mod tests {
             ),
         )
         "###);
+        insta::assert_debug_snapshot!(parse(r#" foo('bar') - baz(qux('qubit')) "#), @r###"
+        Ok(
+            FunctionCall(
+                "difference",
+                [
+                    FunctionCall(
+                        "foo",
+                        [
+                            Name(
+                                "bar",
+                            ),
+                        ],
+                    ),
+                    FunctionCall(
+                        "baz",
+                        [
+                            FunctionCall(
+                                "qux",
+                                [
+                                    Name(
+                                        "qubit",
+                                    ),
+                                ],
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+        )
+        "###);
 
         Ok(())
     }

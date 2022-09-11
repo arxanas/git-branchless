@@ -63,8 +63,8 @@ Name: Cow<'input, str> = {
     // \x22 = double-quote.
     // \x27 = single-quote.
     // \x5c = backslash
-    <s:r"\x22([^\x22]|\x5c.)*\x22|\x27([^\x22]|\x5c.)*\x27"> => {
-        assert!(s.len() >= 2, "There should be at least quote characters in the string literal, got: {}", s);
+    <s:r"\x22([^\x22]|\x5c.)*\x22|\x27([^\x27]|\x5c.)*\x27"> => {
+        assert!(s.len() >= 2, "There should be at least 2 quote characters in the string literal, got: {}", s);
 
         let mut result = String::new();
         let mut last_char_was_backslash = false;
