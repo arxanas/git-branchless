@@ -6,11 +6,12 @@ use std::sync::Arc;
 
 use chashmap::CHashMap;
 use eden_dag::DagAlgorithm;
+use eyre::Context;
 use itertools::Itertools;
 use rayon::{prelude::*, ThreadPool};
 use tracing::{instrument, warn};
 
-use crate::core::dag::{commit_set_to_vec_unsorted, CommitSet, Dag};
+use crate::core::dag::{commit_set_to_vec_unsorted, union_all, CommitSet, Dag};
 use crate::core::effects::{Effects, OperationType};
 use crate::core::formatting::{printable_styled_string, Pluralize};
 use crate::core::rewrite::{RepoPool, RepoResource};
@@ -200,7 +201,7 @@ impl<'a> ConstraintGraph<'a> {
                 }
 
                 Constraint::MoveSubtree {
-                    parent_oid,
+                    parent_oids,
                     child_oid,
                 } => {
                     // remove previous (if any) constraints on commit
@@ -208,10 +209,12 @@ impl<'a> ConstraintGraph<'a> {
                         commits.remove(child_oid);
                     }
 
-                    self.inner
-                        .entry(*parent_oid)
-                        .or_default()
-                        .insert(*child_oid);
+                    for parent_oid in parent_oids {
+                        self.inner
+                            .entry(*parent_oid)
+                            .or_default()
+                            .insert(*child_oid);
+                    }
                 }
             }
         }
@@ -220,7 +223,7 @@ impl<'a> ConstraintGraph<'a> {
             .iter()
             .filter_map(|c| match c {
                 Constraint::MoveSubtree {
-                    parent_oid: _,
+                    parent_oids: _,
                     child_oid: _,
                 } => None,
                 Constraint::MoveChildren {
@@ -260,7 +263,7 @@ impl<'a> ConstraintGraph<'a> {
                 }
 
                 Constraint::MoveSubtree {
-                    parent_oid: _,
+                    parent_oids: _,
                     child_oid: _,
                 } => {
                     // do nothing; these were handled in the first pass
@@ -289,7 +292,7 @@ impl<'a> ConstraintGraph<'a> {
                 continue;
             }
             acc.push(Constraint::MoveSubtree {
-                parent_oid: current_oid,
+                parent_oids: vec![current_oid],
                 child_oid,
             });
             self.collect_descendants(visible_commits, acc, child_oid)?;
@@ -393,7 +396,7 @@ impl<'a> ConstraintGraph<'a> {
                     children
                         .into_iter()
                         .map(move |child_oid| Constraint::MoveSubtree {
-                            parent_oid: unconstrained_oid,
+                            parent_oids: vec![unconstrained_oid],
                             child_oid,
                         })
                 })
@@ -495,7 +498,7 @@ enum Constraint {
     /// Indicates that `child` and all of its descendants should be moved on top
     /// of `parent`.
     MoveSubtree {
-        parent_oid: NonZeroOid,
+        parent_oids: Vec<NonZeroOid>,
         child_oid: NonZeroOid,
     },
 }
@@ -831,14 +834,15 @@ impl<'a> RebasePlanBuilder<'a> {
     }
 
     /// Generate a sequence of rebase steps that cause the subtree at `source_oid`
-    /// to be rebased on top of `dest_oid`.
+    /// to be rebased on top of `dest_oids`.
     pub fn move_subtree(
         &mut self,
         source_oid: NonZeroOid,
-        dest_oid: NonZeroOid,
+        dest_oids: Vec<NonZeroOid>,
     ) -> eyre::Result<()> {
+        assert!(!dest_oids.is_empty());
         self.initial_constraints.push(Constraint::MoveSubtree {
-            parent_oid: dest_oid,
+            parent_oids: dest_oids,
             child_oid: source_oid,
         });
         Ok(())
@@ -866,7 +870,7 @@ impl<'a> RebasePlanBuilder<'a> {
         dest_oid: NonZeroOid,
     ) -> eyre::Result<()> {
         self.initial_constraints.push(Constraint::MoveSubtree {
-            parent_oid: dest_oid,
+            parent_oids: vec![dest_oid],
             child_oid: source_oid,
         });
         self.initial_constraints.push(Constraint::MoveChildren {
@@ -947,26 +951,33 @@ impl<'a> RebasePlanBuilder<'a> {
         let mut acc = Vec::new();
         let mut first_dest_oid = None;
         for constraint in roots {
-            let (parent_oid, child_oid) = match constraint {
+            let (parent_oids, child_oid) = match constraint {
                 Constraint::MoveSubtree {
-                    parent_oid,
+                    parent_oids,
                     child_oid,
-                } => (parent_oid, child_oid),
+                } => (parent_oids, child_oid),
                 Constraint::MoveChildren {
                     parent_of_oid: _,
                     children_of_oid: _,
                 } => eyre::bail!("BUG: Invalid constraint encountered while preparing rebase plan.\nThis should be unreachable."),
             };
-            first_dest_oid.get_or_insert(parent_oid);
+            let first_parent_oid = *parent_oids.first().unwrap();
+            first_dest_oid.get_or_insert(first_parent_oid);
             acc.push(RebaseCommand::Reset {
-                target: OidOrLabel::Oid(parent_oid),
+                target: OidOrLabel::Oid(first_parent_oid),
             });
 
             let upstream_patch_ids = if *detect_duplicate_commits_via_patch_id {
                 let (effects, _progress) =
                     effects.start_operation(OperationType::DetectDuplicateCommits);
                 self.get_upstream_patch_ids(
-                    &effects, pool, repo_pool, &repo, &mut state, child_oid, parent_oid,
+                    &effects,
+                    pool,
+                    repo_pool,
+                    &repo,
+                    &mut state,
+                    child_oid,
+                    &parent_oids,
                 )?
             } else {
                 Default::default()
@@ -975,7 +986,7 @@ impl<'a> RebasePlanBuilder<'a> {
                 &effects,
                 &repo,
                 &mut state,
-                parent_oid,
+                first_parent_oid,
                 repo.find_commit_or_fail(child_oid)?,
                 &upstream_patch_ids,
                 acc,
@@ -1034,7 +1045,7 @@ impl<'a> RebasePlanBuilder<'a> {
         }
     }
 
-    /// Get the patch IDs for commits between `current_oid` and `dest_oid`,
+    /// Get the patch IDs for commits between `current_oid` and `dest_oids`,
     /// filtered to only the commits which might have the same patch ID as a
     /// commit being rebased.
     #[instrument]
@@ -1046,22 +1057,28 @@ impl<'a> RebasePlanBuilder<'a> {
         repo: &Repo,
         state: &mut BuildState,
         current_oid: NonZeroOid,
-        dest_oid: NonZeroOid,
+        dest_oids: &[NonZeroOid],
     ) -> eyre::Result<HashSet<PatchId>> {
-        let merge_base_oid =
-            self.dag
-                .get_one_merge_base_oid(effects, repo, dest_oid, current_oid)?;
-        let merge_base_oid = match merge_base_oid {
-            None => return Ok(HashSet::new()),
-            Some(merge_base_oid) => merge_base_oid,
-        };
+        let merge_base_oids: Vec<CommitSet> = dest_oids
+            .iter()
+            .map(|dest_oid| {
+                let commit_set: CommitSet = [current_oid, *dest_oid].into_iter().collect();
+                self.dag.query().gca_all(commit_set)
+            })
+            .try_collect()?;
+        let merge_base_oids = union_all(&merge_base_oids);
 
         let touched_commit_oids: Vec<NonZeroOid> =
             state.constraints.commits_to_move().into_iter().collect();
 
-        let path = self
-            .dag
-            .get_range(effects, repo, merge_base_oid, dest_oid)?;
+        let path = {
+            let (effects, _progress) = effects.start_operation(OperationType::WalkCommits);
+            let _effects = effects;
+            self.dag
+                .query()
+                .range(merge_base_oids, dest_oids.iter().copied().collect())
+                .wrap_err("Calculating upstream commits")?
+        };
 
         let path = {
             self.filter_path_to_merge_base_commits(
@@ -1110,10 +1127,11 @@ impl<'a> RebasePlanBuilder<'a> {
         pool: &ThreadPool,
         repo_pool: &RepoPool,
         repo: &'a Repo,
-        path: Vec<NonZeroOid>,
+        path: CommitSet,
         touched_commit_oids: Vec<NonZeroOid>,
     ) -> eyre::Result<Vec<Commit<'a>>> {
         let (effects, _progress) = effects.start_operation(OperationType::FilterCommits);
+        let path = commit_set_to_vec_unsorted(&path)?;
 
         let touched_commits: Vec<Commit> = touched_commit_oids
             .into_iter()
@@ -1274,7 +1292,7 @@ mod tests {
         });
         let mut builder = RebasePlanBuilder::new(&dag, permissions);
         let builder2 = builder.clone();
-        builder.move_subtree(test3_oid, test1_oid)?;
+        builder.move_subtree(test3_oid, vec![test1_oid])?;
         let result = builder.build(&effects, &pool, &repo_pool)?;
         let result = result.unwrap();
         let _ignored: Option<RebasePlan> = result;
@@ -1295,8 +1313,8 @@ mod tests {
         let test4_oid = git.commit_file("test4", 4)?;
 
         create_and_execute_plan(&git, move |builder: &mut RebasePlanBuilder| {
-            builder.move_subtree(test4_oid, test1_oid)?;
-            builder.move_subtree(test4_oid, test2_oid)?;
+            builder.move_subtree(test4_oid, vec![test1_oid])?;
+            builder.move_subtree(test4_oid, vec![test2_oid])?;
             Ok(())
         })?;
 
@@ -1327,8 +1345,8 @@ mod tests {
         let test4_oid = git.commit_file("test4", 4)?;
 
         create_and_execute_plan(&git, move |builder: &mut RebasePlanBuilder| {
-            builder.move_subtree(test3_oid, test1_oid)?;
-            builder.move_subtree(test4_oid, test1_oid)?;
+            builder.move_subtree(test3_oid, vec![test1_oid])?;
+            builder.move_subtree(test4_oid, vec![test1_oid])?;
             Ok(())
         })?;
 
@@ -1359,8 +1377,8 @@ mod tests {
         let test4_oid = git.commit_file("test4", 4)?;
 
         create_and_execute_plan(&git, move |builder: &mut RebasePlanBuilder| {
-            builder.move_subtree(test4_oid, test1_oid)?;
-            builder.move_subtree(test3_oid, test1_oid)?;
+            builder.move_subtree(test4_oid, vec![test1_oid])?;
+            builder.move_subtree(test3_oid, vec![test1_oid])?;
             Ok(())
         })?;
 
@@ -1742,7 +1760,7 @@ mod tests {
         let _test5_oid = git.commit_file("test5", 5)?;
 
         create_and_execute_plan(&git, move |builder: &mut RebasePlanBuilder| {
-            builder.move_subtree(test3_oid, test1_oid)?;
+            builder.move_subtree(test3_oid, vec![test1_oid])?;
             builder.move_commit(test4_oid, test1_oid)?;
             Ok(())
         })?;
@@ -1777,7 +1795,7 @@ mod tests {
         let _test5_oid = git.commit_file("test5", 5)?;
 
         create_and_execute_plan(&git, move |builder: &mut RebasePlanBuilder| {
-            builder.move_subtree(test4_oid, test1_oid)?;
+            builder.move_subtree(test4_oid, vec![test1_oid])?;
             builder.move_commit(test3_oid, test1_oid)?;
             Ok(())
         })?;
@@ -1812,8 +1830,8 @@ mod tests {
         let test5_oid = git.commit_file("test5", 5)?;
 
         create_and_execute_plan(&git, move |builder: &mut RebasePlanBuilder| {
-            builder.move_subtree(test3_oid, test5_oid)?;
-            builder.move_subtree(test5_oid, test2_oid)?;
+            builder.move_subtree(test3_oid, vec![test5_oid])?;
+            builder.move_subtree(test5_oid, vec![test2_oid])?;
             Ok(())
         })?;
 
@@ -1850,7 +1868,7 @@ mod tests {
         git.run(&["checkout", "HEAD~"])?;
 
         create_and_execute_plan(&git, move |builder: &mut RebasePlanBuilder| {
-            builder.move_subtree(test3_oid, test2_oid)?;
+            builder.move_subtree(test3_oid, vec![test2_oid])?;
             Ok(())
         })?;
 

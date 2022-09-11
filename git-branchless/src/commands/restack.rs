@@ -162,7 +162,7 @@ fn restack_commits(
         } in rebases
         {
             for child_oid in abandoned_child_oids {
-                builder.move_subtree(child_oid, dest_oid)?;
+                builder.move_subtree(child_oid, vec![dest_oid])?;
             }
         }
         match builder.build(effects, thread_pool, repo_pool)? {

@@ -275,7 +275,7 @@ pub fn r#move(
 
         let source_roots = dag.query().roots(source_oids.clone())?;
         for source_root in commit_set_to_vec_unsorted(&source_roots)? {
-            builder.move_subtree(source_root, dest_oid)?;
+            builder.move_subtree(source_root, vec![dest_oid])?;
         }
 
         let component_roots: CommitSet = exact_components.keys().cloned().collect();
@@ -380,11 +380,11 @@ pub fn r#move(
                 {
                     builder.move_range(component_child, component_dest_oid, component_parent)?;
                 } else {
-                    builder.move_subtree(component_child, component_parent)?;
+                    builder.move_subtree(component_child, vec![component_parent])?;
                 }
             }
 
-            builder.move_subtree(component_root, component_dest_oid)?;
+            builder.move_subtree(component_root, vec![component_dest_oid])?;
         }
 
         if insert {
@@ -447,7 +447,7 @@ pub fn r#move(
                 .difference(&dag.obsolete_commits);
 
             for dest_child in commit_set_to_vec_unsorted(&dest_children)? {
-                builder.move_subtree(dest_child, source_head)?;
+                builder.move_subtree(dest_child, vec![source_head])?;
             }
         }
         builder.build(effects, &pool, &repo_pool)?
