@@ -1,5 +1,5 @@
 use crate::util::{run_in_pty, PtyAction};
-use lib::testing::{make_git, GitRunOptions};
+use lib::testing::{make_git, GitInitOptions, GitRunOptions};
 
 #[test]
 fn test_record_unstaged_changes() -> eyre::Result<()> {
@@ -207,6 +207,65 @@ fn test_record_staged_changes_interactive() -> eyre::Result<()> {
         +++ b/test2.txt
         @@ -0,0 +1 @@
         +test2 contents
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_record_detach() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo_with_options(&GitInitOptions {
+        make_initial_commit: false,
+        run_branchless_init: false,
+    })?;
+    git.run(&["branchless", "init", "--main-branch", "master"])?;
+
+    git.write_file("test1", "new test1 contents\n")?;
+    git.run(&["add", "test1.txt"])?;
+    {
+        let (stdout, _stderr) = git.run(&["record", "-m", "foo", "--detach"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        [master (root-commit) d41ddf7] foo
+         1 file changed, 1 insertion(+)
+         create mode 100644 test1.txt
+        branchless: running command: <git-executable> update-ref -d refs/heads/master d41ddf7dd8a526054ce1ebbc739f613824cecfef
+        "###);
+    }
+
+    git.commit_file("test1", 1)?;
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        o d41ddf7 foo
+
+        @ 6118a39 (> master) create test1.txt
+        "###);
+    }
+
+    git.write_file("test1", "new test1 contents\n")?;
+    {
+        let (stdout, _stderr) = git.run(&["record", "-m", "foo", "--detach"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        [master 2e9aec4] foo
+         1 file changed, 1 insertion(+), 1 deletion(-)
+        branchless: running command: <git-executable> branch -f master 6118a39b4dd4c986d17da2123d907ac17696cb85
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        o d41ddf7 foo
+
+        O 6118a39 (master) create test1.txt
+        |
+        @ 2e9aec4 foo
         "###);
     }
 

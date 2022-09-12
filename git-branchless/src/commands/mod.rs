@@ -263,7 +263,8 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
         Command::Record {
             message,
             interactive,
-        } => record::record(&effects, &git_run_info, message, interactive)?,
+            detach,
+        } => record::record(&effects, &git_run_info, message, interactive, detach)?,
 
         Command::Reword {
             revsets,
