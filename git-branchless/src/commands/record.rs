@@ -12,8 +12,8 @@ use itertools::Itertools;
 use lib::core::effects::{Effects, OperationType};
 use lib::core::eventlog::{EventLogDb, EventTransactionId};
 use lib::git::{
-    process_diff_for_record, update_index, FileMode, GitRunInfo, Repo, Stage, UpdateIndexCommand,
-    WorkingCopyChangesType, WorkingCopySnapshot,
+    process_diff_for_record, update_index, CategorizedReferenceName, FileMode, GitRunInfo, Repo,
+    ResolvedReferenceInfo, Stage, UpdateIndexCommand, WorkingCopyChangesType, WorkingCopySnapshot,
 };
 use lib::util::ExitCode;
 
@@ -22,6 +22,7 @@ pub fn record(
     git_run_info: &GitRunInfo,
     message: Option<String>,
     interactive: bool,
+    detach: bool,
 ) -> eyre::Result<ExitCode> {
     let repo = Repo::from_dir(&git_run_info.working_directory)?;
     let conn = repo.get_db_conn()?;
@@ -59,7 +60,7 @@ pub fn record(
         (snapshot, working_copy_changes_type)
     };
 
-    if interactive {
+    let commit_exit_code = if interactive {
         if working_copy_changes_type == WorkingCopyChangesType::Staged {
             writeln!(
                 effects.get_output_stream(),
@@ -69,7 +70,7 @@ pub fn record(
                 effects.get_output_stream(),
                 "Either commit or unstage your changes and try again. Aborting."
             )?;
-            Ok(ExitCode(1))
+            ExitCode(1)
         } else {
             record_interactive(
                 effects,
@@ -78,7 +79,7 @@ pub fn record(
                 &snapshot,
                 event_tx_id,
                 message.as_deref(),
-            )
+            )?
         }
     } else {
         let args = {
@@ -91,8 +92,54 @@ pub fn record(
             }
             args
         };
-        git_run_info.run_direct_no_wrapping(Some(event_tx_id), &args)
+        git_run_info.run_direct_no_wrapping(Some(event_tx_id), &args)?
+    };
+    if !commit_exit_code.is_success() {
+        return Ok(commit_exit_code);
     }
+
+    if detach {
+        let head_info = repo.get_head_info()?;
+        if let ResolvedReferenceInfo {
+            oid: Some(oid),
+            reference_name: Some(reference_name),
+        } = &head_info
+        {
+            let head_commit = repo.find_commit_or_fail(*oid)?;
+            return match head_commit.get_parents().as_slice() {
+                [] => git_run_info.run(
+                    effects,
+                    Some(event_tx_id),
+                    &[
+                        "update-ref",
+                        "-d",
+                        reference_name.as_str(),
+                        &oid.to_string(),
+                    ],
+                ),
+                [parent_commit] => {
+                    let branch_name =
+                        CategorizedReferenceName::new(reference_name).remove_prefix()?;
+                    repo.detach_head(&head_info)?;
+                    git_run_info.run(
+                        effects,
+                        Some(event_tx_id),
+                        &[
+                            "branch",
+                            "-f",
+                            &branch_name,
+                            &parent_commit.get_oid().to_string(),
+                        ],
+                    )
+                }
+                parent_commits => {
+                    eyre::bail!("git-branchless record --detach called on a merge commit, but it should only be capable of creating zero- or one-parent commits. Parents: {parent_commits:?}");
+                }
+            };
+        }
+    }
+
+    Ok(ExitCode(0))
 }
 
 fn record_interactive(

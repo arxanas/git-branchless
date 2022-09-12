@@ -390,6 +390,10 @@ pub enum Command {
         /// current staged/unstaged changes.
         #[clap(action, short = 'i', long = "interactive")]
         interactive: bool,
+
+        /// Detach the current branch before committing.
+        #[clap(action, short = 'd', long = "detach")]
+        detach: bool,
     },
 
     /// Reword commits.
