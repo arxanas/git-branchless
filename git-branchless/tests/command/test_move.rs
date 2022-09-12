@@ -3625,6 +3625,7 @@ fn test_move_merge_commit() -> eyre::Result<()> {
                             label_name: "merge-parent-3",
                         },
                         Merge {
+                            replacement_commit_oid: None,
                             commit_oid: NonZeroOid(28790c73f13f38ce0d3beb6cfeb2d818b32bcd09),
                             commits_to_merge: [
                                 Oid(

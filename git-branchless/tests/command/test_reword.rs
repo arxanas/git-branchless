@@ -511,3 +511,106 @@ fn test_reword_fixup_ancestry_issue() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_reword_merge_commit() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    git.commit_file("test1", 1)?;
+    git.detach_head()?;
+    let test2_oid = git.commit_file("test2", 2)?;
+    git.run(&["checkout", "HEAD^"])?;
+    git.commit_file("test3", 3)?;
+    git.run(&["merge", &test2_oid.to_string()])?;
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d (master) create test1.txt
+        |\
+        | o 96d1c37 create test2.txt
+        | |
+        | @ a4dd9b0 Merge commit '96d1c37a3d4363611c49f7e52186e189a04c531f' into HEAD
+        |
+        o 4838e49 create test3.txt
+        |
+        @ a4dd9b0 Merge commit '96d1c37a3d4363611c49f7e52186e189a04c531f' into HEAD
+        "###);
+    }
+
+    {
+        let (stdout, stderr) = git.run(&["reword", "-m", "new message"])?;
+        insta::assert_snapshot!(stderr, @r###"
+        branchless: creating working copy snapshot
+        Previous HEAD position was a4dd9b0 Merge commit '96d1c37a3d4363611c49f7e52186e189a04c531f' into HEAD
+        branchless: processing 1 update: ref HEAD
+        HEAD is now at 2fc54bd new message
+        branchless: processing checkout
+        "###);
+        insta::assert_snapshot!(stdout, @r###"
+        Attempting rebase in-memory...
+        [1/1] Committed as: 2fc54bd new message
+        branchless: processing 1 rewritten commit
+        branchless: running command: <git-executable> checkout 2fc54bd59c79078e6d9012df241bcc90f0199596
+        In-memory rebase succeeded.
+        Reworded commit a4dd9b0 as 2fc54bd new message
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d (master) create test1.txt
+        |\
+        | o 96d1c37 create test2.txt
+        | |
+        | @ 2fc54bd new message
+        |
+        o 4838e49 create test3.txt
+        |
+        @ 2fc54bd new message
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["reword", "draft()", "-m", "new message 2"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        Attempting rebase in-memory...
+        [1/3] Committed as: 11f31c5 new message 2
+        [2/3] Committed as: 800dd6c new message 2
+        [3/3] Committed as: 8d2bc36 new message 2
+        branchless: processing 3 rewritten commits
+        branchless: running command: <git-executable> checkout 8d2bc36ad06b0f66768684ce9e926fcd254d9d39
+        In-memory rebase succeeded.
+        Reworded commit 96d1c37 as 800dd6c new message 2
+        Reworded commit 4838e49 as 11f31c5 new message 2
+        Reworded commit 2fc54bd as 8d2bc36 new message 2
+        Reworded 3 commits. If this was unintentional, run: git undo
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d (master) create test1.txt
+        |\
+        | o 800dd6c new message 2
+        | |
+        | @ 8d2bc36 new message 2
+        |
+        o 11f31c5 new message 2
+        |
+        @ 8d2bc36 new message 2
+        "###);
+    }
+
+    Ok(())
+}
