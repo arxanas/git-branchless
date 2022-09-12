@@ -227,37 +227,17 @@ pub fn reword(
         }
     };
 
-    let subtree_roots = find_subtree_roots(&repo, &dag, &commits)?;
-
     let rebase_plan = {
         let pool = ThreadPoolBuilder::new().build()?;
         let repo_pool = RepoResource::new_pool(&repo)?;
         let mut builder = RebasePlanBuilder::new(&dag, permissions);
-
-        for root_commit in subtree_roots {
-            let only_parent_id = root_commit.get_only_parent().map(|parent| parent.get_oid());
-            let only_parent_id = match only_parent_id {
-                Some(only_parent_id) => only_parent_id,
-                None => {
-                    writeln!(
-                        effects.get_error_stream(),
-                        "Refusing to reword commit {}, which has {} parents.\n\
-                        Rewording is only supported for commits with 1 parent.\n\
-                        Aborting.",
-                        root_commit.get_oid(),
-                        root_commit.get_parents().len(),
-                    )?;
-                    return Ok(ExitCode(1));
-                }
-            };
-            builder.move_subtree(root_commit.get_oid(), vec![only_parent_id])?;
-        }
 
         for commit in commits.iter() {
             let message = messages.get(&commit.get_oid()).unwrap();
             // This looks funny, but just means "leave everything but the message as is"
             let replacement_oid =
                 commit.amend_commit(None, None, None, Some(message.as_str()), None)?;
+            builder.move_subtree(commit.get_oid(), commit.get_parent_oids())?;
             builder.replace_commit(commit.get_oid(), replacement_oid)?;
         }
 
@@ -307,13 +287,7 @@ pub fn reword(
         }
         ExecuteRebasePlanResult::Succeeded {
             rewritten_oids: None,
-        } => {
-            writeln!(
-                effects.get_error_stream(),
-                "BUG: Succeeded rewording commits via on-disk rebase? But reword should be rebasing in-memory!"
-            )?;
-            ExitCode(1)
-        }
+        } => ExitCode(0),
         ExecuteRebasePlanResult::DeclinedToMerge { merge_conflict: _ } => {
             writeln!(
                 effects.get_error_stream(),
