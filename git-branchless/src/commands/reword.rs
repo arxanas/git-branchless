@@ -119,7 +119,7 @@ pub fn reword(
                     writeln!(
                         effects.get_error_stream(),
                         "--fixup expects exactly 1 commit, but '{}' evaluated to {}.\nAborting.",
-                        revset.0,
+                        revset,
                         commits.len()
                     )?;
                     return Ok(ExitCode(1));

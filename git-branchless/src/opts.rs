@@ -3,6 +3,7 @@
 use clap::{ArgEnum, Args, Command as ClapCommand, IntoApp, Parser};
 use lib::git::NonZeroOid;
 use man::Arg;
+use std::fmt::Display;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
@@ -16,6 +17,12 @@ impl FromStr for Revset {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         Ok(Self(s.to_string()))
+    }
+}
+
+impl Display for Revset {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 
