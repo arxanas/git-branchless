@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - (#508) Added `exactly(<revset>, n)` revset function to allow assertions on the number of commits within a set.
 - (#509) User defined [revset aliases](https://github.com/arxanas/git-branchless/wiki/Reference:-Revsets#Aliases).
 - (#534) `git record` accepts a `--detach` option to avoid moving the current branch.
+- (#538) `git reword` accepts a `--fixup` option to convert regular commits into `fixup!` commits (for use with `git rebase --autosquash`)
 
 ### Changed
 
