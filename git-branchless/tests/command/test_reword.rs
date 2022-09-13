@@ -334,3 +334,180 @@ fn test_reword_exit_early_public_commit() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_reword_fixup_head() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+    git.run(&["checkout", "-b", "test"])?;
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+
+    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    O f777ecc (master) create initial.txt
+    |
+    o 62fc20d create test1.txt
+    |
+    @ 96d1c37 (> test) create test2.txt
+    "###);
+
+    git.run(&["reword", "--fixup", "HEAD^"])?;
+
+    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    O f777ecc (master) create initial.txt
+    |
+    o 62fc20d create test1.txt
+    |
+    @ 9a86e82 (> test) fixup! create test1.txt
+    "###);
+
+    Ok(())
+}
+
+#[test]
+fn test_reword_fixup_non_head_commit() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+    git.run(&["checkout", "-b", "test"])?;
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+
+    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    O f777ecc (master) create initial.txt
+    |
+    o 62fc20d create test1.txt
+    |
+    @ 96d1c37 (> test) create test2.txt
+    "###);
+
+    git.run(&["reword", "HEAD^", "--fixup", "roots(all())"])?;
+
+    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    O f777ecc (master) create initial.txt
+    |
+    o aa7ed8f fixup! create initial.txt
+    |
+    @ 7e17323 (> test) create test2.txt
+    "###);
+
+    Ok(())
+}
+
+#[test]
+fn test_reword_fixup_multiple_commits() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+    git.run(&["checkout", "-b", "test"])?;
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+
+    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    O f777ecc (master) create initial.txt
+    |
+    o 62fc20d create test1.txt
+    |
+    @ 96d1c37 (> test) create test2.txt
+    "###);
+
+    git.run(&["reword", "stack()", "--fixup", "roots(all())"])?;
+
+    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    O f777ecc (master) create initial.txt
+    |
+    o aa7ed8f fixup! create initial.txt
+    |
+    @ 5a30497 (> test) fixup! create initial.txt
+    "###);
+
+    Ok(())
+}
+
+#[test]
+fn test_reword_fixup_only_accepts_single_commit() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+    git.run(&["checkout", "-b", "test"])?;
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+
+    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    O f777ecc (master) create initial.txt
+    |
+    o 62fc20d create test1.txt
+    |
+    @ 96d1c37 (> test) create test2.txt
+    "###);
+
+    let (_stdout, stderr) = git.run_with_options(
+        &["reword", "--fixup", "ancestors(HEAD)"],
+        &GitRunOptions {
+            expected_exit_code: 1,
+            ..Default::default()
+        },
+    )?;
+    insta::assert_snapshot!(stderr, @r###"
+        --fixup expects exactly 1 commit, but 'ancestors(HEAD)' evaluated to 3.
+        Aborting.
+    "###);
+
+    Ok(())
+}
+
+#[test]
+fn test_reword_fixup_ancestry_issue() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+    git.run(&["checkout", "-b", "test"])?;
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+
+    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    O f777ecc (master) create initial.txt
+    |
+    o 62fc20d create test1.txt
+    |
+    @ 96d1c37 (> test) create test2.txt
+    "###);
+
+    let (_stdout, stderr) = git.run_with_options(
+        &["reword", "HEAD^", "--fixup", "HEAD"],
+        &GitRunOptions {
+            expected_exit_code: 1,
+            ..Default::default()
+        },
+    )?;
+    insta::assert_snapshot!(stderr, @r###"
+        The commit supplied to --fixup must be an ancestor of all commits being reworded.
+        Aborting.
+    "###);
+
+    Ok(())
+}

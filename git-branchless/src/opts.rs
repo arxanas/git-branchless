@@ -399,8 +399,6 @@ pub enum Command {
     /// Reword commits.
     Reword {
         /// Zero or more commits to reword. If not provided, defaults to "HEAD".
-        ///
-        /// Can either be hashes, like `abc123`, or ref-specs, like `HEAD^`.
         #[clap(value_parser)]
         revsets: Vec<Revset>,
 
@@ -420,6 +418,11 @@ pub enum Command {
         /// that; otherwise, the editor starts empty.
         #[clap(action, short = 'd', long = "discard", conflicts_with("messages"))]
         discard: bool,
+
+        /// A commit to "fix up". The reworded commits will become `fixup!` commits (suitable for
+        /// use with `git rebase --autosquash`) targeting the supplied commit.
+        #[clap(value_parser, long = "fixup", conflicts_with_all(&["messages", "discard"]))]
+        commit_to_fixup: Option<Revset>,
     },
 
     /// Display a nice graph of the commits you've recently worked on.

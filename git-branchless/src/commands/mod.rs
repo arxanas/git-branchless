@@ -271,9 +271,12 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
             messages,
             force_rewrite_public_commits,
             discard,
+            commit_to_fixup,
         } => {
             let messages = if discard {
                 InitialCommitMessages::Discard
+            } else if let Some(commit_to_fixup) = commit_to_fixup {
+                InitialCommitMessages::FixUp(commit_to_fixup)
             } else {
                 InitialCommitMessages::Messages(messages)
             };

@@ -11,7 +11,7 @@ use std::fs::File;
 use std::io::Write as OtherWrite;
 use std::time::SystemTime;
 
-use bstr::ByteSlice;
+use bstr::{ByteSlice, ByteVec};
 use chrono::Local;
 use dialoguer::Editor;
 use eden_dag::DagAlgorithm;
@@ -40,6 +40,9 @@ use crate::revset::resolve_commits;
 pub enum InitialCommitMessages {
     /// The user wants to start with an empty (or template) message.
     Discard,
+
+    /// The user wants to fixup a commit.
+    FixUp(Revset),
 
     /// The user provided explicit messages.
     Messages(Vec<String>),
@@ -87,6 +90,44 @@ pub fn reword(
         Err(err) => {
             err.describe(effects, &repo)?;
             return Ok(ExitCode(1));
+        }
+    };
+
+    let messages = match messages {
+        InitialCommitMessages::Discard | InitialCommitMessages::Messages(_) => messages,
+        InitialCommitMessages::FixUp(revset) => {
+            let commits_to_fixup =
+                resolve_commits_from_hashes(&repo, &mut dag, effects, vec![revset.clone()])?
+                    .unwrap_or_default();
+            let commit_to_fixup = match commits_to_fixup.as_slice() {
+                [commit_to_fixup] => {
+                    let commits: CommitSet = commits.iter().map(|c| c.get_oid()).collect();
+                    if !dag
+                        .query()
+                        .common_ancestors(commits)?
+                        .contains(&commit_to_fixup.get_oid().into())?
+                    {
+                        writeln!(
+                            effects.get_error_stream(),
+                            "The commit supplied to --fixup must be an ancestor of all commits being reworded.\nAborting.",
+                        )?;
+                        return Ok(ExitCode(1));
+                    }
+                    commit_to_fixup
+                }
+                commits => {
+                    writeln!(
+                        effects.get_error_stream(),
+                        "--fixup expects exactly 1 commit, but '{}' evaluated to {}.\nAborting.",
+                        revset.0,
+                        commits.len()
+                    )?;
+                    return Ok(ExitCode(1));
+                }
+            };
+            let message = commit_to_fixup.get_summary()?.to_vec();
+            let message = format!("fixup! {}", message.into_string_lossy());
+            InitialCommitMessages::Messages(vec![message])
         }
     };
 
@@ -350,6 +391,9 @@ fn prepare_messages(
     let (message, load_editor, discard_messages) = match messages {
         InitialCommitMessages::Discard => {
             (get_commit_template(repo)?.unwrap_or_default(), true, true)
+        }
+        InitialCommitMessages::FixUp(_) => {
+            eyre::bail!("BUG: Fixup should have already been handled!")
         }
         InitialCommitMessages::Messages(ref messages) => {
             let message = messages.clone().join("\n\n");
