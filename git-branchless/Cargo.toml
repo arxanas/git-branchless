@@ -48,7 +48,7 @@ thiserror = "1.0.34"
 tracing = "0.1.35"
 tracing-chrome = "0.6.0"
 tracing-error = "0.2.0"
-tracing-subscriber = { version = "0.3.11", features = ["env-filter"] }
+tracing-subscriber = { version = "=0.3.11", features = ["env-filter"] }
 
 [target.'cfg(unix)'.dependencies]
 skim = "0.9.4"
