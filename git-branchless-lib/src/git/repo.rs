@@ -206,6 +206,9 @@ pub enum Error {
     #[error("could not get branches: {0}")]
     GetBranches(#[source] git2::Error),
 
+    #[error("could not get remote names: {0}")]
+    GetRemoteNames(#[source] git2::Error),
+
     #[error("HEAD is unborn (try making a commit?)")]
     UnbornHead,
 
@@ -941,6 +944,24 @@ impl Repo {
             .reference(name.as_str(), oid.inner, force, log_message)
             .map_err(Error::CreateReference)?;
         Ok(Reference { inner: reference })
+    }
+
+    /// Get a list of all remote names.
+    #[instrument]
+    pub fn get_all_remote_names(&self) -> Result<Vec<String>> {
+        let remotes = self.inner.remotes().map_err(Error::GetRemoteNames)?;
+        Ok(remotes
+            .into_iter()
+            .enumerate()
+            .filter_map(|(i, remote_name)| match remote_name {
+                Some(remote_name) => Some(remote_name.to_owned()),
+                None => {
+                    warn!(remote_index = i, "Remote name could not be decoded");
+                    None
+                }
+            })
+            .sorted()
+            .collect())
     }
 
     /// Look up a reference with the given name. Returns `None` if not found.
@@ -1925,6 +1946,9 @@ impl<'repo> Reference<'repo> {
 /// `suffix` value is converted to a `String` to be rendered to the screen, so
 /// it may have lost some information if the reference name had unusual
 /// characters.
+///
+/// FIXME: This abstraction seems uncomfortable and clunky to use; consider
+/// revising.
 #[derive(Debug)]
 pub enum CategorizedReferenceName<'a> {
     /// The reference represents a local branch.

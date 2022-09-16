@@ -118,15 +118,22 @@ pub fn submit(
             .collect::<Result<_, _>>()?;
         branch_names.sort_unstable();
         if create {
-            let push_remote: String = match repo.get_readonly_config()?.get("remote.pushDefault")? {
+            let push_remote: String = match get_default_remote(&repo)? {
                 Some(push_remote) => push_remote,
                 None => {
                     writeln!(
                         effects.get_output_stream(),
                         "\
-No value was specified for `remote.pushDefault`, so cannot push these branches: {}
-Configure a value with: git config remote.pushDefault <remote>",
-                        branch_names.join(", ")
+No upstream repository was associated with {} and no value was
+specified for `remote.pushDefault`, so cannot push these branches: {}
+Configure a value with: git config remote.pushDefault <remote>
+These remotes are available: {}",
+                        CategorizedReferenceName::new(
+                            &repo.get_main_branch_reference()?.get_name()?
+                        )
+                        .friendly_describe(),
+                        branch_names.join(", "),
+                        repo.get_all_remote_names()?.join(", "),
                     )?;
                     return Ok(ExitCode(1));
                 }
@@ -171,4 +178,34 @@ To create and push them, retry this operation with the --create option."
         }
     )?;
     Ok(ExitCode(0))
+}
+
+fn get_default_remote(repo: &Repo) -> eyre::Result<Option<String>> {
+    let main_branch_reference = repo.get_main_branch_reference()?;
+    let main_branch_name = main_branch_reference.get_name()?;
+    match CategorizedReferenceName::new(&main_branch_name) {
+        name @ CategorizedReferenceName::LocalBranch { .. } => {
+            if let Some(main_branch) =
+                repo.find_branch(&name.remove_prefix()?, BranchType::Local)?
+            {
+                if let Some(remote_name) = main_branch.get_push_remote_name()? {
+                    return Ok(Some(remote_name));
+                }
+            }
+        }
+
+        name @ CategorizedReferenceName::RemoteBranch { .. } => {
+            let name = name.remove_prefix()?;
+            if let Some((remote_name, _reference_name)) = name.split_once('/') {
+                return Ok(Some(remote_name.to_owned()));
+            }
+        }
+
+        CategorizedReferenceName::OtherRef { .. } => {
+            // Do nothing.
+        }
+    }
+
+    let push_default_remote_opt = repo.get_readonly_config()?.get("remote.pushDefault")?;
+    Ok(push_default_remote_opt)
 }

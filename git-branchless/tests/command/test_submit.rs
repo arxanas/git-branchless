@@ -1,6 +1,6 @@
 use lib::{
     git::GitVersion,
-    testing::{make_git_with_remote_repo, GitInitOptions, GitWrapperWithRemoteRepo},
+    testing::{make_git_with_remote_repo, GitInitOptions, GitRunOptions, GitWrapperWithRemoteRepo},
 };
 
 /// Minimum version due to changes in the output of `git push`.
@@ -61,7 +61,6 @@ fn test_submit() -> eyre::Result<()> {
     }
 
     {
-        cloned_repo.run(&["config", "remote.pushDefault", "origin"])?;
         let (stdout, stderr) = cloned_repo.run(&["submit", "--create"])?;
         let stderr = redact_remotes(stderr);
         insta::assert_snapshot!(stderr, @r###"
@@ -105,6 +104,55 @@ fn test_submit() -> eyre::Result<()> {
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> push --force-with-lease origin bar qux
         Successfully pushed 2 branches.
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_submit_multiple_remotes() -> eyre::Result<()> {
+    let GitWrapperWithRemoteRepo {
+        temp_dir: _guard,
+        original_repo,
+        cloned_repo,
+    } = make_git_with_remote_repo()?;
+
+    if original_repo.get_version()? < MIN_VERSION {
+        return Ok(());
+    }
+
+    {
+        original_repo.init_repo()?;
+        original_repo.commit_file("test1", 1)?;
+        original_repo.commit_file("test2", 2)?;
+
+        original_repo.clone_repo_into(&cloned_repo, &[])?;
+    }
+
+    cloned_repo.init_repo_with_options(&GitInitOptions {
+        make_initial_commit: false,
+        ..Default::default()
+    })?;
+    cloned_repo.run(&["checkout", "-b", "foo"])?;
+    cloned_repo.commit_file("test3", 3)?;
+    cloned_repo.run(&["branch", "--unset-upstream", "master"])?;
+    cloned_repo.run(&["remote", "add", "other-repo", "file://dummy-file"])?;
+
+    {
+        let (stdout, stderr) = cloned_repo.run_with_options(
+            &["submit", "--create"],
+            &GitRunOptions {
+                expected_exit_code: 1,
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stderr, @"");
+        insta::assert_snapshot!(stdout, @r###"
+        No upstream repository was associated with branch master and no value was
+        specified for `remote.pushDefault`, so cannot push these branches: foo
+        Configure a value with: git config remote.pushDefault <remote>
+        These remotes are available: origin, other-repo
         "###);
     }
 
