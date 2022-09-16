@@ -69,7 +69,7 @@ pub fn move_branches<'a>(
                         true,
                         "move branches",
                     ) {
-                        branch_move_err = Some(err);
+                        branch_move_err = Some(eyre::eyre!(err));
                         break 'outer;
                     }
                     branch_moves.push((*old_oid, MaybeZeroOid::NonZero(*new_oid), reference_name));
@@ -81,7 +81,7 @@ pub fn move_branches<'a>(
                     match repo.find_reference(name) {
                         Ok(Some(mut reference)) => {
                             if let Err(err) = reference.delete() {
-                                branch_move_err = Some(err);
+                                branch_move_err = Some(eyre::eyre!(err));
                                 break 'outer;
                             }
                         }
@@ -89,7 +89,7 @@ pub fn move_branches<'a>(
                             warn!(?name, "Reference not found, not deleting")
                         }
                         Err(err) => {
-                            branch_move_err = Some(err);
+                            branch_move_err = Some(eyre::eyre!(err));
                             break 'outer;
                         }
                     };
@@ -519,7 +519,7 @@ mod in_memory {
                         &CherryPickFastOptions {
                             reuse_parent_tree_if_possible: true,
                         },
-                    )? {
+                    ) {
                         Ok(rebased_commit) => rebased_commit,
                         Err(CherryPickFastError::MergeConflict { conflicting_paths }) => {
                             return Ok(RebaseInMemoryResult::MergeConflict(MergeConflictInfo {
@@ -527,6 +527,7 @@ mod in_memory {
                                 conflicting_paths,
                             }))
                         }
+                        Err(other) => eyre::bail!(other),
                     };
 
                     let commit_message = commit_to_apply.get_message_raw()?;

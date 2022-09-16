@@ -12,7 +12,7 @@ use lib::{
         effects::{Effects, OperationType},
         rewrite::RepoResource,
     },
-    git::{Commit, NonZeroOid, Repo, Time},
+    git::{Commit, NonZeroOid, Repo, RepoError, Time},
 };
 use rayon::prelude::{ParallelBridge, ParallelIterator};
 use regex::Regex;
@@ -43,7 +43,7 @@ pub enum PatternError {
     Eval(#[from] Box<EvalError>),
 
     #[error("failed to query repo: {0}")]
-    Repo(#[source] eyre::Error),
+    Repo(#[source] RepoError),
 
     #[error("failed to construct matcher object: {0}")]
     ConstructMatcher(#[source] eyre::Error),

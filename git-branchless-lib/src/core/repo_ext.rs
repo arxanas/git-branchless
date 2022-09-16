@@ -3,6 +3,7 @@
 use std::collections::{HashMap, HashSet};
 
 use color_eyre::Help;
+use eyre::Context;
 use tracing::instrument;
 
 use crate::git::{NonZeroOid, Reference, ReferenceName, Repo};
@@ -69,6 +70,7 @@ Either create it, or update the main branch setting by running:
                                     .into_reference()
                                     .get_name()
                                     .map(|s| format!("{:?}", s))
+                                    .wrap_err("converting branch to reference")
                             })
                             .collect::<eyre::Result<Vec<String>>>()?,
                     );

@@ -16,8 +16,9 @@ pub use index::{update_index, Index, IndexEntry, Stage, UpdateIndexCommand};
 pub use oid::{MaybeZeroOid, NonZeroOid};
 pub use repo::{
     message_prettify, AmendFastOptions, Branch, BranchType, CategorizedReferenceName,
-    CherryPickFastError, CherryPickFastOptions, Commit, GitVersion, PatchId, Reference,
-    ReferenceName, ReferenceTarget, Repo, ResolvedReferenceInfo, Time,
+    CherryPickFastError, CherryPickFastOptions, Commit, Error as RepoError, GitVersion, PatchId,
+    Reference, ReferenceName, ReferenceTarget, Repo, ResolvedReferenceInfo, Result as RepoResult,
+    Time,
 };
 pub use run::{GitRunInfo, GitRunOpts, GitRunResult};
 pub use snapshot::{WorkingCopyChangesType, WorkingCopySnapshot};

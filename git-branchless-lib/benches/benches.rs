@@ -118,7 +118,6 @@ fn bench_cherry_pick_fast(c: &mut Criterion) {
                     reuse_parent_tree_if_possible: false,
                 },
             )
-            .unwrap()
             .unwrap();
         });
     });
