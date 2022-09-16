@@ -72,6 +72,7 @@ const ALL_ALIASES: &[(&str, &str)] = &[
     ("reword", "reword"),
     ("sl", "smartlog"),
     ("smartlog", "smartlog"),
+    ("submit", "submit"),
     ("sync", "sync"),
     ("undo", "undo"),
     ("unhide", "unhide"),

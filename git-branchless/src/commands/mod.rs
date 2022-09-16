@@ -15,6 +15,7 @@ mod restack;
 mod reword;
 mod smartlog;
 mod snapshot;
+mod submit;
 mod sync;
 mod undo;
 mod wrap;
@@ -309,6 +310,10 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
                 snapshot::restore(&effects, &git_run_info, snapshot_oid)?
             }
         },
+
+        Command::Submit { create, revset } => {
+            submit::submit(&effects, &git_run_info, revset, create)?
+        }
 
         Command::Sync {
             update_refs,

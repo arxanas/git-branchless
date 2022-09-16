@@ -332,13 +332,14 @@ stderr:
     /// Clone this repository into the `target` repository (which must not have
     /// been initialized).
     pub fn clone_repo_into(&self, target: &Git, additional_args: &[&str]) -> eyre::Result<()> {
+        let remote = format!("file://{}", self.repo_path.to_str().unwrap());
         let args = {
             let mut args = vec![
                 "clone",
                 // For Windows in CI.
                 "-c",
                 "core.autocrlf=false",
-                self.repo_path.to_str().unwrap(),
+                &remote,
                 target.repo_path.to_str().unwrap(),
             ];
             args.extend(additional_args.iter());

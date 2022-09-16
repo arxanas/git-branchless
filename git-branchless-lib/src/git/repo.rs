@@ -966,7 +966,10 @@ impl Repo {
             .map_err(Error::GetBranches)?
         {
             let (branch, _branch_type) = branch.map_err(Error::ReadBranch)?;
-            all_branches.push(Branch { inner: branch });
+            all_branches.push(Branch {
+                repo: self,
+                inner: branch,
+            });
         }
         Ok(all_branches)
     }
@@ -975,7 +978,10 @@ impl Repo {
     #[instrument]
     pub fn find_branch(&self, name: &str, branch_type: BranchType) -> Result<Option<Branch>> {
         match self.inner.find_branch(name, branch_type) {
-            Ok(branch) => Ok(Some(Branch { inner: branch })),
+            Ok(branch) => Ok(Some(Branch {
+                repo: self,
+                inner: branch,
+            })),
             Err(err) if err.code() == git2::ErrorCode::NotFound => Ok(None),
             Err(err) => Err(Error::FindBranch {
                 source: err,
@@ -2044,6 +2050,7 @@ impl Time {
 
 /// Represents a Git branch.
 pub struct Branch<'repo> {
+    repo: &'repo Repo,
     inner: git2::Branch<'repo>,
 }
 
@@ -2068,11 +2075,22 @@ impl<'repo> Branch<'repo> {
         Ok(self.inner.get().target().map(make_non_zero_oid))
     }
 
+    /// Get the name of this branch, not including any `refs/heads/` prefix.
+    #[instrument]
+    pub fn get_name(&self) -> eyre::Result<&str> {
+        self.inner
+            .name()?
+            .ok_or_else(|| eyre::eyre!("Could not decode branch name"))
+    }
+
     /// If this branch tracks a remote ("upstream") branch, return that branch.
     #[instrument]
     pub fn get_upstream_branch(&self) -> Result<Option<Branch<'repo>>> {
         match self.inner.upstream() {
-            Ok(upstream) => Ok(Some(Branch { inner: upstream })),
+            Ok(upstream) => Ok(Some(Branch {
+                repo: self.repo,
+                inner: upstream,
+            })),
             Err(err) if err.code() == git2::ErrorCode::NotFound => Ok(None),
             Err(err) => {
                 let branch_name = self.inner.name_bytes().map_err(|_err| Error::DecodeUtf8 {
@@ -2083,6 +2101,25 @@ impl<'repo> Branch<'repo> {
                     name: String::from_utf8_lossy(branch_name).into_owned(),
                 })
             }
+        }
+    }
+
+    /// Get the associated remote to push to for this branch. If there is no
+    /// associated remote, returns `None`. Note that this never reads the value
+    /// of `push.remoteDefault`.
+    #[instrument]
+    pub fn get_push_remote_name(&self) -> eyre::Result<Option<String>> {
+        let branch_name = self
+            .inner
+            .name()?
+            .ok_or_else(|| eyre::eyre!("Branch name was not UTF-8: {self:?}"))?;
+        let config = self.repo.get_readonly_config()?;
+        if let Some(remote_name) = config.get(format!("branch.{branch_name}.pushRemote"))? {
+            Ok(Some(remote_name))
+        } else if let Some(remote_name) = config.get(format!("branch.{branch_name}.remote"))? {
+            Ok(Some(remote_name))
+        } else {
+            Ok(None)
         }
     }
 
