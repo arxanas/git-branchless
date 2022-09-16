@@ -364,14 +364,15 @@ branchless: automated working copy snapshot
                 unit: ("unstaged change", "unstaged changes"),
             }
         );
-        repo.create_commit(
+        let commit = repo.create_commit(
             None,
             &signature,
             &signature,
             &message,
             &tree_unstaged,
             Vec::from_iter(head_commit),
-        )
+        )?;
+        Ok(commit)
     }
 
     #[instrument]

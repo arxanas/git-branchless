@@ -48,7 +48,8 @@ impl Resource for RepoResource {
             .repo
             .lock()
             .map_err(|_| eyre::eyre!("Poisoned mutex for RepoResource"))?;
-        repo.try_clone()
+        let repo = repo.try_clone()?;
+        Ok(repo)
     }
 }
 

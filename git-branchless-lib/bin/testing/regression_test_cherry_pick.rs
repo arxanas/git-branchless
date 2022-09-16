@@ -41,13 +41,6 @@ fn main() -> eyre::Result<()> {
                 reuse_parent_tree_if_possible: false,
             },
         )?;
-        let tree = match tree {
-            Ok(tree) => tree,
-            Err(err) => {
-                println!("Failed to cherry-pick: {:?}", err);
-                std::process::exit(1);
-            }
-        };
 
         let expected_tree = current_commit.get_tree()?;
         if tree.get_oid() != expected_tree.get_oid() {

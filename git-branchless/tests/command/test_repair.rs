@@ -1,6 +1,7 @@
-use std::ffi::OsStr;
-
-use lib::{git::BranchType, testing::make_git};
+use lib::{
+    git::{BranchType, ReferenceName},
+    testing::make_git,
+};
 
 #[test]
 fn test_repair_broken_commit() -> eyre::Result<()> {
@@ -14,7 +15,7 @@ fn test_repair_broken_commit() -> eyre::Result<()> {
     git.run(&["checkout", "HEAD^"])?;
 
     let repo = git.get_repo()?;
-    repo.get_reference(OsStr::new(&format!("refs/branchless/{test3_oid}")))?
+    repo.find_reference(&ReferenceName::from(format!("refs/branchless/{test3_oid}")))?
         .unwrap()
         .delete()?;
     git.run(&["gc", "--prune=now"])?;

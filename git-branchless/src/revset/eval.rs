@@ -12,7 +12,7 @@ use thiserror::Error;
 
 use lib::core::dag::{CommitSet, Dag};
 use lib::core::formatting::Pluralize;
-use lib::git::{ConfigRead, Repo, ResolvedReferenceInfo};
+use lib::git::{ConfigRead, Repo, RepoError, ResolvedReferenceInfo};
 use tracing::instrument;
 
 use super::builtins::FUNCTIONS;
@@ -139,6 +139,9 @@ pub enum EvalError {
     #[error(transparent)]
     PatternError(#[from] PatternError),
 
+    #[error(transparent)]
+    RepoError(#[from] RepoError),
+
     #[error("query error: {from}")]
     DagError {
         #[from]
@@ -229,7 +232,7 @@ pub(super) fn eval_fn(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResul
     let alias_template: Option<String> = ctx
         .repo
         .get_readonly_config()
-        .map_err(EvalError::OtherError)?
+        .map_err(EvalError::RepoError)?
         .get(alias_key)
         .map_err(EvalError::OtherError)?;
     if let Some(alias_template) = alias_template {

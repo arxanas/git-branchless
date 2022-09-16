@@ -423,14 +423,16 @@ stderr:
     /// Get a `Repo` object for this repository.
     #[instrument]
     pub fn get_repo(&self) -> eyre::Result<Repo> {
-        Repo::from_dir(&self.repo_path)
+        let repo = Repo::from_dir(&self.repo_path)?;
+        Ok(repo)
     }
 
     /// Get the version of the Git executable.
     #[instrument]
     pub fn get_version(&self) -> eyre::Result<GitVersion> {
         let (version_str, _stderr) = self.run(&["version"])?;
-        version_str.parse()
+        let version = version_str.parse()?;
+        Ok(version)
     }
 
     /// Get the `GitRunInfo` to use for this repository.
