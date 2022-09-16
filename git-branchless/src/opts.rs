@@ -458,6 +458,23 @@ pub enum Command {
         subcommand: SnapshotSubcommand,
     },
 
+    /// Push commits to a remote.
+    Submit {
+        /// If there is no remote branch for a given local branch, create the
+        /// remote branch by pushing the local branch to the default push
+        /// remote.
+        ///
+        /// You can configure the default push remote with `git config
+        /// remote.pushDefault <remote>`.
+        #[clap(action, short = 'c', long = "create")]
+        create: bool,
+
+        /// The commits to push. All branches attached to those commits will be
+        /// pushed.
+        #[clap(value_parser, default_value = "stack()")]
+        revset: Revset,
+    },
+
     /// Move any local commit stacks on top of the main branch.
     Sync {
         /// Run `git fetch` to update remote references before carrying out the
