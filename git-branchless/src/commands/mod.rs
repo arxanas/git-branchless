@@ -473,6 +473,33 @@ support repositories with this configuration option enabled.",
         Err(_) => return Ok(None),
     };
 
+    let config = repo.get_readonly_config()?;
+    if config.get_or("core.splitIndex", false)? {
+        writeln!(
+            effects.get_output_stream(),
+            "\
+{error}
+
+See https://github.com/arxanas/git-branchless/discussions/532 for more
+details.
+
+Note that git-branchless implements its own version of a split index to improve
+the performance of many of its operations, so you may not need to use a split
+index. To disable the split index, run: git update-index --no-split-index",
+            error = printable_styled_string(
+                effects.get_glyphs(),
+                StyledString::styled(
+                    "\
+Error: the Git configuration setting `core.splitIndex` is enabled in this
+repository. git-branchless does not currently support repositories with this
+configuration option enabled.",
+                    BaseColor::Red.light()
+                )
+            )?,
+        )?;
+        return Ok(Some(ExitCode(1)));
+    }
+
     Ok(None)
 }
 

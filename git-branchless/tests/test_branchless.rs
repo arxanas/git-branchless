@@ -127,3 +127,25 @@ fn test_sparse_checkout() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_core_split_index() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+    git.run(&["config", "core.splitIndex", "true"])?;
+
+    {
+        let (stdout, stderr) = git.run(&["update-index", "--split-index"])?;
+        insta::assert_snapshot!(stderr, @"");
+        insta::assert_snapshot!(stdout, @"");
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        @ f777ecc (> master) create initial.txt
+        "###);
+    }
+
+    Ok(())
+}
