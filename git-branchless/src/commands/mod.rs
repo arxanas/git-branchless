@@ -22,13 +22,19 @@ mod wrap;
 use std::any::Any;
 use std::convert::TryInto;
 use std::ffi::OsString;
+use std::fmt::Write;
 use std::path::PathBuf;
 use std::time::SystemTime;
 
 use clap::Parser;
+use cursive::theme::BaseColor;
+use cursive::utils::markup::StyledString;
 use eyre::Context;
 use itertools::Itertools;
+use lib::core::formatting::printable_styled_string;
 use lib::core::rewrite::MergeConflictRemediation;
+use lib::git::Repo;
+use lib::git::RepoError;
 use lib::util::ExitCode;
 use tracing_chrome::ChromeLayerBuilder;
 use tracing_error::ErrorLayer;
@@ -117,6 +123,11 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
         Some(ColorSetting::Auto) | None => Glyphs::detect(),
     };
     let effects = Effects::new(color);
+
+    if let Some(ExitCode(exit_code)) = check_unsupported_config_options(&effects)? {
+        let exit_code: i32 = exit_code.try_into()?;
+        return Ok(exit_code);
+    }
 
     let ExitCode(exit_code) = match command {
         Command::Amend { move_options } => amend::amend(&effects, &git_run_info, &move_options)?,
@@ -426,6 +437,43 @@ fn install_tracing() -> eyre::Result<impl Drop> {
         .try_init()?;
 
     Ok(flush_guard)
+}
+
+fn check_unsupported_config_options(effects: &Effects) -> eyre::Result<Option<ExitCode>> {
+    let _repo = match Repo::from_current_dir() {
+        Ok(repo) => repo,
+        Err(RepoError::UnsupportedExtensionWorktreeConfig(_)) => {
+            writeln!(
+                effects.get_output_stream(),
+                "\
+{error}
+
+Usually, this configuration setting is enabled when initializing a sparse
+checkout. See https://github.com/arxanas/git-branchless/issues/278 for more
+information.
+
+Here are some options:
+
+- To unset the configuration option, run: git config --unset extensions.worktreeConfig
+  - This is safe unless you created another worktree also using a sparse checkout.
+- Try upgrading to Git v2.36+ and reinitializing your sparse checkout.",
+                error = printable_styled_string(
+                    effects.get_glyphs(),
+                    StyledString::styled(
+                        "\
+Error: the Git configuration setting `extensions.worktreeConfig` is enabled in
+this repository. Due to upstream libgit2 limitations, git-branchless does not
+support repositories with this configuration option enabled.",
+                        BaseColor::Red.light()
+                    )
+                )?,
+            )?;
+            return Ok(Some(ExitCode(1)));
+        }
+        Err(_) => return Ok(None),
+    };
+
+    Ok(None)
 }
 
 /// Re-exports of internals for testing purposes.

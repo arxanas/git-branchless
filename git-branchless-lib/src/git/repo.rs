@@ -52,6 +52,9 @@ pub enum Error {
     #[error("could not open repository: {0}")]
     OpenRepo(#[source] git2::Error),
 
+    #[error("could not open repository: {0}")]
+    UnsupportedExtensionWorktreeConfig(#[source] git2::Error),
+
     #[error("could not read index: {0}")]
     ReadIndex(#[source] git2::Error),
 
@@ -454,7 +457,18 @@ impl Repo {
     /// Get the Git repository associated with the given directory.
     #[instrument]
     pub fn from_dir(path: &Path) -> Result<Self> {
-        let repo = git2::Repository::discover(path).map_err(Error::OpenRepo)?;
+        let repo = match git2::Repository::discover(path) {
+            Ok(repo) => repo,
+            Err(err)
+                if err.code() == git2::ErrorCode::GenericError
+                    && err
+                        .message()
+                        .contains("unsupported extension name extensions.worktreeconfig") =>
+            {
+                return Err(Error::UnsupportedExtensionWorktreeConfig(err))
+            }
+            Err(err) => return Err(Error::OpenRepo(err)),
+        };
         Ok(Repo { inner: repo })
     }
 
