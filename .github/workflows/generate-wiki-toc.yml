@@ -1,8 +1,8 @@
-name: 'Generate Wiki tables of contents'
+name: "Generate Wiki tables of contents"
 
 on:
-- gollum
-- workflow_dispatch
+  - gollum
+  - workflow_dispatch
 
 jobs:
   "generate-toc":
@@ -23,6 +23,14 @@ jobs:
             # don't include the name of the document in the item links.
             for i in $(grep -l '<!--ts-->' *.md); do ./gh-md-toc --insert --no-backup "$i"; done
           fi
+
+      - name: Remove timestamps
+        uses: jacobtomlinson/gha-find-replace@v2
+        with:
+          find: "<!-- Added by: runner, at: [^-]+ -->"
+          replace: ""
+          include: "*.md"
+          regex: true
 
       - uses: stefanzweifel/git-auto-commit-action@v4
         with:
