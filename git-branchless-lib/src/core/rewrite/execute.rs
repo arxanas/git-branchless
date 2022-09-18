@@ -443,7 +443,7 @@ mod in_memory {
 
     pub enum RebaseInMemoryResult {
         Succeeded {
-            rewritten_oids: Vec<(NonZeroOid, MaybeZeroOid)>,
+            rewritten_oids: HashMap<NonZeroOid, MaybeZeroOid>,
 
             /// The new OID that `HEAD` should point to, based on the rebase.
             ///
@@ -502,7 +502,7 @@ mod in_memory {
 
         let mut current_oid = rebase_plan.first_dest_oid;
         let mut labels: HashMap<String, NonZeroOid> = HashMap::new();
-        let mut rewritten_oids: Vec<(NonZeroOid, MaybeZeroOid)> = Vec::new();
+        let mut rewritten_oids: HashMap<NonZeroOid, MaybeZeroOid> = HashMap::new();
 
         // Normally, we can determine the new `HEAD` OID by looking at the
         // rewritten commits. However, if `HEAD` pointed to a commit that was
@@ -648,7 +648,7 @@ mod in_memory {
                                 rebased_commit_oid,
                             )?)?;
                     if rebased_commit.is_empty() {
-                        rewritten_oids.push((*original_commit_oid, MaybeZeroOid::Zero));
+                        rewritten_oids.insert(*original_commit_oid, MaybeZeroOid::Zero);
                         maybe_set_skipped_head_new_oid(*original_commit_oid, current_oid);
 
                         writeln!(
@@ -656,10 +656,10 @@ mod in_memory {
                             "[{i}/{num_picks}] Skipped now-empty commit: {commit_description}"
                         )?;
                     } else {
-                        rewritten_oids.push((
+                        rewritten_oids.insert(
                             *original_commit_oid,
                             MaybeZeroOid::NonZero(rebased_commit_oid),
-                        ));
+                        );
                         current_oid = rebased_commit_oid;
 
                         writeln!(
@@ -764,7 +764,7 @@ mod in_memory {
                                 effects.get_glyphs(),
                                 rebased_commit_oid,
                             )?)?;
-                    rewritten_oids.push((*commit_oid, MaybeZeroOid::NonZero(rebased_commit_oid)));
+                    rewritten_oids.insert(*commit_oid, MaybeZeroOid::NonZero(rebased_commit_oid));
                     current_oid = rebased_commit_oid;
 
                     writeln!(
@@ -782,7 +782,7 @@ mod in_memory {
                     let commit_num = format!("[{i}/{num_picks}]");
 
                     let commit = repo.find_commit_or_fail(*commit_oid)?;
-                    rewritten_oids.push((*commit_oid, MaybeZeroOid::Zero));
+                    rewritten_oids.insert(*commit_oid, MaybeZeroOid::Zero);
                     maybe_set_skipped_head_new_oid(*commit_oid, current_oid);
 
                     let commit_description = commit.friendly_describe(effects.get_glyphs())?;
@@ -807,17 +807,10 @@ mod in_memory {
                 None
             }
             Some(head_oid) => {
-                let new_head_oid = rewritten_oids.iter().find_map(|(source_oid, dest_oid)| {
-                    if *source_oid == head_oid {
-                        Some(*dest_oid)
-                    } else {
-                        None
-                    }
-                });
-                match new_head_oid {
+                match rewritten_oids.get(&head_oid) {
                     Some(MaybeZeroOid::NonZero(new_head_oid)) => {
                         // `HEAD` was rewritten to this OID.
-                        Some(new_head_oid)
+                        Some(*new_head_oid)
                     }
                     Some(MaybeZeroOid::Zero) => {
                         // `HEAD` was rewritten, but its associated commit was
@@ -852,7 +845,7 @@ mod in_memory {
         git_run_info: &GitRunInfo,
         repo: &Repo,
         event_log_db: &EventLogDb,
-        rewritten_oids: &[(NonZeroOid, MaybeZeroOid)],
+        rewritten_oids: &HashMap<NonZeroOid, MaybeZeroOid>,
         skipped_head_updated_oid: Option<NonZeroOid>,
         options: &ExecuteRebasePlanOptions,
     ) -> EyreExitOr<()> {
@@ -866,12 +859,7 @@ mod in_memory {
             check_out_commit_options,
         } = options;
 
-        // Note that if an OID has been mapped to multiple other OIDs, then the last
-        // mapping wins. (This corresponds to the last applied rebase operation.)
-        let rewritten_oids_map: HashMap<NonZeroOid, MaybeZeroOid> =
-            rewritten_oids.iter().copied().collect();
-
-        for new_oid in rewritten_oids_map.values() {
+        for new_oid in rewritten_oids.values() {
             if let MaybeZeroOid::NonZero(new_oid) = new_oid {
                 mark_commit_reachable(repo, *new_oid)?;
             }
@@ -884,13 +872,7 @@ mod in_memory {
             repo.detach_head(&head_info)?;
         }
 
-        move_branches(
-            effects,
-            git_run_info,
-            repo,
-            *event_tx_id,
-            &rewritten_oids_map,
-        )?;
+        move_branches(effects, git_run_info, repo, *event_tx_id, rewritten_oids)?;
 
         // Call the `post-rewrite` hook only after moving branches so that we don't
         // produce a spurious abandoned-branch warning.
@@ -914,7 +896,7 @@ mod in_memory {
             repo,
             event_log_db,
             *event_tx_id,
-            &rewritten_oids_map,
+            rewritten_oids,
             &head_info,
             skipped_head_updated_oid,
             check_out_commit_options,
@@ -1257,8 +1239,6 @@ pub fn execute_rebase_plan(
                     }
                 }
 
-                let rewritten_oids: HashMap<NonZeroOid, MaybeZeroOid> =
-                    rewritten_oids.into_iter().collect();
                 writeln!(effects.get_output_stream(), "In-memory rebase succeeded.")?;
                 return Ok(ExecuteRebasePlanResult::Succeeded {
                     rewritten_oids: Some(rewritten_oids),
