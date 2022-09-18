@@ -181,6 +181,10 @@ To create and push them, retry this operation with the --create option."
 }
 
 fn get_default_remote(repo: &Repo) -> eyre::Result<Option<String>> {
+    if let Some(push_default_remote) = repo.get_readonly_config()?.get("remote.pushDefault")? {
+        return Ok(Some(push_default_remote));
+    }
+
     let main_branch_reference = repo.get_main_branch_reference()?;
     let main_branch_name = main_branch_reference.get_name()?;
     match CategorizedReferenceName::new(&main_branch_name) {
@@ -206,6 +210,5 @@ fn get_default_remote(repo: &Repo) -> eyre::Result<Option<String>> {
         }
     }
 
-    let push_default_remote_opt = repo.get_readonly_config()?.get("remote.pushDefault")?;
-    Ok(push_default_remote_opt)
+    Ok(None)
 }
