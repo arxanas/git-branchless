@@ -28,7 +28,7 @@ jobs:
         uses: jacobtomlinson/gha-find-replace@v2
         with:
           find: "<!-- Added by: runner, at: [^-]+ -->"
-          replace: ""
+          replace: "<!-- Added by: runner, at: (timestamp removed) -->"
           include: "*.md"
           regex: true
 
