@@ -56,7 +56,7 @@ skim = "0.9.4"
 [dev-dependencies]
 anyhow = "1.0.64"
 assert_cmd = "2.0.4"
-insta = "1.19.1"
+insta = "1.20.0"
 portable-pty = "0.7.0"
 vt100 = "0.15.1"
 
