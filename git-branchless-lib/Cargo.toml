@@ -62,7 +62,7 @@ rayon = "1.5.3"
 regex = "1.6.0"
 rusqlite = { version = "0.28.0", features = ["bundled"] }
 tempfile = "3.3.0"
-textwrap = "0.15.0"
+textwrap = "0.15.1"
 tracing = "0.1.35"
 tracing-chrome = "0.6.0"
 tracing-error = "0.2.0"
