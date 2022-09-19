@@ -334,9 +334,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "3.2.21"
+version = "3.2.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1ed5341b2301a26ab80be5cbdced622e80ed808483c52e45e3310a877d3b37d7"
+checksum = "86447ad904c7fb335a790c9d7fe3d0d971dc523b8ccd1561a520de9a85302750"
 dependencies = [
  "atty",
  "bitflags",
@@ -460,7 +460,7 @@ dependencies = [
  "atty",
  "cast",
  "ciborium",
- "clap 3.2.21",
+ "clap 3.2.22",
  "criterion-plot",
  "itertools 0.10.4",
  "lazy_static",
@@ -1088,7 +1088,7 @@ dependencies = [
  "chrono",
  "chrono-english",
  "chronoutil",
- "clap 3.2.21",
+ "clap 3.2.22",
  "color-eyre",
  "console",
  "cursive",
