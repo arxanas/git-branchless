@@ -229,7 +229,7 @@ mod tests {
         insta::assert_debug_snapshot!(parse("foo |"), @r###"
         Err(
             ParseError(
-                "Unrecognized EOF found at 5\nExpected one of \"..\", \":\", \"::\", a commit/branch/tag or a string literal",
+                "Unrecognized EOF found at 5\nExpected one of \"(\", \"..\", \":\", \"::\", a commit/branch/tag or a string literal",
             ),
         )
         "###);
@@ -421,6 +421,101 @@ mod tests {
             FunctionCall(
                 "foo",
                 [],
+            ),
+        )
+        "###);
+        insta::assert_debug_snapshot!(parse("(foo) - bar"), @r###"
+        Ok(
+            FunctionCall(
+                "difference",
+                [
+                    Name(
+                        "foo",
+                    ),
+                    Name(
+                        "bar",
+                    ),
+                ],
+            ),
+        )
+        "###);
+        insta::assert_debug_snapshot!(parse("foo - (bar)"), @r###"
+        Ok(
+            FunctionCall(
+                "difference",
+                [
+                    Name(
+                        "foo",
+                    ),
+                    Name(
+                        "bar",
+                    ),
+                ],
+            ),
+        )
+        "###);
+        insta::assert_debug_snapshot!(parse("(foo) & bar"), @r###"
+        Ok(
+            FunctionCall(
+                "intersection",
+                [
+                    Name(
+                        "foo",
+                    ),
+                    Name(
+                        "bar",
+                    ),
+                ],
+            ),
+        )
+        "###);
+        insta::assert_debug_snapshot!(parse("foo & (bar)"), @r###"
+        Ok(
+            FunctionCall(
+                "intersection",
+                [
+                    Name(
+                        "foo",
+                    ),
+                    Name(
+                        "bar",
+                    ),
+                ],
+            ),
+        )
+        "###);
+        insta::assert_debug_snapshot!(parse("(foo | bar):"), @r###"
+        Ok(
+            FunctionCall(
+                "descendants",
+                [
+                    FunctionCall(
+                        "union",
+                        [
+                            Name(
+                                "foo",
+                            ),
+                            Name(
+                                "bar",
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+        )
+        "###);
+        insta::assert_debug_snapshot!(parse("(foo)^"), @r###"
+        Ok(
+            FunctionCall(
+                "parents.nth",
+                [
+                    Name(
+                        "foo",
+                    ),
+                    Name(
+                        "1",
+                    ),
+                ],
             ),
         )
         "###);
