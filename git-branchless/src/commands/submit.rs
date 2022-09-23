@@ -117,40 +117,40 @@ pub fn submit(
             .map(|branch| branch.get_name())
             .collect::<Result<_, _>>()?;
         branch_names.sort_unstable();
-        if create {
-            let push_remote: String = match get_default_remote(&repo)? {
-                Some(push_remote) => push_remote,
-                None => {
-                    writeln!(
-                        effects.get_output_stream(),
-                        "\
+        if !branches_without_remotes.is_empty() {
+            if create {
+                let push_remote: String = match get_default_remote(&repo)? {
+                    Some(push_remote) => push_remote,
+                    None => {
+                        writeln!(
+                            effects.get_output_stream(),
+                            "\
 No upstream repository was associated with {} and no value was
 specified for `remote.pushDefault`, so cannot push these branches: {}
 Configure a value with: git config remote.pushDefault <remote>
 These remotes are available: {}",
-                        CategorizedReferenceName::new(
-                            &repo.get_main_branch_reference()?.get_name()?
-                        )
-                        .friendly_describe(),
-                        branch_names.join(", "),
-                        repo.get_all_remote_names()?.join(", "),
-                    )?;
-                    return Ok(ExitCode(1));
+                            CategorizedReferenceName::new(
+                                &repo.get_main_branch_reference()?.get_name()?
+                            )
+                            .friendly_describe(),
+                            branch_names.join(", "),
+                            repo.get_all_remote_names()?.join(", "),
+                        )?;
+                        return Ok(ExitCode(1));
+                    }
+                };
+                let mut args = vec!["push", "--force-with-lease", "--set-upstream", &push_remote];
+                args.extend(branch_names.iter());
+                {
+                    let (effects, progress) = effects.start_operation(OperationType::PushBranches);
+                    progress.notify_progress(0, branch_names.len());
+                    let exit_code = git_run_info.run(&effects, Some(event_tx_id), &args)?;
+                    if !exit_code.is_success() {
+                        return Ok(exit_code);
+                    }
                 }
-            };
-            let mut args = vec!["push", "--force-with-lease", "--set-upstream", &push_remote];
-            args.extend(branch_names.iter());
-            {
-                let (effects, progress) = effects.start_operation(OperationType::PushBranches);
-                progress.notify_progress(0, branch_names.len());
-                let exit_code = git_run_info.run(&effects, Some(event_tx_id), &args)?;
-                if !exit_code.is_success() {
-                    return Ok(exit_code);
-                }
-            }
-            branch_names.len()
-        } else {
-            if !branches_without_remotes.is_empty() {
+                branch_names.len()
+            } else {
                 writeln!(
                     effects.get_output_stream(),
                     "\
@@ -163,7 +163,9 @@ remote repository: {}",
                     "\
 To create and push them, retry this operation with the --create option."
                 )?;
+                0
             }
+        } else {
             0
         }
     };
