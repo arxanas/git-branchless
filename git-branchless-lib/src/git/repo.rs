@@ -107,14 +107,14 @@ pub enum Error {
     #[error("could not create commit: {0}")]
     CreateCommit(#[source] git2::Error),
 
-    #[error("could not cherry-pick commit {commit} onto {onto}: {0}")]
+    #[error("could not cherry-pick commit {commit} onto {onto}: {source}")]
     CherryPickCommit {
         source: git2::Error,
         commit: NonZeroOid,
         onto: NonZeroOid,
     },
 
-    #[error("could not fast-cherry-pick commit {commit} onto {onto}: {0}")]
+    #[error("could not fast-cherry-pick commit {commit} onto {onto}: {source}")]
     CherryPickFast {
         source: git2::Error,
         commit: NonZeroOid,
