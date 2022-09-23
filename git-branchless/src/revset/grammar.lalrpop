@@ -7,7 +7,6 @@ grammar;
 // `Expr`s bind less tightly than the higher-numbered `Expr`s.
 
 pub Expr: Expr<'input> = {
-    "(" <Expr> ")",
     <lhs:Expr> "|"  <rhs:Expr2> => Expr::FunctionCall(Cow::Borrowed("union"), vec![lhs, rhs]),
     <lhs:Expr> "+"  <rhs:Expr2> => Expr::FunctionCall(Cow::Borrowed("union"), vec![lhs, rhs]),
     <lhs:Expr> "or" <rhs:Expr2> => Expr::FunctionCall(Cow::Borrowed("union"), vec![lhs, rhs]),
@@ -51,6 +50,7 @@ Expr4: Expr<'input> = {
 }
 
 Expr5: Expr<'input> = {
+    "(" <Expr> ")",
     <name:Name> "(" <args:FunctionArgs> ")" => Expr::FunctionCall(name, args),
     <name:Name>                             => Expr::Name(name),
 }
