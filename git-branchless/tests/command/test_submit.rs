@@ -107,6 +107,21 @@ fn test_submit() -> eyre::Result<()> {
         "###);
     }
 
+    // Test case where there are no remote branches to create, even though user has asked for `--create`
+    {
+        let (stdout, stderr) = cloned_repo.run(&["submit", "--create"])?;
+        let stderr = redact_remotes(stderr);
+        insta::assert_snapshot!(stderr, @r###"
+        branchless: processing 1 update: remote branch origin/bar
+        branchless: processing 1 update: remote branch origin/qux
+        Everything up-to-date
+        "###);
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> push --force-with-lease origin bar qux
+        Successfully pushed 2 branches.
+        "###);
+    }
+
     Ok(())
 }
 
