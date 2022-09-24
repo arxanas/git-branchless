@@ -83,3 +83,50 @@ fn test_profiling() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_sparse_checkout() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+
+    if git.run(&["sparse-checkout", "set"]).is_err() {
+        return Ok(());
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["config", "extensions.worktreeConfig"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        true
+        "###);
+    }
+
+    if let Ok((stdout, _stderr)) = git.run(&["smartlog"]) {
+        insta::assert_snapshot!(stdout, @"@ f777ecc (> master) create initial.txt
+");
+    } else {
+        let (stdout, _stderr) = git.run_with_options(
+            &["smartlog"],
+            &GitRunOptions {
+                expected_exit_code: 1,
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stdout, @r###"
+        Error: the Git configuration setting `extensions.worktreeConfig` is enabled in
+        this repository. Due to upstream libgit2 limitations, git-branchless does not
+        support repositories with this configuration option enabled.
+
+        Usually, this configuration setting is enabled when initializing a sparse
+        checkout. See https://github.com/arxanas/git-branchless/issues/278 for more
+        information.
+
+        Here are some options:
+
+        - To unset the configuration option, run: git config --unset extensions.worktreeConfig
+          - This is safe unless you created another worktree also using a sparse checkout.
+        - Try upgrading to Git v2.36+ and reinitializing your sparse checkout.
+        "###);
+    }
+
+    Ok(())
+}
