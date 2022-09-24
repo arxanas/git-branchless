@@ -11,7 +11,7 @@ use itertools::Itertools;
 use rayon::{prelude::*, ThreadPool};
 use tracing::{instrument, warn};
 
-use crate::core::dag::{commit_set_to_vec_unsorted, union_all, CommitSet, Dag};
+use crate::core::dag::{commit_set_to_vec, union_all, CommitSet, Dag};
 use crate::core::effects::{Effects, OperationType};
 use crate::core::formatting::{printable_styled_string, Pluralize};
 use crate::core::rewrite::{RepoPool, RepoResource};
@@ -277,7 +277,7 @@ impl<'a> ConstraintGraph<'a> {
                         .difference(&self.dag.obsolete_commits)
                         .difference(&commits_to_move);
 
-                    for child_oid in commit_set_to_vec_unsorted(&source_children)? {
+                    for child_oid in commit_set_to_vec(&source_children)? {
                         self.inner.entry(parent_oid).or_default().insert(child_oid);
                     }
                 }
@@ -306,7 +306,7 @@ impl<'a> ConstraintGraph<'a> {
             .query()
             .children(CommitSet::from(current_oid))?
             .intersection(visible_commits);
-        let children_oids = commit_set_to_vec_unsorted(&children_oids)?;
+        let children_oids = commit_set_to_vec(&children_oids)?;
         for child_oid in children_oids {
             if self.commits_to_move().contains(&child_oid) {
                 continue;
@@ -644,7 +644,7 @@ Retry with -f/--force-rewrite to proceed anyways.",
 BUG: The following commits were planned to be moved but not verified:
 {:?}
 This is a bug. Please report it.",
-                    commit_set_to_vec_unsorted(illegal_commits_to_move)
+                    commit_set_to_vec(illegal_commits_to_move)
                 )?;
             }
         }
@@ -1178,7 +1178,7 @@ impl<'a> RebasePlanBuilder<'a> {
         touched_commit_oids: Vec<NonZeroOid>,
     ) -> eyre::Result<Vec<Commit<'a>>> {
         let (effects, _progress) = effects.start_operation(OperationType::FilterCommits);
-        let path = commit_set_to_vec_unsorted(&path)?;
+        let path = commit_set_to_vec(&path)?;
 
         let touched_commits: Vec<Commit> = touched_commit_oids
             .into_iter()

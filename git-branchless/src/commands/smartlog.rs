@@ -40,7 +40,7 @@ mod graph {
     use lib::core::gc::mark_commit_reachable;
     use tracing::instrument;
 
-    use lib::core::dag::{commit_set_to_vec_unsorted, CommitSet, Dag};
+    use lib::core::dag::{commit_set_to_vec, CommitSet, Dag};
     use lib::core::effects::{Effects, OperationType};
     use lib::core::eventlog::{EventCursor, EventReplayer};
     use lib::core::node_descriptors::NodeObject;
@@ -176,7 +176,7 @@ mod graph {
             let mut links = Vec::new();
             for child_oid in non_main_node_oids {
                 let parent_vertexes = dag.query().parents(CommitSet::from(*child_oid))?;
-                let parent_oids = commit_set_to_vec_unsorted(&parent_vertexes)?;
+                let parent_oids = commit_set_to_vec(&parent_vertexes)?;
                 for parent_oid in parent_oids {
                     if graph.contains_key(&parent_oid) {
                         links.push((*child_oid, parent_oid))
@@ -241,7 +241,7 @@ mod graph {
             };
 
             let active_heads = dag.query_active_heads(&public_commits, &observed_commits)?;
-            for oid in commit_set_to_vec_unsorted(&active_heads)? {
+            for oid in commit_set_to_vec(&active_heads)? {
                 mark_commit_reachable(repo, oid)?;
             }
 

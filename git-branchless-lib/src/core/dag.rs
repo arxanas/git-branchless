@@ -69,9 +69,9 @@ impl FromIterator<NonZeroOid> for CommitSet {
     }
 }
 
-/// Eagerly convert a `CommitSet` into a `Vec<NonZeroOid>` by iterating over it.
+/// Eagerly convert a `CommitSet` into a `Vec<NonZeroOid>` by iterating over it, preserving order.
 #[instrument]
-pub fn commit_set_to_vec_unsorted(commit_set: &CommitSet) -> eyre::Result<Vec<NonZeroOid>> {
+pub fn commit_set_to_vec(commit_set: &CommitSet) -> eyre::Result<Vec<NonZeroOid>> {
     let mut result = Vec::new();
     for vertex in commit_set.iter().wrap_err("Iterating commit set")? {
         let vertex = vertex.wrap_err("Evaluating vertex")?;
@@ -313,7 +313,7 @@ impl Dag {
     #[instrument]
     pub fn get_only_parent_oid(&self, oid: NonZeroOid) -> eyre::Result<NonZeroOid> {
         let parents: CommitSet = self.inner.parents(CommitSet::from(oid))?;
-        match commit_set_to_vec_unsorted(&parents)?[..] {
+        match commit_set_to_vec(&parents)?[..] {
             [oid] => Ok(oid),
             [] => Err(eyre::eyre!("Commit {} has no parents.", oid)),
             _ => Err(eyre::eyre!("Commit {} has more than 1 parents.", oid)),
@@ -436,7 +436,7 @@ impl Dag {
 
         // FIXME: O(n^2) algorithm (
         // FMI see https://github.com/arxanas/git-branchless/pull/450#issuecomment-1188391763
-        for commit in commit_set_to_vec_unsorted(commit_set)? {
+        for commit in commit_set_to_vec(commit_set)? {
             if commits_to_connect.is_empty()? {
                 break;
             }
@@ -492,7 +492,7 @@ pub fn sorted_commit_set<'repo>(
     dag: &Dag,
     commit_set: &CommitSet,
 ) -> eyre::Result<Vec<Commit<'repo>>> {
-    let commit_oids = commit_set_to_vec_unsorted(commit_set)?;
+    let commit_oids = commit_set_to_vec(commit_set)?;
     let mut commits: Vec<Commit> = {
         let mut commits = Vec::new();
         for commit_oid in commit_oids {
