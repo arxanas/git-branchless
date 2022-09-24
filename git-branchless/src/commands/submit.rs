@@ -2,7 +2,7 @@ use std::fmt::Write;
 use std::time::SystemTime;
 
 use itertools::{Either, Itertools};
-use lib::core::dag::{commit_set_to_vec_unsorted, Dag};
+use lib::core::dag::{commit_set_to_vec, Dag};
 use lib::core::effects::{Effects, OperationType};
 use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::formatting::Pluralize;
@@ -43,7 +43,7 @@ pub fn submit(
         }
     };
 
-    let branches: Vec<Branch> = commit_set_to_vec_unsorted(&commit_set)?
+    let branches: Vec<Branch> = commit_set_to_vec(&commit_set)?
         .into_iter()
         .flat_map(|commit_oid| references_snapshot.branch_oid_to_names.get(&commit_oid))
         .flatten()

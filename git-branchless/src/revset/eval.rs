@@ -378,7 +378,7 @@ pub(super) fn eval_number_rhs(
 mod tests {
     use std::borrow::Cow;
 
-    use lib::core::dag::commit_set_to_vec_unsorted;
+    use lib::core::dag::commit_set_to_vec;
     use lib::core::effects::Effects;
     use lib::core::eventlog::{EventLogDb, EventReplayer};
     use lib::core::formatting::Glyphs;
@@ -396,7 +396,7 @@ mod tests {
         expr: &Expr,
     ) -> eyre::Result<Vec<Commit<'a>>> {
         let result = eval(effects, repo, dag, expr)?;
-        let mut commits: Vec<Commit> = commit_set_to_vec_unsorted(&result)?
+        let mut commits: Vec<Commit> = commit_set_to_vec(&result)?
             .into_iter()
             .map(|oid| repo.find_commit_or_fail(oid))
             .try_collect()?;

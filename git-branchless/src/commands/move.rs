@@ -20,7 +20,7 @@ use crate::revset::resolve_commits;
 use lib::core::config::{
     get_hint_enabled, get_restack_preserve_timestamps, print_hint_suppression_notice, Hint,
 };
-use lib::core::dag::{commit_set_to_vec_unsorted, sorted_commit_set, union_all, CommitSet, Dag};
+use lib::core::dag::{commit_set_to_vec, sorted_commit_set, union_all, CommitSet, Dag};
 use lib::core::effects::Effects;
 use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::rewrite::{
@@ -121,8 +121,7 @@ pub fn r#move(
 
             for component in dag.get_connected_components(&exact_oids)?.into_iter() {
                 let component_roots = dag.query().roots(component.clone())?;
-                let component_root = match commit_set_to_vec_unsorted(&component_roots)?.as_slice()
-                {
+                let component_root = match commit_set_to_vec(&component_roots)?.as_slice() {
                     [only_commit_oid] => *only_commit_oid,
                     _ => {
                         writeln!(
@@ -160,7 +159,7 @@ pub fn r#move(
     };
 
     let dest_oid: NonZeroOid = match resolve_commits(effects, &repo, &mut dag, vec![dest.clone()]) {
-        Ok(commit_sets) => match commit_set_to_vec_unsorted(&commit_sets[0])?.as_slice() {
+        Ok(commit_sets) => match commit_set_to_vec(&commit_sets[0])?.as_slice() {
             [only_commit_oid] => *only_commit_oid,
             other => {
                 let Revset(expr) = dest;
@@ -192,7 +191,7 @@ pub fn r#move(
     };
     let base_oids = {
         let mut result = Vec::new();
-        for base_oid in commit_set_to_vec_unsorted(&base_oids)? {
+        for base_oid in commit_set_to_vec(&base_oids)? {
             let merge_base_oid = dag.get_one_merge_base_oid(effects, &repo, base_oid, dest_oid)?;
             let base_commit_oid = resolve_base_commit(&dag, merge_base_oid, base_oid)?;
             result.push(CommitSet::from(base_commit_oid))
@@ -274,7 +273,7 @@ pub fn r#move(
         let mut builder = RebasePlanBuilder::new(&dag, permissions);
 
         let source_roots = dag.query().roots(source_oids.clone())?;
-        for source_root in commit_set_to_vec_unsorted(&source_roots)? {
+        for source_root in commit_set_to_vec(&source_roots)? {
             builder.move_subtree(source_root, vec![dest_oid])?;
         }
 
@@ -366,7 +365,7 @@ pub fn r#move(
                 .difference(component)
                 .difference(&dag.obsolete_commits);
 
-            for component_child in commit_set_to_vec_unsorted(&component_children)? {
+            for component_child in commit_set_to_vec(&component_children)? {
                 // If the range being extracted has any child commits, then we
                 // need to move each of those subtrees up to the parent commit
                 // of the range. If, however, we're inserting the range and the
@@ -421,7 +420,7 @@ pub fn r#move(
                     .query()
                     .heads(dag.query().descendants(source_oids.clone())?)?
                     .union(&exact_head);
-                match commit_set_to_vec_unsorted(&source_heads)?.as_slice() {
+                match commit_set_to_vec(&source_heads)?.as_slice() {
                     [oid] => *oid,
                     _ => {
                         writeln!(
@@ -446,7 +445,7 @@ pub fn r#move(
                 .difference(&exact_oids)
                 .difference(&dag.obsolete_commits);
 
-            for dest_child in commit_set_to_vec_unsorted(&dest_children)? {
+            for dest_child in commit_set_to_vec(&dest_children)? {
                 builder.move_subtree(dest_child, vec![source_head])?;
             }
         }

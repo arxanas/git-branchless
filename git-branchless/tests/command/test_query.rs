@@ -13,8 +13,8 @@ fn test_query() -> eyre::Result<()> {
         let (stdout, stderr) = git.run(&["query", ".^::"])?;
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
-        70deb1e create test3.txt
         96d1c37 create test2.txt
+        70deb1e create test3.txt
         "###);
     }
 
@@ -22,8 +22,8 @@ fn test_query() -> eyre::Result<()> {
         let (stdout, stderr) = git.run(&["query", ".^::", "--raw"])?;
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
-        70deb1e28791d8e7dd5a1f0c871a51b91282562f
         96d1c37a3d4363611c49f7e52186e189a04c531f
+        70deb1e28791d8e7dd5a1f0c871a51b91282562f
         "###);
     }
 
@@ -155,16 +155,16 @@ fn test_query_branches() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["query", "-b", "::."])?;
         insta::assert_snapshot!(stdout, @r###"
-        master
         foo
+        master
         "###);
     }
 
     {
         let (stdout, _stderr) = git.run(&["query", "branches()"])?;
         insta::assert_snapshot!(stdout, @r###"
-        70deb1e create test3.txt
         62fc20d create test1.txt
+        70deb1e create test3.txt
         "###);
     }
 
