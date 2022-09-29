@@ -7,7 +7,7 @@ license = "GPL-2.0-only"
 name = "git-branchless-lib"
 repository = "https://github.com/arxanas/git-branchless"
 rust-version = "1.61.0"
-version = "0.4.0"
+version = "0.5.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -53,7 +53,7 @@ cursive = { version = "0.20.0", default-features = false }
 eden_dag = { package = "esl01-dag", version = "0.2.1" }
 eyre = "0.6.8"
 git2 = { version = "0.15.0", default-features = false }
-git-record = { version = "0.2", path = "../git-record" }
+git-record = { version = "0.3", path = "../git-record" }
 indicatif = "0.17.1"
 itertools = "0.10.3"
 lazy_static = "1.4.0"
