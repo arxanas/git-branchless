@@ -12,16 +12,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - (#508) Added `exactly(<revset>, n)` revset function to allow assertions on the number of commits within a set.
-- (#509) User defined [revset aliases](https://github.com/arxanas/git-branchless/wiki/Reference:-Revsets#Aliases).
-- (#534) `git record` accepts a `--detach` option to avoid moving the current branch.
-- (#538) `git reword` accepts a `--fixup` option to convert regular commits into `fixup!` commits (for use with `git rebase --autosquash`)
+- (#509) Users can now define custom [revset aliases](https://github.com/arxanas/git-branchless/wiki/Reference:-Revsets#Aliases).
 - (#533) `git reword` can now reword merge commits.
+- (#534) `git record` now accepts a `--detach` option to avoid moving the current branch.
+- (#538) `git reword` now accepts a `--fixup` option to convert regular commits into `fixup!` commits (for use with `git rebase --autosquash`)
+- (#541) EXPERIMENTAL: Created `git submit` command. Discuss at https://github.com/arxanas/git-branchless/discussions/564.
 
 ### Changed
 
+- (#543) Commands will produce a better error message for certain unsupported sparse checkout configurations.
+
+### Fixed
+
+- (#507) The `messages()` revset function now ignores trailing newlines in commit messages.
 - (#512) Fixed so that the setting for `--color` is now respected.
 - (#512) Fixed so that you can pass `--color` anywhere in the command-line, not just before the subcommand.
-- (#507) The `messages()` revset function now ignores trailing newlines in commit messages.
+- (#513) Fixed some false positives for hints to run `git restack` when printing the smartlog.
+- (#518) Fixed the suggested flag in the error message when attempting to rewrite public commits.
+- (#539) Fixed parse errors for certain single-quoted string literals in revset expressions.
+- (#559) Fixed precedence for parentheses in revset expressions.
+- (#569) Fixed the reversed output order of the results of `git query`.
 
 ## [0.4.0] - 2022-08-09
 
@@ -37,9 +47,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Created the `git query` command to dump the results of revset queries.
 - (#399) Added `--delete-branches` option to `git hide`.
 - (#435) Created the `git branchless repair` command, which is occasionally useful for cleaning up garbage-collected commits from the smartlog.
-- EXPERIMENTAL: (#382) Working copy snapshots are created before potentially-destructive operations in order to improve the capabilities of `git undo`.
+- (#382) EXPERIMENTAL: Working copy snapshots are created before potentially-destructive operations in order to improve the capabilities of `git undo`.
   - Working copy snapshots are taken by default. Disable by setting `branchless.undo.createSnapshots` to `false`.
-- EXPERIMENTAL: (#391) created the `git record` command, which opens an interactive change selector for committing.
+- (#391) EXPERIMENTAL: created the `git record` command, which opens an interactive change selector for committing.
 
 ### Changed
 
