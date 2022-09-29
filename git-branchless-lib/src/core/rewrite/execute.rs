@@ -379,7 +379,7 @@ mod in_memory {
     use eyre::Context;
     use tracing::{instrument, warn};
 
-    use crate::core::effects::{Effects, OperationType};
+    use crate::core::effects::{Effects, OperationIcon, OperationType};
     use crate::core::eventlog::EventLogDb;
     use crate::core::gc::mark_commit_reachable;
     use crate::core::rewrite::execute::check_out_updated_head;
@@ -540,10 +540,10 @@ mod in_memory {
                         });
                     };
 
-                    progress.notify_status(format!(
-                        "Applying patch for commit: {}",
-                        commit_description
-                    ));
+                    progress.notify_status(
+                        OperationIcon::None,
+                        format!("Applying patch for commit: {}", commit_description),
+                    );
                     let commit_tree = match repo.cherry_pick_fast(
                         &commit_to_apply,
                         &current_commit,
@@ -569,8 +569,10 @@ mod in_memory {
                         )
                     })?;
 
-                    progress
-                        .notify_status(format!("Committing to repository: {}", commit_description));
+                    progress.notify_status(
+                        OperationIcon::None,
+                        format!("Committing to repository: {}", commit_description),
+                    );
                     let committer_signature = if *preserve_timestamps {
                         commit_to_apply.get_committer()
                     } else {
@@ -657,8 +659,10 @@ mod in_memory {
                     let commit_num = format!("[{}/{}]", i, num_picks);
                     progress.notify_progress(i, num_picks);
 
-                    progress
-                        .notify_status(format!("Applying merge commit: {}", commit_description));
+                    progress.notify_status(
+                        OperationIcon::None,
+                        format!("Applying merge commit: {}", commit_description),
+                    );
                     let commit = repo.find_commit_or_fail(*replacement_commit_oid)?;
                     let commit_tree = commit.get_tree()?;
                     let commit_message = commit_to_apply.get_message_raw()?;
@@ -669,8 +673,10 @@ mod in_memory {
                         )
                     })?;
 
-                    progress
-                        .notify_status(format!("Committing to repository: {}", commit_description));
+                    progress.notify_status(
+                        OperationIcon::None,
+                        format!("Committing to repository: {}", commit_description),
+                    );
                     let committer_signature = if *preserve_timestamps {
                         commit_to_apply.get_committer()
                     } else {
