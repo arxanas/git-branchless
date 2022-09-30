@@ -59,6 +59,8 @@
               checkFlags = [
                 "--skip=test_checkout_pty"
                 "--skip=test_next_ambiguous_interactive"
+                "--skip=test_checkout_auto_switch_interactive"
+                "--skip=test_checkout_auto_switch_interactive_disabled"
               ];
             }
           )
