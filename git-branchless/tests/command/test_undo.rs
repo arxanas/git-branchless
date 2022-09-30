@@ -412,7 +412,7 @@ fn test_undo_move_refs() -> eyre::Result<()> {
                                 to 62fc20d create test1.txt
         3. Check out from 96d1c37 create test2.txt
                        to 62fc20d create test1.txt
-        Confirm? [yN] branchless: running command: <git-executable> checkout 62fc20d2a290daea0d52bdc2ed2ad4be6491010e --detach
+        Confirm? [yN] branchless: running command: <git-executable> checkout master --detach
         Applied 3 inverse events.
         "###);
         assert_eq!(exit_code, 0);
@@ -637,7 +637,7 @@ fn test_undo_doesnt_make_working_dir_dirty() -> eyre::Result<()> {
                        to f777ecc create initial.txt
         5. Delete branch foo at f777ecc create initial.txt
 
-        Confirm? [yN] branchless: running command: <git-executable> checkout f777ecc9b0db5ed372b2615695191a8a17f79f24 --detach
+        Confirm? [yN] branchless: running command: <git-executable> checkout master --detach
         Applied 5 inverse events.
         "###);
         assert_eq!(exit_code, 0);
@@ -876,7 +876,7 @@ fn test_undo_noninteractive() -> eyre::Result<()> {
                                 to 96d1c37 create test2.txt
         4. Check out from 9ed8f9a bad message
                        to 96d1c37 create test2.txt
-        Confirm? [yN] branchless: running command: <git-executable> checkout 96d1c37a3d4363611c49f7e52186e189a04c531f --detach
+        Confirm? [yN] branchless: running command: <git-executable> checkout master --detach
         :
         @ 96d1c37 (master) create test2.txt
         Applied 4 inverse events.
