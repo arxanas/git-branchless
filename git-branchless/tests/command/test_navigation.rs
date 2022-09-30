@@ -600,7 +600,7 @@ fn test_checkout_pty_branch() -> eyre::Result<()> {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
         :
-        @ 62fc20d (master) create test1.txt
+        @ 62fc20d (> master) create test1.txt
         |\
         | o 96d1c37 create test2.txt
         |
@@ -838,4 +838,84 @@ fn test_navigation_checkout_target_only() -> eyre::Result<()> {
     }
 
     Ok(())
+}
+
+#[test]
+#[cfg(unix)]
+fn test_checkout_auto_switch_interactive() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    git.init_repo()?;
+    git.detach_head()?;
+    git.commit_file("test1", 1)?;
+    git.run(&["branch", "test1"])?;
+    git.commit_file("test2", 2)?;
+    git.run(&["branch", "test2"])?;
+
+    run_in_pty(
+        &git,
+        &["co", "--interactive"],
+        &[
+            PtyAction::WaitUntilContains("> "),
+            PtyAction::Write("test1"),
+            PtyAction::WaitUntilContains("> 62fc20d"),
+            PtyAction::Write(CARRIAGE_RETURN),
+        ],
+    )?;
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        @ 62fc20d (> test1) create test1.txt
+        |
+        o 96d1c37 (test2) create test2.txt
+        "###);
+    }
+
+    return Ok(());
+}
+
+#[test]
+#[cfg(unix)]
+fn test_checkout_auto_switch_interactive_disabled() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    git.init_repo()?;
+    git.run(&[
+        "config",
+        "branchless.navigation.autoSwitchBranches",
+        "false",
+    ])?;
+
+    git.detach_head()?;
+    git.commit_file("test1", 1)?;
+    git.run(&["branch", "test1"])?;
+    git.commit_file("test2", 2)?;
+    git.run(&["branch", "test2"])?;
+
+    run_in_pty(
+        &git,
+        &["co", "--interactive"],
+        &[
+            PtyAction::WaitUntilContains("> "),
+            PtyAction::Write("test1"),
+            PtyAction::WaitUntilContains("> 62fc20d"),
+            PtyAction::Write(CARRIAGE_RETURN),
+        ],
+    )?;
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        @ 62fc20d (test1) create test1.txt
+        |
+        o 96d1c37 (test2) create test2.txt
+        "###);
+    }
+
+    return Ok(());
 }
