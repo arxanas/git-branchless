@@ -124,7 +124,7 @@ pub struct TraverseCommitsOptions {
 
 /// Options for checking out a commit.
 #[derive(Args, Debug)]
-pub struct CheckoutOptions {
+pub struct SwitchOptions {
     /// Interactively select a commit to check out.
     #[clap(action, short = 'i', long = "interactive")]
     pub interactive: bool,
@@ -168,13 +168,6 @@ pub enum Command {
     /// Gather information about recent operations to upload as part of a bug
     /// report.
     BugReport,
-
-    /// Check out a given commit.
-    Checkout {
-        /// Options for checking out a commit.
-        #[clap(flatten)]
-        checkout_options: CheckoutOptions,
-    },
 
     /// Run internal garbage collection.
     Gc,
@@ -473,6 +466,13 @@ pub enum Command {
         /// pushed.
         #[clap(value_parser, default_value = "stack()")]
         revset: Revset,
+    },
+
+    /// Switch to the provided branch or commit.
+    Switch {
+        /// Options for switching.
+        #[clap(flatten)]
+        switch_options: SwitchOptions,
     },
 
     /// Move any local commit stacks on top of the main branch.

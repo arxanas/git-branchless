@@ -15,7 +15,7 @@ use lib::util::ExitCode;
 use tracing::{instrument, warn};
 
 use crate::commands::smartlog::make_smartlog_graph;
-use crate::opts::{CheckoutOptions, TraverseCommitsOptions};
+use crate::opts::{SwitchOptions, TraverseCommitsOptions};
 use crate::tui::prompt_select_commit;
 use lib::core::config::get_next_interactive;
 use lib::core::dag::{sorted_commit_set, CommitSet, Dag};
@@ -460,9 +460,9 @@ pub fn traverse_commits(
     )
 }
 
-fn get_initial_query(checkout_options: &CheckoutOptions) -> Option<&str> {
+fn get_initial_query(checkout_options: &SwitchOptions) -> Option<&str> {
     match checkout_options {
-        CheckoutOptions {
+        SwitchOptions {
             interactive: true,
             target: Some(target),
             branch_name: _,
@@ -470,7 +470,7 @@ fn get_initial_query(checkout_options: &CheckoutOptions) -> Option<&str> {
             merge: _,
         } => Some(target),
 
-        CheckoutOptions {
+        SwitchOptions {
             interactive: false,
             target: Some(_),
             branch_name: None,
@@ -478,14 +478,14 @@ fn get_initial_query(checkout_options: &CheckoutOptions) -> Option<&str> {
             merge: false,
         } => None,
 
-        CheckoutOptions {
+        SwitchOptions {
             interactive: true,
             target: None,
             branch_name: _,
             force: _,
             merge: _,
         }
-        | CheckoutOptions {
+        | SwitchOptions {
             interactive: false,
             target: None,
             branch_name: None,
@@ -493,28 +493,28 @@ fn get_initial_query(checkout_options: &CheckoutOptions) -> Option<&str> {
             merge: false,
         } => Some(""),
 
-        CheckoutOptions {
+        SwitchOptions {
             interactive: false,
             target: Some(_),
             branch_name: _,
             force: _,
             merge: _,
         }
-        | CheckoutOptions {
+        | SwitchOptions {
             interactive: false,
             target: _,
             branch_name: Some(_),
             force: _,
             merge: _,
         }
-        | CheckoutOptions {
+        | SwitchOptions {
             interactive: false,
             target: _,
             branch_name: _,
             force: true,
             merge: _,
         }
-        | CheckoutOptions {
+        | SwitchOptions {
             interactive: false,
             target: _,
             branch_name: _,
@@ -524,19 +524,19 @@ fn get_initial_query(checkout_options: &CheckoutOptions) -> Option<&str> {
     }
 }
 
-/// Interactively checkout a commit from the smartlog.
-pub fn checkout(
+/// Interactively switch to a commit from the smartlog.
+pub fn switch(
     effects: &Effects,
     git_run_info: &GitRunInfo,
-    checkout_options: &CheckoutOptions,
+    switch_options: &SwitchOptions,
 ) -> eyre::Result<ExitCode> {
-    let CheckoutOptions {
+    let SwitchOptions {
         interactive: _,
         branch_name,
         force,
         merge,
         target,
-    } = checkout_options;
+    } = switch_options;
 
     let now = SystemTime::now();
     let repo = Repo::from_current_dir()?;
@@ -565,7 +565,7 @@ pub fn checkout(
         true,
     )?;
 
-    let initial_query = get_initial_query(checkout_options);
+    let initial_query = get_initial_query(switch_options);
     let target: Option<CheckoutTarget> = match initial_query {
         None => target.clone().map(CheckoutTarget::Unknown),
         Some(initial_query) => {

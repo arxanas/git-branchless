@@ -55,12 +55,11 @@
                 export TEST_GIT=${git}/bin/git
                 export TEST_GIT_EXEC_PATH=$(${git}/bin/git --exec-path)
               '';
-              # FIXME: these tests deadlock when run in the Nix sandbox
+              # FIXME: these tests time out when run in the Nix sandbox
               checkFlags = [
-                "--skip=test_checkout_pty"
+                "--skip=test_switch_pty"
                 "--skip=test_next_ambiguous_interactive"
-                "--skip=test_checkout_auto_switch_interactive"
-                "--skip=test_checkout_auto_switch_interactive_disabled"
+                "--skip=test_switch_auto_switch_interactive"
               ];
             }
           )

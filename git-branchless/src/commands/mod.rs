@@ -135,8 +135,8 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
 
         Command::BugReport => bug_report::bug_report(&effects, &git_run_info)?,
 
-        Command::Checkout { checkout_options } => {
-            navigation::checkout(&effects, &git_run_info, &checkout_options)?
+        Command::Switch { switch_options } => {
+            navigation::switch(&effects, &git_run_info, &switch_options)?
         }
 
         Command::Gc | Command::HookPreAutoGc => {
