@@ -75,7 +75,7 @@ fn test_next_multiple() -> eyre::Result<()> {
     git.detach_head()?;
     git.commit_file("test1", 1)?;
     git.commit_file("test2", 2)?;
-    git.run(&["switch", "master"])?;
+    git.run(&["checkout", "master"])?;
 
     {
         let (stdout, _stderr) = git.run(&["next", "2"])?;
@@ -99,13 +99,13 @@ fn test_next_ambiguous() -> eyre::Result<()> {
     git.init_repo()?;
     git.detach_head()?;
     git.commit_file("test1", 1)?;
-    git.run(&["switch", "master"])?;
+    git.run(&["checkout", "master"])?;
     git.detach_head()?;
     git.commit_file("test2", 2)?;
-    git.run(&["switch", "master"])?;
+    git.run(&["checkout", "master"])?;
     git.detach_head()?;
     git.commit_file("test3", 3)?;
-    git.run(&["switch", "master"])?;
+    git.run(&["checkout", "master"])?;
 
     {
         let (stdout, _stderr) = git.run_with_options(
@@ -138,7 +138,7 @@ fn test_next_ambiguous() -> eyre::Result<()> {
         "###);
     }
 
-    git.run(&["switch", "master"])?;
+    git.run(&["checkout", "master"])?;
     {
         let (stdout, _stderr) = git.run(&["next", "--newest"])?;
         insta::assert_snapshot!(stdout, @r###"
@@ -164,13 +164,13 @@ fn test_next_ambiguous_interactive() -> eyre::Result<()> {
     git.init_repo()?;
     git.detach_head()?;
     git.commit_file("test1", 1)?;
-    git.run(&["switch", "master"])?;
+    git.run(&["checkout", "master"])?;
     git.detach_head()?;
     git.commit_file("test2", 2)?;
-    git.run(&["switch", "master"])?;
+    git.run(&["checkout", "master"])?;
     git.detach_head()?;
     git.commit_file("test3", 3)?;
-    git.run(&["switch", "master"])?;
+    git.run(&["checkout", "master"])?;
 
     run_in_pty(
         &git,
@@ -209,12 +209,12 @@ fn test_next_on_master() -> eyre::Result<()> {
     git.commit_file("test2", 2)?;
     git.detach_head()?;
     git.commit_file("test3", 3)?;
-    git.run(&["switch", "HEAD^^"])?;
+    git.run(&["checkout", "HEAD^^"])?;
 
     {
         let (stdout, _stderr) = git.run(&["next", "2"])?;
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> switch 70deb1e28791d8e7dd5a1f0c871a51b91282562f
+        branchless: running command: <git-executable> checkout 70deb1e28791d8e7dd5a1f0c871a51b91282562f
         :
         O 96d1c37 (master) create test2.txt
         |
@@ -234,12 +234,12 @@ fn test_next_on_master2() -> eyre::Result<()> {
     git.detach_head()?;
     git.commit_file("test2", 2)?;
     git.commit_file("test3", 3)?;
-    git.run(&["switch", "HEAD^"])?;
+    git.run(&["checkout", "HEAD^"])?;
 
     {
         let (stdout, _stderr) = git.run(&["next"])?;
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> switch 70deb1e28791d8e7dd5a1f0c871a51b91282562f
+        branchless: running command: <git-executable> checkout 70deb1e28791d8e7dd5a1f0c871a51b91282562f
         :
         O 62fc20d (master) create test1.txt
         |
@@ -261,13 +261,13 @@ fn test_next_no_more_children() -> eyre::Result<()> {
     git.commit_file("test2", 2)?;
     git.detach_head()?;
     git.commit_file("test3", 3)?;
-    git.run(&["switch", "HEAD^^"])?;
+    git.run(&["checkout", "HEAD^^"])?;
 
     {
         let (stdout, _stderr) = git.run(&["next", "3"])?;
         insta::assert_snapshot!(stdout, @r###"
         No more child commits to go to after traversing 2 children.
-        branchless: running command: <git-executable> switch 70deb1e28791d8e7dd5a1f0c871a51b91282562f
+        branchless: running command: <git-executable> checkout 70deb1e28791d8e7dd5a1f0c871a51b91282562f
         :
         O 96d1c37 (master) create test2.txt
         |
@@ -280,20 +280,20 @@ fn test_next_no_more_children() -> eyre::Result<()> {
 
 #[test]
 #[cfg(unix)]
-fn test_checkout_pty() -> eyre::Result<()> {
+fn test_switch_pty() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
     git.detach_head()?;
     git.commit_file("test1", 1)?;
     git.commit_file("test2", 2)?;
-    git.run(&["switch", "master"])?;
+    git.run(&["checkout", "master"])?;
     git.detach_head()?;
     git.commit_file("test3", 3)?;
 
     run_in_pty(
         &git,
-        &["branchless", "checkout"],
+        &["branchless", "switch"],
         &[
             PtyAction::WaitUntilContains("> "),
             PtyAction::Write("test1"),
@@ -317,7 +317,7 @@ fn test_checkout_pty() -> eyre::Result<()> {
 
     run_in_pty(
         &git,
-        &["branchless", "checkout"],
+        &["branchless", "switch"],
         &[
             PtyAction::WaitUntilContains("> "),
             PtyAction::Write("test3"),
@@ -344,7 +344,7 @@ fn test_checkout_pty() -> eyre::Result<()> {
 
 #[test]
 #[cfg(unix)]
-fn test_checkout_abort() -> eyre::Result<()> {
+fn test_switch_abort() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -354,7 +354,7 @@ fn test_checkout_abort() -> eyre::Result<()> {
 
     run_in_pty(
         &git,
-        &["branchless", "checkout"],
+        &["branchless", "switch"],
         &[
             PtyAction::WaitUntilContains("> "),
             PtyAction::Write(END_OF_TEXT),
@@ -553,7 +553,7 @@ fn test_navigation_failed_to_check_out_commit() -> eyre::Result<()> {
     git.detach_head()?;
     git.commit_file("test1", 1)?;
     git.commit_file("test2", 2)?;
-    git.run(&["switch", "HEAD^"])?;
+    git.run(&["checkout", "HEAD^"])?;
 
     git.write_file("test2", "conflicting contents")?;
 
@@ -566,7 +566,7 @@ fn test_navigation_failed_to_check_out_commit() -> eyre::Result<()> {
             },
         )?;
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> switch 96d1c37a3d4363611c49f7e52186e189a04c531f
+        branchless: running command: <git-executable> checkout 96d1c37a3d4363611c49f7e52186e189a04c531f
         Failed to check out commit: 96d1c37a3d4363611c49f7e52186e189a04c531f
         "###);
     }
@@ -576,19 +576,19 @@ fn test_navigation_failed_to_check_out_commit() -> eyre::Result<()> {
 
 #[test]
 #[cfg(unix)]
-fn test_checkout_pty_branch() -> eyre::Result<()> {
+fn test_switch_pty_branch() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
     let test1_oid = git.commit_file("test1", 1)?;
     git.detach_head()?;
     git.commit_file("test2", 2)?;
-    git.run(&["switch", "--detach", "master"])?;
+    git.run(&["checkout", "--detach", "master"])?;
     git.commit_file("test3", 3)?;
 
     run_in_pty(
         &git,
-        &["branchless", "checkout"],
+        &["branchless", "switch"],
         &[
             PtyAction::WaitUntilContains("> "),
             PtyAction::Write("master"),
@@ -613,7 +613,7 @@ fn test_checkout_pty_branch() -> eyre::Result<()> {
 
 #[test]
 #[cfg(unix)]
-fn test_checkout_pty_initial_query() -> eyre::Result<()> {
+fn test_switch_pty_initial_query() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -623,7 +623,7 @@ fn test_checkout_pty_initial_query() -> eyre::Result<()> {
 
     run_in_pty(
         &git,
-        &["branchless", "checkout", "-i", "test1"],
+        &["branchless", "switch", "-i", "test1"],
         &[
             PtyAction::WaitUntilContains("> test1"),
             PtyAction::Write(CARRIAGE_RETURN),
@@ -759,7 +759,7 @@ fn test_navigation_force() -> eyre::Result<()> {
 }
 
 #[test]
-fn test_navigation_checkout_flags() -> eyre::Result<()> {
+fn test_navigation_switch_flags() -> eyre::Result<()> {
     let git = make_git()?;
     git.init_repo()?;
 
@@ -769,7 +769,7 @@ fn test_navigation_checkout_flags() -> eyre::Result<()> {
     {
         let git = git.duplicate_repo()?;
         {
-            let (stdout, _stderr) = git.run(&["branchless", "checkout", "-b", "foo", "HEAD^"])?;
+            let (stdout, _stderr) = git.run(&["branchless", "switch", "-b", "foo", "HEAD^"])?;
             insta::assert_snapshot!(stdout, @r###"
             branchless: running command: <git-executable> checkout HEAD^ -b foo
             :
@@ -780,7 +780,7 @@ fn test_navigation_checkout_flags() -> eyre::Result<()> {
         }
 
         {
-            let (stdout, _stderr) = git.run(&["branchless", "checkout", "-b", "bar"])?;
+            let (stdout, _stderr) = git.run(&["branchless", "switch", "-b", "bar"])?;
             insta::assert_snapshot!(stdout, @r###"
             branchless: running command: <git-executable> checkout -b bar
             :
@@ -796,7 +796,7 @@ fn test_navigation_checkout_flags() -> eyre::Result<()> {
         {
             git.commit_file_with_contents("test1", 3, "new contents")?;
             git.write_file("test1", "conflicting\n")?;
-            let (stdout, _stderr) = git.run(&["branchless", "checkout", "-f", "HEAD~2"])?;
+            let (stdout, _stderr) = git.run(&["branchless", "switch", "-f", "HEAD~2"])?;
             insta::assert_snapshot!(stdout, @r###"
             branchless: running command: <git-executable> checkout HEAD~2 -f
             :
@@ -810,7 +810,7 @@ fn test_navigation_checkout_flags() -> eyre::Result<()> {
     {
         git.commit_file_with_contents("test1", 3, "new contents")?;
         git.write_file("test1", "conflicting\n")?;
-        let (stdout, _stderr) = git.run(&["branchless", "checkout", "-m", "HEAD~2"])?;
+        let (stdout, _stderr) = git.run(&["branchless", "switch", "-m", "HEAD~2"])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> checkout HEAD~2 -m
         M	test1.txt
@@ -825,12 +825,12 @@ fn test_navigation_checkout_flags() -> eyre::Result<()> {
 }
 
 #[test]
-fn test_navigation_checkout_target_only() -> eyre::Result<()> {
+fn test_navigation_switch_target_only() -> eyre::Result<()> {
     let git = make_git()?;
     git.init_repo()?;
 
     {
-        let (stdout, _stderr) = git.run(&["branchless", "checkout", "master"])?;
+        let (stdout, _stderr) = git.run(&["branchless", "switch", "master"])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> checkout master
         @ f777ecc (> master) create initial.txt
@@ -842,7 +842,7 @@ fn test_navigation_checkout_target_only() -> eyre::Result<()> {
 
 #[test]
 #[cfg(unix)]
-fn test_checkout_auto_switch_interactive() -> eyre::Result<()> {
+fn test_switch_auto_switch_interactive() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -854,7 +854,7 @@ fn test_checkout_auto_switch_interactive() -> eyre::Result<()> {
 
     run_in_pty(
         &git,
-        &["co", "--interactive"],
+        &["sw", "--interactive"],
         &[
             PtyAction::WaitUntilContains("> "),
             PtyAction::Write("test1"),
@@ -879,7 +879,7 @@ fn test_checkout_auto_switch_interactive() -> eyre::Result<()> {
 
 #[test]
 #[cfg(unix)]
-fn test_checkout_auto_switch_interactive_disabled() -> eyre::Result<()> {
+fn test_switch_auto_switch_interactive_disabled() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
@@ -897,7 +897,7 @@ fn test_checkout_auto_switch_interactive_disabled() -> eyre::Result<()> {
 
     run_in_pty(
         &git,
-        &["co", "--interactive"],
+        &["sw", "--interactive"],
         &[
             PtyAction::WaitUntilContains("> "),
             PtyAction::Write("test1"),
