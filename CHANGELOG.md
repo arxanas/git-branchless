@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - ReleaseDate
 
+## [0.5.0] - 2022-09-28
+
 ### Added
 
 - (#508) Added `exactly(<revset>, n)` revset function to allow assertions on the number of commits within a set.
