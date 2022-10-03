@@ -3066,7 +3066,8 @@ fn test_move_branches_after_move() -> eyre::Result<()> {
             insta::assert_snapshot!(stderr, @r###"
             branchless: creating working copy snapshot
             Previous HEAD position was f81d55c create test5.txt
-            Switched to branch 'bar'
+            branchless: processing 1 update: ref HEAD
+            HEAD is now at 566e434 create test5.txt
             branchless: processing checkout
             "###);
             insta::assert_snapshot!(stdout, @r###"
@@ -3076,7 +3077,7 @@ fn test_move_branches_after_move() -> eyre::Result<()> {
             [3/3] Committed as: 566e434 create test5.txt
             branchless: processing 2 updates: branch bar, branch foo
             branchless: processing 3 rewritten commits
-            branchless: running command: <git-executable> checkout bar
+            branchless: running command: <git-executable> checkout 566e4341a4a9a930fc2bf7ccdfa168e9f266c34a
             :
             O 62fc20d create test1.txt
             |\
@@ -3084,7 +3085,7 @@ fn test_move_branches_after_move() -> eyre::Result<()> {
             | |
             | o a248207 create test4.txt
             | |
-            | @ 566e434 (> bar) create test5.txt
+            | @ 566e434 (bar) create test5.txt
             |
             O 96d1c37 (master) create test2.txt
             In-memory rebase succeeded.
@@ -3101,7 +3102,7 @@ fn test_move_branches_after_move() -> eyre::Result<()> {
             | |
             | o a248207 create test4.txt
             | |
-            | @ 566e434 (> bar) create test5.txt
+            | @ 566e434 (bar) create test5.txt
             |
             O 96d1c37 (master) create test2.txt
             "###);
@@ -3120,7 +3121,7 @@ fn test_move_branches_after_move() -> eyre::Result<()> {
             | |
             | o a248207 create test4.txt
             | |
-            | @ 566e434 (> bar) create test5.txt
+            | @ 566e434 (bar) create test5.txt
             |
             O 96d1c37 (master) create test2.txt
             "###);
@@ -3426,12 +3427,13 @@ fn test_move_delete_checked_out_branch() -> eyre::Result<()> {
             branchless: processing 3 rewritten commits
             branchless: processing 2 updates: branch more-work, branch work
             branchless: creating working copy snapshot
-            branchless: running command: <git-executable> checkout master
+            branchless: running command: <git-executable> checkout 91c5ce63686889388daec1120bf57bea8a744bc2
             Previous HEAD position was 012efd6 create test3.txt
-            Switched to branch 'master'
+            branchless: processing 1 update: ref HEAD
+            HEAD is now at 91c5ce6 create test2.txt
             branchless: processing checkout
             :
-            @ 91c5ce6 (> master) create test2.txt
+            @ 91c5ce6 (master) create test2.txt
             |
             o 012efd6 (more-work) create test3.txt
             Successfully rebased and updated detached HEAD.
@@ -3449,7 +3451,7 @@ fn test_move_delete_checked_out_branch() -> eyre::Result<()> {
             let (stdout, _stderr) = git.run(&["smartlog"])?;
             insta::assert_snapshot!(stdout, @r###"
             :
-            @ 91c5ce6 (> master) create test2.txt
+            @ 91c5ce6 (master) create test2.txt
             |
             o 012efd6 (more-work) create test3.txt
             "###);
@@ -3464,7 +3466,8 @@ fn test_move_delete_checked_out_branch() -> eyre::Result<()> {
             insta::assert_snapshot!(stderr, @r###"
             branchless: creating working copy snapshot
             Previous HEAD position was 96d1c37 create test2.txt
-            Switched to branch 'master'
+            branchless: processing 1 update: ref HEAD
+            HEAD is now at 91c5ce6 create test2.txt
             branchless: processing checkout
             "###);
             insta::assert_snapshot!(stdout, @r###"
@@ -3474,9 +3477,9 @@ fn test_move_delete_checked_out_branch() -> eyre::Result<()> {
             [3/3] Committed as: 012efd6 create test3.txt
             branchless: processing 2 updates: branch more-work, branch work
             branchless: processing 3 rewritten commits
-            branchless: running command: <git-executable> checkout master
+            branchless: running command: <git-executable> checkout 91c5ce63686889388daec1120bf57bea8a744bc2
             :
-            @ 91c5ce6 (> master) create test2.txt
+            @ 91c5ce6 (master) create test2.txt
             |
             o 012efd6 (more-work) create test3.txt
             In-memory rebase succeeded.
@@ -3487,7 +3490,7 @@ fn test_move_delete_checked_out_branch() -> eyre::Result<()> {
             let (stdout, _stderr) = git.run(&["smartlog"])?;
             insta::assert_snapshot!(stdout, @r###"
             :
-            @ 91c5ce6 (> master) create test2.txt
+            @ 91c5ce6 (master) create test2.txt
             |
             o 012efd6 (more-work) create test3.txt
             "###);

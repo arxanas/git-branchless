@@ -48,9 +48,9 @@ fn test_commands() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["next"])?;
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> checkout master
+        branchless: running command: <git-executable> checkout 3df4b9355b3b072aa6c50c6249bf32e289b3a661
         :
-        @ 3df4b93 (> master) create test.txt
+        @ 3df4b93 (master) create test.txt
         "###);
     }
 

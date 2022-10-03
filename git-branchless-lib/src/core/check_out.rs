@@ -7,10 +7,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use cursive::theme::BaseColor;
 use cursive::utils::markup::StyledString;
 use eyre::Context;
-use itertools::Itertools;
 use tracing::instrument;
 
-use crate::core::config::get_auto_switch_branches;
 use crate::git::{
     update_index, CategorizedReferenceName, GitRunInfo, MaybeZeroOid, NonZeroOid, ReferenceName,
     Repo, Stage, UpdateIndexCommand, WorkingCopySnapshot,
@@ -21,7 +19,6 @@ use super::config::get_undo_create_snapshots;
 use super::effects::Effects;
 use super::eventlog::{Event, EventLogDb, EventTransactionId};
 use super::formatting::printable_styled_string;
-use super::repo_ext::{RepoExt, RepoReferencesSnapshot};
 
 /// An entity to check out.
 #[derive(Clone, Debug)]
@@ -57,40 +54,6 @@ impl Default for CheckOutCommitOptions {
     }
 }
 
-fn maybe_get_branch_name(
-    current_target: Option<String>,
-    oid: Option<NonZeroOid>,
-    repo: &Repo,
-) -> eyre::Result<Option<String>> {
-    let RepoReferencesSnapshot {
-        head_oid,
-        branch_oid_to_names,
-        ..
-    } = repo.get_references_snapshot()?;
-    if (head_oid.is_some() && head_oid == oid) || current_target == head_oid.map(|o| o.to_string())
-    {
-        // Don't try to checkout the branch if we aren't actually checking anything new out.
-        return Ok(current_target);
-    }
-
-    // Determine if the oid corresponds to exactly a single branch. If so,
-    // check that out directly.
-    match oid {
-        Some(oid) => match branch_oid_to_names.get(&oid) {
-            Some(branch_names) => match branch_names.iter().exactly_one() {
-                Ok(branch_name) => {
-                    // To remove the `refs/heads/` prefix
-                    let name = CategorizedReferenceName::new(branch_name);
-                    Ok(Some(name.remove_prefix()?))
-                }
-                Err(_) => Ok(current_target),
-            },
-            None => Ok(current_target),
-        },
-        None => Ok(current_target),
-    }
-}
-
 /// Checks out the requested commit. If the operation succeeds, then displays
 /// the new smartlog. Otherwise displays a warning message.
 #[instrument]
@@ -108,25 +71,20 @@ pub fn check_out_commit(
         render_smartlog,
     } = options;
 
-    let (target, oid) = match target {
-        None => (None, None),
+    let target = match target {
+        None => None,
         Some(CheckoutTarget::Reference(reference_name)) => {
             let categorized_target = CategorizedReferenceName::new(&reference_name);
-            (Some(categorized_target.remove_prefix()?), None)
+            Some(categorized_target.remove_prefix()?)
         }
-        Some(CheckoutTarget::Oid(oid)) => (Some(oid.to_string()), Some(oid)),
-        Some(CheckoutTarget::Unknown(target)) => (Some(target), None),
+        Some(CheckoutTarget::Oid(oid)) => Some(oid.to_string()),
+        Some(CheckoutTarget::Unknown(target)) => Some(target),
     };
 
     if get_undo_create_snapshots(repo)? {
         create_snapshot(effects, git_run_info, repo, event_log_db, event_tx_id)?;
     }
 
-    let target = if get_auto_switch_branches(repo)? {
-        maybe_get_branch_name(target, oid, repo)?
-    } else {
-        target
-    };
     let args = {
         let mut args = vec![OsStr::new("checkout")];
         if let Some(target) = &target {

@@ -45,16 +45,6 @@ pub fn get_main_branch_name(repo: &Repo) -> eyre::Result<String> {
     Ok("master".to_string())
 }
 
-/// If `true`, switch to the branch associated with a target commit instead of
-/// the commit directly.
-///
-/// The switch will only occur if it is the only branch on the target commit.
-#[instrument]
-pub fn get_auto_switch_branches(repo: &Repo) -> eyre::Result<bool> {
-    repo.get_readonly_config()?
-        .get_or("branchless.navigation.autoSwitchBranches", true)
-}
-
 /// Get the default comment character.
 #[instrument]
 pub fn get_comment_char(repo: &Repo) -> eyre::Result<char> {

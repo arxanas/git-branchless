@@ -49,7 +49,7 @@ fn test_reword_current_commit_not_head() -> eyre::Result<()> {
     let (stdout, _stderr) = git.run(&["smartlog"])?;
     insta::assert_snapshot!(stdout, @r###"
     :
-    @ 62fc20d (> test1) create test1.txt
+    @ 62fc20d (test1) create test1.txt
     |
     O 96d1c37 (master) create test2.txt
     "###);
@@ -59,7 +59,7 @@ fn test_reword_current_commit_not_head() -> eyre::Result<()> {
     let (stdout, _stderr) = git.run(&["smartlog"])?;
     insta::assert_snapshot!(stdout, @r###"
     :
-    @ a6f8868 (> test1) foo
+    @ a6f8868 (test1) foo
     |
     O 5207ad5 (master) create test2.txt
     "###);
