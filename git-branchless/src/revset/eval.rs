@@ -1070,6 +1070,103 @@ mod tests {
     }
 
     #[test]
+    fn test_eval_current() -> eyre::Result<()> {
+        let git = make_git()?;
+        git.init_repo()?;
+
+        git.detach_head()?;
+        let test1_oid = git.commit_file("test1", 1)?;
+        let _test2_oid = git.commit_file("test2", 2)?;
+        let test3_oid = git.commit_file("test3", 3)?;
+        let test4_oid = git.commit_file("test4", 4)?;
+
+        git.run(&[
+            "move",
+            "-s",
+            &test3_oid.to_string(),
+            "-d",
+            &test1_oid.to_string(),
+        ])?;
+        git.run(&["reword", "-m", "test4 has been rewritten twice"])?;
+
+        let effects = Effects::new_suppress_for_test(Glyphs::text());
+        let repo = git.get_repo()?;
+        let conn = repo.get_db_conn()?;
+        let event_log_db = EventLogDb::new(&conn)?;
+        let event_replayer = EventReplayer::from_event_log_db(&effects, &repo, &event_log_db)?;
+        let event_cursor = event_replayer.make_default_cursor();
+        let references_snapshot = repo.get_references_snapshot()?;
+        let mut dag = Dag::open_and_sync(
+            &effects,
+            &repo,
+            &event_replayer,
+            event_cursor,
+            &references_snapshot,
+        )?;
+
+        {
+            let original_test3_oid = &test3_oid.to_string();
+            let original_test4_oid = &test4_oid.to_string();
+
+            let expr = Expr::FunctionCall(
+                Cow::Borrowed("union"),
+                vec![
+                    Expr::Name(Cow::Borrowed(original_test3_oid)),
+                    Expr::Name(Cow::Borrowed(original_test4_oid)),
+                ],
+            );
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            Ok(
+                [
+                    Commit {
+                        inner: Commit {
+                            id: 70deb1e28791d8e7dd5a1f0c871a51b91282562f,
+                            summary: "create test3.txt",
+                        },
+                    },
+                    Commit {
+                        inner: Commit {
+                            id: 355e173bf9c5d2efac2e451da0cdad3fb82b869a,
+                            summary: "create test4.txt",
+                        },
+                    },
+                ],
+            )
+            "###);
+
+            let expr = Expr::FunctionCall(
+                Cow::Borrowed("current"),
+                vec![Expr::FunctionCall(
+                    Cow::Borrowed("union"),
+                    vec![
+                        Expr::Name(Cow::Borrowed(original_test3_oid)),
+                        Expr::Name(Cow::Borrowed(original_test4_oid)),
+                    ],
+                )],
+            );
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            Ok(
+                [
+                    Commit {
+                        inner: Commit {
+                            id: 4838e49b08954becdd17c0900c1179c2c654c627,
+                            summary: "create test3.txt",
+                        },
+                    },
+                    Commit {
+                        inner: Commit {
+                            id: 619162078182d2c6d80ff604b81e7c2afc3295b7,
+                            summary: "test4 has been rewritten twice",
+                        },
+                    },
+                ],
+            )
+            "###);
+        }
+        Ok(())
+    }
+
+    #[test]
     fn test_eval_aliases() -> eyre::Result<()> {
         let git = make_git()?;
         git.init_repo()?;
