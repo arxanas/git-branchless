@@ -1,7 +1,9 @@
 use bstr::ByteSlice;
 use eden_dag::DagAlgorithm;
 use lib::core::dag::CommitSet;
-use lib::git::{Commit, Repo};
+use lib::core::eventlog::{EventLogDb, EventReplayer};
+use lib::core::rewrite::find_rewrite_target;
+use lib::git::{Commit, MaybeZeroOid, NonZeroOid, Repo};
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -50,6 +52,7 @@ lazy_static! {
             ("committer.email", &fn_committer_email),
             ("committer.date", &fn_committer_date),
             ("exactly", &fn_exactly),
+            ("current", &fn_current),
         ];
         functions.iter().cloned().collect()
     };
@@ -397,4 +400,47 @@ fn fn_exactly(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
             actual_len,
         })
     }
+}
+
+fn fn_current(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+    let expr = eval1(ctx, name, args)?;
+
+    let conn = ctx.repo.get_db_conn()?;
+    let event_log_db = EventLogDb::new(&conn)
+        .wrap_err("Connecting to event log")
+        .map_err(EvalError::OtherError)?;
+    let event_replayer = EventReplayer::from_event_log_db(ctx.effects, ctx.repo, &event_log_db)
+        .wrap_err("Retrieving event replayer")
+        .map_err(EvalError::OtherError)?;
+    let event_cursor = event_replayer.make_default_cursor();
+
+    let mut result = Vec::new();
+    for vertex in expr
+        .iter()
+        .wrap_err("Iterating commit set")
+        .map_err(EvalError::OtherError)?
+    {
+        let vertex = vertex
+            .wrap_err("Evaluating vertex")
+            .map_err(EvalError::OtherError)?;
+
+        let oid = NonZeroOid::try_from(vertex)
+            .wrap_err("Converting vertex to oid")
+            .map_err(EvalError::OtherError)?;
+
+        match find_rewrite_target(&event_replayer, event_cursor, oid) {
+            Some(new_commit_oid) => match new_commit_oid {
+                MaybeZeroOid::NonZero(new_commit_oid) => {
+                    // commit rewritten as new_commit_oid
+                    result.push(new_commit_oid);
+                }
+                MaybeZeroOid::Zero => {
+                    // commit deleted, skip
+                }
+            },
+            // commit not rewritten
+            None => result.push(oid),
+        }
+    }
+    Ok(result.into_iter().collect::<CommitSet>())
 }
