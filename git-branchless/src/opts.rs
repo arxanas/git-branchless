@@ -1,8 +1,7 @@
 //! The command-line options for `git-branchless`.
 
-use clap::{ArgEnum, Args, Command as ClapCommand, IntoApp, Parser};
+use clap::{Args, Command as ClapCommand, CommandFactory, Parser, ValueEnum};
 use lib::git::NonZeroOid;
-use man::Arg;
 use std::fmt::Display;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -45,7 +44,7 @@ pub struct MoveOptions {
 
     /// Only attempt to perform an in-memory rebase. If it fails, do not
     /// attempt an on-disk rebase.
-    #[clap(action, long = "in-memory", conflicts_with_all(&["force-on-disk", "merge"]))]
+    #[clap(action, long = "in-memory", conflicts_with_all(&["force_on_disk", "merge"]))]
     pub force_in_memory: bool,
 
     /// Skip attempting to use an in-memory rebase, and try an
@@ -355,7 +354,7 @@ pub enum Command {
 
         /// Print the OID of each matching commit, one per line. This output is
         /// stable for use in scripts.
-        #[clap(action, short = 'r', long = "raw", conflicts_with("show-branches"))]
+        #[clap(action, short = 'r', long = "raw", conflicts_with("show_branches"))]
         raw: bool,
     },
 
@@ -534,7 +533,7 @@ pub enum Command {
 }
 
 /// Whether to display terminal colors.
-#[derive(ArgEnum, Clone)]
+#[derive(ValueEnum, Clone)]
 pub enum ColorSetting {
     /// Automatically determine whether to display colors from the terminal and environment variables.
     /// This is the default behavior.
@@ -557,7 +556,7 @@ pub struct Opts {
     pub working_directory: Option<PathBuf>,
 
     /// Flag to force enable or disable terminal colors.
-    #[clap(value_parser, long = "color", arg_enum, global = true)]
+    #[clap(value_parser, long = "color", value_enum, global = true)]
     pub color: Option<ColorSetting>,
 
     /// The `git-branchless` subcommand to run.
@@ -601,56 +600,12 @@ pub fn write_man_pages(man_dir: &Path) -> std::io::Result<()> {
 }
 
 fn generate_man_page(man1_dir: &Path, name: &str, command: &ClapCommand) -> std::io::Result<()> {
-    let mut manual = man::Manual::new(name);
-    if let Some(about) = command.get_about() {
-        manual = manual.about(about);
-    }
-
-    let authors = env!("CARGO_PKG_AUTHORS").split(':').map(|author_string| {
-        let (name, email) = match author_string.split_once(" <") {
-            Some(value) => value,
-            None => panic!(
-                "Invalid author specifier (should be Full Name <email@example.com>): {:?}",
-                author_string
-            ),
-        };
-
-        let email = email.strip_prefix('<').unwrap_or(email);
-        let email = email.strip_suffix('>').unwrap_or(email);
-        man::Author::new(name).email(email)
-    });
-    for author in authors {
-        manual = manual.author(author);
-    }
-
-    if let Some(long_about) = command.get_long_about() {
-        manual = manual.description(long_about);
-    }
-
-    for arg in command.get_positionals() {
-        manual = manual.arg(Arg::new(&format!("[{}]", arg.get_id().to_uppercase())));
-    }
-
-    for flag in command.get_opts() {
-        let opt = man::Opt::new(flag.get_id());
-        let opt = match flag.get_short() {
-            Some(short) => opt.short(&String::from(short)),
-            None => opt,
-        };
-        let opt = match flag.get_long() {
-            Some(long) => opt.long(long),
-            None => opt,
-        };
-        let opt = match flag.get_help() {
-            Some(help) => opt.help(help),
-            None => opt,
-        };
-        manual = manual.option(opt);
-    }
-
-    // FIXME: implement rest of man-page rendering.
-
+    let rendered_man_page = {
+        let mut buffer = Vec::new();
+        clap_mangen::Man::new(command.clone()).render(&mut buffer)?;
+        buffer
+    };
     let output_path = man1_dir.join(format!("{}.1", name));
-    std::fs::write(output_path, manual.render())?;
+    std::fs::write(output_path, rendered_man_page)?;
     Ok(())
 }
