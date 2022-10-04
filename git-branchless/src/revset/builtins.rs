@@ -41,6 +41,7 @@ lazy_static! {
             ("roots", &fn_roots),
             ("heads", &fn_heads),
             ("branches", &fn_branches),
+            ("public", &fn_public),
             ("draft", &fn_draft),
             ("stack", &fn_stack),
             ("message", &fn_message),
@@ -173,6 +174,12 @@ fn fn_nthancestor(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
         }
     }
     Ok(CommitSet::from_iter(result.into_iter()))
+}
+
+fn fn_public(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+    eval0(ctx, name, args)?;
+    let public_commits = ctx.query_public_commits()?;
+    Ok(public_commits.clone())
 }
 
 fn fn_draft(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {

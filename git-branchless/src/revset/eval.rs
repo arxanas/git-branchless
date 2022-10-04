@@ -561,6 +561,34 @@ mod tests {
         }
 
         {
+            let expr = Expr::FunctionCall(Cow::Borrowed("public"), vec![]);
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            Ok(
+                [
+                    Commit {
+                        inner: Commit {
+                            id: f777ecc9b0db5ed372b2615695191a8a17f79f24,
+                            summary: "create initial.txt",
+                        },
+                    },
+                    Commit {
+                        inner: Commit {
+                            id: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
+                            summary: "create test1.txt",
+                        },
+                    },
+                    Commit {
+                        inner: Commit {
+                            id: bf0d52a607f693201512a43b6b5a70b2a275e0ad,
+                            summary: "create test4.txt",
+                        },
+                    },
+                ],
+            )
+            "###);
+        }
+
+        {
             let expr = Expr::FunctionCall(
                 Cow::Borrowed("stack"),
                 vec![Expr::Name(Cow::Owned(test2_oid.to_string()))],
