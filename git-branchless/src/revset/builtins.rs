@@ -41,6 +41,7 @@ lazy_static! {
             ("roots", &fn_roots),
             ("heads", &fn_heads),
             ("branches", &fn_branches),
+            ("main", &fn_main),
             ("public", &fn_public),
             ("draft", &fn_draft),
             ("stack", &fn_stack),
@@ -174,6 +175,11 @@ fn fn_nthancestor(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
         }
     }
     Ok(CommitSet::from_iter(result.into_iter()))
+}
+
+fn fn_main(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+    eval0(ctx, name, args)?;
+    Ok(ctx.dag.main_branch_commit.clone())
 }
 
 fn fn_public(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
