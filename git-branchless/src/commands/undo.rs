@@ -22,7 +22,7 @@ use tracing::instrument;
 use crate::commands::smartlog::{make_smartlog_graph, render_graph};
 use crate::declare_views;
 use crate::tui::{with_siv, SingletonView};
-use lib::core::dag::Dag;
+use lib::core::dag::{CommitSet, Dag};
 use lib::core::effects::Effects;
 use lib::core::eventlog::{Event, EventCursor, EventLogDb, EventReplayer, EventTransactionId};
 use lib::core::formatting::{printable_styled_string, Glyphs, Pluralize, StyledStringBuilder};
@@ -40,8 +40,19 @@ fn render_cursor_smartlog(
     event_replayer: &EventReplayer,
     event_cursor: EventCursor,
 ) -> eyre::Result<Vec<StyledString>> {
-    let dag = dag.set_cursor(effects, repo, event_replayer, event_cursor)?;
+    let mut dag = dag.set_cursor(effects, repo, event_replayer, event_cursor)?;
     let references_snapshot = event_replayer.get_references_snapshot(repo, event_cursor)?;
+    dag.sync_from_oids(
+        effects,
+        repo,
+        CommitSet::from(references_snapshot.main_branch_oid),
+        references_snapshot
+            .branch_oid_to_names
+            .keys()
+            .chain(references_snapshot.head_oid.iter())
+            .copied()
+            .collect(),
+    )?;
 
     // FIXME: the information of which branch is checked out is not stored in
     // the event log. For now, just pretend that `HEAD` was always detached in

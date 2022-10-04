@@ -13,7 +13,7 @@ use lib::core::eventlog::{EventCursor, EventLogDb, EventReplayer};
 use lib::core::formatting::Glyphs;
 use lib::core::repo_ext::RepoExt;
 use lib::git::{GitRunInfo, GitVersion, Repo};
-use lib::testing::{make_git, Git};
+use lib::testing::{make_git, Git, GitInitOptions};
 
 use cursive::event::Key;
 use cursive::CursiveRunnable;
@@ -913,6 +913,87 @@ fn test_undo_no_confirm() -> eyre::Result<()> {
         1. Hide commit 62fc20d create test1.txt
 
         Applied 1 inverse event.
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_undo_unseen_commit() -> eyre::Result<()> {
+    let git = make_git()?;
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+
+    git.init_repo_with_options(&GitInitOptions {
+        run_branchless_init: false,
+        make_initial_commit: true,
+    })?;
+    git.commit_file("test1", 1)?;
+    git.detach_head()?;
+    let test2_oid = git.commit_file("test2", 2)?;
+    git.run(&["checkout", "HEAD^"])?;
+    let test3_oid = git.commit_file("test3", 3)?;
+    git.run(&["checkout", "master"])?;
+    git.run(&["branchless", "init"])?;
+
+    // Move the remote-tracking branch to a commit (test3) which doesn't have the previous location
+    // (test2) as an ancestor, to ensure that the DAG won't have observed it.
+    git.run(&[
+        "update-ref",
+        "refs/remotes/origin/master",
+        &test2_oid.to_string(),
+    ])?;
+    git.run(&[
+        "update-ref",
+        "refs/remotes/origin/master",
+        &test3_oid.to_string(),
+        &test2_oid.to_string(),
+    ])?;
+
+    // Set the main branch to `origin/master` to ensure that it appears in historical smartlogs.
+    git.run(&["remote", "add", "origin", "file:///some-remote"])?;
+    git.run(&["branch", "-u", "origin/master"])?;
+    git.run(&["branchless", "init", "--main-branch", "origin/master"])?;
+
+    {
+        let screenshot1 = Default::default();
+        run_select_past_event(
+            &git.get_repo()?,
+            vec![
+                CursiveTestingEvent::Event('p'.into()),
+                CursiveTestingEvent::Event('p'.into()),
+                CursiveTestingEvent::Event('p'.into()),
+                CursiveTestingEvent::TakeScreenshot(Rc::clone(&screenshot1)),
+                CursiveTestingEvent::Event('q'.into()),
+            ],
+        )?;
+        insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
+        ┌───────────────────────────────────────────────────┤ Commit graph ├───────────────────────────────────────────────────┐
+        │:                                                                                                                     │
+        │O 4838e49 (remote origin/master) create test3.txt                                                                     │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+        ┌──────────────────────────────────────────────────────┤ Events ├──────────────────────────────────────────────────────┐
+        │There are no previous available events.                                                                               │
+        └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
         "###);
     }
 
