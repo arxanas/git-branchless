@@ -604,3 +604,25 @@ pub fn make_git_with_remote_repo() -> eyre::Result<GitWrapperWithRemoteRepo> {
         cloned_repo,
     })
 }
+
+/// Represents a Git worktree for an existing Git repository on disk.
+pub struct GitWorktreeWrapper {
+    /// Guard to clean up the containing temporary directory. Make sure to bind
+    /// this to a local variable not named `_`.
+    pub temp_dir: TempDir,
+
+    /// A wrapper around the worktree.
+    pub worktree: Git,
+}
+
+/// Create a new worktree for the provided repository.
+pub fn make_git_worktree(git: &Git, worktree_name: &str) -> eyre::Result<GitWorktreeWrapper> {
+    let temp_dir = tempfile::tempdir()?;
+    let worktree_path = temp_dir.path().join(worktree_name);
+    git.run(&["worktree", "add", worktree_path.to_str().unwrap()])?;
+    let worktree = Git {
+        repo_path: worktree_path,
+        ..git.clone()
+    };
+    Ok(GitWorktreeWrapper { temp_dir, worktree })
+}

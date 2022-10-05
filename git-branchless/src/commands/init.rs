@@ -556,7 +556,9 @@ pub fn init(
     main_branch_name: Option<&str>,
 ) -> eyre::Result<()> {
     let mut in_ = BufReader::new(stdin());
-    let mut repo = Repo::from_current_dir()?;
+    let repo = Repo::from_current_dir()?;
+    let mut repo = repo.open_worktree_parent_repo()?.unwrap_or(repo);
+
     let default_config = Config::open_default()?;
     let readonly_config = repo.get_readonly_config()?;
     let mut config = create_isolated_config(effects, &repo, readonly_config.into_config())?;

@@ -6,7 +6,9 @@ use crate::util::trim_lines;
 
 use eyre::Context;
 use lib::git::GitVersion;
-use lib::testing::{make_git, GitInitOptions, GitRunOptions};
+use lib::testing::{
+    make_git, make_git_worktree, GitInitOptions, GitRunOptions, GitWorktreeWrapper,
+};
 
 #[test]
 fn test_hook_installed() -> eyre::Result<()> {
@@ -562,6 +564,32 @@ fn test_init_core_hooks_path_warning() -> eyre::Result<()> {
         The Git hooks above may have been installed to an unexpected location.
         Successfully installed git-branchless.
         To uninstall, run: git branchless init --uninstall
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_init_worktree() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo_with_options(&GitInitOptions {
+        run_branchless_init: false,
+        make_initial_commit: true,
+    })?;
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+
+    let GitWorktreeWrapper {
+        temp_dir: _temp_dir,
+        worktree,
+    } = make_git_worktree(&git, "new-worktree")?;
+    worktree.run(&["branchless", "init"])?;
+    {
+        let (stdout, _stderr) = worktree.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        @ 96d1c37 (> new-worktree, master) create test2.txt
         "###);
     }
 

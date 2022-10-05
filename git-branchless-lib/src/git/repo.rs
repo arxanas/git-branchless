@@ -52,6 +52,9 @@ pub enum Error {
     #[error("could not open repository: {0}")]
     OpenRepo(#[source] git2::Error),
 
+    #[error("could not find repository to open for worktree {path:?}")]
+    OpenParentWorktreeRepository { path: PathBuf },
+
     #[error("could not open repository: {0}")]
     UnsupportedExtensionWorktreeConfig(#[source] git2::Error),
 
@@ -518,6 +521,32 @@ impl Repo {
         // If we call `get_index` twice in a row, it seems to return the same index contents, even if the on-disk index has changed.
         index.read(false).map_err(Error::ReadIndex)?;
         Ok(Index { inner: index })
+    }
+
+    /// If this repository is a worktree for another "parent" repository, return a [`Repo`] object
+    /// corresponding to that repository.
+    #[instrument]
+    pub fn open_worktree_parent_repo(&self) -> Result<Option<Self>> {
+        if !self.inner.is_worktree() {
+            return Ok(None);
+        }
+
+        // `git2` doesn't seem to support a way to directly look up the parent repository for the
+        // worktree.
+        let worktree_info_dir = self.get_path();
+        let parent_repo_path = match worktree_info_dir
+            .parent() // remove `.git`
+            .and_then(|path| path.parent()) // remove worktree name
+            .and_then(|path| path.parent()) // remove `worktrees`
+        {
+            Some(path) => path,
+            None => {
+                return Err(Error::OpenParentWorktreeRepository {
+                    path: worktree_info_dir.to_owned()});
+            },
+        };
+        let parent_repo = Self::from_dir(parent_repo_path)?;
+        Ok(Some(parent_repo))
     }
 
     /// Get the configuration object for the repository.
