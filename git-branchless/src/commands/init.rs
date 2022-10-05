@@ -432,7 +432,7 @@ fn set_configs(
                 )?;
                 writeln!(
                     effects.get_output_stream(),
-                    "If this is incorrect, run: git config branchless.core.mainBranch <branch>"
+                    "If this is incorrect, run: git branchless init --main-branch <branch>"
                 )?;
                 main_branch_name
             }

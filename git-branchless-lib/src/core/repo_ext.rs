@@ -59,7 +59,7 @@ at path: {:?}.
 These branches exist: {:?}
 Either create it, or update the main branch setting by running:
 
-    git config branchless.core.mainBranch <branch>
+    git branchless init --main-branch <branch>
 ",
                         get_main_branch_name(self)?,
                         self.get_path(),

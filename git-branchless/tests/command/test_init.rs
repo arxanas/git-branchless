@@ -182,7 +182,7 @@ fn test_old_git_version_warning() -> eyre::Result<()> {
         insta::assert_snapshot!(stdout, @r###"
         Created config file at <repo-path>/.git/branchless/config
         Auto-detected your main branch as: master
-        If this is incorrect, run: git config branchless.core.mainBranch <branch>
+        If this is incorrect, run: git branchless init --main-branch <branch>
         Installing hook: post-commit
         Installing hook: post-merge
         Installing hook: post-rewrite
@@ -227,7 +227,7 @@ fn test_init_basic() -> eyre::Result<()> {
         insta::assert_snapshot!(stdout, @r###"
         Created config file at <repo-path>/.git/branchless/config
         Auto-detected your main branch as: master
-        If this is incorrect, run: git config branchless.core.mainBranch <branch>
+        If this is incorrect, run: git branchless init --main-branch <branch>
         Installing hook: post-commit
         Installing hook: post-merge
         Installing hook: post-rewrite
@@ -334,7 +334,7 @@ fn test_main_branch_not_found_error_message() -> eyre::Result<()> {
     These branches exist: []
     Either create it, or update the main branch setting by running:
 
-        git config branchless.core.mainBranch <branch>
+        git branchless init --main-branch <branch>
 
 
     Backtrace omitted. Run with RUST_BACKTRACE=1 environment variable to display it.
@@ -551,7 +551,7 @@ fn test_init_core_hooks_path_warning() -> eyre::Result<()> {
         insta::assert_snapshot!(stdout, @r###"
         Created config file at <repo-path>/.git/branchless/config
         Auto-detected your main branch as: master
-        If this is incorrect, run: git config branchless.core.mainBranch <branch>
+        If this is incorrect, run: git branchless init --main-branch <branch>
         Installing hook: post-commit
         Installing hook: post-merge
         Installing hook: post-rewrite
