@@ -47,7 +47,7 @@ assert_cmd = "2.0.4"
 chashmap = "2.2.2"
 chrono = "0.4.19"
 color-eyre = "0.6.2"
-concolor = { version = "0.0.8", features = ["auto"] }
+concolor = { version = "0.0.9", features = ["auto"] }
 console = "0.15.0"
 cursive = { version = "0.20.0", default-features = false }
 eden_dag = { package = "esl01-dag", version = "0.2.1" }
