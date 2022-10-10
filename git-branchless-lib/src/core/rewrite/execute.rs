@@ -30,6 +30,8 @@ pub fn move_branches<'a>(
     event_tx_id: EventTransactionId,
     rewritten_oids_map: &'a HashMap<NonZeroOid, MaybeZeroOid>,
 ) -> eyre::Result<()> {
+    let main_branch = repo.get_main_branch()?;
+    let main_branch_name = main_branch.get_reference_name()?;
     let branch_oid_to_names = repo.get_branch_oid_to_names()?;
 
     // We may experience an error in the case of a branch move. Ideally, we
@@ -78,22 +80,54 @@ pub fn move_branches<'a>(
 
             MaybeZeroOid::Zero => {
                 for name in names {
-                    match repo.find_reference(name) {
-                        Ok(Some(mut reference)) => {
-                            if let Err(err) = reference.delete() {
+                    if name == &main_branch_name {
+                        // Hack? Never delete the main branch. We probably got here by syncing the
+                        // main branch with the upstream version, but all main branch commits were
+                        // skipped. For a regular branch, we would delete the branch, but for the
+                        // main branch, we should update it to point directly to the upstream
+                        // version.
+                        let target_oid = match main_branch.get_upstream_branch_target()? {
+                            Some(target_oid) => {
+                                if let Err(err) = repo.create_reference(
+                                    &main_branch_name,
+                                    target_oid,
+                                    true,
+                                    "move main branch",
+                                ) {
+                                    branch_move_err = Some(eyre::eyre!(err));
+                                    break 'outer;
+                                }
+                                MaybeZeroOid::NonZero(target_oid)
+                            }
+                            None => {
+                                let mut main_branch_reference =
+                                    repo.get_main_branch()?.into_reference();
+                                if let Err(err) = main_branch_reference.delete() {
+                                    branch_move_err = Some(eyre::eyre!(err));
+                                    break 'outer;
+                                }
+                                MaybeZeroOid::Zero
+                            }
+                        };
+                        branch_moves.push((*old_oid, target_oid, name));
+                    } else {
+                        match repo.find_reference(name) {
+                            Ok(Some(mut reference)) => {
+                                if let Err(err) = reference.delete() {
+                                    branch_move_err = Some(eyre::eyre!(err));
+                                    break 'outer;
+                                }
+                            }
+                            Ok(None) => {
+                                warn!(?name, "Reference not found, not deleting")
+                            }
+                            Err(err) => {
                                 branch_move_err = Some(eyre::eyre!(err));
                                 break 'outer;
                             }
-                        }
-                        Ok(None) => {
-                            warn!(?name, "Reference not found, not deleting")
-                        }
-                        Err(err) => {
-                            branch_move_err = Some(eyre::eyre!(err));
-                            break 'outer;
-                        }
-                    };
-                    branch_moves.push((*old_oid, MaybeZeroOid::Zero, name));
+                        };
+                        branch_moves.push((*old_oid, MaybeZeroOid::Zero, name));
+                    }
                 }
             }
         }

@@ -1,9 +1,25 @@
 use lib::testing::{make_git, make_git_with_remote_repo, GitInitOptions, GitWrapperWithRemoteRepo};
 
+fn remove_nondeterministic_lines(output: String) -> String {
+    output
+        .lines()
+        .filter(|line| {
+            // This line is not present in some Git versions.
+            !line.contains("Fetching")
+                // This line is produced in a different order in some Git versions.
+                && !line.contains("Your branch is up to date")
+        })
+        .map(|line| format!("{line}\n"))
+        .collect()
+}
+
 #[test]
 fn test_sync_basic() -> eyre::Result<()> {
     let git = make_git()?;
 
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
     git.init_repo()?;
 
     git.detach_head()?;
@@ -83,6 +99,10 @@ fn test_sync_basic() -> eyre::Result<()> {
 #[test]
 fn test_sync_up_to_date() -> eyre::Result<()> {
     let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
     git.init_repo()?;
 
     git.commit_file("test1", 1)?;
@@ -108,6 +128,9 @@ fn test_sync_pull() -> eyre::Result<()> {
         original_repo,
         cloned_repo,
     } = make_git_with_remote_repo()?;
+    if !original_repo.supports_reference_transactions()? {
+        return Ok(());
+    }
 
     original_repo.init_repo()?;
     original_repo.commit_file("test1", 1)?;
@@ -130,7 +153,7 @@ fn test_sync_pull() -> eyre::Result<()> {
         let (stdout, _stderr) = cloned_repo.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
         :
-        O 96d1c37 (master, remote origin/master) create test2.txt
+        O 96d1c37 (master) create test2.txt
         |
         @ 70deb1e (> foo) create test3.txt
         "###);
@@ -148,6 +171,7 @@ fn test_sync_pull() -> eyre::Result<()> {
             .collect();
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> fetch --all
+        Fast-forwarding branch master
         Attempting rebase in-memory...
         [1/1] Committed as: 8e521a1 create test3.txt
         branchless: processing 1 update: branch foo
@@ -165,9 +189,7 @@ fn test_sync_pull() -> eyre::Result<()> {
         let (stdout, _stderr) = cloned_repo.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
         :
-        O 96d1c37 (master) create test2.txt
-        |
-        O d2e18e3 (remote origin/master) create test5.txt
+        O d2e18e3 (master) create test5.txt
         |
         @ 8e521a1 (> foo) create test3.txt
         "###);
@@ -179,6 +201,10 @@ fn test_sync_pull() -> eyre::Result<()> {
 #[test]
 fn test_sync_specific_commit() -> eyre::Result<()> {
     let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
     git.init_repo()?;
 
     git.commit_file("test1", 1)?;
@@ -228,6 +254,139 @@ fn test_sync_specific_commit() -> eyre::Result<()> {
         @ d2e18e3 (> master) create test5.txt
         |
         o 8e521a1 (foo) create test3.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_sync_divergent_main_branch() -> eyre::Result<()> {
+    let GitWrapperWithRemoteRepo {
+        temp_dir: _guard,
+        original_repo,
+        cloned_repo,
+    } = make_git_with_remote_repo()?;
+    if !original_repo.supports_reference_transactions()? {
+        return Ok(());
+    }
+
+    original_repo.init_repo()?;
+    original_repo.commit_file("test1", 1)?;
+    original_repo.commit_file("test2", 2)?;
+
+    original_repo.clone_repo_into(&cloned_repo, &["--branch", "master"])?;
+    cloned_repo.init_repo_with_options(&GitInitOptions {
+        make_initial_commit: false,
+        ..Default::default()
+    })?;
+
+    original_repo.commit_file("test3", 3)?;
+    original_repo.commit_file("test4", 4)?;
+    cloned_repo.commit_file("test5", 5)?;
+
+    {
+        let (stdout, _stderr) = cloned_repo.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        @ d2e18e3 (> master) create test5.txt
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = cloned_repo.run(&["sync", "-p"])?;
+        let stdout = remove_nondeterministic_lines(stdout);
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> fetch --all
+        Syncing branch master
+        Attempting rebase in-memory...
+        [1/1] Committed as: f81d55c create test5.txt
+        branchless: processing 1 update: branch master
+        branchless: processing 1 rewritten commit
+        branchless: running command: <git-executable> checkout master
+        Your branch is ahead of 'origin/master' by 1 commit.
+          (use "git push" to publish your local commits)
+        In-memory rebase succeeded.
+        Synced d2e18e3 create test5.txt
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = cloned_repo.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        @ f81d55c (> master) create test5.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_sync_no_delete_main_branch() -> eyre::Result<()> {
+    let GitWrapperWithRemoteRepo {
+        temp_dir: _guard,
+        original_repo,
+        cloned_repo,
+    } = make_git_with_remote_repo()?;
+    if !original_repo.supports_reference_transactions()? {
+        return Ok(());
+    }
+
+    original_repo.init_repo()?;
+    original_repo.commit_file("test1", 1)?;
+    original_repo.commit_file("test2", 2)?;
+    original_repo.run(&["checkout", "-b", "foo"])?;
+    original_repo.commit_file("test3", 3)?;
+
+    original_repo.clone_repo_into(&cloned_repo, &["--branch", "master"])?;
+    cloned_repo.init_repo_with_options(&GitInitOptions {
+        make_initial_commit: false,
+        ..Default::default()
+    })?;
+    cloned_repo.run(&["reset", "--hard", "HEAD^"])?;
+
+    // Simulate landing the commit upstream with a potentially different commit
+    // hash.
+    cloned_repo.run(&["cherry-pick", "origin/master"])?;
+    cloned_repo.run(&["commit", "--amend", "-m", "updated commit message"])?;
+
+    cloned_repo.run(&["branch", "should-be-deleted"])?;
+
+    {
+        let (stdout, stderr) = cloned_repo.run(&["sync", "-p", "--on-disk"])?;
+        let stdout = remove_nondeterministic_lines(stdout);
+        let stderr = remove_nondeterministic_lines(stderr);
+        insta::assert_snapshot!(stderr, @r###"
+        branchless: processing 1 update: ref HEAD
+        Executing: git branchless hook-skip-upstream-applied-commit 6ffd720862b7ae71cbe30d66ed27ea8579e24b0f
+        Executing: git branchless hook-register-extra-post-rewrite-hook
+        branchless: processing 1 rewritten commit
+        branchless: processing 2 updates: branch master, branch should-be-deleted
+        branchless: creating working copy snapshot
+        branchless: running command: <git-executable> checkout master
+        Switched to branch 'master'
+        branchless: processing checkout
+        :
+        @ 96d1c37 (> master) create test2.txt
+        Successfully rebased and updated detached HEAD.
+        "###);
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> fetch --all
+        Syncing branch master
+        branchless: running command: <git-executable> diff --quiet
+        Calling Git for on-disk rebase...
+        branchless: running command: <git-executable> rebase --continue
+        Skipping commit (was already applied upstream): 6ffd720 updated commit message
+        Synced 6ffd720 updated commit message
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = cloned_repo.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        @ 96d1c37 (> master) create test2.txt
         "###);
     }
 

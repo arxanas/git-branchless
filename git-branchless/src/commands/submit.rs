@@ -130,7 +130,7 @@ specified for `remote.pushDefault`, so cannot push these branches: {}
 Configure a value with: git config remote.pushDefault <remote>
 These remotes are available: {}",
                             CategorizedReferenceName::new(
-                                &repo.get_main_branch_reference()?.get_name()?
+                                &repo.get_main_branch()?.get_reference_name()?,
                             )
                             .friendly_describe(),
                             branch_names.join(", "),
@@ -183,8 +183,7 @@ To create and push them, retry this operation with the --create option."
 }
 
 fn get_default_remote(repo: &Repo) -> eyre::Result<Option<String>> {
-    let main_branch_reference = repo.get_main_branch_reference()?;
-    let main_branch_name = main_branch_reference.get_name()?;
+    let main_branch_name = repo.get_main_branch()?.get_reference_name()?;
     match CategorizedReferenceName::new(&main_branch_name) {
         name @ CategorizedReferenceName::LocalBranch { .. } => {
             if let Some(main_branch) =

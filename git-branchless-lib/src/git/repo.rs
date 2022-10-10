@@ -2142,12 +2142,25 @@ impl<'repo> Branch<'repo> {
         Ok(self.inner.get().target().map(make_non_zero_oid))
     }
 
-    /// Get the name of this branch, not including any `refs/heads/` prefix.
+    /// Get the name of this branch, not including any `refs/heads/` prefix. To get the full
+    /// reference name of this branch, instead call `.into_reference().get_name()?`.
     #[instrument]
     pub fn get_name(&self) -> eyre::Result<&str> {
         self.inner
             .name()?
             .ok_or_else(|| eyre::eyre!("Could not decode branch name"))
+    }
+
+    /// Get the full reference name of this branch, including the `refs/heads/` or `refs/remotes/`
+    /// prefix, as appropriate
+    #[instrument]
+    pub fn get_reference_name(&self) -> eyre::Result<ReferenceName> {
+        let reference_name = self
+            .inner
+            .get()
+            .name()
+            .ok_or_else(|| eyre::eyre!("Could not decode branch reference name"))?;
+        Ok(ReferenceName(reference_name.to_owned()))
     }
 
     /// If this branch tracks a remote ("upstream") branch, return that branch.
@@ -2169,6 +2182,18 @@ impl<'repo> Branch<'repo> {
                 })
             }
         }
+    }
+
+    /// If this branch tracks a remote ("upstream") branch, return the OID of the commit which that
+    /// branch points to.
+    #[instrument]
+    pub fn get_upstream_branch_target(&self) -> eyre::Result<Option<NonZeroOid>> {
+        let upstream_branch = match self.get_upstream_branch()? {
+            Some(upstream_branch) => upstream_branch,
+            None => return Ok(None),
+        };
+        let target_oid = upstream_branch.get_oid()?;
+        Ok(target_oid)
     }
 
     /// Get the associated remote to push to for this branch. If there is no

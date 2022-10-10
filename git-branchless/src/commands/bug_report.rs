@@ -187,7 +187,7 @@ fn collect_events(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<
 
     let redactor = Redactor::new({
         let mut preserved_ref_names = HashSet::new();
-        preserved_ref_names.insert(repo.get_main_branch_reference()?.get_name()?);
+        preserved_ref_names.insert(repo.get_main_branch()?.get_reference_name()?);
         preserved_ref_names
     });
 

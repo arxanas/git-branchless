@@ -485,7 +485,7 @@ pub enum Command {
             visible_short_alias = 'u',
             visible_alias = "--update"
         )]
-        update_refs: bool,
+        pull: bool,
 
         /// Options for moving commits.
         #[clap(flatten)]

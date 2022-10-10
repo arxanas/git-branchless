@@ -4069,12 +4069,14 @@ fn test_move_dest_not_in_dag() -> eyre::Result<()> {
         insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
         [1/1] Committed as: 70deb1e create test3.txt
-        branchless: processing 2 updates: branch other-branch, remote branch origin/other-branch
+        branchless: processing 1 update: branch other-branch
         branchless: processing 1 rewritten commit
         branchless: running command: <git-executable> checkout other-branch
-        Your branch is up to date with 'origin/other-branch'.
+        Your branch and 'origin/other-branch' have diverged,
+        and have 2 and 1 different commits each, respectively.
+          (use "git pull" to merge the remote branch into yours)
         :
-        @ 70deb1e (> other-branch, remote origin/other-branch) create test3.txt
+        @ 70deb1e (> other-branch) create test3.txt
         In-memory rebase succeeded.
         "###);
     }

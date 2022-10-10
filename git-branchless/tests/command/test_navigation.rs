@@ -874,7 +874,7 @@ fn test_switch_auto_switch_interactive() -> eyre::Result<()> {
         "###);
     }
 
-    return Ok(());
+    Ok(())
 }
 
 #[test]
@@ -917,5 +917,5 @@ fn test_switch_auto_switch_interactive_disabled() -> eyre::Result<()> {
         "###);
     }
 
-    return Ok(());
+    Ok(())
 }

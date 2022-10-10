@@ -235,7 +235,7 @@ fn restack_branches(
             Some(branch_target) => branch_target,
             None => {
                 warn!(
-                    branch_name = ?branch.into_reference().get_name(),
+                    branch_name = ?branch.get_reference_name()?,
                     "Branch was not a direct reference, could not resolve target"
                 );
                 continue;
