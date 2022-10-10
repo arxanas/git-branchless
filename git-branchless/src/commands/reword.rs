@@ -24,7 +24,7 @@ use lib::core::config::{
 use lib::core::dag::{sorted_commit_set, union_all, CommitSet, Dag};
 use lib::core::effects::Effects;
 use lib::core::eventlog::{EventLogDb, EventReplayer};
-use lib::core::formatting::{printable_styled_string, Glyphs, Pluralize};
+use lib::core::formatting::{Glyphs, Pluralize};
 use lib::core::node_descriptors::{render_node_descriptors, CommitOidDescriptor, NodeObject};
 use lib::core::rewrite::{
     execute_rebase_plan, BuildRebasePlanOptions, ExecuteRebasePlanOptions, ExecuteRebasePlanResult,
@@ -656,8 +656,7 @@ fn render_status_report(
         writeln!(
             effects.get_output_stream(),
             "Reworded commit {} as {}",
-            printable_styled_string(
-                &glyphs,
+            glyphs.render(
                 // Commit doesn't offer `friendly_describe_oid`, so we'll do it ourselves
                 render_node_descriptors(
                     &glyphs,
@@ -667,7 +666,7 @@ fn render_status_report(
                     &mut [&mut CommitOidDescriptor::new(true)?],
                 )?
             )?,
-            printable_styled_string(&glyphs, replacement_commit.friendly_describe(&glyphs)?)?
+            glyphs.render(replacement_commit.friendly_describe(&glyphs)?)?
         )?;
     }
 

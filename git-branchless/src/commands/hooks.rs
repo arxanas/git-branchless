@@ -16,7 +16,7 @@ use itertools::Itertools;
 use tracing::{error, instrument, warn};
 
 use lib::core::eventlog::{should_ignore_ref_updates, Event, EventLogDb};
-use lib::core::formatting::{printable_styled_string, Glyphs, Pluralize};
+use lib::core::formatting::{Glyphs, Pluralize};
 use lib::core::gc::mark_commit_reachable;
 use lib::git::{CategorizedReferenceName, MaybeZeroOid, ReferenceName, Repo};
 
@@ -110,7 +110,7 @@ fn hook_post_commit_common(effects: &Effects, hook_name: &str) -> eyre::Result<(
     writeln!(
         effects.get_output_stream(),
         "branchless: processed commit: {}",
-        printable_styled_string(&glyphs, commit.friendly_describe(&glyphs)?)?,
+        glyphs.render(commit.friendly_describe(&glyphs)?)?,
     )?;
 
     Ok(())

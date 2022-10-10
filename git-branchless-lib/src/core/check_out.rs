@@ -20,7 +20,6 @@ use crate::util::ExitCode;
 use super::config::get_undo_create_snapshots;
 use super::effects::Effects;
 use super::eventlog::{Event, EventLogDb, EventTransactionId};
-use super::formatting::printable_styled_string;
 use super::repo_ext::{RepoExt, RepoReferencesSnapshot};
 
 /// An entity to check out.
@@ -141,16 +140,13 @@ pub fn check_out_commit(
         writeln!(
             effects.get_output_stream(),
             "{}",
-            printable_styled_string(
-                effects.get_glyphs(),
-                StyledString::styled(
-                    match target {
-                        Some(target) => format!("Failed to check out commit: {target}"),
-                        None => "Failed to check out commit".to_string(),
-                    },
-                    BaseColor::Red.light()
-                )
-            )?
+            effects.get_glyphs().render(StyledString::styled(
+                match target {
+                    Some(target) => format!("Failed to check out commit: {target}"),
+                    None => "Failed to check out commit".to_string(),
+                },
+                BaseColor::Red.light()
+            ))?
         )?;
         return Ok(exit_code);
     }

@@ -32,7 +32,7 @@ mod skim {
 
     use itertools::Itertools;
 
-    use lib::core::formatting::{printable_styled_string, Glyphs};
+    use lib::core::formatting::Glyphs;
     use lib::core::node_descriptors::{render_node_descriptors, NodeDescriptor, NodeObject};
     use lib::git::{Commit, NonZeroOid};
 
@@ -109,11 +109,8 @@ mod skim {
 
             Ok(CommitSkimItem {
                 oid: commit.get_oid(),
-                styled_summary: printable_styled_string(&glyphs, styled_summary)?,
-                styled_preview: printable_styled_string(
-                    &Glyphs::pretty(),
-                    commit.friendly_preview()?,
-                )?,
+                styled_summary: glyphs.render(styled_summary)?,
+                styled_preview: Glyphs::pretty().render(commit.friendly_preview()?)?,
             })
         }
     }

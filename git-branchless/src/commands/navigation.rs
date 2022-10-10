@@ -21,7 +21,7 @@ use lib::core::config::get_next_interactive;
 use lib::core::dag::{sorted_commit_set, CommitSet, Dag};
 use lib::core::effects::Effects;
 use lib::core::eventlog::{EventLogDb, EventReplayer};
-use lib::core::formatting::{printable_styled_string, Pluralize};
+use lib::core::formatting::Pluralize;
 use lib::core::node_descriptors::{
     BranchesDescriptor, CommitMessageDescriptor, CommitOidDescriptor,
     DifferentialRevisionDescriptor, NodeDescriptor, Redactor, RelativeTimeDescriptor,
@@ -231,16 +231,13 @@ fn advance(
                 writeln!(
                     effects.get_output_stream(),
                     "{}",
-                    printable_styled_string(
-                        glyphs,
-                        StyledString::styled(
-                            format!(
-                                "No more {} commits to go to after traversing {}.",
-                                pluralize.unit.0, pluralize,
-                            ),
-                            BaseColor::Yellow.light()
-                        )
-                    )?
+                    glyphs.render(StyledString::styled(
+                        format!(
+                            "No more {} commits to go to after traversing {}.",
+                            pluralize.unit.0, pluralize,
+                        ),
+                        BaseColor::Yellow.light()
+                    ))?
                 )?;
 
                 if i == 0 {
@@ -284,7 +281,7 @@ fn advance(
                         effects.get_output_stream(),
                         "  {} {}{}",
                         glyphs.bullet_point,
-                        printable_styled_string(glyphs, child.friendly_describe(glyphs)?)?,
+                        glyphs.render(child.friendly_describe(glyphs)?)?,
                         descriptor
                     )?;
                 }

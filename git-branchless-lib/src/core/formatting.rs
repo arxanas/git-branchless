@@ -200,6 +200,29 @@ impl Glyphs {
             cycle_lower_left_corner: "└",
         }
     }
+
+    /// Write the provided string to `out`, using ANSI escape codes as necessary to
+    /// style it.
+    ///
+    /// TODO: return something that implements `Display` instead of a `String`.
+    pub fn render(&self, string: StyledString) -> eyre::Result<String> {
+        let result = string
+            .spans()
+            .map(|span| {
+                let Span {
+                    content,
+                    attr,
+                    width: _,
+                } = span;
+                if self.should_write_ansi_escape_codes {
+                    Ok(render_style_as_ansi(content, *attr)?)
+                } else {
+                    Ok(content.to_string())
+                }
+            })
+            .collect::<eyre::Result<String>>()?;
+        Ok(result)
+    }
 }
 
 impl std::fmt::Debug for Glyphs {
@@ -378,27 +401,4 @@ fn render_style_as_ansi(content: &str, style: Style) -> eyre::Result<String> {
     let output = output.force_styling(true);
 
     Ok(output.to_string())
-}
-
-/// Write the provided string to `out`, using ANSI escape codes as necessary to
-/// style it.
-///
-/// TODO: return something that implements `Display` instead of a `String`.
-pub fn printable_styled_string(glyphs: &Glyphs, string: StyledString) -> eyre::Result<String> {
-    let result = string
-        .spans()
-        .map(|span| {
-            let Span {
-                content,
-                attr,
-                width: _,
-            } = span;
-            if glyphs.should_write_ansi_escape_codes {
-                Ok(render_style_as_ansi(content, *attr)?)
-            } else {
-                Ok(content.to_string())
-            }
-        })
-        .collect::<eyre::Result<String>>()?;
-    Ok(result)
 }

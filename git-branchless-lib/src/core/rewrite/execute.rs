@@ -11,7 +11,7 @@ use tracing::warn;
 use crate::core::check_out::{check_out_commit, CheckOutCommitOptions, CheckoutTarget};
 use crate::core::effects::Effects;
 use crate::core::eventlog::{EventLogDb, EventTransactionId};
-use crate::core::formatting::{printable_styled_string, Pluralize};
+use crate::core::formatting::Pluralize;
 use crate::core::repo_ext::RepoExt;
 use crate::git::{
     GitRunInfo, MaybeZeroOid, NonZeroOid, ReferenceName, Repo, ResolvedReferenceInfo,
@@ -347,8 +347,7 @@ impl MergeConflictInfo {
                 amount: self.conflicting_paths.len(),
                 unit: ("conflicting file", "conflicting files"),
             },
-            printable_styled_string(
-                effects.get_glyphs(),
+            effects.get_glyphs().render(
                 repo.friendly_describe_commit_from_oid(effects.get_glyphs(), self.commit_oid)?
             )?
         )?;
@@ -382,7 +381,6 @@ mod in_memory {
 
     use crate::core::effects::{Effects, OperationType};
     use crate::core::eventlog::EventLogDb;
-    use crate::core::formatting::printable_styled_string;
     use crate::core::gc::mark_commit_reachable;
     use crate::core::rewrite::execute::check_out_updated_head;
     use crate::core::rewrite::move_branches;
@@ -526,10 +524,9 @@ mod in_memory {
                         .wrap_err("Finding commit to apply")?;
                     i += 1;
 
-                    let commit_description = printable_styled_string(
-                        effects.get_glyphs(),
-                        commit_to_apply.friendly_describe(effects.get_glyphs())?,
-                    )?;
+                    let commit_description = effects
+                        .get_glyphs()
+                        .render(commit_to_apply.friendly_describe(effects.get_glyphs())?)?;
                     let commit_num = format!("[{}/{}]", i, num_picks);
                     progress.notify_progress(i, num_picks);
 
@@ -593,13 +590,13 @@ mod in_memory {
                     let rebased_commit = repo
                         .find_commit_or_fail(rebased_commit_oid)
                         .wrap_err("Looking up just-rebased commit")?;
-                    let commit_description = printable_styled_string(
-                        effects.get_glyphs(),
-                        repo.friendly_describe_commit_from_oid(
-                            effects.get_glyphs(),
-                            rebased_commit_oid,
-                        )?,
-                    )?;
+                    let commit_description =
+                        effects
+                            .get_glyphs()
+                            .render(repo.friendly_describe_commit_from_oid(
+                                effects.get_glyphs(),
+                                rebased_commit_oid,
+                            )?)?;
                     if rebased_commit.is_empty() {
                         rewritten_oids.push((*original_commit_oid, MaybeZeroOid::Zero));
                         maybe_set_skipped_head_new_oid(*original_commit_oid, current_oid);
@@ -654,10 +651,9 @@ mod in_memory {
                         .wrap_err("Finding commit to apply")?;
                     i += 1;
 
-                    let commit_description = printable_styled_string(
-                        effects.get_glyphs(),
-                        commit_to_apply.friendly_describe(effects.get_glyphs())?,
-                    )?;
+                    let commit_description = effects
+                        .get_glyphs()
+                        .render(commit_to_apply.friendly_describe(effects.get_glyphs())?)?;
                     let commit_num = format!("[{}/{}]", i, num_picks);
                     progress.notify_progress(i, num_picks);
 
@@ -709,13 +705,13 @@ mod in_memory {
                         )
                         .wrap_err("Applying rebased commit")?;
 
-                    let commit_description = printable_styled_string(
-                        effects.get_glyphs(),
-                        repo.friendly_describe_commit_from_oid(
-                            effects.get_glyphs(),
-                            rebased_commit_oid,
-                        )?,
-                    )?;
+                    let commit_description =
+                        effects
+                            .get_glyphs()
+                            .render(repo.friendly_describe_commit_from_oid(
+                                effects.get_glyphs(),
+                                rebased_commit_oid,
+                            )?)?;
                     rewritten_oids.push((*commit_oid, MaybeZeroOid::NonZero(rebased_commit_oid)));
                     current_oid = rebased_commit_oid;
 
@@ -736,8 +732,7 @@ mod in_memory {
                     maybe_set_skipped_head_new_oid(*commit_oid, current_oid);
 
                     let commit_description = commit.friendly_describe(effects.get_glyphs())?;
-                    let commit_description =
-                        printable_styled_string(effects.get_glyphs(), commit_description)?;
+                    let commit_description = effects.get_glyphs().render(commit_description)?;
                     writeln!(
                         effects.get_output_stream(),
                         "{} Skipped commit (was already applied upstream): {}",
@@ -1218,8 +1213,7 @@ pub fn execute_rebase_plan(
                 writeln!(
                     effects.get_output_stream(),
                     "The merge commit was: {}",
-                    printable_styled_string(
-                        effects.get_glyphs(),
+                    effects.get_glyphs().render(
                         repo.friendly_describe_commit_from_oid(effects.get_glyphs(), commit_oid)?
                     )?,
                 )?;
@@ -1246,8 +1240,7 @@ pub fn execute_rebase_plan(
                 writeln!(
                     effects.get_output_stream(),
                     "The conflicting commit was: {}",
-                    printable_styled_string(
-                        effects.get_glyphs(),
+                    effects.get_glyphs().render(
                         repo.friendly_describe_commit_from_oid(effects.get_glyphs(), commit_oid)?
                     )?,
                 )?;
