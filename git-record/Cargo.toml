@@ -20,7 +20,7 @@ cursive = { version = "0.20.0", default-features = false, features = [
   "crossterm-backend",
 ] }
 cursive_buffered_backend = "0.6.1"
-tracing = "0.1.35"
+tracing = "0.1.37"
 
 [dev-dependencies]
 criterion = "0.4.0"

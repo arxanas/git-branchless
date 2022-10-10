@@ -46,7 +46,7 @@ rayon = "1.5.3"
 regex = "1.6.0"
 rusqlite = { version = "0.28.0", features = ["bundled"] }
 thiserror = "1.0.34"
-tracing = "0.1.35"
+tracing = "0.1.37"
 tracing-chrome = "0.6.0"
 tracing-error = "0.2.0"
 tracing-subscriber = { version = "=0.3.11", features = ["env-filter"] }
