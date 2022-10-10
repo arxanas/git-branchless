@@ -14,7 +14,7 @@ use lib::core::dag::{sorted_commit_set, union_all, Dag};
 use lib::core::effects::Effects;
 use lib::core::eventlog::{CommitActivityStatus, Event};
 use lib::core::eventlog::{EventLogDb, EventReplayer};
-use lib::core::formatting::{printable_styled_string, Glyphs, Pluralize};
+use lib::core::formatting::{Glyphs, Pluralize};
 use lib::core::rewrite::move_branches;
 use lib::git::{CategorizedReferenceName, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo};
 
@@ -83,7 +83,7 @@ pub fn hide(
         writeln!(
             effects.get_output_stream(),
             "Hid commit: {}",
-            printable_styled_string(&glyphs, commit.friendly_describe(&glyphs)?)?,
+            glyphs.render(commit.friendly_describe(&glyphs)?)?,
         )?;
         if let CommitActivityStatus::Obsolete =
             event_replayer.get_cursor_commit_activity_status(cursor, commit.get_oid())
@@ -235,7 +235,7 @@ pub fn unhide(effects: &Effects, revsets: Vec<Revset>, recursive: bool) -> eyre:
         writeln!(
             effects.get_output_stream(),
             "Unhid commit: {}",
-            printable_styled_string(&glyphs, commit.friendly_describe(&glyphs)?)?,
+            glyphs.render(commit.friendly_describe(&glyphs)?)?,
         )?;
         if let CommitActivityStatus::Active =
             event_replayer.get_cursor_commit_activity_status(cursor, commit.get_oid())

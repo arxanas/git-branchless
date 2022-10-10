@@ -20,7 +20,7 @@ use crate::core::config::{get_hint_enabled, print_hint_suppression_notice, Hint}
 use crate::core::dag::Dag;
 use crate::core::effects::Effects;
 use crate::core::eventlog::{Event, EventLogDb, EventReplayer};
-use crate::core::formatting::{printable_styled_string, Pluralize};
+use crate::core::formatting::Pluralize;
 use crate::core::repo_ext::RepoExt;
 use crate::git::{
     CategorizedReferenceName, GitRunInfo, MaybeZeroOid, NonZeroOid, ReferenceName, Repo,
@@ -459,10 +459,9 @@ pub fn hook_drop_commit_if_empty(
     writeln!(
         effects.get_output_stream(),
         "Skipped now-empty commit: {}",
-        printable_styled_string(
-            effects.get_glyphs(),
-            head_commit.friendly_describe(effects.get_glyphs())?
-        )?
+        effects
+            .get_glyphs()
+            .render(head_commit.friendly_describe(effects.get_glyphs())?)?
     )?;
     repo.set_head(only_parent_oid)?;
 
@@ -498,10 +497,9 @@ pub fn hook_skip_upstream_applied_commit(
     writeln!(
         effects.get_output_stream(),
         "Skipping commit (was already applied upstream): {}",
-        printable_styled_string(
-            effects.get_glyphs(),
-            commit.friendly_describe(effects.get_glyphs())?
-        )?
+        effects
+            .get_glyphs()
+            .render(commit.friendly_describe(effects.get_glyphs())?)?
     )?;
 
     if let Some(orig_head_reference) = repo.find_reference(&"ORIG_HEAD".into())? {

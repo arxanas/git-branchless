@@ -18,7 +18,7 @@ use lib::core::config::get_restack_preserve_timestamps;
 use lib::core::dag::{commit_set_to_vec, sorted_commit_set, union_all, CommitSet, Dag};
 use lib::core::effects::{Effects, OperationType};
 use lib::core::eventlog::{EventLogDb, EventReplayer};
-use lib::core::formatting::{printable_styled_string, StyledStringBuilder};
+use lib::core::formatting::StyledStringBuilder;
 use lib::core::rewrite::{
     execute_rebase_plan, BuildRebasePlanError, BuildRebasePlanOptions, ExecuteRebasePlanOptions,
     ExecuteRebasePlanResult, RebasePlan, RebasePlanBuilder, RebasePlanPermissions, RepoPool,
@@ -190,8 +190,7 @@ fn execute_main_branch_sync_plan(
     )?;
 
     let main_branch_reference_name = main_branch.get_reference_name()?;
-    let branch_description = printable_styled_string(
-        effects.get_glyphs(),
+    let branch_description = effects.get_glyphs().render(
         StyledStringBuilder::new()
             .append_styled(
                 CategorizedReferenceName::new(&main_branch_reference_name).friendly_describe(),
@@ -400,8 +399,7 @@ fn execute_plans(
         writeln!(
             effects.get_output_stream(),
             "{}",
-            printable_styled_string(
-                effects.get_glyphs(),
+            effects.get_glyphs().render(
                 StyledStringBuilder::new()
                     .append_plain("Synced ")
                     .append(success_commit.friendly_describe(effects.get_glyphs())?)
@@ -413,11 +411,9 @@ fn execute_plans(
     for merge_conflict_commit in merge_conflict_commits {
         writeln!(
             effects.get_output_stream(),
-            "{}",
-            printable_styled_string(
-                effects.get_glyphs(),
+            "Merge conflict for {}",
+            effects.get_glyphs().render(
                 StyledStringBuilder::new()
-                    .append_plain("Merge conflict for ")
                     .append(merge_conflict_commit.friendly_describe(effects.get_glyphs())?)
                     .build()
             )?
@@ -428,10 +424,9 @@ fn execute_plans(
         writeln!(
             effects.get_output_stream(),
             "Not moving up-to-date stack at {}",
-            printable_styled_string(
-                effects.get_glyphs(),
-                skipped_commit.friendly_describe(effects.get_glyphs())?
-            )?
+            effects
+                .get_glyphs()
+                .render(skipped_commit.friendly_describe(effects.get_glyphs())?)?
         )?;
     }
 

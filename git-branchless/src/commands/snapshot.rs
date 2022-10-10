@@ -11,7 +11,6 @@ use eyre::Context;
 use lib::core::check_out::{create_snapshot, restore_snapshot};
 use lib::core::effects::Effects;
 use lib::core::eventlog::EventLogDb;
-use lib::core::formatting::printable_styled_string;
 use lib::git::{GitRunInfo, GitRunResult, NonZeroOid, Repo, WorkingCopySnapshot};
 use lib::util::ExitCode;
 
@@ -45,13 +44,10 @@ pub fn create(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<Exit
         writeln!(
             effects.get_output_stream(),
             "{}",
-            printable_styled_string(
-                effects.get_glyphs(),
-                StyledString::styled(
-                    "Failed to clean up working copy state".to_string(),
-                    BaseColor::Red.light()
-                )
-            )?
+            effects.get_glyphs().render(StyledString::styled(
+                "Failed to clean up working copy state".to_string(),
+                BaseColor::Red.light()
+            ))?
         )?;
         return Ok(ExitCode(exit_code.try_into()?));
     }

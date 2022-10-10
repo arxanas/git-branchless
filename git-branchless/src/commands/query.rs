@@ -5,7 +5,6 @@ use itertools::Itertools;
 use lib::core::dag::{commit_set_to_vec, Dag};
 use lib::core::effects::{Effects, OperationType};
 use lib::core::eventlog::{EventLogDb, EventReplayer};
-use lib::core::formatting::printable_styled_string;
 use lib::core::repo_ext::RepoExt;
 use lib::git::{CategorizedReferenceName, GitRunInfo, Repo};
 use lib::util::ExitCode;
@@ -83,10 +82,9 @@ pub fn query(
                 writeln!(
                     effects.get_output_stream(),
                     "{}",
-                    printable_styled_string(
-                        effects.get_glyphs(),
-                        commit.friendly_describe(effects.get_glyphs())?
-                    )?,
+                    effects
+                        .get_glyphs()
+                        .render(commit.friendly_describe(effects.get_glyphs())?)?,
                 )?;
             }
         }

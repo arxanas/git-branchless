@@ -32,7 +32,6 @@ use cursive::theme::BaseColor;
 use cursive::utils::markup::StyledString;
 use eyre::Context;
 use itertools::Itertools;
-use lib::core::formatting::printable_styled_string;
 use lib::core::rewrite::MergeConflictRemediation;
 use lib::git::Repo;
 use lib::git::RepoError;
@@ -462,16 +461,13 @@ Here are some options:
 - To unset the configuration option, run: git config --unset extensions.worktreeConfig
   - This is safe unless you created another worktree also using a sparse checkout.
 - Try upgrading to Git v2.36+ and reinitializing your sparse checkout.",
-                error = printable_styled_string(
-                    effects.get_glyphs(),
-                    StyledString::styled(
-                        "\
+                error = effects.get_glyphs().render(StyledString::styled(
+                    "\
 Error: the Git configuration setting `extensions.worktreeConfig` is enabled in
 this repository. Due to upstream libgit2 limitations, git-branchless does not
 support repositories with this configuration option enabled.",
-                        BaseColor::Red.light()
-                    )
-                )?,
+                    BaseColor::Red.light()
+                ))?,
             )?;
             return Ok(Some(ExitCode(1)));
         }

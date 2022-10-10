@@ -25,7 +25,7 @@ use crate::tui::{with_siv, SingletonView};
 use lib::core::dag::{CommitSet, Dag};
 use lib::core::effects::Effects;
 use lib::core::eventlog::{Event, EventCursor, EventLogDb, EventReplayer, EventTransactionId};
-use lib::core::formatting::{printable_styled_string, Glyphs, Pluralize, StyledStringBuilder};
+use lib::core::formatting::{Glyphs, Pluralize, StyledStringBuilder};
 use lib::core::node_descriptors::{
     BranchesDescriptor, CommitMessageDescriptor, CommitOidDescriptor,
     DifferentialRevisionDescriptor, ObsolescenceExplanationDescriptor, Redactor,
@@ -810,7 +810,7 @@ fn undo_events(
         writeln!(
             effects.get_output_stream(),
             "{}",
-            printable_styled_string(effects.get_glyphs(), line)?
+            effects.get_glyphs().render(line)?
         )?;
     }
 

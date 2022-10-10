@@ -15,7 +15,7 @@ use crate::commands::smartlog::{make_smartlog_graph, render_graph};
 use lib::core::dag::Dag;
 use lib::core::effects::Effects;
 use lib::core::eventlog::{Event, EventCursor, EventLogDb, EventReplayer};
-use lib::core::formatting::{printable_styled_string, Glyphs};
+use lib::core::formatting::Glyphs;
 use lib::core::node_descriptors::{
     BranchesDescriptor, CommitMessageDescriptor, CommitOidDescriptor,
     DifferentialRevisionDescriptor, ObsolescenceExplanationDescriptor, Redactor,
@@ -156,7 +156,7 @@ fn describe_event_cursor(
     )?;
     let graph_lines = graph_lines
         .into_iter()
-        .map(|line| printable_styled_string(&glyphs, line))
+        .map(|line| glyphs.render(line))
         .try_collect()?;
 
     Ok([

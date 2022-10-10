@@ -13,7 +13,7 @@ use tracing::{instrument, warn};
 
 use crate::core::dag::{commit_set_to_vec, union_all, CommitSet, Dag};
 use crate::core::effects::{Effects, OperationType};
-use crate::core::formatting::{printable_styled_string, Pluralize};
+use crate::core::formatting::Pluralize;
 use crate::core::rewrite::{RepoPool, RepoResource};
 use crate::core::task::ResourcePool;
 use crate::git::{Commit, NonZeroOid, PatchId, Repo};
@@ -600,10 +600,7 @@ impl BuildRebasePlanError {
                         char1,
                         char2,
                         char3,
-                        printable_styled_string(
-                            glyphs,
-                            repo.friendly_describe_commit_from_oid(glyphs, *oid)?,
-                        )?,
+                        glyphs.render(repo.friendly_describe_commit_from_oid(glyphs, *oid)?,)?,
                     )?;
                 }
             }
@@ -628,10 +625,9 @@ Retry with -f/--force-rewrite to proceed anyways.",
                         amount: public_commits_to_move.count()?,
                         unit: ("public commit", "public commits")
                     },
-                    printable_styled_string(
-                        effects.get_glyphs(),
-                        example_bad_commit.friendly_describe(effects.get_glyphs())?
-                    )?,
+                    effects
+                        .get_glyphs()
+                        .render(example_bad_commit.friendly_describe(effects.get_glyphs())?)?,
                 )?;
             }
 
