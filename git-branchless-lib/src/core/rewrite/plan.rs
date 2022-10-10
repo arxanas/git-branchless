@@ -525,7 +525,7 @@ enum Constraint {
 }
 
 /// Options used to build a rebase plan.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct BuildRebasePlanOptions {
     /// Force rewriting public commits, even though other users may have access
     /// to those commits.

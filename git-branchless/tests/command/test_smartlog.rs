@@ -304,57 +304,6 @@ fn test_custom_main_branch() -> eyre::Result<()> {
 }
 
 #[test]
-fn test_main_remote_branch() -> eyre::Result<()> {
-    let GitWrapperWithRemoteRepo {
-        temp_dir: _guard,
-        original_repo,
-        cloned_repo,
-    } = make_git_with_remote_repo()?;
-
-    {
-        original_repo.init_repo()?;
-        original_repo.commit_file("test1", 1)?;
-        original_repo.run(&[
-            "clone",
-            original_repo.repo_path.to_str().unwrap(),
-            cloned_repo.repo_path.to_str().unwrap(),
-        ])?;
-    }
-
-    {
-        cloned_repo.init_repo_with_options(&GitInitOptions {
-            make_initial_commit: false,
-            ..Default::default()
-        })?;
-        cloned_repo.detach_head()?;
-        cloned_repo.run(&["config", "branchless.core.mainBranch", "origin/master"])?;
-        cloned_repo.run(&["branch", "-d", "master"])?;
-        let (stdout, _stderr) = cloned_repo.run(&["smartlog"])?;
-        insta::assert_snapshot!(stdout, @r###"
-        :
-        @ 62fc20d (remote origin/master) create test1.txt
-        "###);
-    }
-
-    {
-        original_repo.commit_file("test2", 2)?;
-    }
-
-    {
-        cloned_repo.run(&["fetch"])?;
-        let (stdout, _stderr) = cloned_repo.run(&["smartlog"])?;
-        insta::assert_snapshot!(stdout, @r###"
-        :
-        @ 62fc20d create test1.txt
-        |
-        O 96d1c37 (remote origin/master) create test2.txt
-        "###);
-    }
-
-    Ok(())
-}
-
-#[test]
 fn test_show_rewritten_commit_hash() -> eyre::Result<()> {
     let git = make_git()?;
 
@@ -539,19 +488,7 @@ fn test_active_non_head_main_branch_commit() -> eyre::Result<()> {
         let (stdout, _stderr) = cloned_repo.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
         :
-        @ 70deb1e (> master, remote origin/master) create test3.txt
-        "###);
-    }
-
-    {
-        // Verify that both `origin/master` and `master` appear in the smartlog.
-        cloned_repo.commit_file("test4", 4)?;
-        let (stdout, _stderr) = cloned_repo.run(&["smartlog"])?;
-        insta::assert_snapshot!(stdout, @r###"
-        :
-        O 70deb1e (remote origin/master) create test3.txt
-        |
-        @ 355e173 (> master) create test4.txt
+        @ 70deb1e (> master) create test3.txt
         "###);
     }
 

@@ -1,27 +1,31 @@
 //! Implements the `git sync` command.
 
+use cursive::theme::BaseColor;
 use std::fmt::Write;
 use std::time::SystemTime;
 
 use eden_dag::DagAlgorithm;
+use eyre::Report;
 use itertools::Itertools;
 use lib::core::check_out::CheckOutCommitOptions;
 use lib::core::repo_ext::RepoExt;
 use lib::util::ExitCode;
-use rayon::ThreadPoolBuilder;
+use rayon::{ThreadPool, ThreadPoolBuilder};
 
 use crate::opts::{MoveOptions, Revset};
 use crate::revset::resolve_commits;
 use lib::core::config::get_restack_preserve_timestamps;
-use lib::core::dag::{sorted_commit_set, union_all, CommitSet, Dag};
+use lib::core::dag::{commit_set_to_vec, sorted_commit_set, union_all, CommitSet, Dag};
 use lib::core::effects::{Effects, OperationType};
 use lib::core::eventlog::{EventLogDb, EventReplayer};
-use lib::core::formatting::{printable_styled_string, Glyphs, StyledStringBuilder};
+use lib::core::formatting::{printable_styled_string, StyledStringBuilder};
 use lib::core::rewrite::{
     execute_rebase_plan, BuildRebasePlanError, BuildRebasePlanOptions, ExecuteRebasePlanOptions,
-    ExecuteRebasePlanResult, RebasePlan, RebasePlanBuilder, RebasePlanPermissions, RepoResource,
+    ExecuteRebasePlanResult, RebasePlan, RebasePlanBuilder, RebasePlanPermissions, RepoPool,
+    RepoResource,
 };
-use lib::git::{Commit, GitRunInfo, NonZeroOid, Repo};
+use lib::core::task::ResourcePool;
+use lib::git::{CategorizedReferenceName, Commit, GitRunInfo, NonZeroOid, Repo};
 
 fn get_stack_roots(dag: &Dag) -> eyre::Result<CommitSet> {
     let public_commits = dag.query_public_commits()?;
@@ -45,18 +49,17 @@ fn get_stack_roots(dag: &Dag) -> eyre::Result<CommitSet> {
 pub fn sync(
     effects: &Effects,
     git_run_info: &GitRunInfo,
-    update_refs: bool,
+    pull: bool,
     move_options: &MoveOptions,
     revsets: Vec<Revset>,
 ) -> eyre::Result<ExitCode> {
-    let glyphs = Glyphs::detect();
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
     let now = SystemTime::now();
     let event_tx_id = event_log_db.make_transaction_id(now, "sync fetch")?;
 
-    if update_refs {
+    if pull {
         let exit_code = git_run_info.run(effects, Some(event_tx_id), &["fetch", "--all"])?;
         if !exit_code.is_success() {
             return Ok(exit_code);
@@ -97,75 +100,12 @@ pub fn sync(
         dump_rebase_constraints,
         dump_rebase_plan,
     } = *move_options;
-    let pool = ThreadPoolBuilder::new().build()?;
-    let repo_pool = RepoResource::new_pool(&repo)?;
-    let root_commit_and_plans: Vec<(NonZeroOid, Option<RebasePlan>)> = {
-        let build_options = BuildRebasePlanOptions {
-            force_rewrite_public_commits,
-            detect_duplicate_commits_via_patch_id,
-            dump_rebase_constraints,
-            dump_rebase_plan,
-        };
-        let permissions = match RebasePlanPermissions::verify_rewrite_set(
-            &dag,
-            &build_options,
-            &root_commit_oids,
-        )? {
-            Ok(permissions) => permissions,
-            Err(err) => {
-                err.describe(effects, &repo)?;
-                return Ok(ExitCode(1));
-            }
-        };
-        let builder = RebasePlanBuilder::new(&dag, permissions);
-
-        let root_commit_oids = root_commits
-            .into_iter()
-            .map(|commit| commit.get_oid())
-            .collect_vec();
-        let root_commit_and_plans = pool.install(|| -> eyre::Result<_> {
-            let result = root_commit_oids
-                // Don't parallelize for now, since the status updates don't render well.
-                .into_iter()
-                .map(
-                    |root_commit_oid| -> eyre::Result<
-                        Result<(NonZeroOid, Option<RebasePlan>), BuildRebasePlanError>,
-                    > {
-                        // Keep access to the same underlying caches by cloning the same instance of the builder.
-                        let mut builder = builder.clone();
-
-                        let repo = repo_pool.try_create()?;
-                        let root_commit = repo.find_commit_or_fail(root_commit_oid)?;
-
-                        let only_parent_id =
-                            root_commit.get_only_parent().map(|parent| parent.get_oid());
-                        if only_parent_id == Some(references_snapshot.main_branch_oid) {
-                            return Ok(Ok((root_commit_oid, None)));
-                        }
-
-                        builder.move_subtree(
-                            root_commit.get_oid(),
-                            vec![references_snapshot.main_branch_oid],
-                        )?;
-                        let rebase_plan = builder.build(effects, &pool, &repo_pool)?;
-                        Ok(rebase_plan.map(|rebase_plan| (root_commit_oid, rebase_plan)))
-                    },
-                )
-                .collect::<eyre::Result<Vec<_>>>()?
-                .into_iter()
-                .collect::<Result<Vec<_>, BuildRebasePlanError>>();
-            Ok(result)
-        })?;
-
-        match root_commit_and_plans {
-            Ok(root_commit_and_plans) => root_commit_and_plans,
-            Err(err) => {
-                err.describe(effects, &repo)?;
-                return Ok(ExitCode(1));
-            }
-        }
+    let build_options = BuildRebasePlanOptions {
+        force_rewrite_public_commits,
+        detect_duplicate_commits_via_patch_id,
+        dump_rebase_constraints,
+        dump_rebase_plan,
     };
-
     let now = SystemTime::now();
     let event_tx_id = event_log_db.make_transaction_id(now, "sync")?;
     let execute_options = ExecuteRebasePlanOptions {
@@ -180,7 +120,239 @@ pub fn sync(
             render_smartlog: false,
         },
     };
+    let thread_pool = ThreadPoolBuilder::new().build()?;
+    let repo_pool = RepoResource::new_pool(&repo)?;
 
+    if pull {
+        let exit_code = execute_main_branch_sync_plan(
+            effects,
+            git_run_info,
+            &repo,
+            &mut dag,
+            &event_log_db,
+            &build_options,
+            &execute_options,
+            &thread_pool,
+            &repo_pool,
+        )?;
+        if !exit_code.is_success() {
+            return Ok(exit_code);
+        }
+    }
+
+    // The main branch OID might have changed since we synced with `master`, so read it again.
+    let main_branch_oid = repo.get_main_branch_oid()?;
+    execute_sync_plans(
+        effects,
+        git_run_info,
+        &repo,
+        &event_log_db,
+        &mut dag,
+        &root_commit_oids,
+        root_commits,
+        main_branch_oid,
+        &build_options,
+        &execute_options,
+        &thread_pool,
+        &repo_pool,
+    )
+}
+
+fn execute_main_branch_sync_plan(
+    effects: &Effects,
+    git_run_info: &GitRunInfo,
+    repo: &Repo,
+    dag: &mut Dag,
+    event_log_db: &EventLogDb,
+    build_options: &BuildRebasePlanOptions,
+    execute_options: &ExecuteRebasePlanOptions,
+    thread_pool: &ThreadPool,
+    repo_pool: &RepoPool,
+) -> eyre::Result<ExitCode> {
+    let main_branch = repo.get_main_branch()?;
+    let upstream_main_branch = match main_branch.get_upstream_branch()? {
+        Some(upstream_main_branch) => upstream_main_branch,
+        None => return Ok(ExitCode(0)),
+    };
+    let upstream_main_branch_oid = match upstream_main_branch.get_oid()? {
+        Some(upstream_main_branch_oid) => upstream_main_branch_oid,
+        None => return Ok(ExitCode(0)),
+    };
+    dag.sync_from_oids(
+        effects,
+        repo,
+        CommitSet::from(upstream_main_branch_oid),
+        CommitSet::empty(),
+    )?;
+    let local_main_branch_commits = dag.query().only(
+        main_branch.get_oid()?.into_iter().collect(),
+        CommitSet::from(upstream_main_branch_oid),
+    )?;
+
+    let main_branch_reference_name = main_branch.get_reference_name()?;
+    let branch_description = printable_styled_string(
+        effects.get_glyphs(),
+        StyledStringBuilder::new()
+            .append_styled(
+                CategorizedReferenceName::new(&main_branch_reference_name).friendly_describe(),
+                BaseColor::Green.dark(),
+            )
+            .build(),
+    )?;
+    if local_main_branch_commits.is_empty()? {
+        writeln!(
+            effects.get_output_stream(),
+            "Fast-forwarding {}",
+            branch_description
+        )?;
+        repo.create_reference(
+            &main_branch_reference_name,
+            upstream_main_branch_oid,
+            true,
+            "sync",
+        )?;
+        return Ok(ExitCode(0));
+    } else {
+        writeln!(
+            effects.get_output_stream(),
+            "Syncing {}",
+            branch_description
+        )?;
+    }
+
+    let build_options = BuildRebasePlanOptions {
+        // Since we're syncing the main branch, by definition, any commits on it would be public, so
+        // we need to set this to `true` to get the rebase to succeed.
+        force_rewrite_public_commits: true,
+        ..build_options.clone()
+    };
+    let permissions = match RebasePlanPermissions::verify_rewrite_set(
+        dag,
+        &build_options,
+        &local_main_branch_commits,
+    )? {
+        Ok(permissions) => permissions,
+        Err(err) => {
+            err.describe(effects, repo)?;
+            return Ok(ExitCode(1));
+        }
+    };
+    let mut builder = RebasePlanBuilder::new(dag, permissions);
+    let local_main_branch_roots = dag.query().roots(local_main_branch_commits)?;
+    let root_commit_oid = match commit_set_to_vec(&local_main_branch_roots)?
+        .into_iter()
+        .exactly_one()
+    {
+        Ok(root_oid) => root_oid,
+        Err(_) => return Ok(ExitCode(0)),
+    };
+    builder.move_subtree(root_commit_oid, vec![upstream_main_branch_oid])?;
+    let rebase_plan = match builder.build(effects, thread_pool, repo_pool)? {
+        Ok(rebase_plan) => rebase_plan,
+        Err(err) => {
+            err.describe(effects, repo)?;
+            return Ok(ExitCode(1));
+        }
+    };
+    let rebase_plan = match rebase_plan {
+        Some(rebase_plan) => rebase_plan,
+        None => return Ok(ExitCode(0)),
+    };
+
+    execute_plans(
+        effects,
+        git_run_info,
+        repo,
+        event_log_db,
+        execute_options,
+        vec![(root_commit_oid, Some(rebase_plan))],
+    )
+}
+
+fn execute_sync_plans(
+    effects: &Effects,
+    git_run_info: &GitRunInfo,
+    repo: &Repo,
+    event_log_db: &EventLogDb,
+    dag: &mut Dag,
+    root_commit_oids: &CommitSet,
+    root_commits: Vec<Commit>,
+    main_branch_oid: NonZeroOid,
+    build_options: &BuildRebasePlanOptions,
+    execute_options: &ExecuteRebasePlanOptions,
+    thread_pool: &ThreadPool,
+    repo_pool: &ResourcePool<RepoResource>,
+) -> eyre::Result<ExitCode> {
+    let permissions =
+        match RebasePlanPermissions::verify_rewrite_set(dag, build_options, root_commit_oids)? {
+            Ok(permissions) => permissions,
+            Err(err) => {
+                err.describe(effects, repo)?;
+                return Ok(ExitCode(1));
+            }
+        };
+    let builder = RebasePlanBuilder::new(dag, permissions);
+
+    let root_commit_oids = root_commits
+        .into_iter()
+        .map(|commit| commit.get_oid())
+        .collect_vec();
+    let root_commit_and_plans = thread_pool.install(|| -> eyre::Result<_> {
+        let result = root_commit_oids
+            // Don't parallelize for now, since the status updates don't render well.
+            .into_iter()
+            .map(
+                |root_commit_oid| -> eyre::Result<
+                    Result<(NonZeroOid, Option<RebasePlan>), BuildRebasePlanError>,
+                > {
+                    // Keep access to the same underlying caches by cloning the same instance of the builder.
+                    let mut builder = builder.clone();
+
+                    let repo = repo_pool.try_create()?;
+                    let root_commit = repo.find_commit_or_fail(root_commit_oid)?;
+
+                    let only_parent_id =
+                        root_commit.get_only_parent().map(|parent| parent.get_oid());
+                    if only_parent_id == Some(main_branch_oid) {
+                        return Ok(Ok((root_commit_oid, None)));
+                    }
+
+                    builder.move_subtree(root_commit.get_oid(), vec![main_branch_oid])?;
+                    let rebase_plan = builder.build(effects, thread_pool, repo_pool)?;
+                    Ok(rebase_plan.map(|rebase_plan| (root_commit_oid, rebase_plan)))
+                },
+            )
+            .collect::<eyre::Result<Vec<_>>>()?
+            .into_iter()
+            .collect::<Result<Vec<_>, BuildRebasePlanError>>();
+        Ok(result)
+    })?;
+
+    let root_commit_and_plans = match root_commit_and_plans {
+        Ok(root_commit_and_plans) => root_commit_and_plans,
+        Err(err) => {
+            err.describe(effects, repo)?;
+            return Ok(ExitCode(1));
+        }
+    };
+    execute_plans(
+        effects,
+        git_run_info,
+        repo,
+        event_log_db,
+        execute_options,
+        root_commit_and_plans,
+    )
+}
+
+fn execute_plans(
+    effects: &Effects,
+    git_run_info: &GitRunInfo,
+    repo: &Repo,
+    event_log_db: &EventLogDb,
+    execute_options: &ExecuteRebasePlanOptions,
+    root_commit_and_plans: Vec<(NonZeroOid, Option<RebasePlan>)>,
+) -> Result<ExitCode, Report> {
     let (success_commits, merge_conflict_commits, skipped_commits) = {
         let mut success_commits: Vec<Commit> = Vec::new();
         let mut merge_conflict_commits: Vec<Commit> = Vec::new();
@@ -202,10 +374,10 @@ pub fn sync(
             let result = execute_rebase_plan(
                 &effects,
                 git_run_info,
-                &repo,
-                &event_log_db,
+                repo,
+                event_log_db,
                 &rebase_plan,
-                &execute_options,
+                execute_options,
             )?;
             progress.notify_progress_inc(1);
             match result {
@@ -229,10 +401,10 @@ pub fn sync(
             effects.get_output_stream(),
             "{}",
             printable_styled_string(
-                &glyphs,
+                effects.get_glyphs(),
                 StyledStringBuilder::new()
                     .append_plain("Synced ")
-                    .append(success_commit.friendly_describe(&glyphs)?)
+                    .append(success_commit.friendly_describe(effects.get_glyphs())?)
                     .build()
             )?
         )?;
@@ -243,10 +415,10 @@ pub fn sync(
             effects.get_output_stream(),
             "{}",
             printable_styled_string(
-                &glyphs,
+                effects.get_glyphs(),
                 StyledStringBuilder::new()
                     .append_plain("Merge conflict for ")
-                    .append(merge_conflict_commit.friendly_describe(&glyphs)?)
+                    .append(merge_conflict_commit.friendly_describe(effects.get_glyphs())?)
                     .build()
             )?
         )?;
@@ -256,7 +428,10 @@ pub fn sync(
         writeln!(
             effects.get_output_stream(),
             "Not moving up-to-date stack at {}",
-            printable_styled_string(&glyphs, skipped_commit.friendly_describe(&glyphs)?)?
+            printable_styled_string(
+                effects.get_glyphs(),
+                skipped_commit.friendly_describe(effects.get_glyphs())?
+            )?
         )?;
     }
 

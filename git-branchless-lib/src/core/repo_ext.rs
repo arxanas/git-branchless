@@ -6,7 +6,7 @@ use color_eyre::Help;
 use eyre::Context;
 use tracing::instrument;
 
-use crate::git::{NonZeroOid, Reference, ReferenceName, Repo};
+use crate::git::{Branch, BranchType, NonZeroOid, ReferenceName, Repo};
 
 use super::config::get_main_branch_name;
 
@@ -25,8 +25,8 @@ pub struct RepoReferencesSnapshot {
 
 /// Helper functions on [`Repo`].
 pub trait RepoExt {
-    /// Get the `Reference` for the main branch for the repository.
-    fn get_main_branch_reference(&self) -> eyre::Result<Reference>;
+    /// Get the `Branch` for the main branch for the repository.
+    fn get_main_branch(&self) -> eyre::Result<Branch>;
 
     /// Get the OID corresponding to the main branch.
     fn get_main_branch_oid(&self) -> eyre::Result<NonZeroOid>;
@@ -42,18 +42,13 @@ pub trait RepoExt {
 }
 
 impl RepoExt for Repo {
-    fn get_main_branch_reference(&self) -> eyre::Result<Reference> {
+    fn get_main_branch(&self) -> eyre::Result<Branch> {
         let main_branch_name = get_main_branch_name(self)?;
-        match self.find_branch(&main_branch_name, git2::BranchType::Local)? {
-            Some(branch) => match branch.get_upstream_branch()? {
-                Some(upstream_branch) => Ok(upstream_branch.into_reference()),
-                None => Ok(branch.into_reference()),
-            },
-            None => match self.find_branch(&main_branch_name, git2::BranchType::Remote)? {
-                Some(branch) => Ok(branch.into_reference()),
-                None => {
-                    let suggestion = format!(
-                        r"
+        match self.find_branch(&main_branch_name, BranchType::Local)? {
+            Some(branch) => Ok(branch),
+            None => {
+                let suggestion = format!(
+                    r"
 The main branch {:?} could not be found in your repository
 at path: {:?}.
 These branches exist: {:?}
@@ -61,35 +56,34 @@ Either create it, or update the main branch setting by running:
 
     git branchless init --main-branch <branch>
 ",
-                        get_main_branch_name(self)?,
-                        self.get_path(),
-                        self.get_all_local_branches()?
-                            .into_iter()
-                            .map(|branch| {
-                                branch
-                                    .into_reference()
-                                    .get_name()
-                                    .map(|s| format!("{:?}", s))
-                                    .wrap_err("converting branch to reference")
-                            })
-                            .collect::<eyre::Result<Vec<String>>>()?,
-                    );
-                    Err(eyre::eyre!("Could not find repository main branch")
-                        .with_suggestion(|| suggestion))
-                }
-            },
+                    get_main_branch_name(self)?,
+                    self.get_path(),
+                    self.get_all_local_branches()?
+                        .into_iter()
+                        .map(|branch| {
+                            branch
+                                .into_reference()
+                                .get_name()
+                                .map(|s| format!("{:?}", s))
+                                .wrap_err("converting branch to reference")
+                        })
+                        .collect::<eyre::Result<Vec<String>>>()?,
+                );
+                Err(eyre::eyre!("Could not find repository main branch")
+                    .with_suggestion(|| suggestion))
+            }
         }
     }
 
     #[instrument]
     fn get_main_branch_oid(&self) -> eyre::Result<NonZeroOid> {
-        let main_branch_reference = self.get_main_branch_reference()?;
-        let commit = main_branch_reference.peel_to_commit()?;
-        match commit {
-            Some(commit) => Ok(commit.get_oid()),
+        let main_branch = self.get_main_branch()?;
+        let main_branch_oid = main_branch.get_oid()?;
+        match main_branch_oid {
+            Some(main_branch_oid) => Ok(main_branch_oid),
             None => eyre::bail!(
                 "Could not find commit pointed to by main branch: {:?}",
-                main_branch_reference.get_name()?
+                main_branch.get_name()?,
             ),
         }
     }
@@ -108,15 +102,6 @@ Either create it, or update the main branch setting by running:
                     .insert(reference_name);
             }
         }
-
-        // The main branch may be a remote branch, in which case it won't be
-        // returned in the iteration above.
-        let main_branch_name = self.get_main_branch_reference()?.get_name()?;
-        let main_branch_oid = self.get_main_branch_oid()?;
-        result
-            .entry(main_branch_oid)
-            .or_insert_with(HashSet::new)
-            .insert(main_branch_name);
 
         Ok(result)
     }

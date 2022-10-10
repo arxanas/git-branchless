@@ -770,7 +770,7 @@ impl EventReplayer {
     ) -> eyre::Result<Self> {
         let (_effects, _progress) = effects.start_operation(OperationType::ProcessEvents);
 
-        let main_branch_reference_name = repo.get_main_branch_reference()?.get_name()?;
+        let main_branch_reference_name = repo.get_main_branch()?.get_reference_name()?;
         let mut result = EventReplayer::new(main_branch_reference_name);
         for event in event_log_db.get_events()? {
             result.process_event(&event);
@@ -1209,7 +1209,7 @@ impl EventReplayer {
         cursor: EventCursor,
         repo: &Repo,
     ) -> eyre::Result<NonZeroOid> {
-        let main_branch_reference_name = repo.get_main_branch_reference()?.get_name()?;
+        let main_branch_reference_name = repo.get_main_branch()?.get_reference_name()?;
         let main_branch_oid = self.get_cursor_branch_oid(cursor, &main_branch_reference_name)?;
         match main_branch_oid {
             Some(main_branch_oid) => Ok(main_branch_oid),
