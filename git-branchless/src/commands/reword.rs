@@ -314,7 +314,7 @@ fn resolve_commits_from_hashes<'repo>(
         revsets
     };
 
-    let commit_sets = match resolve_commits(effects, repo, dag, hashes) {
+    let commit_sets = match resolve_commits(effects, repo, dag, &hashes) {
         Ok(commit_sets) => commit_sets,
         Err(err) => {
             err.describe(effects)?;
