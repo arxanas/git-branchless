@@ -593,8 +593,7 @@ pub fn smartlog(
         if *show_hidden_commits {
             swap(&mut dag.obsolete_commits, &mut old_obsolete_commits);
         }
-        let observed_commits = match resolve_commits(effects, &repo, &mut dag, vec![revset.clone()])
-        {
+        let observed_commits = match resolve_commits(effects, &repo, &mut dag, &[revset.clone()]) {
             Ok(result) => match result.as_slice() {
                 [commit_set] => commit_set.clone(),
                 other => panic!(

@@ -35,7 +35,7 @@ pub fn submit(
         &references_snapshot,
     )?;
 
-    let commit_set = match resolve_commits(effects, &repo, &mut dag, vec![revset]) {
+    let commit_set = match resolve_commits(effects, &repo, &mut dag, &[revset]) {
         Ok(mut commit_sets) => commit_sets.pop().unwrap(),
         Err(err) => {
             err.describe(effects)?;

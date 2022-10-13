@@ -58,13 +58,13 @@ pub fn resolve_commits(
     effects: &Effects,
     repo: &Repo,
     dag: &mut Dag,
-    revsets: Vec<Revset>,
+    revsets: &[Revset],
 ) -> Result<Vec<CommitSet>, ResolveError> {
     let mut commit_sets = Vec::new();
     for Revset(revset) in revsets {
         // Handle syntax that's supported by Git, but which we haven't
         // implemented in the revset language.
-        if let Ok(Some(commit)) = repo.revparse_single_commit(&revset) {
+        if let Ok(Some(commit)) = repo.revparse_single_commit(revset) {
             let commit_set = CommitSet::from(commit.get_oid());
             dag.sync_from_oids(effects, repo, CommitSet::empty(), commit_set.clone())
                 .map_err(|err| ResolveError::OtherError { source: err })?;
@@ -72,7 +72,7 @@ pub fn resolve_commits(
             continue;
         }
 
-        let expr = parse(&revset).map_err(|err| ResolveError::ParseError {
+        let expr = parse(revset).map_err(|err| ResolveError::ParseError {
             expr: revset.clone(),
             source: err,
         })?;
