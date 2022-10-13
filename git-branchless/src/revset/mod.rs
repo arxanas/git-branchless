@@ -11,7 +11,7 @@ mod resolve;
 pub use ast::Expr;
 pub use eval::eval;
 pub use parser::parse;
-pub use resolve::resolve_commits;
+pub use resolve::{check_revset_syntax, resolve_commits};
 
 use lalrpop_util::lalrpop_mod;
 lalrpop_mod!(

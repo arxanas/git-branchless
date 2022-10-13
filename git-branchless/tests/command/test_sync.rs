@@ -135,19 +135,20 @@ fn test_sync_pull() -> eyre::Result<()> {
     original_repo.init_repo()?;
     original_repo.commit_file("test1", 1)?;
     original_repo.commit_file("test2", 2)?;
-    original_repo.run(&["checkout", "-b", "foo"])?;
-    original_repo.commit_file("test3", 3)?;
 
     original_repo.clone_repo_into(&cloned_repo, &["--branch", "master"])?;
     cloned_repo.init_repo_with_options(&GitInitOptions {
         make_initial_commit: false,
         ..Default::default()
     })?;
-    cloned_repo.run(&["checkout", "foo"])?;
+    cloned_repo.detach_head()?;
 
+    original_repo.commit_file("test3", 3)?;
     original_repo.commit_file("test4", 4)?;
-    original_repo.run(&["checkout", "master"])?;
     original_repo.commit_file("test5", 5)?;
+    cloned_repo.commit_file("test3", 3)?;
+    cloned_repo.commit_file("test4", 4)?;
+    cloned_repo.commit_file("test6", 6)?;
 
     {
         let (stdout, _stderr) = cloned_repo.run(&["smartlog"])?;
@@ -155,7 +156,11 @@ fn test_sync_pull() -> eyre::Result<()> {
         :
         O 96d1c37 (master) create test2.txt
         |
-        @ 70deb1e (> foo) create test3.txt
+        o 70deb1e create test3.txt
+        |
+        o 355e173 create test4.txt
+        |
+        @ 6ac5566 create test6.txt
         "###);
     }
 
@@ -164,17 +169,13 @@ fn test_sync_pull() -> eyre::Result<()> {
         let stdout: String = remove_nondeterministic_lines(stdout);
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> fetch --all
-        Fast-forwarding branch master to d2e18e3 create test5.txt
+        Fast-forwarding branch master to f81d55c create test5.txt
         Attempting rebase in-memory...
-        [1/1] Committed as: 8e521a1 create test3.txt
-        branchless: processing 1 update: branch foo
+        [1/1] Committed as: 2831fb5 create test6.txt
         branchless: processing 1 rewritten commit
-        branchless: running command: <git-executable> checkout foo
-        Your branch and 'origin/foo' have diverged,
-        and have 2 and 2 different commits each, respectively.
-          (use "git pull" to merge the remote branch into yours)
+        branchless: running command: <git-executable> checkout 2831fb5864ee099dc3e448a38dcb3c8527149510
         In-memory rebase succeeded.
-        Synced 70deb1e create test3.txt
+        Synced 6ac5566 create test6.txt
         "###);
     }
 
@@ -182,9 +183,9 @@ fn test_sync_pull() -> eyre::Result<()> {
         let (stdout, _stderr) = cloned_repo.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
         :
-        O d2e18e3 (master) create test5.txt
+        O f81d55c (master) create test5.txt
         |
-        @ 8e521a1 (> foo) create test3.txt
+        @ 2831fb5 create test6.txt
         "###);
     }
 
@@ -193,8 +194,8 @@ fn test_sync_pull() -> eyre::Result<()> {
         let stdout: String = remove_nondeterministic_lines(stdout);
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> fetch --all
-        Not updating branch master at d2e18e3 create test5.txt
-        Not moving up-to-date stack at 8e521a1 create test3.txt
+        Not updating branch master at f81d55c create test5.txt
+        Not moving up-to-date stack at 2831fb5 create test6.txt
         "###);
     }
 

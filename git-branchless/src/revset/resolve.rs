@@ -6,6 +6,7 @@ use lib::git::Repo;
 use tracing::instrument;
 
 use crate::opts::Revset;
+use crate::revset::Expr;
 
 use super::eval::EvalError;
 use super::parser::ParseError;
@@ -48,6 +49,17 @@ impl ResolveError {
     }
 }
 
+/// Check for syntax errors in the provided revsets without actually evaluating them.
+pub fn check_revset_syntax(repo: &Repo, revsets: &[Revset]) -> Result<(), ParseError> {
+    for Revset(revset) in revsets {
+        if let Ok(Some(_)) = repo.revparse_single_commit(revset) {
+            continue;
+        }
+        let _expr: Expr = parse(revset)?;
+    }
+    Ok(())
+}
+
 /// Parse strings which refer to commits, such as:
 ///
 /// - Full OIDs.
@@ -62,6 +74,8 @@ pub fn resolve_commits(
 ) -> Result<Vec<CommitSet>, ResolveError> {
     let mut commit_sets = Vec::new();
     for Revset(revset) in revsets {
+        // NB: also update `check_parse_revsets`
+
         // Handle syntax that's supported by Git, but which we haven't
         // implemented in the revset language.
         if let Ok(Some(commit)) = repo.revparse_single_commit(revset) {

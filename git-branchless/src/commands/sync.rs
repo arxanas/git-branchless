@@ -13,7 +13,7 @@ use lib::util::ExitCode;
 use rayon::{ThreadPool, ThreadPoolBuilder};
 
 use crate::opts::{MoveOptions, Revset};
-use crate::revset::resolve_commits;
+use crate::revset::{check_revset_syntax, resolve_commits};
 use lib::core::config::get_restack_preserve_timestamps;
 use lib::core::dag::{commit_set_to_vec, sorted_commit_set, union_all, CommitSet, Dag};
 use lib::core::effects::{Effects, OperationType};
@@ -59,37 +59,16 @@ pub fn sync(
     let now = SystemTime::now();
     let event_tx_id = event_log_db.make_transaction_id(now, "sync fetch")?;
 
+    // Try to surface parse errors early, before potentially doing commit graph or network
+    // side-effects.
+    check_revset_syntax(&repo, &revsets)?;
+
     if pull {
         let exit_code = git_run_info.run(effects, Some(event_tx_id), &["fetch", "--all"])?;
         if !exit_code.is_success() {
             return Ok(exit_code);
         }
     }
-
-    let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
-    let event_cursor = event_replayer.make_default_cursor();
-    let references_snapshot = repo.get_references_snapshot()?;
-    let mut dag = Dag::open_and_sync(
-        effects,
-        &repo,
-        &event_replayer,
-        event_cursor,
-        &references_snapshot,
-    )?;
-
-    let commit_sets = match resolve_commits(effects, &repo, &mut dag, &revsets) {
-        Ok(commit_sets) => commit_sets,
-        Err(err) => {
-            err.describe(effects)?;
-            return Ok(ExitCode(1));
-        }
-    };
-    let root_commit_oids = if commit_sets.is_empty() {
-        get_stack_roots(&dag)?
-    } else {
-        dag.query().roots(union_all(&commit_sets))?
-    };
-    let root_commits = sorted_commit_set(&repo, &dag, &root_commit_oids)?;
 
     let MoveOptions {
         force_rewrite_public_commits,
@@ -128,7 +107,6 @@ pub fn sync(
             effects,
             git_run_info,
             &repo,
-            &mut dag,
             &event_log_db,
             &build_options,
             &execute_options,
@@ -140,21 +118,18 @@ pub fn sync(
         }
     }
 
-    // The main branch OID might have changed since we synced with `master`, so read it again.
-    let main_branch_oid = repo.get_main_branch_oid()?;
+    // The main branch might have changed since we synced with `master`, so read its information again.
+
     execute_sync_plans(
         effects,
         git_run_info,
         &repo,
         &event_log_db,
-        &mut dag,
-        &root_commit_oids,
-        root_commits,
-        main_branch_oid,
         &build_options,
         &execute_options,
         &thread_pool,
         &repo_pool,
+        revsets,
     )
 }
 
@@ -162,13 +137,23 @@ fn execute_main_branch_sync_plan(
     effects: &Effects,
     git_run_info: &GitRunInfo,
     repo: &Repo,
-    dag: &mut Dag,
     event_log_db: &EventLogDb,
     build_options: &BuildRebasePlanOptions,
     execute_options: &ExecuteRebasePlanOptions,
     thread_pool: &ThreadPool,
     repo_pool: &RepoPool,
 ) -> eyre::Result<ExitCode> {
+    let event_replayer = EventReplayer::from_event_log_db(effects, repo, event_log_db)?;
+    let event_cursor = event_replayer.make_default_cursor();
+    let references_snapshot = repo.get_references_snapshot()?;
+    let mut dag = Dag::open_and_sync(
+        effects,
+        repo,
+        &event_replayer,
+        event_cursor,
+        &references_snapshot,
+    )?;
+
     let local_main_branch = repo.get_main_branch()?;
     let local_main_branch_oid = local_main_branch.get_oid()?;
     let local_main_branch_reference_name = local_main_branch.get_reference_name()?;
@@ -251,7 +236,7 @@ fn execute_main_branch_sync_plan(
         ..build_options.clone()
     };
     let permissions = match RebasePlanPermissions::verify_rewrite_set(
-        dag,
+        &dag,
         &build_options,
         &local_main_branch_commits,
     )? {
@@ -261,7 +246,7 @@ fn execute_main_branch_sync_plan(
             return Ok(ExitCode(1));
         }
     };
-    let mut builder = RebasePlanBuilder::new(dag, permissions);
+    let mut builder = RebasePlanBuilder::new(&dag, permissions);
     let local_main_branch_roots = dag.query().roots(local_main_branch_commits)?;
     let root_commit_oid = match commit_set_to_vec(&local_main_branch_roots)?
         .into_iter()
@@ -298,24 +283,46 @@ fn execute_sync_plans(
     git_run_info: &GitRunInfo,
     repo: &Repo,
     event_log_db: &EventLogDb,
-    dag: &mut Dag,
-    root_commit_oids: &CommitSet,
-    root_commits: Vec<Commit>,
-    main_branch_oid: NonZeroOid,
     build_options: &BuildRebasePlanOptions,
     execute_options: &ExecuteRebasePlanOptions,
     thread_pool: &ThreadPool,
     repo_pool: &ResourcePool<RepoResource>,
+    revsets: Vec<Revset>,
 ) -> eyre::Result<ExitCode> {
+    let event_replayer = EventReplayer::from_event_log_db(effects, repo, event_log_db)?;
+    let event_cursor = event_replayer.make_default_cursor();
+    let references_snapshot = repo.get_references_snapshot()?;
+    let mut dag = Dag::open_and_sync(
+        effects,
+        repo,
+        &event_replayer,
+        event_cursor,
+        &references_snapshot,
+    )?;
+    let commit_sets = match resolve_commits(effects, repo, &mut dag, &revsets) {
+        Ok(commit_sets) => commit_sets,
+        Err(err) => {
+            err.describe(effects)?;
+            return Ok(ExitCode(1));
+        }
+    };
+    let main_branch_oid = repo.get_main_branch_oid()?;
+    let root_commit_oids = if commit_sets.is_empty() {
+        get_stack_roots(&dag)?
+    } else {
+        dag.query().roots(union_all(&commit_sets))?
+    };
+
+    let root_commits = sorted_commit_set(repo, &dag, &root_commit_oids)?;
     let permissions =
-        match RebasePlanPermissions::verify_rewrite_set(dag, build_options, root_commit_oids)? {
+        match RebasePlanPermissions::verify_rewrite_set(&dag, build_options, &root_commit_oids)? {
             Ok(permissions) => permissions,
             Err(err) => {
                 err.describe(effects, repo)?;
                 return Ok(ExitCode(1));
             }
         };
-    let builder = RebasePlanBuilder::new(dag, permissions);
+    let builder = RebasePlanBuilder::new(&dag, permissions);
 
     let root_commit_oids = root_commits
         .into_iter()
