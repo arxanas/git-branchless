@@ -65,7 +65,7 @@ impl Default for GitRunOpts {
 #[must_use]
 pub struct GitRunResult {
     /// The exit code of the process.
-    pub exit_code: i32,
+    pub exit_code: ExitCode,
 
     /// The stdout contents written by the invocation.
     pub stdout: Vec<u8>,
@@ -302,15 +302,16 @@ impl GitRunInfo {
         let output = child
             .wait_with_output()
             .wrap_err("Spawning Git subprocess")?;
+        let exit_code = ExitCode(output.status.code().unwrap_or(1).try_into()?);
         let result = GitRunResult {
             // On Unix, if the child process was terminated by a signal, we need to call
             // some Unix-specific functions to access the signal that terminated it. For
             // simplicity, just return `1` in those cases.
-            exit_code: output.status.code().unwrap_or(1),
+            exit_code,
             stdout: output.stdout,
             stderr: output.stderr,
         };
-        if treat_git_failure_as_error && !output.status.success() {
+        if treat_git_failure_as_error && !exit_code.is_success() {
             eyre::bail!(
                 "Git subprocess failed:\nArgs: {:?}\nResult: {:?}",
                 &args,

@@ -119,7 +119,7 @@ pub fn get_editor(git_run_info: &GitRunInfo, repo: &Repo) -> eyre::Result<Option
     if let Ok(result) =
         git_run_info.run_silent(repo, None, &["var", "GIT_EDITOR"], GitRunOpts::default())
     {
-        if result.exit_code == 0 {
+        if result.exit_code.is_success() {
             let editor =
                 std::str::from_utf8(&result.stdout).context("Decoding git var output as UTF-8")?;
             let editor = editor.trim_end();

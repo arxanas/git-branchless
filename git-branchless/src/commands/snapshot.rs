@@ -1,7 +1,6 @@
 //! Manage working copy snapshots. These commands are primarily intended for
 //! testing and debugging.
 
-use std::convert::TryInto;
 use std::fmt::Write;
 use std::time::SystemTime;
 
@@ -40,7 +39,7 @@ pub fn create(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<Exit
         )
         .wrap_err("Discarding working copy")?;
 
-    if exit_code != 0 {
+    if !exit_code.is_success() {
         writeln!(
             effects.get_output_stream(),
             "{}",
@@ -49,10 +48,8 @@ pub fn create(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<Exit
                 BaseColor::Red.light()
             ))?
         )?;
-        return Ok(ExitCode(exit_code.try_into()?));
     }
-
-    Ok(ExitCode(0))
+    Ok(exit_code)
 }
 
 pub fn restore(
