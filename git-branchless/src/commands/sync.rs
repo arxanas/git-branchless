@@ -169,10 +169,29 @@ fn execute_main_branch_sync_plan(
     thread_pool: &ThreadPool,
     repo_pool: &RepoPool,
 ) -> eyre::Result<ExitCode> {
-    let main_branch = repo.get_main_branch()?;
-    let upstream_main_branch = match main_branch.get_upstream_branch()? {
+    let local_main_branch = repo.get_main_branch()?;
+    let local_main_branch_oid = local_main_branch.get_oid()?;
+    let local_main_branch_reference_name = local_main_branch.get_reference_name()?;
+    let local_main_branch_description = effects.get_glyphs().render(
+        StyledStringBuilder::new()
+            .append_styled(
+                CategorizedReferenceName::new(&local_main_branch_reference_name)
+                    .friendly_describe(),
+                BaseColor::Green.dark(),
+            )
+            .build(),
+    )?;
+
+    let upstream_main_branch = match local_main_branch.get_upstream_branch()? {
         Some(upstream_main_branch) => upstream_main_branch,
-        None => return Ok(ExitCode(0)),
+        None => {
+            writeln!(
+                effects.get_output_stream(),
+                "{} does not track an upstream branch, so not pulling.",
+                local_main_branch_description
+            )?;
+            return Ok(ExitCode(0));
+        }
     };
     let upstream_main_branch_oid = match upstream_main_branch.get_oid()? {
         Some(upstream_main_branch_oid) => upstream_main_branch_oid,
@@ -185,27 +204,33 @@ fn execute_main_branch_sync_plan(
         CommitSet::empty(),
     )?;
     let local_main_branch_commits = dag.query().only(
-        main_branch.get_oid()?.into_iter().collect(),
+        local_main_branch_oid.into_iter().collect(),
         CommitSet::from(upstream_main_branch_oid),
     )?;
-
-    let main_branch_reference_name = main_branch.get_reference_name()?;
-    let branch_description = effects.get_glyphs().render(
-        StyledStringBuilder::new()
-            .append_styled(
-                CategorizedReferenceName::new(&main_branch_reference_name).friendly_describe(),
-                BaseColor::Green.dark(),
-            )
-            .build(),
-    )?;
     if local_main_branch_commits.is_empty()? {
-        writeln!(
-            effects.get_output_stream(),
-            "Fast-forwarding {}",
-            branch_description
-        )?;
+        if local_main_branch_oid == Some(upstream_main_branch_oid) {
+            let local_main_branch_commit = repo.find_commit_or_fail(upstream_main_branch_oid)?;
+            writeln!(
+                effects.get_output_stream(),
+                "Not updating {} at {}",
+                local_main_branch_description,
+                effects
+                    .get_glyphs()
+                    .render(local_main_branch_commit.friendly_describe(effects.get_glyphs())?)?,
+            )?;
+        } else {
+            let remote_main_branch_commit = repo.find_commit_or_fail(upstream_main_branch_oid)?;
+            writeln!(
+                effects.get_output_stream(),
+                "Fast-forwarding {} to {}",
+                local_main_branch_description,
+                effects
+                    .get_glyphs()
+                    .render(remote_main_branch_commit.friendly_describe(effects.get_glyphs())?)?,
+            )?;
+        }
         repo.create_reference(
-            &main_branch_reference_name,
+            &local_main_branch_reference_name,
             upstream_main_branch_oid,
             true,
             "sync",
@@ -215,7 +240,7 @@ fn execute_main_branch_sync_plan(
         writeln!(
             effects.get_output_stream(),
             "Syncing {}",
-            branch_description
+            local_main_branch_description
         )?;
     }
 

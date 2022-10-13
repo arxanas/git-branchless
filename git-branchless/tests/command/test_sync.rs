@@ -161,17 +161,10 @@ fn test_sync_pull() -> eyre::Result<()> {
 
     {
         let (stdout, _stderr) = cloned_repo.run(&["sync", "-p"])?;
-        let stdout: String = stdout
-            .lines()
-            .into_iter()
-            .filter(|line|
-                // The `Fetching <remote>` lines seems to be gone as of Git v2.36.
-                !line.contains("Fetching"))
-            .map(|line| format!("{}\n", line))
-            .collect();
+        let stdout: String = remove_nondeterministic_lines(stdout);
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> fetch --all
-        Fast-forwarding branch master
+        Fast-forwarding branch master to d2e18e3 create test5.txt
         Attempting rebase in-memory...
         [1/1] Committed as: 8e521a1 create test3.txt
         branchless: processing 1 update: branch foo
@@ -192,6 +185,16 @@ fn test_sync_pull() -> eyre::Result<()> {
         O d2e18e3 (master) create test5.txt
         |
         @ 8e521a1 (> foo) create test3.txt
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = cloned_repo.run(&["sync", "-p"])?;
+        let stdout: String = remove_nondeterministic_lines(stdout);
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> fetch --all
+        Not updating branch master at d2e18e3 create test5.txt
+        Not moving up-to-date stack at 8e521a1 create test3.txt
         "###);
     }
 
