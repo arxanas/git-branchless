@@ -513,3 +513,23 @@ fn test_snapshot_restore_unborn_head() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_snapshot_submodules() -> eyre::Result<()> {
+    let git1 = make_git()?;
+    if !git1.supports_submodules_for_testing() {
+        return Ok(());
+    }
+    git1.init_repo()?;
+    let git2 = make_git()?;
+    git2.init_repo()?;
+
+    git1.run(&[
+        "submodule",
+        "add",
+        &format!("file://{}", git2.repo_path.to_str().unwrap()),
+        "nested-submodule",
+    ])?;
+
+    Ok(())
+}

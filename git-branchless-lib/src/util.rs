@@ -22,9 +22,9 @@ impl ExitCode {
 pub fn get_from_path(exe_name: &str) -> Option<PathBuf> {
     std::env::var_os("PATH").and_then(|paths| {
         std::env::split_paths(&paths).find_map(|dir| {
-            let bash_path = dir.join(exe_name);
-            if bash_path.is_file() {
-                Some(bash_path)
+            let exe_path = dir.join(exe_name);
+            if exe_path.is_file() {
+                Some(exe_path)
             } else {
                 None
             }
@@ -52,4 +52,15 @@ pub fn get_sh() -> Option<PathBuf> {
         }
     }
     get_from_path(exe_name)
+}
+
+/// Get the path to a directory containing tools necessary to run `git submodule` commands, such as
+/// `git submodule add`. Without this path, submodule commands might fail with errors like
+/// `basename` not being found.
+///
+/// Example of this issue: https://www.mail-archive.com/bug-guix@gnu.org/msg16085.html
+pub fn get_submodule_tools_path() -> Option<PathBuf> {
+    let basename_path = get_from_path("basename")?;
+    let basename_dir = basename_path.parent()?;
+    Some(basename_dir.to_owned())
 }

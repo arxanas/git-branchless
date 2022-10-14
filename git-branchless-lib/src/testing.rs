@@ -16,7 +16,7 @@ use crate::core::config::env_vars::{
     TEST_SEPARATE_COMMAND_BINARIES,
 };
 use crate::git::{GitRunInfo, GitVersion, NonZeroOid, Repo};
-use crate::util::get_sh;
+use crate::util::{get_sh, get_submodule_tools_path};
 
 use color_eyre::Help;
 use eyre::Context;
@@ -141,18 +141,21 @@ impl Git {
             .expect("Unable to find git-branchless path parent");
         let bash = get_sh().expect("bash missing?");
         let bash_path = bash.parent().unwrap();
-        std::env::join_paths(
-            vec![
-                // For Git to be able to launch `git-branchless`.
-                branchless_path.as_os_str(),
-                // For our hooks to be able to call back into `git`.
-                self.git_exec_path.as_os_str(),
-                // For branchless to manually invoke bash when needed.
-                bash_path.as_os_str(),
-            ]
-            .into_iter(),
-        )
-        .expect("joining paths")
+        let mut paths = vec![
+            // For Git to be able to launch `git-branchless`.
+            branchless_path,
+            // For our hooks to be able to call back into `git`.
+            self.git_exec_path.as_ref(),
+            // For branchless to manually invoke bash when needed.
+            bash_path,
+        ];
+
+        let submodule_tools_path = get_submodule_tools_path();
+        if let Some(submodule_tools_path) = submodule_tools_path.as_deref() {
+            paths.push(submodule_tools_path);
+        }
+
+        std::env::join_paths(paths).expect("joining paths")
     }
 
     /// Get the environment variables needed to run git in the test environment.
@@ -533,6 +536,12 @@ then you can only run tests in the main `git-branchless` and \
     pub fn supports_reference_transactions(&self) -> eyre::Result<bool> {
         let version = self.get_version()?;
         Ok(version >= GitVersion(2, 29, 0))
+    }
+
+    /// Determine if we can instantiate Git submoules in tests.
+    #[instrument]
+    pub fn supports_submodules_for_testing(&self) -> bool {
+        cfg!(unix)
     }
 
     /// Determine if the `--committer-date-is-author-date` option to `git rebase
