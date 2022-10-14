@@ -549,6 +549,11 @@ fn test_snapshot_submodules() -> eyre::Result<()> {
         &format!("file://{}", git2.repo_path.to_str().unwrap()),
         "nested-submodule",
     ])?;
+    // {
+    //     let (stdout, stderr) = git1.run(&["branchless", "snapshot", "create"])?;
+    //     insta::assert_snapshot!(stderr, @"");
+    //     insta::assert_snapshot!(stdout, @"");
+    // }
 
     Ok(())
 }
