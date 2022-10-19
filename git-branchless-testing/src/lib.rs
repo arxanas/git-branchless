@@ -485,19 +485,34 @@ then you can only run tests in the main `git-branchless` and \
         Ok(())
     }
 
-    /// Commit a file with default contents. The `time` argument is used to set
-    /// the commit timestamp, which is factored into the commit hash.
+    /// Get a diff of a commit with the a/b file header removed. Only works for commits
+    /// with a single file.
     #[instrument]
-    pub fn commit_file_with_contents(
+    pub fn get_trimmed_diff(&self, file: &str, commit: &str) -> eyre::Result<String> {
+        let (stdout, _stderr) = self.run(&["show", "--pretty=format:", commit])?;
+        let split_on = format!("+++ b/{file}\n");
+        match stdout.as_str().split_once(split_on.as_str()) {
+            Some((_, diff)) => Ok(diff.to_string()),
+            None => eyre::bail!("Error trimming diff. Could not split on '{split_on}'"),
+        }
+    }
+
+    /// Commit a file with given contents and message. The `time` argument is
+    /// used to set the commit timestamp, which is factored into the commit
+    /// hash. The filename is always appended to the message prefix.
+    #[instrument]
+    pub fn commit_file_with_contents_and_message(
         &self,
         name: &str,
         time: isize,
         contents: &str,
+        message_prefix: &str,
     ) -> eyre::Result<NonZeroOid> {
+        let message = format!("{message_prefix} {name}.txt");
         self.write_file_txt(name, contents)?;
         self.run(&["add", "."])?;
         self.run_with_options(
-            &["commit", "-m", &format!("create {name}.txt")],
+            &["commit", "-m", &message],
             &GitRunOptions {
                 time,
                 ..Default::default()
@@ -510,6 +525,19 @@ then you can only run tests in the main `git-branchless` and \
             .oid
             .expect("Could not find OID for just-created commit");
         Ok(oid)
+    }
+
+    /// Commit a file with given contents and a default message. The `time`
+    /// argument is used to set the commit timestamp, which is factored into the
+    /// commit hash.
+    #[instrument]
+    pub fn commit_file_with_contents(
+        &self,
+        name: &str,
+        time: isize,
+        contents: &str,
+    ) -> eyre::Result<NonZeroOid> {
+        self.commit_file_with_contents_and_message(name, time, contents, "create")
     }
 
     /// Commit a file with default contents. The `time` argument is used to set
