@@ -111,3 +111,46 @@ fn test_test_abort() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_test_cached_results() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    git.init_repo()?;
+    git.detach_head()?;
+    git.commit_file("test2", 2)?;
+    git.commit_file("test3", 3)?;
+    git.run(&["revert", "HEAD"])?;
+
+    {
+        let (stdout, _stderr) = git.run(&["test", "run", "-c", "exit 0"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> diff --quiet
+        Calling Git for on-disk rebase...
+        branchless: running command: <git-executable> rebase --continue
+        Ran exit 0 on 3 commits:
+        ✓ Passed: fe65c1f create test2.txt
+        ✓ Passed: 0206717 create test3.txt
+        ✓ Passed (cached): 1b0d484 Revert "create test3.txt"
+        3 passed, 0 failed, 0 skipped
+        branchless: running command: <git-executable> rebase --abort
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["test", "run", "-c", "exit 0"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> diff --quiet
+        Calling Git for on-disk rebase...
+        branchless: running command: <git-executable> rebase --continue
+        Ran exit 0 on 3 commits:
+        ✓ Passed (cached): fe65c1f create test2.txt
+        ✓ Passed (cached): 0206717 create test3.txt
+        ✓ Passed (cached): 1b0d484 Revert "create test3.txt"
+        3 passed, 0 failed, 0 skipped
+        branchless: running command: <git-executable> rebase --abort
+        "###);
+    }
+
+    Ok(())
+}
