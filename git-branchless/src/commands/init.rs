@@ -74,6 +74,7 @@ const ALL_ALIASES: &[(&str, &str)] = &[
     ("submit", "submit"),
     ("sw", "switch"),
     ("sync", "sync"),
+    ("test", "test"),
     ("undo", "undo"),
     ("unhide", "unhide"),
 ];

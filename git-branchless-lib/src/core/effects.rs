@@ -41,6 +41,8 @@ pub enum OperationType {
     RepairBranches,
     RepairCommits,
     RunGitCommand(Arc<String>),
+    RunTests(Arc<String>),
+    RunTestOnCommit(Arc<String>),
     SortCommits,
     SyncCommits,
     UpdateCommitGraph,
@@ -77,6 +79,8 @@ impl ToString for OperationType {
             OperationType::RunGitCommand(command) => {
                 return format!("Running Git command: {}", &command)
             }
+            OperationType::RunTests(command) => return format!("Running tests: {command}"),
+            OperationType::RunTestOnCommit(commit) => return format!("Testing {commit}"),
             OperationType::SortCommits => "Sorting commits",
             OperationType::SyncCommits => "Syncing commit stacks",
             OperationType::UpdateCommitGraph => "Updating commit graph",
