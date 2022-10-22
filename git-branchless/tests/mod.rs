@@ -22,6 +22,7 @@ mod command {
     mod test_snapshot;
     mod test_submit;
     mod test_sync;
+    mod test_test;
     mod test_undo;
     mod test_wrap;
 }

@@ -17,6 +17,7 @@ mod smartlog;
 mod snapshot;
 mod submit;
 mod sync;
+mod test;
 mod undo;
 mod wrap;
 
@@ -42,11 +43,11 @@ use tracing_subscriber::fmt as tracing_fmt;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
 
-use crate::opts::ColorSetting;
 use crate::opts::Command;
 use crate::opts::Opts;
 use crate::opts::SnapshotSubcommand;
 use crate::opts::WrappedCommand;
+use crate::opts::{ColorSetting, TestSubcommand};
 use lib::core::config::env_vars::get_path_to_git;
 use lib::core::effects::Effects;
 use lib::core::formatting::Glyphs;
@@ -55,6 +56,7 @@ use lib::git::NonZeroOid;
 
 use self::reword::InitialCommitMessages;
 use self::smartlog::SmartlogOptions;
+use self::test::TestOptions;
 
 fn rewrite_args(args: Vec<OsString>) -> Vec<OsString> {
     let first_arg = match args.first() {
@@ -330,6 +332,12 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
             move_options,
             revsets,
         } => sync::sync(&effects, &git_run_info, pull, &move_options, revsets)?,
+
+        Command::Test { subcommand } => match subcommand {
+            TestSubcommand::Run { command, commits } => {
+                test::run(&effects, &git_run_info, &TestOptions { command }, commits)?
+            }
+        },
 
         Command::Undo { interactive, yes } => {
             undo::undo(&effects, &git_run_info, interactive, yes)?

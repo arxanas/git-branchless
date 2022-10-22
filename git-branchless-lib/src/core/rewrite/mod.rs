@@ -13,8 +13,8 @@ pub use execute::{
     MergeConflictInfo, MergeConflictRemediation,
 };
 pub use plan::{
-    BuildRebasePlanError, BuildRebasePlanOptions, RebasePlan, RebasePlanBuilder,
-    RebasePlanPermissions,
+    BuildRebasePlanError, BuildRebasePlanOptions, OidOrLabel, RebaseCommand, RebasePlan,
+    RebasePlanBuilder, RebasePlanPermissions,
 };
 use tracing::instrument;
 

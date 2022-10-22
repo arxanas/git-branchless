@@ -436,6 +436,7 @@ mod in_memory {
                     | RebaseCommand::CreateLabel { .. }
                     | RebaseCommand::Reset { .. }
                     | RebaseCommand::Pick { .. }
+                    | RebaseCommand::Break
                     | RebaseCommand::RegisterExtraPostRewriteHook
                     | RebaseCommand::DetectEmptyCommit { .. }
                     | RebaseCommand::SkipUpstreamAppliedCommit { .. } => None,
@@ -482,6 +483,7 @@ mod in_memory {
             .filter(|command| match command {
                 RebaseCommand::CreateLabel { .. }
                 | RebaseCommand::Reset { .. }
+                | RebaseCommand::Break
                 | RebaseCommand::RegisterExtraPostRewriteHook
                 | RebaseCommand::DetectEmptyCommit { .. } => false,
                 RebaseCommand::Pick { .. }
@@ -727,6 +729,10 @@ mod in_memory {
                         commit_num,
                         commit_description
                     )?;
+                }
+
+                RebaseCommand::Break => {
+                    eyre::bail!("`break` not supported for in-memory rebases");
                 }
 
                 RebaseCommand::SkipUpstreamAppliedCommit { commit_oid } => {

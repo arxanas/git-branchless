@@ -18,9 +18,13 @@ use crate::core::rewrite::{RepoPool, RepoResource};
 use crate::core::task::ResourcePool;
 use crate::git::{Commit, NonZeroOid, PatchId, Repo};
 
+/// Represents the target for certain [`RebaseCommand`]s.
 #[derive(Debug)]
 pub enum OidOrLabel {
+    /// A commit hash to check out directly.
     Oid(NonZeroOid),
+
+    /// A label created previously with [`RebaseCommand::CreateLabel`].
     Label(String),
 }
 
@@ -38,18 +42,31 @@ impl Display for OidOrLabel {
 pub enum RebaseCommand {
     /// Create a label (a reference stored in `refs/rewritten/`) pointing to the
     /// current rebase head for later use.
-    CreateLabel { label_name: String },
+    CreateLabel {
+        /// The new label name.
+        label_name: String,
+    },
 
     /// Move the rebase head to the provided label or commit.
-    Reset { target: OidOrLabel },
+    Reset {
+        /// The target to check out.
+        target: OidOrLabel,
+    },
 
     /// Apply the provided commit on top of the rebase head, and update the
     /// rebase head to point to the newly-applied commit.
     Pick {
+        /// The original commit, which contains the relevant metadata such as
+        /// the commit message.
         original_commit_oid: NonZeroOid,
+
+        /// The commit whose patch should be applied to the rebase head. This
+        /// will be different from [`original_commit_oid`] when a commit is
+        /// being replaced.
         commit_to_apply_oid: NonZeroOid,
     },
 
+    /// Merge two or more parent commits.
     Merge {
         /// If specified, the new merge commit will use this commit's message
         /// and tree, rather than attempting a new merge.
@@ -65,25 +82,40 @@ pub enum RebaseCommand {
         commits_to_merge: Vec<OidOrLabel>,
     },
 
+    /// Pause the rebase, to be resumed later. Only supported in on-disk
+    /// rebases.
+    Break,
+
     /// On-disk rebases only. Register that we want to run cleanup at the end of
     /// the rebase, during the `post-rewrite` hook.
     RegisterExtraPostRewriteHook,
 
     /// Determine if the current commit is empty. If so, reset the rebase head
     /// to its parent and record that it was empty in the `rewritten-list`.
-    DetectEmptyCommit { commit_oid: NonZeroOid },
+    DetectEmptyCommit {
+        /// The original commit. If the new commit is empty, then the original
+        /// commit will be recorded as skipped.
+        commit_oid: NonZeroOid,
+    },
 
     /// The commit that would have been applied to the rebase head was already
     /// applied upstream. Skip it and record it in the `rewritten-list`.
-    SkipUpstreamAppliedCommit { commit_oid: NonZeroOid },
+    SkipUpstreamAppliedCommit {
+        /// The original commit, which will be recorded as skipped.
+        commit_oid: NonZeroOid,
+    },
 }
 
 /// Represents a sequence of commands that can be executed to carry out a rebase
 /// operation.
 #[derive(Debug)]
 pub struct RebasePlan {
-    pub(super) first_dest_oid: NonZeroOid,
-    pub(super) commands: Vec<RebaseCommand>,
+    /// The first commit OID that will be checked out. This is necessary to
+    /// support on-disk rebases.
+    pub first_dest_oid: NonZeroOid,
+
+    /// The commands to run.
+    pub commands: Vec<RebaseCommand>,
 }
 
 impl ToString for RebaseCommand {
@@ -122,6 +154,7 @@ impl ToString for RebaseCommand {
                 // triggered.
                 format!("exec git show -s --format=%B {replacement_commit_oid} | git commit-tree -p {commit_oid} {other_parents} {replacement_commit_oid}^{{tree}}")
             }
+            RebaseCommand::Break => "break".to_string(),
             RebaseCommand::RegisterExtraPostRewriteHook => {
                 "exec git branchless hook-register-extra-post-rewrite-hook".to_string()
             }
@@ -1060,6 +1093,7 @@ impl<'a> RebasePlanBuilder<'a> {
             .filter_map(|rebase_command| match rebase_command {
                 RebaseCommand::CreateLabel { label_name: _ }
                 | RebaseCommand::Reset { target: _ }
+                | RebaseCommand::Break
                 | RebaseCommand::RegisterExtraPostRewriteHook
                 | RebaseCommand::DetectEmptyCommit { commit_oid: _ } => None,
                 RebaseCommand::Pick {

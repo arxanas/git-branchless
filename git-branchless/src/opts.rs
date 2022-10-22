@@ -497,6 +497,13 @@ pub enum Command {
         revsets: Vec<Revset>,
     },
 
+    /// Run a command on each commit in a given set and aggregate the results.
+    Test {
+        /// The subcommand to run.
+        #[clap(subcommand)]
+        subcommand: TestSubcommand,
+    },
+
     /// Browse or return to a previous state of the repository.
     Undo {
         /// Interactively browse through previous states of the repository
@@ -578,6 +585,21 @@ pub enum SnapshotSubcommand {
         /// The commit hash for the snapshot.
         #[clap(value_parser)]
         snapshot_oid: NonZeroOid,
+    },
+}
+
+/// `test` subcommands.
+#[derive(Parser)]
+pub enum TestSubcommand {
+    /// Run a given command on a set of commits and present the successes and failures.
+    Run {
+        /// The command to execute on each commit.
+        #[clap(value_parser, short = 'c', long = "command")]
+        command: String,
+
+        /// The set of commits to test.
+        #[clap(value_parser, default_value = "stack()")]
+        commits: Revset,
     },
 }
 
