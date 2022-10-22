@@ -1,12 +1,17 @@
-use std::fmt::Write;
+use std::error::Error;
+use std::fmt::Write as _;
+use std::fs::File;
 use std::io;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::str::FromStr;
 use std::sync::Arc;
 use std::time::SystemTime;
 
 use cursive::theme::{BaseColor, Effect, Style};
 use cursive::utils::markup::StyledString;
+use eyre::WrapErr;
 use lazy_static::lazy_static;
 use lib::core::dag::{sorted_commit_set, Dag};
 use lib::core::effects::{icons, Effects, OperationIcon, OperationType};
@@ -34,6 +39,12 @@ lazy_static! {
 
 pub struct TestOptions {
     pub command: String,
+}
+
+impl TestOptions {
+    fn make_command_slug(&self) -> String {
+        self.command.replace(&['/', ' '], "_")
+    }
 }
 
 pub fn run(
@@ -198,12 +209,36 @@ fn clear_abort_trap(
     Ok(exit_code)
 }
 
+/// The possible results of attempting to run a test.
 enum TestOutput {
+    /// Attempting to set up the working directory for the repository failed.
     CheckoutFailed,
+
+    /// Invoking the test command failed.
     SpawnTestFailed(io::Error),
+
+    /// The test command was invoked successfully, but was terminated by a signal, rather than
+    /// returning an exit code normally.
     TerminatedBySignal,
+
+    /// It appears that some other process is already running the test for a commit with the given
+    /// tree. (If that process crashed, then the test may need to be re-run.)
+    AlreadyInProgress,
+
+    /// Attempting to read cached data failed.
+    ReadCacheFailed(Box<dyn Error>),
+
+    /// The test failed and returned the provided (non-zero) exit code.
     Failed(i32),
+
+    /// Like [`Failed`], but the result was cached, so we didn't need to re-run the test.
+    FailedCached(i32),
+
+    /// The test passed and returned a successful exit code.
     Passed,
+
+    /// Like [`Passed`], but the result was cached, so we didn't need to re-run the test.
+    PassedCached,
 }
 
 impl TestOutput {
@@ -217,6 +252,7 @@ impl TestOutput {
                 )
                 .append(commit.friendly_describe(glyphs)?)
                 .build(),
+
             TestOutput::SpawnTestFailed(err) => StyledStringBuilder::new()
                 .append_styled(
                     format!("{} Failed to spawn test: {err}: ", icons::EXCLAMATION),
@@ -224,6 +260,7 @@ impl TestOutput {
                 )
                 .append(commit.friendly_describe(glyphs)?)
                 .build(),
+
             TestOutput::TerminatedBySignal => StyledStringBuilder::new()
                 .append_styled(
                     format!("{} Test command terminated by signal: ", icons::CROSS),
@@ -231,6 +268,23 @@ impl TestOutput {
                 )
                 .append(commit.friendly_describe(glyphs)?)
                 .build(),
+
+            TestOutput::AlreadyInProgress => StyledStringBuilder::new()
+                .append_styled(
+                    format!("{} Test already in progress? ", icons::EXCLAMATION),
+                    *STYLE_SKIPPED,
+                )
+                .append(commit.friendly_describe(glyphs)?)
+                .build(),
+
+            TestOutput::ReadCacheFailed(_) => StyledStringBuilder::new()
+                .append_styled(
+                    format!("{} Could not read cached test result: ", icons::EXCLAMATION),
+                    *STYLE_SKIPPED,
+                )
+                .append(commit.friendly_describe(glyphs)?)
+                .build(),
+
             TestOutput::Failed(exit_code) => StyledStringBuilder::new()
                 .append_styled(
                     format!("{} Failed with exit code {exit_code}: ", icons::CROSS),
@@ -238,8 +292,28 @@ impl TestOutput {
                 )
                 .append(commit.friendly_describe(glyphs)?)
                 .build(),
+
+            TestOutput::FailedCached(exit_code) => StyledStringBuilder::new()
+                .append_styled(
+                    format!(
+                        "{} Failed (cached) with exit code {exit_code}: ",
+                        icons::CROSS
+                    ),
+                    *STYLE_FAILURE,
+                )
+                .append(commit.friendly_describe(glyphs)?)
+                .build(),
+
             TestOutput::Passed => StyledStringBuilder::new()
                 .append_styled(format!("{} Passed: ", icons::CHECKMARK), *STYLE_SUCCESS)
+                .append(commit.friendly_describe(glyphs)?)
+                .build(),
+
+            TestOutput::PassedCached => StyledStringBuilder::new()
+                .append_styled(
+                    format!("{} Passed (cached): ", icons::CHECKMARK),
+                    *STYLE_SUCCESS,
+                )
                 .append(commit.friendly_describe(glyphs)?)
                 .build(),
         };
@@ -292,19 +366,22 @@ fn run_tests(
                     match prepare_working_directory(git_run_info, repo, event_tx_id, commit)? {
                         None => TestOutput::CheckoutFailed,
                         Some(working_directory) => {
-                            test_commit(&working_directory, &shell_path, command, commit)?
+                            test_commit(repo, &working_directory, &shell_path, options, commit)?
                         }
                     };
                 let text = output.describe(&effects, commit)?;
                 progress.notify_status(
                     match output {
-                        TestOutput::CheckoutFailed | TestOutput::SpawnTestFailed(_) => {
-                            OperationIcon::Warning
-                        }
-                        TestOutput::TerminatedBySignal | TestOutput::Failed(_) => {
-                            OperationIcon::Failure
-                        }
-                        TestOutput::Passed => OperationIcon::Success,
+                        TestOutput::CheckoutFailed
+                        | TestOutput::SpawnTestFailed(_)
+                        | TestOutput::AlreadyInProgress
+                        | TestOutput::ReadCacheFailed(_) => OperationIcon::Warning,
+
+                        TestOutput::TerminatedBySignal
+                        | TestOutput::Failed(_)
+                        | TestOutput::FailedCached(_) => OperationIcon::Failure,
+
+                        TestOutput::Passed | TestOutput::PassedCached => OperationIcon::Success,
                     },
                     effects.get_glyphs().render(text)?,
                 );
@@ -343,9 +420,13 @@ fn run_tests(
         match output {
             TestOutput::CheckoutFailed
             | TestOutput::SpawnTestFailed(_)
+            | TestOutput::AlreadyInProgress
+            | TestOutput::ReadCacheFailed(_)
             | TestOutput::TerminatedBySignal => num_skipped += 1,
-            TestOutput::Failed(_) => num_failed += 1,
-            TestOutput::Passed => num_passed += 1,
+
+            TestOutput::Failed(_) | TestOutput::FailedCached(_) => num_failed += 1,
+
+            TestOutput::Passed | TestOutput::PassedCached => num_passed += 1,
         }
     }
 
@@ -396,18 +477,58 @@ fn prepare_working_directory(
 }
 
 fn test_commit(
+    repo: &Repo,
     working_directory: &Path,
     shell_path: &Path,
-    command: &str,
-    _commit: &Commit,
+    options: &TestOptions,
+    commit: &Commit,
 ) -> eyre::Result<TestOutput> {
+    let test_output_dir = repo.get_test_dir();
+    let command_dir = test_output_dir.join(options.make_command_slug());
+    std::fs::create_dir_all(&command_dir)
+        .wrap_err_with(|| format!("Creating command directory {command_dir:?}"))?;
+
+    let tree_oid = commit.get_tree()?.get_oid();
+    let tree_dir = command_dir.join(tree_oid.to_string());
+    std::fs::create_dir_all(&tree_dir)
+        .wrap_err_with(|| format!("Creating tree directory {tree_dir:?}"))?;
+    let exit_code_path = tree_dir.join("exit_code");
+    let stdout_path = tree_dir.join("stdout");
+    let stderr_path = tree_dir.join("stderr");
+
+    // Try to create the exit code file atomically.
+    let mut exit_code_file = match File::options()
+        .create_new(true)
+        .write(true)
+        .open(&exit_code_path)
+    {
+        Ok(exit_code_file) => exit_code_file,
+        Err(_) => {
+            return match std::fs::read_to_string(&exit_code_path) {
+                Ok(contents) if contents.is_empty() => Ok(TestOutput::AlreadyInProgress),
+                Ok(contents) => match i32::from_str(contents.trim()) {
+                    Ok(cached_exit_code) => match cached_exit_code {
+                        0 => Ok(TestOutput::PassedCached),
+                        cached_exit_code => Ok(TestOutput::FailedCached(cached_exit_code)),
+                    },
+                    Err(err) => Ok(TestOutput::ReadCacheFailed(Box::new(err))),
+                },
+                Err(err) => Ok(TestOutput::ReadCacheFailed(Box::new(err))),
+            }
+        }
+    };
+
+    let stdout_file = File::create(&stdout_path)
+        .wrap_err_with(|| format!("Opening stdout file {stdout_path:?}"))?;
+    let stderr_file = File::create(&stderr_path)
+        .wrap_err_with(|| format!("Opening stderr file {stderr_path:?}"))?;
     let exit_code = match Command::new(&shell_path)
         .arg("-c")
-        .arg(command)
+        .arg(&options.command)
         .current_dir(working_directory)
         .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stdout(stdout_file)
+        .stderr(stderr_file)
         .output()
     {
         Ok(output) => output.status.code(),
@@ -422,6 +543,8 @@ fn test_commit(
             return Ok(TestOutput::TerminatedBySignal);
         }
     };
+    writeln!(exit_code_file, "{exit_code}")
+        .wrap_err_with(|| format!("Writing exit code {exit_code} to {exit_code_path:?}"))?;
 
     let output = match exit_code {
         0 => TestOutput::Passed,
