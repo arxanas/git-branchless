@@ -600,6 +600,10 @@ pub enum TestSubcommand {
         /// The set of commits to test.
         #[clap(value_parser, default_value = "stack()")]
         commits: Revset,
+
+        /// Show the test output as well.
+        #[clap(short = 'v', long, action = clap::ArgAction::Count)]
+        verbosity: u8,
     },
 }
 

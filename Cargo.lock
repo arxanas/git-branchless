@@ -1193,6 +1193,8 @@ dependencies = [
  "rayon",
  "regex",
  "rusqlite",
+ "serde",
+ "serde_json",
  "skim",
  "thiserror",
  "tracing",
