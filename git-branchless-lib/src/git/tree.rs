@@ -511,10 +511,10 @@ mod tests {
 
         git.init_repo()?;
 
-        git.write_file("foo", "foo")?;
-        git.write_file("bar/bar", "bar")?;
-        git.write_file("bar/baz", "qux")?;
-        git.write_file("xyzzy", "xyzzy")?;
+        git.write_file_txt("foo", "foo")?;
+        git.write_file_txt("bar/bar", "bar")?;
+        git.write_file_txt("bar/baz", "qux")?;
+        git.write_file_txt("xyzzy", "xyzzy")?;
         git.run(&["add", "."])?;
         git.run(&["commit", "-m", "commit"])?;
 

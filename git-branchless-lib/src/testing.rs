@@ -351,7 +351,9 @@ stderr:
     }
 
     /// Write the provided contents to the provided file in the repository root.
-    pub fn write_file(&self, name: &str, contents: &str) -> eyre::Result<()> {
+    /// For historical reasons, the name is suffixed with `.txt` (this is
+    /// technical debt).
+    pub fn write_file_txt(&self, name: &str, contents: &str) -> eyre::Result<()> {
         let path = PathBuf::from(name);
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(self.repo_path.join(dir))?;
@@ -388,7 +390,7 @@ stderr:
         time: isize,
         contents: &str,
     ) -> eyre::Result<NonZeroOid> {
-        self.write_file(name, contents)?;
+        self.write_file_txt(name, contents)?;
         self.run(&["add", "."])?;
         self.run_with_options(
             &["commit", "-m", &format!("create {}.txt", name)],

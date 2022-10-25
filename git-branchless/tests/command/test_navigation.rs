@@ -555,7 +555,7 @@ fn test_navigation_failed_to_check_out_commit() -> eyre::Result<()> {
     git.commit_file("test2", 2)?;
     git.run(&["checkout", "HEAD^"])?;
 
-    git.write_file("test2", "conflicting contents")?;
+    git.write_file_txt("test2", "conflicting contents")?;
 
     {
         let (stdout, _stderr) = git.run_with_options(
@@ -651,7 +651,7 @@ fn test_navigation_merge() -> eyre::Result<()> {
     git.detach_head()?;
     git.commit_file_with_contents("conflicting", 1, "foo\nbar\n")?;
     git.commit_file_with_contents("conflicting", 2, "baz\nqux\n")?;
-    git.write_file("conflicting", "foo\nbar\nqux\n")?;
+    git.write_file_txt("conflicting", "foo\nbar\nqux\n")?;
 
     {
         let (stdout, stderr) = git.run_with_options(
@@ -715,7 +715,7 @@ fn test_navigation_force() -> eyre::Result<()> {
     git.detach_head()?;
     git.commit_file_with_contents("conflicting", 1, "foo\nbar\n")?;
     git.commit_file_with_contents("conflicting", 2, "baz\nqux\n")?;
-    git.write_file("conflicting", "foo\n\nbar\nqux\n")?;
+    git.write_file_txt("conflicting", "foo\n\nbar\nqux\n")?;
 
     {
         let (stdout, stderr) = git.run_with_options(
@@ -795,7 +795,7 @@ fn test_navigation_switch_flags() -> eyre::Result<()> {
         let git = git.duplicate_repo()?;
         {
             git.commit_file_with_contents("test1", 3, "new contents")?;
-            git.write_file("test1", "conflicting\n")?;
+            git.write_file_txt("test1", "conflicting\n")?;
             let (stdout, _stderr) = git.run(&["branchless", "switch", "-f", "HEAD~2"])?;
             insta::assert_snapshot!(stdout, @r###"
             branchless: running command: <git-executable> checkout HEAD~2 -f
@@ -809,7 +809,7 @@ fn test_navigation_switch_flags() -> eyre::Result<()> {
 
     {
         git.commit_file_with_contents("test1", 3, "new contents")?;
-        git.write_file("test1", "conflicting\n")?;
+        git.write_file_txt("test1", "conflicting\n")?;
         let (stdout, _stderr) = git.run(&["branchless", "switch", "-m", "HEAD~2"])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> checkout HEAD~2 -m

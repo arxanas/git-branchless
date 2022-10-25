@@ -15,7 +15,7 @@ fn test_amend_with_children() -> eyre::Result<()> {
     git.commit_file("test3", 3)?;
     git.run(&["checkout", "HEAD^"])?;
 
-    git.write_file("test2", "updated contents")?;
+    git.write_file_txt("test2", "updated contents")?;
 
     {
         let (stdout, _stderr) = git.run(&["branchless", "amend"])?;
@@ -38,7 +38,7 @@ fn test_amend_with_children() -> eyre::Result<()> {
         "###);
     }
 
-    git.write_file("test3", "create merge conflict")?;
+    git.write_file_txt("test3", "create merge conflict")?;
     git.run(&["add", "."])?;
     {
         let (stdout, _stderr) = git.run_with_options(
@@ -183,8 +183,8 @@ fn test_amend_with_working_copy() -> eyre::Result<()> {
     git.commit_file("test1", 1)?;
     git.commit_file("test2", 2)?;
 
-    git.write_file("test1", "updated contents")?;
-    git.write_file("test2", "updated contents")?;
+    git.write_file_txt("test1", "updated contents")?;
+    git.write_file_txt("test2", "updated contents")?;
     git.run(&["add", "test1.txt"])?;
 
     {
@@ -230,7 +230,7 @@ fn test_amend_head() -> eyre::Result<()> {
     git.init_repo()?;
     git.detach_head()?;
     git.commit_file("test1", 1)?;
-    git.write_file("test1", "updated contents")?;
+    git.write_file_txt("test1", "updated contents")?;
 
     {
         let (stdout, _stderr) = git.run(&["branchless", "amend"])?;
@@ -246,7 +246,7 @@ fn test_amend_head() -> eyre::Result<()> {
     }
 
     // Amend should only update tracked files.
-    git.write_file("newfile", "some new file")?;
+    git.write_file_txt("newfile", "some new file")?;
     {
         let (stdout, _stderr) = git.run(&["branchless", "amend"])?;
         insta::assert_snapshot!(stdout, @"There are no uncommitted or staged changes. Nothing to amend.
@@ -282,7 +282,7 @@ fn test_amend_executable() -> eyre::Result<()> {
     git.commit_file("test2", 2)?;
 
     let executable = fs::Permissions::from_mode(0o777);
-    git.write_file("executable_file", "contents")?;
+    git.write_file_txt("executable_file", "contents")?;
     git.set_file_permissions("executable_file", executable)?;
     git.run(&["add", "."])?;
 
@@ -318,10 +318,10 @@ fn test_amend_unresolved_merge_conflict() -> eyre::Result<()> {
     git.init_repo()?;
     git.commit_file("file1", 1)?;
     git.run(&["checkout", "-b", "branch1"])?;
-    git.write_file("file1", "branch1 contents")?;
+    git.write_file_txt("file1", "branch1 contents")?;
     git.run(&["commit", "-a", "-m", "updated"])?;
     git.run(&["checkout", "master"])?;
-    git.write_file("file1", "master contents")?;
+    git.write_file_txt("file1", "master contents")?;
     git.run(&["commit", "-a", "-m", "updated"])?;
     git.run_with_options(
         &["merge", "branch1"],
@@ -356,7 +356,7 @@ fn test_amend_undo() -> eyre::Result<()> {
     git.init_repo()?;
 
     git.commit_file("file1", 1)?;
-    git.write_file("file1", "new contents\n")?;
+    git.write_file_txt("file1", "new contents\n")?;
 
     {
         let (stdout, _stderr) = git.run(&["status", "-vv"])?;
@@ -472,7 +472,7 @@ fn test_amend_undo_detached_head() -> eyre::Result<()> {
 
     git.detach_head()?;
     git.commit_file("file1", 1)?;
-    git.write_file("file1", "new contents\n")?;
+    git.write_file_txt("file1", "new contents\n")?;
 
     {
         let (stdout, _stderr) = git.run(&["amend"])?;

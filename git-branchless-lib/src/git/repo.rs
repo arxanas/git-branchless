@@ -1702,7 +1702,7 @@ mod tests {
 
         git.run(&["checkout", "master"])?;
         let initial_oid = git.commit_file_with_contents("initial", 2, "initial contents")?;
-        git.write_file("initial", "updated contents")?;
+        git.write_file_txt("initial", "updated contents")?;
 
         let repo = git.get_repo()?;
         let initial_commit = repo.find_commit_or_fail(initial_oid)?;
@@ -1781,7 +1781,7 @@ mod tests {
 
         git.run(&["checkout", "master"])?;
         let initial_oid = git.commit_file_with_contents("initial", 2, "initial contents")?;
-        git.write_file("initial", "updated contents")?;
+        git.write_file_txt("initial", "updated contents")?;
 
         let repo = git.get_repo()?;
         let initial_commit = repo.find_commit_or_fail(initial_oid)?;
@@ -1814,8 +1814,8 @@ mod tests {
         ]
         "###);
 
-        git.write_file("file2", "another file")?;
-        git.write_file("initial", "updated contents again")?;
+        git.write_file_txt("file2", "another file")?;
+        git.write_file_txt("initial", "updated contents again")?;
         let tree = repo.amend_fast(
             &initial_commit,
             &AmendFastOptions::FromWorkingCopy {

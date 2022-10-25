@@ -717,7 +717,7 @@ mod tests {
         }
 
         git.run(&["config", "commit.template", "template.txt"])?;
-        git.write_file(
+        git.write_file_txt(
             "template",
             "\
 This is a template!

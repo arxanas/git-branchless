@@ -11,7 +11,7 @@ fn test_record_unstaged_changes() -> eyre::Result<()> {
     git.init_repo()?;
 
     git.commit_file("test1", 1)?;
-    git.write_file("test1", "contents1\n")?;
+    git.write_file_txt("test1", "contents1\n")?;
     {
         let (stdout, _stderr) = git.run(&["record", "-m", "foo"])?;
         insta::assert_snapshot!(stdout, @r###"
@@ -52,7 +52,7 @@ fn test_record_unstaged_changes_interactive() -> eyre::Result<()> {
     git.init_repo()?;
 
     git.commit_file("test1", 1)?;
-    git.write_file("test1", "contents1\n")?;
+    git.write_file_txt("test1", "contents1\n")?;
     {
         run_in_pty(
             &git,
@@ -130,7 +130,7 @@ fn test_record_staged_changes() -> eyre::Result<()> {
 
     git.commit_file("test1", 1)?;
     git.commit_file("test2", 2)?;
-    git.write_file("test1", "new test1 contents\n")?;
+    git.write_file_txt("test1", "new test1 contents\n")?;
     git.run(&["add", "test1.txt"])?;
 
     {
@@ -174,7 +174,7 @@ fn test_record_staged_changes_interactive() -> eyre::Result<()> {
 
     git.commit_file("test1", 1)?;
     git.commit_file("test2", 2)?;
-    git.write_file("test1", "new test1 contents\n")?;
+    git.write_file_txt("test1", "new test1 contents\n")?;
     git.run(&["add", "test1.txt"])?;
 
     {
@@ -226,7 +226,7 @@ fn test_record_detach() -> eyre::Result<()> {
     })?;
     git.run(&["branchless", "init", "--main-branch", "master"])?;
 
-    git.write_file("test1", "new test1 contents\n")?;
+    git.write_file_txt("test1", "new test1 contents\n")?;
     git.run(&["add", "test1.txt"])?;
     {
         let (stdout, _stderr) = git.run(&["record", "-m", "foo", "--detach"])?;
@@ -248,7 +248,7 @@ fn test_record_detach() -> eyre::Result<()> {
         "###);
     }
 
-    git.write_file("test1", "new test1 contents\n")?;
+    git.write_file_txt("test1", "new test1 contents\n")?;
     {
         let (stdout, _stderr) = git.run(&["record", "-m", "foo", "--detach"])?;
         insta::assert_snapshot!(stdout, @r###"

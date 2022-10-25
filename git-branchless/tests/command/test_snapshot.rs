@@ -16,8 +16,8 @@ fn test_restore_snapshot_basic() -> eyre::Result<()> {
 
     git.commit_file("test1", 1)?;
     git.commit_file("test2", 2)?;
-    git.write_file("test1", "test1 new contents\n")?;
-    git.write_file("test2", "staged contents\n")?;
+    git.write_file_txt("test1", "test1 new contents\n")?;
+    git.write_file_txt("test2", "staged contents\n")?;
     git.run(&["add", "test2.txt"])?;
 
     {
@@ -334,7 +334,7 @@ fn test_restore_snapshot_respect_untracked_changes() -> eyre::Result<()> {
     }
 
     git.run(&["checkout", "HEAD^"])?;
-    git.write_file("test1", "untracked contents")?;
+    git.write_file_txt("test1", "untracked contents")?;
 
     {
         let (stdout, stderr) = git.run_with_options(
