@@ -13,7 +13,7 @@ fn redact_remotes(output: String) -> String {
             if line.contains("To file://") {
                 "To: file://<remote>\n".to_string()
             } else if line.contains("error: failed to push some refs to 'file://") {
-                "error: failed to push some refs to 'file://<remote>'".to_string()
+                "error: failed to push some refs to 'file://<remote>'\n".to_string()
             } else {
                 format!("{line}\n")
             }
@@ -55,10 +55,9 @@ fn test_submit() -> eyre::Result<()> {
         let (stdout, stderr) = cloned_repo.run(&["submit"])?;
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
-        Skipped pushing these branches because they were not already associated with a
-        remote repository: bar, qux
-        To create and push them, retry this operation with the --create option.
-        Successfully pushed 0 branches.
+        Skipped 2 branches (not yet on remote): bar, qux
+        These branches were skipped because they were not already associated with a remote repository. To
+        create and push them, retry this operation with the --create option.
         "###);
     }
 
@@ -75,10 +74,10 @@ fn test_submit() -> eyre::Result<()> {
         branchless: processing 1 update: remote branch origin/qux
         "###);
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> push --force-with-lease --set-upstream origin bar qux
+        branchless: running command: <git-executable> push --set-upstream origin bar qux
         branch 'bar' set up to track 'origin/bar'.
         branch 'qux' set up to track 'origin/qux'.
-        Successfully pushed 2 branches.
+        Created 2 branches: bar, qux
         "###);
     }
 
@@ -100,12 +99,13 @@ fn test_submit() -> eyre::Result<()> {
         branchless: processing 1 update: branch qux
         To: file://<remote>
          + 20230db...bae8307 qux -> qux (forced update)
-        branchless: processing 1 update: remote branch origin/bar
         branchless: processing 1 update: remote branch origin/qux
         "###);
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> push --force-with-lease origin bar qux
-        Successfully pushed 2 branches.
+        branchless: running command: <git-executable> fetch origin
+        branchless: running command: <git-executable> push --force-with-lease origin qux
+        Pushed 1 branch: qux
+        Skipped 1 branch (already up-to-date): bar
         "###);
     }
 
@@ -114,13 +114,13 @@ fn test_submit() -> eyre::Result<()> {
         let (stdout, stderr) = cloned_repo.run(&["submit", "--create"])?;
         let stderr = redact_remotes(stderr);
         insta::assert_snapshot!(stderr, @r###"
-        branchless: processing 1 update: remote branch origin/bar
         branchless: processing 1 update: remote branch origin/qux
         Everything up-to-date
         "###);
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> push --force-with-lease origin bar qux
-        Successfully pushed 2 branches.
+        branchless: running command: <git-executable> fetch origin
+        branchless: running command: <git-executable> push --force-with-lease origin
+        Skipped 2 branches (already up-to-date): bar, qux
         "###);
     }
 
@@ -214,10 +214,15 @@ fn test_submit_existing_branch() -> eyre::Result<()> {
         let stderr = redact_remotes(stderr);
         insta::assert_snapshot!(stderr, @r###"
         To: file://<remote>
-         ! [rejected]        feature -> feature (stale info)
+         ! [rejected]        feature -> feature (fetch first)
         error: failed to push some refs to 'file://<remote>'
+        hint: Updates were rejected because the remote contains work that you do
+        hint: not have locally. This is usually caused by another repository pushing
+        hint: to the same ref. You may want to first integrate the remote changes
+        hint: (e.g., 'git pull ...') before pushing again.
+        hint: See the 'Note about fast-forwards' in 'git push --help' for details.
         "###);
-        insta::assert_snapshot!(stdout, @"branchless: running command: <git-executable> push --force-with-lease --set-upstream origin feature
+        insta::assert_snapshot!(stdout, @"branchless: running command: <git-executable> push --set-upstream origin feature
 ");
     }
 
