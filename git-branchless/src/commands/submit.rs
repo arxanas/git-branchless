@@ -79,8 +79,80 @@ pub fn submit(
         .map(|(v, k)| (k, v))
         .into_group_map();
 
-    let total_num_pushed_branches = {
+    let (created_branches, uncreated_branches) = {
+        let mut branch_names: Vec<&str> = branches_without_remotes
+            .iter()
+            .map(|branch| branch.get_name())
+            .collect::<Result<_, _>>()?;
+        branch_names.sort_unstable();
+        if branches_without_remotes.is_empty() {
+            Default::default()
+        } else if create {
+            let push_remote: String = match get_default_remote(&repo)? {
+                Some(push_remote) => push_remote,
+                None => {
+                    writeln!(
+                        effects.get_output_stream(),
+                        "\
+No upstream repository was associated with {} and no value was
+specified for `remote.pushDefault`, so cannot push these branches: {}
+Configure a value with: git config remote.pushDefault <remote>
+These remotes are available: {}",
+                        CategorizedReferenceName::new(
+                            &repo.get_main_branch()?.get_reference_name()?,
+                        )
+                        .friendly_describe(),
+                        branch_names.join(", "),
+                        repo.get_all_remote_names()?.join(", "),
+                    )?;
+                    return Ok(ExitCode(1));
+                }
+            };
+
+            // This will fail if somebody else created the branch on the remote and we don't
+            // know about it.
+            let mut args = vec!["push", "--set-upstream", &push_remote];
+            args.extend(branch_names.iter());
+            {
+                let (effects, progress) = effects.start_operation(OperationType::PushBranches);
+                progress.notify_progress(0, branch_names.len());
+                let exit_code = git_run_info.run(&effects, Some(event_tx_id), &args)?;
+                if !exit_code.is_success() {
+                    return Ok(exit_code);
+                }
+            }
+            (branch_names, Default::default())
+        } else {
+            (Default::default(), branch_names)
+        }
+    };
+
+    // TODO: explain why fetching here.
+    let remote_names = remotes_to_branches.keys().sorted().collect_vec();
+    if !remote_names.is_empty() {
+        let remote_args = {
+            let mut result = vec!["fetch"];
+            for remote_name in &remote_names {
+                result.push(remote_name.as_str());
+            }
+            result
+        };
+        let exit_code = git_run_info.run(effects, Some(event_tx_id), &remote_args)?;
+        if !exit_code.is_success() {
+            writeln!(
+                effects.get_output_stream(),
+                "Failed to fetch from remotes: {}",
+                remote_names.into_iter().join(", ")
+            )?;
+            return Ok(exit_code);
+        }
+    }
+
+    let (pushed_branches, skipped_branches) = {
         let (effects, progress) = effects.start_operation(OperationType::PushBranches);
+
+        let mut pushed_branches: Vec<&str> = Vec::new();
+        let mut skipped_branches: Vec<&str> = Vec::new();
         let total_num_branches = remotes_to_branches
             .values()
             .map(|branches| branches.len())
@@ -90,95 +162,97 @@ pub fn submit(
             .iter()
             .sorted_by(|(k1, _v1), (k2, _v2)| k1.cmp(k2))
         {
-            let mut branch_names: Vec<&str> = branches
-                .iter()
-                .map(|branch| branch.get_name())
-                .collect::<Result<_, _>>()?;
-            branch_names.sort_unstable();
+            let (branches_to_push_names, branches_to_skip_names) = {
+                let mut branches_to_push_names = Vec::new();
+                let mut branches_to_skip_names = Vec::new();
+                for branch in branches {
+                    let branch_name = branch.get_name()?;
+                    if let Some(upstream_branch) = branch.get_upstream_branch()? {
+                        if upstream_branch.get_oid()? == branch.get_oid()? {
+                            branches_to_skip_names.push(branch_name);
+                            continue;
+                        }
+                    }
+                    branches_to_push_names.push(branch_name);
+                }
+                branches_to_push_names.sort_unstable();
+                branches_to_skip_names.sort_unstable();
+                (branches_to_push_names, branches_to_skip_names)
+            };
+            pushed_branches.extend(branches_to_push_names.iter());
+            skipped_branches.extend(branches_to_skip_names.iter());
+
             let mut args = vec!["push", "--force-with-lease", remote_name];
-            args.extend(branch_names.iter());
+            args.extend(branches_to_push_names.iter());
             let exit_code = git_run_info.run(&effects, Some(event_tx_id), &args)?;
             if !exit_code.is_success() {
                 writeln!(
                     effects.get_output_stream(),
                     "Failed to push branches: {}",
-                    branch_names.into_iter().join(", ")
+                    branches_to_push_names.into_iter().join(", ")
                 )?;
                 return Ok(exit_code);
             }
             progress.notify_progress_inc(branches.len());
         }
-        total_num_branches
+        (pushed_branches, skipped_branches)
     };
 
-    let total_num_pushed_branches = total_num_pushed_branches + {
-        let mut branch_names: Vec<&str> = branches_without_remotes
-            .iter()
-            .map(|branch| branch.get_name())
-            .collect::<Result<_, _>>()?;
-        branch_names.sort_unstable();
-        if !branches_without_remotes.is_empty() {
-            if create {
-                let push_remote: String = match get_default_remote(&repo)? {
-                    Some(push_remote) => push_remote,
-                    None => {
-                        writeln!(
-                            effects.get_output_stream(),
-                            "\
-No upstream repository was associated with {} and no value was
-specified for `remote.pushDefault`, so cannot push these branches: {}
-Configure a value with: git config remote.pushDefault <remote>
-These remotes are available: {}",
-                            CategorizedReferenceName::new(
-                                &repo.get_main_branch()?.get_reference_name()?,
-                            )
-                            .friendly_describe(),
-                            branch_names.join(", "),
-                            repo.get_all_remote_names()?.join(", "),
-                        )?;
-                        return Ok(ExitCode(1));
-                    }
-                };
-                let mut args = vec!["push", "--force-with-lease", "--set-upstream", &push_remote];
-                args.extend(branch_names.iter());
-                {
-                    let (effects, progress) = effects.start_operation(OperationType::PushBranches);
-                    progress.notify_progress(0, branch_names.len());
-                    let exit_code = git_run_info.run(&effects, Some(event_tx_id), &args)?;
-                    if !exit_code.is_success() {
-                        return Ok(exit_code);
-                    }
-                }
-                branch_names.len()
-            } else {
-                writeln!(
-                    effects.get_output_stream(),
-                    "\
-Skipped pushing these branches because they were not already associated with a
-remote repository: {}",
-                    branch_names.join(", ")
-                )?;
-                writeln!(
-                    effects.get_output_stream(),
-                    "\
-To create and push them, retry this operation with the --create option."
-                )?;
-                0
-            }
-        } else {
-            0
-        }
-    };
+    if !created_branches.is_empty() {
+        writeln!(
+            effects.get_output_stream(),
+            "Created {}: {}",
+            Pluralize {
+                determiner: None,
+                amount: created_branches.len(),
+                unit: ("branch", "branches")
+            },
+            created_branches.into_iter().join(", ")
+        )?;
+    }
+    if !pushed_branches.is_empty() {
+        writeln!(
+            effects.get_output_stream(),
+            "Pushed {}: {}",
+            Pluralize {
+                determiner: None,
+                amount: pushed_branches.len(),
+                unit: ("branch", "branches")
+            },
+            pushed_branches.into_iter().join(", ")
+        )?;
+    }
+    if !skipped_branches.is_empty() {
+        writeln!(
+            effects.get_output_stream(),
+            "Skipped {} (already up-to-date): {}",
+            Pluralize {
+                determiner: None,
+                amount: skipped_branches.len(),
+                unit: ("branch", "branches")
+            },
+            skipped_branches.into_iter().join(", ")
+        )?;
+    }
+    if !uncreated_branches.is_empty() {
+        writeln!(
+            effects.get_output_stream(),
+            "Skipped {} (not yet on remote): {}",
+            Pluralize {
+                determiner: None,
+                amount: uncreated_branches.len(),
+                unit: ("branch", "branches")
+            },
+            uncreated_branches.into_iter().join(", ")
+        )?;
+        writeln!(
+            effects.get_output_stream(),
+            "\
+These branches were skipped because they were not already associated with a remote repository. To
+create and push them, retry this operation with the --create option."
+        )?;
+    }
 
-    writeln!(
-        effects.get_output_stream(),
-        "Successfully pushed {}.",
-        Pluralize {
-            determiner: None,
-            amount: total_num_pushed_branches,
-            unit: ("branch", "branches")
-        }
-    )?;
     Ok(ExitCode(0))
 }
 
