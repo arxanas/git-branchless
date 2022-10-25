@@ -619,6 +619,7 @@ struct TestFiles {
     stderr_file: File,
 }
 
+#[derive(Debug)]
 enum TestFilesResult {
     Cached(TestOutput),
     NotCached(TestFiles),
@@ -778,4 +779,75 @@ fn test_commit(
         stderr_path,
         test_status,
     })
+}
+
+#[instrument]
+pub fn show(effects: &Effects, options: &TestOptions, revset: Revset) -> eyre::Result<ExitCode> {
+    let repo = Repo::from_current_dir()?;
+    let conn = repo.get_db_conn()?;
+    let event_log_db = EventLogDb::new(&conn)?;
+    let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
+    let event_cursor = event_replayer.make_default_cursor();
+    let references_snapshot = repo.get_references_snapshot()?;
+    let mut dag = Dag::open_and_sync(
+        effects,
+        &repo,
+        &event_replayer,
+        event_cursor,
+        &references_snapshot,
+    )?;
+
+    let commit_set = match resolve_commits(effects, &repo, &mut dag, &[revset]) {
+        Ok(mut commit_sets) => commit_sets.pop().unwrap(),
+        Err(err) => {
+            err.describe(effects)?;
+            return Ok(ExitCode(1));
+        }
+    };
+
+    let commits = sorted_commit_set(&repo, &dag, &commit_set)?;
+    for commit in commits {
+        let test_files = make_test_files(&repo, &commit, options)?;
+        match test_files {
+            TestFilesResult::NotCached(_) => {
+                writeln!(
+                    effects.get_output_stream(),
+                    "No cached test data for {}",
+                    effects
+                        .get_glyphs()
+                        .render(commit.friendly_describe(effects.get_glyphs())?)?
+                )?;
+            }
+            TestFilesResult::Cached(test_output) => {
+                write!(
+                    effects.get_output_stream(),
+                    "{}",
+                    effects.get_glyphs().render(test_output.describe(
+                        effects,
+                        &commit,
+                        options.verbosity
+                    )?)?,
+                )?;
+            }
+        }
+    }
+
+    Ok(ExitCode(0))
+}
+
+#[instrument]
+pub fn clean(effects: &Effects) -> eyre::Result<ExitCode> {
+    let repo = Repo::from_current_dir()?;
+    let test_dir = repo.get_test_dir();
+    if test_dir.exists() {
+        std::fs::remove_dir_all(&test_dir)
+            .with_context(|| format!("Cleaning test dir: {test_dir:?}"))?;
+        writeln!(effects.get_output_stream(), "Cleaned cached test results.")?;
+    } else {
+        writeln!(
+            effects.get_output_stream(),
+            "No cached test results to clean."
+        )?;
+    }
+    Ok(ExitCode(0))
 }

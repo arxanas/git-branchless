@@ -347,6 +347,21 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
                 },
                 commits,
             )?,
+
+            TestSubcommand::Show {
+                command,
+                commits,
+                verbosity,
+            } => test::show(
+                &effects,
+                &TestOptions {
+                    command,
+                    verbosity: test::Verbosity::from(verbosity),
+                },
+                commits,
+            )?,
+
+            TestSubcommand::Clean => test::clean(&effects)?,
         },
 
         Command::Undo { interactive, yes } => {

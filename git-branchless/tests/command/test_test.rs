@@ -292,3 +292,53 @@ fn test_test_verbosity() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_test_show() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+
+    git.detach_head()?;
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+
+    {
+        let (stdout, _stderr) = git.run(&["test", "run", "-c", "echo hi", "."])?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> diff --quiet
+        Calling Git for on-disk rebase...
+        branchless: running command: <git-executable> rebase --continue
+        Ran echo hi on 1 commit:
+        ✓ Passed: 96d1c37 create test2.txt
+        1 passed, 0 failed, 0 skipped
+        branchless: running command: <git-executable> rebase --abort
+        "###);
+    }
+
+    {
+        let (stdout, stderr) = git.run(&["test", "show", "-c", "echo hi"])?;
+        insta::assert_snapshot!(stderr, @"");
+        insta::assert_snapshot!(stdout, @r###"
+        No cached test data for 62fc20d create test1.txt
+        ✓ Passed (cached): 96d1c37 create test2.txt
+        "###);
+    }
+
+    {
+        let (stdout, stderr) = git.run(&["test", "clean"])?;
+        insta::assert_snapshot!(stderr, @"");
+        insta::assert_snapshot!(stdout, @"Cleaned cached test results.
+");
+    }
+
+    {
+        let (stdout, stderr) = git.run(&["test", "show", "-c", "echo hi"])?;
+        insta::assert_snapshot!(stderr, @"");
+        insta::assert_snapshot!(stdout, @r###"
+        No cached test data for 62fc20d create test1.txt
+        No cached test data for 96d1c37 create test2.txt
+        "###);
+    }
+
+    Ok(())
+}
