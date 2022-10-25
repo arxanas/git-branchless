@@ -605,6 +605,24 @@ pub enum TestSubcommand {
         #[clap(short = 'v', long, action = clap::ArgAction::Count)]
         verbosity: u8,
     },
+
+    /// Show the results of a set of previous test runs.
+    Show {
+        /// The command to execute on each commit.
+        #[clap(value_parser, short = 'c', long = "command")]
+        command: String,
+
+        /// The set of commits to show the test output for.
+        #[clap(value_parser, default_value = "stack()")]
+        commits: Revset,
+
+        /// Show the test output as well.
+        #[clap(short = 'v', long, action = clap::ArgAction::Count)]
+        verbosity: u8,
+    },
+
+    /// Clean any cached test results.
+    Clean,
 }
 
 /// Generate and write man-pages into the specified directory.
