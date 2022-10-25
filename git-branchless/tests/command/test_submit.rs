@@ -12,6 +12,8 @@ fn redact_remotes(output: String) -> String {
         .map(|line| {
             if line.contains("To file://") {
                 "To: file://<remote>\n".to_string()
+            } else if line.contains("error: failed to push some refs to 'file://") {
+                "error: failed to push some refs to 'file://<remote>'".to_string()
             } else {
                 format!("{line}\n")
             }
@@ -168,6 +170,66 @@ fn test_submit_multiple_remotes() -> eyre::Result<()> {
         specified for `remote.pushDefault`, so cannot push these branches: foo
         Configure a value with: git config remote.pushDefault <remote>
         These remotes are available: origin, other-repo
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_submit_existing_branch() -> eyre::Result<()> {
+    let GitWrapperWithRemoteRepo {
+        temp_dir: _guard,
+        original_repo,
+        cloned_repo,
+    } = make_git_with_remote_repo()?;
+
+    if original_repo.get_version()? < MIN_VERSION {
+        return Ok(());
+    }
+
+    original_repo.init_repo()?;
+    original_repo.commit_file("test1", 1)?;
+    original_repo.commit_file("test2", 2)?;
+
+    original_repo.clone_repo_into(&cloned_repo, &[])?;
+    cloned_repo.init_repo_with_options(&GitInitOptions {
+        make_initial_commit: false,
+        ..Default::default()
+    })?;
+
+    original_repo.run(&["checkout", "-b", "feature"])?;
+    original_repo.commit_file("test3", 3)?;
+    cloned_repo.run(&["checkout", "-b", "feature"])?;
+    cloned_repo.commit_file("test4", 4)?;
+
+    {
+        let (stdout, stderr) = cloned_repo.run_with_options(
+            &["submit", "--create"],
+            &GitRunOptions {
+                expected_exit_code: 1,
+                ..Default::default()
+            },
+        )?;
+        let stderr = redact_remotes(stderr);
+        insta::assert_snapshot!(stderr, @r###"
+        To: file://<remote>
+         ! [rejected]        feature -> feature (stale info)
+        error: failed to push some refs to 'file://<remote>'
+        "###);
+        insta::assert_snapshot!(stdout, @"branchless: running command: <git-executable> push --force-with-lease --set-upstream origin feature
+");
+    }
+
+    {
+        cloned_repo.run(&["fetch"])?;
+        let (stdout, _stderr) = cloned_repo.run(&["branch", "--all", "--verbose"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        * feature                f57e36f create test4.txt
+          master                 96d1c37 create test2.txt
+          remotes/origin/HEAD    -> origin/master
+          remotes/origin/feature 70deb1e create test3.txt
+          remotes/origin/master  96d1c37 create test2.txt
         "###);
     }
 
