@@ -334,9 +334,19 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
         } => sync::sync(&effects, &git_run_info, pull, &move_options, revsets)?,
 
         Command::Test { subcommand } => match subcommand {
-            TestSubcommand::Run { command, commits } => {
-                test::run(&effects, &git_run_info, &TestOptions { command }, commits)?
-            }
+            TestSubcommand::Run {
+                command,
+                commits,
+                verbosity,
+            } => test::run(
+                &effects,
+                &git_run_info,
+                &TestOptions {
+                    command,
+                    verbosity: test::Verbosity::from(verbosity),
+                },
+                commits,
+            )?,
         },
 
         Command::Undo { interactive, yes } => {

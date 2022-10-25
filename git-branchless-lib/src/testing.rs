@@ -354,12 +354,17 @@ stderr:
     /// For historical reasons, the name is suffixed with `.txt` (this is
     /// technical debt).
     pub fn write_file_txt(&self, name: &str, contents: &str) -> eyre::Result<()> {
-        let path = PathBuf::from(name);
+        let name = format!("{name}.txt");
+        self.write_file(&name, contents)
+    }
+
+    /// Write the provided contents to the provided file in the repository root.
+    pub fn write_file(&self, name: &str, contents: &str) -> eyre::Result<()> {
+        let path = self.repo_path.join(name);
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(self.repo_path.join(dir))?;
         }
-        let file_path = self.repo_path.join(format!("{}.txt", name));
-        std::fs::write(&file_path, contents)?;
+        std::fs::write(&path, contents)?;
         Ok(())
     }
 
