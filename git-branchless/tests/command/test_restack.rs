@@ -237,7 +237,7 @@ fn test_restack_aborts_during_rebase_conflict() -> eyre::Result<()> {
     git.commit_file("test2", 2)?;
     git.run(&["prev"])?;
 
-    git.write_file("test2", "conflicting test2 contents")?;
+    git.write_file_txt("test2", "conflicting test2 contents")?;
     git.run(&["add", "."])?;
     git.run(&["commit", "--amend", "-m", "amend test1 with test2 conflict"])?;
 

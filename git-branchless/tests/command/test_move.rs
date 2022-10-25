@@ -2708,7 +2708,7 @@ fn test_move_force_in_memory() -> eyre::Result<()> {
     git.commit_file("test2", 2)?;
     git.run(&["checkout", "HEAD~"])?;
 
-    git.write_file("test2", "conflicting contents")?;
+    git.write_file_txt("test2", "conflicting contents")?;
     git.run(&["add", "."])?;
     git.run(&["commit", "-m", "conflicting test2"])?;
 
@@ -3510,7 +3510,7 @@ fn test_move_with_unstaged_changes() -> eyre::Result<()> {
     git.commit_file("test3", 3)?;
 
     {
-        git.write_file("test3", "new contents")?;
+        git.write_file_txt("test3", "new contents")?;
         let (stdout, stderr) = git.run_with_options(
             &["move", "--on-disk", "-d", "master"],
             &GitRunOptions {
@@ -4224,7 +4224,7 @@ fn test_move_branch_on_merge_conflict_resolution() -> eyre::Result<()> {
         },
     )?;
 
-    git.write_file("test1", "contents 3")?;
+    git.write_file_txt("test1", "contents 3")?;
     git.run(&["add", "."])?;
 
     {

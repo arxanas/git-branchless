@@ -893,7 +893,7 @@ mod tests {
         let git = make_git()?;
         git.init_repo()?;
 
-        git.write_file("test1", "test\n")?;
+        git.write_file_txt("test1", "test\n")?;
         git.run(&["add", "test1.txt"])?;
         git.run_with_options(
             &["commit", "-m", "test1"],
@@ -913,7 +913,7 @@ mod tests {
             },
         )?;
 
-        git.write_file("test2", "test\n")?;
+        git.write_file_txt("test2", "test\n")?;
         git.run(&["add", "test2.txt"])?;
         git.run_with_options(
             &["commit", "-m", "test2"],

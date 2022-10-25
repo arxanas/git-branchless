@@ -394,9 +394,9 @@ mod tests {
         }
         "###);
 
-        git.write_file("new_file", "another file")?;
+        git.write_file_txt("new_file", "another file")?;
         git.run(&["add", "new_file.txt"])?;
-        git.write_file("untracked", "should not show up in status")?;
+        git.write_file_txt("untracked", "should not show up in status")?;
         git.delete_file("initial")?;
         git.run(&["mv", "test1.txt", "renamed.txt"])?;
 
