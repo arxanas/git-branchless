@@ -8,7 +8,6 @@ use std::convert::TryFrom;
 use std::fmt::Write;
 use std::time::SystemTime;
 
-use console::style;
 use eden_dag::DagAlgorithm;
 use lib::core::repo_ext::RepoExt;
 use lib::util::ExitCode;
@@ -18,7 +17,8 @@ use tracing::instrument;
 use crate::opts::{MoveOptions, Revset};
 use crate::revset::resolve_commits;
 use lib::core::config::{
-    get_hint_enabled, get_restack_preserve_timestamps, print_hint_suppression_notice, Hint,
+    get_hint_enabled, get_hint_string, get_restack_preserve_timestamps,
+    print_hint_suppression_notice, Hint,
 };
 use lib::core::dag::{commit_set_to_vec, sorted_commit_set, union_all, CommitSet, Dag};
 use lib::core::effects::Effects;
@@ -210,7 +210,7 @@ pub fn r#move(
                 writeln!(
                     effects.get_output_stream(),
                     "{}: you can omit the --base flag in this case, as it defaults to HEAD",
-                    style("hint").blue().bold()
+                    effects.get_glyphs().render(get_hint_string())?,
                 )?;
             }
 
@@ -219,7 +219,7 @@ pub fn r#move(
                 writeln!(
                     effects.get_output_stream(),
                     "{}: you can omit the --dest flag in this case, as it defaults to HEAD",
-                    style("hint").blue().bold()
+                    effects.get_glyphs().render(get_hint_string())?,
                 )?;
             }
 
