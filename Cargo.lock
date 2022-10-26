@@ -1213,6 +1213,7 @@ dependencies = [
  "regex",
  "rusqlite",
  "serde",
+ "serde_json",
  "tempfile",
  "textwrap",
  "thiserror",

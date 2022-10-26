@@ -155,11 +155,19 @@ impl ToString for FileMode {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SubmoduleStatus {
+    commit_changed: bool,
+    tracked_changes: bool,
+    untracked_changes: bool,
+}
+
 /// The status of a file in the repo.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StatusEntry {
     /// The status of the file in the index.
     pub index_status: FileStatus,
+    pub submodule_status: Option<SubmoduleStatus>,
     /// The status of the file in the working copy.
     pub working_copy_status: FileStatus,
     /// The file mode of the file in the working copy.
@@ -192,7 +200,13 @@ impl TryFrom<&[u8]> for StatusEntry {
             static ref STATUS_PORCELAIN_V2_REGEXP: Regex = Regex::new(concat!(
                 r#"^(?P<prefix>1|2|u) "#,                                    // Prefix.
                 r#"(?P<index_status>[\w.])(?P<working_copy_status>[\w.]) "#, // Status indicators.
-                r#"[\w.]+ "#,                                                // Submodule state.
+
+                r#"(?P<submodule_status>[\w.])"#,                            // Submodule status.
+                r#"(?P<submodule_commit>[\w.])"#,
+                r#"(?P<submodule_tracked>[\w.])"#,
+                r#"(?P<submodule_untracked>[\w.])"#,
+                r#" "#,
+
                 r#"(\d{6} ){2,3}(?P<working_copy_filemode>\d{6}) "#,         // HEAD, Index, and Working Copy file modes;
                                                                              // or stage1, stage2, stage3, and working copy file modes.
                 r#"([\w\d]+ ){2,3}"#,                                        // HEAD and Index object IDs, and optionally the rename/copy score.
@@ -201,9 +215,35 @@ impl TryFrom<&[u8]> for StatusEntry {
             .expect("porcelain v2 status line regex");
         }
 
-        let status_line_parts = STATUS_PORCELAIN_V2_REGEXP
-            .captures(line)
-            .ok_or_else(|| eyre::eyre!("unable to parse status line into parts"))?;
+        let status_line_parts = STATUS_PORCELAIN_V2_REGEXP.captures(line).ok_or_else(|| {
+            eyre::eyre!(
+                "unable to parse status line into parts: {:?}",
+                String::from_utf8_lossy(line),
+            )
+        })?;
+
+        let submodule_status = match status_line_parts.name("submodule_status") {
+            Some(m) if m.as_bytes() == b"S" => {
+                let commit_changed = status_line_parts
+                    .name("submodule_commit")
+                    .map(|m| m.as_bytes())
+                    == Some(b"C");
+                let tracked_changes = status_line_parts
+                    .name("submodule_tracked")
+                    .map(|m| m.as_bytes())
+                    == Some(b"M");
+                let untracked_changes = status_line_parts
+                    .name("submodule_untracked")
+                    .map(|m| m.as_bytes())
+                    == Some(b"U");
+                Some(SubmoduleStatus {
+                    commit_changed,
+                    tracked_changes,
+                    untracked_changes,
+                })
+            }
+            _ => None,
+        };
 
         let index_status: FileStatus = match status_line_parts.name("prefix") {
             Some(m) if m.as_bytes() == b"u" => FileStatus::Unmerged,
@@ -238,6 +278,7 @@ impl TryFrom<&[u8]> for StatusEntry {
 
         Ok(StatusEntry {
             index_status,
+            submodule_status,
             working_copy_status,
             working_copy_file_mode,
             path: path.to_vec().into_path_buf()?,

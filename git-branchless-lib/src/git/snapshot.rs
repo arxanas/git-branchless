@@ -21,8 +21,10 @@
 //!  into multiple could also be used to split the working copy into multiple
 //!  commits.
 
+use eyre::WrapErr;
 use itertools::Itertools;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
+use std::path::PathBuf;
 use std::str::FromStr;
 
 use tracing::instrument;
@@ -41,6 +43,7 @@ use super::{
 const BRANCHLESS_HEAD_TRAILER: &str = "Branchless-head";
 const BRANCHLESS_HEAD_REF_TRAILER: &str = "Branchless-head-ref";
 const BRANCHLESS_UNSTAGED_TRAILER: &str = "Branchless-unstaged";
+const BRANCHLESS_SUBMODULES_TRAILER: &str = "Branchless-submodules";
 
 /// A special `Commit` which represents the status of the working copy at a
 /// given point in time. This means that it can include changes in any stage.
@@ -83,6 +86,8 @@ pub struct WorkingCopySnapshot<'repo> {
     /// The index contents at stage 3 ("theirs", i.e. the commit being merged
     /// in).
     pub commit_stage3: Commit<'repo>,
+
+    pub submodules: HashMap<PathBuf, MaybeZeroOid>,
 }
 
 /// The type of changes in the working copy, if any.
@@ -153,6 +158,63 @@ impl<'repo> WorkingCopySnapshot<'repo> {
             Stage::Stage3,
         )?;
 
+        let submodules: HashMap<PathBuf, MaybeZeroOid> = repo
+            .inner
+            .submodules()?
+            .into_iter()
+            .map(|submodule| -> eyre::Result<(PathBuf, MaybeZeroOid)> {
+                let head_oid = submodule
+                    .workdir_id()
+                    .map(MaybeZeroOid::from)
+                    .unwrap_or(MaybeZeroOid::Zero);
+                let head_info = ResolvedReferenceInfo {
+                    oid: head_oid.into(),
+                    reference_name: match submodule.branch_bytes() {
+                        None => None,
+                        Some(branch_name) => {
+                            debug_assert!(branch_name.starts_with(b"refs/heads/"));
+                            Some(ReferenceName::from_bytes(branch_name.to_vec())?)
+                        }
+                    },
+                };
+                let submodule_path = submodule.path();
+                let relevant_status_entries = status_entries
+                    .iter()
+                    .filter(|entry| entry.path.starts_with(submodule_path))
+                    .cloned()
+                    .collect_vec();
+                let submodule_snapshot =
+                    Self::create(repo, index, &head_info, &relevant_status_entries)?;
+                Ok((
+                    submodule.path().to_owned(),
+                    submodule_snapshot.base_commit.get_oid().into(),
+                ))
+            })
+            .try_collect()?;
+        let submodules_trailer = serde_json::to_string(
+            &submodules
+                .iter()
+                .map(|(path, oid)| (path, oid.to_string()))
+                .collect::<BTreeMap<_, _>>(), // Use `BTreeMap` for determinism.
+        )
+        .wrap_err_with(|| format!("Serializing submodule state: {submodules:?}"))?;
+        // let submodules: HashMap<PathBuf, Option<Commit>> = submodules
+        //     .into_iter()
+        //     .map(|(path, oid)| -> eyre::Result<(PathBuf, Option<Commit>)> {
+        //         let commit =
+        //             match oid.unwrap_or(MaybeZeroOid::Zero) {
+        //                 MaybeZeroOid::Zero => None,
+        //                 MaybeZeroOid::NonZero(oid) => {
+        //                     dbg!(repo.inner.find_object(oid.into(), None));
+        //                     Some(repo.find_commit_or_fail(oid).wrap_err_with(|| {
+        //                         format!("Resolving commit for submodule {path:?}")
+        //                     })?)
+        //                 }
+        //             };
+        //         Ok((path, commit))
+        //     })
+        //     .try_collect()?;
+
         let trailers = {
             let mut result = vec![(BRANCHLESS_HEAD_TRAILER, head_commit_oid.to_string())];
             if let Some(head_reference_name) = &head_reference_name {
@@ -168,6 +230,9 @@ impl<'repo> WorkingCopySnapshot<'repo> {
                 (Stage::Stage2.get_trailer(), commit_stage2.to_string()),
                 (Stage::Stage3.get_trailer(), commit_stage3.to_string()),
             ]);
+            if !submodules.is_empty() {
+                result.push((BRANCHLESS_SUBMODULES_TRAILER, submodules_trailer));
+            }
             result
         };
         let signature = Signature::automated()?;
@@ -224,6 +289,7 @@ branchless: automated working copy snapshot
             commit_stage1,
             commit_stage2,
             commit_stage3,
+            submodules,
         })
     }
 
@@ -283,6 +349,24 @@ branchless: automated working copy snapshot
             Some(commit) => commit,
             None => return Ok(None),
         };
+        let submodules = trailers.iter().find_map(|(k, v)| {
+            if k == BRANCHLESS_SUBMODULES_TRAILER {
+                Some(v)
+            } else {
+                None
+            }
+        });
+        let submodules: HashMap<PathBuf, String> = match submodules {
+            None => Default::default(),
+            Some(submodules) => serde_json::from_str(submodules)
+                .wrap_err_with(|| format!("Deserializing submodules: {submodules:?}"))?,
+        };
+        let submodules = submodules
+            .into_iter()
+            .map(|(path, oid)| -> eyre::Result<(PathBuf, MaybeZeroOid)> {
+                Ok((path, MaybeZeroOid::from_str(&oid)?))
+            })
+            .try_collect()?;
 
         Ok(Some(WorkingCopySnapshot {
             base_commit: base_commit.to_owned(),
@@ -293,6 +377,7 @@ branchless: automated working copy snapshot
             commit_stage1,
             commit_stage2,
             commit_stage3,
+            submodules,
         }))
     }
 
@@ -335,16 +420,25 @@ branchless: automated working copy snapshot
         let hydrate_entries = {
             let mut result = HashMap::new();
             for (path, file_mode) in changed_paths {
-                let entry = if file_mode == FileMode::Unreadable {
-                    // If the file was deleted from the index, it's possible
-                    // that it might still exist on disk. However, if the mode
-                    // is `Unreadable`, that means that we should ignore its
-                    // existence on disk because it's no longer being tracked by
-                    // the index.
-                    None
-                } else {
-                    repo.create_blob_from_path(&path)?
-                        .map(|blob_oid| (blob_oid, file_mode))
+                let entry = match file_mode {
+                    FileMode::Unreadable => {
+                        // If the file was deleted from the index, it's possible
+                        // that it might still exist on disk. However, if the mode
+                        // is `Unreadable`, that means that we should ignore its
+                        // existence on disk because it's no longer being tracked by
+                        // the index.
+                        None
+                    }
+                    FileMode::Commit => {
+                        // Submodule.
+                        // dbg!(&status_entries);
+                        // panic!();
+                        None
+                    }
+                    FileMode::Tree /* tree shouldn't happen? */ | FileMode::Blob | FileMode::BlobExecutable | FileMode::Link => {
+                        repo.create_blob_from_path(&path)?
+                            .map(|blob_oid| (blob_oid, file_mode))
+                    }
                 };
                 result.insert(path, entry);
             }
