@@ -607,7 +607,7 @@ pub enum TestSubcommand {
         commits: Revset,
 
         /// Show the test output as well.
-        #[clap(short = 'v', long, action = clap::ArgAction::Count)]
+        #[clap(short = 'v', long = "verbose", action = clap::ArgAction::Count)]
         verbosity: u8,
     },
 
@@ -627,7 +627,7 @@ pub enum TestSubcommand {
         commits: Revset,
 
         /// Show the test output as well.
-        #[clap(short = 'v', long, action = clap::ArgAction::Count)]
+        #[clap(short = 'v', long = "verbose", action = clap::ArgAction::Count)]
         verbosity: u8,
     },
 
