@@ -4,7 +4,10 @@ use std::ffi::OsString;
 use std::fmt::Write;
 use std::path::PathBuf;
 
-use console::style;
+use crate::core::formatting::StyledStringBuilder;
+
+use cursive::theme::{BaseColor, Effect, Style};
+use cursive::utils::markup::StyledString;
 use eyre::Context;
 use tracing::{instrument, warn};
 
@@ -220,12 +223,22 @@ pub fn get_hint_enabled(repo: &Repo, hint: Hint) -> eyre::Result<bool> {
         .get_or(hint.get_config_key(), true)
 }
 
+/// Render the leading colored "hint" text for use in messaging.
+pub fn get_hint_string() -> StyledString {
+    StyledStringBuilder::new()
+        .append_styled(
+            "hint",
+            Style::merge(&[BaseColor::Blue.dark().into(), Effect::Bold.into()]),
+        )
+        .build()
+}
+
 /// Print instructions explaining how to disable a given hint.
 pub fn print_hint_suppression_notice(effects: &Effects, hint: Hint) -> eyre::Result<()> {
     writeln!(
         effects.get_output_stream(),
         "{}: disable this hint by running: git config --global {} false",
-        style("hint").blue().bold(),
+        effects.get_glyphs().render(get_hint_string())?,
         hint.get_config_key(),
     )?;
     Ok(())

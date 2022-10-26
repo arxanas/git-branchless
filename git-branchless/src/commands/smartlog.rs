@@ -8,9 +8,8 @@ use std::fmt::Write;
 use std::mem::swap;
 use std::time::SystemTime;
 
-use console::style;
 use eden_dag::DagAlgorithm;
-use lib::core::config::{get_hint_enabled, print_hint_suppression_notice, Hint};
+use lib::core::config::{get_hint_enabled, get_hint_string, print_hint_suppression_notice, Hint};
 use lib::core::repo_ext::RepoExt;
 use lib::core::rewrite::find_rewrite_target;
 use lib::util::ExitCode;
@@ -673,7 +672,7 @@ pub fn smartlog(
             writeln!(
                 effects.get_output_stream(),
                 "{}: there {} in your commit graph",
-                style("hint").blue().bold(),
+                effects.get_glyphs().render(get_hint_string())?,
                 Pluralize {
                     determiner: Some(("is", "are")),
                     amount: num_abandoned_children,
@@ -683,7 +682,7 @@ pub fn smartlog(
             writeln!(
                 effects.get_output_stream(),
                 "{}: to fix this, run: git restack",
-                style("hint").blue().bold(),
+                effects.get_glyphs().render(get_hint_string())?,
             )?;
             print_hint_suppression_notice(effects, Hint::SmartlogFixAbandoned)?;
         }
