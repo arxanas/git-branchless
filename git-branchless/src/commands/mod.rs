@@ -56,7 +56,7 @@ use lib::git::NonZeroOid;
 
 use self::reword::InitialCommitMessages;
 use self::smartlog::SmartlogOptions;
-use self::test::TestOptions;
+use self::test::RawTestOptions;
 
 fn rewrite_args(args: Vec<OsString>) -> Vec<OsString> {
     let first_arg = match args.first() {
@@ -335,27 +335,31 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
 
         Command::Test { subcommand } => match subcommand {
             TestSubcommand::Run {
-                command,
+                exec: command,
+                command: command_alias,
                 commits,
                 verbosity,
             } => test::run(
                 &effects,
                 &git_run_info,
-                &TestOptions {
-                    command,
+                &RawTestOptions {
+                    exec: command,
+                    command: command_alias,
                     verbosity: test::Verbosity::from(verbosity),
                 },
                 commits,
             )?,
 
             TestSubcommand::Show {
-                command,
+                exec: command,
+                command: command_alias,
                 commits,
                 verbosity,
             } => test::show(
                 &effects,
-                &TestOptions {
-                    command,
+                &RawTestOptions {
+                    exec: command,
+                    command: command_alias,
                     verbosity: test::Verbosity::from(verbosity),
                 },
                 commits,

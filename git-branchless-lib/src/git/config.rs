@@ -135,6 +135,9 @@ pub trait ConfigRead {
     /// write to the underlying configuration file.
     fn into_config(self) -> Config;
 
+    /// Get all config key-value pairs matching a certain glob pattern.
+    fn list<S: AsRef<str>>(&self, glob_pattern: S) -> eyre::Result<Vec<(String, String)>>;
+
     /// Get a config key of one of various possible types.
     fn get<V: GetConfigValue<V>, S: AsRef<str>>(&self, key: S) -> eyre::Result<Option<V>>;
 
@@ -166,6 +169,24 @@ impl ConfigRead for Config {
     /// Get a config key of one of various possible types.
     fn get<V: GetConfigValue<V>, S: AsRef<str>>(&self, key: S) -> eyre::Result<Option<V>> {
         V::get_from_config(self, key)
+    }
+
+    fn list<S: AsRef<str>>(&self, glob_pattern: S) -> eyre::Result<Vec<(String, String)>> {
+        let glob_pattern = glob_pattern.as_ref();
+        let entries = self.inner.entries(Some(glob_pattern)).wrap_err_with(|| {
+            format!("Reading config entries for glob pattern {glob_pattern:?}")
+        })?;
+        let mut result = Vec::new();
+        entries
+            .for_each(|entry| {
+                if let (Some(name), Some(value)) = (entry.name(), entry.value()) {
+                    result.push((name.to_owned(), value.to_owned()));
+                }
+            })
+            .wrap_err_with(|| {
+                format!("Iterating config entries for glob pattern {glob_pattern:?}")
+            })?;
+        Ok(result)
     }
 }
 

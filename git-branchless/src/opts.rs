@@ -593,9 +593,14 @@ pub enum SnapshotSubcommand {
 pub enum TestSubcommand {
     /// Run a given command on a set of commits and present the successes and failures.
     Run {
-        /// The command to execute on each commit.
-        #[clap(value_parser, short = 'c', long = "command")]
-        command: String,
+        /// An ad-hoc command to execute on each commit.
+        #[clap(value_parser, short = 'x', long = "exec")]
+        exec: Option<String>,
+
+        /// The test command alias for the command to execute on each commit. Set with
+        /// `git config branchless.test.alias.<name> <command>`.
+        #[clap(value_parser, short = 'c', long = "command", conflicts_with("exec"))]
+        command: Option<String>,
 
         /// The set of commits to test.
         #[clap(value_parser, default_value = "stack()")]
@@ -608,9 +613,14 @@ pub enum TestSubcommand {
 
     /// Show the results of a set of previous test runs.
     Show {
-        /// The command to execute on each commit.
-        #[clap(value_parser, short = 'c', long = "command")]
-        command: String,
+        /// An ad-hoc command to execute on each commit.
+        #[clap(value_parser, short = 'x', long = "exec")]
+        exec: Option<String>,
+
+        /// The test command alias for the command to execute on each commit. Set with
+        /// `git config branchless.test.alias.<name> <command>`.
+        #[clap(value_parser, short = 'c', long = "command", conflicts_with("exec"))]
+        command: Option<String>,
 
         /// The set of commits to show the test output for.
         #[clap(value_parser, default_value = "stack()")]

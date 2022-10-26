@@ -19,7 +19,7 @@ use lib::core::rewrite::{
     execute_rebase_plan, ExecuteRebasePlanOptions, ExecuteRebasePlanResult, RebaseCommand,
     RebasePlan,
 };
-use lib::git::{Commit, GitRunInfo, GitRunResult, Repo};
+use lib::git::{Commit, ConfigRead, GitRunInfo, GitRunResult, Repo};
 use lib::util::{get_sh, ExitCode};
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
@@ -54,12 +54,105 @@ impl From<u8> for Verbosity {
 }
 
 #[derive(Debug)]
-pub struct TestOptions {
-    pub command: String,
+pub struct RawTestOptions {
+    pub exec: Option<String>,
+    pub command: Option<String>,
     pub verbosity: Verbosity,
 }
 
-impl TestOptions {
+fn resolve_test_command_alias(
+    effects: &Effects,
+    repo: &Repo,
+    alias: Option<&str>,
+) -> eyre::Result<Result<String, ExitCode>> {
+    let config = repo.get_readonly_config()?;
+    let config_key = format!("branchless.test.alias.{}", alias.unwrap_or("default"));
+    let config_value: Option<String> = config.get(config_key).unwrap_or_default();
+    if let Some(command) = config_value {
+        return Ok(Ok(command));
+    }
+
+    match alias {
+        Some(alias) => {
+            writeln!(
+                effects.get_output_stream(),
+                "\
+The test command alias {alias:?} was not defined.
+
+To create it, run: git config branchless.test.alias.{alias} <command>
+Or use the -x/--exec flag instead to run a test command without first creating an alias."
+            )?;
+        }
+        None => {
+            writeln!(
+                effects.get_output_stream(),
+                "\
+Could not determine test command to run. No test command was provided with -c/--command or
+-x/--exec, and the configuration value 'branchless.test.alias.default' was not set.
+
+To configure a default test command, run: git config branchless.test.alias.default <command>
+To run a specific test command, run: git test run -x <command>
+To run a specific command alias, run: git test run -c <alias>",
+            )?;
+        }
+    }
+
+    let aliases = config.list("branchless.test.alias.*")?;
+    if !aliases.is_empty() {
+        writeln!(
+            effects.get_output_stream(),
+            "\nThese are the currently-configured command aliases:"
+        )?;
+        for (name, command) in aliases {
+            writeln!(
+                effects.get_output_stream(),
+                "{} {name} = {command:?}",
+                effects.get_glyphs().bullet_point,
+            )?;
+        }
+    }
+
+    Ok(Err(ExitCode(1)))
+}
+
+#[derive(Debug)]
+struct ResolvedTestOptions {
+    command: String,
+    verbosity: Verbosity,
+}
+
+impl ResolvedTestOptions {
+    fn resolve(
+        effects: &Effects,
+        repo: &Repo,
+        options: &RawTestOptions,
+    ) -> eyre::Result<Result<Self, ExitCode>> {
+        let RawTestOptions {
+            exec: command,
+            command: command_alias,
+            verbosity,
+        } = options;
+        let resolved_command = match (command, command_alias) {
+            (Some(command), None) => command.to_owned(),
+            (None, maybe_command_alias) => {
+                match resolve_test_command_alias(effects, repo, maybe_command_alias.as_deref())? {
+                    Ok(command) => command,
+                    Err(exit_code) => {
+                        return Ok(Err(exit_code));
+                    }
+                }
+            }
+            (Some(command), Some(command_alias)) => unreachable!(
+                "Command ({:?}) and command alias ({:?}) are conflicting options",
+                command, command_alias
+            ),
+        };
+        Ok(Ok(ResolvedTestOptions {
+            command: resolved_command,
+            verbosity: *verbosity,
+        }))
+    }
+
     fn make_command_slug(&self) -> String {
         self.command.replace(&['/', ' ', '\n'], "_")
     }
@@ -69,7 +162,7 @@ impl TestOptions {
 pub fn run(
     effects: &Effects,
     git_run_info: &GitRunInfo,
-    options: &TestOptions,
+    options: &RawTestOptions,
     revset: Revset,
 ) -> eyre::Result<ExitCode> {
     let repo = Repo::from_current_dir()?;
@@ -87,6 +180,11 @@ pub fn run(
         event_cursor,
         &references_snapshot,
     )?;
+
+    let options = match ResolvedTestOptions::resolve(effects, &repo, options)? {
+        Ok(options) => options,
+        Err(exit_code) => return Ok(exit_code),
+    };
 
     let commit_set = match resolve_commits(effects, &repo, &mut dag, &[revset]) {
         Ok(mut commit_sets) => commit_sets.pop().unwrap(),
@@ -109,8 +207,14 @@ pub fn run(
     };
 
     let commits = sorted_commit_set(&repo, &dag, &commit_set)?;
-    let result: Result<_, _> =
-        run_tests(effects, git_run_info, &repo, event_tx_id, &commits, options);
+    let result: Result<_, _> = run_tests(
+        effects,
+        git_run_info,
+        &repo,
+        event_tx_id,
+        &commits,
+        &options,
+    );
     let abort_trap_exit_code = clear_abort_trap(effects, git_run_info, event_tx_id, abort_trap)?;
     if !abort_trap_exit_code.is_success() {
         return Ok(abort_trap_exit_code);
@@ -432,9 +536,10 @@ fn run_tests(
     repo: &Repo,
     event_tx_id: EventTransactionId,
     commits: &[Commit],
-    options: &TestOptions,
+    options: &ResolvedTestOptions,
 ) -> eyre::Result<ExitCode> {
-    let TestOptions { command, verbosity } = options;
+    let ResolvedTestOptions { command, verbosity } = &options;
+
     let shell_path = match get_sh() {
         Some(shell_path) => shell_path,
         None => {
@@ -544,10 +649,10 @@ fn run_test(
     shell_path: &Path,
     repo: &Repo,
     event_tx_id: EventTransactionId,
-    options: &TestOptions,
+    options: &ResolvedTestOptions,
     commit: &Commit,
 ) -> eyre::Result<TestOutput> {
-    let TestOptions {
+    let ResolvedTestOptions {
         command: _,
         verbosity,
     } = options;
@@ -629,7 +734,7 @@ enum TestFilesResult {
 fn make_test_files(
     repo: &Repo,
     commit: &Commit,
-    options: &TestOptions,
+    options: &ResolvedTestOptions,
 ) -> eyre::Result<TestFilesResult> {
     let test_output_dir = repo.get_test_dir();
     let command_dir = test_output_dir.join(options.make_command_slug());
@@ -724,7 +829,7 @@ fn test_commit(
     test_files: TestFiles,
     working_directory: &Path,
     shell_path: &Path,
-    options: &TestOptions,
+    options: &ResolvedTestOptions,
     commit: &Commit,
 ) -> eyre::Result<TestOutput> {
     let TestFiles {
@@ -782,7 +887,7 @@ fn test_commit(
 }
 
 #[instrument]
-pub fn show(effects: &Effects, options: &TestOptions, revset: Revset) -> eyre::Result<ExitCode> {
+pub fn show(effects: &Effects, options: &RawTestOptions, revset: Revset) -> eyre::Result<ExitCode> {
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
@@ -797,6 +902,13 @@ pub fn show(effects: &Effects, options: &TestOptions, revset: Revset) -> eyre::R
         &references_snapshot,
     )?;
 
+    let options = match ResolvedTestOptions::resolve(effects, &repo, options)? {
+        Ok(options) => options,
+        Err(exit_code) => {
+            return Ok(exit_code);
+        }
+    };
+
     let commit_set = match resolve_commits(effects, &repo, &mut dag, &[revset]) {
         Ok(mut commit_sets) => commit_sets.pop().unwrap(),
         Err(err) => {
@@ -807,7 +919,7 @@ pub fn show(effects: &Effects, options: &TestOptions, revset: Revset) -> eyre::R
 
     let commits = sorted_commit_set(&repo, &dag, &commit_set)?;
     for commit in commits {
-        let test_files = make_test_files(&repo, &commit, options)?;
+        let test_files = make_test_files(&repo, &commit, &options)?;
         match test_files {
             TestFilesResult::NotCached(_) => {
                 writeln!(

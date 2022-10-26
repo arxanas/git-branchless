@@ -22,7 +22,7 @@ fn test_test() -> eyre::Result<()> {
     git.commit_file("test3", 3)?;
 
     {
-        let (stdout, _stderr) = git.run(&["test", "run", "-c", "exit 0"])?;
+        let (stdout, _stderr) = git.run(&["test", "run", "-x", "exit 0"])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
@@ -37,7 +37,7 @@ fn test_test() -> eyre::Result<()> {
 
     {
         let (stdout, _stderr) = git.run_with_options(
-            &["test", "run", "-c", "exit 1"],
+            &["test", "run", "-x", "exit 1"],
             &GitRunOptions {
                 expected_exit_code: 1,
                 ..Default::default()
@@ -71,7 +71,7 @@ fn test_test_abort() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run_with_options(
             // Kill the parent process (i.e. the owning `git branchless test run` process).
-            &["test", "run", "-c", "kill $PPID"],
+            &["test", "run", "-x", "kill $PPID"],
             &GitRunOptions {
                 expected_exit_code: 143,
                 ..Default::default()
@@ -86,7 +86,7 @@ fn test_test_abort() -> eyre::Result<()> {
 
     {
         let (stdout, _stderr) = git.run_with_options(
-            &["test", "run", "-c", "exit 0"],
+            &["test", "run", "-x", "exit 0"],
             &GitRunOptions {
                 expected_exit_code: 1,
                 ..Default::default()
@@ -135,7 +135,7 @@ fn test_test_cached_results() -> eyre::Result<()> {
     git.run(&["revert", "HEAD"])?;
 
     {
-        let (stdout, _stderr) = git.run(&["test", "run", "-c", "exit 0"])?;
+        let (stdout, _stderr) = git.run(&["test", "run", "-x", "exit 0"])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
@@ -150,7 +150,7 @@ fn test_test_cached_results() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["test", "run", "-c", "exit 0"])?;
+        let (stdout, _stderr) = git.run(&["test", "run", "-x", "exit 0"])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
@@ -181,7 +181,7 @@ fn test_test_verbosity() -> eyre::Result<()> {
     let long_command = "bash test.sh 15";
 
     {
-        let (stdout, _stderr) = git.run(&["test", "run", "-c", short_command, "-v"])?;
+        let (stdout, _stderr) = git.run(&["test", "run", "-x", short_command, "-v"])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
@@ -207,7 +207,7 @@ fn test_test_verbosity() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["test", "run", "-c", short_command, "-vv"])?;
+        let (stdout, _stderr) = git.run(&["test", "run", "-x", short_command, "-vv"])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
@@ -233,7 +233,7 @@ fn test_test_verbosity() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["test", "run", "-c", long_command, "-v"])?;
+        let (stdout, _stderr) = git.run(&["test", "run", "-x", long_command, "-v"])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
@@ -260,7 +260,7 @@ fn test_test_verbosity() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["test", "run", "-c", long_command, "-vv"])?;
+        let (stdout, _stderr) = git.run(&["test", "run", "-x", long_command, "-vv"])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
@@ -303,7 +303,7 @@ fn test_test_show() -> eyre::Result<()> {
     git.commit_file("test2", 2)?;
 
     {
-        let (stdout, _stderr) = git.run(&["test", "run", "-c", "echo hi", "."])?;
+        let (stdout, _stderr) = git.run(&["test", "run", "-x", "echo hi", "."])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
@@ -316,7 +316,7 @@ fn test_test_show() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, stderr) = git.run(&["test", "show", "-c", "echo hi"])?;
+        let (stdout, stderr) = git.run(&["test", "show", "-x", "echo hi"])?;
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
         No cached test data for 62fc20d create test1.txt
@@ -332,11 +332,123 @@ fn test_test_show() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, stderr) = git.run(&["test", "show", "-c", "echo hi"])?;
+        let (stdout, stderr) = git.run(&["test", "show", "-x", "echo hi"])?;
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
         No cached test data for 62fc20d create test1.txt
         No cached test data for 96d1c37 create test2.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_test_command_alias() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+
+    {
+        let (stdout, _stderr) = git.run_with_options(
+            &["test", "run"],
+            &GitRunOptions {
+                expected_exit_code: 1,
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stdout, @r###"
+        Could not determine test command to run. No test command was provided with -c/--command or
+        -x/--exec, and the configuration value 'branchless.test.alias.default' was not set.
+
+        To configure a default test command, run: git config branchless.test.alias.default <command>
+        To run a specific test command, run: git test run -x <command>
+        To run a specific command alias, run: git test run -c <alias>
+        "###);
+    }
+
+    git.run(&["config", "branchless.test.alias.foo", "echo foo"])?;
+    {
+        let (stdout, _stderr) = git.run_with_options(
+            &["test", "run"],
+            &GitRunOptions {
+                expected_exit_code: 1,
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stdout, @r###"
+        Could not determine test command to run. No test command was provided with -c/--command or
+        -x/--exec, and the configuration value 'branchless.test.alias.default' was not set.
+
+        To configure a default test command, run: git config branchless.test.alias.default <command>
+        To run a specific test command, run: git test run -x <command>
+        To run a specific command alias, run: git test run -c <alias>
+
+        These are the currently-configured command aliases:
+        - branchless.test.alias.foo = "echo foo"
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run_with_options(
+            &["test", "run", "-c", "nonexistent"],
+            &GitRunOptions {
+                expected_exit_code: 1,
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stdout, @r###"
+        The test command alias "nonexistent" was not defined.
+
+        To create it, run: git config branchless.test.alias.nonexistent <command>
+        Or use the -x/--exec flag instead to run a test command without first creating an alias.
+
+        These are the currently-configured command aliases:
+        - branchless.test.alias.foo = "echo foo"
+        "###);
+    }
+
+    git.run(&["config", "branchless.test.alias.default", "echo default"])?;
+    {
+        let (stdout, _stderr) = git.run(&["test", "run"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> diff --quiet
+        Calling Git for on-disk rebase...
+        branchless: running command: <git-executable> rebase --continue
+        Ran echo default on 0 commits:
+        0 passed, 0 failed, 0 skipped
+        branchless: running command: <git-executable> rebase --abort
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["test", "run", "-c", "foo"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> diff --quiet
+        Calling Git for on-disk rebase...
+        branchless: running command: <git-executable> rebase --continue
+        Ran echo foo on 0 commits:
+        0 passed, 0 failed, 0 skipped
+        branchless: running command: <git-executable> rebase --abort
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run_with_options(
+            &["test", "run", "-c", "foo bar baz"],
+            &GitRunOptions {
+                expected_exit_code: 1,
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stdout, @r###"
+        The test command alias "foo bar baz" was not defined.
+
+        To create it, run: git config branchless.test.alias.foo bar baz <command>
+        Or use the -x/--exec flag instead to run a test command without first creating an alias.
+
+        These are the currently-configured command aliases:
+        - branchless.test.alias.foo = "echo foo"
+        - branchless.test.alias.default = "echo default"
         "###);
     }
 
