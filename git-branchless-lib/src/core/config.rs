@@ -197,22 +197,22 @@ pub const RESTACK_WARN_ABANDONED_CONFIG_KEY: &str = "branchless.restack.warnAban
 /// Possible hint types.
 #[derive(Clone, Debug)]
 pub enum Hint {
+    /// Suggest omitting arguments when they would default to `HEAD`.
+    MoveImplicitHeadArgument,
+
     /// Suggest running `git restack` when a commit is abandoned as part of a `rewrite` event.
     RestackWarnAbandoned,
 
     /// Suggest running `git restack` when the smartlog prints an abandoned commit.
     SmartlogFixAbandoned,
-
-    /// Suggest omitting arguments when they would default to `HEAD`.
-    MoveImplicitHeadArgument,
 }
 
 impl Hint {
     fn get_config_key(&self) -> &'static str {
         match self {
+            Hint::MoveImplicitHeadArgument => "branchless.hint.moveImplicitHeadArgument",
             Hint::RestackWarnAbandoned => "branchless.hint.restackWarnAbandoned",
             Hint::SmartlogFixAbandoned => "branchless.hint.smartlogFixAbandoned",
-            Hint::MoveImplicitHeadArgument => "branchless.hint.moveImplicitHeadArgument",
         }
     }
 }
