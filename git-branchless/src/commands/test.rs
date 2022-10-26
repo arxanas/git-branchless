@@ -598,6 +598,7 @@ fn run_tests(
     let mut num_passed = 0;
     let mut num_failed = 0;
     let mut num_skipped = 0;
+    let mut num_cached_results = 0;
     for (commit, test_output) in results {
         write!(
             effects.get_output_stream(),
@@ -613,9 +614,20 @@ fn run_tests(
             | TestStatus::ReadCacheFailed(_)
             | TestStatus::TerminatedBySignal => num_skipped += 1,
 
-            TestStatus::Failed(_) | TestStatus::FailedCached(_) => num_failed += 1,
-
-            TestStatus::Passed | TestStatus::PassedCached => num_passed += 1,
+            TestStatus::Failed(_) => {
+                num_failed += 1;
+            }
+            TestStatus::FailedCached(_) => {
+                num_failed += 1;
+                num_cached_results += 1;
+            }
+            TestStatus::Passed => {
+                num_passed += 1;
+            }
+            TestStatus::PassedCached => {
+                num_passed += 1;
+                num_cached_results += 1;
+            }
         }
     }
 
@@ -635,6 +647,25 @@ fn run_tests(
             .build(),
     )?;
     writeln!(effects.get_output_stream(), "{passed}, {failed}, {skipped}")?;
+
+    if num_cached_results > 0 && get_hint_enabled(repo, Hint::CleanCachedTestResults)? {
+        writeln!(
+            effects.get_output_stream(),
+            "{}: There {}.",
+            effects.get_glyphs().render(get_hint_string())?,
+            Pluralize {
+                determiner: Some(("was", "were")),
+                amount: num_cached_results,
+                unit: ("cached test result", "cached test results")
+            }
+        )?;
+        writeln!(
+            effects.get_output_stream(),
+            "{}: To clear all cached results, run: git test clean",
+            effects.get_glyphs().render(get_hint_string())?,
+        )?;
+        print_hint_suppression_notice(effects, Hint::CleanCachedTestResults)?;
+    }
 
     if num_failed > 0 || num_skipped > 0 {
         Ok(ExitCode(1))

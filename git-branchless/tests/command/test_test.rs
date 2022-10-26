@@ -145,6 +145,9 @@ fn test_test_cached_results() -> eyre::Result<()> {
         ✓ Passed: 0206717 create test3.txt
         ✓ Passed (cached): 1b0d484 Revert "create test3.txt"
         3 passed, 0 failed, 0 skipped
+        hint: There was 1 cached test result.
+        hint: To clear all cached results, run: git test clean
+        hint: disable this hint by running: git config --global branchless.hint.cleanCachedTestResults false
         branchless: running command: <git-executable> rebase --abort
         "###);
     }
@@ -160,6 +163,9 @@ fn test_test_cached_results() -> eyre::Result<()> {
         ✓ Passed (cached): 0206717 create test3.txt
         ✓ Passed (cached): 1b0d484 Revert "create test3.txt"
         3 passed, 0 failed, 0 skipped
+        hint: There were 3 cached test results.
+        hint: To clear all cached results, run: git test clean
+        hint: disable this hint by running: git config --global branchless.hint.cleanCachedTestResults false
         branchless: running command: <git-executable> rebase --abort
         "###);
     }
@@ -228,6 +234,9 @@ fn test_test_verbosity() -> eyre::Result<()> {
         Stderr: <repo-path>/.git/branchless/test/bash_test.sh_10/48bb2464c55090a387ed70b3d229705a94856efb/stderr
         <no output>
         1 passed, 0 failed, 0 skipped
+        hint: There was 1 cached test result.
+        hint: To clear all cached results, run: git test clean
+        hint: disable this hint by running: git config --global branchless.hint.cleanCachedTestResults false
         branchless: running command: <git-executable> rebase --abort
         "###);
     }
@@ -286,6 +295,9 @@ fn test_test_verbosity() -> eyre::Result<()> {
         Stderr: <repo-path>/.git/branchless/test/bash_test.sh_15/48bb2464c55090a387ed70b3d229705a94856efb/stderr
         <no output>
         1 passed, 0 failed, 0 skipped
+        hint: There was 1 cached test result.
+        hint: To clear all cached results, run: git test clean
+        hint: disable this hint by running: git config --global branchless.hint.cleanCachedTestResults false
         branchless: running command: <git-executable> rebase --abort
         "###);
     }
