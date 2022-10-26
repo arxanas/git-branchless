@@ -321,6 +321,8 @@ fn test_test_show() -> eyre::Result<()> {
         insta::assert_snapshot!(stdout, @r###"
         No cached test data for 62fc20d create test1.txt
         ✓ Passed (cached): 96d1c37 create test2.txt
+        hint: To see more detailed output, re-run with -v/--verbose.
+        hint: disable this hint by running: git config --global branchless.hint.testShowVerbose false
         "###);
     }
 
@@ -337,6 +339,8 @@ fn test_test_show() -> eyre::Result<()> {
         insta::assert_snapshot!(stdout, @r###"
         No cached test data for 62fc20d create test1.txt
         No cached test data for 96d1c37 create test2.txt
+        hint: To see more detailed output, re-run with -v/--verbose.
+        hint: disable this hint by running: git config --global branchless.hint.testShowVerbose false
         "###);
     }
 

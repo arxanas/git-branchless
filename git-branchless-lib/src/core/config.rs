@@ -4,13 +4,12 @@ use std::ffi::OsString;
 use std::fmt::Write;
 use std::path::PathBuf;
 
-use crate::core::formatting::StyledStringBuilder;
-
 use cursive::theme::{BaseColor, Effect, Style};
 use cursive::utils::markup::StyledString;
 use eyre::Context;
 use tracing::{instrument, warn};
 
+use crate::core::formatting::StyledStringBuilder;
 use crate::git::{ConfigRead, GitRunInfo, GitRunOpts, Repo};
 
 use super::effects::Effects;
@@ -205,6 +204,9 @@ pub enum Hint {
 
     /// Suggest running `git restack` when the smartlog prints an abandoned commit.
     SmartlogFixAbandoned,
+
+    /// Suggest showing more output with `git test show` using `--verbose`.
+    TestShowVerbose,
 }
 
 impl Hint {
@@ -213,6 +215,7 @@ impl Hint {
             Hint::MoveImplicitHeadArgument => "branchless.hint.moveImplicitHeadArgument",
             Hint::RestackWarnAbandoned => "branchless.hint.restackWarnAbandoned",
             Hint::SmartlogFixAbandoned => "branchless.hint.smartlogFixAbandoned",
+            Hint::TestShowVerbose => "branchless.hint.testShowVerbose",
         }
     }
 }

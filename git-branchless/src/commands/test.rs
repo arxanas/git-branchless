@@ -10,6 +10,7 @@ use cursive::utils::markup::StyledString;
 use eyre::WrapErr;
 use itertools::Itertools;
 use lazy_static::lazy_static;
+use lib::core::config::{get_hint_enabled, get_hint_string, print_hint_suppression_notice, Hint};
 use lib::core::dag::{sorted_commit_set, Dag};
 use lib::core::effects::{icons, Effects, OperationIcon, OperationType};
 use lib::core::eventlog::{EventLogDb, EventReplayer, EventTransactionId};
@@ -941,6 +942,28 @@ pub fn show(effects: &Effects, options: &RawTestOptions, revset: Revset) -> eyre
                     )?)?,
                 )?;
             }
+        }
+    }
+
+    if get_hint_enabled(&repo, Hint::TestShowVerbose)? {
+        match options.verbosity {
+            Verbosity::None => {
+                writeln!(
+                    effects.get_output_stream(),
+                    "{}: To see more detailed output, re-run with -v/--verbose.",
+                    effects.get_glyphs().render(get_hint_string())?,
+                )?;
+                print_hint_suppression_notice(effects, Hint::TestShowVerbose)?;
+            }
+            Verbosity::PartialOutput => {
+                writeln!(
+                    effects.get_output_stream(),
+                    "{}: To see more detailed output, re-run with -vv/--verbose --verbose.",
+                    effects.get_glyphs().render(get_hint_string())?,
+                )?;
+                print_hint_suppression_notice(effects, Hint::TestShowVerbose)?;
+            }
+            Verbosity::FullOutput => {}
         }
     }
 
