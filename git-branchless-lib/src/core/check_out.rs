@@ -197,6 +197,7 @@ pub fn create_snapshot<'repo>(
     let index = repo.get_index()?;
     let (snapshot, _status) =
         repo.get_status(effects, git_run_info, &index, &head_info, Some(event_tx_id))?;
+    // TODO: if there are submodules, invoke `git submodule foreach branchless snapshot create`?
     event_log_db.add_events(vec![Event::WorkingCopySnapshot {
         timestamp: SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs_f64(),
         event_tx_id,
