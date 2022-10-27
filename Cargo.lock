@@ -1409,6 +1409,7 @@ checksum = "bfddc9561e8baf264e0e45e197fd7696320026eb10a8180340debc27b18f535b"
 dependencies = [
  "console",
  "number_prefix",
+ "unicode-segmentation",
  "unicode-width",
 ]
 
