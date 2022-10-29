@@ -650,7 +650,11 @@ pub enum TestSubcommand {
     },
 
     /// Clean any cached test results.
-    Clean,
+    Clean {
+        /// The set of commits whose results should be cleaned.
+        #[clap(value_parser, default_value = "stack()")]
+        commits: Revset,
+    },
 }
 
 /// Generate and write man-pages into the specified directory.

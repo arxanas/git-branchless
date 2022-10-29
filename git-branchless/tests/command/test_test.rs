@@ -194,7 +194,7 @@ fn test_test_verbosity() -> eyre::Result<()> {
         branchless: running command: <git-executable> rebase --continue
         Ran bash test.sh 10 on 1 commit:
         ✓ Passed: fe65c1f create test2.txt
-        Stdout: <repo-path>/.git/branchless/test/bash_test.sh_10/48bb2464c55090a387ed70b3d229705a94856efb/stdout
+        Stdout: <repo-path>/.git/branchless/test/48bb2464c55090a387ed70b3d229705a94856efb/bash_test.sh_10/stdout
         This is line 1
         This is line 2
         This is line 3
@@ -205,7 +205,7 @@ fn test_test_verbosity() -> eyre::Result<()> {
         This is line 8
         This is line 9
         This is line 10
-        Stderr: <repo-path>/.git/branchless/test/bash_test.sh_10/48bb2464c55090a387ed70b3d229705a94856efb/stderr
+        Stderr: <repo-path>/.git/branchless/test/48bb2464c55090a387ed70b3d229705a94856efb/bash_test.sh_10/stderr
         <no output>
         1 passed, 0 failed, 0 skipped
         branchless: running command: <git-executable> rebase --abort
@@ -220,7 +220,7 @@ fn test_test_verbosity() -> eyre::Result<()> {
         branchless: running command: <git-executable> rebase --continue
         Ran bash test.sh 10 on 1 commit:
         ✓ Passed (cached): fe65c1f create test2.txt
-        Stdout: <repo-path>/.git/branchless/test/bash_test.sh_10/48bb2464c55090a387ed70b3d229705a94856efb/stdout
+        Stdout: <repo-path>/.git/branchless/test/48bb2464c55090a387ed70b3d229705a94856efb/bash_test.sh_10/stdout
         This is line 1
         This is line 2
         This is line 3
@@ -231,7 +231,7 @@ fn test_test_verbosity() -> eyre::Result<()> {
         This is line 8
         This is line 9
         This is line 10
-        Stderr: <repo-path>/.git/branchless/test/bash_test.sh_10/48bb2464c55090a387ed70b3d229705a94856efb/stderr
+        Stderr: <repo-path>/.git/branchless/test/48bb2464c55090a387ed70b3d229705a94856efb/bash_test.sh_10/stderr
         <no output>
         1 passed, 0 failed, 0 skipped
         hint: There was 1 cached test result.
@@ -249,7 +249,7 @@ fn test_test_verbosity() -> eyre::Result<()> {
         branchless: running command: <git-executable> rebase --continue
         Ran bash test.sh 15 on 1 commit:
         ✓ Passed: fe65c1f create test2.txt
-        Stdout: <repo-path>/.git/branchless/test/bash_test.sh_15/48bb2464c55090a387ed70b3d229705a94856efb/stdout
+        Stdout: <repo-path>/.git/branchless/test/48bb2464c55090a387ed70b3d229705a94856efb/bash_test.sh_15/stdout
         This is line 1
         This is line 2
         This is line 3
@@ -261,7 +261,7 @@ fn test_test_verbosity() -> eyre::Result<()> {
         This is line 13
         This is line 14
         This is line 15
-        Stderr: <repo-path>/.git/branchless/test/bash_test.sh_15/48bb2464c55090a387ed70b3d229705a94856efb/stderr
+        Stderr: <repo-path>/.git/branchless/test/48bb2464c55090a387ed70b3d229705a94856efb/bash_test.sh_15/stderr
         <no output>
         1 passed, 0 failed, 0 skipped
         branchless: running command: <git-executable> rebase --abort
@@ -276,7 +276,7 @@ fn test_test_verbosity() -> eyre::Result<()> {
         branchless: running command: <git-executable> rebase --continue
         Ran bash test.sh 15 on 1 commit:
         ✓ Passed (cached): fe65c1f create test2.txt
-        Stdout: <repo-path>/.git/branchless/test/bash_test.sh_15/48bb2464c55090a387ed70b3d229705a94856efb/stdout
+        Stdout: <repo-path>/.git/branchless/test/48bb2464c55090a387ed70b3d229705a94856efb/bash_test.sh_15/stdout
         This is line 1
         This is line 2
         This is line 3
@@ -292,7 +292,7 @@ fn test_test_verbosity() -> eyre::Result<()> {
         This is line 13
         This is line 14
         This is line 15
-        Stderr: <repo-path>/.git/branchless/test/bash_test.sh_15/48bb2464c55090a387ed70b3d229705a94856efb/stderr
+        Stderr: <repo-path>/.git/branchless/test/48bb2464c55090a387ed70b3d229705a94856efb/bash_test.sh_15/stderr
         <no output>
         1 passed, 0 failed, 0 skipped
         hint: There was 1 cached test result.
@@ -341,8 +341,11 @@ fn test_test_show() -> eyre::Result<()> {
     {
         let (stdout, stderr) = git.run(&["test", "clean"])?;
         insta::assert_snapshot!(stderr, @"");
-        insta::assert_snapshot!(stdout, @"Cleaned cached test results.
-");
+        insta::assert_snapshot!(stdout, @r###"
+        Cleaning results for 62fc20d create test1.txt
+        Cleaning results for 96d1c37 create test2.txt
+        Cleaned 2 cached test results.
+        "###);
     }
 
     {
@@ -520,9 +523,9 @@ fn test_test_worktree_strategy() -> eyre::Result<()> {
         insta::assert_snapshot!(stdout, @r###"
         Ran echo hello on 1 commit:
         ✓ Passed: 62fc20d create test1.txt
-        Stdout: <repo-path>/.git/branchless/test/echo_hello/8108c01b1930423879f106c1ebf725fcbfedccda/stdout
+        Stdout: <repo-path>/.git/branchless/test/8108c01b1930423879f106c1ebf725fcbfedccda/echo_hello/stdout
         hello
-        Stderr: <repo-path>/.git/branchless/test/echo_hello/8108c01b1930423879f106c1ebf725fcbfedccda/stderr
+        Stderr: <repo-path>/.git/branchless/test/8108c01b1930423879f106c1ebf725fcbfedccda/echo_hello/stderr
         <no output>
         1 passed, 0 failed, 0 skipped
         "###);
@@ -543,9 +546,9 @@ fn test_test_worktree_strategy() -> eyre::Result<()> {
         insta::assert_snapshot!(stdout, @r###"
         Ran echo hello on 1 commit:
         ✓ Passed (cached): 62fc20d create test1.txt
-        Stdout: <repo-path>/.git/branchless/test/echo_hello/8108c01b1930423879f106c1ebf725fcbfedccda/stdout
+        Stdout: <repo-path>/.git/branchless/test/8108c01b1930423879f106c1ebf725fcbfedccda/echo_hello/stdout
         hello
-        Stderr: <repo-path>/.git/branchless/test/echo_hello/8108c01b1930423879f106c1ebf725fcbfedccda/stderr
+        Stderr: <repo-path>/.git/branchless/test/8108c01b1930423879f106c1ebf725fcbfedccda/echo_hello/stderr
         <no output>
         1 passed, 0 failed, 0 skipped
         hint: There was 1 cached test result.

@@ -796,18 +796,19 @@ fn make_test_files(
     options: &ResolvedTestOptions,
 ) -> eyre::Result<TestFilesResult> {
     let test_output_dir = repo.get_test_dir();
-    let command_dir = test_output_dir.join(options.make_command_slug());
+    let tree_oid = commit.get_tree()?.get_oid();
+    let tree_dir = test_output_dir.join(tree_oid.to_string());
+    std::fs::create_dir_all(&tree_dir)
+        .wrap_err_with(|| format!("Creating tree directory {tree_dir:?}"))?;
+
+    let command_dir = tree_dir.join(options.make_command_slug());
     std::fs::create_dir_all(&command_dir)
         .wrap_err_with(|| format!("Creating command directory {command_dir:?}"))?;
 
-    let tree_oid = commit.get_tree()?.get_oid();
-    let tree_dir = command_dir.join(tree_oid.to_string());
-    std::fs::create_dir_all(&tree_dir)
-        .wrap_err_with(|| format!("Creating tree directory {tree_dir:?}"))?;
-    let result_path = tree_dir.join("result");
-    let stdout_path = tree_dir.join("stdout");
-    let stderr_path = tree_dir.join("stderr");
-    let lock_path = tree_dir.join("pid.lock");
+    let result_path = command_dir.join("result");
+    let stdout_path = command_dir.join("stdout");
+    let stderr_path = command_dir.join("stderr");
+    let lock_path = command_dir.join("pid.lock");
 
     let mut lock_file =
         LockFile::open(&lock_path).wrap_err_with(|| format!("Opening lock file {lock_path:?}"))?;
@@ -1098,18 +1099,70 @@ pub fn show(effects: &Effects, options: &RawTestOptions, revset: Revset) -> eyre
 }
 
 #[instrument]
-pub fn clean(effects: &Effects) -> eyre::Result<ExitCode> {
+pub fn clean(effects: &Effects, revset: Revset) -> eyre::Result<ExitCode> {
     let repo = Repo::from_current_dir()?;
+    let conn = repo.get_db_conn()?;
+    let event_log_db = EventLogDb::new(&conn)?;
+    let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
+    let event_cursor = event_replayer.make_default_cursor();
+    let references_snapshot = repo.get_references_snapshot()?;
+    let mut dag = Dag::open_and_sync(
+        effects,
+        &repo,
+        &event_replayer,
+        event_cursor,
+        &references_snapshot,
+    )?;
+
+    let commit_set = match resolve_commits(effects, &repo, &mut dag, &[revset]) {
+        Ok(mut commit_sets) => commit_sets.pop().unwrap(),
+        Err(err) => {
+            err.describe(effects)?;
+            return Ok(ExitCode(1));
+        }
+    };
+
     let test_dir = repo.get_test_dir();
-    if test_dir.exists() {
-        std::fs::remove_dir_all(&test_dir)
-            .with_context(|| format!("Cleaning test dir: {test_dir:?}"))?;
-        writeln!(effects.get_output_stream(), "Cleaned cached test results.")?;
-    } else {
+    if !test_dir.exists() {
         writeln!(
             effects.get_output_stream(),
             "No cached test results to clean."
         )?;
     }
+
+    let mut num_cleaned_commits = 0;
+    for commit in sorted_commit_set(&repo, &dag, &commit_set)? {
+        let tree_oid = commit.get_tree()?.get_oid();
+        let tree_dir = test_dir.join(tree_oid.to_string());
+        if tree_dir.exists() {
+            writeln!(
+                effects.get_output_stream(),
+                "Cleaning results for {}",
+                effects
+                    .get_glyphs()
+                    .render(commit.friendly_describe(effects.get_glyphs())?)?,
+            )?;
+            std::fs::remove_dir_all(&tree_dir)
+                .with_context(|| format!("Cleaning test dir: {tree_dir:?}"))?;
+            num_cleaned_commits += 1;
+        } else {
+            writeln!(
+                effects.get_output_stream(),
+                "Nothing to clean for {}",
+                effects
+                    .get_glyphs()
+                    .render(commit.friendly_describe(effects.get_glyphs())?)?,
+            )?;
+        }
+    }
+    writeln!(
+        effects.get_output_stream(),
+        "Cleaned {}.",
+        Pluralize {
+            determiner: None,
+            amount: num_cleaned_commits,
+            unit: ("cached test result", "cached test results")
+        }
+    )?;
     Ok(ExitCode(0))
 }
