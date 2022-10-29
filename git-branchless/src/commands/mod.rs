@@ -368,7 +368,7 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
                 commits,
             )?,
 
-            TestSubcommand::Clean => test::clean(&effects)?,
+            TestSubcommand::Clean { commits } => test::clean(&effects, commits)?,
         },
 
         Command::Undo { interactive, yes } => {
