@@ -8,6 +8,7 @@ use std::time::SystemTime;
 use cursive::theme::{BaseColor, Effect, Style};
 use cursive::utils::markup::StyledString;
 use eyre::WrapErr;
+use fslock::LockFile;
 use itertools::Itertools;
 use lazy_static::lazy_static;
 use lib::core::config::{get_hint_enabled, get_hint_string, print_hint_suppression_notice, Hint};
@@ -725,6 +726,7 @@ fn run_test(
             match prepare_working_directory(git_run_info, repo, event_tx_id, commit, *strategy)? {
                 None => {
                     let TestFiles {
+                        lock_file: _, // Drop lock.
                         result_path,
                         result_file: _,
                         stdout_path,
@@ -772,6 +774,7 @@ fn run_test(
 
 #[derive(Debug)]
 struct TestFiles {
+    lock_file: LockFile,
     result_path: PathBuf,
     result_file: File,
     stdout_path: PathBuf,
@@ -804,6 +807,21 @@ fn make_test_files(
     let result_path = tree_dir.join("result");
     let stdout_path = tree_dir.join("stdout");
     let stderr_path = tree_dir.join("stderr");
+    let lock_path = tree_dir.join("pid.lock");
+
+    let mut lock_file =
+        LockFile::open(&lock_path).wrap_err_with(|| format!("Opening lock file {lock_path:?}"))?;
+    if !lock_file
+        .try_lock_with_pid()
+        .wrap_err_with(|| format!("Locking file {lock_path:?}"))?
+    {
+        return Ok(TestFilesResult::Cached(TestOutput {
+            _result_path: result_path,
+            stdout_path,
+            stderr_path,
+            test_status: TestStatus::AlreadyInProgress,
+        }));
+    }
 
     // Try to create the exit code file atomically.
     let result_file = match File::options()
@@ -814,8 +832,9 @@ fn make_test_files(
         Ok(result_file) => result_file,
         Err(_) => {
             let test_status = match std::fs::read_to_string(&result_path) {
-                Ok(contents) if contents.is_empty() => TestStatus::AlreadyInProgress,
+                Err(err) => TestStatus::ReadCacheFailed(err.to_string()),
                 Ok(contents) => match serde_json::from_str(&contents) {
+                    Err(err) => TestStatus::ReadCacheFailed(err.to_string()),
                     Ok(TestStatus::Passed) => TestStatus::PassedCached,
                     Ok(TestStatus::Failed(exit_code)) => TestStatus::FailedCached(exit_code),
                     Ok(
@@ -829,9 +848,7 @@ fn make_test_files(
                     ) => TestStatus::ReadCacheFailed(format!(
                         "Unexpected cached test result: {test_result:?}"
                     )),
-                    Err(err) => TestStatus::ReadCacheFailed(err.to_string()),
                 },
-                Err(err) => TestStatus::ReadCacheFailed(err.to_string()),
             };
             return Ok(TestFilesResult::Cached(TestOutput {
                 _result_path: result_path,
@@ -847,6 +864,7 @@ fn make_test_files(
     let stderr_file = File::create(&stderr_path)
         .wrap_err_with(|| format!("Opening stderr file {stderr_path:?}"))?;
     Ok(TestFilesResult::NotCached(TestFiles {
+        lock_file,
         result_path,
         result_file,
         stdout_path,
@@ -942,6 +960,7 @@ fn test_commit(
     commit: &Commit,
 ) -> eyre::Result<TestOutput> {
     let TestFiles {
+        lock_file: _lock_file, // Make sure not to drop lock.
         result_path,
         result_file,
         stdout_path,
