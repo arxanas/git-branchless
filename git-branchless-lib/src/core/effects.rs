@@ -1,7 +1,7 @@
 //! Wrappers around various side effects.
 
 use std::convert::TryInto;
-use std::fmt::Write;
+use std::fmt::{Debug, Write};
 use std::io::{stderr, stdout, Stderr, Stdout, Write as WriteIo};
 use std::mem::take;
 use std::sync::{Arc, Mutex, RwLock};
@@ -80,7 +80,7 @@ impl ToString for OperationType {
                 return format!("Running Git command: {}", &command)
             }
             OperationType::RunTests(command) => return format!("Running tests: {command}"),
-            OperationType::RunTestOnCommit(commit) => return format!("Testing {commit}"),
+            OperationType::RunTestOnCommit(commit) => return format!("Waiting to test {commit}"),
             OperationType::SortCommits => "Sorting commits",
             OperationType::SyncCommits => "Syncing commit stacks",
             OperationType::UpdateCommitGraph => "Updating commit graph",
@@ -154,6 +154,7 @@ impl RootOperation {
                             progress_bar: ProgressBar::new_spinner(),
                             has_meter: Default::default(),
                             icon: Default::default(),
+                            progress_message: first.to_string(),
                             start_times: Default::default(),
                             elapsed_duration: Default::default(),
                             children: Default::default(),
@@ -246,14 +247,17 @@ pub mod icons {
     pub const EXCLAMATION: &str = "⚠️";
 
     /// Used to indicate failure.
-    pub const CROSS: &str = "✗️";
+    ///
+    /// Can't use "✗️" in interactive progress meters because some terminals think its width is >1,
+    /// which seems to cause rendering issues because we use 1 as its width.
+    pub const CROSS: &str = "X";
 }
 
 /// An icon denoting the status of an operation.
 #[derive(Clone, Copy, Debug)]
 pub enum OperationIcon {
-    /// No icon should be rendered.
-    None,
+    /// A suitable waiting icon should be rendered.
+    InProgress,
 
     /// The operation was a success.
     Success,
@@ -267,7 +271,7 @@ pub enum OperationIcon {
 
 impl Default for OperationIcon {
     fn default() -> Self {
-        Self::None
+        Self::InProgress
     }
 }
 
@@ -278,6 +282,7 @@ struct OperationState {
     has_meter: bool,
     start_times: Vec<Instant>,
     icon: OperationIcon,
+    progress_message: String,
     elapsed_duration: Duration,
     children: Vec<OperationState>,
 }
@@ -320,6 +325,7 @@ impl OperationState {
                             progress_bar: ProgressBar::new_spinner(),
                             has_meter: Default::default(),
                             icon: Default::default(),
+                            progress_message: first.to_string(),
                             start_times: Default::default(),
                             elapsed_duration: Default::default(),
                             children: Default::default(),
@@ -364,6 +370,11 @@ impl OperationState {
                 // the line so that the length number isn't overlapped by the
                 // cursor.
                 Arc::new(Mutex::new(ProgressStyle::default_bar().template("{prefix}{spinner} {wide_msg} {bar} {pos}/{len} ").unwrap()));
+            static ref WAITING_PROGRESS_STYLE: Arc<Mutex<ProgressStyle>> = Arc::new(Mutex::new(IN_PROGRESS_SPINNER_STYLE
+                .clone().lock().unwrap().clone()
+                // Requires at least two tick values, so just pass the same one twice.
+                .tick_strings(&[" ", " "])
+            ));
             static ref SUCCESS_PROGRESS_STYLE: Arc<Mutex<ProgressStyle>> = Arc::new(Mutex::new(IN_PROGRESS_SPINNER_STYLE
                 .clone()
                 .lock()
@@ -400,21 +411,24 @@ impl OperationState {
                 (_, _, OperationIcon::Success) => SUCCESS_PROGRESS_STYLE.lock().unwrap().clone(),
                 (_, _, OperationIcon::Warning) => WARNING_PROGRESS_STYLE.lock().unwrap().clone(),
                 (_, _, OperationIcon::Failure) => FAILURE_PROGRESS_STYLE.lock().unwrap().clone(),
-                ([], _, OperationIcon::None) => SUCCESS_PROGRESS_STYLE.lock().unwrap().clone(),
-                ([..], false, OperationIcon::None) => {
+                ([], _, OperationIcon::InProgress) => {
+                    WAITING_PROGRESS_STYLE.lock().unwrap().clone()
+                }
+                ([..], false, OperationIcon::InProgress) => {
                     IN_PROGRESS_SPINNER_STYLE.lock().unwrap().clone()
                 }
-                ([..], true, OperationIcon::None) => IN_PROGRESS_BAR_STYLE.lock().unwrap().clone(),
+                ([..], true, OperationIcon::InProgress) => {
+                    IN_PROGRESS_BAR_STYLE.lock().unwrap().clone()
+                }
             },
         );
-        // Both `set_message` and `set_prefix` implicitly call
-        // `ProgressBar::tick` and force a redraw.
         self.progress_bar.set_prefix("  ".repeat(nesting_level));
         self.progress_bar.set_message(format!(
             "{} ({:.1}s)",
-            self.operation_type.to_string(),
+            self.progress_message,
             elapsed_duration.as_secs_f64(),
         ));
+        self.progress_bar.tick();
     }
 }
 
@@ -633,7 +647,7 @@ impl Effects {
             None => return,
         };
         operation_state.icon = icon;
-        operation_state.progress_bar.set_message(message);
+        operation_state.progress_message = message;
     }
 
     fn on_drop_progress_handle(&self, operation_key: &OperationKey) {
