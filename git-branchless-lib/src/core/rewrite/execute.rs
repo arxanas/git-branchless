@@ -543,7 +543,7 @@ mod in_memory {
                     };
 
                     progress.notify_status(
-                        OperationIcon::None,
+                        OperationIcon::InProgress,
                         format!("Applying patch for commit: {}", commit_description),
                     );
                     let commit_tree = match repo.cherry_pick_fast(
@@ -572,7 +572,7 @@ mod in_memory {
                     })?;
 
                     progress.notify_status(
-                        OperationIcon::None,
+                        OperationIcon::InProgress,
                         format!("Committing to repository: {}", commit_description),
                     );
                     let committer_signature = if *preserve_timestamps {
@@ -662,7 +662,7 @@ mod in_memory {
                     progress.notify_progress(i, num_picks);
 
                     progress.notify_status(
-                        OperationIcon::None,
+                        OperationIcon::InProgress,
                         format!("Applying merge commit: {}", commit_description),
                     );
                     let commit = repo.find_commit_or_fail(*replacement_commit_oid)?;
@@ -676,7 +676,7 @@ mod in_memory {
                     })?;
 
                     progress.notify_status(
-                        OperationIcon::None,
+                        OperationIcon::InProgress,
                         format!("Committing to repository: {}", commit_description),
                     );
                     let committer_signature = if *preserve_timestamps {

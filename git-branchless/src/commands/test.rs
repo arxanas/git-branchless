@@ -16,7 +16,7 @@ use lib::core::config::{get_hint_enabled, get_hint_string, print_hint_suppressio
 use lib::core::dag::{sorted_commit_set, Dag};
 use lib::core::effects::{icons, Effects, OperationIcon, OperationType};
 use lib::core::eventlog::{EventLogDb, EventReplayer, EventTransactionId};
-use lib::core::formatting::{Pluralize, StyledStringBuilder};
+use lib::core::formatting::{Glyphs, Pluralize, StyledStringBuilder};
 use lib::core::repo_ext::RepoExt;
 use lib::core::rewrite::{
     execute_rebase_plan, ExecuteRebasePlanOptions, ExecuteRebasePlanResult, RebaseCommand,
@@ -423,6 +423,95 @@ enum TestStatus {
     PassedCached,
 }
 
+impl TestStatus {
+    #[instrument]
+    fn get_icon(&self) -> &'static str {
+        match self {
+            TestStatus::CheckoutFailed
+            | TestStatus::SpawnTestFailed(_)
+            | TestStatus::AlreadyInProgress
+            | TestStatus::ReadCacheFailed(_)
+            | TestStatus::TerminatedBySignal => icons::EXCLAMATION,
+            TestStatus::Failed(_) | TestStatus::FailedCached(_) => icons::CROSS,
+            TestStatus::Passed | TestStatus::PassedCached => icons::CHECKMARK,
+        }
+    }
+
+    #[instrument]
+    fn get_style(&self) -> Style {
+        match self {
+            TestStatus::CheckoutFailed
+            | TestStatus::SpawnTestFailed(_)
+            | TestStatus::AlreadyInProgress
+            | TestStatus::ReadCacheFailed(_)
+            | TestStatus::TerminatedBySignal => *STYLE_SKIPPED,
+            TestStatus::Failed(_) | TestStatus::FailedCached(_) => *STYLE_FAILURE,
+            TestStatus::Passed | TestStatus::PassedCached => *STYLE_SUCCESS,
+        }
+    }
+}
+
+#[instrument]
+fn make_test_status_description(
+    glyphs: &Glyphs,
+    commit: &Commit,
+    test_status: &TestStatus,
+) -> eyre::Result<StyledString> {
+    let description = match test_status {
+        TestStatus::CheckoutFailed => StyledStringBuilder::new()
+            .append_styled("Failed to check out: ", *STYLE_SKIPPED)
+            .append(commit.friendly_describe(glyphs)?)
+            .build(),
+
+        TestStatus::SpawnTestFailed(err) => StyledStringBuilder::new()
+            .append_styled(format!("Failed to spawn test: {err}: "), *STYLE_SKIPPED)
+            .append(commit.friendly_describe(glyphs)?)
+            .build(),
+
+        TestStatus::TerminatedBySignal => StyledStringBuilder::new()
+            .append_styled("Test command terminated by signal: ", *STYLE_FAILURE)
+            .append(commit.friendly_describe(glyphs)?)
+            .build(),
+
+        TestStatus::AlreadyInProgress => StyledStringBuilder::new()
+            .append_styled("Test already in progress? ", *STYLE_SKIPPED)
+            .append(commit.friendly_describe(glyphs)?)
+            .build(),
+
+        TestStatus::ReadCacheFailed(_) => StyledStringBuilder::new()
+            .append_styled("Could not read cached test result: ", *STYLE_SKIPPED)
+            .append(commit.friendly_describe(glyphs)?)
+            .build(),
+
+        TestStatus::Failed(exit_code) => StyledStringBuilder::new()
+            .append_styled(
+                format!("Failed with exit code {exit_code}: "),
+                *STYLE_FAILURE,
+            )
+            .append(commit.friendly_describe(glyphs)?)
+            .build(),
+
+        TestStatus::FailedCached(exit_code) => StyledStringBuilder::new()
+            .append_styled(
+                format!("Failed (cached) with exit code {exit_code}: "),
+                *STYLE_FAILURE,
+            )
+            .append(commit.friendly_describe(glyphs)?)
+            .build(),
+
+        TestStatus::Passed => StyledStringBuilder::new()
+            .append_styled("Passed: ", *STYLE_SUCCESS)
+            .append(commit.friendly_describe(glyphs)?)
+            .build(),
+
+        TestStatus::PassedCached => StyledStringBuilder::new()
+            .append_styled("Passed (cached): ", *STYLE_SUCCESS)
+            .append(commit.friendly_describe(glyphs)?)
+            .build(),
+    };
+    Ok(description)
+}
+
 impl TestOutput {
     #[instrument]
     fn describe(
@@ -431,86 +520,18 @@ impl TestOutput {
         commit: &Commit,
         verbosity: Verbosity,
     ) -> eyre::Result<StyledString> {
-        let glyphs = effects.get_glyphs();
-        let description = match &self.test_status {
-            TestStatus::CheckoutFailed => StyledStringBuilder::new()
-                .append_styled(
-                    format!("{} Failed to check out: ", icons::EXCLAMATION),
-                    *STYLE_SKIPPED,
-                )
-                .append(commit.friendly_describe(glyphs)?)
-                .build(),
-
-            TestStatus::SpawnTestFailed(err) => StyledStringBuilder::new()
-                .append_styled(
-                    format!("{} Failed to spawn test: {err}: ", icons::EXCLAMATION),
-                    *STYLE_SKIPPED,
-                )
-                .append(commit.friendly_describe(glyphs)?)
-                .build(),
-
-            TestStatus::TerminatedBySignal => StyledStringBuilder::new()
-                .append_styled(
-                    format!("{} Test command terminated by signal: ", icons::CROSS),
-                    *STYLE_FAILURE,
-                )
-                .append(commit.friendly_describe(glyphs)?)
-                .build(),
-
-            TestStatus::AlreadyInProgress => StyledStringBuilder::new()
-                .append_styled(
-                    format!("{} Test already in progress? ", icons::EXCLAMATION),
-                    *STYLE_SKIPPED,
-                )
-                .append(commit.friendly_describe(glyphs)?)
-                .build(),
-
-            TestStatus::ReadCacheFailed(_) => StyledStringBuilder::new()
-                .append_styled(
-                    format!("{} Could not read cached test result: ", icons::EXCLAMATION),
-                    *STYLE_SKIPPED,
-                )
-                .append(commit.friendly_describe(glyphs)?)
-                .build(),
-
-            TestStatus::Failed(exit_code) => StyledStringBuilder::new()
-                .append_styled(
-                    format!("{} Failed with exit code {exit_code}: ", icons::CROSS),
-                    *STYLE_FAILURE,
-                )
-                .append(commit.friendly_describe(glyphs)?)
-                .build(),
-
-            TestStatus::FailedCached(exit_code) => StyledStringBuilder::new()
-                .append_styled(
-                    format!(
-                        "{} Failed (cached) with exit code {exit_code}: ",
-                        icons::CROSS
-                    ),
-                    *STYLE_FAILURE,
-                )
-                .append(commit.friendly_describe(glyphs)?)
-                .build(),
-
-            TestStatus::Passed => StyledStringBuilder::new()
-                .append_styled(format!("{} Passed: ", icons::CHECKMARK), *STYLE_SUCCESS)
-                .append(commit.friendly_describe(glyphs)?)
-                .build(),
-
-            TestStatus::PassedCached => StyledStringBuilder::new()
-                .append_styled(
-                    format!("{} Passed (cached): ", icons::CHECKMARK),
-                    *STYLE_SUCCESS,
-                )
-                .append(commit.friendly_describe(glyphs)?)
-                .build(),
-        };
+        let description = StyledStringBuilder::new()
+            .append_styled(self.test_status.get_icon(), self.test_status.get_style())
+            .append_plain(" ")
+            .append(make_test_status_description(
+                effects.get_glyphs(),
+                commit,
+                &self.test_status,
+            )?)
+            .build();
 
         if verbosity == Verbosity::None {
-            return Ok(StyledStringBuilder::new()
-                .append(description)
-                .append_plain("\n")
-                .build());
+            return Ok(StyledStringBuilder::from_lines(vec![description]));
         }
 
         fn abbreviate_lines(path: &Path, verbosity: Verbosity) -> Vec<StyledString> {
@@ -614,10 +635,31 @@ fn run_tests(
         let (effects, progress) =
             effects.start_operation(OperationType::RunTests(Arc::new(command.clone())));
         progress.notify_progress(0, commits.len());
+        let commits_with_operations = {
+            let mut results = Vec::new();
+            for commit in commits {
+                // Create the progress entries in the multiprogress meter without starting them.
+                // They'll be resumed later in the loop below.
+                let commit_description = effects
+                    .get_glyphs()
+                    .render(commit.friendly_describe(effects.get_glyphs())?)?;
+                let operation_type =
+                    OperationType::RunTestOnCommit(Arc::new(commit_description.clone()));
+                let (_effects, progress) = effects.start_operation(operation_type.clone());
+                progress.notify_status(
+                    OperationIcon::InProgress,
+                    format!("Waiting to test {}", commit_description),
+                );
+                results.push((commit, operation_type));
+            }
+            results
+        };
+
         let mut results = Vec::new();
-        for commit in commits {
+        for (commit, operation_type) in commits_with_operations {
             let test_output = run_test(
                 &effects,
+                operation_type,
                 git_run_info,
                 &shell_path,
                 repo,
@@ -727,6 +769,7 @@ fn run_tests(
 #[instrument]
 fn run_test(
     effects: &Effects,
+    operation_type: OperationType,
     git_run_info: &GitRunInfo,
     shell_path: &Path,
     repo: &Repo,
@@ -737,14 +780,18 @@ fn run_test(
     let ResolvedTestOptions {
         command: _,
         strategy,
-        verbosity,
+        verbosity: _,
     } = options;
-
-    let (effects, progress) = effects.start_operation(OperationType::RunTestOnCommit(Arc::new(
-        effects
-            .get_glyphs()
-            .render(commit.friendly_describe(effects.get_glyphs())?)?,
-    )));
+    let (effects, progress) = effects.start_operation(operation_type);
+    progress.notify_status(
+        OperationIcon::InProgress,
+        format!(
+            "Testing {}",
+            effects
+                .get_glyphs()
+                .render(commit.friendly_describe(effects.get_glyphs())?)?
+        ),
+    );
 
     let test_output = match make_test_files(repo, commit, options)? {
         TestFilesResult::Cached(test_output) => test_output,
@@ -779,7 +826,13 @@ fn run_test(
         }
     };
 
-    let text = test_output.describe(&effects, commit, *verbosity)?;
+    let description = StyledStringBuilder::new()
+        .append(make_test_status_description(
+            effects.get_glyphs(),
+            commit,
+            &test_output.test_status,
+        )?)
+        .build();
     progress.notify_status(
         match test_output.test_status {
             TestStatus::CheckoutFailed
@@ -793,7 +846,7 @@ fn run_test(
 
             TestStatus::Passed | TestStatus::PassedCached => OperationIcon::Success,
         },
-        effects.get_glyphs().render(text)?,
+        effects.get_glyphs().render(description)?,
     );
     Ok(test_output)
 }
