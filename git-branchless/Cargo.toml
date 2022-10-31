@@ -23,7 +23,7 @@ chrono = "0.4.19"
 chrono-english = "0.1.7"
 chronoutil = "0.2.3"
 clap = { version = "4.0.18", features = ["derive"] }
-clap_mangen = "0.2.3"
+clap_mangen = "0.2.4"
 color-eyre = "0.6.2"
 console = "0.15.0"
 cursive = { version = "0.20.0", default-features = false, features = [
