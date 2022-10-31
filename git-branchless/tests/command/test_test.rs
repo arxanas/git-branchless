@@ -470,3 +470,89 @@ fn test_test_command_alias() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[cfg(unix)] // Paths don't match on Windows.
+#[test]
+fn test_test_worktree_strategy() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+
+    git.commit_file("test1", 1)?;
+    git.write_file_txt("test1", "Updated contents\n")?;
+
+    {
+        let (stdout, stderr) = git.run_with_options(
+            &[
+                "test",
+                "run",
+                "--strategy",
+                "working-copy",
+                "-x",
+                "echo hello",
+                "@",
+            ],
+            &GitRunOptions {
+                expected_exit_code: 1,
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stderr, @"");
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> diff --quiet
+        This operation would modify the working copy, but you have uncommitted changes
+        in your working copy which might be overwritten as a result.
+        Commit your changes and then try again.
+        "###);
+    }
+
+    {
+        let (stdout, stderr) = git.run(&[
+            "test",
+            "run",
+            "--strategy",
+            "worktree",
+            "-x",
+            "echo hello",
+            "-vv",
+            "@",
+        ])?;
+        insta::assert_snapshot!(stderr, @"");
+        insta::assert_snapshot!(stdout, @r###"
+        Ran echo hello on 1 commit:
+        ✓ Passed: 62fc20d create test1.txt
+        Stdout: <repo-path>/.git/branchless/test/echo_hello/8108c01b1930423879f106c1ebf725fcbfedccda/stdout
+        hello
+        Stderr: <repo-path>/.git/branchless/test/echo_hello/8108c01b1930423879f106c1ebf725fcbfedccda/stderr
+        <no output>
+        1 passed, 0 failed, 0 skipped
+        "###);
+    }
+
+    {
+        let (stdout, stderr) = git.run(&[
+            "test",
+            "run",
+            "--strategy",
+            "worktree",
+            "-x",
+            "echo hello",
+            "-vv",
+            "@",
+        ])?;
+        insta::assert_snapshot!(stderr, @"");
+        insta::assert_snapshot!(stdout, @r###"
+        Ran echo hello on 1 commit:
+        ✓ Passed (cached): 62fc20d create test1.txt
+        Stdout: <repo-path>/.git/branchless/test/echo_hello/8108c01b1930423879f106c1ebf725fcbfedccda/stdout
+        hello
+        Stderr: <repo-path>/.git/branchless/test/echo_hello/8108c01b1930423879f106c1ebf725fcbfedccda/stderr
+        <no output>
+        1 passed, 0 failed, 0 skipped
+        hint: There was 1 cached test result.
+        hint: To clear all cached results, run: git test clean
+        hint: disable this hint by running: git config --global branchless.hint.cleanCachedTestResults false
+        "###);
+    }
+
+    Ok(())
+}
