@@ -48,8 +48,8 @@ fn test_test() -> eyre::Result<()> {
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
         Ran exit 1 on 2 commits:
-        ✗️ Failed with exit code 1: fe65c1f create test2.txt
-        ✗️ Failed with exit code 1: 0206717 create test3.txt
+        X Failed with exit code 1: fe65c1f create test2.txt
+        X Failed with exit code 1: 0206717 create test3.txt
         0 passed, 2 failed, 0 skipped
         branchless: running command: <git-executable> rebase --abort
         "###);
@@ -554,6 +554,77 @@ fn test_test_worktree_strategy() -> eyre::Result<()> {
         hint: There was 1 cached test result.
         hint: To clear all cached results, run: git test clean
         hint: disable this hint by running: git config --global branchless.hint.cleanCachedTestResults false
+        "###);
+    }
+
+    Ok(())
+}
+
+#[cfg(unix)] // Paths don't match on Windows.
+#[test]
+fn test_test_config_strategy() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+
+    git.commit_file("test1", 1)?;
+
+    git.write_file(
+        "test.sh",
+        "#!/bin/sh
+echo hello
+",
+    )?;
+    git.commit_file("test2", 2)?;
+
+    git.write_file_txt("test1", "Updated contents\n")?;
+
+    git.run(&["config", "branchless.test.alias.default", "bash test.sh"])?;
+    git.run(&["config", "branchless.test.strategy", "working-copy"])?;
+    {
+        let (stdout, stderr) = git.run_with_options(
+            &["test", "run", "@"],
+            &GitRunOptions {
+                expected_exit_code: 1,
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stderr, @"");
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> diff --quiet
+        This operation would modify the working copy, but you have uncommitted changes
+        in your working copy which might be overwritten as a result.
+        Commit your changes and then try again.
+        "###);
+    }
+
+    git.run(&["config", "branchless.test.strategy", "worktree"])?;
+    {
+        let (stdout, stderr) = git.run(&["test", "run", "-vv", "@"])?;
+        insta::assert_snapshot!(stderr, @"");
+        insta::assert_snapshot!(stdout, @r###"
+        Ran bash test.sh on 1 commit:
+        ✓ Passed: c82ebfa create test2.txt
+        Stdout: <repo-path>/.git/branchless/test/a3ae41e24abf7537423d8c72d07df7af456de6dd/bash_test.sh/stdout
+        hello
+        Stderr: <repo-path>/.git/branchless/test/a3ae41e24abf7537423d8c72d07df7af456de6dd/bash_test.sh/stderr
+        <no output>
+        1 passed, 0 failed, 0 skipped
+        "###);
+    }
+
+    git.run(&["config", "branchless.test.strategy", "invalid-value"])?;
+    {
+        let (stdout, stderr) = git.run_with_options(
+            &["test", "run", "-vv", "@"],
+            &GitRunOptions {
+                expected_exit_code: 1,
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stderr, @"");
+        insta::assert_snapshot!(stdout, @r###"
+        Invalid value for config value branchless.test.strategy: invalid-value
+        Expected one of: working-copy, worktree
         "###);
     }
 

@@ -5,6 +5,7 @@ use std::process::{Command, Stdio};
 use std::sync::Arc;
 use std::time::SystemTime;
 
+use clap::ValueEnum;
 use cursive::theme::{BaseColor, Effect, Style};
 use cursive::utils::markup::StyledString;
 use eyre::WrapErr;
@@ -131,6 +132,7 @@ impl ResolvedTestOptions {
         repo: &Repo,
         options: &RawTestOptions,
     ) -> eyre::Result<Result<Self, ExitCode>> {
+        let config = repo.get_readonly_config()?;
         let RawTestOptions {
             exec: command,
             command: command_alias,
@@ -152,7 +154,31 @@ impl ResolvedTestOptions {
                 command, command_alias
             ),
         };
-        let resolved_strategy = strategy.unwrap_or(TestExecutionStrategy::WorkingCopy);
+        let resolved_strategy = match strategy {
+            Some(strategy) => *strategy,
+            None => {
+                let strategy: Option<String> = config.get("branchless.test.strategy")?;
+                match strategy {
+                    None => TestExecutionStrategy::WorkingCopy,
+                    Some(strategy) => match TestExecutionStrategy::from_str(&strategy, true) {
+                        Ok(strategy) => strategy,
+                        Err(_) => {
+                            writeln!(effects.get_output_stream(), "Invalid value for config value branchless.test.strategy: {strategy}")?;
+                            writeln!(
+                                effects.get_output_stream(),
+                                "Expected one of: {}",
+                                TestExecutionStrategy::value_variants()
+                                    .iter()
+                                    .filter_map(|variant| variant.to_possible_value())
+                                    .map(|value| value.get_name().to_owned())
+                                    .join(", ")
+                            )?;
+                            return Ok(Err(ExitCode(1)));
+                        }
+                    },
+                }
+            }
+        };
         Ok(Ok(ResolvedTestOptions {
             command: resolved_command,
             strategy: resolved_strategy,
