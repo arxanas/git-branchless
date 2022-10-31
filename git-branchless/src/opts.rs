@@ -551,6 +551,20 @@ pub enum ColorSetting {
     Never,
 }
 
+/// How to execute tests.
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub enum TestExecutionStrategy {
+    /// Default. Run the tests in the working copy. This requires a clean working copy. This is
+    /// useful if you want to reuse build artifacts in the current directory.
+    WorkingCopy,
+
+    /// Run the tests in a separate worktree (managed by git-branchless). This is useful if you want
+    /// to run tests in parallel, or if you want to run tests on a different commit without
+    /// invalidating build artifacts in the current directory, or if you want to run tests while
+    /// your working copy is dirty.
+    Worktree,
+}
+
 /// Branchless workflow for Git.
 ///
 /// See the documentation at <https://github.com/arxanas/git-branchless/wiki>.
@@ -609,6 +623,10 @@ pub enum TestSubcommand {
         /// Show the test output as well.
         #[clap(short = 'v', long = "verbose", action = clap::ArgAction::Count)]
         verbosity: u8,
+
+        /// How to execute the tests.
+        #[clap(short = 's', long = "strategy")]
+        strategy: Option<TestExecutionStrategy>,
     },
 
     /// Show the results of a set of previous test runs.

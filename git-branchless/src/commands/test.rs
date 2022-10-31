@@ -25,7 +25,7 @@ use lib::util::{get_sh, ExitCode};
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
 
-use crate::opts::Revset;
+use crate::opts::{Revset, TestExecutionStrategy};
 use crate::revset::resolve_commits;
 
 lazy_static! {
@@ -58,6 +58,7 @@ impl From<u8> for Verbosity {
 pub struct RawTestOptions {
     pub exec: Option<String>,
     pub command: Option<String>,
+    pub strategy: Option<TestExecutionStrategy>,
     pub verbosity: Verbosity,
 }
 
@@ -119,6 +120,7 @@ To run a specific command alias, run: git test run -c <alias>",
 #[derive(Debug)]
 struct ResolvedTestOptions {
     command: String,
+    strategy: TestExecutionStrategy,
     verbosity: Verbosity,
 }
 
@@ -131,6 +133,7 @@ impl ResolvedTestOptions {
         let RawTestOptions {
             exec: command,
             command: command_alias,
+            strategy,
             verbosity,
         } = options;
         let resolved_command = match (command, command_alias) {
@@ -148,8 +151,10 @@ impl ResolvedTestOptions {
                 command, command_alias
             ),
         };
+        let resolved_strategy = strategy.unwrap_or(TestExecutionStrategy::WorkingCopy);
         Ok(Ok(ResolvedTestOptions {
             command: resolved_command,
+            strategy: resolved_strategy,
             verbosity: *verbosity,
         }))
     }
@@ -202,6 +207,7 @@ pub fn run(
         &repo,
         &event_log_db,
         event_tx_id,
+        options.strategy,
     )? {
         Ok(abort_trap) => abort_trap,
         Err(exit_code) => return Ok(exit_code),
@@ -227,7 +233,9 @@ pub fn run(
 
 #[must_use]
 #[derive(Debug)]
-struct AbortTrap;
+struct AbortTrap {
+    is_active: bool,
+}
 
 /// Ensure that no commit operation is currently underway (such as a merge or
 /// rebase), and start a rebase.  In the event that the test invocation is
@@ -242,7 +250,13 @@ fn set_abort_trap(
     repo: &Repo,
     event_log_db: &EventLogDb,
     event_tx_id: EventTransactionId,
+    strategy: TestExecutionStrategy,
 ) -> eyre::Result<Result<AbortTrap, ExitCode>> {
+    match strategy {
+        TestExecutionStrategy::Worktree => return Ok(Ok(AbortTrap { is_active: false })),
+        TestExecutionStrategy::WorkingCopy => {}
+    }
+
     if let Some(operation_type) = repo.get_current_operation_type() {
         writeln!(
             effects.get_output_stream(),
@@ -308,7 +322,7 @@ fn set_abort_trap(
         }
     }
 
-    Ok(Ok(AbortTrap))
+    Ok(Ok(AbortTrap { is_active: true }))
 }
 
 #[instrument]
@@ -316,8 +330,13 @@ fn clear_abort_trap(
     effects: &Effects,
     git_run_info: &GitRunInfo,
     event_tx_id: EventTransactionId,
-    _abort_trap: AbortTrap,
+    abort_trap: AbortTrap,
 ) -> eyre::Result<ExitCode> {
+    let AbortTrap { is_active } = abort_trap;
+    if !is_active {
+        return Ok(ExitCode(0));
+    }
+
     let exit_code = git_run_info.run(effects, Some(event_tx_id), &["rebase", "--abort"])?;
     if !exit_code.is_success() {
         writeln!(
@@ -539,7 +558,11 @@ fn run_tests(
     commits: &[Commit],
     options: &ResolvedTestOptions,
 ) -> eyre::Result<ExitCode> {
-    let ResolvedTestOptions { command, verbosity } = &options;
+    let ResolvedTestOptions {
+        command,
+        strategy: _,
+        verbosity,
+    } = &options;
 
     let shell_path = match get_sh() {
         Some(shell_path) => shell_path,
@@ -686,6 +709,7 @@ fn run_test(
 ) -> eyre::Result<TestOutput> {
     let ResolvedTestOptions {
         command: _,
+        strategy,
         verbosity,
     } = options;
 
@@ -698,7 +722,7 @@ fn run_test(
     let test_output = match make_test_files(repo, commit, options)? {
         TestFilesResult::Cached(test_output) => test_output,
         TestFilesResult::NotCached(test_files) => {
-            match prepare_working_directory(git_run_info, repo, event_tx_id, commit)? {
+            match prepare_working_directory(git_run_info, repo, event_tx_id, commit, *strategy)? {
                 None => {
                     let TestFiles {
                         result_path,
@@ -838,20 +862,73 @@ fn prepare_working_directory(
     repo: &Repo,
     event_tx_id: EventTransactionId,
     commit: &Commit,
+    strategy: TestExecutionStrategy,
 ) -> eyre::Result<Option<PathBuf>> {
-    let GitRunResult { exit_code, stdout: _, stderr: _ } =
-        // Don't show the `git checkout` operation among the progress bars, as we only want to see
-        // the testing status.
-        git_run_info.run_silent(
-            repo,
-            Some(event_tx_id),
-            &["checkout", &commit.get_oid().to_string()],
-            Default::default()
-        )?;
-    if exit_code.is_success() {
-        Ok(repo.get_working_copy_path().map(|path| path.to_owned()))
-    } else {
-        Ok(None)
+    match strategy {
+        TestExecutionStrategy::WorkingCopy => {
+            let GitRunResult { exit_code, stdout: _, stderr: _ } =
+                // Don't show the `git checkout` operation among the progress bars, as we only want to see
+                // the testing status.
+                git_run_info.run_silent(
+                    repo,
+                    Some(event_tx_id),
+                    &["checkout", &commit.get_oid().to_string()],
+                    Default::default()
+                )?;
+            if exit_code.is_success() {
+                Ok(repo.get_working_copy_path().map(|path| path.to_owned()))
+            } else {
+                Ok(None)
+            }
+        }
+
+        TestExecutionStrategy::Worktree => {
+            let parent_dir = repo.get_test_dir().join("worktrees");
+            std::fs::create_dir_all(&parent_dir)
+                .wrap_err_with(|| format!("Creating worktree parent dir at {parent_dir:?}"))?;
+
+            let worktree_dir = parent_dir.join("testing-worktree-1");
+            let worktree_dir_str = match worktree_dir.to_str() {
+                Some(worktree_dir) => worktree_dir,
+                None => return Ok(None),
+            };
+            if !worktree_dir.exists() {
+                let GitRunResult {
+                    exit_code,
+                    stdout: _,
+                    stderr: _,
+                } = git_run_info.run_silent(
+                    repo,
+                    Some(event_tx_id),
+                    &["worktree", "add", worktree_dir_str, "--force", "--detach"],
+                    Default::default(),
+                )?;
+                if !exit_code.is_success() {
+                    return Ok(None);
+                }
+            }
+
+            let GitRunResult {
+                exit_code,
+                stdout: _,
+                stderr: _,
+            } = git_run_info.run_silent(
+                repo,
+                Some(event_tx_id),
+                &[
+                    "-C",
+                    worktree_dir_str,
+                    "checkout",
+                    "--force",
+                    &commit.get_oid().to_string(),
+                ],
+                Default::default(),
+            )?;
+            if !exit_code.is_success() {
+                return Ok(None);
+            }
+            Ok(Some(worktree_dir))
+        }
     }
 }
 
