@@ -308,6 +308,7 @@ fn test_show_rewritten_commit_hash() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
+    git.detach_head()?;
     git.commit_file("test1", 1)?;
     git.commit_file("test2", 2)?;
     git.run(&["prev"])?;
@@ -317,13 +318,13 @@ fn test_show_rewritten_commit_hash() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
-        O f777ecc create initial.txt
+        O f777ecc (master) create initial.txt
         |\
         | @ 2ebe095 test1 version 2
         |
-        X 62fc20d (rewritten as 2ebe0950) create test1.txt
+        x 62fc20d (rewritten as 2ebe0950) create test1.txt
         |
-        O 96d1c37 (master) create test2.txt
+        o 96d1c37 create test2.txt
         hint: there is 1 abandoned commit in your commit graph
         hint: to fix this, run: git restack
         hint: disable this hint by running: git config --global branchless.hint.smartlogFixAbandoned false
@@ -504,6 +505,7 @@ fn test_smartlog_hint_abandoned() -> eyre::Result<()> {
     }
     git.init_repo()?;
 
+    git.detach_head()?;
     git.commit_file("test1", 1)?;
     git.commit_file("test2", 2)?;
     git.run(&["checkout", "HEAD^"])?;
@@ -512,13 +514,13 @@ fn test_smartlog_hint_abandoned() -> eyre::Result<()> {
     let hint_command = {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
-        O f777ecc create initial.txt
+        O f777ecc (master) create initial.txt
         |\
         | @ ae94dc2 amended test1
         |
-        X 62fc20d (rewritten as ae94dc2a) create test1.txt
+        x 62fc20d (rewritten as ae94dc2a) create test1.txt
         |
-        O 96d1c37 (master) create test2.txt
+        o 96d1c37 create test2.txt
         hint: there is 1 abandoned commit in your commit graph
         hint: to fix this, run: git restack
         hint: disable this hint by running: git config --global branchless.hint.smartlogFixAbandoned false
@@ -531,13 +533,13 @@ fn test_smartlog_hint_abandoned() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
-        O f777ecc create initial.txt
+        O f777ecc (master) create initial.txt
         |\
         | @ ae94dc2 amended test1
         |
-        X 62fc20d (rewritten as ae94dc2a) create test1.txt
+        x 62fc20d (rewritten as ae94dc2a) create test1.txt
         |
-        O 96d1c37 (master) create test2.txt
+        o 96d1c37 create test2.txt
         "###);
     }
 

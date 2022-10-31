@@ -164,13 +164,8 @@ fn test_amended_initial_commit() -> eyre::Result<()> {
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
         @ 9a9f929 new initial commit
-
-        X f777ecc (rewritten as 9a9f929a) create initial.txt
-        |
+        :
         O 62fc20d (master) create test1.txt
-        hint: there is 1 abandoned commit in your commit graph
-        hint: to fix this, run: git restack
-        hint: disable this hint by running: git config --global branchless.hint.smartlogFixAbandoned false
         "###);
     }
 

@@ -386,12 +386,10 @@ impl Dag {
         let active_heads = self.query().heads(active_commits)?;
         let active_heads = active_heads.difference(public_commits);
 
-        let anomalous_main_branch_commits = self.obsolete_commits.intersection(public_commits);
         let active_heads = active_heads
             .union(&self.head_commit)
             .union(&self.branch_commits)
-            .union(&self.main_branch_commit)
-            .union(&anomalous_main_branch_commits);
+            .union(&self.main_branch_commit);
 
         Ok(active_heads)
     }
