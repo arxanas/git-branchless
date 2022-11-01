@@ -39,14 +39,12 @@ pub struct ReferenceName(String);
 
 impl ReferenceName {
     /// Create a reference name from the provided bytestring. Non-UTF-8 references are not supported.
-    #[instrument]
     pub fn from_bytes(bytes: Vec<u8>) -> std::result::Result<ReferenceName, ReferenceNameError> {
         let reference_name = String::from_utf8(bytes).map_err(ReferenceNameError::InvalidUtf8)?;
         Ok(Self(reference_name))
     }
 
     /// View this reference name as a string. (This is a zero-cost conversion.)
-    #[instrument]
     pub fn as_str(&self) -> &str {
         let Self(reference_name) = self;
         reference_name
