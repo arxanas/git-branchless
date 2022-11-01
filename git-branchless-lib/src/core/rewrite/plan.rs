@@ -1090,22 +1090,22 @@ impl<'a> RebasePlanBuilder<'a> {
     ) {
         let included_commit_oids: HashSet<NonZeroOid> = rebase_commands
             .iter()
-            .filter_map(|rebase_command| match rebase_command {
+            .flat_map(|rebase_command| match rebase_command {
                 RebaseCommand::CreateLabel { label_name: _ }
                 | RebaseCommand::Reset { target: _ }
                 | RebaseCommand::Break
                 | RebaseCommand::RegisterExtraPostRewriteHook
-                | RebaseCommand::DetectEmptyCommit { commit_oid: _ } => None,
+                | RebaseCommand::DetectEmptyCommit { commit_oid: _ } => Vec::new(),
                 RebaseCommand::Pick {
-                    original_commit_oid: _,
-                    commit_to_apply_oid: commit_oid,
-                }
-                | RebaseCommand::Merge {
+                    original_commit_oid,
+                    commit_to_apply_oid,
+                } => vec![*original_commit_oid, *commit_to_apply_oid],
+                RebaseCommand::Merge {
                     replacement_commit_oid: _,
                     commit_oid,
                     commits_to_merge: _,
                 }
-                | RebaseCommand::SkipUpstreamAppliedCommit { commit_oid } => Some(*commit_oid),
+                | RebaseCommand::SkipUpstreamAppliedCommit { commit_oid } => vec![*commit_oid],
             })
             .collect();
         let missing_commit_oids = state
