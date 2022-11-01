@@ -1,12 +1,13 @@
 //! Wrappers around various side effects.
 
+use bstr::ByteSlice;
 use std::convert::TryInto;
 use std::fmt::{Debug, Write};
 use std::io::{stderr, stdout, Stderr, Stdout, Write as WriteIo};
 use std::mem::take;
 use std::sync::{Arc, Mutex, RwLock};
-use std::thread;
 use std::time::{Duration, Instant};
+use std::{io, thread};
 
 use indicatif::{MultiProgress, ProgressBar, ProgressDrawTarget, ProgressStyle};
 use itertools::Itertools;
@@ -919,7 +920,7 @@ impl Write for ErrorStream {
         match &self.dest {
             OutputDest::Stdout => {
                 self.buffer.push_str(s);
-                self.flush();
+                WriteProgress::flush(self);
             }
 
             OutputDest::Suppress => {
@@ -931,6 +932,33 @@ impl Write for ErrorStream {
                 write!(buffer, "{}", s).unwrap();
             }
         }
+        Ok(())
+    }
+}
+
+/// You probably don't want this. This implementation is only for `tracing`'s `fmt_layer`, because
+/// it needs a writer of type `io::Write`, but `Effects` normally uses its implementation of
+/// `fmt::Write`.
+impl io::Write for ErrorStream {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        match &self.dest {
+            OutputDest::Stdout => {
+                self.buffer.push_str(buf.to_str_lossy().as_ref());
+                Ok(buf.len())
+            }
+            OutputDest::Suppress => {
+                // Do nothing.
+                Ok(buf.len())
+            }
+            OutputDest::BufferForTest { stdout: _, stderr } => {
+                let mut buffer = stderr.lock().unwrap();
+                buffer.write(buf)
+            }
+        }
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        WriteProgress::flush(self);
         Ok(())
     }
 }

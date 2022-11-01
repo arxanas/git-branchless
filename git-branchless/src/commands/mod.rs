@@ -37,6 +37,7 @@ use lib::core::rewrite::MergeConflictRemediation;
 use lib::git::Repo;
 use lib::git::RepoError;
 use lib::util::ExitCode;
+use tracing::level_filters::LevelFilter;
 use tracing_chrome::ChromeLayerBuilder;
 use tracing_error::ErrorLayer;
 use tracing_subscriber::fmt as tracing_fmt;
@@ -94,8 +95,6 @@ fn rewrite_args(args: Vec<OsString>) -> Vec<OsString> {
 /// Wrapper function for `main` to ensure that `Drop` is called for local
 /// variables, since `std::process::exit` will skip them.
 fn do_main_and_drop_locals() -> eyre::Result<i32> {
-    let _tracing_guard = install_tracing();
-
     let args = rewrite_args(std::env::args_os().collect_vec());
     let Opts {
         working_directory,
@@ -125,6 +124,8 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
         Some(ColorSetting::Auto) | None => Glyphs::detect(),
     };
     let effects = Effects::new(color);
+
+    let _tracing_guard = install_tracing(effects.clone());
 
     if let Some(ExitCode(exit_code)) = check_unsupported_config_options(&effects)? {
         let exit_code: i32 = exit_code.try_into()?;
@@ -406,27 +407,11 @@ pub fn main() {
 }
 
 #[must_use = "This function returns a guard object to flush traces. Dropping it immediately is probably incorrect. Make sure that the returned value lives until tracing has finished."]
-fn install_tracing() -> eyre::Result<impl Drop> {
-    let (filter_layer, fmt_layer) = match EnvFilter::try_from_default_env() {
-        Ok(filter_layer) => {
-            let fmt_layer = tracing_fmt::layer()
-                .with_span_events(tracing_fmt::format::FmtSpan::CLOSE)
-                .with_target(false);
-            (Some(filter_layer), Some(fmt_layer))
-        }
-        Err(_) => {
-            // We would like the filter layer to apply *only* to the formatting
-            // layer. That way, the logging output is suppressed, but we still
-            // get spantraces for use with `color-eyre`. However, it's currently
-            // not possible (?), at least not without writing some a custom
-            // subscriber. See https://github.com/tokio-rs/tracing/pull/1523
-            //
-            // The workaround is to only display logging messages if `RUST_LOG`
-            // is set (which is unfortunate, because we'll miss out on
-            // `WARN`-level messages by default).
-            (None, None)
-        }
-    };
+fn install_tracing(effects: Effects) -> eyre::Result<impl Drop> {
+    let env_filter = EnvFilter::builder()
+        .with_default_directive(LevelFilter::WARN.into())
+        .from_env_lossy();
+    let fmt_layer = tracing_fmt::layer().with_writer(move || effects.clone().get_error_stream());
 
     let (profile_layer, flush_guard): (_, Box<dyn Any>) = {
         // We may invoke a hook that calls back into `git-branchless`. In that case,
@@ -475,8 +460,7 @@ fn install_tracing() -> eyre::Result<impl Drop> {
 
     tracing_subscriber::registry()
         .with(ErrorLayer::default())
-        .with(filter_layer)
-        .with(fmt_layer)
+        .with(fmt_layer.with_filter(env_filter))
         .with(profile_layer)
         .try_init()?;
 
