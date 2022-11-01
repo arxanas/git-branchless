@@ -627,6 +627,10 @@ pub enum TestSubcommand {
         /// How to execute the tests.
         #[clap(short = 's', long = "strategy")]
         strategy: Option<TestExecutionStrategy>,
+
+        /// How many jobs to execute in parallel. The value `0` indicates to use all CPUs.
+        #[clap(short = 'j', long = "jobs")]
+        jobs: Option<usize>,
     },
 
     /// Show the results of a set of previous test runs.

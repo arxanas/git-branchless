@@ -1,8 +1,11 @@
+use std::collections::{HashMap, VecDeque};
+use std::convert::TryFrom;
 use std::fmt::Write as _;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::Arc;
+use std::sync::mpsc::{channel, Sender};
+use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
 use clap::ValueEnum;
@@ -14,7 +17,7 @@ use itertools::Itertools;
 use lazy_static::lazy_static;
 use lib::core::config::{get_hint_enabled, get_hint_string, print_hint_suppression_notice, Hint};
 use lib::core::dag::{sorted_commit_set, Dag};
-use lib::core::effects::{icons, Effects, OperationIcon, OperationType};
+use lib::core::effects::{icons, Effects, OperationIcon, OperationType, ProgressHandle};
 use lib::core::eventlog::{EventLogDb, EventReplayer, EventTransactionId};
 use lib::core::formatting::{Glyphs, Pluralize, StyledStringBuilder};
 use lib::core::repo_ext::RepoExt;
@@ -22,10 +25,10 @@ use lib::core::rewrite::{
     execute_rebase_plan, ExecuteRebasePlanOptions, ExecuteRebasePlanResult, RebaseCommand,
     RebasePlan,
 };
-use lib::git::{Commit, ConfigRead, GitRunInfo, GitRunResult, Repo};
+use lib::git::{Commit, ConfigRead, GitRunInfo, GitRunResult, NonZeroOid, Repo};
 use lib::util::{get_sh, ExitCode};
 use serde::{Deserialize, Serialize};
-use tracing::instrument;
+use tracing::{debug, instrument};
 
 use crate::opts::{Revset, TestExecutionStrategy};
 use crate::revset::resolve_commits;
@@ -61,6 +64,7 @@ pub struct RawTestOptions {
     pub exec: Option<String>,
     pub command: Option<String>,
     pub strategy: Option<TestExecutionStrategy>,
+    pub jobs: Option<usize>,
     pub verbosity: Verbosity,
 }
 
@@ -123,6 +127,7 @@ To run a specific command alias, run: git test run -c <alias>",
 struct ResolvedTestOptions {
     command: String,
     strategy: TestExecutionStrategy,
+    jobs: usize,
     verbosity: Verbosity,
 }
 
@@ -137,6 +142,7 @@ impl ResolvedTestOptions {
             exec: command,
             command: command_alias,
             strategy,
+            jobs,
             verbosity,
         } = options;
         let resolved_command = match (command, command_alias) {
@@ -157,31 +163,77 @@ impl ResolvedTestOptions {
         let resolved_strategy = match strategy {
             Some(strategy) => *strategy,
             None => {
-                let strategy: Option<String> = config.get("branchless.test.strategy")?;
+                let strategy_config_key = "branchless.test.strategy";
+                let strategy: Option<String> = config.get(strategy_config_key)?;
                 match strategy {
                     None => TestExecutionStrategy::WorkingCopy,
-                    Some(strategy) => match TestExecutionStrategy::from_str(&strategy, true) {
-                        Ok(strategy) => strategy,
-                        Err(_) => {
-                            writeln!(effects.get_output_stream(), "Invalid value for config value branchless.test.strategy: {strategy}")?;
-                            writeln!(
-                                effects.get_output_stream(),
-                                "Expected one of: {}",
-                                TestExecutionStrategy::value_variants()
-                                    .iter()
-                                    .filter_map(|variant| variant.to_possible_value())
-                                    .map(|value| value.get_name().to_owned())
-                                    .join(", ")
-                            )?;
-                            return Ok(Err(ExitCode(1)));
+                    Some(strategy) => {
+                        match TestExecutionStrategy::from_str(&strategy, true) {
+                            Ok(strategy) => strategy,
+                            Err(_) => {
+                                writeln!(effects.get_output_stream(), "Invalid value for config value {strategy_config_key}: {strategy}")?;
+                                writeln!(
+                                    effects.get_output_stream(),
+                                    "Expected one of: {}",
+                                    TestExecutionStrategy::value_variants()
+                                        .iter()
+                                        .filter_map(|variant| variant.to_possible_value())
+                                        .map(|value| value.get_name().to_owned())
+                                        .join(", ")
+                                )?;
+                                return Ok(Err(ExitCode(1)));
+                            }
                         }
-                    },
+                    }
                 }
             }
         };
+
+        let jobs_config_key = "branchless.test.jobs";
+        let configured_jobs: Option<i32> = config.get(jobs_config_key)?;
+        let (resolved_jobs, resolved_strategy) = match jobs {
+            None => match configured_jobs {
+                None => (1, resolved_strategy),
+                Some(jobs) => match usize::try_from(jobs) {
+                    Ok(jobs) => (jobs, resolved_strategy),
+                    Err(err) => {
+                        writeln!(
+                            effects.get_output_stream(),
+                            "Invalid value for config value for {jobs_config_key}: {err}"
+                        )?;
+                        return Ok(Err(ExitCode(1)));
+                    }
+                },
+            },
+            Some(1) => (1, resolved_strategy),
+            Some(jobs) => {
+                // NB: match on the strategy passed on the command-line here, not the resolved strategy.
+                match strategy {
+                    None | Some(TestExecutionStrategy::Worktree) => (*jobs, resolved_strategy),
+                    Some(TestExecutionStrategy::WorkingCopy) => {
+                        writeln!(
+                            effects.get_output_stream(),
+                            "\
+The --jobs argument can only be used with --strategy worktree,
+but --strategy working-copy was provided instead."
+                        )?;
+                        return Ok(Err(ExitCode(1)));
+                    }
+                }
+            }
+        };
+
+        let resolved_jobs = if resolved_jobs == 0 {
+            num_cpus::get_physical()
+        } else {
+            resolved_jobs
+        };
+        assert!(resolved_jobs > 0);
+
         Ok(Ok(ResolvedTestOptions {
             command: resolved_command,
             strategy: resolved_strategy,
+            jobs: resolved_jobs,
             verbosity: *verbosity,
         }))
     }
@@ -608,7 +660,8 @@ fn run_tests(
 ) -> eyre::Result<ExitCode> {
     let ResolvedTestOptions {
         command,
-        strategy: _,
+        strategy: _, // Strategy forwarded to `run_test` so that it can provision its working directory.
+        jobs,
         verbosity,
     } = &options;
 
@@ -635,8 +688,8 @@ fn run_tests(
         let (effects, progress) =
             effects.start_operation(OperationType::RunTests(Arc::new(command.clone())));
         progress.notify_progress(0, commits.len());
-        let commits_with_operations = {
-            let mut results = Vec::new();
+        let work_queue = {
+            let mut results = VecDeque::new();
             for commit in commits {
                 // Create the progress entries in the multiprogress meter without starting them.
                 // They'll be resumed later in the loop below.
@@ -650,28 +703,85 @@ fn run_tests(
                     OperationIcon::InProgress,
                     format!("Waiting to test {}", commit_description),
                 );
-                results.push((commit, operation_type));
+                results.push_back((commit.get_oid(), operation_type));
             }
             results
         };
 
-        let mut results = Vec::new();
-        for (commit, operation_type) in commits_with_operations {
-            let test_output = run_test(
-                &effects,
-                operation_type,
-                git_run_info,
-                &shell_path,
-                repo,
-                event_tx_id,
-                options,
-                commit,
-            )?;
-            results.push((commit, test_output));
-            progress.notify_progress_inc(1);
-        }
-        results
+        let repo_dir = repo.get_path();
+        crossbeam::thread::scope(|scope| {
+            let work_queue = Arc::new(Mutex::new(work_queue));
+            let (result_tx, result_rx) = channel();
+            let workers: HashMap<WorkerId, crossbeam::thread::ScopedJoinHandle<()>> = {
+                let mut result = HashMap::new();
+                for worker_id in 1..=*jobs {
+                    let effects = &effects;
+                    let progress = &progress;
+                    let shell_path = &shell_path;
+                    let work_queue = Arc::clone(&work_queue);
+                    let result_tx = result_tx.clone();
+                    result.insert(
+                        worker_id,
+                        scope.spawn(move |_scope| {
+                            worker(
+                                effects,
+                                progress,
+                                shell_path,
+                                git_run_info,
+                                repo_dir,
+                                event_tx_id,
+                                options,
+                                worker_id,
+                                work_queue,
+                                result_tx,
+                            );
+                            debug!("Exiting spawned thread closure");
+                        }),
+                    );
+                }
+                result
+            };
+
+            // We rely on `result_rx.recv()` returning `Err` once all the threads have exited
+            // (whether that reason should be panicking or having finished all work). We have to
+            // drop our local reference to ensure that we don't deadlock, since otherwise therex
+            // would still be a live receiver for the sender.
+            drop(result_tx);
+
+            let mut results = Vec::new();
+            while let Ok(message) = {
+                debug!("Main thread waiting for new job result");
+                let result = result_rx.recv();
+                debug!("Main thread got new job result");
+                result
+            } {
+                match message {
+                    JobResult::Done(commit_oid, test_output) => {
+                        results.push((commit_oid, test_output));
+                        if results.len() == commits.len() {
+                            drop(result_rx);
+                            break;
+                        }
+                    }
+                    JobResult::Error(worker_id, commit_oid, error_message) => {
+                        eyre::bail!("Worker {worker_id} failed when processing commit {commit_oid}: {error_message}");
+                    }
+                }
+            }
+
+            debug!("Waiting for workers");
+            progress.notify_status(OperationIcon::InProgress, "Waiting for workers");
+            for (worker_id, worker) in workers {
+                worker
+                    .join()
+                    .map_err(|_err| eyre::eyre!("Waiting for worker {worker_id} to exit"))?;
+            }
+
+            debug!("About to return from thread scope");
+            Ok(results)
+        }).map_err(|_| eyre::eyre!("Could not spawn workers"))?.wrap_err("Failed waiting on workers")?
     };
+    debug!("Returned from thread scope");
 
     writeln!(
         effects.get_output_stream(),
@@ -691,13 +801,14 @@ fn run_tests(
     let mut num_failed = 0;
     let mut num_skipped = 0;
     let mut num_cached_results = 0;
-    for (commit, test_output) in results {
+    for (commit_oid, test_output) in results {
+        let commit = repo.find_commit_or_fail(commit_oid)?;
         write!(
             effects.get_output_stream(),
             "{}",
             effects
                 .get_glyphs()
-                .render(test_output.describe(effects, commit, *verbosity)?)?
+                .render(test_output.describe(effects, &commit, *verbosity)?)?
         )?;
         match test_output.test_status {
             TestStatus::CheckoutFailed
@@ -766,6 +877,94 @@ fn run_tests(
     }
 }
 
+type WorkerId = usize;
+type Job = (NonZeroOid, OperationType);
+type WorkQueue = Arc<Mutex<VecDeque<Job>>>;
+enum JobResult {
+    Done(NonZeroOid, TestOutput),
+    Error(WorkerId, NonZeroOid, String),
+}
+
+fn worker(
+    effects: &Effects,
+    progress: &ProgressHandle,
+    shell_path: &Path,
+    git_run_info: &GitRunInfo,
+    repo_dir: &Path,
+    event_tx_id: EventTransactionId,
+    options: &ResolvedTestOptions,
+    worker_id: WorkerId,
+    work_queue: WorkQueue,
+    result_tx: Sender<JobResult>,
+) {
+    debug!(?worker_id, "Worker spawned");
+
+    let repo = match Repo::from_dir(repo_dir) {
+        Ok(repo) => repo,
+        Err(err) => {
+            panic!("Worker {} could not open repository at: {}", worker_id, err);
+        }
+    };
+
+    let run_job = |job: Job| -> eyre::Result<bool> {
+        let (commit_oid, operation_type) = job;
+        let commit = repo.find_commit_or_fail(commit_oid)?;
+        let test_output = run_test(
+            effects,
+            operation_type,
+            git_run_info,
+            shell_path,
+            &repo,
+            event_tx_id,
+            options,
+            worker_id,
+            &commit,
+        )?;
+        progress.notify_progress_inc(1);
+
+        debug!(?worker_id, ?commit_oid, "Worker sending Done job result");
+        let should_terminate = result_tx
+            .send(JobResult::Done(commit_oid, test_output))
+            .is_err();
+        debug!(
+            ?worker_id,
+            ?commit_oid,
+            "Worker finished sending Done job result"
+        );
+        Ok(should_terminate)
+    };
+
+    while let Some(job) = {
+        debug!(?worker_id, "Locking work queue");
+        let mut work_queue = work_queue.lock().unwrap();
+        debug!(?worker_id, "Locked work queue");
+        let job = work_queue.pop_front();
+        // Ensure we don't hold the lock while we process the job.
+        drop(work_queue);
+        debug!(?worker_id, "Unlocked work queue");
+        job
+    } {
+        let (commit_oid, _) = job;
+        debug!(?worker_id, ?commit_oid, "Worker accepted job");
+        let job_result = run_job(job);
+        debug!(?worker_id, ?commit_oid, "Worker finished job");
+        match job_result {
+            Ok(true) => break,
+            Ok(false) => {
+                // Continue.
+            }
+            Err(err) => {
+                debug!(?worker_id, ?commit_oid, "Worker sending Error job result");
+                result_tx
+                    .send(JobResult::Error(worker_id, commit_oid, err.to_string()))
+                    .ok();
+                debug!(?worker_id, ?commit_oid, "Worker sending Error job result");
+            }
+        }
+    }
+    debug!(?worker_id, "Worker exiting");
+}
+
 #[instrument]
 fn run_test(
     effects: &Effects,
@@ -775,18 +974,20 @@ fn run_test(
     repo: &Repo,
     event_tx_id: EventTransactionId,
     options: &ResolvedTestOptions,
+    worker_id: WorkerId,
     commit: &Commit,
 ) -> eyre::Result<TestOutput> {
     let ResolvedTestOptions {
         command: _,
         strategy,
+        jobs: _, // Caller handles job management.
         verbosity: _,
     } = options;
     let (effects, progress) = effects.start_operation(operation_type);
     progress.notify_status(
         OperationIcon::InProgress,
         format!(
-            "Testing {}",
+            "Preparing {}",
             effects
                 .get_glyphs()
                 .render(commit.friendly_describe(effects.get_glyphs())?)?
@@ -796,8 +997,15 @@ fn run_test(
     let test_output = match make_test_files(repo, commit, options)? {
         TestFilesResult::Cached(test_output) => test_output,
         TestFilesResult::NotCached(test_files) => {
-            match prepare_working_directory(git_run_info, repo, event_tx_id, commit, *strategy)? {
-                None => {
+            match prepare_working_directory(
+                git_run_info,
+                repo,
+                event_tx_id,
+                commit,
+                *strategy,
+                worker_id,
+            )? {
+                Err(_) => {
                     let TestFiles {
                         lock_file: _, // Drop lock.
                         result_path,
@@ -814,14 +1022,27 @@ fn run_test(
                         test_status: TestStatus::CheckoutFailed,
                     }
                 }
-                Some(working_directory) => test_commit(
-                    repo,
-                    test_files,
-                    &working_directory,
-                    shell_path,
-                    options,
-                    commit,
-                )?,
+                Ok(PreparedWorkingDirectory {
+                    mut lock_file,
+                    path,
+                }) => {
+                    progress.notify_status(
+                        OperationIcon::InProgress,
+                        format!(
+                            "Testing {}",
+                            effects
+                                .get_glyphs()
+                                .render(commit.friendly_describe(effects.get_glyphs())?)?
+                        ),
+                    );
+
+                    let result = test_commit(repo, test_files, &path, shell_path, options, commit)?;
+                    lock_file
+                        .unlock()
+                        .wrap_err_with(|| format!("Unlocking test dir at {path:?}"))?;
+                    drop(lock_file);
+                    result
+                }
             }
         }
     };
@@ -954,6 +1175,20 @@ fn make_test_files(
     }))
 }
 
+#[derive(Debug)]
+struct PreparedWorkingDirectory {
+    lock_file: LockFile,
+    path: PathBuf,
+}
+
+#[derive(Debug)]
+enum PrepareWorkingDirectoryError {
+    LockFailed(PathBuf),
+    NoWorkingCopy,
+    CheckoutFailed(NonZeroOid),
+    CreateWorktreeFailed(PathBuf),
+}
+
 #[instrument]
 fn prepare_working_directory(
     git_run_info: &GitRunInfo,
@@ -961,9 +1196,35 @@ fn prepare_working_directory(
     event_tx_id: EventTransactionId,
     commit: &Commit,
     strategy: TestExecutionStrategy,
-) -> eyre::Result<Option<PathBuf>> {
+    worker_id: WorkerId,
+) -> eyre::Result<Result<PreparedWorkingDirectory, PrepareWorkingDirectoryError>> {
+    let test_lock_dir_path = repo.get_test_dir().join("locks");
+    std::fs::create_dir_all(&test_lock_dir_path)
+        .wrap_err_with(|| format!("Creating test lock dir path: {test_lock_dir_path:?}"))?;
+
+    let lock_file_name = match strategy {
+        TestExecutionStrategy::WorkingCopy => "working-copy.lock".to_string(),
+        TestExecutionStrategy::Worktree => {
+            format!("worktree-{worker_id}.lock")
+        }
+    };
+    let lock_path = test_lock_dir_path.join(lock_file_name);
+    let mut lock_file = LockFile::open(&lock_path)
+        .wrap_err_with(|| format!("Opening working copy lock at {lock_path:?}"))?;
+    if !lock_file
+        .try_lock_with_pid()
+        .wrap_err_with(|| format!("Locking working copy with {lock_path:?}"))?
+    {
+        return Ok(Err(PrepareWorkingDirectoryError::LockFailed(lock_path)));
+    }
+
     match strategy {
         TestExecutionStrategy::WorkingCopy => {
+            let working_copy_path = match repo.get_working_copy_path() {
+                None => return Ok(Err(PrepareWorkingDirectoryError::NoWorkingCopy)),
+                Some(working_copy_path) => working_copy_path.to_owned(),
+            };
+
             let GitRunResult { exit_code, stdout: _, stderr: _ } =
                 // Don't show the `git checkout` operation among the progress bars, as we only want to see
                 // the testing status.
@@ -974,9 +1235,14 @@ fn prepare_working_directory(
                     Default::default()
                 )?;
             if exit_code.is_success() {
-                Ok(repo.get_working_copy_path().map(|path| path.to_owned()))
+                Ok(Ok(PreparedWorkingDirectory {
+                    lock_file,
+                    path: working_copy_path,
+                }))
             } else {
-                Ok(None)
+                Ok(Err(PrepareWorkingDirectoryError::CheckoutFailed(
+                    commit.get_oid(),
+                )))
             }
         }
 
@@ -985,11 +1251,17 @@ fn prepare_working_directory(
             std::fs::create_dir_all(&parent_dir)
                 .wrap_err_with(|| format!("Creating worktree parent dir at {parent_dir:?}"))?;
 
-            let worktree_dir = parent_dir.join("testing-worktree-1");
+            let worktree_dir_name = format!("testing-worktree-{worker_id}");
+            let worktree_dir = parent_dir.join(worktree_dir_name);
             let worktree_dir_str = match worktree_dir.to_str() {
                 Some(worktree_dir) => worktree_dir,
-                None => return Ok(None),
+                None => {
+                    return Ok(Err(PrepareWorkingDirectoryError::CreateWorktreeFailed(
+                        worktree_dir,
+                    )));
+                }
             };
+
             if !worktree_dir.exists() {
                 let GitRunResult {
                     exit_code,
@@ -1002,7 +1274,9 @@ fn prepare_working_directory(
                     Default::default(),
                 )?;
                 if !exit_code.is_success() {
-                    return Ok(None);
+                    return Ok(Err(PrepareWorkingDirectoryError::CreateWorktreeFailed(
+                        worktree_dir,
+                    )));
                 }
             }
 
@@ -1023,9 +1297,14 @@ fn prepare_working_directory(
                 Default::default(),
             )?;
             if !exit_code.is_success() {
-                return Ok(None);
+                return Ok(Err(PrepareWorkingDirectoryError::CheckoutFailed(
+                    commit.get_oid(),
+                )));
             }
-            Ok(Some(worktree_dir))
+            Ok(Ok(PreparedWorkingDirectory {
+                lock_file,
+                path: worktree_dir,
+            }))
         }
     }
 }
@@ -1244,4 +1523,70 @@ pub fn clean(effects: &Effects, revset: Revset) -> eyre::Result<ExitCode> {
         }
     )?;
     Ok(ExitCode(0))
+}
+
+#[cfg(test)]
+mod tests {
+    use lib::testing::make_git;
+
+    use super::*;
+
+    #[test]
+    fn test_lock_prepared_working_directory() -> eyre::Result<()> {
+        let git = make_git()?;
+        git.init_repo()?;
+
+        let git_run_info = git.get_git_run_info();
+        let repo = git.get_repo()?;
+        let conn = repo.get_db_conn()?;
+        let event_log_db = EventLogDb::new(&conn)?;
+        let event_tx_id = event_log_db.make_transaction_id(SystemTime::now(), "test")?;
+        let head_oid = repo.get_head_info()?.oid.unwrap();
+        let head_commit = repo.find_commit_or_fail(head_oid)?;
+        let worker_id = 1;
+
+        let _prepared_working_copy = prepare_working_directory(
+            &git_run_info,
+            &repo,
+            event_tx_id,
+            &head_commit,
+            TestExecutionStrategy::WorkingCopy,
+            worker_id,
+        )?
+        .unwrap();
+        assert!(matches!(
+            prepare_working_directory(
+                &git_run_info,
+                &repo,
+                event_tx_id,
+                &head_commit,
+                TestExecutionStrategy::WorkingCopy,
+                worker_id
+            )?,
+            Err(PrepareWorkingDirectoryError::LockFailed(_))
+        ));
+
+        let _prepared_worktree = prepare_working_directory(
+            &git_run_info,
+            &repo,
+            event_tx_id,
+            &head_commit,
+            TestExecutionStrategy::Worktree,
+            worker_id,
+        )?
+        .unwrap();
+        assert!(matches!(
+            prepare_working_directory(
+                &git_run_info,
+                &repo,
+                event_tx_id,
+                &head_commit,
+                TestExecutionStrategy::Worktree,
+                worker_id
+            )?,
+            Err(PrepareWorkingDirectoryError::LockFailed(_))
+        ));
+
+        Ok(())
+    }
 }

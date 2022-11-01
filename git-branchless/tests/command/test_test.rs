@@ -630,3 +630,60 @@ echo hello
 
     Ok(())
 }
+
+#[test]
+fn test_test_jobs_argument_handling() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+
+    git.detach_head()?;
+    git.commit_file("test1", 1)?;
+    git.run(&["config", "branchless.test.alias.default", "exit 0"])?;
+
+    {
+        let (stdout, stderr) = git.run_with_options(
+            &["test", "run", "--strategy", "working-copy", "--jobs", "0"],
+            &GitRunOptions {
+                expected_exit_code: 1,
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stderr, @"");
+        insta::assert_snapshot!(stdout, @r###"
+        The --jobs argument can only be used with --strategy worktree,
+        but --strategy working-copy was provided instead.
+        "###);
+    }
+
+    {
+        // `--jobs 1` is allowed for `--strategy working-copy`, since that's the default anyways.
+        let (stdout, _stderr) =
+            git.run(&["test", "run", "--strategy", "working-copy", "--jobs", "1"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> diff --quiet
+        Calling Git for on-disk rebase...
+        branchless: running command: <git-executable> rebase --continue
+        Ran exit 0 on 1 commit:
+        ✓ Passed: 62fc20d create test1.txt
+        1 passed, 0 failed, 0 skipped
+        branchless: running command: <git-executable> rebase --abort
+        "###);
+    }
+
+    {
+        let (stdout, stderr) = git.run_with_options(
+            &["test", "run", "--strategy", "working-copy", "--jobs", "2"],
+            &GitRunOptions {
+                expected_exit_code: 1,
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stderr, @"");
+        insta::assert_snapshot!(stdout, @r###"
+        The --jobs argument can only be used with --strategy worktree,
+        but --strategy working-copy was provided instead.
+        "###);
+    }
+
+    Ok(())
+}

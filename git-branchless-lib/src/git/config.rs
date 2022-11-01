@@ -26,6 +26,7 @@ impl std::fmt::Debug for Config {
 #[derive(Debug)]
 enum ConfigValueInner {
     String(String),
+    Int(i32),
     Bool(bool),
 }
 
@@ -39,6 +40,14 @@ impl From<bool> for ConfigValue {
     fn from(value: bool) -> ConfigValue {
         ConfigValue {
             inner: ConfigValueInner::Bool(value),
+        }
+    }
+}
+
+impl From<i32> for ConfigValue {
+    fn from(value: i32) -> Self {
+        ConfigValue {
+            inner: ConfigValueInner::Int(value),
         }
     }
 }
@@ -63,6 +72,7 @@ impl Display for ConfigValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.inner {
             ConfigValueInner::String(value) => write!(f, "{}", value),
+            ConfigValueInner::Int(value) => write!(f, "{}", value),
             ConfigValueInner::Bool(value) => write!(f, "{:?}", value),
         }
     }
@@ -97,6 +107,24 @@ impl GetConfigValue<bool> for bool {
         #[instrument]
         fn inner(config: &Config, key: &str) -> eyre::Result<Option<bool>> {
             let value = match config.inner.get_bool(key) {
+                Ok(value) => Some(value),
+                Err(err) if err.code() == git2::ErrorCode::NotFound => None,
+                Err(err) => {
+                    return Err(wrap_git_error(err))
+                        .wrap_err("Looking up bool value for config key")
+                }
+            };
+            Ok(value)
+        }
+        inner(config, key.as_ref())
+    }
+}
+
+impl GetConfigValue<i32> for i32 {
+    fn get_from_config(config: &Config, key: impl AsRef<str>) -> eyre::Result<Option<i32>> {
+        #[instrument]
+        fn inner(config: &Config, key: &str) -> eyre::Result<Option<i32>> {
+            let value = match config.inner.get_i32(key) {
                 Ok(value) => Some(value),
                 Err(err) if err.code() == git2::ErrorCode::NotFound => None,
                 Err(err) => {
@@ -239,6 +267,7 @@ impl Config {
             ConfigValueInner::String(value) => {
                 self.inner.set_str(key, value).map_err(wrap_git_error)
             }
+            ConfigValueInner::Int(value) => self.inner.set_i32(key, *value).map_err(wrap_git_error),
             ConfigValueInner::Bool(value) => {
                 self.inner.set_bool(key, *value).map_err(wrap_git_error)
             }
