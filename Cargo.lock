@@ -1131,6 +1131,7 @@ dependencies = [
  "clap_mangen",
  "color-eyre",
  "console",
+ "crossbeam",
  "cursive",
  "cursive_buffered_backend",
  "dialoguer",
@@ -1146,6 +1147,7 @@ dependencies = [
  "lalrpop-util",
  "lazy_static",
  "man",
+ "num_cpus",
  "once_cell",
  "path-slash",
  "portable-pty",
@@ -2874,7 +2876,7 @@ version = "1.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
- "cfg-if 1.0.0",
+ "cfg-if 0.1.10",
  "rand 0.8.5",
  "static_assertions",
 ]

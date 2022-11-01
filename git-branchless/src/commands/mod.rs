@@ -341,6 +341,7 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
                 commits,
                 verbosity,
                 strategy,
+                jobs,
             } => test::run(
                 &effects,
                 &git_run_info,
@@ -348,6 +349,7 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
                     exec: command,
                     command: command_alias,
                     strategy,
+                    jobs,
                     verbosity: test::Verbosity::from(verbosity),
                 },
                 commits,
@@ -364,6 +366,7 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
                     exec: command,
                     command: command_alias,
                     strategy: None,
+                    jobs: None,
                     verbosity: test::Verbosity::from(verbosity),
                 },
                 commits,
