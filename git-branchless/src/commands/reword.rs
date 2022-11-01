@@ -8,7 +8,6 @@ use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 use std::fmt::Write;
 use std::fs::File;
-use std::io::Write as OtherWrite;
 use std::time::SystemTime;
 
 use bstr::{ByteSlice, ByteVec};
@@ -500,6 +499,7 @@ fn prepare_messages(
 
         let mut w = File::create(repo.get_path().join("REWORD_EDITMSG"))
             .context("Creating REWORD_EDITMSG file")?;
+        use std::io::Write;
         writeln!(
             &mut w,
             "{} This file was created by `git branchless reword` at {}\n\
