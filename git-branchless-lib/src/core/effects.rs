@@ -664,7 +664,8 @@ impl Effects {
         let operation_state = match operation {
             Some(operation_state) => operation_state,
             None => {
-                warn!("Progress operation not started");
+                drop(root_operation); // Avoid potential deadlock.
+                warn!(?operation_key, "Progress operation not started");
                 return;
             }
         };
@@ -679,7 +680,11 @@ impl Effects {
         {
             Some(start_time_index) => operation_state.start_times.remove(start_time_index),
             None => {
-                warn!("Progress operation ended without matching start call");
+                drop(root_operation); // Avoid potential deadlock.
+                warn!(
+                    ?operation_key,
+                    "Progress operation ended without matching start call"
+                );
                 return;
             }
         };
