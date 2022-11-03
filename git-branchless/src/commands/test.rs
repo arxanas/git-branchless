@@ -445,7 +445,7 @@ struct TestOutput {
 }
 
 /// The possible results of attempting to run a test.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug)]
 enum TestStatus {
     /// Attempting to set up the working directory for the repository failed.
     CheckoutFailed,
@@ -503,6 +503,12 @@ impl TestStatus {
             TestStatus::Passed | TestStatus::PassedCached => *STYLE_SUCCESS,
         }
     }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct SerializedTestResult {
+    command: String,
+    exit_code: i32,
 }
 
 #[instrument]
@@ -1126,42 +1132,29 @@ fn make_test_files(
         }));
     }
 
-    // Try to create the exit code file atomically.
-    let result_file = match File::options()
-        .create_new(true)
-        .write(true)
-        .open(&result_path)
-    {
-        Ok(result_file) => result_file,
-        Err(_) => {
-            let test_status = match std::fs::read_to_string(&result_path) {
-                Err(err) => TestStatus::ReadCacheFailed(err.to_string()),
-                Ok(contents) => match serde_json::from_str(&contents) {
-                    Err(err) => TestStatus::ReadCacheFailed(err.to_string()),
-                    Ok(TestStatus::Passed) => TestStatus::PassedCached,
-                    Ok(TestStatus::Failed(exit_code)) => TestStatus::FailedCached(exit_code),
-                    Ok(
-                        test_result @ (TestStatus::AlreadyInProgress
-                        | TestStatus::CheckoutFailed
-                        | TestStatus::PassedCached
-                        | TestStatus::FailedCached(_)
-                        | TestStatus::ReadCacheFailed(_)
-                        | TestStatus::SpawnTestFailed(_)
-                        | TestStatus::TerminatedBySignal),
-                    ) => TestStatus::ReadCacheFailed(format!(
-                        "Unexpected cached test result: {test_result:?}"
-                    )),
-                },
-            };
-            return Ok(TestFilesResult::Cached(TestOutput {
-                _result_path: result_path,
-                stdout_path,
-                stderr_path,
-                test_status,
-            }));
-        }
-    };
+    if let Ok(contents) = std::fs::read_to_string(&result_path) {
+        let serialized_result: Result<SerializedTestResult, _> = serde_json::from_str(&contents);
+        let test_status = match serialized_result {
+            Ok(SerializedTestResult {
+                command: _,
+                exit_code: 0,
+            }) => TestStatus::PassedCached,
+            Ok(SerializedTestResult {
+                command: _,
+                exit_code,
+            }) => TestStatus::FailedCached(exit_code),
+            Err(err) => TestStatus::ReadCacheFailed(err.to_string()),
+        };
+        return Ok(TestFilesResult::Cached(TestOutput {
+            _result_path: result_path,
+            stdout_path,
+            stderr_path,
+            test_status,
+        }));
+    }
 
+    let result_file = File::create(&result_path)
+        .wrap_err_with(|| format!("Opening result file {result_path:?}"))?;
     let stdout_file = File::create(&stdout_path)
         .wrap_err_with(|| format!("Opening stdout file {stdout_path:?}"))?;
     let stderr_file = File::create(&stderr_path)
@@ -1364,7 +1357,11 @@ fn test_commit(
         exit_code => TestStatus::Failed(exit_code),
     };
 
-    serde_json::to_writer_pretty(result_file, &test_status)
+    let serialized_test_result = SerializedTestResult {
+        command: options.command.clone(),
+        exit_code,
+    };
+    serde_json::to_writer_pretty(result_file, &serialized_test_result)
         .wrap_err_with(|| format!("Writing test status {test_status:?} to {result_path:?}"))?;
 
     Ok(TestOutput {
