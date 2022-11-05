@@ -192,7 +192,7 @@ impl RootOperation {
     pub fn tick(&mut self) {
         let operations = {
             let mut acc = Vec::new();
-            self.traverse_operations(&mut acc, 0, &self.children);
+            Self::traverse_operations(&mut acc, 0, &self.children);
             acc
         };
         for (nesting_level, operation) in operations {
@@ -204,7 +204,7 @@ impl RootOperation {
     pub fn refresh_multi_progress(&mut self) {
         let operations = {
             let mut acc = Vec::new();
-            self.traverse_operations(&mut acc, 0, &self.children);
+            Self::traverse_operations(&mut acc, 0, &self.children);
             acc
         };
         if self.multi_progress.clear().is_err() {
@@ -227,14 +227,13 @@ impl RootOperation {
     }
 
     fn traverse_operations<'a>(
-        &self,
         acc: &mut Vec<(usize, &'a OperationState)>,
         current_level: usize,
         operations: &'a [OperationState],
     ) {
         for operation in operations {
             acc.push((current_level, operation));
-            self.traverse_operations(acc, current_level + 1, &operation.children);
+            Self::traverse_operations(acc, current_level + 1, &operation.children);
         }
     }
 }

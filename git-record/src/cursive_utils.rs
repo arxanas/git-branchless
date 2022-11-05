@@ -67,7 +67,7 @@ impl<T: EventDrivenCursiveApp + UnwindSafe + RefUnwindSafe> EventDrivenCursiveAp
                         let mut self_ = AssertUnwindSafe(&mut self);
                         let main_tx = AssertUnwindSafe(main_tx.clone());
                         move || {
-                            self_.handle_message(*siv, main_tx.clone(), message);
+                            self_.handle_message(&mut siv, main_tx.clone(), message);
                         }
                     });
                     match maybe_panic {

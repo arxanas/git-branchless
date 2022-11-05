@@ -104,7 +104,7 @@ impl Git {
         let repo_path = repo_path
             .to_str()
             .ok_or_else(|| eyre::eyre!("Could not convert repo path to string"))?;
-        let output = output.replace(&repo_path, "<repo-path>");
+        let output = output.replace(repo_path, "<repo-path>");
 
         lazy_static! {
             // Simulate clearing the terminal line by searching for the

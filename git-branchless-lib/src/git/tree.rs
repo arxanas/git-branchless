@@ -444,7 +444,7 @@ pub fn make_empty_tree(repo: &Repo) -> Result<Tree> {
 /// which wouldn't exist in one of the pre-/post-patch trees.
 fn remove_entry_if_exists(builder: &mut git2::TreeBuilder, name: &Path) -> Result<()> {
     if builder
-        .get(&name)
+        .get(name)
         .map_err(|err| Error::ReadTreeBuilderEntry {
             source: err,
             path: name.to_owned(),
@@ -452,7 +452,7 @@ fn remove_entry_if_exists(builder: &mut git2::TreeBuilder, name: &Path) -> Resul
         .is_some()
     {
         builder
-            .remove(&name)
+            .remove(name)
             .map_err(|err| Error::DeleteTreeBuilderEntry {
                 source: err,
                 path: name.to_owned(),

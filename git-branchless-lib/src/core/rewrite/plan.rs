@@ -1240,7 +1240,7 @@ impl<'a> RebasePlanBuilder<'a> {
                         .map(|commit_oid| match touched_paths_cache.get(&commit_oid) {
                             Some(upstream_touched_paths) => {
                                 if Self::should_check_patch_id(
-                                    &*upstream_touched_paths,
+                                    &upstream_touched_paths,
                                     &local_touched_paths,
                                 ) {
                                     CacheLookupResult::Cached(Some(commit_oid))
