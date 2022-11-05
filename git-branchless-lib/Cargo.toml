@@ -76,8 +76,3 @@ insta = "1.20.0"
 lazy_static = "1.4.0"
 portable-pty = "0.7.0"
 vt100 = "0.15.1"
-
-# Lock at 0.3.25 to support the Nix build, as per
-# https://github.com/arxanas/git-branchless/pull/618#issuecomment-1298976262.
-# This explicit dependency can be removed once the upstream regression is fixed.
-pkg-config = "=0.3.25"
