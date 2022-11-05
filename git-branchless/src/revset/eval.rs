@@ -4,12 +4,11 @@ use std::num::ParseIntError;
 use std::sync::Arc;
 
 use eden_dag::errors::BackendError;
-use eden_dag::DagAlgorithm;
 use itertools::Itertools;
 use lib::core::effects::{Effects, OperationType};
-use once_cell::unsync::OnceCell;
 use thiserror::Error;
 
+use crate::opts::ResolveRevsetOptions;
 use lib::core::dag::{CommitSet, Dag};
 use lib::core::formatting::Pluralize;
 use lib::git::{ConfigRead, Repo, RepoError, ResolvedReferenceInfo};
@@ -25,62 +24,7 @@ pub(super) struct Context<'a> {
     pub effects: &'a Effects,
     pub repo: &'a Repo,
     pub dag: &'a mut Dag,
-    pub public_commits: OnceCell<CommitSet>,
-    pub active_heads: OnceCell<CommitSet>,
-    pub active_commits: OnceCell<CommitSet>,
-    pub draft_commits: OnceCell<CommitSet>,
-}
-
-impl Context<'_> {
-    #[instrument]
-    pub fn query_public_commits(&self) -> Result<&CommitSet, EvalError> {
-        self.public_commits.get_or_try_init(|| {
-            let public_commits = self
-                .dag
-                .query_public_commits()
-                .map_err(EvalError::OtherError)?;
-            Ok(public_commits)
-        })
-    }
-
-    #[instrument]
-    pub fn query_active_heads(&self) -> Result<&CommitSet, EvalError> {
-        self.active_heads.get_or_try_init(|| {
-            let public_commits = self.query_public_commits()?;
-            let active_heads = self
-                .dag
-                .query_active_heads(
-                    public_commits,
-                    &self
-                        .dag
-                        .observed_commits
-                        .difference(&self.dag.obsolete_commits),
-                )
-                .map_err(EvalError::OtherError)?;
-            Ok(active_heads)
-        })
-    }
-
-    #[instrument]
-    pub fn query_active_commits(&self) -> Result<&CommitSet, EvalError> {
-        self.active_commits.get_or_try_init(|| {
-            let active_heads = self.query_active_heads()?;
-            let active_commits = self.dag.query().ancestors(active_heads.clone())?;
-            Ok(active_commits)
-        })
-    }
-
-    #[instrument]
-    pub fn query_draft_commits(&self) -> Result<&CommitSet, EvalError> {
-        self.draft_commits.get_or_try_init(|| {
-            let public_commits = self.query_public_commits()?;
-            let active_heads = self.query_active_heads()?;
-            Ok(self
-                .dag
-                .query()
-                .only(active_heads.clone(), public_commits.clone())?)
-        })
-    }
+    pub show_hidden_commits: bool,
 }
 
 #[derive(Debug, Error)]
@@ -162,18 +106,24 @@ pub type EvalResult = Result<CommitSet, EvalError>;
 
 /// Evaluate the provided revset expression.
 #[instrument]
-pub fn eval(effects: &Effects, repo: &Repo, dag: &mut Dag, expr: &Expr) -> EvalResult {
+pub fn eval(
+    effects: &Effects,
+    repo: &Repo,
+    dag: &mut Dag,
+    resolve_revset_options: &ResolveRevsetOptions,
+    expr: &Expr,
+) -> EvalResult {
     let (effects, _progress) =
         effects.start_operation(OperationType::EvaluateRevset(Arc::new(expr.to_string())));
 
+    let ResolveRevsetOptions {
+        show_hidden_commits,
+    } = resolve_revset_options;
     let mut ctx = Context {
         effects: &effects,
         repo,
         dag,
-        public_commits: Default::default(),
-        active_heads: Default::default(),
-        active_commits: Default::default(),
-        draft_commits: Default::default(),
+        show_hidden_commits: *show_hidden_commits,
     };
     let commits = eval_inner(&mut ctx, expr)?;
     Ok(commits)
@@ -183,20 +133,34 @@ pub fn eval(effects: &Effects, repo: &Repo, dag: &mut Dag, expr: &Expr) -> EvalR
 fn eval_inner(ctx: &mut Context, expr: &Expr) -> EvalResult {
     match expr {
         Expr::Name(name) => eval_name(ctx, name),
-        Expr::FunctionCall(name, args) => eval_fn(ctx, name, args),
+        Expr::FunctionCall(name, args) => {
+            let result = eval_fn(ctx, name, args)?;
+            let visible_commits = if ctx.show_hidden_commits {
+                &result
+            } else {
+                ctx.dag
+                    .query_visible_commits()
+                    .map_err(EvalError::OtherError)?
+            };
+            let result = result.intersection(visible_commits);
+            Ok(result)
+        }
     }
 }
 
 pub(super) fn eval_name(ctx: &mut Context, name: &str) -> EvalResult {
     if name == "." || name == "@" {
-        let head_info = ctx.repo.get_head_info();
-        if let Ok(ResolvedReferenceInfo {
-            oid: Some(oid),
-            reference_name: _,
-        }) = head_info
-        {
-            return Ok(oid.into());
-        }
+        let head_info = ctx.repo.get_head_info()?;
+        return match head_info {
+            ResolvedReferenceInfo {
+                oid: Some(oid),
+                reference_name: _,
+            } => Ok(oid.into()),
+            ResolvedReferenceInfo {
+                oid: None,
+                reference_name: _,
+            } => Ok(CommitSet::empty()),
+        };
     }
 
     let commit = ctx.repo.revparse_single_commit(name);
@@ -246,8 +210,8 @@ pub(super) fn eval_fn(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResul
             .map(|(i, arg)| (format!("${}", i + 1), arg.clone()))
             .collect();
         let alias_expr = alias_expr.replace_names(&arg_map);
-        let commits = eval_inner(ctx, &alias_expr);
-        return commits;
+        let commits = eval_inner(ctx, &alias_expr)?;
+        return Ok(commits);
     }
 
     Err(EvalError::UnboundFunction {
@@ -395,7 +359,7 @@ mod tests {
         dag: &mut Dag,
         expr: &Expr,
     ) -> eyre::Result<Vec<Commit<'a>>> {
-        let result = eval(effects, repo, dag, expr)?;
+        let result = eval(effects, repo, dag, &ResolveRevsetOptions::default(), expr)?;
         let mut commits: Vec<Commit> = commit_set_to_vec(&result)?
             .into_iter()
             .map(|oid| repo.find_commit_or_fail(oid))
@@ -1161,20 +1125,7 @@ mod tests {
             );
             insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
             Ok(
-                [
-                    Commit {
-                        inner: Commit {
-                            id: 70deb1e28791d8e7dd5a1f0c871a51b91282562f,
-                            summary: "create test3.txt",
-                        },
-                    },
-                    Commit {
-                        inner: Commit {
-                            id: 355e173bf9c5d2efac2e451da0cdad3fb82b869a,
-                            summary: "create test4.txt",
-                        },
-                    },
-                ],
+                [],
             )
             "###);
 

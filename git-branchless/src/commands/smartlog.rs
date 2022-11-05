@@ -5,7 +5,6 @@
 
 use std::cmp::Ordering;
 use std::fmt::Write;
-use std::mem::swap;
 use std::time::SystemTime;
 
 use eden_dag::DagAlgorithm;
@@ -33,7 +32,6 @@ use crate::revset::resolve_commits;
 
 mod graph {
     use std::collections::HashMap;
-    use std::convert::TryFrom;
 
     use eden_dag::DagAlgorithm;
     use lib::core::gc::mark_commit_reachable;
@@ -120,7 +118,7 @@ mod graph {
     /// (or else you won't get a good idea of the line of development that happened
     /// for this commit since the main branch).
     #[instrument]
-    fn walk_from_active_heads<'repo>(
+    fn walk_from_commits<'repo>(
         effects: &Effects,
         repo: &'repo Repo,
         dag: &Dag,
@@ -129,19 +127,16 @@ mod graph {
     ) -> eyre::Result<SmartlogGraph<'repo>> {
         let mut graph: HashMap<NonZeroOid, Node> = {
             let mut result = HashMap::new();
-            for vertex in active_heads.iter()? {
-                let vertex = vertex?;
-                let path_to_main_branch =
-                    dag.find_path_to_main_branch(effects, CommitSet::from(vertex.clone()))?;
-                let path_to_main_branch = match path_to_main_branch {
-                    Some(path_to_main_branch) => path_to_main_branch,
-                    None => CommitSet::from(vertex.clone()),
+            for vertex in commit_set_to_vec(active_heads)? {
+                let vertex = CommitSet::from(vertex);
+                let merge_bases = dag.query().gca_all(dag.main_branch_commit.union(&vertex))?;
+                let intermediate_commits = if merge_bases.is_empty()? {
+                    vertex
+                } else {
+                    dag.query().range(merge_bases, vertex)?
                 };
 
-                for vertex in path_to_main_branch.iter_rev()? {
-                    let vertex = vertex?;
-                    let oid = NonZeroOid::try_from(vertex.clone())?;
-
+                for oid in commit_set_to_vec(&intermediate_commits)? {
                     let object = match repo.find_commit(oid)? {
                         Some(commit) => NodeObject::Commit { commit },
                         None => {
@@ -156,8 +151,8 @@ mod graph {
                             object,
                             parent: None,         // populated below
                             children: Vec::new(), // populated below
-                            is_main: public_commits.contains(&vertex)?,
-                            is_obsolete: dag.obsolete_commits.contains(&vertex)?,
+                            is_main: public_commits.contains(&oid.into())?,
+                            is_obsolete: dag.query_obsolete_commits().contains(&oid.into())?,
                         },
                     );
                 }
@@ -223,8 +218,7 @@ mod graph {
         dag: &Dag,
         event_replayer: &EventReplayer,
         event_cursor: EventCursor,
-        observed_commits: &CommitSet,
-        remove_commits: bool,
+        commits: &CommitSet,
     ) -> eyre::Result<SmartlogGraph<'repo>> {
         let (effects, _progress) = effects.start_operation(OperationType::MakeGraph);
 
@@ -232,19 +226,11 @@ mod graph {
             let (effects, _progress) = effects.start_operation(OperationType::WalkCommits);
 
             let public_commits = dag.query_public_commits()?;
-
-            let observed_commits = if remove_commits {
-                observed_commits.difference(&dag.obsolete_commits)
-            } else {
-                observed_commits.clone()
-            };
-
-            let active_heads = dag.query_active_heads(&public_commits, &observed_commits)?;
-            for oid in commit_set_to_vec(&active_heads)? {
+            for oid in commit_set_to_vec(commits)? {
                 mark_commit_reachable(repo, oid)?;
             }
 
-            walk_from_active_heads(&effects, repo, dag, &public_commits, &active_heads)?
+            walk_from_commits(&effects, repo, dag, public_commits, commits)?
         };
         sort_children(&mut graph);
         Ok(graph)
@@ -266,7 +252,7 @@ mod render {
     use lib::core::node_descriptors::{render_node_descriptors, NodeDescriptor};
     use lib::git::{NonZeroOid, Repo};
 
-    use crate::opts::Revset;
+    use crate::opts::{ResolveRevsetOptions, Revset};
 
     use super::graph::SmartlogGraph;
 
@@ -516,10 +502,6 @@ mod render {
     /// Options for rendering the smartlog.
     #[derive(Debug)]
     pub struct SmartlogOptions {
-        /// Whether to also show commits in the smartlog which would normally not be
-        /// visible.
-        pub show_hidden_commits: bool,
-
         /// The point in time at which to show the smartlog. If not provided,
         /// renders the smartlog as of the current time. If negative, is treated
         /// as an offset from the current event.
@@ -528,14 +510,16 @@ mod render {
         /// The commits to render. These commits and their ancestors up to the
         /// main branch will be rendered.
         pub revset: Revset,
+
+        pub resolve_revset_options: ResolveRevsetOptions,
     }
 
     impl Default for SmartlogOptions {
         fn default() -> Self {
             Self {
-                show_hidden_commits: Default::default(),
                 event_id: Default::default(),
-                revset: Revset("draft()".to_string()),
+                revset: Revset("draft() | branches() | @".to_string()),
+                resolve_revset_options: Default::default(),
             }
         }
     }
@@ -549,9 +533,9 @@ pub fn smartlog(
     options: &SmartlogOptions,
 ) -> eyre::Result<ExitCode> {
     let SmartlogOptions {
-        show_hidden_commits,
         event_id,
         revset,
+        resolve_revset_options,
     } = options;
 
     let repo = Repo::from_dir(&git_run_info.working_directory)?;
@@ -582,33 +566,24 @@ pub fn smartlog(
         &references_snapshot,
     )?;
 
-    let observed_commits = {
-        // For the purpose of resolving the revset expression, we may
-        // temporarily clear the DAG's obsolete commit set. However, when we
-        // render the smartlog later, we want to have the original obsolete
-        // commit set so that we can correctly identify which of the nodes are
-        // obsolete commits.
-        let mut old_obsolete_commits = CommitSet::empty();
-        if *show_hidden_commits {
-            swap(&mut dag.obsolete_commits, &mut old_obsolete_commits);
+    let commits = match resolve_commits(
+        effects,
+        &repo,
+        &mut dag,
+        &[revset.clone()],
+        resolve_revset_options,
+    ) {
+        Ok(result) => match result.as_slice() {
+            [commit_set] => commit_set.clone(),
+            other => panic!(
+                "Expected exactly 1 result from resolve commits, got: {:?}",
+                other
+            ),
+        },
+        Err(err) => {
+            err.describe(effects)?;
+            return Ok(ExitCode(1));
         }
-        let observed_commits = match resolve_commits(effects, &repo, &mut dag, &[revset.clone()]) {
-            Ok(result) => match result.as_slice() {
-                [commit_set] => commit_set.clone(),
-                other => panic!(
-                    "Expected exactly 1 result from resolve commits, got: {:?}",
-                    other
-                ),
-            },
-            Err(err) => {
-                err.describe(effects)?;
-                return Ok(ExitCode(1));
-            }
-        };
-        if *show_hidden_commits {
-            swap(&mut dag.obsolete_commits, &mut old_obsolete_commits);
-        }
-        observed_commits
     };
 
     let graph = make_smartlog_graph(
@@ -617,8 +592,7 @@ pub fn smartlog(
         &dag,
         &event_replayer,
         event_cursor,
-        &observed_commits,
-        !show_hidden_commits,
+        &commits,
     )?;
 
     let lines = render_graph(
@@ -652,7 +626,9 @@ pub fn smartlog(
         )?;
     }
 
-    if !show_hidden_commits && get_hint_enabled(&repo, Hint::SmartlogFixAbandoned)? {
+    if !resolve_revset_options.show_hidden_commits
+        && get_hint_enabled(&repo, Hint::SmartlogFixAbandoned)?
+    {
         let commits_with_abandoned_children: CommitSet = graph
             .nodes
             .iter()
@@ -667,7 +643,7 @@ pub fn smartlog(
             })
             .collect();
         let children = dag.query().children(commits_with_abandoned_children)?;
-        let num_abandoned_children = children.difference(&dag.obsolete_commits).count()?;
+        let num_abandoned_children = children.difference(&dag.query_obsolete_commits()).count()?;
         if num_abandoned_children > 0 {
             writeln!(
                 effects.get_output_stream(),

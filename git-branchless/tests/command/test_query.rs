@@ -187,6 +187,16 @@ fn test_query_hidden_commits() -> eyre::Result<()> {
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
         96d1c37 create test2.txt
+        70deb1e create test3.txt
+        "###);
+    }
+
+    git.run(&["checkout", "-B", "master"])?;
+    {
+        let (stdout, stderr) = git.run(&["query", &format!("{}::", test2_oid)])?;
+        insta::assert_snapshot!(stderr, @"");
+        insta::assert_snapshot!(stdout, @r###"
+        96d1c37 create test2.txt
         "###);
     }
 

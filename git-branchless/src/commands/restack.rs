@@ -59,7 +59,6 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 use std::time::SystemTime;
 
-use eden_dag::DagAlgorithm;
 use lib::core::check_out::CheckOutCommitOptions;
 use lib::core::repo_ext::RepoExt;
 use lib::util::ExitCode;
@@ -67,7 +66,7 @@ use rayon::{ThreadPool, ThreadPoolBuilder};
 use tracing::{instrument, warn};
 
 use crate::commands::smartlog::smartlog;
-use crate::opts::{MoveOptions, Revset};
+use crate::opts::{MoveOptions, ResolveRevsetOptions, Revset};
 use crate::revset::resolve_commits;
 use lib::core::config::get_restack_preserve_timestamps;
 use lib::core::dag::{commit_set_to_vec, union_all, CommitSet, Dag};
@@ -98,18 +97,13 @@ fn restack_commits(
     let repo = repo_pool.try_create()?;
     let commit_set: CommitSet = match commits {
         Some(commits) => commits.into_iter().collect(),
-        None => dag.obsolete_commits.clone(),
+        None => dag.query_obsolete_commits(),
     };
     // Don't use `sort_commit_set` since the set of obsolete commits may be very
     // large and we'll be throwing away most of them.
     let commits = commit_set_to_vec(&commit_set)?;
 
-    let public_commits = dag.query_public_commits()?;
-    let active_heads = dag.query_active_heads(
-        &public_commits,
-        &dag.observed_commits.difference(&dag.obsolete_commits),
-    )?;
-    let draft_commits = dag.query().range(public_commits, active_heads)?;
+    let draft_commits = dag.query_draft_commits()?;
 
     struct RebaseInfo {
         dest_oid: NonZeroOid,
@@ -120,7 +114,7 @@ fn restack_commits(
         for original_commit_oid in commits {
             let abandoned_children = find_abandoned_children(
                 dag,
-                &draft_commits,
+                draft_commits,
                 event_replayer,
                 event_cursor,
                 original_commit_oid,
@@ -277,6 +271,7 @@ pub fn restack(
     effects: &Effects,
     git_run_info: &GitRunInfo,
     revsets: Vec<Revset>,
+    resolve_revset_options: &ResolveRevsetOptions,
     move_options: &MoveOptions,
     merge_conflict_remediation: MergeConflictRemediation,
 ) -> eyre::Result<ExitCode> {
@@ -297,13 +292,14 @@ pub fn restack(
         &references_snapshot,
     )?;
 
-    let commit_sets = match resolve_commits(effects, &repo, &mut dag, &revsets) {
-        Ok(commit_sets) => commit_sets,
-        Err(err) => {
-            err.describe(effects)?;
-            return Ok(ExitCode(1));
-        }
-    };
+    let commit_sets =
+        match resolve_commits(effects, &repo, &mut dag, &revsets, resolve_revset_options) {
+            Ok(commit_sets) => commit_sets,
+            Err(err) => {
+                err.describe(effects)?;
+                return Ok(ExitCode(1));
+            }
+        };
     let commits: Option<HashSet<NonZeroOid>> = if commit_sets.is_empty() {
         None
     } else {

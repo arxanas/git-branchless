@@ -12,7 +12,7 @@ use lib::core::repo_ext::RepoExt;
 use lib::util::ExitCode;
 use rayon::{ThreadPool, ThreadPoolBuilder};
 
-use crate::opts::{MoveOptions, Revset};
+use crate::opts::{MoveOptions, ResolveRevsetOptions, Revset};
 use crate::revset::{check_revset_syntax, resolve_commits};
 use lib::core::config::get_restack_preserve_timestamps;
 use lib::core::dag::{commit_set_to_vec, sorted_commit_set, union_all, CommitSet, Dag};
@@ -28,20 +28,12 @@ use lib::core::task::ResourcePool;
 use lib::git::{CategorizedReferenceName, Commit, GitRunInfo, NonZeroOid, Repo};
 
 fn get_stack_roots(dag: &Dag) -> eyre::Result<CommitSet> {
-    let public_commits = dag.query_public_commits()?;
-    let active_heads = dag.query_active_heads(
-        &public_commits,
-        &dag.observed_commits.difference(&dag.obsolete_commits),
-    )?;
-    let draft_commits = dag
-        .query()
-        .range(public_commits.clone(), active_heads)?
-        .difference(&public_commits);
+    let draft_commits = dag.query_draft_commits()?;
 
     // FIXME: if two draft roots are ancestors of a single commit (due to a
     // merge commit), then the entire unit should be treated as one stack and
     // moved together, rather than attempting two separate rebases.
-    let draft_roots = dag.query().roots(draft_commits)?;
+    let draft_roots = dag.query().roots(draft_commits.clone())?;
     Ok(draft_roots)
 }
 
@@ -52,6 +44,7 @@ pub fn sync(
     pull: bool,
     move_options: &MoveOptions,
     revsets: Vec<Revset>,
+    resolve_revset_options: &ResolveRevsetOptions,
 ) -> eyre::Result<ExitCode> {
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
@@ -130,6 +123,7 @@ pub fn sync(
         &thread_pool,
         &repo_pool,
         revsets,
+        resolve_revset_options,
     )
 }
 
@@ -288,6 +282,7 @@ fn execute_sync_plans(
     thread_pool: &ThreadPool,
     repo_pool: &ResourcePool<RepoResource>,
     revsets: Vec<Revset>,
+    resolve_revset_options: &ResolveRevsetOptions,
 ) -> eyre::Result<ExitCode> {
     let event_replayer = EventReplayer::from_event_log_db(effects, repo, event_log_db)?;
     let event_cursor = event_replayer.make_default_cursor();
@@ -299,13 +294,14 @@ fn execute_sync_plans(
         event_cursor,
         &references_snapshot,
     )?;
-    let commit_sets = match resolve_commits(effects, repo, &mut dag, &revsets) {
-        Ok(commit_sets) => commit_sets,
-        Err(err) => {
-            err.describe(effects)?;
-            return Ok(ExitCode(1));
-        }
-    };
+    let commit_sets =
+        match resolve_commits(effects, repo, &mut dag, &revsets, resolve_revset_options) {
+            Ok(commit_sets) => commit_sets,
+            Err(err) => {
+                err.describe(effects)?;
+                return Ok(ExitCode(1));
+            }
+        };
     let main_branch_oid = repo.get_main_branch_oid()?;
     let root_commit_oids = if commit_sets.is_empty() {
         get_stack_roots(&dag)?

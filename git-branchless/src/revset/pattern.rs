@@ -137,13 +137,18 @@ pub(super) fn make_pattern_matcher_set(
     struct Wrapped {
         effects: Effects,
         repo: Repo,
-        active_commits: CommitSet,
+        visible_commits: CommitSet,
         matcher: Box<dyn PatternMatcher>,
     }
     let wrapped = Arc::new(Mutex::new(Wrapped {
         effects: ctx.effects.clone(),
         repo: repo.try_clone().map_err(PatternError::Repo)?,
-        active_commits: ctx.query_active_commits().map_err(Box::new)?.clone(),
+        visible_commits: ctx
+            .dag
+            .query_visible_commits()
+            .map_err(EvalError::OtherError)
+            .map_err(Box::new)?
+            .clone(),
         matcher,
     }));
 
@@ -156,7 +161,7 @@ pub(super) fn make_pattern_matcher_set(
                 let Wrapped {
                     effects,
                     repo,
-                    active_commits,
+                    visible_commits,
                     matcher,
                 } = &*wrapped;
 
@@ -165,11 +170,11 @@ pub(super) fn make_pattern_matcher_set(
                 ));
                 let _effects = effects;
 
-                let len = active_commits.count()?;
+                let len = visible_commits.count()?;
                 progress.notify_progress(0, len);
 
                 let repo_pool = RepoResource::new_pool(repo).map_err(make_dag_backend_error)?;
-                let commit_oids = active_commits.iter()?;
+                let commit_oids = visible_commits.iter()?;
                 let result = commit_oids
                     .par_bridge()
                     .try_fold(
@@ -206,12 +211,12 @@ pub(super) fn make_pattern_matcher_set(
             let Wrapped {
                 effects,
                 repo,
-                active_commits,
+                visible_commits,
                 matcher,
             } = &*wrapped;
             let _effects = effects;
 
-            if !active_commits.contains(vertex)? {
+            if !visible_commits.contains(vertex)? {
                 return Ok(false);
             }
 

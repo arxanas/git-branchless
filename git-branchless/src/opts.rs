@@ -34,6 +34,14 @@ pub enum WrappedCommand {
     WrappedCommand(Vec<String>),
 }
 
+/// Options for resolving revset expressions.
+#[derive(Args, Debug, Default)]
+pub struct ResolveRevsetOptions {
+    /// Include hidden commits in the results of evaluating revset expressions.
+    #[clap(action, long = "hidden")]
+    pub show_hidden_commits: bool,
+}
+
 /// Options for moving commits.
 #[derive(Args, Debug)]
 pub struct MoveOptions {
@@ -177,6 +185,10 @@ pub enum Command {
         #[clap(value_parser)]
         revsets: Vec<Revset>,
 
+        /// Options for resolving revset expressions.
+        #[clap(flatten)]
+        resolve_revset_options: ResolveRevsetOptions,
+
         /// Also delete any branches that are abandoned as a result of this hide.
         #[clap(action, short = 'D', long = "delete-branches")]
         delete_branches: bool,
@@ -311,14 +323,18 @@ pub enum Command {
         #[clap(value_parser, short = 'd', long = "dest")]
         dest: Option<Revset>,
 
-        /// Insert the subtree between the destination and it's children, if any.
-        /// Only supported if the moved subtree has a single head.
-        #[clap(action, short = 'I', long = "insert")]
-        insert: bool,
+        /// Options for resolving revset expressions.
+        #[clap(flatten)]
+        resolve_revset_options: ResolveRevsetOptions,
 
         /// Options for moving commits.
         #[clap(flatten)]
         move_options: MoveOptions,
+
+        /// Insert the subtree between the destination and it's children, if any.
+        /// Only supported if the moved subtree has a single head.
+        #[clap(action, short = 'I', long = "insert")]
+        insert: bool,
     },
 
     /// Move to a later commit in the current stack.
@@ -348,6 +364,10 @@ pub enum Command {
         #[clap(value_parser)]
         revset: Revset,
 
+        /// Options for resolving revset expressions.
+        #[clap(flatten)]
+        resolve_revset_options: ResolveRevsetOptions,
+
         /// Print the branches attached to the resulting commits, rather than the commits themselves.
         #[clap(action, short = 'b', long = "branches")]
         show_branches: bool,
@@ -371,7 +391,11 @@ pub enum Command {
         /// The IDs of the abandoned commits whose descendants should be
         /// restacked. If not provided, all abandoned commits are restacked.
         #[clap(value_parser)]
-        commits: Vec<Revset>,
+        revsets: Vec<Revset>,
+
+        /// Options for resolving revset expressions.
+        #[clap(flatten)]
+        resolve_revset_options: ResolveRevsetOptions,
 
         /// Options for moving commits.
         #[clap(flatten)]
@@ -401,6 +425,10 @@ pub enum Command {
         #[clap(value_parser)]
         revsets: Vec<Revset>,
 
+        /// Options for resolving revset expressions.
+        #[clap(flatten)]
+        resolve_revset_options: ResolveRevsetOptions,
+
         /// Force rewording public commits, even though other people may have access to
         /// those commits.
         #[clap(action, short = 'f', long = "force-rewrite", visible_alias = "fr")]
@@ -426,10 +454,6 @@ pub enum Command {
 
     /// Display a nice graph of the commits you've recently worked on.
     Smartlog {
-        /// Also show commits which have been hidden.
-        #[clap(action, long = "hidden")]
-        show_hidden_commits: bool,
-
         /// The point in time at which to show the smartlog. If not provided,
         /// renders the smartlog as of the current time. If negative, is treated
         /// as an offset from the current event.
@@ -438,8 +462,12 @@ pub enum Command {
 
         /// The commits to render. These commits and their ancestors up to the
         /// main branch will be rendered.
-        #[clap(value_parser, default_value = "draft()")]
+        #[clap(value_parser, default_value = "draft() | branches() | @")]
         revset: Revset,
+
+        /// Options for resolving revset expressions.
+        #[clap(flatten)]
+        resolve_revset_options: ResolveRevsetOptions,
     },
 
     #[clap(hide = true)]
@@ -465,6 +493,10 @@ pub enum Command {
         /// pushed.
         #[clap(value_parser, default_value = "stack()")]
         revset: Revset,
+
+        /// Options for resolving revset expressions.
+        #[clap(flatten)]
+        resolve_revset_options: ResolveRevsetOptions,
     },
 
     /// Switch to the provided branch or commit.
@@ -495,6 +527,10 @@ pub enum Command {
         /// no commits are provided, all draft commits will be synced.
         #[clap(value_parser)]
         revsets: Vec<Revset>,
+
+        /// Options for resolving revset expressions.
+        #[clap(flatten)]
+        resolve_revset_options: ResolveRevsetOptions,
     },
 
     /// Run a command on each commit in a given set and aggregate the results.
@@ -521,6 +557,10 @@ pub enum Command {
         /// Zero or more commits to unhide.
         #[clap(value_parser)]
         revsets: Vec<Revset>,
+
+        /// Options for resolving revset expressions.
+        #[clap(flatten)]
+        resolve_revset_options: ResolveRevsetOptions,
 
         /// Also recursively unhide all children commits of the provided commits.
         #[clap(action, short = 'r', long = "recursive")]
@@ -618,7 +658,11 @@ pub enum TestSubcommand {
 
         /// The set of commits to test.
         #[clap(value_parser, default_value = "stack()")]
-        commits: Revset,
+        revset: Revset,
+
+        /// Options for resolving revset expressions.
+        #[clap(flatten)]
+        resolve_revset_options: ResolveRevsetOptions,
 
         /// Show the test output as well.
         #[clap(short = 'v', long = "verbose", action = clap::ArgAction::Count)]
@@ -646,7 +690,11 @@ pub enum TestSubcommand {
 
         /// The set of commits to show the test output for.
         #[clap(value_parser, default_value = "stack()")]
-        commits: Revset,
+        revset: Revset,
+
+        /// Options for resolving revset expressions.
+        #[clap(flatten)]
+        resolve_revset_options: ResolveRevsetOptions,
 
         /// Show the test output as well.
         #[clap(short = 'v', long = "verbose", action = clap::ArgAction::Count)]
@@ -657,7 +705,11 @@ pub enum TestSubcommand {
     Clean {
         /// The set of commits whose results should be cleaned.
         #[clap(value_parser, default_value = "stack()")]
-        commits: Revset,
+        revset: Revset,
+
+        /// Options for resolving revset expressions.
+        #[clap(flatten)]
+        resolve_revset_options: ResolveRevsetOptions,
     },
 }
 

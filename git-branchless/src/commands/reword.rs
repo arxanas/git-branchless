@@ -31,7 +31,7 @@ use lib::core::rewrite::{
 };
 use lib::git::{message_prettify, Commit, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo};
 
-use crate::opts::Revset;
+use crate::opts::{ResolveRevsetOptions, Revset};
 use crate::revset::resolve_commits;
 
 /// The commit message(s) provided by the user.
@@ -52,6 +52,7 @@ pub enum InitialCommitMessages {
 pub fn reword(
     effects: &Effects,
     revsets: Vec<Revset>,
+    resolve_revset_options: &ResolveRevsetOptions,
     messages: InitialCommitMessages,
     git_run_info: &GitRunInfo,
     force_rewrite_public_commits: bool,
@@ -70,7 +71,13 @@ pub fn reword(
         &references_snapshot,
     )?;
 
-    let commits = match resolve_commits_from_hashes(&repo, &mut dag, effects, revsets)? {
+    let commits = match resolve_commits_from_hashes(
+        &repo,
+        &mut dag,
+        effects,
+        revsets,
+        resolve_revset_options,
+    )? {
         Some(commits) => commits,
         None => return Ok(ExitCode(1)),
     };
@@ -95,9 +102,14 @@ pub fn reword(
     let messages = match messages {
         InitialCommitMessages::Discard | InitialCommitMessages::Messages(_) => messages,
         InitialCommitMessages::FixUp(revset) => {
-            let commits_to_fixup =
-                resolve_commits_from_hashes(&repo, &mut dag, effects, vec![revset.clone()])?
-                    .unwrap_or_default();
+            let commits_to_fixup = resolve_commits_from_hashes(
+                &repo,
+                &mut dag,
+                effects,
+                vec![revset.clone()],
+                resolve_revset_options,
+            )?
+            .unwrap_or_default();
             let commit_to_fixup = match commits_to_fixup.as_slice() {
                 [commit_to_fixup] => {
                     let commits: CommitSet = commits.iter().map(|c| c.get_oid()).collect();
@@ -306,6 +318,7 @@ fn resolve_commits_from_hashes<'repo>(
     dag: &mut Dag,
     effects: &Effects,
     revsets: Vec<Revset>,
+    resolve_revset_options: &ResolveRevsetOptions,
 ) -> eyre::Result<Option<Vec<Commit<'repo>>>> {
     let hashes = if revsets.is_empty() {
         vec![Revset("HEAD".to_string())]
@@ -313,7 +326,7 @@ fn resolve_commits_from_hashes<'repo>(
         revsets
     };
 
-    let commit_sets = match resolve_commits(effects, repo, dag, &hashes) {
+    let commit_sets = match resolve_commits(effects, repo, dag, &hashes, resolve_revset_options) {
         Ok(commit_sets) => commit_sets,
         Err(err) => {
             err.describe(effects)?;

@@ -107,7 +107,7 @@ fn advance(
                     let result = dag
                         .query()
                         .children(CommitSet::from(current_oid))?
-                        .difference(&dag.obsolete_commits);
+                        .intersection(dag.query_visible_commits()?);
                     Ok(result)
                 };
 
@@ -558,8 +558,7 @@ pub fn switch(
         &dag,
         &event_replayer,
         event_cursor,
-        &dag.observed_commits,
-        true,
+        dag.query_default_smartlog_commits()?,
     )?;
 
     let initial_query = get_initial_query(switch_options);

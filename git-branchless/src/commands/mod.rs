@@ -46,6 +46,7 @@ use tracing_subscriber::EnvFilter;
 
 use crate::opts::Command;
 use crate::opts::Opts;
+use crate::opts::ResolveRevsetOptions;
 use crate::opts::SnapshotSubcommand;
 use crate::opts::WrappedCommand;
 use crate::opts::{ColorSetting, TestSubcommand};
@@ -133,7 +134,12 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
     }
 
     let ExitCode(exit_code) = match command {
-        Command::Amend { move_options } => amend::amend(&effects, &git_run_info, &move_options)?,
+        Command::Amend { move_options } => amend::amend(
+            &effects,
+            &git_run_info,
+            &ResolveRevsetOptions::default(),
+            &move_options,
+        )?,
 
         Command::BugReport => bug_report::bug_report(&effects, &git_run_info)?,
 
@@ -148,9 +154,17 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
 
         Command::Hide {
             revsets,
+            resolve_revset_options,
             delete_branches,
             recursive,
-        } => hide::hide(&effects, &git_run_info, revsets, delete_branches, recursive)?,
+        } => hide::hide(
+            &effects,
+            &git_run_info,
+            revsets,
+            &resolve_revset_options,
+            delete_branches,
+            recursive,
+        )?,
 
         Command::HookDetectEmptyCommit { old_commit_oid } => {
             let old_commit_oid: NonZeroOid = old_commit_oid.parse()?;
@@ -224,8 +238,9 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
             dest,
             base,
             exact,
-            insert,
+            resolve_revset_options,
             move_options,
+            insert,
         } => r#move::r#move(
             &effects,
             &git_run_info,
@@ -233,8 +248,9 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
             dest,
             base,
             exact,
-            insert,
+            &resolve_revset_options,
             &move_options,
+            insert,
         )?,
 
         Command::Next {
@@ -257,19 +273,29 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
 
         Command::Query {
             revset,
+            resolve_revset_options,
             show_branches,
             raw,
-        } => query::query(&effects, &git_run_info, revset, show_branches, raw)?,
+        } => query::query(
+            &effects,
+            &git_run_info,
+            revset,
+            &resolve_revset_options,
+            show_branches,
+            raw,
+        )?,
 
         Command::Repair { dry_run } => repair::repair(&effects, dry_run)?,
 
         Command::Restack {
-            commits: revsets,
+            revsets,
+            resolve_revset_options,
             move_options,
         } => restack::restack(
             &effects,
             &git_run_info,
             revsets,
+            &resolve_revset_options,
             &move_options,
             MergeConflictRemediation::Retry,
         )?,
@@ -282,6 +308,7 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
 
         Command::Reword {
             revsets,
+            resolve_revset_options,
             messages,
             force_rewrite_public_commits,
             discard,
@@ -297,6 +324,7 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
             reword::reword(
                 &effects,
                 revsets,
+                &resolve_revset_options,
                 messages,
                 &git_run_info,
                 force_rewrite_public_commits,
@@ -304,16 +332,16 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
         }
 
         Command::Smartlog {
-            show_hidden_commits,
             event_id,
             revset,
+            resolve_revset_options,
         } => smartlog::smartlog(
             &effects,
             &git_run_info,
             &SmartlogOptions {
-                show_hidden_commits,
                 event_id,
                 revset,
+                resolve_revset_options,
             },
         )?,
 
@@ -324,21 +352,38 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
             }
         },
 
-        Command::Submit { create, revset } => {
-            submit::submit(&effects, &git_run_info, revset, create)?
-        }
+        Command::Submit {
+            create,
+            revset,
+            resolve_revset_options,
+        } => submit::submit(
+            &effects,
+            &git_run_info,
+            revset,
+            &resolve_revset_options,
+            create,
+        )?,
 
         Command::Sync {
             pull,
             move_options,
             revsets,
-        } => sync::sync(&effects, &git_run_info, pull, &move_options, revsets)?,
+            resolve_revset_options,
+        } => sync::sync(
+            &effects,
+            &git_run_info,
+            pull,
+            &move_options,
+            revsets,
+            &resolve_revset_options,
+        )?,
 
         Command::Test { subcommand } => match subcommand {
             TestSubcommand::Run {
                 exec: command,
                 command: command_alias,
-                commits,
+                revset,
+                resolve_revset_options,
                 verbosity,
                 strategy,
                 jobs,
@@ -352,13 +397,15 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
                     jobs,
                     verbosity: test::Verbosity::from(verbosity),
                 },
-                commits,
+                revset,
+                &resolve_revset_options,
             )?,
 
             TestSubcommand::Show {
                 exec: command,
                 command: command_alias,
-                commits,
+                revset,
+                resolve_revset_options,
                 verbosity,
             } => test::show(
                 &effects,
@@ -369,17 +416,25 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
                     jobs: None,
                     verbosity: test::Verbosity::from(verbosity),
                 },
-                commits,
+                revset,
+                &resolve_revset_options,
             )?,
 
-            TestSubcommand::Clean { commits } => test::clean(&effects, commits)?,
+            TestSubcommand::Clean {
+                revset,
+                resolve_revset_options,
+            } => test::clean(&effects, revset, &resolve_revset_options)?,
         },
 
         Command::Undo { interactive, yes } => {
             undo::undo(&effects, &git_run_info, interactive, yes)?
         }
 
-        Command::Unhide { revsets, recursive } => hide::unhide(&effects, revsets, recursive)?,
+        Command::Unhide {
+            revsets,
+            resolve_revset_options,
+            recursive,
+        } => hide::unhide(&effects, revsets, &resolve_revset_options, recursive)?,
 
         Command::Wrap {
             git_executable: explicit_git_executable,

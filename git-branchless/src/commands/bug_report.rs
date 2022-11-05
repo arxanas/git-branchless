@@ -136,8 +136,7 @@ fn describe_event_cursor(
         dag,
         event_replayer,
         event_cursor,
-        &dag.observed_commits,
-        true,
+        dag.query_default_smartlog_commits()?,
     )?;
     let graph_lines = render_graph(
         &effects,

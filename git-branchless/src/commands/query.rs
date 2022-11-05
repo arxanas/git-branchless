@@ -10,7 +10,7 @@ use lib::git::{CategorizedReferenceName, GitRunInfo, Repo};
 use lib::util::ExitCode;
 use tracing::instrument;
 
-use crate::opts::Revset;
+use crate::opts::{ResolveRevsetOptions, Revset};
 use crate::revset::resolve_commits;
 
 #[instrument]
@@ -18,6 +18,7 @@ pub fn query(
     effects: &Effects,
     git_run_info: &GitRunInfo,
     query: Revset,
+    resolve_revset_options: &ResolveRevsetOptions,
     show_branches: bool,
     raw: bool,
 ) -> eyre::Result<ExitCode> {
@@ -35,13 +36,14 @@ pub fn query(
         &references_snapshot,
     )?;
 
-    let commit_set = match resolve_commits(effects, &repo, &mut dag, &[query]) {
-        Ok(commit_sets) => commit_sets[0].clone(),
-        Err(err) => {
-            err.describe(effects)?;
-            return Ok(ExitCode(1));
-        }
-    };
+    let commit_set =
+        match resolve_commits(effects, &repo, &mut dag, &[query], resolve_revset_options) {
+            Ok(commit_sets) => commit_sets[0].clone(),
+            Err(err) => {
+                err.describe(effects)?;
+                return Ok(ExitCode(1));
+            }
+        };
 
     if show_branches {
         let commit_oids = {
