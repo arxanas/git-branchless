@@ -133,7 +133,7 @@ pub fn get_editor(git_run_info: &GitRunInfo, repo: &Repo) -> eyre::Result<Option
     }
 
     let editor = std::env::var_os("GIT_EDITOR");
-    if editor != None {
+    if editor.is_some() {
         return Ok(editor);
     }
 

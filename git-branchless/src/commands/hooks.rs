@@ -240,8 +240,8 @@ mod reference_transaction {
         match fields.as_slice() {
             [old_value, new_value, ref_name] => Ok(ParsedReferenceTransactionLine {
                 ref_name: ReferenceName::from(*ref_name),
-                old_oid: MaybeZeroOid::from_str(*old_value)?,
-                new_oid: MaybeZeroOid::from_str(*new_value)?,
+                old_oid: MaybeZeroOid::from_str(old_value)?,
+                new_oid: MaybeZeroOid::from_str(new_value)?,
             }),
             _ => {
                 eyre::bail!(

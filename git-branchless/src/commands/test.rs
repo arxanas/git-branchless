@@ -239,7 +239,7 @@ but --strategy working-copy was provided instead."
     }
 
     fn make_command_slug(&self) -> String {
-        self.command.replace(&['/', ' ', '\n'], "_")
+        self.command.replace(['/', ' ', '\n'], "_")
     }
 }
 
@@ -1327,7 +1327,7 @@ fn test_commit(
         stderr_path,
         stderr_file,
     } = test_files;
-    let exit_code = match Command::new(&shell_path)
+    let exit_code = match Command::new(shell_path)
         .arg("-c")
         .arg(&options.command)
         .current_dir(working_directory)
