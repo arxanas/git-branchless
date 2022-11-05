@@ -68,8 +68,7 @@ fn render_cursor_smartlog(
         &dag,
         event_replayer,
         event_cursor,
-        &dag.observed_commits,
-        true,
+        dag.query_default_smartlog_commits()?,
     )?;
     let result = render_graph(
         effects,

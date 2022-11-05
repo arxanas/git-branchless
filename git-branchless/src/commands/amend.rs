@@ -14,7 +14,7 @@ use lib::util::ExitCode;
 use tracing::instrument;
 
 use crate::commands::restack;
-use crate::opts::{MoveOptions, Revset};
+use crate::opts::{MoveOptions, ResolveRevsetOptions, Revset};
 use lib::core::config::get_restack_preserve_timestamps;
 use lib::core::effects::Effects;
 use lib::core::eventlog::{Event, EventLogDb};
@@ -27,6 +27,7 @@ use lib::git::{AmendFastOptions, GitRunInfo, MaybeZeroOid, Repo, ResolvedReferen
 pub fn amend(
     effects: &Effects,
     git_run_info: &GitRunInfo,
+    resolve_revset_options: &ResolveRevsetOptions,
     move_options: &MoveOptions,
 ) -> eyre::Result<ExitCode> {
     let now = SystemTime::now();
@@ -147,6 +148,7 @@ pub fn amend(
         effects,
         git_run_info,
         vec![Revset(head_oid.to_string())],
+        resolve_revset_options,
         move_options,
         MergeConflictRemediation::Restack,
     )?;

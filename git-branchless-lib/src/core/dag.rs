@@ -11,6 +11,7 @@ use eden_dag::ops::DagPersistent;
 use eden_dag::DagAlgorithm;
 use eyre::Context;
 use itertools::Itertools;
+use once_cell::sync::OnceCell;
 use tracing::{instrument, trace, warn};
 
 use crate::core::effects::{Effects, OperationType};
@@ -106,11 +107,16 @@ pub struct Dag {
 
     /// A set containing all commits that have been observed by the
     /// `EventReplayer`.
-    pub observed_commits: CommitSet,
+    observed_commits: CommitSet,
 
     /// A set containing all commits that have been determined to be obsolete by
     /// the `EventReplayer`.
-    pub obsolete_commits: CommitSet,
+    obsolete_commits: CommitSet,
+
+    public_commits: OnceCell<CommitSet>,
+    visible_commits: OnceCell<CommitSet>,
+    draft_commits: OnceCell<CommitSet>,
+    default_smartlog_commits: OnceCell<CommitSet>,
 }
 
 impl Dag {
@@ -187,6 +193,10 @@ impl Dag {
             branch_commits,
             observed_commits,
             obsolete_commits,
+            public_commits: Default::default(),
+            visible_commits: Default::default(),
+            draft_commits: Default::default(),
+            default_smartlog_commits: Default::default(),
         })
     }
 
@@ -362,36 +372,61 @@ impl Dag {
     }
 
     /// Return the set of commits which are public (checked into the main branch).
-    pub fn query_public_commits(&self) -> eyre::Result<CommitSet> {
-        let public_commits = self.query().ancestors(self.main_branch_commit.clone())?;
-        Ok(public_commits)
+    pub fn query_public_commits(&self) -> eyre::Result<&CommitSet> {
+        self.public_commits.get_or_try_init(|| {
+            let public_commits = self.query().ancestors(self.main_branch_commit.clone())?;
+            Ok(public_commits)
+        })
     }
 
-    /// Query the set of active heads. This includes the heads of the set of
-    /// visible commits, plus any other commits which would be rendered in the
-    /// smartlog.
-    ///
-    /// This query includes heads which may be ancestor of other commits in the
-    /// set. For example, if `HEAD` points to a commit which is the ancestor of
-    /// a visible commit, both commits are included in the resulting set. This
-    /// is so that they can be explicitly rendered in the smartlog. To get the
-    /// set of visible commits, simply query for the ancestors of the set
-    /// resulting from this function.
-    pub fn query_active_heads(
-        &self,
-        public_commits: &CommitSet,
-        observed_commits: &CommitSet,
-    ) -> eyre::Result<CommitSet> {
-        let active_commits = observed_commits.clone();
-        let active_heads = self.query().heads(active_commits)?;
-        let active_heads = active_heads.difference(public_commits);
+    /// Determine the set of commits which are considered to be "visible". A
+    /// commit is "visible" if it is not obsolete or has a non-obsolete
+    /// descendant.
+    pub fn query_visible_commits(&self) -> eyre::Result<&CommitSet> {
+        self.visible_commits.get_or_try_init(|| {
+            let public_commits = self.query_public_commits()?;
+            let visible_heads = public_commits
+                .union(&self.observed_commits.difference(&self.obsolete_commits))
+                .union(&self.head_commit)
+                .union(&self.main_branch_commit)
+                .union(&self.branch_commits);
+            let visible_commits = self.query().ancestors(visible_heads)?;
+            Ok(visible_commits)
+        })
+    }
 
-        let active_heads = active_heads
-            .union(&self.head_commit)
-            .union(&self.branch_commits)
-            .union(&self.main_branch_commit);
+    /// Determine the set of obsolete commits. These commits have been rewritten
+    /// or explicitly hidden by the user.
+    pub fn query_obsolete_commits(&self) -> CommitSet {
+        self.obsolete_commits.clone()
+    }
 
-        Ok(active_heads)
+    /// Determine the set of "draft" commits. The draft commits are all visible
+    /// commits which aren't public.
+    pub fn query_draft_commits(&self) -> eyre::Result<&CommitSet> {
+        self.draft_commits.get_or_try_init(|| {
+            let visible_commits = self.query_visible_commits()?;
+            let public_commits = self.query_public_commits()?;
+            Ok(visible_commits.difference(public_commits))
+        })
+    }
+
+    /// Determine the default set of commits that is shown in the smartlog when
+    /// no revset is passed.
+    pub fn query_default_smartlog_commits(&self) -> eyre::Result<&CommitSet> {
+        self.default_smartlog_commits.get_or_try_init(|| {
+            let public_commits = self.query_public_commits()?;
+            let active_commits = self.observed_commits.clone();
+            let active_heads = self.query().heads(active_commits)?;
+            let active_heads = active_heads.difference(public_commits);
+
+            let active_heads = active_heads
+                .union(&self.head_commit)
+                .union(&self.branch_commits)
+                .union(&self.main_branch_commit);
+
+            Ok(active_heads)
+        })
     }
 
     /// Find a path from the provided head to its merge-base with the main

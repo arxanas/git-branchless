@@ -18,7 +18,7 @@ use lib::core::formatting::{Glyphs, Pluralize};
 use lib::core::rewrite::move_branches;
 use lib::git::{CategorizedReferenceName, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo};
 
-use crate::opts::Revset;
+use crate::opts::{ResolveRevsetOptions, Revset};
 use crate::revset::resolve_commits;
 
 /// Hide the hashes provided on the command-line.
@@ -27,6 +27,7 @@ pub fn hide(
     effects: &Effects,
     git_run_info: &GitRunInfo,
     revsets: Vec<Revset>,
+    resolve_revset_options: &ResolveRevsetOptions,
     delete_branches: bool,
     recursive: bool,
 ) -> eyre::Result<ExitCode> {
@@ -46,19 +47,20 @@ pub fn hide(
         &references_snapshot,
     )?;
 
-    let commit_sets = match resolve_commits(effects, &repo, &mut dag, &revsets) {
-        Ok(commit_sets) => commit_sets,
-        Err(err) => {
-            err.describe(effects)?;
-            return Ok(ExitCode(1));
-        }
-    };
+    let commit_sets =
+        match resolve_commits(effects, &repo, &mut dag, &revsets, resolve_revset_options) {
+            Ok(commit_sets) => commit_sets,
+            Err(err) => {
+                err.describe(effects)?;
+                return Ok(ExitCode(1));
+            }
+        };
 
     let commits = union_all(&commit_sets);
     let commits = if recursive {
         dag.query()
             .descendants(commits)?
-            .difference(&dag.obsolete_commits)
+            .intersection(dag.query_visible_commits()?)
     } else {
         commits
     };
@@ -181,7 +183,12 @@ pub fn hide(
 
 /// Unhide the hashes provided on the command-line.
 #[instrument]
-pub fn unhide(effects: &Effects, revsets: Vec<Revset>, recursive: bool) -> eyre::Result<ExitCode> {
+pub fn unhide(
+    effects: &Effects,
+    revsets: Vec<Revset>,
+    resolve_revset_options: &ResolveRevsetOptions,
+    recursive: bool,
+) -> eyre::Result<ExitCode> {
     let now = SystemTime::now();
     let glyphs = Glyphs::detect();
     let repo = Repo::from_current_dir()?;
@@ -198,19 +205,20 @@ pub fn unhide(effects: &Effects, revsets: Vec<Revset>, recursive: bool) -> eyre:
         &references_snapshot,
     )?;
 
-    let commit_sets = match resolve_commits(effects, &repo, &mut dag, &revsets) {
-        Ok(commit_sets) => commit_sets,
-        Err(err) => {
-            err.describe(effects)?;
-            return Ok(ExitCode(1));
-        }
-    };
+    let commit_sets =
+        match resolve_commits(effects, &repo, &mut dag, &revsets, resolve_revset_options) {
+            Ok(commit_sets) => commit_sets,
+            Err(err) => {
+                err.describe(effects)?;
+                return Ok(ExitCode(1));
+            }
+        };
 
     let commits = union_all(&commit_sets);
     let commits = if recursive {
         dag.query()
             .descendants(commits)?
-            .intersection(&dag.obsolete_commits)
+            .intersection(&dag.query_obsolete_commits())
     } else {
         commits
     };

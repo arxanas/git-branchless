@@ -84,8 +84,8 @@ pub fn find_abandoned_children(
     };
 
     let children = dag.query().children(CommitSet::from(oid))?;
-    let children = children.intersection(draft_commits);
-    let non_obsolete_children = children.difference(&dag.obsolete_commits);
+    let children = children.intersection(dag.query_visible_commits()?);
+    let non_obsolete_children = children.difference(&dag.query_obsolete_commits());
     let non_obsolete_children_oids: Vec<NonZeroOid> = non_obsolete_children
         .iter()?
         .map(|x| -> eyre::Result<NonZeroOid> { NonZeroOid::try_from(x?) })

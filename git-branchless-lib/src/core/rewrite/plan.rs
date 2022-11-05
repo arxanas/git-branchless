@@ -202,13 +202,9 @@ impl<'a> RebasePlanPermissions<'a> {
             }
         }
 
-        let allowed_commits = dag.query().range(
-            commits.clone(),
-            commits.union(&dag.query_active_heads(&public_commits, &dag.observed_commits)?),
-        )?;
         Ok(Ok(RebasePlanPermissions {
             build_options,
-            allowed_commits,
+            allowed_commits: commits,
         }))
     }
 
@@ -307,8 +303,8 @@ impl<'a> ConstraintGraph<'a> {
                         .dag
                         .query()
                         .children(CommitSet::from(*children_of_oid))?
-                        .difference(&self.dag.obsolete_commits)
-                        .difference(&commits_to_move);
+                        .difference(&commits_to_move)
+                        .intersection(self.dag.query_visible_commits()?);
 
                     for child_oid in commit_set_to_vec(&source_children)? {
                         self.inner.entry(parent_oid).or_default().insert(child_oid);
@@ -362,21 +358,13 @@ impl<'a> ConstraintGraph<'a> {
         let _effects = effects;
 
         let all_descendants_of_constrained_nodes = {
-            let public_commits = self.dag.query_public_commits()?;
-            let active_heads = self.dag.query_active_heads(
-                &public_commits,
-                &self
-                    .dag
-                    .observed_commits
-                    .difference(&self.dag.obsolete_commits),
-            )?;
-            let visible_commits = self.dag.query().ancestors(active_heads)?;
+            let visible_commits = self.dag.query_visible_commits()?;
 
             let mut acc = Vec::new();
             let parents = self.commits_to_move();
             progress.notify_progress(0, parents.len());
             for parent_oid in parents {
-                self.collect_descendants(&visible_commits, &mut acc, parent_oid)?;
+                self.collect_descendants(visible_commits, &mut acc, parent_oid)?;
                 progress.notify_progress_inc(1);
             }
             acc

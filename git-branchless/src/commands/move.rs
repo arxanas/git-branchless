@@ -14,7 +14,7 @@ use lib::util::ExitCode;
 use rayon::ThreadPoolBuilder;
 use tracing::instrument;
 
-use crate::opts::{MoveOptions, Revset};
+use crate::opts::{MoveOptions, ResolveRevsetOptions, Revset};
 use crate::revset::resolve_commits;
 use lib::core::config::{
     get_hint_enabled, get_hint_string, get_restack_preserve_timestamps,
@@ -64,8 +64,9 @@ pub fn r#move(
     dest: Option<Revset>,
     bases: Vec<Revset>,
     exacts: Vec<Revset>,
-    insert: bool,
+    resolve_revset_options: &ResolveRevsetOptions,
     move_options: &MoveOptions,
+    insert: bool,
 ) -> eyre::Result<ExitCode> {
     let sources_provided = !sources.is_empty();
     let bases_provided = !bases.is_empty();
@@ -100,21 +101,29 @@ pub fn r#move(
         &references_snapshot,
     )?;
 
-    let source_oids: CommitSet = match resolve_commits(effects, &repo, &mut dag, &sources) {
-        Ok(commit_sets) => union_all(&commit_sets),
-        Err(err) => {
-            err.describe(effects)?;
-            return Ok(ExitCode(1));
-        }
-    };
-    let base_oids: CommitSet = match resolve_commits(effects, &repo, &mut dag, &bases) {
-        Ok(commit_sets) => union_all(&commit_sets),
-        Err(err) => {
-            err.describe(effects)?;
-            return Ok(ExitCode(1));
-        }
-    };
-    let exact_components = match resolve_commits(effects, &repo, &mut dag, &exacts) {
+    let source_oids: CommitSet =
+        match resolve_commits(effects, &repo, &mut dag, &sources, resolve_revset_options) {
+            Ok(commit_sets) => union_all(&commit_sets),
+            Err(err) => {
+                err.describe(effects)?;
+                return Ok(ExitCode(1));
+            }
+        };
+    let base_oids: CommitSet =
+        match resolve_commits(effects, &repo, &mut dag, &bases, resolve_revset_options) {
+            Ok(commit_sets) => union_all(&commit_sets),
+            Err(err) => {
+                err.describe(effects)?;
+                return Ok(ExitCode(1));
+            }
+        };
+    let exact_components = match resolve_commits(
+        effects,
+        &repo,
+        &mut dag,
+        &exacts,
+        resolve_revset_options,
+    ) {
         Ok(commit_sets) => {
             let exact_oids = union_all(&commit_sets);
             let mut components: HashMap<NonZeroOid, CommitSet> = HashMap::new();
@@ -158,7 +167,13 @@ pub fn r#move(
         }
     };
 
-    let dest_oid: NonZeroOid = match resolve_commits(effects, &repo, &mut dag, &[dest.clone()]) {
+    let dest_oid: NonZeroOid = match resolve_commits(
+        effects,
+        &repo,
+        &mut dag,
+        &[dest.clone()],
+        resolve_revset_options,
+    ) {
         Ok(commit_sets) => match commit_set_to_vec(&commit_sets[0])?.as_slice() {
             [only_commit_oid] => *only_commit_oid,
             other => {
@@ -363,7 +378,7 @@ pub fn r#move(
                 .query()
                 .children(component.clone())?
                 .difference(component)
-                .difference(&dag.obsolete_commits);
+                .intersection(dag.query_visible_commits()?);
 
             for component_child in commit_set_to_vec(&component_children)? {
                 // If the range being extracted has any child commits, then we
@@ -443,7 +458,7 @@ pub fn r#move(
                 .children(CommitSet::from(dest_oid))?
                 .difference(&source_oids)
                 .difference(&exact_oids)
-                .difference(&dag.obsolete_commits);
+                .intersection(dag.query_visible_commits()?);
 
             for dest_child in commit_set_to_vec(&dest_children)? {
                 builder.move_subtree(dest_child, vec![source_head])?;

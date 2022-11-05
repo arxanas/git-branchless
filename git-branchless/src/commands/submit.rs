@@ -10,13 +10,14 @@ use lib::core::repo_ext::RepoExt;
 use lib::git::{Branch, BranchType, CategorizedReferenceName, ConfigRead, GitRunInfo, Repo};
 use lib::util::ExitCode;
 
-use crate::opts::Revset;
+use crate::opts::{ResolveRevsetOptions, Revset};
 use crate::revset::resolve_commits;
 
 pub fn submit(
     effects: &Effects,
     git_run_info: &GitRunInfo,
     revset: Revset,
+    resolve_revset_options: &ResolveRevsetOptions,
     create: bool,
 ) -> eyre::Result<ExitCode> {
     let repo = Repo::from_current_dir()?;
@@ -35,13 +36,14 @@ pub fn submit(
         &references_snapshot,
     )?;
 
-    let commit_set = match resolve_commits(effects, &repo, &mut dag, &[revset]) {
-        Ok(mut commit_sets) => commit_sets.pop().unwrap(),
-        Err(err) => {
-            err.describe(effects)?;
-            return Ok(ExitCode(1));
-        }
-    };
+    let commit_set =
+        match resolve_commits(effects, &repo, &mut dag, &[revset], resolve_revset_options) {
+            Ok(mut commit_sets) => commit_sets.pop().unwrap(),
+            Err(err) => {
+                err.describe(effects)?;
+                return Ok(ExitCode(1));
+            }
+        };
 
     let branches: Vec<Branch> = commit_set_to_vec(&commit_set)?
         .into_iter()

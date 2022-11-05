@@ -161,6 +161,8 @@ fn test_amended_initial_commit() -> eyre::Result<()> {
     git.run(&["commit", "--amend", "-m", "new initial commit"])?;
 
     {
+        // FIXME: there is no topological relationship between the new initial commit and `master`,
+        // so they shouldn't be connected in the smartlog.
         let (stdout, _stderr) = git.run(&["smartlog"])?;
         insta::assert_snapshot!(stdout, @r###"
         @ 9a9f929 new initial commit

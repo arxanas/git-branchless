@@ -62,7 +62,11 @@ lazy_static! {
 
 fn fn_all(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     eval0(ctx, name, args)?;
-    Ok(ctx.query_active_commits()?.clone())
+    Ok(ctx
+        .dag
+        .query_visible_commits()
+        .map_err(EvalError::OtherError)?
+        .clone())
 }
 
 fn fn_none(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
@@ -97,7 +101,10 @@ fn fn_range(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
 
 fn fn_not(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     let expr = eval1(ctx, name, args)?;
-    let active_commits = ctx.query_active_commits()?;
+    let active_commits = ctx
+        .dag
+        .query_visible_commits()
+        .map_err(EvalError::OtherError)?;
     Ok(active_commits.difference(&expr))
 }
 
@@ -184,19 +191,28 @@ fn fn_main(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
 
 fn fn_public(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     eval0(ctx, name, args)?;
-    let public_commits = ctx.query_public_commits()?;
+    let public_commits = ctx
+        .dag
+        .query_public_commits()
+        .map_err(EvalError::OtherError)?;
     Ok(public_commits.clone())
 }
 
 fn fn_draft(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     eval0(ctx, name, args)?;
-    let draft_commits = ctx.query_draft_commits()?;
+    let draft_commits = ctx
+        .dag
+        .query_draft_commits()
+        .map_err(EvalError::OtherError)?;
     Ok(draft_commits.clone())
 }
 
 fn fn_stack(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     let arg = eval0_or_1(ctx, name, args)?.unwrap_or_else(|| ctx.dag.head_commit.clone());
-    let draft_commits = ctx.query_draft_commits()?;
+    let draft_commits = ctx
+        .dag
+        .query_draft_commits()
+        .map_err(EvalError::OtherError)?;
     let stack_roots = ctx.dag.query().roots(draft_commits.clone())?;
     let stack_ancestors = ctx.dag.query().range(stack_roots, arg)?;
     let stack = ctx
@@ -416,7 +432,13 @@ fn fn_exactly(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
 }
 
 fn fn_current(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
-    let expr = eval1(ctx, name, args)?;
+    let mut ctx = Context {
+        effects: ctx.effects,
+        repo: ctx.repo,
+        dag: ctx.dag,
+        show_hidden_commits: true,
+    };
+    let expr = eval1(&mut ctx, name, args)?;
 
     let conn = ctx.repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)

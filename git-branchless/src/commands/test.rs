@@ -30,7 +30,7 @@ use lib::util::{get_sh, ExitCode};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, instrument};
 
-use crate::opts::{Revset, TestExecutionStrategy};
+use crate::opts::{ResolveRevsetOptions, Revset, TestExecutionStrategy};
 use crate::revset::resolve_commits;
 
 lazy_static! {
@@ -249,6 +249,7 @@ pub fn run(
     git_run_info: &GitRunInfo,
     options: &RawTestOptions,
     revset: Revset,
+    resolve_revset_options: &ResolveRevsetOptions,
 ) -> eyre::Result<ExitCode> {
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
@@ -271,13 +272,14 @@ pub fn run(
         Err(exit_code) => return Ok(exit_code),
     };
 
-    let commit_set = match resolve_commits(effects, &repo, &mut dag, &[revset]) {
-        Ok(mut commit_sets) => commit_sets.pop().unwrap(),
-        Err(err) => {
-            err.describe(effects)?;
-            return Ok(ExitCode(1));
-        }
-    };
+    let commit_set =
+        match resolve_commits(effects, &repo, &mut dag, &[revset], resolve_revset_options) {
+            Ok(mut commit_sets) => commit_sets.pop().unwrap(),
+            Err(err) => {
+                err.describe(effects)?;
+                return Ok(ExitCode(1));
+            }
+        };
 
     let abort_trap = match set_abort_trap(
         now,
@@ -1374,7 +1376,12 @@ fn test_commit(
 }
 
 #[instrument]
-pub fn show(effects: &Effects, options: &RawTestOptions, revset: Revset) -> eyre::Result<ExitCode> {
+pub fn show(
+    effects: &Effects,
+    options: &RawTestOptions,
+    revset: Revset,
+    resolve_revset_options: &ResolveRevsetOptions,
+) -> eyre::Result<ExitCode> {
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
@@ -1396,13 +1403,14 @@ pub fn show(effects: &Effects, options: &RawTestOptions, revset: Revset) -> eyre
         }
     };
 
-    let commit_set = match resolve_commits(effects, &repo, &mut dag, &[revset]) {
-        Ok(mut commit_sets) => commit_sets.pop().unwrap(),
-        Err(err) => {
-            err.describe(effects)?;
-            return Ok(ExitCode(1));
-        }
-    };
+    let commit_set =
+        match resolve_commits(effects, &repo, &mut dag, &[revset], resolve_revset_options) {
+            Ok(mut commit_sets) => commit_sets.pop().unwrap(),
+            Err(err) => {
+                err.describe(effects)?;
+                return Ok(ExitCode(1));
+            }
+        };
 
     let commits = sorted_commit_set(&repo, &dag, &commit_set)?;
     for commit in commits {
@@ -1457,7 +1465,11 @@ pub fn show(effects: &Effects, options: &RawTestOptions, revset: Revset) -> eyre
 }
 
 #[instrument]
-pub fn clean(effects: &Effects, revset: Revset) -> eyre::Result<ExitCode> {
+pub fn clean(
+    effects: &Effects,
+    revset: Revset,
+    resolve_revset_options: &ResolveRevsetOptions,
+) -> eyre::Result<ExitCode> {
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
@@ -1472,13 +1484,14 @@ pub fn clean(effects: &Effects, revset: Revset) -> eyre::Result<ExitCode> {
         &references_snapshot,
     )?;
 
-    let commit_set = match resolve_commits(effects, &repo, &mut dag, &[revset]) {
-        Ok(mut commit_sets) => commit_sets.pop().unwrap(),
-        Err(err) => {
-            err.describe(effects)?;
-            return Ok(ExitCode(1));
-        }
-    };
+    let commit_set =
+        match resolve_commits(effects, &repo, &mut dag, &[revset], resolve_revset_options) {
+            Ok(mut commit_sets) => commit_sets.pop().unwrap(),
+            Err(err) => {
+                err.describe(effects)?;
+                return Ok(ExitCode(1));
+            }
+        };
 
     let test_dir = repo.get_test_dir();
     if !test_dir.exists() {
