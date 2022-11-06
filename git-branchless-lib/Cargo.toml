@@ -76,3 +76,7 @@ insta = "1.20.0"
 lazy_static = "1.4.0"
 portable-pty = "0.7.0"
 vt100 = "0.15.1"
+
+# FIXME: when updated to `1.0.74`, the `cc` package causes Nix build failures.
+# See https://github.com/arxanas/git-branchless/pull/618.
+cc = "=1.0.73"
