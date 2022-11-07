@@ -138,7 +138,7 @@ pub struct SwitchOptions {
 
     /// When checking out the target commit, also create a branch with the
     /// provided name pointing to that commit.
-    #[clap(value_parser, short = 'b', long = "branch")]
+    #[clap(value_parser, short = 'c', long = "create")]
     pub branch_name: Option<String>,
 
     /// Forcibly switch commits, discarding any working copy changes if
