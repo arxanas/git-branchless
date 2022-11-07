@@ -769,7 +769,7 @@ fn test_navigation_switch_flags() -> eyre::Result<()> {
     {
         let git = git.duplicate_repo()?;
         {
-            let (stdout, _stderr) = git.run(&["branchless", "switch", "-b", "foo", "HEAD^"])?;
+            let (stdout, _stderr) = git.run(&["branchless", "switch", "-c", "foo", "HEAD^"])?;
             insta::assert_snapshot!(stdout, @r###"
             branchless: running command: <git-executable> checkout HEAD^ -b foo
             :
@@ -780,7 +780,7 @@ fn test_navigation_switch_flags() -> eyre::Result<()> {
         }
 
         {
-            let (stdout, _stderr) = git.run(&["branchless", "switch", "-b", "bar"])?;
+            let (stdout, _stderr) = git.run(&["branchless", "switch", "-c", "bar"])?;
             insta::assert_snapshot!(stdout, @r###"
             branchless: running command: <git-executable> checkout -b bar
             :
