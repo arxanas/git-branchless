@@ -470,11 +470,14 @@ fn fn_exactly(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
 
 #[instrument]
 fn fn_current(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+    let mut dag = ctx
+        .dag
+        .clear_obsolete_commits(ctx.repo)
+        .map_err(EvalError::OtherError)?;
     let mut ctx = Context {
         effects: ctx.effects,
         repo: ctx.repo,
-        dag: ctx.dag,
-        show_hidden_commits: true,
+        dag: &mut dag,
     };
     let expr = eval1(&mut ctx, name, args)?;
 
