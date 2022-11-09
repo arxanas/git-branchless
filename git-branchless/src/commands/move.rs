@@ -8,7 +8,7 @@ use std::convert::TryFrom;
 use std::fmt::Write;
 use std::time::SystemTime;
 
-use eden_dag::DagAlgorithm;
+use eden_dag::{DagAlgorithm, VertexName};
 use lib::core::repo_ext::RepoExt;
 use lib::util::ExitCode;
 use rayon::ThreadPoolBuilder;
@@ -32,7 +32,7 @@ use lib::git::{GitRunInfo, NonZeroOid, Repo};
 #[instrument]
 fn resolve_base_commit(
     dag: &Dag,
-    merge_base_oid: Option<NonZeroOid>,
+    merge_base_oid: Option<VertexName>,
     oid: NonZeroOid,
 ) -> eyre::Result<NonZeroOid> {
     let bases = match merge_base_oid {
@@ -207,7 +207,9 @@ pub fn r#move(
     let base_oids = {
         let mut result = Vec::new();
         for base_oid in commit_set_to_vec(&base_oids)? {
-            let merge_base_oid = dag.get_one_merge_base_oid(effects, &repo, base_oid, dest_oid)?;
+            let merge_base_oid = dag
+                .query()
+                .gca_one(vec![base_oid, dest_oid].into_iter().collect::<CommitSet>())?;
             let base_commit_oid = resolve_base_commit(&dag, merge_base_oid, base_oid)?;
             result.push(CommitSet::from(base_commit_oid))
         }
