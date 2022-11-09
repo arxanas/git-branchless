@@ -519,7 +519,9 @@ mod render {
         fn default() -> Self {
             Self {
                 event_id: Default::default(),
-                revset: Revset("draft() | branches() | @".to_string()),
+                revset: Revset(
+                    "((draft() | branches() | @) % main()) | branches() | @".to_string(),
+                ),
                 resolve_revset_options: Default::default(),
             }
         }

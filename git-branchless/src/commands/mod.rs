@@ -340,7 +340,7 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
             &git_run_info,
             &SmartlogOptions {
                 event_id,
-                revset,
+                revset: revset.unwrap_or_else(|| SmartlogOptions::default().revset),
                 resolve_revset_options,
             },
         )?,

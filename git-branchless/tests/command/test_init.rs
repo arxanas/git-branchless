@@ -327,7 +327,7 @@ fn test_main_branch_not_found_error_message() -> eyre::Result<()> {
 
       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ SPANTRACE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-       0: git_branchless::commands::smartlog::smartlog with effects=<Output fancy=false> git_run_info=<GitRunInfo path_to_git="<git-executable>" working_directory="<repo-path>" env=not shown> options=SmartlogOptions { event_id: None, revset: Revset("draft() | branches() | @"), resolve_revset_options: ResolveRevsetOptions { show_hidden_commits: false } }
+       0: git_branchless::commands::smartlog::smartlog with effects=<Output fancy=false> git_run_info=<GitRunInfo path_to_git="<git-executable>" working_directory="<repo-path>" env=not shown> options=SmartlogOptions { event_id: None, revset: Revset("((draft() | branches() | @) % main()) | branches() | @"), resolve_revset_options: ResolveRevsetOptions { show_hidden_commits: false } }
           at some/file/path.rs:123
 
     Suggestion:
