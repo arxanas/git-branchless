@@ -707,3 +707,32 @@ fn test_smartlog_hidden() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_smartlog_sparse_vertical_ellipsis_sibling_commits() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+
+    git.detach_head()?;
+    git.commit_file("test1", 1)?;
+    git.run(&["checkout", "HEAD~"])?;
+    git.commit_file("test2", 2)?;
+    git.run(&["checkout", "HEAD~"])?;
+    git.commit_file("test3", 3)?;
+    git.commit_file("test4", 4)?;
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog", "heads(draft())"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |\
+        | o 62fc20d create test1.txt
+        |\
+        | o fe65c1f create test2.txt
+        :
+        @ 2b633ed create test4.txt
+        "###);
+    }
+
+    Ok(())
+}
