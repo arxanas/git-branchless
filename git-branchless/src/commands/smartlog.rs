@@ -498,14 +498,7 @@ mod render {
                     }
                 } else {
                     StyledStringBuilder::new()
-                        .append_plain(format!(
-                            "{} ",
-                            if !current_node.descendants.is_empty() {
-                                glyphs.vertical_ellipsis
-                            } else {
-                                glyphs.line
-                            }
-                        ))
+                        .append_plain(format!("{} ", glyphs.line))
                         .append(child_line)
                         .build()
                 };
