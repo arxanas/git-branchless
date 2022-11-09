@@ -618,6 +618,7 @@ fn test_smartlog_sparse_branch() -> eyre::Result<()> {
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc create initial.txt
         |\
+        : # 1 omitted commit
         : :
         : o 96d1c37 create test2.txt
         :
@@ -650,11 +651,15 @@ fn test_smartlog_sparse_false_head() -> eyre::Result<()> {
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc create initial.txt
         |\
+        | # 1 omitted commit
         | :
         | o 96d1c37 create test2.txt
         | :
+        | # 1 omitted descendant commit
         |
         O 8f7aef5 (master) create test4.txt
+        :
+        # 1 omitted commit
         :
         @ 68975e5 create test6.txt
         "###);
@@ -679,6 +684,7 @@ fn test_smartlog_sparse_main_false_head() -> eyre::Result<()> {
         :
         @ 62fc20d (master) create test1.txt
         :
+        # 1 omitted descendant commit
         "###);
     }
 
@@ -729,6 +735,8 @@ fn test_smartlog_sparse_vertical_ellipsis_sibling_commits() -> eyre::Result<()> 
         | o 62fc20d create test1.txt
         |\
         | o fe65c1f create test2.txt
+        :
+        # 1 omitted commit
         :
         @ 2b633ed create test4.txt
         "###);

@@ -44,6 +44,11 @@ mod graph {
     use lib::git::{Commit, Time};
     use lib::git::{NonZeroOid, Repo};
 
+    #[derive(Debug)]
+    pub struct AncestorInfo {
+        pub oid: NonZeroOid,
+        pub distance: usize,
+    }
     /// Node contained in the smartlog commit graph.
     #[derive(Debug)]
     pub struct Node<'repo> {
@@ -59,9 +64,9 @@ mod graph {
         /// The OIDs of the children nodes in the smartlog commit graph.
         pub children: Vec<NonZeroOid>,
 
-        /// Does this commit have any non-immediate, non-main branch ancestor
-        /// nodes in the smartlog commit graph?
-        pub has_ancestors: bool,
+        /// Information about a non-immediate, non-main branch ancestor node in
+        /// the smartlog commit graph.
+        pub ancestor_info: Option<AncestorInfo>,
 
         /// The OIDs of any non-immediate descendant nodes in the smartlog commit graph.
         pub descendants: Vec<NonZeroOid>,
@@ -91,9 +96,9 @@ mod graph {
         /// Indicates that this commit has descendants, but that none of them
         /// are included in the graph.
         ///
-        /// This allows us to indicate this "false head" to the user. Otherwise,
+        /// This allows us to indicate a "false head" to the user. Otherwise,
         /// this commit would look like a normal, descendant-less head.
-        pub is_false_head: bool,
+        pub num_omitted_descendants: usize,
     }
 
     /// Graph of commits that the user is working on.
@@ -160,11 +165,11 @@ mod graph {
                             object,
                             parent: None,         // populated below
                             children: Vec::new(), // populated below
-                            has_ancestors: false,
+                            ancestor_info: None,
                             descendants: Vec::new(), // populated below
                             is_main: dag.is_public_commit(oid)?,
                             is_obsolete: dag.query_obsolete_commits().contains(&oid.into())?,
-                            is_false_head: false,
+                            num_omitted_descendants: 0, // populated below
                         },
                     );
                 }
@@ -228,7 +233,18 @@ mod graph {
         }
 
         for (ancestor_oid, descendent_oid) in non_immediate_links.iter() {
-            graph.get_mut(descendent_oid).unwrap().has_ancestors = true;
+            let distance = dag
+                .query()
+                .range(
+                    CommitSet::from(*ancestor_oid),
+                    CommitSet::from(*descendent_oid),
+                )?
+                .difference(&vec![*ancestor_oid, *descendent_oid].into_iter().collect())
+                .count()?;
+            graph.get_mut(descendent_oid).unwrap().ancestor_info = Some(AncestorInfo {
+                oid: *ancestor_oid,
+                distance,
+            });
             graph
                 .get_mut(ancestor_oid)
                 .unwrap()
@@ -248,13 +264,14 @@ mod graph {
             }
 
             // This node has no descendants in the graph, so it's a
-            // false head if it has *any* (non-obsolete) children.
-            let children_not_in_graph = dag
+            // false head if it has *any* visible descendants.
+            let descendants_not_in_graph = dag
                 .query()
-                .children(oid_set)?
-                .difference(&dag.query_obsolete_commits());
+                .descendants(oid_set.clone())?
+                .difference(&oid_set);
+            let descendants_not_in_graph = dag.filter_visible_commits(descendants_not_in_graph)?;
 
-            node.is_false_head = !children_not_in_graph.is_empty()?;
+            node.num_omitted_descendants = descendants_not_in_graph.count()?;
         }
 
         Ok(SmartlogGraph { nodes: graph })
@@ -325,14 +342,14 @@ mod render {
 
     use lib::core::dag::{CommitSet, CommitVertex, Dag};
     use lib::core::effects::Effects;
-    use lib::core::formatting::set_effect;
+    use lib::core::formatting::{set_effect, Pluralize};
     use lib::core::formatting::{Glyphs, StyledStringBuilder};
     use lib::core::node_descriptors::{render_node_descriptors, NodeDescriptor};
     use lib::git::{NonZeroOid, Repo};
 
     use crate::opts::{ResolveRevsetOptions, Revset};
 
-    use super::graph::SmartlogGraph;
+    use super::graph::{AncestorInfo, SmartlogGraph};
 
     /// Split fully-independent subgraphs into multiple graphs.
     ///
@@ -349,7 +366,7 @@ mod render {
         let mut root_commit_oids: Vec<NonZeroOid> = graph
             .nodes
             .iter()
-            .filter(|(_oid, node)| node.parent.is_none() && !node.has_ancestors)
+            .filter(|(_oid, node)| node.parent.is_none() && node.ancestor_info.is_none())
             .map(|(oid, _node)| oid)
             .copied()
             .collect();
@@ -418,8 +435,23 @@ mod render {
 
         let mut lines = vec![];
 
-        if current_node.has_ancestors {
-            lines.push(StyledString::plain(glyphs.vertical_ellipsis.to_string()));
+        if let Some(AncestorInfo { oid: _, distance }) = current_node.ancestor_info {
+            lines.push(
+                StyledStringBuilder::new()
+                    .append_plain(glyphs.commit_omitted)
+                    .append_plain(" ")
+                    .append_styled(
+                        &Pluralize {
+                            determiner: None,
+                            amount: distance,
+                            unit: ("omitted commit", "omitted commits"),
+                        }
+                        .to_string(),
+                        Effect::Dim,
+                    )
+                    .build(),
+            );
+            lines.push(StyledString::plain(glyphs.vertical_ellipsis));
         };
 
         lines.push({
@@ -434,8 +466,23 @@ mod render {
             }
         });
 
-        if current_node.is_false_head {
-            lines.push(StyledString::plain(glyphs.vertical_ellipsis.to_string()));
+        if current_node.num_omitted_descendants > 0 {
+            lines.push(StyledString::plain(glyphs.vertical_ellipsis));
+            lines.push(
+                StyledStringBuilder::new()
+                    .append_plain(glyphs.commit_omitted)
+                    .append_plain(" ")
+                    .append_styled(
+                        &Pluralize {
+                            determiner: None,
+                            amount: current_node.num_omitted_descendants,
+                            unit: ("omitted descendant commit", "omitted descendant commits"),
+                        }
+                        .to_string(),
+                        Effect::Dim,
+                    )
+                    .build(),
+            );
         };
 
         let children: Vec<_> = current_node
@@ -457,26 +504,15 @@ mod render {
             }
 
             let is_last_child = child_idx == (children.len() + descendants.len()) - 1;
-            if is_last_child {
-                let line = match last_child_line_char {
-                    Some(_) => Some(StyledString::plain(format!(
-                        "{}{}",
-                        glyphs.line_with_offshoot, glyphs.slash
-                    ))),
-                    None if current_node.descendants.is_empty() => {
-                        Some(StyledString::plain(glyphs.line.to_string()))
-                    }
-                    None => None,
-                };
-                if let Some(line) = line {
-                    lines.push(line);
-                }
-            } else {
-                lines.push(StyledString::plain(format!(
-                    "{}{}",
-                    glyphs.line_with_offshoot, glyphs.slash
-                )));
-            }
+            lines.push(StyledString::plain(
+                if !is_last_child || last_child_line_char.is_some() {
+                    format!("{}{}", glyphs.line_with_offshoot, glyphs.slash)
+                } else if current_node.descendants.is_empty() {
+                    glyphs.line.to_string()
+                } else {
+                    glyphs.vertical_ellipsis.to_string()
+                },
+            ));
 
             let child_output = get_child_output(
                 glyphs,
