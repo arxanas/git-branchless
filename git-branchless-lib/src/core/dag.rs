@@ -173,10 +173,7 @@ impl Dag {
             })
             .collect();
 
-        let dag_dir = repo.get_dag_dir();
-        std::fs::create_dir_all(&dag_dir).wrap_err("Creating .git/branchless/dag dir")?;
-        let dag = eden_dag::Dag::open(&dag_dir)
-            .wrap_err_with(|| format!("Opening DAG directory at: {:?}", &dag_dir))?;
+        let dag = Self::open_inner_dag(repo)?;
 
         let observed_commits: CommitSet = observed_commits.into_iter().collect();
         let head_commit = match head_oid {
@@ -198,6 +195,15 @@ impl Dag {
             visible_commits: Default::default(),
             draft_commits: Default::default(),
         })
+    }
+
+    #[instrument]
+    fn open_inner_dag(repo: &Repo) -> eyre::Result<eden_dag::Dag> {
+        let dag_dir = repo.get_dag_dir();
+        std::fs::create_dir_all(&dag_dir).wrap_err("Creating .git/branchless/dag dir")?;
+        let dag = eden_dag::Dag::open(&dag_dir)
+            .wrap_err_with(|| format!("Opening DAG directory at: {:?}", &dag_dir))?;
+        Ok(dag)
     }
 
     /// This function's code adapted from `GitDag`, licensed under GPL-2.
@@ -294,6 +300,24 @@ impl Dag {
             &references_snapshot,
         )?;
         Ok(dag)
+    }
+
+    /// Create a new `Dag` with no obsolete commits.
+    #[instrument]
+    pub fn clear_obsolete_commits(&self, repo: &Repo) -> eyre::Result<Self> {
+        let inner = Self::open_inner_dag(repo)?;
+        Ok(Self {
+            inner,
+            head_commit: self.head_commit.clone(),
+            branch_commits: self.branch_commits.clone(),
+            main_branch_commit: self.main_branch_commit.clone(),
+            observed_commits: self.observed_commits.clone(),
+            obsolete_commits: CommitSet::empty(),
+            draft_commits: Default::default(),
+            public_commits: Default::default(),
+            visible_heads: Default::default(),
+            visible_commits: Default::default(),
+        })
     }
 
     /// Get the parent OID for the given OID. Returns an error if the given OID

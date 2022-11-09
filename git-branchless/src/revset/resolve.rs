@@ -82,6 +82,16 @@ pub fn resolve_commits(
     revsets: &[Revset],
     options: &ResolveRevsetOptions,
 ) -> Result<Vec<CommitSet>, ResolveError> {
+    let mut dag_with_obsolete = if options.show_hidden_commits {
+        Some(
+            dag.clear_obsolete_commits(repo)
+                .map_err(|err| ResolveError::OtherError { source: err })?,
+        )
+    } else {
+        None
+    };
+    let dag = dag_with_obsolete.as_mut().unwrap_or(dag);
+
     let mut commit_sets = Vec::new();
     for Revset(revset) in revsets {
         // NB: also update `check_parse_revsets`
