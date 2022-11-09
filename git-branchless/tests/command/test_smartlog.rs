@@ -572,3 +572,115 @@ fn test_smartlog_hint_abandoned_except_current_commit() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_smartlog_sparse() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    git.init_repo()?;
+    git.detach_head()?;
+    git.commit_file("test1", 1)?;
+    git.run(&["checkout", "master"])?;
+    git.commit_file("test2", 2)?;
+    git.commit_file("test3", 3)?;
+    git.detach_head()?;
+    git.commit_file("test4", 4)?;
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog", "none()"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 0206717 (master) create test3.txt
+        |
+        @ 8e62740 create test4.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_smartlog_sparse_branch() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    git.init_repo()?;
+    git.detach_head()?;
+    git.commit_file("test1", 1)?;
+    let test2_oid = git.commit_file("test2", 2)?;
+    git.run(&["checkout", "master"])?;
+    git.commit_file("test3", 3)?;
+    git.commit_file("test4", 4)?;
+    git.detach_head()?;
+    git.commit_file("test5", 5)?;
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog", &test2_oid.to_string()])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc create initial.txt
+        |\
+        : :
+        : o 96d1c37 create test2.txt
+        :
+        O 2b633ed (master) create test4.txt
+        |
+        @ 1393298 create test5.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_smartlog_sparse_false_head() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    git.init_repo()?;
+    git.detach_head()?;
+    git.commit_file("test1", 1)?;
+    let test2_oid = git.commit_file("test2", 2)?;
+    git.commit_file("test3", 3)?;
+    git.run(&["checkout", "master"])?;
+    git.commit_file("test4", 4)?;
+    git.detach_head()?;
+    git.commit_file("test5", 5)?;
+    git.commit_file("test6", 6)?;
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog", &test2_oid.to_string()])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc create initial.txt
+        |\
+        | :
+        | o 96d1c37 create test2.txt
+        | :
+        |
+        O 8f7aef5 (master) create test4.txt
+        :
+        @ 68975e5 create test6.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_smartlog_sparse_main_false_head() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    git.init_repo()?;
+    git.commit_file("test1", 1)?;
+    git.detach_head()?;
+    git.commit_file("test2", 2)?;
+    git.run(&["checkout", "HEAD~"])?;
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog", "none()"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        @ 62fc20d (master) create test1.txt
+        :
+        "###);
+    }
+
+    Ok(())
+}

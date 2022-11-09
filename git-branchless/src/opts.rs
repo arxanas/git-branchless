@@ -460,8 +460,8 @@ pub enum Command {
         #[clap(value_parser, long = "event-id")]
         event_id: Option<isize>,
 
-        /// The commits to render. These commits and their ancestors up to the
-        /// main branch will be rendered.
+        /// The commits to render. These commits, plus any related commits, will
+        /// be rendered.
         #[clap(value_parser)]
         revset: Option<Revset>,
 
