@@ -397,12 +397,14 @@ impl Dag {
 
     /// Determine the set of obsolete commits. These commits have been rewritten
     /// or explicitly hidden by the user.
+    #[instrument]
     pub fn query_obsolete_commits(&self) -> CommitSet {
         self.obsolete_commits.clone()
     }
 
     /// Determine the set of "draft" commits. The draft commits are all visible
     /// commits which aren't public.
+    #[instrument]
     pub fn query_draft_commits(&self) -> eyre::Result<&CommitSet> {
         self.draft_commits.get_or_try_init(|| {
             let visible_commits = self.query_visible_commits()?;
