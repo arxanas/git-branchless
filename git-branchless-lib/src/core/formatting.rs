@@ -116,6 +116,10 @@ pub struct Glyphs {
     /// currently checked out. (This is an unusual situation.)
     pub commit_main_obsolete_head: &'static str,
 
+    /// Cursor indicating that some number of commits have been omitted from the
+    /// smartlog at this position.
+    pub commit_omitted: &'static str,
+
     /// Character used to point to the currently-checked-out branch.
     pub branch_arrow: &'static str,
 
@@ -165,6 +169,7 @@ impl Glyphs {
             commit_main_head: "@",
             commit_main_obsolete: "X",
             commit_main_obsolete_head: "%",
+            commit_omitted: "#",
             branch_arrow: ">",
             bullet_point: "-",
             cycle_arrow: ">",
@@ -187,6 +192,7 @@ impl Glyphs {
             commit_visible_head: "●",
             commit_obsolete: "✕",
             commit_obsolete_head: "⦻",
+            commit_omitted: "⊘",
             commit_main: "◇",
             commit_main_head: "◆",
             commit_main_obsolete: "✕",
