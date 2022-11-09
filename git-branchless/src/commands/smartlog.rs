@@ -196,33 +196,31 @@ mod graph {
                 immediate_links.push((*child_oid, parent_oid))
             }
 
-            if parent_vertices.count()? != parents_in_graph.count()? {
-                // Find non-immediate ancestor links.
-                let excluded_parents = parent_vertices.difference(&graph_vertices);
-                let excluded_parent_oids = commit_set_to_vec(&excluded_parents)?;
-                for parent_oid in excluded_parent_oids {
-                    // Find the nearest ancestor that is included in the graph and
-                    // also on the same branch.
+            // Find non-immediate ancestor links.
+            let excluded_parents = parent_vertices.difference(&graph_vertices);
+            let excluded_parent_oids = commit_set_to_vec(&excluded_parents)?;
+            for parent_oid in excluded_parent_oids {
+                // Find the nearest ancestor that is included in the graph and
+                // also on the same branch.
 
-                    let parent_set = CommitSet::from(parent_oid);
-                    let merge_base = dag
-                        .query()
-                        .gca_one(dag.main_branch_commit.union(&parent_set))?;
+                let parent_set = CommitSet::from(parent_oid);
+                let merge_base = dag
+                    .query()
+                    .gca_one(dag.main_branch_commit.union(&parent_set))?;
 
-                    let path_to_main_branch = match merge_base {
-                        Some(merge_base) => {
-                            dag.query().range(CommitSet::from(merge_base), parent_set)?
-                        }
-                        None => CommitSet::empty(),
-                    };
-                    let nearest_branch_ancestor = dag
-                        .query()
-                        .heads_ancestors(path_to_main_branch.intersection(&graph_vertices))?;
-
-                    let ancestor_oids = commit_set_to_vec(&nearest_branch_ancestor)?;
-                    for ancestor_oid in ancestor_oids.iter() {
-                        non_immediate_links.push((*ancestor_oid, *child_oid));
+                let path_to_main_branch = match merge_base {
+                    Some(merge_base) => {
+                        dag.query().range(CommitSet::from(merge_base), parent_set)?
                     }
+                    None => CommitSet::empty(),
+                };
+                let nearest_branch_ancestor = dag
+                    .query()
+                    .heads_ancestors(path_to_main_branch.intersection(&graph_vertices))?;
+
+                let ancestor_oids = commit_set_to_vec(&nearest_branch_ancestor)?;
+                for ancestor_oid in ancestor_oids.iter() {
+                    non_immediate_links.push((*ancestor_oid, *child_oid));
                 }
             }
         }
