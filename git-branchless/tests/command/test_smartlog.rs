@@ -684,3 +684,26 @@ fn test_smartlog_sparse_main_false_head() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_smartlog_hidden() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+
+    git.detach_head()?;
+    git.commit_file("test1", 1)?;
+    git.run(&["commit", "--amend", "-m", "amended test1"])?;
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog", "--hidden"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |\
+        | @ ae94dc2 amended test1
+        |
+        x 62fc20d (rewritten as ae94dc2a) create test1.txt
+        "###);
+    }
+
+    Ok(())
+}
