@@ -148,6 +148,7 @@ fn eval_inner(ctx: &mut Context, expr: &Expr) -> EvalResult {
     }
 }
 
+#[instrument]
 pub(super) fn eval_name(ctx: &mut Context, name: &str) -> EvalResult {
     if name == "." || name == "@" {
         let head_info = ctx.repo.get_head_info()?;
@@ -187,6 +188,7 @@ pub(super) fn eval_name(ctx: &mut Context, name: &str) -> EvalResult {
     Ok(commit_set)
 }
 
+#[instrument]
 pub(super) fn eval_fn(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     if let Some(function) = FUNCTIONS.get(name) {
         return function(ctx, name, args);
@@ -273,6 +275,7 @@ pub(super) fn eval1(ctx: &mut Context, function_name: &str, args: &[Expr]) -> Ev
     }
 }
 
+#[instrument]
 pub(super) fn eval1_pattern(
     _ctx: &mut Context,
     function_name: &str,
@@ -314,6 +317,7 @@ pub(super) fn eval2(
     }
 }
 
+#[instrument]
 pub(super) fn eval_number_rhs(
     ctx: &mut Context,
     function_name: &str,

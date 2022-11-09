@@ -7,7 +7,7 @@ use lib::git::{Commit, MaybeZeroOid, NonZeroOid, Repo};
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::convert::TryFrom;
-use tracing::warn;
+use tracing::{instrument, warn};
 
 use eyre::Context as EyreContext;
 use lazy_static::lazy_static;
@@ -60,6 +60,7 @@ lazy_static! {
     };
 }
 
+#[instrument]
 fn fn_all(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     eval0(ctx, name, args)?;
     Ok(ctx
@@ -69,36 +70,43 @@ fn fn_all(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
         .clone())
 }
 
+#[instrument]
 fn fn_none(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     eval0(ctx, name, args)?;
     Ok(CommitSet::empty())
 }
 
+#[instrument]
 fn fn_union(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     let (lhs, rhs) = eval2(ctx, name, args)?;
     Ok(lhs.union(&rhs))
 }
 
+#[instrument]
 fn fn_intersection(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     let (lhs, rhs) = eval2(ctx, name, args)?;
     Ok(lhs.intersection(&rhs))
 }
 
+#[instrument]
 fn fn_difference(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     let (lhs, rhs) = eval2(ctx, name, args)?;
     Ok(lhs.difference(&rhs))
 }
 
+#[instrument]
 fn fn_only(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     let (lhs, rhs) = eval2(ctx, name, args)?;
     Ok(ctx.dag.query().only(lhs, rhs)?)
 }
 
+#[instrument]
 fn fn_range(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     let (lhs, rhs) = eval2(ctx, name, args)?;
     Ok(ctx.dag.query().range(lhs, rhs)?)
 }
 
+#[instrument]
 fn fn_not(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     let expr = eval1(ctx, name, args)?;
     let active_commits = ctx
@@ -108,41 +116,49 @@ fn fn_not(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     Ok(active_commits.difference(&expr))
 }
 
+#[instrument]
 fn fn_ancestors(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     let expr = eval1(ctx, name, args)?;
     Ok(ctx.dag.query().ancestors(expr)?)
 }
 
+#[instrument]
 fn fn_descendants(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     let expr = eval1(ctx, name, args)?;
     Ok(ctx.dag.query().descendants(expr)?)
 }
 
+#[instrument]
 fn fn_parents(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     let expr = eval1(ctx, name, args)?;
     Ok(ctx.dag.query().parents(expr)?)
 }
 
+#[instrument]
 fn fn_children(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     let expr = eval1(ctx, name, args)?;
     Ok(ctx.dag.query().children(expr)?)
 }
 
+#[instrument]
 fn fn_roots(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     let expr = eval1(ctx, name, args)?;
     Ok(ctx.dag.query().roots(expr)?)
 }
 
+#[instrument]
 fn fn_heads(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     let expr = eval1(ctx, name, args)?;
     Ok(ctx.dag.query().heads(expr)?)
 }
 
+#[instrument]
 fn fn_branches(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     eval0(ctx, name, args)?;
     Ok(ctx.dag.branch_commits.clone())
 }
 
+#[instrument]
 fn fn_parents_nth(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     let (lhs, n) = eval_number_rhs(ctx, name, args)?;
     let mut result = Vec::new();
@@ -164,6 +180,7 @@ fn fn_parents_nth(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     Ok(CommitSet::from_iter(result.into_iter()))
 }
 
+#[instrument]
 fn fn_nthancestor(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     let (lhs, n) = eval_number_rhs(ctx, name, args)?;
     let n: u64 = u64::try_from(n).unwrap();
@@ -184,11 +201,13 @@ fn fn_nthancestor(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     Ok(CommitSet::from_iter(result.into_iter()))
 }
 
+#[instrument]
 fn fn_main(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     eval0(ctx, name, args)?;
     Ok(ctx.dag.main_branch_commit.clone())
 }
 
+#[instrument]
 fn fn_public(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     eval0(ctx, name, args)?;
     let public_commits = ctx
@@ -198,6 +217,7 @@ fn fn_public(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     Ok(public_commits.clone())
 }
 
+#[instrument]
 fn fn_draft(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     eval0(ctx, name, args)?;
     let draft_commits = ctx
@@ -207,6 +227,7 @@ fn fn_draft(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     Ok(draft_commits.clone())
 }
 
+#[instrument]
 fn fn_stack(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     let arg = eval0_or_1(ctx, name, args)?.unwrap_or_else(|| ctx.dag.head_commit.clone());
     let draft_commits = ctx
@@ -236,6 +257,7 @@ fn fn_stack(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
 
 type MatcherFn = dyn Fn(&Repo, &Commit) -> Result<bool, PatternError> + Sync + Send;
 
+#[instrument(skip(f))]
 fn make_pattern_matcher(
     ctx: &mut Context,
     name: &str,
@@ -265,6 +287,7 @@ fn make_pattern_matcher(
     Ok(matcher)
 }
 
+#[instrument]
 fn fn_message(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     let pattern = eval1_pattern(ctx, name, args)?;
     make_pattern_matcher(
@@ -290,6 +313,7 @@ fn fn_message(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     )
 }
 
+#[instrument]
 fn fn_path_changed(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     let pattern = eval1_pattern(ctx, name, args)?;
     make_pattern_matcher(
@@ -327,6 +351,7 @@ fn fn_path_changed(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     )
 }
 
+#[instrument]
 fn fn_author_name(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     let pattern = eval1_pattern(ctx, name, args)?;
     make_pattern_matcher(
@@ -342,6 +367,7 @@ fn fn_author_name(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     )
 }
 
+#[instrument]
 fn fn_author_email(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     let pattern = eval1_pattern(ctx, name, args)?;
     make_pattern_matcher(
@@ -357,6 +383,7 @@ fn fn_author_email(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     )
 }
 
+#[instrument]
 fn fn_author_date(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     let pattern = eval1_pattern(ctx, name, args)?;
     make_pattern_matcher(
@@ -370,6 +397,7 @@ fn fn_author_date(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     )
 }
 
+#[instrument]
 fn fn_committer_name(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     let pattern = eval1_pattern(ctx, name, args)?;
     make_pattern_matcher(
@@ -385,6 +413,7 @@ fn fn_committer_name(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult
     )
 }
 
+#[instrument]
 fn fn_committer_email(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     let pattern = eval1_pattern(ctx, name, args)?;
     make_pattern_matcher(
@@ -400,6 +429,7 @@ fn fn_committer_email(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResul
     )
 }
 
+#[instrument]
 fn fn_committer_date(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     let pattern = eval1_pattern(ctx, name, args)?;
     make_pattern_matcher(
@@ -413,6 +443,7 @@ fn fn_committer_date(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult
     )
 }
 
+#[instrument]
 fn fn_exactly(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     let (lhs, expected_len) = eval_number_rhs(ctx, name, args)?;
     let actual_len: usize = lhs
@@ -431,6 +462,7 @@ fn fn_exactly(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     }
 }
 
+#[instrument]
 fn fn_current(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     let mut ctx = Context {
         effects: ctx.effects,
