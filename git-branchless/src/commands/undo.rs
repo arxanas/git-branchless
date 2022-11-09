@@ -21,6 +21,7 @@ use tracing::instrument;
 
 use crate::commands::smartlog::{make_smartlog_graph, render_graph};
 use crate::declare_views;
+use crate::revset::resolve_default_smartlog_commits;
 use crate::tui::{with_siv, SingletonView};
 use lib::core::dag::{CommitSet, Dag};
 use lib::core::effects::Effects;
@@ -62,14 +63,8 @@ fn render_cursor_smartlog(
         reference_name: None,
     };
 
-    let graph = make_smartlog_graph(
-        effects,
-        repo,
-        &dag,
-        event_replayer,
-        event_cursor,
-        dag.query_default_smartlog_commits()?,
-    )?;
+    let commits = resolve_default_smartlog_commits(effects, repo, &mut dag)?;
+    let graph = make_smartlog_graph(effects, repo, &dag, event_replayer, event_cursor, &commits)?;
     let result = render_graph(
         effects,
         repo,

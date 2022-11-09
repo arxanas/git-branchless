@@ -11,6 +11,13 @@ use std::str::FromStr;
 #[derive(Clone, Debug)]
 pub struct Revset(pub String);
 
+impl Revset {
+    /// The default revset to render in the smartlog if no revset is provided by the user.
+    pub fn default_smartlog_revset() -> Self {
+        Self("((draft() | branches() | @) % main()) | branches() | @".to_string())
+    }
+}
+
 impl FromStr for Revset {
     type Err = std::convert::Infallible;
 

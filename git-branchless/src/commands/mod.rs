@@ -47,6 +47,7 @@ use tracing_subscriber::EnvFilter;
 use crate::opts::Command;
 use crate::opts::Opts;
 use crate::opts::ResolveRevsetOptions;
+use crate::opts::Revset;
 use crate::opts::SnapshotSubcommand;
 use crate::opts::WrappedCommand;
 use crate::opts::{ColorSetting, TestSubcommand};
@@ -340,7 +341,7 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
             &git_run_info,
             &SmartlogOptions {
                 event_id,
-                revset: revset.unwrap_or_else(|| SmartlogOptions::default().revset),
+                revset: revset.unwrap_or_else(Revset::default_smartlog_revset),
                 resolve_revset_options,
             },
         )?,

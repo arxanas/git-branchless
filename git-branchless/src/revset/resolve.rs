@@ -1,8 +1,10 @@
 use std::fmt::Write;
 
+use eyre::WrapErr;
 use lib::core::dag::{CommitSet, Dag};
 use lib::core::effects::Effects;
 use lib::git::Repo;
+use thiserror::Error;
 use tracing::instrument;
 
 use crate::opts::{ResolveRevsetOptions, Revset};
@@ -14,11 +16,18 @@ use super::{eval, parse};
 
 /// The result of attempting to resolve commits.
 #[allow(clippy::enum_variant_names)]
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum ResolveError {
+    #[error("parse error in {expr:?}: {source}")]
     ParseError { expr: String, source: ParseError },
+
+    #[error("evaluation error in {expr:?}: {source}")]
     EvalError { expr: String, source: EvalError },
+
+    #[error("DAG query error: {source}")]
     DagError { source: eden_dag::Error },
+
+    #[error(transparent)]
     OtherError { source: eyre::Error },
 }
 
@@ -100,4 +109,24 @@ pub fn resolve_commits(
         commit_sets.push(commits);
     }
     Ok(commit_sets)
+}
+
+/// Resolve the set of commits that would appear in the smartlog by default (if
+/// the user doesn't specify a revset).
+pub fn resolve_default_smartlog_commits(
+    effects: &Effects,
+    repo: &Repo,
+    dag: &mut Dag,
+) -> eyre::Result<CommitSet> {
+    let revset = Revset::default_smartlog_revset();
+    let results = resolve_commits(
+        effects,
+        repo,
+        dag,
+        &[revset],
+        &ResolveRevsetOptions::default(),
+    )
+    .wrap_err("Resolving default smartlog commits")?;
+    let commits = results.first().unwrap();
+    Ok(commits.clone())
 }

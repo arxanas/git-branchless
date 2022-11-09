@@ -16,6 +16,7 @@ use tracing::{instrument, warn};
 
 use crate::commands::smartlog::make_smartlog_graph;
 use crate::opts::{SwitchOptions, TraverseCommitsOptions};
+use crate::revset::resolve_default_smartlog_commits;
 use crate::tui::prompt_select_commit;
 use lib::core::config::get_next_interactive;
 use lib::core::dag::{sorted_commit_set, CommitSet, Dag};
@@ -542,7 +543,7 @@ pub fn switch(
     let event_tx_id = event_log_db.make_transaction_id(now, "checkout")?;
     let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
     let event_cursor = event_replayer.make_default_cursor();
-    let dag = Dag::open_and_sync(
+    let mut dag = Dag::open_and_sync(
         effects,
         &repo,
         &event_replayer,
@@ -550,13 +551,14 @@ pub fn switch(
         &references_snapshot,
     )?;
 
+    let commits = resolve_default_smartlog_commits(effects, &repo, &mut dag)?;
     let graph = make_smartlog_graph(
         effects,
         &repo,
         &dag,
         &event_replayer,
         event_cursor,
-        dag.query_default_smartlog_commits()?,
+        &commits,
     )?;
 
     let initial_query = get_initial_query(switch_options);
