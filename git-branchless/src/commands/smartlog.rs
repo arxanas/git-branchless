@@ -237,6 +237,7 @@ mod graph {
 
 mod render {
     use std::cmp::Ordering;
+    use std::convert::TryFrom;
 
     use cursive::theme::Effect;
     use cursive::utils::markup::StyledString;
@@ -262,7 +263,6 @@ mod render {
     /// Returns the list such that the topologically-earlier subgraphs are first in
     /// the list (i.e. those that would be rendered at the bottom of the smartlog).
     fn split_commit_graph_by_roots(
-        effects: &Effects,
         repo: &Repo,
         dag: &Dag,
         graph: &SmartlogGraph,
@@ -284,10 +284,13 @@ mod render {
                 _ => return lhs_oid.cmp(rhs_oid),
             };
 
-            let merge_base_oid = dag.get_one_merge_base_oid(effects, repo, *lhs_oid, *rhs_oid);
+            let merge_base_oid = dag
+                .query()
+                .gca_one(vec![*lhs_oid, *rhs_oid].into_iter().collect::<CommitSet>());
             let merge_base_oid = match merge_base_oid {
                 Err(_) => return lhs_oid.cmp(rhs_oid),
-                Ok(merge_base_oid) => merge_base_oid,
+                Ok(None) => None,
+                Ok(Some(merge_base_oid)) => NonZeroOid::try_from(merge_base_oid).ok(),
             };
 
             match merge_base_oid {
@@ -485,7 +488,7 @@ mod render {
         head_oid: Option<NonZeroOid>,
         commit_descriptors: &mut [&mut dyn NodeDescriptor],
     ) -> eyre::Result<Vec<StyledString>> {
-        let root_oids = split_commit_graph_by_roots(effects, repo, dag, graph);
+        let root_oids = split_commit_graph_by_roots(repo, dag, graph);
         let lines = get_output(
             effects.get_glyphs(),
             dag,

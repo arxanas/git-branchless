@@ -298,28 +298,6 @@ impl Dag {
         Ok(dag)
     }
 
-    /// Get one of the merge-base OIDs for the given pair of OIDs. If there are
-    /// multiple possible merge-bases, one is arbitrarily returned.
-    #[instrument]
-    pub fn get_one_merge_base_oid(
-        &self,
-        effects: &Effects,
-        repo: &Repo,
-        lhs_oid: NonZeroOid,
-        rhs_oid: NonZeroOid,
-    ) -> eyre::Result<Option<NonZeroOid>> {
-        let set = vec![CommitVertex::from(lhs_oid), CommitVertex::from(rhs_oid)];
-        let set = self
-            .inner
-            .sort(&CommitSet::from_static_names(set))
-            .wrap_err("Sorting DAG vertex set")?;
-        let vertex = self.inner.gca_one(set).wrap_err("Computing merge-base")?;
-        match vertex {
-            None => Ok(None),
-            Some(vertex) => Ok(Some(vertex.to_hex().parse()?)),
-        }
-    }
-
     /// Get the parent OID for the given OID. Returns an error if the given OID
     /// does not have exactly 1 parent.
     #[instrument]
@@ -472,32 +450,6 @@ impl Dag {
 
             Ok(active_heads)
         })
-    }
-
-    /// Find a path from the provided head to its merge-base with the main
-    /// branch.
-    #[instrument]
-    pub fn find_path_to_main_branch(
-        &self,
-        effects: &Effects,
-        head: CommitSet,
-    ) -> eyre::Result<Option<CommitSet>> {
-        // FIXME: this assumes that there is only one merge-base with the main branch.
-        let merge_base = {
-            let (_effects, _progress) = effects.start_operation(OperationType::GetMergeBase);
-            self.query().gca_one(self.main_branch_commit.union(&head))?
-        };
-        let merge_base = match merge_base {
-            Some(merge_base) => merge_base,
-            None => return Ok(None),
-        };
-
-        // FIXME: this assumes that there is only one path to the merge-base.
-        let path = {
-            let (_effects, _progress) = effects.start_operation(OperationType::FindPathToMergeBase);
-            self.query().range(CommitSet::from(merge_base), head)?
-        };
-        Ok(Some(path))
     }
 
     /// Given a CommitSet, return a list of CommitSets, each representing a
