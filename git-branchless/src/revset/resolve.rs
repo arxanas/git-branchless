@@ -110,11 +110,10 @@ pub fn resolve_commits(
             expr: revset.clone(),
             source: err,
         })?;
-        let commits =
-            eval(effects, repo, dag, options, &expr).map_err(|err| ResolveError::EvalError {
-                expr: revset.clone(),
-                source: err,
-            })?;
+        let commits = eval(effects, repo, dag, &expr).map_err(|err| ResolveError::EvalError {
+            expr: revset.clone(),
+            source: err,
+        })?;
 
         commit_sets.push(commits);
     }

@@ -8,7 +8,6 @@ use itertools::Itertools;
 use lib::core::effects::{Effects, OperationType};
 use thiserror::Error;
 
-use crate::opts::ResolveRevsetOptions;
 use lib::core::dag::{CommitSet, Dag};
 use lib::core::formatting::Pluralize;
 use lib::git::{ConfigRead, Repo, RepoError, ResolvedReferenceInfo};
@@ -24,7 +23,6 @@ pub(super) struct Context<'a> {
     pub effects: &'a Effects,
     pub repo: &'a Repo,
     pub dag: &'a mut Dag,
-    pub show_hidden_commits: bool,
 }
 
 #[derive(Debug, Error)]
@@ -106,24 +104,14 @@ pub type EvalResult = Result<CommitSet, EvalError>;
 
 /// Evaluate the provided revset expression.
 #[instrument]
-pub fn eval(
-    effects: &Effects,
-    repo: &Repo,
-    dag: &mut Dag,
-    resolve_revset_options: &ResolveRevsetOptions,
-    expr: &Expr,
-) -> EvalResult {
+pub fn eval(effects: &Effects, repo: &Repo, dag: &mut Dag, expr: &Expr) -> EvalResult {
     let (effects, _progress) =
         effects.start_operation(OperationType::EvaluateRevset(Arc::new(expr.to_string())));
 
-    let ResolveRevsetOptions {
-        show_hidden_commits,
-    } = resolve_revset_options;
     let mut ctx = Context {
         effects: &effects,
         repo,
         dag,
-        show_hidden_commits: *show_hidden_commits,
     };
     let commits = eval_inner(&mut ctx, expr)?;
     Ok(commits)
@@ -135,13 +123,10 @@ fn eval_inner(ctx: &mut Context, expr: &Expr) -> EvalResult {
         Expr::Name(name) => eval_name(ctx, name),
         Expr::FunctionCall(name, args) => {
             let result = eval_fn(ctx, name, args)?;
-            let result = if ctx.show_hidden_commits {
-                result
-            } else {
-                ctx.dag
-                    .filter_visible_commits(result)
-                    .map_err(EvalError::OtherError)?
-            };
+            let result = ctx
+                .dag
+                .filter_visible_commits(result)
+                .map_err(EvalError::OtherError)?;
             Ok(result)
         }
     }
@@ -362,7 +347,7 @@ mod tests {
         dag: &mut Dag,
         expr: &Expr,
     ) -> eyre::Result<Vec<Commit<'a>>> {
-        let result = eval(effects, repo, dag, &ResolveRevsetOptions::default(), expr)?;
+        let result = eval(effects, repo, dag, expr)?;
         let mut commits: Vec<Commit> = commit_set_to_vec(&result)?
             .into_iter()
             .map(|oid| repo.find_commit_or_fail(oid))
