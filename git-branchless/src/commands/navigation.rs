@@ -104,10 +104,8 @@ fn advance(
         let candidate_commits = match command {
             Command::Next => {
                 let child_commits = || -> eyre::Result<CommitSet> {
-                    let result = dag
-                        .query()
-                        .children(CommitSet::from(current_oid))?
-                        .intersection(dag.query_visible_commits()?);
+                    let result = dag.query().children(CommitSet::from(current_oid))?;
+                    let result = dag.filter_visible_commits(result)?;
                     Ok(result)
                 };
 

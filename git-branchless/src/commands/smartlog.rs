@@ -122,7 +122,6 @@ mod graph {
         effects: &Effects,
         repo: &'repo Repo,
         dag: &Dag,
-        public_commits: &CommitSet,
         active_heads: &CommitSet,
     ) -> eyre::Result<SmartlogGraph<'repo>> {
         let mut graph: HashMap<NonZeroOid, Node> = {
@@ -151,7 +150,7 @@ mod graph {
                             object,
                             parent: None,         // populated below
                             children: Vec::new(), // populated below
-                            is_main: public_commits.contains(&oid.into())?,
+                            is_main: dag.is_public_commit(oid)?,
                             is_obsolete: dag.query_obsolete_commits().contains(&oid.into())?,
                         },
                     );
@@ -225,12 +224,11 @@ mod graph {
         let mut graph = {
             let (effects, _progress) = effects.start_operation(OperationType::WalkCommits);
 
-            let public_commits = dag.query_public_commits()?;
             for oid in commit_set_to_vec(commits)? {
                 mark_commit_reachable(repo, oid)?;
             }
 
-            walk_from_commits(&effects, repo, dag, public_commits, commits)?
+            walk_from_commits(&effects, repo, dag, commits)?
         };
         sort_children(&mut graph);
         Ok(graph)
