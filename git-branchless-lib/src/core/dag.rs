@@ -117,7 +117,6 @@ pub struct Dag {
     visible_heads: OnceCell<CommitSet>,
     visible_commits: OnceCell<CommitSet>,
     draft_commits: OnceCell<CommitSet>,
-    default_smartlog_commits: OnceCell<CommitSet>,
 }
 
 impl Dag {
@@ -198,7 +197,6 @@ impl Dag {
             visible_heads: Default::default(),
             visible_commits: Default::default(),
             draft_commits: Default::default(),
-            default_smartlog_commits: Default::default(),
         })
     }
 
@@ -431,24 +429,6 @@ impl Dag {
                 .query()
                 .only(visible_heads.clone(), self.main_branch_commit.clone())?;
             Ok(draft_commits)
-        })
-    }
-
-    /// Determine the default set of commits that is shown in the smartlog when
-    /// no revset is passed.
-    pub fn query_default_smartlog_commits(&self) -> eyre::Result<&CommitSet> {
-        self.default_smartlog_commits.get_or_try_init(|| {
-            let public_commits = self.query_public_commits_slow()?;
-            let active_commits = self.observed_commits.clone();
-            let active_heads = self.query().heads(active_commits)?;
-            let active_heads = active_heads.difference(public_commits);
-
-            let active_heads = active_heads
-                .union(&self.head_commit)
-                .union(&self.branch_commits)
-                .union(&self.main_branch_commit);
-
-            Ok(active_heads)
         })
     }
 

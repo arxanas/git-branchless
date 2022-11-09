@@ -12,6 +12,7 @@ use lib::core::repo_ext::{RepoExt, RepoReferencesSnapshot};
 use lib::util::ExitCode;
 
 use crate::commands::smartlog::{make_smartlog_graph, render_graph};
+use crate::revset::resolve_default_smartlog_commits;
 use lib::core::dag::Dag;
 use lib::core::effects::Effects;
 use lib::core::eventlog::{Event, EventCursor, EventLogDb, EventReplayer};
@@ -95,7 +96,7 @@ fn describe_event_cursor(
     repo: &Repo,
     event_log_db: &EventLogDb,
     event_replayer: &EventReplayer,
-    dag: &Dag,
+    dag: &mut Dag,
     head_info: &ResolvedReferenceInfo,
     references_snapshot: &RepoReferencesSnapshot,
     redactor: &Redactor,
@@ -130,14 +131,8 @@ fn describe_event_cursor(
 
     let glyphs = Glyphs::text();
     let effects = Effects::new(glyphs.clone());
-    let graph = make_smartlog_graph(
-        &effects,
-        repo,
-        dag,
-        event_replayer,
-        event_cursor,
-        dag.query_default_smartlog_commits()?,
-    )?;
+    let commits = resolve_default_smartlog_commits(&effects, repo, dag)?;
+    let graph = make_smartlog_graph(&effects, repo, dag, event_replayer, event_cursor, &commits)?;
     let graph_lines = render_graph(
         &effects,
         repo,
@@ -176,7 +171,7 @@ fn collect_events(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<
     let event_log_db = EventLogDb::new(&conn)?;
     let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
     let event_cursor = event_replayer.make_default_cursor();
-    let dag = Dag::open_and_sync(
+    let mut dag = Dag::open_and_sync(
         effects,
         &repo,
         &event_replayer,
@@ -199,7 +194,7 @@ fn collect_events(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<
             &repo,
             &event_log_db,
             &event_replayer,
-            &dag,
+            &mut dag,
             &head_info,
             &references_snapshot,
             &redactor,

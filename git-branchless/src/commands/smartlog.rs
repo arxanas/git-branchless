@@ -349,16 +349,7 @@ mod render {
         let mut root_commit_oids: Vec<NonZeroOid> = graph
             .nodes
             .iter()
-            .filter(|(_oid, node)| {
-                // Common case: on main w/ no parents in graph, eg a merge base
-                node.parent.is_none() && node.is_main ||
-                    // Pathological cases: orphaned, garbage collected, etc
-                    node.parent.is_none()
-                        && !node.is_main
-                        && node.children.is_empty()
-                        && node.descendants.is_empty()
-                        && !node.has_ancestors
-            })
+            .filter(|(_oid, node)| node.parent.is_none() && !node.has_ancestors)
             .map(|(oid, _node)| oid)
             .copied()
             .collect();
@@ -631,9 +622,7 @@ mod render {
         fn default() -> Self {
             Self {
                 event_id: Default::default(),
-                revset: Revset(
-                    "((draft() | branches() | @) % main()) | branches() | @".to_string(),
-                ),
+                revset: Revset::default_smartlog_revset(),
                 resolve_revset_options: Default::default(),
             }
         }
