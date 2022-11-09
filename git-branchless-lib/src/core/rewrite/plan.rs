@@ -192,7 +192,7 @@ impl<'a> RebasePlanPermissions<'a> {
         // error message which indicates the magnitude of the issue.
         let commits = dag.query().descendants(commits.clone())?;
 
-        let public_commits = dag.query_public_commits()?;
+        let public_commits = dag.query_public_commits_slow()?;
         if !build_options.force_rewrite_public_commits {
             let public_commits_to_move = public_commits.intersection(&commits);
             if !public_commits_to_move.is_empty()? {
@@ -303,8 +303,8 @@ impl<'a> ConstraintGraph<'a> {
                         .dag
                         .query()
                         .children(CommitSet::from(*children_of_oid))?
-                        .difference(&commits_to_move)
-                        .intersection(self.dag.query_visible_commits()?);
+                        .difference(&commits_to_move);
+                    let source_children = self.dag.filter_visible_commits(source_children)?;
 
                     for child_oid in commit_set_to_vec(&source_children)? {
                         self.inner.entry(parent_oid).or_default().insert(child_oid);
@@ -358,7 +358,7 @@ impl<'a> ConstraintGraph<'a> {
         let _effects = effects;
 
         let all_descendants_of_constrained_nodes = {
-            let visible_commits = self.dag.query_visible_commits()?;
+            let visible_commits = self.dag.query_visible_commits_slow()?;
 
             let mut acc = Vec::new();
             let parents = self.commits_to_move();

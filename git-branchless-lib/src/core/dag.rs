@@ -114,6 +114,7 @@ pub struct Dag {
     obsolete_commits: CommitSet,
 
     public_commits: OnceCell<CommitSet>,
+    visible_heads: OnceCell<CommitSet>,
     visible_commits: OnceCell<CommitSet>,
     draft_commits: OnceCell<CommitSet>,
     default_smartlog_commits: OnceCell<CommitSet>,
@@ -194,6 +195,7 @@ impl Dag {
             observed_commits,
             obsolete_commits,
             public_commits: Default::default(),
+            visible_heads: Default::default(),
             visible_commits: Default::default(),
             draft_commits: Default::default(),
             default_smartlog_commits: Default::default(),
@@ -371,8 +373,27 @@ impl Dag {
         self.inner.borrow()
     }
 
-    /// Return the set of commits which are public (checked into the main branch).
-    pub fn query_public_commits(&self) -> eyre::Result<&CommitSet> {
+    /// Determine whether or not the given commit is a public commit (i.e. is an
+    /// ancestor of the main branch).
+    #[instrument]
+    pub fn is_public_commit(&self, commit_oid: NonZeroOid) -> eyre::Result<bool> {
+        let main_branch_commits = commit_set_to_vec(&self.main_branch_commit)?;
+        for main_branch_commit in main_branch_commits {
+            if self
+                .inner
+                .is_ancestor(commit_oid.into(), main_branch_commit.into())?
+            {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
+    /// Return the set of commits which are public, as per the definition in
+    /// `is_public_commit`. You should try to use `is_public_commit` instead, as
+    /// it will be faster to compute.
+    #[instrument]
+    pub fn query_public_commits_slow(&self) -> eyre::Result<&CommitSet> {
         self.public_commits.get_or_try_init(|| {
             let public_commits = self.query().ancestors(self.main_branch_commit.clone())?;
             Ok(public_commits)
@@ -382,17 +403,37 @@ impl Dag {
     /// Determine the set of commits which are considered to be "visible". A
     /// commit is "visible" if it is not obsolete or has a non-obsolete
     /// descendant.
-    pub fn query_visible_commits(&self) -> eyre::Result<&CommitSet> {
-        self.visible_commits.get_or_try_init(|| {
-            let public_commits = self.query_public_commits()?;
-            let visible_heads = public_commits
+    #[instrument]
+    pub fn query_visible_heads(&self) -> eyre::Result<&CommitSet> {
+        self.visible_heads.get_or_try_init(|| {
+            let visible_heads = CommitSet::empty()
                 .union(&self.observed_commits.difference(&self.obsolete_commits))
                 .union(&self.head_commit)
                 .union(&self.main_branch_commit)
                 .union(&self.branch_commits);
-            let visible_commits = self.query().ancestors(visible_heads)?;
-            Ok(visible_commits)
+            let visible_heads = self.query().heads(visible_heads)?;
+            Ok(visible_heads)
         })
+    }
+
+    /// Query the set of all visible commits, as per the definition in
+    /// `query_visible_head`s. You should try to use `query_visible_heads`
+    /// instead if possible, since it will be faster to compute.
+    #[instrument]
+    pub fn query_visible_commits_slow(&self) -> eyre::Result<&CommitSet> {
+        self.visible_commits.get_or_try_init(|| {
+            let visible_heads = self.query_visible_heads()?;
+            let result = self.inner.ancestors(visible_heads.clone())?;
+            Ok(result)
+        })
+    }
+
+    /// Keep only commits in the given set which are visible, as per the
+    /// definition in `query_visible_heads`.
+    #[instrument]
+    pub fn filter_visible_commits(&self, commits: CommitSet) -> eyre::Result<CommitSet> {
+        let visible_heads = self.query_visible_heads()?;
+        Ok(commits.intersection(&self.query().range(commits.clone(), visible_heads.clone())?))
     }
 
     /// Determine the set of obsolete commits. These commits have been rewritten
@@ -407,9 +448,11 @@ impl Dag {
     #[instrument]
     pub fn query_draft_commits(&self) -> eyre::Result<&CommitSet> {
         self.draft_commits.get_or_try_init(|| {
-            let visible_commits = self.query_visible_commits()?;
-            let public_commits = self.query_public_commits()?;
-            Ok(visible_commits.difference(public_commits))
+            let visible_heads = self.query_visible_heads()?;
+            let draft_commits = self
+                .query()
+                .only(visible_heads.clone(), self.main_branch_commit.clone())?;
+            Ok(draft_commits)
         })
     }
 
@@ -417,7 +460,7 @@ impl Dag {
     /// no revset is passed.
     pub fn query_default_smartlog_commits(&self) -> eyre::Result<&CommitSet> {
         self.default_smartlog_commits.get_or_try_init(|| {
-            let public_commits = self.query_public_commits()?;
+            let public_commits = self.query_public_commits_slow()?;
             let active_commits = self.observed_commits.clone();
             let active_heads = self.query().heads(active_commits)?;
             let active_heads = active_heads.difference(public_commits);

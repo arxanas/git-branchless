@@ -63,11 +63,16 @@ lazy_static! {
 #[instrument]
 fn fn_all(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     eval0(ctx, name, args)?;
-    Ok(ctx
+    let visible_heads = ctx
         .dag
-        .query_visible_commits()
-        .map_err(EvalError::OtherError)?
-        .clone())
+        .query_visible_heads()
+        .map_err(EvalError::OtherError)?;
+    let visible_commits = ctx.dag.query().ancestors(visible_heads.clone())?;
+    let visible_commits = ctx
+        .dag
+        .filter_visible_commits(visible_commits)
+        .map_err(EvalError::OtherError)?;
+    Ok(visible_commits)
 }
 
 #[instrument]
@@ -109,11 +114,12 @@ fn fn_range(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
 #[instrument]
 fn fn_not(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     let expr = eval1(ctx, name, args)?;
-    let active_commits = ctx
+    let visible_heads = ctx
         .dag
-        .query_visible_commits()
+        .query_visible_heads()
         .map_err(EvalError::OtherError)?;
-    Ok(active_commits.difference(&expr))
+    let visible_commits = ctx.dag.query().ancestors(visible_heads.clone())?;
+    Ok(visible_commits.difference(&expr))
 }
 
 #[instrument]
@@ -212,7 +218,7 @@ fn fn_public(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     eval0(ctx, name, args)?;
     let public_commits = ctx
         .dag
-        .query_public_commits()
+        .query_public_commits_slow()
         .map_err(EvalError::OtherError)?;
     Ok(public_commits.clone())
 }

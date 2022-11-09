@@ -135,14 +135,13 @@ fn eval_inner(ctx: &mut Context, expr: &Expr) -> EvalResult {
         Expr::Name(name) => eval_name(ctx, name),
         Expr::FunctionCall(name, args) => {
             let result = eval_fn(ctx, name, args)?;
-            let visible_commits = if ctx.show_hidden_commits {
-                &result
+            let result = if ctx.show_hidden_commits {
+                result
             } else {
                 ctx.dag
-                    .query_visible_commits()
+                    .filter_visible_commits(result)
                     .map_err(EvalError::OtherError)?
             };
-            let result = result.intersection(visible_commits);
             Ok(result)
         }
     }

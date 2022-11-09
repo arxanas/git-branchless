@@ -58,9 +58,7 @@ pub fn hide(
 
     let commits = union_all(&commit_sets);
     let commits = if recursive {
-        dag.query()
-            .descendants(commits)?
-            .intersection(dag.query_visible_commits()?)
+        dag.filter_visible_commits(dag.query().descendants(commits)?)?
     } else {
         commits
     };

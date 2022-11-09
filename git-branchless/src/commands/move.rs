@@ -377,8 +377,8 @@ pub fn r#move(
             let component_children: CommitSet = dag
                 .query()
                 .children(component.clone())?
-                .difference(component)
-                .intersection(dag.query_visible_commits()?);
+                .difference(component);
+            let component_children = dag.filter_visible_commits(component_children)?;
 
             for component_child in commit_set_to_vec(&component_children)? {
                 // If the range being extracted has any child commits, then we
@@ -457,8 +457,8 @@ pub fn r#move(
                 .query()
                 .children(CommitSet::from(dest_oid))?
                 .difference(&source_oids)
-                .difference(&exact_oids)
-                .intersection(dag.query_visible_commits()?);
+                .difference(&exact_oids);
+            let dest_children = dag.filter_visible_commits(dest_children)?;
 
             for dest_child in commit_set_to_vec(&dest_children)? {
                 builder.move_subtree(dest_child, vec![source_head])?;

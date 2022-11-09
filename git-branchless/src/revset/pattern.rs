@@ -145,7 +145,7 @@ pub(super) fn make_pattern_matcher_set(
         repo: repo.try_clone().map_err(PatternError::Repo)?,
         visible_commits: ctx
             .dag
-            .query_visible_commits()
+            .query_visible_commits_slow()
             .map_err(EvalError::OtherError)
             .map_err(Box::new)?
             .clone(),
