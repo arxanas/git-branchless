@@ -462,8 +462,8 @@ pub enum Command {
 
         /// The commits to render. These commits and their ancestors up to the
         /// main branch will be rendered.
-        #[clap(value_parser, default_value = "draft() | branches() | @")]
-        revset: Revset,
+        #[clap(value_parser)]
+        revset: Option<Revset>,
 
         /// Options for resolving revset expressions.
         #[clap(flatten)]
