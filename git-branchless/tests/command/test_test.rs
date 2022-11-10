@@ -146,7 +146,7 @@ fn test_test_cached_results() -> eyre::Result<()> {
         ✓ Passed (cached): 1b0d484 Revert "create test3.txt"
         3 passed, 0 failed, 0 skipped
         hint: there was 1 cached test result
-        hint: to clear all cached results, run: git test clean
+        hint: to clear these cached results, run: git test clean "stack()"
         hint: disable this hint by running: git config --global branchless.hint.cleanCachedTestResults false
         branchless: running command: <git-executable> rebase --abort
         "###);
@@ -164,7 +164,7 @@ fn test_test_cached_results() -> eyre::Result<()> {
         ✓ Passed (cached): 1b0d484 Revert "create test3.txt"
         3 passed, 0 failed, 0 skipped
         hint: there were 3 cached test results
-        hint: to clear all cached results, run: git test clean
+        hint: to clear these cached results, run: git test clean "stack()"
         hint: disable this hint by running: git config --global branchless.hint.cleanCachedTestResults false
         branchless: running command: <git-executable> rebase --abort
         "###);
@@ -235,7 +235,7 @@ fn test_test_verbosity() -> eyre::Result<()> {
         <no output>
         1 passed, 0 failed, 0 skipped
         hint: there was 1 cached test result
-        hint: to clear all cached results, run: git test clean
+        hint: to clear these cached results, run: git test clean "stack()"
         hint: disable this hint by running: git config --global branchless.hint.cleanCachedTestResults false
         branchless: running command: <git-executable> rebase --abort
         "###);
@@ -296,7 +296,7 @@ fn test_test_verbosity() -> eyre::Result<()> {
         <no output>
         1 passed, 0 failed, 0 skipped
         hint: there was 1 cached test result
-        hint: to clear all cached results, run: git test clean
+        hint: to clear these cached results, run: git test clean "stack()"
         hint: disable this hint by running: git config --global branchless.hint.cleanCachedTestResults false
         branchless: running command: <git-executable> rebase --abort
         "###);
@@ -552,7 +552,7 @@ fn test_test_worktree_strategy() -> eyre::Result<()> {
         <no output>
         1 passed, 0 failed, 0 skipped
         hint: there was 1 cached test result
-        hint: to clear all cached results, run: git test clean
+        hint: to clear these cached results, run: git test clean "@"
         hint: disable this hint by running: git config --global branchless.hint.cleanCachedTestResults false
         "###);
     }
