@@ -239,7 +239,7 @@ but --strategy working-copy was provided instead."
     }
 
     fn make_command_slug(&self) -> String {
-        self.command.replace(['/', ' ', '\n'], "_")
+        self.command.replace(['/', ' ', '\n'], "__")
     }
 }
 
