@@ -272,14 +272,19 @@ pub fn run(
         Err(exit_code) => return Ok(exit_code),
     };
 
-    let commit_set =
-        match resolve_commits(effects, &repo, &mut dag, &[revset], resolve_revset_options) {
-            Ok(mut commit_sets) => commit_sets.pop().unwrap(),
-            Err(err) => {
-                err.describe(effects)?;
-                return Ok(ExitCode(1));
-            }
-        };
+    let commit_set = match resolve_commits(
+        effects,
+        &repo,
+        &mut dag,
+        &[revset.clone()],
+        resolve_revset_options,
+    ) {
+        Ok(mut commit_sets) => commit_sets.pop().unwrap(),
+        Err(err) => {
+            err.describe(effects)?;
+            return Ok(ExitCode(1));
+        }
+    };
 
     let abort_trap = match set_abort_trap(
         now,
@@ -300,6 +305,7 @@ pub fn run(
         git_run_info,
         &repo,
         event_tx_id,
+        &revset,
         &commits,
         &options,
     );
@@ -663,6 +669,7 @@ fn run_tests(
     git_run_info: &GitRunInfo,
     repo: &Repo,
     event_tx_id: EventTransactionId,
+    revset: &Revset,
     commits: &[Commit],
     options: &ResolvedTestOptions,
 ) -> eyre::Result<ExitCode> {
@@ -872,8 +879,9 @@ fn run_tests(
         )?;
         writeln!(
             effects.get_output_stream(),
-            "{}: to clear all cached results, run: git test clean",
+            "{}: to clear these cached results, run: git test clean {:?}",
             effects.get_glyphs().render(get_hint_string())?,
+            revset.to_string(),
         )?;
         print_hint_suppression_notice(effects, Hint::CleanCachedTestResults)?;
     }
