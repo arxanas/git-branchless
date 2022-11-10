@@ -86,7 +86,7 @@ pub struct Glyphs {
     pub vertical_ellipsis: &'static str,
 
     /// Line used to connect a parent commit to its non-first child commit.
-    pub slash: &'static str,
+    pub split: &'static str,
 
     /// Cursor for a normal visible commit which is not currently checked out.
     pub commit_visible: &'static str,
@@ -160,7 +160,7 @@ impl Glyphs {
             line: "|",
             line_with_offshoot: "|",
             vertical_ellipsis: ":",
-            slash: "\\",
+            split: "\\",
             commit_visible: "o",
             commit_visible_head: "@",
             commit_obsolete: "x",
@@ -187,7 +187,7 @@ impl Glyphs {
             line: "┃",
             line_with_offshoot: "┣",
             vertical_ellipsis: "⋮",
-            slash: "━┓",
+            split: "━┓",
             commit_visible: "◯",
             commit_visible_head: "●",
             commit_obsolete: "✕",
