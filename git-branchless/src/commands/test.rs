@@ -862,7 +862,7 @@ fn run_tests(
     if num_cached_results > 0 && get_hint_enabled(repo, Hint::CleanCachedTestResults)? {
         writeln!(
             effects.get_output_stream(),
-            "{}: There {}.",
+            "{}: there {}",
             effects.get_glyphs().render(get_hint_string())?,
             Pluralize {
                 determiner: Some(("was", "were")),
@@ -872,7 +872,7 @@ fn run_tests(
         )?;
         writeln!(
             effects.get_output_stream(),
-            "{}: To clear all cached results, run: git test clean",
+            "{}: to clear all cached results, run: git test clean",
             effects.get_glyphs().render(get_hint_string())?,
         )?;
         print_hint_suppression_notice(effects, Hint::CleanCachedTestResults)?;
@@ -1441,7 +1441,7 @@ pub fn show(
             Verbosity::None => {
                 writeln!(
                     effects.get_output_stream(),
-                    "{}: To see more detailed output, re-run with -v/--verbose.",
+                    "{}: to see more detailed output, re-run with -v/--verbose",
                     effects.get_glyphs().render(get_hint_string())?,
                 )?;
                 print_hint_suppression_notice(effects, Hint::TestShowVerbose)?;
@@ -1449,7 +1449,7 @@ pub fn show(
             Verbosity::PartialOutput => {
                 writeln!(
                     effects.get_output_stream(),
-                    "{}: To see more detailed output, re-run with -vv/--verbose --verbose.",
+                    "{}: to see more detailed output, re-run with -vv/--verbose --verbose",
                     effects.get_glyphs().render(get_hint_string())?,
                 )?;
                 print_hint_suppression_notice(effects, Hint::TestShowVerbose)?;
