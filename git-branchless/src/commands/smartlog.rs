@@ -504,7 +504,7 @@ mod render {
             let is_last_child = child_idx == (children.len() + descendants.len()) - 1;
             lines.push(StyledString::plain(
                 if !is_last_child || last_child_line_char.is_some() {
-                    format!("{}{}", glyphs.line_with_offshoot, glyphs.slash)
+                    format!("{}{}", glyphs.line_with_offshoot, glyphs.split)
                 } else if current_node.descendants.is_empty() {
                     glyphs.line.to_string()
                 } else {
