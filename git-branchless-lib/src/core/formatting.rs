@@ -88,6 +88,9 @@ pub struct Glyphs {
     /// Line used to connect a parent commit to its non-first child commit.
     pub split: &'static str,
 
+    /// Line used to connect a child commit to its non-first parent commit.
+    pub merge: &'static str,
+
     /// Cursor for a normal visible commit which is not currently checked out.
     pub commit_visible: &'static str,
 
@@ -119,6 +122,10 @@ pub struct Glyphs {
     /// Cursor indicating that some number of commits have been omitted from the
     /// smartlog at this position.
     pub commit_omitted: &'static str,
+
+    /// Cursor indicating that a commit was either merging into this child
+    /// commit or merged from this parent commit.
+    pub commit_merge: &'static str,
 
     /// Character used to point to the currently-checked-out branch.
     pub branch_arrow: &'static str,
@@ -161,6 +168,7 @@ impl Glyphs {
             line_with_offshoot: "|",
             vertical_ellipsis: ":",
             split: "\\",
+            merge: "/",
             commit_visible: "o",
             commit_visible_head: "@",
             commit_obsolete: "x",
@@ -170,6 +178,7 @@ impl Glyphs {
             commit_main_obsolete: "X",
             commit_main_obsolete_head: "%",
             commit_omitted: "#",
+            commit_merge: "&",
             branch_arrow: ">",
             bullet_point: "-",
             cycle_arrow: ">",
@@ -188,11 +197,13 @@ impl Glyphs {
             line_with_offshoot: "┣",
             vertical_ellipsis: "⋮",
             split: "━┓",
+            merge: "━┛",
             commit_visible: "◯",
             commit_visible_head: "●",
             commit_obsolete: "✕",
             commit_obsolete_head: "⦻",
             commit_omitted: "⊘",
+            commit_merge: "↓",
             commit_main: "◇",
             commit_main_head: "◆",
             commit_main_obsolete: "✕",
