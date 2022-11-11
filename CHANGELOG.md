@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - ReleaseDate
 
+## [0.6.0-rc.1] - 2022-11-10
+
 ### Added
 
 - (#576) EXPERIMENTAL: Created `git test` command to run a command on each commit in your stack.
