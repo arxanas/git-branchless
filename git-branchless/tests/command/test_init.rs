@@ -338,6 +338,8 @@ fn test_main_branch_not_found_error_message() -> eyre::Result<()> {
 
         git branchless init --main-branch <branch>
 
+    Note that remote main branches are no longer supported as of v0.6.0. See
+    https://github.com/arxanas/git-branchless/discussions/595 for more details.
 
     Backtrace omitted. Run with RUST_BACKTRACE=1 environment variable to display it.
     Run with RUST_BACKTRACE=full to include source snippets.

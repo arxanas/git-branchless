@@ -55,7 +55,9 @@ These branches exist: {:?}
 Either create it, or update the main branch setting by running:
 
     git branchless init --main-branch <branch>
-",
+
+Note that remote main branches are no longer supported as of v0.6.0. See
+https://github.com/arxanas/git-branchless/discussions/595 for more details.",
                     get_main_branch_name(self)?,
                     self.get_path(),
                     self.get_all_local_branches()?
