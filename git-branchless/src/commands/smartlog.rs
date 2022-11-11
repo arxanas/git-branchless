@@ -32,12 +32,13 @@ use crate::revset::resolve_commits;
 
 mod graph {
     use std::collections::HashMap;
+    use std::convert::TryFrom;
 
     use eden_dag::DagAlgorithm;
     use lib::core::gc::mark_commit_reachable;
     use tracing::instrument;
 
-    use lib::core::dag::{commit_set_to_vec, CommitSet, Dag};
+    use lib::core::dag::{commit_set_to_vec, CommitSet, CommitVertex, Dag};
     use lib::core::effects::{Effects, OperationType};
     use lib::core::eventlog::{EventCursor, EventReplayer};
     use lib::core::node_descriptors::NodeObject;
@@ -49,27 +50,33 @@ mod graph {
         pub oid: NonZeroOid,
         pub distance: usize,
     }
+
+    #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+    pub struct ChildInfo {
+        pub oid: NonZeroOid,
+        pub is_merge_child: bool,
+    }
     /// Node contained in the smartlog commit graph.
     #[derive(Debug)]
     pub struct Node<'repo> {
         /// The underlying commit object.
         pub object: NodeObject<'repo>,
 
-        /// The OID of the parent node in the smartlog commit graph.
+        /// The OIDs of the parent nodes in the smartlog commit graph.
         ///
         /// This is different from inspecting `commit.parents()`, since the smartlog
         /// will hide most nodes from the commit graph, including parent nodes.
-        pub parent: Option<NonZeroOid>,
+        pub parents: Vec<NonZeroOid>,
 
         /// The OIDs of the children nodes in the smartlog commit graph.
-        pub children: Vec<NonZeroOid>,
+        pub children: Vec<ChildInfo>,
 
         /// Information about a non-immediate, non-main branch ancestor node in
         /// the smartlog commit graph.
         pub ancestor_info: Option<AncestorInfo>,
 
         /// The OIDs of any non-immediate descendant nodes in the smartlog commit graph.
-        pub descendants: Vec<NonZeroOid>,
+        pub descendants: Vec<ChildInfo>,
 
         /// Indicates that this is a commit to the main branch.
         ///
@@ -163,7 +170,7 @@ mod graph {
                         oid,
                         Node {
                             object,
-                            parent: None,         // populated below
+                            parents: Vec::new(),  // populated below
                             children: Vec::new(), // populated below
                             ancestor_info: None,
                             descendants: Vec::new(), // populated below
@@ -177,8 +184,8 @@ mod graph {
             result
         };
 
-        let mut immediate_links: Vec<(NonZeroOid, NonZeroOid)> = Vec::new();
-        let mut non_immediate_links: Vec<(NonZeroOid, NonZeroOid)> = Vec::new();
+        let mut immediate_links: Vec<(NonZeroOid, NonZeroOid, bool)> = Vec::new();
+        let mut non_immediate_links: Vec<(NonZeroOid, NonZeroOid, bool)> = Vec::new();
 
         let non_main_node_oids =
             graph
@@ -187,23 +194,36 @@ mod graph {
 
         let graph_vertices: CommitSet = graph.keys().cloned().collect();
         for child_oid in non_main_node_oids {
-            let parent_vertices = dag.query().parents(CommitSet::from(*child_oid))?;
+            let parent_vertices = dag.query().parent_names(CommitVertex::from(*child_oid))?;
 
             // Find immediate parent-child links.
-            let parents_in_graph = parent_vertices.intersection(&graph_vertices);
-            let parent_oids = commit_set_to_vec(&parents_in_graph)?;
-            for parent_oid in parent_oids {
-                immediate_links.push((*child_oid, parent_oid))
+            match parent_vertices.as_slice() {
+                [] => {}
+                [first_parent_vertex, merge_parent_vertices @ ..] => {
+                    if graph_vertices.contains(first_parent_vertex)? {
+                        let first_parent_oid = NonZeroOid::try_from(first_parent_vertex.clone())?;
+                        immediate_links.push((*child_oid, first_parent_oid, false));
+                    }
+                    for merge_parent_vertex in merge_parent_vertices {
+                        if graph_vertices.contains(merge_parent_vertex)? {
+                            let merge_parent_oid =
+                                NonZeroOid::try_from(merge_parent_vertex.clone())?;
+                            immediate_links.push((*child_oid, merge_parent_oid, true));
+                        }
+                    }
+                }
             }
 
             // Find non-immediate ancestor links.
-            let excluded_parents = parent_vertices.difference(&graph_vertices);
-            let excluded_parent_oids = commit_set_to_vec(&excluded_parents)?;
-            for parent_oid in excluded_parent_oids {
+            for excluded_parent_vertex in parent_vertices {
+                if graph_vertices.contains(&excluded_parent_vertex)? {
+                    continue;
+                }
+
                 // Find the nearest ancestor that is included in the graph and
                 // also on the same branch.
 
-                let parent_set = CommitSet::from(parent_oid);
+                let parent_set = CommitSet::from(excluded_parent_vertex);
                 let merge_base = dag
                     .query()
                     .gca_one(dag.main_branch_commit.union(&parent_set))?;
@@ -220,17 +240,20 @@ mod graph {
 
                 let ancestor_oids = commit_set_to_vec(&nearest_branch_ancestor)?;
                 for ancestor_oid in ancestor_oids.iter() {
-                    non_immediate_links.push((*ancestor_oid, *child_oid));
+                    non_immediate_links.push((*ancestor_oid, *child_oid, false));
                 }
             }
         }
 
-        for (child_oid, parent_oid) in immediate_links.iter() {
-            graph.get_mut(child_oid).unwrap().parent = Some(*parent_oid);
-            graph.get_mut(parent_oid).unwrap().children.push(*child_oid);
+        for (child_oid, parent_oid, is_merge_link) in immediate_links.iter() {
+            graph.get_mut(child_oid).unwrap().parents.push(*parent_oid);
+            graph.get_mut(parent_oid).unwrap().children.push(ChildInfo {
+                oid: *child_oid,
+                is_merge_child: *is_merge_link,
+            });
         }
 
-        for (ancestor_oid, descendent_oid) in non_immediate_links.iter() {
+        for (ancestor_oid, descendent_oid, is_merge_link) in non_immediate_links.iter() {
             let distance = dag
                 .query()
                 .range(
@@ -247,7 +270,10 @@ mod graph {
                 .get_mut(ancestor_oid)
                 .unwrap()
                 .descendants
-                .push(*descendent_oid);
+                .push(ChildInfo {
+                    oid: *descendent_oid,
+                    is_merge_child: *is_merge_link,
+                })
         }
 
         for (oid, node) in graph.iter_mut() {
@@ -292,8 +318,12 @@ mod graph {
             })
             .collect();
         for node in graph.nodes.values_mut() {
-            node.children
-                .sort_by_key(|child_oid| (&commit_times[child_oid], child_oid.to_string()));
+            node.children.sort_by_key(
+                |ChildInfo {
+                     oid,
+                     is_merge_child,
+                 }| (&commit_times[oid], *is_merge_child, oid.to_string()),
+            );
         }
     }
 
@@ -333,7 +363,7 @@ mod render {
     use std::collections::HashSet;
     use std::convert::TryFrom;
 
-    use cursive::theme::Effect;
+    use cursive::theme::{BaseColor, Effect};
     use cursive::utils::markup::StyledString;
     use eden_dag::DagAlgorithm;
     use tracing::instrument;
@@ -347,7 +377,7 @@ mod render {
 
     use crate::opts::{ResolveRevsetOptions, Revset};
 
-    use super::graph::{AncestorInfo, SmartlogGraph};
+    use super::graph::{AncestorInfo, ChildInfo, SmartlogGraph};
 
     /// Split fully-independent subgraphs into multiple graphs.
     ///
@@ -364,7 +394,7 @@ mod render {
         let mut root_commit_oids: Vec<NonZeroOid> = graph
             .nodes
             .iter()
-            .filter(|(_oid, node)| node.parent.is_none() && node.ancestor_info.is_none())
+            .filter(|(_oid, node)| node.parents.is_empty() && node.ancestor_info.is_none())
             .map(|(oid, _node)| oid)
             .copied()
             .collect();
@@ -419,18 +449,6 @@ mod render {
         let current_node = &graph.nodes[&current_oid];
         let is_head = Some(current_oid) == head_oid;
 
-        let text = render_node_descriptors(glyphs, &current_node.object, commit_descriptors)?;
-        let cursor = match (current_node.is_main, current_node.is_obsolete, is_head) {
-            (false, false, false) => glyphs.commit_visible,
-            (false, false, true) => glyphs.commit_visible_head,
-            (false, true, false) => glyphs.commit_obsolete,
-            (false, true, true) => glyphs.commit_obsolete_head,
-            (true, false, false) => glyphs.commit_main,
-            (true, false, true) => glyphs.commit_main_head,
-            (true, true, false) => glyphs.commit_main_obsolete,
-            (true, true, true) => glyphs.commit_main_obsolete_head,
-        };
-
         let mut lines = vec![];
 
         if let Some(AncestorInfo { oid: _, distance }) = current_node.ancestor_info {
@@ -452,11 +470,50 @@ mod render {
             lines.push(StyledString::plain(glyphs.vertical_ellipsis));
         };
 
+        if let [_, merge_parents @ ..] = current_node.parents.as_slice() {
+            if !merge_parents.is_empty() {
+                for merge_parent_oid in merge_parents {
+                    let merge_parent_node = &graph.nodes[merge_parent_oid];
+                    lines.push(
+                        StyledStringBuilder::new()
+                            .append_plain(last_child_line_char.unwrap_or(glyphs.line))
+                            .append_plain(" ")
+                            .append_styled(
+                                format!("{} (merge) ", glyphs.commit_merge),
+                                BaseColor::Blue.dark(),
+                            )
+                            .append(render_node_descriptors(
+                                glyphs,
+                                &merge_parent_node.object,
+                                commit_descriptors,
+                            )?)
+                            .build(),
+                    );
+                }
+                lines.push(StyledString::plain(format!(
+                    "{}{}",
+                    glyphs.line_with_offshoot, glyphs.merge,
+                )));
+            }
+        }
+
         lines.push({
-            let mut first_line = StyledString::new();
-            first_line.append_plain(cursor);
-            first_line.append_plain(" ");
-            first_line.append(text);
+            let cursor = match (current_node.is_main, current_node.is_obsolete, is_head) {
+                (false, false, false) => glyphs.commit_visible,
+                (false, false, true) => glyphs.commit_visible_head,
+                (false, true, false) => glyphs.commit_obsolete,
+                (false, true, true) => glyphs.commit_obsolete_head,
+                (true, false, false) => glyphs.commit_main,
+                (true, false, true) => glyphs.commit_main_head,
+                (true, true, false) => glyphs.commit_main_obsolete,
+                (true, true, true) => glyphs.commit_main_obsolete_head,
+            };
+            let text = render_node_descriptors(glyphs, &current_node.object, commit_descriptors)?;
+            let first_line = StyledStringBuilder::new()
+                .append_plain(cursor)
+                .append_plain(" ")
+                .append(text)
+                .build();
             if is_head {
                 set_effect(first_line, Effect::Bold)
             } else {
@@ -483,21 +540,57 @@ mod render {
             );
         };
 
-        let children: Vec<_> = current_node
+        let children: Vec<ChildInfo> = current_node
             .children
             .iter()
-            .filter(|child_oid| graph.nodes.contains_key(child_oid))
-            .copied()
+            .filter(
+                |ChildInfo {
+                     oid,
+                     is_merge_child: _,
+                 }| graph.nodes.contains_key(oid),
+            )
+            .cloned()
             .collect();
-        let descendants: HashSet<_> = current_node
+        let descendants: HashSet<ChildInfo> = current_node
             .descendants
             .iter()
-            .filter(|descendent_oid| graph.nodes.contains_key(descendent_oid))
-            .copied()
+            .filter(
+                |ChildInfo {
+                     oid,
+                     is_merge_child: _,
+                 }| graph.nodes.contains_key(oid),
+            )
+            .cloned()
             .collect();
-        for (child_idx, child_oid) in children.iter().chain(descendants.iter()).enumerate() {
+        for (child_idx, child_info) in children.iter().chain(descendants.iter()).enumerate() {
+            let ChildInfo {
+                oid: child_oid,
+                is_merge_child,
+            } = child_info;
             if root_oids.contains(child_oid) {
                 // Will be rendered by the parent.
+                continue;
+            }
+            if *is_merge_child {
+                // lines.push(StyledString::plain(format!(
+                //     "{}{}",
+                //     glyphs.line_with_offshoot, glyphs.split
+                // )));
+                lines.push(
+                    StyledStringBuilder::new()
+                        // .append_plain(last_child_line_char.unwrap_or(glyphs.line))
+                        // .append_plain(" ")
+                        .append_styled(
+                            format!("{} (merge) ", glyphs.commit_merge),
+                            BaseColor::Blue.dark(),
+                        )
+                        .append(render_node_descriptors(
+                            glyphs,
+                            &graph.nodes[child_oid].object,
+                            commit_descriptors,
+                        )?)
+                        .build(),
+                );
                 continue;
             }
 

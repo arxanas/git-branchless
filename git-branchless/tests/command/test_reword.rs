@@ -535,11 +535,12 @@ fn test_reword_merge_commit() -> eyre::Result<()> {
         O 62fc20d (master) create test1.txt
         |\
         | o 96d1c37 create test2.txt
-        | |
-        | @ a4dd9b0 Merge commit '96d1c37a3d4363611c49f7e52186e189a04c531f' into HEAD
+        | & (merge) a4dd9b0 Merge commit '96d1c37a3d4363611c49f7e52186e189a04c531f' into HEAD
         |
         o 4838e49 create test3.txt
         |
+        | & (merge) 96d1c37 create test2.txt
+        |/
         @ a4dd9b0 Merge commit '96d1c37a3d4363611c49f7e52186e189a04c531f' into HEAD
         "###);
     }
@@ -570,11 +571,12 @@ fn test_reword_merge_commit() -> eyre::Result<()> {
         O 62fc20d (master) create test1.txt
         |\
         | o 96d1c37 create test2.txt
-        | |
-        | @ 2fc54bd new message
+        | & (merge) 2fc54bd new message
         |
         o 4838e49 create test3.txt
         |
+        | & (merge) 96d1c37 create test2.txt
+        |/
         @ 2fc54bd new message
         "###);
     }
@@ -604,11 +606,12 @@ fn test_reword_merge_commit() -> eyre::Result<()> {
         |\
         | o 800dd6c new message 2
         | |
+        | | & (merge) 11f31c5 new message 2
+        | |/
         | @ 8d2bc36 new message 2
         |
         o 11f31c5 new message 2
-        |
-        @ 8d2bc36 new message 2
+        & (merge) 8d2bc36 new message 2
         "###);
     }
 

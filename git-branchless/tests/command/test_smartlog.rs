@@ -134,14 +134,47 @@ fn test_merge_commit() -> eyre::Result<()> {
         O f777ecc (master) create initial.txt
         |\
         | o 62fc20d (test1) create test1.txt
-        | |
-        | @ fa4e4e1 (> test2and3) Merge branch 'test1' into test2and3
+        | & (merge) fa4e4e1 (> test2and3) Merge branch 'test1' into test2and3
         |
         o fe65c1f create test2.txt
         |
         o 0206717 create test3.txt
         |
+        | & (merge) 62fc20d (test1) create test1.txt
+        |/
         @ fa4e4e1 (> test2and3) Merge branch 'test1' into test2and3
+        "###);
+    }
+
+    git.run(&["checkout", "-b", "test4", "master"])?;
+    git.commit_file("test4", 4)?;
+    git.commit_file("test5", 5)?;
+    git.run(&["merge", "test1", "test2and3"])?;
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |\
+        | o 62fc20d (test1) create test1.txt
+        | & (merge) fa4e4e1 (test2and3) Merge branch 'test1' into test2and3
+        |\
+        | o fe65c1f create test2.txt
+        | |
+        | o 0206717 create test3.txt
+        | |
+        | | & (merge) 62fc20d (test1) create test1.txt
+        | |/
+        | o fa4e4e1 (test2and3) Merge branch 'test1' into test2and3
+        | & (merge) 36a25e8 (> test4) Merge branch 'test2and3' into test4
+        |
+        o 8f7aef5 create test4.txt
+        |
+        o 47d30fa create test5.txt
+        |
+        | & (merge) fa4e4e1 (test2and3) Merge branch 'test1' into test2and3
+        |/
+        @ 36a25e8 (> test4) Merge branch 'test2and3' into test4
         "###);
     }
 
