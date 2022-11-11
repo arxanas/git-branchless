@@ -9,9 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - ReleaseDate
 
+### Added
+
+- (#576) EXPERIMENTAL: Created `git test` command to run a command on each commit in your stack.
+- (#589, #593) `git sync --pull` rebases the local main branch on top of the remote main branch.
+- (#619) `git smartlog` now renders revsets with non-contiguous commits.
+- (#638) `git smartlog` now deduplicates merge commits which appear in the smartlog.
+
 ### Changed
 
 - (#526) BREAKING: When checking out a commit with a single branch attached to it, that branch will also be checked out.
+- (#589) BREAKING: Remote main branches are no longer supported. To upgrade you'll need to create a local main branch which tracks the remote main branch. You can use `git sync` to keep it up-to-date.
+- (#571) Added `current(<revset>)` revset function to determine the latest versions of a set of rewritten commits.
+- (#582) Added `main()`, `public()` revset functions.
+- (#593, #608) `git sync` produces more descriptive output.
+
+### Fixed
+
+- (#588) `git branchless init` now works when invoked in a worktree.
+- (#589) `git reword --force-rewrite` no longer moves remote-tracking branches.
+- (#589) `git smartlog` no longer uses 100% CPU in certain cases with remote main branches (because remote main branches are no longer supported).
 
 ## [0.5.0] - 2022-09-28
 
