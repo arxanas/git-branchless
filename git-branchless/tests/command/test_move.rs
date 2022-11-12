@@ -2728,10 +2728,28 @@ fn test_move_force_in_memory() -> eyre::Result<()> {
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
-        There was a merge conflict, which currently can't be resolved when rebasing in-memory.
-        The conflicting commit was: 081b474 conflicting test2
-        Aborting since an in-memory rebase was requested.
+        This operation would cause a merge conflict:
+        - (1 conflicting file) 081b474 conflicting test2
+        To resolve merge conflicts, retry this operation with the --merge option.
         "###);
+    }
+
+    {
+        let (stdout, stderr) = git.run_with_options(
+            &["move", "-d", "master", "--in-memory", "--merge"],
+            &GitRunOptions {
+                expected_exit_code: 2,
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stderr, @r###"
+        error: The argument '--in-memory' cannot be used with '--merge'
+
+        Usage: git-branchless move --dest <DEST> --in-memory
+
+        For more information try '--help'
+        "###);
+        insta::assert_snapshot!(stdout, @"");
     }
 
     Ok(())
