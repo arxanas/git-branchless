@@ -1232,12 +1232,7 @@ pub fn execute_rebase_plan(
             }
 
             RebaseInMemoryResult::MergeConflict(merge_conflict) => {
-                if !resolve_merge_conflicts
-                    // If an in-memory rebase was forced, don't suggest to the user
-                    // that they can re-run with `--merge`, since that still won't
-                    // work.
-                    && !*force_in_memory
-                {
+                if !resolve_merge_conflicts {
                     return Ok(ExecuteRebasePlanResult::DeclinedToMerge { merge_conflict });
                 }
 
