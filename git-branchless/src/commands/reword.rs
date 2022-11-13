@@ -277,6 +277,7 @@ pub fn reword(
         resolve_merge_conflicts: false,
         check_out_commit_options: CheckOutCommitOptions {
             additional_args: Default::default(),
+            reset: false,
             render_smartlog: false,
         },
     };

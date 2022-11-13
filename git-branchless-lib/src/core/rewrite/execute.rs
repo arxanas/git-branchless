@@ -422,20 +422,13 @@ mod in_memory {
                 .iter()
                 .find_map(|command| match command {
                     RebaseCommand::Merge {
-                        replacement_commit_oid: None,
                         commit_oid,
                         commits_to_merge: _,
                     } => Some(commit_oid),
-                    RebaseCommand::Merge {
-                        // If we know exactly what tree to use, we don't
-                        // actually have to carry out a merge in memory.
-                        replacement_commit_oid: Some(_),
-                        commit_oid: _,
-                        commits_to_merge: _,
-                    }
-                    | RebaseCommand::CreateLabel { .. }
+                    RebaseCommand::CreateLabel { .. }
                     | RebaseCommand::Reset { .. }
                     | RebaseCommand::Pick { .. }
+                    | RebaseCommand::Replace { .. }
                     | RebaseCommand::Break
                     | RebaseCommand::RegisterExtraPostRewriteHook
                     | RebaseCommand::DetectEmptyCommit { .. }
@@ -488,6 +481,7 @@ mod in_memory {
                 | RebaseCommand::DetectEmptyCommit { .. } => false,
                 RebaseCommand::Pick { .. }
                 | RebaseCommand::Merge { .. }
+                | RebaseCommand::Replace { .. }
                 | RebaseCommand::SkipUpstreamAppliedCommit { .. } => true,
             })
             .count();
@@ -629,7 +623,6 @@ mod in_memory {
                 }
 
                 RebaseCommand::Merge {
-                    replacement_commit_oid: None,
                     commit_oid,
                     commits_to_merge: _,
                 } => {
@@ -642,73 +635,78 @@ mod in_memory {
                     });
                 }
 
-                RebaseCommand::Merge {
-                    replacement_commit_oid: Some(replacement_commit_oid),
+                RebaseCommand::Replace {
                     commit_oid,
-                    commits_to_merge,
+                    replacement_commit_oid,
+                    parents,
                 } => {
-                    let current_commit = repo
-                        .find_commit_or_fail(current_oid)
+                    let original_commit = repo
+                        .find_commit_or_fail(*commit_oid)
                         .wrap_err("Finding current commit")?;
-                    let commit_to_apply = repo
-                        .find_commit_or_fail(*replacement_commit_oid)
-                        .wrap_err("Finding commit to apply")?;
-                    i += 1;
-
-                    let commit_description = effects
+                    let original_commit_description = effects
                         .get_glyphs()
-                        .render(commit_to_apply.friendly_describe(effects.get_glyphs())?)?;
+                        .render(original_commit.friendly_describe(effects.get_glyphs())?)?;
+
+                    i += 1;
                     let commit_num = format!("[{}/{}]", i, num_picks);
                     progress.notify_progress(i, num_picks);
-
                     progress.notify_status(
                         OperationIcon::InProgress,
-                        format!("Applying merge commit: {}", commit_description),
+                        format!("Replacing commit: {}", original_commit_description),
                     );
-                    let commit = repo.find_commit_or_fail(*replacement_commit_oid)?;
-                    let commit_tree = commit.get_tree()?;
-                    let commit_message = commit_to_apply.get_message_raw()?;
-                    let commit_message = commit_message.to_str().with_context(|| {
-                        eyre::eyre!(
-                            "Could not decode commit message for commit: {:?}",
-                            replacement_commit_oid,
-                        )
-                    })?;
 
+                    let replacement_commit = repo.find_commit_or_fail(*replacement_commit_oid)?;
+                    let replacement_tree = replacement_commit.get_tree()?;
+                    let replacement_message = replacement_commit.get_message_raw()?;
+                    let replacement_commit_message =
+                        replacement_message.to_str().with_context(|| {
+                            eyre::eyre!(
+                                "Could not decode commit message for replacement commit: {:?}",
+                                replacement_commit
+                            )
+                        })?;
+
+                    let replacement_commit_description = effects
+                        .get_glyphs()
+                        .render(replacement_commit.friendly_describe(effects.get_glyphs())?)?;
                     progress.notify_status(
                         OperationIcon::InProgress,
-                        format!("Committing to repository: {}", commit_description),
+                        format!(
+                            "Committing to repository: {}",
+                            replacement_commit_description
+                        ),
                     );
                     let committer_signature = if *preserve_timestamps {
-                        commit_to_apply.get_committer()
+                        replacement_commit.get_committer()
                     } else {
-                        commit_to_apply.get_committer().update_timestamp(*now)?
+                        replacement_commit.get_committer().update_timestamp(*now)?
                     };
                     let parents = {
-                        let mut result = vec![current_commit];
-                        for parent in commits_to_merge {
-                            let parent = match parent {
-                                OidOrLabel::Oid(oid) => repo.find_commit_or_fail(*oid)?,
+                        let mut result = Vec::new();
+                        for parent in parents {
+                            let parent_oid = match parent {
+                                OidOrLabel::Oid(oid) => *oid,
                                 OidOrLabel::Label(label) => {
                                     let oid = labels.get(label).ok_or_else(|| {
                                         eyre::eyre!(
                                             "Label {label} could not be resolved to a commit"
                                         )
                                     })?;
-                                    repo.find_commit_or_fail(*oid)?
+                                    *oid
                                 }
                             };
-                            result.push(parent);
+                            let parent_commit = repo.find_commit_or_fail(parent_oid)?;
+                            result.push(parent_commit);
                         }
                         result
                     };
                     let rebased_commit_oid = repo
                         .create_commit(
                             None,
-                            &commit_to_apply.get_author(),
+                            &replacement_commit.get_author(),
                             &committer_signature,
-                            commit_message,
-                            &commit_tree,
+                            replacement_commit_message,
+                            &replacement_tree,
                             parents.iter().collect(),
                         )
                         .wrap_err("Applying rebased commit")?;
@@ -1187,7 +1185,7 @@ pub fn execute_rebase_plan(
             "Attempting rebase in-memory..."
         )?;
 
-        match rebase_in_memory(effects, repo, rebase_plan, options)? {
+        let merge_conflict = match rebase_in_memory(effects, repo, rebase_plan, options)? {
             RebaseInMemoryResult::Succeeded {
                 rewritten_oids,
                 new_head_oid,
@@ -1229,6 +1227,7 @@ pub fn execute_rebase_plan(
                         repo.friendly_describe_commit_from_oid(effects.get_glyphs(), commit_oid)?
                     )?,
                 )?;
+                None
             }
 
             RebaseInMemoryResult::MergeConflict(merge_conflict) => {
@@ -1251,8 +1250,9 @@ pub fn execute_rebase_plan(
                         repo.friendly_describe_commit_from_oid(effects.get_glyphs(), commit_oid)?
                     )?,
                 )?;
+                Some(merge_conflict)
             }
-        }
+        };
 
         // The rebase has failed at this point, decide whether or not to try
         // again with an on-disk rebase.
@@ -1261,8 +1261,11 @@ pub fn execute_rebase_plan(
                 effects.get_output_stream(),
                 "Aborting since an in-memory rebase was requested."
             )?;
-            return Ok(ExecuteRebasePlanResult::Failed {
-                exit_code: ExitCode(1),
+            return Ok(match merge_conflict {
+                Some(merge_conflict) => ExecuteRebasePlanResult::DeclinedToMerge { merge_conflict },
+                None => ExecuteRebasePlanResult::Failed {
+                    exit_code: ExitCode(1),
+                },
             });
         } else {
             writeln!(effects.get_output_stream(), "Trying again on-disk...")?;

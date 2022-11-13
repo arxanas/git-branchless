@@ -4,22 +4,30 @@
 //! that are already tracked in the repo. Following the amend,
 //! the command performs a restack.
 
+use std::ffi::OsString;
 use std::fmt::Write;
-use std::time::SystemTime;
+use std::time::{SystemTime, UNIX_EPOCH};
 
+use eden_dag::DagAlgorithm;
 use eyre::Context;
 use itertools::Itertools;
-use lib::core::rewrite::MergeConflictRemediation;
+use lib::core::check_out::{check_out_commit, CheckOutCommitOptions, CheckoutTarget};
+use lib::core::dag::{CommitSet, Dag};
+use lib::core::gc::mark_commit_reachable;
+use lib::core::repo_ext::RepoExt;
+use lib::core::rewrite::{
+    execute_rebase_plan, BuildRebasePlanOptions, ExecuteRebasePlanOptions, ExecuteRebasePlanResult,
+    RebasePlanBuilder, RebasePlanPermissions, RepoResource,
+};
 use lib::util::ExitCode;
+use rayon::ThreadPoolBuilder;
 use tracing::instrument;
 
-use crate::commands::restack;
-use crate::opts::{MoveOptions, ResolveRevsetOptions, Revset};
+use crate::opts::{MoveOptions, ResolveRevsetOptions};
 use lib::core::config::get_restack_preserve_timestamps;
 use lib::core::effects::Effects;
-use lib::core::eventlog::{Event, EventLogDb};
+use lib::core::eventlog::{Event, EventLogDb, EventReplayer};
 use lib::core::formatting::Pluralize;
-use lib::core::gc::mark_commit_reachable;
 use lib::git::{AmendFastOptions, GitRunInfo, MaybeZeroOid, Repo, ResolvedReferenceInfo};
 
 /// Amends the existing HEAD commit.
@@ -35,6 +43,16 @@ pub fn amend(
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
+    let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
+    let event_cursor = event_replayer.make_default_cursor();
+    let references_snapshot = repo.get_references_snapshot()?;
+    let dag = Dag::open_and_sync(
+        effects,
+        &repo,
+        &event_replayer,
+        event_cursor,
+        &references_snapshot,
+    )?;
 
     let head_info = repo.get_head_info()?;
     let head_oid = match head_info.oid {
@@ -65,13 +83,13 @@ pub fn amend(
         let ResolvedReferenceInfo {
             oid,
             reference_name,
-        } = head_info;
+        } = &head_info;
         event_log_db.add_events(vec![Event::WorkingCopySnapshot {
             timestamp,
             event_tx_id,
-            head_oid: MaybeZeroOid::from(oid),
+            head_oid: MaybeZeroOid::from(*oid),
             commit_oid: snapshot.base_commit.get_oid(),
-            ref_name: reference_name,
+            ref_name: reference_name.clone(),
         }])?;
     }
 
@@ -120,7 +138,7 @@ pub fn amend(
     };
 
     let amended_commit_oid = head_commit.amend_commit(
-        Some("HEAD"),
+        None,
         Some(&author),
         Some(&committer),
         None,
@@ -129,32 +147,126 @@ pub fn amend(
     mark_commit_reachable(&repo, amended_commit_oid)
         .wrap_err("Marking commit as reachable for GC purposes.")?;
 
-    event_log_db.add_events(vec![Event::RewriteEvent {
-        timestamp,
-        event_tx_id,
-        old_commit_oid: head_oid.into(),
-        new_commit_oid: amended_commit_oid.into(),
-    }])?;
+    let rebase_plan = {
+        let build_options = BuildRebasePlanOptions {
+            force_rewrite_public_commits: move_options.force_rewrite_public_commits,
+            detect_duplicate_commits_via_patch_id: move_options
+                .detect_duplicate_commits_via_patch_id,
+            dump_rebase_constraints: move_options.dump_rebase_constraints,
+            dump_rebase_plan: move_options.dump_rebase_plan,
+        };
+        let commits_to_verify = dag.query().descendants(CommitSet::from(head_oid))?;
+        let commits_to_verify = dag.filter_visible_commits(commits_to_verify)?;
+        let permissions = match RebasePlanPermissions::verify_rewrite_set(
+            &dag,
+            &build_options,
+            &commits_to_verify,
+        )? {
+            Ok(permissions) => permissions,
+            Err(err) => {
+                err.describe(effects, &repo)?;
+                return Ok(ExitCode(1));
+            }
+        };
 
-    if let AmendFastOptions::FromWorkingCopy { .. } = opts {
-        // TODO(#201): Figure out a way to perform "fast amend" on the working copy without needing a reset.
-        let exit_code = git_run_info.run(effects, Some(event_tx_id), &["reset"])?;
-        if !exit_code.is_success() {
-            return Ok(exit_code);
+        let mut builder = RebasePlanBuilder::new(&dag, permissions);
+        builder.move_subtree(head_oid, head_commit.get_parent_oids())?;
+        builder.replace_commit(head_oid, amended_commit_oid)?;
+
+        let thread_pool = ThreadPoolBuilder::new().build()?;
+        let repo_pool = RepoResource::new_pool(&repo)?;
+        match builder.build(effects, &thread_pool, &repo_pool)? {
+            Ok(Some(rebase_plan)) => rebase_plan,
+            Ok(None) => {
+                unreachable!("A rebase plan should always be generated when amending a commit.");
+            }
+            Err(err) => {
+                err.describe(effects, &repo)?;
+                return Ok(ExitCode(1));
+            }
         }
-    }
+    };
 
-    let restack_exit_code = restack::restack(
+    let execute_options = ExecuteRebasePlanOptions {
+        now,
+        event_tx_id,
+        force_in_memory: true,
+        force_on_disk: false,
+        preserve_timestamps: get_restack_preserve_timestamps(&repo)?,
+        resolve_merge_conflicts: false,
+        check_out_commit_options: CheckOutCommitOptions {
+            additional_args: Default::default(),
+            reset: true,
+            render_smartlog: true,
+        },
+    };
+    let needs_merge = match execute_rebase_plan(
         effects,
         git_run_info,
-        vec![Revset(head_oid.to_string())],
-        resolve_revset_options,
-        move_options,
-        MergeConflictRemediation::Restack,
-    )?;
-    if !restack_exit_code.is_success() {
-        return Ok(restack_exit_code);
-    }
+        &repo,
+        &event_log_db,
+        &rebase_plan,
+        &execute_options,
+    )? {
+        ExecuteRebasePlanResult::Succeeded { rewritten_oids: _ } => false,
+        ExecuteRebasePlanResult::DeclinedToMerge {
+            merge_conflict: _, // `execute_rebase_plan` should have printed merge conflict info.
+        } => {
+            let checkout_args = match head_info {
+                ResolvedReferenceInfo {
+                    oid: _,
+                    reference_name: Some(reference_name),
+                } => vec![
+                    OsString::from("-B"),
+                    OsString::from(reference_name.as_str()),
+                ],
+                ResolvedReferenceInfo {
+                    oid: _,
+                    reference_name: None,
+                } => Vec::new(),
+            };
+
+            writeln!(
+                effects.get_output_stream(),
+                "This operation would cause a merge conflict, and --merge was not provided."
+            )?;
+            writeln!(
+                effects.get_output_stream(),
+                "Amending without rebasing descendants: {}",
+                effects
+                    .get_glyphs()
+                    .render(head_commit.friendly_describe(effects.get_glyphs())?)?
+            )?;
+
+            event_log_db.add_events(vec![Event::RewriteEvent {
+                timestamp: now.duration_since(UNIX_EPOCH)?.as_secs_f64(),
+                event_tx_id,
+                old_commit_oid: MaybeZeroOid::NonZero(head_oid),
+                new_commit_oid: MaybeZeroOid::NonZero(amended_commit_oid),
+            }])?;
+            let exit_code = check_out_commit(
+                effects,
+                git_run_info,
+                &repo,
+                &event_log_db,
+                event_tx_id,
+                Some(CheckoutTarget::Oid(amended_commit_oid)),
+                &CheckOutCommitOptions {
+                    additional_args: checkout_args,
+                    reset: false,
+                    render_smartlog: true,
+                },
+            )?;
+            if !exit_code.is_success() {
+                return Ok(exit_code);
+            }
+
+            true
+        }
+        ExecuteRebasePlanResult::Failed { exit_code } => {
+            return Ok(exit_code);
+        }
+    };
 
     match opts {
         AmendFastOptions::FromIndex { paths } => {
@@ -183,5 +295,13 @@ pub fn amend(
             )?;
         }
     }
+
+    if needs_merge {
+        writeln!(
+            effects.get_output_stream(),
+            "To resolve merge conflicts run: git restack --merge"
+        )?;
+    }
+
     Ok(ExitCode(0))
 }

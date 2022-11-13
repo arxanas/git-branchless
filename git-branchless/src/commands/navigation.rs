@@ -612,6 +612,7 @@ pub fn switch(
         target,
         &CheckOutCommitOptions {
             additional_args,
+            reset: false,
             render_smartlog: true,
         },
     )?;
