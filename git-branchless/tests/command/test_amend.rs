@@ -658,3 +658,290 @@ fn test_amend_undo_detached_head() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_amend_reparent() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+
+    git.detach_head()?;
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+    git.run(&["checkout", "HEAD~"])?;
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        @ 62fc20d create test1.txt
+        |
+        o 96d1c37 create test2.txt
+        "###);
+    }
+
+    git.write_file_txt("test2", "Conflicting contents\n")?;
+    git.run(&["add", "test2.txt"])?;
+    {
+        let (stdout, _stderr) = git.run(&["amend", "--reparent", "--debug-dump-rebase-plan"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        Rebase plan: Some(
+            RebasePlan {
+                first_dest_oid: NonZeroOid(f777ecc9b0db5ed372b2615695191a8a17f79f24),
+                commands: [
+                    Reset {
+                        target: Oid(
+                            NonZeroOid(f777ecc9b0db5ed372b2615695191a8a17f79f24),
+                        ),
+                    },
+                    Replace {
+                        commit_oid: NonZeroOid(62fc20d2a290daea0d52bdc2ed2ad4be6491010e),
+                        replacement_commit_oid: NonZeroOid(3d8543b87d55c5b7995935e18e05cb6c399fb526),
+                        parents: [
+                            Oid(
+                                NonZeroOid(f777ecc9b0db5ed372b2615695191a8a17f79f24),
+                            ),
+                        ],
+                    },
+                    CreateLabel {
+                        label_name: "parent-2",
+                    },
+                    Replace {
+                        commit_oid: NonZeroOid(96d1c37a3d4363611c49f7e52186e189a04c531f),
+                        replacement_commit_oid: NonZeroOid(96d1c37a3d4363611c49f7e52186e189a04c531f),
+                        parents: [
+                            Label(
+                                "parent-2",
+                            ),
+                        ],
+                    },
+                    RegisterExtraPostRewriteHook,
+                ],
+            },
+        )
+        Attempting rebase in-memory...
+        [1/2] Committed as: 3d8543b create test1.txt
+        [2/2] Committed as: e0d5305 create test2.txt
+        branchless: processing 2 rewritten commits
+        branchless: running command: <git-executable> reset 3d8543b87d55c5b7995935e18e05cb6c399fb526
+        branchless: running command: <git-executable> checkout 3d8543b87d55c5b7995935e18e05cb6c399fb526
+        O f777ecc (master) create initial.txt
+        |
+        @ 3d8543b create test1.txt
+        |
+        o e0d5305 create test2.txt
+        In-memory rebase succeeded.
+        Amended with 1 staged change.
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        @ 3d8543b create test1.txt
+        |
+        o e0d5305 create test2.txt
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["show"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        commit 3d8543b87d55c5b7995935e18e05cb6c399fb526
+        Author: Testy McTestface <test@example.com>
+        Date:   Thu Oct 29 12:34:56 2020 -0100
+
+            create test1.txt
+
+        diff --git a/test1.txt b/test1.txt
+        new file mode 100644
+        index 0000000..7432a8f
+        --- /dev/null
+        +++ b/test1.txt
+        @@ -0,0 +1 @@
+        +test1 contents
+        diff --git a/test2.txt b/test2.txt
+        new file mode 100644
+        index 0000000..9e172d3
+        --- /dev/null
+        +++ b/test2.txt
+        @@ -0,0 +1 @@
+        +Conflicting contents
+        "###);
+    }
+
+    git.run(&["next"])?;
+    {
+        let (stdout, _stderr) = git.run(&["show"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        commit e0d53059b0c1f7fa277f8206a3ec45b93d82ad4f
+        Author: Testy McTestface <test@example.com>
+        Date:   Thu Oct 29 12:34:56 2020 -0200
+
+            create test2.txt
+
+        diff --git a/test2.txt b/test2.txt
+        index 9e172d3..4e512d2 100644
+        --- a/test2.txt
+        +++ b/test2.txt
+        @@ -1 +1 @@
+        -Conflicting contents
+        +test2 contents
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_amend_reparent_merge() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+
+    git.detach_head()?;
+    git.commit_file("test1", 1)?;
+    let conflicting_oid = git.commit_file_with_contents("conflicting", 2, "contents 1\n")?;
+    let test3_oid = git.commit_file("test3", 3)?;
+
+    git.run(&["checkout", "master", "--detach"])?;
+    git.commit_file_with_contents("conflicting", 2, "contents 2\n")?;
+    git.run(&["merge", &test3_oid.to_string(), "--strategy-option=ours"])?;
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |\
+        | o 62fc20d create test1.txt
+        | |
+        | o 292c9a0 create conflicting.txt
+        | |
+        | o 402c2e6 create test3.txt
+        | & (merge) 90403aa Merge commit '402c2e6c16e2861d57d7fb6a20cbc5559bd00d44' into HEAD
+        |
+        o 7ec39c7 create conflicting.txt
+        |
+        | & (merge) 402c2e6 create test3.txt
+        |/
+        @ 90403aa Merge commit '402c2e6c16e2861d57d7fb6a20cbc5559bd00d44' into HEAD
+        "###);
+    }
+    {
+        let (stdout, _stderr) = git.run(&["diff", "HEAD^^"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        diff --git a/conflicting.txt b/conflicting.txt
+        new file mode 100644
+        index 0000000..076e8e3
+        --- /dev/null
+        +++ b/conflicting.txt
+        @@ -0,0 +1 @@
+        +contents 2
+        diff --git a/test1.txt b/test1.txt
+        new file mode 100644
+        index 0000000..7432a8f
+        --- /dev/null
+        +++ b/test1.txt
+        @@ -0,0 +1 @@
+        +test1 contents
+        diff --git a/test3.txt b/test3.txt
+        new file mode 100644
+        index 0000000..a474f4e
+        --- /dev/null
+        +++ b/test3.txt
+        @@ -0,0 +1 @@
+        +test3 contents
+        "###);
+    }
+
+    git.run(&["checkout", &conflicting_oid.to_string()])?;
+    git.write_file_txt("conflicting", "contents 3\n")?;
+    {
+        let (stdout, _stderr) = git.run(&["amend", "--reparent", "--debug-dump-rebase-plan"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        Rebase plan: Some(
+            RebasePlan {
+                first_dest_oid: NonZeroOid(62fc20d2a290daea0d52bdc2ed2ad4be6491010e),
+                commands: [
+                    Reset {
+                        target: Oid(
+                            NonZeroOid(62fc20d2a290daea0d52bdc2ed2ad4be6491010e),
+                        ),
+                    },
+                    Replace {
+                        commit_oid: NonZeroOid(292c9a0b6d1833452eec2839ba2d7f02e1752fe3),
+                        replacement_commit_oid: NonZeroOid(d517a648915434edf38114da4efd820ec6f513cf),
+                        parents: [
+                            Oid(
+                                NonZeroOid(62fc20d2a290daea0d52bdc2ed2ad4be6491010e),
+                            ),
+                        ],
+                    },
+                    CreateLabel {
+                        label_name: "parent-2",
+                    },
+                    Replace {
+                        commit_oid: NonZeroOid(402c2e6c16e2861d57d7fb6a20cbc5559bd00d44),
+                        replacement_commit_oid: NonZeroOid(402c2e6c16e2861d57d7fb6a20cbc5559bd00d44),
+                        parents: [
+                            Label(
+                                "parent-2",
+                            ),
+                        ],
+                    },
+                    CreateLabel {
+                        label_name: "parent-4",
+                    },
+                    Reset {
+                        target: Oid(
+                            NonZeroOid(7ec39c7da50fc25deeea3318d937e1005de2a047),
+                        ),
+                    },
+                    Replace {
+                        commit_oid: NonZeroOid(90403aa2d53c65bce0805026a2bb4a0934587bbe),
+                        replacement_commit_oid: NonZeroOid(90403aa2d53c65bce0805026a2bb4a0934587bbe),
+                        parents: [
+                            Oid(
+                                NonZeroOid(7ec39c7da50fc25deeea3318d937e1005de2a047),
+                            ),
+                            Label(
+                                "parent-4",
+                            ),
+                        ],
+                    },
+                    Reset {
+                        target: Oid(
+                            NonZeroOid(7ec39c7da50fc25deeea3318d937e1005de2a047),
+                        ),
+                    },
+                    RegisterExtraPostRewriteHook,
+                ],
+            },
+        )
+        Attempting rebase in-memory...
+        [1/3] Committed as: d517a64 create conflicting.txt
+        [2/3] Committed as: 99a19d2 create test3.txt
+        [3/3] Committed as: f66b478 Merge commit '402c2e6c16e2861d57d7fb6a20cbc5559bd00d44' into HEAD
+        branchless: processing 3 rewritten commits
+        branchless: running command: <git-executable> reset d517a648915434edf38114da4efd820ec6f513cf
+        branchless: running command: <git-executable> checkout d517a648915434edf38114da4efd820ec6f513cf
+        O f777ecc (master) create initial.txt
+        |\
+        | o 62fc20d create test1.txt
+        | |
+        | @ d517a64 create conflicting.txt
+        | |
+        | o 99a19d2 create test3.txt
+        | & (merge) f66b478 Merge commit '402c2e6c16e2861d57d7fb6a20cbc5559bd00d44' into HEAD
+        |
+        o 7ec39c7 create conflicting.txt
+        |
+        | & (merge) 99a19d2 create test3.txt
+        |/
+        o f66b478 Merge commit '402c2e6c16e2861d57d7fb6a20cbc5559bd00d44' into HEAD
+        In-memory rebase succeeded.
+        Amended with 1 uncommitted change.
+        "###);
+    }
+
+    Ok(())
+}

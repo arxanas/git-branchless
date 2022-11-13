@@ -4,6 +4,7 @@
 //! that are already tracked in the repo. Following the amend,
 //! the command performs a restack.
 
+use std::convert::TryFrom;
 use std::ffi::OsString;
 use std::fmt::Write;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -25,10 +26,13 @@ use tracing::instrument;
 
 use crate::opts::{MoveOptions, ResolveRevsetOptions};
 use lib::core::config::get_restack_preserve_timestamps;
+use lib::core::dag::commit_set_to_vec;
 use lib::core::effects::Effects;
 use lib::core::eventlog::{Event, EventLogDb, EventReplayer};
 use lib::core::formatting::Pluralize;
-use lib::git::{AmendFastOptions, GitRunInfo, MaybeZeroOid, Repo, ResolvedReferenceInfo};
+use lib::git::{
+    AmendFastOptions, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo, ResolvedReferenceInfo,
+};
 
 /// Amends the existing HEAD commit.
 #[instrument]
@@ -37,6 +41,7 @@ pub fn amend(
     git_run_info: &GitRunInfo,
     resolve_revset_options: &ResolveRevsetOptions,
     move_options: &MoveOptions,
+    reparent: bool,
 ) -> eyre::Result<ExitCode> {
     let now = SystemTime::now();
     let timestamp = now.duration_since(SystemTime::UNIX_EPOCH)?.as_secs_f64();
@@ -46,7 +51,7 @@ pub fn amend(
     let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
     let event_cursor = event_replayer.make_default_cursor();
     let references_snapshot = repo.get_references_snapshot()?;
-    let dag = Dag::open_and_sync(
+    let mut dag = Dag::open_and_sync(
         effects,
         &repo,
         &event_replayer,
@@ -75,6 +80,21 @@ pub fn amend(
         )?;
         return Ok(ExitCode(1));
     }
+
+    let build_options = BuildRebasePlanOptions {
+        force_rewrite_public_commits: move_options.force_rewrite_public_commits,
+        dump_rebase_constraints: move_options.dump_rebase_constraints,
+        dump_rebase_plan: move_options.dump_rebase_plan,
+        detect_duplicate_commits_via_patch_id: move_options.detect_duplicate_commits_via_patch_id,
+    };
+    let commits_to_verify = dag.query().descendants(CommitSet::from(head_oid))?;
+    let commits_to_verify = dag.filter_visible_commits(commits_to_verify)?;
+    if let Err(err) =
+        RebasePlanPermissions::verify_rewrite_set(&dag, &build_options, &commits_to_verify)?
+    {
+        err.describe(effects, &repo)?;
+        return Ok(ExitCode(1));
+    };
 
     let event_tx_id = event_log_db.make_transaction_id(now, "amend")?;
     let (snapshot, status) =
@@ -146,6 +166,12 @@ pub fn amend(
     )?;
     mark_commit_reachable(&repo, amended_commit_oid)
         .wrap_err("Marking commit as reachable for GC purposes.")?;
+    dag.sync_from_oids(
+        effects,
+        &repo,
+        CommitSet::empty(),
+        CommitSet::from(amended_commit_oid),
+    )?;
 
     let rebase_plan = {
         let build_options = BuildRebasePlanOptions {
@@ -172,6 +198,28 @@ pub fn amend(
         let mut builder = RebasePlanBuilder::new(&dag, permissions);
         builder.move_subtree(head_oid, head_commit.get_parent_oids())?;
         builder.replace_commit(head_oid, amended_commit_oid)?;
+
+        // To keep the contents of all descendant commits the same, forcibly
+        // replace the children commits, and then rely on normal patch
+        // application to apply the rest.
+        if reparent {
+            let descendants = dag
+                .query()
+                .descendants(CommitSet::from(head_oid))?
+                .difference(&CommitSet::from(head_oid));
+            let descendants = dag.filter_visible_commits(descendants)?;
+            for descendant_oid in commit_set_to_vec(&descendants)? {
+                let parents = dag.query().parent_names(descendant_oid.into())?;
+                builder.move_subtree(
+                    descendant_oid,
+                    parents
+                        .into_iter()
+                        .map(NonZeroOid::try_from)
+                        .try_collect()?,
+                )?;
+                builder.replace_commit(descendant_oid, descendant_oid)?;
+            }
+        }
 
         let thread_pool = ThreadPoolBuilder::new().build()?;
         let repo_pool = RepoResource::new_pool(&repo)?;

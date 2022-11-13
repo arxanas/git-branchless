@@ -177,6 +177,12 @@ pub enum Command {
         /// Options for moving commits.
         #[clap(flatten)]
         move_options: MoveOptions,
+
+        /// Modify the contents of the current HEAD commit, but keep all contents of descendant
+        /// commits exactly the same (i.e. "reparent" them). This can be useful when applying
+        /// formatting or refactoring changes.
+        #[clap(long)]
+        reparent: bool,
     },
 
     /// Gather information about recent operations to upload as part of a bug
