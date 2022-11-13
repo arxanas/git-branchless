@@ -145,7 +145,7 @@ impl<'repo> Commit<'repo> {
     pub fn get_trailers(&self) -> Result<Vec<(String, String)>> {
         let message = self.get_message_raw()?;
         let message = message.to_str().map_err(|_| Error::DecodeUtf8 {
-            item: "raw messgae",
+            item: "raw message",
         })?;
         let mut result = Vec::new();
         for (k, v) in message_trailers_bytes(message)
