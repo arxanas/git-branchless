@@ -1141,24 +1141,32 @@ fn make_test_files(
     }
 
     if let Ok(contents) = std::fs::read_to_string(&result_path) {
-        let serialized_result: Result<SerializedTestResult, _> = serde_json::from_str(&contents);
-        let test_status = match serialized_result {
-            Ok(SerializedTestResult {
-                command: _,
-                exit_code: 0,
-            }) => TestStatus::PassedCached,
-            Ok(SerializedTestResult {
-                command: _,
-                exit_code,
-            }) => TestStatus::FailedCached(exit_code),
-            Err(err) => TestStatus::ReadCacheFailed(err.to_string()),
-        };
-        return Ok(TestFilesResult::Cached(TestOutput {
-            _result_path: result_path,
-            stdout_path,
-            stderr_path,
-            test_status,
-        }));
+        // If the file exists but was empty, this indicates that a previous
+        // attempt did not complete successfully. However, we successfully took
+        // the lock, so it should be the case that we are the exclusive writers
+        // to the contents of this directory (i.e. the previous attempt is not
+        // still running), so it's safe to proceed and overwrite these files.
+        if !contents.is_empty() {
+            let serialized_result: Result<SerializedTestResult, _> =
+                serde_json::from_str(&contents);
+            let test_status = match serialized_result {
+                Ok(SerializedTestResult {
+                    command: _,
+                    exit_code: 0,
+                }) => TestStatus::PassedCached,
+                Ok(SerializedTestResult {
+                    command: _,
+                    exit_code,
+                }) => TestStatus::FailedCached(exit_code),
+                Err(err) => TestStatus::ReadCacheFailed(err.to_string()),
+            };
+            return Ok(TestFilesResult::Cached(TestOutput {
+                _result_path: result_path,
+                stdout_path,
+                stderr_path,
+                test_status,
+            }));
+        }
     }
 
     let result_file = File::create(&result_path)
