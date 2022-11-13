@@ -723,6 +723,7 @@ fn extract_checkout_target(
                     target: CheckoutTarget::Oid(*new_oid),
                     options: CheckOutCommitOptions {
                         additional_args: vec!["--detach".into()],
+                        reset: false,
                         render_smartlog: true,
                     },
                 });
@@ -745,6 +746,7 @@ fn extract_checkout_target(
                             }
                             None => Default::default(),
                         },
+                        reset: false,
                         render_smartlog: true,
                     },
                 })
@@ -1062,6 +1064,7 @@ mod tests {
                         additional_args: [
                             "--detach",
                         ],
+                        reset: false,
                         render_smartlog: true,
                     },
                 },

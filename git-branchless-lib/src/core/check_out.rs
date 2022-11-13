@@ -43,6 +43,10 @@ pub struct CheckOutCommitOptions {
     /// Additional arguments to pass to `git checkout`.
     pub additional_args: Vec<OsString>,
 
+    /// Use `git reset` rather than `git checkout`; that is, leave the index and
+    /// working copy unchanged, and just adjust the `HEAD` pointer.
+    pub reset: bool,
+
     /// Whether or not to render the smartlog after the checkout has completed.
     pub render_smartlog: bool,
 }
@@ -51,6 +55,7 @@ impl Default for CheckOutCommitOptions {
     fn default() -> Self {
         Self {
             additional_args: Default::default(),
+            reset: false,
             render_smartlog: true,
         }
     }
@@ -104,6 +109,7 @@ pub fn check_out_commit(
 ) -> eyre::Result<ExitCode> {
     let CheckOutCommitOptions {
         additional_args,
+        reset,
         render_smartlog,
     } = options;
 
@@ -126,7 +132,17 @@ pub fn check_out_commit(
     } else {
         target
     };
-    let args = {
+
+    if *reset {
+        if let Some(target) = &target {
+            let exit_code = git_run_info.run(effects, Some(event_tx_id), &["reset", target])?;
+            if !exit_code.is_success() {
+                return Ok(exit_code);
+            }
+        }
+    }
+
+    let checkout_args = {
         let mut args = vec![OsStr::new("checkout")];
         if let Some(target) = &target {
             args.push(OsStr::new(target.as_str()));
@@ -134,8 +150,7 @@ pub fn check_out_commit(
         args.extend(additional_args.iter().map(OsStr::new));
         args
     };
-    let exit_code = git_run_info.run(effects, Some(event_tx_id), args.as_slice())?;
-
+    let exit_code = git_run_info.run(effects, Some(event_tx_id), checkout_args.as_slice())?;
     if !exit_code.is_success() {
         writeln!(
             effects.get_output_stream(),

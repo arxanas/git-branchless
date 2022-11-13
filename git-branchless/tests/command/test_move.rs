@@ -3643,14 +3643,18 @@ fn test_move_merge_commit() -> eyre::Result<()> {
                             commit_oid: NonZeroOid(fe65c1fe15584744e649b2c79d4cf9b0d878f92e),
                         },
                         CreateLabel {
-                            label_name: "merge-parent-3",
+                            label_name: "parent-3",
+                        },
+                        Reset {
+                            target: Oid(
+                                NonZeroOid(98b9119d16974f372e76cb64a3b77c528fc0b18b),
+                            ),
                         },
                         Merge {
-                            replacement_commit_oid: None,
                             commit_oid: NonZeroOid(28790c73f13f38ce0d3beb6cfeb2d818b32bcd09),
                             commits_to_merge: [
-                                Oid(
-                                    NonZeroOid(98b9119d16974f372e76cb64a3b77c528fc0b18b),
+                                Label(
+                                    "parent-3",
                                 ),
                             ],
                         },
@@ -3667,29 +3671,30 @@ fn test_move_merge_commit() -> eyre::Result<()> {
             branchless: processing 1 update: ref HEAD
             branchless: processed commit: 96d1c37 create test2.txt
             Executing: git branchless hook-detect-empty-commit fe65c1fe15584744e649b2c79d4cf9b0d878f92e
-            branchless: processing 1 update: ref refs/rewritten/merge-parent-3
+            branchless: processing 1 update: ref refs/rewritten/parent-3
+            branchless: processing 1 update: ref HEAD
             Executing: git branchless hook-register-extra-post-rewrite-hook
             branchless: processing 2 rewritten commits
             branchless: creating working copy snapshot
             branchless: running command: <git-executable> checkout 98b9119d16974f372e76cb64a3b77c528fc0b18b
-            Previous HEAD position was 96a2c4b Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
+            Previous HEAD position was 5a6a761 Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
             branchless: processing 1 update: ref HEAD
             HEAD is now at 98b9119 create test3.txt
             branchless: processing checkout
             O f777ecc create initial.txt
             |\
             | @ 98b9119 create test3.txt
-            | & (merge) 96a2c4b Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
+            | |
+            | | & (merge) 96d1c37 create test2.txt
+            | |/
+            | o 5a6a761 Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
             |
             O 62fc20d (master) create test1.txt
             |
             o 96d1c37 create test2.txt
-            |
-            | & (merge) 98b9119 create test3.txt
-            |/
-            o 96a2c4b Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
+            & (merge) 5a6a761 Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
             Successfully rebased and updated detached HEAD.
-            branchless: processing 1 update: ref refs/rewritten/merge-parent-3
+            branchless: processing 1 update: ref refs/rewritten/parent-3
             "###);
         }
 
@@ -3699,15 +3704,15 @@ fn test_move_merge_commit() -> eyre::Result<()> {
             O f777ecc create initial.txt
             |\
             | @ 98b9119 create test3.txt
-            | & (merge) 96a2c4b Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
+            | |
+            | | & (merge) 96d1c37 create test2.txt
+            | |/
+            | o 5a6a761 Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
             |
             O 62fc20d (master) create test1.txt
             |
             o 96d1c37 create test2.txt
-            |
-            | & (merge) 98b9119 create test3.txt
-            |/
-            o 96a2c4b Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
+            & (merge) 5a6a761 Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
             "###);
         }
     }
@@ -3759,29 +3764,30 @@ fn test_move_merge_commit() -> eyre::Result<()> {
             branchless: processing 1 update: ref HEAD
             branchless: processed commit: 96d1c37 create test2.txt
             Executing: git branchless hook-detect-empty-commit fe65c1fe15584744e649b2c79d4cf9b0d878f92e
-            branchless: processing 1 update: ref refs/rewritten/merge-parent-3
+            branchless: processing 1 update: ref refs/rewritten/parent-3
+            branchless: processing 1 update: ref HEAD
             Executing: git branchless hook-register-extra-post-rewrite-hook
             branchless: processing 2 rewritten commits
             branchless: creating working copy snapshot
             branchless: running command: <git-executable> checkout 98b9119d16974f372e76cb64a3b77c528fc0b18b
-            Previous HEAD position was 96a2c4b Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
+            Previous HEAD position was 5a6a761 Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
             branchless: processing 1 update: ref HEAD
             HEAD is now at 98b9119 create test3.txt
             branchless: processing checkout
             O f777ecc create initial.txt
             |\
             | @ 98b9119 create test3.txt
-            | & (merge) 96a2c4b Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
+            | |
+            | | & (merge) 96d1c37 create test2.txt
+            | |/
+            | o 5a6a761 Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
             |
             O 62fc20d (master) create test1.txt
             |
             o 96d1c37 create test2.txt
-            |
-            | & (merge) 98b9119 create test3.txt
-            |/
-            o 96a2c4b Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
+            & (merge) 5a6a761 Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
             Successfully rebased and updated detached HEAD.
-            branchless: processing 1 update: ref refs/rewritten/merge-parent-3
+            branchless: processing 1 update: ref refs/rewritten/parent-3
             "###);
         }
 
@@ -3791,15 +3797,15 @@ fn test_move_merge_commit() -> eyre::Result<()> {
             O f777ecc create initial.txt
             |\
             | @ 98b9119 create test3.txt
-            | & (merge) 96a2c4b Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
+            | |
+            | | & (merge) 96d1c37 create test2.txt
+            | |/
+            | o 5a6a761 Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
             |
             O 62fc20d (master) create test1.txt
             |
             o 96d1c37 create test2.txt
-            |
-            | & (merge) 98b9119 create test3.txt
-            |/
-            o 96a2c4b Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
+            & (merge) 5a6a761 Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
             "###);
         }
     }

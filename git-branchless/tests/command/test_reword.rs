@@ -582,18 +582,38 @@ fn test_reword_merge_commit() -> eyre::Result<()> {
     }
 
     {
+        let (stdout, _stderr) = git.run(&["diff", "master"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        diff --git a/test2.txt b/test2.txt
+        new file mode 100644
+        index 0000000..4e512d2
+        --- /dev/null
+        +++ b/test2.txt
+        @@ -0,0 +1 @@
+        +test2 contents
+        diff --git a/test3.txt b/test3.txt
+        new file mode 100644
+        index 0000000..a474f4e
+        --- /dev/null
+        +++ b/test3.txt
+        @@ -0,0 +1 @@
+        +test3 contents
+        "###);
+    }
+
+    {
         let (stdout, _stderr) = git.run(&["reword", "draft()", "-m", "new message 2"])?;
         insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
         [1/3] Committed as: 11f31c5 new message 2
         [2/3] Committed as: 800dd6c new message 2
-        [3/3] Committed as: 8d2bc36 new message 2
+        [3/3] Committed as: 930244c new message 2
         branchless: processing 3 rewritten commits
-        branchless: running command: <git-executable> checkout 8d2bc36ad06b0f66768684ce9e926fcd254d9d39
+        branchless: running command: <git-executable> checkout 930244cad08ebb6278b3b606c45a6848dcc5cc74
         In-memory rebase succeeded.
         Reworded commit 96d1c37 as 800dd6c new message 2
         Reworded commit 4838e49 as 11f31c5 new message 2
-        Reworded commit 2fc54bd as 8d2bc36 new message 2
+        Reworded commit 2fc54bd as 930244c new message 2
         Reworded 3 commits. If this was unintentional, run: git undo
         "###);
     }
@@ -605,13 +625,33 @@ fn test_reword_merge_commit() -> eyre::Result<()> {
         O 62fc20d (master) create test1.txt
         |\
         | o 800dd6c new message 2
-        | |
-        | | & (merge) 11f31c5 new message 2
-        | |/
-        | @ 8d2bc36 new message 2
+        | & (merge) 930244c new message 2
         |
         o 11f31c5 new message 2
-        & (merge) 8d2bc36 new message 2
+        |
+        | & (merge) 800dd6c new message 2
+        |/
+        @ 930244c new message 2
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["diff", "master"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        diff --git a/test2.txt b/test2.txt
+        new file mode 100644
+        index 0000000..4e512d2
+        --- /dev/null
+        +++ b/test2.txt
+        @@ -0,0 +1 @@
+        +test2 contents
+        diff --git a/test3.txt b/test3.txt
+        new file mode 100644
+        index 0000000..a474f4e
+        --- /dev/null
+        +++ b/test3.txt
+        @@ -0,0 +1 @@
+        +test3 contents
         "###);
     }
 
