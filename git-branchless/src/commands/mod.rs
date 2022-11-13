@@ -384,6 +384,11 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
         )?,
 
         Command::Test { subcommand } => match subcommand {
+            TestSubcommand::Clean {
+                revset,
+                resolve_revset_options,
+            } => test::clean(&effects, revset, &resolve_revset_options)?,
+
             TestSubcommand::Run {
                 exec: command,
                 command: command_alias,
@@ -424,11 +429,6 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
                 revset,
                 &resolve_revset_options,
             )?,
-
-            TestSubcommand::Clean {
-                revset,
-                resolve_revset_options,
-            } => test::clean(&effects, revset, &resolve_revset_options)?,
         },
 
         Command::Undo { interactive, yes } => {

@@ -658,6 +658,17 @@ pub enum SnapshotSubcommand {
 /// `test` subcommands.
 #[derive(Parser)]
 pub enum TestSubcommand {
+    /// Clean any cached test results.
+    Clean {
+        /// The set of commits whose results should be cleaned.
+        #[clap(value_parser, default_value = "stack()")]
+        revset: Revset,
+
+        /// Options for resolving revset expressions.
+        #[clap(flatten)]
+        resolve_revset_options: ResolveRevsetOptions,
+    },
+
     /// Run a given command on a set of commits and present the successes and failures.
     Run {
         /// An ad-hoc command to execute on each commit.
@@ -712,17 +723,6 @@ pub enum TestSubcommand {
         /// Show the test output as well.
         #[clap(short = 'v', long = "verbose", action = clap::ArgAction::Count)]
         verbosity: u8,
-    },
-
-    /// Clean any cached test results.
-    Clean {
-        /// The set of commits whose results should be cleaned.
-        #[clap(value_parser, default_value = "stack()")]
-        revset: Revset,
-
-        /// Options for resolving revset expressions.
-        #[clap(flatten)]
-        resolve_revset_options: ResolveRevsetOptions,
     },
 }
 
