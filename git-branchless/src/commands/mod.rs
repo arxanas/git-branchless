@@ -135,11 +135,15 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
     }
 
     let ExitCode(exit_code) = match command {
-        Command::Amend { move_options } => amend::amend(
+        Command::Amend {
+            move_options,
+            reparent,
+        } => amend::amend(
             &effects,
             &git_run_info,
             &ResolveRevsetOptions::default(),
             &move_options,
+            reparent,
         )?,
 
         Command::BugReport => bug_report::bug_report(&effects, &git_run_info)?,
