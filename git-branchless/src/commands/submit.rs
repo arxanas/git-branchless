@@ -10,8 +10,8 @@ use lib::core::repo_ext::RepoExt;
 use lib::git::{Branch, BranchType, CategorizedReferenceName, ConfigRead, GitRunInfo, Repo};
 use lib::util::ExitCode;
 
-use crate::revset::resolve_commits;
 use git_branchless_opts::{ResolveRevsetOptions, Revset};
+use git_branchless_revset::resolve_commits;
 
 pub fn submit(
     effects: &Effects,

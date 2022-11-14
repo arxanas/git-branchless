@@ -31,8 +31,8 @@ use lib::core::rewrite::{
 };
 use lib::git::{message_prettify, Commit, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo};
 
-use crate::revset::resolve_commits;
 use git_branchless_opts::{ResolveRevsetOptions, Revset};
+use git_branchless_revset::resolve_commits;
 
 /// The commit message(s) provided by the user.
 #[derive(Debug)]

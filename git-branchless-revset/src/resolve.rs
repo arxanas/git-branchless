@@ -1,18 +1,17 @@
 use std::fmt::Write;
 
 use eyre::WrapErr;
+use git_branchless_opts::{ResolveRevsetOptions, Revset};
 use lib::core::dag::{CommitSet, Dag};
 use lib::core::effects::Effects;
 use lib::git::Repo;
 use thiserror::Error;
 use tracing::instrument;
 
-use crate::revset::Expr;
-use git_branchless_opts::{ResolveRevsetOptions, Revset};
-
-use super::eval::EvalError;
-use super::parser::ParseError;
-use super::{eval, parse};
+use crate::eval::EvalError;
+use crate::parser::ParseError;
+use crate::Expr;
+use crate::{eval, parse};
 
 /// The result of attempting to resolve commits.
 #[allow(clippy::enum_variant_names)]

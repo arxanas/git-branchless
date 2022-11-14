@@ -12,8 +12,8 @@ use lib::core::repo_ext::RepoExt;
 use lib::util::ExitCode;
 use rayon::{ThreadPool, ThreadPoolBuilder};
 
-use crate::revset::{check_revset_syntax, resolve_commits};
 use git_branchless_opts::{MoveOptions, ResolveRevsetOptions, Revset};
+use git_branchless_revset::{check_revset_syntax, resolve_commits};
 use lib::core::config::get_restack_preserve_timestamps;
 use lib::core::dag::{commit_set_to_vec, sorted_commit_set, union_all, CommitSet, Dag};
 use lib::core::effects::{Effects, OperationType};

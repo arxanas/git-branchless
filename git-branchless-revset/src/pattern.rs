@@ -18,9 +18,8 @@ use rayon::prelude::{ParallelBridge, ParallelIterator};
 use regex::Regex;
 use thiserror::Error;
 
-use crate::revset::eval::make_dag_backend_error;
-
-use super::eval::{Context, EvalError};
+use crate::eval::make_dag_backend_error;
+use crate::eval::{Context, EvalError};
 
 pub(super) enum Pattern {
     Exact(String),

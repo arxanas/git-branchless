@@ -1130,6 +1130,7 @@ dependencies = [
  "fslock",
  "git-branchless-lib",
  "git-branchless-opts",
+ "git-branchless-revset",
  "git-record",
  "glob",
  "insta",
@@ -1196,11 +1197,35 @@ dependencies = [
 
 [[package]]
 name = "git-branchless-opts"
-version = "0.6.0-rc.1"
+version = "0.7.0-pre.1"
 dependencies = [
  "clap 4.0.27",
  "clap_mangen",
  "git-branchless-lib",
+]
+
+[[package]]
+name = "git-branchless-revset"
+version = "0.7.0-pre.1"
+dependencies = [
+ "bstr",
+ "chrono",
+ "chrono-english",
+ "chronoutil",
+ "esl01-dag",
+ "eyre",
+ "git-branchless-lib",
+ "git-branchless-opts",
+ "glob",
+ "insta",
+ "itertools 0.10.5",
+ "lalrpop",
+ "lalrpop-util",
+ "lazy_static",
+ "rayon",
+ "regex",
+ "thiserror",
+ "tracing",
 ]
 
 [[package]]

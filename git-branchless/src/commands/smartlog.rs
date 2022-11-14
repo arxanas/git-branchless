@@ -28,7 +28,7 @@ use lib::git::{GitRunInfo, Repo};
 pub use graph::{make_smartlog_graph, SmartlogGraph};
 pub use render::{render_graph, SmartlogOptions};
 
-use crate::revset::resolve_commits;
+use git_branchless_revset::resolve_commits;
 
 mod graph {
     use std::collections::HashMap;

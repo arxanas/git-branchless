@@ -30,8 +30,8 @@ use lib::util::{get_sh, ExitCode};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, instrument};
 
-use crate::revset::resolve_commits;
 use git_branchless_opts::{ResolveRevsetOptions, Revset, TestExecutionStrategy};
+use git_branchless_revset::resolve_commits;
 
 lazy_static! {
     static ref STYLE_SUCCESS: Style =

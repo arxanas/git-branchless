@@ -9,6 +9,7 @@ members = [
     "git-branchless",
     "git-branchless-lib",
     "git-branchless-opts",
+    "git-branchless-revset",
     "git-record",
 ]
 

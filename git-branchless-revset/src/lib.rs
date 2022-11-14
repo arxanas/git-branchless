@@ -1,6 +1,10 @@
 //! Parser and evaluator for a "revset"-like language, as in Mercurial and
 //! Jujutsu.
 
+#![warn(missing_docs)]
+#![warn(clippy::all, clippy::as_conversions, clippy::clone_on_ref_ptr)]
+#![allow(clippy::too_many_arguments, clippy::blocks_in_if_conditions)]
+
 mod ast;
 mod builtins;
 mod eval;
@@ -17,5 +21,5 @@ use lalrpop_util::lalrpop_mod;
 lalrpop_mod!(
     #[allow(clippy::all, clippy::as_conversions)]
     grammar,
-    "/revset/grammar.rs"
+    "/grammar.rs"
 );

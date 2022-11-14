@@ -12,13 +12,12 @@ use tracing::{instrument, warn};
 use eyre::Context as EyreContext;
 use lazy_static::lazy_static;
 
-use crate::revset::pattern::{PatternError, PatternMatcher};
-
-use super::eval::{
+use crate::eval::{
     eval0, eval0_or_1, eval1, eval1_pattern, eval2, eval_number_rhs, Context, EvalError, EvalResult,
 };
-use super::pattern::make_pattern_matcher_set;
-use super::Expr;
+use crate::pattern::make_pattern_matcher_set;
+use crate::pattern::{PatternError, PatternMatcher};
+use crate::Expr;
 
 type FnType = &'static (dyn Fn(&mut Context, &str, &[Expr]) -> EvalResult + Sync);
 lazy_static! {
