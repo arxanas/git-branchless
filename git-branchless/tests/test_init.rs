@@ -1,14 +1,14 @@
+pub mod util;
+
 use std::collections::HashMap;
-
-use regex::Regex;
-
-use crate::util::trim_lines;
 
 use eyre::Context;
 use lib::git::GitVersion;
 use lib::testing::{
     make_git, make_git_worktree, GitInitOptions, GitRunOptions, GitWorktreeWrapper,
 };
+use regex::Regex;
+use util::trim_lines;
 
 #[test]
 fn test_hook_installed() -> eyre::Result<()> {

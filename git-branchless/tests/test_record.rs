@@ -1,5 +1,7 @@
-use crate::util::{run_in_pty, PtyAction};
+pub mod util;
+
 use lib::testing::{make_git, GitInitOptions, GitRunOptions};
+use util::{run_in_pty, PtyAction};
 
 #[test]
 fn test_record_unstaged_changes() -> eyre::Result<()> {

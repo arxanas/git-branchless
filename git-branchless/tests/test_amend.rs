@@ -780,7 +780,7 @@ fn test_amend_reparent() -> eyre::Result<()> {
         o 96d1c37 create test2.txt
         "###);
     }
-
+    // TODO 2
     git.write_file_txt("test2", "Conflicting contents\n")?;
     git.run(&["add", "test2.txt"])?;
     {
