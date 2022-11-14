@@ -8,6 +8,7 @@ default-members = ["git-branchless"]
 members = [
     "git-branchless",
     "git-branchless-lib",
+    "git-branchless-move",
     "git-branchless-opts",
     "git-branchless-revset",
     "git-record",

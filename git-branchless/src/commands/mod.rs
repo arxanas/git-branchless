@@ -6,7 +6,6 @@ mod gc;
 mod hide;
 mod hooks;
 mod init;
-mod r#move;
 mod navigation;
 mod query;
 mod record;
@@ -243,7 +242,7 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
             resolve_revset_options,
             move_options,
             insert,
-        } => r#move::r#move(
+        } => git_branchless_move::r#move(
             &effects,
             &git_run_info,
             source,
