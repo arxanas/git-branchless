@@ -10,7 +10,7 @@ use itertools::Itertools;
 use path_slash::PathExt;
 use tracing::{instrument, warn};
 
-use crate::opts::write_man_pages;
+use git_branchless_opts::write_man_pages;
 use lib::core::config::{get_core_hooks_path, get_default_branch_name};
 use lib::core::dag::Dag;
 use lib::core::effects::Effects;

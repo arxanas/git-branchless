@@ -7,8 +7,8 @@ use lib::git::Repo;
 use thiserror::Error;
 use tracing::instrument;
 
-use crate::opts::{ResolveRevsetOptions, Revset};
 use crate::revset::Expr;
+use git_branchless_opts::{ResolveRevsetOptions, Revset};
 
 use super::eval::EvalError;
 use super::parser::ParseError;

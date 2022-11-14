@@ -10,8 +10,8 @@ use lib::git::{CategorizedReferenceName, GitRunInfo, Repo};
 use lib::util::ExitCode;
 use tracing::instrument;
 
-use crate::opts::{ResolveRevsetOptions, Revset};
 use crate::revset::resolve_commits;
+use git_branchless_opts::{ResolveRevsetOptions, Revset};
 
 #[instrument]
 pub fn query(

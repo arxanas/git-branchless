@@ -1129,6 +1129,7 @@ dependencies = [
  "eyre",
  "fslock",
  "git-branchless-lib",
+ "git-branchless-opts",
  "git-record",
  "glob",
  "insta",
@@ -1191,6 +1192,15 @@ dependencies = [
  "tracing-error",
  "tracing-subscriber",
  "vt100",
+]
+
+[[package]]
+name = "git-branchless-opts"
+version = "0.6.0-rc.1"
+dependencies = [
+ "clap 4.0.27",
+ "clap_mangen",
+ "git-branchless-lib",
 ]
 
 [[package]]

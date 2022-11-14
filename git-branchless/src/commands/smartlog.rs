@@ -375,7 +375,7 @@ mod render {
     use lib::core::node_descriptors::{render_node_descriptors, NodeDescriptor};
     use lib::git::{NonZeroOid, Repo};
 
-    use crate::opts::{ResolveRevsetOptions, Revset};
+    use git_branchless_opts::{ResolveRevsetOptions, Revset};
 
     use super::graph::{AncestorInfo, ChildInfo, SmartlogGraph};
 
