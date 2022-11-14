@@ -38,6 +38,7 @@ fslock = "0.2.1"
 git-branchless-move = { version = "0.7.0-pre.1", path = "../git-branchless-move" }
 git-branchless-opts = { version = "0.7.0-pre.1", path = "../git-branchless-opts" }
 git-branchless-revset = { version = "0.7.0-pre.1", path = "../git-branchless-revset" }
+git-branchless-test = { version = "0.7.0-pre.1", path = "../git-branchless-test" }
 git-record = { version = "0.3", path = "../git-record" }
 glob = "0.3.0"
 itertools = "0.10.3"

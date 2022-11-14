@@ -1,3 +1,11 @@
+//! Run a user-provided command on each of a set of provided commits. This is
+//! useful to run checks on all commits in the current stack with caching,
+//! parallelization, out-of-tree execution, etc.
+
+#![warn(missing_docs)]
+#![warn(clippy::all, clippy::as_conversions, clippy::clone_on_ref_ptr)]
+#![allow(clippy::too_many_arguments, clippy::blocks_in_if_conditions)]
+
 use std::collections::{HashMap, VecDeque};
 use std::convert::TryFrom;
 use std::fmt::Write as _;
@@ -42,10 +50,16 @@ lazy_static! {
         Style::merge(&[BaseColor::Yellow.light().into(), Effect::Bold.into()]);
 }
 
+/// How verbose of output to produce.
 #[derive(Clone, Copy, Debug, Ord, PartialOrd, Eq, PartialEq)]
 pub enum Verbosity {
+    /// Do not include test output at all.
     None,
+
+    /// Include truncated test output.
     PartialOutput,
+
+    /// Include the full test output.
     FullOutput,
 }
 
@@ -59,12 +73,23 @@ impl From<u8> for Verbosity {
     }
 }
 
+/// The options for testing before they've assumed default values or been
+/// validated.
 #[derive(Debug)]
 pub struct RawTestOptions {
+    /// The command to execute, if any.
     pub exec: Option<String>,
+
+    /// The command alias to execute, if any.
     pub command: Option<String>,
+
+    /// The execution strategy to use.
     pub strategy: Option<TestExecutionStrategy>,
+
+    /// The number of jobs to run in parallel.
     pub jobs: Option<usize>,
+
+    /// The requested verbosity of the test output.
     pub verbosity: Verbosity,
 }
 
@@ -243,6 +268,7 @@ but --strategy working-copy was provided instead."
     }
 }
 
+/// Run the command provided in `options` on each of the commits in `revset`.
 #[instrument]
 pub fn run(
     effects: &Effects,
@@ -1388,6 +1414,8 @@ fn test_commit(
     })
 }
 
+/// Show test output for the command provided in `options` for each of the
+/// commits in `revset`.
 #[instrument]
 pub fn show(
     effects: &Effects,
@@ -1477,6 +1505,7 @@ pub fn show(
     Ok(ExitCode(0))
 }
 
+/// Delete cached test output for the commits in `revset`.
 #[instrument]
 pub fn clean(
     effects: &Effects,
