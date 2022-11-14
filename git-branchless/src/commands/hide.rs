@@ -18,7 +18,7 @@ use lib::git::{CategorizedReferenceName, GitRunInfo, MaybeZeroOid, NonZeroOid, R
 use lib::util::ExitCode;
 use tracing::instrument;
 
-use crate::revset::resolve_commits;
+use git_branchless_revset::resolve_commits;
 
 /// Hide the hashes provided on the command-line.
 #[instrument]

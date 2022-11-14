@@ -339,7 +339,7 @@ mod tests {
     use lib::testing::{make_git, GitRunOptions};
 
     use super::*;
-    use crate::revset::Expr;
+    use crate::Expr;
 
     fn eval_and_sort<'a>(
         effects: &Effects,

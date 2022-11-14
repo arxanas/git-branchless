@@ -14,8 +14,8 @@ use lib::util::ExitCode;
 use rayon::ThreadPoolBuilder;
 use tracing::instrument;
 
-use crate::revset::resolve_commits;
 use git_branchless_opts::{MoveOptions, ResolveRevsetOptions, Revset};
+use git_branchless_revset::resolve_commits;
 use lib::core::config::{
     get_hint_enabled, get_hint_string, get_restack_preserve_timestamps,
     print_hint_suppression_notice, Hint,
