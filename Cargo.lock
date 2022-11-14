@@ -1129,6 +1129,7 @@ dependencies = [
  "eyre",
  "fslock",
  "git-branchless-lib",
+ "git-branchless-move",
  "git-branchless-opts",
  "git-branchless-revset",
  "git-record",
@@ -1193,6 +1194,20 @@ dependencies = [
  "tracing-error",
  "tracing-subscriber",
  "vt100",
+]
+
+[[package]]
+name = "git-branchless-move"
+version = "0.7.0-pre.1"
+dependencies = [
+ "esl01-dag",
+ "eyre",
+ "git-branchless-lib",
+ "git-branchless-opts",
+ "git-branchless-revset",
+ "insta",
+ "rayon",
+ "tracing",
 ]
 
 [[package]]
