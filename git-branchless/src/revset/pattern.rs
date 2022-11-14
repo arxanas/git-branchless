@@ -69,8 +69,14 @@ impl Pattern {
             Pattern::Exact(_) | Pattern::Substring(_) | Pattern::Glob(_) | Pattern::Regex(_) => {
                 false
             }
-            Pattern::Before(date) => &time.to_naive_date_time() <= date,
-            Pattern::After(date) => &time.to_naive_date_time() >= date,
+            Pattern::Before(date) => match time.to_naive_date_time() {
+                Some(time) => &time <= date,
+                None => false,
+            },
+            Pattern::After(date) => match time.to_naive_date_time() {
+                Some(time) => &time >= date,
+                None => false,
+            },
         }
     }
 

@@ -209,7 +209,15 @@ impl<'repo> Commit<'repo> {
                 ),
                 BaseColor::Magenta.light(),
             ),
-            StyledString::styled(format!("Date:\t{}", commit_time), BaseColor::Green.light()),
+            StyledString::styled(
+                format!(
+                    "Date:\t{}",
+                    commit_time
+                        .map(|commit_time| commit_time.to_string())
+                        .unwrap_or_else(|| "?".to_string())
+                ),
+                BaseColor::Green.light(),
+            ),
             StyledString::plain(textwrap::indent(
                 &self.get_message_pretty()?.to_str_lossy(),
                 "    ",

@@ -1612,8 +1612,8 @@ impl Time {
     }
 
     /// Calculate the associated [`NaiveDateTime`].
-    pub fn to_naive_date_time(&self) -> NaiveDateTime {
-        NaiveDateTime::from_timestamp(self.inner.seconds(), 0)
+    pub fn to_naive_date_time(&self) -> Option<NaiveDateTime> {
+        NaiveDateTime::from_timestamp_opt(self.inner.seconds(), 0)
     }
 }
 
