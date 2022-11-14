@@ -44,13 +44,10 @@ use tracing_subscriber::fmt as tracing_fmt;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
 
-use crate::opts::Command;
-use crate::opts::Opts;
-use crate::opts::ResolveRevsetOptions;
-use crate::opts::Revset;
-use crate::opts::SnapshotSubcommand;
-use crate::opts::WrappedCommand;
-use crate::opts::{ColorSetting, TestSubcommand};
+use git_branchless_opts::{
+    ColorSetting, Command, Opts, ResolveRevsetOptions, Revset, SnapshotSubcommand, TestSubcommand,
+    WrappedCommand,
+};
 use lib::core::config::env_vars::get_path_to_git;
 use lib::core::effects::Effects;
 use lib::core::formatting::Glyphs;

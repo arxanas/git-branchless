@@ -15,9 +15,9 @@ use lib::util::ExitCode;
 use tracing::{instrument, warn};
 
 use crate::commands::smartlog::make_smartlog_graph;
-use crate::opts::{SwitchOptions, TraverseCommitsOptions};
 use crate::revset::resolve_default_smartlog_commits;
 use crate::tui::prompt_select_commit;
+use git_branchless_opts::{SwitchOptions, TraverseCommitsOptions};
 use lib::core::config::get_next_interactive;
 use lib::core::dag::{sorted_commit_set, CommitSet, Dag};
 use lib::core::effects::Effects;

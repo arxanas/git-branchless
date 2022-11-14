@@ -21,6 +21,5 @@
 #![allow(clippy::too_many_arguments, clippy::blocks_in_if_conditions)]
 
 pub mod commands;
-pub mod opts;
 pub mod revset;
 pub mod tui;

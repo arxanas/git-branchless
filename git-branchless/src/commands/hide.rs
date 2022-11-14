@@ -6,19 +6,18 @@ use std::fmt::Write;
 use std::time::SystemTime;
 
 use eden_dag::DagAlgorithm;
-use lib::core::repo_ext::RepoExt;
-use lib::util::ExitCode;
-use tracing::instrument;
-
+use git_branchless_opts::{ResolveRevsetOptions, Revset};
 use lib::core::dag::{sorted_commit_set, union_all, Dag};
 use lib::core::effects::Effects;
 use lib::core::eventlog::{CommitActivityStatus, Event};
 use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::formatting::{Glyphs, Pluralize};
+use lib::core::repo_ext::RepoExt;
 use lib::core::rewrite::move_branches;
 use lib::git::{CategorizedReferenceName, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo};
+use lib::util::ExitCode;
+use tracing::instrument;
 
-use crate::opts::{ResolveRevsetOptions, Revset};
 use crate::revset::resolve_commits;
 
 /// Hide the hashes provided on the command-line.

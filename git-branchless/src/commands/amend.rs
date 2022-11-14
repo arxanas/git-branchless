@@ -11,28 +11,27 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use eden_dag::DagAlgorithm;
 use eyre::Context;
+use git_branchless_opts::{MoveOptions, ResolveRevsetOptions};
 use itertools::Itertools;
 use lib::core::check_out::{check_out_commit, CheckOutCommitOptions, CheckoutTarget};
+use lib::core::config::get_restack_preserve_timestamps;
+use lib::core::dag::commit_set_to_vec;
 use lib::core::dag::{CommitSet, Dag};
+use lib::core::effects::Effects;
+use lib::core::eventlog::{Event, EventLogDb, EventReplayer};
+use lib::core::formatting::Pluralize;
 use lib::core::gc::mark_commit_reachable;
 use lib::core::repo_ext::RepoExt;
 use lib::core::rewrite::{
     execute_rebase_plan, BuildRebasePlanOptions, ExecuteRebasePlanOptions, ExecuteRebasePlanResult,
     RebasePlanBuilder, RebasePlanPermissions, RepoResource,
 };
-use lib::util::ExitCode;
-use rayon::ThreadPoolBuilder;
-use tracing::instrument;
-
-use crate::opts::{MoveOptions, ResolveRevsetOptions};
-use lib::core::config::get_restack_preserve_timestamps;
-use lib::core::dag::commit_set_to_vec;
-use lib::core::effects::Effects;
-use lib::core::eventlog::{Event, EventLogDb, EventReplayer};
-use lib::core::formatting::Pluralize;
 use lib::git::{
     AmendFastOptions, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo, ResolvedReferenceInfo,
 };
+use lib::util::ExitCode;
+use rayon::ThreadPoolBuilder;
+use tracing::instrument;
 
 /// Amends the existing HEAD commit.
 #[instrument]
