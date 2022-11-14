@@ -78,7 +78,7 @@ jobs:
           override: true
 
       - name: Cache dependencies
-        uses: Swatinem/rust-cache@b894d59a8d236e2979b247b80dac8d053ab340dd
+        uses: Swatinem/rust-cache@359a70e43a0bb8a13953b04a90f76428b4959bb6
 
       - name: Compile (all features)
         run: cargo build --all-features --all-targets --workspace
