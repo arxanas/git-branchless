@@ -1132,6 +1132,7 @@ dependencies = [
  "git-branchless-move",
  "git-branchless-opts",
  "git-branchless-revset",
+ "git-branchless-test",
  "git-record",
  "glob",
  "insta",
@@ -1240,6 +1241,26 @@ dependencies = [
  "rayon",
  "regex",
  "thiserror",
+ "tracing",
+]
+
+[[package]]
+name = "git-branchless-test"
+version = "0.7.0-pre.1"
+dependencies = [
+ "clap 4.0.27",
+ "crossbeam",
+ "cursive",
+ "eyre",
+ "fslock",
+ "git-branchless-lib",
+ "git-branchless-opts",
+ "git-branchless-revset",
+ "itertools 0.10.5",
+ "lazy_static",
+ "num_cpus",
+ "serde",
+ "serde_json",
  "tracing",
 ]
 

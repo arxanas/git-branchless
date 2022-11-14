@@ -16,7 +16,6 @@ mod smartlog;
 mod snapshot;
 mod submit;
 mod sync;
-mod test;
 mod undo;
 mod wrap;
 
@@ -55,7 +54,6 @@ use lib::git::NonZeroOid;
 
 use self::reword::InitialCommitMessages;
 use self::smartlog::SmartlogOptions;
-use self::test::RawTestOptions;
 
 fn rewrite_args(args: Vec<OsString>) -> Vec<OsString> {
     let first_arg = match args.first() {
@@ -383,7 +381,7 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
             TestSubcommand::Clean {
                 revset,
                 resolve_revset_options,
-            } => test::clean(&effects, revset, &resolve_revset_options)?,
+            } => git_branchless_test::clean(&effects, revset, &resolve_revset_options)?,
 
             TestSubcommand::Run {
                 exec: command,
@@ -393,15 +391,15 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
                 verbosity,
                 strategy,
                 jobs,
-            } => test::run(
+            } => git_branchless_test::run(
                 &effects,
                 &git_run_info,
-                &RawTestOptions {
+                &git_branchless_test::RawTestOptions {
                     exec: command,
                     command: command_alias,
                     strategy,
                     jobs,
-                    verbosity: test::Verbosity::from(verbosity),
+                    verbosity: git_branchless_test::Verbosity::from(verbosity),
                 },
                 revset,
                 &resolve_revset_options,
@@ -413,14 +411,14 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
                 revset,
                 resolve_revset_options,
                 verbosity,
-            } => test::show(
+            } => git_branchless_test::show(
                 &effects,
-                &RawTestOptions {
+                &git_branchless_test::RawTestOptions {
                     exec: command,
                     command: command_alias,
                     strategy: None,
                     jobs: None,
-                    verbosity: test::Verbosity::from(verbosity),
+                    verbosity: git_branchless_test::Verbosity::from(verbosity),
                 },
                 revset,
                 &resolve_revset_options,
