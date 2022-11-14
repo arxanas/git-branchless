@@ -1,5 +1,7 @@
-use crate::util::{run_in_pty, PtyAction};
+pub mod util;
+
 use lib::testing::{make_git, GitRunOptions};
+use util::{run_in_pty, PtyAction};
 
 const CARRIAGE_RETURN: &str = "\r";
 const END_OF_TEXT: &str = "\x03";

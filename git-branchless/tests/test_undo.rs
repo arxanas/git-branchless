@@ -1,8 +1,8 @@
+pub mod util;
+
 use std::mem::swap;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
-
-use crate::util::trim_lines;
 
 use git_branchless_undo::testing::{select_past_event, undo_events};
 use git_record::testing::{screen_to_string, CursiveTestingBackend, CursiveTestingEvent};
@@ -13,6 +13,7 @@ use lib::core::formatting::Glyphs;
 use lib::core::repo_ext::RepoExt;
 use lib::git::{GitRunInfo, GitVersion, Repo};
 use lib::testing::{make_git, Git, GitInitOptions};
+use util::trim_lines;
 
 use cursive_core::event::Key;
 use cursive_core::{Cursive, CursiveRunner};

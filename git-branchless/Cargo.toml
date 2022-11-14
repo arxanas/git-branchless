@@ -81,3 +81,72 @@ pre-release-replacements = [
   { file = "../CHANGELOG.md", search = "ReleaseDate", replace = "{{date}}", min = 1 },
   { file = "../CHANGELOG.md", search = "<!-- next-header -->", replace = "<!-- next-header -->\n## [Unreleased] - ReleaseDate\n", exactly = 1 },
 ]
+
+[[test]]
+name = "test_amend"
+
+[[test]]
+name = "test_branchless"
+
+[[test]]
+name = "test_bug_report"
+
+[[test]]
+name = "test_eventlog"
+
+[[test]]
+name = "test_gc"
+
+[[test]]
+name = "test_hide"
+
+[[test]]
+name = "test_hooks"
+
+[[test]]
+name = "test_init"
+
+[[test]]
+name = "test_move"
+
+[[test]]
+name = "test_navigation"
+
+[[test]]
+name = "test_query"
+
+[[test]]
+name = "test_record"
+
+[[test]]
+name = "test_repair"
+
+[[test]]
+name = "test_restack"
+
+[[test]]
+name = "test_reword"
+
+[[test]]
+name = "test_smartlog"
+
+[[test]]
+name = "test_snapshot"
+
+[[test]]
+name = "test_submit"
+
+[[test]]
+name = "test_sync"
+
+[[test]]
+name = "test_test"
+
+[[test]]
+name = "test_undo"
+
+[[test]]
+name = "test_wrap"
+
+
+
