@@ -9,7 +9,6 @@ mod init;
 mod query;
 mod repair;
 mod restack;
-mod reword;
 mod snapshot;
 mod submit;
 mod sync;
@@ -47,8 +46,6 @@ use lib::core::effects::Effects;
 use lib::core::formatting::Glyphs;
 use lib::git::GitRunInfo;
 use lib::git::NonZeroOid;
-
-use self::reword::InitialCommitMessages;
 
 fn rewrite_args(args: Vec<OsString>) -> Vec<OsString> {
     let first_arg = match args.first() {
@@ -309,13 +306,13 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
             commit_to_fixup,
         } => {
             let messages = if discard {
-                InitialCommitMessages::Discard
+                git_branchless_reword::InitialCommitMessages::Discard
             } else if let Some(commit_to_fixup) = commit_to_fixup {
-                InitialCommitMessages::FixUp(commit_to_fixup)
+                git_branchless_reword::InitialCommitMessages::FixUp(commit_to_fixup)
             } else {
-                InitialCommitMessages::Messages(messages)
+                git_branchless_reword::InitialCommitMessages::Messages(messages)
             };
-            reword::reword(
+            git_branchless_reword::reword(
                 &effects,
                 revsets,
                 &resolve_revset_options,

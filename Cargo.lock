@@ -1133,6 +1133,7 @@ dependencies = [
  "git-branchless-opts",
  "git-branchless-record",
  "git-branchless-revset",
+ "git-branchless-reword",
  "git-branchless-smartlog",
  "git-branchless-test",
  "git-branchless-undo",
@@ -1272,6 +1273,23 @@ dependencies = [
  "rayon",
  "regex",
  "thiserror",
+ "tracing",
+]
+
+[[package]]
+name = "git-branchless-reword"
+version = "0.7.0-pre.1"
+dependencies = [
+ "bstr",
+ "chrono",
+ "dialoguer",
+ "esl01-dag",
+ "eyre",
+ "git-branchless-lib",
+ "git-branchless-opts",
+ "git-branchless-revset",
+ "insta",
+ "rayon",
  "tracing",
 ]
 

@@ -1,5 +1,9 @@
 //! Update commit messages
 
+#![warn(missing_docs)]
+#![warn(clippy::all, clippy::as_conversions, clippy::clone_on_ref_ptr)]
+#![allow(clippy::too_many_arguments, clippy::blocks_in_if_conditions)]
+
 use lib::core::check_out::CheckOutCommitOptions;
 use lib::core::repo_ext::RepoExt;
 use lib::util::ExitCode;
