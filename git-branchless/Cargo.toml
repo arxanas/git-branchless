@@ -37,6 +37,7 @@ git-branchless-navigation = { version = "0.7.0-pre.1", path = "../git-branchless
 git-branchless-opts = { version = "0.7.0-pre.1", path = "../git-branchless-opts" }
 git-branchless-record = { version = "0.7.0-pre.1", path = "../git-branchless-record" }
 git-branchless-revset = { version = "0.7.0-pre.1", path = "../git-branchless-revset" }
+git-branchless-reword = { version = "0.7.0-pre.1", path = "../git-branchless-reword" }
 git-branchless-smartlog = { version = "0.7.0-pre.1", path = "../git-branchless-smartlog" }
 git-branchless-test = { version = "0.7.0-pre.1", path = "../git-branchless-test" }
 git-branchless-undo = { version = "0.7.0-pre.1", path = "../git-branchless-undo" }
