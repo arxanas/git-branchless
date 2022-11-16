@@ -1087,7 +1087,7 @@ checksum = "22030e2c5a68ec659fde1e949a745124b48e6fa8b045b7ed5bd1fe4ccc5c4e5d"
 
 [[package]]
 name = "git-branchless"
-version = "0.6.0-rc.1"
+version = "0.7.0-pre.1"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -1136,7 +1136,7 @@ dependencies = [
 
 [[package]]
 name = "git-branchless-lib"
-version = "0.6.0-rc.1"
+version = "0.7.0-pre.1"
 dependencies = [
  "anyhow",
  "assert_cmd",
