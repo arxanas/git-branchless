@@ -113,13 +113,9 @@ fn test_submit() -> eyre::Result<()> {
     {
         let (stdout, stderr) = cloned_repo.run(&["submit", "--create"])?;
         let stderr = redact_remotes(stderr);
-        insta::assert_snapshot!(stderr, @r###"
-        branchless: processing 1 update: remote branch origin/qux
-        Everything up-to-date
-        "###);
+        insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> fetch origin
-        branchless: running command: <git-executable> push --force-with-lease origin
         Skipped 2 branches (already up-to-date): bar, qux
         "###);
     }
@@ -235,6 +231,62 @@ fn test_submit_existing_branch() -> eyre::Result<()> {
           remotes/origin/HEAD    -> origin/master
           remotes/origin/feature 70deb1e create test3.txt
           remotes/origin/master  96d1c37 create test2.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_submit_up_to_date_branch() -> eyre::Result<()> {
+    let GitWrapperWithRemoteRepo {
+        temp_dir: _guard,
+        original_repo,
+        cloned_repo,
+    } = make_git_with_remote_repo()?;
+
+    if original_repo.get_version()? < MIN_VERSION {
+        return Ok(());
+    }
+
+    {
+        original_repo.init_repo()?;
+        original_repo.commit_file("test1", 1)?;
+        original_repo.commit_file("test2", 2)?;
+        original_repo.clone_repo_into(&cloned_repo, &[])?;
+        cloned_repo.init_repo_with_options(&GitInitOptions {
+            make_initial_commit: false,
+            ..Default::default()
+        })?;
+    }
+
+    cloned_repo.run(&["checkout", "-b", "feature"])?;
+    cloned_repo.commit_file("test3", 3)?;
+
+    {
+        let (stdout, stderr) = cloned_repo.run(&["submit", "--create", "feature"])?;
+        let stderr = redact_remotes(stderr);
+        insta::assert_snapshot!(stderr, @r###"
+        branchless: processing 1 update: branch feature
+        To: file://<remote>
+         * [new branch]      feature -> feature
+        branchless: processing 1 update: remote branch origin/feature
+        "###);
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> push --set-upstream origin feature
+        branch 'feature' set up to track 'origin/feature'.
+        Created 1 branch: feature
+        "###);
+    }
+
+    cloned_repo.detach_head()?;
+    {
+        let (stdout, stderr) = cloned_repo.run(&["submit", "feature"])?;
+        let stderr = redact_remotes(stderr);
+        insta::assert_snapshot!(stderr, @"");
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> fetch origin
+        Skipped 1 branch (already up-to-date): feature
         "###);
     }
 

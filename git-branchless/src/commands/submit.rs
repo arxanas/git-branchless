@@ -184,16 +184,18 @@ These remotes are available: {}",
             pushed_branches.extend(branches_to_push_names.iter());
             skipped_branches.extend(branches_to_skip_names.iter());
 
-            let mut args = vec!["push", "--force-with-lease", remote_name];
-            args.extend(branches_to_push_names.iter());
-            let exit_code = git_run_info.run(&effects, Some(event_tx_id), &args)?;
-            if !exit_code.is_success() {
-                writeln!(
-                    effects.get_output_stream(),
-                    "Failed to push branches: {}",
-                    branches_to_push_names.into_iter().join(", ")
-                )?;
-                return Ok(exit_code);
+            if !pushed_branches.is_empty() {
+                let mut args = vec!["push", "--force-with-lease", remote_name];
+                args.extend(branches_to_push_names.iter());
+                let exit_code = git_run_info.run(&effects, Some(event_tx_id), &args)?;
+                if !exit_code.is_success() {
+                    writeln!(
+                        effects.get_output_stream(),
+                        "Failed to push branches: {}",
+                        branches_to_push_names.into_iter().join(", ")
+                    )?;
+                    return Ok(exit_code);
+                }
             }
             progress.notify_progress_inc(branches.len());
         }
