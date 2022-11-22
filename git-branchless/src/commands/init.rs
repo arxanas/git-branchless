@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 
 use console::style;
 use eyre::Context;
+use itertools::Itertools;
 use path_slash::PathExt;
 use tracing::{instrument, warn};
 
@@ -202,12 +203,15 @@ fn install_hook(repo: &Repo, hook_type: &str, hook_script: &str) -> eyre::Result
 
 #[instrument]
 fn install_hooks(effects: &Effects, repo: &Repo) -> eyre::Result<()> {
+    writeln!(
+        effects.get_output_stream(),
+        "Installing hooks: {}",
+        ALL_HOOKS
+            .iter()
+            .map(|(hook_type, _hook_script)| hook_type)
+            .join(", ")
+    )?;
     for (hook_type, hook_script) in ALL_HOOKS {
-        writeln!(
-            effects.get_output_stream(),
-            "Installing hook: {}",
-            hook_type
-        )?;
         install_hook(repo, hook_type, hook_script)?;
     }
 
