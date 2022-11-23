@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use branchless::git::{CherryPickFastOptions, Repo};
+use branchless::git::{CherryPickFastOptions, MaybeZeroOid, Repo};
 use eyre::Context;
 
 fn main() -> eyre::Result<()> {
@@ -42,12 +42,12 @@ fn main() -> eyre::Result<()> {
             },
         )?;
 
-        let expected_tree = current_commit.get_tree()?;
-        if tree.get_oid() != expected_tree.get_oid() {
+        let expected_tree_oid = current_commit.get_tree_oid();
+        if MaybeZeroOid::NonZero(tree.get_oid()) != expected_tree_oid {
             println!(
                 "Trees are NOT equal, actual {actual} vs expected {expected}\n\
                 Try running: git diff-tree -p {expected} {actual}",
-                expected = expected_tree.get_oid().to_string(),
+                expected = expected_tree_oid.to_string(),
                 actual = tree.get_oid().to_string(),
             );
             std::process::exit(1);
