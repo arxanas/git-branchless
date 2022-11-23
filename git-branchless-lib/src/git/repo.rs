@@ -1208,7 +1208,7 @@ impl Repo {
 
         if *reuse_parent_tree_if_possible {
             if let Some(only_parent) = patch_commit.get_only_parent() {
-                if only_parent.get_tree()?.get_oid() == target_commit.get_tree()?.get_oid() {
+                if only_parent.get_tree_oid() == target_commit.get_tree_oid() {
                     // If this patch is being applied to the same commit it was
                     // originally based on, then we can skip cherry-picking
                     // altogether, and use its tree directly. This is common e.g.

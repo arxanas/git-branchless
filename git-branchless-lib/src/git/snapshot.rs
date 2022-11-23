@@ -468,22 +468,21 @@ branchless: automated working copy snapshot
     /// Determine what kind of changes to the working copy the user made in this snapshot.
     #[instrument]
     pub fn get_working_copy_changes_type(&self) -> eyre::Result<WorkingCopyChangesType> {
-        let base_tree = self.base_commit.get_tree()?;
-        let base_oid = base_tree.get_oid();
-        let unstaged_tree = self.commit_unstaged.get_tree()?;
-        let stage0_tree = self.commit_stage0.get_tree()?;
-        let stage1_tree = self.commit_stage1.get_tree()?;
-        let stage2_tree = self.commit_stage2.get_tree()?;
-        let stage3_tree = self.commit_stage3.get_tree()?;
+        let base_tree_oid = self.base_commit.get_tree_oid();
+        let unstaged_tree_oid = self.commit_unstaged.get_tree_oid();
+        let stage0_tree_oid = self.commit_stage0.get_tree_oid();
+        let stage1_tree_oid = self.commit_stage1.get_tree_oid();
+        let stage2_tree_oid = self.commit_stage2.get_tree_oid();
+        let stage3_tree_oid = self.commit_stage3.get_tree_oid();
 
-        if base_oid != stage1_tree.get_oid()
-            || base_oid != stage2_tree.get_oid()
-            || base_oid != stage3_tree.get_oid()
+        if base_tree_oid != stage1_tree_oid
+            || base_tree_oid != stage2_tree_oid
+            || base_tree_oid != stage3_tree_oid
         {
             Ok(WorkingCopyChangesType::Conflicts)
-        } else if base_oid != stage0_tree.get_oid() {
+        } else if base_tree_oid != stage0_tree_oid {
             Ok(WorkingCopyChangesType::Staged)
-        } else if base_oid != unstaged_tree.get_oid() {
+        } else if base_tree_oid != unstaged_tree_oid {
             Ok(WorkingCopyChangesType::Unstaged)
         } else {
             Ok(WorkingCopyChangesType::None)

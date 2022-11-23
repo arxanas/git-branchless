@@ -1112,7 +1112,7 @@ fn make_test_files(
     options: &ResolvedTestOptions,
 ) -> eyre::Result<TestFilesResult> {
     let test_output_dir = repo.get_test_dir();
-    let tree_oid = commit.get_tree()?.get_oid();
+    let tree_oid = commit.get_tree_oid();
     let tree_dir = test_output_dir.join(tree_oid.to_string());
     std::fs::create_dir_all(&tree_dir)
         .wrap_err_with(|| format!("Creating tree directory {tree_dir:?}"))?;
@@ -1516,7 +1516,7 @@ pub fn clean(
 
     let mut num_cleaned_commits = 0;
     for commit in sorted_commit_set(&repo, &dag, &commit_set)? {
-        let tree_oid = commit.get_tree()?.get_oid();
+        let tree_oid = commit.get_tree_oid();
         let tree_dir = test_dir.join(tree_oid.to_string());
         if tree_dir.exists() {
             writeln!(

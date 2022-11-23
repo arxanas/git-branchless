@@ -14,6 +14,8 @@ use crate::git::oid::make_non_zero_oid;
 use crate::git::repo::{Error, Result, Signature};
 use crate::git::{NonZeroOid, Time, Tree};
 
+use super::MaybeZeroOid;
+
 /// Represents a commit object in the Git object database.
 #[derive(Clone, Debug)]
 pub struct Commit<'repo> {
@@ -127,6 +129,12 @@ impl<'repo> Commit<'repo> {
         Signature {
             inner: self.inner.committer(),
         }
+    }
+
+    /// Get the OID of the `Tree` object associated with this commit.
+    #[instrument]
+    pub fn get_tree_oid(&self) -> MaybeZeroOid {
+        self.inner.tree_id().into()
     }
 
     /// Get the `Tree` object associated with this commit.
