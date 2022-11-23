@@ -633,3 +633,42 @@ pub fn make_git_worktree(git: &Git, worktree_name: &str) -> eyre::Result<GitWork
     };
     Ok(GitWorktreeWrapper { temp_dir, worktree })
 }
+
+/// Find and extract the command to disable the hint mentioned in the output.
+/// Returns the arguments to `git` which would disable the hint.
+pub fn extract_hint_command(stdout: &str) -> Vec<String> {
+    let hint_command = stdout
+        .split_once("disable this hint by running: ")
+        .map(|(_first, second)| second)
+        .unwrap()
+        .split('\n')
+        .next()
+        .unwrap();
+    hint_command
+        .split(' ')
+        .skip(1) // "git"
+        .filter(|s| s != &"--global")
+        .map(|s| s.to_owned())
+        .collect_vec()
+}
+
+/// Remove some of the output from `git rebase`, as it seems to be
+/// non-deterministic as to whether or not it appears.
+pub fn remove_rebase_lines(output: String) -> String {
+    output
+        .lines()
+        .filter(|line| !line.contains("First, rewinding head") && !line.contains("Applying:"))
+        .filter(|line| {
+            // See https://github.com/arxanas/git-branchless/issues/87.  Before
+            // Git v2.33 (`next` branch), the "Auto-merging" line appears
+            // *after* the "CONFLICT" line for a given file (which doesn't make
+            // sense -- how can there be a conflict before merging has started)?
+            // The development version of Git v2.33 fixes this and places the
+            // "Auto-merging" line *before* the "CONFLICT" line. To avoid having
+            // to deal with multiple possible output formats, just remove the
+            // line in question.
+            !line.contains("Auto-merging")
+        })
+        .map(|line| format!("{}\n", line))
+        .collect()
+}

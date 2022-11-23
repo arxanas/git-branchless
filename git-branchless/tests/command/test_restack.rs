@@ -1,25 +1,4 @@
-use lib::testing::{make_git, GitInitOptions, GitRunOptions};
-
-/// Remove some of the output from `git rebase`, as it seems to be
-/// non-deterministic as to whether or not it appears.
-pub fn remove_rebase_lines(output: String) -> String {
-    output
-        .lines()
-        .filter(|line| !line.contains("First, rewinding head") && !line.contains("Applying:"))
-        .filter(|line| {
-            // See https://github.com/arxanas/git-branchless/issues/87.  Before
-            // Git v2.33 (`next` branch), the "Auto-merging" line appears
-            // *after* the "CONFLICT" line for a given file (which doesn't make
-            // sense -- how can there be a conflict before merging has started)?
-            // The development version of Git v2.33 fixes this and places the
-            // "Auto-merging" line *before* the "CONFLICT" line. To avoid having
-            // to deal with multiple possible output formats, just remove the
-            // line in question.
-            !line.contains("Auto-merging")
-        })
-        .map(|line| format!("{}\n", line))
-        .collect()
-}
+use lib::testing::{make_git, remove_rebase_lines, GitInitOptions, GitRunOptions};
 
 #[test]
 fn test_restack_amended_commit() -> eyre::Result<()> {
