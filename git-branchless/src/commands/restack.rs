@@ -65,9 +65,9 @@ use lib::util::ExitCode;
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use tracing::{instrument, warn};
 
-use crate::commands::smartlog::smartlog;
 use git_branchless_opts::{MoveOptions, ResolveRevsetOptions, Revset};
 use git_branchless_revset::resolve_commits;
+use git_branchless_smartlog::smartlog;
 use lib::core::config::get_restack_preserve_timestamps;
 use lib::core::dag::{commit_set_to_vec, union_all, CommitSet, Dag};
 use lib::core::effects::Effects;

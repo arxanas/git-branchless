@@ -1132,6 +1132,7 @@ dependencies = [
  "git-branchless-move",
  "git-branchless-opts",
  "git-branchless-revset",
+ "git-branchless-smartlog",
  "git-branchless-test",
  "git-record",
  "glob",
@@ -1241,6 +1242,19 @@ dependencies = [
  "rayon",
  "regex",
  "thiserror",
+ "tracing",
+]
+
+[[package]]
+name = "git-branchless-smartlog"
+version = "0.7.0-pre.1"
+dependencies = [
+ "cursive_core",
+ "esl01-dag",
+ "eyre",
+ "git-branchless-lib",
+ "git-branchless-opts",
+ "git-branchless-revset",
  "tracing",
 ]
 
