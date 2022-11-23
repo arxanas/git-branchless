@@ -5,7 +5,10 @@
 #![allow(clippy::too_many_arguments, clippy::blocks_in_if_conditions)]
 
 use clap::{Args, Command as ClapCommand, CommandFactory, Parser, ValueEnum};
+use itertools::Itertools;
 use lib::git::NonZeroOid;
+
+use std::ffi::OsString;
 use std::fmt::Display;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -757,4 +760,43 @@ fn generate_man_page(man1_dir: &Path, name: &str, command: &ClapCommand) -> std:
     let output_path = man1_dir.join(format!("{}.1", name));
     std::fs::write(output_path, rendered_man_page)?;
     Ok(())
+}
+
+fn rewrite_args(args: Vec<OsString>) -> Vec<OsString> {
+    let first_arg = match args.first() {
+        None => return args,
+        Some(first_arg) => first_arg,
+    };
+
+    // Don't use `std::env::current_exe`, because it may or may not resolve the
+    // symlink. We want to preserve the symlink in our case. See
+    // https://doc.rust-lang.org/std/env/fn.current_exe.html#platform-specific-behavior
+    let exe_path = PathBuf::from(first_arg);
+    let exe_name = match exe_path.file_name().and_then(|arg| arg.to_str()) {
+        Some(exe_name) => exe_name,
+        None => return args,
+    };
+
+    // On Windows, the first argument might be `git-branchless-smartlog.exe`
+    // instead of just `git-branchless-smartlog`. Remove the suffix in that
+    // case.
+    let exe_name = match exe_name.strip_suffix(std::env::consts::EXE_SUFFIX) {
+        Some(exe_name) => exe_name,
+        None => exe_name,
+    };
+
+    match exe_name.strip_prefix("git-branchless-") {
+        Some(subcommand) => {
+            let mut new_args = vec![OsString::from("git-branchless"), OsString::from(subcommand)];
+            new_args.extend(args.into_iter().skip(1));
+            new_args
+        }
+        None => args,
+    }
+}
+
+/// Parse the command-line arguments.
+pub fn parse_args() -> Opts {
+    let args = rewrite_args(std::env::args_os().collect_vec());
+    Opts::parse_from(args)
 }

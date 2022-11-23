@@ -17,18 +17,10 @@ version = "0.7.0-pre.1"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bstr = "1.0.1"
 bugreport = "0.5.0"
-chrono = "0.4.19"
-chrono-english = "0.1.7"
-chronoutil = "0.2.3"
-clap = { version = "4.0.27", features = ["derive"] }
-clap_mangen = "0.2.5"
 color-eyre = "0.6.2"
 console = "0.15.0"
-crossbeam = "0.8.2"
 cursive_core = "0.3.5"
-dialoguer = "0.10.1"
 eden_dag = { package = "esl01-dag", version = "0.2.1" }
 eyre = "0.6.8"
 fslock = "0.2.1"
@@ -42,9 +34,7 @@ git-branchless-smartlog = { version = "0.7.0-pre.1", path = "../git-branchless-s
 git-branchless-test = { version = "0.7.0-pre.1", path = "../git-branchless-test" }
 git-branchless-undo = { version = "0.7.0-pre.1", path = "../git-branchless-undo" }
 git-record = { version = "0.3", path = "../git-record" }
-glob = "0.3.0"
-itertools = "0.10.3"
-lalrpop-util = { version = "0.19.8", features = ["lexer"] }
+itertools = "0.10.5"
 lazy_static = "1.4.0"
 lib = { package = "git-branchless-lib", version = "0.7.0-pre.1", path = "../git-branchless-lib" }
 man = "0.3.0"
@@ -54,16 +44,11 @@ path-slash = "0.2.1"
 rayon = "1.5.3"
 regex = "1.6.0"
 rusqlite = { version = "0.28.0", features = ["bundled"] }
-serde = { version = "1.0.149", features = ["derive"] }
-serde_json = "1.0.87"
 thiserror = "1.0.34"
 tracing = "0.1.37"
 tracing-chrome = "0.6.0"
 tracing-error = "0.2.0"
 tracing-subscriber = { version = "=0.3.11", features = ["env-filter"] }
-
-[target.'cfg(unix)'.dependencies]
-skim = "0.10.1"
 
 [dev-dependencies]
 anyhow = "1.0.66"
@@ -71,9 +56,6 @@ assert_cmd = "2.0.7"
 insta = "1.22.0"
 portable-pty = "0.7.0"
 vt100 = "0.15.1"
-
-[build-dependencies]
-lalrpop = "0.19.8"
 
 [package.metadata.release]
 pre-release-replacements = [
