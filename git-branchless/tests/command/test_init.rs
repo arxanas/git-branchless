@@ -350,12 +350,7 @@ fn test_init_uninstall() -> eyre::Result<()> {
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
         Removing config file: <repo-path>/.git/branchless/config
-        Uninstalling hook: post-commit
-        Uninstalling hook: post-merge
-        Uninstalling hook: post-rewrite
-        Uninstalling hook: post-checkout
-        Uninstalling hook: pre-auto-gc
-        Uninstalling hook: reference-transaction
+        Uninstalling hooks: post-commit, post-merge, post-rewrite, post-checkout, pre-auto-gc, reference-transaction
         "###);
     }
 

@@ -234,12 +234,15 @@ fn install_hooks(effects: &Effects, repo: &Repo) -> eyre::Result<()> {
 
 #[instrument]
 fn uninstall_hooks(effects: &Effects, repo: &Repo) -> eyre::Result<()> {
+    writeln!(
+        effects.get_output_stream(),
+        "Uninstalling hooks: {}",
+        ALL_HOOKS
+            .iter()
+            .map(|(hook_type, _hook_script)| hook_type)
+            .join(", ")
+    )?;
     for (hook_type, _hook_script) in ALL_HOOKS {
-        writeln!(
-            effects.get_output_stream(),
-            "Uninstalling hook: {}",
-            hook_type
-        )?;
         install_hook(
             repo,
             hook_type,
