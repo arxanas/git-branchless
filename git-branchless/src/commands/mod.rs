@@ -12,7 +12,6 @@ mod record;
 mod repair;
 mod restack;
 mod reword;
-mod smartlog;
 mod snapshot;
 mod submit;
 mod sync;
@@ -53,7 +52,6 @@ use lib::git::GitRunInfo;
 use lib::git::NonZeroOid;
 
 use self::reword::InitialCommitMessages;
-use self::smartlog::SmartlogOptions;
 
 fn rewrite_args(args: Vec<OsString>) -> Vec<OsString> {
     let first_arg = match args.first() {
@@ -334,10 +332,10 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
             event_id,
             revset,
             resolve_revset_options,
-        } => smartlog::smartlog(
+        } => git_branchless_smartlog::smartlog(
             &effects,
             &git_run_info,
-            &SmartlogOptions {
+            &git_branchless_smartlog::SmartlogOptions {
                 event_id,
                 revset: revset.unwrap_or_else(Revset::default_smartlog_revset),
                 resolve_revset_options,

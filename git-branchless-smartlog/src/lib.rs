@@ -3,6 +3,10 @@
 //! The set of commits that are still being worked on is inferred from the event
 //! log; see the `eventlog` module.
 
+#![warn(missing_docs)]
+#![warn(clippy::all, clippy::as_conversions, clippy::clone_on_ref_ptr)]
+#![allow(clippy::too_many_arguments, clippy::blocks_in_if_conditions)]
+
 use std::cmp::Ordering;
 use std::fmt::Write;
 use std::time::SystemTime;
@@ -110,6 +114,7 @@ mod graph {
 
     /// Graph of commits that the user is working on.
     pub struct SmartlogGraph<'repo> {
+        /// The nodes in the graph for use in rendering the smartlog.
         pub nodes: HashMap<NonZeroOid, Node<'repo>>,
     }
 
@@ -363,8 +368,8 @@ mod render {
     use std::collections::HashSet;
     use std::convert::TryFrom;
 
-    use cursive::theme::{BaseColor, Effect};
-    use cursive::utils::markup::StyledString;
+    use cursive_core::theme::{BaseColor, Effect};
+    use cursive_core::utils::markup::StyledString;
     use eden_dag::DagAlgorithm;
     use tracing::instrument;
 
@@ -735,6 +740,7 @@ mod render {
         /// be rendered.
         pub revset: Revset,
 
+        /// The options to use when resolving the revset.
         pub resolve_revset_options: ResolveRevsetOptions,
     }
 

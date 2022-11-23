@@ -14,10 +14,10 @@ use lib::core::repo_ext::RepoExt;
 use lib::util::ExitCode;
 use tracing::{instrument, warn};
 
-use crate::commands::smartlog::make_smartlog_graph;
 use crate::tui::prompt_select_commit;
 use git_branchless_opts::{SwitchOptions, TraverseCommitsOptions};
 use git_branchless_revset::resolve_default_smartlog_commits;
+use git_branchless_smartlog::make_smartlog_graph;
 use lib::core::config::get_next_interactive;
 use lib::core::dag::{sorted_commit_set, CommitSet, Dag};
 use lib::core::effects::Effects;

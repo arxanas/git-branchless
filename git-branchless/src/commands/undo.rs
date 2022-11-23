@@ -19,10 +19,10 @@ use lib::core::repo_ext::RepoExt;
 use lib::util::ExitCode;
 use tracing::instrument;
 
-use crate::commands::smartlog::{make_smartlog_graph, render_graph};
 use crate::declare_views;
 use crate::tui::{with_siv, SingletonView};
 use git_branchless_revset::resolve_default_smartlog_commits;
+use git_branchless_smartlog::{make_smartlog_graph, render_graph};
 use lib::core::dag::{CommitSet, Dag};
 use lib::core::effects::Effects;
 use lib::core::eventlog::{Event, EventCursor, EventLogDb, EventReplayer, EventTransactionId};

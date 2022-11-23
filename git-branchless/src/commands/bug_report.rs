@@ -11,8 +11,8 @@ use itertools::Itertools;
 use lib::core::repo_ext::{RepoExt, RepoReferencesSnapshot};
 use lib::util::ExitCode;
 
-use crate::commands::smartlog::{make_smartlog_graph, render_graph};
 use git_branchless_revset::resolve_default_smartlog_commits;
+use git_branchless_smartlog::{make_smartlog_graph, render_graph};
 use lib::core::dag::Dag;
 use lib::core::effects::Effects;
 use lib::core::eventlog::{Event, EventCursor, EventLogDb, EventReplayer};
