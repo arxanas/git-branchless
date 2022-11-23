@@ -16,16 +16,13 @@ mod wrap;
 
 use std::any::Any;
 use std::convert::TryInto;
-use std::ffi::OsString;
 use std::fmt::Write;
 use std::path::PathBuf;
 use std::time::SystemTime;
 
-use clap::Parser;
 use cursive_core::theme::BaseColor;
 use cursive_core::utils::markup::StyledString;
 use eyre::Context;
-use itertools::Itertools;
 use lib::core::rewrite::MergeConflictRemediation;
 use lib::git::Repo;
 use lib::git::RepoError;
@@ -47,48 +44,14 @@ use lib::core::formatting::Glyphs;
 use lib::git::GitRunInfo;
 use lib::git::NonZeroOid;
 
-fn rewrite_args(args: Vec<OsString>) -> Vec<OsString> {
-    let first_arg = match args.first() {
-        None => return args,
-        Some(first_arg) => first_arg,
-    };
-
-    // Don't use `std::env::current_exe`, because it may or may not resolve the
-    // symlink. We want to preserve the symlink in our case. See
-    // https://doc.rust-lang.org/std/env/fn.current_exe.html#platform-specific-behavior
-    let exe_path = PathBuf::from(first_arg);
-    let exe_name = match exe_path.file_name().and_then(|arg| arg.to_str()) {
-        Some(exe_name) => exe_name,
-        None => return args,
-    };
-
-    // On Windows, the first argument might be `git-branchless-smartlog.exe`
-    // instead of just `git-branchless-smartlog`. Remove the suffix in that
-    // case.
-    let exe_name = match exe_name.strip_suffix(std::env::consts::EXE_SUFFIX) {
-        Some(exe_name) => exe_name,
-        None => exe_name,
-    };
-
-    match exe_name.strip_prefix("git-branchless-") {
-        Some(subcommand) => {
-            let mut new_args = vec![OsString::from("git-branchless"), OsString::from(subcommand)];
-            new_args.extend(args.into_iter().skip(1));
-            new_args
-        }
-        None => args,
-    }
-}
-
 /// Wrapper function for `main` to ensure that `Drop` is called for local
 /// variables, since `std::process::exit` will skip them.
 fn do_main_and_drop_locals() -> eyre::Result<i32> {
-    let args = rewrite_args(std::env::args_os().collect_vec());
     let Opts {
         working_directory,
         command,
         color,
-    } = Opts::parse_from(args);
+    } = git_branchless_opts::parse_args();
     if let Some(working_directory) = working_directory {
         std::env::set_current_dir(&working_directory).wrap_err_with(|| {
             format!(
