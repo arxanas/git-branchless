@@ -1,9 +1,7 @@
-use crate::util::extract_hint_command;
 use lib::testing::{
-    make_git, make_git_with_remote_repo, GitInitOptions, GitRunOptions, GitWrapperWithRemoteRepo,
+    extract_hint_command, make_git, make_git_with_remote_repo, remove_rebase_lines, GitInitOptions,
+    GitRunOptions, GitWrapperWithRemoteRepo,
 };
-
-use crate::command::test_restack::remove_rebase_lines;
 
 #[test]
 fn test_move_stick() -> eyre::Result<()> {

@@ -1,6 +1,6 @@
-use crate::util::extract_hint_command;
 use lib::testing::{
-    make_git, make_git_with_remote_repo, GitInitOptions, GitRunOptions, GitWrapperWithRemoteRepo,
+    extract_hint_command, make_git, make_git_with_remote_repo, GitInitOptions, GitRunOptions,
+    GitWrapperWithRemoteRepo,
 };
 
 #[test]
