@@ -101,10 +101,16 @@ fn test_dont_install_existing_aliases() -> eyre::Result<()> {
     std::fs::create_dir(&fake_home_dir)?;
     std::fs::write(&fake_home_git_config, "[alias]\n\tsl = status\n")?;
 
-    let env = HashMap::from([(
-        "HOME".to_string(),
-        fake_home_dir.to_string_lossy().to_string(),
-    )]);
+    let env = HashMap::from([
+        (
+            "HOME".to_string(),
+            fake_home_dir.to_string_lossy().to_string(),
+        ),
+        (
+            "GIT_CONFIG_GLOBAL".to_string(),
+            fake_home_git_config.to_string_lossy().to_string(),
+        ),
+    ]);
     let git_run_options = GitRunOptions {
         env,
         ..GitRunOptions::default()

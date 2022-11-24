@@ -166,6 +166,8 @@ impl Git {
 
         let new_path = self.get_path_for_env();
         let envs = vec![
+            ("GIT_CONFIG_GLOBAL", OsString::from("")),
+            ("GIT_CONFIG_SYSTEM", OsString::from("")),
             ("GIT_CONFIG_NOSYSTEM", OsString::from("1")),
             ("GIT_AUTHOR_DATE", date.clone()),
             ("GIT_COMMITTER_DATE", date),
