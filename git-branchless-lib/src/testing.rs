@@ -292,6 +292,21 @@ stderr:
     /// with it.
     #[instrument]
     pub fn init_repo_with_options(&self, options: &GitInitOptions) -> eyre::Result<()> {
+        // The below should fail with "fatal: $HOME not set" if the environment
+        // variables propagated correctly to the `git` binary.
+        self.run_with_options(
+            &["config", "--global", "--list"],
+            &GitRunOptions {
+                expected_exit_code: 128,
+                ..Default::default()
+            },
+        )
+        .wrap_err(
+            "The Git global configuration should not exist during tests, \
+as the HOME environment variable is not set. \
+Check that the Git executable is not being wrapped in a shell script.",
+        )?;
+
         self.run(&["init"])?;
         self.run(&["config", "user.name", DUMMY_NAME])?;
         self.run(&["config", "user.email", DUMMY_EMAIL])?;
