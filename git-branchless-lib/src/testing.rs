@@ -292,7 +292,10 @@ stderr:
     /// with it.
     #[instrument]
     pub fn init_repo_with_options(&self, options: &GitInitOptions) -> eyre::Result<()> {
-        self.run(&["init"])?;
+        // Ensure that the branch "master" is created for tests, regardless of
+        // the `init.defaultBranch` configuration variable, or git defaults.
+        self.run(&["init", "--initial-branch=master"])?;
+
         self.run(&["config", "user.name", DUMMY_NAME])?;
         self.run(&["config", "user.email", DUMMY_EMAIL])?;
 
