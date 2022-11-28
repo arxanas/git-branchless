@@ -4,8 +4,8 @@
 use std::fmt::Write;
 use std::time::SystemTime;
 
-use cursive::theme::BaseColor;
-use cursive::utils::markup::StyledString;
+use cursive_core::theme::BaseColor;
+use cursive_core::utils::markup::StyledString;
 use eyre::Context;
 use lib::core::check_out::{create_snapshot, restore_snapshot};
 use lib::core::effects::Effects;

@@ -14,6 +14,7 @@ git-branchless-smartlog = { version = "0.7.0-pre.1", path = "../git-branchless-s
 tracing = "0.1.37"
 cursive_buffered_backend = "0.6.1"
 git-record = { version = "0.3.0", path = "../git-record" }
+cursive_core = "0.3.5"
 
 [dev-dependencies]
 insta = "1.21.0"

@@ -27,10 +27,7 @@ clap_mangen = "0.2.5"
 color-eyre = "0.6.2"
 console = "0.15.0"
 crossbeam = "0.8.2"
-cursive = { version = "0.20.0", default-features = false, features = [
-  "crossterm-backend",
-] }
-cursive_buffered_backend = "0.6.1"
+cursive_core = "0.3.5"
 dialoguer = "0.10.1"
 eden_dag = { package = "esl01-dag", version = "0.2.1" }
 eyre = "0.6.8"
@@ -38,6 +35,7 @@ fslock = "0.2.1"
 git-branchless-move = { version = "0.7.0-pre.1", path = "../git-branchless-move" }
 git-branchless-navigation = { version = "0.7.0-pre.1", path = "../git-branchless-navigation" }
 git-branchless-opts = { version = "0.7.0-pre.1", path = "../git-branchless-opts" }
+git-branchless-record = { version = "0.7.0-pre.1", path = "../git-branchless-record" }
 git-branchless-revset = { version = "0.7.0-pre.1", path = "../git-branchless-revset" }
 git-branchless-smartlog = { version = "0.7.0-pre.1", path = "../git-branchless-smartlog" }
 git-branchless-test = { version = "0.7.0-pre.1", path = "../git-branchless-test" }
