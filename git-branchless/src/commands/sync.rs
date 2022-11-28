@@ -1,6 +1,6 @@
 //! Implements the `git sync` command.
 
-use cursive::theme::BaseColor;
+use cursive_core::theme::BaseColor;
 use std::fmt::Write;
 use std::time::SystemTime;
 

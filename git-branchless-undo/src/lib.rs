@@ -14,11 +14,13 @@ use std::io::{stdin, BufRead, BufReader, Read};
 use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
 use std::time::SystemTime;
 
-use cursive::event::Key;
-use cursive::traits::Resizable;
-use cursive::utils::markup::StyledString;
-use cursive::views::{Dialog, EditView, LinearLayout, OnEventView, Panel, ScrollView, TextView};
-use cursive::{Cursive, CursiveRunnable, CursiveRunner};
+use cursive_core::event::Key;
+use cursive_core::traits::Resizable;
+use cursive_core::utils::markup::StyledString;
+use cursive_core::views::{
+    Dialog, EditView, LinearLayout, OnEventView, Panel, ScrollView, TextView,
+};
+use cursive_core::{Cursive, CursiveRunner};
 use eyre::Context;
 use lib::core::check_out::{check_out_commit, CheckOutCommitOptions, CheckoutTarget};
 use lib::core::repo_ext::RepoExt;
@@ -412,7 +414,7 @@ fn describe_events_numbered(
 
 #[instrument(skip(siv))]
 fn select_past_event(
-    mut siv: CursiveRunner<CursiveRunnable>,
+    mut siv: CursiveRunner<Cursive>,
     effects: &Effects,
     repo: &Repo,
     dag: &Dag,
@@ -446,13 +448,13 @@ fn select_past_event(
         ('q'.into(), Message::Quit),
         ('Q'.into(), Message::Quit),
         (
-            cursive::event::Key::Enter.into(),
+            cursive_core::event::Key::Enter.into(),
             Message::SelectEventIdAndQuit,
         ),
     ]
     .iter()
     .cloned()
-    .for_each(|(event, message): (cursive::event::Event, Message)| {
+    .for_each(|(event, message): (cursive_core::event::Event, Message)| {
         siv.add_global_callback(event, {
             let main_tx = main_tx.clone();
             move |_siv| main_tx.send(message).unwrap()
@@ -991,7 +993,7 @@ pub fn undo(
 pub mod testing {
     use std::io::Read;
 
-    use cursive::{CursiveRunnable, CursiveRunner};
+    use cursive_core::{Cursive, CursiveRunner};
 
     use lib::core::dag::Dag;
     use lib::core::effects::Effects;
@@ -1000,7 +1002,7 @@ pub mod testing {
     use lib::util::ExitCode;
 
     pub fn select_past_event(
-        siv: CursiveRunner<CursiveRunnable>,
+        siv: CursiveRunner<Cursive>,
         effects: &Effects,
         repo: &Repo,
         dag: &Dag,

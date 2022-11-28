@@ -7,7 +7,6 @@ mod hide;
 mod hooks;
 mod init;
 mod query;
-mod record;
 mod repair;
 mod restack;
 mod reword;
@@ -24,8 +23,8 @@ use std::path::PathBuf;
 use std::time::SystemTime;
 
 use clap::Parser;
-use cursive::theme::BaseColor;
-use cursive::utils::markup::StyledString;
+use cursive_core::theme::BaseColor;
+use cursive_core::utils::markup::StyledString;
 use eyre::Context;
 use itertools::Itertools;
 use lib::core::rewrite::MergeConflictRemediation;
@@ -299,7 +298,7 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
             message,
             interactive,
             detach,
-        } => record::record(&effects, &git_run_info, message, interactive, detach)?,
+        } => git_branchless_record::record(&effects, &git_run_info, message, interactive, detach)?,
 
         Command::Reword {
             revsets,

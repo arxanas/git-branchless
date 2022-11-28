@@ -1,4 +1,3 @@
-use std::convert::Infallible;
 use std::mem::swap;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
@@ -15,8 +14,8 @@ use lib::core::repo_ext::RepoExt;
 use lib::git::{GitRunInfo, GitVersion, Repo};
 use lib::testing::{make_git, Git, GitInitOptions};
 
-use cursive::event::Key;
-use cursive::CursiveRunnable;
+use cursive_core::event::Key;
+use cursive_core::{Cursive, CursiveRunner};
 use lib::util::ExitCode;
 
 fn run_select_past_event(
@@ -37,10 +36,10 @@ fn run_select_past_event(
         event_cursor,
         &references_snapshot,
     )?;
-    let siv = CursiveRunnable::new::<Infallible, _>(move || {
-        Ok(CursiveTestingBackend::init(events.clone()))
-    });
-    select_past_event(siv.into_runner(), &effects, repo, &dag, &mut event_replayer)
+    let backend = CursiveTestingBackend::init(events);
+    let siv = Cursive::new();
+    let siv = CursiveRunner::new(siv, backend);
+    select_past_event(siv, &effects, repo, &dag, &mut event_replayer)
 }
 
 fn run_undo_events(git: &Git, event_cursor: EventCursor) -> eyre::Result<(isize, String)> {

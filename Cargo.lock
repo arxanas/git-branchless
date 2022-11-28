@@ -1122,8 +1122,7 @@ dependencies = [
  "color-eyre",
  "console",
  "crossbeam",
- "cursive",
- "cursive_buffered_backend",
+ "cursive_core",
  "dialoguer",
  "esl01-dag",
  "eyre",
@@ -1132,6 +1131,7 @@ dependencies = [
  "git-branchless-move",
  "git-branchless-navigation",
  "git-branchless-opts",
+ "git-branchless-record",
  "git-branchless-revset",
  "git-branchless-smartlog",
  "git-branchless-test",
@@ -1240,6 +1240,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "git-branchless-record"
+version = "0.7.0-pre.1"
+dependencies = [
+ "cursive",
+ "cursive_buffered_backend",
+ "eyre",
+ "git-branchless-lib",
+ "git-record",
+ "itertools 0.10.5",
+]
+
+[[package]]
 name = "git-branchless-revset"
 version = "0.7.0-pre.1"
 dependencies = [
@@ -1302,6 +1314,7 @@ version = "0.7.0-pre.1"
 dependencies = [
  "cursive",
  "cursive_buffered_backend",
+ "cursive_core",
  "eyre",
  "git-branchless-lib",
  "git-branchless-revset",
