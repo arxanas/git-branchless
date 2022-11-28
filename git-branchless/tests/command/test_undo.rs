@@ -5,8 +5,8 @@ use std::sync::{Arc, Mutex};
 
 use crate::util::trim_lines;
 
-use git_branchless::commands::testing::undo::{select_past_event, undo_events};
-use git_branchless::tui::testing::{screen_to_string, CursiveTestingBackend, CursiveTestingEvent};
+use git_branchless_undo::testing::{select_past_event, undo_events};
+use git_record::testing::{screen_to_string, CursiveTestingBackend, CursiveTestingEvent};
 use lib::core::dag::Dag;
 use lib::core::effects::Effects;
 use lib::core::eventlog::{EventCursor, EventLogDb, EventReplayer};

@@ -1135,6 +1135,7 @@ dependencies = [
  "git-branchless-revset",
  "git-branchless-smartlog",
  "git-branchless-test",
+ "git-branchless-undo",
  "git-record",
  "glob",
  "insta",
@@ -1292,6 +1293,21 @@ dependencies = [
  "num_cpus",
  "serde",
  "serde_json",
+ "tracing",
+]
+
+[[package]]
+name = "git-branchless-undo"
+version = "0.7.0-pre.1"
+dependencies = [
+ "cursive",
+ "cursive_buffered_backend",
+ "eyre",
+ "git-branchless-lib",
+ "git-branchless-revset",
+ "git-branchless-smartlog",
+ "git-record",
+ "insta",
  "tracing",
 ]
 

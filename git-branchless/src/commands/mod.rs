@@ -14,7 +14,6 @@ mod reword;
 mod snapshot;
 mod submit;
 mod sync;
-mod undo;
 mod wrap;
 
 use std::any::Any;
@@ -423,7 +422,7 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
         },
 
         Command::Undo { interactive, yes } => {
-            undo::undo(&effects, &git_run_info, interactive, yes)?
+            git_branchless_undo::undo(&effects, &git_run_info, interactive, yes)?
         }
 
         Command::Unhide {
@@ -553,9 +552,4 @@ support repositories with this configuration option enabled.",
     };
 
     Ok(None)
-}
-
-/// Re-exports of internals for testing purposes.
-pub mod testing {
-    pub use crate::commands::undo::testing as undo;
 }
