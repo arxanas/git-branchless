@@ -46,8 +46,8 @@ pub trait SingletonView<V> {
 /// ```
 /// # use cursive::Cursive;
 /// # use cursive::views::{EditView, TextView};
-/// # use git_branchless::declare_views;
-/// # use git_branchless::tui::SingletonView;
+/// # use git_branchless_undo::declare_views;
+/// # use git_branchless_undo::tui::SingletonView;
 /// # fn main() {
 /// declare_views! {
 ///     SomeDisplayView => TextView,

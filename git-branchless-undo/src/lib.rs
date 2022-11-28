@@ -3,6 +3,12 @@
 //! This is accomplished by finding the events that have happened since a certain
 //! time and inverting them.
 
+#![warn(missing_docs)]
+#![warn(clippy::all, clippy::as_conversions, clippy::clone_on_ref_ptr)]
+#![allow(clippy::too_many_arguments, clippy::blocks_in_if_conditions)]
+
+pub mod tui;
+
 use std::fmt::Write;
 use std::io::{stdin, BufRead, BufReader, Read};
 use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
@@ -19,7 +25,6 @@ use lib::core::repo_ext::RepoExt;
 use lib::util::ExitCode;
 use tracing::instrument;
 
-use crate::declare_views;
 use crate::tui::{with_siv, SingletonView};
 use git_branchless_revset::resolve_default_smartlog_commits;
 use git_branchless_smartlog::{make_smartlog_graph, render_graph};
