@@ -1130,6 +1130,7 @@ dependencies = [
  "fslock",
  "git-branchless-lib",
  "git-branchless-move",
+ "git-branchless-navigation",
  "git-branchless-opts",
  "git-branchless-revset",
  "git-branchless-smartlog",
@@ -1209,6 +1210,22 @@ dependencies = [
  "git-branchless-revset",
  "insta",
  "rayon",
+ "tracing",
+]
+
+[[package]]
+name = "git-branchless-navigation"
+version = "0.7.0-pre.1"
+dependencies = [
+ "cursive",
+ "esl01-dag",
+ "eyre",
+ "git-branchless-lib",
+ "git-branchless-opts",
+ "git-branchless-revset",
+ "git-branchless-smartlog",
+ "itertools 0.10.5",
+ "skim",
  "tracing",
 ]
 

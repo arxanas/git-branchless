@@ -1,3 +1,5 @@
+//! An interactive prompt to select a commit.
+
 use lib::core::node_descriptors::NodeDescriptor;
 use lib::git::{Commit, NonZeroOid};
 
