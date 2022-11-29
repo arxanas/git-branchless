@@ -6,7 +6,6 @@ mod gc;
 mod hide;
 mod hooks;
 mod init;
-mod navigation;
 mod query;
 mod record;
 mod repair;
@@ -141,7 +140,7 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
         Command::BugReport => bug_report::bug_report(&effects, &git_run_info)?,
 
         Command::Switch { switch_options } => {
-            navigation::switch(&effects, &git_run_info, &switch_options)?
+            git_branchless_navigation::switch(&effects, &git_run_info, &switch_options)?
         }
 
         Command::Gc | Command::HookPreAutoGc => {
@@ -252,19 +251,19 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
 
         Command::Next {
             traverse_commits_options,
-        } => navigation::traverse_commits(
+        } => git_branchless_navigation::traverse_commits(
             &effects,
             &git_run_info,
-            navigation::Command::Next,
+            git_branchless_navigation::Command::Next,
             &traverse_commits_options,
         )?,
 
         Command::Prev {
             traverse_commits_options,
-        } => navigation::traverse_commits(
+        } => git_branchless_navigation::traverse_commits(
             &effects,
             &git_run_info,
-            navigation::Command::Prev,
+            git_branchless_navigation::Command::Prev,
             &traverse_commits_options,
         )?,
 

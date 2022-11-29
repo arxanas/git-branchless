@@ -1,5 +1,11 @@
 //! Convenience commands to help the user move through a stack of commits.
 
+#![warn(missing_docs)]
+#![warn(clippy::all, clippy::as_conversions, clippy::clone_on_ref_ptr)]
+#![allow(clippy::too_many_arguments, clippy::blocks_in_if_conditions)]
+
+pub mod prompt;
+
 use std::collections::HashSet;
 
 use std::ffi::OsString;
@@ -14,7 +20,6 @@ use lib::core::repo_ext::RepoExt;
 use lib::util::ExitCode;
 use tracing::{instrument, warn};
 
-use crate::tui::prompt_select_commit;
 use git_branchless_opts::{SwitchOptions, TraverseCommitsOptions};
 use git_branchless_revset::resolve_default_smartlog_commits;
 use git_branchless_smartlog::make_smartlog_graph;
@@ -28,6 +33,8 @@ use lib::core::node_descriptors::{
     DifferentialRevisionDescriptor, NodeDescriptor, Redactor, RelativeTimeDescriptor,
 };
 use lib::git::{GitRunInfo, NonZeroOid, Repo};
+
+use crate::prompt::prompt_select_commit;
 
 /// The command being invoked, indicating which direction to traverse commits.
 #[derive(Clone, Copy, Debug)]
