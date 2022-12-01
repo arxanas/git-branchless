@@ -172,6 +172,22 @@ pub fn amend(
         CommitSet::empty(),
         CommitSet::from(amended_commit_oid),
     )?;
+    let exit_code = check_out_commit(
+        effects,
+        git_run_info,
+        &repo,
+        &event_log_db,
+        event_tx_id,
+        Some(CheckoutTarget::Oid(amended_commit_oid)),
+        &CheckOutCommitOptions {
+            additional_args: Default::default(),
+            reset: true,
+            render_smartlog: false,
+        },
+    )?;
+    if !exit_code.is_success() {
+        return Ok(exit_code);
+    }
 
     let rebase_plan = {
         let build_options = BuildRebasePlanOptions {
@@ -238,10 +254,10 @@ pub fn amend(
     let execute_options = ExecuteRebasePlanOptions {
         now,
         event_tx_id,
-        force_in_memory: true,
-        force_on_disk: false,
+        force_in_memory: move_options.force_in_memory,
+        force_on_disk: move_options.force_on_disk,
         preserve_timestamps: get_restack_preserve_timestamps(&repo)?,
-        resolve_merge_conflicts: false,
+        resolve_merge_conflicts: move_options.resolve_merge_conflicts,
         check_out_commit_options: CheckOutCommitOptions {
             additional_args: Default::default(),
             reset: true,
@@ -301,7 +317,7 @@ pub fn amend(
                 Some(CheckoutTarget::Oid(amended_commit_oid)),
                 &CheckOutCommitOptions {
                     additional_args: checkout_args,
-                    reset: false,
+                    reset: true,
                     render_smartlog: true,
                 },
             )?;
