@@ -12,7 +12,10 @@ use tracing::{instrument, warn};
 
 use crate::opts::write_man_pages;
 use lib::core::config::{get_core_hooks_path, get_default_branch_name};
+use lib::core::dag::Dag;
 use lib::core::effects::Effects;
+use lib::core::eventlog::{EventLogDb, EventReplayer};
+use lib::core::repo_ext::RepoExt;
 use lib::git::{BranchType, Config, ConfigRead, ConfigWrite, GitRunInfo, GitVersion, Repo};
 
 pub const ALL_HOOKS: &[(&str, &str)] = &[
@@ -581,6 +584,24 @@ pub fn init(
         git_run_info,
     )?;
     install_man_pages(effects, &repo, &mut config)?;
+
+    let conn = repo.get_db_conn()?;
+    let event_log_db = EventLogDb::new(&conn)?;
+    // If the main branch hasn't been born yet, then we may fail to generate a
+    // references snapshot. In that case, defer syncing of the DAG to a future
+    // invocation, when the main branch has been born.
+    if let Ok(references_snapshot) = repo.get_references_snapshot() {
+        let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
+        let event_cursor = event_replayer.make_default_cursor();
+        Dag::open_and_sync(
+            effects,
+            &repo,
+            &event_replayer,
+            event_cursor,
+            &references_snapshot,
+        )?;
+    }
+
     writeln!(
         effects.get_output_stream(),
         "{}",

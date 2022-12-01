@@ -763,6 +763,7 @@ impl EventReplayer {
     /// * `event_log_db`: The database to query events from.
     ///
     /// Returns: The constructed replayer.
+    #[instrument]
     pub fn from_event_log_db(
         effects: &Effects,
         repo: &Repo,
@@ -1204,6 +1205,7 @@ impl EventReplayer {
     ///
     /// Returns: A mapping from an OID to the names of branches pointing to that
     /// OID.
+    #[instrument]
     fn get_cursor_main_branch_oid(
         &self,
         cursor: EventCursor,
