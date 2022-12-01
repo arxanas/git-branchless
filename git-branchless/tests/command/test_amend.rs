@@ -20,19 +20,12 @@ fn test_amend_with_children() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["branchless", "amend"])?;
         insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> reset 7ac317b9d1dd1bbdf46e8ee692b9b9e280f28a50
+        branchless: running command: <git-executable> checkout 7ac317b9d1dd1bbdf46e8ee692b9b9e280f28a50
         Attempting rebase in-memory...
         [1/2] Committed as: 7ac317b create test2.txt
         [2/2] Committed as: b51f01b create test3.txt
         branchless: processing 2 rewritten commits
-        branchless: running command: <git-executable> reset 7ac317b9d1dd1bbdf46e8ee692b9b9e280f28a50
-        branchless: running command: <git-executable> checkout 7ac317b9d1dd1bbdf46e8ee692b9b9e280f28a50
-        O f777ecc (master) create initial.txt
-        |
-        o 62fc20d create test1.txt
-        |
-        @ 7ac317b create test2.txt
-        |
-        o b51f01b create test3.txt
         In-memory rebase succeeded.
         Amended with 1 uncommitted change.
         "###);
@@ -40,46 +33,99 @@ fn test_amend_with_children() -> eyre::Result<()> {
 
     git.write_file_txt("test3", "create merge conflict")?;
     git.run(&["add", "."])?;
+
     {
-        let (stdout, _stderr) = git.run(&["branchless", "amend"])?;
+        let (stdout, _stderr) = git.run(&["status", "-vv"])?;
         insta::assert_snapshot!(stdout, @r###"
-        Attempting rebase in-memory...
-        [1/2] Committed as: 7c5e857 create test2.txt
-        This operation would cause a merge conflict, and --merge was not provided.
-        Amending without rebasing descendants: 7ac317b create test2.txt
-        branchless: running command: <git-executable> checkout 7c5e8578f402b6b77afa143283b65fcdc9614233
-        O f777ecc (master) create initial.txt
-        |
-        o 62fc20d create test1.txt
-        |\
-        | x 7ac317b (rewritten as 7c5e8578) create test2.txt
-        | |
-        | o b51f01b create test3.txt
-        |
-        @ 7c5e857 create test2.txt
-        hint: there is 1 abandoned commit in your commit graph
-        hint: to fix this, run: git restack
-        hint: disable this hint by running: git config --global branchless.hint.smartlogFixAbandoned false
-        Amended with 1 staged change.
-        To resolve merge conflicts run: git restack --merge
+        HEAD detached from 96d1c37
+        Changes to be committed:
+          (use "git restore --staged <file>..." to unstage)
+        	new file:   test3.txt
+
+        Changes to be committed:
+        diff --git c/test3.txt i/test3.txt
+        new file mode 100644
+        index 0000000..4706e16
+        --- /dev/null
+        +++ i/test3.txt
+        @@ -0,0 +1 @@
+        +create merge conflict
+        \ No newline at end of file
         "###);
     }
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let git = git.duplicate_repo()?;
+        {
+            let (stdout, _stderr) = git.run(&["branchless", "amend"])?;
+            insta::assert_snapshot!(stdout, @r###"
+            branchless: running command: <git-executable> reset 7c5e8578f402b6b77afa143283b65fcdc9614233
+            branchless: running command: <git-executable> checkout 7c5e8578f402b6b77afa143283b65fcdc9614233
+            Attempting rebase in-memory...
+            [1/2] Committed as: 7c5e857 create test2.txt
+            This operation would cause a merge conflict, and --merge was not provided.
+            Amending without rebasing descendants: 7ac317b create test2.txt
+            branchless: running command: <git-executable> reset 7c5e8578f402b6b77afa143283b65fcdc9614233
+            branchless: running command: <git-executable> checkout 7c5e8578f402b6b77afa143283b65fcdc9614233
+            O f777ecc (master) create initial.txt
+            |
+            o 62fc20d create test1.txt
+            |\
+            | x 7ac317b (rewritten as 7c5e8578) create test2.txt
+            | |
+            | o b51f01b create test3.txt
+            |
+            @ 7c5e857 create test2.txt
+            hint: there is 1 abandoned commit in your commit graph
+            hint: to fix this, run: git restack
+            hint: disable this hint by running: git config --global branchless.hint.smartlogFixAbandoned false
+            Amended with 1 staged change.
+            To resolve merge conflicts run: git restack --merge
+            "###);
+        }
+
+        {
+            let (stdout, _stderr) = git.run(&["status", "-vv"])?;
+            insta::assert_snapshot!(stdout, @r###"
+            HEAD detached from 96d1c37
+            nothing to commit, working tree clean
+            "###);
+        }
+
+        {
+            let (stdout, _stderr) = git.run(&["smartlog"])?;
+            insta::assert_snapshot!(stdout, @r###"
+            O f777ecc (master) create initial.txt
+            |
+            o 62fc20d create test1.txt
+            |\
+            | x 7ac317b (rewritten as 7c5e8578) create test2.txt
+            | |
+            | o b51f01b create test3.txt
+            |
+            @ 7c5e857 create test2.txt
+            hint: there is 1 abandoned commit in your commit graph
+            hint: to fix this, run: git restack
+            hint: disable this hint by running: git config --global branchless.hint.smartlogFixAbandoned false
+            "###);
+        }
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["branchless", "amend", "--merge"])?;
         insta::assert_snapshot!(stdout, @r###"
-        O f777ecc (master) create initial.txt
-        |
-        o 62fc20d create test1.txt
-        |\
-        | x 7ac317b (rewritten as 7c5e8578) create test2.txt
-        | |
-        | o b51f01b create test3.txt
-        |
-        @ 7c5e857 create test2.txt
-        hint: there is 1 abandoned commit in your commit graph
-        hint: to fix this, run: git restack
-        hint: disable this hint by running: git config --global branchless.hint.smartlogFixAbandoned false
+        branchless: running command: <git-executable> reset 7c5e8578f402b6b77afa143283b65fcdc9614233
+        branchless: running command: <git-executable> checkout 7c5e8578f402b6b77afa143283b65fcdc9614233
+        Attempting rebase in-memory...
+        [1/2] Committed as: 7c5e857 create test2.txt
+        There was a merge conflict, which currently can't be resolved when rebasing in-memory.
+        The conflicting commit was: b51f01b create test3.txt
+        Trying again on-disk...
+        branchless: running command: <git-executable> diff --quiet
+        Calling Git for on-disk rebase...
+        branchless: running command: <git-executable> rebase --continue
+        8199289e5f25fea6084ac3c456ff543e34c9618b
+        Amended with 1 staged change.
         "###);
     }
 
@@ -99,18 +145,23 @@ fn test_amend_rename() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["branchless", "amend"])?;
         insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> reset f6b255388219264f4bcd258a3020d262c2d7b03e
+        branchless: running command: <git-executable> checkout f6b255388219264f4bcd258a3020d262c2d7b03e
         Attempting rebase in-memory...
         [1/1] Committed as: f6b2553 create test2.txt
         branchless: processing 1 rewritten commit
-        branchless: running command: <git-executable> reset f6b255388219264f4bcd258a3020d262c2d7b03e
-        branchless: running command: <git-executable> checkout f6b255388219264f4bcd258a3020d262c2d7b03e
+        In-memory rebase succeeded.
+        Amended with 2 staged changes.
+        "###);
+    }
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
         o 62fc20d create test1.txt
         |
         @ f6b2553 create test2.txt
-        In-memory rebase succeeded.
-        Amended with 2 staged changes.
         "###);
     }
     {
@@ -138,18 +189,23 @@ fn test_amend_delete() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["branchless", "amend"])?;
         insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> reset f0f07277a6448cac370e6023ab379ec0c601ccfe
+        branchless: running command: <git-executable> checkout f0f07277a6448cac370e6023ab379ec0c601ccfe
         Attempting rebase in-memory...
         [1/1] Committed as: f0f0727 create test2.txt
         branchless: processing 1 rewritten commit
-        branchless: running command: <git-executable> reset f0f07277a6448cac370e6023ab379ec0c601ccfe
-        branchless: running command: <git-executable> checkout f0f07277a6448cac370e6023ab379ec0c601ccfe
+        In-memory rebase succeeded.
+        Amended with 1 uncommitted change.
+        "###);
+    }
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
         o 62fc20d create test1.txt
         |
         @ f0f0727 create test2.txt
-        In-memory rebase succeeded.
-        Amended with 1 uncommitted change.
         "###);
     }
     {
@@ -177,18 +233,23 @@ fn test_amend_delete_only_in_index() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["branchless", "amend"])?;
         insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> reset f0f07277a6448cac370e6023ab379ec0c601ccfe
+        branchless: running command: <git-executable> checkout f0f07277a6448cac370e6023ab379ec0c601ccfe
         Attempting rebase in-memory...
         [1/1] Committed as: f0f0727 create test2.txt
         branchless: processing 1 rewritten commit
-        branchless: running command: <git-executable> reset f0f07277a6448cac370e6023ab379ec0c601ccfe
-        branchless: running command: <git-executable> checkout f0f07277a6448cac370e6023ab379ec0c601ccfe
+        In-memory rebase succeeded.
+        Amended with 1 staged change.
+        "###);
+    }
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
         o 62fc20d create test1.txt
         |
         @ f0f0727 create test2.txt
-        In-memory rebase succeeded.
-        Amended with 1 staged change.
         "###);
     }
     {
@@ -263,21 +324,27 @@ fn test_amend_with_working_copy() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["branchless", "amend"])?;
         insta::assert_snapshot!(stdout, @r###"
-        Attempting rebase in-memory...
-        [1/1] Committed as: f8e4ba1 create test2.txt
-        branchless: processing 1 rewritten commit
         branchless: running command: <git-executable> reset f8e4ba1be5cefcf22e831f51b1525b0be8215a31
         Unstaged changes after reset:
         M	test2.txt
         branchless: running command: <git-executable> checkout f8e4ba1be5cefcf22e831f51b1525b0be8215a31
         M	test2.txt
+        Attempting rebase in-memory...
+        [1/1] Committed as: f8e4ba1 create test2.txt
+        branchless: processing 1 rewritten commit
+        In-memory rebase succeeded.
+        Amended with 1 staged change. (Some uncommitted changes were not amended.)
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
         o 62fc20d create test1.txt
         |
         @ f8e4ba1 create test2.txt
-        In-memory rebase succeeded.
-        Amended with 1 staged change. (Some uncommitted changes were not amended.)
         "###);
     }
 
@@ -307,18 +374,24 @@ fn test_amend_with_working_copy() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["branchless", "amend"])?;
         insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> reset 2e69581cb466962fa85e5918f29af6d2925fdd6f
+        branchless: running command: <git-executable> checkout 2e69581cb466962fa85e5918f29af6d2925fdd6f
         Attempting rebase in-memory...
         [1/1] Committed as: 2e69581 create test2.txt
         branchless: processing 1 rewritten commit
-        branchless: running command: <git-executable> reset 2e69581cb466962fa85e5918f29af6d2925fdd6f
-        branchless: running command: <git-executable> checkout 2e69581cb466962fa85e5918f29af6d2925fdd6f
+        In-memory rebase succeeded.
+        Amended with 1 uncommitted change.
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
         o 62fc20d create test1.txt
         |
         @ 2e69581 create test2.txt
-        In-memory rebase succeeded.
-        Amended with 1 uncommitted change.
         "###);
     }
 
@@ -349,16 +422,22 @@ fn test_amend_head() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["branchless", "amend"])?;
         insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> reset 3b98a960e6ebde39a933c25413b43bce8c0fd128
+        branchless: running command: <git-executable> checkout 3b98a960e6ebde39a933c25413b43bce8c0fd128
         Attempting rebase in-memory...
         [1/1] Committed as: 3b98a96 create test1.txt
         branchless: processing 1 rewritten commit
-        branchless: running command: <git-executable> reset 3b98a960e6ebde39a933c25413b43bce8c0fd128
-        branchless: running command: <git-executable> checkout 3b98a960e6ebde39a933c25413b43bce8c0fd128
+        In-memory rebase succeeded.
+        Amended with 1 uncommitted change.
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
         @ 3b98a96 create test1.txt
-        In-memory rebase succeeded.
-        Amended with 1 uncommitted change.
         "###);
     }
 
@@ -374,16 +453,22 @@ fn test_amend_head() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["branchless", "amend"])?;
         insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> reset 685ef311b070a460b7c86a9aed068be563978021
+        branchless: running command: <git-executable> checkout 685ef311b070a460b7c86a9aed068be563978021
         Attempting rebase in-memory...
         [1/1] Committed as: 685ef31 create test1.txt
         branchless: processing 1 rewritten commit
-        branchless: running command: <git-executable> reset 685ef311b070a460b7c86a9aed068be563978021
-        branchless: running command: <git-executable> checkout 685ef311b070a460b7c86a9aed068be563978021
+        In-memory rebase succeeded.
+        Amended with 1 staged change.
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
         @ 685ef31 create test1.txt
-        In-memory rebase succeeded.
-        Amended with 1 staged change.
         "###);
     }
 
@@ -410,18 +495,23 @@ fn test_amend_executable() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["branchless", "amend"])?;
         insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> reset f00ec4b5a81438f4e792ca5576a290b16fed8fdb
+        branchless: running command: <git-executable> checkout f00ec4b5a81438f4e792ca5576a290b16fed8fdb
         Attempting rebase in-memory...
         [1/1] Committed as: f00ec4b create test2.txt
         branchless: processing 1 rewritten commit
-        branchless: running command: <git-executable> reset f00ec4b5a81438f4e792ca5576a290b16fed8fdb
-        branchless: running command: <git-executable> checkout f00ec4b5a81438f4e792ca5576a290b16fed8fdb
+        In-memory rebase succeeded.
+        Amended with 1 staged change.
+        "###);
+    }
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
         o 62fc20d create test1.txt
         |
         @ f00ec4b create test2.txt
-        In-memory rebase succeeded.
-        Amended with 1 staged change.
         "###);
     }
     {
@@ -510,15 +600,11 @@ fn test_amend_undo() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["amend"])?;
         insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> reset 94b10776514a5a182d920265fc3c42f2147b1201
+        branchless: running command: <git-executable> checkout 94b10776514a5a182d920265fc3c42f2147b1201
         Attempting rebase in-memory...
         [1/1] Committed as: 94b1077 create file1.txt
-        branchless: processing 1 update: branch foo
         branchless: processing 1 rewritten commit
-        branchless: running command: <git-executable> reset foo
-        branchless: running command: <git-executable> checkout foo
-        O f777ecc (master) create initial.txt
-        |
-        @ 94b1077 (> foo) create file1.txt
         In-memory rebase succeeded.
         Amended with 1 uncommitted change.
         "###);
@@ -527,8 +613,17 @@ fn test_amend_undo() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["status"])?;
         insta::assert_snapshot!(stdout, @r###"
-        On branch foo
+        HEAD detached at 94b1077
         nothing to commit, working tree clean
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        @ 94b1077 (foo) create file1.txt
         "###);
     }
 
@@ -536,16 +631,17 @@ fn test_amend_undo() -> eyre::Result<()> {
         let (stdout, _stderr) = git.run(&["undo", "-y"])?;
         insta::assert_snapshot!(stdout, @r###"
         Will apply these actions:
-        1. Check out from 94b1077 create file1.txt
-                       to 94b1077 create file1.txt
-        2. Check out from 94b1077 create file1.txt
-                       to c0bdfb5 create file1.txt
-        3. Restore snapshot for c0bdfb5 create file1.txt
-                backed up using 55e9304 branchless: automated working copy snapshot
-        4. Rewrite commit 94b1077 create file1.txt
+        1. Rewrite commit 94b1077 create file1.txt
                       as c0bdfb5 create file1.txt
-        5. Move branch foo from 94b1077 create file1.txt
+        2. Check out from 94b1077 create file1.txt
+                       to 94b1077 create file1.txt
+        3. Move branch foo from 94b1077 create file1.txt
                              to c0bdfb5 create file1.txt
+        4. Check out from 94b1077 create file1.txt
+                       to c0bdfb5 create file1.txt
+        5. Restore snapshot for branch foo
+                    pointing to c0bdfb5 create file1.txt
+                backed up using a293e0b branchless: automated working copy snapshot
         6. Restore snapshot for branch foo
                     pointing to c0bdfb5 create file1.txt
                 backed up using a293e0b branchless: automated working copy snapshot
@@ -615,16 +711,22 @@ fn test_amend_undo_detached_head() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["amend"])?;
         insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> reset 94b10776514a5a182d920265fc3c42f2147b1201
+        branchless: running command: <git-executable> checkout 94b10776514a5a182d920265fc3c42f2147b1201
         Attempting rebase in-memory...
         [1/1] Committed as: 94b1077 create file1.txt
         branchless: processing 1 rewritten commit
-        branchless: running command: <git-executable> reset 94b10776514a5a182d920265fc3c42f2147b1201
-        branchless: running command: <git-executable> checkout 94b10776514a5a182d920265fc3c42f2147b1201
+        In-memory rebase succeeded.
+        Amended with 1 uncommitted change.
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
         @ 94b1077 create file1.txt
-        In-memory rebase succeeded.
-        Amended with 1 uncommitted change.
         "###);
     }
 
@@ -632,14 +734,14 @@ fn test_amend_undo_detached_head() -> eyre::Result<()> {
         let (stdout, _stderr) = git.run(&["undo", "-y"])?;
         insta::assert_snapshot!(stdout, @r###"
         Will apply these actions:
-        1. Check out from 94b1077 create file1.txt
-                       to 94b1077 create file1.txt
-        2. Check out from 94b1077 create file1.txt
-                       to c0bdfb5 create file1.txt
-        3. Restore snapshot for c0bdfb5 create file1.txt
-                backed up using 55e9304 branchless: automated working copy snapshot
-        4. Rewrite commit 94b1077 create file1.txt
+        1. Rewrite commit 94b1077 create file1.txt
                       as c0bdfb5 create file1.txt
+        2. Check out from 94b1077 create file1.txt
+                       to 94b1077 create file1.txt
+        3. Check out from 94b1077 create file1.txt
+                       to c0bdfb5 create file1.txt
+        4. Restore snapshot for c0bdfb5 create file1.txt
+                backed up using 55e9304 branchless: automated working copy snapshot
         5. Restore snapshot for c0bdfb5 create file1.txt
                 backed up using 55e9304 branchless: automated working copy snapshot
         branchless: running command: <git-executable> checkout 55e9304c975103af25622dca880679182506f49f
@@ -684,6 +786,8 @@ fn test_amend_reparent() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["amend", "--reparent", "--debug-dump-rebase-plan"])?;
         insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> reset 3d8543b87d55c5b7995935e18e05cb6c399fb526
+        branchless: running command: <git-executable> checkout 3d8543b87d55c5b7995935e18e05cb6c399fb526
         Rebase plan: Some(
             RebasePlan {
                 first_dest_oid: NonZeroOid(f777ecc9b0db5ed372b2615695191a8a17f79f24),
@@ -722,15 +826,19 @@ fn test_amend_reparent() -> eyre::Result<()> {
         [1/2] Committed as: 3d8543b create test1.txt
         [2/2] Committed as: e0d5305 create test2.txt
         branchless: processing 2 rewritten commits
-        branchless: running command: <git-executable> reset 3d8543b87d55c5b7995935e18e05cb6c399fb526
-        branchless: running command: <git-executable> checkout 3d8543b87d55c5b7995935e18e05cb6c399fb526
+        In-memory rebase succeeded.
+        Amended with 1 staged change.
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
         @ 3d8543b create test1.txt
         |
         o e0d5305 create test2.txt
-        In-memory rebase succeeded.
-        Amended with 1 staged change.
         "###);
     }
 
@@ -858,6 +966,8 @@ fn test_amend_reparent_merge() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["amend", "--reparent", "--debug-dump-rebase-plan"])?;
         insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> reset d517a648915434edf38114da4efd820ec6f513cf
+        branchless: running command: <git-executable> checkout d517a648915434edf38114da4efd820ec6f513cf
         Rebase plan: Some(
             RebasePlan {
                 first_dest_oid: NonZeroOid(62fc20d2a290daea0d52bdc2ed2ad4be6491010e),
@@ -922,8 +1032,14 @@ fn test_amend_reparent_merge() -> eyre::Result<()> {
         [2/3] Committed as: 99a19d2 create test3.txt
         [3/3] Committed as: f66b478 Merge commit '402c2e6c16e2861d57d7fb6a20cbc5559bd00d44' into HEAD
         branchless: processing 3 rewritten commits
-        branchless: running command: <git-executable> reset d517a648915434edf38114da4efd820ec6f513cf
-        branchless: running command: <git-executable> checkout d517a648915434edf38114da4efd820ec6f513cf
+        In-memory rebase succeeded.
+        Amended with 1 uncommitted change.
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |\
         | o 62fc20d create test1.txt
@@ -938,8 +1054,6 @@ fn test_amend_reparent_merge() -> eyre::Result<()> {
         | & (merge) 99a19d2 create test3.txt
         |/
         o f66b478 Merge commit '402c2e6c16e2861d57d7fb6a20cbc5559bd00d44' into HEAD
-        In-memory rebase succeeded.
-        Amended with 1 uncommitted change.
         "###);
     }
 
