@@ -10,7 +10,7 @@ jobs:
   nix:
     runs-on: ubuntu-latest
     name: nix-build
-    timeout-minutes: 20
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v3
         with:
