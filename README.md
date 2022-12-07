@@ -49,7 +49,7 @@ It **adds more flexibility** for power users. Examples:
   - [Anonymous branching](https://github.com/arxanas/git-branchless/wiki/Concepts#anonymous-branching): reduces the overhead of branching for experimental work.
   - In-memory operations: to modify the commit graph without having to check out the commits in question.
   - [`git next/prev`](https://github.com/arxanas/git-branchless/wiki/Command:-git-next,-git-prev): to quickly jump between commits and branches in a commit stack.
-  - [`git co -i/--interactive`](https://github.com/arxanas/git-branchless/wiki/Command:-git-co): to interactively select a commit to check out.
+  - [`git sw -i/--interactive`](https://github.com/arxanas/git-branchless/wiki/Command:-git-sw): to interactively select a commit to switch to.
 
 It **provides faster operations** for large repositories and monorepos, particularly at large tech companies. Examples:
   - See the blog post <a href="https://blog.waleedkhan.name/in-memory-rebases/"><i>Lightning-fast rebases with git-move</i></a>.
