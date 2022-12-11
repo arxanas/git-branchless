@@ -1,17 +1,26 @@
 use std::fmt::Write;
 use std::time::SystemTime;
 
+use cursive_core::theme::{BaseColor, Effect, Style};
 use itertools::{Either, Itertools};
+use lazy_static::lazy_static;
 use lib::core::dag::{commit_set_to_vec, Dag};
 use lib::core::effects::{Effects, OperationType};
 use lib::core::eventlog::{EventLogDb, EventReplayer};
-use lib::core::formatting::Pluralize;
+use lib::core::formatting::{Pluralize, StyledStringBuilder};
 use lib::core::repo_ext::RepoExt;
 use lib::git::{Branch, BranchType, CategorizedReferenceName, ConfigRead, GitRunInfo, Repo};
 use lib::util::ExitCode;
 
 use git_branchless_opts::{ResolveRevsetOptions, Revset};
 use git_branchless_revset::resolve_commits;
+
+lazy_static! {
+    static ref STYLE_PUSHED: Style =
+        Style::merge(&[BaseColor::Green.light().into(), Effect::Bold.into()]);
+    static ref STYLE_SKIPPED: Style =
+        Style::merge(&[BaseColor::Yellow.light().into(), Effect::Bold.into()]);
+}
 
 pub fn submit(
     effects: &Effects,
@@ -211,7 +220,17 @@ These remotes are available: {}",
                 amount: created_branches.len(),
                 unit: ("branch", "branches")
             },
-            created_branches.into_iter().join(", ")
+            created_branches
+                .into_iter()
+                .map(|branch_name| effects
+                    .get_glyphs()
+                    .render(
+                        StyledStringBuilder::new()
+                            .append_styled(branch_name, *STYLE_PUSHED)
+                            .build(),
+                    )
+                    .expect("Rendering branch name"))
+                .join(", ")
         )?;
     }
     if !pushed_branches.is_empty() {
@@ -223,7 +242,17 @@ These remotes are available: {}",
                 amount: pushed_branches.len(),
                 unit: ("branch", "branches")
             },
-            pushed_branches.into_iter().join(", ")
+            pushed_branches
+                .into_iter()
+                .map(|branch_name| effects
+                    .get_glyphs()
+                    .render(
+                        StyledStringBuilder::new()
+                            .append_styled(branch_name, *STYLE_PUSHED)
+                            .build(),
+                    )
+                    .expect("Rendering branch name"))
+                .join(", ")
         )?;
     }
     if !skipped_branches.is_empty() {
@@ -235,7 +264,17 @@ These remotes are available: {}",
                 amount: skipped_branches.len(),
                 unit: ("branch", "branches")
             },
-            skipped_branches.into_iter().join(", ")
+            skipped_branches
+                .into_iter()
+                .map(|branch_name| effects
+                    .get_glyphs()
+                    .render(
+                        StyledStringBuilder::new()
+                            .append_styled(branch_name, *STYLE_SKIPPED)
+                            .build(),
+                    )
+                    .expect("Rendering branch name"))
+                .join(", ")
         )?;
     }
     if !uncreated_branches.is_empty() {
@@ -247,7 +286,17 @@ These remotes are available: {}",
                 amount: uncreated_branches.len(),
                 unit: ("branch", "branches")
             },
-            uncreated_branches.into_iter().join(", ")
+            uncreated_branches
+                .into_iter()
+                .map(|branch_name| effects
+                    .get_glyphs()
+                    .render(
+                        StyledStringBuilder::new()
+                            .append_styled(branch_name, *STYLE_SKIPPED)
+                            .build(),
+                    )
+                    .expect("Rendering branch name"))
+                .join(", ")
         )?;
         writeln!(
             effects.get_output_stream(),
