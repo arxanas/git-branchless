@@ -1967,16 +1967,16 @@ fn test_move_exact_range_one_side_of_merged_stack_without_base_and_merge_commits
     |\
     | o 96d1c37 create test2.txt
     | |\
-    | | x 70deb1e (rewritten as 4838e49b) create test3.txt
+    | | x 70deb1e (rewritten as 4838e49) create test3.txt
     | | |
-    | | x 355e173 (rewritten as a2482074) create test4.txt
+    | | x 355e173 (rewritten as a248207) create test4.txt
     | | & (merge) 178e00f Merge commit '355e173bf9c5d2efac2e451da0cdad3fb82b869a' into HEAD
     | |
     | o d2e18e3 create test5.txt
     | |
     | o d43fec8 create test6.txt
     | |
-    | | & (merge) 355e173 (rewritten as a2482074) create test4.txt
+    | | & (merge) 355e173 (rewritten as a248207) create test4.txt
     | |/
     | @ 178e00f Merge commit '355e173bf9c5d2efac2e451da0cdad3fb82b869a' into HEAD
     |
@@ -2052,9 +2052,9 @@ fn test_move_exact_range_one_side_of_merged_stack_including_base_and_merge_commi
     | | o 355e173 create test4.txt
     | | & (merge) 178e00f Merge commit '355e173bf9c5d2efac2e451da0cdad3fb82b869a' into HEAD
     | |
-    | x d2e18e3 (rewritten as ea7aa064) create test5.txt
+    | x d2e18e3 (rewritten as ea7aa06) create test5.txt
     | |
-    | x d43fec8 (rewritten as da42aeb4) create test6.txt
+    | x d43fec8 (rewritten as da42aeb) create test6.txt
     | |
     | | & (merge) 355e173 create test4.txt
     | |/
@@ -2137,14 +2137,14 @@ fn test_move_exact_range_two_partial_components_of_merged_stack() -> eyre::Resul
     | |\
     | | o 70deb1e create test3.txt
     | | |
-    | | x 355e173 (rewritten as bf0d52a6) create test4.txt
+    | | x 355e173 (rewritten as bf0d52a) create test4.txt
     | | & (merge) 178e00f Merge commit '355e173bf9c5d2efac2e451da0cdad3fb82b869a' into HEAD
     | |\
-    | | x d2e18e3 (rewritten as ea7aa064) create test5.txt
+    | | x d2e18e3 (rewritten as ea7aa06) create test5.txt
     | | |
-    | | x d43fec8 (rewritten as d071649c) create test6.txt
+    | | x d43fec8 (rewritten as d071649) create test6.txt
     | | |
-    | | | & (merge) 355e173 (rewritten as bf0d52a6) create test4.txt
+    | | | & (merge) 355e173 (rewritten as bf0d52a) create test4.txt
     | | |/
     | | @ 178e00f Merge commit '355e173bf9c5d2efac2e451da0cdad3fb82b869a' into HEAD
     | |
@@ -3887,14 +3887,14 @@ fn test_move_merge_commit_both_parents() -> eyre::Result<()> {
         |\
         | o 96d1c37 create test2.txt
         | |
-        | x 70deb1e (rewritten as 4838e49b) create test3.txt
+        | x 70deb1e (rewritten as 4838e49) create test3.txt
         | |\
-        | | x 355e173 (rewritten as a2482074) create test4.txt
+        | | x 355e173 (rewritten as a248207) create test4.txt
         | | & (merge) 8fb706a Merge commit '355e173bf9c5d2efac2e451da0cdad3fb82b869a' into HEAD
         | |
-        | x 9ea1b36 (rewritten as b1f9efa0) create test5.txt
+        | x 9ea1b36 (rewritten as b1f9efa) create test5.txt
         | |
-        | | & (merge) 355e173 (rewritten as a2482074) create test4.txt
+        | | & (merge) 355e173 (rewritten as a248207) create test4.txt
         | |/
         | @ 8fb706a Merge commit '355e173bf9c5d2efac2e451da0cdad3fb82b869a' into HEAD
         |

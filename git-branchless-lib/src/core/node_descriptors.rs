@@ -271,7 +271,8 @@ impl<'a> NodeDescriptor for ObsolescenceExplanationDescriptor<'a> {
                     find_rewrite_target(self.event_replayer, self.event_cursor, object.get_oid());
                 rewrite_target.map(|rewritten_oid| {
                     StyledString::styled(
-                        format!("(rewritten as {})", &rewritten_oid.to_string()[..8]),
+                        // `7` is the default value for config setting `core.abbrev`.
+                        format!("(rewritten as {})", &rewritten_oid.to_string()[..7]),
                         BaseColor::Black.light(),
                     )
                 })

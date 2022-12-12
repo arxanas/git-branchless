@@ -2004,14 +2004,14 @@ mod tests {
         | |
         | o 22cf458 create test4.txt
         |
-        x 70deb1e (rewritten as b8f27a86) create test3.txt
+        x 70deb1e (rewritten as b8f27a8) create test3.txt
         |\
-        | x 355e173 (rewritten as 22cf4586) create test4.txt
+        | x 355e173 (rewritten as 22cf458) create test4.txt
         | & (merge) 8fb706a Merge commit '355e173bf9c5d2efac2e451da0cdad3fb82b869a' into HEAD
         |
-        x 9ea1b36 (rewritten as 2b47b505) create test5.txt
+        x 9ea1b36 (rewritten as 2b47b50) create test5.txt
         |
-        | & (merge) 355e173 (rewritten as 22cf4586) create test4.txt
+        | & (merge) 355e173 (rewritten as 22cf458) create test4.txt
         |/
         o 8fb706a Merge commit '355e173bf9c5d2efac2e451da0cdad3fb82b869a' into HEAD
         hint: there is 1 abandoned commit in your commit graph

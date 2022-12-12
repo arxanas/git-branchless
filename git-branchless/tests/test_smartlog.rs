@@ -355,7 +355,7 @@ fn test_show_rewritten_commit_hash() -> eyre::Result<()> {
         |\
         | @ 2ebe095 test1 version 2
         |
-        x 62fc20d (rewritten as 2ebe0950) create test1.txt
+        x 62fc20d (rewritten as 2ebe095) create test1.txt
         |
         o 96d1c37 create test2.txt
         hint: there is 1 abandoned commit in your commit graph
@@ -414,7 +414,7 @@ fn test_show_hidden_commits() -> eyre::Result<()> {
         |\
         | x cb8137a (manually hidden) amended test2
         |
-        x 96d1c37 (rewritten as cb8137ad) create test2.txt
+        x 96d1c37 (rewritten as cb8137a) create test2.txt
         "###);
     }
 
@@ -551,7 +551,7 @@ fn test_smartlog_hint_abandoned() -> eyre::Result<()> {
         |\
         | @ ae94dc2 amended test1
         |
-        x 62fc20d (rewritten as ae94dc2a) create test1.txt
+        x 62fc20d (rewritten as ae94dc2) create test1.txt
         |
         o 96d1c37 create test2.txt
         hint: there is 1 abandoned commit in your commit graph
@@ -570,7 +570,7 @@ fn test_smartlog_hint_abandoned() -> eyre::Result<()> {
         |\
         | @ ae94dc2 amended test1
         |
-        x 62fc20d (rewritten as ae94dc2a) create test1.txt
+        x 62fc20d (rewritten as ae94dc2) create test1.txt
         |
         o 96d1c37 create test2.txt
         "###);
@@ -597,7 +597,7 @@ fn test_smartlog_hint_abandoned_except_current_commit() -> eyre::Result<()> {
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc create initial.txt
         |\
-        | % 62fc20d (rewritten as ae94dc2a) create test1.txt
+        | % 62fc20d (rewritten as ae94dc2) create test1.txt
         |
         O ae94dc2 (master) amended test1
         "###);
@@ -740,7 +740,7 @@ fn test_smartlog_hidden() -> eyre::Result<()> {
         |\
         | @ ae94dc2 amended test1
         |
-        x 62fc20d (rewritten as ae94dc2a) create test1.txt
+        x 62fc20d (rewritten as ae94dc2) create test1.txt
         "###);
     }
 

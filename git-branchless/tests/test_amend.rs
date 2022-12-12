@@ -71,7 +71,7 @@ fn test_amend_with_children() -> eyre::Result<()> {
             |
             o 62fc20d create test1.txt
             |\
-            | x 7ac317b (rewritten as 7c5e8578) create test2.txt
+            | x 7ac317b (rewritten as 7c5e857) create test2.txt
             | |
             | o b51f01b create test3.txt
             |
@@ -99,7 +99,7 @@ fn test_amend_with_children() -> eyre::Result<()> {
             |
             o 62fc20d create test1.txt
             |\
-            | x 7ac317b (rewritten as 7c5e8578) create test2.txt
+            | x 7ac317b (rewritten as 7c5e857) create test2.txt
             | |
             | o b51f01b create test3.txt
             |
