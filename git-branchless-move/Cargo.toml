@@ -13,4 +13,4 @@ rayon = "1.5.3"
 tracing = "0.1.37"
 
 [dev-dependencies]
-insta = "1.21.0"
+insta = "1.23.0"

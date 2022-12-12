@@ -72,7 +72,7 @@ bstr = "1.0.1"
 
 [dev-dependencies]
 criterion = { version = "0.4.0", features = ["html_reports"] }
-insta = "1.22.0"
+insta = "1.23.0"
 lazy_static = "1.4.0"
 portable-pty = "0.7.0"
 vt100 = "0.15.1"
