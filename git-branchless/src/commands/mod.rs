@@ -257,8 +257,16 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
         Command::Record {
             message,
             interactive,
+            branch,
             detach,
-        } => git_branchless_record::record(&effects, &git_run_info, message, interactive, detach)?,
+        } => git_branchless_record::record(
+            &effects,
+            &git_run_info,
+            message,
+            interactive,
+            branch,
+            detach,
+        )?,
 
         Command::Reword {
             revsets,

@@ -273,3 +273,32 @@ fn test_record_detach() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_record_create_branch() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+
+    git.commit_file("test1", 1)?;
+    git.write_file_txt("test1", "new contents\n")?;
+    {
+        let (stdout, _stderr) = git.run(&["record", "-b", "foo", "-m", "Update"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> checkout -b foo
+        [foo 836023f] Update
+         1 file changed, 1 insertion(+), 1 deletion(-)
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d (master) create test1.txt
+        |
+        @ 836023f (> foo) Update
+        "###);
+    }
+
+    Ok(())
+}
