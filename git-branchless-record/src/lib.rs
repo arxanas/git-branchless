@@ -4,6 +4,7 @@
 #![warn(clippy::all, clippy::as_conversions, clippy::clone_on_ref_ptr)]
 #![allow(clippy::too_many_arguments, clippy::blocks_in_if_conditions)]
 
+use std::ffi::OsString;
 use std::fmt::Write;
 use std::io;
 use std::time::SystemTime;
@@ -15,6 +16,7 @@ use cursive_buffered_backend::BufferedBackend;
 use git_record::Recorder;
 use git_record::{RecordError, RecordState};
 use itertools::Itertools;
+use lib::core::check_out::{check_out_commit, CheckOutCommitOptions};
 use lib::core::effects::{Effects, OperationType};
 use lib::core::eventlog::{EventLogDb, EventTransactionId};
 use lib::git::{
@@ -29,6 +31,7 @@ pub fn record(
     git_run_info: &GitRunInfo,
     message: Option<String>,
     interactive: bool,
+    branch_name: Option<String>,
     detach: bool,
 ) -> eyre::Result<ExitCode> {
     let repo = Repo::from_dir(&git_run_info.working_directory)?;
@@ -66,6 +69,25 @@ pub fn record(
         }
         (snapshot, working_copy_changes_type)
     };
+
+    if let Some(branch_name) = branch_name {
+        let exit_code = check_out_commit(
+            effects,
+            git_run_info,
+            &repo,
+            &event_log_db,
+            event_tx_id,
+            None,
+            &CheckOutCommitOptions {
+                additional_args: vec![OsString::from("-b"), OsString::from(branch_name)],
+                reset: false,
+                render_smartlog: false,
+            },
+        )?;
+        if !exit_code.is_success() {
+            return Ok(exit_code);
+        }
+    }
 
     let commit_exit_code = if interactive {
         if working_copy_changes_type == WorkingCopyChangesType::Staged {

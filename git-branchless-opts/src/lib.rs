@@ -434,8 +434,13 @@ pub enum Command {
         #[clap(action, short = 'i', long = "interactive")]
         interactive: bool,
 
+        /// Create and switch to a new branch with the given name before
+        /// committing.
+        #[clap(action, short = 'b', long = "branch")]
+        branch: Option<String>,
+
         /// Detach the current branch before committing.
-        #[clap(action, short = 'd', long = "detach")]
+        #[clap(action, short = 'd', long = "detach", conflicts_with("branch"))]
         detach: bool,
     },
 
