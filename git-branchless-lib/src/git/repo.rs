@@ -1802,6 +1802,7 @@ mod tests {
             &AmendFastOptions::FromWorkingCopy {
                 status_entries: vec![StatusEntry {
                     index_status: FileStatus::Renamed,
+                    submodule_status: None,
                     working_copy_status: FileStatus::Unmodified,
                     working_copy_file_mode: FileMode::Blob,
                     path: "initial.txt".into(),
@@ -1833,6 +1834,7 @@ mod tests {
             &AmendFastOptions::FromWorkingCopy {
                 status_entries: vec![StatusEntry {
                     index_status: FileStatus::Unmodified,
+                    submodule_status: None,
                     working_copy_status: FileStatus::Added,
                     working_copy_file_mode: FileMode::Blob,
                     path: "file2.txt".into(),
@@ -1866,6 +1868,7 @@ mod tests {
             &AmendFastOptions::FromWorkingCopy {
                 status_entries: vec![StatusEntry {
                     index_status: FileStatus::Unmodified,
+                    submodule_status: None,
                     working_copy_status: FileStatus::Deleted,
                     working_copy_file_mode: FileMode::Blob,
                     path: "initial.txt".into(),

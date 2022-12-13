@@ -306,6 +306,7 @@ mod tests {
             ).unwrap(),
             StatusEntry {
                 index_status: FileStatus::Unmodified,
+                submodule_status: None,
                 working_copy_status: FileStatus::Modified,
                 path: "repo.rs".into(),
                 orig_path: None,
@@ -319,6 +320,7 @@ mod tests {
             ).unwrap(),
             StatusEntry {
                 index_status: FileStatus::Added,
+                submodule_status: None,
                 working_copy_status: FileStatus::Unmodified,
                 path: "repo.rs".into(),
                 orig_path: None,
@@ -333,6 +335,7 @@ mod tests {
             entry,
             StatusEntry {
                 index_status: FileStatus::Renamed,
+                submodule_status: None,
                 working_copy_status: FileStatus::Deleted,
                 path: "new_file.rs".into(),
                 orig_path: Some("old_file.rs".into()),
@@ -350,6 +353,7 @@ mod tests {
             ).unwrap(),
             StatusEntry {
                 index_status: FileStatus::Unmerged,
+                submodule_status: None,
                 working_copy_status: FileStatus::Unmodified,
                 path: "repo.rs".into(),
                 orig_path: None,
@@ -457,6 +461,7 @@ mod tests {
             vec![
                 StatusEntry {
                     index_status: FileStatus::Unmodified,
+                    submodule_status: None,
                     working_copy_status: FileStatus::Deleted,
                     working_copy_file_mode: FileMode::Unreadable,
                     path: "initial.txt".into(),
@@ -464,6 +469,7 @@ mod tests {
                 },
                 StatusEntry {
                     index_status: FileStatus::Added,
+                    submodule_status: None,
                     working_copy_status: FileStatus::Unmodified,
                     working_copy_file_mode: FileMode::Blob,
                     path: "new_file.txt".into(),
@@ -471,6 +477,7 @@ mod tests {
                 },
                 StatusEntry {
                     index_status: FileStatus::Renamed,
+                    submodule_status: None,
                     working_copy_status: FileStatus::Unmodified,
                     working_copy_file_mode: FileMode::Blob,
                     path: "renamed.txt".into(),
