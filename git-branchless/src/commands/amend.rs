@@ -27,7 +27,8 @@ use lib::core::rewrite::{
     RebasePlanBuilder, RebasePlanPermissions, RepoResource,
 };
 use lib::git::{
-    AmendFastOptions, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo, ResolvedReferenceInfo,
+    AmendFastOptions, CategorizedReferenceName, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo,
+    ResolvedReferenceInfo,
 };
 use lib::util::ExitCode;
 use rayon::ThreadPoolBuilder;
@@ -171,19 +172,31 @@ pub fn amend(
         CommitSet::empty(),
         CommitSet::from(amended_commit_oid),
     )?;
-    let exit_code = check_out_commit(
-        effects,
-        git_run_info,
-        &repo,
-        &event_log_db,
-        event_tx_id,
-        Some(CheckoutTarget::Oid(amended_commit_oid)),
-        &CheckOutCommitOptions {
-            additional_args: Default::default(),
-            reset: true,
-            render_smartlog: false,
-        },
-    )?;
+    let exit_code = {
+        let additional_args = match &head_info.reference_name {
+            Some(name) => match CategorizedReferenceName::new(name) {
+                name @ CategorizedReferenceName::LocalBranch { .. } => {
+                    vec![OsString::from("-B"), OsString::from(name.remove_prefix()?)]
+                }
+                CategorizedReferenceName::RemoteBranch { .. }
+                | CategorizedReferenceName::OtherRef { .. } => Default::default(),
+            },
+            None => Default::default(),
+        };
+        check_out_commit(
+            effects,
+            git_run_info,
+            &repo,
+            &event_log_db,
+            event_tx_id,
+            Some(CheckoutTarget::Oid(amended_commit_oid)),
+            &CheckOutCommitOptions {
+                additional_args,
+                reset: true,
+                render_smartlog: false,
+            },
+        )?
+    };
     if !exit_code.is_success() {
         return Ok(exit_code);
     }

@@ -601,10 +601,15 @@ fn test_amend_undo() -> eyre::Result<()> {
         let (stdout, _stderr) = git.run(&["amend"])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> reset 94b10776514a5a182d920265fc3c42f2147b1201
-        branchless: running command: <git-executable> checkout 94b10776514a5a182d920265fc3c42f2147b1201
+        branchless: running command: <git-executable> checkout 94b10776514a5a182d920265fc3c42f2147b1201 -B foo
         Attempting rebase in-memory...
         [1/1] Committed as: 94b1077 create file1.txt
         branchless: processing 1 rewritten commit
+        branchless: running command: <git-executable> reset foo
+        branchless: running command: <git-executable> checkout foo
+        O f777ecc (master) create initial.txt
+        |
+        @ 94b1077 (> foo) create file1.txt
         In-memory rebase succeeded.
         Amended with 1 uncommitted change.
         "###);
@@ -613,7 +618,7 @@ fn test_amend_undo() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["status"])?;
         insta::assert_snapshot!(stdout, @r###"
-        HEAD detached at 94b1077
+        On branch foo
         nothing to commit, working tree clean
         "###);
     }
@@ -623,7 +628,7 @@ fn test_amend_undo() -> eyre::Result<()> {
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
-        @ 94b1077 (foo) create file1.txt
+        @ 94b1077 (> foo) create file1.txt
         "###);
     }
 
@@ -631,20 +636,28 @@ fn test_amend_undo() -> eyre::Result<()> {
         let (stdout, _stderr) = git.run(&["undo", "-y"])?;
         insta::assert_snapshot!(stdout, @r###"
         Will apply these actions:
-        1. Rewrite commit 94b1077 create file1.txt
-                      as c0bdfb5 create file1.txt
+        1. Check out from 94b1077 create file1.txt
+                       to 94b1077 create file1.txt
         2. Check out from 94b1077 create file1.txt
                        to 94b1077 create file1.txt
-        3. Move branch foo from 94b1077 create file1.txt
+        3. Restore snapshot for 94b1077 create file1.txt
+                backed up using 9c50d27 branchless: automated working copy snapshot
+        4. Rewrite commit 94b1077 create file1.txt
+                      as c0bdfb5 create file1.txt
+        5. Check out from 94b1077 create file1.txt
+                       to 94b1077 create file1.txt
+        6. Delete branch foo at 94b1077 create file1.txt
+           
+        7. Move branch foo from 94b1077 create file1.txt
                              to c0bdfb5 create file1.txt
-        4. Check out from 94b1077 create file1.txt
+        8. Check out from 94b1077 create file1.txt
                        to c0bdfb5 create file1.txt
-        5. Restore snapshot for branch foo
+        9. Restore snapshot for branch foo
                     pointing to c0bdfb5 create file1.txt
                 backed up using a293e0b branchless: automated working copy snapshot
-        6. Restore snapshot for branch foo
-                    pointing to c0bdfb5 create file1.txt
-                backed up using a293e0b branchless: automated working copy snapshot
+        10. Restore snapshot for branch foo
+                     pointing to c0bdfb5 create file1.txt
+                 backed up using a293e0b branchless: automated working copy snapshot
         branchless: running command: <git-executable> checkout a293e0b4502882ced673f83b6742539ee06cbc74 -B foo
         branchless: running command: <git-executable> reset --hard HEAD
         HEAD is now at a293e0b branchless: automated working copy snapshot
@@ -657,7 +670,7 @@ fn test_amend_undo() -> eyre::Result<()> {
         O f777ecc (master) create initial.txt
         |
         @ c0bdfb5 (> foo) create file1.txt
-        Applied 6 inverse events.
+        Applied 10 inverse events.
         "###);
     }
 
@@ -1054,6 +1067,55 @@ fn test_amend_reparent_merge() -> eyre::Result<()> {
         | & (merge) 99a19d2 create test3.txt
         |/
         o f66b478 Merge commit '402c2e6c16e2861d57d7fb6a20cbc5559bd00d44' into HEAD
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_amend_no_detach_branch() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+
+    git.run(&["checkout", "-b", "foo"])?;
+    git.commit_file("test1", 1)?;
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        @ 62fc20d (> foo) create test1.txt
+        "###);
+    }
+
+    git.write_file_txt("test1", "new contents\n")?;
+
+    {
+        let (stdout, _stderr) = git.run(&["amend"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> reset 7143ebcc44407b0553d9f50eaf29e0e4f0f0d6c0
+        branchless: running command: <git-executable> checkout 7143ebcc44407b0553d9f50eaf29e0e4f0f0d6c0 -B foo
+        Attempting rebase in-memory...
+        [1/1] Committed as: 7143ebc create test1.txt
+        branchless: processing 1 rewritten commit
+        branchless: running command: <git-executable> reset foo
+        branchless: running command: <git-executable> checkout foo
+        O f777ecc (master) create initial.txt
+        |
+        @ 7143ebc (> foo) create test1.txt
+        In-memory rebase succeeded.
+        Amended with 1 uncommitted change.
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        @ 7143ebc (> foo) create test1.txt
         "###);
     }
 
