@@ -51,7 +51,7 @@ tracing-error = "0.2.0"
 tracing-subscriber = { version = "=0.3.11", features = ["env-filter"] }
 
 [dev-dependencies]
-anyhow = "1.0.66"
+anyhow = "1.0.68"
 assert_cmd = "2.0.7"
 insta = "1.23.0"
 portable-pty = "0.7.0"
