@@ -762,7 +762,7 @@ fn generate_man_page(man1_dir: &Path, name: &str, command: &ClapCommand) -> std:
         clap_mangen::Man::new(command.clone()).render(&mut buffer)?;
         buffer
     };
-    let output_path = man1_dir.join(format!("{}.1", name));
+    let output_path = man1_dir.join(format!("{name}.1"));
     std::fs::write(output_path, rendered_man_page)?;
     Ok(())
 }

@@ -205,7 +205,7 @@ mod reference_transaction {
         repo: &Repo,
     ) -> eyre::Result<HashMap<ReferenceName, MaybeZeroOid>> {
         let packed_refs_file_path = repo.get_packed_refs_path();
-        let file = match File::open(&packed_refs_file_path) {
+        let file = match File::open(packed_refs_file_path) {
             Ok(file) => file,
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(HashMap::new()),
             Err(err) => return Err(err.into()),

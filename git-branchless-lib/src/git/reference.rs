@@ -89,7 +89,7 @@ pub struct Reference<'repo> {
 impl std::fmt::Debug for Reference<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.inner.name() {
-            Some(name) => write!(f, "<Reference name={:?}>", name),
+            Some(name) => write!(f, "<Reference name={name:?}>"),
             None => write!(f, "<Reference name={:?}>", self.inner.name_bytes()),
         }
     }
@@ -224,12 +224,12 @@ impl<'a> CategorizedReferenceName<'a> {
         let name = self.render_suffix();
         match self {
             CategorizedReferenceName::LocalBranch { .. } => {
-                format!("branch {}", name)
+                format!("branch {name}")
             }
             CategorizedReferenceName::RemoteBranch { .. } => {
-                format!("remote branch {}", name)
+                format!("remote branch {name}")
             }
-            CategorizedReferenceName::OtherRef { .. } => format!("ref {}", name),
+            CategorizedReferenceName::OtherRef { .. } => format!("ref {name}"),
         }
     }
 }

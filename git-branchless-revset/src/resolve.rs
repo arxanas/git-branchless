@@ -36,18 +36,14 @@ impl ResolveError {
             ResolveError::ParseError { expr, source } => {
                 writeln!(
                     effects.get_error_stream(),
-                    "Parse error for expression '{}': {}",
-                    expr,
-                    source
+                    "Parse error for expression '{expr}': {source}"
                 )?;
                 Ok(())
             }
             ResolveError::EvalError { expr, source } => {
                 writeln!(
                     effects.get_error_stream(),
-                    "Evaluation error for expression '{}': {}",
-                    expr,
-                    source
+                    "Evaluation error for expression '{expr}': {source}"
                 )?;
                 Ok(())
             }

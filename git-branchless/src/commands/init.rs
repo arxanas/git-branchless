@@ -97,7 +97,7 @@ pub fn determine_hook_path(repo: &Repo, hook_type: &str) -> eyre::Result<Hook> {
     let multi_hooks_path = repo.get_path().join("hooks_multi");
     let hook = if multi_hooks_path.exists() {
         let path = multi_hooks_path
-            .join(format!("{}.d", hook_type))
+            .join(format!("{hook_type}.d"))
             .join("00_local_branchless");
         Hook::MultiHook { path }
     } else {
@@ -164,7 +164,7 @@ fn write_script(path: &Path, contents: &str) -> eyre::Result<()> {
         let mode = mode | 0o111;
         permissions.set_mode(mode);
         std::fs::set_permissions(path, permissions)
-            .wrap_err_with(|| format!("Marking {:?} as executable", path))?;
+            .wrap_err_with(|| format!("Marking {path:?} as executable"))?;
     }
 
     Ok(())
@@ -180,8 +180,7 @@ fn update_hook_contents(hook: &Hook, hook_contents: &str) -> eyre::Result<()> {
             }
             Err(ref err) if err.kind() == std::io::ErrorKind::NotFound => {
                 let hook_contents = format!(
-                    "{}\n{}\n{}\n{}\n",
-                    SHEBANG, UPDATE_MARKER_START, hook_contents, UPDATE_MARKER_END
+                    "{SHEBANG}\n{UPDATE_MARKER_START}\n{hook_contents}\n{UPDATE_MARKER_END}\n"
                 );
                 (path, hook_contents)
             }
@@ -189,7 +188,7 @@ fn update_hook_contents(hook: &Hook, hook_contents: &str) -> eyre::Result<()> {
                 return Err(eyre::eyre!(other));
             }
         },
-        Hook::MultiHook { path } => (path, format!("{}\n{}", SHEBANG, hook_contents)),
+        Hook::MultiHook { path } => (path, format!("{SHEBANG}\n{hook_contents}")),
     };
 
     write_script(hook_path, &hook_contents).wrap_err("Writing hook script")?;
@@ -283,7 +282,7 @@ fn install_alias(
     from: &str,
     to: &str,
 ) -> eyre::Result<()> {
-    let alias_key = format!("alias.{}", from);
+    let alias_key = format!("alias.{from}");
 
     let existing_alias: Option<String> = config.get(&alias_key)?;
     if existing_alias.is_some() {
@@ -294,16 +293,15 @@ fn install_alias(
     if default_alias.is_some() {
         writeln!(
             effects.get_output_stream(),
-            "Alias {} already installed, skipping",
-            from
+            "Alias {from} already installed, skipping"
         )?;
         return Ok(());
     }
 
     let alias = if should_use_wrapped_command_alias() {
-        format!("branchless-{}", to)
+        format!("branchless-{to}")
     } else {
-        format!("branchless {}", to)
+        format!("branchless {to}")
     };
     config.set(&alias_key, alias)?;
     Ok(())
@@ -357,7 +355,7 @@ fn install_aliases(
     let version_str = version_str.trim();
     let version: GitVersion = version_str
         .parse()
-        .wrap_err_with(|| format!("Parsing Git version string: {}", version_str))?;
+        .wrap_err_with(|| format!("Parsing Git version string: {version_str}"))?;
     if version < GitVersion(2, 29, 0) {
         write!(
             effects.get_output_stream(),
@@ -413,8 +411,7 @@ fn install_man_pages(effects: &Effects, repo: &Repo, config: &mut Config) -> eyr
             // NB: the trailing `:` at the end of `MANPATH` indicates to `man`
             // that it should try its normal lookup paths if the requested
             // `man`-page cannot be found in the provided `MANPATH`.
-            "env MANPATH=.git/{}: man",
-            man_dir_relative
+            "env MANPATH=.git/{man_dir_relative}: man"
         ),
     )?;
     config.set("man.viewer", "branchless")?;
@@ -636,23 +633,21 @@ mod tests {
         let input = format!(
             "\
 hello, world
-{}
+{UPDATE_MARKER_START}
 contents 1
-{}
+{UPDATE_MARKER_END}
 goodbye, world
-",
-            UPDATE_MARKER_START, UPDATE_MARKER_END
+"
         );
         let expected = format!(
             "\
 hello, world
-{}
+{UPDATE_MARKER_START}
 contents 2
 contents 3
-{}
+{UPDATE_MARKER_END}
 goodbye, world
-",
-            UPDATE_MARKER_START, UPDATE_MARKER_END
+"
         );
 
         assert_eq!(
@@ -675,7 +670,7 @@ contents 3
         }
 
         for (_from, to) in ALL_ALIASES {
-            let executable_name = format!("git-branchless-{}", to);
+            let executable_name = format!("git-branchless-{to}");
 
             // For each subcommand that's been aliased, asserts that a binary
             // with the corresponding name exists in `Cargo.toml`. If this test

@@ -412,12 +412,12 @@ fn prepare_messages(
     let possible_template_message = if possible_template_message.is_empty() {
         String::from("\n")
     } else {
-        format!("{}\n\n", possible_template_message)
+        format!("{possible_template_message}\n\n")
     };
     let possible_template_message = possible_template_message.as_str();
-    let discarded_message_header = format!("{} Original message:\n{} ", comment_char, comment_char);
+    let discarded_message_header = format!("{comment_char} Original message:\n{comment_char} ");
     let discarded_message_header = discarded_message_header.as_str();
-    let discarded_message_padding = format!("\n{} ", comment_char);
+    let discarded_message_padding = format!("\n{comment_char} ");
     let discarded_message_padding = discarded_message_padding.as_str();
 
     let mut message = String::new();
@@ -452,9 +452,9 @@ fn prepare_messages(
         };
 
         let msg = if commits.len() == 1 {
-            format!("{}\n\n", msg)
+            format!("{msg}\n\n")
         } else {
-            format!("++ reword {}\n{}\n\n", oid, msg)
+            format!("++ reword {oid}\n{msg}\n\n")
         };
         message.push_str(msg.as_str());
     }
@@ -691,8 +691,7 @@ fn render_status_report(
     if num_commits != 1 {
         writeln!(
             effects.get_output_stream(),
-            "Reworded {} commits. If this was unintentional, run: git undo",
-            num_commits,
+            "Reworded {num_commits} commits. If this was unintentional, run: git undo",
         )?;
     }
 

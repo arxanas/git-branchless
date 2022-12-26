@@ -361,7 +361,7 @@ fn test_move_exact_range_stick() -> eyre::Result<()> {
             "move",
             "--on-disk",
             "--exact",
-            &format!("{}:{}", test2_oid, test3_oid),
+            &format!("{test2_oid}:{test3_oid}"),
             "-d",
             &test4_oid.to_string(),
         ])?;
@@ -387,7 +387,7 @@ fn test_move_exact_range_stick() -> eyre::Result<()> {
             "move",
             "--in-memory",
             "--exact",
-            &format!("{}:{}", test2_oid, test3_oid),
+            &format!("{test2_oid}:{test3_oid}"),
             "-d",
             &test4_oid.to_string(),
         ])?;
@@ -454,7 +454,7 @@ fn test_move_exact_noncontiguous_commits_stick() -> eyre::Result<()> {
             "move",
             "--on-disk",
             "--exact",
-            &format!("{} + {} + {}", test3_oid, test5_oid, test7_oid),
+            &format!("{test3_oid} + {test5_oid} + {test7_oid}"),
             "-d",
             &test1_oid.to_string(),
         ])?;
@@ -486,7 +486,7 @@ fn test_move_exact_noncontiguous_commits_stick() -> eyre::Result<()> {
             "move",
             "--in-memory",
             "--exact",
-            &format!("{} + {} + {}", test3_oid, test5_oid, test7_oid),
+            &format!("{test3_oid} + {test5_oid} + {test7_oid}"),
             "-d",
             &test1_oid.to_string(),
         ])?;
@@ -569,8 +569,7 @@ fn test_move_exact_noncontiguous_ranges_stick() -> eyre::Result<()> {
             "--on-disk",
             "--exact",
             &format!(
-                "{}:{} + {}:{} + {}:{}",
-                test3_oid, test4_oid, test6_oid, test7_oid, test9_oid, test10_oid
+                "{test3_oid}:{test4_oid} + {test6_oid}:{test7_oid} + {test9_oid}:{test10_oid}"
             ),
             "-d",
             &test1_oid.to_string(),
@@ -610,8 +609,7 @@ fn test_move_exact_noncontiguous_ranges_stick() -> eyre::Result<()> {
             "--in-memory",
             "--exact",
             &format!(
-                "{}:{} + {}:{} + {}:{}",
-                test3_oid, test4_oid, test6_oid, test7_oid, test9_oid, test10_oid
+                "{test3_oid}:{test4_oid} + {test6_oid}:{test7_oid} + {test9_oid}:{test10_oid}"
             ),
             "-d",
             &test1_oid.to_string(),
@@ -688,7 +686,7 @@ fn test_move_exact_contiguous_and_noncontiguous_stick() -> eyre::Result<()> {
             "move",
             "--on-disk",
             "--exact",
-            &format!("{} + {}:{}", test3_oid, test5_oid, test6_oid),
+            &format!("{test3_oid} + {test5_oid}:{test6_oid}"),
             "-d",
             &test1_oid.to_string(),
         ])?;
@@ -718,7 +716,7 @@ fn test_move_exact_contiguous_and_noncontiguous_stick() -> eyre::Result<()> {
             "move",
             "--in-memory",
             "--exact",
-            &format!("{} + {}:{}", test3_oid, test5_oid, test6_oid),
+            &format!("{test3_oid} + {test5_oid}:{test6_oid}"),
             "-d",
             &test1_oid.to_string(),
         ])?;
@@ -1020,7 +1018,7 @@ fn test_move_insert_range_stick() -> eyre::Result<()> {
             "--on-disk",
             "--insert",
             "--exact",
-            &format!("{}:{}", test2_oid, test3_oid),
+            &format!("{test2_oid}:{test3_oid}"),
             "-d",
             &test4_oid.to_string(),
         ])?;
@@ -1047,7 +1045,7 @@ fn test_move_insert_range_stick() -> eyre::Result<()> {
             "--in-memory",
             "--insert",
             "--exact",
-            &format!("{}:{}", test2_oid, test3_oid),
+            &format!("{test2_oid}:{test3_oid}"),
             "-d",
             &test4_oid.to_string(),
         ])?;
@@ -1125,8 +1123,7 @@ fn test_move_insert_exact_noncontiguous_ranges_stick() -> eyre::Result<()> {
             "--insert",
             "--exact",
             &format!(
-                "{}:{} + {}:{} + {}:{}",
-                test3_oid, test4_oid, test6_oid, test7_oid, test9_oid, test10_oid
+                "{test3_oid}:{test4_oid} + {test6_oid}:{test7_oid} + {test9_oid}:{test10_oid}"
             ),
             "-d",
             &test1_oid.to_string(),
@@ -1167,8 +1164,7 @@ fn test_move_insert_exact_noncontiguous_ranges_stick() -> eyre::Result<()> {
             "--insert",
             "--exact",
             &format!(
-                "{}:{} + {}:{} + {}:{}",
-                test3_oid, test4_oid, test6_oid, test7_oid, test9_oid, test10_oid
+                "{test3_oid}:{test4_oid} + {test6_oid}:{test7_oid} + {test9_oid}:{test10_oid}"
             ),
             "-d",
             &test1_oid.to_string(),
@@ -1445,7 +1441,7 @@ fn test_move_exact_range_tree() -> eyre::Result<()> {
             "move",
             "--on-disk",
             "--exact",
-            &format!("{}:{}", test2_oid, test3_oid),
+            &format!("{test2_oid}:{test3_oid}"),
             "-d",
             &test4_oid.to_string(),
         ])?;
@@ -1470,7 +1466,7 @@ fn test_move_exact_range_tree() -> eyre::Result<()> {
         git.run(&[
             "move",
             "--exact",
-            &format!("{}:{}", test2_oid, test3_oid),
+            &format!("{test2_oid}:{test3_oid}"),
             "-d",
             &test4_oid.to_string(),
         ])?;
@@ -1529,7 +1525,7 @@ fn test_move_exact_range_with_leaves() -> eyre::Result<()> {
             "move",
             "--on-disk",
             "--exact",
-            &format!("{}+{}", test3_oid, test5_oid),
+            &format!("{test3_oid}+{test5_oid}"),
             "-d",
             &test2_oid.to_string(),
         ])?;
@@ -1554,7 +1550,7 @@ fn test_move_exact_range_with_leaves() -> eyre::Result<()> {
         git.run(&[
             "move",
             "--exact",
-            &format!("{}+{}", test3_oid, test5_oid),
+            &format!("{test3_oid}+{test5_oid}"),
             "-d",
             &test2_oid.to_string(),
         ])?;
@@ -1613,7 +1609,7 @@ fn test_move_exact_range_just_leaves() -> eyre::Result<()> {
             "move",
             "--on-disk",
             "--exact",
-            &format!("{}+{}", test4_oid, test5_oid),
+            &format!("{test4_oid}+{test5_oid}"),
             "-d",
             &test2_oid.to_string(),
         ])?;
@@ -1638,7 +1634,7 @@ fn test_move_exact_range_just_leaves() -> eyre::Result<()> {
         git.run(&[
             "move",
             "--exact",
-            &format!("{}+{}", test4_oid, test5_oid),
+            &format!("{test4_oid}+{test5_oid}"),
             "-d",
             &test2_oid.to_string(),
         ])?;
@@ -1703,7 +1699,7 @@ fn test_move_exact_range_with_multiple_heads() -> eyre::Result<()> {
             "move",
             "--on-disk",
             "--exact",
-            &format!("{}+{}+{}", test3_oid, test4_oid, test6_oid),
+            &format!("{test3_oid}+{test4_oid}+{test6_oid}"),
             "-d",
             &test2_oid.to_string(),
         ])?;
@@ -1732,7 +1728,7 @@ fn test_move_exact_range_with_multiple_heads() -> eyre::Result<()> {
         git.run(&[
             "move",
             "--exact",
-            &format!("{}+{}+{}", test3_oid, test4_oid, test6_oid),
+            &format!("{test3_oid}+{test4_oid}+{test6_oid}"),
             "-d",
             &test2_oid.to_string(),
         ])?;
@@ -1798,7 +1794,7 @@ fn test_move_exact_range_with_leaves_and_descendent_components() -> eyre::Result
             "move",
             "--on-disk",
             "--exact",
-            &format!("{}+{}+{}", test3_oid, test5_oid, test6_oid),
+            &format!("{test3_oid}+{test5_oid}+{test6_oid}"),
             "-d",
             &test2_oid.to_string(),
         ])?;
@@ -1825,7 +1821,7 @@ fn test_move_exact_range_with_leaves_and_descendent_components() -> eyre::Result
         git.run(&[
             "move",
             "--exact",
-            &format!("{}+{}+{}", test3_oid, test5_oid, test6_oid),
+            &format!("{test3_oid}+{test5_oid}+{test6_oid}"),
             "-d",
             &test2_oid.to_string(),
         ])?;
@@ -1892,7 +1888,7 @@ fn test_move_exact_ranges_with_merge_commits_betwixt_not_supported() -> eyre::Re
         &[
             "move",
             "--exact",
-            &format!("{}+{}+{}", test2_oid, test4_oid, test6_oid),
+            &format!("{test2_oid}+{test4_oid}+{test6_oid}"),
             "-d",
             &test2_oid.to_string(),
         ],
@@ -1953,7 +1949,7 @@ fn test_move_exact_range_one_side_of_merged_stack_without_base_and_merge_commits
     git.run(&[
         "move",
         "--exact",
-        &format!("{}+{}", test3_oid, test4_oid),
+        &format!("{test3_oid}+{test4_oid}"),
         "-d",
         &test1_oid.to_string(),
     ])?;
@@ -2121,7 +2117,7 @@ fn test_move_exact_range_two_partial_components_of_merged_stack() -> eyre::Resul
     git.run(&[
         "move",
         "--exact",
-        &format!("{}:: - {} - {}", test2_oid, test4_oid, test5_oid),
+        &format!("{test2_oid}:: - {test4_oid} - {test5_oid}"),
         "-d",
         &test1_oid.to_string(),
     ])?;

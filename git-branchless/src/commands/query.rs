@@ -78,7 +78,7 @@ pub fn query(
         };
         for commit_oid in commit_oids.into_iter().rev() {
             if raw {
-                writeln!(effects.get_output_stream(), "{}", commit_oid)?;
+                writeln!(effects.get_output_stream(), "{commit_oid}")?;
             } else {
                 let commit = repo.find_commit_or_fail(commit_oid)?;
                 writeln!(

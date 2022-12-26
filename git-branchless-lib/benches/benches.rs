@@ -24,7 +24,7 @@ fn nth_parent(commit: Commit, n: usize) -> Commit {
     for _i in 0..n {
         commit = match commit.get_parents().first() {
             Some(commit) => commit.clone(),
-            None => panic!("Couldn't find parent of: {:?}", commit),
+            None => panic!("Couldn't find parent of: {commit:?}"),
         }
     }
     commit

@@ -273,7 +273,7 @@ fn advance(
                 }
             }
             (None, [_, _, ..]) => {
-                writeln!(effects.get_output_stream(), "{}", header)?;
+                writeln!(effects.get_output_stream(), "{header}")?;
                 for (j, child) in (0..).zip(candidate_commits.iter()) {
                     let descriptor = if j == 0 {
                         " (oldest)"

@@ -373,13 +373,11 @@ fn set_abort_trap(
     if let Some(operation_type) = repo.get_current_operation_type() {
         writeln!(
             effects.get_output_stream(),
-            "A {} operation is already in progress.",
-            operation_type
+            "A {operation_type} operation is already in progress."
         )?;
         writeln!(
             effects.get_output_stream(),
-            "Run git {0} --continue or git {0} --abort to resolve it and proceed.",
-            operation_type
+            "Run git {operation_type} --continue or git {operation_type} --abort to resolve it and proceed."
         )?;
         return Ok(Err(ExitCode(1)));
     }
@@ -689,6 +687,21 @@ impl TestOutput {
     }
 }
 
+fn shell_escape(s: impl AsRef<str>) -> String {
+    let s = s.as_ref();
+    let mut escaped = String::new();
+    escaped.push('"');
+    for c in s.chars() {
+        match c {
+            '"' => escaped.push_str(r#"\""#),
+            '\\' => escaped.push_str(r#"\\\\"#),
+            c => escaped.push(c),
+        }
+    }
+    escaped.push('"');
+    escaped
+}
+
 #[instrument]
 fn run_tests(
     effects: &Effects,
@@ -742,7 +755,7 @@ fn run_tests(
                 let (_effects, progress) = effects.start_operation(operation_type.clone());
                 progress.notify_status(
                     OperationIcon::InProgress,
-                    format!("Waiting to test {}", commit_description),
+                    format!("Waiting to test {commit_description}"),
                 );
                 results.push_back((commit.get_oid(), operation_type));
             }
@@ -905,9 +918,9 @@ fn run_tests(
         )?;
         writeln!(
             effects.get_output_stream(),
-            "{}: to clear these cached results, run: git test clean {:?}",
+            "{}: to clear these cached results, run: git test clean {}",
             effects.get_glyphs().render(get_hint_string())?,
-            revset.to_string(),
+            shell_escape(revset.to_string()),
         )?;
         print_hint_suppression_notice(effects, Hint::CleanCachedTestResults)?;
     }
@@ -944,7 +957,7 @@ fn worker(
     let repo = match Repo::from_dir(repo_dir) {
         Ok(repo) => repo,
         Err(err) => {
-            panic!("Worker {} could not open repository at: {}", worker_id, err);
+            panic!("Worker {worker_id} could not open repository at: {err}");
         }
     };
 

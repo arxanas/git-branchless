@@ -95,7 +95,7 @@ pub enum EvalError {
 }
 
 pub(super) fn make_dag_backend_error(error: impl Display) -> eden_dag::Error {
-    let error = format!("error: {}", error);
+    let error = format!("error: {error}");
     let error = BackendError::Generic(error);
     eden_dag::Error::Backend(Box::new(error))
 }
@@ -178,7 +178,7 @@ pub(super) fn eval_fn(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResul
         return function(ctx, name, args);
     }
 
-    let alias_key = format!("branchless.revsets.alias.{}", name);
+    let alias_key = format!("branchless.revsets.alias.{name}");
     let alias_template: Option<String> = ctx
         .repo
         .get_readonly_config()

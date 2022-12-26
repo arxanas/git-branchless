@@ -41,7 +41,7 @@ fn test_hook_appended_to_existing_contents() -> eyre::Result<()> {
 
     let hook_path = git.repo_path.join(".git").join("hooks").join("post-commit");
     std::fs::write(
-        &hook_path,
+        hook_path,
         "#!/bin/sh
 echo Hello, world
 ",
@@ -529,7 +529,7 @@ fn test_init_core_hooks_path_warning() -> eyre::Result<()> {
     git.init_repo()?;
 
     let hooks_path = git.get_repo()?.get_path().join("my-hooks");
-    std::fs::create_dir_all(&hooks_path)?;
+    std::fs::create_dir_all(hooks_path)?;
     git.run(&["config", "core.hooksPath", "my-hooks"])?;
 
     {

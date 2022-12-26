@@ -167,8 +167,7 @@ fn execute_main_branch_sync_plan(
         None => {
             writeln!(
                 effects.get_output_stream(),
-                "{} does not track an upstream branch, so not pulling.",
-                local_main_branch_description
+                "{local_main_branch_description} does not track an upstream branch, so not pulling."
             )?;
             return Ok(ExitCode(0));
         }
@@ -219,8 +218,7 @@ fn execute_main_branch_sync_plan(
     } else {
         writeln!(
             effects.get_output_stream(),
-            "Syncing {}",
-            local_main_branch_description
+            "Syncing {local_main_branch_description}"
         )?;
     }
 

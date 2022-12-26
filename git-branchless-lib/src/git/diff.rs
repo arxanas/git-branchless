@@ -89,10 +89,7 @@ pub fn process_diff_for_record(
                     });
                 }
                 DeltaFileContent::Binary => {
-                    panic!(
-                        "File {:?} got a hunk callback, but it was a binary file",
-                        path
-                    )
+                    panic!("File {path:?} got a hunk callback, but it was a binary file")
                 }
             }
             true

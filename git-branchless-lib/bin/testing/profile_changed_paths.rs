@@ -22,7 +22,7 @@ fn main() -> eyre::Result<()> {
     let path_to_repo: PathBuf = std::env::var("PATH_TO_REPO")
         .expect("No `PATH_TO_REPO` was set")
         .into();
-    println!("Path to repo: {:?}", path_to_repo);
+    println!("Path to repo: {path_to_repo:?}");
 
     let repo = Repo::from_dir(&path_to_repo)?;
     let commit = match std::env::var("COMMIT_OID") {
@@ -41,7 +41,7 @@ fn main() -> eyre::Result<()> {
     println!("Commit to check: {:?}", &commit);
 
     let result = repo.get_paths_touched_by_commit(&commit)?;
-    println!("Result: {:?}", result);
+    println!("Result: {result:?}");
 
     Ok(())
 }

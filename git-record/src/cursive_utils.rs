@@ -78,9 +78,9 @@ impl<T: EventDrivenCursiveApp + UnwindSafe + RefUnwindSafe> EventDrivenCursiveAp
                             // Ensure we exit TUI mode before attempting to print panic details.
                             drop(siv);
                             if let Some(payload) = panic.downcast_ref::<String>() {
-                                panic!("panic occurred: {}", payload);
+                                panic!("panic occurred: {payload}");
                             } else if let Some(payload) = panic.downcast_ref::<&str>() {
-                                panic!("panic occurred: {}", payload);
+                                panic!("panic occurred: {payload}");
                             } else {
                                 panic!("panic occurred (message not available)",);
                             }

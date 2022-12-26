@@ -107,7 +107,7 @@ Screen contents:
             }
 
             PtyAction::Write(value) => {
-                write!(pty.master, "{}", value)?;
+                write!(pty.master, "{value}")?;
                 pty.master.flush()?;
             }
         }

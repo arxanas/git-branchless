@@ -88,7 +88,7 @@ fn redact_event(redactor: &Redactor, event: &Event) -> String {
         }
     };
 
-    format!("{:?}", event)
+    format!("{event:?}")
 }
 
 fn describe_event_cursor(
@@ -231,7 +231,7 @@ impl Collector for EventCollector {
         _crate_info: &bugreport::CrateInfo,
     ) -> Result<ReportEntry, CollectionError> {
         collect_events(&self.effects, &self.git_run_info)
-            .map_err(|e| CollectionError::CouldNotRetrieve(format!("Error: {}", e)))
+            .map_err(|e| CollectionError::CouldNotRetrieve(format!("Error: {e}")))
     }
 }
 
@@ -299,7 +299,7 @@ impl Collector for HookCollector {
         &mut self,
         _crate_info: &bugreport::CrateInfo,
     ) -> Result<ReportEntry, CollectionError> {
-        collect_hooks().map_err(|e| CollectionError::CouldNotRetrieve(format!("Error: {}", e)))
+        collect_hooks().map_err(|e| CollectionError::CouldNotRetrieve(format!("Error: {e}")))
     }
 }
 

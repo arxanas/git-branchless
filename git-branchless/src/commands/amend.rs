@@ -351,12 +351,12 @@ pub fn amend(
                 amount: paths.len(),
                 unit: ("staged change", "staged changes"),
             };
-            let mut message = format!("Amended with {}.", staged_changes);
+            let mut message = format!("Amended with {staged_changes}.");
             // TODO: Include the number of uncommitted changes.
             if !unstaged_entries.is_empty() {
                 message += " (Some uncommitted changes were not amended.)";
             }
-            writeln!(effects.get_output_stream(), "{}", message)?;
+            writeln!(effects.get_output_stream(), "{message}")?;
         }
         AmendFastOptions::FromWorkingCopy { status_entries } => {
             let uncommitted_changes = Pluralize {
@@ -366,8 +366,7 @@ pub fn amend(
             };
             writeln!(
                 effects.get_output_stream(),
-                "Amended with {}.",
-                uncommitted_changes,
+                "Amended with {uncommitted_changes}.",
             )?;
         }
     }

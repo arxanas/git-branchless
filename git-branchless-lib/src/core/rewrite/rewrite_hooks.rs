@@ -62,7 +62,7 @@ fn write_rewritten_list(
 
     let file = tempfile.as_file_mut();
     for (old_commit_oid, new_commit_oid) in rewritten_oids {
-        writeln!(file, "{} {}", old_commit_oid, new_commit_oid)?;
+        writeln!(file, "{old_commit_oid} {new_commit_oid}")?;
     }
     tempfile
         .persist(rewritten_list_path)
@@ -141,8 +141,7 @@ pub fn hook_post_rewrite(
         .to_string();
         writeln!(
             effects.get_output_stream(),
-            "branchless: processing {}",
-            message_rewritten_commits
+            "branchless: processing {message_rewritten_commits}"
         )?;
     }
 
@@ -272,8 +271,7 @@ fn warn_abandoned(
                 all_abandoned_branches.sort_unstable();
                 let abandoned_branches_list = all_abandoned_branches.join(", ");
                 warning_items.push(format!(
-                    "{} ({})",
-                    abandoned_branch_count, abandoned_branches_list
+                    "{abandoned_branch_count} ({abandoned_branches_list})"
                 ));
             }
 
@@ -281,7 +279,7 @@ fn warn_abandoned(
         };
 
         let warning_message = warning_items.join(" and ");
-        let warning_message = style(format!("This operation abandoned {}!", warning_message))
+        let warning_message = style(format!("This operation abandoned {warning_message}!"))
             .bold()
             .yellow();
 

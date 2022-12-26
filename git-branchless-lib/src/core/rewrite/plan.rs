@@ -133,12 +133,12 @@ pub struct RebasePlan {
 impl ToString for RebaseCommand {
     fn to_string(&self) -> String {
         match self {
-            RebaseCommand::CreateLabel { label_name } => format!("label {}", label_name),
-            RebaseCommand::Reset { target } => format!("reset {}", target),
+            RebaseCommand::CreateLabel { label_name } => format!("label {label_name}"),
+            RebaseCommand::Reset { target } => format!("reset {target}"),
             RebaseCommand::Pick {
                 original_commit_oid: _,
                 commit_to_apply_oid: commit_oid,
-            } => format!("pick {}", commit_oid),
+            } => format!("pick {commit_oid}"),
             RebaseCommand::Merge {
                 commit_oid,
                 commits_to_merge,
@@ -170,16 +170,10 @@ impl ToString for RebaseCommand {
                 "exec git branchless hook-register-extra-post-rewrite-hook".to_string()
             }
             RebaseCommand::DetectEmptyCommit { commit_oid } => {
-                format!(
-                    "exec git branchless hook-detect-empty-commit {}",
-                    commit_oid
-                )
+                format!("exec git branchless hook-detect-empty-commit {commit_oid}")
             }
             RebaseCommand::SkipUpstreamAppliedCommit { commit_oid } => {
-                format!(
-                    "exec git branchless hook-skip-upstream-applied-commit {}",
-                    commit_oid
-                )
+                format!("exec git branchless hook-skip-upstream-applied-commit {commit_oid}")
             }
         }
     }
@@ -895,7 +889,7 @@ impl<'a> RebasePlanBuilder<'a> {
                 // children, create a label so that the child can reference this
                 // commit later for merging.
                 let command_num = acc.len();
-                let label_name = self.make_label_name(state, format!("parent-{}", command_num));
+                let label_name = self.make_label_name(state, format!("parent-{command_num}"));
                 state
                     .parent_labels
                     .insert(current_commit.get_oid(), label_name.clone());
@@ -923,7 +917,7 @@ impl<'a> RebasePlanBuilder<'a> {
             Ok(acc)
         } else {
             let command_num = acc.len();
-            let label_name = self.make_label_name(state, format!("label-{}", command_num));
+            let label_name = self.make_label_name(state, format!("label-{command_num}"));
             let mut acc = acc;
             acc.push(RebaseCommand::CreateLabel {
                 label_name: label_name.clone(),
@@ -1115,7 +1109,7 @@ impl<'a> RebasePlanBuilder<'a> {
         if *dump_rebase_plan {
             // For test: don't print to `effects.get_output_stream()`, as it will
             // be suppressed.
-            println!("Rebase plan: {:#?}", rebase_plan);
+            println!("Rebase plan: {rebase_plan:#?}");
         }
         Ok(Ok(rebase_plan))
     }

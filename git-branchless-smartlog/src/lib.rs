@@ -462,7 +462,7 @@ mod render {
                     .append_plain(glyphs.commit_omitted)
                     .append_plain(" ")
                     .append_styled(
-                        &Pluralize {
+                        Pluralize {
                             determiner: None,
                             amount: distance,
                             unit: ("omitted commit", "omitted commits"),
@@ -533,7 +533,7 @@ mod render {
                     .append_plain(glyphs.commit_omitted)
                     .append_plain(" ")
                     .append_styled(
-                        &Pluralize {
+                        Pluralize {
                             determiner: None,
                             amount: current_node.num_omitted_descendants,
                             unit: ("omitted descendant commit", "omitted descendant commits"),
@@ -623,7 +623,7 @@ mod render {
                 let line = if is_last_child {
                     match last_child_line_char {
                         Some(last_child_line_char) => StyledStringBuilder::new()
-                            .append_plain(format!("{} ", last_child_line_char))
+                            .append_plain(format!("{last_child_line_char} "))
                             .append(child_line)
                             .build(),
                         None => child_line,
@@ -805,10 +805,7 @@ pub fn smartlog(
     ) {
         Ok(result) => match result.as_slice() {
             [commit_set] => commit_set.clone(),
-            other => panic!(
-                "Expected exactly 1 result from resolve commits, got: {:?}",
-                other
-            ),
+            other => panic!("Expected exactly 1 result from resolve commits, got: {other:?}"),
         },
         Err(err) => {
             err.describe(effects)?;

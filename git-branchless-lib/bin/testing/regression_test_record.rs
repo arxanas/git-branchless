@@ -28,7 +28,7 @@ fn main() -> eyre::Result<()> {
                 break;
             }
         };
-        println!("Test #{}: {:?}", i, current_commit);
+        println!("Test #{i}: {current_commit:?}");
 
         let parent_commit = match current_commit.get_only_parent() {
             Some(parent_commit) => parent_commit,
