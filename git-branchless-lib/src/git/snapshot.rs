@@ -632,6 +632,7 @@ mod tests {
         [
             StatusEntry {
                 index_status: Unmerged,
+                submodule_status: None,
                 working_copy_status: Added,
                 working_copy_file_mode: Blob,
                 path: "test2.txt",

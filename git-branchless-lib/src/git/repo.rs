@@ -905,6 +905,7 @@ impl Repo {
     }
 
     /// Returns the current status of the repo index and working copy.
+    #[instrument]
     pub fn get_status(
         &self,
         effects: &Effects,
