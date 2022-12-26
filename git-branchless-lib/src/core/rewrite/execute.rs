@@ -53,8 +53,7 @@ pub fn move_branches<'a>(
             MaybeZeroOid::NonZero(new_oid) => {
                 let new_commit = match repo.find_commit_or_fail(*new_oid).wrap_err_with(|| {
                     format!(
-                        "Could not find newly-rewritten commit with old OID: {:?}, new OID: {:?}",
-                        old_oid, new_oid,
+                        "Could not find newly-rewritten commit with old OID: {old_oid:?}, new OID: {new_oid:?}",
                     )
                 }) {
                     Ok(commit) => commit,
@@ -523,7 +522,7 @@ mod in_memory {
                     let commit_description = effects
                         .get_glyphs()
                         .render(commit_to_apply.friendly_describe(effects.get_glyphs())?)?;
-                    let commit_num = format!("[{}/{}]", i, num_picks);
+                    let commit_num = format!("[{i}/{num_picks}]");
                     progress.notify_progress(i, num_picks);
 
                     if commit_to_apply.get_parent_count() > 1 {
@@ -538,7 +537,7 @@ mod in_memory {
 
                     progress.notify_status(
                         OperationIcon::InProgress,
-                        format!("Applying patch for commit: {}", commit_description),
+                        format!("Applying patch for commit: {commit_description}"),
                     );
                     let commit_tree = match repo.cherry_pick_fast(
                         &commit_to_apply,
@@ -567,7 +566,7 @@ mod in_memory {
 
                     progress.notify_status(
                         OperationIcon::InProgress,
-                        format!("Committing to repository: {}", commit_description),
+                        format!("Committing to repository: {commit_description}"),
                     );
                     let committer_signature = if *preserve_timestamps {
                         commit_to_apply.get_committer()
@@ -601,10 +600,7 @@ mod in_memory {
 
                         writeln!(
                             effects.get_output_stream(),
-                            "[{}/{}] Skipped now-empty commit: {}",
-                            i,
-                            num_picks,
-                            commit_description
+                            "[{i}/{num_picks}] Skipped now-empty commit: {commit_description}"
                         )?;
                     } else {
                         rewritten_oids.push((
@@ -615,9 +611,7 @@ mod in_memory {
 
                         writeln!(
                             effects.get_output_stream(),
-                            "{} Committed as: {}",
-                            commit_num,
-                            commit_description
+                            "{commit_num} Committed as: {commit_description}"
                         )?;
                     }
                 }
@@ -648,11 +642,11 @@ mod in_memory {
                         .render(original_commit.friendly_describe(effects.get_glyphs())?)?;
 
                     i += 1;
-                    let commit_num = format!("[{}/{}]", i, num_picks);
+                    let commit_num = format!("[{i}/{num_picks}]");
                     progress.notify_progress(i, num_picks);
                     progress.notify_status(
                         OperationIcon::InProgress,
-                        format!("Replacing commit: {}", original_commit_description),
+                        format!("Replacing commit: {original_commit_description}"),
                     );
 
                     let replacement_commit = repo.find_commit_or_fail(*replacement_commit_oid)?;
@@ -671,10 +665,7 @@ mod in_memory {
                         .render(replacement_commit.friendly_describe(effects.get_glyphs())?)?;
                     progress.notify_status(
                         OperationIcon::InProgress,
-                        format!(
-                            "Committing to repository: {}",
-                            replacement_commit_description
-                        ),
+                        format!("Committing to repository: {replacement_commit_description}"),
                     );
                     let committer_signature = if *preserve_timestamps {
                         replacement_commit.get_committer()
@@ -723,9 +714,7 @@ mod in_memory {
 
                     writeln!(
                         effects.get_output_stream(),
-                        "{} Committed as: {}",
-                        commit_num,
-                        commit_description
+                        "{commit_num} Committed as: {commit_description}"
                     )?;
                 }
 
@@ -735,7 +724,7 @@ mod in_memory {
 
                 RebaseCommand::SkipUpstreamAppliedCommit { commit_oid } => {
                     i += 1;
-                    let commit_num = format!("[{}/{}]", i, num_picks);
+                    let commit_num = format!("[{i}/{num_picks}]");
 
                     let commit = repo.find_commit_or_fail(*commit_oid)?;
                     rewritten_oids.push((*commit_oid, MaybeZeroOid::Zero));
@@ -745,9 +734,7 @@ mod in_memory {
                     let commit_description = effects.get_glyphs().render(commit_description)?;
                     writeln!(
                         effects.get_output_stream(),
-                        "{} Skipped commit (was already applied upstream): {}",
-                        commit_num,
-                        commit_description
+                        "{commit_num} Skipped commit (was already applied upstream): {commit_description}"
                     )?;
                 }
 
@@ -854,7 +841,7 @@ mod in_memory {
         // produce a spurious abandoned-branch warning.
         let post_rewrite_stdin: String = rewritten_oids
             .iter()
-            .map(|(old_oid, new_oid)| format!("{} {}\n", old_oid, new_oid))
+            .map(|(old_oid, new_oid)| format!("{old_oid} {new_oid}\n"))
             .collect();
         let post_rewrite_stdin = BString::from(post_rewrite_stdin);
         git_run_info.run_hook(
@@ -1297,13 +1284,11 @@ Commit your changes and then try again.
             Err(Error::OperationAlreadyInProgress { operation_type }) => {
                 writeln!(
                     effects.get_output_stream(),
-                    "A {} operation is already in progress.",
-                    operation_type
+                    "A {operation_type} operation is already in progress."
                 )?;
                 writeln!(
                     effects.get_output_stream(),
-                    "Run git {0} --continue or git {0} --abort to resolve it and proceed.",
-                    operation_type
+                    "Run git {operation_type} --continue or git {operation_type} --abort to resolve it and proceed."
                 )?;
                 return Ok(ExecuteRebasePlanResult::Failed {
                     exit_code: ExitCode(1),

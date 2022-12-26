@@ -60,7 +60,7 @@ impl ToString for OperationType {
             OperationType::ConstrainCommits => "Creating commit constraints",
             OperationType::DetectDuplicateCommits => "Checking for duplicate commits",
             OperationType::EvaluateRevset(revset) => {
-                return format!("Evaluating revset: {}", revset);
+                return format!("Evaluating revset: {revset}");
             }
             OperationType::FilterByTouchedPaths => "Filtering upstream commits by touched paths",
             OperationType::FilterCommits => "Filtering commits",
@@ -873,7 +873,7 @@ impl Write for OutputStream {
 
             OutputDest::BufferForTest { stdout, stderr: _ } => {
                 let mut buffer = stdout.lock().unwrap();
-                write!(buffer, "{}", s).unwrap();
+                write!(buffer, "{s}").unwrap();
             }
         }
         Ok(())
@@ -933,7 +933,7 @@ impl Write for ErrorStream {
 
             OutputDest::BufferForTest { stdout: _, stderr } => {
                 let mut buffer = stderr.lock().unwrap();
-                write!(buffer, "{}", s).unwrap();
+                write!(buffer, "{s}").unwrap();
             }
         }
         Ok(())

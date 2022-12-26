@@ -28,7 +28,7 @@ pub struct FileKey {
 impl FileKey {
     fn view_id(&self) -> String {
         let Self { file_num } = self;
-        format!("FileKey({})", file_num)
+        format!("FileKey({file_num})")
     }
 }
 
@@ -217,11 +217,7 @@ impl<'a> Recorder<'a> {
                     local_changed_section_num += 1;
                     *global_changed_section_num += 1;
                     let description = format!(
-                        "section {}/{} in current file, {}/{} total",
-                        local_changed_section_num,
-                        local_num_changed_sections,
-                        global_changed_section_num,
-                        global_num_changed_sections
+                        "section {local_changed_section_num}/{local_num_changed_sections} in current file, {global_changed_section_num}/{global_num_changed_sections} total"
                     );
 
                     self.make_changed_section_views(
@@ -344,8 +340,8 @@ impl<'a> Recorder<'a> {
 
         let line_contents = {
             let (line, style) = match section_line_key.section_type {
-                SectionChangedLineType::Before => (format!(" -{}", line), BaseColor::Red.dark()),
-                SectionChangedLineType::After => (format!(" +{}", line), BaseColor::Green.dark()),
+                SectionChangedLineType::Before => (format!(" -{line}"), BaseColor::Red.dark()),
+                SectionChangedLineType::After => (format!(" +{line}"), BaseColor::Green.dark()),
             };
             let mut s = StyledString::new();
             s.append_styled(line, style);

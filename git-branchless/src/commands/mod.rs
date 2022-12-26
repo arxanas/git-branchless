@@ -459,7 +459,7 @@ fn install_tracing(effects: Effects) -> eyre::Result<impl Drop> {
                 );
                 Some(filename)
             }
-            Ok(value) if !value.is_empty() => Some(format!("{}-{}", value, nesting_level)),
+            Ok(value) if !value.is_empty() => Some(format!("{value}-{nesting_level}")),
             Ok(_) | Err(_) => None,
         };
 

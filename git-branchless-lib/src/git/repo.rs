@@ -1110,7 +1110,7 @@ impl Repo {
             None => {
                 let NonZeroOid { inner: oid } = oid;
                 Ok(StyledString::styled(
-                    format!("<commit not available: {}>", oid),
+                    format!("<commit not available: {oid}>"),
                     BaseColor::Red.light(),
                 ))
             }
@@ -1577,9 +1577,9 @@ impl<'repo> Signature<'repo> {
     /// Return the friendly formatted name and email of the signature.
     pub fn friendly_describe(&self) -> Option<String> {
         let name = self.inner.name();
-        let email = self.inner.email().map(|email| format!("<{}>", email));
+        let email = self.inner.email().map(|email| format!("<{email}>"));
         match (name, email) {
-            (Some(name), Some(email)) => Some(format!("{} {}", name, email)),
+            (Some(name), Some(email)) => Some(format!("{name} {email}")),
             (Some(name), _) => Some(name.into()),
             (_, Some(email)) => Some(email),
             _ => None,

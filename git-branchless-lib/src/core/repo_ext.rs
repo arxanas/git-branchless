@@ -66,7 +66,7 @@ https://github.com/arxanas/git-branchless/discussions/595 for more details.",
                             branch
                                 .into_reference()
                                 .get_name()
-                                .map(|s| format!("{:?}", s))
+                                .map(|s| format!("{s:?}"))
                                 .wrap_err("converting branch to reference")
                         })
                         .collect::<eyre::Result<Vec<String>>>()?,

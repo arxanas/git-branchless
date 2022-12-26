@@ -114,7 +114,7 @@ impl Redactor {
                             CategorizedReferenceName::RemoteBranch { name: _, prefix } => prefix,
                             CategorizedReferenceName::OtherRef { name: _ } => "",
                         };
-                        format!("{}redacted-ref-{}", prefix, len).into()
+                        format!("{prefix}redacted-ref-{len}").into()
                     })
                     .clone()
             }
@@ -472,27 +472,27 @@ impl RelativeTimeDescriptor {
         };
 
         if delta < 60 {
-            return Ok(format!("{}s", delta));
+            return Ok(format!("{delta}s"));
         }
         delta /= 60;
 
         if delta < 60 {
-            return Ok(format!("{}m", delta));
+            return Ok(format!("{delta}m"));
         }
         delta /= 60;
 
         if delta < 24 {
-            return Ok(format!("{}h", delta));
+            return Ok(format!("{delta}h"));
         }
         delta /= 24;
 
         if delta < 365 {
-            return Ok(format!("{}d", delta));
+            return Ok(format!("{delta}d"));
         }
         delta /= 365;
 
         // Arguably at this point, users would want a specific date rather than a delta.
-        Ok(format!("{}y", delta))
+        Ok(format!("{delta}y"))
     }
 }
 

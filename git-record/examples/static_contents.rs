@@ -116,7 +116,7 @@ fn main() {
 
                 println!("Path {} will have these final contents:", path.display());
                 let (selected, _unselected) = file_state.get_selected_contents();
-                print!("{}", selected);
+                print!("{selected}");
             }
         }
         Err(RecordError::Cancelled) => println!("Cancelled!"),

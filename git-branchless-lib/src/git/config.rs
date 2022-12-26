@@ -71,9 +71,9 @@ impl From<&str> for ConfigValue {
 impl Display for ConfigValue {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.inner {
-            ConfigValueInner::String(value) => write!(f, "{}", value),
-            ConfigValueInner::Int(value) => write!(f, "{}", value),
-            ConfigValueInner::Bool(value) => write!(f, "{:?}", value),
+            ConfigValueInner::String(value) => write!(f, "{value}"),
+            ConfigValueInner::Int(value) => write!(f, "{value}"),
+            ConfigValueInner::Bool(value) => write!(f, "{value:?}"),
         }
     }
 }

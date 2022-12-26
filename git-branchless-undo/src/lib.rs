@@ -394,7 +394,7 @@ fn describe_events_numbered(
 ) -> Result<Vec<StyledString>, eyre::Error> {
     let mut lines = Vec::new();
     for (i, event) in (1..).zip(events) {
-        let num_header = format!("{}. ", i);
+        let num_header = format!("{i}. ");
         for (j, event_line) in (0..).zip(describe_event(glyphs, repo, event)?) {
             let prefix = if j == 0 {
                 num_header.clone()
@@ -583,8 +583,7 @@ fn select_past_event(
                                     }
                                     Err(_) => {
                                         siv.add_layer(Dialog::info(format!(
-                                            "Invalid event ID: {}",
-                                            text
+                                            "Invalid event ID: {text}"
                                         )));
                                     }
                                 }
@@ -927,11 +926,7 @@ fn undo_events(
         }
     }
 
-    writeln!(
-        effects.get_output_stream(),
-        "Applied {}.",
-        num_inverse_events
-    )?;
+    writeln!(effects.get_output_stream(), "Applied {num_inverse_events}.")?;
     Ok(ExitCode(0))
 }
 

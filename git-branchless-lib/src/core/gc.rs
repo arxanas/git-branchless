@@ -67,10 +67,10 @@ pub fn find_dangling_references<'repo>(
 /// * `commit_oid`: The commit OID to mark as reachable.
 #[instrument]
 pub fn mark_commit_reachable(repo: &Repo, commit_oid: NonZeroOid) -> eyre::Result<()> {
-    let ref_name = format!("refs/branchless/{}", commit_oid);
+    let ref_name = format!("refs/branchless/{commit_oid}");
     eyre::ensure!(
         Reference::is_valid_name(&ref_name),
-        format!("Invalid ref name to mark commit as reachable: {}", ref_name)
+        format!("Invalid ref name to mark commit as reachable: {ref_name}")
     );
 
     // NB: checking for the commit first with `find_commit` is racy, as the `create_reference` call

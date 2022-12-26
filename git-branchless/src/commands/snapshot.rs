@@ -68,8 +68,7 @@ pub fn restore(
         None => {
             writeln!(
                 effects.get_error_stream(),
-                "Not a snapshot commit: {}",
-                snapshot_oid
+                "Not a snapshot commit: {snapshot_oid}"
             )?;
             return Ok(ExitCode(1));
         }

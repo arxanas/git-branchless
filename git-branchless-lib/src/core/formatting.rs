@@ -52,7 +52,7 @@ impl Display for Pluralize<'_> {
                 amount,
                 unit: (_, unit),
                 determiner: None,
-            } => write!(f, "{} {}", amount, unit),
+            } => write!(f, "{amount} {unit}"),
 
             Self {
                 amount: 1,
@@ -64,7 +64,7 @@ impl Display for Pluralize<'_> {
                 amount,
                 unit: (_, unit),
                 determiner: Some((_, determiner)),
-            } => write!(f, "{} {} {}", determiner, amount, unit),
+            } => write!(f, "{determiner} {amount} {unit}"),
         }
     }
 }

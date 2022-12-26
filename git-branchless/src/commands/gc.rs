@@ -38,8 +38,7 @@ pub fn gc(effects: &Effects) -> eyre::Result<()> {
 
     writeln!(
         effects.get_output_stream(),
-        "branchless: {} deleted",
-        num_dangling_references,
+        "branchless: {num_dangling_references} deleted",
     )?;
     Ok(())
 }

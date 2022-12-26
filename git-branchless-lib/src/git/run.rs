@@ -103,7 +103,7 @@ impl GitRunInfo {
             let reader = BufReader::new(stream);
             for line in reader.lines() {
                 let line = line.expect("Reading line from subprocess");
-                writeln!(output, "{}", line).expect("Writing line from subprocess");
+                writeln!(output, "{line}").expect("Writing line from subprocess");
             }
         })
     }
@@ -125,7 +125,7 @@ impl GitRunInfo {
             .map(|arg| arg.to_string_lossy().to_string())
             .collect_vec()
             .join(" ");
-        let command_string = format!("git {}", args_string);
+        let command_string = format!("git {args_string}");
         let (effects, _progress) =
             effects.start_operation(OperationType::RunGitCommand(Arc::new(command_string)));
         writeln!(
@@ -383,7 +383,7 @@ impl GitRunInfo {
                         .unwrap_or_else(|| repo.get_path()),
                 )
                 .arg("-c")
-                .arg(format!("{} \"$@\"", hook_name))
+                .arg(format!("{hook_name} \"$@\""))
                 .arg(hook_name) // "$@" expands "$1" "$2" "$3" ... but we also must specify $0.
                 .args(args)
                 .env_clear()
