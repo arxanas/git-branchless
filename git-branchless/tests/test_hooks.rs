@@ -345,3 +345,46 @@ fn test_merge_commit_recorded() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_git_am_recorded() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+
+    git.detach_head()?;
+    git.commit_file("test1", 1)?;
+    git.run(&["format-patch", "HEAD^"])?;
+    git.run(&["reset", "--hard", "HEAD^"])?;
+
+    {
+        let (stdout, _stderr) = git.run(&["am", "0001-create-test1.txt.patch"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        Applying: create test1.txt
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |\
+        | @ 047b7ad create test1.txt
+        |
+        o 62fc20d create test1.txt
+        "###);
+    }
+
+    git.run(&["reset", "--hard", "HEAD^"])?;
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        @ f777ecc (master) create initial.txt
+        |\
+        | o 047b7ad create test1.txt
+        |
+        o 62fc20d create test1.txt
+        "###);
+    }
+
+    Ok(())
+}

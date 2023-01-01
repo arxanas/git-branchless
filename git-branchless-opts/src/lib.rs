@@ -233,6 +233,10 @@ pub enum Command {
 
     /// Internal use.
     #[clap(hide = true)]
+    HookPostApplypatch,
+
+    /// Internal use.
+    #[clap(hide = true)]
     HookPostCheckout {
         /// The previous commit OID.
         #[clap(value_parser)]

@@ -134,6 +134,14 @@ pub fn hook_post_merge(effects: &Effects, _is_squash_merge: isize) -> eyre::Resu
     hook_post_commit_common(effects, "post-merge")
 }
 
+/// Handle Git's `post-applypatch` hook.
+///
+/// See the man-page for `githooks(5)`.
+#[instrument]
+pub fn hook_post_applypatch(effects: &Effects) -> eyre::Result<()> {
+    hook_post_commit_common(effects, "post-applypatch")
+}
+
 mod reference_transaction {
     use std::collections::HashMap;
     use std::fs::File;
