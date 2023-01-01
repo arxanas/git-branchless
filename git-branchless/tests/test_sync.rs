@@ -8,6 +8,10 @@ fn remove_nondeterministic_lines(output: String) -> String {
             !line.contains("Fetching")
                 // This line is produced in a different order in some Git versions.
                 && !line.contains("Your branch is up to date")
+                // This line is only sometimes produced in CI for some reason? I
+                // don't understand how it would only sometimes print this
+                // message, but it does.
+                && !line.contains("Switched to branch")
         })
         .map(|line| format!("{line}\n"))
         .collect()
@@ -369,7 +373,6 @@ fn test_sync_no_delete_main_branch() -> eyre::Result<()> {
         branchless: processing 2 updates: branch master, branch should-be-deleted
         branchless: creating working copy snapshot
         branchless: running command: <git-executable> checkout master
-        Switched to branch 'master'
         branchless: processing checkout
         :
         @ 96d1c37 (> master) create test2.txt
