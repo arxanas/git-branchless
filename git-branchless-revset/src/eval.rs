@@ -485,6 +485,25 @@ mod tests {
         }
 
         {
+            let expr = Expr::FunctionCall(
+                Cow::Borrowed("siblings"),
+                vec![Expr::Name(Cow::Owned(test2_oid.to_string()))],
+            );
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            Ok(
+                [
+                    Commit {
+                        inner: Commit {
+                            id: bf0d52a607f693201512a43b6b5a70b2a275e0ad,
+                            summary: "create test4.txt",
+                        },
+                    },
+                ],
+            )
+            "###);
+        }
+
+        {
             let expr = Expr::FunctionCall(Cow::Borrowed("stack"), vec![]);
             insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
             Ok(
