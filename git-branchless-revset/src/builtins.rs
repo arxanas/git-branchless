@@ -37,6 +37,7 @@ lazy_static! {
             ("parents", &fn_parents),
             ("parents.nth", &fn_parents_nth),
             ("children", &fn_children),
+            ("siblings", &fn_siblings),
             ("roots", &fn_roots),
             ("heads", &fn_heads),
             ("branches", &fn_branches),
@@ -143,6 +144,15 @@ fn fn_parents(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
 fn fn_children(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     let expr = eval1(ctx, name, args)?;
     Ok(ctx.dag.query().children(expr)?)
+}
+
+#[instrument]
+fn fn_siblings(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+    let expr = eval1(ctx, name, args)?;
+    let parents = ctx.dag.query().parents(expr.clone())?;
+    let children = ctx.dag.query().children(parents)?;
+    let siblings = children.difference(&expr);
+    Ok(siblings)
 }
 
 #[instrument]
