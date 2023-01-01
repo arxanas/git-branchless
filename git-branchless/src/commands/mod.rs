@@ -126,6 +126,11 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
             ExitCode(0)
         }
 
+        Command::HookPostApplypatch => {
+            hooks::hook_post_applypatch(&effects)?;
+            ExitCode(0)
+        }
+
         Command::HookPostCheckout {
             previous_commit,
             current_commit,

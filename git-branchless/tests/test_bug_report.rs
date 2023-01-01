@@ -37,8 +37,28 @@ fn test_bug_report() -> eyre::Result<()> {
 
         insta::assert_snapshot!(stdout, @r###"
         <details>
-        <summary>Show 6 hooks</summary>
+        <summary>Show 7 hooks</summary>
 
+        ##### Hook `post-applypatch`
+
+        ```
+        #!/bin/sh
+        ## START BRANCHLESS CONFIG
+
+        git branchless hook-post-applypatch "$@"
+
+        ## END BRANCHLESS CONFIG
+        ```
+        ##### Hook `post-checkout`
+
+        ```
+        #!/bin/sh
+        ## START BRANCHLESS CONFIG
+
+        git branchless hook-post-checkout "$@"
+
+        ## END BRANCHLESS CONFIG
+        ```
         ##### Hook `post-commit`
 
         ```
@@ -66,16 +86,6 @@ fn test_bug_report() -> eyre::Result<()> {
         ## START BRANCHLESS CONFIG
 
         git branchless hook-post-rewrite "$@"
-
-        ## END BRANCHLESS CONFIG
-        ```
-        ##### Hook `post-checkout`
-
-        ```
-        #!/bin/sh
-        ## START BRANCHLESS CONFIG
-
-        git branchless hook-post-checkout "$@"
 
         ## END BRANCHLESS CONFIG
         ```

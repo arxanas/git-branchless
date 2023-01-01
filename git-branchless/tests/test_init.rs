@@ -185,7 +185,7 @@ fn test_old_git_version_warning() -> eyre::Result<()> {
         Created config file at <repo-path>/.git/branchless/config
         Auto-detected your main branch as: master
         If this is incorrect, run: git branchless init --main-branch <branch>
-        Installing hooks: post-commit, post-merge, post-rewrite, post-checkout, pre-auto-gc, reference-transaction
+        Installing hooks: post-applypatch, post-checkout, post-commit, post-merge, post-rewrite, pre-auto-gc, reference-transaction
         Warning: the branchless workflow's `git undo` command requires Git
         v2.29 or later, but your Git version is: <git version output>
 
@@ -225,7 +225,7 @@ fn test_init_basic() -> eyre::Result<()> {
         Created config file at <repo-path>/.git/branchless/config
         Auto-detected your main branch as: master
         If this is incorrect, run: git branchless init --main-branch <branch>
-        Installing hooks: post-commit, post-merge, post-rewrite, post-checkout, pre-auto-gc, reference-transaction
+        Installing hooks: post-applypatch, post-checkout, post-commit, post-merge, post-rewrite, pre-auto-gc, reference-transaction
         Successfully installed git-branchless.
         To uninstall, run: git branchless init --uninstall
         "###);
@@ -264,7 +264,7 @@ fn test_init_prompt_for_main_branch() -> eyre::Result<()> {
         Your main branch name could not be auto-detected!
         Examples of a main branch: master, main, trunk, etc.
         See https://github.com/arxanas/git-branchless/wiki/Concepts#main-branch
-        Enter the name of your main branch: Installing hooks: post-commit, post-merge, post-rewrite, post-checkout, pre-auto-gc, reference-transaction
+        Enter the name of your main branch: Installing hooks: post-applypatch, post-checkout, post-commit, post-merge, post-rewrite, pre-auto-gc, reference-transaction
         Successfully installed git-branchless.
         To uninstall, run: git branchless init --uninstall
         "###);
@@ -352,7 +352,7 @@ fn test_init_uninstall() -> eyre::Result<()> {
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
         Removing config file: <repo-path>/.git/branchless/config
-        Uninstalling hooks: post-commit, post-merge, post-rewrite, post-checkout, pre-auto-gc, reference-transaction
+        Uninstalling hooks: post-applypatch, post-checkout, post-commit, post-merge, post-rewrite, pre-auto-gc, reference-transaction
         "###);
     }
 
@@ -538,7 +538,7 @@ fn test_init_core_hooks_path_warning() -> eyre::Result<()> {
         Created config file at <repo-path>/.git/branchless/config
         Auto-detected your main branch as: master
         If this is incorrect, run: git branchless init --main-branch <branch>
-        Installing hooks: post-commit, post-merge, post-rewrite, post-checkout, pre-auto-gc, reference-transaction
+        Installing hooks: post-applypatch, post-checkout, post-commit, post-merge, post-rewrite, pre-auto-gc, reference-transaction
         Warning: the configuration value core.hooksPath was set to: my-hooks
         The Git hooks above may have been installed to an unexpected location.
         Successfully installed git-branchless.

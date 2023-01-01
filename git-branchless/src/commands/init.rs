@@ -20,6 +20,18 @@ use lib::git::{BranchType, Config, ConfigRead, ConfigWrite, GitRunInfo, GitVersi
 
 pub const ALL_HOOKS: &[(&str, &str)] = &[
     (
+        "post-applypatch",
+        r#"
+git branchless hook-post-applypatch "$@"
+"#,
+    ),
+    (
+        "post-checkout",
+        r#"
+git branchless hook-post-checkout "$@"
+"#,
+    ),
+    (
         "post-commit",
         r#"
 git branchless hook-post-commit "$@"
@@ -35,12 +47,6 @@ git branchless hook-post-merge "$@"
         "post-rewrite",
         r#"
 git branchless hook-post-rewrite "$@"
-"#,
-    ),
-    (
-        "post-checkout",
-        r#"
-git branchless hook-post-checkout "$@"
 "#,
     ),
     (
