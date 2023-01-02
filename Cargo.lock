@@ -1233,10 +1233,12 @@ version = "0.7.0-pre.1"
 dependencies = [
  "cursive",
  "cursive_buffered_backend",
+ "esl01-dag",
  "eyre",
  "git-branchless-lib",
  "git-record",
  "itertools 0.10.5",
+ "rayon",
 ]
 
 [[package]]

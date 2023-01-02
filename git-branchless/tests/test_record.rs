@@ -302,3 +302,119 @@ fn test_record_create_branch() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_record_insert() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+
+    git.run(&["checkout", "-B", "foo"])?;
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+    git.run(&["checkout", "HEAD^"])?;
+
+    git.write_file_txt("test1", "new contents\n")?;
+    {
+        let (stdout, _stderr) = git.run(&["record", "-m", "update test1.txt", "--insert"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        [detached HEAD c17ec22] update test1.txt
+         1 file changed, 1 insertion(+), 1 deletion(-)
+        Attempting rebase in-memory...
+        [1/1] Committed as: 734e7f6 create test2.txt
+        branchless: processing 1 update: branch foo
+        branchless: processing 1 rewritten commit
+        In-memory rebase succeeded.
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        o 62fc20d create test1.txt
+        |
+        @ c17ec22 update test1.txt
+        |
+        o 734e7f6 (foo) create test2.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_record_insert_rewrite_public_commit() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+    git.run(&["checkout", "HEAD^"])?;
+
+    git.write_file_txt("test1", "new contents\n")?;
+    {
+        let (stdout, _stderr) = git.run(&["record", "-m", "update test1.txt", "--insert"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        [detached HEAD c17ec22] update test1.txt
+         1 file changed, 1 insertion(+), 1 deletion(-)
+        You are trying to rewrite 1 public commit, such as: 96d1c37 create test2.txt
+        It is generally not advised to rewrite public commits, because your
+        collaborators will have difficulty merging your changes.
+        To proceed anyways, run: git move -f -s 'siblings(.)
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d create test1.txt
+        |\
+        | @ c17ec22 update test1.txt
+        |
+        O 96d1c37 (master) create test2.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_record_insert_merge_conflict() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+
+    git.run(&["checkout", "-B", "foo"])?;
+    git.commit_file("test1", 1)?;
+    git.commit_file_with_contents("test1", 1, "new contents 1\n")?;
+    git.run(&["checkout", "HEAD^"])?;
+
+    git.write_file_txt("test1", "new contents 2\n")?;
+    {
+        let (stdout, _stderr) = git.run(&["record", "-m", "update test1.txt", "--insert"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        [detached HEAD c36bf7c] update test1.txt
+         1 file changed, 1 insertion(+), 1 deletion(-)
+        Attempting rebase in-memory...
+        This operation would cause a merge conflict:
+        - (1 conflicting file) ae32734 create test1.txt
+        To resolve merge conflicts, run: git move -m -s 'siblings(.)'
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        o 62fc20d create test1.txt
+        |\
+        | @ c36bf7c update test1.txt
+        |
+        o ae32734 (foo) create test1.txt
+        "###);
+    }
+
+    Ok(())
+}

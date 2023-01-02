@@ -312,6 +312,9 @@ pub enum MergeConflictRemediation {
 
     /// Indicate that the user should run `git restack --merge`.
     Restack,
+
+    /// Indicate that the user should run `git move -m -s 'siblings(.)'`.
+    Insert,
 }
 
 /// Information about a merge conflict that occurred while moving commits.
@@ -362,6 +365,12 @@ impl MergeConflictInfo {
                 writeln!(
                     effects.get_output_stream(),
                     "To resolve merge conflicts, run: git restack --merge"
+                )?;
+            }
+            MergeConflictRemediation::Insert => {
+                writeln!(
+                    effects.get_output_stream(),
+                    "To resolve merge conflicts, run: git move -m -s 'siblings(.)'"
                 )?;
             }
         }

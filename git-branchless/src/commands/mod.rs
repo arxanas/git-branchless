@@ -264,6 +264,7 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
             interactive,
             branch,
             detach,
+            insert,
         } => git_branchless_record::record(
             &effects,
             &git_run_info,
@@ -271,6 +272,7 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
             interactive,
             branch,
             detach,
+            insert,
         )?,
 
         Command::Reword {
