@@ -325,13 +325,7 @@ fn resolve_commits_from_hashes<'repo>(
     revsets: Vec<Revset>,
     resolve_revset_options: &ResolveRevsetOptions,
 ) -> eyre::Result<Option<Vec<Commit<'repo>>>> {
-    let hashes = if revsets.is_empty() {
-        vec![Revset("HEAD".to_string())]
-    } else {
-        revsets
-    };
-
-    let commit_sets = match resolve_commits(effects, repo, dag, &hashes, resolve_revset_options) {
+    let commit_sets = match resolve_commits(effects, repo, dag, &revsets, resolve_revset_options) {
         Ok(commit_sets) => commit_sets,
         Err(err) => {
             err.describe(effects)?;

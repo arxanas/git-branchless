@@ -455,8 +455,13 @@ pub enum Command {
 
     /// Reword commits.
     Reword {
-        /// Zero or more commits to reword. If not provided, defaults to "HEAD".
-        #[clap(value_parser)]
+        /// Zero or more commits to reword.
+        #[clap(
+            value_parser,
+            default_value = "stack() | @",
+            default_value_if("commit_to_fixup", clap::builder::ArgPredicate::IsPresent, "@"),
+            default_value_if("messages", clap::builder::ArgPredicate::IsPresent, "@")
+        )]
         revsets: Vec<Revset>,
 
         /// Options for resolving revset expressions.
