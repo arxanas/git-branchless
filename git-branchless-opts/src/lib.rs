@@ -682,7 +682,7 @@ pub enum TestSubcommand {
     /// Clean any cached test results.
     Clean {
         /// The set of commits whose results should be cleaned.
-        #[clap(value_parser, default_value = "stack()")]
+        #[clap(value_parser, default_value = "stack() | @")]
         revset: Revset,
 
         /// Options for resolving revset expressions.
@@ -702,7 +702,7 @@ pub enum TestSubcommand {
         command: Option<String>,
 
         /// The set of commits to test.
-        #[clap(value_parser, default_value = "stack()")]
+        #[clap(value_parser, default_value = "stack() | @")]
         revset: Revset,
 
         /// Options for resolving revset expressions.
@@ -734,7 +734,7 @@ pub enum TestSubcommand {
         command: Option<String>,
 
         /// The set of commits to show the test output for.
-        #[clap(value_parser, default_value = "stack()")]
+        #[clap(value_parser, default_value = "stack() | @")]
         revset: Revset,
 
         /// Options for resolving revset expressions.

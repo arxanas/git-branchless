@@ -146,7 +146,7 @@ fn test_test_cached_results() -> eyre::Result<()> {
         ✓ Passed (cached): 1b0d484 Revert "create test3.txt"
         3 passed, 0 failed, 0 skipped
         hint: there was 1 cached test result
-        hint: to clear these cached results, run: git test clean "stack()"
+        hint: to clear these cached results, run: git test clean "stack() | @"
         hint: disable this hint by running: git config --global branchless.hint.cleanCachedTestResults false
         branchless: running command: <git-executable> rebase --abort
         "###);
@@ -164,7 +164,7 @@ fn test_test_cached_results() -> eyre::Result<()> {
         ✓ Passed (cached): 1b0d484 Revert "create test3.txt"
         3 passed, 0 failed, 0 skipped
         hint: there were 3 cached test results
-        hint: to clear these cached results, run: git test clean "stack()"
+        hint: to clear these cached results, run: git test clean "stack() | @"
         hint: disable this hint by running: git config --global branchless.hint.cleanCachedTestResults false
         branchless: running command: <git-executable> rebase --abort
         "###);
@@ -237,7 +237,7 @@ fn test_test_verbosity() -> eyre::Result<()> {
         <no output>
         1 passed, 0 failed, 0 skipped
         hint: there was 1 cached test result
-        hint: to clear these cached results, run: git test clean "stack()"
+        hint: to clear these cached results, run: git test clean "stack() | @"
         hint: disable this hint by running: git config --global branchless.hint.cleanCachedTestResults false
         branchless: running command: <git-executable> rebase --abort
         "###);
@@ -300,7 +300,7 @@ fn test_test_verbosity() -> eyre::Result<()> {
         <no output>
         1 passed, 0 failed, 0 skipped
         hint: there was 1 cached test result
-        hint: to clear these cached results, run: git test clean "stack()"
+        hint: to clear these cached results, run: git test clean "stack() | @"
         hint: disable this hint by running: git config --global branchless.hint.cleanCachedTestResults false
         branchless: running command: <git-executable> rebase --abort
         "###);
@@ -437,8 +437,9 @@ fn test_test_command_alias() -> eyre::Result<()> {
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
-        Ran echo default on 0 commits:
-        0 passed, 0 failed, 0 skipped
+        Ran echo default on 1 commit:
+        ✓ Passed: f777ecc create initial.txt
+        1 passed, 0 failed, 0 skipped
         branchless: running command: <git-executable> rebase --abort
         "###);
     }
@@ -449,8 +450,9 @@ fn test_test_command_alias() -> eyre::Result<()> {
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
-        Ran echo foo on 0 commits:
-        0 passed, 0 failed, 0 skipped
+        Ran echo foo on 1 commit:
+        ✓ Passed: f777ecc create initial.txt
+        1 passed, 0 failed, 0 skipped
         branchless: running command: <git-executable> rebase --abort
         "###);
     }
