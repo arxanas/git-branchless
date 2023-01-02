@@ -13,12 +13,41 @@ use crate::core::formatting::StyledStringBuilder;
 use crate::git::{ConfigRead, GitRunInfo, GitRunOpts, Repo};
 
 use super::effects::Effects;
+use super::eventlog::EventTransactionId;
+
+/// Get the expected hooks dir inside `.git`, assuming that the user has not
+/// overridden it.
+#[instrument]
+pub fn get_default_hooks_dir(repo: &Repo) -> PathBuf {
+    repo.get_path().join("hooks")
+}
 
 /// Get the path where Git hooks are stored on disk.
 #[instrument]
-pub fn get_core_hooks_path(repo: &Repo) -> eyre::Result<PathBuf> {
-    repo.get_readonly_config()?
-        .get_or_else("core.hooksPath", || repo.get_path().join("hooks"))
+pub fn get_hooks_dir(
+    git_run_info: &GitRunInfo,
+    repo: &Repo,
+    event_tx_id: Option<EventTransactionId>,
+) -> eyre::Result<PathBuf> {
+    let result = git_run_info
+        .run_silent(
+            repo,
+            event_tx_id,
+            &["config", "core.hooksPath"],
+            GitRunOpts {
+                treat_git_failure_as_error: false,
+                ..Default::default()
+            },
+        )
+        .context("Reading core.hooksPath")?;
+    let hooks_path = if result.exit_code.is_success() {
+        let path = String::from_utf8(result.stdout)
+            .context("Decoding git config output for hooks path")?;
+        PathBuf::from(path.strip_suffix('\n').unwrap_or(&path))
+    } else {
+        get_default_hooks_dir(repo)
+    };
+    Ok(hooks_path)
 }
 
 /// Get the configured name of the main branch.

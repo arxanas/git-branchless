@@ -8,6 +8,7 @@ use bugreport::collector::{CollectionError, Collector};
 use bugreport::format::Markdown;
 use bugreport::report::ReportEntry;
 use itertools::Itertools;
+use lib::core::config::get_hooks_dir;
 use lib::core::repo_ext::{RepoExt, RepoReferencesSnapshot};
 use lib::util::ExitCode;
 
@@ -235,14 +236,17 @@ impl Collector for EventCollector {
     }
 }
 
-struct HookCollector;
+struct HookCollector {
+    git_run_info: GitRunInfo,
+}
 
-fn collect_hooks() -> eyre::Result<ReportEntry> {
+fn collect_hooks(git_run_info: &GitRunInfo) -> eyre::Result<ReportEntry> {
     let repo = Repo::from_current_dir()?;
+    let hooks_dir = get_hooks_dir(git_run_info, &repo, None)?;
     let hook_contents = {
         let mut result = Vec::new();
         for (hook_type, _content) in ALL_HOOKS {
-            let hook_path = match determine_hook_path(&repo, hook_type)? {
+            let hook_path = match determine_hook_path(&repo, &hooks_dir, hook_type)? {
                 Hook::RegularHook { path } | Hook::MultiHook { path } => path,
             };
             let hook_contents = match std::fs::read_to_string(hook_path) {
@@ -299,7 +303,8 @@ impl Collector for HookCollector {
         &mut self,
         _crate_info: &bugreport::CrateInfo,
     ) -> Result<ReportEntry, CollectionError> {
-        collect_hooks().map_err(|e| CollectionError::CouldNotRetrieve(format!("Error: {e}")))
+        collect_hooks(&self.git_run_info)
+            .map_err(|e| CollectionError::CouldNotRetrieve(format!("Error: {e}")))
     }
 }
 
@@ -312,7 +317,9 @@ pub fn bug_report(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<
         .info(CommandLine::default())
         .info(EnvironmentVariables::list(&["SHELL", "EDITOR"]))
         .info(CommandOutput::new("Git version", "git", &["version"]))
-        .info(HookCollector)
+        .info(HookCollector {
+            git_run_info: git_run_info.clone(),
+        })
         .info(EventCollector {
             effects: effects.clone(),
             git_run_info: git_run_info.clone(),

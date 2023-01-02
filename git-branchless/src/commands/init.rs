@@ -11,7 +11,7 @@ use path_slash::PathExt;
 use tracing::{instrument, warn};
 
 use git_branchless_opts::write_man_pages;
-use lib::core::config::{get_core_hooks_path, get_default_branch_name};
+use lib::core::config::{get_default_branch_name, get_default_hooks_dir, get_hooks_dir};
 use lib::core::dag::Dag;
 use lib::core::effects::Effects;
 use lib::core::eventlog::{EventLogDb, EventReplayer};
@@ -99,7 +99,7 @@ pub enum Hook {
 }
 
 #[instrument]
-pub fn determine_hook_path(repo: &Repo, hook_type: &str) -> eyre::Result<Hook> {
+pub fn determine_hook_path(repo: &Repo, hooks_dir: &Path, hook_type: &str) -> eyre::Result<Hook> {
     let multi_hooks_path = repo.get_path().join("hooks_multi");
     let hook = if multi_hooks_path.exists() {
         let path = multi_hooks_path
@@ -107,7 +107,6 @@ pub fn determine_hook_path(repo: &Repo, hook_type: &str) -> eyre::Result<Hook> {
             .join("00_local_branchless");
         Hook::MultiHook { path }
     } else {
-        let hooks_dir = get_core_hooks_path(repo)?;
         let path = hooks_dir.join(hook_type);
         Hook::RegularHook { path }
     };
@@ -203,14 +202,19 @@ fn update_hook_contents(hook: &Hook, hook_contents: &str) -> eyre::Result<()> {
 }
 
 #[instrument]
-fn install_hook(repo: &Repo, hook_type: &str, hook_script: &str) -> eyre::Result<()> {
-    let hook = determine_hook_path(repo, hook_type)?;
+fn install_hook(
+    repo: &Repo,
+    hooks_dir: &Path,
+    hook_type: &str,
+    hook_script: &str,
+) -> eyre::Result<()> {
+    let hook = determine_hook_path(repo, hooks_dir, hook_type)?;
     update_hook_contents(&hook, hook_script)?;
     Ok(())
 }
 
 #[instrument]
-fn install_hooks(effects: &Effects, repo: &Repo) -> eyre::Result<()> {
+fn install_hooks(effects: &Effects, git_run_info: &GitRunInfo, repo: &Repo) -> eyre::Result<()> {
     writeln!(
         effects.get_output_stream(),
         "Installing hooks: {}",
@@ -219,21 +223,22 @@ fn install_hooks(effects: &Effects, repo: &Repo) -> eyre::Result<()> {
             .map(|(hook_type, _hook_script)| hook_type)
             .join(", ")
     )?;
+    let hooks_dir = get_hooks_dir(git_run_info, repo, None)?;
     for (hook_type, hook_script) in ALL_HOOKS {
-        install_hook(repo, hook_type, hook_script)?;
+        install_hook(repo, &hooks_dir, hook_type, hook_script)?;
     }
 
-    let hooks_path: Option<PathBuf> = repo.get_readonly_config()?.get("core.hooksPath")?;
-    if let Some(hooks_path) = hooks_path {
+    let default_hooks_dir = get_default_hooks_dir(repo);
+    if hooks_dir != default_hooks_dir {
         writeln!(
             effects.get_output_stream(),
-            "{}: the configuration value core.hooksPath was set to: {}",
+            "\
+{}: the configuration value core.hooksPath was set to: {},
+which is not the expected default value of: {}
+The Git hooks above may have been installed to an unexpected global location.",
             style("Warning").yellow().bold(),
-            hooks_path.to_string_lossy()
-        )?;
-        writeln!(
-            effects.get_output_stream(),
-            "The Git hooks above may have been installed to an unexpected location."
+            hooks_dir.to_string_lossy(),
+            default_hooks_dir.to_string_lossy()
         )?;
     }
 
@@ -241,7 +246,7 @@ fn install_hooks(effects: &Effects, repo: &Repo) -> eyre::Result<()> {
 }
 
 #[instrument]
-fn uninstall_hooks(effects: &Effects, repo: &Repo) -> eyre::Result<()> {
+fn uninstall_hooks(effects: &Effects, git_run_info: &GitRunInfo, repo: &Repo) -> eyre::Result<()> {
     writeln!(
         effects.get_output_stream(),
         "Uninstalling hooks: {}",
@@ -250,9 +255,11 @@ fn uninstall_hooks(effects: &Effects, repo: &Repo) -> eyre::Result<()> {
             .map(|(hook_type, _hook_script)| hook_type)
             .join(", ")
     )?;
+    let hooks_dir = get_hooks_dir(git_run_info, repo, None)?;
     for (hook_type, _hook_script) in ALL_HOOKS {
         install_hook(
             repo,
+            &hooks_dir,
             hook_type,
             r#"
 # This hook has been uninstalled.
@@ -578,7 +585,7 @@ pub fn init(
     let mut config = create_isolated_config(effects, &repo, readonly_config.into_config())?;
 
     set_configs(&mut in_, effects, &repo, &mut config, main_branch_name)?;
-    install_hooks(effects, &repo)?;
+    install_hooks(effects, git_run_info, &repo)?;
     install_aliases(
         effects,
         &mut repo,
@@ -622,11 +629,11 @@ pub fn init(
 
 /// Uninstall `git-branchless` in the current repo.
 #[instrument]
-pub fn uninstall(effects: &Effects) -> eyre::Result<()> {
+pub fn uninstall(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<()> {
     let repo = Repo::from_current_dir()?;
     let readonly_config = repo.get_readonly_config().wrap_err("Getting repo config")?;
     delete_isolated_config(effects, &repo, readonly_config.into_config())?;
-    uninstall_hooks(effects, &repo)?;
+    uninstall_hooks(effects, git_run_info, &repo)?;
     Ok(())
 }
 

@@ -188,7 +188,7 @@ fn do_main_and_drop_locals() -> eyre::Result<i32> {
             uninstall: true,
             main_branch_name: _,
         } => {
-            init::uninstall(&effects)?;
+            init::uninstall(&effects, &git_run_info)?;
             ExitCode(0)
         }
 

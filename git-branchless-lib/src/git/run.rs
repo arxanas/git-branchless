@@ -13,7 +13,7 @@ use eyre::{eyre, Context};
 use itertools::Itertools;
 use tracing::instrument;
 
-use crate::core::config::get_core_hooks_path;
+use crate::core::config::get_hooks_dir;
 use crate::core::effects::{Effects, OperationType};
 use crate::core::eventlog::{EventTransactionId, BRANCHLESS_TRANSACTION_ID_ENV_VAR};
 use crate::git::repo::Repo;
@@ -351,7 +351,7 @@ impl GitRunInfo {
         args: &[&str],
         stdin: Option<BString>,
     ) -> eyre::Result<()> {
-        let hook_dir = get_core_hooks_path(repo)?;
+        let hook_dir = get_hooks_dir(self, repo, Some(event_tx_id))?;
         if !hook_dir.exists() {
             return Ok(());
         }
