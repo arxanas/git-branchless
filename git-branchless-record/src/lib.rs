@@ -4,6 +4,7 @@
 #![warn(clippy::all, clippy::as_conversions, clippy::clone_on_ref_ptr)]
 #![allow(clippy::too_many_arguments, clippy::blocks_in_if_conditions)]
 
+use std::collections::HashSet;
 use std::ffi::OsString;
 use std::fmt::Write;
 use std::io;
@@ -13,17 +14,29 @@ use cursive::backends::crossterm;
 use cursive::CursiveRunnable;
 use cursive_buffered_backend::BufferedBackend;
 
+use eden_dag::DagAlgorithm;
 use git_record::Recorder;
 use git_record::{RecordError, RecordState};
 use itertools::Itertools;
 use lib::core::check_out::{check_out_commit, CheckOutCommitOptions};
+use lib::core::config::get_restack_preserve_timestamps;
+use lib::core::dag::{commit_set_to_vec, CommitSet, Dag};
 use lib::core::effects::{Effects, OperationType};
-use lib::core::eventlog::{EventLogDb, EventTransactionId};
+use lib::core::eventlog::{EventLogDb, EventReplayer, EventTransactionId};
+use lib::core::formatting::Pluralize;
+use lib::core::repo_ext::RepoExt;
+use lib::core::rewrite::{
+    execute_rebase_plan, BuildRebasePlanError, BuildRebasePlanOptions, ExecuteRebasePlanOptions,
+    ExecuteRebasePlanResult, MergeConflictRemediation, RebasePlanBuilder, RebasePlanPermissions,
+    RepoResource,
+};
 use lib::git::{
-    process_diff_for_record, update_index, CategorizedReferenceName, FileMode, GitRunInfo, Repo,
-    ResolvedReferenceInfo, Stage, UpdateIndexCommand, WorkingCopyChangesType, WorkingCopySnapshot,
+    process_diff_for_record, update_index, CategorizedReferenceName, FileMode, GitRunInfo,
+    NonZeroOid, Repo, ResolvedReferenceInfo, Stage, UpdateIndexCommand, WorkingCopyChangesType,
+    WorkingCopySnapshot,
 };
 use lib::util::ExitCode;
+use rayon::ThreadPoolBuilder;
 
 /// Commit changes in the working copy.
 pub fn record(
@@ -33,11 +46,13 @@ pub fn record(
     interactive: bool,
     branch_name: Option<String>,
     detach: bool,
+    insert: bool,
 ) -> eyre::Result<ExitCode> {
+    let now = SystemTime::now();
     let repo = Repo::from_dir(&git_run_info.working_directory)?;
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
-    let event_tx_id = event_log_db.make_transaction_id(SystemTime::now(), "record")?;
+    let event_tx_id = event_log_db.make_transaction_id(now, "record")?;
 
     let (snapshot, working_copy_changes_type) = {
         let head_info = repo.get_head_info()?;
@@ -168,6 +183,13 @@ pub fn record(
         }
     }
 
+    if insert {
+        let exit_code = insert_before_siblings(effects, git_run_info, now, event_tx_id)?;
+        if !exit_code.is_success() {
+            return Ok(exit_code);
+        }
+    }
+
     Ok(ExitCode(0))
 }
 
@@ -245,4 +267,154 @@ fn record_interactive(
         args
     };
     git_run_info.run_direct_no_wrapping(Some(event_tx_id), &args)
+}
+
+fn insert_before_siblings(
+    effects: &Effects,
+    git_run_info: &GitRunInfo,
+    now: SystemTime,
+    event_tx_id: EventTransactionId,
+) -> eyre::Result<ExitCode> {
+    // Reopen the repository since references may have changed.
+    let repo = Repo::from_dir(&git_run_info.working_directory)?;
+    let conn = repo.get_db_conn()?;
+    let event_log_db = EventLogDb::new(&conn)?;
+    let references_snapshot = repo.get_references_snapshot()?;
+    let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
+    let event_cursor = event_replayer.make_default_cursor();
+    let head_info = repo.get_head_info()?;
+    let head_oid = match head_info {
+        ResolvedReferenceInfo {
+            oid: Some(head_oid),
+            reference_name: _,
+        } => head_oid,
+        ResolvedReferenceInfo {
+            oid: None,
+            reference_name: _,
+        } => {
+            return Ok(ExitCode(0));
+        }
+    };
+
+    let dag = Dag::open_and_sync(
+        effects,
+        &repo,
+        &event_replayer,
+        event_cursor,
+        &references_snapshot,
+    )?;
+    let head_commit = repo.find_commit_or_fail(head_oid)?;
+    let head_commit_set = CommitSet::from(head_oid);
+    let parents = dag.query().parents(head_commit_set.clone())?;
+    let children = dag.query().children(parents)?;
+    let siblings = children.difference(&head_commit_set);
+    let build_options = BuildRebasePlanOptions {
+        force_rewrite_public_commits: false,
+        dump_rebase_constraints: false,
+        dump_rebase_plan: false,
+        detect_duplicate_commits_via_patch_id: true,
+    };
+
+    let rebase_plan_result =
+        match RebasePlanPermissions::verify_rewrite_set(&dag, &build_options, &siblings)? {
+            Err(err) => Err(err),
+            Ok(permissions) => {
+                let head_commit_parents: HashSet<_> =
+                    head_commit.get_parent_oids().into_iter().collect();
+                let mut builder = RebasePlanBuilder::new(&dag, permissions);
+                for sibling_oid in commit_set_to_vec(&siblings)? {
+                    let sibling_commit = repo.find_commit_or_fail(sibling_oid)?;
+                    let parent_oids = sibling_commit.get_parent_oids();
+                    let new_parent_oids = parent_oids
+                        .into_iter()
+                        .map(|parent_oid| {
+                            if head_commit_parents.contains(&parent_oid) {
+                                head_oid
+                            } else {
+                                parent_oid
+                            }
+                        })
+                        .collect_vec();
+                    builder.move_subtree(sibling_oid, new_parent_oids)?;
+                }
+                let thread_pool = ThreadPoolBuilder::new().build()?;
+                let repo_pool = RepoResource::new_pool(&repo)?;
+                builder.build(effects, &thread_pool, &repo_pool)?
+            }
+        };
+
+    let rebase_plan = match rebase_plan_result {
+        Ok(Some(rebase_plan)) => rebase_plan,
+
+        Ok(None) => {
+            // Nothing to do, since there were no siblings to move.
+            return Ok(ExitCode(0));
+        }
+
+        Err(BuildRebasePlanError::ConstraintCycle { .. }) => {
+            writeln!(
+                effects.get_output_stream(),
+                "BUG: constraint cycle detected when moving siblings, which shouldn't be possible."
+            )?;
+            return Ok(ExitCode(1));
+        }
+
+        Err(err @ BuildRebasePlanError::MoveIllegalCommits { .. }) => {
+            err.describe(effects, &repo)?;
+            return Ok(ExitCode(1));
+        }
+
+        Err(BuildRebasePlanError::MovePublicCommits {
+            public_commits_to_move,
+        }) => {
+            let example_bad_commit_oid = public_commits_to_move
+                .first()?
+                .ok_or_else(|| eyre::eyre!("BUG: could not get OID of a public commit to move"))?;
+            let example_bad_commit_oid = NonZeroOid::try_from(example_bad_commit_oid)?;
+            let example_bad_commit = repo.find_commit_or_fail(example_bad_commit_oid)?;
+            writeln!(
+                effects.get_output_stream(),
+                "\
+You are trying to rewrite {}, such as: {}
+It is generally not advised to rewrite public commits, because your
+collaborators will have difficulty merging your changes.
+To proceed anyways, run: git move -f -s 'siblings(.)",
+                Pluralize {
+                    determiner: None,
+                    amount: public_commits_to_move.count()?,
+                    unit: ("public commit", "public commits")
+                },
+                effects
+                    .get_glyphs()
+                    .render(example_bad_commit.friendly_describe(effects.get_glyphs())?)?,
+            )?;
+            return Ok(ExitCode(0));
+        }
+    };
+
+    let execute_options = ExecuteRebasePlanOptions {
+        now,
+        event_tx_id,
+        preserve_timestamps: get_restack_preserve_timestamps(&repo)?,
+        force_in_memory: true,
+        force_on_disk: false,
+        resolve_merge_conflicts: false,
+        check_out_commit_options: Default::default(),
+    };
+    let result = execute_rebase_plan(
+        effects,
+        git_run_info,
+        &repo,
+        &event_log_db,
+        &rebase_plan,
+        &execute_options,
+    )?;
+    match result {
+        ExecuteRebasePlanResult::Succeeded { rewritten_oids: _ } => Ok(ExitCode(0)),
+        ExecuteRebasePlanResult::DeclinedToMerge { merge_conflict } => {
+            merge_conflict.describe(effects, &repo, MergeConflictRemediation::Insert)?;
+            Ok(ExitCode(0))
+        }
+        ExecuteRebasePlanResult::Failed { exit_code } => Ok(exit_code),
+    }
 }

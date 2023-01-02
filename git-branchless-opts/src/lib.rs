@@ -446,6 +446,11 @@ pub enum Command {
         /// Detach the current branch before committing.
         #[clap(action, short = 'd', long = "detach", conflicts_with("branch"))]
         detach: bool,
+
+        /// Insert the new commit between the current commit and its children,
+        /// if any.
+        #[clap(action, short = 'I', long = "insert")]
+        insert: bool,
     },
 
     /// Reword commits.
