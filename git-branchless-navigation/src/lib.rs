@@ -463,70 +463,6 @@ pub fn traverse_commits(
     )
 }
 
-fn get_initial_query(checkout_options: &SwitchOptions) -> Option<&str> {
-    match checkout_options {
-        SwitchOptions {
-            interactive: true,
-            target: Some(target),
-            branch_name: _,
-            force: _,
-            merge: _,
-        } => Some(target),
-
-        SwitchOptions {
-            interactive: false,
-            target: Some(_),
-            branch_name: None,
-            force: false,
-            merge: false,
-        } => None,
-
-        SwitchOptions {
-            interactive: true,
-            target: None,
-            branch_name: _,
-            force: _,
-            merge: _,
-        }
-        | SwitchOptions {
-            interactive: false,
-            target: None,
-            branch_name: None,
-            force: false,
-            merge: false,
-        } => Some(""),
-
-        SwitchOptions {
-            interactive: false,
-            target: Some(_),
-            branch_name: _,
-            force: _,
-            merge: _,
-        }
-        | SwitchOptions {
-            interactive: false,
-            target: _,
-            branch_name: Some(_),
-            force: _,
-            merge: _,
-        }
-        | SwitchOptions {
-            interactive: false,
-            target: _,
-            branch_name: _,
-            force: true,
-            merge: _,
-        }
-        | SwitchOptions {
-            interactive: false,
-            target: _,
-            branch_name: _,
-            force: _,
-            merge: true,
-        } => None,
-    }
-}
-
 /// Interactively switch to a commit from the smartlog.
 pub fn switch(
     effects: &Effects,
@@ -568,13 +504,28 @@ pub fn switch(
         &commits,
     )?;
 
-    let initial_query = get_initial_query(switch_options);
+    let initial_query = match switch_options {
+        SwitchOptions {
+            interactive: true,
+            branch_name: _,
+            force: _,
+            merge: _,
+            target,
+        } => Some(target.clone().unwrap_or_default()),
+        SwitchOptions {
+            interactive: false,
+            branch_name: _,
+            force: _,
+            merge: _,
+            target: _,
+        } => None,
+    };
     let target: Option<CheckoutTarget> = match initial_query {
         None => target.clone().map(CheckoutTarget::Unknown),
         Some(initial_query) => {
             match prompt_select_commit(
                 None,
-                initial_query,
+                &initial_query,
                 graph.get_commits(),
                 &mut [
                     &mut CommitOidDescriptor::new(true)?,
