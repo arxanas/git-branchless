@@ -806,7 +806,7 @@ fn test_navigation_switch_flags() -> eyre::Result<()> {
             git.write_file_txt("test1", "conflicting\n")?;
             let (stdout, _stderr) = git.branchless("switch", &["-f", "HEAD~2"])?;
             insta::assert_snapshot!(stdout, @r###"
-            branchless: running command: <git-executable> checkout HEAD~2 -f
+            branchless: running command: <git-executable> checkout HEAD~2 --force
             :
             @ 62fc20d create test1.txt
             :
@@ -820,7 +820,7 @@ fn test_navigation_switch_flags() -> eyre::Result<()> {
         git.write_file_txt("test1", "conflicting\n")?;
         let (stdout, _stderr) = git.branchless("switch", &["-m", "HEAD~2"])?;
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> checkout HEAD~2 -m
+        branchless: running command: <git-executable> checkout HEAD~2 --merge
         M	test1.txt
         :
         @ 62fc20d create test1.txt
