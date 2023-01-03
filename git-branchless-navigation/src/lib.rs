@@ -553,10 +553,10 @@ pub fn switch(
             args.push(branch_name.into());
         }
         if *force {
-            args.push("-f".into());
+            args.push("--force".into());
         }
         if *merge {
-            args.push("-m".into());
+            args.push("--merge".into());
         }
         args
     };
