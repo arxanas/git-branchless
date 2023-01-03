@@ -90,7 +90,7 @@ fn restack_commits(
     event_cursor: EventCursor,
     git_run_info: &GitRunInfo,
     commits: Option<impl IntoIterator<Item = NonZeroOid>>,
-    build_options: &BuildRebasePlanOptions,
+    build_options: BuildRebasePlanOptions,
     execute_options: &ExecuteRebasePlanOptions,
     merge_conflict_remediation: MergeConflictRemediation,
 ) -> eyre::Result<ExitCode> {
@@ -344,7 +344,7 @@ pub fn restack(
         event_cursor,
         git_run_info,
         commits,
-        &build_options,
+        build_options,
         &execute_options,
         merge_conflict_remediation,
     )?;

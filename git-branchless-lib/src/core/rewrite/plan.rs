@@ -181,16 +181,16 @@ impl ToString for RebaseCommand {
 
 /// A token representing that the rebase plan has been checked for validity.
 #[derive(Clone, Debug)]
-pub struct RebasePlanPermissions<'a> {
-    build_options: &'a BuildRebasePlanOptions,
+pub struct RebasePlanPermissions {
+    build_options: BuildRebasePlanOptions,
     allowed_commits: CommitSet,
 }
 
-impl<'a> RebasePlanPermissions<'a> {
+impl RebasePlanPermissions {
     /// Construct a new `RebasePlanPermissions`.
     pub fn verify_rewrite_set(
         dag: &Dag,
-        build_options: &'a BuildRebasePlanOptions,
+        build_options: BuildRebasePlanOptions,
         commits: &CommitSet,
     ) -> eyre::Result<Result<Self, BuildRebasePlanError>> {
         // This isn't necessary for correctness, but helps to produce a better
@@ -214,10 +214,7 @@ impl<'a> RebasePlanPermissions<'a> {
     }
 
     #[cfg(test)]
-    fn omnipotent_for_test(
-        dag: &Dag,
-        build_options: &'a BuildRebasePlanOptions,
-    ) -> eyre::Result<Self> {
+    fn omnipotent_for_test(dag: &Dag, build_options: BuildRebasePlanOptions) -> eyre::Result<Self> {
         Ok(Self {
             build_options,
             allowed_commits: dag.query().all()?,
@@ -229,7 +226,7 @@ impl<'a> RebasePlanPermissions<'a> {
 #[derive(Clone, Debug)]
 struct ConstraintGraph<'a> {
     dag: &'a Dag,
-    permissions: &'a RebasePlanPermissions<'a>,
+    permissions: &'a RebasePlanPermissions,
 
     /// This is a mapping from `x` to `y` if `x` must be applied before `y`
     inner: HashMap<NonZeroOid, HashSet<NonZeroOid>>,
@@ -522,7 +519,7 @@ struct BuildState<'repo> {
 #[derive(Clone, Debug)]
 pub struct RebasePlanBuilder<'a> {
     dag: &'a Dag,
-    permissions: RebasePlanPermissions<'a>,
+    permissions: RebasePlanPermissions,
 
     /// The constraints specified by the caller.
     initial_constraints: Vec<Constraint>,
@@ -680,7 +677,7 @@ This is a bug. Please report it.",
 
 impl<'a> RebasePlanBuilder<'a> {
     /// Constructor.
-    pub fn new(dag: &'a Dag, permissions: RebasePlanPermissions<'a>) -> Self {
+    pub fn new(dag: &'a Dag, permissions: RebasePlanPermissions) -> Self {
         RebasePlanBuilder {
             dag,
             permissions,
@@ -1026,7 +1023,7 @@ impl<'a> RebasePlanBuilder<'a> {
             dump_rebase_constraints,
             dump_rebase_plan,
             detect_duplicate_commits_via_patch_id,
-        } = self.permissions.build_options;
+        } = &self.permissions.build_options;
         if *dump_rebase_constraints {
             // For test: don't print to `effects.get_output_stream()`, as it will
             // be suppressed.
@@ -1396,7 +1393,7 @@ mod tests {
             dump_rebase_plan: false,
             detect_duplicate_commits_via_patch_id: true,
         };
-        let permissions = RebasePlanPermissions::omnipotent_for_test(&dag, &build_options)?;
+        let permissions = RebasePlanPermissions::omnipotent_for_test(&dag, build_options)?;
         let pool = ThreadPoolBuilder::new().build()?;
         let repo_pool = RepoPool::new(RepoResource {
             repo: Mutex::new(repo.try_clone()?),
@@ -2048,7 +2045,7 @@ mod tests {
             dump_rebase_plan: false,
             detect_duplicate_commits_via_patch_id: true,
         };
-        let permissions = RebasePlanPermissions::omnipotent_for_test(&dag, &build_options)?;
+        let permissions = RebasePlanPermissions::omnipotent_for_test(&dag, build_options)?;
         let mut builder = RebasePlanBuilder::new(&dag, permissions);
 
         builder_callback_fn(&mut builder)?;

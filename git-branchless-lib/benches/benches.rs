@@ -64,7 +64,7 @@ fn bench_rebase_plan(c: &mut Criterion) {
         };
         let permissions = RebasePlanPermissions::verify_rewrite_set(
             &dag,
-            &build_options,
+            build_options,
             &CommitSet::from(later_commit.get_oid()),
         )
         .unwrap()

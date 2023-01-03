@@ -316,7 +316,7 @@ fn insert_before_siblings(
     };
 
     let rebase_plan_result =
-        match RebasePlanPermissions::verify_rewrite_set(&dag, &build_options, &siblings)? {
+        match RebasePlanPermissions::verify_rewrite_set(&dag, build_options, &siblings)? {
             Err(err) => Err(err),
             Ok(permissions) => {
                 let head_commit_parents: HashSet<_> =
