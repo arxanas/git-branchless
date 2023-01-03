@@ -297,7 +297,7 @@ fn test_switch_pty() -> eyre::Result<()> {
     run_in_pty(
         &git,
         "switch",
-        &[],
+        &["-i"],
         &[
             PtyAction::WaitUntilContains("> "),
             PtyAction::Write("test1"),
@@ -322,7 +322,7 @@ fn test_switch_pty() -> eyre::Result<()> {
     run_in_pty(
         &git,
         "switch",
-        &[],
+        &["-i"],
         &[
             PtyAction::WaitUntilContains("> "),
             PtyAction::Write("test3"),
@@ -360,7 +360,7 @@ fn test_switch_abort() -> eyre::Result<()> {
     run_in_pty(
         &git,
         "switch",
-        &[],
+        &["-i"],
         &[
             PtyAction::WaitUntilContains("> "),
             PtyAction::Write(END_OF_TEXT),
@@ -595,7 +595,7 @@ fn test_switch_pty_branch() -> eyre::Result<()> {
     run_in_pty(
         &git,
         "switch",
-        &[],
+        &["-i"],
         &[
             PtyAction::WaitUntilContains("> "),
             PtyAction::Write("master"),
