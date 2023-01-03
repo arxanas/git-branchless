@@ -119,7 +119,7 @@ pub fn sync(
         git_run_info,
         &repo,
         &event_log_db,
-        &build_options,
+        build_options,
         &execute_options,
         &thread_pool,
         &repo_pool,
@@ -230,7 +230,7 @@ fn execute_main_branch_sync_plan(
     };
     let permissions = match RebasePlanPermissions::verify_rewrite_set(
         &dag,
-        &build_options,
+        build_options,
         &local_main_branch_commits,
     )? {
         Ok(permissions) => permissions,
@@ -276,7 +276,7 @@ fn execute_sync_plans(
     git_run_info: &GitRunInfo,
     repo: &Repo,
     event_log_db: &EventLogDb,
-    build_options: &BuildRebasePlanOptions,
+    build_options: BuildRebasePlanOptions,
     execute_options: &ExecuteRebasePlanOptions,
     thread_pool: &ThreadPool,
     repo_pool: &ResourcePool<RepoResource>,

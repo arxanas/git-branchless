@@ -282,7 +282,7 @@ pub fn r#move(
                 commits_to_move
             };
 
-            match RebasePlanPermissions::verify_rewrite_set(&dag, &build_options, &commits_to_move)?
+            match RebasePlanPermissions::verify_rewrite_set(&dag, build_options, &commits_to_move)?
             {
                 Ok(permissions) => permissions,
                 Err(err) => {

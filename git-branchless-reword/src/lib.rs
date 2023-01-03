@@ -95,7 +95,7 @@ pub fn reword(
     };
     let permissions = match RebasePlanPermissions::verify_rewrite_set(
         &dag,
-        &build_options,
+        build_options,
         &commits.iter().map(|commit| commit.get_oid()).collect(),
     )? {
         Ok(permissions) => permissions,

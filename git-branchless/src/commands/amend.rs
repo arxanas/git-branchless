@@ -90,7 +90,7 @@ pub fn amend(
     let commits_to_verify = dag.query().descendants(CommitSet::from(head_oid))?;
     let commits_to_verify = dag.filter_visible_commits(commits_to_verify)?;
     if let Err(err) =
-        RebasePlanPermissions::verify_rewrite_set(&dag, &build_options, &commits_to_verify)?
+        RebasePlanPermissions::verify_rewrite_set(&dag, build_options, &commits_to_verify)?
     {
         err.describe(effects, &repo)?;
         return Ok(ExitCode(1));
@@ -221,7 +221,7 @@ pub fn amend(
         let commits_to_verify = &descendants;
         let permissions = match RebasePlanPermissions::verify_rewrite_set(
             &dag,
-            &build_options,
+            build_options,
             commits_to_verify,
         )? {
             Ok(permissions) => permissions,
