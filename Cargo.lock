@@ -1340,6 +1340,7 @@ dependencies = [
 name = "git-branchless-test"
 version = "0.7.0-pre.1"
 dependencies = [
+ "assert_cmd",
  "clap 4.0.32",
  "crossbeam",
  "cursive",
@@ -1349,6 +1350,7 @@ dependencies = [
  "git-branchless-lib",
  "git-branchless-opts",
  "git-branchless-revset",
+ "insta",
  "itertools 0.10.5",
  "lazy_static",
  "num_cpus",

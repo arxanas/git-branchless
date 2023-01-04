@@ -123,9 +123,6 @@ name = "test_submit"
 name = "test_sync"
 
 [[test]]
-name = "test_test"
-
-[[test]]
 name = "test_undo"
 
 [[test]]
