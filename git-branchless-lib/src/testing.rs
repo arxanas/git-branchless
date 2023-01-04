@@ -18,6 +18,7 @@ use crate::util::get_sh;
 use eyre::Context;
 use itertools::Itertools;
 use lazy_static::lazy_static;
+use once_cell::sync::OnceCell;
 use regex::{Captures, Regex};
 use tempfile::TempDir;
 use tracing::instrument;
@@ -566,8 +567,12 @@ impl GitWrapper {
     }
 }
 
+static COLOR_EYRE_INSTALL: OnceCell<()> = OnceCell::new();
+
 /// Create a temporary directory for testing and a `Git` instance to use with it.
 pub fn make_git() -> eyre::Result<GitWrapper> {
+    COLOR_EYRE_INSTALL.get_or_try_init(color_eyre::install)?;
+
     let repo_dir = tempfile::tempdir()?;
     let path_to_git = get_path_to_git()?;
     let git_exec_path = get_git_exec_path()?;
