@@ -333,7 +333,15 @@ integration tests. You can build it with: cargo prepare-tests",
         self.run(&["config", "core.autocrlf", "false"])?;
 
         if options.run_branchless_init {
-            self.run(&["branchless", "init"])?;
+            self.run(&["branchless-init"]).suggestion(
+                "\
+The git-branchless-init binary is NOT automatically built or updated when \
+running integration tests for other binaries (see \
+https://github.com/rust-lang/cargo/issues/4316 for more details). \
+\
+Make sure that git-branchless-init has been built before running integration \
+tests. You can build it with: cargo prepare-tests",
+            )?;
         }
 
         Ok(())
