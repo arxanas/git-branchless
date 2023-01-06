@@ -40,7 +40,7 @@ impl Display for Revset {
 
 /// A command wrapped by `git-branchless wrap`. The arguments are forwarded to
 /// `git`.
-#[derive(Parser)]
+#[derive(Debug, Parser)]
 pub enum WrappedCommand {
     /// The wrapped command.
     #[clap(external_subcommand)]
@@ -283,7 +283,7 @@ pub struct TestArgs {
 }
 
 /// FIXME: write man-page text
-#[derive(Parser)]
+#[derive(Debug, Parser)]
 pub enum Command {
     /// Amend the current HEAD commit.
     Amend {
@@ -627,7 +627,7 @@ pub enum Command {
 }
 
 /// Whether to display terminal colors.
-#[derive(ValueEnum, Clone)]
+#[derive(Clone, Debug, ValueEnum)]
 pub enum ColorSetting {
     /// Automatically determine whether to display colors from the terminal and environment variables.
     /// This is the default behavior.
@@ -653,7 +653,7 @@ pub enum TestExecutionStrategy {
 }
 
 /// Arguments which apply to all commands. Used during setup.
-#[derive(Parser)]
+#[derive(Debug, Parser)]
 pub struct GlobalArgs {
     /// Change to the given directory before executing the rest of the program.
     /// (The option is called `-C` for symmetry with Git.)
@@ -668,7 +668,7 @@ pub struct GlobalArgs {
 /// Branchless workflow for Git.
 ///
 /// See the documentation at <https://github.com/arxanas/git-branchless/wiki>.
-#[derive(Parser)]
+#[derive(Debug, Parser)]
 #[clap(version = env!("CARGO_PKG_VERSION"), author = "Waleed Khan <me@waleedkhan.name>")]
 pub struct Opts {
     /// Global arguments.
@@ -681,7 +681,7 @@ pub struct Opts {
 }
 
 /// `snapshot` subcommands.
-#[derive(Parser)]
+#[derive(Debug, Parser)]
 pub enum SnapshotSubcommand {
     /// Create a new snapshot containing the working copy contents, and then
     /// reset the working copy to the current `HEAD` commit.
