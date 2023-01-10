@@ -23,6 +23,7 @@ type FnType = &'static (dyn Fn(&mut Context, &str, &[Expr]) -> EvalResult + Sync
 lazy_static! {
     pub(super) static ref FUNCTIONS: HashMap<&'static str, FnType> = {
         let functions: &[(&'static str, FnType)] = &[
+            ("abandoned", &fn_abandoned),
             ("all", &fn_all),
             ("none", &fn_none),
             ("union", &fn_union),
@@ -58,6 +59,21 @@ lazy_static! {
         ];
         functions.iter().cloned().collect()
     };
+}
+
+#[instrument]
+fn fn_abandoned(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+    eval0(ctx, name, args)?;
+
+    let obsolete_commits = ctx.dag.query_obsolete_commits();
+    let abandoned_children = find_abandoned_children(
+        obsolete_commits,
+        // ?
+        // ?
+        // ?
+        // ?
+    )?;
+    Ok(abandoned_children)
 }
 
 #[instrument]
