@@ -4,6 +4,8 @@
 #![warn(clippy::all, clippy::as_conversions, clippy::clone_on_ref_ptr)]
 #![allow(clippy::too_many_arguments, clippy::blocks_in_if_conditions)]
 
+pub mod dialoguer_edit;
+
 use lib::core::check_out::CheckOutCommitOptions;
 use lib::core::repo_ext::RepoExt;
 use lib::util::ExitCode;
@@ -16,7 +18,7 @@ use std::time::SystemTime;
 
 use bstr::{ByteSlice, ByteVec};
 use chrono::Local;
-use dialoguer::Editor;
+use dialoguer_edit::Editor;
 use eden_dag::DagAlgorithm;
 use eyre::Context;
 use tracing::{instrument, warn};
