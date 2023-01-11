@@ -28,6 +28,7 @@ lazy_static! {
             ("union", &fn_union),
             ("intersection", &fn_intersection),
             ("difference", &fn_difference),
+            ("obsolete", &fn_obsolete),
             ("only", &fn_only),
             ("range", &fn_range),
             ("not", &fn_not),
@@ -97,6 +98,13 @@ fn fn_intersection(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
 fn fn_difference(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     let (lhs, rhs) = eval2(ctx, name, args)?;
     Ok(lhs.difference(&rhs))
+}
+
+#[instrument]
+fn fn_obsolete(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+    eval0(ctx, name, args)?;
+    let obsolete_commits = ctx.dag.query_obsolete_commits();
+    Ok(obsolete_commits)
 }
 
 #[instrument]
