@@ -102,9 +102,9 @@ dependencies = [
 
 [[package]]
 name = "assert_cmd"
-version = "2.0.7"
+version = "2.0.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fa3d466004a8b4cb1bc34044240a2fd29d17607e2e3bd613eb44fd48e8100da3"
+checksum = "9834fcc22e0874394a010230586367d4a3e9f11b560f469262678547e1d2575e"
 dependencies = [
  "bstr",
  "doc-comment",
@@ -649,9 +649,9 @@ dependencies = [
 
 [[package]]
 name = "cxx"
-version = "1.0.85"
+version = "1.0.86"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5add3fc1717409d029b20c5b6903fc0c0b02fa6741d820054f4a2efa5e5816fd"
+checksum = "51d1075c37807dcf850c379432f0df05ba52cc30f279c5cfc43cc221ce7f8579"
 dependencies = [
  "cc",
  "cxxbridge-flags",
@@ -661,9 +661,9 @@ dependencies = [
 
 [[package]]
 name = "cxx-build"
-version = "1.0.85"
+version = "1.0.86"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4c87959ba14bc6fbc61df77c3fcfe180fc32b93538c4f1031dd802ccb5f2ff0"
+checksum = "5044281f61b27bc598f2f6647d480aed48d2bf52d6eb0b627d84c0361b17aa70"
 dependencies = [
  "cc",
  "codespan-reporting",
@@ -676,15 +676,15 @@ dependencies = [
 
 [[package]]
 name = "cxxbridge-flags"
-version = "1.0.85"
+version = "1.0.86"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69a3e162fde4e594ed2b07d0f83c6c67b745e7f28ce58c6df5e6b6bef99dfb59"
+checksum = "61b50bc93ba22c27b0d31128d2d130a0a6b3d267ae27ef7e4fae2167dfe8781c"
 
 [[package]]
 name = "cxxbridge-macro"
-version = "1.0.85"
+version = "1.0.86"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e7e2adeb6a0d4a282e581096b06e1791532b7d576dcde5ccd9382acf55db8e6"
+checksum = "39e61fda7e62115119469c7b3591fd913ecca96fb766cfd3f2e2502ab7bc87a5"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1379,9 +1379,9 @@ dependencies = [
 
 [[package]]
 name = "glob"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b919933a397b79c37e33b77bb2aa3dc8eb6e165ad809e58ff75bc7db2e34574"
+checksum = "d2fabcfbdc87f4758337ca535fb41a6d701b65693ce38287d856d1674551ec9b"
 
 [[package]]
 name = "half"
@@ -1514,9 +1514,9 @@ dependencies = [
 
 [[package]]
 name = "insta"
-version = "1.24.1"
+version = "1.26.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb5686bd8e9239eabe90bb30a0c341bffd6fdc177fb556708f2cb792bf00352d"
+checksum = "f6f0f08b46e4379744de2ab67aa8f7de3ffd1da3e275adc41fcc82053ede46ff"
 dependencies = [
  "console",
  "lazy_static",
@@ -1659,9 +1659,9 @@ checksum = "201de327520df007757c1f0adce6e827fe8562fbc28bfd9c15571c66ca1f5f79"
 
 [[package]]
 name = "libgit2-sys"
-version = "0.14.0+1.5.0"
+version = "0.14.1+1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "47a00859c70c8a4f7218e6d1cc32875c4b55f6799445b842b0d8ed5e4c3d959b"
+checksum = "4a07fb2692bc3593bda59de45a502bb3071659f2c515e28c71e728306b038e17"
 dependencies = [
  "cc",
  "libc",
@@ -1941,9 +1941,9 @@ checksum = "830b246a0e5f20af87141b25c173cd1b609bd7779a4617d6ec582abaf90870f3"
 
 [[package]]
 name = "object"
-version = "0.30.0"
+version = "0.30.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "239da7f290cfa979f43f85a8efeee9a8a76d0827c356d37f9d3d7254d6b537fb"
+checksum = "2b8c786513eb403643f2a88c244c2aaa270ef2153f55094587d0c48a3cf22a83"
 dependencies = [
  "memchr",
 ]
@@ -2180,9 +2180,9 @@ checksum = "925383efa346730478fb4838dbe9137d2a47675ad789c546d150a6e1dd4ab31c"
 
 [[package]]
 name = "predicates"
-version = "2.1.4"
+version = "2.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f54fc5dc63ed3bbf19494623db4f3af16842c0d975818e469022d09e53f0aa05"
+checksum = "59230a63c37f3e18569bdb90e4a89cbf5bf8b06fea0b84e65ea10cc4df47addd"
 dependencies = [
  "difflib",
  "itertools 0.10.5",
@@ -2478,9 +2478,9 @@ checksum = "7ef03e0a2b150c7a90d01faf6254c9c48a41e95fb2a8c2ac1c6f0d2b9aefc342"
 
 [[package]]
 name = "rustix"
-version = "0.36.5"
+version = "0.36.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a3807b5d10909833d3e9acd1eb5fb988f79376ff10fce42937de71a449c4c588"
+checksum = "4feacf7db682c6c329c4ede12649cd36ecab0f3be5b7d74e6a20304725db4549"
 dependencies = [
  "bitflags",
  "errno",
