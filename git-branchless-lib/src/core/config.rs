@@ -33,7 +33,7 @@ pub fn get_hooks_dir(
         .run_silent(
             repo,
             event_tx_id,
-            &["config", "core.hooksPath"],
+            &["config", "--type", "path", "core.hooksPath"],
             GitRunOpts {
                 treat_git_failure_as_error: false,
                 ..Default::default()
