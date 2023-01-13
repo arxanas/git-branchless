@@ -167,6 +167,9 @@ pub enum Error {
         name: ReferenceName,
     },
 
+    #[error("could not delete branch: {0}")]
+    DeleteBranch(#[source] git2::Error),
+
     #[error("could not delete reference: {0}")]
     DeleteReference(#[source] git2::Error),
 

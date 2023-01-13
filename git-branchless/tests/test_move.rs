@@ -4529,3 +4529,50 @@ fn test_move_public_commit() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_move_delete_branch_config_entry() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+
+    {
+        git.run(&["remote", "add", "self", "."])?;
+    }
+
+    git.run(&["checkout", "-b", "foo"])?;
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+    git.run(&["checkout", "master", "-b", "bar"])?;
+    git.run(&["cherry-pick", "foo^"])?;
+
+    {
+        let (stdout, _stderr) = git.run(&["config", "branch.foo.remote", "self"])?;
+        insta::assert_snapshot!(stdout, @"");
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["move", "-d", "foo"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        Attempting rebase in-memory...
+        [1/1] Skipped commit (was already applied upstream): 047b7ad create test1.txt
+        branchless: processing 1 update: branch bar
+        branchless: processing 1 rewritten commit
+        branchless: running command: <git-executable> checkout foo
+        O f777ecc (master) create initial.txt
+        |
+        o 62fc20d create test1.txt
+        |
+        @ 96d1c37 (> foo) create test2.txt
+        In-memory rebase succeeded.
+        "###);
+    }
+
+    {
+        let (stdout, stderr) = git.run(&["config", "branch.foo.remote", "--default"])?;
+        insta::assert_snapshot!(stderr, @"");
+        insta::assert_snapshot!(stdout, @r###"
+        "###);
+    }
+
+    Ok(())
+}

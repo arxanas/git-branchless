@@ -14,7 +14,8 @@ use crate::core::eventlog::{EventLogDb, EventTransactionId};
 use crate::core::formatting::Pluralize;
 use crate::core::repo_ext::RepoExt;
 use crate::git::{
-    GitRunInfo, MaybeZeroOid, NonZeroOid, ReferenceName, Repo, ResolvedReferenceInfo,
+    BranchType, CategorizedReferenceName, GitRunInfo, MaybeZeroOid, NonZeroOid, ReferenceName,
+    Repo, ResolvedReferenceInfo,
 };
 use crate::util::ExitCode;
 
@@ -78,8 +79,8 @@ pub fn move_branches<'a>(
             }
 
             MaybeZeroOid::Zero => {
-                for name in names {
-                    if name == &main_branch_name {
+                for reference_name in names {
+                    if reference_name == &main_branch_name {
                         // Hack? Never delete the main branch. We probably got here by syncing the
                         // main branch with the upstream version, but all main branch commits were
                         // skipped. For a regular branch, we would delete the branch, but for the
@@ -108,24 +109,34 @@ pub fn move_branches<'a>(
                                 MaybeZeroOid::Zero
                             }
                         };
-                        branch_moves.push((*old_oid, target_oid, name));
+                        branch_moves.push((*old_oid, target_oid, reference_name));
                     } else {
-                        match repo.find_reference(name) {
-                            Ok(Some(mut reference)) => {
-                                if let Err(err) = reference.delete() {
-                                    branch_move_err = Some(eyre::eyre!(err));
-                                    break 'outer;
-                                }
+                        let branch_name = CategorizedReferenceName::new(reference_name);
+                        match branch_name {
+                            CategorizedReferenceName::RemoteBranch { .. }
+                            | CategorizedReferenceName::OtherRef { .. } => {
+                                warn!(?reference_name, "Not deleting non-local-branch reference");
                             }
-                            Ok(None) => {
-                                warn!(?name, "Reference not found, not deleting")
+                            CategorizedReferenceName::LocalBranch { .. } => {
+                                let branch_name = branch_name.remove_prefix()?;
+                                match repo.find_branch(&branch_name, BranchType::Local) {
+                                    Ok(Some(mut branch)) => {
+                                        if let Err(err) = branch.delete() {
+                                            branch_move_err = Some(eyre::eyre!(err));
+                                            break 'outer;
+                                        }
+                                    }
+                                    Ok(None) => {
+                                        warn!(?branch_name, "Branch not found, not deleting")
+                                    }
+                                    Err(err) => {
+                                        branch_move_err = Some(eyre::eyre!(err));
+                                        break 'outer;
+                                    }
+                                };
+                                branch_moves.push((*old_oid, MaybeZeroOid::Zero, reference_name));
                             }
-                            Err(err) => {
-                                branch_move_err = Some(eyre::eyre!(err));
-                                break 'outer;
-                            }
-                        };
-                        branch_moves.push((*old_oid, MaybeZeroOid::Zero, name));
+                        }
                     }
                 }
             }

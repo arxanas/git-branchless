@@ -343,4 +343,11 @@ impl<'repo> Branch<'repo> {
             inner: self.inner.into_reference(),
         }
     }
+
+    /// Delete the branch.
+    #[instrument]
+    pub fn delete(&mut self) -> Result<()> {
+        self.inner.delete().map_err(Error::DeleteBranch)?;
+        Ok(())
+    }
 }
