@@ -103,8 +103,6 @@ fn restack_commits(
     // large and we'll be throwing away most of them.
     let commits = commit_set_to_vec(&commit_set)?;
 
-    let draft_commits = dag.query_draft_commits()?;
-
     struct RebaseInfo {
         dest_oid: NonZeroOid,
         abandoned_child_oids: Vec<NonZeroOid>,
@@ -112,13 +110,8 @@ fn restack_commits(
     let rebases: Vec<RebaseInfo> = {
         let mut result = Vec::new();
         for original_commit_oid in commits {
-            let abandoned_children = find_abandoned_children(
-                dag,
-                draft_commits,
-                event_replayer,
-                event_cursor,
-                original_commit_oid,
-            )?;
+            let abandoned_children =
+                find_abandoned_children(dag, event_replayer, event_cursor, original_commit_oid)?;
             if let Some((rewritten_oid, abandoned_child_oids)) = abandoned_children {
                 result.push(RebaseInfo {
                     dest_oid: rewritten_oid,

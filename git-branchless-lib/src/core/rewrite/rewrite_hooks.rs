@@ -212,19 +212,12 @@ fn warn_abandoned(
         &references_snapshot,
     )?;
 
-    let draft_commits = dag.query_draft_commits()?;
-
     let (all_abandoned_children, all_abandoned_branches) = {
         let mut all_abandoned_children: HashSet<NonZeroOid> = HashSet::new();
         let mut all_abandoned_branches: HashSet<&str> = HashSet::new();
         for old_commit_oid in old_commit_oids {
-            let abandoned_result = find_abandoned_children(
-                &dag,
-                draft_commits,
-                &event_replayer,
-                event_cursor,
-                old_commit_oid,
-            )?;
+            let abandoned_result =
+                find_abandoned_children(&dag, &event_replayer, event_cursor, old_commit_oid)?;
             let (_rewritten_oid, abandoned_children) = match abandoned_result {
                 Some(abandoned_result) => abandoned_result,
                 None => continue,

@@ -72,7 +72,6 @@ pub fn find_rewrite_target(
 #[instrument]
 pub fn find_abandoned_children(
     dag: &Dag,
-    draft_commits: &CommitSet,
     event_replayer: &EventReplayer,
     event_cursor: EventCursor,
     oid: NonZeroOid,
