@@ -1345,6 +1345,7 @@ dependencies = [
  "cursive",
  "eyre",
  "fslock",
+ "git-branchless-invoke",
  "git-branchless-lib",
  "git-branchless-opts",
  "git-branchless-revset",
