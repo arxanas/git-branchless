@@ -7,6 +7,7 @@ debug = 0
 default-members = ["git-branchless"]
 members = [
     "git-branchless",
+    "git-branchless-invoke",
     "git-branchless-lib",
     "git-branchless-move",
     "git-branchless-navigation",
