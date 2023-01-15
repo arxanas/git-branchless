@@ -644,12 +644,9 @@ pub enum TestExecutionStrategy {
     Worktree,
 }
 
-/// Branchless workflow for Git.
-///
-/// See the documentation at <https://github.com/arxanas/git-branchless/wiki>.
+/// Arguments which apply to all commands. Used during setup.
 #[derive(Parser)]
-#[clap(version = env!("CARGO_PKG_VERSION"), author = "Waleed Khan <me@waleedkhan.name>")]
-pub struct Opts {
+pub struct GlobalArgs {
     /// Change to the given directory before executing the rest of the program.
     /// (The option is called `-C` for symmetry with Git.)
     #[clap(value_parser, short = 'C', global = true)]
@@ -658,6 +655,17 @@ pub struct Opts {
     /// Flag to force enable or disable terminal colors.
     #[clap(value_parser, long = "color", value_enum, global = true)]
     pub color: Option<ColorSetting>,
+}
+
+/// Branchless workflow for Git.
+///
+/// See the documentation at <https://github.com/arxanas/git-branchless/wiki>.
+#[derive(Parser)]
+#[clap(version = env!("CARGO_PKG_VERSION"), author = "Waleed Khan <me@waleedkhan.name>")]
+pub struct Opts {
+    /// Global arguments.
+    #[clap(flatten)]
+    pub global_args: GlobalArgs,
 
     /// The `git-branchless` subcommand to run.
     #[clap(subcommand)]
