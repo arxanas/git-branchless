@@ -21,6 +21,7 @@ use cursive::theme::{BaseColor, Effect, Style};
 use cursive::utils::markup::StyledString;
 use eyre::WrapErr;
 use fslock::LockFile;
+use git_branchless_invoke::CommandContext;
 use itertools::Itertools;
 use lazy_static::lazy_static;
 use lib::core::config::{get_hint_enabled, get_hint_string, print_hint_suppression_notice, Hint};
@@ -38,7 +39,9 @@ use lib::util::{get_sh, ExitCode};
 use serde::{Deserialize, Serialize};
 use tracing::{debug, instrument};
 
-use git_branchless_opts::{ResolveRevsetOptions, Revset, TestExecutionStrategy};
+use git_branchless_opts::{
+    ResolveRevsetOptions, Revset, TestArgs, TestExecutionStrategy, TestSubcommand,
+};
 use git_branchless_revset::resolve_commits;
 
 lazy_static! {
@@ -52,7 +55,7 @@ lazy_static! {
 
 /// How verbose of output to produce.
 #[derive(Clone, Copy, Debug, Ord, PartialOrd, Eq, PartialEq)]
-pub enum Verbosity {
+enum Verbosity {
     /// Do not include test output at all.
     None,
 
@@ -76,7 +79,7 @@ impl From<u8> for Verbosity {
 /// The options for testing before they've assumed default values or been
 /// validated.
 #[derive(Debug)]
-pub struct RawTestOptions {
+struct RawTestOptions {
     /// The command to execute, if any.
     pub exec: Option<String>,
 
@@ -268,9 +271,66 @@ but --strategy working-copy was provided instead."
     }
 }
 
+/// `test` command.
+#[instrument]
+pub fn command_main(ctx: CommandContext, args: TestArgs) -> eyre::Result<ExitCode> {
+    let CommandContext {
+        effects,
+        git_run_info,
+    } = ctx;
+    let TestArgs { subcommand } = args;
+    match subcommand {
+        TestSubcommand::Clean {
+            revset,
+            resolve_revset_options,
+        } => subcommand_clean(&effects, revset, &resolve_revset_options),
+
+        TestSubcommand::Run {
+            exec: command,
+            command: command_alias,
+            revset,
+            resolve_revset_options,
+            verbosity,
+            strategy,
+            jobs,
+        } => subcommand_run(
+            &effects,
+            &git_run_info,
+            &RawTestOptions {
+                exec: command,
+                command: command_alias,
+                strategy,
+                jobs,
+                verbosity: Verbosity::from(verbosity),
+            },
+            revset,
+            &resolve_revset_options,
+        ),
+
+        TestSubcommand::Show {
+            exec: command,
+            command: command_alias,
+            revset,
+            resolve_revset_options,
+            verbosity,
+        } => subcommand_show(
+            &effects,
+            &RawTestOptions {
+                exec: command,
+                command: command_alias,
+                strategy: None,
+                jobs: None,
+                verbosity: Verbosity::from(verbosity),
+            },
+            revset,
+            &resolve_revset_options,
+        ),
+    }
+}
+
 /// Run the command provided in `options` on each of the commits in `revset`.
 #[instrument]
-pub fn run(
+fn subcommand_run(
     effects: &Effects,
     git_run_info: &GitRunInfo,
     options: &RawTestOptions,
@@ -1430,7 +1490,7 @@ fn test_commit(
 /// Show test output for the command provided in `options` for each of the
 /// commits in `revset`.
 #[instrument]
-pub fn show(
+fn subcommand_show(
     effects: &Effects,
     options: &RawTestOptions,
     revset: Revset,
@@ -1520,7 +1580,7 @@ pub fn show(
 
 /// Delete cached test output for the commits in `revset`.
 #[instrument]
-pub fn clean(
+pub fn subcommand_clean(
     effects: &Effects,
     revset: Revset,
     resolve_revset_options: &ResolveRevsetOptions,

@@ -17,8 +17,7 @@ use lib::core::rewrite::MergeConflictRemediation;
 use lib::util::ExitCode;
 
 use git_branchless_opts::{
-    rewrite_args, Command, Opts, ResolveRevsetOptions, SnapshotSubcommand, TestSubcommand,
-    WrappedCommand,
+    rewrite_args, Command, Opts, ResolveRevsetOptions, SnapshotSubcommand, WrappedCommand,
 };
 use lib::git::GitRunInfo;
 
@@ -216,53 +215,7 @@ fn command_main(ctx: CommandContext, opts: Opts) -> eyre::Result<ExitCode> {
             &resolve_revset_options,
         )?,
 
-        Command::Test { subcommand } => match subcommand {
-            TestSubcommand::Clean {
-                revset,
-                resolve_revset_options,
-            } => git_branchless_test::clean(&effects, revset, &resolve_revset_options)?,
-
-            TestSubcommand::Run {
-                exec: command,
-                command: command_alias,
-                revset,
-                resolve_revset_options,
-                verbosity,
-                strategy,
-                jobs,
-            } => git_branchless_test::run(
-                &effects,
-                &git_run_info,
-                &git_branchless_test::RawTestOptions {
-                    exec: command,
-                    command: command_alias,
-                    strategy,
-                    jobs,
-                    verbosity: git_branchless_test::Verbosity::from(verbosity),
-                },
-                revset,
-                &resolve_revset_options,
-            )?,
-
-            TestSubcommand::Show {
-                exec: command,
-                command: command_alias,
-                revset,
-                resolve_revset_options,
-                verbosity,
-            } => git_branchless_test::show(
-                &effects,
-                &git_branchless_test::RawTestOptions {
-                    exec: command,
-                    command: command_alias,
-                    strategy: None,
-                    jobs: None,
-                    verbosity: git_branchless_test::Verbosity::from(verbosity),
-                },
-                revset,
-                &resolve_revset_options,
-            )?,
-        },
+        Command::Test(args) => git_branchless_test::command_main(ctx, args)?,
 
         Command::Undo { interactive, yes } => {
             git_branchless_undo::undo(&effects, &git_run_info, interactive, yes)?

@@ -274,6 +274,14 @@ pub struct SmartlogArgs {
     pub resolve_revset_options: ResolveRevsetOptions,
 }
 
+/// Run a command on each commit in a given set and aggregate the results.
+#[derive(Debug, Parser)]
+pub struct TestArgs {
+    /// The subcommand to run.
+    #[clap(subcommand)]
+    pub subcommand: TestSubcommand,
+}
+
 /// FIXME: write man-page text
 #[derive(Parser)]
 pub enum Command {
@@ -577,11 +585,7 @@ pub enum Command {
     },
 
     /// Run a command on each commit in a given set and aggregate the results.
-    Test {
-        /// The subcommand to run.
-        #[clap(subcommand)]
-        subcommand: TestSubcommand,
-    },
+    Test(TestArgs),
 
     /// Browse or return to a previous state of the repository.
     Undo {
@@ -694,7 +698,7 @@ pub enum SnapshotSubcommand {
 }
 
 /// `test` subcommands.
-#[derive(Parser)]
+#[derive(Debug, Parser)]
 pub enum TestSubcommand {
     /// Clean any cached test results.
     Clean {
