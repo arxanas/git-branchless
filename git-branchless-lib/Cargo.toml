@@ -52,7 +52,7 @@ console = "0.15.4"
 cursive = { version = "0.20.0", default-features = false }
 eden_dag = { package = "esl01-dag", version = "0.2.1" }
 eyre = "0.6.8"
-git2 = { version = "0.15.0", default-features = false }
+git2 = { version = "0.16.0", default-features = false }
 git-record = { version = "0.3", path = "../git-record" }
 indicatif = { version = "0.17.1", features = ["improved_unicode"] }
 itertools = "0.10.3"
