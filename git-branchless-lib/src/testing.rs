@@ -15,6 +15,7 @@ use crate::core::config::env_vars::{get_git_exec_path, get_path_to_git, TEST_GIT
 use crate::git::{GitRunInfo, GitVersion, NonZeroOid, Repo};
 use crate::util::get_sh;
 
+use color_eyre::Help;
 use eyre::Context;
 use itertools::Itertools;
 use lazy_static::lazy_static;
@@ -287,6 +288,20 @@ stderr:
         args: &[S],
     ) -> eyre::Result<(String, String)> {
         self.run_with_options(args, &Default::default())
+    }
+
+    /// Render the smartlog for the repository.
+    pub fn smartlog(&self) -> eyre::Result<String> {
+        let (stdout, _stderr) = self.run(&["branchless-smartlog"]).suggestion(
+            "\
+The git-branchless-smartlog binary is NOT automatically built or updated when \
+running integration tests for other binaries (see \
+https://github.com/rust-lang/cargo/issues/4316 for more details). \
+\
+Make sure that git-branchless-smartlog has been built before running \
+integration tests. You can build it with: cargo prepare-tests",
+        )?;
+        Ok(stdout)
     }
 
     /// Set up a Git repo in the directory and initialize git-branchless to work

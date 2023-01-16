@@ -17,7 +17,7 @@ use lib::core::rewrite::MergeConflictRemediation;
 use lib::util::ExitCode;
 
 use git_branchless_opts::{
-    rewrite_args, Command, Opts, ResolveRevsetOptions, Revset, SnapshotSubcommand, TestSubcommand,
+    rewrite_args, Command, Opts, ResolveRevsetOptions, SnapshotSubcommand, TestSubcommand,
     WrappedCommand,
 };
 use lib::git::GitRunInfo;
@@ -181,19 +181,7 @@ fn command_main(ctx: CommandContext, opts: Opts) -> eyre::Result<ExitCode> {
             )?
         }
 
-        Command::Smartlog {
-            event_id,
-            revset,
-            resolve_revset_options,
-        } => git_branchless_smartlog::smartlog(
-            &effects,
-            &git_run_info,
-            &git_branchless_smartlog::SmartlogOptions {
-                event_id,
-                revset: revset.unwrap_or_else(Revset::default_smartlog_revset),
-                resolve_revset_options,
-            },
-        )?,
+        Command::Smartlog(args) => git_branchless_smartlog::command_main(ctx, args)?,
 
         Command::Snapshot { subcommand } => match subcommand {
             SnapshotSubcommand::Create => snapshot::create(&effects, &git_run_info)?,

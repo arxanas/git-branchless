@@ -12,6 +12,8 @@ use std::fmt::Write;
 use std::time::SystemTime;
 
 use eden_dag::DagAlgorithm;
+use git_branchless_invoke::CommandContext;
+use git_branchless_opts::{Revset, SmartlogArgs};
 use lib::core::config::{get_hint_enabled, get_hint_string, print_hint_suppression_notice, Hint};
 use lib::core::repo_ext::RepoExt;
 use lib::core::rewrite::find_rewrite_target;
@@ -892,4 +894,28 @@ pub fn smartlog(
     }
 
     Ok(ExitCode(0))
+}
+
+/// `smartlog` command.
+#[instrument]
+pub fn command_main(ctx: CommandContext, args: SmartlogArgs) -> eyre::Result<ExitCode> {
+    let CommandContext {
+        effects,
+        git_run_info,
+    } = ctx;
+    let SmartlogArgs {
+        event_id,
+        revset,
+        resolve_revset_options,
+    } = args;
+
+    smartlog(
+        &effects,
+        &git_run_info,
+        &SmartlogOptions {
+            event_id,
+            revset: revset.unwrap_or_else(Revset::default_smartlog_revset),
+            resolve_revset_options,
+        },
+    )
 }

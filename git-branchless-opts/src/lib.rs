@@ -255,6 +255,25 @@ pub struct InitArgs {
     pub main_branch_name: Option<String>,
 }
 
+/// Display a nice graph of the commits you've recently worked on.
+#[derive(Debug, Parser)]
+pub struct SmartlogArgs {
+    /// The point in time at which to show the smartlog. If not provided,
+    /// renders the smartlog as of the current time. If negative, is treated
+    /// as an offset from the current event.
+    #[clap(value_parser, long = "event-id")]
+    pub event_id: Option<isize>,
+
+    /// The commits to render. These commits, plus any related commits, will
+    /// be rendered.
+    #[clap(value_parser)]
+    pub revset: Option<Revset>,
+
+    /// Options for resolving revset expressions.
+    #[clap(flatten)]
+    pub resolve_revset_options: ResolveRevsetOptions,
+}
+
 /// FIXME: write man-page text
 #[derive(Parser)]
 pub enum Command {
@@ -491,23 +510,8 @@ pub enum Command {
         commit_to_fixup: Option<Revset>,
     },
 
-    /// Display a nice graph of the commits you've recently worked on.
-    Smartlog {
-        /// The point in time at which to show the smartlog. If not provided,
-        /// renders the smartlog as of the current time. If negative, is treated
-        /// as an offset from the current event.
-        #[clap(value_parser, long = "event-id")]
-        event_id: Option<isize>,
-
-        /// The commits to render. These commits, plus any related commits, will
-        /// be rendered.
-        #[clap(value_parser)]
-        revset: Option<Revset>,
-
-        /// Options for resolving revset expressions.
-        #[clap(flatten)]
-        resolve_revset_options: ResolveRevsetOptions,
-    },
+    /// `smartlog` command.
+    Smartlog(SmartlogArgs),
 
     #[clap(hide = true)]
     /// Manage working copy snapshots.
