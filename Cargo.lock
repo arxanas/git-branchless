@@ -1328,6 +1328,7 @@ dependencies = [
  "cursive_core",
  "esl01-dag",
  "eyre",
+ "git-branchless-invoke",
  "git-branchless-lib",
  "git-branchless-opts",
  "git-branchless-revset",
