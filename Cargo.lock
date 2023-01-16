@@ -629,9 +629,9 @@ dependencies = [
 
 [[package]]
 name = "cursive_core"
-version = "0.3.6"
+version = "0.3.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2de434b364bcca5039553b7ae1b5994b59b679e18bcb03adbc9c8e538446b9b4"
+checksum = "4db3b58161228d0dcb45c7968c5e74c3f03ad39e8983e58ad7d57061aa2cd94d"
 dependencies = [
  "ahash 0.8.2",
  "crossbeam-channel",
