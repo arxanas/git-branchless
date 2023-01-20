@@ -819,7 +819,6 @@ impl Repo {
             })?;
         let paths = diff
             .deltas()
-            .into_iter()
             .flat_map(|delta| vec![delta.old_file().path(), delta.new_file().path()])
             .flat_map(|p| p.map(PathBuf::from))
             .collect();
