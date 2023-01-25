@@ -364,7 +364,7 @@ fn test_git_am_recorded() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |\
@@ -376,7 +376,7 @@ fn test_git_am_recorded() -> eyre::Result<()> {
 
     git.run(&["reset", "--hard", "HEAD^"])?;
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         @ f777ecc (master) create initial.txt
         |\

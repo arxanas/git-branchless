@@ -12,7 +12,7 @@ fn test_reword_head() -> eyre::Result<()> {
     git.run(&["branch", "test1"])?;
     git.commit_file("test2", 2)?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     :
     O 62fc20d (test1) create test1.txt
@@ -22,7 +22,7 @@ fn test_reword_head() -> eyre::Result<()> {
 
     git.run(&["reword", "--force-rewrite", "--message", "foo"])?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     :
     O 62fc20d (test1) create test1.txt
@@ -46,7 +46,7 @@ fn test_reword_current_commit_not_head() -> eyre::Result<()> {
     git.commit_file("test2", 2)?;
     git.run(&["prev"])?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     :
     @ 62fc20d (> test1) create test1.txt
@@ -56,7 +56,7 @@ fn test_reword_current_commit_not_head() -> eyre::Result<()> {
 
     git.run(&["reword", "--force-rewrite", "--message", "foo"])?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     :
     @ a6f8868 (> test1) foo
@@ -146,7 +146,7 @@ fn test_reword_non_head_commit() -> eyre::Result<()> {
     git.run(&["branch", "test1"])?;
     git.commit_file("test2", 2)?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     :
     O 62fc20d (test1) create test1.txt
@@ -156,7 +156,7 @@ fn test_reword_non_head_commit() -> eyre::Result<()> {
 
     git.run(&["reword", "HEAD^", "--force-rewrite", "--message", "bar"])?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     :
     O 8d4a670 (test1) bar
@@ -179,7 +179,7 @@ fn test_reword_multiple_commits_on_same_branch() -> eyre::Result<()> {
     git.run(&["branch", "test1"])?;
     git.commit_file("test2", 2)?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     :
     O 62fc20d (test1) create test1.txt
@@ -196,7 +196,7 @@ fn test_reword_multiple_commits_on_same_branch() -> eyre::Result<()> {
         "foo",
     ])?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     :
     O a6f8868 (test1) foo
@@ -224,7 +224,7 @@ fn test_reword_tree() -> eyre::Result<()> {
     git.run(&["checkout", &test3_oid.to_string()])?;
     git.commit_file("test5", 5)?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     :
     O 96d1c37 (master) create test2.txt
@@ -238,7 +238,7 @@ fn test_reword_tree() -> eyre::Result<()> {
 
     let (_stdout, _stderr) = git.run(&["reword", &test3_oid.to_string(), "--message", "foo"])?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     :
     O 96d1c37 (master) create test2.txt
@@ -270,7 +270,7 @@ fn test_reword_across_branches() -> eyre::Result<()> {
     let test4_oid = git.commit_file("test4", 4)?;
     git.commit_file("test5", 5)?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     :
     O 62fc20d (master) create test1.txt
@@ -292,7 +292,7 @@ fn test_reword_across_branches() -> eyre::Result<()> {
         "foo",
     ])?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     :
     O 62fc20d (master) create test1.txt
@@ -347,7 +347,7 @@ fn test_reword_fixup_head() -> eyre::Result<()> {
     git.commit_file("test1", 1)?;
     git.commit_file("test2", 2)?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     O f777ecc (master) create initial.txt
     |
@@ -358,7 +358,7 @@ fn test_reword_fixup_head() -> eyre::Result<()> {
 
     git.run(&["reword", "--fixup", "HEAD^"])?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     O f777ecc (master) create initial.txt
     |
@@ -382,7 +382,7 @@ fn test_reword_fixup_non_head_commit() -> eyre::Result<()> {
     git.commit_file("test1", 1)?;
     git.commit_file("test2", 2)?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     O f777ecc (master) create initial.txt
     |
@@ -393,7 +393,7 @@ fn test_reword_fixup_non_head_commit() -> eyre::Result<()> {
 
     git.run(&["reword", "HEAD^", "--fixup", "roots(all())"])?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     O f777ecc (master) create initial.txt
     |
@@ -417,7 +417,7 @@ fn test_reword_fixup_multiple_commits() -> eyre::Result<()> {
     git.commit_file("test1", 1)?;
     git.commit_file("test2", 2)?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     O f777ecc (master) create initial.txt
     |
@@ -428,7 +428,7 @@ fn test_reword_fixup_multiple_commits() -> eyre::Result<()> {
 
     git.run(&["reword", "stack()", "--fixup", "roots(all())"])?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     O f777ecc (master) create initial.txt
     |
@@ -452,7 +452,7 @@ fn test_reword_fixup_only_accepts_single_commit() -> eyre::Result<()> {
     git.commit_file("test1", 1)?;
     git.commit_file("test2", 2)?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     O f777ecc (master) create initial.txt
     |
@@ -488,7 +488,7 @@ fn test_reword_fixup_ancestry_issue() -> eyre::Result<()> {
     git.commit_file("test1", 1)?;
     git.commit_file("test2", 2)?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     O f777ecc (master) create initial.txt
     |
@@ -529,7 +529,7 @@ fn test_reword_merge_commit() -> eyre::Result<()> {
     git.run(&["merge", &test2_oid.to_string()])?;
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d (master) create test1.txt
@@ -565,7 +565,7 @@ fn test_reword_merge_commit() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d (master) create test1.txt
@@ -619,7 +619,7 @@ fn test_reword_merge_commit() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d (master) create test1.txt

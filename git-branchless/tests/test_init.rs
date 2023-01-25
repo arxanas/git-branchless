@@ -70,7 +70,7 @@ fn test_alias_installed() -> eyre::Result<()> {
     git.init_repo()?;
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @"@ f777ecc (> master) create initial.txt
 ");
     }
@@ -271,7 +271,7 @@ fn test_init_prompt_for_main_branch() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @"@ f777ecc (> bespoke) create initial.txt
 ");
     }
@@ -450,7 +450,7 @@ fn test_init_explicit_main_branch_name() -> eyre::Result<()> {
         git.run(&["branch", "-d", "master"])?;
         git.commit_file("test1", 1)?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         @ 62fc20d (> foo) create test1.txt
@@ -477,7 +477,7 @@ fn test_init_repo_default_branch() -> eyre::Result<()> {
         git.run(&["branchless", "init"])?;
         git.commit_file("test1", 1)?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         @ 62fc20d (> repo-default-branch) create test1.txt

@@ -77,7 +77,7 @@ fn test_amend_with_children() -> eyre::Result<()> {
         }
 
         {
-            let (stdout, _stderr) = git.run(&["smartlog"])?;
+            let stdout = git.smartlog()?;
             insta::assert_snapshot!(stdout, @r###"
             O f777ecc (master) create initial.txt
             |
@@ -117,7 +117,7 @@ fn test_amend_rename() -> eyre::Result<()> {
         "###);
     }
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
@@ -157,7 +157,7 @@ fn test_amend_delete() -> eyre::Result<()> {
         "###);
     }
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
@@ -197,7 +197,7 @@ fn test_amend_delete_only_in_index() -> eyre::Result<()> {
         "###);
     }
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
@@ -288,7 +288,7 @@ fn test_amend_with_working_copy() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
@@ -331,7 +331,7 @@ fn test_amend_with_working_copy() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
@@ -375,7 +375,7 @@ fn test_amend_head() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
@@ -402,7 +402,7 @@ fn test_amend_head() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
@@ -439,7 +439,7 @@ fn test_amend_executable() -> eyre::Result<()> {
         "###);
     }
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
@@ -549,7 +549,7 @@ fn test_amend_undo() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
@@ -616,7 +616,7 @@ fn test_amend_undo() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
@@ -650,7 +650,7 @@ fn test_amend_undo_detached_head() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
@@ -699,7 +699,7 @@ fn test_amend_reparent() -> eyre::Result<()> {
     git.commit_file("test2", 2)?;
     git.run(&["checkout", "HEAD~"])?;
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
@@ -768,7 +768,7 @@ fn test_amend_reparent() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
@@ -841,7 +841,7 @@ fn test_amend_reparent_merge() -> eyre::Result<()> {
     git.commit_file_with_contents("conflicting", 2, "contents 2\n")?;
     git.run(&["merge", &test3_oid.to_string(), "--strategy-option=ours"])?;
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |\
@@ -950,7 +950,7 @@ fn test_amend_reparent_merge() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |\
@@ -1000,7 +1000,7 @@ fn test_amend_no_detach_branch() -> eyre::Result<()> {
     git.commit_file("test1", 1)?;
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
@@ -1020,7 +1020,7 @@ fn test_amend_no_detach_branch() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |

@@ -499,7 +499,7 @@ fn test_snapshot_restore_unborn_head() -> eyre::Result<()> {
 
     git.commit_file("test1", 1)?;
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @"@ 6118a39 (> master) create test1.txt
 ");
     }

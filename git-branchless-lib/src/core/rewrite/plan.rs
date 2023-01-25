@@ -1426,7 +1426,7 @@ mod tests {
             Ok(())
         })?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
@@ -1458,7 +1458,7 @@ mod tests {
             Ok(())
         })?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
@@ -1490,7 +1490,7 @@ mod tests {
             Ok(())
         })?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
@@ -1522,7 +1522,7 @@ mod tests {
             Ok(())
         })?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
@@ -1558,7 +1558,7 @@ mod tests {
             Ok(())
         })?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
@@ -1595,7 +1595,7 @@ mod tests {
             Ok(())
         })?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
@@ -1630,7 +1630,7 @@ mod tests {
             Ok(())
         })?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
@@ -1661,7 +1661,7 @@ mod tests {
         git.run(&["checkout", &test3_oid.to_string()])?;
         git.commit_file("test5", 5)?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
@@ -1682,7 +1682,7 @@ mod tests {
             Ok(())
         })?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
@@ -1717,7 +1717,7 @@ mod tests {
             Ok(())
         })?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
@@ -1753,7 +1753,7 @@ mod tests {
             Ok(())
         })?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
@@ -1791,7 +1791,7 @@ mod tests {
             Ok(())
         })?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
 
         // FIXME This output is correct mathematically, but feels like it should
         // be incorrect. What *should* we be doing if the user moves 2 ranges w/
@@ -1836,7 +1836,7 @@ mod tests {
             Ok(())
         })?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
@@ -1873,7 +1873,7 @@ mod tests {
             Ok(())
         })?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
@@ -1908,7 +1908,7 @@ mod tests {
             Ok(())
         })?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
@@ -1943,7 +1943,7 @@ mod tests {
             Ok(())
         })?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
@@ -1981,7 +1981,7 @@ mod tests {
         })?;
 
         // FIXME: this is wrong, the merge commit should be moved as well.
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |

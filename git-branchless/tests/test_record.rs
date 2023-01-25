@@ -242,7 +242,7 @@ fn test_record_detach() -> eyre::Result<()> {
 
     git.commit_file("test1", 1)?;
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         o d41ddf7 foo
 
@@ -261,7 +261,7 @@ fn test_record_detach() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         o d41ddf7 foo
 
@@ -291,7 +291,7 @@ fn test_record_create_branch() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d (master) create test1.txt
@@ -328,7 +328,7 @@ fn test_record_insert() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
@@ -366,7 +366,7 @@ fn test_record_insert_rewrite_public_commit() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d create test1.txt
@@ -404,7 +404,7 @@ fn test_record_insert_merge_conflict() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |

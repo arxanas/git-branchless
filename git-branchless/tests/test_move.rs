@@ -31,7 +31,7 @@ fn test_move_stick() -> eyre::Result<()> {
             &test1_oid.to_string(),
         ])?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d create test1.txt
@@ -99,7 +99,7 @@ fn test_move_stick() -> eyre::Result<()> {
         In-memory rebase succeeded.
         "###);
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d create test1.txt
@@ -131,7 +131,7 @@ fn test_move_insert_stick() -> eyre::Result<()> {
     let test3_oid = git.commit_file("test3", 3)?;
     git.commit_file("test4", 4)?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     :
     O 62fc20d (master) create test1.txt
@@ -156,7 +156,7 @@ fn test_move_insert_stick() -> eyre::Result<()> {
             &test1_oid.to_string(),
         ])?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d (master) create test1.txt
@@ -234,7 +234,7 @@ fn test_move_insert_stick() -> eyre::Result<()> {
         In-memory rebase succeeded.
         "###);
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d (master) create test1.txt
@@ -263,7 +263,7 @@ fn test_move_exact_single_stick() -> eyre::Result<()> {
     let test3_oid = git.commit_file("test3", 3)?;
     git.commit_file("test4", 4)?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     :
     O 62fc20d (master) create test1.txt
@@ -287,7 +287,7 @@ fn test_move_exact_single_stick() -> eyre::Result<()> {
             &test1_oid.to_string(),
         ])?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d (master) create test1.txt
@@ -311,7 +311,7 @@ fn test_move_exact_single_stick() -> eyre::Result<()> {
             &test1_oid.to_string(),
         ])?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d (master) create test1.txt
@@ -340,7 +340,7 @@ fn test_move_exact_range_stick() -> eyre::Result<()> {
     let test3_oid = git.commit_file("test3", 3)?;
     let test4_oid = git.commit_file("test4", 4)?;
     git.commit_file("test5", 5)?;
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     :
     O 62fc20d (master) create test1.txt
@@ -366,7 +366,7 @@ fn test_move_exact_range_stick() -> eyre::Result<()> {
             &test4_oid.to_string(),
         ])?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d (master) create test1.txt
@@ -392,7 +392,7 @@ fn test_move_exact_range_stick() -> eyre::Result<()> {
             &test4_oid.to_string(),
         ])?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d (master) create test1.txt
@@ -427,7 +427,7 @@ fn test_move_exact_noncontiguous_commits_stick() -> eyre::Result<()> {
     let test7_oid = git.commit_file("test7", 7)?;
     git.commit_file("test8", 8)?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     :
     O 62fc20d (master) create test1.txt
@@ -459,7 +459,7 @@ fn test_move_exact_noncontiguous_commits_stick() -> eyre::Result<()> {
             &test1_oid.to_string(),
         ])?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d (master) create test1.txt
@@ -491,7 +491,7 @@ fn test_move_exact_noncontiguous_commits_stick() -> eyre::Result<()> {
             &test1_oid.to_string(),
         ])?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d (master) create test1.txt
@@ -535,7 +535,7 @@ fn test_move_exact_noncontiguous_ranges_stick() -> eyre::Result<()> {
     let test10_oid = git.commit_file("test10", 10)?;
     git.commit_file("test11", 11)?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     :
     O 62fc20d (master) create test1.txt
@@ -575,7 +575,7 @@ fn test_move_exact_noncontiguous_ranges_stick() -> eyre::Result<()> {
             &test1_oid.to_string(),
         ])?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d (master) create test1.txt
@@ -615,7 +615,7 @@ fn test_move_exact_noncontiguous_ranges_stick() -> eyre::Result<()> {
             &test1_oid.to_string(),
         ])?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d (master) create test1.txt
@@ -661,7 +661,7 @@ fn test_move_exact_contiguous_and_noncontiguous_stick() -> eyre::Result<()> {
     let test6_oid = git.commit_file("test6", 6)?;
     git.commit_file("test7", 7)?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     :
     O 62fc20d (master) create test1.txt
@@ -691,7 +691,7 @@ fn test_move_exact_contiguous_and_noncontiguous_stick() -> eyre::Result<()> {
             &test1_oid.to_string(),
         ])?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d (master) create test1.txt
@@ -721,7 +721,7 @@ fn test_move_exact_contiguous_and_noncontiguous_stick() -> eyre::Result<()> {
             &test1_oid.to_string(),
         ])?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d (master) create test1.txt
@@ -756,7 +756,7 @@ fn test_move_exact_insert_stick() -> eyre::Result<()> {
     let test3_oid = git.commit_file("test3", 3)?;
     git.commit_file("test4", 4)?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     :
     O 62fc20d (master) create test1.txt
@@ -781,7 +781,7 @@ fn test_move_exact_insert_stick() -> eyre::Result<()> {
             &test1_oid.to_string(),
         ])?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d (master) create test1.txt
@@ -806,7 +806,7 @@ fn test_move_exact_insert_stick() -> eyre::Result<()> {
             &test1_oid.to_string(),
         ])?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d (master) create test1.txt
@@ -836,7 +836,7 @@ fn test_move_exact_insert_swap() -> eyre::Result<()> {
     let test3_oid = git.commit_file("test3", 3)?;
     git.commit_file("test4", 4)?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     :
     O 62fc20d (master) create test1.txt
@@ -861,7 +861,7 @@ fn test_move_exact_insert_swap() -> eyre::Result<()> {
             &test3_oid.to_string(),
         ])?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d (master) create test1.txt
@@ -886,7 +886,7 @@ fn test_move_exact_insert_swap() -> eyre::Result<()> {
             &test3_oid.to_string(),
         ])?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d (master) create test1.txt
@@ -916,7 +916,7 @@ fn test_move_exact_insert_with_siblings() -> eyre::Result<()> {
     git.run(&["checkout", "HEAD^"])?;
     git.commit_file("test4", 4)?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     :
     O 62fc20d (master) create test1.txt
@@ -941,7 +941,7 @@ fn test_move_exact_insert_with_siblings() -> eyre::Result<()> {
             &test1_oid.to_string(),
         ])?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d (master) create test1.txt
@@ -966,7 +966,7 @@ fn test_move_exact_insert_with_siblings() -> eyre::Result<()> {
             &test1_oid.to_string(),
         ])?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d (master) create test1.txt
@@ -996,7 +996,7 @@ fn test_move_insert_range_stick() -> eyre::Result<()> {
     let test4_oid = git.commit_file("test4", 4)?;
     git.commit_file("test5", 5)?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     :
     O 62fc20d (master) create test1.txt
@@ -1023,7 +1023,7 @@ fn test_move_insert_range_stick() -> eyre::Result<()> {
             &test4_oid.to_string(),
         ])?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d (master) create test1.txt
@@ -1050,7 +1050,7 @@ fn test_move_insert_range_stick() -> eyre::Result<()> {
             &test4_oid.to_string(),
         ])?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d (master) create test1.txt
@@ -1088,7 +1088,7 @@ fn test_move_insert_exact_noncontiguous_ranges_stick() -> eyre::Result<()> {
     let test10_oid = git.commit_file("test10", 10)?;
     git.commit_file("test11", 11)?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     :
     O 62fc20d (master) create test1.txt
@@ -1129,7 +1129,7 @@ fn test_move_insert_exact_noncontiguous_ranges_stick() -> eyre::Result<()> {
             &test1_oid.to_string(),
         ])?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d (master) create test1.txt
@@ -1170,7 +1170,7 @@ fn test_move_insert_exact_noncontiguous_ranges_stick() -> eyre::Result<()> {
             &test1_oid.to_string(),
         ])?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d (master) create test1.txt
@@ -1230,7 +1230,7 @@ fn test_move_tree() -> eyre::Result<()> {
             &test1_oid.to_string(),
         ])?;
         {
-            let (stdout, _stderr) = git.run(&["smartlog"])?;
+            let stdout = git.smartlog()?;
             insta::assert_snapshot!(stdout, @r###"
             :
             O 62fc20d create test1.txt
@@ -1256,7 +1256,7 @@ fn test_move_tree() -> eyre::Result<()> {
             &test1_oid.to_string(),
         ])?;
         {
-            let (stdout, _stderr) = git.run(&["smartlog"])?;
+            let stdout = git.smartlog()?;
             insta::assert_snapshot!(stdout, @r###"
             :
             O 62fc20d create test1.txt
@@ -1288,7 +1288,7 @@ fn test_move_insert_in_place() -> eyre::Result<()> {
     git.run(&["checkout", "HEAD^"])?;
     git.commit_file("test3", 3)?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     :
     O 62fc20d (master) create test1.txt
@@ -1307,7 +1307,7 @@ fn test_move_insert_in_place() -> eyre::Result<()> {
         &test1_oid.to_string(),
     ])?;
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d (master) create test1.txt
@@ -1338,7 +1338,7 @@ fn test_move_insert_tree() -> eyre::Result<()> {
     git.commit_file("test3", 3)?;
     let test4_oid = git.commit_file("test4", 4)?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     :
     O 62fc20d (master) create test1.txt
@@ -1363,7 +1363,7 @@ fn test_move_insert_tree() -> eyre::Result<()> {
             &test1_oid.to_string(),
         ])?;
         {
-            let (stdout, _stderr) = git.run(&["smartlog"])?;
+            let stdout = git.smartlog()?;
             insta::assert_snapshot!(stdout, @r###"
             :
             O 62fc20d (master) create test1.txt
@@ -1388,7 +1388,7 @@ fn test_move_insert_tree() -> eyre::Result<()> {
             &test1_oid.to_string(),
         ])?;
         {
-            let (stdout, _stderr) = git.run(&["smartlog"])?;
+            let stdout = git.smartlog()?;
             insta::assert_snapshot!(stdout, @r###"
             :
             O 62fc20d (master) create test1.txt
@@ -1420,7 +1420,7 @@ fn test_move_exact_range_tree() -> eyre::Result<()> {
     git.run(&["checkout", &test3_oid.to_string()])?;
     git.commit_file("test5", 5)?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     :
     O 62fc20d (master) create test1.txt
@@ -1446,7 +1446,7 @@ fn test_move_exact_range_tree() -> eyre::Result<()> {
             &test4_oid.to_string(),
         ])?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d (master) create test1.txt
@@ -1471,7 +1471,7 @@ fn test_move_exact_range_tree() -> eyre::Result<()> {
             &test4_oid.to_string(),
         ])?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d (master) create test1.txt
@@ -1504,7 +1504,7 @@ fn test_move_exact_range_with_leaves() -> eyre::Result<()> {
     git.run(&["checkout", &test3_oid.to_string()])?;
     let test5_oid = git.commit_file("test5", 5)?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     :
     O 62fc20d (master) create test1.txt
@@ -1530,7 +1530,7 @@ fn test_move_exact_range_with_leaves() -> eyre::Result<()> {
             &test2_oid.to_string(),
         ])?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d (master) create test1.txt
@@ -1555,7 +1555,7 @@ fn test_move_exact_range_with_leaves() -> eyre::Result<()> {
             &test2_oid.to_string(),
         ])?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d (master) create test1.txt
@@ -1588,7 +1588,7 @@ fn test_move_exact_range_just_leaves() -> eyre::Result<()> {
     git.run(&["checkout", "HEAD^"])?;
     let test5_oid = git.commit_file("test5", 5)?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     :
     O 62fc20d (master) create test1.txt
@@ -1614,7 +1614,7 @@ fn test_move_exact_range_just_leaves() -> eyre::Result<()> {
             &test2_oid.to_string(),
         ])?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d (master) create test1.txt
@@ -1639,7 +1639,7 @@ fn test_move_exact_range_just_leaves() -> eyre::Result<()> {
             &test2_oid.to_string(),
         ])?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d (master) create test1.txt
@@ -1674,7 +1674,7 @@ fn test_move_exact_range_with_multiple_heads() -> eyre::Result<()> {
     let test6_oid = git.commit_file("test6", 6)?;
     git.commit_file("test7", 7)?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     :
     O 62fc20d (master) create test1.txt
@@ -1704,7 +1704,7 @@ fn test_move_exact_range_with_multiple_heads() -> eyre::Result<()> {
             &test2_oid.to_string(),
         ])?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d (master) create test1.txt
@@ -1733,7 +1733,7 @@ fn test_move_exact_range_with_multiple_heads() -> eyre::Result<()> {
             &test2_oid.to_string(),
         ])?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d (master) create test1.txt
@@ -1771,7 +1771,7 @@ fn test_move_exact_range_with_leaves_and_descendent_components() -> eyre::Result
     git.run(&["checkout", &test3_oid.to_string()])?;
     let test6_oid = git.commit_file("test6", 6)?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     :
     O 62fc20d (master) create test1.txt
@@ -1799,7 +1799,7 @@ fn test_move_exact_range_with_leaves_and_descendent_components() -> eyre::Result
             &test2_oid.to_string(),
         ])?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d (master) create test1.txt
@@ -1826,7 +1826,7 @@ fn test_move_exact_range_with_leaves_and_descendent_components() -> eyre::Result
             &test2_oid.to_string(),
         ])?;
 
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d (master) create test1.txt
@@ -1863,7 +1863,7 @@ fn test_move_exact_ranges_with_merge_commits_betwixt_not_supported() -> eyre::Re
     git.run(&["merge", &test3_oid.to_string()])?;
     let test6_oid = git.commit_file("test6", 6)?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     :
     O 62fc20d (master) create test1.txt
@@ -1925,7 +1925,7 @@ fn test_move_exact_range_one_side_of_merged_stack_without_base_and_merge_commits
     git.commit_file("test6", 6)?;
     git.run(&["merge", &test4_oid.to_string()])?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     :
     O 62fc20d (master) create test1.txt
@@ -1954,7 +1954,7 @@ fn test_move_exact_range_one_side_of_merged_stack_without_base_and_merge_commits
         &test1_oid.to_string(),
     ])?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     // FIXME: This output is correct except for a known issue involving moving
     // merge commits. (See `test_move_merge_commit_both_parents`.)
     insta::assert_snapshot!(stdout, @r###"
@@ -2005,7 +2005,7 @@ fn test_move_exact_range_one_side_of_merged_stack_including_base_and_merge_commi
     git.commit_file("test6", 6)?;
     git.run(&["merge", &test4_oid.to_string()])?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     :
     O 62fc20d (master) create test1.txt
@@ -2034,7 +2034,7 @@ fn test_move_exact_range_one_side_of_merged_stack_including_base_and_merge_commi
         &test1_oid.to_string(),
     ])?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     // FIXME: This output is correct except for a known issue involving moving
     // merge commits. (See `test_move_merge_commit_both_parents`.)
     insta::assert_snapshot!(stdout, @r###"
@@ -2093,7 +2093,7 @@ fn test_move_exact_range_two_partial_components_of_merged_stack() -> eyre::Resul
     //  \5
     // FIXME Is it Ok that 3&7 are no longer directly connected?
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
     :
     O 62fc20d (master) create test1.txt
@@ -2122,7 +2122,7 @@ fn test_move_exact_range_two_partial_components_of_merged_stack() -> eyre::Resul
         &test1_oid.to_string(),
     ])?;
 
-    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    let stdout = git.smartlog()?;
     // FIXME: This output is correct except for a known issue involving moving
     // merge commits. (See `test_move_merge_commit_both_parents`.)
     insta::assert_snapshot!(stdout, @r###"
@@ -2187,7 +2187,7 @@ fn test_move_with_source_not_in_smartlog() -> eyre::Result<()> {
         ])?;
 
         {
-            let (stdout, _stderr) = git.run(&["smartlog"])?;
+            let stdout = git.smartlog()?;
             insta::assert_snapshot!(stdout, @r###"
             :
             O 62fc20d create test1.txt
@@ -2257,7 +2257,7 @@ fn test_move_with_source_not_in_smartlog() -> eyre::Result<()> {
         }
 
         {
-            let (stdout, _stderr) = git.run(&["smartlog"])?;
+            let stdout = git.smartlog()?;
             insta::assert_snapshot!(stdout, @r###"
             :
             O 62fc20d create test1.txt
@@ -2361,7 +2361,7 @@ fn test_move_merge_conflict() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d (master) create test1.txt
@@ -2439,7 +2439,7 @@ fn test_move_base() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         @ bf0d52a (> master) create test4.txt
@@ -2500,7 +2500,7 @@ fn test_move_base_shared() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
@@ -2563,7 +2563,7 @@ fn test_move_checkout_new_head() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d (master) create test1.txt
@@ -2634,7 +2634,7 @@ fn test_move_branch() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         @ 70deb1e (> master) create test3.txt
@@ -2683,7 +2683,7 @@ fn test_move_base_onto_head() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d (master) create test1.txt
@@ -2919,7 +2919,7 @@ fn test_move_main_branch_commits() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d create test1.txt
@@ -3030,7 +3030,7 @@ fn test_move_branches_after_move() -> eyre::Result<()> {
         }
 
         {
-            let (stdout, _stderr) = git.run(&["smartlog"])?;
+            let stdout = git.smartlog()?;
             insta::assert_snapshot!(stdout, @r###"
             :
             O 62fc20d create test1.txt
@@ -3109,7 +3109,7 @@ fn test_move_branches_after_move() -> eyre::Result<()> {
         }
 
         {
-            let (stdout, _stderr) = git.run(&["smartlog"])?;
+            let stdout = git.smartlog()?;
             insta::assert_snapshot!(stdout, @r###"
             :
             O 62fc20d create test1.txt
@@ -3191,7 +3191,7 @@ fn test_move_no_reapply_upstream_commits() -> eyre::Result<()> {
         }
 
         {
-            let (stdout, _stderr) = git.run(&["smartlog"])?;
+            let stdout = git.smartlog()?;
             insta::assert_snapshot!(stdout, @r###"
             :
             O 047b7ad (master) create test1.txt
@@ -3229,7 +3229,7 @@ fn test_move_no_reapply_upstream_commits() -> eyre::Result<()> {
         }
 
         {
-            let (stdout, _stderr) = git.run(&["smartlog"])?;
+            let stdout = git.smartlog()?;
             insta::assert_snapshot!(stdout, @r###"
             :
             O 047b7ad (master) create test1.txt
@@ -3265,7 +3265,7 @@ fn test_move_no_reapply_squashed_commits() -> eyre::Result<()> {
         let git = git.duplicate_repo()?;
 
         {
-            let (stdout, _stderr) = git.run(&["smartlog"])?;
+            let stdout = git.smartlog()?;
             insta::assert_snapshot!(stdout, @r###"
             O f777ecc create initial.txt
             |\
@@ -3321,7 +3321,7 @@ fn test_move_no_reapply_squashed_commits() -> eyre::Result<()> {
         }
 
         {
-            let (stdout, _stderr) = git.run(&["smartlog"])?;
+            let stdout = git.smartlog()?;
             insta::assert_snapshot!(stdout, @r###"
             :
             @ de4a1fe (> master) squashed test1 and test2
@@ -3337,7 +3337,7 @@ fn test_move_no_reapply_squashed_commits() -> eyre::Result<()> {
     // --in-memory
     {
         {
-            let (stdout, _stderr) = git.run(&["smartlog"])?;
+            let stdout = git.smartlog()?;
             insta::assert_snapshot!(stdout, @r###"
             O f777ecc create initial.txt
             |\
@@ -3378,7 +3378,7 @@ fn test_move_no_reapply_squashed_commits() -> eyre::Result<()> {
         }
 
         {
-            let (stdout, _stderr) = git.run(&["smartlog"])?;
+            let stdout = git.smartlog()?;
             insta::assert_snapshot!(stdout, @r###"
             :
             @ de4a1fe (> master) squashed test1 and test2
@@ -3411,7 +3411,7 @@ fn test_move_delete_checked_out_branch() -> eyre::Result<()> {
     ])?;
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc create initial.txt
         |\
@@ -3463,7 +3463,7 @@ fn test_move_delete_checked_out_branch() -> eyre::Result<()> {
         }
 
         {
-            let (stdout, _stderr) = git.run(&["smartlog"])?;
+            let stdout = git.smartlog()?;
             insta::assert_snapshot!(stdout, @r###"
             :
             @ 91c5ce6 (> master) create test2.txt
@@ -3501,7 +3501,7 @@ fn test_move_delete_checked_out_branch() -> eyre::Result<()> {
         }
 
         {
-            let (stdout, _stderr) = git.run(&["smartlog"])?;
+            let stdout = git.smartlog()?;
             insta::assert_snapshot!(stdout, @r###"
             :
             @ 91c5ce6 (> master) create test2.txt
@@ -3565,7 +3565,7 @@ fn test_move_merge_commit() -> eyre::Result<()> {
 
     git.run(&["checkout", &test3_oid.to_string()])?;
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc create initial.txt
         |\
@@ -3693,7 +3693,7 @@ fn test_move_merge_commit() -> eyre::Result<()> {
         }
 
         {
-            let (stdout, _stderr) = git.run(&["smartlog"])?;
+            let stdout = git.smartlog()?;
             insta::assert_snapshot!(stdout, @r###"
             O f777ecc create initial.txt
             |\
@@ -3786,7 +3786,7 @@ fn test_move_merge_commit() -> eyre::Result<()> {
         }
 
         {
-            let (stdout, _stderr) = git.run(&["smartlog"])?;
+            let stdout = git.smartlog()?;
             insta::assert_snapshot!(stdout, @r###"
             O f777ecc create initial.txt
             |\
@@ -3826,7 +3826,7 @@ fn test_move_merge_commit_both_parents() -> eyre::Result<()> {
     git.run(&["merge", &test4_oid.to_string()])?;
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
@@ -3875,7 +3875,7 @@ fn test_move_merge_commit_both_parents() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
@@ -3924,7 +3924,7 @@ fn test_move_orphaned_root() -> eyre::Result<()> {
     git.detach_head()?;
     git.run(&["checkout", "--orphan", "new-root"])?;
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 96d1c37 (master) create test2.txt
@@ -3933,7 +3933,7 @@ fn test_move_orphaned_root() -> eyre::Result<()> {
 
     git.run(&["commit", "-m", "new root"])?;
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         // FIXME: the smartlog handling for unrelated roots is wrong. There
         // should be no relation between these two commits.
         insta::assert_snapshot!(stdout, @r###"
@@ -3981,7 +3981,7 @@ fn test_move_orphaned_root() -> eyre::Result<()> {
         }
 
         {
-            let (stdout, _stderr) = git.run(&["smartlog"])?;
+            let stdout = git.smartlog()?;
             insta::assert_snapshot!(stdout, @r###"
             :
             O 96d1c37 (master) create test2.txt
@@ -4022,7 +4022,7 @@ fn test_move_orphaned_root() -> eyre::Result<()> {
         }
 
         {
-            let (stdout, _stderr) = git.run(&["smartlog"])?;
+            let stdout = git.smartlog()?;
             insta::assert_snapshot!(stdout, @r###"
             :
             O 96d1c37 (master) create test2.txt
@@ -4172,7 +4172,7 @@ fn test_move_orig_head_no_symbolic_reference() -> eyre::Result<()> {
     git.detach_head()?;
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         @ 96d1c37 (foo, master) create test2.txt
@@ -4186,7 +4186,7 @@ fn test_move_orig_head_no_symbolic_reference() -> eyre::Result<()> {
     git.run(&["reset", "--hard", "HEAD^"])?;
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         // `foo` should be unmoved here, rather than moved to
         // `create test1.txt`.
         insta::assert_snapshot!(stdout, @r###"
@@ -4285,7 +4285,7 @@ fn test_move_branch_on_merge_conflict_resolution() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         @ 62fc20d (> master) create test1.txt

@@ -359,7 +359,7 @@ fn test_undo_hide() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |\
@@ -419,7 +419,7 @@ fn test_undo_move_refs() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         @ 62fc20d (master) create test1.txt
@@ -738,7 +738,7 @@ fn test_undo_garbage_collected_commit() -> eyre::Result<()> {
     git.run(&["gc", "--prune=now"])?;
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         @ 62fc20d (master) create test1.txt
@@ -850,7 +850,7 @@ fn test_undo_noninteractive() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         @ 9ed8f9a (> master) bad message
@@ -884,7 +884,7 @@ fn test_undo_noninteractive() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         @ 96d1c37 (master) create test2.txt

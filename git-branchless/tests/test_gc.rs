@@ -20,7 +20,7 @@ fn test_gc() -> eyre::Result<()> {
 
     git.run(&["gc", "--prune=now"])?;
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         @ f777ecc (master) create initial.txt
         |
@@ -39,7 +39,7 @@ fn test_gc() -> eyre::Result<()> {
 
     git.run(&["gc", "--prune=now"])?;
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @"@ f777ecc (master) create initial.txt
 ");
     }
@@ -244,7 +244,7 @@ fn test_gc_no_init() -> eyre::Result<()> {
     let test1_oid = git.commit_file("test1", 1)?;
 
     {
-        let (stdout, _stderr) = git.run(&["branchless", "smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
@@ -261,7 +261,7 @@ fn test_gc_no_init() -> eyre::Result<()> {
 
     git.run(&["checkout", &test1_oid.to_string()])?;
     {
-        let (stdout, _stderr) = git.run(&["branchless", "smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
