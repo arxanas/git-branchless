@@ -5,7 +5,6 @@
 #![allow(clippy::too_many_arguments, clippy::blocks_in_if_conditions)]
 
 use clap::{Args, Command as ClapCommand, CommandFactory, Parser, ValueEnum};
-use itertools::Itertools;
 use lib::git::NonZeroOid;
 
 use std::ffi::OsString;
@@ -176,6 +175,71 @@ pub struct SwitchOptions {
     pub target: Option<String>,
 }
 
+/// Internal use.
+#[derive(Debug, Parser)]
+pub enum HookSubcommand {
+    /// Internal use.
+    DetectEmptyCommit {
+        /// The OID of the commit currently being applied, to be checked for emptiness.
+        #[clap(value_parser)]
+        old_commit_oid: String,
+    },
+    /// Internal use.
+    PreAutoGc,
+    /// Internal use.
+    PostApplypatch,
+    /// Internal use.
+    PostCheckout {
+        /// The previous commit OID.
+        #[clap(value_parser)]
+        previous_commit: String,
+
+        /// The current commit OID.
+        #[clap(value_parser)]
+        current_commit: String,
+
+        /// Whether or not this was a branch checkout (versus a file checkout).
+        #[clap(value_parser)]
+        is_branch_checkout: isize,
+    },
+    /// Internal use.
+    PostCommit,
+    /// Internal use.
+    PostMerge {
+        /// Whether or not this is a squash merge. See githooks(5).
+        #[clap(value_parser)]
+        is_squash_merge: isize,
+    },
+    /// Internal use.
+    PostRewrite {
+        /// One of `amend` or `rebase`.
+        #[clap(value_parser)]
+        rewrite_type: String,
+    },
+    /// Internal use.
+    ReferenceTransaction {
+        /// One of `prepared`, `committed`, or `aborted`. See githooks(5).
+        #[clap(value_parser)]
+        transaction_state: String,
+    },
+    /// Internal use.
+    RegisterExtraPostRewriteHook,
+    /// Internal use.
+    SkipUpstreamAppliedCommit {
+        /// The OID of the commit that was skipped.
+        #[clap(value_parser)]
+        commit_oid: String,
+    },
+}
+
+/// Internal use.
+#[derive(Debug, Parser)]
+pub struct HookArgs {
+    /// The subcommand to run.
+    #[clap(subcommand)]
+    pub subcommand: HookSubcommand,
+}
+
 /// Initialize the branchless workflow for this repository.
 #[derive(Debug, Parser)]
 pub struct InitArgs {
@@ -236,75 +300,7 @@ pub enum Command {
 
     /// Internal use.
     #[clap(hide = true)]
-    HookDetectEmptyCommit {
-        /// The OID of the commit currently being applied, to be checked for emptiness.
-        #[clap(value_parser)]
-        old_commit_oid: String,
-    },
-
-    /// Internal use.
-    #[clap(hide = true)]
-    HookPreAutoGc,
-
-    /// Internal use.
-    #[clap(hide = true)]
-    HookPostApplypatch,
-
-    /// Internal use.
-    #[clap(hide = true)]
-    HookPostCheckout {
-        /// The previous commit OID.
-        #[clap(value_parser)]
-        previous_commit: String,
-
-        /// The current commit OID.
-        #[clap(value_parser)]
-        current_commit: String,
-
-        /// Whether or not this was a branch checkout (versus a file checkout).
-        #[clap(value_parser)]
-        is_branch_checkout: isize,
-    },
-
-    /// Internal use.
-    #[clap(hide = true)]
-    HookPostCommit,
-
-    /// Internal use.
-    #[clap(hide = true)]
-    HookPostMerge {
-        /// Whether or not this is a squash merge. See githooks(5).
-        #[clap(value_parser)]
-        is_squash_merge: isize,
-    },
-
-    /// Internal use.
-    #[clap(hide = true)]
-    HookPostRewrite {
-        /// One of `amend` or `rebase`.
-        #[clap(value_parser)]
-        rewrite_type: String,
-    },
-
-    /// Internal use.
-    #[clap(hide = true)]
-    HookReferenceTransaction {
-        /// One of `prepared`, `committed`, or `aborted`. See githooks(5).
-        #[clap(value_parser)]
-        transaction_state: String,
-    },
-
-    /// Internal use.
-    #[clap(hide = true)]
-    HookRegisterExtraPostRewriteHook,
-
-    /// Internal use.
-    #[clap(hide = true)]
-    HookSkipUpstreamAppliedCommit {
-        /// The OID of the commit that was skipped.
-        #[clap(value_parser)]
-        commit_oid: String,
-    },
+    Hook(HookArgs),
 
     /// Initialize the branchless workflow for this repository.
     Init(InitArgs),
@@ -793,10 +789,14 @@ fn generate_man_page(man1_dir: &Path, name: &str, command: &ClapCommand) -> std:
     Ok(())
 }
 
-fn rewrite_args(args: Vec<OsString>) -> Vec<OsString> {
+/// Carry out some rewrites on the command-line arguments for uniformity. For
+/// example, `git-branchless-smartlog` becomes `git-branchless smartlog`, and
+/// the `.exe` suffix is removed on Windows. These are necessary for later
+/// command-line argument parsing.
+pub fn rewrite_args(args: Vec<OsString>) -> Vec<OsString> {
     let first_arg = match args.first() {
         None => return args,
-        Some(first_arg) => first_arg,
+        Some(first_arg) => first_arg.clone(),
     };
 
     // Don't use `std::env::current_exe`, because it may or may not resolve the
@@ -816,18 +816,134 @@ fn rewrite_args(args: Vec<OsString>) -> Vec<OsString> {
         None => exe_name,
     };
 
-    match exe_name.strip_prefix("git-branchless-") {
+    let args = match exe_name.strip_prefix("git-branchless-") {
         Some(subcommand) => {
             let mut new_args = vec![OsString::from("git-branchless"), OsString::from(subcommand)];
             new_args.extend(args.into_iter().skip(1));
             new_args
         }
-        None => args,
-    }
+        None => {
+            let mut new_args = vec![OsString::from(exe_name)];
+            new_args.extend(args.into_iter().skip(1));
+            new_args
+        }
+    };
+
+    // For backward-compatibility, convert calls of the form
+    // `git-branchless-hook-X Y Z` into `git-branchless hook X Y Z`.
+    let args = match args.as_slice() {
+        [first, subcommand, rest @ ..] if exe_name == "git-branchless" => {
+            let mut new_args = vec![first.clone()];
+            match subcommand
+                .to_str()
+                .and_then(|arg| arg.strip_prefix("hook-"))
+            {
+                Some(hook_subcommand) => {
+                    new_args.push(OsString::from("hook"));
+                    new_args.push(OsString::from(hook_subcommand));
+                }
+                None => {
+                    new_args.push(subcommand.clone());
+                }
+            }
+            new_args.extend(rest.iter().cloned());
+            new_args
+        }
+        other => other.to_vec(),
+    };
+
+    args
 }
 
-/// Parse the command-line arguments.
-pub fn parse_args() -> Opts {
-    let args = rewrite_args(std::env::args_os().collect_vec());
-    Opts::parse_from(args)
+#[cfg(test)]
+mod tests {
+    use super::rewrite_args;
+    use std::ffi::OsString;
+
+    #[test]
+    fn test_rewrite_args() {
+        assert_eq!(
+            rewrite_args(vec![OsString::from("git-branchless")]),
+            vec![OsString::from("git-branchless")]
+        );
+        assert_eq!(
+            rewrite_args(vec![OsString::from("git-branchless-smartlog")]),
+            vec![OsString::from("git-branchless"), OsString::from("smartlog")]
+        );
+
+        // Should only happen on Windows.
+        if std::env::consts::EXE_SUFFIX == ".exe" {
+            assert_eq!(
+                rewrite_args(vec![OsString::from("git-branchless-smartlog.exe")]),
+                vec![OsString::from("git-branchless"), OsString::from("smartlog")]
+            );
+        }
+
+        assert_eq!(
+            rewrite_args(vec![
+                OsString::from("git-branchless-smartlog"),
+                OsString::from("foo"),
+                OsString::from("bar")
+            ]),
+            vec![
+                OsString::from("git-branchless"),
+                OsString::from("smartlog"),
+                OsString::from("foo"),
+                OsString::from("bar")
+            ]
+        );
+
+        assert_eq!(
+            rewrite_args(vec![
+                OsString::from("git-branchless"),
+                OsString::from("hook-post-commit"),
+            ]),
+            vec![
+                OsString::from("git-branchless"),
+                OsString::from("hook"),
+                OsString::from("post-commit"),
+            ]
+        );
+        assert_eq!(
+            rewrite_args(vec![
+                OsString::from("git-branchless-hook"),
+                OsString::from("post-commit"),
+            ]),
+            vec![
+                OsString::from("git-branchless"),
+                OsString::from("hook"),
+                OsString::from("post-commit"),
+            ]
+        );
+        assert_eq!(
+            rewrite_args(vec![
+                OsString::from("git-branchless"),
+                OsString::from("hook-post-checkout"),
+                OsString::from("3"),
+                OsString::from("2"),
+                OsString::from("1"),
+            ]),
+            vec![
+                OsString::from("git-branchless"),
+                OsString::from("hook"),
+                OsString::from("post-checkout"),
+                OsString::from("3"),
+                OsString::from("2"),
+                OsString::from("1"),
+            ]
+        );
+        assert_eq!(
+            rewrite_args(vec![
+                OsString::from("target/debug/git-branchless"),
+                OsString::from("hook-detect-empty-commit"),
+                OsString::from("abc123"),
+            ]),
+            vec![
+                OsString::from("git-branchless"),
+                OsString::from("hook"),
+                OsString::from("detect-empty-commit"),
+                OsString::from("abc123"),
+            ]
+        );
+    }
 }

@@ -45,7 +45,7 @@ fn test_bug_report() -> eyre::Result<()> {
         #!/bin/sh
         ## START BRANCHLESS CONFIG
 
-        git branchless hook-post-applypatch "$@"
+        git branchless-hook post-applypatch "$@"
 
         ## END BRANCHLESS CONFIG
         ```
@@ -55,7 +55,7 @@ fn test_bug_report() -> eyre::Result<()> {
         #!/bin/sh
         ## START BRANCHLESS CONFIG
 
-        git branchless hook-post-checkout "$@"
+        git branchless-hook post-checkout "$@"
 
         ## END BRANCHLESS CONFIG
         ```
@@ -65,7 +65,7 @@ fn test_bug_report() -> eyre::Result<()> {
         #!/bin/sh
         ## START BRANCHLESS CONFIG
 
-        git branchless hook-post-commit "$@"
+        git branchless-hook post-commit "$@"
 
         ## END BRANCHLESS CONFIG
         ```
@@ -75,7 +75,7 @@ fn test_bug_report() -> eyre::Result<()> {
         #!/bin/sh
         ## START BRANCHLESS CONFIG
 
-        git branchless hook-post-merge "$@"
+        git branchless-hook post-merge "$@"
 
         ## END BRANCHLESS CONFIG
         ```
@@ -85,7 +85,7 @@ fn test_bug_report() -> eyre::Result<()> {
         #!/bin/sh
         ## START BRANCHLESS CONFIG
 
-        git branchless hook-post-rewrite "$@"
+        git branchless-hook post-rewrite "$@"
 
         ## END BRANCHLESS CONFIG
         ```
@@ -95,7 +95,7 @@ fn test_bug_report() -> eyre::Result<()> {
         #!/bin/sh
         ## START BRANCHLESS CONFIG
 
-        git branchless hook-pre-auto-gc "$@"
+        git branchless-hook pre-auto-gc "$@"
 
         ## END BRANCHLESS CONFIG
         ```
@@ -107,7 +107,7 @@ fn test_bug_report() -> eyre::Result<()> {
 
         # Avoid canceling the reference transaction in the case that `branchless` fails
         # for whatever reason.
-        git branchless hook-reference-transaction "$@" || (
+        git branchless-hook reference-transaction "$@" || (
         echo 'branchless: Failed to process reference transaction!'
         echo 'branchless: Some events (e.g. branch updates) may have been lost.'
         echo 'branchless: This is a bug. Please report it.'

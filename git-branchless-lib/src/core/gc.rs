@@ -8,12 +8,17 @@
 //! garbage collection doesn't collect commits which branchless thinks are still
 //! active.
 
+use std::fmt::Write;
+
 use eyre::Context;
 use tracing::instrument;
 
+use crate::core::effects::Effects;
+use crate::core::eventlog::{
+    is_gc_ref, CommitActivityStatus, EventCursor, EventLogDb, EventReplayer,
+};
+use crate::core::formatting::Pluralize;
 use crate::git::{NonZeroOid, Reference, Repo};
-
-use super::eventlog::{is_gc_ref, CommitActivityStatus, EventCursor, EventReplayer};
 
 /// Find references under `refs/branchless/` which point to commits which are no
 /// longer active. These are safe to remove.
@@ -86,5 +91,38 @@ pub fn mark_commit_reachable(repo: &Repo, commit_oid: NonZeroOid) -> eyre::Resul
         .wrap_err("Creating reference")?;
     }
 
+    Ok(())
+}
+
+/// Run branchless's garbage collection.
+///
+/// Frees any references to commits which are no longer visible in the smartlog.
+#[instrument]
+pub fn gc(effects: &Effects) -> eyre::Result<()> {
+    let repo = Repo::from_current_dir()?;
+    let conn = repo.get_db_conn()?;
+    let event_log_db = EventLogDb::new(&conn)?;
+    let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
+    let event_cursor = event_replayer.make_default_cursor();
+
+    writeln!(
+        effects.get_output_stream(),
+        "branchless: collecting garbage"
+    )?;
+    let dangling_references = find_dangling_references(&repo, &event_replayer, event_cursor)?;
+    let num_dangling_references = Pluralize {
+        determiner: None,
+        amount: dangling_references.len(),
+        unit: ("dangling reference", "dangling references"),
+    }
+    .to_string();
+    for mut reference in dangling_references.into_iter() {
+        reference.delete()?;
+    }
+
+    writeln!(
+        effects.get_output_stream(),
+        "branchless: {num_dangling_references} deleted",
+    )?;
     Ok(())
 }
