@@ -296,6 +296,37 @@ pub mod env_vars {
     /// See <https://git-scm.com/docs/git#Documentation/git.txt---exec-pathltpathgt>.
     pub const TEST_GIT_EXEC_PATH: &str = "TEST_GIT_EXEC_PATH";
 
+    /// Specifies `git-branchless` subcommands to invoke directly.
+    ///
+    /// For example, `TEST_SEPARATE_COMMAND_BINARIES=init test`, this function
+    /// would try to run `git-branchless-init` instead of `git-branchless init`
+    /// and `git-branchless-test` instead of `git-branchless test`.
+    ///
+    /// Why? The `git test` command is implemented in its own
+    /// `git-branchless-test` binary. It's slow to include it in
+    /// `git-branchless` itself because we have to relink the entire
+    /// `git-branchless` binary whenever just a portion of `git-branchless-test`
+    /// changes, which leads to slow incremental builds and iteration times.
+    ///
+    /// Instead, we can assume that its dependency commands like `git branchless
+    /// init` don't change when we're incrementally rebuilding the tests, and we
+    /// can try to build and use the existing `git-branchless-init` binary on
+    /// disk, which shouldn't change when we make changes to
+    /// `git-branchless-test`.
+    ///
+    /// Common dependency binaries like `git-branchless-init` should be built
+    /// with the `cargo build -p git-branchless-init` before running incremental
+    /// tests. (Ideally, this would happen automatically by marking the binaries
+    /// as dependencies and having Cargo build them, but that's not implemented;
+    /// see https://github.com/rust-lang/cargo/issues/4316 for more details).
+    ///
+    /// If there *is* a change to `git-branchless-init`, and it hasn't been
+    /// built, and the test is rerun, then it might fail in an unusual way
+    /// because it's invoking the wrong version of the `git-branchless-init`
+    /// code. This can be fixed by building the necessary dependency binaries
+    /// manually.
+    pub const TEST_SEPARATE_COMMAND_BINARIES: &str = "TEST_SEPARATE_COMMAND_BINARIES";
+
     /// Get the path to the Git executable for testing.
     #[instrument]
     pub fn get_path_to_git() -> eyre::Result<PathBuf> {
@@ -326,5 +357,19 @@ or set `env.{0}` in your `config.toml` \
         })?;
         let git_exec_path = PathBuf::from(&git_exec_path);
         Ok(git_exec_path)
+    }
+
+    /// Determine whether the specified binary should be run separately. See
+    /// [`TEST_SEPARATE_COMMAND_BINARIES`] for more details.
+    #[instrument]
+    pub fn should_use_separate_command_binary(program: &str) -> bool {
+        let values = match std::env::var("TEST_SEPARATE_COMMAND_BINARIES") {
+            Ok(value) => value,
+            Err(_) => return false,
+        };
+        let program = program.strip_prefix("git-branchless-").unwrap_or(program);
+        values
+            .split_ascii_whitespace()
+            .any(|value| value.strip_prefix("git-branchless-").unwrap_or(value) == program)
     }
 }
