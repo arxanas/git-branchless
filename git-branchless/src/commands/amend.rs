@@ -4,11 +4,11 @@
 //! that are already tracked in the repo. Following the amend,
 //! the command performs a restack.
 
-use std::convert::TryFrom;
 use std::ffi::OsString;
 use std::fmt::Write;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use bstr::ByteSlice;
 use eden_dag::DagAlgorithm;
 use eyre::Context;
 use git_branchless_opts::{MoveOptions, ResolveRevsetOptions};
@@ -27,7 +27,7 @@ use lib::core::rewrite::{
     RebasePlanBuilder, RebasePlanPermissions, RepoResource,
 };
 use lib::git::{
-    AmendFastOptions, CategorizedReferenceName, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo,
+    AmendFastOptions, CategorizedReferenceName, GitRunInfo, MaybeZeroOid, Repo,
     ResolvedReferenceInfo,
 };
 use lib::util::ExitCode;
@@ -166,6 +166,12 @@ pub fn amend(
     )?;
     mark_commit_reachable(&repo, amended_commit_oid)
         .wrap_err("Marking commit as reachable for GC purposes.")?;
+    event_log_db.add_events(vec![Event::RewriteEvent {
+        timestamp: now.duration_since(UNIX_EPOCH)?.as_secs_f64(),
+        event_tx_id,
+        old_commit_oid: MaybeZeroOid::NonZero(head_oid),
+        new_commit_oid: MaybeZeroOid::NonZero(amended_commit_oid),
+    }])?;
     dag.sync_from_oids(
         effects,
         &repo,
@@ -209,12 +215,14 @@ pub fn amend(
             dump_rebase_constraints: move_options.dump_rebase_constraints,
             dump_rebase_plan: move_options.dump_rebase_plan,
         };
-        let commits_to_verify = dag.query().descendants(CommitSet::from(head_oid))?;
-        let commits_to_verify = dag.filter_visible_commits(commits_to_verify)?;
+        let children = dag.query().children(CommitSet::from(head_oid))?;
+        let descendants = dag.query().descendants(children)?;
+        let descendants = dag.filter_visible_commits(descendants)?;
+        let commits_to_verify = &descendants;
         let permissions = match RebasePlanPermissions::verify_rewrite_set(
             &dag,
             &build_options,
-            &commits_to_verify,
+            commits_to_verify,
         )? {
             Ok(permissions) => permissions,
             Err(err) => {
@@ -224,38 +232,52 @@ pub fn amend(
         };
 
         let mut builder = RebasePlanBuilder::new(&dag, permissions);
-        builder.move_subtree(head_oid, head_commit.get_parent_oids())?;
-        builder.replace_commit(head_oid, amended_commit_oid)?;
+        for descendant_oid in commit_set_to_vec(&descendants)? {
+            let descendant_commit = repo.find_commit_or_fail(descendant_oid)?;
+            let parent_oids: Vec<_> = descendant_commit
+                .get_parent_oids()
+                .into_iter()
+                .map(|parent_oid| {
+                    if parent_oid == head_oid {
+                        amended_commit_oid
+                    } else {
+                        parent_oid
+                    }
+                })
+                .collect();
+            builder.move_subtree(descendant_oid, parent_oids.clone())?;
 
-        // To keep the contents of all descendant commits the same, forcibly
-        // replace the children commits, and then rely on normal patch
-        // application to apply the rest.
-        if reparent {
-            let descendants = dag
-                .query()
-                .descendants(CommitSet::from(head_oid))?
-                .difference(&CommitSet::from(head_oid));
-            let descendants = dag.filter_visible_commits(descendants)?;
-            for descendant_oid in commit_set_to_vec(&descendants)? {
-                let parents = dag.query().parent_names(descendant_oid.into())?;
-                builder.move_subtree(
-                    descendant_oid,
-                    parents
-                        .into_iter()
-                        .map(NonZeroOid::try_from)
-                        .try_collect()?,
+            // To keep the contents of all descendant commits the same, forcibly
+            // replace the children commits, and then rely on normal patch
+            // application to apply the rest.
+            if reparent {
+                let parents: Vec<_> = parent_oids
+                    .into_iter()
+                    .map(|parent_oid| repo.find_commit_or_fail(parent_oid))
+                    .try_collect()?;
+                let descendant_message = descendant_commit.get_message_raw()?;
+                let descendant_message = descendant_message.to_str().with_context(|| {
+                    eyre::eyre!(
+                        "Could not decode commit message for descendant commit: {:?}",
+                        descendant_commit
+                    )
+                })?;
+                let reparented_descendant_oid = repo.create_commit(
+                    None,
+                    &descendant_commit.get_author(),
+                    &descendant_commit.get_committer(),
+                    descendant_message,
+                    &descendant_commit.get_tree()?,
+                    parents.iter().collect(),
                 )?;
-                builder.replace_commit(descendant_oid, descendant_oid)?;
+                builder.replace_commit(descendant_oid, reparented_descendant_oid)?;
             }
         }
 
         let thread_pool = ThreadPoolBuilder::new().build()?;
         let repo_pool = RepoResource::new_pool(&repo)?;
         match builder.build(effects, &thread_pool, &repo_pool)? {
-            Ok(Some(rebase_plan)) => rebase_plan,
-            Ok(None) => {
-                unreachable!("A rebase plan should always be generated when amending a commit.");
-            }
+            Ok(rebase_plan) => rebase_plan,
             Err(err) => {
                 err.describe(effects, &repo)?;
                 return Ok(ExitCode(1));
@@ -263,84 +285,52 @@ pub fn amend(
         }
     };
 
-    let execute_options = ExecuteRebasePlanOptions {
-        now,
-        event_tx_id,
-        force_in_memory: move_options.force_in_memory,
-        force_on_disk: move_options.force_on_disk,
-        preserve_timestamps: get_restack_preserve_timestamps(&repo)?,
-        resolve_merge_conflicts: move_options.resolve_merge_conflicts,
-        check_out_commit_options: CheckOutCommitOptions {
-            additional_args: Default::default(),
-            reset: true,
-            render_smartlog: true,
-        },
-    };
-    let needs_merge = match execute_rebase_plan(
-        effects,
-        git_run_info,
-        &repo,
-        &event_log_db,
-        &rebase_plan,
-        &execute_options,
-    )? {
-        ExecuteRebasePlanResult::Succeeded { rewritten_oids: _ } => false,
-        ExecuteRebasePlanResult::DeclinedToMerge {
-            merge_conflict: _, // `execute_rebase_plan` should have printed merge conflict info.
-        } => {
-            let checkout_args = match head_info {
-                ResolvedReferenceInfo {
-                    oid: _,
-                    reference_name: Some(reference_name),
-                } => vec![
-                    OsString::from("-B"),
-                    OsString::from(reference_name.as_str()),
-                ],
-                ResolvedReferenceInfo {
-                    oid: _,
-                    reference_name: None,
-                } => Vec::new(),
-            };
-
-            writeln!(
-                effects.get_output_stream(),
-                "This operation would cause a merge conflict, and --merge was not provided."
-            )?;
-            writeln!(
-                effects.get_output_stream(),
-                "Amending without rebasing descendants: {}",
-                effects
-                    .get_glyphs()
-                    .render(head_commit.friendly_describe(effects.get_glyphs())?)?
-            )?;
-
-            event_log_db.add_events(vec![Event::RewriteEvent {
-                timestamp: now.duration_since(UNIX_EPOCH)?.as_secs_f64(),
+    let needs_merge = match rebase_plan {
+        None => false,
+        Some(rebase_plan) => {
+            let execute_options = ExecuteRebasePlanOptions {
+                now,
                 event_tx_id,
-                old_commit_oid: MaybeZeroOid::NonZero(head_oid),
-                new_commit_oid: MaybeZeroOid::NonZero(amended_commit_oid),
-            }])?;
-            let exit_code = check_out_commit(
+                force_in_memory: move_options.force_in_memory,
+                force_on_disk: move_options.force_on_disk,
+                preserve_timestamps: get_restack_preserve_timestamps(&repo)?,
+                resolve_merge_conflicts: move_options.resolve_merge_conflicts,
+                check_out_commit_options: CheckOutCommitOptions {
+                    additional_args: Default::default(),
+                    reset: true,
+                    render_smartlog: false,
+                },
+            };
+            match execute_rebase_plan(
                 effects,
                 git_run_info,
                 &repo,
                 &event_log_db,
-                event_tx_id,
-                Some(CheckoutTarget::Oid(amended_commit_oid)),
-                &CheckOutCommitOptions {
-                    additional_args: checkout_args,
-                    reset: true,
-                    render_smartlog: true,
-                },
-            )?;
-            if !exit_code.is_success() {
-                return Ok(exit_code);
-            }
+                &rebase_plan,
+                &execute_options,
+            )? {
+                ExecuteRebasePlanResult::Succeeded { rewritten_oids: _ } => false,
+                ExecuteRebasePlanResult::DeclinedToMerge {
+                    merge_conflict: _, // `execute_rebase_plan` should have printed merge conflict info.
+                } => {
+                    writeln!(
+                    effects.get_output_stream(),
+                    "This operation would cause a merge conflict, and --merge was not provided."
+                )?;
+                    writeln!(
+                        effects.get_output_stream(),
+                        "Amending without rebasing descendants: {}",
+                        effects
+                            .get_glyphs()
+                            .render(head_commit.friendly_describe(effects.get_glyphs())?)?
+                    )?;
 
-            true
-        }
-        ExecuteRebasePlanResult::Failed { exit_code } => {
-            return Ok(exit_code);
+                    true
+                }
+                ExecuteRebasePlanResult::Failed { exit_code } => {
+                    return Ok(exit_code);
+                }
+            }
         }
     };
 
