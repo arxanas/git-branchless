@@ -51,8 +51,8 @@ fn test_test() -> eyre::Result<()> {
         branchless: running command: <git-executable> rebase --continue
         Using test execution strategy: working-copy
         Ran exit 1 on 2 commits:
-        X Failed with exit code 1: fe65c1f create test2.txt
-        X Failed with exit code 1: 0206717 create test3.txt
+        X Failed (exit code 1): fe65c1f create test2.txt
+        X Failed (exit code 1): 0206717 create test3.txt
         0 passed, 2 failed, 0 skipped
         branchless: running command: <git-executable> rebase --abort
         "###);
