@@ -557,16 +557,21 @@ enum TestStatus {
     ReadCacheFailed(String),
 
     /// The test failed and returned the provided (non-zero) exit code.
-    Failed(i32),
+    Failed {
+        /// Whether or not the result was cached (indicating that we didn't
+        /// actually re-run the test).
+        cached: bool,
 
-    /// Like [`Failed`], but the result was cached, so we didn't need to re-run the test.
-    FailedCached(i32),
+        /// The exit code of the process.
+        exit_code: i32,
+    },
 
     /// The test passed and returned a successful exit code.
-    Passed,
-
-    /// Like [`Passed`], but the result was cached, so we didn't need to re-run the test.
-    PassedCached,
+    Passed {
+        /// Whether or not the result was cached (indicating that we didn't
+        /// actually re-run the test).
+        cached: bool,
+    },
 }
 
 impl TestStatus {
@@ -578,8 +583,8 @@ impl TestStatus {
             | TestStatus::AlreadyInProgress
             | TestStatus::ReadCacheFailed(_)
             | TestStatus::TerminatedBySignal => icons::EXCLAMATION,
-            TestStatus::Failed(_) | TestStatus::FailedCached(_) => icons::CROSS,
-            TestStatus::Passed | TestStatus::PassedCached => icons::CHECKMARK,
+            TestStatus::Failed { .. } => icons::CROSS,
+            TestStatus::Passed { .. } => icons::CHECKMARK,
         }
     }
 
@@ -591,8 +596,8 @@ impl TestStatus {
             | TestStatus::AlreadyInProgress
             | TestStatus::ReadCacheFailed(_)
             | TestStatus::TerminatedBySignal => *STYLE_SKIPPED,
-            TestStatus::Failed(_) | TestStatus::FailedCached(_) => *STYLE_FAILURE,
-            TestStatus::Passed | TestStatus::PassedCached => *STYLE_SUCCESS,
+            TestStatus::Failed { .. } => *STYLE_FAILURE,
+            TestStatus::Passed { .. } => *STYLE_SUCCESS,
         }
     }
 }
@@ -635,28 +640,31 @@ fn make_test_status_description(
             .append(commit.friendly_describe(glyphs)?)
             .build(),
 
-        TestStatus::Failed(exit_code) => StyledStringBuilder::new()
+        TestStatus::Failed {
+            cached: false,
+            exit_code,
+        } => StyledStringBuilder::new()
+            .append_styled(format!("Failed (exit code {exit_code}): "), *STYLE_FAILURE)
+            .append(commit.friendly_describe(glyphs)?)
+            .build(),
+
+        TestStatus::Failed {
+            cached: true,
+            exit_code,
+        } => StyledStringBuilder::new()
             .append_styled(
-                format!("Failed with exit code {exit_code}: "),
+                format!("Failed (cached, exit code {exit_code}): "),
                 *STYLE_FAILURE,
             )
             .append(commit.friendly_describe(glyphs)?)
             .build(),
 
-        TestStatus::FailedCached(exit_code) => StyledStringBuilder::new()
-            .append_styled(
-                format!("Failed (cached) with exit code {exit_code}: "),
-                *STYLE_FAILURE,
-            )
-            .append(commit.friendly_describe(glyphs)?)
-            .build(),
-
-        TestStatus::Passed => StyledStringBuilder::new()
+        TestStatus::Passed { cached: false } => StyledStringBuilder::new()
             .append_styled("Passed: ", *STYLE_SUCCESS)
             .append(commit.friendly_describe(glyphs)?)
             .build(),
 
-        TestStatus::PassedCached => StyledStringBuilder::new()
+        TestStatus::Passed { cached: true } => StyledStringBuilder::new()
             .append_styled("Passed (cached): ", *STYLE_SUCCESS)
             .append(commit.friendly_describe(glyphs)?)
             .build(),
@@ -945,19 +953,20 @@ fn run_tests(
             | TestStatus::ReadCacheFailed(_)
             | TestStatus::TerminatedBySignal => num_skipped += 1,
 
-            TestStatus::Failed(_) => {
+            TestStatus::Failed {
+                cached,
+                exit_code: _,
+            } => {
                 num_failed += 1;
+                if cached {
+                    num_cached_results += 1;
+                }
             }
-            TestStatus::FailedCached(_) => {
-                num_failed += 1;
-                num_cached_results += 1;
-            }
-            TestStatus::Passed => {
+            TestStatus::Passed { cached } => {
                 num_passed += 1;
-            }
-            TestStatus::PassedCached => {
-                num_passed += 1;
-                num_cached_results += 1;
+                if cached {
+                    num_cached_results += 1;
+                }
             }
         }
     }
@@ -1190,11 +1199,9 @@ fn run_test(
             | TestStatus::AlreadyInProgress
             | TestStatus::ReadCacheFailed(_) => OperationIcon::Warning,
 
-            TestStatus::TerminatedBySignal
-            | TestStatus::Failed(_)
-            | TestStatus::FailedCached(_) => OperationIcon::Failure,
+            TestStatus::TerminatedBySignal | TestStatus::Failed { .. } => OperationIcon::Failure,
 
-            TestStatus::Passed | TestStatus::PassedCached => OperationIcon::Success,
+            TestStatus::Passed { .. } => OperationIcon::Success,
         },
         effects.get_glyphs().render(description)?,
     );
@@ -1266,11 +1273,14 @@ fn make_test_files(
                 Ok(SerializedTestResult {
                     command: _,
                     exit_code: 0,
-                }) => TestStatus::PassedCached,
+                }) => TestStatus::Passed { cached: true },
                 Ok(SerializedTestResult {
                     command: _,
                     exit_code,
-                }) => TestStatus::FailedCached(exit_code),
+                }) => TestStatus::Failed {
+                    cached: true,
+                    exit_code,
+                },
                 Err(err) => TestStatus::ReadCacheFailed(err.to_string()),
             };
             return Ok(TestFilesResult::Cached(TestOutput {
@@ -1482,8 +1492,11 @@ fn test_commit(
         }
     };
     let test_status = match exit_code {
-        0 => TestStatus::Passed,
-        exit_code => TestStatus::Failed(exit_code),
+        0 => TestStatus::Passed { cached: false },
+        exit_code => TestStatus::Failed {
+            cached: false,
+            exit_code,
+        },
     };
 
     let serialized_test_result = SerializedTestResult {
