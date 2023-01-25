@@ -237,7 +237,9 @@ impl ResolvedTestOptions {
             Some(jobs) => {
                 // NB: match on the strategy passed on the command-line here, not the resolved strategy.
                 match strategy {
-                    None | Some(TestExecutionStrategy::Worktree) => (*jobs, resolved_strategy),
+                    None | Some(TestExecutionStrategy::Worktree) => {
+                        (*jobs, TestExecutionStrategy::Worktree)
+                    }
                     Some(TestExecutionStrategy::WorkingCopy) => {
                         writeln!(
                             effects.get_output_stream(),
