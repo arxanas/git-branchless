@@ -8,6 +8,7 @@ use console::style;
 use eyre::Context;
 use git_branchless_invoke::CommandContext;
 use itertools::Itertools;
+use lib::core::config::env_vars::should_use_separate_command_binary;
 use lib::util::ExitCode;
 use path_slash::PathExt;
 use tracing::{instrument, warn};
@@ -24,37 +25,37 @@ pub const ALL_HOOKS: &[(&str, &str)] = &[
     (
         "post-applypatch",
         r#"
-git branchless-hook post-applypatch "$@"
+git branchless hook post-applypatch "$@"
 "#,
     ),
     (
         "post-checkout",
         r#"
-git branchless-hook post-checkout "$@"
+git branchless hook post-checkout "$@"
 "#,
     ),
     (
         "post-commit",
         r#"
-git branchless-hook post-commit "$@"
+git branchless hook post-commit "$@"
 "#,
     ),
     (
         "post-merge",
         r#"
-git branchless-hook post-merge "$@"
+git branchless hook post-merge "$@"
 "#,
     ),
     (
         "post-rewrite",
         r#"
-git branchless-hook post-rewrite "$@"
+git branchless hook post-rewrite "$@"
 "#,
     ),
     (
         "pre-auto-gc",
         r#"
-git branchless-hook pre-auto-gc "$@"
+git branchless hook pre-auto-gc "$@"
 "#,
     ),
     (
@@ -62,7 +63,7 @@ git branchless-hook pre-auto-gc "$@"
         r#"
 # Avoid canceling the reference transaction in the case that `branchless` fails
 # for whatever reason.
-git branchless-hook reference-transaction "$@" || (
+git branchless hook reference-transaction "$@" || (
 echo 'branchless: Failed to process reference transaction!'
 echo 'branchless: Some events (e.g. branch updates) may have been lost.'
 echo 'branchless: This is a bug. Please report it.'
@@ -158,6 +159,11 @@ fn write_script(path: &Path, contents: &str) -> eyre::Result<()> {
         .ok_or_else(|| eyre::eyre!("No parent for dir {:?}", path))?;
     std::fs::create_dir_all(script_dir).wrap_err("Creating script dir")?;
 
+    let contents = if should_use_separate_command_binary("hook") {
+        contents.replace("branchless hook", "branchless-hook")
+    } else {
+        contents.to_string()
+    };
     std::fs::write(path, contents).wrap_err("Writing script contents")?;
 
     // Setting hook file as executable only supported on Unix systems.

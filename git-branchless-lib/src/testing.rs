@@ -11,7 +11,10 @@ use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use crate::core::config::env_vars::{get_git_exec_path, get_path_to_git, TEST_GIT};
+use crate::core::config::env_vars::{
+    get_git_exec_path, get_path_to_git, should_use_separate_command_binary, TEST_GIT,
+    TEST_SEPARATE_COMMAND_BINARIES,
+};
 use crate::git::{GitRunInfo, GitVersion, NonZeroOid, Repo};
 use crate::util::get_sh;
 
@@ -22,7 +25,7 @@ use lazy_static::lazy_static;
 use once_cell::sync::OnceCell;
 use regex::{Captures, Regex};
 use tempfile::TempDir;
-use tracing::instrument;
+use tracing::{instrument, warn};
 
 const DUMMY_NAME: &str = "Testy McTestface";
 const DUMMY_EMAIL: &str = "test@example.com";
@@ -175,6 +178,10 @@ impl Git {
             ("GIT_EXEC_PATH", self.git_exec_path.as_os_str().into()),
             ("PATH", new_path),
             (TEST_GIT, self.path_to_git.as_os_str().into()),
+            (
+                TEST_SEPARATE_COMMAND_BINARIES,
+                std::env::var_os(TEST_SEPARATE_COMMAND_BINARIES).unwrap_or_default(),
+            ),
         ];
 
         envs.into_iter()
@@ -287,21 +294,72 @@ stderr:
         &self,
         args: &[S],
     ) -> eyre::Result<(String, String)> {
+        if let Some(first_arg) = args.first() {
+            if first_arg.as_ref() == "branchless" {
+                eyre::bail!(
+                    r#"Refusing to invoke `branchless` via `git.run(&["branchless", ...])`; instead, call `git.branchless(&[...])`"#
+                );
+            }
+        }
+
         self.run_with_options(args, &Default::default())
     }
 
     /// Render the smartlog for the repository.
+    #[instrument]
     pub fn smartlog(&self) -> eyre::Result<String> {
-        let (stdout, _stderr) = self.run(&["branchless-smartlog"]).suggestion(
-            "\
-The git-branchless-smartlog binary is NOT automatically built or updated when \
-running integration tests for other binaries (see \
-https://github.com/rust-lang/cargo/issues/4316 for more details). \
-\
-Make sure that git-branchless-smartlog has been built before running \
-integration tests. You can build it with: cargo prepare-tests",
-        )?;
+        let (stdout, _stderr) = self.branchless("smartlog", &[])?;
         Ok(stdout)
+    }
+
+    /// Convenience method to call `branchless_with_options` with the default
+    /// options.
+    #[instrument]
+    pub fn branchless(&self, subcommand: &str, args: &[&str]) -> eyre::Result<(String, String)> {
+        self.branchless_with_options(subcommand, args, &Default::default())
+    }
+
+    /// Locate the git-branchless binary and run a git-branchless subcommand
+    /// with the provided `GitRunOptions`. These subcommands are located using
+    /// `should_use_separate_command_binary`.
+    #[instrument]
+    pub fn branchless_with_options(
+        &self,
+        subcommand: &str,
+        args: &[&str],
+        options: &GitRunOptions,
+    ) -> eyre::Result<(String, String)> {
+        let mut git_run_args = Vec::new();
+        if should_use_separate_command_binary(subcommand) {
+            git_run_args.push(format!("branchless-{subcommand}"));
+        } else {
+            git_run_args.push("branchless".to_string());
+            git_run_args.push(subcommand.to_string());
+        }
+        git_run_args.extend(args.iter().map(|arg| arg.to_string()));
+
+        let result = self.run_with_options(&git_run_args, options);
+
+        if !should_use_separate_command_binary(subcommand) {
+            result
+        } else {
+            result.suggestion(format!(
+                "\
+If you have set the TEST_SEPARATE_COMMAND_BINARIES environment variable, then \
+the git-branchless-{subcommand} binary is NOT automatically built or updated when \
+running integration tests for other binaries (see \
+https://github.com/rust-lang/cargo/issues/4316 for more details).
+
+Make sure that git-branchless-{subcommand} has been built before running \
+integration tests. You can build it with: cargo build -p
+git-branchless-{subcommand}
+
+If you have not set the TEST_SEPARATE_COMMAND_BINARIES environment variable, \
+then you can only run tests in the main `git-branchless` and \
+`git-branchless-lib` crates.\
+        ",
+            ))
+        }
     }
 
     /// Set up a Git repo in the directory and initialize git-branchless to work
@@ -333,15 +391,7 @@ integration tests. You can build it with: cargo prepare-tests",
         self.run(&["config", "core.autocrlf", "false"])?;
 
         if options.run_branchless_init {
-            self.run(&["branchless-init"]).suggestion(
-                "\
-The git-branchless-init binary is NOT automatically built or updated when \
-running integration tests for other binaries (see \
-https://github.com/rust-lang/cargo/issues/4316 for more details). \
-\
-Make sure that git-branchless-init has been built before running integration \
-tests. You can build it with: cargo prepare-tests",
-            )?;
+            self.branchless("init", &[])?;
         }
 
         Ok(())

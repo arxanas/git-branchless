@@ -486,17 +486,9 @@ fn test_test_worktree_strategy() -> eyre::Result<()> {
     git.write_file_txt("test1", "Updated contents\n")?;
 
     {
-        let (stdout, stderr) = git.run_with_options(
-            &[
-                "branchless",
-                "test",
-                "run",
-                "--strategy",
-                "working-copy",
-                "-x",
-                "echo hello",
-                "@",
-            ],
+        let (stdout, stderr) = git.branchless_with_options(
+            "test",
+            &["run", "--strategy", "working-copy", "-x", "echo hello", "@"],
             &GitRunOptions {
                 expected_exit_code: 1,
                 ..Default::default()
@@ -646,16 +638,9 @@ fn test_test_jobs_argument_handling() -> eyre::Result<()> {
     git.run(&["config", "branchless.test.alias.default", "exit 0"])?;
 
     {
-        let (stdout, stderr) = git.run_with_options(
-            &[
-                "branchless",
-                "test",
-                "run",
-                "--strategy",
-                "working-copy",
-                "--jobs",
-                "0",
-            ],
+        let (stdout, stderr) = git.branchless_with_options(
+            "test",
+            &["run", "--strategy", "working-copy", "--jobs", "0"],
             &GitRunOptions {
                 expected_exit_code: 1,
                 ..Default::default()
@@ -691,16 +676,9 @@ fn test_test_jobs_argument_handling() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, stderr) = git.run_with_options(
-            &[
-                "branchless",
-                "test",
-                "run",
-                "--strategy",
-                "working-copy",
-                "--jobs",
-                "2",
-            ],
+        let (stdout, stderr) = git.branchless_with_options(
+            "test",
+            &["run", "--strategy", "working-copy", "--jobs", "2"],
             &GitRunOptions {
                 expected_exit_code: 1,
                 ..Default::default()
