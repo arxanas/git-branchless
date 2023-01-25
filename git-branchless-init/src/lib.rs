@@ -6,11 +6,13 @@ use std::path::{Path, PathBuf};
 
 use console::style;
 use eyre::Context;
+use git_branchless_invoke::CommandContext;
 use itertools::Itertools;
+use lib::util::ExitCode;
 use path_slash::PathExt;
 use tracing::{instrument, warn};
 
-use git_branchless_opts::write_man_pages;
+use git_branchless_opts::{write_man_pages, InitArgs};
 use lib::core::config::{get_default_branch_name, get_default_hooks_dir, get_hooks_dir};
 use lib::core::dag::Dag;
 use lib::core::effects::Effects;
@@ -571,11 +573,11 @@ fn delete_isolated_config(
 
 /// Initialize `git-branchless` in the current repo.
 #[instrument]
-pub fn init(
+fn command_init(
     effects: &Effects,
     git_run_info: &GitRunInfo,
     main_branch_name: Option<&str>,
-) -> eyre::Result<()> {
+) -> eyre::Result<ExitCode> {
     let mut in_ = BufReader::new(stdin());
     let repo = Repo::from_current_dir()?;
     let mut repo = repo.open_worktree_parent_repo()?.unwrap_or(repo);
@@ -624,17 +626,37 @@ pub fn init(
         "To uninstall, run: {}",
         console::style("git branchless init --uninstall").bold()
     )?;
-    Ok(())
+
+    Ok(ExitCode(0))
 }
 
 /// Uninstall `git-branchless` in the current repo.
 #[instrument]
-pub fn uninstall(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<()> {
+pub fn command_uninstall(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<ExitCode> {
     let repo = Repo::from_current_dir()?;
     let readonly_config = repo.get_readonly_config().wrap_err("Getting repo config")?;
     delete_isolated_config(effects, &repo, readonly_config.into_config())?;
     uninstall_hooks(effects, git_run_info, &repo)?;
-    Ok(())
+    Ok(ExitCode(0))
+}
+
+#[instrument]
+pub fn command_main(ctx: CommandContext, args: InitArgs) -> eyre::Result<ExitCode> {
+    let CommandContext {
+        effects,
+        git_run_info,
+    } = ctx;
+    match args {
+        InitArgs {
+            uninstall: false,
+            main_branch_name,
+        } => command_init(&effects, &git_run_info, main_branch_name.as_deref()),
+
+        InitArgs {
+            uninstall: true,
+            main_branch_name: _,
+        } => command_uninstall(&effects, &git_run_info),
+    }
 }
 
 #[cfg(test)]

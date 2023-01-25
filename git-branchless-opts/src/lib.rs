@@ -176,6 +176,21 @@ pub struct SwitchOptions {
     pub target: Option<String>,
 }
 
+/// Initialize the branchless workflow for this repository.
+#[derive(Debug, Parser)]
+pub struct InitArgs {
+    /// Uninstall the branchless workflow instead of initializing it.
+    #[clap(action, long = "uninstall")]
+    pub uninstall: bool,
+
+    /// Use the provided name as the name of the main branch.
+    ///
+    /// If not set, it will be auto-detected. If it can't be auto-detected,
+    /// then you will be prompted to enter a value for the main branch name.
+    #[clap(value_parser, long = "main-branch", conflicts_with = "uninstall")]
+    pub main_branch_name: Option<String>,
+}
+
 /// FIXME: write man-page text
 #[derive(Parser)]
 pub enum Command {
@@ -292,18 +307,7 @@ pub enum Command {
     },
 
     /// Initialize the branchless workflow for this repository.
-    Init {
-        /// Uninstall the branchless workflow instead of initializing it.
-        #[clap(action, long = "uninstall")]
-        uninstall: bool,
-
-        /// Use the provided name as the name of the main branch.
-        ///
-        /// If not set, it will be auto-detected. If it can't be auto-detected,
-        /// then you will be prompted to enter a value for the main branch name.
-        #[clap(value_parser, long = "main-branch", conflicts_with = "uninstall")]
-        main_branch_name: Option<String>,
-    },
+    Init(InitArgs),
 
     /// Move a subtree of commits from one location to another.
     ///
