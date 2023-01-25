@@ -1102,7 +1102,7 @@ mod tests {
             "-d",
             &test1_oid.to_string(),
         ])?;
-        git.run(&["reword", "-m", "test4 has been rewritten twice"])?;
+        git.branchless("reword", &["-m", "test4 has been rewritten twice"])?;
 
         let effects = Effects::new_suppress_for_test(Glyphs::text());
         let repo = git.get_repo()?;
@@ -1246,8 +1246,9 @@ mod tests {
         {
             git.run(&["config", "branchless.revsets.alias.parseError", "foo("])?;
 
-            let (_stdout, _stderr) = git.run_with_options(
-                &["query", "parseError()"],
+            let (_stdout, _stderr) = git.branchless_with_options(
+                "query",
+                &["parseError()"],
                 &GitRunOptions {
                     expected_exit_code: 1,
                     ..Default::default()

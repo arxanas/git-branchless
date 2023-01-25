@@ -34,7 +34,7 @@ fn test_repair_broken_commit() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["branchless", "repair", "--no-dry-run"])?;
+        let (stdout, _stderr) = git.branchless("repair", &["--no-dry-run"])?;
         insta::assert_snapshot!(stdout, @"Found and repaired 1 broken commit: 70deb1e28791d8e7dd5a1f0c871a51b91282562f
 ");
     }
@@ -72,7 +72,7 @@ fn test_repair_broken_branch() -> eyre::Result<()> {
         .delete()?;
 
     {
-        let (stdout, _stderr) = git.run(&["branchless", "repair", "--no-dry-run"])?;
+        let (stdout, _stderr) = git.branchless("repair", &["--no-dry-run"])?;
         insta::assert_snapshot!(stdout, @"Found and repaired 1 broken branch: foo
 ");
     }
@@ -81,7 +81,7 @@ fn test_repair_broken_branch() -> eyre::Result<()> {
         // Advance the event cursor so that we can write `--event-id=-1` below.
         git.commit_file("test2", 2)?;
 
-        let (stdout, _stderr) = git.run(&["smartlog", "--event-id=-1"])?;
+        let (stdout, _stderr) = git.branchless("smartlog", &["--event-id=-1"])?;
         insta::assert_snapshot!(stdout, @r###"
         :
         @ 96d1c37 (> master) create test2.txt

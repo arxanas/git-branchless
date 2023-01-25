@@ -153,8 +153,9 @@ fn test_submit_multiple_remotes() -> eyre::Result<()> {
     cloned_repo.run(&["remote", "add", "other-repo", "file://dummy-file"])?;
 
     {
-        let (stdout, stderr) = cloned_repo.run_with_options(
-            &["submit", "--create"],
+        let (stdout, stderr) = cloned_repo.branchless_with_options(
+            "submit",
+            &["--create"],
             &GitRunOptions {
                 expected_exit_code: 1,
                 ..Default::default()
@@ -200,8 +201,9 @@ fn test_submit_existing_branch() -> eyre::Result<()> {
     cloned_repo.commit_file("test4", 4)?;
 
     {
-        let (stdout, stderr) = cloned_repo.run_with_options(
-            &["submit", "--create"],
+        let (stdout, stderr) = cloned_repo.branchless_with_options(
+            "submit",
+            &["--create"],
             &GitRunOptions {
                 expected_exit_code: 1,
                 ..Default::default()

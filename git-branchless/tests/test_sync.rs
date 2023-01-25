@@ -239,7 +239,7 @@ fn test_sync_specific_commit() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["sync", "foo"])?;
+        let (stdout, _stderr) = git.branchless("sync", &["foo"])?;
         insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
         [1/1] Committed as: 8e521a1 create test3.txt

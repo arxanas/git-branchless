@@ -22,14 +22,16 @@ fn test_move_stick() -> eyre::Result<()> {
     // --on-disk
     {
         let git = git.duplicate_repo()?;
-        git.run(&[
+        git.branchless(
             "move",
-            "--on-disk",
-            "-s",
-            &test3_oid.to_string(),
-            "-d",
-            &test1_oid.to_string(),
-        ])?;
+            &[
+                "--on-disk",
+                "-s",
+                &test3_oid.to_string(),
+                "-d",
+                &test1_oid.to_string(),
+            ],
+        )?;
 
         let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
@@ -46,15 +48,17 @@ fn test_move_stick() -> eyre::Result<()> {
 
     // --in-memory
     {
-        let (stdout, _stderr) = git.run(&[
+        let (stdout, _stderr) = git.branchless(
             "move",
-            "--in-memory",
-            "--debug-dump-rebase-plan",
-            "-s",
-            &test3_oid.to_string(),
-            "-d",
-            &test1_oid.to_string(),
-        ])?;
+            &[
+                "--in-memory",
+                "--debug-dump-rebase-plan",
+                "-s",
+                &test3_oid.to_string(),
+                "-d",
+                &test1_oid.to_string(),
+            ],
+        )?;
         insta::assert_snapshot!(stdout, @r###"
         Rebase plan: Some(
             RebasePlan {
@@ -146,15 +150,17 @@ fn test_move_insert_stick() -> eyre::Result<()> {
     // --on-disk
     {
         let git = git.duplicate_repo()?;
-        git.run(&[
+        git.branchless(
             "move",
-            "--on-disk",
-            "--insert",
-            "-s",
-            &test3_oid.to_string(),
-            "-d",
-            &test1_oid.to_string(),
-        ])?;
+            &[
+                "--on-disk",
+                "--insert",
+                "-s",
+                &test3_oid.to_string(),
+                "-d",
+                &test1_oid.to_string(),
+            ],
+        )?;
 
         let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
@@ -171,17 +177,19 @@ fn test_move_insert_stick() -> eyre::Result<()> {
 
     // --in-memory
     {
-        let (stdout, _stderr) = git.run(&[
+        let (stdout, _stderr) = git.branchless(
             "move",
-            "--in-memory",
-            "--insert",
-            // "--debug-dump-rebase-constraints",
-            "--debug-dump-rebase-plan",
-            "-s",
-            &test3_oid.to_string(),
-            "-d",
-            &test1_oid.to_string(),
-        ])?;
+            &[
+                "--in-memory",
+                "--insert",
+                // "--debug-dump-rebase-constraints",
+                "--debug-dump-rebase-plan",
+                "-s",
+                &test3_oid.to_string(),
+                "-d",
+                &test1_oid.to_string(),
+            ],
+        )?;
         insta::assert_snapshot!(stdout, @r###"
         Rebase plan: Some(
             RebasePlan {
@@ -278,14 +286,16 @@ fn test_move_exact_single_stick() -> eyre::Result<()> {
     // --on-disk
     {
         let git = git.duplicate_repo()?;
-        git.run(&[
+        git.branchless(
             "move",
-            "--on-disk",
-            "--exact",
-            &test3_oid.to_string(),
-            "-d",
-            &test1_oid.to_string(),
-        ])?;
+            &[
+                "--on-disk",
+                "--exact",
+                &test3_oid.to_string(),
+                "-d",
+                &test1_oid.to_string(),
+            ],
+        )?;
 
         let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
@@ -302,14 +312,16 @@ fn test_move_exact_single_stick() -> eyre::Result<()> {
 
     // --in-memory
     {
-        git.run(&[
+        git.branchless(
             "move",
-            "--in-memory",
-            "--exact",
-            &test3_oid.to_string(),
-            "-d",
-            &test1_oid.to_string(),
-        ])?;
+            &[
+                "--in-memory",
+                "--exact",
+                &test3_oid.to_string(),
+                "-d",
+                &test1_oid.to_string(),
+            ],
+        )?;
 
         let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
@@ -357,14 +369,16 @@ fn test_move_exact_range_stick() -> eyre::Result<()> {
     // --on-disk
     {
         let git = git.duplicate_repo()?;
-        git.run(&[
+        git.branchless(
             "move",
-            "--on-disk",
-            "--exact",
-            &format!("{test2_oid}:{test3_oid}"),
-            "-d",
-            &test4_oid.to_string(),
-        ])?;
+            &[
+                "--on-disk",
+                "--exact",
+                &format!("{test2_oid}:{test3_oid}"),
+                "-d",
+                &test4_oid.to_string(),
+            ],
+        )?;
 
         let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
@@ -383,14 +397,16 @@ fn test_move_exact_range_stick() -> eyre::Result<()> {
 
     // --in-memory
     {
-        git.run(&[
+        git.branchless(
             "move",
-            "--in-memory",
-            "--exact",
-            &format!("{test2_oid}:{test3_oid}"),
-            "-d",
-            &test4_oid.to_string(),
-        ])?;
+            &[
+                "--in-memory",
+                "--exact",
+                &format!("{test2_oid}:{test3_oid}"),
+                "-d",
+                &test4_oid.to_string(),
+            ],
+        )?;
 
         let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
@@ -450,14 +466,16 @@ fn test_move_exact_noncontiguous_commits_stick() -> eyre::Result<()> {
     // --on-disk
     {
         let git = git.duplicate_repo()?;
-        git.run(&[
+        git.branchless(
             "move",
-            "--on-disk",
-            "--exact",
-            &format!("{test3_oid} + {test5_oid} + {test7_oid}"),
-            "-d",
-            &test1_oid.to_string(),
-        ])?;
+            &[
+                "--on-disk",
+                "--exact",
+                &format!("{test3_oid} + {test5_oid} + {test7_oid}"),
+                "-d",
+                &test1_oid.to_string(),
+            ],
+        )?;
 
         let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
@@ -482,14 +500,16 @@ fn test_move_exact_noncontiguous_commits_stick() -> eyre::Result<()> {
 
     // --in-memory
     {
-        git.run(&[
+        git.branchless(
             "move",
-            "--in-memory",
-            "--exact",
-            &format!("{test3_oid} + {test5_oid} + {test7_oid}"),
-            "-d",
-            &test1_oid.to_string(),
-        ])?;
+            &[
+                "--in-memory",
+                "--exact",
+                &format!("{test3_oid} + {test5_oid} + {test7_oid}"),
+                "-d",
+                &test1_oid.to_string(),
+            ],
+        )?;
 
         let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
@@ -564,16 +584,18 @@ fn test_move_exact_noncontiguous_ranges_stick() -> eyre::Result<()> {
     // --on-disk
     {
         let git = git.duplicate_repo()?;
-        git.run(&[
+        git.branchless(
             "move",
-            "--on-disk",
-            "--exact",
-            &format!(
-                "{test3_oid}:{test4_oid} + {test6_oid}:{test7_oid} + {test9_oid}:{test10_oid}"
-            ),
-            "-d",
-            &test1_oid.to_string(),
-        ])?;
+            &[
+                "--on-disk",
+                "--exact",
+                &format!(
+                    "{test3_oid}:{test4_oid} + {test6_oid}:{test7_oid} + {test9_oid}:{test10_oid}"
+                ),
+                "-d",
+                &test1_oid.to_string(),
+            ],
+        )?;
 
         let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
@@ -604,16 +626,18 @@ fn test_move_exact_noncontiguous_ranges_stick() -> eyre::Result<()> {
 
     // --in-memory
     {
-        git.run(&[
+        git.branchless(
             "move",
-            "--in-memory",
-            "--exact",
-            &format!(
-                "{test3_oid}:{test4_oid} + {test6_oid}:{test7_oid} + {test9_oid}:{test10_oid}"
-            ),
-            "-d",
-            &test1_oid.to_string(),
-        ])?;
+            &[
+                "--in-memory",
+                "--exact",
+                &format!(
+                    "{test3_oid}:{test4_oid} + {test6_oid}:{test7_oid} + {test9_oid}:{test10_oid}"
+                ),
+                "-d",
+                &test1_oid.to_string(),
+            ],
+        )?;
 
         let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
@@ -682,14 +706,16 @@ fn test_move_exact_contiguous_and_noncontiguous_stick() -> eyre::Result<()> {
     // --on-disk
     {
         let git = git.duplicate_repo()?;
-        git.run(&[
+        git.branchless(
             "move",
-            "--on-disk",
-            "--exact",
-            &format!("{test3_oid} + {test5_oid}:{test6_oid}"),
-            "-d",
-            &test1_oid.to_string(),
-        ])?;
+            &[
+                "--on-disk",
+                "--exact",
+                &format!("{test3_oid} + {test5_oid}:{test6_oid}"),
+                "-d",
+                &test1_oid.to_string(),
+            ],
+        )?;
 
         let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
@@ -712,14 +738,16 @@ fn test_move_exact_contiguous_and_noncontiguous_stick() -> eyre::Result<()> {
 
     // --in-memory
     {
-        git.run(&[
+        git.branchless(
             "move",
-            "--in-memory",
-            "--exact",
-            &format!("{test3_oid} + {test5_oid}:{test6_oid}"),
-            "-d",
-            &test1_oid.to_string(),
-        ])?;
+            &[
+                "--in-memory",
+                "--exact",
+                &format!("{test3_oid} + {test5_oid}:{test6_oid}"),
+                "-d",
+                &test1_oid.to_string(),
+            ],
+        )?;
 
         let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
@@ -771,15 +799,17 @@ fn test_move_exact_insert_stick() -> eyre::Result<()> {
     // --on-disk
     {
         let git = git.duplicate_repo()?;
-        git.run(&[
+        git.branchless(
             "move",
-            "--on-disk",
-            "--insert",
-            "--exact",
-            &test3_oid.to_string(),
-            "-d",
-            &test1_oid.to_string(),
-        ])?;
+            &[
+                "--on-disk",
+                "--insert",
+                "--exact",
+                &test3_oid.to_string(),
+                "-d",
+                &test1_oid.to_string(),
+            ],
+        )?;
 
         let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
@@ -796,15 +826,17 @@ fn test_move_exact_insert_stick() -> eyre::Result<()> {
 
     // --in-memory
     {
-        git.run(&[
+        git.branchless(
             "move",
-            "--in-memory",
-            "--insert",
-            "--exact",
-            &test3_oid.to_string(),
-            "-d",
-            &test1_oid.to_string(),
-        ])?;
+            &[
+                "--in-memory",
+                "--insert",
+                "--exact",
+                &test3_oid.to_string(),
+                "-d",
+                &test1_oid.to_string(),
+            ],
+        )?;
 
         let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
@@ -851,15 +883,17 @@ fn test_move_exact_insert_swap() -> eyre::Result<()> {
     // --on-disk
     {
         let git = git.duplicate_repo()?;
-        git.run(&[
+        git.branchless(
             "move",
-            "--on-disk",
-            "--insert",
-            "--exact",
-            &test2_oid.to_string(),
-            "-d",
-            &test3_oid.to_string(),
-        ])?;
+            &[
+                "--on-disk",
+                "--insert",
+                "--exact",
+                &test2_oid.to_string(),
+                "-d",
+                &test3_oid.to_string(),
+            ],
+        )?;
 
         let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
@@ -876,15 +910,17 @@ fn test_move_exact_insert_swap() -> eyre::Result<()> {
 
     // --in-memory
     {
-        git.run(&[
+        git.branchless(
             "move",
-            "--in-memory",
-            "--insert",
-            "--exact",
-            &test2_oid.to_string(),
-            "-d",
-            &test3_oid.to_string(),
-        ])?;
+            &[
+                "--in-memory",
+                "--insert",
+                "--exact",
+                &test2_oid.to_string(),
+                "-d",
+                &test3_oid.to_string(),
+            ],
+        )?;
 
         let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
@@ -931,15 +967,17 @@ fn test_move_exact_insert_with_siblings() -> eyre::Result<()> {
     // --on-disk
     {
         let git = git.duplicate_repo()?;
-        git.run(&[
+        git.branchless(
             "move",
-            "--on-disk",
-            "--insert",
-            "--exact",
-            &test3_oid.to_string(),
-            "-d",
-            &test1_oid.to_string(),
-        ])?;
+            &[
+                "--on-disk",
+                "--insert",
+                "--exact",
+                &test3_oid.to_string(),
+                "-d",
+                &test1_oid.to_string(),
+            ],
+        )?;
 
         let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
@@ -956,15 +994,17 @@ fn test_move_exact_insert_with_siblings() -> eyre::Result<()> {
 
     // --in-memory
     {
-        git.run(&[
+        git.branchless(
             "move",
-            "--in-memory",
-            "--insert",
-            "--exact",
-            &test3_oid.to_string(),
-            "-d",
-            &test1_oid.to_string(),
-        ])?;
+            &[
+                "--in-memory",
+                "--insert",
+                "--exact",
+                &test3_oid.to_string(),
+                "-d",
+                &test1_oid.to_string(),
+            ],
+        )?;
 
         let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
@@ -1013,15 +1053,17 @@ fn test_move_insert_range_stick() -> eyre::Result<()> {
     // --on-disk
     {
         let git = git.duplicate_repo()?;
-        git.run(&[
+        git.branchless(
             "move",
-            "--on-disk",
-            "--insert",
-            "--exact",
-            &format!("{test2_oid}:{test3_oid}"),
-            "-d",
-            &test4_oid.to_string(),
-        ])?;
+            &[
+                "--on-disk",
+                "--insert",
+                "--exact",
+                &format!("{test2_oid}:{test3_oid}"),
+                "-d",
+                &test4_oid.to_string(),
+            ],
+        )?;
 
         let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
@@ -1040,15 +1082,17 @@ fn test_move_insert_range_stick() -> eyre::Result<()> {
 
     // --in-memory
     {
-        git.run(&[
+        git.branchless(
             "move",
-            "--in-memory",
-            "--insert",
-            "--exact",
-            &format!("{test2_oid}:{test3_oid}"),
-            "-d",
-            &test4_oid.to_string(),
-        ])?;
+            &[
+                "--in-memory",
+                "--insert",
+                "--exact",
+                &format!("{test2_oid}:{test3_oid}"),
+                "-d",
+                &test4_oid.to_string(),
+            ],
+        )?;
 
         let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
@@ -1117,17 +1161,19 @@ fn test_move_insert_exact_noncontiguous_ranges_stick() -> eyre::Result<()> {
     // --on-disk
     {
         let git = git.duplicate_repo()?;
-        git.run(&[
+        git.branchless(
             "move",
-            "--on-disk",
-            "--insert",
-            "--exact",
-            &format!(
-                "{test3_oid}:{test4_oid} + {test6_oid}:{test7_oid} + {test9_oid}:{test10_oid}"
-            ),
-            "-d",
-            &test1_oid.to_string(),
-        ])?;
+            &[
+                "--on-disk",
+                "--insert",
+                "--exact",
+                &format!(
+                    "{test3_oid}:{test4_oid} + {test6_oid}:{test7_oid} + {test9_oid}:{test10_oid}"
+                ),
+                "-d",
+                &test1_oid.to_string(),
+            ],
+        )?;
 
         let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
@@ -1158,17 +1204,19 @@ fn test_move_insert_exact_noncontiguous_ranges_stick() -> eyre::Result<()> {
 
     // --in-memory
     {
-        git.run(&[
+        git.branchless(
             "move",
-            "--in-memory",
-            "--insert",
-            "--exact",
-            &format!(
-                "{test3_oid}:{test4_oid} + {test6_oid}:{test7_oid} + {test9_oid}:{test10_oid}"
-            ),
-            "-d",
-            &test1_oid.to_string(),
-        ])?;
+            &[
+                "--in-memory",
+                "--insert",
+                "--exact",
+                &format!(
+                    "{test3_oid}:{test4_oid} + {test6_oid}:{test7_oid} + {test9_oid}:{test10_oid}"
+                ),
+                "-d",
+                &test1_oid.to_string(),
+            ],
+        )?;
 
         let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
@@ -1221,14 +1269,16 @@ fn test_move_tree() -> eyre::Result<()> {
     // --on-disk
     {
         let git = git.duplicate_repo()?;
-        git.run(&[
+        git.branchless(
             "move",
-            "--on-disk",
-            "-s",
-            &test3_oid.to_string(),
-            "-d",
-            &test1_oid.to_string(),
-        ])?;
+            &[
+                "--on-disk",
+                "-s",
+                &test3_oid.to_string(),
+                "-d",
+                &test1_oid.to_string(),
+            ],
+        )?;
         {
             let stdout = git.smartlog()?;
             insta::assert_snapshot!(stdout, @r###"
@@ -1248,13 +1298,10 @@ fn test_move_tree() -> eyre::Result<()> {
 
     // in-memory
     {
-        git.run(&[
+        git.branchless(
             "move",
-            "-s",
-            &test3_oid.to_string(),
-            "-d",
-            &test1_oid.to_string(),
-        ])?;
+            &["-s", &test3_oid.to_string(), "-d", &test1_oid.to_string()],
+        )?;
         {
             let stdout = git.smartlog()?;
             insta::assert_snapshot!(stdout, @r###"
@@ -1298,14 +1345,16 @@ fn test_move_insert_in_place() -> eyre::Result<()> {
     @ 4838e49 create test3.txt
     "###);
 
-    git.run(&[
+    git.branchless(
         "move",
-        "--insert",
-        "-s",
-        &test2_oid.to_string(),
-        "-d",
-        &test1_oid.to_string(),
-    ])?;
+        &[
+            "--insert",
+            "-s",
+            &test2_oid.to_string(),
+            "-d",
+            &test1_oid.to_string(),
+        ],
+    )?;
     {
         let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
@@ -1353,15 +1402,17 @@ fn test_move_insert_tree() -> eyre::Result<()> {
     // --on-disk
     {
         let git = git.duplicate_repo()?;
-        git.run(&[
+        git.branchless(
             "move",
-            "--on-disk",
-            "--insert",
-            "-s",
-            &test4_oid.to_string(),
-            "-d",
-            &test1_oid.to_string(),
-        ])?;
+            &[
+                "--on-disk",
+                "--insert",
+                "-s",
+                &test4_oid.to_string(),
+                "-d",
+                &test1_oid.to_string(),
+            ],
+        )?;
         {
             let stdout = git.smartlog()?;
             insta::assert_snapshot!(stdout, @r###"
@@ -1379,14 +1430,16 @@ fn test_move_insert_tree() -> eyre::Result<()> {
 
     // in-memory
     {
-        git.run(&[
+        git.branchless(
             "move",
-            "--insert",
-            "-s",
-            &test4_oid.to_string(),
-            "-d",
-            &test1_oid.to_string(),
-        ])?;
+            &[
+                "--insert",
+                "-s",
+                &test4_oid.to_string(),
+                "-d",
+                &test1_oid.to_string(),
+            ],
+        )?;
         {
             let stdout = git.smartlog()?;
             insta::assert_snapshot!(stdout, @r###"
@@ -1437,14 +1490,16 @@ fn test_move_exact_range_tree() -> eyre::Result<()> {
     // --on-disk
     {
         let git = git.duplicate_repo()?;
-        git.run(&[
+        git.branchless(
             "move",
-            "--on-disk",
-            "--exact",
-            &format!("{test2_oid}:{test3_oid}"),
-            "-d",
-            &test4_oid.to_string(),
-        ])?;
+            &[
+                "--on-disk",
+                "--exact",
+                &format!("{test2_oid}:{test3_oid}"),
+                "-d",
+                &test4_oid.to_string(),
+            ],
+        )?;
 
         let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
@@ -1463,13 +1518,15 @@ fn test_move_exact_range_tree() -> eyre::Result<()> {
 
     // in-memory
     {
-        git.run(&[
+        git.branchless(
             "move",
-            "--exact",
-            &format!("{test2_oid}:{test3_oid}"),
-            "-d",
-            &test4_oid.to_string(),
-        ])?;
+            &[
+                "--exact",
+                &format!("{test2_oid}:{test3_oid}"),
+                "-d",
+                &test4_oid.to_string(),
+            ],
+        )?;
 
         let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
@@ -1521,14 +1578,16 @@ fn test_move_exact_range_with_leaves() -> eyre::Result<()> {
     // --on-disk
     {
         let git = git.duplicate_repo()?;
-        git.run(&[
+        git.branchless(
             "move",
-            "--on-disk",
-            "--exact",
-            &format!("{test3_oid}+{test5_oid}"),
-            "-d",
-            &test2_oid.to_string(),
-        ])?;
+            &[
+                "--on-disk",
+                "--exact",
+                &format!("{test3_oid}+{test5_oid}"),
+                "-d",
+                &test2_oid.to_string(),
+            ],
+        )?;
 
         let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
@@ -1547,13 +1606,15 @@ fn test_move_exact_range_with_leaves() -> eyre::Result<()> {
 
     // in-memory
     {
-        git.run(&[
+        git.branchless(
             "move",
-            "--exact",
-            &format!("{test3_oid}+{test5_oid}"),
-            "-d",
-            &test2_oid.to_string(),
-        ])?;
+            &[
+                "--exact",
+                &format!("{test3_oid}+{test5_oid}"),
+                "-d",
+                &test2_oid.to_string(),
+            ],
+        )?;
 
         let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
@@ -1605,14 +1666,16 @@ fn test_move_exact_range_just_leaves() -> eyre::Result<()> {
     // --on-disk
     {
         let git = git.duplicate_repo()?;
-        git.run(&[
+        git.branchless(
             "move",
-            "--on-disk",
-            "--exact",
-            &format!("{test4_oid}+{test5_oid}"),
-            "-d",
-            &test2_oid.to_string(),
-        ])?;
+            &[
+                "--on-disk",
+                "--exact",
+                &format!("{test4_oid}+{test5_oid}"),
+                "-d",
+                &test2_oid.to_string(),
+            ],
+        )?;
 
         let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
@@ -1631,13 +1694,15 @@ fn test_move_exact_range_just_leaves() -> eyre::Result<()> {
 
     // in-memory
     {
-        git.run(&[
+        git.branchless(
             "move",
-            "--exact",
-            &format!("{test4_oid}+{test5_oid}"),
-            "-d",
-            &test2_oid.to_string(),
-        ])?;
+            &[
+                "--exact",
+                &format!("{test4_oid}+{test5_oid}"),
+                "-d",
+                &test2_oid.to_string(),
+            ],
+        )?;
 
         let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
@@ -1695,14 +1760,16 @@ fn test_move_exact_range_with_multiple_heads() -> eyre::Result<()> {
     // --on-disk
     {
         let git = git.duplicate_repo()?;
-        git.run(&[
+        git.branchless(
             "move",
-            "--on-disk",
-            "--exact",
-            &format!("{test3_oid}+{test4_oid}+{test6_oid}"),
-            "-d",
-            &test2_oid.to_string(),
-        ])?;
+            &[
+                "--on-disk",
+                "--exact",
+                &format!("{test3_oid}+{test4_oid}+{test6_oid}"),
+                "-d",
+                &test2_oid.to_string(),
+            ],
+        )?;
 
         let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
@@ -1725,13 +1792,15 @@ fn test_move_exact_range_with_multiple_heads() -> eyre::Result<()> {
 
     // in-memory
     {
-        git.run(&[
+        git.branchless(
             "move",
-            "--exact",
-            &format!("{test3_oid}+{test4_oid}+{test6_oid}"),
-            "-d",
-            &test2_oid.to_string(),
-        ])?;
+            &[
+                "--exact",
+                &format!("{test3_oid}+{test4_oid}+{test6_oid}"),
+                "-d",
+                &test2_oid.to_string(),
+            ],
+        )?;
 
         let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
@@ -1790,14 +1859,16 @@ fn test_move_exact_range_with_leaves_and_descendent_components() -> eyre::Result
     // --on-disk
     {
         let git = git.duplicate_repo()?;
-        git.run(&[
+        git.branchless(
             "move",
-            "--on-disk",
-            "--exact",
-            &format!("{test3_oid}+{test5_oid}+{test6_oid}"),
-            "-d",
-            &test2_oid.to_string(),
-        ])?;
+            &[
+                "--on-disk",
+                "--exact",
+                &format!("{test3_oid}+{test5_oid}+{test6_oid}"),
+                "-d",
+                &test2_oid.to_string(),
+            ],
+        )?;
 
         let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
@@ -1818,13 +1889,15 @@ fn test_move_exact_range_with_leaves_and_descendent_components() -> eyre::Result
 
     // in-memory
     {
-        git.run(&[
+        git.branchless(
             "move",
-            "--exact",
-            &format!("{test3_oid}+{test5_oid}+{test6_oid}"),
-            "-d",
-            &test2_oid.to_string(),
-        ])?;
+            &[
+                "--exact",
+                &format!("{test3_oid}+{test5_oid}+{test6_oid}"),
+                "-d",
+                &test2_oid.to_string(),
+            ],
+        )?;
 
         let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
@@ -1884,9 +1957,9 @@ fn test_move_exact_ranges_with_merge_commits_betwixt_not_supported() -> eyre::Re
     @ 8fb4e4a create test6.txt
     "###);
 
-    let (stdout, stderr) = git.run_with_options(
+    let (stdout, stderr) = git.branchless_with_options(
+        "move",
         &[
-            "move",
             "--exact",
             &format!("{test2_oid}+{test4_oid}+{test6_oid}"),
             "-d",
@@ -1946,13 +2019,15 @@ fn test_move_exact_range_one_side_of_merged_stack_without_base_and_merge_commits
     @ 178e00f Merge commit '355e173bf9c5d2efac2e451da0cdad3fb82b869a' into HEAD
     "###);
 
-    git.run(&[
+    git.branchless(
         "move",
-        "--exact",
-        &format!("{test3_oid}+{test4_oid}"),
-        "-d",
-        &test1_oid.to_string(),
-    ])?;
+        &[
+            "--exact",
+            &format!("{test3_oid}+{test4_oid}"),
+            "-d",
+            &test1_oid.to_string(),
+        ],
+    )?;
 
     let stdout = git.smartlog()?;
     // FIXME: This output is correct except for a known issue involving moving
@@ -2026,13 +2101,15 @@ fn test_move_exact_range_one_side_of_merged_stack_including_base_and_merge_commi
     @ 178e00f Merge commit '355e173bf9c5d2efac2e451da0cdad3fb82b869a' into HEAD
     "###);
 
-    git.run(&[
+    git.branchless(
         "move",
-        "--exact",
-        &format!("{}+{}+{}+{}", test2_oid, test3_oid, test4_oid, "178e00f"),
-        "-d",
-        &test1_oid.to_string(),
-    ])?;
+        &[
+            "--exact",
+            &format!("{}+{}+{}+{}", test2_oid, test3_oid, test4_oid, "178e00f"),
+            "-d",
+            &test1_oid.to_string(),
+        ],
+    )?;
 
     let stdout = git.smartlog()?;
     // FIXME: This output is correct except for a known issue involving moving
@@ -2114,13 +2191,15 @@ fn test_move_exact_range_two_partial_components_of_merged_stack() -> eyre::Resul
     @ 178e00f Merge commit '355e173bf9c5d2efac2e451da0cdad3fb82b869a' into HEAD
     "###);
 
-    git.run(&[
+    git.branchless(
         "move",
-        "--exact",
-        &format!("{test2_oid}:: - {test4_oid} - {test5_oid}"),
-        "-d",
-        &test1_oid.to_string(),
-    ])?;
+        &[
+            "--exact",
+            &format!("{test2_oid}:: - {test4_oid} - {test5_oid}"),
+            "-d",
+            &test1_oid.to_string(),
+        ],
+    )?;
 
     let stdout = git.smartlog()?;
     // FIXME: This output is correct except for a known issue involving moving
@@ -2176,15 +2255,17 @@ fn test_move_with_source_not_in_smartlog() -> eyre::Result<()> {
     {
         let git = git.duplicate_repo()?;
 
-        git.run(&[
+        git.branchless(
             "move",
-            "--on-disk",
-            "-f",
-            "-s",
-            &test3_oid.to_string(),
-            "-d",
-            &test1_oid.to_string(),
-        ])?;
+            &[
+                "--on-disk",
+                "-f",
+                "-s",
+                &test3_oid.to_string(),
+                "-d",
+                &test1_oid.to_string(),
+            ],
+        )?;
 
         {
             let stdout = git.smartlog()?;
@@ -2202,16 +2283,18 @@ fn test_move_with_source_not_in_smartlog() -> eyre::Result<()> {
     // --in-memory
     {
         {
-            let (stdout, _stderr) = git.run(&[
+            let (stdout, _stderr) = git.branchless(
                 "move",
-                "--in-memory",
-                "--debug-dump-rebase-plan",
-                "-f",
-                "-s",
-                &test3_oid.to_string(),
-                "-d",
-                &test1_oid.to_string(),
-            ])?;
+                &[
+                    "--in-memory",
+                    "--debug-dump-rebase-plan",
+                    "-f",
+                    "-s",
+                    &test3_oid.to_string(),
+                    "-d",
+                    &test1_oid.to_string(),
+                ],
+            )?;
             insta::assert_snapshot!(stdout, @r###"
             Rebase plan: Some(
                 RebasePlan {
@@ -2288,8 +2371,9 @@ fn test_move_merge_conflict() -> eyre::Result<()> {
     git.commit_file_with_contents("conflict", 2, "conflict 2\n")?;
 
     {
-        let (stdout, _stderr) = git.run_with_options(
-            &["move", "--source", &other_oid.to_string()],
+        let (stdout, _stderr) = git.branchless_with_options(
+            "move",
+            &["--source", &other_oid.to_string()],
             &GitRunOptions {
                 expected_exit_code: 1,
                 ..Default::default()
@@ -2304,9 +2388,9 @@ fn test_move_merge_conflict() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run_with_options(
+        let (stdout, _stderr) = git.branchless_with_options(
+            "move",
             &[
-                "move",
                 "--debug-dump-rebase-plan",
                 "--merge",
                 "--source",
@@ -2389,12 +2473,10 @@ fn test_move_base() -> eyre::Result<()> {
     git.commit_file("test4", 4)?;
 
     {
-        let (stdout, _stderr) = git.run(&[
+        let (stdout, _stderr) = git.branchless(
             "move",
-            "--debug-dump-rebase-plan",
-            "--base",
-            &test3_oid.to_string(),
-        ])?;
+            &["--debug-dump-rebase-plan", "--base", &test3_oid.to_string()],
+        )?;
         insta::assert_snapshot!(stdout, @r###"
         Rebase plan: Some(
             RebasePlan {
@@ -2472,7 +2554,8 @@ fn test_move_base_shared() -> eyre::Result<()> {
     git.commit_file("test4", 4)?;
 
     {
-        let (stdout, stderr) = git.run(&["move", "-b", "HEAD", "-d", &test2_oid.to_string()])?;
+        let (stdout, stderr) =
+            git.branchless("move", &["-b", "HEAD", "-d", &test2_oid.to_string()])?;
         insta::assert_snapshot!(stderr, @r###"
         branchless: creating working copy snapshot
         Previous HEAD position was a248207 create test4.txt
@@ -2524,11 +2607,12 @@ fn test_move_checkout_new_head() -> eyre::Result<()> {
     git.init_repo()?;
 
     git.commit_file("test1", 1)?;
-    git.run(&["prev"])?;
+    git.branchless("prev", &[])?;
     git.commit_file("test2", 2)?;
 
     {
-        let (stdout, _stderr) = git.run(&["move", "--debug-dump-rebase-plan", "-d", "master"])?;
+        let (stdout, _stderr) =
+            git.branchless("move", &["--debug-dump-rebase-plan", "-d", "master"])?;
         insta::assert_snapshot!(stdout, @r###"
         Rebase plan: Some(
             RebasePlan {
@@ -2594,13 +2678,15 @@ fn test_move_branch() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&[
+        let (stdout, _stderr) = git.branchless(
             "move",
-            "--debug-dump-rebase-plan",
-            "-d",
-            &test2_oid.to_string(),
-            "-f",
-        ])?;
+            &[
+                "--debug-dump-rebase-plan",
+                "-d",
+                &test2_oid.to_string(),
+                "-f",
+            ],
+        )?;
         insta::assert_snapshot!(stdout, @r###"
         Rebase plan: Some(
             RebasePlan {
@@ -2666,8 +2752,9 @@ fn test_move_base_onto_head() -> eyre::Result<()> {
     git.commit_file("test3", 3)?;
 
     {
-        let (stdout, stderr) = git.run_with_options(
-            &["move", "--debug-dump-rebase-plan", "-b", "HEAD^"],
+        let (stdout, stderr) = git.branchless_with_options(
+            "move",
+            &["--debug-dump-rebase-plan", "-b", "HEAD^"],
             &GitRunOptions {
                 expected_exit_code: 1,
                 ..Default::default()
@@ -2712,8 +2799,9 @@ fn test_move_force_in_memory() -> eyre::Result<()> {
     git.run(&["commit", "-m", "conflicting test2"])?;
 
     {
-        let (stdout, stderr) = git.run_with_options(
-            &["move", "-d", "master", "--in-memory"],
+        let (stdout, stderr) = git.branchless_with_options(
+            "move",
+            &["-d", "master", "--in-memory"],
             &GitRunOptions {
                 expected_exit_code: 1,
                 ..Default::default()
@@ -2729,8 +2817,9 @@ fn test_move_force_in_memory() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, stderr) = git.run_with_options(
-            &["move", "-d", "master", "--in-memory", "--merge"],
+        let (stdout, stderr) = git.branchless_with_options(
+            "move",
+            &["-d", "master", "--in-memory", "--merge"],
             &GitRunOptions {
                 expected_exit_code: 2,
                 ..Default::default()
@@ -2768,7 +2857,7 @@ fn test_rebase_in_memory_updates_committer_timestamp() -> eyre::Result<()> {
         .find_commit_or_fail(repo.get_head_info()?.oid.unwrap())?
         .get_committer()
         .get_time();
-    git.run(&["move", "-d", "master"])?;
+    git.branchless("move", &["-d", "master"])?;
     let updated_committer_timestamp = repo
         .find_commit_or_fail(repo.get_head_info()?.oid.unwrap())?
         .get_committer()
@@ -2794,15 +2883,17 @@ fn test_move_in_memory_gc() -> eyre::Result<()> {
     git.commit_file("test2", 2)?;
 
     {
-        let (stdout, stderr) = git.run(&[
+        let (stdout, stderr) = git.branchless(
             "move",
-            "--debug-dump-rebase-plan",
-            "-s",
-            "HEAD",
-            "-d",
-            "master",
-            "--in-memory",
-        ])?;
+            &[
+                "--debug-dump-rebase-plan",
+                "-s",
+                "HEAD",
+                "-d",
+                "master",
+                "--in-memory",
+            ],
+        )?;
         insta::assert_snapshot!(stderr, @r###"
         branchless: creating working copy snapshot
         Previous HEAD position was 96d1c37 create test2.txt
@@ -2847,7 +2938,7 @@ fn test_move_in_memory_gc() -> eyre::Result<()> {
     git.run(&["checkout", &test1_oid.to_string()])?;
 
     {
-        let (stdout, stderr) = git.run(&["smartlog"])?;
+        let (stdout, stderr) = git.branchless("smartlog", &[])?;
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
@@ -2861,7 +2952,7 @@ fn test_move_in_memory_gc() -> eyre::Result<()> {
     git.run(&["gc", "--prune=now"])?;
 
     {
-        let (stdout, stderr) = git.run(&["smartlog"])?;
+        let (stdout, stderr) = git.branchless("smartlog", &[])?;
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
@@ -2892,14 +2983,16 @@ fn test_move_main_branch_commits() -> eyre::Result<()> {
     git.commit_file("test5", 5)?;
 
     {
-        let (stdout, _stderr) = git.run(&[
+        let (stdout, _stderr) = git.branchless(
             "move",
-            "-f",
-            "-s",
-            &test3_oid.to_string(),
-            "-d",
-            &test1_oid.to_string(),
-        ])?;
+            &[
+                "-f",
+                "-s",
+                &test3_oid.to_string(),
+                "-d",
+                &test1_oid.to_string(),
+            ],
+        )?;
         insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
         [1/3] Committed as: 4838e49 create test3.txt
@@ -2998,14 +3091,10 @@ fn test_move_branches_after_move() -> eyre::Result<()> {
         }
 
         {
-            let (stdout, stderr) = git.run(&[
+            let (stdout, stderr) = git.branchless(
                 "move",
-                "--on-disk",
-                "-s",
-                "foo",
-                "-d",
-                &test1_oid.to_string(),
-            ])?;
+                &["--on-disk", "-s", "foo", "-d", &test1_oid.to_string()],
+            )?;
             insta::assert_snapshot!(stderr, @r###"
             branchless: processing 1 update: ref HEAD
             branchless: processing 1 update: ref HEAD
@@ -3052,7 +3141,7 @@ fn test_move_branches_after_move() -> eyre::Result<()> {
 
         {
             // There should be no branches left to restack.
-            let (stdout, _stderr) = git.run(&["restack"])?;
+            let (stdout, _stderr) = git.branchless("restack", &[])?;
             insta::assert_snapshot!(stdout, @r###"
             No abandoned commits to restack.
             No abandoned branches to restack.
@@ -3072,14 +3161,10 @@ fn test_move_branches_after_move() -> eyre::Result<()> {
 
     {
         {
-            let (stdout, stderr) = git.run(&[
+            let (stdout, stderr) = git.branchless(
                 "move",
-                "--in-memory",
-                "-s",
-                "foo",
-                "-d",
-                &test1_oid.to_string(),
-            ])?;
+                &["--in-memory", "-s", "foo", "-d", &test1_oid.to_string()],
+            )?;
             insta::assert_snapshot!(stderr, @r###"
             branchless: creating working copy snapshot
             Previous HEAD position was f81d55c create test5.txt
@@ -3126,7 +3211,7 @@ fn test_move_branches_after_move() -> eyre::Result<()> {
 
         {
             // There should be no branches left to restack.
-            let (stdout, _stderr) = git.run(&["restack"])?;
+            let (stdout, _stderr) = git.branchless("restack", &[])?;
             insta::assert_snapshot!(stdout, @r###"
             No abandoned commits to restack.
             No abandoned branches to restack.
@@ -3170,7 +3255,8 @@ fn test_move_no_reapply_upstream_commits() -> eyre::Result<()> {
         let git = git.duplicate_repo()?;
 
         {
-            let (stdout, stderr) = git.run(&["move", "--on-disk", "-b", "HEAD", "-d", "master"])?;
+            let (stdout, stderr) =
+                git.branchless("move", &["--on-disk", "-b", "HEAD", "-d", "master"])?;
             insta::assert_snapshot!(stderr, @r###"
             branchless: processing 1 update: ref HEAD
             Executing: git branchless hook-skip-upstream-applied-commit 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
@@ -3205,7 +3291,7 @@ fn test_move_no_reapply_upstream_commits() -> eyre::Result<()> {
     {
         {
             let (stdout, stderr) =
-                git.run(&["move", "--in-memory", "-b", "HEAD", "-d", "master"])?;
+                git.branchless("move", &["--in-memory", "-b", "HEAD", "-d", "master"])?;
             insta::assert_snapshot!(stderr, @r###"
             branchless: creating working copy snapshot
             Previous HEAD position was 96d1c37 create test2.txt
@@ -3283,14 +3369,10 @@ fn test_move_no_reapply_squashed_commits() -> eyre::Result<()> {
         }
 
         {
-            let (stdout, stderr) = git.run(&[
+            let (stdout, stderr) = git.branchless(
                 "move",
-                "--on-disk",
-                "-b",
-                &test2_oid.to_string(),
-                "-d",
-                "master",
-            ])?;
+                &["--on-disk", "-b", &test2_oid.to_string(), "-d", "master"],
+            )?;
             insta::assert_snapshot!(stderr, @r###"
             branchless: processing 1 update: ref HEAD
             branchless: processing 1 update: ref HEAD
@@ -3350,14 +3432,10 @@ fn test_move_no_reapply_squashed_commits() -> eyre::Result<()> {
         }
 
         {
-            let (stdout, stderr) = git.run(&[
+            let (stdout, stderr) = git.branchless(
                 "move",
-                "--in-memory",
-                "-b",
-                &test2_oid.to_string(),
-                "-d",
-                "master",
-            ])?;
+                &["--in-memory", "-b", &test2_oid.to_string(), "-d", "master"],
+            )?;
             insta::assert_snapshot!(stderr, @r###"
             branchless: creating working copy snapshot
             Switched to branch 'master'
@@ -3431,7 +3509,8 @@ fn test_move_delete_checked_out_branch() -> eyre::Result<()> {
 
         {
             git.run(&["checkout", "work"])?;
-            let (stdout, stderr) = git.run(&["move", "--on-disk", "-b", "HEAD", "-d", "master"])?;
+            let (stdout, stderr) =
+                git.branchless("move", &["--on-disk", "-b", "HEAD", "-d", "master"])?;
             insta::assert_snapshot!(stderr, @r###"
             branchless: processing 1 update: ref HEAD
             Executing: git branchless hook-skip-upstream-applied-commit 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
@@ -3477,7 +3556,7 @@ fn test_move_delete_checked_out_branch() -> eyre::Result<()> {
         {
             git.run(&["checkout", "work"])?;
             let (stdout, stderr) =
-                git.run(&["move", "--in-memory", "-b", "HEAD", "-d", "master"])?;
+                git.branchless("move", &["--in-memory", "-b", "HEAD", "-d", "master"])?;
             insta::assert_snapshot!(stderr, @r###"
             branchless: creating working copy snapshot
             Previous HEAD position was 96d1c37 create test2.txt
@@ -3528,8 +3607,9 @@ fn test_move_with_unstaged_changes() -> eyre::Result<()> {
 
     {
         git.write_file_txt("test3", "new contents")?;
-        let (stdout, stderr) = git.run_with_options(
-            &["move", "--on-disk", "-d", "master"],
+        let (stdout, stderr) = git.branchless_with_options(
+            "move",
+            &["--on-disk", "-d", "master"],
             &GitRunOptions {
                 expected_exit_code: 1,
                 ..Default::default()
@@ -3587,16 +3667,18 @@ fn test_move_merge_commit() -> eyre::Result<()> {
         let git = git.duplicate_repo()?;
 
         {
-            let (stdout, stderr) = git.run(&[
+            let (stdout, stderr) = git.branchless(
                 "move",
-                "--debug-dump-rebase-constraints",
-                "--debug-dump-rebase-plan",
-                "--on-disk",
-                "-s",
-                &test2_oid.to_string(),
-                "-d",
-                "master",
-            ])?;
+                &[
+                    "--debug-dump-rebase-constraints",
+                    "--debug-dump-rebase-plan",
+                    "--on-disk",
+                    "-s",
+                    &test2_oid.to_string(),
+                    "-d",
+                    "master",
+                ],
+            )?;
             insta::assert_snapshot!(stdout, @r###"
             Rebase constraints before adding descendants: [
                 (
@@ -3716,15 +3798,9 @@ fn test_move_merge_commit() -> eyre::Result<()> {
         let git = git.duplicate_repo()?;
 
         {
-            let (stdout, _stderr) = git.run_with_options(
-                &[
-                    "move",
-                    "--in-memory",
-                    "-s",
-                    &test2_oid.to_string(),
-                    "-d",
-                    "master",
-                ],
+            let (stdout, _stderr) = git.branchless_with_options(
+                "move",
+                &["--in-memory", "-s", &test2_oid.to_string(), "-d", "master"],
                 &GitRunOptions {
                     expected_exit_code: 1,
                     ..Default::default()
@@ -3743,7 +3819,7 @@ fn test_move_merge_commit() -> eyre::Result<()> {
     {
         {
             let (stdout, stderr) =
-                git.run(&["move", "-s", &test2_oid.to_string(), "-d", "master"])?;
+                git.branchless("move", &["-s", &test2_oid.to_string(), "-d", "master"])?;
             insta::assert_snapshot!(stdout, @r###"
             Attempting rebase in-memory...
             Merge commits currently can't be rebased in-memory.
@@ -3848,13 +3924,10 @@ fn test_move_merge_commit_both_parents() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&[
+        let (stdout, _stderr) = git.branchless(
             "move",
-            "-s",
-            &test3_oid.to_string(),
-            "-d",
-            &test1_oid.to_string(),
-        ])?;
+            &["-s", &test3_oid.to_string(), "-d", &test1_oid.to_string()],
+        )?;
         // FIXME: this operation should successfully move the merge commit.
         insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
@@ -3950,7 +4023,7 @@ fn test_move_orphaned_root() -> eyre::Result<()> {
         let git = git.duplicate_repo()?;
 
         {
-            let (stdout, stderr) = git.run(&["move", "--on-disk", "-d", "master"])?;
+            let (stdout, stderr) = git.branchless("move", &["--on-disk", "-d", "master"])?;
             insta::assert_snapshot!(stderr, @r###"
             branchless: processing 1 update: ref HEAD
             branchless: processing 1 update: ref HEAD
@@ -3999,7 +4072,7 @@ fn test_move_orphaned_root() -> eyre::Result<()> {
     // --in-memory
     {
         {
-            let (stdout, stderr) = git.run(&["move", "--in-memory", "-d", "master"])?;
+            let (stdout, stderr) = git.branchless("move", &["--in-memory", "-d", "master"])?;
             insta::assert_snapshot!(stderr, @r###"
             branchless: creating working copy snapshot
             Previous HEAD position was fc09f3d create test3.txt
@@ -4046,7 +4119,8 @@ fn test_move_no_extra_checkout() -> eyre::Result<()> {
     git.commit_file("test2", 2)?;
 
     {
-        let (stdout, _stderr) = git.run(&["move", "--in-memory", "-s", "HEAD", "-d", "HEAD^"])?;
+        let (stdout, _stderr) =
+            git.branchless("move", &["--in-memory", "-s", "HEAD", "-d", "HEAD^"])?;
         insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
         [1/1] Committed as: 96d1c37 create test2.txt
@@ -4057,7 +4131,8 @@ fn test_move_no_extra_checkout() -> eyre::Result<()> {
 
     {
         git.run(&["branch", "foo"])?;
-        let (stdout, _stderr) = git.run(&["move", "--in-memory", "-s", "HEAD", "-d", "HEAD^"])?;
+        let (stdout, _stderr) =
+            git.branchless("move", &["--in-memory", "-s", "HEAD", "-d", "HEAD^"])?;
         insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
         [1/1] Committed as: 96d1c37 create test2.txt
@@ -4093,9 +4168,9 @@ fn test_move_dest_not_in_dag() -> eyre::Result<()> {
             make_initial_commit: false,
             run_branchless_init: false,
         })?;
-        cloned_repo.run(&["branchless", "init", "--main-branch", "other-branch"])?;
+        cloned_repo.branchless("init", &["--main-branch", "other-branch"])?;
 
-        let (stdout, _stderr) = cloned_repo.run(&["move", "-d", "origin/master", "-f"])?;
+        let (stdout, _stderr) = cloned_repo.branchless("move", &["-d", "origin/master", "-f"])?;
         insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
         [1/1] Committed as: 70deb1e create test3.txt
@@ -4129,8 +4204,9 @@ fn test_move_abort_rebase_check_out_old_branch() -> eyre::Result<()> {
     git.commit_file_with_contents("test2", 2, "test2 conflicting contents")?;
 
     {
-        let (stdout, _stderr) = git.run_with_options(
-            &["move", "-d", "original", "--on-disk"],
+        let (stdout, _stderr) = git.branchless_with_options(
+            "move",
+            &["-d", "original", "--on-disk"],
             &GitRunOptions {
                 expected_exit_code: 1,
                 ..Default::default()
@@ -4168,7 +4244,7 @@ fn test_move_orig_head_no_symbolic_reference() -> eyre::Result<()> {
 
     git.run(&["checkout", "-b", "foo"])?;
     // Force `ORIG_HEAD` to be written to disk.
-    git.run(&["move", "-f", "-d", "HEAD^", "--on-disk"])?;
+    git.branchless("move", &["-f", "-d", "HEAD^", "--on-disk"])?;
     git.detach_head()?;
 
     {
@@ -4217,7 +4293,7 @@ fn test_move_standalone_create_gc_refs() -> eyre::Result<()> {
 ");
     }
 
-    git.run(&["branchless", "move", "-d", &test1_oid.to_string()])?;
+    git.branchless("move", &["-d", &test1_oid.to_string()])?;
 
     {
         let (stdout, _stderr) = git.run(&["show-ref"])?;
@@ -4246,8 +4322,9 @@ fn test_move_branch_on_merge_conflict_resolution() -> eyre::Result<()> {
     let test3_oid = git.commit_file_with_contents("test1", 3, "contents 3")?;
 
     git.run(&["checkout", "master"])?;
-    git.run_with_options(
-        &["move", "-s", &test3_oid.to_string(), "--merge"],
+    git.branchless_with_options(
+        "move",
+        &["-s", &test3_oid.to_string(), "--merge"],
         &GitRunOptions {
             expected_exit_code: 1,
             ..Default::default()
@@ -4323,7 +4400,7 @@ fn test_move_revset() -> eyre::Result<()> {
     git.commit_file("test5", 5)?;
 
     {
-        let (stdout, _stderr) = git.run(&["move", "-s", "draft()", "-d", "master"])?;
+        let (stdout, _stderr) = git.branchless("move", &["-s", "draft()", "-d", "master"])?;
         insta::assert_snapshot!(stdout, @r###"
         hint: you can omit the --dest flag in this case, as it defaults to HEAD
         hint: disable this hint by running: git config --global branchless.hint.moveImplicitHeadArgument false
@@ -4364,13 +4441,10 @@ fn test_move_revset_non_continguous() -> eyre::Result<()> {
     let test4_oid = git.commit_file("test4", 4)?;
 
     {
-        let (stdout, _stderr) = git.run(&[
+        let (stdout, _stderr) = git.branchless(
             "move",
-            "-s",
-            &format!("{test2_oid} | {test4_oid}"),
-            "-d",
-            "master^",
-        ])?;
+            &["-s", &format!("{test2_oid} | {test4_oid}"), "-d", "master^"],
+        )?;
         insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
         [1/3] Committed as: 8f7aef5 create test4.txt
@@ -4413,7 +4487,8 @@ fn test_move_hint() -> eyre::Result<()> {
         let git = git.duplicate_repo()?;
 
         let dest_hint_command = {
-            let (stdout, _stderr) = git.run(&["move", "-s", &test3_oid.to_string(), "-d", "."])?;
+            let (stdout, _stderr) =
+                git.branchless("move", &["-s", &test3_oid.to_string(), "-d", "."])?;
             insta::assert_snapshot!(stdout, @r###"
         hint: you can omit the --dest flag in this case, as it defaults to HEAD
         hint: disable this hint by running: git config --global branchless.hint.moveImplicitHeadArgument false
@@ -4426,8 +4501,9 @@ fn test_move_hint() -> eyre::Result<()> {
         };
 
         let base_hint_command = {
-            git.run(&["next", "--newest"])?;
-            let (stdout, _stderr) = git.run(&["move", "-b", ".", "-d", &test2_oid.to_string()])?;
+            git.branchless("next", &["--newest"])?;
+            let (stdout, _stderr) =
+                git.branchless("move", &["-b", ".", "-d", &test2_oid.to_string()])?;
             insta::assert_snapshot!(stdout, @r###"
         hint: you can omit the --base flag in this case, as it defaults to HEAD
         hint: disable this hint by running: git config --global branchless.hint.moveImplicitHeadArgument false
@@ -4453,7 +4529,8 @@ fn test_move_hint() -> eyre::Result<()> {
     git.run(&hint_command)?;
 
     {
-        let (stdout, _stderr) = git.run(&["move", "-s", &test3_oid.to_string(), "-d", "."])?;
+        let (stdout, _stderr) =
+            git.branchless("move", &["-s", &test3_oid.to_string(), "-d", "."])?;
         insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
         [1/1] Committed as: 4838e49 create test3.txt
@@ -4462,8 +4539,9 @@ fn test_move_hint() -> eyre::Result<()> {
         "###);
     }
     {
-        git.run(&["next", "--newest"])?;
-        let (stdout, _stderr) = git.run(&["move", "-b", ".", "-d", &test2_oid.to_string()])?;
+        git.branchless("next", &["--newest"])?;
+        let (stdout, _stderr) =
+            git.branchless("move", &["-b", ".", "-d", &test2_oid.to_string()])?;
         insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
         [1/1] Committed as: 70deb1e create test3.txt
@@ -4495,8 +4573,9 @@ fn test_move_public_commit() -> eyre::Result<()> {
     git.commit_file("test2", 2)?;
 
     {
-        let (stdout, _stderr) = git.run_with_options(
-            &["move", "-x", ".^"],
+        let (stdout, _stderr) = git.branchless_with_options(
+            "move",
+            &["-x", ".^"],
             &GitRunOptions {
                 expected_exit_code: 1,
                 ..Default::default()
@@ -4511,7 +4590,7 @@ fn test_move_public_commit() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["move", "-x", ".^", "-f"])?;
+        let (stdout, _stderr) = git.branchless("move", &["-x", ".^", "-f"])?;
         insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
         [1/2] Committed as: fe65c1f create test2.txt
@@ -4551,7 +4630,7 @@ fn test_move_delete_branch_config_entry() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["move", "-d", "foo"])?;
+        let (stdout, _stderr) = git.branchless("move", &["-d", "foo"])?;
         insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
         [1/1] Skipped commit (was already applied upstream): 047b7ad create test1.txt

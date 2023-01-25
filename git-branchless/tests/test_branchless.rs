@@ -19,7 +19,7 @@ fn test_commands() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["hide", "3df4b935"])?;
+        let (stdout, _stderr) = git.branchless("hide", &["3df4b935"])?;
         insta::assert_snapshot!(stdout, @r###"
         Hid commit: 3df4b93 create test.txt
         Abandoned 1 branch: master
@@ -28,7 +28,7 @@ fn test_commands() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["unhide", "3df4b935"])?;
+        let (stdout, _stderr) = git.branchless("unhide", &["3df4b935"])?;
         insta::assert_snapshot!(stdout, @r###"
         Unhid commit: 3df4b93 create test.txt
         To hide this 1 commit, run: git undo
@@ -36,7 +36,7 @@ fn test_commands() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["prev"])?;
+        let (stdout, _stderr) = git.branchless("prev", &[])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> checkout f777ecc9b0db5ed372b2615695191a8a17f79f24
         @ f777ecc create initial.txt
@@ -46,7 +46,7 @@ fn test_commands() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["next"])?;
+        let (stdout, _stderr) = git.branchless("next", &[])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> checkout master
         :
@@ -62,8 +62,9 @@ fn test_profiling() -> eyre::Result<()> {
     let git = make_git()?;
     git.init_repo()?;
 
-    git.run_with_options(
-        &["smartlog"],
+    git.branchless_with_options(
+        "smartlog",
+        &[],
         &GitRunOptions {
             env: {
                 let mut env: HashMap<String, String> = HashMap::new();
@@ -104,8 +105,9 @@ fn test_sparse_checkout() -> eyre::Result<()> {
         insta::assert_snapshot!(stdout, @"@ f777ecc (> master) create initial.txt
 ");
     } else {
-        let (stdout, _stderr) = git.run_with_options(
-            &["smartlog"],
+        let (stdout, _stderr) = git.branchless_with_options(
+            "smartlog",
+            &[],
             &GitRunOptions {
                 expected_exit_code: 1,
                 ..Default::default()

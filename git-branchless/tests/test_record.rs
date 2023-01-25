@@ -15,7 +15,7 @@ fn test_record_unstaged_changes() -> eyre::Result<()> {
     git.commit_file("test1", 1)?;
     git.write_file_txt("test1", "contents1\n")?;
     {
-        let (stdout, _stderr) = git.run(&["record", "-m", "foo"])?;
+        let (stdout, _stderr) = git.branchless("record", &["-m", "foo"])?;
         insta::assert_snapshot!(stdout, @r###"
         [master 914812a] foo
          1 file changed, 1 insertion(+), 1 deletion(-)
@@ -58,7 +58,8 @@ fn test_record_unstaged_changes_interactive() -> eyre::Result<()> {
     {
         run_in_pty(
             &git,
-            &["record", "-i", "-m", "foo"],
+            "record",
+            &["-i", "-m", "foo"],
             &[
                 PtyAction::WaitUntilContains("contents1"),
                 PtyAction::Write("q"),
@@ -89,7 +90,8 @@ fn test_record_unstaged_changes_interactive() -> eyre::Result<()> {
     {
         run_in_pty(
             &git,
-            &["record", "-i", "-m", "foo"],
+            "record",
+            &["-i", "-m", "foo"],
             &[
                 PtyAction::WaitUntilContains("contents1"),
                 PtyAction::Write(" "),
@@ -136,7 +138,7 @@ fn test_record_staged_changes() -> eyre::Result<()> {
     git.run(&["add", "test1.txt"])?;
 
     {
-        let (stdout, _stderr) = git.run(&["record", "-m", "foo"])?;
+        let (stdout, _stderr) = git.branchless("record", &["-m", "foo"])?;
         insta::assert_snapshot!(stdout, @r###"
         [master b437fb4] foo
          1 file changed, 1 insertion(+), 1 deletion(-)
@@ -180,8 +182,9 @@ fn test_record_staged_changes_interactive() -> eyre::Result<()> {
     git.run(&["add", "test1.txt"])?;
 
     {
-        let (stdout, _stderr) = git.run_with_options(
-            &["record", "-i", "-m", "foo"],
+        let (stdout, _stderr) = git.branchless_with_options(
+            "record",
+            &["-i", "-m", "foo"],
             &GitRunOptions {
                 expected_exit_code: 1,
                 ..Default::default()
@@ -226,12 +229,12 @@ fn test_record_detach() -> eyre::Result<()> {
         make_initial_commit: false,
         run_branchless_init: false,
     })?;
-    git.run(&["branchless", "init", "--main-branch", "master"])?;
+    git.branchless("init", &["--main-branch", "master"])?;
 
     git.write_file_txt("test1", "new test1 contents\n")?;
     git.run(&["add", "test1.txt"])?;
     {
-        let (stdout, _stderr) = git.run(&["record", "-m", "foo", "--detach"])?;
+        let (stdout, _stderr) = git.branchless("record", &["-m", "foo", "--detach"])?;
         insta::assert_snapshot!(stdout, @r###"
         [master (root-commit) d41ddf7] foo
          1 file changed, 1 insertion(+)
@@ -252,7 +255,7 @@ fn test_record_detach() -> eyre::Result<()> {
 
     git.write_file_txt("test1", "new test1 contents\n")?;
     {
-        let (stdout, _stderr) = git.run(&["record", "-m", "foo", "--detach"])?;
+        let (stdout, _stderr) = git.branchless("record", &["-m", "foo", "--detach"])?;
         insta::assert_snapshot!(stdout, @r###"
         [master 2e9aec4] foo
          1 file changed, 1 insertion(+), 1 deletion(-)
@@ -282,7 +285,7 @@ fn test_record_create_branch() -> eyre::Result<()> {
     git.commit_file("test1", 1)?;
     git.write_file_txt("test1", "new contents\n")?;
     {
-        let (stdout, _stderr) = git.run(&["record", "-b", "foo", "-m", "Update"])?;
+        let (stdout, _stderr) = git.branchless("record", &["-b", "foo", "-m", "Update"])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> checkout -b foo
         [foo 836023f] Update
@@ -315,7 +318,8 @@ fn test_record_insert() -> eyre::Result<()> {
 
     git.write_file_txt("test1", "new contents\n")?;
     {
-        let (stdout, _stderr) = git.run(&["record", "-m", "update test1.txt", "--insert"])?;
+        let (stdout, _stderr) =
+            git.branchless("record", &["-m", "update test1.txt", "--insert"])?;
         insta::assert_snapshot!(stdout, @r###"
         [detached HEAD c17ec22] update test1.txt
          1 file changed, 1 insertion(+), 1 deletion(-)
@@ -354,7 +358,8 @@ fn test_record_insert_rewrite_public_commit() -> eyre::Result<()> {
 
     git.write_file_txt("test1", "new contents\n")?;
     {
-        let (stdout, _stderr) = git.run(&["record", "-m", "update test1.txt", "--insert"])?;
+        let (stdout, _stderr) =
+            git.branchless("record", &["-m", "update test1.txt", "--insert"])?;
         insta::assert_snapshot!(stdout, @r###"
         [detached HEAD c17ec22] update test1.txt
          1 file changed, 1 insertion(+), 1 deletion(-)
@@ -392,7 +397,8 @@ fn test_record_insert_merge_conflict() -> eyre::Result<()> {
 
     git.write_file_txt("test1", "new contents 2\n")?;
     {
-        let (stdout, _stderr) = git.run(&["record", "-m", "update test1.txt", "--insert"])?;
+        let (stdout, _stderr) =
+            git.branchless("record", &["-m", "update test1.txt", "--insert"])?;
         insta::assert_snapshot!(stdout, @r###"
         [detached HEAD c36bf7c] update test1.txt
          1 file changed, 1 insertion(+), 1 deletion(-)

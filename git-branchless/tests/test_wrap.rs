@@ -19,7 +19,7 @@ fn test_wrap_rebase_in_transaction() -> eyre::Result<()> {
     git.commit_file("test2", 2)?;
     git.run(&["checkout", "master"])?;
 
-    git.run(&["branchless", "wrap", "rebase", "foo"])?;
+    git.branchless("wrap", &["rebase", "foo"])?;
 
     let effects = Effects::new_suppress_for_test(Glyphs::text());
     let repo = git.get_repo()?;
@@ -321,20 +321,21 @@ fn test_wrap_explicit_git_executable() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
-    let (stdout, _stderr) = git.run(&[
-        "branchless",
+    let (stdout, _stderr) = git.branchless(
         "wrap",
-        "--git-executable",
-        // Don't use a hardcoded executable like `echo` here (see
-        // https://github.com/arxanas/git-branchless/issues/26). We also
-        // don't want to use `git`, since that's the default value for
-        // this argument, so we wouldn't be able to tell if it was
-        // working. But we're certain to have `git-branchless` on
-        // `PATH`!
-        "git-branchless",
-        "--",
-        "--help",
-    ])?;
+        &[
+            "--git-executable",
+            // Don't use a hardcoded executable like `echo` here (see
+            // https://github.com/arxanas/git-branchless/issues/26). We also
+            // don't want to use `git`, since that's the default value for
+            // this argument, so we wouldn't be able to tell if it was
+            // working. But we're certain to have `git-branchless` on
+            // `PATH`!
+            "git-branchless",
+            "--",
+            "--help",
+        ],
+    )?;
     assert!(stdout.contains("Branchless workflow for Git."));
     Ok(())
 }
@@ -343,8 +344,9 @@ fn test_wrap_explicit_git_executable() -> eyre::Result<()> {
 fn test_wrap_without_repo() -> eyre::Result<()> {
     let git = make_git()?;
 
-    let (stdout, stderr) = git.run_with_options(
-        &["branchless", "wrap", "status"],
+    let (stdout, stderr) = git.branchless_with_options(
+        "wrap",
+        &["status"],
         &GitRunOptions {
             expected_exit_code: 128,
             ..Default::default()
@@ -361,8 +363,9 @@ fn test_wrap_without_repo() -> eyre::Result<()> {
 fn test_wrap_exit_code() -> eyre::Result<()> {
     let git = make_git()?;
 
-    git.run_with_options(
-        &["branchless", "wrap", "check-ref-format", ".."],
+    git.branchless_with_options(
+        "wrap",
+        &["check-ref-format", ".."],
         &GitRunOptions {
             expected_exit_code: 1,
             ..Default::default()

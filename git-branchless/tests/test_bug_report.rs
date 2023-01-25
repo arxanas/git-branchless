@@ -25,7 +25,7 @@ fn test_bug_report() -> eyre::Result<()> {
     git.commit_file("test2", 2)?;
 
     {
-        let (stdout, _stderr) = git.run(&["branchless", "bug-report"])?;
+        let (stdout, _stderr) = git.branchless("bug-report", &[])?;
         let stdout = redact_timestamp(stdout);
 
         // Exclude the platform-specific information for this test.

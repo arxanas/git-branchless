@@ -314,7 +314,7 @@ fn test_undo_hide() -> eyre::Result<()> {
     git.commit_file("test1", 1)?;
     git.run(&["checkout", "HEAD^"])?;
     git.commit_file("test2", 2)?;
-    git.run(&["hide", "test1"])?;
+    git.branchless("hide", &["test1"])?;
     git.run(&["branch", "-D", "test1"])?;
 
     {
@@ -435,7 +435,7 @@ fn test_historical_smartlog_visibility() -> eyre::Result<()> {
 
     git.init_repo()?;
     git.commit_file("test1", 1)?;
-    git.run(&["hide", "HEAD"])?;
+    git.branchless("hide", &["HEAD"])?;
 
     let screenshot1 = Default::default();
     let screenshot2 = Default::default();
@@ -725,11 +725,11 @@ fn test_undo_garbage_collected_commit() -> eyre::Result<()> {
     git.commit_file("test1", 1)?;
     git.detach_head()?;
     git.commit_file("test2", 2)?;
-    git.run(&["hide", "HEAD"])?;
+    git.branchless("hide", &["HEAD"])?;
     git.run(&["checkout", "HEAD^"])?;
 
     {
-        let (stdout, _stderr) = git.run(&["branchless", "gc"])?;
+        let (stdout, _stderr) = git.branchless("gc", &[])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: collecting garbage
         branchless: 1 dangling reference deleted
@@ -815,15 +815,7 @@ fn test_undo_noninteractive() -> eyre::Result<()> {
     git.init_repo()?;
     git.commit_file("test1", 1)?;
     git.commit_file("test2", 2)?;
-    git.run(&[
-        "branchless",
-        "wrap",
-        "--",
-        "commit",
-        "--amend",
-        "-m",
-        "bad message",
-    ])?;
+    git.branchless("wrap", &["--", "commit", "--amend", "-m", "bad message"])?;
 
     {
         let (stdout, _stderr) = git.run_with_options(
@@ -906,7 +898,7 @@ fn test_undo_no_confirm() -> eyre::Result<()> {
     git.commit_file("test1", 1)?;
 
     {
-        let (stdout, _stderr) = git.run(&["undo", "--yes"])?;
+        let (stdout, _stderr) = git.branchless("undo", &["--yes"])?;
         let stdout = trim_lines(stdout);
         insta::assert_snapshot!(stdout, @r###"
         Will apply these actions:
@@ -939,7 +931,7 @@ fn test_undo_unseen_commit() -> eyre::Result<()> {
         git.run(&["checkout", "HEAD^"])?;
         let test3_oid = git.commit_file("test3", 3)?;
         git.run(&["checkout", "master"])?;
-        git.run(&["branchless", "init"])?;
+        git.branchless("init", &[])?;
 
         // Move the remote-tracking branch to a commit (test3) which doesn't have the previous location
         // (test2) as an ancestor, to ensure that the DAG won't have observed it.
@@ -958,7 +950,7 @@ fn test_undo_unseen_commit() -> eyre::Result<()> {
         // Set the main branch to `origin/master` to ensure that it appears in historical smartlogs.
         git.run(&["remote", "add", "origin", "file:///some-remote"])?;
         git.run(&["branch", "-u", "origin/master"])?;
-        git.run(&["branchless", "init", "--main-branch", "origin/master"])?;
+        git.branchless("init", &["--main-branch", "origin/master"])?;
 
         {
             let screenshot1 = Default::default();

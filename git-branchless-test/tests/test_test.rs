@@ -22,7 +22,7 @@ fn test_test() -> eyre::Result<()> {
     git.commit_file("test3", 3)?;
 
     {
-        let (stdout, _stderr) = git.run(&["branchless-test", "run", "-x", "exit 0"])?;
+        let (stdout, _stderr) = git.branchless("test", &["run", "-x", "exit 0"])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
@@ -36,8 +36,9 @@ fn test_test() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run_with_options(
-            &["branchless-test", "run", "-x", "exit 1"],
+        let (stdout, _stderr) = git.branchless_with_options(
+            "test",
+            &["run", "-x", "exit 1"],
             &GitRunOptions {
                 expected_exit_code: 1,
                 ..Default::default()
@@ -69,9 +70,10 @@ fn test_test_abort() -> eyre::Result<()> {
     git.commit_file("test3", 3)?;
 
     {
-        let (stdout, _stderr) = git.run_with_options(
+        let (stdout, _stderr) = git.branchless_with_options(
             // Kill the parent process (i.e. the owning `git branchless test run` process).
-            &["branchless-test", "run", "-x", "kill $PPID"],
+            "test",
+            &["run", "-x", "kill $PPID"],
             &GitRunOptions {
                 expected_exit_code: 143,
                 ..Default::default()
@@ -85,8 +87,9 @@ fn test_test_abort() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run_with_options(
-            &["branchless-test", "run", "-x", "exit 0"],
+        let (stdout, _stderr) = git.branchless_with_options(
+            "test",
+            &["run", "-x", "exit 0"],
             &GitRunOptions {
                 expected_exit_code: 1,
                 ..Default::default()
@@ -135,7 +138,7 @@ fn test_test_cached_results() -> eyre::Result<()> {
     git.run(&["revert", "HEAD"])?;
 
     {
-        let (stdout, _stderr) = git.run(&["branchless-test", "run", "-x", "exit 0"])?;
+        let (stdout, _stderr) = git.branchless("test", &["run", "-x", "exit 0"])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
@@ -153,7 +156,7 @@ fn test_test_cached_results() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["branchless-test", "run", "-x", "exit 0"])?;
+        let (stdout, _stderr) = git.branchless("test", &["run", "-x", "exit 0"])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
@@ -187,7 +190,7 @@ fn test_test_verbosity() -> eyre::Result<()> {
     let long_command = "bash test.sh 15";
 
     {
-        let (stdout, _stderr) = git.run(&["branchless-test", "run", "-x", short_command, "-v"])?;
+        let (stdout, _stderr) = git.branchless("test", &["run", "-x", short_command, "-v"])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
@@ -213,7 +216,7 @@ fn test_test_verbosity() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["branchless-test", "run", "-x", short_command, "-vv"])?;
+        let (stdout, _stderr) = git.branchless("test", &["run", "-x", short_command, "-vv"])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
@@ -242,7 +245,7 @@ fn test_test_verbosity() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["branchless-test", "run", "-x", long_command, "-v"])?;
+        let (stdout, _stderr) = git.branchless("test", &["run", "-x", long_command, "-v"])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
@@ -269,7 +272,7 @@ fn test_test_verbosity() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["branchless-test", "run", "-x", long_command, "-vv"])?;
+        let (stdout, _stderr) = git.branchless("test", &["run", "-x", long_command, "-vv"])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
@@ -315,7 +318,7 @@ fn test_test_show() -> eyre::Result<()> {
     git.commit_file("test2", 2)?;
 
     {
-        let (stdout, _stderr) = git.run(&["branchless-test", "run", "-x", "echo hi", "."])?;
+        let (stdout, _stderr) = git.branchless("test", &["run", "-x", "echo hi", "."])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
@@ -328,7 +331,7 @@ fn test_test_show() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, stderr) = git.run(&["branchless-test", "show", "-x", "echo hi"])?;
+        let (stdout, stderr) = git.branchless("test", &["show", "-x", "echo hi"])?;
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
         No cached test data for 62fc20d create test1.txt
@@ -339,7 +342,7 @@ fn test_test_show() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, stderr) = git.run(&["branchless-test", "clean"])?;
+        let (stdout, stderr) = git.branchless("test", &["clean"])?;
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
         Cleaning results for 62fc20d create test1.txt
@@ -349,7 +352,7 @@ fn test_test_show() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, stderr) = git.run(&["branchless-test", "show", "-x", "echo hi"])?;
+        let (stdout, stderr) = git.branchless("test", &["show", "-x", "echo hi"])?;
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
         No cached test data for 62fc20d create test1.txt
@@ -368,8 +371,9 @@ fn test_test_command_alias() -> eyre::Result<()> {
     git.init_repo()?;
 
     {
-        let (stdout, _stderr) = git.run_with_options(
-            &["branchless-test", "run"],
+        let (stdout, _stderr) = git.branchless_with_options(
+            "test",
+            &["run"],
             &GitRunOptions {
                 expected_exit_code: 1,
                 ..Default::default()
@@ -387,8 +391,9 @@ fn test_test_command_alias() -> eyre::Result<()> {
 
     git.run(&["config", "branchless.test.alias.foo", "echo foo"])?;
     {
-        let (stdout, _stderr) = git.run_with_options(
-            &["branchless-test", "run"],
+        let (stdout, _stderr) = git.branchless_with_options(
+            "test",
+            &["run"],
             &GitRunOptions {
                 expected_exit_code: 1,
                 ..Default::default()
@@ -408,8 +413,9 @@ fn test_test_command_alias() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run_with_options(
-            &["branchless-test", "run", "-c", "nonexistent"],
+        let (stdout, _stderr) = git.branchless_with_options(
+            "test",
+            &["run", "-c", "nonexistent"],
             &GitRunOptions {
                 expected_exit_code: 1,
                 ..Default::default()
@@ -428,7 +434,7 @@ fn test_test_command_alias() -> eyre::Result<()> {
 
     git.run(&["config", "branchless.test.alias.default", "echo default"])?;
     {
-        let (stdout, _stderr) = git.run(&["branchless-test", "run"])?;
+        let (stdout, _stderr) = git.branchless("test", &["run"])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
@@ -441,7 +447,7 @@ fn test_test_command_alias() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["branchless-test", "run", "-c", "foo"])?;
+        let (stdout, _stderr) = git.branchless("test", &["run", "-c", "foo"])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
@@ -454,8 +460,9 @@ fn test_test_command_alias() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run_with_options(
-            &["branchless-test", "run", "-c", "foo bar baz"],
+        let (stdout, _stderr) = git.branchless_with_options(
+            "test",
+            &["run", "-c", "foo bar baz"],
             &GitRunOptions {
                 expected_exit_code: 1,
                 ..Default::default()
@@ -504,17 +511,18 @@ fn test_test_worktree_strategy() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, stderr) = git.run(&[
-            "branchless",
+        let (stdout, stderr) = git.branchless(
             "test",
-            "run",
-            "--strategy",
-            "worktree",
-            "-x",
-            "echo hello",
-            "-vv",
-            "@",
-        ])?;
+            &[
+                "run",
+                "--strategy",
+                "worktree",
+                "-x",
+                "echo hello",
+                "-vv",
+                "@",
+            ],
+        )?;
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
         Ran echo hello on 1 commit:
@@ -528,17 +536,18 @@ fn test_test_worktree_strategy() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, stderr) = git.run(&[
-            "branchless",
+        let (stdout, stderr) = git.branchless(
             "test",
-            "run",
-            "--strategy",
-            "worktree",
-            "-x",
-            "echo hello",
-            "-vv",
-            "@",
-        ])?;
+            &[
+                "run",
+                "--strategy",
+                "worktree",
+                "-x",
+                "echo hello",
+                "-vv",
+                "@",
+            ],
+        )?;
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
         Ran echo hello on 1 commit:
@@ -578,8 +587,9 @@ echo hello
     git.run(&["config", "branchless.test.alias.default", "bash test.sh"])?;
     git.run(&["config", "branchless.test.strategy", "working-copy"])?;
     {
-        let (stdout, stderr) = git.run_with_options(
-            &["branchless-test", "run", "@"],
+        let (stdout, stderr) = git.branchless_with_options(
+            "test",
+            &["run", "@"],
             &GitRunOptions {
                 expected_exit_code: 1,
                 ..Default::default()
@@ -596,7 +606,7 @@ echo hello
 
     git.run(&["config", "branchless.test.strategy", "worktree"])?;
     {
-        let (stdout, stderr) = git.run(&["branchless-test", "run", "-vv", "@"])?;
+        let (stdout, stderr) = git.branchless("test", &["run", "-vv", "@"])?;
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
         Ran bash test.sh on 1 commit:
@@ -611,8 +621,9 @@ echo hello
 
     git.run(&["config", "branchless.test.strategy", "invalid-value"])?;
     {
-        let (stdout, stderr) = git.run_with_options(
-            &["branchless-test", "run", "-vv", "@"],
+        let (stdout, stderr) = git.branchless_with_options(
+            "test",
+            &["run", "-vv", "@"],
             &GitRunOptions {
                 expected_exit_code: 1,
                 ..Default::default()
@@ -655,15 +666,10 @@ fn test_test_jobs_argument_handling() -> eyre::Result<()> {
 
     {
         // `--jobs 1` is allowed for `--strategy working-copy`, since that's the default anyways.
-        let (stdout, _stderr) = git.run(&[
-            "branchless",
+        let (stdout, _stderr) = git.branchless(
             "test",
-            "run",
-            "--strategy",
-            "working-copy",
-            "--jobs",
-            "1",
-        ])?;
+            &["run", "--strategy", "working-copy", "--jobs", "1"],
+        )?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
