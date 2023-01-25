@@ -114,9 +114,6 @@ name = "test_restack"
 name = "test_reword"
 
 [[test]]
-name = "test_smartlog"
-
-[[test]]
 name = "test_snapshot"
 
 [[test]]

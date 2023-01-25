@@ -1332,6 +1332,7 @@ dependencies = [
  "git-branchless-lib",
  "git-branchless-opts",
  "git-branchless-revset",
+ "insta",
  "tracing",
 ]
 
