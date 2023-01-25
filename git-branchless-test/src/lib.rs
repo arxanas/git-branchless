@@ -774,7 +774,7 @@ fn run_tests(
 ) -> eyre::Result<ExitCode> {
     let ResolvedTestOptions {
         command,
-        strategy: _, // Strategy forwarded to `run_test` so that it can provision its working directory.
+        strategy,
         jobs,
         verbosity,
     } = &options;
@@ -797,6 +797,18 @@ fn run_tests(
             return Ok(ExitCode(1));
         }
     };
+
+    if let Some(strategy_value) = strategy.to_possible_value() {
+        writeln!(
+            effects.get_output_stream(),
+            "Using test execution strategy: {}",
+            effects.get_glyphs().render(
+                StyledStringBuilder::new()
+                    .append_styled(strategy_value.get_name(), Effect::Bold)
+                    .build()
+            )?,
+        )?;
+    }
 
     let results = {
         let (effects, progress) =
