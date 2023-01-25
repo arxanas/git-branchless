@@ -1,7 +1,4 @@
-use lib::testing::{
-    extract_hint_command, make_git, make_git_with_remote_repo, GitInitOptions, GitRunOptions,
-    GitWrapperWithRemoteRepo,
-};
+use lib::testing::{extract_hint_command, make_git, GitRunOptions};
 
 #[test]
 fn test_init_smartlog() -> eyre::Result<()> {
@@ -10,7 +7,7 @@ fn test_init_smartlog() -> eyre::Result<()> {
     git.init_repo()?;
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @"@ f777ecc (> master) create initial.txt
 ");
     }
@@ -27,7 +24,7 @@ fn test_show_reachable_commit() -> eyre::Result<()> {
     git.commit_file("test", 1)?;
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
@@ -50,7 +47,7 @@ fn test_tree() -> eyre::Result<()> {
     git.commit_file("test2", 2)?;
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |\
@@ -76,7 +73,7 @@ fn test_rebase() -> eyre::Result<()> {
     git.run(&["rebase", "test1"])?;
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
@@ -99,7 +96,7 @@ fn test_sequential_master_commits() -> eyre::Result<()> {
     git.commit_file("test3", 3)?;
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         @ 70deb1e (> master) create test3.txt
@@ -129,7 +126,7 @@ fn test_merge_commit() -> eyre::Result<()> {
 
     {
         // Rendering here is arbitrary and open to change.
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |\
@@ -152,7 +149,7 @@ fn test_merge_commit() -> eyre::Result<()> {
     git.run(&["merge", "test1", "test2and3"])?;
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |\
@@ -203,7 +200,7 @@ fn test_rebase_conflict() -> eyre::Result<()> {
     git.run(&["rebase", "--continue"])?;
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
@@ -230,7 +227,7 @@ fn test_non_adjacent_commits() -> eyre::Result<()> {
     git.commit_file("test4", 4)?;
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc create initial.txt
         |\
@@ -260,7 +257,7 @@ fn test_non_adjacent_commits2() -> eyre::Result<()> {
     git.commit_file("test5", 5)?;
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc create initial.txt
         |\
@@ -294,7 +291,7 @@ fn test_non_adjacent_commits3() -> eyre::Result<()> {
     git.commit_file("test6", 6)?;
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d create test1.txt
@@ -324,7 +321,7 @@ fn test_custom_main_branch() -> eyre::Result<()> {
     git.commit_file("test2", 2)?;
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d (main) create test1.txt
@@ -344,12 +341,12 @@ fn test_show_rewritten_commit_hash() -> eyre::Result<()> {
     git.detach_head()?;
     git.commit_file("test1", 1)?;
     git.commit_file("test2", 2)?;
-    git.run(&["prev"])?;
+    git.run(&["checkout", "HEAD^"])?;
     git.run(&["commit", "--amend", "-m", "test1 version 1"])?;
     git.run(&["commit", "--amend", "-m", "test1 version 2"])?;
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |\
@@ -377,152 +374,11 @@ fn test_smartlog_orphaned_root() -> eyre::Result<()> {
     git.run(&["checkout", "--orphan", "new-root"])?;
 
     {
-        let (stdout, stderr) = git.run(&["smartlog"])?;
+        let (stdout, stderr) = git.run(&["branchless-smartlog"])?;
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d (master) create test1.txt
-        "###);
-    }
-
-    Ok(())
-}
-
-#[test]
-fn test_show_hidden_commits() -> eyre::Result<()> {
-    let git = make_git()?;
-
-    git.init_repo()?;
-    let test1_oid = git.commit_file("test1", 1)?;
-    git.detach_head()?;
-    let test2_oid = git.commit_file("test2", 2)?;
-    git.run(&["commit", "--amend", "-m", "amended test2"])?;
-    let test2_oid_amended = git.get_repo()?.get_head_info()?.oid.unwrap();
-    git.run(&["hide", "HEAD"])?;
-    git.run(&["checkout", "HEAD^"])?;
-
-    {
-        let (stdout, stderr) = git.run(&[
-            "smartlog",
-            "--hidden",
-            &format!("{test1_oid} + {test2_oid} + {test2_oid_amended}"),
-        ])?;
-        insta::assert_snapshot!(stderr, @"");
-        insta::assert_snapshot!(stdout, @r###"
-        :
-        @ 62fc20d (master) create test1.txt
-        |\
-        | x cb8137a (manually hidden) amended test2
-        |
-        x 96d1c37 (rewritten as cb8137ad) create test2.txt
-        "###);
-    }
-
-    Ok(())
-}
-
-#[test]
-fn test_show_only_branches() -> eyre::Result<()> {
-    let git = make_git()?;
-
-    git.init_repo()?;
-    git.commit_file("test1", 1)?;
-    git.detach_head()?;
-    let test2_oid = git.commit_file("test2", 2)?;
-    git.run(&["checkout", "master"])?;
-    git.commit_file("test3", 3)?;
-    git.detach_head()?;
-    let test4_oid = git.commit_file("test4", 4)?;
-    git.run(&["checkout", "master"])?;
-    git.commit_file("test5", 5)?;
-    git.detach_head()?;
-    let test6_oid = git.commit_file("test6", 6)?;
-    git.run(&["checkout", "master"])?;
-    git.commit_file("test7", 7)?;
-    git.detach_head()?;
-    git.commit_file("test8", 8)?;
-    git.run(&["checkout", "master"])?;
-    git.commit_file("test9", 9)?;
-
-    git.run(&["branch", "branch-2", &test2_oid.to_string()])?;
-    git.run(&["branch", "branch-4", &test4_oid.to_string()])?;
-    git.run(&["hide", &test4_oid.to_string()])?;
-    git.run(&["hide", &test6_oid.to_string()])?;
-
-    // confirm our baseline:
-    // branch, hidden branch and non-branch head are visible; hidden non-branch head is not
-    {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
-        insta::assert_snapshot!(stdout, @r###"
-        :
-        O 62fc20d create test1.txt
-        |\
-        | o 96d1c37 (branch-2) create test2.txt
-        |
-        O 4838e49 create test3.txt
-        |\
-        : x a248207 (manually hidden) (branch-4) create test4.txt
-        :
-        O 8577a96 create test7.txt
-        |\
-        | o e8b6a38 create test8.txt
-        |
-        @ 1b854ed (> master) create test9.txt
-        "###);
-    }
-
-    // just branches (normal and hidden) but no non-branch heads
-    {
-        let (stdout, _stderr) = git.run(&["smartlog", "branches()"])?;
-        insta::assert_snapshot!(stdout, @r###"
-        :
-        O 62fc20d create test1.txt
-        |\
-        | o 96d1c37 (branch-2) create test2.txt
-        |
-        O 4838e49 create test3.txt
-        |\
-        : x a248207 (manually hidden) (branch-4) create test4.txt
-        :
-        @ 1b854ed (> master) create test9.txt
-        "###);
-    }
-
-    Ok(())
-}
-
-#[test]
-fn test_active_non_head_main_branch_commit() -> eyre::Result<()> {
-    let GitWrapperWithRemoteRepo {
-        temp_dir: _guard,
-        original_repo,
-        cloned_repo,
-    } = make_git_with_remote_repo()?;
-
-    let test1_oid = {
-        original_repo.init_repo()?;
-        let test1_oid = original_repo.commit_file("test1", 1)?;
-        original_repo.commit_file("test2", 2)?;
-        original_repo.commit_file("test3", 3)?;
-
-        original_repo.clone_repo_into(&cloned_repo, &[])?;
-
-        test1_oid
-    };
-
-    {
-        cloned_repo.init_repo_with_options(&GitInitOptions {
-            make_initial_commit: false,
-            ..Default::default()
-        })?;
-        // Ensure that the `test1` commit isn't visible just because it's been
-        // un-hidden. It's a public commit, so it should be hidden if possible.
-        cloned_repo.run(&["unhide", &test1_oid.to_string()])?;
-
-        let (stdout, _stderr) = cloned_repo.run(&["smartlog"])?;
-        insta::assert_snapshot!(stdout, @r###"
-        :
-        @ 70deb1e (> master) create test3.txt
         "###);
     }
 
@@ -545,7 +401,7 @@ fn test_smartlog_hint_abandoned() -> eyre::Result<()> {
     git.run(&["commit", "--amend", "-m", "amended test1"])?;
 
     let hint_command = {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |\
@@ -564,7 +420,7 @@ fn test_smartlog_hint_abandoned() -> eyre::Result<()> {
     git.run(&hint_command)?;
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |\
@@ -593,7 +449,7 @@ fn test_smartlog_hint_abandoned_except_current_commit() -> eyre::Result<()> {
     git.run(&["checkout", &test1_oid.to_string()])?;
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc create initial.txt
         |\
@@ -620,7 +476,7 @@ fn test_smartlog_sparse() -> eyre::Result<()> {
     git.commit_file("test4", 4)?;
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog", "none()"])?;
+        let (stdout, _stderr) = git.run(&["branchless-smartlog", "none()"])?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 0206717 (master) create test3.txt
@@ -647,7 +503,7 @@ fn test_smartlog_sparse_branch() -> eyre::Result<()> {
     git.commit_file("test5", 5)?;
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog", &test2_oid.to_string()])?;
+        let (stdout, _stderr) = git.run(&["branchless-smartlog", &test2_oid.to_string()])?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc create initial.txt
         |\
@@ -680,7 +536,7 @@ fn test_smartlog_sparse_false_head() -> eyre::Result<()> {
     git.commit_file("test6", 6)?;
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog", &test2_oid.to_string()])?;
+        let (stdout, _stderr) = git.run(&["branchless-smartlog", &test2_oid.to_string()])?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc create initial.txt
         |\
@@ -712,7 +568,7 @@ fn test_smartlog_sparse_main_false_head() -> eyre::Result<()> {
     git.run(&["checkout", "HEAD~"])?;
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog", "none()"])?;
+        let (stdout, _stderr) = git.run(&["branchless-smartlog", "none()"])?;
         insta::assert_snapshot!(stdout, @r###"
         :
         @ 62fc20d (master) create test1.txt
@@ -734,7 +590,7 @@ fn test_smartlog_hidden() -> eyre::Result<()> {
     git.run(&["commit", "--amend", "-m", "amended test1"])?;
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog", "--hidden"])?;
+        let (stdout, _stderr) = git.run(&["branchless-smartlog", "--hidden"])?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |\
@@ -761,7 +617,7 @@ fn test_smartlog_sparse_vertical_ellipsis_sibling_commits() -> eyre::Result<()> 
     git.commit_file("test4", 4)?;
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog", "heads(draft())"])?;
+        let (stdout, _stderr) = git.run(&["branchless-smartlog", "heads(draft())"])?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |\
