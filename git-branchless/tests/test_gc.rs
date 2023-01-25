@@ -28,9 +28,9 @@ fn test_gc() -> eyre::Result<()> {
         "###);
     }
 
-    git.run(&["hide", "62fc20d2"])?;
+    git.branchless("hide", &["62fc20d2"])?;
     {
-        let (stdout, _stderr) = git.run(&["branchless", "gc"])?;
+        let (stdout, _stderr) = git.branchless("gc", &[])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: collecting garbage
         branchless: 1 dangling reference deleted
@@ -71,11 +71,11 @@ fn test_gc_reference_transaction() -> eyre::Result<()> {
     git.commit_file("test1", 1)?;
     git.detach_head()?;
     git.commit_file("test2", 2)?;
-    git.run(&["hide", "HEAD"])?;
+    git.branchless("hide", &["HEAD"])?;
     git.run(&["checkout", "HEAD^"])?;
 
     {
-        let (stdout, _stderr) = git.run(&["branchless", "gc"])?;
+        let (stdout, _stderr) = git.branchless("gc", &[])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: collecting garbage
         branchless: 1 dangling reference deleted
@@ -270,7 +270,7 @@ fn test_gc_no_init() -> eyre::Result<()> {
     }
 
     git.run(&["checkout", "HEAD~"])?;
-    git.run(&["branchless", "gc"])?;
+    git.branchless("gc", &[])?;
     {
         let (stdout, stderr) = git.run(&["gc", "--prune=now"])?;
         insta::assert_snapshot!(stderr, @"");
@@ -279,7 +279,7 @@ fn test_gc_no_init() -> eyre::Result<()> {
 
     git.run(&["checkout", &test1_oid.to_string()])?;
     {
-        let (stdout, _stderr) = git.run(&["branchless", "smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |

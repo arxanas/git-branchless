@@ -17,7 +17,7 @@ fn test_git_v2_31_events() -> eyre::Result<()> {
     git.commit_file("test1", 1)?;
     git.run(&["checkout", "HEAD^"])?;
     git.commit_file("test2", 2)?;
-    git.run(&["hide", "test1"])?;
+    git.branchless("hide", &["test1"])?;
     git.run(&["branch", "-D", "test1"])?;
 
     let effects = Effects::new_suppress_for_test(Glyphs::text());

@@ -14,7 +14,7 @@ fn test_prev() -> eyre::Result<()> {
     git.commit_file("test1", 1)?;
 
     {
-        let (stdout, _stderr) = git.run(&["prev"])?;
+        let (stdout, _stderr) = git.branchless("prev", &[])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> checkout f777ecc9b0db5ed372b2615695191a8a17f79f24
         @ f777ecc create initial.txt
@@ -57,7 +57,7 @@ fn test_prev_multiple() -> eyre::Result<()> {
     git.commit_file("test2", 2)?;
 
     {
-        let (stdout, _stderr) = git.run(&["prev", "2"])?;
+        let (stdout, _stderr) = git.branchless("prev", &["2"])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> checkout f777ecc9b0db5ed372b2615695191a8a17f79f24
         @ f777ecc create initial.txt
@@ -80,7 +80,7 @@ fn test_next_multiple() -> eyre::Result<()> {
     git.run(&["checkout", "master"])?;
 
     {
-        let (stdout, _stderr) = git.run(&["next", "2"])?;
+        let (stdout, _stderr) = git.branchless("next", &["2"])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> checkout 96d1c37a3d4363611c49f7e52186e189a04c531f
         O f777ecc (master) create initial.txt
@@ -127,7 +127,7 @@ fn test_next_ambiguous() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["next", "--oldest"])?;
+        let (stdout, _stderr) = git.branchless("next", &["--oldest"])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> checkout 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
         O f777ecc (master) create initial.txt
@@ -142,7 +142,7 @@ fn test_next_ambiguous() -> eyre::Result<()> {
 
     git.run(&["checkout", "master"])?;
     {
-        let (stdout, _stderr) = git.run(&["next", "--newest"])?;
+        let (stdout, _stderr) = git.branchless("next", &["--newest"])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> checkout 98b9119d16974f372e76cb64a3b77c528fc0b18b
         O f777ecc (master) create initial.txt
@@ -176,7 +176,8 @@ fn test_next_ambiguous_interactive() -> eyre::Result<()> {
 
     run_in_pty(
         &git,
-        &["next", "--interactive"],
+        "next",
+        &["--interactive"],
         &[
             PtyAction::WaitUntilContains("> "),
             PtyAction::Write("test2"),
@@ -214,7 +215,7 @@ fn test_next_on_master() -> eyre::Result<()> {
     git.run(&["checkout", "HEAD^^"])?;
 
     {
-        let (stdout, _stderr) = git.run(&["next", "2"])?;
+        let (stdout, _stderr) = git.branchless("next", &["2"])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> checkout 70deb1e28791d8e7dd5a1f0c871a51b91282562f
         :
@@ -266,7 +267,7 @@ fn test_next_no_more_children() -> eyre::Result<()> {
     git.run(&["checkout", "HEAD^^"])?;
 
     {
-        let (stdout, _stderr) = git.run(&["next", "3"])?;
+        let (stdout, _stderr) = git.branchless("next", &["3"])?;
         insta::assert_snapshot!(stdout, @r###"
         No more child commits to go to after traversing 2 children.
         branchless: running command: <git-executable> checkout 70deb1e28791d8e7dd5a1f0c871a51b91282562f
@@ -295,7 +296,8 @@ fn test_switch_pty() -> eyre::Result<()> {
 
     run_in_pty(
         &git,
-        &["branchless", "switch"],
+        "switch",
+        &[],
         &[
             PtyAction::WaitUntilContains("> "),
             PtyAction::Write("test1"),
@@ -319,7 +321,8 @@ fn test_switch_pty() -> eyre::Result<()> {
 
     run_in_pty(
         &git,
-        &["branchless", "switch"],
+        "switch",
+        &[],
         &[
             PtyAction::WaitUntilContains("> "),
             PtyAction::Write("test3"),
@@ -356,7 +359,8 @@ fn test_switch_abort() -> eyre::Result<()> {
 
     run_in_pty(
         &git,
-        &["branchless", "switch"],
+        "switch",
+        &[],
         &[
             PtyAction::WaitUntilContains("> "),
             PtyAction::Write(END_OF_TEXT),
@@ -388,7 +392,7 @@ fn test_navigation_traverse_all_the_way() -> eyre::Result<()> {
     git.commit_file("test3", 3)?;
 
     {
-        let (stdout, _stderr) = git.run(&["prev", "-a"])?;
+        let (stdout, _stderr) = git.branchless("prev", &["-a"])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> checkout 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
         O f777ecc (master) create initial.txt
@@ -402,7 +406,7 @@ fn test_navigation_traverse_all_the_way() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["next", "-a"])?;
+        let (stdout, _stderr) = git.branchless("next", &["-a"])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> checkout 70deb1e28791d8e7dd5a1f0c871a51b91282562f
         O f777ecc (master) create initial.txt
@@ -433,7 +437,7 @@ fn test_navigation_traverse_branches() -> eyre::Result<()> {
     git.commit_file("test5", 5)?;
 
     {
-        let (stdout, _stderr) = git.run(&["prev", "-b", "2"])?;
+        let (stdout, _stderr) = git.branchless("prev", &["-b", "2"])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> checkout foo
         O f777ecc (master) create initial.txt
@@ -449,7 +453,7 @@ fn test_navigation_traverse_branches() -> eyre::Result<()> {
         o f81d55c create test5.txt
         "###);
 
-        let (stdout, _stderr) = git.run(&["prev", "-a", "-b"])?;
+        let (stdout, _stderr) = git.branchless("prev", &["-a", "-b"])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> checkout foo
         O f777ecc (master) create initial.txt
@@ -465,7 +469,7 @@ fn test_navigation_traverse_branches() -> eyre::Result<()> {
         o f81d55c create test5.txt
         "###);
 
-        let (stdout, _stderr) = git.run(&["prev", "-b"])?;
+        let (stdout, _stderr) = git.branchless("prev", &["-b"])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> checkout master
         @ f777ecc (> master) create initial.txt
@@ -483,7 +487,7 @@ fn test_navigation_traverse_branches() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["next", "-b", "2"])?;
+        let (stdout, _stderr) = git.branchless("next", &["-b", "2"])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> checkout bar
         O f777ecc (master) create initial.txt
@@ -501,7 +505,7 @@ fn test_navigation_traverse_branches() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["next", "-a", "-b"])?;
+        let (stdout, _stderr) = git.branchless("next", &["-a", "-b"])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> checkout bar
         O f777ecc (master) create initial.txt
@@ -533,7 +537,7 @@ fn test_traverse_branches_ambiguous() -> eyre::Result<()> {
     git.commit_file("test2", 2)?;
 
     {
-        let (stdout, _stderr) = git.run(&["prev", "--all", "--branch"])?;
+        let (stdout, _stderr) = git.branchless("prev", &["--all", "--branch"])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> checkout 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
         O f777ecc (master) create initial.txt
@@ -590,7 +594,8 @@ fn test_switch_pty_branch() -> eyre::Result<()> {
 
     run_in_pty(
         &git,
-        &["branchless", "switch"],
+        "switch",
+        &[],
         &[
             PtyAction::WaitUntilContains("> "),
             PtyAction::Write("master"),
@@ -625,7 +630,8 @@ fn test_switch_pty_initial_query() -> eyre::Result<()> {
 
     run_in_pty(
         &git,
-        &["branchless", "switch", "-i", "test1"],
+        "switch",
+        &["-i", "test1"],
         &[
             PtyAction::WaitUntilContains("> test1"),
             PtyAction::Write(CARRIAGE_RETURN),
@@ -677,7 +683,7 @@ fn test_navigation_merge() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["prev", "--merge"])?;
+        let (stdout, _stderr) = git.branchless("prev", &["--merge"])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> checkout 25497cb08387d7d20aa741398b73ce7f924afdb5 --merge
         M	conflicting.txt
@@ -741,7 +747,7 @@ fn test_navigation_force() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["prev", "--force"])?;
+        let (stdout, _stderr) = git.branchless("prev", &["--force"])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> checkout 25497cb08387d7d20aa741398b73ce7f924afdb5 --force
         O f777ecc (master) create initial.txt
@@ -771,7 +777,7 @@ fn test_navigation_switch_flags() -> eyre::Result<()> {
     {
         let git = git.duplicate_repo()?;
         {
-            let (stdout, _stderr) = git.run(&["branchless", "switch", "-c", "foo", "HEAD^"])?;
+            let (stdout, _stderr) = git.branchless("switch", &["-c", "foo", "HEAD^"])?;
             insta::assert_snapshot!(stdout, @r###"
             branchless: running command: <git-executable> checkout HEAD^ -b foo
             :
@@ -782,7 +788,7 @@ fn test_navigation_switch_flags() -> eyre::Result<()> {
         }
 
         {
-            let (stdout, _stderr) = git.run(&["branchless", "switch", "-c", "bar"])?;
+            let (stdout, _stderr) = git.branchless("switch", &["-c", "bar"])?;
             insta::assert_snapshot!(stdout, @r###"
             branchless: running command: <git-executable> checkout -b bar
             :
@@ -798,7 +804,7 @@ fn test_navigation_switch_flags() -> eyre::Result<()> {
         {
             git.commit_file_with_contents("test1", 3, "new contents")?;
             git.write_file_txt("test1", "conflicting\n")?;
-            let (stdout, _stderr) = git.run(&["branchless", "switch", "-f", "HEAD~2"])?;
+            let (stdout, _stderr) = git.branchless("switch", &["-f", "HEAD~2"])?;
             insta::assert_snapshot!(stdout, @r###"
             branchless: running command: <git-executable> checkout HEAD~2 -f
             :
@@ -812,7 +818,7 @@ fn test_navigation_switch_flags() -> eyre::Result<()> {
     {
         git.commit_file_with_contents("test1", 3, "new contents")?;
         git.write_file_txt("test1", "conflicting\n")?;
-        let (stdout, _stderr) = git.run(&["branchless", "switch", "-m", "HEAD~2"])?;
+        let (stdout, _stderr) = git.branchless("switch", &["-m", "HEAD~2"])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> checkout HEAD~2 -m
         M	test1.txt
@@ -832,7 +838,7 @@ fn test_navigation_switch_target_only() -> eyre::Result<()> {
     git.init_repo()?;
 
     {
-        let (stdout, _stderr) = git.run(&["branchless", "switch", "master"])?;
+        let (stdout, _stderr) = git.branchless("switch", &["master"])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> checkout master
         @ f777ecc (> master) create initial.txt
@@ -856,7 +862,8 @@ fn test_switch_auto_switch_interactive() -> eyre::Result<()> {
 
     run_in_pty(
         &git,
-        &["sw", "--interactive"],
+        "switch",
+        &["--interactive"],
         &[
             PtyAction::WaitUntilContains("> "),
             PtyAction::Write("test1"),
@@ -899,7 +906,8 @@ fn test_switch_auto_switch_interactive_disabled() -> eyre::Result<()> {
 
     run_in_pty(
         &git,
-        &["sw", "--interactive"],
+        "switch",
+        &["--interactive"],
         &[
             PtyAction::WaitUntilContains("> "),
             PtyAction::Write("test1"),

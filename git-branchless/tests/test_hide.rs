@@ -25,7 +25,7 @@ fn test_hide_commit() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["hide", &test1_oid.to_string()])?;
+        let (stdout, _stderr) = git.branchless("hide", &[&test1_oid.to_string()])?;
         insta::assert_snapshot!(stdout, @r###"
         Hid commit: 62fc20d create test1.txt
         To unhide this 1 commit, run: git undo
@@ -51,8 +51,9 @@ fn test_hide_bad_commit() -> eyre::Result<()> {
     git.init_repo()?;
 
     {
-        let (stdout, stderr) = git.run_with_options(
-            &["hide", "abc123"],
+        let (stdout, stderr) = git.branchless_with_options(
+            "hide",
+            &["abc123"],
             &GitRunOptions {
                 expected_exit_code: 1,
                 ..Default::default()
@@ -74,9 +75,9 @@ fn test_hide_already_hidden_commit() -> eyre::Result<()> {
     git.detach_head()?;
     let test1_oid = git.commit_file("test1", 1)?;
 
-    git.run(&["hide", &test1_oid.to_string()])?;
+    git.branchless("hide", &[&test1_oid.to_string()])?;
     {
-        let (stdout, _stderr) = git.run(&["hide", &test1_oid.to_string()])?;
+        let (stdout, _stderr) = git.branchless("hide", &[&test1_oid.to_string()])?;
         insta::assert_snapshot!(stdout, @r###"
         Hid commit: 62fc20d create test1.txt
         (It was already hidden, so this operation had no effect.)
@@ -94,7 +95,7 @@ fn test_hide_current_commit() -> eyre::Result<()> {
     git.init_repo()?;
     git.detach_head()?;
     git.commit_file("test", 1)?;
-    git.run(&["hide", "HEAD"])?;
+    git.branchless("hide", &["HEAD"])?;
 
     {
         let stdout = git.smartlog()?;
@@ -119,8 +120,8 @@ fn test_hidden_commit_with_head_as_child() -> eyre::Result<()> {
     let test3_oid = git.commit_file("test3", 3)?;
     git.run(&["checkout", &test2_oid.to_string()])?;
 
-    git.run(&["hide", &test1_oid.to_string()])?;
-    git.run(&["hide", &test3_oid.to_string()])?;
+    git.branchless("hide", &[&test1_oid.to_string()])?;
+    git.branchless("hide", &[&test3_oid.to_string()])?;
 
     {
         let stdout = git.smartlog()?;
@@ -149,7 +150,7 @@ fn test_hide_master_commit_with_hidden_children() -> eyre::Result<()> {
     git.commit_file("test4", 4)?;
     git.commit_file("test5", 5)?;
 
-    git.run(&["hide", &test3_oid.to_string()])?;
+    git.branchless("hide", &[&test3_oid.to_string()])?;
     {
         let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
@@ -172,7 +173,7 @@ fn test_branches_always_visible() -> eyre::Result<()> {
     git.run(&["branch", "test"])?;
     git.run(&["checkout", "master"])?;
 
-    let (stdout, _stderr) = git.run(&["hide", "test", "test^"])?;
+    let (stdout, _stderr) = git.branchless("hide", &["test", "test^"])?;
     insta::assert_snapshot!(stdout, @r###"
     Hid commit: 62fc20d create test1.txt
     Hid commit: 96d1c37 create test2.txt
@@ -212,7 +213,7 @@ fn test_hide_delete_branches() -> eyre::Result<()> {
     git.run(&["branch", "test"])?;
     git.run(&["checkout", "master"])?;
 
-    let (stdout, _stderr) = git.run(&["hide", "--delete-branches", "test", "test^"])?;
+    let (stdout, _stderr) = git.branchless("hide", &["--delete-branches", "test", "test^"])?;
     insta::assert_snapshot!(stdout, @r###"
     Hid commit: 62fc20d create test1.txt
     Hid commit: 96d1c37 create test2.txt
@@ -228,8 +229,9 @@ fn test_hide_delete_branches() -> eyre::Result<()> {
         "###);
     }
 
-    git.run_with_options(
-        &["undo"],
+    git.branchless_with_options(
+        "undo",
+        &[],
         &GitRunOptions {
             input: Some("y".to_string()),
             ..Default::default()
@@ -276,12 +278,14 @@ fn test_hide_delete_multiple_branches() -> eyre::Result<()> {
         "###);
     }
 
-    let (stdout, _stderr) = git.run(&[
+    let (stdout, _stderr) = git.branchless(
         "hide",
-        "--delete-branches",
-        &test1_oid.to_string(),
-        &test2_oid.to_string(),
-    ])?;
+        &[
+            "--delete-branches",
+            &test1_oid.to_string(),
+            &test2_oid.to_string(),
+        ],
+    )?;
     insta::assert_snapshot!(stdout, @r###"
     Hid commit: 62fc20d create test1.txt
     Hid commit: fe65c1f create test2.txt
@@ -309,7 +313,7 @@ fn test_hide_delete_checked_out_branch() -> eyre::Result<()> {
     git.commit_file("test1", 1)?;
     git.commit_file("test2", 2)?;
 
-    let (stdout, _stderr) = git.run(&["hide", "--delete-branches", "test"])?;
+    let (stdout, _stderr) = git.branchless("hide", &["--delete-branches", "test"])?;
     insta::assert_snapshot!(stdout, @r###"
     Hid commit: 96d1c37 create test2.txt
     branchless: processing 1 update: branch test
@@ -342,7 +346,7 @@ fn test_unhide() -> eyre::Result<()> {
     git.run(&["checkout", "master"])?;
 
     {
-        let (stdout, _stderr) = git.run(&["unhide", &test2_oid.to_string()])?;
+        let (stdout, _stderr) = git.branchless("unhide", &[&test2_oid.to_string()])?;
         insta::assert_snapshot!(stdout, @r###"
         Unhid commit: 96d1c37 create test2.txt
         (It was not hidden, so this operation had no effect.)
@@ -350,7 +354,7 @@ fn test_unhide() -> eyre::Result<()> {
         "###);
     }
 
-    git.run(&["hide", &test2_oid.to_string()])?;
+    git.branchless("hide", &[&test2_oid.to_string()])?;
     {
         let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
@@ -361,7 +365,7 @@ fn test_unhide() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["unhide", &test2_oid.to_string()])?;
+        let (stdout, _stderr) = git.branchless("unhide", &[&test2_oid.to_string()])?;
         insta::assert_snapshot!(stdout, @r###"
         Unhid commit: 96d1c37 create test2.txt
         To hide this 1 commit, run: git undo
@@ -407,7 +411,7 @@ fn test_hide_recursive() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["hide", "-r", &test2_oid.to_string()])?;
+        let (stdout, _stderr) = git.branchless("hide", &["-r", &test2_oid.to_string()])?;
         insta::assert_snapshot!(stdout, @r###"
         Hid commit: 96d1c37 create test2.txt
         Hid commit: 70deb1e create test3.txt
@@ -425,7 +429,7 @@ fn test_hide_recursive() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["unhide", "-r", &test2_oid.to_string()])?;
+        let (stdout, _stderr) = git.branchless("unhide", &["-r", &test2_oid.to_string()])?;
         insta::assert_snapshot!(stdout, @r###"
         Unhid commit: 96d1c37 create test2.txt
         Unhid commit: 70deb1e create test3.txt
@@ -475,7 +479,7 @@ fn test_smartlog_active_non_head_main_branch_commit() -> eyre::Result<()> {
         })?;
         // Ensure that the `test1` commit isn't visible just because it's been
         // un-hidden. It's a public commit, so it should be hidden if possible.
-        cloned_repo.run(&["unhide", &test1_oid.to_string()])?;
+        cloned_repo.branchless("unhide", &[&test1_oid.to_string()])?;
 
         let stdout = cloned_repo.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
@@ -497,15 +501,17 @@ fn test_smartlog_show_hidden_commits() -> eyre::Result<()> {
     let test2_oid = git.commit_file("test2", 2)?;
     git.run(&["commit", "--amend", "-m", "amended test2"])?;
     let test2_oid_amended = git.get_repo()?.get_head_info()?.oid.unwrap();
-    git.run(&["hide", "HEAD"])?;
+    git.branchless("hide", &["HEAD"])?;
     git.run(&["checkout", "HEAD^"])?;
 
     {
-        let (stdout, stderr) = git.run(&[
-            "branchless-smartlog",
-            "--hidden",
-            &format!("{test1_oid} + {test2_oid} + {test2_oid_amended}"),
-        ])?;
+        let (stdout, stderr) = git.branchless(
+            "smartlog",
+            &[
+                "--hidden",
+                &format!("{test1_oid} + {test2_oid} + {test2_oid_amended}"),
+            ],
+        )?;
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
         :
@@ -545,8 +551,8 @@ fn test_smartlog_show_only_branches() -> eyre::Result<()> {
 
     git.run(&["branch", "branch-2", &test2_oid.to_string()])?;
     git.run(&["branch", "branch-4", &test4_oid.to_string()])?;
-    git.run(&["hide", &test4_oid.to_string()])?;
-    git.run(&["hide", &test6_oid.to_string()])?;
+    git.branchless("hide", &[&test4_oid.to_string()])?;
+    git.branchless("hide", &[&test6_oid.to_string()])?;
 
     // confirm our baseline:
     // branch, hidden branch and non-branch head are visible; hidden non-branch head is not
@@ -572,7 +578,7 @@ fn test_smartlog_show_only_branches() -> eyre::Result<()> {
 
     // just branches (normal and hidden) but no non-branch heads
     {
-        let (stdout, _stderr) = git.run(&["branchless-smartlog", "branches()"])?;
+        let (stdout, _stderr) = git.branchless("smartlog", &["branches()"])?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d create test1.txt

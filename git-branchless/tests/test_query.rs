@@ -10,7 +10,7 @@ fn test_query() -> eyre::Result<()> {
     git.commit_file("test3", 3)?;
 
     {
-        let (stdout, stderr) = git.run(&["query", ".^::"])?;
+        let (stdout, stderr) = git.branchless("query", &[".^::"])?;
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
         96d1c37 create test2.txt
@@ -19,7 +19,7 @@ fn test_query() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, stderr) = git.run(&["query", ".^::", "--raw"])?;
+        let (stdout, stderr) = git.branchless("query", &[".^::", "--raw"])?;
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
         96d1c37a3d4363611c49f7e52186e189a04c531f
@@ -36,8 +36,9 @@ fn test_query_parse_error() -> eyre::Result<()> {
     git.init_repo()?;
 
     {
-        let (stdout, stderr) = git.run_with_options(
-            &["query", "foo("],
+        let (stdout, stderr) = git.branchless_with_options(
+            "query",
+            &["foo("],
             &GitRunOptions {
                 expected_exit_code: 1,
                 ..Default::default()
@@ -63,8 +64,9 @@ fn test_query_eval_error() -> eyre::Result<()> {
     git.commit_file("test3", 3)?;
 
     {
-        let (stdout, stderr) = git.run_with_options(
-            &["query", "foo"],
+        let (stdout, stderr) = git.branchless_with_options(
+            "query",
+            &["foo"],
             &GitRunOptions {
                 expected_exit_code: 1,
                 ..Default::default()
@@ -76,8 +78,9 @@ fn test_query_eval_error() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, stderr) = git.run_with_options(
-            &["query", "foo()"],
+        let (stdout, stderr) = git.branchless_with_options(
+            "query",
+            &["foo()"],
             &GitRunOptions {
                 expected_exit_code: 1,
                 ..Default::default()
@@ -102,7 +105,7 @@ fn test_query_legacy_git_syntax() -> eyre::Result<()> {
     git.commit_file("test3", 3)?;
 
     {
-        let (stdout, stderr) = git.run(&["query", "HEAD~2"])?;
+        let (stdout, stderr) = git.branchless("query", &["HEAD~2"])?;
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
         62fc20d create test1.txt
@@ -110,8 +113,9 @@ fn test_query_legacy_git_syntax() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, stderr) = git.run_with_options(
-            &["query", "foo-@"],
+        let (stdout, stderr) = git.branchless_with_options(
+            "query",
+            &["foo-@"],
             &GitRunOptions {
                 expected_exit_code: 1,
                 ..Default::default()
@@ -136,14 +140,15 @@ fn test_query_branches() -> eyre::Result<()> {
     git.commit_file("test3", 3)?;
 
     {
-        let (stdout, _stderr) = git.run(&["query", "-b", "."])?;
+        let (stdout, _stderr) = git.branchless("query", &["-b", "."])?;
         insta::assert_snapshot!(stdout, @"master
 ");
     }
 
     {
-        let (stdout, _stderr) = git.run_with_options(
-            &["query", "-b", ".", "-r"],
+        let (stdout, _stderr) = git.branchless_with_options(
+            "query",
+            &["-b", ".", "-r"],
             &GitRunOptions {
                 expected_exit_code: 2,
                 ..Default::default()
@@ -153,7 +158,7 @@ fn test_query_branches() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["query", "-b", "::."])?;
+        let (stdout, _stderr) = git.branchless("query", &["-b", "::."])?;
         insta::assert_snapshot!(stdout, @r###"
         foo
         master
@@ -161,7 +166,7 @@ fn test_query_branches() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["query", "branches()"])?;
+        let (stdout, _stderr) = git.branchless("query", &["branches()"])?;
         insta::assert_snapshot!(stdout, @r###"
         62fc20d create test1.txt
         70deb1e create test3.txt
@@ -180,11 +185,11 @@ fn test_query_hidden_commits() -> eyre::Result<()> {
     let test2_oid = git.commit_file("test2", 2)?;
     git.commit_file("test3", 3)?;
 
-    git.run(&["hide", "HEAD"])?;
+    git.branchless("hide", &["HEAD"])?;
     git.run(&["checkout", &test2_oid.to_string()])?;
 
     {
-        let (stdout, stderr) = git.run(&["query", &format!("{test2_oid}::")])?;
+        let (stdout, stderr) = git.branchless("query", &[&format!("{test2_oid}::")])?;
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
         96d1c37 create test2.txt
@@ -194,7 +199,7 @@ fn test_query_hidden_commits() -> eyre::Result<()> {
 
     git.run(&["checkout", "-B", "master"])?;
     {
-        let (stdout, stderr) = git.run(&["query", &format!("{test2_oid}::")])?;
+        let (stdout, stderr) = git.branchless("query", &[&format!("{test2_oid}::")])?;
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
         96d1c37 create test2.txt

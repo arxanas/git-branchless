@@ -47,7 +47,7 @@ echo Hello, world
 ",
     )?;
 
-    git.run(&["branchless", "init"])?;
+    git.branchless("init", &[])?;
 
     {
         let (stdout, stderr) = git.run(&["commit", "--allow-empty", "-m", "test"])?;
@@ -111,7 +111,7 @@ fn test_dont_install_existing_aliases() -> eyre::Result<()> {
     };
 
     // Initialize branchless and make sure it didn't add the "sl" alias
-    git.run_with_options(&["branchless", "init"], &git_run_options)?;
+    git.branchless_with_options("init", &[], &git_run_options)?;
 
     {
         let (expected_stdout, _) = git.run_with_options(&["status"], &git_run_options)?;
@@ -126,7 +126,7 @@ fn test_dont_install_existing_aliases() -> eyre::Result<()> {
         "[alias]\n\tsl = status\n\tsmartlog = status",
     )?;
 
-    git.run_with_options(&["branchless", "init"], &git_run_options)?;
+    git.branchless_with_options("init", &[], &git_run_options)?;
 
     {
         let (expected_stdout, _) = git.run_with_options(&["status"], &git_run_options)?;
@@ -145,7 +145,7 @@ fn test_dont_install_existing_aliases() -> eyre::Result<()> {
     // Update the config to remove both aliases and make sure both are added
     std::fs::write(&fake_home_git_config, "")?;
 
-    git.run_with_options(&["branchless", "init"], &git_run_options)?;
+    git.branchless_with_options("init", &[], &git_run_options)?;
 
     {
         let (expected_stdout, _) = git.run_with_options(&["smartlog"], &git_run_options)?;
@@ -178,7 +178,7 @@ fn test_old_git_version_warning() -> eyre::Result<()> {
     git.init_repo()?;
     let version = git.get_version()?;
     if version < GitVersion(2, 29, 0) {
-        let (stdout, _stderr) = git.run(&["branchless", "init"])?;
+        let (stdout, _stderr) = git.branchless("init", &[])?;
         let (version_str, _stderr) = git.run(&["version"])?;
         let stdout = stdout.replace(version_str.trim(), "<git version output>");
         insta::assert_snapshot!(stdout, @r###"
@@ -220,7 +220,7 @@ fn test_init_basic() -> eyre::Result<()> {
     })?;
 
     {
-        let (stdout, _stderr) = git.run(&["branchless", "init"])?;
+        let (stdout, _stderr) = git.branchless("init", &[])?;
         insta::assert_snapshot!(stdout, @r###"
         Created config file at <repo-path>/.git/branchless/config
         Auto-detected your main branch as: master
@@ -251,8 +251,9 @@ fn test_init_prompt_for_main_branch() -> eyre::Result<()> {
     git.run(&["branch", "-m", "master", "bespoke"])?;
 
     {
-        let (stdout, stderr) = git.run_with_options(
-            &["branchless", "init"],
+        let (stdout, stderr) = git.branchless_with_options(
+            "init",
+            &[],
             &GitRunOptions {
                 input: Some("bespoke\n".to_string()),
                 ..Default::default()
@@ -288,8 +289,9 @@ fn test_main_branch_not_found_error_message() -> eyre::Result<()> {
     git.detach_head()?;
     git.run(&["branch", "-d", "master"])?;
 
-    let (stdout, stderr) = git.run_with_options(
-        &["smartlog"],
+    let (stdout, stderr) = git.branchless_with_options(
+        "smartlog",
+        &[],
         &GitRunOptions {
             // Exit code 101 indicates a panic.
             expected_exit_code: 101,
@@ -350,7 +352,7 @@ fn test_init_uninstall() -> eyre::Result<()> {
     git.init_repo()?;
 
     {
-        let (stdout, stderr) = git.run(&["branchless", "init", "--uninstall"])?;
+        let (stdout, stderr) = git.branchless("init", &["--uninstall"])?;
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
         Removing config file: <repo-path>/.git/branchless/config
@@ -397,8 +399,9 @@ fn test_man_viewer_installed() -> eyre::Result<()> {
     };
 
     {
-        let (stdout, _stderr) = git.run_with_options(
-            &["smartlog", "--help"],
+        let (stdout, _stderr) = git.branchless_with_options(
+            "smartlog",
+            &["--help"],
             &GitRunOptions {
                 env: env.clone(),
                 ..Default::default()
@@ -413,8 +416,9 @@ fn test_man_viewer_installed() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run_with_options(
-            &["init", "--help"],
+        let (stdout, _stderr) = git.branchless_with_options(
+            "init",
+            &["--help"],
             &GitRunOptions {
                 env,
                 ..Default::default()
@@ -445,7 +449,7 @@ fn test_init_explicit_main_branch_name() -> eyre::Result<()> {
         // over the repo default.
         git.run(&["config", "init.defaultBranch", "repo-default-branch"])?;
 
-        git.run(&["branchless", "init", "--main-branch", "foo"])?;
+        git.branchless("init", &["--main-branch", "foo"])?;
         git.run(&["checkout", "-b", "foo"])?;
         git.run(&["branch", "-d", "master"])?;
         git.commit_file("test1", 1)?;
@@ -474,7 +478,7 @@ fn test_init_repo_default_branch() -> eyre::Result<()> {
         git.run(&["config", "init.defaultBranch", "repo-default-branch"])?;
         git.run(&["branch", "-d", "master"])?;
 
-        git.run(&["branchless", "init"])?;
+        git.branchless("init", &[])?;
         git.commit_file("test1", 1)?;
 
         let stdout = git.smartlog()?;
@@ -535,7 +539,7 @@ fn test_init_core_hooks_path_warning() -> eyre::Result<()> {
     git.run(&["config", "core.hooksPath", "my-hooks"])?;
 
     {
-        let (stdout, _stderr) = git.run(&["branchless", "init"])?;
+        let (stdout, _stderr) = git.branchless("init", &[])?;
         insta::assert_snapshot!(stdout, @r###"
         Created config file at <repo-path>/.git/branchless/config
         Auto-detected your main branch as: master
@@ -588,7 +592,7 @@ hooksPath = my-hooks
     )?;
 
     {
-        let (stdout, _stderr) = git.run(&["branchless", "init"])?;
+        let (stdout, _stderr) = git.branchless("init", &[])?;
         insta::assert_snapshot!(stdout, @r###"
         Created config file at <repo-path>/.git/branchless/config
         Auto-detected your main branch as: master
@@ -619,9 +623,9 @@ fn test_init_worktree() -> eyre::Result<()> {
         temp_dir: _temp_dir,
         worktree,
     } = make_git_worktree(&git, "new-worktree")?;
-    worktree.run(&["branchless", "init"])?;
+    worktree.branchless("init", &[])?;
     {
-        let (stdout, _stderr) = worktree.run(&["smartlog"])?;
+        let stdout = worktree.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         @ 96d1c37 (> new-worktree, master) create test2.txt

@@ -36,7 +36,7 @@ fn test_restack_amended_commit() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["restack", "--on-disk"])?;
+        let (stdout, _stderr) = git.branchless("restack", &["--on-disk"])?;
         let stdout = remove_rebase_lines(stdout);
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> diff --quiet
@@ -76,7 +76,7 @@ fn test_restack_consecutive_rewrites() -> eyre::Result<()> {
     git.run(&["commit", "--amend", "-m", "amend test1.txt v2"])?;
 
     {
-        let (stdout, _stderr) = git.run(&["restack", "--on-disk"])?;
+        let (stdout, _stderr) = git.branchless("restack", &["--on-disk"])?;
         let stdout = remove_rebase_lines(stdout);
 
         insta::assert_snapshot!(stdout, @r###"
@@ -151,7 +151,7 @@ fn test_amended_initial_commit() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["restack", "--on-disk", "--force-rewrite"])?;
+        let (stdout, _stderr) = git.branchless("restack", &["--on-disk", "--force-rewrite"])?;
         let stdout = remove_rebase_lines(stdout);
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> diff --quiet
@@ -185,7 +185,7 @@ fn test_restack_amended_master() -> eyre::Result<()> {
     git.run(&["commit", "--amend", "-m", "amended test1"])?;
 
     {
-        let (stdout, _stderr) = git.run(&["restack", "--on-disk", "--force-rewrite"])?;
+        let (stdout, _stderr) = git.branchless("restack", &["--on-disk", "--force-rewrite"])?;
         let stdout = remove_rebase_lines(stdout);
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> diff --quiet
@@ -218,8 +218,9 @@ fn test_restack_aborts_during_rebase_conflict() -> eyre::Result<()> {
     git.run(&["commit", "--amend", "-m", "amend test1 with test2 conflict"])?;
 
     {
-        let (stdout, _stderr) = git.run_with_options(
-            &["restack", "-f"],
+        let (stdout, _stderr) = git.branchless_with_options(
+            "restack",
+            &["-f"],
             &GitRunOptions {
                 expected_exit_code: 1,
                 ..Default::default()
@@ -234,8 +235,9 @@ fn test_restack_aborts_during_rebase_conflict() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run_with_options(
-            &["restack", "--force-rewrite", "--merge"],
+        let (stdout, _stderr) = git.branchless_with_options(
+            "restack",
+            &["--force-rewrite", "--merge"],
             &GitRunOptions {
                 expected_exit_code: 1,
                 ..Default::default()
@@ -282,7 +284,7 @@ fn test_restack_multiple_amended() -> eyre::Result<()> {
     git.run(&["checkout", "HEAD~"])?;
 
     {
-        let (stdout, _stderr) = git.run(&["restack", "--on-disk"])?;
+        let (stdout, _stderr) = git.branchless("restack", &["--on-disk"])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
@@ -351,7 +353,7 @@ fn test_restack_single_of_many_commits() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, stderr) = git.run(&["restack", "--on-disk", &test2_oid.to_string()])?;
+        let (stdout, stderr) = git.branchless("restack", &["--on-disk", &test2_oid.to_string()])?;
         insta::assert_snapshot!(stderr, @r###"
         branchless: processing 1 update: ref HEAD
         branchless: processing 1 update: ref HEAD
@@ -425,7 +427,7 @@ fn test_restack_unobserved_commit() -> eyre::Result<()> {
     git.detach_head()?;
     git.commit_file("test3", 3)?;
 
-    git.run(&["branchless", "init"])?;
+    git.branchless("init", &[])?;
     {
         let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
@@ -481,7 +483,7 @@ fn test_restack_checked_out_branch() -> eyre::Result<()> {
     git.run(&["checkout", "foo"])?;
 
     {
-        let (stdout, _stderr) = git.run(&["restack", "-f"])?;
+        let (stdout, _stderr) = git.branchless("restack", &["-f"])?;
         insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
         [1/1] Committed as: 59e7581 create test2.txt
@@ -514,7 +516,7 @@ fn test_restack_non_observed_branch_commit() -> eyre::Result<()> {
     git.run(&["checkout", "foo"])?;
 
     {
-        let (stdout, _stderr) = git.run(&["restack", "-f"])?;
+        let (stdout, _stderr) = git.branchless("restack", &["-f"])?;
         insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
         [1/1] Committed as: 59e7581 create test2.txt
@@ -550,7 +552,7 @@ fn test_restack_non_observed_branch_commit() -> eyre::Result<()> {
         // the user might not expect the restack operation to create duplicates
         // of all descendant commits just because a branch pointed to one of
         // those descendants.
-        let (stdout, _stderr) = git.run(&["restack", "-f"])?;
+        let (stdout, _stderr) = git.branchless("restack", &["-f"])?;
         insta::assert_snapshot!(stdout, @r###"
         No abandoned commits to restack.
         branchless: processing 1 update: branch foo

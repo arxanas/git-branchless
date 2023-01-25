@@ -20,7 +20,7 @@ fn test_reword_head() -> eyre::Result<()> {
     @ 96d1c37 (> master) create test2.txt
     "###);
 
-    git.run(&["reword", "--force-rewrite", "--message", "foo"])?;
+    git.branchless("reword", &["--force-rewrite", "--message", "foo"])?;
 
     let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
@@ -54,7 +54,7 @@ fn test_reword_current_commit_not_head() -> eyre::Result<()> {
     O 96d1c37 (master) create test2.txt
     "###);
 
-    git.run(&["reword", "--force-rewrite", "--message", "foo"])?;
+    git.branchless("reword", &["--force-rewrite", "--message", "foo"])?;
 
     let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
@@ -83,7 +83,7 @@ fn test_reword_with_multiple_messages() -> eyre::Result<()> {
     create test1.txt
     "###);
 
-    git.run(&["reword", "-f", "-m", "foo", "-m", "bar"])?;
+    git.branchless("reword", &["-f", "-m", "foo", "-m", "bar"])?;
 
     let (stdout, _stderr) = git.run(&["log", "-n", "1", "--format=%h%n%B"])?;
     insta::assert_snapshot!(stdout, @r###"
@@ -154,7 +154,7 @@ fn test_reword_non_head_commit() -> eyre::Result<()> {
     @ 96d1c37 (> master) create test2.txt
     "###);
 
-    git.run(&["reword", "HEAD^", "--force-rewrite", "--message", "bar"])?;
+    git.branchless("reword", &["HEAD^", "--force-rewrite", "--message", "bar"])?;
 
     let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
@@ -236,7 +236,8 @@ fn test_reword_tree() -> eyre::Result<()> {
     @ 9ea1b36 create test5.txt
     "###);
 
-    let (_stdout, _stderr) = git.run(&["reword", &test3_oid.to_string(), "--message", "foo"])?;
+    let (_stdout, _stderr) =
+        git.branchless("reword", &[&test3_oid.to_string(), "--message", "foo"])?;
 
     let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
@@ -356,7 +357,7 @@ fn test_reword_fixup_head() -> eyre::Result<()> {
     @ 96d1c37 (> test) create test2.txt
     "###);
 
-    git.run(&["reword", "--fixup", "HEAD^"])?;
+    git.branchless("reword", &["--fixup", "HEAD^"])?;
 
     let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
@@ -391,7 +392,7 @@ fn test_reword_fixup_non_head_commit() -> eyre::Result<()> {
     @ 96d1c37 (> test) create test2.txt
     "###);
 
-    git.run(&["reword", "HEAD^", "--fixup", "roots(all())"])?;
+    git.branchless("reword", &["HEAD^", "--fixup", "roots(all())"])?;
 
     let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
@@ -426,7 +427,7 @@ fn test_reword_fixup_multiple_commits() -> eyre::Result<()> {
     @ 96d1c37 (> test) create test2.txt
     "###);
 
-    git.run(&["reword", "stack()", "--fixup", "roots(all())"])?;
+    git.branchless("reword", &["stack()", "--fixup", "roots(all())"])?;
 
     let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
@@ -461,8 +462,9 @@ fn test_reword_fixup_only_accepts_single_commit() -> eyre::Result<()> {
     @ 96d1c37 (> test) create test2.txt
     "###);
 
-    let (_stdout, stderr) = git.run_with_options(
-        &["reword", "--fixup", "ancestors(HEAD)"],
+    let (_stdout, stderr) = git.branchless_with_options(
+        "reword",
+        &["--fixup", "ancestors(HEAD)"],
         &GitRunOptions {
             expected_exit_code: 1,
             ..Default::default()
@@ -497,8 +499,9 @@ fn test_reword_fixup_ancestry_issue() -> eyre::Result<()> {
     @ 96d1c37 (> test) create test2.txt
     "###);
 
-    let (_stdout, stderr) = git.run_with_options(
-        &["reword", "HEAD^", "--fixup", "HEAD"],
+    let (_stdout, stderr) = git.branchless_with_options(
+        "reword",
+        &["HEAD^", "--fixup", "HEAD"],
         &GitRunOptions {
             expected_exit_code: 1,
             ..Default::default()
@@ -546,7 +549,7 @@ fn test_reword_merge_commit() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, stderr) = git.run(&["reword", "-m", "new message"])?;
+        let (stdout, stderr) = git.branchless("reword", &["-m", "new message"])?;
         insta::assert_snapshot!(stderr, @r###"
         branchless: creating working copy snapshot
         Previous HEAD position was a4dd9b0 Merge commit '96d1c37a3d4363611c49f7e52186e189a04c531f' into HEAD
@@ -602,7 +605,7 @@ fn test_reword_merge_commit() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["reword", "draft()", "-m", "new message 2"])?;
+        let (stdout, _stderr) = git.branchless("reword", &["draft()", "-m", "new message 2"])?;
         insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
         [1/3] Committed as: 11f31c5 new message 2

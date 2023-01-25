@@ -374,7 +374,7 @@ fn test_smartlog_orphaned_root() -> eyre::Result<()> {
     git.run(&["checkout", "--orphan", "new-root"])?;
 
     {
-        let (stdout, stderr) = git.run(&["branchless-smartlog"])?;
+        let (stdout, stderr) = git.branchless("smartlog", &[])?;
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
         :
@@ -476,7 +476,7 @@ fn test_smartlog_sparse() -> eyre::Result<()> {
     git.commit_file("test4", 4)?;
 
     {
-        let (stdout, _stderr) = git.run(&["branchless-smartlog", "none()"])?;
+        let (stdout, _stderr) = git.branchless("smartlog", &["none()"])?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 0206717 (master) create test3.txt
@@ -536,7 +536,7 @@ fn test_smartlog_sparse_false_head() -> eyre::Result<()> {
     git.commit_file("test6", 6)?;
 
     {
-        let (stdout, _stderr) = git.run(&["branchless-smartlog", &test2_oid.to_string()])?;
+        let (stdout, _stderr) = git.branchless("smartlog", &[&test2_oid.to_string()])?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc create initial.txt
         |\
@@ -568,7 +568,7 @@ fn test_smartlog_sparse_main_false_head() -> eyre::Result<()> {
     git.run(&["checkout", "HEAD~"])?;
 
     {
-        let (stdout, _stderr) = git.run(&["branchless-smartlog", "none()"])?;
+        let (stdout, _stderr) = git.branchless("smartlog", &["none()"])?;
         insta::assert_snapshot!(stdout, @r###"
         :
         @ 62fc20d (master) create test1.txt
@@ -590,7 +590,7 @@ fn test_smartlog_hidden() -> eyre::Result<()> {
     git.run(&["commit", "--amend", "-m", "amended test1"])?;
 
     {
-        let (stdout, _stderr) = git.run(&["branchless-smartlog", "--hidden"])?;
+        let (stdout, _stderr) = git.branchless("smartlog", &["--hidden"])?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |\
@@ -617,7 +617,7 @@ fn test_smartlog_sparse_vertical_ellipsis_sibling_commits() -> eyre::Result<()> 
     git.commit_file("test4", 4)?;
 
     {
-        let (stdout, _stderr) = git.run(&["branchless-smartlog", "heads(draft())"])?;
+        let (stdout, _stderr) = git.branchless("smartlog", &["heads(draft())"])?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |\

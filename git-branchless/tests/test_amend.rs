@@ -562,7 +562,7 @@ fn test_amend_undo() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["undo", "-y"])?;
+        let (stdout, _stderr) = git.branchless("undo", &["-y"])?;
         let stdout = trim_lines(stdout);
         insta::assert_snapshot!(stdout, @r###"
         Will apply these actions:
@@ -664,7 +664,7 @@ fn test_amend_undo_detached_head() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["undo", "-y"])?;
+        let (stdout, _stderr) = git.branchless("undo", &["-y"])?;
         insta::assert_snapshot!(stdout, @r###"
         Will apply these actions:
         1. Check out from 94b1077 create file1.txt
@@ -811,7 +811,7 @@ fn test_amend_reparent() -> eyre::Result<()> {
         "###);
     }
 
-    git.run(&["next"])?;
+    git.branchless("next", &[])?;
     {
         let (stdout, _stderr) = git.run(&["show"])?;
         insta::assert_snapshot!(stdout, @r###"

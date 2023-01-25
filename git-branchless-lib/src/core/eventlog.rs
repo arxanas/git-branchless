@@ -1429,7 +1429,7 @@ mod tests {
 
         git.init_repo()?;
         git.commit_file("test1", 1)?;
-        git.run(&["hide", "HEAD"])?;
+        git.branchless("hide", &["HEAD"])?;
 
         let repo = git.get_repo()?;
         let conn = repo.get_db_conn()?;

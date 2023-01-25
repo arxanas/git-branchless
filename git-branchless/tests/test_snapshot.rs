@@ -66,7 +66,7 @@ fn test_restore_snapshot_basic() -> eyre::Result<()> {
     };
 
     let snapshot_oid = {
-        let (snapshot_oid, stderr) = git.run(&["branchless", "snapshot", "create"])?;
+        let (snapshot_oid, stderr) = git.branchless("snapshot", &["create"])?;
         insta::assert_snapshot!(stderr, @"branchless: creating working copy snapshot
 ");
         NonZeroOid::from_str(snapshot_oid.trim())?
@@ -82,12 +82,8 @@ fn test_restore_snapshot_basic() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, stderr) = git.run(&[
-            "branchless",
-            "snapshot",
-            "restore",
-            &snapshot_oid.to_string(),
-        ])?;
+        let (stdout, stderr) =
+            git.branchless("snapshot", &["restore", &snapshot_oid.to_string()])?;
         let stdout = trim_lines(stdout);
         insta::assert_snapshot!(stderr, @r###"
         branchless: restoring from snapshot
@@ -183,7 +179,7 @@ fn test_restore_snapshot_deleted_files() -> eyre::Result<()> {
     };
 
     let snapshot_oid = {
-        let (snapshot_oid, stderr) = git.run(&["branchless", "snapshot", "create"])?;
+        let (snapshot_oid, stderr) = git.branchless("snapshot", &["create"])?;
         insta::assert_snapshot!(stderr, @"branchless: creating working copy snapshot
 ");
         NonZeroOid::from_str(snapshot_oid.trim())?
@@ -196,12 +192,8 @@ fn test_restore_snapshot_deleted_files() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, stderr) = git.run(&[
-            "branchless",
-            "snapshot",
-            "restore",
-            &snapshot_oid.to_string(),
-        ])?;
+        let (stdout, stderr) =
+            git.branchless("snapshot", &["restore", &snapshot_oid.to_string()])?;
         let stdout = trim_lines(stdout);
         insta::assert_snapshot!(stderr, @r###"
         branchless: restoring from snapshot
@@ -260,7 +252,7 @@ fn test_restore_snapshot_delete_file_only_in_index() -> eyre::Result<()> {
     }
 
     let snapshot_oid = {
-        let (snapshot_oid, stderr) = git.run(&["branchless", "snapshot", "create"])?;
+        let (snapshot_oid, stderr) = git.branchless("snapshot", &["create"])?;
         insta::assert_snapshot!(stderr, @"branchless: creating working copy snapshot
 ");
         NonZeroOid::from_str(snapshot_oid.trim())?
@@ -273,12 +265,8 @@ fn test_restore_snapshot_delete_file_only_in_index() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, stderr) = git.run(&[
-            "branchless",
-            "snapshot",
-            "restore",
-            &snapshot_oid.to_string(),
-        ])?;
+        let (stdout, stderr) =
+            git.branchless("snapshot", &["restore", &snapshot_oid.to_string()])?;
         let stdout = trim_lines(stdout);
         insta::assert_snapshot!(stderr, @r###"
         branchless: restoring from snapshot
@@ -323,7 +311,7 @@ fn test_restore_snapshot_respect_untracked_changes() -> eyre::Result<()> {
     git.commit_file("test1", 1)?;
 
     let snapshot_oid = {
-        let (snapshot_oid, stderr) = git.run(&["branchless", "snapshot", "create"])?;
+        let (snapshot_oid, stderr) = git.branchless("snapshot", &["create"])?;
         insta::assert_snapshot!(stderr, @"branchless: creating working copy snapshot
 ");
         NonZeroOid::from_str(snapshot_oid.trim())?
@@ -415,7 +403,7 @@ fn test_snapshot_merge_conflict() -> eyre::Result<()> {
     }
 
     let snapshot_oid = {
-        let (stdout, stderr) = git.run(&["branchless", "snapshot", "create"])?;
+        let (stdout, stderr) = git.branchless("snapshot", &["create"])?;
         insta::assert_snapshot!(stderr, @"branchless: creating working copy snapshot
 ");
         NonZeroOid::from_str(stdout.trim())?
@@ -431,12 +419,8 @@ fn test_snapshot_merge_conflict() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&[
-            "branchless",
-            "snapshot",
-            "restore",
-            &snapshot_oid.to_string(),
-        ])?;
+        let (stdout, _stderr) =
+            git.branchless("snapshot", &["restore", &snapshot_oid.to_string()])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> reset --hard HEAD
         HEAD is now at 588fac3 delete test2.txt
@@ -477,7 +461,7 @@ fn test_snapshot_restore_unborn_head() -> eyre::Result<()> {
         run_branchless_init: false,
     })?;
 
-    git.run(&["branchless", "init", "--main-branch", "master"])?;
+    git.branchless("init", &["--main-branch", "master"])?;
 
     {
         let (stdout, _stderr) = git.run(&["status", "-vv"])?;
@@ -491,7 +475,7 @@ fn test_snapshot_restore_unborn_head() -> eyre::Result<()> {
     }
 
     let snapshot_oid = {
-        let (snapshot_oid, stderr) = git.run(&["branchless", "snapshot", "create"])?;
+        let (snapshot_oid, stderr) = git.branchless("snapshot", &["create"])?;
         insta::assert_snapshot!(stderr, @"branchless: creating working copy snapshot
 ");
         NonZeroOid::from_str(snapshot_oid.trim())?
@@ -505,12 +489,8 @@ fn test_snapshot_restore_unborn_head() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&[
-            "branchless",
-            "snapshot",
-            "restore",
-            &snapshot_oid.to_string(),
-        ])?;
+        let (stdout, _stderr) =
+            git.branchless("snapshot", &["restore", &snapshot_oid.to_string()])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> reset --hard HEAD
         HEAD is now at 6118a39 create test1.txt

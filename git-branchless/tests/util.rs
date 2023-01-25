@@ -19,7 +19,12 @@ pub enum PtyAction<'a> {
     WaitUntilContains(&'a str),
 }
 
-pub fn run_in_pty(git: &Git, args: &[&str], inputs: &[PtyAction]) -> eyre::Result<()> {
+pub fn run_in_pty(
+    git: &Git,
+    branchless_subcommand: &str,
+    args: &[&str],
+    inputs: &[PtyAction],
+) -> eyre::Result<()> {
     // Use the native pty implementation for the system
     let pty_system = native_pty_system();
     let pty_size = PtySize::default();
@@ -34,6 +39,8 @@ pub fn run_in_pty(git: &Git, args: &[&str], inputs: &[PtyAction]) -> eyre::Resul
         cmd.env(k, v);
     }
     cmd.env("TERM", "xterm");
+    cmd.arg("branchless");
+    cmd.arg(branchless_subcommand);
     cmd.args(args);
     cmd.cwd(&git.repo_path);
 
