@@ -6,7 +6,7 @@ debug = 0
 [workspace]
 default-members = ["git-branchless"]
 members = [
-    "git-branchless",
+    "git-branchless-init",
     "git-branchless-invoke",
     "git-branchless-lib",
     "git-branchless-move",
@@ -17,6 +17,7 @@ members = [
     "git-branchless-reword",
     "git-branchless-smartlog",
     "git-branchless-test",
+    "git-branchless",
     "git-record",
 ]
 

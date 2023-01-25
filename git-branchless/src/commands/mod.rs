@@ -5,7 +5,6 @@ mod bug_report;
 mod gc;
 mod hide;
 mod hooks;
-mod init;
 mod query;
 mod repair;
 mod restack;
@@ -127,21 +126,7 @@ fn command_main(ctx: CommandContext, opts: Opts) -> eyre::Result<ExitCode> {
             ExitCode(0)
         }
 
-        Command::Init {
-            uninstall: false,
-            main_branch_name,
-        } => {
-            init::init(&effects, &git_run_info, main_branch_name.as_deref())?;
-            ExitCode(0)
-        }
-
-        Command::Init {
-            uninstall: true,
-            main_branch_name: _,
-        } => {
-            init::uninstall(&effects, &git_run_info)?;
-            ExitCode(0)
-        }
+        Command::Init(args) => git_branchless_init::command_main(ctx, args)?,
 
         Command::Move {
             source,
