@@ -11,7 +11,7 @@ fn test_commands() -> eyre::Result<()> {
     git.commit_file("test", 1)?;
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         @ 3df4b93 (> master) create test.txt
@@ -100,7 +100,7 @@ fn test_sparse_checkout() -> eyre::Result<()> {
         "###);
     }
 
-    if let Ok((stdout, _stderr)) = git.run(&["smartlog"]) {
+    if let Ok(stdout) = git.smartlog() {
         insta::assert_snapshot!(stdout, @"@ f777ecc (> master) create initial.txt
 ");
     } else {

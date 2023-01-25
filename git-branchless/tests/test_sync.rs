@@ -40,7 +40,7 @@ fn test_sync_basic() -> eyre::Result<()> {
     git.commit_file("test5", 5)?;
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc create initial.txt
         |\
@@ -84,7 +84,7 @@ fn test_sync_basic() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         @ 117e086 (> master) create test5.txt
@@ -225,7 +225,7 @@ fn test_sync_specific_commit() -> eyre::Result<()> {
     git.commit_file("test5", 5)?;
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 96d1c37 create test2.txt
@@ -252,7 +252,7 @@ fn test_sync_specific_commit() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 96d1c37 create test2.txt

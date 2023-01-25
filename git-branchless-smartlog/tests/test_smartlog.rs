@@ -503,7 +503,7 @@ fn test_smartlog_sparse_branch() -> eyre::Result<()> {
     git.commit_file("test5", 5)?;
 
     {
-        let (stdout, _stderr) = git.run(&["branchless-smartlog", &test2_oid.to_string()])?;
+        let (stdout, _stderr) = git.run(&["smartlog", &test2_oid.to_string()])?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc create initial.txt
         |\

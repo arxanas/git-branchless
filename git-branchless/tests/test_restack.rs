@@ -18,7 +18,7 @@ fn test_restack_amended_commit() -> eyre::Result<()> {
     git.run(&["commit", "--amend", "-m", "amend test1.txt"])?;
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |\
@@ -142,7 +142,7 @@ fn test_amended_initial_commit() -> eyre::Result<()> {
     {
         // FIXME: there is no topological relationship between the new initial commit and `master`,
         // so they shouldn't be connected in the smartlog.
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         @ 9a9f929 new initial commit
         :
@@ -328,7 +328,7 @@ fn test_restack_single_of_many_commits() -> eyre::Result<()> {
     git.run(&["commit", "--amend", "-m", "updated test4"])?;
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d (master) create test1.txt
@@ -427,7 +427,7 @@ fn test_restack_unobserved_commit() -> eyre::Result<()> {
 
     git.run(&["branchless", "init"])?;
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d (master) create test1.txt
@@ -443,7 +443,7 @@ fn test_restack_unobserved_commit() -> eyre::Result<()> {
 
     git.run(&["commit", "--amend", "-m", "Updated test2"])?;
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         O 62fc20d (master) create test1.txt

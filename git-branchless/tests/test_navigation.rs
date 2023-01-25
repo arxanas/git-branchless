@@ -37,7 +37,7 @@ fn test_prev() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         @ f777ecc create initial.txt
         |
@@ -187,7 +187,7 @@ fn test_next_ambiguous_interactive() -> eyre::Result<()> {
     )?;
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |\
@@ -305,7 +305,7 @@ fn test_switch_pty() -> eyre::Result<()> {
         ],
     )?;
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |\
@@ -329,7 +329,7 @@ fn test_switch_pty() -> eyre::Result<()> {
         ],
     )?;
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |\
@@ -363,7 +363,7 @@ fn test_switch_abort() -> eyre::Result<()> {
         ],
     )?;
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
@@ -599,7 +599,7 @@ fn test_switch_pty_branch() -> eyre::Result<()> {
         ],
     )?;
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         @ 62fc20d (> master) create test1.txt
@@ -632,7 +632,7 @@ fn test_switch_pty_initial_query() -> eyre::Result<()> {
         ],
     )?;
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
@@ -866,7 +866,7 @@ fn test_switch_auto_switch_interactive() -> eyre::Result<()> {
     )?;
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
@@ -909,7 +909,7 @@ fn test_switch_auto_switch_interactive_disabled() -> eyre::Result<()> {
     )?;
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |

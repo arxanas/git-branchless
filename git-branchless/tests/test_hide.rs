@@ -477,7 +477,7 @@ fn test_smartlog_active_non_head_main_branch_commit() -> eyre::Result<()> {
         // un-hidden. It's a public commit, so it should be hidden if possible.
         cloned_repo.run(&["unhide", &test1_oid.to_string()])?;
 
-        let (stdout, _stderr) = cloned_repo.run(&["branchless-smartlog"])?;
+        let stdout = cloned_repo.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
         @ 70deb1e (> master) create test3.txt

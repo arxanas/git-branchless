@@ -21,7 +21,7 @@ fn test_repair_broken_commit() -> eyre::Result<()> {
     git.run(&["gc", "--prune=now"])?;
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         o 70deb1e <garbage collected>
 
@@ -40,7 +40,7 @@ fn test_repair_broken_commit() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
