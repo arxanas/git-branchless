@@ -1,5 +1,6 @@
 use std::any::Any;
 use std::convert::TryInto;
+use std::ffi::OsString;
 use std::fmt::Write;
 use std::path::PathBuf;
 use std::time::SystemTime;
@@ -15,6 +16,7 @@ use lib::core::formatting::Glyphs;
 use lib::git::GitRunInfo;
 use lib::git::{Repo, RepoError};
 use lib::util::ExitCode;
+use tracing::instrument;
 use tracing::level_filters::LevelFilter;
 use tracing_chrome::ChromeLayerBuilder;
 use tracing_error::ErrorLayer;
@@ -124,11 +126,13 @@ support repositories with this configuration option enabled.",
 }
 
 /// Wrapper function for `main` to ensure that `Drop` is called for local
-/// variables, since `std::process::exit` will skip them.
-fn do_main_and_drop_locals<T: Parser>(
+/// variables, since `std::process::exit` will skip them. You probably want to
+/// call `invoke_subcommand_main` instead.
+#[instrument(skip(f))]
+pub fn do_main_and_drop_locals<T: Parser>(
     f: impl Fn(CommandContext, T) -> eyre::Result<ExitCode>,
+    args: Vec<OsString>,
 ) -> eyre::Result<i32> {
-    let args: Vec<_> = std::env::args_os().collect();
     let command = GlobalArgs::command();
     let matches = command.ignore_errors(true).get_matches_from(&args);
     let GlobalArgs {
@@ -178,11 +182,11 @@ fn do_main_and_drop_locals<T: Parser>(
     Ok(exit_code)
 }
 
-pub fn invoke_subcommand_main<T: Parser>(
-    f: impl Fn(CommandContext, T) -> eyre::Result<ExitCode>,
-) -> ! {
+#[instrument(skip(f))]
+pub fn invoke_subcommand_main<T: Parser>(f: impl Fn(CommandContext, T) -> eyre::Result<ExitCode>) {
     // Install panic handler.
     color_eyre::install().expect("Could not install panic handler");
-    let exit_code = do_main_and_drop_locals(f).expect("A fatal error occurred");
+    let args = std::env::args_os().collect();
+    let exit_code = do_main_and_drop_locals(f, args).expect("A fatal error occurred");
     std::process::exit(exit_code);
 }

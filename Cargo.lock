@@ -1108,6 +1108,7 @@ dependencies = [
  "esl01-dag",
  "eyre",
  "fslock",
+ "git-branchless-hook",
  "git-branchless-init",
  "git-branchless-invoke",
  "git-branchless-lib",
@@ -1138,6 +1139,21 @@ dependencies = [
  "tracing-error",
  "tracing-subscriber",
  "vt100",
+]
+
+[[package]]
+name = "git-branchless-hook"
+version = "0.7.0-pre.1"
+dependencies = [
+ "console",
+ "eyre",
+ "git-branchless-invoke",
+ "git-branchless-lib",
+ "git-branchless-opts",
+ "itertools 0.10.5",
+ "lazy_static",
+ "regex",
+ "tracing",
 ]
 
 [[package]]

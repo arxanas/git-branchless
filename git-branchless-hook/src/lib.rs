@@ -12,13 +12,16 @@ use std::io::{stdin, BufRead};
 use std::time::SystemTime;
 
 use eyre::Context;
+use git_branchless_invoke::CommandContext;
+use git_branchless_opts::{HookArgs, HookSubcommand};
 use itertools::Itertools;
+use lib::util::ExitCode;
 use tracing::{error, instrument, warn};
 
 use lib::core::eventlog::{should_ignore_ref_updates, Event, EventLogDb};
 use lib::core::formatting::{Glyphs, Pluralize};
-use lib::core::gc::mark_commit_reachable;
-use lib::git::{CategorizedReferenceName, MaybeZeroOid, ReferenceName, Repo};
+use lib::core::gc::{gc, mark_commit_reachable};
+use lib::git::{CategorizedReferenceName, MaybeZeroOid, NonZeroOid, ReferenceName, Repo};
 
 use lib::core::effects::Effects;
 pub use lib::core::rewrite::rewrite_hooks::{
@@ -30,7 +33,7 @@ pub use lib::core::rewrite::rewrite_hooks::{
 ///
 /// See the man-page for `githooks(5)`.
 #[instrument]
-pub fn hook_post_checkout(
+fn hook_post_checkout(
     effects: &Effects,
     previous_head_oid: &str,
     current_head_oid: &str,
@@ -120,7 +123,7 @@ fn hook_post_commit_common(effects: &Effects, hook_name: &str) -> eyre::Result<(
 ///
 /// See the man-page for `githooks(5)`.
 #[instrument]
-pub fn hook_post_commit(effects: &Effects) -> eyre::Result<()> {
+fn hook_post_commit(effects: &Effects) -> eyre::Result<()> {
     hook_post_commit_common(effects, "post-commit")
 }
 
@@ -130,7 +133,7 @@ pub fn hook_post_commit(effects: &Effects) -> eyre::Result<()> {
 ///
 /// See the man-page for `githooks(5)`.
 #[instrument]
-pub fn hook_post_merge(effects: &Effects, _is_squash_merge: isize) -> eyre::Result<()> {
+fn hook_post_merge(effects: &Effects, _is_squash_merge: isize) -> eyre::Result<()> {
     hook_post_commit_common(effects, "post-merge")
 }
 
@@ -138,7 +141,7 @@ pub fn hook_post_merge(effects: &Effects, _is_squash_merge: isize) -> eyre::Resu
 ///
 /// See the man-page for `githooks(5)`.
 #[instrument]
-pub fn hook_post_applypatch(effects: &Effects) -> eyre::Result<()> {
+fn hook_post_applypatch(effects: &Effects) -> eyre::Result<()> {
     hook_post_commit_common(effects, "post-applypatch")
 }
 
@@ -368,7 +371,7 @@ mod reference_transaction {
 ///
 /// See the man-page for `githooks(5)`.
 #[instrument]
-pub fn hook_reference_transaction(effects: &Effects, transaction_state: &str) -> eyre::Result<()> {
+fn hook_reference_transaction(effects: &Effects, transaction_state: &str) -> eyre::Result<()> {
     use reference_transaction::{
         fix_packed_reference_oid, parse_reference_transaction_line, read_packed_refs_file,
         ParsedReferenceTransactionLine,
@@ -474,30 +477,67 @@ pub fn hook_reference_transaction(effects: &Effects, transaction_state: &str) ->
     Ok(())
 }
 
-#[cfg(test)]
-mod tests {
-    use lib::testing::{make_git, GitRunOptions};
+/// `hook` subcommand.
+#[instrument]
+pub fn command_main(ctx: CommandContext, args: HookArgs) -> eyre::Result<ExitCode> {
+    let CommandContext {
+        effects,
+        git_run_info,
+    } = ctx;
+    let HookArgs { subcommand } = args;
 
-    #[test]
-    fn test_is_rebase_underway() -> eyre::Result<()> {
-        let git = make_git()?;
+    match subcommand {
+        HookSubcommand::DetectEmptyCommit { old_commit_oid } => {
+            let old_commit_oid: NonZeroOid = old_commit_oid.parse()?;
+            hook_drop_commit_if_empty(&effects, old_commit_oid)?;
+        }
 
-        git.init_repo()?;
-        let repo = git.get_repo()?;
-        assert!(!repo.is_rebase_underway()?);
+        HookSubcommand::PreAutoGc => {
+            gc(&effects)?;
+        }
 
-        let oid1 = git.commit_file_with_contents("test", 1, "foo")?;
-        git.run(&["checkout", "HEAD^"])?;
-        git.commit_file_with_contents("test", 1, "bar")?;
-        git.run_with_options(
-            &["rebase", &oid1.to_string()],
-            &GitRunOptions {
-                expected_exit_code: 1,
-                ..Default::default()
-            },
-        )?;
-        assert!(repo.is_rebase_underway()?);
+        HookSubcommand::PostApplypatch => {
+            hook_post_applypatch(&effects)?;
+        }
 
-        Ok(())
+        HookSubcommand::PostCheckout {
+            previous_commit,
+            current_commit,
+            is_branch_checkout,
+        } => {
+            hook_post_checkout(
+                &effects,
+                &previous_commit,
+                &current_commit,
+                is_branch_checkout,
+            )?;
+        }
+
+        HookSubcommand::PostCommit => {
+            hook_post_commit(&effects)?;
+        }
+
+        HookSubcommand::PostMerge { is_squash_merge } => {
+            hook_post_merge(&effects, is_squash_merge)?;
+        }
+
+        HookSubcommand::PostRewrite { rewrite_type } => {
+            hook_post_rewrite(&effects, &git_run_info, &rewrite_type)?;
+        }
+
+        HookSubcommand::ReferenceTransaction { transaction_state } => {
+            hook_reference_transaction(&effects, &transaction_state)?;
+        }
+
+        HookSubcommand::RegisterExtraPostRewriteHook => {
+            hook_register_extra_post_rewrite_hook()?;
+        }
+
+        HookSubcommand::SkipUpstreamAppliedCommit { commit_oid } => {
+            let commit_oid: NonZeroOid = commit_oid.parse()?;
+            hook_skip_upstream_applied_commit(&effects, commit_oid)?;
+        }
     }
+
+    Ok(ExitCode(0))
 }

@@ -2,9 +2,7 @@
 
 mod amend;
 mod bug_report;
-mod gc;
 mod hide;
-mod hooks;
 mod query;
 mod repair;
 mod restack;
@@ -14,14 +12,15 @@ mod sync;
 mod wrap;
 
 use git_branchless_invoke::CommandContext;
+use lib::core::gc;
 use lib::core::rewrite::MergeConflictRemediation;
 use lib::util::ExitCode;
 
 use git_branchless_opts::{
-    Command, Opts, ResolveRevsetOptions, Revset, SnapshotSubcommand, TestSubcommand, WrappedCommand,
+    rewrite_args, Command, Opts, ResolveRevsetOptions, Revset, SnapshotSubcommand, TestSubcommand,
+    WrappedCommand,
 };
 use lib::git::GitRunInfo;
-use lib::git::NonZeroOid;
 
 fn command_main(ctx: CommandContext, opts: Opts) -> eyre::Result<ExitCode> {
     let CommandContext {
@@ -51,10 +50,12 @@ fn command_main(ctx: CommandContext, opts: Opts) -> eyre::Result<ExitCode> {
             git_branchless_navigation::switch(&effects, &git_run_info, &switch_options)?
         }
 
-        Command::Gc | Command::HookPreAutoGc => {
+        Command::Gc => {
             gc::gc(&effects)?;
             ExitCode(0)
         }
+
+        Command::Hook(args) => git_branchless_hook::command_main(ctx, args)?,
 
         Command::Hide {
             revsets,
@@ -69,62 +70,6 @@ fn command_main(ctx: CommandContext, opts: Opts) -> eyre::Result<ExitCode> {
             delete_branches,
             recursive,
         )?,
-
-        Command::HookDetectEmptyCommit { old_commit_oid } => {
-            let old_commit_oid: NonZeroOid = old_commit_oid.parse()?;
-            hooks::hook_drop_commit_if_empty(&effects, old_commit_oid)?;
-            ExitCode(0)
-        }
-
-        Command::HookPostApplypatch => {
-            hooks::hook_post_applypatch(&effects)?;
-            ExitCode(0)
-        }
-
-        Command::HookPostCheckout {
-            previous_commit,
-            current_commit,
-            is_branch_checkout,
-        } => {
-            hooks::hook_post_checkout(
-                &effects,
-                &previous_commit,
-                &current_commit,
-                is_branch_checkout,
-            )?;
-            ExitCode(0)
-        }
-
-        Command::HookPostCommit => {
-            hooks::hook_post_commit(&effects)?;
-            ExitCode(0)
-        }
-
-        Command::HookPostMerge { is_squash_merge } => {
-            hooks::hook_post_merge(&effects, is_squash_merge)?;
-            ExitCode(0)
-        }
-
-        Command::HookPostRewrite { rewrite_type } => {
-            hooks::hook_post_rewrite(&effects, &git_run_info, &rewrite_type)?;
-            ExitCode(0)
-        }
-
-        Command::HookReferenceTransaction { transaction_state } => {
-            hooks::hook_reference_transaction(&effects, &transaction_state)?;
-            ExitCode(0)
-        }
-
-        Command::HookRegisterExtraPostRewriteHook => {
-            hooks::hook_register_extra_post_rewrite_hook()?;
-            ExitCode(0)
-        }
-
-        Command::HookSkipUpstreamAppliedCommit { commit_oid } => {
-            let commit_oid: NonZeroOid = commit_oid.parse()?;
-            hooks::hook_skip_upstream_applied_commit(&effects, commit_oid)?;
-            ExitCode(0)
-        }
 
         Command::Init(args) => git_branchless_init::command_main(ctx, args)?,
 
@@ -361,5 +306,11 @@ fn command_main(ctx: CommandContext, opts: Opts) -> eyre::Result<ExitCode> {
 
 /// Execute the main process and exit with the appropriate exit code.
 pub fn main() {
-    git_branchless_invoke::invoke_subcommand_main(command_main)
+    // Install panic handler.
+    color_eyre::install().expect("Could not install panic handler");
+    let args: Vec<_> = std::env::args_os().collect();
+    let args = rewrite_args(args);
+    let exit_code = git_branchless_invoke::do_main_and_drop_locals(command_main, args)
+        .expect("A fatal error occurred");
+    std::process::exit(exit_code);
 }
