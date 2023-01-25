@@ -16,8 +16,8 @@ use lib::core::formatting::Glyphs;
 use lib::git::GitRunInfo;
 use lib::git::{Repo, RepoError};
 use lib::util::ExitCode;
-use tracing::instrument;
 use tracing::level_filters::LevelFilter;
+use tracing::{info, instrument, warn};
 use tracing_chrome::ChromeLayerBuilder;
 use tracing_error::ErrorLayer;
 use tracing_subscriber::fmt as tracing_fmt;
@@ -31,6 +31,7 @@ pub struct CommandContext {
 }
 
 #[must_use = "This function returns a guard object to flush traces. Dropping it immediately is probably incorrect. Make sure that the returned value lives until tracing has finished."]
+#[instrument]
 fn install_tracing(effects: Effects) -> eyre::Result<impl Drop> {
     let env_filter = EnvFilter::builder()
         .with_default_directive(LevelFilter::WARN.into())
@@ -91,6 +92,18 @@ fn install_tracing(effects: Effects) -> eyre::Result<impl Drop> {
     Ok(flush_guard)
 }
 
+#[instrument]
+fn install_libgit2_tracing() {
+    fn git_trace(level: git2::TraceLevel, msg: &str) {
+        info!("[{:?}]: {}", level, msg);
+    }
+
+    if !git2::trace_set(git2::TraceLevel::Trace, git_trace) {
+        warn!("Failed to install libgit2 tracing");
+    }
+}
+
+#[instrument]
 fn check_unsupported_config_options(effects: &Effects) -> eyre::Result<Option<ExitCode>> {
     let _repo = match Repo::from_current_dir() {
         Ok(repo) => repo,
@@ -167,6 +180,7 @@ pub fn do_main_and_drop_locals<T: Parser>(
     let effects = Effects::new(color);
 
     let _tracing_guard = install_tracing(effects.clone());
+    install_libgit2_tracing();
 
     if let Some(ExitCode(exit_code)) = check_unsupported_config_options(&effects)? {
         let exit_code: i32 = exit_code.try_into()?;
