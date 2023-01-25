@@ -27,6 +27,7 @@ fn test_test() -> eyre::Result<()> {
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
+        Using test execution strategy: working-copy
         Ran exit 0 on 2 commits:
         ✓ Passed: fe65c1f create test2.txt
         ✓ Passed: 0206717 create test3.txt
@@ -48,6 +49,7 @@ fn test_test() -> eyre::Result<()> {
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
+        Using test execution strategy: working-copy
         Ran exit 1 on 2 commits:
         X Failed with exit code 1: fe65c1f create test2.txt
         X Failed with exit code 1: 0206717 create test3.txt
@@ -83,6 +85,7 @@ fn test_test_abort() -> eyre::Result<()> {
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
+        Using test execution strategy: working-copy
         "###);
     }
 
@@ -143,6 +146,7 @@ fn test_test_cached_results() -> eyre::Result<()> {
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
+        Using test execution strategy: working-copy
         Ran exit 0 on 3 commits:
         ✓ Passed: fe65c1f create test2.txt
         ✓ Passed: 0206717 create test3.txt
@@ -161,6 +165,7 @@ fn test_test_cached_results() -> eyre::Result<()> {
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
+        Using test execution strategy: working-copy
         Ran exit 0 on 3 commits:
         ✓ Passed (cached): fe65c1f create test2.txt
         ✓ Passed (cached): 0206717 create test3.txt
@@ -195,6 +200,7 @@ fn test_test_verbosity() -> eyre::Result<()> {
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
+        Using test execution strategy: working-copy
         Ran bash test.sh 10 on 1 commit:
         ✓ Passed: fe65c1f create test2.txt
         Stdout: <repo-path>/.git/branchless/test/48bb2464c55090a387ed70b3d229705a94856efb/bash__test.sh__10/stdout
@@ -221,6 +227,7 @@ fn test_test_verbosity() -> eyre::Result<()> {
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
+        Using test execution strategy: working-copy
         Ran bash test.sh 10 on 1 commit:
         ✓ Passed (cached): fe65c1f create test2.txt
         Stdout: <repo-path>/.git/branchless/test/48bb2464c55090a387ed70b3d229705a94856efb/bash__test.sh__10/stdout
@@ -250,6 +257,7 @@ fn test_test_verbosity() -> eyre::Result<()> {
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
+        Using test execution strategy: working-copy
         Ran bash test.sh 15 on 1 commit:
         ✓ Passed: fe65c1f create test2.txt
         Stdout: <repo-path>/.git/branchless/test/48bb2464c55090a387ed70b3d229705a94856efb/bash__test.sh__15/stdout
@@ -277,6 +285,7 @@ fn test_test_verbosity() -> eyre::Result<()> {
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
+        Using test execution strategy: working-copy
         Ran bash test.sh 15 on 1 commit:
         ✓ Passed (cached): fe65c1f create test2.txt
         Stdout: <repo-path>/.git/branchless/test/48bb2464c55090a387ed70b3d229705a94856efb/bash__test.sh__15/stdout
@@ -323,6 +332,7 @@ fn test_test_show() -> eyre::Result<()> {
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
+        Using test execution strategy: working-copy
         Ran echo hi on 1 commit:
         ✓ Passed: 96d1c37 create test2.txt
         1 passed, 0 failed, 0 skipped
@@ -439,6 +449,7 @@ fn test_test_command_alias() -> eyre::Result<()> {
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
+        Using test execution strategy: working-copy
         Ran echo default on 1 commit:
         ✓ Passed: f777ecc create initial.txt
         1 passed, 0 failed, 0 skipped
@@ -452,6 +463,7 @@ fn test_test_command_alias() -> eyre::Result<()> {
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
+        Using test execution strategy: working-copy
         Ran echo foo on 1 commit:
         ✓ Passed: f777ecc create initial.txt
         1 passed, 0 failed, 0 skipped
@@ -525,6 +537,7 @@ fn test_test_worktree_strategy() -> eyre::Result<()> {
         )?;
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
+        Using test execution strategy: worktree
         Ran echo hello on 1 commit:
         ✓ Passed: 62fc20d create test1.txt
         Stdout: <repo-path>/.git/branchless/test/8108c01b1930423879f106c1ebf725fcbfedccda/echo__hello/stdout
@@ -550,6 +563,7 @@ fn test_test_worktree_strategy() -> eyre::Result<()> {
         )?;
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
+        Using test execution strategy: worktree
         Ran echo hello on 1 commit:
         ✓ Passed (cached): 62fc20d create test1.txt
         Stdout: <repo-path>/.git/branchless/test/8108c01b1930423879f106c1ebf725fcbfedccda/echo__hello/stdout
@@ -609,6 +623,7 @@ echo hello
         let (stdout, stderr) = git.branchless("test", &["run", "-vv", "@"])?;
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
+        Using test execution strategy: worktree
         Ran bash test.sh on 1 commit:
         ✓ Passed: c82ebfa create test2.txt
         Stdout: <repo-path>/.git/branchless/test/a3ae41e24abf7537423d8c72d07df7af456de6dd/bash__test.sh/stdout
@@ -674,6 +689,7 @@ fn test_test_jobs_argument_handling() -> eyre::Result<()> {
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
+        Using test execution strategy: working-copy
         Ran exit 0 on 1 commit:
         ✓ Passed: 62fc20d create test1.txt
         1 passed, 0 failed, 0 skipped
