@@ -17,6 +17,7 @@ version = "0.7.0-pre.1"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+bstr = "1.0.1"
 bugreport = "0.5.0"
 color-eyre = "0.6.2"
 console = "0.15.5"
