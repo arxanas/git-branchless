@@ -713,5 +713,19 @@ fn test_test_jobs_argument_handling() -> eyre::Result<()> {
         "###);
     }
 
+    {
+        let (stdout, stderr) = git.branchless("test", &["run", "--jobs", "2"])?;
+        insta::assert_snapshot!(stderr, @"");
+        insta::assert_snapshot!(stdout, @r###"
+        Using test execution strategy: worktree
+        Ran exit 0 on 1 commit:
+        ✓ Passed (cached): 62fc20d create test1.txt
+        1 passed, 0 failed, 0 skipped
+        hint: there was 1 cached test result
+        hint: to clear these cached results, run: git test clean "stack() | @"
+        hint: disable this hint by running: git config --global branchless.hint.cleanCachedTestResults false
+        "###);
+    }
+
     Ok(())
 }
