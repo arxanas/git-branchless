@@ -399,3 +399,54 @@ fn test_sync_no_delete_main_branch() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_sync_merge_commit() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    git.run(&["checkout", "-b", "foo"])?;
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+    git.run(&["checkout", "--detach", "master"])?;
+    git.commit_file("test3", 3)?;
+    git.run(&["merge", "foo"])?;
+    git.run(&["checkout", "master"])?;
+    git.commit_file("test4", 4)?;
+
+    {
+        let stdout = git.smartlog()?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc create initial.txt
+        |\
+        | o 62fc20d create test1.txt
+        | |
+        | o 96d1c37 (foo) create test2.txt
+        | & (merge) 5cedb02 Merge branch 'foo' into HEAD
+        |\
+        | o 98b9119 create test3.txt
+        | |
+        | | & (merge) 96d1c37 (foo) create test2.txt
+        | |/
+        | o 5cedb02 Merge branch 'foo' into HEAD
+        |
+        @ 8f7aef5 (> master) create test4.txt
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.branchless("sync", &[])?;
+        insta::assert_snapshot!(stdout, @r###"
+        Attempting rebase in-memory...
+        Attempting rebase in-memory...
+        Can't rebase merge commit in-memory: 62fc20d create test1.txt
+        Can't rebase merge commit in-memory: 98b9119 create test3.txt
+        "###);
+    }
+
+    Ok(())
+}

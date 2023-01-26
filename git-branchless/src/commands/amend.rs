@@ -285,54 +285,66 @@ pub fn amend(
         }
     };
 
-    let needs_merge = match rebase_plan {
-        None => false,
-        Some(rebase_plan) => {
-            let execute_options = ExecuteRebasePlanOptions {
-                now,
-                event_tx_id,
-                force_in_memory: move_options.force_in_memory,
-                force_on_disk: move_options.force_on_disk,
-                preserve_timestamps: get_restack_preserve_timestamps(&repo)?,
-                resolve_merge_conflicts: move_options.resolve_merge_conflicts,
-                check_out_commit_options: CheckOutCommitOptions {
-                    additional_args: Default::default(),
-                    reset: true,
-                    render_smartlog: false,
-                },
-            };
-            match execute_rebase_plan(
-                effects,
-                git_run_info,
-                &repo,
-                &event_log_db,
-                &rebase_plan,
-                &execute_options,
-            )? {
-                ExecuteRebasePlanResult::Succeeded { rewritten_oids: _ } => false,
-                ExecuteRebasePlanResult::DeclinedToMerge {
-                    merge_conflict: _, // `execute_rebase_plan` should have printed merge conflict info.
-                } => {
-                    writeln!(
-                    effects.get_output_stream(),
-                    "This operation would cause a merge conflict, and --merge was not provided."
-                )?;
-                    writeln!(
-                        effects.get_output_stream(),
-                        "Amending without rebasing descendants: {}",
-                        effects
-                            .get_glyphs()
-                            .render(head_commit.friendly_describe(effects.get_glyphs())?)?
-                    )?;
+    if let Some(rebase_plan) = rebase_plan {
+        let execute_options = ExecuteRebasePlanOptions {
+            now,
+            event_tx_id,
+            force_in_memory: move_options.force_in_memory,
+            force_on_disk: move_options.force_on_disk,
+            preserve_timestamps: get_restack_preserve_timestamps(&repo)?,
+            resolve_merge_conflicts: move_options.resolve_merge_conflicts,
+            check_out_commit_options: CheckOutCommitOptions {
+                additional_args: Default::default(),
+                reset: true,
+                render_smartlog: false,
+            },
+        };
+        match execute_rebase_plan(
+            effects,
+            git_run_info,
+            &repo,
+            &event_log_db,
+            &rebase_plan,
+            &execute_options,
+        )? {
+            ExecuteRebasePlanResult::Succeeded {
+                rewritten_oids: None,
+            } => {}
 
-                    true
-                }
-                ExecuteRebasePlanResult::Failed { exit_code } => {
-                    return Ok(exit_code);
-                }
+            ExecuteRebasePlanResult::Succeeded {
+                rewritten_oids: Some(rewritten_oids),
+            } => {
+                writeln!(
+                    effects.get_output_stream(),
+                    "Restacked {}.",
+                    Pluralize {
+                        determiner: None,
+                        amount: rewritten_oids.len(),
+                        unit: ("commit", "commits")
+                    }
+                )?;
+            }
+
+            ExecuteRebasePlanResult::DeclinedToMerge { failed_merge_info } => {
+                failed_merge_info.describe(
+                    effects,
+                    &repo,
+                    lib::core::rewrite::MergeConflictRemediation::Restack,
+                )?;
+                writeln!(
+                    effects.get_output_stream(),
+                    "Amending without restacking descendant commits: {}",
+                    effects
+                        .get_glyphs()
+                        .render(head_commit.friendly_describe(effects.get_glyphs())?)?
+                )?;
+            }
+
+            ExecuteRebasePlanResult::Failed { exit_code } => {
+                return Ok(exit_code);
             }
         }
-    };
+    }
 
     match opts {
         AmendFastOptions::FromIndex { paths } => {
@@ -359,13 +371,6 @@ pub fn amend(
                 "Amended with {uncommitted_changes}.",
             )?;
         }
-    }
-
-    if needs_merge {
-        writeln!(
-            effects.get_output_stream(),
-            "To resolve merge conflicts run: git restack --merge"
-        )?;
     }
 
     Ok(ExitCode(0))
