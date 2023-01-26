@@ -790,7 +790,7 @@ fn test_navigation_switch_flags() -> eyre::Result<()> {
         {
             let (stdout, _stderr) = git.branchless("switch", &["-c", "bar"])?;
             insta::assert_snapshot!(stdout, @r###"
-            branchless: running command: <git-executable> checkout -b bar
+            branchless: running command: <git-executable> checkout foo -b bar
             :
             @ 62fc20d (> bar, foo) create test1.txt
             |
@@ -924,6 +924,50 @@ fn test_switch_auto_switch_interactive_disabled() -> eyre::Result<()> {
         @ 62fc20d (test1) create test1.txt
         |
         o 96d1c37 (test2) create test2.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_switch_detach() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+    git.commit_file("test1", 1)?;
+    git.run(&["branch", "foo"])?;
+    git.commit_file("test2", 2)?;
+
+    {
+        let (stdout, _stderr) = git.branchless("switch", &["-d"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> checkout master --detach
+        :
+        O 62fc20d (foo) create test1.txt
+        |
+        @ 96d1c37 (master) create test2.txt
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.branchless("switch", &["-d", "foo"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> checkout foo --detach
+        :
+        @ 62fc20d (foo) create test1.txt
+        |
+        O 96d1c37 (master) create test2.txt
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.branchless("switch", &[])?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> checkout foo
+        :
+        @ 62fc20d (> foo) create test1.txt
+        |
+        O 96d1c37 (master) create test2.txt
         "###);
     }
 

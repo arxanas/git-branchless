@@ -475,6 +475,7 @@ pub fn switch(
         force,
         merge,
         target,
+        detach,
     } = switch_options;
 
     let now = SystemTime::now();
@@ -510,6 +511,7 @@ pub fn switch(
             branch_name: _,
             force: _,
             merge: _,
+            detach: _,
             target,
         } => Some(target.clone().unwrap_or_default()),
         SwitchOptions {
@@ -517,6 +519,7 @@ pub fn switch(
             branch_name: _,
             force: _,
             merge: _,
+            detach: _,
             target: _,
         } => None,
     };
@@ -557,6 +560,9 @@ pub fn switch(
         }
         if *merge {
             args.push("--merge".into());
+        }
+        if *detach {
+            args.push("--detach".into());
         }
         args
     };
