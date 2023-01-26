@@ -411,8 +411,8 @@ To proceed anyways, run: git move -f -s 'siblings(.)",
     )?;
     match result {
         ExecuteRebasePlanResult::Succeeded { rewritten_oids: _ } => Ok(ExitCode(0)),
-        ExecuteRebasePlanResult::DeclinedToMerge { merge_conflict } => {
-            merge_conflict.describe(effects, &repo, MergeConflictRemediation::Insert)?;
+        ExecuteRebasePlanResult::DeclinedToMerge { failed_merge_info } => {
+            failed_merge_info.describe(effects, &repo, MergeConflictRemediation::Insert)?;
             Ok(ExitCode(0))
         }
         ExecuteRebasePlanResult::Failed { exit_code } => Ok(exit_code),

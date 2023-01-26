@@ -481,10 +481,10 @@ fn set_abort_trap(
         ExecuteRebasePlanResult::Succeeded { rewritten_oids: _ } => {
             // Do nothing.
         }
-        ExecuteRebasePlanResult::DeclinedToMerge { merge_conflict } => {
+        ExecuteRebasePlanResult::DeclinedToMerge { failed_merge_info } => {
             writeln!(
                 effects.get_output_stream(),
-                "BUG: Encountered unexpected merge conflict: {merge_conflict:?}"
+                "BUG: Encountered unexpected merge failure: {failed_merge_info:?}"
             )?;
             return Ok(Err(ExitCode(1)));
         }

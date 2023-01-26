@@ -21,8 +21,8 @@ use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::formatting::StyledStringBuilder;
 use lib::core::rewrite::{
     execute_rebase_plan, BuildRebasePlanError, BuildRebasePlanOptions, ExecuteRebasePlanOptions,
-    ExecuteRebasePlanResult, RebasePlan, RebasePlanBuilder, RebasePlanPermissions, RepoPool,
-    RepoResource,
+    ExecuteRebasePlanResult, FailedMergeInfo, RebasePlan, RebasePlanBuilder, RebasePlanPermissions,
+    RepoPool, RepoResource,
 };
 use lib::core::task::ResourcePool;
 use lib::git::{CategorizedReferenceName, Commit, GitRunInfo, NonZeroOid, Repo};
@@ -379,9 +379,9 @@ fn execute_plans(
     execute_options: &ExecuteRebasePlanOptions,
     root_commit_and_plans: Vec<(NonZeroOid, Option<RebasePlan>)>,
 ) -> Result<ExitCode, Report> {
-    let (success_commits, merge_conflict_commits, skipped_commits) = {
+    let (success_commits, failed_merge_commits, skipped_commits) = {
         let mut success_commits: Vec<Commit> = Vec::new();
-        let mut merge_conflict_commits: Vec<Commit> = Vec::new();
+        let mut failed_merge_commits: Vec<(Commit, FailedMergeInfo)> = Vec::new();
         let mut skipped_commits: Vec<Commit> = Vec::new();
 
         let (effects, progress) = effects.start_operation(OperationType::SyncCommits);
@@ -410,8 +410,8 @@ fn execute_plans(
                 ExecuteRebasePlanResult::Succeeded { rewritten_oids: _ } => {
                     success_commits.push(root_commit);
                 }
-                ExecuteRebasePlanResult::DeclinedToMerge { merge_conflict: _ } => {
-                    merge_conflict_commits.push(root_commit);
+                ExecuteRebasePlanResult::DeclinedToMerge { failed_merge_info } => {
+                    failed_merge_commits.push((root_commit, failed_merge_info));
                 }
                 ExecuteRebasePlanResult::Failed { exit_code } => {
                     return Ok(exit_code);
@@ -419,7 +419,7 @@ fn execute_plans(
             }
         }
 
-        (success_commits, merge_conflict_commits, skipped_commits)
+        (success_commits, failed_merge_commits, skipped_commits)
     };
 
     for success_commit in success_commits {
@@ -435,16 +435,35 @@ fn execute_plans(
         )?;
     }
 
-    for merge_conflict_commit in merge_conflict_commits {
-        writeln!(
-            effects.get_output_stream(),
-            "Merge conflict for {}",
-            effects.get_glyphs().render(
-                StyledStringBuilder::new()
-                    .append(merge_conflict_commit.friendly_describe(effects.get_glyphs())?)
-                    .build()
-            )?
-        )?;
+    for (failed_merge_commit, failed_merge_info) in failed_merge_commits {
+        match failed_merge_info {
+            FailedMergeInfo::Conflict {
+                commit_oid: _,
+                conflicting_paths,
+            } => {
+                writeln!(
+                    effects.get_output_stream(),
+                    "Merge conflict ({} files) for {}",
+                    conflicting_paths.len(),
+                    effects.get_glyphs().render(
+                        StyledStringBuilder::new()
+                            .append(failed_merge_commit.friendly_describe(effects.get_glyphs())?)
+                            .build()
+                    )?
+                )?;
+            }
+            FailedMergeInfo::CannotRebaseMergeInMemory { commit_oid: _ } => {
+                writeln!(
+                    effects.get_output_stream(),
+                    "Can't rebase merge commit in-memory: {}",
+                    effects.get_glyphs().render(
+                        StyledStringBuilder::new()
+                            .append(failed_merge_commit.friendly_describe(effects.get_glyphs())?)
+                            .build()
+                    )?
+                )?;
+            }
+        }
     }
 
     for skipped_commit in skipped_commits {

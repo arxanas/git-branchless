@@ -182,8 +182,8 @@ fn restack_commits(
             Ok(ExitCode(0))
         }
 
-        ExecuteRebasePlanResult::DeclinedToMerge { merge_conflict } => {
-            merge_conflict.describe(effects, &repo, merge_conflict_remediation)?;
+        ExecuteRebasePlanResult::DeclinedToMerge { failed_merge_info } => {
+            failed_merge_info.describe(effects, &repo, merge_conflict_remediation)?;
             Ok(ExitCode(1))
         }
 

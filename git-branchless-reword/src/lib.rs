@@ -306,10 +306,12 @@ pub fn reword(
         ExecuteRebasePlanResult::Succeeded {
             rewritten_oids: None,
         } => ExitCode(0),
-        ExecuteRebasePlanResult::DeclinedToMerge { merge_conflict: _ } => {
+        ExecuteRebasePlanResult::DeclinedToMerge {
+            failed_merge_info: _,
+        } => {
             writeln!(
                 effects.get_error_stream(),
-                "BUG: Merge conflict detected, but rewording shouldn't cause any conflicts."
+                "BUG: Merge failed, but rewording shouldn't cause any merge failures."
             )?;
             ExitCode(1)
         }

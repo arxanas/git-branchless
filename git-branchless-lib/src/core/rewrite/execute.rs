@@ -328,17 +328,26 @@ pub enum MergeConflictRemediation {
     Insert,
 }
 
-/// Information about a merge conflict that occurred while moving commits.
+/// Information about a failure to merge that occurred while moving commits.
 #[derive(Debug)]
-pub struct MergeConflictInfo {
-    /// The OID of the commit that, when moved, caused a conflict.
-    pub commit_oid: NonZeroOid,
+pub enum FailedMergeInfo {
+    /// A merge conflict occurred.
+    Conflict {
+        /// The OID of the commit that, when moved, caused a conflict.
+        commit_oid: NonZeroOid,
 
-    /// The paths which were in conflict.
-    pub conflicting_paths: HashSet<PathBuf>,
+        /// The paths which were in conflict.
+        conflicting_paths: HashSet<PathBuf>,
+    },
+
+    /// A merge commit could not be rebased in memory.
+    CannotRebaseMergeInMemory {
+        /// The OID of the merge commit that could not be moved.
+        commit_oid: NonZeroOid,
+    },
 }
 
-impl MergeConflictInfo {
+impl FailedMergeInfo {
     /// Describe the merge conflict in a user-friendly way and advise to rerun
     /// with `--merge`.
     pub fn describe(
@@ -347,23 +356,44 @@ impl MergeConflictInfo {
         repo: &Repo,
         remediation: MergeConflictRemediation,
     ) -> eyre::Result<()> {
-        writeln!(
-            effects.get_output_stream(),
-            "This operation would cause a merge conflict:"
-        )?;
-        writeln!(
-            effects.get_output_stream(),
-            "{} ({}) {}",
-            effects.get_glyphs().bullet_point,
-            Pluralize {
-                determiner: None,
-                amount: self.conflicting_paths.len(),
-                unit: ("conflicting file", "conflicting files"),
-            },
-            effects.get_glyphs().render(
-                repo.friendly_describe_commit_from_oid(effects.get_glyphs(), self.commit_oid)?
-            )?
-        )?;
+        match self {
+            FailedMergeInfo::Conflict {
+                commit_oid,
+                conflicting_paths,
+            } => {
+                writeln!(
+                    effects.get_output_stream(),
+                    "This operation would cause a merge conflict:"
+                )?;
+                writeln!(
+                    effects.get_output_stream(),
+                    "{} ({}) {}",
+                    effects.get_glyphs().bullet_point,
+                    Pluralize {
+                        determiner: None,
+                        amount: conflicting_paths.len(),
+                        unit: ("conflicting file", "conflicting files"),
+                    },
+                    effects.get_glyphs().render(
+                        repo.friendly_describe_commit_from_oid(effects.get_glyphs(), *commit_oid)?
+                    )?
+                )?;
+            }
+
+            FailedMergeInfo::CannotRebaseMergeInMemory { commit_oid } => {
+                writeln!(
+                    effects.get_output_stream(),
+                    "Merge commits currently can't be rebased in-memory."
+                )?;
+                writeln!(
+                    effects.get_output_stream(),
+                    "The merge commit was: {}",
+                    effects.get_glyphs().render(
+                        repo.friendly_describe_commit_from_oid(effects.get_glyphs(), *commit_oid)?
+                    )?,
+                )?;
+            }
+        }
 
         match remediation {
             MergeConflictRemediation::Retry => {
@@ -409,7 +439,7 @@ mod in_memory {
     };
     use crate::util::ExitCode;
 
-    use super::{ExecuteRebasePlanOptions, MergeConflictInfo};
+    use super::{ExecuteRebasePlanOptions, FailedMergeInfo};
 
     pub enum RebaseInMemoryResult {
         Succeeded {
@@ -422,10 +452,7 @@ mod in_memory {
             /// caller will need to figure that out.
             new_head_oid: Option<NonZeroOid>,
         },
-        CannotRebaseMergeCommit {
-            commit_oid: NonZeroOid,
-        },
-        MergeConflict(MergeConflictInfo),
+        MergeFailed(FailedMergeInfo),
     }
 
     #[instrument]
@@ -454,9 +481,11 @@ mod in_memory {
                     | RebaseCommand::SkipUpstreamAppliedCommit { .. } => None,
                 })
         {
-            return Ok(RebaseInMemoryResult::CannotRebaseMergeCommit {
-                commit_oid: *merge_commit_oid,
-            });
+            return Ok(RebaseInMemoryResult::MergeFailed(
+                FailedMergeInfo::CannotRebaseMergeInMemory {
+                    commit_oid: *merge_commit_oid,
+                },
+            ));
         }
 
         let ExecuteRebasePlanOptions {
@@ -550,9 +579,11 @@ mod in_memory {
                             ?commit_to_apply_oid,
                             "BUG: Merge commit should have been detected during planning phase"
                         );
-                        return Ok(RebaseInMemoryResult::CannotRebaseMergeCommit {
-                            commit_oid: *commit_to_apply_oid,
-                        });
+                        return Ok(RebaseInMemoryResult::MergeFailed(
+                            FailedMergeInfo::CannotRebaseMergeInMemory {
+                                commit_oid: *commit_to_apply_oid,
+                            },
+                        ));
                     };
 
                     progress.notify_status(
@@ -568,10 +599,12 @@ mod in_memory {
                     ) {
                         Ok(rebased_commit) => rebased_commit,
                         Err(CherryPickFastError::MergeConflict { conflicting_paths }) => {
-                            return Ok(RebaseInMemoryResult::MergeConflict(MergeConflictInfo {
-                                commit_oid: *commit_to_apply_oid,
-                                conflicting_paths,
-                            }))
+                            return Ok(RebaseInMemoryResult::MergeFailed(
+                                FailedMergeInfo::Conflict {
+                                    commit_oid: *commit_to_apply_oid,
+                                    conflicting_paths,
+                                },
+                            ))
                         }
                         Err(other) => eyre::bail!(other),
                     };
@@ -644,9 +677,11 @@ mod in_memory {
                         ?commit_oid,
                         "BUG: Merge commit without replacement should have been detected when starting in-memory rebase"
                     );
-                    return Ok(RebaseInMemoryResult::CannotRebaseMergeCommit {
-                        commit_oid: *commit_oid,
-                    });
+                    return Ok(RebaseInMemoryResult::MergeFailed(
+                        FailedMergeInfo::CannotRebaseMergeInMemory {
+                            commit_oid: *commit_oid,
+                        },
+                    ));
                 }
 
                 RebaseCommand::Replace {
@@ -1150,11 +1185,11 @@ pub enum ExecuteRebasePlanResult {
         rewritten_oids: Option<HashMap<NonZeroOid, MaybeZeroOid>>,
     },
 
-    /// The rebase operation encounter a merge conflict, and it was not
+    /// The rebase operation encounter a failure to merge, and it was not
     /// requested to try to resolve it.
     DeclinedToMerge {
-        /// Information about the merge conflict that occurred.
-        merge_conflict: MergeConflictInfo,
+        /// Information about the merge failure that occurred.
+        failed_merge_info: FailedMergeInfo,
     },
 
     /// The rebase operation failed.
@@ -1192,7 +1227,9 @@ pub fn execute_rebase_plan(
             "Attempting rebase in-memory..."
         )?;
 
-        let merge_conflict = match rebase_in_memory(effects, repo, rebase_plan, options)? {
+        let failed_merge_info = match rebase_in_memory(effects, repo, rebase_plan, options)? {
+            RebaseInMemoryResult::MergeFailed(failed_merge_info) => failed_merge_info,
+
             RebaseInMemoryResult::Succeeded {
                 rewritten_oids,
                 new_head_oid,
@@ -1221,45 +1258,11 @@ pub fn execute_rebase_plan(
                     rewritten_oids: Some(rewritten_oids),
                 });
             }
-
-            RebaseInMemoryResult::CannotRebaseMergeCommit { commit_oid } => {
-                writeln!(
-                    effects.get_output_stream(),
-                    "Merge commits currently can't be rebased in-memory."
-                )?;
-                writeln!(
-                    effects.get_output_stream(),
-                    "The merge commit was: {}",
-                    effects.get_glyphs().render(
-                        repo.friendly_describe_commit_from_oid(effects.get_glyphs(), commit_oid)?
-                    )?,
-                )?;
-                None
-            }
-
-            RebaseInMemoryResult::MergeConflict(merge_conflict) => {
-                if !resolve_merge_conflicts {
-                    return Ok(ExecuteRebasePlanResult::DeclinedToMerge { merge_conflict });
-                }
-
-                let MergeConflictInfo {
-                    commit_oid,
-                    conflicting_paths: _,
-                } = merge_conflict;
-                writeln!(
-                    effects.get_output_stream(),
-                    "There was a merge conflict, which currently can't be resolved when rebasing in-memory."
-                )?;
-                writeln!(
-                    effects.get_output_stream(),
-                    "The conflicting commit was: {}",
-                    effects.get_glyphs().render(
-                        repo.friendly_describe_commit_from_oid(effects.get_glyphs(), commit_oid)?
-                    )?,
-                )?;
-                Some(merge_conflict)
-            }
         };
+
+        if !resolve_merge_conflicts {
+            return Ok(ExecuteRebasePlanResult::DeclinedToMerge { failed_merge_info });
+        }
 
         // The rebase has failed at this point, decide whether or not to try
         // again with an on-disk rebase.
@@ -1268,14 +1271,12 @@ pub fn execute_rebase_plan(
                 effects.get_output_stream(),
                 "Aborting since an in-memory rebase was requested."
             )?;
-            return Ok(match merge_conflict {
-                Some(merge_conflict) => ExecuteRebasePlanResult::DeclinedToMerge { merge_conflict },
-                None => ExecuteRebasePlanResult::Failed {
-                    exit_code: ExitCode(1),
-                },
-            });
+            return Ok(ExecuteRebasePlanResult::DeclinedToMerge { failed_merge_info });
         } else {
-            writeln!(effects.get_output_stream(), "Trying again on-disk...")?;
+            writeln!(
+                effects.get_output_stream(),
+                "Failed to merge in-memory, trying again on-disk..."
+            )?;
         }
     }
 

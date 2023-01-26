@@ -505,8 +505,8 @@ pub fn r#move(
     match result {
         ExecuteRebasePlanResult::Succeeded { rewritten_oids: _ } => Ok(ExitCode(0)),
 
-        ExecuteRebasePlanResult::DeclinedToMerge { merge_conflict } => {
-            merge_conflict.describe(effects, &repo, MergeConflictRemediation::Retry)?;
+        ExecuteRebasePlanResult::DeclinedToMerge { failed_merge_info } => {
+            failed_merge_info.describe(effects, &repo, MergeConflictRemediation::Retry)?;
             Ok(ExitCode(1))
         }
 

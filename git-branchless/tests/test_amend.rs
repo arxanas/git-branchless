@@ -29,6 +29,7 @@ fn test_amend_with_children() -> eyre::Result<()> {
         [1/1] Committed as: b51f01b create test3.txt
         branchless: processing 1 rewritten commit
         In-memory rebase succeeded.
+        Restacked 1 commit.
         Amended with 1 uncommitted change.
         "###);
     }
@@ -64,10 +65,11 @@ fn test_amend_with_children() -> eyre::Result<()> {
             branchless: running command: <git-executable> reset 7c5e8578f402b6b77afa143283b65fcdc9614233
             branchless: running command: <git-executable> checkout 7c5e8578f402b6b77afa143283b65fcdc9614233
             Attempting rebase in-memory...
-            This operation would cause a merge conflict, and --merge was not provided.
-            Amending without rebasing descendants: 7ac317b create test2.txt
+            This operation would cause a merge conflict:
+            - (1 conflicting file) b51f01b create test3.txt
+            To resolve merge conflicts, run: git restack --merge
+            Amending without restacking descendant commits: 7ac317b create test2.txt
             Amended with 1 staged change.
-            To resolve merge conflicts run: git restack --merge
             "###);
         }
 
@@ -770,6 +772,7 @@ fn test_amend_reparent() -> eyre::Result<()> {
         [1/1] Committed as: e0d5305 create test2.txt
         branchless: processing 1 rewritten commit
         In-memory rebase succeeded.
+        Restacked 1 commit.
         Amended with 1 staged change.
         "###);
     }
@@ -953,6 +956,7 @@ fn test_amend_reparent_merge() -> eyre::Result<()> {
         [2/2] Committed as: f66b478 Merge commit '402c2e6c16e2861d57d7fb6a20cbc5559bd00d44' into HEAD
         branchless: processing 2 rewritten commits
         In-memory rebase succeeded.
+        Restacked 2 commits.
         Amended with 1 uncommitted change.
         "###);
     }
@@ -1070,9 +1074,7 @@ fn test_amend_merge() -> eyre::Result<()> {
         branchless: running command: <git-executable> reset 3d8543b87d55c5b7995935e18e05cb6c399fb526
         branchless: running command: <git-executable> checkout 3d8543b87d55c5b7995935e18e05cb6c399fb526
         Attempting rebase in-memory...
-        There was a merge conflict, which currently can't be resolved when rebasing in-memory.
-        The conflicting commit was: 96d1c37 create test2.txt
-        Trying again on-disk...
+        Failed to merge in-memory, trying again on-disk...
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue

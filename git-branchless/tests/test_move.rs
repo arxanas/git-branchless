@@ -2425,9 +2425,7 @@ fn test_move_merge_conflict() -> eyre::Result<()> {
             },
         )
         Attempting rebase in-memory...
-        There was a merge conflict, which currently can't be resolved when rebasing in-memory.
-        The conflicting commit was: e85d25c create conflict.txt
-        Trying again on-disk...
+        Failed to merge in-memory, trying again on-disk...
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
@@ -3672,6 +3670,7 @@ fn test_move_merge_commit() -> eyre::Result<()> {
                 &[
                     "--debug-dump-rebase-constraints",
                     "--debug-dump-rebase-plan",
+                    "--merge",
                     "--on-disk",
                     "-s",
                     &test2_oid.to_string(),
@@ -3798,9 +3797,38 @@ fn test_move_merge_commit() -> eyre::Result<()> {
         let git = git.duplicate_repo()?;
 
         {
-            let (stdout, _stderr) = git.branchless_with_options(
+            let (stdout, stderr) = git.branchless_with_options(
                 "move",
-                &["--in-memory", "-s", &test2_oid.to_string(), "-d", "master"],
+                &[
+                    "--in-memory",
+                    "--merge",
+                    "-s",
+                    &test2_oid.to_string(),
+                    "-d",
+                    "master",
+                ],
+                &GitRunOptions {
+                    expected_exit_code: 2,
+                    ..Default::default()
+                },
+            )?;
+            insta::assert_snapshot!(stderr, @r###"
+            error: The argument '--in-memory' cannot be used with '--merge'
+
+            Usage: git-branchless move --in-memory --source <SOURCE> --dest <DEST>
+
+            For more information try '--help'
+            "###);
+            insta::assert_snapshot!(stdout, @"");
+        }
+    }
+
+    // no flag
+    {
+        {
+            let (stdout, stderr) = git.branchless_with_options(
+                "move",
+                &["-s", &test2_oid.to_string(), "-d", "master"],
                 &GitRunOptions {
                     expected_exit_code: 1,
                     ..Default::default()
@@ -3810,55 +3838,9 @@ fn test_move_merge_commit() -> eyre::Result<()> {
             Attempting rebase in-memory...
             Merge commits currently can't be rebased in-memory.
             The merge commit was: 28790c7 Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
-            Aborting since an in-memory rebase was requested.
+            To resolve merge conflicts, retry this operation with the --merge option.
             "###);
-        }
-    }
-
-    // no flag
-    {
-        {
-            let (stdout, stderr) =
-                git.branchless("move", &["-s", &test2_oid.to_string(), "-d", "master"])?;
-            insta::assert_snapshot!(stdout, @r###"
-            Attempting rebase in-memory...
-            Merge commits currently can't be rebased in-memory.
-            The merge commit was: 28790c7 Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
-            Trying again on-disk...
-            branchless: running command: <git-executable> diff --quiet
-            Calling Git for on-disk rebase...
-            branchless: running command: <git-executable> rebase --continue
-            "###);
-            insta::assert_snapshot!(stderr, @r###"
-            branchless: processing 1 update: ref HEAD
-            branchless: processing 1 update: ref HEAD
-            branchless: processed commit: 96d1c37 create test2.txt
-            Executing: git branchless hook-detect-empty-commit fe65c1fe15584744e649b2c79d4cf9b0d878f92e
-            branchless: processing 1 update: ref refs/rewritten/parent-3
-            branchless: processing 1 update: ref HEAD
-            Executing: git branchless hook-register-extra-post-rewrite-hook
-            branchless: processing 2 rewritten commits
-            branchless: creating working copy snapshot
-            branchless: running command: <git-executable> checkout 98b9119d16974f372e76cb64a3b77c528fc0b18b
-            Previous HEAD position was 5a6a761 Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
-            branchless: processing 1 update: ref HEAD
-            HEAD is now at 98b9119 create test3.txt
-            branchless: processing checkout
-            O f777ecc create initial.txt
-            |\
-            | @ 98b9119 create test3.txt
-            | |
-            | | & (merge) 96d1c37 create test2.txt
-            | |/
-            | o 5a6a761 Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
-            |
-            O 62fc20d (master) create test1.txt
-            |
-            o 96d1c37 create test2.txt
-            & (merge) 5a6a761 Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
-            Successfully rebased and updated detached HEAD.
-            branchless: processing 1 update: ref refs/rewritten/parent-3
-            "###);
+            insta::assert_snapshot!(stderr, @"");
         }
 
         {
@@ -3866,17 +3848,82 @@ fn test_move_merge_commit() -> eyre::Result<()> {
             insta::assert_snapshot!(stdout, @r###"
             O f777ecc create initial.txt
             |\
+            | o fe65c1f create test2.txt
+            | & (merge) 28790c7 Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
+            |\
             | @ 98b9119 create test3.txt
             | |
-            | | & (merge) 96d1c37 create test2.txt
+            | | & (merge) fe65c1f create test2.txt
             | |/
-            | o 5a6a761 Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
+            | o 28790c7 Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
             |
             O 62fc20d (master) create test1.txt
-            |
-            o 96d1c37 create test2.txt
-            & (merge) 5a6a761 Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
             "###);
+        }
+
+        // --merge with no other flag
+        {
+            {
+                let (stdout, stderr) = git.branchless(
+                    "move",
+                    &["--merge", "-s", &test2_oid.to_string(), "-d", "master"],
+                )?;
+                insta::assert_snapshot!(stdout, @r###"
+                Attempting rebase in-memory...
+                Failed to merge in-memory, trying again on-disk...
+                branchless: running command: <git-executable> diff --quiet
+                Calling Git for on-disk rebase...
+                branchless: running command: <git-executable> rebase --continue
+                "###);
+                insta::assert_snapshot!(stderr, @r###"
+                branchless: processing 1 update: ref HEAD
+                branchless: processing 1 update: ref HEAD
+                branchless: processed commit: 96d1c37 create test2.txt
+                Executing: git branchless hook-detect-empty-commit fe65c1fe15584744e649b2c79d4cf9b0d878f92e
+                branchless: processing 1 update: ref refs/rewritten/parent-3
+                branchless: processing 1 update: ref HEAD
+                Executing: git branchless hook-register-extra-post-rewrite-hook
+                branchless: processing 2 rewritten commits
+                branchless: creating working copy snapshot
+                branchless: running command: <git-executable> checkout 98b9119d16974f372e76cb64a3b77c528fc0b18b
+                Previous HEAD position was 5a6a761 Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
+                branchless: processing 1 update: ref HEAD
+                HEAD is now at 98b9119 create test3.txt
+                branchless: processing checkout
+                O f777ecc create initial.txt
+                |\
+                | @ 98b9119 create test3.txt
+                | |
+                | | & (merge) 96d1c37 create test2.txt
+                | |/
+                | o 5a6a761 Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
+                |
+                O 62fc20d (master) create test1.txt
+                |
+                o 96d1c37 create test2.txt
+                & (merge) 5a6a761 Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
+                Successfully rebased and updated detached HEAD.
+                branchless: processing 1 update: ref refs/rewritten/parent-3
+                "###);
+            }
+
+            {
+                let stdout = git.smartlog()?;
+                insta::assert_snapshot!(stdout, @r###"
+                O f777ecc create initial.txt
+                |\
+                | @ 98b9119 create test3.txt
+                | |
+                | | & (merge) 96d1c37 create test2.txt
+                | |/
+                | o 5a6a761 Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
+                |
+                O 62fc20d (master) create test1.txt
+                |
+                o 96d1c37 create test2.txt
+                & (merge) 5a6a761 Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
+                "###);
+            }
         }
     }
 
