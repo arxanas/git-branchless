@@ -287,7 +287,8 @@ fn test_record_create_branch() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.branchless("record", &["-b", "foo", "-m", "Update"])?;
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> checkout -b foo
+        branchless: running command: <git-executable> checkout master -b foo
+        M	test1.txt
         [foo 836023f] Update
          1 file changed, 1 insertion(+), 1 deletion(-)
         "###);

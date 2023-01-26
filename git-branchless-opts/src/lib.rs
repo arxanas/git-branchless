@@ -164,6 +164,11 @@ pub struct SwitchOptions {
     #[clap(action, short = 'm', long = "merge", conflicts_with("force"))]
     pub merge: bool,
 
+    /// If the target is a branch, switch to that branch and immediately detach
+    /// from it.
+    #[clap(action, short = 'd', long = "detach")]
+    pub detach: bool,
+
     /// The commit or branch to check out.
     ///
     /// If this is not provided, then interactive commit selection starts as

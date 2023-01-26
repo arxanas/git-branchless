@@ -71,7 +71,13 @@ fn maybe_get_branch_name(
         branch_oid_to_names,
         ..
     } = repo.get_references_snapshot()?;
-    if (head_oid.is_some() && head_oid == oid) || current_target == head_oid.map(|o| o.to_string())
+    let oid = match current_target {
+        Some(_) => oid,
+        None => head_oid,
+    };
+    if current_target.is_some()
+        && ((head_oid.is_some() && head_oid == oid)
+            || current_target == head_oid.map(|o| o.to_string()))
     {
         // Don't try to checkout the branch if we aren't actually checking anything new out.
         return Ok(current_target);
