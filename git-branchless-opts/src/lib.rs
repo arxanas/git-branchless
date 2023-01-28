@@ -771,6 +771,42 @@ pub enum TestSubcommand {
         #[clap(short = 'v', long = "verbose", action = clap::ArgAction::Count)]
         verbosity: u8,
     },
+
+    /// Run a given command on a set of commits and present the successes and failures.
+    Fix {
+        /// An ad-hoc command to execute on each commit.
+        #[clap(value_parser, short = 'x', long = "exec")]
+        exec: Option<String>,
+
+        /// The test command alias for the command to execute on each commit. Set with
+        /// `git config branchless.test.alias.<name> <command>`.
+        #[clap(value_parser, short = 'c', long = "command", conflicts_with("exec"))]
+        command: Option<String>,
+
+        /// The set of commits to test.
+        #[clap(value_parser, default_value = "stack()")]
+        revset: Revset,
+
+        /// Options for resolving revset expressions.
+        #[clap(flatten)]
+        resolve_revset_options: ResolveRevsetOptions,
+
+        /// Show the test output as well.
+        #[clap(short = 'v', long = "verbose", action = clap::ArgAction::Count)]
+        verbosity: u8,
+
+        /// How to execute the tests.
+        #[clap(short = 's', long = "strategy")]
+        strategy: Option<TestExecutionStrategy>,
+
+        /// How many jobs to execute in parallel. The value `0` indicates to use all CPUs.
+        #[clap(short = 'j', long = "jobs")]
+        jobs: Option<usize>,
+
+        /// Options for moving commits.
+        #[clap(flatten)]
+        move_options: MoveOptions,
+    },
 }
 
 /// Generate and write man-pages into the specified directory.

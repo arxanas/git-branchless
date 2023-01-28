@@ -559,6 +559,14 @@ impl Effects {
         }
     }
 
+    /// Suppress output sent to the returned `Effects`.
+    pub fn suppress(&self) -> Self {
+        Self {
+            dest: OutputDest::Suppress,
+            ..self.clone()
+        }
+    }
+
     /// Start reporting progress for the specified operation type.
     ///
     /// A progress spinner is shown until the returned `ProgressHandle` is
