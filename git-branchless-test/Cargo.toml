@@ -4,6 +4,7 @@ name = "git-branchless-test"
 version = "0.7.0-pre.1"
 
 [dependencies]
+bstr = "1.0.1"
 clap = "4.0.23"
 crossbeam = "0.8.2"
 cursive = { version = "0.20.0", default-features = false, features = [
@@ -18,6 +19,7 @@ itertools = "0.10.5"
 lazy_static = "1.4.0"
 lib = { package = "git-branchless-lib", version = "0.7.0-pre.1", path = "../git-branchless-lib" }
 num_cpus = "1.14.0"
+rayon = "1.6.1"
 serde = { version = "1.0.150", features = ["serde_derive", "derive"] }
 serde_json = "1.0.87"
 tracing = "0.1.37"

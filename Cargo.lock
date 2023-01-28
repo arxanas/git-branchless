@@ -1342,6 +1342,7 @@ name = "git-branchless-test"
 version = "0.7.0-pre.1"
 dependencies = [
  "assert_cmd",
+ "bstr",
  "clap 4.0.32",
  "crossbeam",
  "cursive",
@@ -1355,6 +1356,7 @@ dependencies = [
  "itertools 0.10.5",
  "lazy_static",
  "num_cpus",
+ "rayon",
  "serde",
  "serde_json",
  "tracing",

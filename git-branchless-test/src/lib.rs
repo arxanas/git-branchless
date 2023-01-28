@@ -16,6 +16,7 @@ use std::sync::mpsc::{channel, Sender};
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
+use bstr::ByteSlice;
 use clap::ValueEnum;
 use cursive::theme::{BaseColor, Effect, Style};
 use cursive::utils::markup::StyledString;
@@ -24,23 +25,31 @@ use fslock::LockFile;
 use git_branchless_invoke::CommandContext;
 use itertools::Itertools;
 use lazy_static::lazy_static;
-use lib::core::config::{get_hint_enabled, get_hint_string, print_hint_suppression_notice, Hint};
-use lib::core::dag::{sorted_commit_set, Dag};
+use lib::core::check_out::CheckOutCommitOptions;
+use lib::core::config::{
+    get_hint_enabled, get_hint_string, get_restack_preserve_timestamps,
+    print_hint_suppression_notice, Hint,
+};
+use lib::core::dag::{sorted_commit_set, CommitSet, Dag};
 use lib::core::effects::{icons, Effects, OperationIcon, OperationType, ProgressHandle};
 use lib::core::eventlog::{EventLogDb, EventReplayer, EventTransactionId};
 use lib::core::formatting::{Glyphs, Pluralize, StyledStringBuilder};
 use lib::core::repo_ext::RepoExt;
 use lib::core::rewrite::{
-    execute_rebase_plan, ExecuteRebasePlanOptions, ExecuteRebasePlanResult, RebaseCommand,
-    RebasePlan,
+    execute_rebase_plan, BuildRebasePlanOptions, ExecuteRebasePlanOptions, ExecuteRebasePlanResult,
+    RebaseCommand, RebasePlan, RebasePlanBuilder, RebasePlanPermissions, RepoResource,
 };
-use lib::git::{Commit, ConfigRead, GitRunInfo, GitRunResult, NonZeroOid, Repo};
+use lib::git::{
+    Commit, ConfigRead, GitRunInfo, GitRunResult, MaybeZeroOid, NonZeroOid, Repo,
+    WorkingCopyChangesType,
+};
 use lib::util::{get_sh, ExitCode};
-use serde::{Deserialize, Serialize};
-use tracing::{debug, instrument};
+use rayon::ThreadPoolBuilder;
+use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
+use tracing::{debug, instrument, warn};
 
 use git_branchless_opts::{
-    ResolveRevsetOptions, Revset, TestArgs, TestExecutionStrategy, TestSubcommand,
+    MoveOptions, ResolveRevsetOptions, Revset, TestArgs, TestExecutionStrategy, TestSubcommand,
 };
 use git_branchless_revset::resolve_commits;
 
@@ -94,6 +103,10 @@ struct RawTestOptions {
 
     /// The requested verbosity of the test output.
     pub verbosity: Verbosity,
+
+    /// Whether to amend commits with the changes produced by the executed
+    /// command.
+    pub apply_fixes: bool,
 }
 
 fn resolve_test_command_alias(
@@ -157,12 +170,18 @@ struct ResolvedTestOptions {
     strategy: TestExecutionStrategy,
     jobs: usize,
     verbosity: Verbosity,
+    fix_options: Option<(ExecuteRebasePlanOptions, RebasePlanPermissions)>,
 }
 
 impl ResolvedTestOptions {
     fn resolve(
+        now: SystemTime,
         effects: &Effects,
+        dag: &Dag,
         repo: &Repo,
+        event_tx_id: EventTransactionId,
+        commits: &CommitSet,
+        move_options: Option<&MoveOptions>,
         options: &RawTestOptions,
     ) -> eyre::Result<Result<Self, ExitCode>> {
         let config = repo.get_readonly_config()?;
@@ -172,6 +191,7 @@ impl ResolvedTestOptions {
             strategy,
             jobs,
             verbosity,
+            apply_fixes,
         } = options;
         let resolved_command = match (command, command_alias) {
             (Some(command), None) => command.to_owned(),
@@ -260,11 +280,60 @@ but --strategy working-copy was provided instead."
         };
         assert!(resolved_jobs > 0);
 
+        let fix_options = if *apply_fixes {
+            let move_options = match move_options {
+                Some(move_options) => move_options,
+                None => {
+                    writeln!(effects.get_output_stream(), "BUG: fixes were requested to be applied, but no `BuildRebasePlanOptions` were provided.")?;
+                    return Ok(Err(ExitCode(1)));
+                }
+            };
+            let MoveOptions {
+                force_rewrite_public_commits,
+                force_in_memory,
+                force_on_disk,
+                detect_duplicate_commits_via_patch_id,
+                resolve_merge_conflicts,
+                dump_rebase_constraints,
+                dump_rebase_plan,
+            } = move_options;
+            let build_options = BuildRebasePlanOptions {
+                force_rewrite_public_commits: *force_rewrite_public_commits,
+                dump_rebase_constraints: *dump_rebase_constraints,
+                dump_rebase_plan: *dump_rebase_plan,
+                detect_duplicate_commits_via_patch_id: *detect_duplicate_commits_via_patch_id,
+            };
+            let execute_options = ExecuteRebasePlanOptions {
+                now,
+                event_tx_id,
+                preserve_timestamps: get_restack_preserve_timestamps(repo)?,
+                force_in_memory: *force_in_memory,
+                force_on_disk: *force_on_disk,
+                resolve_merge_conflicts: *resolve_merge_conflicts,
+                check_out_commit_options: CheckOutCommitOptions {
+                    render_smartlog: false,
+                    ..Default::default()
+                },
+            };
+            let permissions =
+                match RebasePlanPermissions::verify_rewrite_set(dag, build_options, commits)? {
+                    Ok(permissions) => permissions,
+                    Err(err) => {
+                        err.describe(effects, repo)?;
+                        return Ok(Err(ExitCode(1)));
+                    }
+                };
+            Some((execute_options, permissions))
+        } else {
+            None
+        };
+
         Ok(Ok(ResolvedTestOptions {
             command: resolved_command,
             strategy: resolved_strategy,
             jobs: resolved_jobs,
             verbosity: *verbosity,
+            fix_options,
         }))
     }
 
@@ -304,9 +373,11 @@ pub fn command_main(ctx: CommandContext, args: TestArgs) -> eyre::Result<ExitCod
                 strategy,
                 jobs,
                 verbosity: Verbosity::from(verbosity),
+                apply_fixes: false,
             },
             revset,
             &resolve_revset_options,
+            None,
         ),
 
         TestSubcommand::Show {
@@ -323,9 +394,35 @@ pub fn command_main(ctx: CommandContext, args: TestArgs) -> eyre::Result<ExitCod
                 strategy: None,
                 jobs: None,
                 verbosity: Verbosity::from(verbosity),
+                apply_fixes: false,
             },
             revset,
             &resolve_revset_options,
+        ),
+
+        TestSubcommand::Fix {
+            exec: command,
+            command: command_alias,
+            revset,
+            resolve_revset_options,
+            verbosity,
+            strategy,
+            jobs,
+            move_options,
+        } => subcommand_run(
+            &effects,
+            &git_run_info,
+            &RawTestOptions {
+                exec: command,
+                command: command_alias,
+                strategy,
+                jobs,
+                verbosity: Verbosity::from(verbosity),
+                apply_fixes: true,
+            },
+            revset,
+            &resolve_revset_options,
+            Some(&move_options),
         ),
     }
 }
@@ -338,12 +435,13 @@ fn subcommand_run(
     options: &RawTestOptions,
     revset: Revset,
     resolve_revset_options: &ResolveRevsetOptions,
+    move_options: Option<&MoveOptions>,
 ) -> eyre::Result<ExitCode> {
+    let now = SystemTime::now();
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
-    let now = SystemTime::now();
-    let event_tx_id = event_log_db.make_transaction_id(now, "test")?;
+    let event_tx_id = event_log_db.make_transaction_id(now, "test run")?;
     let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
     let event_cursor = event_replayer.make_default_cursor();
     let references_snapshot = repo.get_references_snapshot()?;
@@ -354,11 +452,6 @@ fn subcommand_run(
         event_cursor,
         &references_snapshot,
     )?;
-
-    let options = match ResolvedTestOptions::resolve(effects, &repo, options)? {
-        Ok(options) => options,
-        Err(exit_code) => return Ok(exit_code),
-    };
 
     let commit_set = match resolve_commits(
         effects,
@@ -372,6 +465,20 @@ fn subcommand_run(
             err.describe(effects)?;
             return Ok(ExitCode(1));
         }
+    };
+
+    let options = match ResolvedTestOptions::resolve(
+        now,
+        effects,
+        &dag,
+        &repo,
+        event_tx_id,
+        &commit_set,
+        move_options,
+        options,
+    )? {
+        Ok(options) => options,
+        Err(exit_code) => return Ok(exit_code),
     };
 
     let abort_trap = match set_abort_trap(
@@ -388,10 +495,12 @@ fn subcommand_run(
     };
 
     let commits = sorted_commit_set(&repo, &dag, &commit_set)?;
-    let result: Result<_, _> = run_tests(
+    let results: Result<_, _> = run_tests(
         effects,
         git_run_info,
+        &dag,
         &repo,
+        &event_log_db,
         event_tx_id,
         &revset,
         &commits,
@@ -402,8 +511,41 @@ fn subcommand_run(
         return Ok(abort_trap_exit_code);
     }
 
-    let result = result?;
-    Ok(result)
+    let results = match results? {
+        Ok(results) => results,
+        Err(exit_code) => return Ok(exit_code),
+    };
+
+    let exit_code = print_summary(
+        effects,
+        &repo,
+        &revset,
+        &options.command,
+        &results,
+        &options.verbosity,
+    )?;
+    if !exit_code.is_success() {
+        return Ok(exit_code);
+    }
+
+    if let Some((execute_options, permissions)) = &options.fix_options {
+        let exit_code = apply_fixes(
+            effects,
+            git_run_info,
+            &dag,
+            &repo,
+            &event_log_db,
+            execute_options,
+            permissions.clone(),
+            &options.command,
+            &results,
+        )?;
+        if !exit_code.is_success() {
+            return Ok(exit_code);
+        }
+    }
+
+    Ok(ExitCode(0))
 }
 
 #[must_use]
@@ -571,6 +713,7 @@ enum TestStatus {
         /// Whether or not the result was cached (indicating that we didn't
         /// actually re-run the test).
         cached: bool,
+        fixed_tree_oid: Option<NonZeroOid>,
     },
 }
 
@@ -602,10 +745,30 @@ impl TestStatus {
     }
 }
 
+#[derive(Debug)]
+struct SerializedNonZeroOid(NonZeroOid);
+
+impl Serialize for SerializedNonZeroOid {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.0.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for SerializedNonZeroOid {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let s = String::deserialize(deserializer)?;
+        let oid: NonZeroOid = s.parse().map_err(|_| {
+            de::Error::invalid_value(de::Unexpected::Str(&s), &"a valid non-zero OID")
+        })?;
+        Ok(SerializedNonZeroOid(oid))
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 struct SerializedTestResult {
     command: String,
     exit_code: i32,
+    fixed_tree_oid: Option<SerializedNonZeroOid>,
 }
 
 #[instrument]
@@ -659,13 +822,35 @@ fn make_test_status_description(
             .append(commit.friendly_describe(glyphs)?)
             .build(),
 
-        TestStatus::Passed { cached: false } => StyledStringBuilder::new()
+        TestStatus::Passed {
+            cached: false,
+            fixed_tree_oid: None,
+        } => StyledStringBuilder::new()
             .append_styled("Passed: ", *STYLE_SUCCESS)
             .append(commit.friendly_describe(glyphs)?)
             .build(),
 
-        TestStatus::Passed { cached: true } => StyledStringBuilder::new()
+        TestStatus::Passed {
+            cached: false,
+            fixed_tree_oid: Some(_),
+        } => StyledStringBuilder::new()
+            .append_styled("Passed (fixed): ", *STYLE_SUCCESS)
+            .append(commit.friendly_describe(glyphs)?)
+            .build(),
+
+        TestStatus::Passed {
+            cached: true,
+            fixed_tree_oid: None,
+        } => StyledStringBuilder::new()
             .append_styled("Passed (cached): ", *STYLE_SUCCESS)
+            .append(commit.friendly_describe(glyphs)?)
+            .build(),
+
+        TestStatus::Passed {
+            cached: true,
+            fixed_tree_oid: Some(_),
+        } => StyledStringBuilder::new()
+            .append_styled("Passed (cached, fixed): ", *STYLE_SUCCESS)
             .append(commit.friendly_describe(glyphs)?)
             .build(),
     };
@@ -776,17 +961,20 @@ fn shell_escape(s: impl AsRef<str>) -> String {
 fn run_tests(
     effects: &Effects,
     git_run_info: &GitRunInfo,
+    dag: &Dag,
     repo: &Repo,
+    event_log_db: &EventLogDb,
     event_tx_id: EventTransactionId,
     revset: &Revset,
     commits: &[Commit],
     options: &ResolvedTestOptions,
-) -> eyre::Result<ExitCode> {
+) -> eyre::Result<Result<Vec<(NonZeroOid, TestOutput)>, ExitCode>> {
     let ResolvedTestOptions {
         command,
         strategy,
         jobs,
-        verbosity,
+        verbosity: _,   // Verbosity used by caller to print results.
+        fix_options: _, // Whether to apply fixes is checked by `test_commit`, after the working directory is set up.
     } = &options;
 
     let shell_path = match get_sh() {
@@ -804,7 +992,7 @@ fn run_tests(
                         .build()
                 )?
             )?;
-            return Ok(ExitCode(1));
+            return Ok(Err(ExitCode(1)));
         }
     };
 
@@ -919,26 +1107,23 @@ fn run_tests(
     };
     debug!("Returned from thread scope");
 
-    writeln!(
-        effects.get_output_stream(),
-        "Ran {} on {}:",
-        effects.get_glyphs().render(
-            StyledStringBuilder::new()
-                .append_styled(command, Effect::Bold)
-                .build()
-        )?,
-        Pluralize {
-            determiner: None,
-            amount: commits.len(),
-            unit: ("commit", "commits")
-        }
-    )?;
+    Ok(Ok(results))
+}
+
+fn print_summary(
+    effects: &Effects,
+    repo: &Repo,
+    revset: &Revset,
+    command: &str,
+    results: &[(NonZeroOid, TestOutput)],
+    verbosity: &Verbosity,
+) -> eyre::Result<ExitCode> {
     let mut num_passed = 0;
     let mut num_failed = 0;
     let mut num_skipped = 0;
     let mut num_cached_results = 0;
     for (commit_oid, test_output) in results {
-        let commit = repo.find_commit_or_fail(commit_oid)?;
+        let commit = repo.find_commit_or_fail(*commit_oid)?;
         write!(
             effects.get_output_stream(),
             "{}",
@@ -962,7 +1147,10 @@ fn run_tests(
                     num_cached_results += 1;
                 }
             }
-            TestStatus::Passed { cached } => {
+            TestStatus::Passed {
+                cached,
+                fixed_tree_oid: _,
+            } => {
                 num_passed += 1;
                 if cached {
                     num_cached_results += 1;
@@ -970,6 +1158,21 @@ fn run_tests(
             }
         }
     }
+
+    writeln!(
+        effects.get_output_stream(),
+        "Tested {} with {}:",
+        Pluralize {
+            determiner: None,
+            amount: results.len(),
+            unit: ("commit", "commits")
+        },
+        effects.get_glyphs().render(
+            StyledStringBuilder::new()
+                .append_styled(command, Effect::Bold)
+                .build()
+        )?,
+    )?;
 
     let passed = effects.get_glyphs().render(
         StyledStringBuilder::new()
@@ -1012,6 +1215,134 @@ fn run_tests(
         Ok(ExitCode(1))
     } else {
         Ok(ExitCode(0))
+    }
+}
+
+fn apply_fixes(
+    effects: &Effects,
+    git_run_info: &GitRunInfo,
+    dag: &Dag,
+    repo: &Repo,
+    event_log_db: &EventLogDb,
+    execute_options: &ExecuteRebasePlanOptions,
+    permissions: RebasePlanPermissions,
+    command: &str,
+    results: &[(NonZeroOid, TestOutput)],
+) -> eyre::Result<ExitCode> {
+    let fixed_tree_oids: Vec<(NonZeroOid, NonZeroOid)> = results
+        .iter()
+        .filter_map(|(commit_oid, test_output)| match test_output.test_status {
+            TestStatus::Passed {
+                cached: _,
+                fixed_tree_oid: Some(fixed_tree_oid),
+            } => Some((*commit_oid, fixed_tree_oid)),
+
+            TestStatus::Passed {
+                cached: _,
+                fixed_tree_oid: None,
+            }
+            | TestStatus::CheckoutFailed
+            | TestStatus::SpawnTestFailed(_)
+            | TestStatus::TerminatedBySignal
+            | TestStatus::AlreadyInProgress
+            | TestStatus::ReadCacheFailed(_)
+            | TestStatus::Failed { .. } => None,
+        })
+        .collect();
+
+    let mut builder = RebasePlanBuilder::new(dag, permissions);
+    let mut fixed_commit_oids = Vec::new();
+    for (commit_oid, fixed_tree_oid) in fixed_tree_oids {
+        let commit = repo.find_commit_or_fail(commit_oid)?;
+        let fixed_tree = repo.find_tree_or_fail(fixed_tree_oid)?;
+        if commit.get_tree_oid() == MaybeZeroOid::NonZero(fixed_tree.get_oid()) {
+            warn!(
+                ?commit_oid,
+                ?fixed_tree_oid,
+                "The result of fixing this commit produced the same tree OID as it already had"
+            );
+        }
+
+        let commit_message = commit.get_message_raw()?;
+        let commit_message = commit_message.to_str().with_context(|| {
+            eyre::eyre!(
+                "Could not decode commit message for commit: {:?}",
+                commit_oid
+            )
+        })?;
+        let parents: Vec<Commit> = commit
+            .get_parent_oids()
+            .into_iter()
+            .map(|parent_oid| repo.find_commit_or_fail(parent_oid))
+            .try_collect()?;
+        let fixed_commit_oid = repo.create_commit(
+            None,
+            &commit.get_author(),
+            &commit.get_committer(),
+            commit_message,
+            &fixed_tree,
+            parents.iter().collect(),
+        )?;
+        fixed_commit_oids.push(fixed_commit_oid);
+        builder.replace_commit(commit_oid, fixed_commit_oid)?;
+        builder.move_subtree(commit_oid, commit.get_parent_oids())?;
+    }
+
+    let thread_pool = ThreadPoolBuilder::new().build()?;
+    let repo_pool = RepoResource::new_pool(repo)?;
+    let rebase_plan = match builder.build(effects, &thread_pool, &repo_pool)? {
+        Ok(Some(plan)) => plan,
+        Ok(None) => {
+            writeln!(effects.get_output_stream(), "No commits to fix.")?;
+            return Ok(ExitCode(0));
+        }
+        Err(err) => {
+            err.describe(effects, repo)?;
+            return Ok(ExitCode(1));
+        }
+    };
+
+    match execute_rebase_plan(
+        effects,
+        git_run_info,
+        repo,
+        event_log_db,
+        &rebase_plan,
+        execute_options,
+    )? {
+        ExecuteRebasePlanResult::Succeeded { rewritten_oids: _ } => {
+            writeln!(
+                effects.get_output_stream(),
+                "Fixed {} with {}:",
+                Pluralize {
+                    determiner: None,
+                    amount: fixed_commit_oids.len(),
+                    unit: ("commit", "commits")
+                },
+                effects.get_glyphs().render(
+                    StyledStringBuilder::new()
+                        .append_styled(command, Effect::Bold)
+                        .build()
+                )?,
+            )?;
+            for fixed_commit_oid in fixed_commit_oids {
+                let fixed_commit = repo.find_commit_or_fail(fixed_commit_oid)?;
+                writeln!(
+                    effects.get_output_stream(),
+                    "{}",
+                    effects
+                        .get_glyphs()
+                        .render(fixed_commit.friendly_describe(effects.get_glyphs())?)?
+                )?;
+            }
+
+            Ok(ExitCode(0))
+        }
+        ExecuteRebasePlanResult::DeclinedToMerge { failed_merge_info } => {
+            writeln!(effects.get_output_stream(), "BUG: encountered merge conflicts during git test fix, but we should not be applying any patches: {failed_merge_info:?}")?;
+            Ok(ExitCode(1))
+        }
+        ExecuteRebasePlanResult::Failed { exit_code } => Ok(exit_code),
     }
 }
 
@@ -1120,6 +1451,7 @@ fn run_test(
         strategy,
         jobs: _, // Caller handles job management.
         verbosity: _,
+        fix_options: _, // Checked in `test_commit`.
     } = options;
     let (effects, progress) = effects.start_operation(operation_type);
     progress.notify_status(
@@ -1174,7 +1506,17 @@ fn run_test(
                         ),
                     );
 
-                    let result = test_commit(repo, test_files, &path, shell_path, options, commit)?;
+                    let result = test_commit(
+                        &effects,
+                        git_run_info,
+                        repo,
+                        event_tx_id,
+                        test_files,
+                        &path,
+                        shell_path,
+                        options,
+                        commit,
+                    )?;
                     lock_file
                         .unlock()
                         .wrap_err_with(|| format!("Unlocking test dir at {path:?}"))?;
@@ -1273,10 +1615,15 @@ fn make_test_files(
                 Ok(SerializedTestResult {
                     command: _,
                     exit_code: 0,
-                }) => TestStatus::Passed { cached: true },
+                    fixed_tree_oid,
+                }) => TestStatus::Passed {
+                    cached: true,
+                    fixed_tree_oid: fixed_tree_oid.map(|SerializedNonZeroOid(oid)| oid),
+                },
                 Ok(SerializedTestResult {
                     command: _,
                     exit_code,
+                    fixed_tree_oid: _,
                 }) => TestStatus::Failed {
                     cached: true,
                     exit_code,
@@ -1445,7 +1792,10 @@ fn prepare_working_directory(
 
 #[instrument]
 fn test_commit(
+    effects: &Effects,
+    git_run_info: &GitRunInfo,
     repo: &Repo,
+    event_tx_id: EventTransactionId,
     test_files: TestFiles,
     working_directory: &Path,
     shell_path: &Path,
@@ -1492,7 +1842,42 @@ fn test_commit(
         }
     };
     let test_status = match exit_code {
-        0 => TestStatus::Passed { cached: false },
+        0 => {
+            let fixed_tree_oid = match options.fix_options {
+                None => None,
+                Some(_) => {
+                    let repo = Repo::from_dir(working_directory)?;
+                    let index = repo.get_index()?;
+                    let head_info = repo.get_head_info()?;
+                    let effects = effects.suppress();
+                    let (snapshot, _status) = repo.get_status(
+                        &effects,
+                        git_run_info,
+                        &index,
+                        &head_info,
+                        Some(event_tx_id),
+                    )?;
+                    match snapshot.get_working_copy_changes_type()? {
+                        WorkingCopyChangesType::None | WorkingCopyChangesType::Unstaged => {
+                            let fixed_tree_oid = snapshot.commit_unstaged.get_tree_oid();
+                            if commit.get_tree_oid() != fixed_tree_oid {
+                                Option::<NonZeroOid>::from(snapshot.commit_unstaged.get_tree_oid())
+                            } else {
+                                None
+                            }
+                        }
+                        WorkingCopyChangesType::Staged | WorkingCopyChangesType::Conflicts => {
+                            // FIXME: surface information about the fix that failed to be applied.
+                            None
+                        }
+                    }
+                }
+            };
+            TestStatus::Passed {
+                cached: false,
+                fixed_tree_oid,
+            }
+        }
         exit_code => TestStatus::Failed {
             cached: false,
             exit_code,
@@ -1502,6 +1887,18 @@ fn test_commit(
     let serialized_test_result = SerializedTestResult {
         command: options.command.clone(),
         exit_code,
+        fixed_tree_oid: match &test_status {
+            TestStatus::Passed {
+                cached: _,
+                fixed_tree_oid,
+            } => (*fixed_tree_oid).map(SerializedNonZeroOid),
+            TestStatus::CheckoutFailed
+            | TestStatus::SpawnTestFailed(_)
+            | TestStatus::TerminatedBySignal
+            | TestStatus::AlreadyInProgress
+            | TestStatus::ReadCacheFailed(_)
+            | TestStatus::Failed { .. } => None,
+        },
     };
     serde_json::to_writer_pretty(result_file, &serialized_test_result)
         .wrap_err_with(|| format!("Writing test status {test_status:?} to {result_path:?}"))?;
@@ -1523,9 +1920,11 @@ fn subcommand_show(
     revset: Revset,
     resolve_revset_options: &ResolveRevsetOptions,
 ) -> eyre::Result<ExitCode> {
+    let now = SystemTime::now();
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
+    let event_tx_id = event_log_db.make_transaction_id(now, "test show")?;
     let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
     let event_cursor = event_replayer.make_default_cursor();
     let references_snapshot = repo.get_references_snapshot()?;
@@ -1537,13 +1936,6 @@ fn subcommand_show(
         &references_snapshot,
     )?;
 
-    let options = match ResolvedTestOptions::resolve(effects, &repo, options)? {
-        Ok(options) => options,
-        Err(exit_code) => {
-            return Ok(exit_code);
-        }
-    };
-
     let commit_set =
         match resolve_commits(effects, &repo, &mut dag, &[revset], resolve_revset_options) {
             Ok(mut commit_sets) => commit_sets.pop().unwrap(),
@@ -1552,6 +1944,22 @@ fn subcommand_show(
                 return Ok(ExitCode(1));
             }
         };
+
+    let options = match ResolvedTestOptions::resolve(
+        now,
+        effects,
+        &dag,
+        &repo,
+        event_tx_id,
+        &commit_set,
+        None,
+        options,
+    )? {
+        Ok(options) => options,
+        Err(exit_code) => {
+            return Ok(exit_code);
+        }
+    };
 
     let commits = sorted_commit_set(&repo, &dag, &commit_set)?;
     for commit in commits {
