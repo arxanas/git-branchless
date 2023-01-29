@@ -18,7 +18,7 @@ use lib::core::config::get_restack_preserve_timestamps;
 use lib::core::dag::{commit_set_to_vec, sorted_commit_set, union_all, CommitSet, Dag};
 use lib::core::effects::{Effects, OperationType};
 use lib::core::eventlog::{EventLogDb, EventReplayer};
-use lib::core::formatting::StyledStringBuilder;
+use lib::core::formatting::{Pluralize, StyledStringBuilder};
 use lib::core::rewrite::{
     execute_rebase_plan, BuildRebasePlanError, BuildRebasePlanOptions, ExecuteRebasePlanOptions,
     ExecuteRebasePlanResult, FailedMergeInfo, RebasePlan, RebasePlanBuilder, RebasePlanPermissions,
@@ -443,8 +443,12 @@ fn execute_plans(
             } => {
                 writeln!(
                     effects.get_output_stream(),
-                    "Merge conflict ({} files) for {}",
-                    conflicting_paths.len(),
+                    "Merge conflict ({}) for {}",
+                    Pluralize {
+                        determiner: None,
+                        amount: conflicting_paths.len(),
+                        unit: ("file", "files")
+                    },
                     effects.get_glyphs().render(
                         StyledStringBuilder::new()
                             .append(failed_merge_commit.friendly_describe(effects.get_glyphs())?)
