@@ -619,7 +619,10 @@ fn set_abort_trap(
             force_in_memory: false,
             force_on_disk: true,
             resolve_merge_conflicts: false,
-            check_out_commit_options: Default::default(),
+            check_out_commit_options: CheckOutCommitOptions {
+                render_smartlog: false,
+                ..Default::default()
+            },
         },
     )? {
         ExecuteRebasePlanResult::Succeeded { rewritten_oids: _ } => {
