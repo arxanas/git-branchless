@@ -96,6 +96,10 @@ struct RawTestOptions {
     /// The command alias to execute, if any.
     pub command: Option<String>,
 
+    /// Whether or not to execute as a "dry-run", i.e. don't rewrite any commits
+    /// if `true`.
+    pub dry_run: bool,
+
     /// The execution strategy to use.
     pub strategy: Option<TestExecutionStrategy>,
 
@@ -169,6 +173,7 @@ To run a specific command alias, run: git test run -c <alias>",
 struct ResolvedTestOptions {
     command: String,
     strategy: TestExecutionStrategy,
+    dry_run: bool,
     jobs: usize,
     verbosity: Verbosity,
     fix_options: Option<(ExecuteRebasePlanOptions, RebasePlanPermissions)>,
@@ -189,6 +194,7 @@ impl ResolvedTestOptions {
         let RawTestOptions {
             exec: command,
             command: command_alias,
+            dry_run,
             strategy,
             jobs,
             verbosity,
@@ -332,6 +338,7 @@ but --strategy working-copy was provided instead."
         Ok(Ok(ResolvedTestOptions {
             command: resolved_command,
             strategy: resolved_strategy,
+            dry_run: *dry_run,
             jobs: resolved_jobs,
             verbosity: *verbosity,
             fix_options,
@@ -371,6 +378,7 @@ pub fn command_main(ctx: CommandContext, args: TestArgs) -> eyre::Result<ExitCod
             &RawTestOptions {
                 exec: command,
                 command: command_alias,
+                dry_run: false,
                 strategy,
                 jobs,
                 verbosity: Verbosity::from(verbosity),
@@ -392,6 +400,7 @@ pub fn command_main(ctx: CommandContext, args: TestArgs) -> eyre::Result<ExitCod
             &RawTestOptions {
                 exec: command,
                 command: command_alias,
+                dry_run: false,
                 strategy: None,
                 jobs: None,
                 verbosity: Verbosity::from(verbosity),
@@ -404,6 +413,7 @@ pub fn command_main(ctx: CommandContext, args: TestArgs) -> eyre::Result<ExitCod
         TestSubcommand::Fix {
             exec: command,
             command: command_alias,
+            dry_run,
             revset,
             resolve_revset_options,
             verbosity,
@@ -416,6 +426,7 @@ pub fn command_main(ctx: CommandContext, args: TestArgs) -> eyre::Result<ExitCod
             &RawTestOptions {
                 exec: command,
                 command: command_alias,
+                dry_run,
                 strategy,
                 jobs,
                 verbosity: Verbosity::from(verbosity),
@@ -538,6 +549,7 @@ fn subcommand_run(
             &event_log_db,
             execute_options,
             permissions.clone(),
+            options.dry_run,
             &options.command,
             &results,
         )?;
@@ -976,6 +988,7 @@ fn run_tests(
     let ResolvedTestOptions {
         command,
         strategy,
+        dry_run: _, // Used only in `apply_fixes`.
         jobs,
         verbosity: _,   // Verbosity used by caller to print results.
         fix_options: _, // Whether to apply fixes is checked by `test_commit`, after the working directory is set up.
@@ -1230,6 +1243,7 @@ fn apply_fixes(
     event_log_db: &EventLogDb,
     execute_options: &ExecuteRebasePlanOptions,
     permissions: RebasePlanPermissions,
+    dry_run: bool,
     command: &str,
     results: &[(NonZeroOid, TestOutput)],
 ) -> eyre::Result<ExitCode> {
@@ -1361,48 +1375,54 @@ fn apply_fixes(
         }
     };
 
-    match execute_rebase_plan(
-        effects,
-        git_run_info,
-        repo,
-        event_log_db,
-        &rebase_plan,
-        execute_options,
-    )? {
-        ExecuteRebasePlanResult::Succeeded { rewritten_oids: _ } => {
-            writeln!(
-                effects.get_output_stream(),
-                "Fixed {} with {}:",
-                Pluralize {
-                    determiner: None,
-                    amount: commits_to_fix_oids.len(),
-                    unit: ("commit", "commits")
-                },
-                effects.get_glyphs().render(
-                    StyledStringBuilder::new()
-                        .append_styled(command, Effect::Bold)
-                        .build()
-                )?,
-            )?;
-            for fixed_commit_oid in commits_to_fix_oids {
-                let fixed_commit = repo.find_commit_or_fail(fixed_commit_oid)?;
-                writeln!(
-                    effects.get_output_stream(),
-                    "{}",
-                    effects
-                        .get_glyphs()
-                        .render(fixed_commit.friendly_describe(effects.get_glyphs())?)?
-                )?;
+    if !dry_run {
+        match execute_rebase_plan(
+            effects,
+            git_run_info,
+            repo,
+            event_log_db,
+            &rebase_plan,
+            execute_options,
+        )? {
+            ExecuteRebasePlanResult::Succeeded { rewritten_oids: _ } => {}
+            ExecuteRebasePlanResult::DeclinedToMerge { failed_merge_info } => {
+                writeln!(effects.get_output_stream(), "BUG: encountered merge conflicts during git test fix, but we should not be applying any patches: {failed_merge_info:?}")?;
+                return Ok(ExitCode(1));
             }
-
-            Ok(ExitCode(0))
+            ExecuteRebasePlanResult::Failed { exit_code } => return Ok(exit_code),
         }
-        ExecuteRebasePlanResult::DeclinedToMerge { failed_merge_info } => {
-            writeln!(effects.get_output_stream(), "BUG: encountered merge conflicts during git test fix, but we should not be applying any patches: {failed_merge_info:?}")?;
-            Ok(ExitCode(1))
-        }
-        ExecuteRebasePlanResult::Failed { exit_code } => Ok(exit_code),
     }
+
+    writeln!(
+        effects.get_output_stream(),
+        "Fixed {} with {}:",
+        Pluralize {
+            determiner: None,
+            amount: commits_to_fix_oids.len(),
+            unit: ("commit", "commits")
+        },
+        effects.get_glyphs().render(
+            StyledStringBuilder::new()
+                .append_styled(command, Effect::Bold)
+                .build()
+        )?,
+    )?;
+    for fixed_commit_oid in commits_to_fix_oids {
+        let fixed_commit = repo.find_commit_or_fail(fixed_commit_oid)?;
+        writeln!(
+            effects.get_output_stream(),
+            "{}",
+            effects
+                .get_glyphs()
+                .render(fixed_commit.friendly_describe(effects.get_glyphs())?)?
+        )?;
+    }
+
+    if dry_run {
+        writeln!(effects.get_output_stream(), "(This was a dry-run, so no commits were rewritten. Re-run without the --dry-run option to apply fixes.)")?;
+    }
+
+    Ok(ExitCode(0))
 }
 
 type WorkerId = usize;
@@ -1508,7 +1528,8 @@ fn run_test(
     let ResolvedTestOptions {
         command: _,
         strategy,
-        jobs: _, // Caller handles job management.
+        dry_run: _, // Used only in `apply_fixes`.
+        jobs: _,    // Caller handles job management.
         verbosity: _,
         fix_options: _, // Checked in `test_commit`.
     } = options;
