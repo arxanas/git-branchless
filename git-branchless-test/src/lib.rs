@@ -1025,7 +1025,7 @@ fn run_tests(
         )?;
     }
 
-    let results = {
+    let results_unordered = {
         let (effects, progress) =
             effects.start_operation(OperationType::RunTests(Arc::new(command.clone())));
         progress.notify_progress(0, commits.len());
@@ -1089,7 +1089,7 @@ fn run_tests(
             // would still be a live receiver for the sender.
             drop(result_tx);
 
-            let mut results = Vec::new();
+            let mut results = HashMap::new();
             while let Ok(message) = {
                 debug!("Main thread waiting for new job result");
                 let result = result_rx.recv();
@@ -1098,7 +1098,7 @@ fn run_tests(
             } {
                 match message {
                     JobResult::Done(commit_oid, test_output) => {
-                        results.push((commit_oid, test_output));
+                        results.insert(commit_oid, test_output);
                         if results.len() == commits.len() {
                             drop(result_rx);
                             break;
@@ -1124,7 +1124,32 @@ fn run_tests(
     };
     debug!("Returned from thread scope");
 
-    Ok(Ok(results))
+    // The results may be returned in an arbitrary order if they were produced
+    // in parallel, so recover the input order to produce deterministic output.
+    let results_ordered = {
+        let mut results_unordered = results_unordered;
+        let mut results_ordered = Vec::new();
+        for commit_oid in commits.iter().map(|commit| commit.get_oid()) {
+            match results_unordered.remove(&commit_oid) {
+                Some(result) => {
+                    results_ordered.push((commit_oid, result));
+                }
+                None => {
+                    warn!(?commit_oid, "No result was returned for commit");
+                }
+            }
+        }
+        if !results_unordered.is_empty() {
+            warn!(
+                ?results_unordered,
+                ?commits,
+                "There were extra results for commits not appearing in the input list"
+            );
+        }
+        results_ordered
+    };
+
+    Ok(Ok(results_ordered))
 }
 
 fn print_summary(
