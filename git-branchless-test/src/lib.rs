@@ -20,6 +20,7 @@ use bstr::ByteSlice;
 use clap::ValueEnum;
 use cursive::theme::{BaseColor, Effect, Style};
 use cursive::utils::markup::StyledString;
+use eden_dag::DagAlgorithm;
 use eyre::WrapErr;
 use fslock::LockFile;
 use git_branchless_invoke::CommandContext;
@@ -30,7 +31,7 @@ use lib::core::config::{
     get_hint_enabled, get_hint_string, get_restack_preserve_timestamps,
     print_hint_suppression_notice, Hint,
 };
-use lib::core::dag::{sorted_commit_set, CommitSet, Dag};
+use lib::core::dag::{commit_set_to_vec, sorted_commit_set, CommitSet, Dag};
 use lib::core::effects::{icons, Effects, OperationIcon, OperationType, ProgressHandle};
 use lib::core::eventlog::{EventLogDb, EventReplayer, EventTransactionId};
 use lib::core::formatting::{Glyphs, Pluralize, StyledStringBuilder};
@@ -532,7 +533,7 @@ fn subcommand_run(
         let exit_code = apply_fixes(
             effects,
             git_run_info,
-            &dag,
+            &mut dag,
             &repo,
             &event_log_db,
             execute_options,
@@ -1224,7 +1225,7 @@ fn print_summary(
 fn apply_fixes(
     effects: &Effects,
     git_run_info: &GitRunInfo,
-    dag: &Dag,
+    dag: &mut Dag,
     repo: &Repo,
     event_log_db: &EventLogDb,
     execute_options: &ExecuteRebasePlanOptions,
@@ -1253,47 +1254,102 @@ fn apply_fixes(
         })
         .collect();
 
-    let mut builder = RebasePlanBuilder::new(dag, permissions);
-    let mut fixed_commit_oids = Vec::new();
-    for (commit_oid, fixed_tree_oid) in fixed_tree_oids {
-        let commit = repo.find_commit_or_fail(commit_oid)?;
-        let fixed_tree = repo.find_tree_or_fail(fixed_tree_oid)?;
-        if commit.get_tree_oid() == MaybeZeroOid::NonZero(fixed_tree.get_oid()) {
+    #[derive(Debug)]
+    struct Fix {
+        original_commit_oid: NonZeroOid,
+        original_commit_parent_oids: Vec<NonZeroOid>,
+        fixed_commit_oid: Option<NonZeroOid>,
+    }
+    let mut fixes = Vec::new();
+    let mut commits_to_fix_oids = Vec::new();
+    for (original_commit_oid, fixed_tree_oid) in fixed_tree_oids {
+        let original_commit = repo.find_commit_or_fail(original_commit_oid)?;
+        let original_tree_oid = original_commit.get_tree_oid();
+        if original_tree_oid == MaybeZeroOid::NonZero(fixed_tree_oid) {
             warn!(
-                ?commit_oid,
+                ?original_commit_oid,
                 ?fixed_tree_oid,
                 "The result of fixing this commit produced the same tree OID as it already had"
             );
         }
 
-        let commit_message = commit.get_message_raw()?;
+        let commit_message = original_commit.get_message_raw()?;
         let commit_message = commit_message.to_str().with_context(|| {
             eyre::eyre!(
                 "Could not decode commit message for commit: {:?}",
-                commit_oid
+                original_commit_oid
             )
         })?;
-        let parents: Vec<Commit> = commit
+        let parents: Vec<Commit> = original_commit
             .get_parent_oids()
             .into_iter()
             .map(|parent_oid| repo.find_commit_or_fail(parent_oid))
             .try_collect()?;
+        let fixed_tree = repo.find_tree_or_fail(fixed_tree_oid)?;
         let fixed_commit_oid = repo.create_commit(
             None,
-            &commit.get_author(),
-            &commit.get_committer(),
+            &original_commit.get_author(),
+            &original_commit.get_committer(),
             commit_message,
             &fixed_tree,
             parents.iter().collect(),
         )?;
-        fixed_commit_oids.push(fixed_commit_oid);
-        builder.replace_commit(commit_oid, fixed_commit_oid)?;
-        builder.move_subtree(commit_oid, commit.get_parent_oids())?;
+        commits_to_fix_oids.push(original_commit_oid);
+        let fix = Fix {
+            original_commit_oid,
+            original_commit_parent_oids: original_commit.get_parent_oids(),
+            fixed_commit_oid: Some(fixed_commit_oid),
+        };
+        debug!(
+            ?fix,
+            ?original_tree_oid,
+            ?fixed_tree_oid,
+            "Generated fix to apply"
+        );
+        fixes.push(fix);
     }
 
-    let thread_pool = ThreadPoolBuilder::new().build()?;
-    let repo_pool = RepoResource::new_pool(repo)?;
-    let rebase_plan = match builder.build(effects, &thread_pool, &repo_pool)? {
+    let commits_to_fix_oids_set: CommitSet = commits_to_fix_oids.iter().copied().collect();
+    dag.sync_from_oids(
+        effects,
+        repo,
+        CommitSet::empty(),
+        commits_to_fix_oids_set.clone(),
+    )?;
+
+    let descendant_oids = dag.query().descendants(commits_to_fix_oids_set.clone())?;
+    let descendant_oids = dag
+        .filter_visible_commits(descendant_oids)?
+        .difference(&commits_to_fix_oids_set);
+    for descendant_oid in commit_set_to_vec(&descendant_oids)? {
+        let descendant_commit = repo.find_commit_or_fail(descendant_oid)?;
+        fixes.push(Fix {
+            original_commit_oid: descendant_oid,
+            original_commit_parent_oids: descendant_commit.get_parent_oids(),
+            fixed_commit_oid: None,
+        });
+    }
+
+    let rebase_plan = {
+        let mut builder = RebasePlanBuilder::new(dag, permissions);
+        for fix in fixes {
+            let Fix {
+                original_commit_oid,
+                original_commit_parent_oids,
+                fixed_commit_oid,
+            } = fix;
+            builder.replace_commit(
+                original_commit_oid,
+                fixed_commit_oid.unwrap_or(original_commit_oid),
+            )?;
+            builder.move_subtree(original_commit_oid, original_commit_parent_oids)?;
+        }
+        let thread_pool = ThreadPoolBuilder::new().build()?;
+        let repo_pool = RepoResource::new_pool(repo)?;
+        builder.build(effects, &thread_pool, &repo_pool)?
+    };
+
+    let rebase_plan = match rebase_plan {
         Ok(Some(plan)) => plan,
         Ok(None) => {
             writeln!(effects.get_output_stream(), "No commits to fix.")?;
@@ -1319,7 +1375,7 @@ fn apply_fixes(
                 "Fixed {} with {}:",
                 Pluralize {
                     determiner: None,
-                    amount: fixed_commit_oids.len(),
+                    amount: commits_to_fix_oids.len(),
                     unit: ("commit", "commits")
                 },
                 effects.get_glyphs().render(
@@ -1328,7 +1384,7 @@ fn apply_fixes(
                         .build()
                 )?,
             )?;
-            for fixed_commit_oid in fixed_commit_oids {
+            for fixed_commit_oid in commits_to_fix_oids {
                 let fixed_commit = repo.find_commit_or_fail(fixed_commit_oid)?;
                 writeln!(
                     effects.get_output_stream(),
@@ -1710,14 +1766,14 @@ fn prepare_working_directory(
             };
 
             let GitRunResult { exit_code, stdout: _, stderr: _ } =
-                // Don't show the `git checkout` operation among the progress bars, as we only want to see
-                // the testing status.
+                // Don't show the `git reset` operation among the progress bars,
+                // as we only want to see the testing status.
                 git_run_info.run_silent(
                     repo,
                     Some(event_tx_id),
-                    &["checkout", &commit.get_oid().to_string()],
+                    &["reset", "--hard", &commit.get_oid().to_string()],
                     Default::default()
-                )?;
+                ).context("Checking out commit to prepare working directory")?;
             if exit_code.is_success() {
                 Ok(Ok(PreparedWorkingDirectory {
                     lock_file,

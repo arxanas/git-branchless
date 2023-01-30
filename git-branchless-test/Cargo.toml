@@ -10,6 +10,7 @@ crossbeam = "0.8.2"
 cursive = { version = "0.20.0", default-features = false, features = [
   "crossterm-backend",
 ] }
+eden_dag = { package = "esl01-dag", version = "0.2.1" }
 eyre = "0.6.8"
 fslock = "0.2.1"
 git-branchless-invoke = { version = "0.7.0-pre.1", path = "../git-branchless-invoke" }
