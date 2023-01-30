@@ -1181,7 +1181,7 @@ dependencies = [
  "eyre",
  "git-branchless-lib",
  "git-branchless-opts",
- "git2 0.15.0",
+ "git2",
  "tracing",
  "tracing-chrome",
  "tracing-error",
@@ -1206,7 +1206,7 @@ dependencies = [
  "esl01-dag",
  "eyre",
  "git-record",
- "git2 0.16.1",
+ "git2",
  "indicatif",
  "insta",
  "itertools 0.10.5",
@@ -1410,19 +1410,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "git2"
-version = "0.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2994bee4a3a6a51eb90c218523be382fd7ea09b16380b9312e9dbe955ff7c7d1"
-dependencies = [
- "bitflags",
- "libc",
- "libgit2-sys",
- "log",
- "url",
 ]
 
 [[package]]
@@ -3120,7 +3107,7 @@ version = "1.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
- "cfg-if 1.0.0",
+ "cfg-if 0.1.10",
  "rand 0.8.5",
  "static_assertions",
 ]
