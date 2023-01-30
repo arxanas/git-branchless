@@ -1346,6 +1346,7 @@ dependencies = [
  "clap 4.0.32",
  "crossbeam",
  "cursive",
+ "esl01-dag",
  "eyre",
  "fslock",
  "git-branchless-invoke",

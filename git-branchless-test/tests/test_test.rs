@@ -782,9 +782,9 @@ done
         branchless: running command: <git-executable> checkout 6f48e0a628753731739619f27107c57f5d0cc1e0
         In-memory rebase succeeded.
         Fixed 3 commits with bash test.sh:
-        300cb54 create test1.txt
-        a5a8f25 create test2.txt
-        82ddc75 create test3.txt
+        62fc20d create test1.txt
+        96d1c37 create test2.txt
+        70deb1e create test3.txt
         "###);
     }
 
@@ -947,5 +947,162 @@ done
         1 passed, 2 failed, 0 skipped
         "###);
     }
+    Ok(())
+}
+
+#[test]
+fn test_test_no_apply_descendants_as_patches() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+
+    git.detach_head()?;
+    git.commit_file("test1", 1)?;
+
+    git.write_file_txt("test1", "This file would conflict if applied as a patch\n")?;
+    git.write_file_txt("test2", "Updated contents for file test2.txt\n")?;
+    git.run(&["add", "."])?;
+    git.run(&["commit", "-m", "descendant commit"])?;
+
+    git.write_file(
+        "test.sh",
+        r#"#!/bin/sh
+for i in *.txt; do
+    echo "Updated contents for file $i" >"$i"
+done
+"#,
+    )?;
+
+    {
+        let (stdout, _stderr) = git.run(&["log", "--patch"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        commit 75e728fb17f6952287302c3e76d88aa737dd99d1
+        Author: Testy McTestface <test@example.com>
+        Date:   Thu Oct 29 12:34:56 2020 +0000
+
+            descendant commit
+
+        diff --git a/test1.txt b/test1.txt
+        index 7432a8f..60d9cdb 100644
+        --- a/test1.txt
+        +++ b/test1.txt
+        @@ -1 +1 @@
+        -test1 contents
+        +This file would conflict if applied as a patch
+        diff --git a/test2.txt b/test2.txt
+        new file mode 100644
+        index 0000000..dce8610
+        --- /dev/null
+        +++ b/test2.txt
+        @@ -0,0 +1 @@
+        +Updated contents for file test2.txt
+
+        commit 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
+        Author: Testy McTestface <test@example.com>
+        Date:   Thu Oct 29 12:34:56 2020 -0100
+
+            create test1.txt
+
+        diff --git a/test1.txt b/test1.txt
+        new file mode 100644
+        index 0000000..7432a8f
+        --- /dev/null
+        +++ b/test1.txt
+        @@ -0,0 +1 @@
+        +test1 contents
+
+        commit f777ecc9b0db5ed372b2615695191a8a17f79f24
+        Author: Testy McTestface <test@example.com>
+        Date:   Thu Oct 29 12:34:56 2020 +0000
+
+            create initial.txt
+
+        diff --git a/initial.txt b/initial.txt
+        new file mode 100644
+        index 0000000..63af228
+        --- /dev/null
+        +++ b/initial.txt
+        @@ -0,0 +1 @@
+        +initial contents
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.branchless("test", &["fix", "-x", "bash test.sh"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> diff --quiet
+        Calling Git for on-disk rebase...
+        branchless: running command: <git-executable> rebase --continue
+        Using test execution strategy: working-copy
+        branchless: running command: <git-executable> rebase --abort
+        ✓ Passed (fixed): 62fc20d create test1.txt
+        ✓ Passed (fixed): 75e728f descendant commit
+        Tested 2 commits with bash test.sh:
+        2 passed, 0 failed, 0 skipped
+        Attempting rebase in-memory...
+        [1/2] Committed as: 300cb54 create test1.txt
+        [2/2] Committed as: f15b423 descendant commit
+        branchless: processing 2 rewritten commits
+        branchless: running command: <git-executable> checkout f15b423404bbebfe4b09e305e074b525d008f44a
+        In-memory rebase succeeded.
+        Fixed 2 commits with bash test.sh:
+        62fc20d create test1.txt
+        75e728f descendant commit
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["log", "--patch"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        commit f15b423404bbebfe4b09e305e074b525d008f44a
+        Author: Testy McTestface <test@example.com>
+        Date:   Thu Oct 29 12:34:56 2020 +0000
+
+            descendant commit
+
+        diff --git a/test2.txt b/test2.txt
+        new file mode 100644
+        index 0000000..dce8610
+        --- /dev/null
+        +++ b/test2.txt
+        @@ -0,0 +1 @@
+        +Updated contents for file test2.txt
+
+        commit 300cb542f9b6474befd598bdbdd263d7d2b011a0
+        Author: Testy McTestface <test@example.com>
+        Date:   Thu Oct 29 12:34:56 2020 -0100
+
+            create test1.txt
+
+        diff --git a/initial.txt b/initial.txt
+        index 63af228..a48ef19 100644
+        --- a/initial.txt
+        +++ b/initial.txt
+        @@ -1 +1 @@
+        -initial contents
+        +Updated contents for file initial.txt
+        diff --git a/test1.txt b/test1.txt
+        new file mode 100644
+        index 0000000..4d62cad
+        --- /dev/null
+        +++ b/test1.txt
+        @@ -0,0 +1 @@
+        +Updated contents for file test1.txt
+
+        commit f777ecc9b0db5ed372b2615695191a8a17f79f24
+        Author: Testy McTestface <test@example.com>
+        Date:   Thu Oct 29 12:34:56 2020 +0000
+
+            create initial.txt
+
+        diff --git a/initial.txt b/initial.txt
+        new file mode 100644
+        index 0000000..63af228
+        --- /dev/null
+        +++ b/initial.txt
+        @@ -0,0 +1 @@
+        +initial contents
+        "###);
+    }
+
     Ok(())
 }
