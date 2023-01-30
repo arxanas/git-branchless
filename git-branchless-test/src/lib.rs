@@ -1948,33 +1948,36 @@ fn test_commit(
     };
     let test_status = match exit_code {
         0 => {
-            let fixed_tree_oid = match options.fix_options {
-                None => None,
-                Some(_) => {
-                    let repo = Repo::from_dir(working_directory)?;
-                    let index = repo.get_index()?;
-                    let head_info = repo.get_head_info()?;
-                    let effects = effects.suppress();
-                    let (snapshot, _status) = repo.get_status(
-                        &effects,
-                        git_run_info,
-                        &index,
-                        &head_info,
-                        Some(event_tx_id),
-                    )?;
-                    match snapshot.get_working_copy_changes_type()? {
-                        WorkingCopyChangesType::None | WorkingCopyChangesType::Unstaged => {
-                            let fixed_tree_oid = snapshot.commit_unstaged.get_tree_oid();
-                            if commit.get_tree_oid() != fixed_tree_oid {
-                                Option::<NonZeroOid>::from(snapshot.commit_unstaged.get_tree_oid())
-                            } else {
-                                None
-                            }
-                        }
-                        WorkingCopyChangesType::Staged | WorkingCopyChangesType::Conflicts => {
-                            // FIXME: surface information about the fix that failed to be applied.
+            let fixed_tree_oid = {
+                let repo = Repo::from_dir(working_directory)?;
+                let index = repo.get_index()?;
+                let head_info = repo.get_head_info()?;
+                let effects = effects.suppress();
+                let (snapshot, _status) = repo.get_status(
+                    &effects,
+                    git_run_info,
+                    &index,
+                    &head_info,
+                    Some(event_tx_id),
+                )?;
+                match snapshot.get_working_copy_changes_type()? {
+                    WorkingCopyChangesType::None | WorkingCopyChangesType::Unstaged => {
+                        let fixed_tree_oid: MaybeZeroOid = snapshot.commit_unstaged.get_tree_oid();
+                        if commit.get_tree_oid() != fixed_tree_oid {
+                            let fixed_tree_oid: Option<NonZeroOid> = fixed_tree_oid.into();
+                            fixed_tree_oid
+                        } else {
                             None
                         }
+                    }
+                    changes_type @ (WorkingCopyChangesType::Staged
+                    | WorkingCopyChangesType::Conflicts) => {
+                        // FIXME: surface information about the fix that failed to be applied.
+                        warn!(
+                            ?changes_type,
+                            "There were staged changes or conflicts in the resulting working copy"
+                        );
+                        None
                     }
                 }
             };
