@@ -783,6 +783,10 @@ pub enum TestSubcommand {
         #[clap(value_parser, short = 'c', long = "command", conflicts_with("exec"))]
         command: Option<String>,
 
+        /// Don't rewrite any commits. Instead, just print a summary as usual.
+        #[clap(value_parser, short = 'n', long = "dry-run")]
+        dry_run: bool,
+
         /// The set of commits to test.
         #[clap(value_parser, default_value = "stack()")]
         revset: Revset,
