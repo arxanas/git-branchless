@@ -324,9 +324,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.0.32"
+version = "4.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7db700bc935f9e43e88d00b0850dae18a63773cfbec6d8e070fccf7fef89a39"
+checksum = "f13b9c79b5d1dd500d20ef541215a6423c75829ef43117e1b4d17fd8af0b5d76"
 dependencies = [
  "bitflags",
  "clap_derive",
@@ -339,9 +339,9 @@ dependencies = [
 
 [[package]]
 name = "clap_derive"
-version = "4.0.21"
+version = "4.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0177313f9f02afc995627906bbd8967e2be069f5261954222dac78290c2b9014"
+checksum = "684a277d672e91966334af371f1a7b5833f9aa00b07c84e92fbce95e00208ce8"
 dependencies = [
  "heck",
  "proc-macro-error",
@@ -374,7 +374,7 @@ version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "904eb24d05ad587557e0f484ddce5c737c30cf81372badb16d13e41c4b8340b1"
 dependencies = [
- "clap 4.0.32",
+ "clap 4.1.4",
  "roff 0.2.1",
 ]
 
@@ -1175,7 +1175,7 @@ dependencies = [
 name = "git-branchless-invoke"
 version = "0.7.0-pre.1"
 dependencies = [
- "clap 4.0.32",
+ "clap 4.1.4",
  "color-eyre",
  "cursive_core",
  "eyre",
@@ -1260,7 +1260,7 @@ dependencies = [
 name = "git-branchless-opts"
 version = "0.7.0-pre.1"
 dependencies = [
- "clap 4.0.32",
+ "clap 4.1.4",
  "clap_mangen",
  "git-branchless-lib",
  "itertools 0.10.5",
@@ -1343,7 +1343,7 @@ version = "0.7.0-pre.1"
 dependencies = [
  "assert_cmd",
  "bstr",
- "clap 4.0.32",
+ "clap 4.1.4",
  "crossbeam",
  "cursive",
  "eyre",
