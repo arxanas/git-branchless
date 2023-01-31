@@ -6,13 +6,15 @@
 #![warn(clippy::all, clippy::as_conversions, clippy::clone_on_ref_ptr)]
 #![allow(clippy::too_many_arguments, clippy::blocks_in_if_conditions)]
 
+mod worker;
+
 use std::collections::{HashMap, VecDeque};
 use std::convert::TryFrom;
 use std::fmt::Write as _;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::mpsc::{channel, Sender};
+use std::sync::mpsc::channel;
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
@@ -32,7 +34,7 @@ use lib::core::config::{
     print_hint_suppression_notice, Hint,
 };
 use lib::core::dag::{commit_set_to_vec, sorted_commit_set, CommitSet, Dag};
-use lib::core::effects::{icons, Effects, OperationIcon, OperationType, ProgressHandle};
+use lib::core::effects::{icons, Effects, OperationIcon, OperationType};
 use lib::core::eventlog::{EventLogDb, EventReplayer, EventTransactionId};
 use lib::core::formatting::{Glyphs, Pluralize, StyledStringBuilder};
 use lib::core::repo_ext::RepoExt;
@@ -53,6 +55,8 @@ use git_branchless_opts::{
     MoveOptions, ResolveRevsetOptions, Revset, TestArgs, TestExecutionStrategy, TestSubcommand,
 };
 use git_branchless_revset::resolve_commits;
+
+use crate::worker::{worker, JobResult, WorkerId};
 
 lazy_static! {
     static ref STYLE_SUCCESS: Style =
@@ -1499,94 +1503,6 @@ fn apply_fixes(
     }
 
     Ok(ExitCode(0))
-}
-
-type WorkerId = usize;
-type Job = (NonZeroOid, OperationType);
-type WorkQueue = Arc<Mutex<VecDeque<Job>>>;
-enum JobResult {
-    Done(NonZeroOid, TestOutput),
-    Error(WorkerId, NonZeroOid, String),
-}
-
-fn worker(
-    effects: &Effects,
-    progress: &ProgressHandle,
-    shell_path: &Path,
-    git_run_info: &GitRunInfo,
-    repo_dir: &Path,
-    event_tx_id: EventTransactionId,
-    options: &ResolvedTestOptions,
-    worker_id: WorkerId,
-    work_queue: WorkQueue,
-    result_tx: Sender<JobResult>,
-) {
-    debug!(?worker_id, "Worker spawned");
-
-    let repo = match Repo::from_dir(repo_dir) {
-        Ok(repo) => repo,
-        Err(err) => {
-            panic!("Worker {worker_id} could not open repository at: {err}");
-        }
-    };
-
-    let run_job = |job: Job| -> eyre::Result<bool> {
-        let (commit_oid, operation_type) = job;
-        let commit = repo.find_commit_or_fail(commit_oid)?;
-        let test_output = run_test(
-            effects,
-            operation_type,
-            git_run_info,
-            shell_path,
-            &repo,
-            event_tx_id,
-            options,
-            worker_id,
-            &commit,
-        )?;
-        progress.notify_progress_inc(1);
-
-        debug!(?worker_id, ?commit_oid, "Worker sending Done job result");
-        let should_terminate = result_tx
-            .send(JobResult::Done(commit_oid, test_output))
-            .is_err();
-        debug!(
-            ?worker_id,
-            ?commit_oid,
-            "Worker finished sending Done job result"
-        );
-        Ok(should_terminate)
-    };
-
-    while let Some(job) = {
-        debug!(?worker_id, "Locking work queue");
-        let mut work_queue = work_queue.lock().unwrap();
-        debug!(?worker_id, "Locked work queue");
-        let job = work_queue.pop_front();
-        // Ensure we don't hold the lock while we process the job.
-        drop(work_queue);
-        debug!(?worker_id, "Unlocked work queue");
-        job
-    } {
-        let (commit_oid, _) = job;
-        debug!(?worker_id, ?commit_oid, "Worker accepted job");
-        let job_result = run_job(job);
-        debug!(?worker_id, ?commit_oid, "Worker finished job");
-        match job_result {
-            Ok(true) => break,
-            Ok(false) => {
-                // Continue.
-            }
-            Err(err) => {
-                debug!(?worker_id, ?commit_oid, "Worker sending Error job result");
-                result_tx
-                    .send(JobResult::Error(worker_id, commit_oid, err.to_string()))
-                    .ok();
-                debug!(?worker_id, ?commit_oid, "Worker sending Error job result");
-            }
-        }
-    }
-    debug!(?worker_id, "Worker exiting");
 }
 
 #[instrument]
