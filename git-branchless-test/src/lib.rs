@@ -999,6 +999,12 @@ fn run_tests(
     commits: &[Commit],
     options: &ResolvedTestOptions,
 ) -> eyre::Result<Result<Vec<(NonZeroOid, TestOutput)>, ExitCode>> {
+    #[derive(Clone, Debug)]
+    struct TestJob {
+        commit_oid: NonZeroOid,
+        operation_type: OperationType,
+    }
+
     let ResolvedTestOptions {
         command,
         strategy,
@@ -1043,7 +1049,7 @@ fn run_tests(
         let (effects, progress) =
             effects.start_operation(OperationType::RunTests(Arc::new(command.clone())));
         progress.notify_progress(0, commits.len());
-        let work_queue = {
+        let work_queue: VecDeque<TestJob> = {
             let mut results = VecDeque::new();
             for commit in commits {
                 // Create the progress entries in the multiprogress meter without starting them.
@@ -1058,7 +1064,10 @@ fn run_tests(
                     OperationIcon::InProgress,
                     format!("Waiting to test {commit_description}"),
                 );
-                results.push_back((commit.get_oid(), operation_type));
+                results.push_back(TestJob {
+                    commit_oid: commit.get_oid(),
+                    operation_type,
+                });
             }
             results
         };
@@ -1075,21 +1084,32 @@ fn run_tests(
                     let shell_path = &shell_path;
                     let work_queue = Arc::clone(&work_queue);
                     let result_tx = result_tx.clone();
+                    let setup = move || -> eyre::Result<Repo> {
+                        let repo = Repo::from_dir(repo_dir)?;
+                        Ok(repo)
+                    };
+                    let f = move |job: TestJob, repo: &Repo| -> eyre::Result<TestOutput> {
+                        let TestJob {
+                            commit_oid,
+                            operation_type,
+                        } = job;
+                        let commit = repo.find_commit_or_fail(commit_oid)?;
+                        run_test(
+                            effects,
+                            operation_type,
+                            git_run_info,
+                            shell_path,
+                            repo,
+                            event_tx_id,
+                            options,
+                            worker_id,
+                            &commit,
+                        )
+                    };
                     result.insert(
                         worker_id,
                         scope.spawn(move |_scope| {
-                            worker(
-                                effects,
-                                progress,
-                                shell_path,
-                                git_run_info,
-                                repo_dir,
-                                event_tx_id,
-                                options,
-                                worker_id,
-                                work_queue,
-                                result_tx,
-                            );
+                            worker(progress, worker_id, work_queue, result_tx, setup, f);
                             debug!("Exiting spawned thread closure");
                         }),
                     );
@@ -1111,14 +1131,22 @@ fn run_tests(
                 result
             } {
                 match message {
-                    JobResult::Done(commit_oid, test_output) => {
+                    JobResult::Done(job, test_output) => {
+                        let TestJob {
+                            commit_oid,
+                            operation_type: _,
+                        } = job;
                         results.insert(commit_oid, test_output);
                         if results.len() == commits.len() {
                             drop(result_rx);
                             break;
                         }
                     }
-                    JobResult::Error(worker_id, commit_oid, error_message) => {
+                    JobResult::Error(worker_id, job, error_message) => {
+                        let TestJob {
+                            commit_oid,
+                            operation_type: _,
+                        } = job;
                         eyre::bail!("Worker {worker_id} failed when processing commit {commit_oid}: {error_message}");
                     }
                 }
@@ -1134,7 +1162,9 @@ fn run_tests(
 
             debug!("About to return from thread scope");
             Ok(results)
-        }).map_err(|_| eyre::eyre!("Could not spawn workers"))?.wrap_err("Failed waiting on workers")?
+        })
+        .map_err(|_| eyre::eyre!("Could not spawn workers"))?
+        .wrap_err("Failed waiting on workers")?
     };
     debug!("Returned from thread scope");
 

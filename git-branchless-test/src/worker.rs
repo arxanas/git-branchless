@@ -1,69 +1,44 @@
 use std::collections::VecDeque;
-use std::path::Path;
 use std::sync::{mpsc::Sender, Arc, Mutex};
 
-use lib::core::effects::{Effects, OperationType, ProgressHandle};
-use lib::core::eventlog::EventTransactionId;
-use lib::git::GitRunInfo;
-use lib::git::{NonZeroOid, Repo};
+use lib::core::effects::ProgressHandle;
 use tracing::debug;
 
-use crate::{run_test, ResolvedTestOptions, TestOutput};
+use crate::TestOutput;
 
 pub(crate) type WorkerId = usize;
-type Job = (NonZeroOid, OperationType);
-type WorkQueue = Arc<Mutex<VecDeque<Job>>>;
-pub(crate) enum JobResult {
-    Done(NonZeroOid, TestOutput),
-    Error(WorkerId, NonZeroOid, String),
+pub(crate) type WorkQueue<Job> = Arc<Mutex<VecDeque<Job>>>;
+pub(crate) enum JobResult<Job, Output> {
+    Done(Job, Output),
+    Error(WorkerId, Job, String),
 }
 
-pub(crate) fn worker(
-    effects: &Effects,
+pub(crate) fn worker<Job: Clone + std::fmt::Debug, Context>(
     progress: &ProgressHandle,
-    shell_path: &Path,
-    git_run_info: &GitRunInfo,
-    repo_dir: &Path,
-    event_tx_id: EventTransactionId,
-    options: &ResolvedTestOptions,
     worker_id: WorkerId,
-    work_queue: WorkQueue,
-    result_tx: Sender<JobResult>,
+    work_queue: WorkQueue<Job>,
+    result_tx: Sender<JobResult<Job, TestOutput>>,
+    setup: impl Fn() -> eyre::Result<Context>,
+    f: impl Fn(Job, &Context) -> eyre::Result<TestOutput>,
 ) {
     debug!(?worker_id, "Worker spawned");
 
-    let repo = match Repo::from_dir(repo_dir) {
-        Ok(repo) => repo,
+    let context = match setup() {
+        Ok(context) => context,
         Err(err) => {
             panic!("Worker {worker_id} could not open repository at: {err}");
         }
     };
 
     let run_job = |job: Job| -> eyre::Result<bool> {
-        let (commit_oid, operation_type) = job;
-        let commit = repo.find_commit_or_fail(commit_oid)?;
-        let test_output = run_test(
-            effects,
-            operation_type,
-            git_run_info,
-            shell_path,
-            &repo,
-            event_tx_id,
-            options,
-            worker_id,
-            &commit,
-        )?;
+        let test_output = f(job.clone(), &context)?;
         progress.notify_progress_inc(1);
 
-        debug!(?worker_id, ?commit_oid, "Worker sending Done job result");
+        debug!(?worker_id, ?job, "Worker sending Done job result");
         let should_terminate = result_tx
-            .send(JobResult::Done(commit_oid, test_output))
+            .send(JobResult::Done(job.clone(), test_output))
             .is_err();
-        debug!(
-            ?worker_id,
-            ?commit_oid,
-            "Worker finished sending Done job result"
-        );
+        debug!(?worker_id, ?job, "Worker finished sending Done job result");
         Ok(should_terminate)
     };
 
@@ -77,21 +52,20 @@ pub(crate) fn worker(
         debug!(?worker_id, "Unlocked work queue");
         job
     } {
-        let (commit_oid, _) = job;
-        debug!(?worker_id, ?commit_oid, "Worker accepted job");
-        let job_result = run_job(job);
-        debug!(?worker_id, ?commit_oid, "Worker finished job");
+        debug!(?worker_id, ?job, "Worker accepted job");
+        let job_result = run_job(job.clone());
+        debug!(?worker_id, ?job, "Worker finished job");
         match job_result {
             Ok(true) => break,
             Ok(false) => {
                 // Continue.
             }
             Err(err) => {
-                debug!(?worker_id, ?commit_oid, "Worker sending Error job result");
+                debug!(?worker_id, ?job, "Worker sending Error job result");
                 result_tx
-                    .send(JobResult::Error(worker_id, commit_oid, err.to_string()))
+                    .send(JobResult::Error(worker_id, job.clone(), err.to_string()))
                     .ok();
-                debug!(?worker_id, ?commit_oid, "Worker sending Error job result");
+                debug!(?worker_id, ?job, "Worker sending Error job result");
             }
         }
     }
