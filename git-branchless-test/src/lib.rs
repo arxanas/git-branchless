@@ -1595,7 +1595,7 @@ fn run_test(
                     }
                 }
                 Ok(PreparedWorkingDirectory {
-                    mut lock_file,
+                    lock_file: mut working_directory_lock_file,
                     path,
                 }) => {
                     progress.notify_status(
@@ -1619,10 +1619,10 @@ fn run_test(
                         options,
                         commit,
                     )?;
-                    lock_file
+                    working_directory_lock_file
                         .unlock()
-                        .wrap_err_with(|| format!("Unlocking test dir at {path:?}"))?;
-                    drop(lock_file);
+                        .wrap_err_with(|| format!("Unlocking working directory at {path:?}"))?;
+                    drop(working_directory_lock_file);
                     result
                 }
             }
@@ -1947,16 +1947,18 @@ fn test_commit(
         0 => {
             let fixed_tree_oid = {
                 let repo = Repo::from_dir(working_directory)?;
-                let index = repo.get_index()?;
-                let head_info = repo.get_head_info()?;
-                let effects = effects.suppress();
-                let (snapshot, _status) = repo.get_status(
-                    &effects,
-                    git_run_info,
-                    &index,
-                    &head_info,
-                    Some(event_tx_id),
-                )?;
+                let snapshot = {
+                    let index = repo.get_index()?;
+                    let head_info = repo.get_head_info()?;
+                    let (snapshot, _status) = repo.get_status(
+                        &effects.suppress(),
+                        git_run_info,
+                        &index,
+                        &head_info,
+                        Some(event_tx_id),
+                    )?;
+                    snapshot
+                };
                 match snapshot.get_working_copy_changes_type()? {
                     WorkingCopyChangesType::None | WorkingCopyChangesType::Unstaged => {
                         let fixed_tree_oid: MaybeZeroOid = snapshot.commit_unstaged.get_tree_oid();
