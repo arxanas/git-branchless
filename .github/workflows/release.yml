@@ -1,8 +1,10 @@
 # Originally from
 # https://github.com/martinvonz/jj/blob/028e6106f52978fdd120037d4b3db2f088cafcfa/.github/workflows/release.yml
+name: Build binaries for GitHub release
+
 on:
   release:
-    types: [created]
+    types: [created, edited, published]
 
 permissions: read-all
 
