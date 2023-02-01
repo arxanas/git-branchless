@@ -196,6 +196,28 @@ impl<'repo> Commit<'repo> {
         Ok(description)
     }
 
+    /// Print a shortened colorized version of the OID of this commit.
+    #[instrument]
+    pub fn friendly_describe_oid(&self, glyphs: &Glyphs) -> Result<StyledString> {
+        let description = render_node_descriptors(
+            glyphs,
+            &NodeObject::Commit {
+                commit: self.clone(),
+            },
+            &mut [
+                &mut CommitOidDescriptor::new(true).map_err(|err| Error::DescribeCommit {
+                    source: err,
+                    commit: self.get_oid(),
+                })?,
+            ],
+        )
+        .map_err(|err| Error::DescribeCommit {
+            source: err,
+            commit: self.get_oid(),
+        })?;
+        Ok(description)
+    }
+
     /// Get a multi-line description of this commit containing information about
     /// its OID, author, commit time, and message.
     #[instrument]
