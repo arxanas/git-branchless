@@ -1196,6 +1196,7 @@ fn run_tests(
     Ok(Ok(results_ordered))
 }
 
+#[instrument]
 fn print_summary(
     effects: &Effects,
     repo: &Repo,
@@ -1304,6 +1305,7 @@ fn print_summary(
     }
 }
 
+#[instrument(skip(permissions))]
 fn apply_fixes(
     effects: &Effects,
     git_run_info: &GitRunInfo,
