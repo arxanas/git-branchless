@@ -1300,7 +1300,7 @@ fn apply_fixes(
         fixed_commit_oid: Option<NonZeroOid>,
     }
     let mut fixes = Vec::new();
-    let mut commits_to_fix_oids = Vec::new();
+    let mut fixed_commit_oids = Vec::new();
     for (original_commit_oid, fixed_tree_oid) in fixed_tree_oids {
         let original_commit = repo.find_commit_or_fail(original_commit_oid)?;
         let original_tree_oid = original_commit.get_tree_oid();
@@ -1333,7 +1333,7 @@ fn apply_fixes(
             &fixed_tree,
             parents.iter().collect(),
         )?;
-        commits_to_fix_oids.push(original_commit_oid);
+        fixed_commit_oids.push((original_commit_oid, fixed_commit_oid));
         let fix = Fix {
             original_commit_oid,
             original_commit_parent_oids: original_commit.get_parent_oids(),
@@ -1348,7 +1348,11 @@ fn apply_fixes(
         fixes.push(fix);
     }
 
-    let commits_to_fix_oids_set: CommitSet = commits_to_fix_oids.iter().copied().collect();
+    let commits_to_fix_oids_set: CommitSet = fixed_commit_oids
+        .iter()
+        .map(|(_, fixed)| fixed)
+        .copied()
+        .collect();
     dag.sync_from_oids(
         effects,
         repo,
@@ -1400,7 +1404,9 @@ fn apply_fixes(
         }
     };
 
-    if !dry_run {
+    let rewritten_oids = if dry_run {
+        Default::default()
+    } else {
         match execute_rebase_plan(
             effects,
             git_run_info,
@@ -1409,21 +1415,33 @@ fn apply_fixes(
             &rebase_plan,
             execute_options,
         )? {
-            ExecuteRebasePlanResult::Succeeded { rewritten_oids: _ } => {}
+            ExecuteRebasePlanResult::Succeeded { rewritten_oids } => rewritten_oids,
             ExecuteRebasePlanResult::DeclinedToMerge { failed_merge_info } => {
                 writeln!(effects.get_output_stream(), "BUG: encountered merge conflicts during git test fix, but we should not be applying any patches: {failed_merge_info:?}")?;
                 return Ok(ExitCode(1));
             }
             ExecuteRebasePlanResult::Failed { exit_code } => return Ok(exit_code),
         }
-    }
+    };
+    let rewritten_oids = match rewritten_oids {
+        Some(rewritten_oids) => rewritten_oids,
+
+        // Can happen during a dry-run; just produce our rewritten commits which
+        // haven't been rebased on top of each other yet.
+        // FIXME: it should be possible to execute the rebase plan but not
+        // commit the branch moves so that we can preview it.
+        None => fixed_commit_oids
+            .iter()
+            .map(|(original_oid, fixed_oid)| (*original_oid, MaybeZeroOid::NonZero(*fixed_oid)))
+            .collect(),
+    };
 
     writeln!(
         effects.get_output_stream(),
         "Fixed {} with {}:",
         Pluralize {
             determiner: None,
-            amount: commits_to_fix_oids.len(),
+            amount: fixed_commit_oids.len(),
             unit: ("commit", "commits")
         },
         effects.get_glyphs().render(
@@ -1432,15 +1450,38 @@ fn apply_fixes(
                 .build()
         )?,
     )?;
-    for fixed_commit_oid in commits_to_fix_oids {
-        let fixed_commit = repo.find_commit_or_fail(fixed_commit_oid)?;
-        writeln!(
-            effects.get_output_stream(),
-            "{}",
-            effects
-                .get_glyphs()
-                .render(fixed_commit.friendly_describe(effects.get_glyphs())?)?
-        )?;
+    for (original_commit_oid, _fixed_commit_oid) in fixed_commit_oids {
+        let original_commit = repo.find_commit_or_fail(original_commit_oid)?;
+        let fixed_commit_oid = rewritten_oids
+            .get(&original_commit_oid)
+            .copied()
+            .unwrap_or(MaybeZeroOid::Zero);
+        match fixed_commit_oid {
+            MaybeZeroOid::NonZero(fixed_commit_oid) => {
+                let fixed_commit = repo.find_commit_or_fail(fixed_commit_oid)?;
+                writeln!(
+                    effects.get_output_stream(),
+                    "{} -> {}",
+                    effects
+                        .get_glyphs()
+                        .render(original_commit.friendly_describe_oid(effects.get_glyphs())?)?,
+                    effects
+                        .get_glyphs()
+                        .render(fixed_commit.friendly_describe(effects.get_glyphs())?)?
+                )?;
+            }
+
+            MaybeZeroOid::Zero => {
+                // Shouldn't happen.
+                writeln!(
+                    effects.get_output_stream(),
+                    "(deleted) {}",
+                    effects
+                        .get_glyphs()
+                        .render(original_commit.friendly_describe_oid(effects.get_glyphs())?)?,
+                )?;
+            }
+        }
     }
 
     if dry_run {

@@ -782,9 +782,9 @@ done
         branchless: running command: <git-executable> checkout 6f48e0a628753731739619f27107c57f5d0cc1e0
         In-memory rebase succeeded.
         Fixed 3 commits with bash test.sh:
-        62fc20d create test1.txt
-        96d1c37 create test2.txt
-        70deb1e create test3.txt
+        62fc20d -> 300cb54 create test1.txt
+        96d1c37 -> 2ee3aea create test2.txt
+        70deb1e -> 6f48e0a create test3.txt
         "###);
     }
 
@@ -1045,8 +1045,8 @@ done
         branchless: running command: <git-executable> checkout f15b423404bbebfe4b09e305e074b525d008f44a
         In-memory rebase succeeded.
         Fixed 2 commits with bash test.sh:
-        62fc20d create test1.txt
-        75e728f descendant commit
+        62fc20d -> 300cb54 create test1.txt
+        75e728f -> f15b423 descendant commit
         "###);
     }
 
