@@ -157,7 +157,12 @@ impl ToString for RebaseCommand {
             } => {
                 let parents = parents
                     .iter()
-                    .map(|parent| format!("-p {parent}"))
+                    .map(|parent| match parent {
+                        OidOrLabel::Oid(parent_oid) => format!("-p {parent_oid}"),
+                        OidOrLabel::Label(parent_label) => {
+                            format!("-p refs/rewritten/{parent_label}")
+                        }
+                    })
                     .join(" ");
                 // FIXME: Untested, this probably doesn't work. Currently,
                 // on-disk rebases for merges with replacement commits are not

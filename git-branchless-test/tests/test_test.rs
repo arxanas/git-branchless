@@ -1106,3 +1106,28 @@ done
 
     Ok(())
 }
+
+#[test]
+fn test_test_forbid_on_disk_rebase() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    git.init_repo()?;
+    git.detach_head()?;
+    git.commit_file("test1", 1)?;
+
+    {
+        let (stdout, _stderr) = git.branchless_with_options(
+            "test",
+            &["fix", "--on-disk", "-x", "exit 0"],
+            &GitRunOptions {
+                expected_exit_code: 1,
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stdout, @r###"
+        The --on-disk option cannot be provided for fixes. Use the --in-memory option instead.
+        "###);
+    }
+
+    Ok(())
+}

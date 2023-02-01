@@ -297,13 +297,23 @@ but --strategy working-copy was provided instead."
             };
             let MoveOptions {
                 force_rewrite_public_commits,
-                force_in_memory,
+                force_in_memory: _,
                 force_on_disk,
                 detect_duplicate_commits_via_patch_id,
                 resolve_merge_conflicts,
                 dump_rebase_constraints,
                 dump_rebase_plan,
             } = move_options;
+
+            let force_in_memory = true;
+            if *force_on_disk {
+                writeln!(
+                    effects.get_output_stream(),
+                    "The --on-disk option cannot be provided for fixes. Use the --in-memory option instead."
+                )?;
+                return Ok(Err(ExitCode(1)));
+            }
+
             let build_options = BuildRebasePlanOptions {
                 force_rewrite_public_commits: *force_rewrite_public_commits,
                 dump_rebase_constraints: *dump_rebase_constraints,
@@ -314,7 +324,7 @@ but --strategy working-copy was provided instead."
                 now,
                 event_tx_id,
                 preserve_timestamps: get_restack_preserve_timestamps(repo)?,
-                force_in_memory: *force_in_memory,
+                force_in_memory,
                 force_on_disk: *force_on_disk,
                 resolve_merge_conflicts: *resolve_merge_conflicts,
                 check_out_commit_options: CheckOutCommitOptions {
