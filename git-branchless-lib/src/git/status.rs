@@ -441,7 +441,7 @@ mod tests {
         WorkingCopySnapshot {
             base_commit: Commit {
                 inner: Commit {
-                    id: e378f780ff4d810e12d36e89334d8971d7add0d1,
+                    id: 2f8be3a55bd58854a5871d7260abc37ab5d1199c,
                     summary: "branchless: automated working copy snapshot",
                 },
             },
@@ -460,7 +460,7 @@ mod tests {
             ),
             commit_unstaged: Commit {
                 inner: Commit {
-                    id: 8f4827eba90e1ce5bbd0d76fc29d587c8ad9135e,
+                    id: 329d438eaf36089efa9a49a3942a10985c037dce,
                     summary: "branchless: working copy snapshot data: 4 unstaged changes",
                 },
             },
