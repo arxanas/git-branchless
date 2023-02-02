@@ -1341,96 +1341,106 @@ fn apply_fixes(
     struct Fix {
         original_commit_oid: NonZeroOid,
         original_commit_parent_oids: Vec<NonZeroOid>,
-        fixed_commit_oid: Option<NonZeroOid>,
+        fixed_commit_oid: NonZeroOid,
     }
-    let mut fixes = Vec::new();
-    let mut fixed_commit_oids = Vec::new();
-    for (original_commit_oid, fixed_tree_oid) in fixed_tree_oids {
-        let original_commit = repo.find_commit_or_fail(original_commit_oid)?;
-        let original_tree_oid = original_commit.get_tree_oid();
-        if original_tree_oid == MaybeZeroOid::NonZero(fixed_tree_oid) {
-            warn!(
-                ?original_commit_oid,
+    let fixes: Vec<Fix> = {
+        let mut fixes = Vec::new();
+        for (original_commit_oid, fixed_tree_oid) in fixed_tree_oids {
+            let original_commit = repo.find_commit_or_fail(original_commit_oid)?;
+            let original_tree_oid = original_commit.get_tree_oid();
+            let commit_message = original_commit.get_message_raw()?;
+            let commit_message = commit_message.to_str().with_context(|| {
+                eyre::eyre!(
+                    "Could not decode commit message for commit: {:?}",
+                    original_commit_oid
+                )
+            })?;
+            let parents: Vec<Commit> = original_commit
+                .get_parent_oids()
+                .into_iter()
+                .map(|parent_oid| repo.find_commit_or_fail(parent_oid))
+                .try_collect()?;
+            let fixed_tree = repo.find_tree_or_fail(fixed_tree_oid)?;
+            let fixed_commit_oid = repo.create_commit(
+                None,
+                &original_commit.get_author(),
+                &original_commit.get_committer(),
+                commit_message,
+                &fixed_tree,
+                parents.iter().collect(),
+            )?;
+            if original_commit_oid == fixed_commit_oid {
+                continue;
+            }
+
+            let fix = Fix {
+                original_commit_oid,
+                original_commit_parent_oids: original_commit.get_parent_oids(),
+                fixed_commit_oid,
+            };
+            debug!(
+                ?fix,
+                ?original_tree_oid,
                 ?fixed_tree_oid,
-                "The result of fixing this commit produced the same tree OID as it already had"
+                "Generated fix to apply"
             );
+            fixes.push(fix);
         }
+        fixes
+    };
 
-        let commit_message = original_commit.get_message_raw()?;
-        let commit_message = commit_message.to_str().with_context(|| {
-            eyre::eyre!(
-                "Could not decode commit message for commit: {:?}",
-                original_commit_oid
-            )
-        })?;
-        let parents: Vec<Commit> = original_commit
-            .get_parent_oids()
-            .into_iter()
-            .map(|parent_oid| repo.find_commit_or_fail(parent_oid))
-            .try_collect()?;
-        let fixed_tree = repo.find_tree_or_fail(fixed_tree_oid)?;
-        let fixed_commit_oid = repo.create_commit(
-            None,
-            &original_commit.get_author(),
-            &original_commit.get_committer(),
-            commit_message,
-            &fixed_tree,
-            parents.iter().collect(),
-        )?;
-        fixed_commit_oids.push((original_commit_oid, fixed_commit_oid));
-        let fix = Fix {
-            original_commit_oid,
-            original_commit_parent_oids: original_commit.get_parent_oids(),
-            fixed_commit_oid: Some(fixed_commit_oid),
-        };
-        debug!(
-            ?fix,
-            ?original_tree_oid,
-            ?fixed_tree_oid,
-            "Generated fix to apply"
-        );
-        fixes.push(fix);
-    }
-
-    let commits_to_fix_oids_set: CommitSet = fixed_commit_oids
-        .iter()
-        .map(|(_, fixed)| fixed)
-        .copied()
-        .collect();
     dag.sync_from_oids(
         effects,
         repo,
         CommitSet::empty(),
-        commits_to_fix_oids_set.clone(),
+        fixes
+            .iter()
+            .map(|fix| {
+                let Fix {
+                    original_commit_oid: _,
+                    original_commit_parent_oids: _,
+                    fixed_commit_oid,
+                } = fix;
+                fixed_commit_oid
+            })
+            .copied()
+            .collect(),
     )?;
-
-    let descendant_oids = dag.query().descendants(commits_to_fix_oids_set.clone())?;
-    let descendant_oids = dag
-        .filter_visible_commits(descendant_oids)?
-        .difference(&commits_to_fix_oids_set);
-    for descendant_oid in commit_set_to_vec(&descendant_oids)? {
-        let descendant_commit = repo.find_commit_or_fail(descendant_oid)?;
-        fixes.push(Fix {
-            original_commit_oid: descendant_oid,
-            original_commit_parent_oids: descendant_commit.get_parent_oids(),
-            fixed_commit_oid: None,
-        });
-    }
 
     let rebase_plan = {
         let mut builder = RebasePlanBuilder::new(dag, permissions);
-        for fix in fixes {
+        for fix in &fixes {
             let Fix {
                 original_commit_oid,
                 original_commit_parent_oids,
                 fixed_commit_oid,
             } = fix;
-            builder.replace_commit(
-                original_commit_oid,
-                fixed_commit_oid.unwrap_or(original_commit_oid),
-            )?;
-            builder.move_subtree(original_commit_oid, original_commit_parent_oids)?;
+            builder.replace_commit(*original_commit_oid, *fixed_commit_oid)?;
+            builder.move_subtree(*original_commit_oid, original_commit_parent_oids.clone())?;
         }
+
+        let original_oids: CommitSet = fixes
+            .iter()
+            .map(|fix| {
+                let Fix {
+                    original_commit_oid,
+                    original_commit_parent_oids: _,
+                    fixed_commit_oid: _,
+                } = fix;
+                original_commit_oid
+            })
+            .copied()
+            .collect();
+        let descendant_oids = dag.query().descendants(original_oids.clone())?;
+        let descendant_oids = dag
+            .filter_visible_commits(descendant_oids)?
+            .difference(&original_oids);
+        for descendant_oid in commit_set_to_vec(&descendant_oids)? {
+            let descendant_commit = repo.find_commit_or_fail(descendant_oid)?;
+            builder.replace_commit(descendant_oid, descendant_oid)?;
+            builder.move_subtree(descendant_oid, descendant_commit.get_parent_oids())?;
+        }
+
         let thread_pool = ThreadPoolBuilder::new().build()?;
         let repo_pool = RepoResource::new_pool(repo)?;
         builder.build(effects, &thread_pool, &repo_pool)?
@@ -1474,9 +1484,19 @@ fn apply_fixes(
         // haven't been rebased on top of each other yet.
         // FIXME: it should be possible to execute the rebase plan but not
         // commit the branch moves so that we can preview it.
-        None => fixed_commit_oids
+        None => fixes
             .iter()
-            .map(|(original_oid, fixed_oid)| (*original_oid, MaybeZeroOid::NonZero(*fixed_oid)))
+            .map(|fix| {
+                let Fix {
+                    original_commit_oid,
+                    original_commit_parent_oids: _,
+                    fixed_commit_oid,
+                } = fix;
+                (
+                    *original_commit_oid,
+                    MaybeZeroOid::NonZero(*fixed_commit_oid),
+                )
+            })
             .collect(),
     };
 
@@ -1485,7 +1505,7 @@ fn apply_fixes(
         "Fixed {} with {}:",
         Pluralize {
             determiner: None,
-            amount: fixed_commit_oids.len(),
+            amount: fixes.len(),
             unit: ("commit", "commits")
         },
         effects.get_glyphs().render(
@@ -1494,12 +1514,17 @@ fn apply_fixes(
                 .build()
         )?,
     )?;
-    for (original_commit_oid, _fixed_commit_oid) in fixed_commit_oids {
+    for fix in fixes {
+        let Fix {
+            original_commit_oid,
+            original_commit_parent_oids: _,
+            fixed_commit_oid,
+        } = fix;
         let original_commit = repo.find_commit_or_fail(original_commit_oid)?;
         let fixed_commit_oid = rewritten_oids
             .get(&original_commit_oid)
             .copied()
-            .unwrap_or(MaybeZeroOid::Zero);
+            .unwrap_or(MaybeZeroOid::NonZero(fixed_commit_oid));
         match fixed_commit_oid {
             MaybeZeroOid::NonZero(fixed_commit_oid) => {
                 let fixed_commit = repo.find_commit_or_fail(fixed_commit_oid)?;
@@ -1957,6 +1982,13 @@ fn test_commit(
                         &head_info,
                         Some(event_tx_id),
                     )?;
+                    if head_info.oid != Some(commit.get_oid()) {
+                        warn!(
+                            ?commit,
+                            ?head_info,
+                            "Repository was not checked out to expected commit"
+                        );
+                    }
                     snapshot
                 };
                 match snapshot.get_working_copy_changes_type()? {
