@@ -100,7 +100,7 @@ pub enum Error {
     CreateBlob(#[source] git2::Error),
 
     #[error("could not create blob from {path}: {source}")]
-    CreateBlobFromPath { source: git2::Error, path: PathBuf },
+    CreateBlobFromPath { source: eyre::Error, path: PathBuf },
 
     #[error("could not find commit {oid}: {source}")]
     FindCommit {
@@ -1123,14 +1123,30 @@ impl Repo {
     /// If the file doesn't exist on disk, returns `None` instead.
     #[instrument]
     pub fn create_blob_from_path(&self, path: &Path) -> Result<Option<NonZeroOid>> {
-        match self.inner.blob_path(path) {
-            Ok(oid) => Ok(Some(make_non_zero_oid(oid))),
-            Err(err) if err.code() == git2::ErrorCode::NotFound => Ok(None),
-            Err(err) => Err(Error::CreateBlobFromPath {
-                source: err,
-                path: path.to_owned(),
-            }),
-        }
+        // Can't use `self.inner.blob_path`, because it will read the file from
+        // the main repository instead of from the current worktree.
+        let path = self
+            .get_working_copy_path()
+            .ok_or_else(|| Error::CreateBlobFromPath {
+                source: eyre::eyre!(
+                    "Repository at {:?} has no working copy path (is bare)",
+                    self.get_path()
+                ),
+                path: path.to_path_buf(),
+            })?
+            .join(path);
+        let contents = match std::fs::read(&path) {
+            Ok(contents) => contents,
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(err) => {
+                return Err(Error::CreateBlobFromPath {
+                    source: err.into(),
+                    path,
+                })
+            }
+        };
+        let blob = self.create_blob_from_contents(&contents)?;
+        Ok(Some(blob))
     }
 
     /// Create a blob corresponding to the provided byte slice.
