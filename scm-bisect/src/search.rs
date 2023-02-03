@@ -16,7 +16,7 @@ pub trait SearchGraph: Debug {
     type Node: Clone + Debug + Hash + Eq;
 
     /// An error type.
-    type Error: Debug + std::error::Error + 'static;
+    type Error: Debug;
 
     /// Return whether or not `node` is an ancestor of `descendant`.
     #[instrument]
@@ -24,21 +24,21 @@ pub trait SearchGraph: Debug {
         &self,
         ancestor: Self::Node,
         descendant: Self::Node,
-    ) -> std::result::Result<bool, Self::Error> {
+    ) -> Result<bool, Self::Error> {
         let ancestors = self.ancestors(descendant)?;
         Ok(ancestors.contains(&ancestor))
     }
 
     /// Get every node `X` in the graph such that `X == node` or there exists a
     /// child of `X` that is an ancestor of `node`.
-    fn ancestors(&self, node: Self::Node) -> std::result::Result<HashSet<Self::Node>, Self::Error>;
+    fn ancestors(&self, node: Self::Node) -> Result<HashSet<Self::Node>, Self::Error>;
 
     /// Get the union of `ancestors(node)` for every node in `nodes`.
     #[instrument]
     fn ancestors_all(
         &self,
         nodes: HashSet<Self::Node>,
-    ) -> std::result::Result<HashSet<Self::Node>, Self::Error> {
+    ) -> Result<HashSet<Self::Node>, Self::Error> {
         let mut ancestors = HashSet::new();
         for node in nodes {
             ancestors.extend(self.ancestors(node)?);
@@ -52,11 +52,11 @@ pub trait SearchGraph: Debug {
     fn ancestors_heads(
         &self,
         nodes: HashSet<Self::Node>,
-    ) -> std::result::Result<HashSet<Self::Node>, Self::Error> {
+    ) -> Result<HashSet<Self::Node>, Self::Error> {
         let node_to_ancestors: HashMap<Self::Node, HashSet<Self::Node>> = nodes
             .iter()
             .map(|node| Ok((node.clone(), self.ancestors(node.clone())?)))
-            .collect::<std::result::Result<_, _>>()?;
+            .collect::<Result<_, _>>()?;
         let heads: HashSet<Self::Node> = nodes
             .into_iter()
             .filter(|node| {
@@ -77,16 +77,14 @@ pub trait SearchGraph: Debug {
 
     /// Get every node `X` in the graph such that `X == node` or there exists a
     /// parent of `X` that is a descendant of `node`.
-    fn descendants(
-        &self,
-        node: Self::Node,
-    ) -> std::result::Result<HashSet<Self::Node>, Self::Error>;
+    fn descendants(&self, node: Self::Node) -> Result<HashSet<Self::Node>, Self::Error>;
 
     /// Get the union of `descendants(node)` for every node in `nodes`.
+    #[instrument]
     fn descendants_all(
         &self,
         nodes: HashSet<Self::Node>,
-    ) -> std::result::Result<HashSet<Self::Node>, Self::Error> {
+    ) -> Result<HashSet<Self::Node>, Self::Error> {
         let mut descendants = HashSet::new();
         for node in nodes {
             descendants.extend(self.descendants(node)?);
@@ -100,11 +98,11 @@ pub trait SearchGraph: Debug {
     fn descendants_roots(
         &self,
         nodes: HashSet<Self::Node>,
-    ) -> std::result::Result<HashSet<Self::Node>, Self::Error> {
+    ) -> Result<HashSet<Self::Node>, Self::Error> {
         let node_to_descendants: HashMap<Self::Node, HashSet<Self::Node>> = nodes
             .iter()
             .map(|node| Ok((node.clone(), self.descendants(node.clone())?)))
-            .collect::<std::result::Result<_, _>>()?;
+            .collect::<Result<_, _>>()?;
         let roots: HashSet<Self::Node> = nodes
             .into_iter()
             .filter(|node| {
@@ -231,7 +229,7 @@ pub enum Strategy {
 /// The error type for the search.
 #[allow(missing_docs)]
 #[derive(Debug, Error)]
-pub enum Error<Node: Debug> {
+pub enum Error2<Node, Error> {
     #[error("inconsistent state transition: {ancestor_node:?} ({ancestor_status:?}) was marked as an ancestor of {descendant_node:?} ({descendant_status:?}")]
     InconsistentStateTransition {
         ancestor_node: Node,
@@ -249,8 +247,11 @@ pub enum Error<Node: Debug> {
 
     /// Returned when the caller's trait implementation returns an error.
     #[error(transparent)]
-    Underlying(Box<dyn std::error::Error>),
+    Underlying(#[from] Error),
 }
+
+/// The error type for the search.
+pub type Error<G> = Error2<<G as SearchGraph>::Node, <G as SearchGraph>::Error>;
 
 /// The search algorithm.
 #[derive(Clone, Debug)]
@@ -273,7 +274,7 @@ impl<G: SearchGraph> Search<G> {
     ///
     /// FIXME: O(n) complexity.
     #[instrument]
-    pub fn success_bounds(&self) -> Result<HashSet<G::Node>, Error<G::Node>> {
+    pub fn success_bounds(&self) -> Result<HashSet<G::Node>, Error<G>> {
         let success_nodes = self
             .nodes
             .iter()
@@ -282,10 +283,7 @@ impl<G: SearchGraph> Search<G> {
                 Status::Untested | Status::Failure | Status::Indeterminate => None,
             })
             .collect::<HashSet<_>>();
-        let success_bounds = self
-            .graph
-            .ancestors_heads(success_nodes)
-            .map_err(|err| Error::Underlying(Box::new(err)))?;
+        let success_bounds = self.graph.ancestors_heads(success_nodes)?;
         Ok(success_bounds)
     }
 
@@ -293,7 +291,7 @@ impl<G: SearchGraph> Search<G> {
     ///
     /// FIXME: O(n) complexity.
     #[instrument]
-    pub fn failure_bounds(&self) -> Result<HashSet<G::Node>, Error<G::Node>> {
+    pub fn failure_bounds(&self) -> Result<HashSet<G::Node>, Error<G>> {
         let failure_nodes = self
             .nodes
             .iter()
@@ -302,28 +300,19 @@ impl<G: SearchGraph> Search<G> {
                 Status::Untested | Status::Success | Status::Indeterminate => None,
             })
             .collect::<HashSet<_>>();
-        let failure_bounds = self
-            .graph
-            .descendants_roots(failure_nodes)
-            .map_err(|err| Error::Underlying(Box::new(err)))?;
+        let failure_bounds = self.graph.descendants_roots(failure_nodes)?;
         Ok(failure_bounds)
     }
 
     /// Summarize the current search progress and suggest the next node(s) to
     /// search. The caller is responsible for calling `notify` with the result.
     #[instrument]
-    pub fn search(&self, strategy: Strategy) -> Result<LazySolution<G::Node>, Error<G::Node>> {
+    pub fn search(&self, strategy: Strategy) -> Result<LazySolution<G::Node>, Error<G>> {
         let success_bounds = self.success_bounds()?;
         let failure_bounds = self.failure_bounds()?;
         let nodes_to_search = {
-            let implied_success_nodes = self
-                .graph
-                .ancestors_all(success_bounds.clone())
-                .map_err(|err| Error::Underlying(Box::new(err)))?;
-            let implied_failure_nodes = self
-                .graph
-                .descendants_all(failure_bounds.clone())
-                .map_err(|err| Error::Underlying(Box::new(err)))?;
+            let implied_success_nodes = self.graph.ancestors_all(success_bounds.clone())?;
+            let implied_failure_nodes = self.graph.descendants_all(failure_bounds.clone())?;
             self.nodes
                 .iter()
                 .filter_map(|(node, status)| match status {
@@ -350,12 +339,12 @@ impl<G: SearchGraph> Search<G> {
 
     /// Update the search state with the result of a search.
     #[instrument]
-    pub fn notify(&mut self, node: G::Node, status: Status) -> Result<(), Error<G::Node>> {
+    pub fn notify(&mut self, node: G::Node, status: Status) -> Result<(), Error<G>> {
         match self.nodes.get(&node) {
             Some(existing_status @ (Status::Success | Status::Failure))
                 if existing_status != &status =>
             {
-                return Err(Error::IllegalStateTransition {
+                return Err(Error::<G>::IllegalStateTransition {
                     node,
                     from: *existing_status,
                     to: status,
@@ -369,12 +358,8 @@ impl<G: SearchGraph> Search<G> {
 
             Status::Success => {
                 for failure_node in self.failure_bounds()? {
-                    if self
-                        .graph
-                        .is_ancestor(failure_node.clone(), node.clone())
-                        .map_err(|err| Error::Underlying(Box::new(err)))?
-                    {
-                        return Err(Error::InconsistentStateTransition {
+                    if self.graph.is_ancestor(failure_node.clone(), node.clone())? {
+                        return Err(Error::<G>::InconsistentStateTransition {
                             ancestor_node: failure_node,
                             ancestor_status: Status::Failure,
                             descendant_node: node,
@@ -386,12 +371,8 @@ impl<G: SearchGraph> Search<G> {
 
             Status::Failure => {
                 for success_node in self.success_bounds()? {
-                    if self
-                        .graph
-                        .is_ancestor(node.clone(), success_node.clone())
-                        .map_err(|err| Error::Underlying(Box::new(err)))?
-                    {
-                        return Err(Error::InconsistentStateTransition {
+                    if self.graph.is_ancestor(node.clone(), success_node.clone())? {
+                        return Err(Error::<G>::InconsistentStateTransition {
                             ancestor_node: node,
                             ancestor_status: Status::Failure,
                             descendant_node: success_node,
@@ -451,25 +432,19 @@ mod tests {
         type Node = usize;
         type Error = Infallible;
 
-        fn ancestors(
-            &self,
-            node: Self::Node,
-        ) -> std::result::Result<HashSet<Self::Node>, Infallible> {
+        fn ancestors(&self, node: Self::Node) -> Result<HashSet<Self::Node>, Infallible> {
             assert!(node < self.max);
             Ok((0..=node).into_iter().collect())
         }
 
-        fn descendants(
-            &self,
-            node: Self::Node,
-        ) -> std::result::Result<HashSet<Self::Node>, Infallible> {
+        fn descendants(&self, node: Self::Node) -> Result<HashSet<Self::Node>, Infallible> {
             assert!(node < self.max);
             Ok((node..self.max).into_iter().collect())
         }
     }
 
     #[test]
-    fn test_search_stick() -> Result<(), Error<usize>> {
+    fn test_search_stick() -> Result<(), Error<UsizeGraph>> {
         let graph = UsizeGraph { max: 7 };
         let nodes = 0..graph.max;
         let mut search = Search::new(graph, nodes);
@@ -550,7 +525,7 @@ mod tests {
     }
 
     #[test]
-    fn test_search_inconsistent_notify() -> Result<(), Error<usize>> {
+    fn test_search_inconsistent_notify() -> Result<(), Error<UsizeGraph>> {
         let graph = UsizeGraph { max: 7 };
         let nodes = 0..graph.max;
         let mut search = Search::new(graph, nodes);
@@ -601,10 +576,7 @@ mod tests {
         type Node = char;
         type Error = Infallible;
 
-        fn ancestors(
-            &self,
-            node: Self::Node,
-        ) -> std::result::Result<HashSet<Self::Node>, Infallible> {
+        fn ancestors(&self, node: Self::Node) -> Result<HashSet<Self::Node>, Infallible> {
             let mut result = hashset! {node};
             let parents: HashSet<char> = self
                 .nodes
@@ -615,10 +587,7 @@ mod tests {
             Ok(result)
         }
 
-        fn descendants(
-            &self,
-            node: Self::Node,
-        ) -> std::result::Result<HashSet<Self::Node>, Infallible> {
+        fn descendants(&self, node: Self::Node) -> Result<HashSet<Self::Node>, Infallible> {
             let mut result = hashset! {node};
             let children: HashSet<char> = self.nodes[&node].clone();
             result.extend(self.descendants_all(children)?);
@@ -627,7 +596,7 @@ mod tests {
     }
 
     #[test]
-    fn test_search_dag() -> Result<(), Error<char>> {
+    fn test_search_dag() -> Result<(), Error<TestGraph>> {
         let graph = TestGraph {
             nodes: hashmap! {
                 'a' => hashset! {'b'},
