@@ -143,15 +143,31 @@ pub enum Status {
     Indeterminate,
 }
 
-/// The results of the search so far. The search is complete if `next_to_search` is empty.
-pub struct LazySolution<'a, Node: Eq + Hash + 'a> {
+/// The upper and lower bounds of the search.
+#[derive(Debug, Eq, PartialEq)]
+pub struct Bounds<Node: Debug + Eq + Hash> {
     /// The upper bounds of the search. The ancestors of this set have (or are
     /// assumed to have) `Status::Success`.
-    pub success_bounds: HashSet<Node>,
+    success: HashSet<Node>,
 
     /// The lower bounds of the search. The ancestors of this set have (or are
     /// assumed to have) `Status::Failure`.
-    pub failure_bounds: HashSet<Node>,
+    failure: HashSet<Node>,
+}
+
+impl<Node: Debug + Eq + Hash> Default for Bounds<Node> {
+    fn default() -> Self {
+        Bounds {
+            success: Default::default(),
+            failure: Default::default(),
+        }
+    }
+}
+
+/// The results of the search so far. The search is complete if `next_to_search` is empty.
+pub struct LazySolution<'a, Node: Debug + Eq + Hash + 'a> {
+    /// The bounds of the search so far.
+    pub bounds: Bounds<Node>,
 
     /// The next nodes to search in a suggested order. Normally, you would only
     /// consume the first node in this iterator and then call `Search::notify`
@@ -160,7 +176,7 @@ pub struct LazySolution<'a, Node: Eq + Hash + 'a> {
     pub next_to_search: Box<dyn Iterator<Item = Node> + 'a>,
 }
 
-impl<'a, Node: Eq + Hash + 'a> LazySolution<'a, Node> {
+impl<'a, Node: Debug + Eq + Hash + 'a> LazySolution<'a, Node> {
     /// Convenience function to call `EagerSolution::from` on this `LazySolution`.
     pub fn into_eager(self) -> EagerSolution<Node> {
         EagerSolution::from(self)
@@ -170,18 +186,20 @@ impl<'a, Node: Eq + Hash + 'a> LazySolution<'a, Node> {
 /// A `LazySolution` with a `Vec<Node>` for `next_to_search`. This is primarily
 /// for debugging.
 #[derive(Debug, Eq, PartialEq)]
-pub struct EagerSolution<Node: Hash + Eq> {
-    success_bounds: HashSet<Node>,
-    failure_bounds: HashSet<Node>,
+pub struct EagerSolution<Node: Debug + Hash + Eq> {
+    bounds: Bounds<Node>,
     next_to_search: Vec<Node>,
 }
 
-impl<Node: Hash + Eq> From<LazySolution<'_, Node>> for EagerSolution<Node> {
+impl<Node: Debug + Hash + Eq> From<LazySolution<'_, Node>> for EagerSolution<Node> {
     fn from(solution: LazySolution<Node>) -> Self {
+        let LazySolution {
+            bounds,
+            next_to_search,
+        } = solution;
         Self {
-            success_bounds: solution.success_bounds,
-            failure_bounds: solution.failure_bounds,
-            next_to_search: solution.next_to_search.collect(),
+            bounds,
+            next_to_search: next_to_search.collect(),
         }
     }
 }
@@ -331,8 +349,10 @@ impl<G: SearchGraph> Search<G> {
         };
 
         Ok(LazySolution {
-            success_bounds,
-            failure_bounds,
+            bounds: Bounds {
+                success: success_bounds,
+                failure: failure_bounds,
+            },
             next_to_search: Box::new(next_to_search),
         })
     }
@@ -452,16 +472,14 @@ mod tests {
         assert_eq!(
             search.search(Strategy::Linear)?.into_eager(),
             EagerSolution {
-                success_bounds: hashset! {},
-                failure_bounds: hashset! {},
+                bounds: Default::default(),
                 next_to_search: vec![0, 1, 2, 3, 4, 5, 6],
             }
         );
         assert_eq!(
             search.search(Strategy::LinearReverse)?.into_eager(),
             EagerSolution {
-                success_bounds: hashset! {},
-                failure_bounds: hashset! {},
+                bounds: Default::default(),
                 next_to_search: vec![6, 5, 4, 3, 2, 1, 0],
             }
         );
@@ -469,8 +487,7 @@ mod tests {
         assert_eq!(
             search.search(Strategy::Binary)?.into_eager(),
             EagerSolution {
-                success_bounds: hashset! {},
-                failure_bounds: hashset! {},
+                bounds: Default::default(),
                 next_to_search: vec![3, 1, 5, 0, 4, 2, 6],
             }
         );
@@ -479,16 +496,20 @@ mod tests {
         assert_eq!(
             search.search(Strategy::Linear)?.into_eager(),
             EagerSolution {
-                success_bounds: hashset! {2},
-                failure_bounds: hashset! {},
+                bounds: Bounds {
+                    success: hashset! {2},
+                    failure: hashset! {},
+                },
                 next_to_search: vec![3, 4, 5, 6],
             }
         );
         assert_eq!(
             search.search(Strategy::Binary)?.into_eager(),
             EagerSolution {
-                success_bounds: hashset! {2},
-                failure_bounds: hashset! {},
+                bounds: Bounds {
+                    success: hashset! {2},
+                    failure: hashset! {},
+                },
                 next_to_search: vec![5, 4, 6, 3],
             }
         );
@@ -497,16 +518,20 @@ mod tests {
         assert_eq!(
             search.search(Strategy::Linear)?.into_eager(),
             EagerSolution {
-                success_bounds: hashset! {2},
-                failure_bounds: hashset! {5},
+                bounds: Bounds {
+                    success: hashset! {2},
+                    failure: hashset! {5},
+                },
                 next_to_search: vec![3, 4],
             }
         );
         assert_eq!(
             search.search(Strategy::Binary)?.into_eager(),
             EagerSolution {
-                success_bounds: hashset! {2},
-                failure_bounds: hashset! {5},
+                bounds: Bounds {
+                    success: hashset! {2},
+                    failure: hashset! {5},
+                },
                 next_to_search: vec![4, 3],
             }
         );
@@ -515,8 +540,10 @@ mod tests {
         assert_eq!(
             search.search(Strategy::Binary)?.into_eager(),
             EagerSolution {
-                success_bounds: hashset! {2},
-                failure_bounds: hashset! {5},
+                bounds: Bounds {
+                    success: hashset! {2},
+                    failure: hashset! {5},
+                },
                 next_to_search: vec![4],
             }
         );
@@ -616,8 +643,7 @@ mod tests {
         assert_eq!(
             search.search(Strategy::Linear)?.into_eager(),
             EagerSolution {
-                success_bounds: hashset! {},
-                failure_bounds: hashset! {},
+                bounds: Default::default(),
                 next_to_search: vec!['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'],
             }
         );
@@ -627,8 +653,10 @@ mod tests {
         assert_eq!(
             search.search(Strategy::Linear)?.into_eager(),
             EagerSolution {
-                success_bounds: hashset! {'b'},
-                failure_bounds: hashset! {'g'},
+                bounds: Bounds {
+                    success: hashset! {'b'},
+                    failure: hashset! {'g'},
+                },
                 next_to_search: vec!['c', 'd', 'e', 'f', 'h'],
             }
         );
@@ -637,8 +665,10 @@ mod tests {
         assert_eq!(
             search.search(Strategy::Linear)?.into_eager(),
             EagerSolution {
-                success_bounds: hashset! {'e'},
-                failure_bounds: hashset! {'g'},
+                bounds: Bounds {
+                    success: hashset! {'e'},
+                    failure: hashset! {'g'},
+                },
                 next_to_search: vec!['f', 'h'],
             }
         );
@@ -647,8 +677,10 @@ mod tests {
         assert_eq!(
             search.search(Strategy::Linear)?.into_eager(),
             EagerSolution {
-                success_bounds: hashset! {'f'},
-                failure_bounds: hashset! {'g'},
+                bounds: Bounds {
+                    success: hashset! {'f'},
+                    failure: hashset! {'g'},
+                },
                 next_to_search: vec!['h'],
             }
         );
@@ -657,8 +689,10 @@ mod tests {
         assert_eq!(
             search.search(Strategy::Linear)?.into_eager(),
             EagerSolution {
-                success_bounds: hashset! {'f', 'h'},
-                failure_bounds: hashset! {'g'},
+                bounds: Bounds {
+                    success: hashset! {'f', 'h'},
+                    failure: hashset! {'g'},
+                },
                 next_to_search: vec![],
             }
         );
@@ -719,10 +753,11 @@ mod tests {
 
             let solution = loop {
                 let solution = search.search(strategy).unwrap().into_eager();
-                for success_node in &solution.success_bounds {
+                let Bounds { success, failure } = &solution.bounds;
+                for success_node in success {
                     assert!(!failure_nodes.contains(success_node))
                 }
-                for failure_node in &solution.failure_bounds {
+                for failure_node in failure {
                     assert!(failure_nodes.contains(failure_node));
                 }
                 match solution.next_to_search.first() {
@@ -738,11 +773,11 @@ mod tests {
             };
 
             let nodes = graph.nodes.keys().copied().collect::<HashSet<_>>();
-            assert!(solution.success_bounds.is_subset(&nodes));
-            assert!(solution.failure_bounds.is_subset(&nodes));
-            assert!(solution.success_bounds.is_disjoint(&solution.failure_bounds));
-            let all_success_nodes = graph.ancestors_all(solution.success_bounds.clone()).unwrap();
-            let all_failure_nodes = graph.descendants_all(solution.failure_bounds).unwrap();
+            assert!(solution.bounds.success.is_subset(&nodes));
+            assert!(solution.bounds.failure.is_subset(&nodes));
+            assert!(solution.bounds.success.is_disjoint(&solution.bounds.failure));
+            let all_success_nodes = graph.ancestors_all(solution.bounds.success.clone()).unwrap();
+            let all_failure_nodes = graph.descendants_all(solution.bounds.failure).unwrap();
             assert!(all_success_nodes.is_disjoint(&all_failure_nodes));
             assert!(
                 all_success_nodes.union(&all_failure_nodes).copied().collect::<HashSet<_>>() == nodes,
