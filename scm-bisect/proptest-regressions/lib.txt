@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc ce11ffd995d0052397748bfc67c12868894333525e05f275b93791d554eed36c # shrinks to strategy = Linear, (graph, failure_nodes) = (TestGraph { nodes: {'a': {'¡'}} }, ['a'])
+cc d64864227683ebca9d4ac1a79649d8e51162bc55b3450269c39e842d8ee0f7dd # shrinks to strategy = Linear, (graph, failure_nodes) = (TestGraph { nodes: {'c': {}, 'a': {}} }, ['c'])
