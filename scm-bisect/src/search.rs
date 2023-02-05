@@ -426,7 +426,11 @@ mod tests {
     use std::convert::Infallible;
 
     use maplit::{hashmap, hashset};
+    use proptest::prelude::Strategy as ProptestStrategy;
+    use proptest::prelude::*;
+    use proptest::proptest;
 
+    use super::Strategy;
     use super::*;
 
     struct UsizeGraph {
@@ -578,6 +582,7 @@ mod tests {
         Ok(())
     }
 
+    #[derive(Clone, Debug)]
     struct TestGraph {
         nodes: HashMap<char, HashSet<char>>,
     }
@@ -680,5 +685,93 @@ mod tests {
         );
 
         Ok(())
+    }
+
+    fn arb_strategy() -> impl ProptestStrategy<Value = Strategy> {
+        prop_oneof![
+            Just(Strategy::Linear),
+            Just(Strategy::LinearReverse),
+            Just(Strategy::Binary),
+        ]
+    }
+
+    fn arb_test_graph_and_nodes() -> impl ProptestStrategy<Value = (TestGraph, Vec<char>)> {
+        let nodes = prop::collection::hash_set(
+            prop::sample::select(vec!['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']),
+            1..=8,
+        );
+        nodes
+            .prop_flat_map(|nodes| {
+                let num_nodes = nodes.len();
+                let nodes_kv = nodes
+                    .iter()
+                    .copied()
+                    .map(|node| (node, HashSet::new()))
+                    .collect();
+                let graph = TestGraph { nodes: nodes_kv };
+                let lineages = prop::collection::vec(
+                    prop::sample::subsequence(nodes.into_iter().collect_vec(), 0..num_nodes),
+                    0..num_nodes,
+                );
+                (Just(graph), lineages)
+            })
+            .prop_map(|(mut graph, lineages)| {
+                for lineage in lineages {
+                    for (parent, child) in lineage.into_iter().tuple_windows() {
+                        graph.nodes.get_mut(&parent).unwrap().insert(child);
+                    }
+                }
+                graph
+            })
+            .prop_flat_map(|graph| {
+                let nodes = graph.nodes.keys().copied().collect::<Vec<_>>();
+                let num_nodes = nodes.len();
+                let failure_nodes = prop::sample::subsequence(nodes, 0..num_nodes);
+                (Just(graph), failure_nodes)
+            })
+    }
+
+    proptest! {
+        #[test]
+        fn test_search_dag_proptest(strategy in arb_strategy(), (graph, failure_nodes) in arb_test_graph_and_nodes()) {
+            let nodes = graph.nodes.keys().sorted().copied().collect::<Vec<_>>();
+            let mut search = Search::new(graph.clone(), nodes);
+            let failure_nodes = graph.descendants_all(failure_nodes.into_iter().collect()).unwrap();
+
+            let solution = loop {
+                let solution = search.search(strategy).unwrap().into_eager();
+                for success_node in &solution.success_bounds {
+                    assert!(!failure_nodes.contains(success_node))
+                }
+                for failure_node in &solution.failure_bounds {
+                    assert!(failure_nodes.contains(failure_node));
+                }
+                match solution.next_to_search.first() {
+                    Some(node) => {
+                        search.notify(*node, if failure_nodes.contains(node) {
+                            Status::Failure
+                        } else {
+                            Status::Success
+                        }).unwrap();
+                    }
+                    None => break solution,
+                }
+            };
+
+            let nodes = graph.nodes.keys().copied().collect::<HashSet<_>>();
+            assert!(solution.success_bounds.is_subset(&nodes));
+            assert!(solution.failure_bounds.is_subset(&nodes));
+            assert!(solution.success_bounds.is_disjoint(&solution.failure_bounds));
+            let all_success_nodes = graph.ancestors_all(solution.success_bounds.clone()).unwrap();
+            let all_failure_nodes = graph.descendants_all(solution.failure_bounds).unwrap();
+            assert!(all_success_nodes.is_disjoint(&all_failure_nodes));
+            assert!(
+                all_success_nodes.union(&all_failure_nodes).copied().collect::<HashSet<_>>() == nodes,
+                "all_success_nodes: {:?}, all_failure_nodes: {:?}, nodes: {:?}",
+                all_success_nodes,
+                all_failure_nodes,
+                nodes,
+            );
+        }
     }
 }
