@@ -9,6 +9,7 @@ edition = "2021"
 indexmap = "1"
 itertools = "0.10"
 thiserror = "1"
+tracing = "0.1"
 
 [dev-dependencies]
 insta = "1"

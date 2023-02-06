@@ -8,9 +8,10 @@ use std::hash::Hash;
 use indexmap::IndexMap;
 use itertools::{EitherOrBoth, Itertools};
 use thiserror::Error;
+use tracing::instrument;
 
 /// The set of nodes compromising a directed acyclic graph to be searched.
-pub trait SearchGraph {
+pub trait SearchGraph: Debug {
     /// The type of nodes in the graph. This should be cheap to clone.
     type Node: Clone + Debug + Hash + Eq;
 
@@ -18,6 +19,7 @@ pub trait SearchGraph {
     type Error: Debug + std::error::Error + 'static;
 
     /// Return whether or not `node` is an ancestor of `descendant`.
+    #[instrument]
     fn is_ancestor(
         &self,
         ancestor: Self::Node,
@@ -32,6 +34,7 @@ pub trait SearchGraph {
     fn ancestors(&self, node: Self::Node) -> std::result::Result<HashSet<Self::Node>, Self::Error>;
 
     /// Get the union of `ancestors(node)` for every node in `nodes`.
+    #[instrument]
     fn ancestors_all(
         &self,
         nodes: HashSet<Self::Node>,
@@ -45,6 +48,7 @@ pub trait SearchGraph {
 
     /// Filter `nodes` to only include nodes that are not ancestors of any other
     /// node in `nodes`.
+    #[instrument]
     fn ancestors_heads(
         &self,
         nodes: HashSet<Self::Node>,
@@ -92,6 +96,7 @@ pub trait SearchGraph {
 
     /// Filter `nodes` to only include nodes that are not descendants of any
     /// other node in `nodes`.
+    #[instrument]
     fn descendants_roots(
         &self,
         nodes: HashSet<Self::Node>,
@@ -267,6 +272,7 @@ impl<G: SearchGraph> Search<G> {
     /// Get the currently known bounds on the success nodes.
     ///
     /// FIXME: O(n) complexity.
+    #[instrument]
     pub fn success_bounds(&self) -> Result<HashSet<G::Node>, Error<G::Node>> {
         let success_nodes = self
             .nodes
@@ -286,6 +292,7 @@ impl<G: SearchGraph> Search<G> {
     /// Get the currently known bounds on the failure nodes.
     ///
     /// FIXME: O(n) complexity.
+    #[instrument]
     pub fn failure_bounds(&self) -> Result<HashSet<G::Node>, Error<G::Node>> {
         let failure_nodes = self
             .nodes
@@ -304,6 +311,7 @@ impl<G: SearchGraph> Search<G> {
 
     /// Summarize the current search progress and suggest the next node(s) to
     /// search. The caller is responsible for calling `notify` with the result.
+    #[instrument]
     pub fn search(&self, strategy: Strategy) -> Result<LazySolution<G::Node>, Error<G::Node>> {
         let success_bounds = self.success_bounds()?;
         let failure_bounds = self.failure_bounds()?;
@@ -341,6 +349,7 @@ impl<G: SearchGraph> Search<G> {
     }
 
     /// Update the search state with the result of a search.
+    #[instrument]
     pub fn notify(&mut self, node: G::Node, status: Status) -> Result<(), Error<G::Node>> {
         match self.nodes.get(&node) {
             Some(existing_status @ (Status::Success | Status::Failure))
@@ -433,6 +442,7 @@ mod tests {
     use super::Strategy;
     use super::*;
 
+    #[derive(Debug)]
     struct UsizeGraph {
         max: usize,
     }
