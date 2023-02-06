@@ -59,7 +59,7 @@ anyhow = "1.0.69"
 assert_cmd = "2.0.7"
 insta = "1.24.1"
 portable-pty = "0.7.0"
-vt100 = "0.15.1"
+vt100 = "0.15.2"
 
 [package.metadata.release]
 pre-release-replacements = [
