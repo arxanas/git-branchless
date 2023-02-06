@@ -2632,6 +2632,7 @@ dependencies = [
  "maplit",
  "proptest",
  "thiserror",
+ "tracing",
 ]
 
 [[package]]
