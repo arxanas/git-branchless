@@ -76,6 +76,22 @@ lazy_static! {
         Style::merge(&[BaseColor::Yellow.light().into(), Effect::Bold.into()]);
 }
 
+/// The exit status to use when a test command intends to skip the provided commit.
+/// This exit code is used officially by several source control systems:
+///
+/// - Git: "Note that the script (my_script in the above example) should exit
+/// with code 0 if the current source code is good/old, and exit with a code
+/// between 1 and 127 (inclusive), except 125, if the current source code is
+/// bad/new."
+/// - Mercurial: "The exit status of the command will be used to mark revisions
+/// as good or bad: status 0 means good, 125 means to skip the revision, 127
+/// (command not found) will abort the bisection, and any other non-zero exit
+/// status means the revision is bad."
+///
+/// And it's become the de-facto standard for custom bisection scripts for other
+/// source control systems as well.
+const INDETERMINATE_EXIT_CODE: i32 = 125;
+
 /// How verbose of output to produce.
 #[derive(Clone, Copy, Debug, Ord, PartialOrd, Eq, PartialEq)]
 enum Verbosity {
@@ -764,6 +780,10 @@ enum TestStatus {
     /// Attempting to read cached data failed.
     ReadCacheFailed(String),
 
+    Indeterminate {
+        exit_code: i32,
+    },
+
     /// The test failed and returned the provided (non-zero) exit code.
     Failed {
         /// Whether or not the result was cached (indicating that we didn't
@@ -791,7 +811,8 @@ impl TestStatus {
             | TestStatus::SpawnTestFailed(_)
             | TestStatus::AlreadyInProgress
             | TestStatus::ReadCacheFailed(_)
-            | TestStatus::TerminatedBySignal => icons::EXCLAMATION,
+            | TestStatus::TerminatedBySignal
+            | TestStatus::Indeterminate { .. } => icons::EXCLAMATION,
             TestStatus::Failed { .. } => icons::CROSS,
             TestStatus::Passed { .. } => icons::CHECKMARK,
         }
@@ -804,7 +825,8 @@ impl TestStatus {
             | TestStatus::SpawnTestFailed(_)
             | TestStatus::AlreadyInProgress
             | TestStatus::ReadCacheFailed(_)
-            | TestStatus::TerminatedBySignal => *STYLE_SKIPPED,
+            | TestStatus::TerminatedBySignal
+            | TestStatus::Indeterminate { .. } => *STYLE_SKIPPED,
             TestStatus::Failed { .. } => *STYLE_FAILURE,
             TestStatus::Passed { .. } => *STYLE_SUCCESS,
         }
@@ -866,6 +888,14 @@ fn make_test_status_description(
 
         TestStatus::ReadCacheFailed(_) => StyledStringBuilder::new()
             .append_styled("Could not read cached test result: ", *STYLE_SKIPPED)
+            .append(commit.friendly_describe(glyphs)?)
+            .build(),
+
+        TestStatus::Indeterminate { exit_code } => StyledStringBuilder::new()
+            .append_styled(
+                format!("Exit code indicated to skip this commit (exit code {exit_code}): "),
+                *STYLE_SKIPPED,
+            )
             .append(commit.friendly_describe(glyphs)?)
             .build(),
 
@@ -1341,17 +1371,13 @@ fn event_loop(
                         | TestStatus::SpawnTestFailed(_)
                         | TestStatus::TerminatedBySignal
                         | TestStatus::AlreadyInProgress
-                        | TestStatus::ReadCacheFailed(_) => search::Status::Indeterminate,
+                        | TestStatus::ReadCacheFailed(_)
+                        | TestStatus::Indeterminate { .. } => search::Status::Indeterminate,
 
                         TestStatus::Failed {
                             cached: _,
-                            exit_code,
-                        } => {
-                            if *exit_code == 125 {
-                                todo!("Handle indeterminate result");
-                            }
-                            search::Status::Failure
-                        }
+                            exit_code: _,
+                        } => search::Status::Failure,
 
                         TestStatus::Passed {
                             cached: _,
@@ -1422,7 +1448,8 @@ fn print_summary(
             | TestStatus::SpawnTestFailed(_)
             | TestStatus::AlreadyInProgress
             | TestStatus::ReadCacheFailed(_)
-            | TestStatus::TerminatedBySignal => num_skipped += 1,
+            | TestStatus::TerminatedBySignal
+            | TestStatus::Indeterminate { .. } => num_skipped += 1,
 
             TestStatus::Failed {
                 cached,
@@ -1599,6 +1626,7 @@ fn apply_fixes(
             | TestStatus::TerminatedBySignal
             | TestStatus::AlreadyInProgress
             | TestStatus::ReadCacheFailed(_)
+            | TestStatus::Indeterminate { .. }
             | TestStatus::Failed { .. } => None,
         })
         .collect();
@@ -1933,7 +1961,8 @@ fn run_test(
             TestStatus::CheckoutFailed
             | TestStatus::SpawnTestFailed(_)
             | TestStatus::AlreadyInProgress
-            | TestStatus::ReadCacheFailed(_) => OperationIcon::Warning,
+            | TestStatus::ReadCacheFailed(_)
+            | TestStatus::Indeterminate { .. } => OperationIcon::Warning,
 
             TestStatus::TerminatedBySignal | TestStatus::Failed { .. } => OperationIcon::Failure,
 
@@ -2014,6 +2043,15 @@ fn make_test_files(
                     cached: true,
                     fixed_tree_oid: fixed_tree_oid.map(|SerializedNonZeroOid(oid)| oid),
                 },
+
+                Ok(SerializedTestResult {
+                    command: _,
+                    exit_code,
+                    fixed_tree_oid: _,
+                }) if exit_code == INDETERMINATE_EXIT_CODE => {
+                    TestStatus::Indeterminate { exit_code }
+                }
+
                 Ok(SerializedTestResult {
                     command: _,
                     exit_code,
@@ -2284,6 +2322,9 @@ fn test_commit(
                 fixed_tree_oid,
             }
         }
+
+        exit_code @ INDETERMINATE_EXIT_CODE => TestStatus::Indeterminate { exit_code },
+
         exit_code => TestStatus::Failed {
             cached: false,
             exit_code,
@@ -2303,7 +2344,8 @@ fn test_commit(
             | TestStatus::TerminatedBySignal
             | TestStatus::AlreadyInProgress
             | TestStatus::ReadCacheFailed(_)
-            | TestStatus::Failed { .. } => None,
+            | TestStatus::Failed { .. }
+            | TestStatus::Indeterminate { .. } => None,
         },
     };
     serde_json::to_writer_pretty(result_file, &serialized_test_result)
