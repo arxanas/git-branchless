@@ -1198,3 +1198,137 @@ fn test_test_run_none() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_test_search_skip_indeterminate() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    git.init_repo()?;
+    git.detach_head()?;
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+    git.commit_file("test3", 3)?;
+    git.commit_file("test4", 4)?;
+    git.commit_file("test5", 5)?;
+    git.commit_file("test6", 6)?;
+    git.commit_file("test7", 7)?;
+
+    {
+        let (stdout, _stderr) =
+            git.branchless("test", &["run", "--search", "binary", "--exec", "exit 125"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> diff --quiet
+        Calling Git for on-disk rebase...
+        branchless: running command: <git-executable> rebase --continue
+        Using test execution strategy: working-copy
+        Using test search strategy: binary
+        branchless: running command: <git-executable> rebase --abort
+        ⚠️ Exit code indicated to skip this commit (exit code 125): 62fc20d create test1.txt
+        ⚠️ Exit code indicated to skip this commit (exit code 125): 96d1c37 create test2.txt
+        ⚠️ Exit code indicated to skip this commit (exit code 125): 70deb1e create test3.txt
+        ⚠️ Exit code indicated to skip this commit (exit code 125): 355e173 create test4.txt
+        ⚠️ Exit code indicated to skip this commit (exit code 125): f81d55c create test5.txt
+        ⚠️ Exit code indicated to skip this commit (exit code 125): 2831fb5 create test6.txt
+        ⚠️ Exit code indicated to skip this commit (exit code 125): c8933b3 create test7.txt
+        Tested 7 commits with exit 125:
+        0 passed, 0 failed, 7 skipped
+        There were no passing commits in the provided set.
+        There were no failing commits in the provided set.
+        "###);
+    }
+
+    // Confirm that we treat exit code 125 as indeterminate even when cached.
+    {
+        let (stdout, _stderr) =
+            git.branchless("test", &["run", "--search", "binary", "--exec", "exit 125"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> diff --quiet
+        Calling Git for on-disk rebase...
+        branchless: running command: <git-executable> rebase --continue
+        Using test execution strategy: working-copy
+        Using test search strategy: binary
+        branchless: running command: <git-executable> rebase --abort
+        ⚠️ Exit code indicated to skip this commit (exit code 125): 62fc20d create test1.txt
+        ⚠️ Exit code indicated to skip this commit (exit code 125): 96d1c37 create test2.txt
+        ⚠️ Exit code indicated to skip this commit (exit code 125): 70deb1e create test3.txt
+        ⚠️ Exit code indicated to skip this commit (exit code 125): 355e173 create test4.txt
+        ⚠️ Exit code indicated to skip this commit (exit code 125): f81d55c create test5.txt
+        ⚠️ Exit code indicated to skip this commit (exit code 125): 2831fb5 create test6.txt
+        ⚠️ Exit code indicated to skip this commit (exit code 125): c8933b3 create test7.txt
+        Tested 7 commits with exit 125:
+        0 passed, 0 failed, 7 skipped
+        There were no passing commits in the provided set.
+        There were no failing commits in the provided set.
+        "###);
+    }
+
+    git.write_file(
+        "test.sh",
+        r#"#!/bin/sh
+if [[ "$(git log)" =~ 'test4' ]]; then
+    exit 125
+elif [[ "$(git log)" =~ 'test6' ]]; then
+    exit 1
+else
+    exit 0
+fi
+"#,
+    )?;
+
+    {
+        let (stdout, _stderr) = git.branchless(
+            "test",
+            &["run", "--search", "linear", "--exec", "bash test.sh"],
+        )?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> diff --quiet
+        Calling Git for on-disk rebase...
+        branchless: running command: <git-executable> rebase --continue
+        Using test execution strategy: working-copy
+        Using test search strategy: linear
+        branchless: running command: <git-executable> rebase --abort
+        ✓ Passed: 62fc20d create test1.txt
+        ✓ Passed: 96d1c37 create test2.txt
+        ✓ Passed: 70deb1e create test3.txt
+        ⚠️ Exit code indicated to skip this commit (exit code 125): 355e173 create test4.txt
+        ⚠️ Exit code indicated to skip this commit (exit code 125): f81d55c create test5.txt
+        ⚠️ Exit code indicated to skip this commit (exit code 125): 2831fb5 create test6.txt
+        ⚠️ Exit code indicated to skip this commit (exit code 125): c8933b3 create test7.txt
+        Tested 7 commits with bash test.sh:
+        3 passed, 0 failed, 4 skipped
+        Last passing commit:
+        - 70deb1e create test3.txt
+        There were no failing commits in the provided set.
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.branchless(
+            "test",
+            &["run", "--search", "binary", "--exec", "bash test.sh"],
+        )?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> diff --quiet
+        Calling Git for on-disk rebase...
+        branchless: running command: <git-executable> rebase --continue
+        Using test execution strategy: working-copy
+        Using test search strategy: binary
+        branchless: running command: <git-executable> rebase --abort
+        ✓ Passed (cached): 70deb1e create test3.txt
+        ⚠️ Exit code indicated to skip this commit (exit code 125): 355e173 create test4.txt
+        ⚠️ Exit code indicated to skip this commit (exit code 125): f81d55c create test5.txt
+        ⚠️ Exit code indicated to skip this commit (exit code 125): 2831fb5 create test6.txt
+        ⚠️ Exit code indicated to skip this commit (exit code 125): c8933b3 create test7.txt
+        Tested 5 commits with bash test.sh:
+        1 passed, 0 failed, 4 skipped
+        Last passing commit:
+        - 70deb1e create test3.txt
+        There were no failing commits in the provided set.
+        hint: there was 1 cached test result
+        hint: to clear these cached results, run: git test clean "stack() | @"
+        hint: disable this hint by running: git config --global branchless.hint.cleanCachedTestResults false
+        "###);
+    }
+
+    Ok(())
+}
