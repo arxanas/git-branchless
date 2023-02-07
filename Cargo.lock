@@ -1354,6 +1354,7 @@ dependencies = [
  "maplit",
  "num_cpus",
  "rayon",
+ "scm-bisect",
  "serde",
  "serde_json",
  "thiserror",

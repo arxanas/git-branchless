@@ -13,24 +13,25 @@
 
 mod worker;
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 use std::fmt::Write as _;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::mpsc::channel;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::SystemTime;
 
 use bstr::ByteSlice;
 use clap::ValueEnum;
+use crossbeam::channel::{Receiver, RecvError};
 use cursive::theme::{BaseColor, Effect, Style};
 use cursive::utils::markup::StyledString;
 use eden_dag::DagAlgorithm;
 use eyre::WrapErr;
 use fslock::LockFile;
 use git_branchless_invoke::CommandContext;
+use indexmap::IndexMap;
 use itertools::Itertools;
 use lazy_static::lazy_static;
 use lib::core::check_out::CheckOutCommitOptions;
@@ -53,15 +54,18 @@ use lib::git::{
 };
 use lib::util::{get_sh, ExitCode};
 use rayon::ThreadPoolBuilder;
+use scm_bisect::search;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
+use thiserror::Error;
 use tracing::{debug, instrument, warn};
 
 use git_branchless_opts::{
-    MoveOptions, ResolveRevsetOptions, Revset, TestArgs, TestExecutionStrategy, TestSubcommand,
+    MoveOptions, ResolveRevsetOptions, Revset, TestArgs, TestExecutionStrategy, TestSearchStrategy,
+    TestSubcommand,
 };
 use git_branchless_revset::resolve_commits;
 
-use crate::worker::{worker, JobResult, WorkerId};
+use crate::worker::{worker, JobResult, WorkQueue, WorkerId};
 
 lazy_static! {
     static ref STYLE_SUCCESS: Style =
@@ -111,6 +115,13 @@ struct RawTestOptions {
 
     /// The execution strategy to use.
     pub strategy: Option<TestExecutionStrategy>,
+
+    /// Search for the first commit that fails the test command, rather than
+    /// running on all commits.
+    pub search: Option<TestSearchStrategy>,
+
+    /// Shorthand for the binary search strategy.
+    pub bisect: bool,
 
     /// The number of jobs to run in parallel.
     pub jobs: Option<usize>,
@@ -181,7 +192,8 @@ To run a specific command alias, run: git test run -c <alias>",
 #[derive(Debug)]
 struct ResolvedTestOptions {
     command: String,
-    strategy: TestExecutionStrategy,
+    execution_strategy: TestExecutionStrategy,
+    search_strategy: Option<TestSearchStrategy>,
     dry_run: bool,
     jobs: usize,
     verbosity: Verbosity,
@@ -205,6 +217,8 @@ impl ResolvedTestOptions {
             command: command_alias,
             dry_run,
             strategy,
+            search,
+            bisect,
             jobs,
             verbosity,
             apply_fixes,
@@ -255,7 +269,7 @@ impl ResolvedTestOptions {
 
         let jobs_config_key = "branchless.test.jobs";
         let configured_jobs: Option<i32> = config.get(jobs_config_key)?;
-        let (resolved_jobs, resolved_strategy) = match jobs {
+        let (resolved_jobs, resolved_execution_strategy) = match jobs {
             None => match configured_jobs {
                 None => (1, resolved_strategy),
                 Some(jobs) => match usize::try_from(jobs) {
@@ -354,9 +368,16 @@ but --strategy working-copy was provided instead."
             None
         };
 
+        let resolved_search_strategy = if *bisect {
+            Some(TestSearchStrategy::Binary)
+        } else {
+            *search
+        };
+
         Ok(Ok(ResolvedTestOptions {
             command: resolved_command,
-            strategy: resolved_strategy,
+            execution_strategy: resolved_execution_strategy,
+            search_strategy: resolved_search_strategy,
             dry_run: *dry_run,
             jobs: resolved_jobs,
             verbosity: *verbosity,
@@ -390,6 +411,8 @@ pub fn command_main(ctx: CommandContext, args: TestArgs) -> eyre::Result<ExitCod
             resolve_revset_options,
             verbosity,
             strategy,
+            search,
+            bisect,
             jobs,
         } => subcommand_run(
             &effects,
@@ -399,6 +422,8 @@ pub fn command_main(ctx: CommandContext, args: TestArgs) -> eyre::Result<ExitCod
                 command: command_alias,
                 dry_run: false,
                 strategy,
+                search,
+                bisect,
                 jobs,
                 verbosity: Verbosity::from(verbosity),
                 apply_fixes: false,
@@ -421,6 +446,8 @@ pub fn command_main(ctx: CommandContext, args: TestArgs) -> eyre::Result<ExitCod
                 command: command_alias,
                 dry_run: false,
                 strategy: None,
+                search: None,
+                bisect: false,
                 jobs: None,
                 verbosity: Verbosity::from(verbosity),
                 apply_fixes: false,
@@ -447,6 +474,8 @@ pub fn command_main(ctx: CommandContext, args: TestArgs) -> eyre::Result<ExitCod
                 command: command_alias,
                 dry_run,
                 strategy,
+                search: None,
+                bisect: false,
                 jobs,
                 verbosity: Verbosity::from(verbosity),
                 apply_fixes: true,
@@ -519,14 +548,14 @@ fn subcommand_run(
         &repo,
         &event_log_db,
         event_tx_id,
-        options.strategy,
+        options.execution_strategy,
     )? {
         Ok(abort_trap) => abort_trap,
         Err(exit_code) => return Ok(exit_code),
     };
 
     let commits = sorted_commit_set(&repo, &dag, &commit_set)?;
-    let results: Result<_, _> = run_tests(
+    let test_results: Result<_, _> = run_tests(
         effects,
         git_run_info,
         &dag,
@@ -542,17 +571,19 @@ fn subcommand_run(
         return Ok(abort_trap_exit_code);
     }
 
-    let results = match results? {
-        Ok(results) => results,
+    let test_results = match test_results? {
+        Ok(test_results) => test_results,
         Err(exit_code) => return Ok(exit_code),
     };
 
     let exit_code = print_summary(
         effects,
+        &dag,
         &repo,
         &revset,
         &options.command,
-        &results,
+        &test_results,
+        options.search_strategy.is_some(),
         &options.verbosity,
     )?;
     if !exit_code.is_success() {
@@ -570,7 +601,7 @@ fn subcommand_run(
             permissions.clone(),
             options.dry_run,
             &options.command,
-            &results,
+            &test_results,
         )?;
         if !exit_code.is_success() {
             return Ok(exit_code);
@@ -992,8 +1023,56 @@ fn shell_escape(s: impl AsRef<str>) -> String {
     escaped
 }
 
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+struct TestJob {
+    commit_oid: NonZeroOid,
+    operation_type: OperationType,
+}
+
+#[derive(Debug, Error)]
+enum SearchGraphError {
+    #[error(transparent)]
+    Dag(#[from] eden_dag::Error),
+
+    #[error(transparent)]
+    Other(#[from] eyre::Error),
+}
+
+#[derive(Debug)]
+struct SearchGraph<'a> {
+    dag: &'a Dag,
+    commit_set: CommitSet,
+}
+
+impl<'a> search::SearchGraph for SearchGraph<'a> {
+    type Node = NonZeroOid;
+    type Error = SearchGraphError;
+
+    #[instrument]
+    fn ancestors(&self, node: Self::Node) -> Result<HashSet<Self::Node>, Self::Error> {
+        let ancestors = self.dag.query().ancestors(CommitSet::from(node))?;
+        let ancestors = ancestors.intersection(&self.commit_set);
+        let ancestors = commit_set_to_vec(&ancestors)?;
+        Ok(ancestors.into_iter().collect())
+    }
+
+    #[instrument]
+    fn descendants(&self, node: Self::Node) -> Result<HashSet<Self::Node>, Self::Error> {
+        let descendants = self.dag.query().descendants(CommitSet::from(node))?;
+        let descendants = descendants.intersection(&self.commit_set);
+        let descendants = commit_set_to_vec(&descendants)?;
+        Ok(descendants.into_iter().collect())
+    }
+}
+
+#[derive(Debug)]
+struct TestResults {
+    search_bounds: search::Bounds<NonZeroOid>,
+    test_outputs: IndexMap<NonZeroOid, TestOutput>,
+}
+
 #[instrument]
-fn run_tests(
+fn run_tests<'a>(
     effects: &Effects,
     git_run_info: &GitRunInfo,
     dag: &Dag,
@@ -1003,16 +1082,11 @@ fn run_tests(
     revset: &Revset,
     commits: &[Commit],
     options: &ResolvedTestOptions,
-) -> eyre::Result<Result<Vec<(NonZeroOid, TestOutput)>, ExitCode>> {
-    #[derive(Clone, Debug)]
-    struct TestJob {
-        commit_oid: NonZeroOid,
-        operation_type: OperationType,
-    }
-
+) -> eyre::Result<Result<TestResults, ExitCode>> {
     let ResolvedTestOptions {
         command,
-        strategy,
+        execution_strategy,
+        search_strategy,
         dry_run: _, // Used only in `apply_fixes`.
         jobs,
         verbosity: _,   // Verbosity used by caller to print results.
@@ -1038,7 +1112,7 @@ fn run_tests(
         }
     };
 
-    if let Some(strategy_value) = strategy.to_possible_value() {
+    if let Some(strategy_value) = execution_strategy.to_possible_value() {
         writeln!(
             effects.get_output_stream(),
             "Using test execution strategy: {}",
@@ -1050,12 +1124,30 @@ fn run_tests(
         )?;
     }
 
-    let results_unordered = {
+    if let Some(strategy_value) = search_strategy.and_then(|opt| opt.to_possible_value()) {
+        writeln!(
+            effects.get_output_stream(),
+            "Using test search strategy: {}",
+            effects.get_glyphs().render(
+                StyledStringBuilder::new()
+                    .append_styled(strategy_value.get_name(), Effect::Bold)
+                    .build()
+            )?,
+        )?;
+    }
+    let search_strategy = match search_strategy {
+        None => None,
+        Some(TestSearchStrategy::Linear) => Some(search::Strategy::Linear),
+        Some(TestSearchStrategy::Reverse) => Some(search::Strategy::LinearReverse),
+        Some(TestSearchStrategy::Binary) => Some(search::Strategy::Binary),
+    };
+
+    let (search, test_outputs_unordered) = {
         let (effects, progress) =
             effects.start_operation(OperationType::RunTests(Arc::new(command.clone())));
         progress.notify_progress(0, commits.len());
-        let work_queue: VecDeque<TestJob> = {
-            let mut results = VecDeque::new();
+        let commit_jobs = {
+            let mut results = IndexMap::new();
             for commit in commits {
                 // Create the progress entries in the multiprogress meter without starting them.
                 // They'll be resumed later in the loop below.
@@ -1069,25 +1161,50 @@ fn run_tests(
                     OperationIcon::InProgress,
                     format!("Waiting to test {commit_description}"),
                 );
-                results.push_back(TestJob {
-                    commit_oid: commit.get_oid(),
-                    operation_type,
-                });
+                results.insert(
+                    commit.get_oid(),
+                    TestJob {
+                        commit_oid: commit.get_oid(),
+                        operation_type,
+                    },
+                );
             }
             results
         };
 
+        let graph = SearchGraph {
+            dag,
+            commit_set: commits.iter().map(|c| c.get_oid()).collect(),
+        };
+        let search = search::Search::new(graph, commits.iter().map(|c| c.get_oid()));
+
+        let work_queue = WorkQueue::new();
+        match search_strategy {
+            None => {
+                work_queue.set(commit_jobs.values().cloned().collect());
+            }
+            Some(search_strategy) => {
+                let solution = search.search(search_strategy)?;
+                work_queue.set(
+                    solution
+                        .next_to_search
+                        .take(*jobs)
+                        .map(|commit_oid| commit_jobs[&commit_oid].clone())
+                        .collect(),
+                );
+            }
+        };
+
         let repo_dir = repo.get_path();
-        crossbeam::thread::scope(|scope| {
-            let work_queue = Arc::new(Mutex::new(work_queue));
-            let (result_tx, result_rx) = channel();
+        crossbeam::thread::scope(|scope| -> eyre::Result<_> {
+            let (result_tx, result_rx) = crossbeam::channel::unbounded();
             let workers: HashMap<WorkerId, crossbeam::thread::ScopedJoinHandle<()>> = {
                 let mut result = HashMap::new();
                 for worker_id in 1..=*jobs {
                     let effects = &effects;
                     let progress = &progress;
                     let shell_path = &shell_path;
-                    let work_queue = Arc::clone(&work_queue);
+                    let work_queue = work_queue.clone();
                     let result_tx = result_tx.clone();
                     let setup = move || -> eyre::Result<Repo> {
                         let repo = Repo::from_dir(repo_dir)?;
@@ -1124,49 +1241,32 @@ fn run_tests(
 
             // We rely on `result_rx.recv()` returning `Err` once all the threads have exited
             // (whether that reason should be panicking or having finished all work). We have to
-            // drop our local reference to ensure that we don't deadlock, since otherwise therex
+            // drop our local reference to ensure that we don't deadlock, since otherwise there
             // would still be a live receiver for the sender.
             drop(result_tx);
 
-            let mut results = HashMap::new();
-            while let Ok(message) = {
-                debug!("Main thread waiting for new job result");
-                let result = result_rx.recv();
-                debug!("Main thread got new job result");
-                result
-            } {
-                match message {
-                    JobResult::Done(job, test_output) => {
-                        let TestJob {
-                            commit_oid,
-                            operation_type: _,
-                        } = job;
-                        results.insert(commit_oid, test_output);
-                        if results.len() == commits.len() {
-                            drop(result_rx);
-                            break;
-                        }
-                    }
-                    JobResult::Error(worker_id, job, error_message) => {
-                        let TestJob {
-                            commit_oid,
-                            operation_type: _,
-                        } = job;
-                        eyre::bail!("Worker {worker_id} failed when processing commit {commit_oid}: {error_message}");
-                    }
+            let test_results = event_loop(
+                commit_jobs,
+                search,
+                search_strategy,
+                *jobs,
+                work_queue.clone(),
+                result_rx,
+            )?;
+
+            debug!("Waiting for workers");
+            work_queue.close();
+            progress.notify_status(OperationIcon::InProgress, "Waiting for workers");
+            if search_strategy.is_none() {
+                for (worker_id, worker) in workers {
+                    worker
+                        .join()
+                        .map_err(|_err| eyre::eyre!("Waiting for worker {worker_id} to exit"))?;
                 }
             }
 
-            debug!("Waiting for workers");
-            progress.notify_status(OperationIcon::InProgress, "Waiting for workers");
-            for (worker_id, worker) in workers {
-                worker
-                    .join()
-                    .map_err(|_err| eyre::eyre!("Waiting for worker {worker_id} to exit"))?;
-            }
-
             debug!("About to return from thread scope");
-            Ok(results)
+            Ok(test_results)
         })
         .map_err(|_| eyre::eyre!("Could not spawn workers"))?
         .wrap_err("Failed waiting on workers")?
@@ -1175,46 +1275,140 @@ fn run_tests(
 
     // The results may be returned in an arbitrary order if they were produced
     // in parallel, so recover the input order to produce deterministic output.
-    let results_ordered = {
-        let mut results_unordered = results_unordered;
-        let mut results_ordered = Vec::new();
+    let test_outputs_ordered: IndexMap<NonZeroOid, TestOutput> = {
+        let mut test_outputs_unordered = test_outputs_unordered;
+        let mut test_outputs_ordered = IndexMap::new();
         for commit_oid in commits.iter().map(|commit| commit.get_oid()) {
-            match results_unordered.remove(&commit_oid) {
+            match test_outputs_unordered.remove(&commit_oid) {
                 Some(result) => {
-                    results_ordered.push((commit_oid, result));
+                    test_outputs_ordered.insert(commit_oid, result);
                 }
                 None => {
-                    warn!(?commit_oid, "No result was returned for commit");
+                    if search_strategy.is_none() {
+                        warn!(?commit_oid, "No result was returned for commit");
+                    }
                 }
             }
         }
-        if !results_unordered.is_empty() {
+        if !test_outputs_unordered.is_empty() {
             warn!(
-                ?results_unordered,
+                ?test_outputs_unordered,
                 ?commits,
                 "There were extra results for commits not appearing in the input list"
             );
         }
-        results_ordered
+        test_outputs_ordered
     };
 
-    Ok(Ok(results_ordered))
+    Ok(Ok(TestResults {
+        search_bounds: match search_strategy {
+            None => Default::default(),
+            Some(search_strategy) => search.search(search_strategy)?.bounds,
+        },
+        test_outputs: test_outputs_ordered,
+    }))
+}
+
+fn event_loop(
+    commit_jobs: IndexMap<NonZeroOid, TestJob>,
+    mut search: search::Search<SearchGraph>,
+    search_strategy: Option<search::Strategy>,
+    num_jobs: usize,
+    work_queue: WorkQueue<TestJob>,
+    result_rx: Receiver<JobResult<TestJob, TestOutput>>,
+) -> eyre::Result<(search::Search<SearchGraph>, HashMap<NonZeroOid, TestOutput>)> {
+    let mut test_outputs = HashMap::new();
+    while let Ok(message) = {
+        debug!("Main thread waiting for new job result");
+        let result = if commit_jobs.is_empty() {
+            Err(RecvError)
+        } else {
+            result_rx.recv()
+        };
+        debug!("Main thread got new job result");
+        result
+    } {
+        match message {
+            JobResult::Done(job, test_output) => {
+                let TestJob {
+                    commit_oid,
+                    operation_type: _,
+                } = job;
+                search.notify(
+                    commit_oid,
+                    match &test_output.test_status {
+                        TestStatus::CheckoutFailed
+                        | TestStatus::SpawnTestFailed(_)
+                        | TestStatus::TerminatedBySignal
+                        | TestStatus::AlreadyInProgress
+                        | TestStatus::ReadCacheFailed(_) => search::Status::Indeterminate,
+
+                        TestStatus::Failed {
+                            cached: _,
+                            exit_code,
+                        } => {
+                            if *exit_code == 125 {
+                                todo!("Handle indeterminate result");
+                            }
+                            search::Status::Failure
+                        }
+
+                        TestStatus::Passed {
+                            cached: _,
+                            fixed_tree_oid: _,
+                        } => search::Status::Success,
+                    },
+                )?;
+                test_outputs.insert(commit_oid, test_output);
+
+                let should_exit = match search_strategy {
+                    None => test_outputs.len() == commit_jobs.len(),
+                    Some(search_strategy) => {
+                        let solution = search.search(search_strategy)?;
+                        let next_to_search = solution
+                            .next_to_search
+                            .take(num_jobs)
+                            .map(|commit_oid| commit_jobs[&commit_oid].clone())
+                            .collect_vec();
+                        let should_exit = next_to_search.is_empty();
+                        work_queue.set(next_to_search);
+                        should_exit
+                    }
+                };
+                if should_exit {
+                    drop(result_rx);
+                    break;
+                }
+            }
+            JobResult::Error(worker_id, job, error_message) => {
+                let TestJob {
+                    commit_oid,
+                    operation_type: _,
+                } = job;
+                eyre::bail!("Worker {worker_id} failed when processing commit {commit_oid}: {error_message}");
+            }
+        }
+    }
+
+    Ok((search, test_outputs))
 }
 
 #[instrument]
 fn print_summary(
     effects: &Effects,
+    dag: &Dag,
     repo: &Repo,
     revset: &Revset,
     command: &str,
-    results: &[(NonZeroOid, TestOutput)],
+    test_results: &TestResults,
+    is_search: bool,
     verbosity: &Verbosity,
 ) -> eyre::Result<ExitCode> {
     let mut num_passed = 0;
     let mut num_failed = 0;
     let mut num_skipped = 0;
     let mut num_cached_results = 0;
-    for (commit_oid, test_output) in results {
+    for (commit_oid, test_output) in &test_results.test_outputs {
         let commit = repo.find_commit_or_fail(*commit_oid)?;
         write!(
             effects.get_output_stream(),
@@ -1256,7 +1450,7 @@ fn print_summary(
         "Tested {} with {}:",
         Pluralize {
             determiner: None,
-            amount: results.len(),
+            amount: test_results.test_outputs.len(),
             unit: ("commit", "commits")
         },
         effects.get_glyphs().render(
@@ -1283,6 +1477,68 @@ fn print_summary(
     )?;
     writeln!(effects.get_output_stream(), "{passed}, {failed}, {skipped}")?;
 
+    if is_search {
+        let success_commits: CommitSet =
+            test_results.search_bounds.success.iter().copied().collect();
+        let success_commits = sorted_commit_set(repo, dag, &success_commits)?;
+        if success_commits.is_empty() {
+            writeln!(
+                effects.get_output_stream(),
+                "There were no passing commits in the provided set."
+            )?;
+        } else {
+            writeln!(
+                effects.get_output_stream(),
+                "Last passing {commits}:",
+                commits = if success_commits.len() == 1 {
+                    "commit"
+                } else {
+                    "commits"
+                },
+            )?;
+            for commit in success_commits {
+                writeln!(
+                    effects.get_output_stream(),
+                    "{} {}",
+                    effects.get_glyphs().bullet_point,
+                    effects
+                        .get_glyphs()
+                        .render(commit.friendly_describe(effects.get_glyphs())?)?
+                )?;
+            }
+        }
+
+        let failure_commits: CommitSet =
+            test_results.search_bounds.failure.iter().copied().collect();
+        let failure_commits = sorted_commit_set(repo, dag, &failure_commits)?;
+        if failure_commits.is_empty() {
+            writeln!(
+                effects.get_output_stream(),
+                "There were no failing commits in the provided set."
+            )?;
+        } else {
+            writeln!(
+                effects.get_output_stream(),
+                "First failing {commits}:",
+                commits = if failure_commits.len() == 1 {
+                    "commit"
+                } else {
+                    "commits"
+                },
+            )?;
+            for commit in failure_commits {
+                writeln!(
+                    effects.get_output_stream(),
+                    "{} {}",
+                    effects.get_glyphs().bullet_point,
+                    effects
+                        .get_glyphs()
+                        .render(commit.friendly_describe(effects.get_glyphs())?)?
+                )?;
+            }
+        }
+    }
+
     if num_cached_results > 0 && get_hint_enabled(repo, Hint::CleanCachedTestResults)? {
         writeln!(
             effects.get_output_stream(),
@@ -1303,7 +1559,9 @@ fn print_summary(
         print_hint_suppression_notice(effects, Hint::CleanCachedTestResults)?;
     }
 
-    if num_failed > 0 || num_skipped > 0 {
+    if is_search {
+        Ok(ExitCode(0))
+    } else if num_failed > 0 || num_skipped > 0 {
         Ok(ExitCode(1))
     } else {
         Ok(ExitCode(0))
@@ -1321,9 +1579,10 @@ fn apply_fixes(
     permissions: RebasePlanPermissions,
     dry_run: bool,
     command: &str,
-    results: &[(NonZeroOid, TestOutput)],
+    test_results: &TestResults,
 ) -> eyre::Result<ExitCode> {
-    let fixed_tree_oids: Vec<(NonZeroOid, NonZeroOid)> = results
+    let fixed_tree_oids: Vec<(NonZeroOid, NonZeroOid)> = test_results
+        .test_outputs
         .iter()
         .filter_map(|(commit_oid, test_output)| match test_output.test_status {
             TestStatus::Passed {
@@ -1581,9 +1840,10 @@ fn run_test(
 ) -> eyre::Result<TestOutput> {
     let ResolvedTestOptions {
         command: _,
-        strategy,
-        dry_run: _, // Used only in `apply_fixes`.
-        jobs: _,    // Caller handles job management.
+        execution_strategy,
+        search_strategy: _, // Caller handles which commits to test.
+        dry_run: _,         // Used only in `apply_fixes`.
+        jobs: _,            // Caller handles job management.
         verbosity: _,
         fix_options: _, // Checked in `test_commit`.
     } = options;
@@ -1606,7 +1866,7 @@ fn run_test(
                 repo,
                 event_tx_id,
                 commit,
-                *strategy,
+                *execution_strategy,
                 worker_id,
             )? {
                 Err(_) => {

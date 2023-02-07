@@ -1,25 +1,106 @@
-use std::collections::VecDeque;
-use std::sync::{mpsc::Sender, Arc, Mutex};
+use std::collections::HashSet;
+use std::fmt::Debug;
+use std::hash::Hash;
+use std::sync::{Arc, Mutex};
 
+use crossbeam::channel::{Receiver, RecvError, SendError, Sender, TryRecvError};
 use lib::core::effects::ProgressHandle;
 use tracing::debug;
 
 use crate::TestOutput;
 
 pub(crate) type WorkerId = usize;
-pub(crate) type WorkQueue<Job> = Arc<Mutex<VecDeque<Job>>>;
-pub(crate) enum JobResult<Job, Output> {
-    Done(Job, Output),
-    Error(WorkerId, Job, String),
+
+pub trait Job: Clone + Debug + Eq + Hash {}
+impl<T: Clone + Debug + Eq + Hash> Job for T {}
+
+pub(crate) enum JobResult<J: Job, Output> {
+    Done(J, Output),
+    Error(WorkerId, J, String),
 }
 
-pub(crate) fn worker<Job: Clone + std::fmt::Debug, Context>(
+#[derive(Clone, Debug)]
+pub(crate) struct WorkQueue<J: Job> {
+    job_tx: Arc<Mutex<Option<Sender<J>>>>,
+    job_rx: Receiver<J>,
+    accepted_jobs: Arc<Mutex<HashSet<J>>>,
+}
+
+impl<J: Job> WorkQueue<J> {
+    pub fn new() -> Self {
+        let (job_tx, job_rx) = crossbeam::channel::unbounded();
+        Self {
+            job_tx: Arc::new(Mutex::new(Some(job_tx))),
+            job_rx,
+            accepted_jobs: Default::default(),
+        }
+    }
+
+    pub fn set(&self, jobs: Vec<J>) {
+        let job_tx = self.job_tx.lock().unwrap();
+        let job_tx = match job_tx.as_ref() {
+            Some(job_tx) => job_tx,
+            None => {
+                debug!(?jobs, "Tried to set jobs when work queue was disconnected");
+                return;
+            }
+        };
+        loop {
+            match self.job_rx.try_recv() {
+                Ok(job) => {
+                    debug!(?job, "Cancelling scheduled job");
+                }
+                Err(TryRecvError::Empty) => {
+                    break;
+                }
+                Err(TryRecvError::Disconnected) => {
+                    return;
+                }
+            }
+        }
+        for job in jobs {
+            debug!(?job, "Scheduling job");
+            match job_tx.send(job) {
+                Ok(()) => {}
+                Err(SendError(job)) => {
+                    debug!(?job, "Failed to schedule job");
+                }
+            }
+        }
+    }
+
+    pub fn close(&self) {
+        let mut job_tx = self.job_tx.lock().unwrap();
+        *job_tx = None;
+    }
+
+    pub fn pop_blocking(&self) -> Option<J> {
+        loop {
+            match self.job_rx.recv() {
+                Ok(job) => {
+                    let mut accepted_jobs = self.accepted_jobs.lock().unwrap();
+                    if accepted_jobs.insert(job.clone()) {
+                        break Some(job);
+                    } else {
+                        debug!(?job, "Skipped already-accepted job");
+                    }
+                }
+                Err(RecvError) => {
+                    debug!("Work queue disconnected");
+                    break None;
+                }
+            }
+        }
+    }
+}
+
+pub(crate) fn worker<J: Job, Context>(
     progress: &ProgressHandle,
     worker_id: WorkerId,
-    work_queue: WorkQueue<Job>,
-    result_tx: Sender<JobResult<Job, TestOutput>>,
+    work_queue: WorkQueue<J>,
+    result_tx: Sender<JobResult<J, TestOutput>>,
     setup: impl Fn() -> eyre::Result<Context>,
-    f: impl Fn(Job, &Context) -> eyre::Result<TestOutput>,
+    f: impl Fn(J, &Context) -> eyre::Result<TestOutput>,
 ) {
     debug!(?worker_id, "Worker spawned");
 
@@ -30,7 +111,7 @@ pub(crate) fn worker<Job: Clone + std::fmt::Debug, Context>(
         }
     };
 
-    let run_job = |job: Job| -> eyre::Result<bool> {
+    let run_job = |job: J| -> eyre::Result<bool> {
         let test_output = f(job.clone(), &context)?;
         progress.notify_progress_inc(1);
 
@@ -42,16 +123,7 @@ pub(crate) fn worker<Job: Clone + std::fmt::Debug, Context>(
         Ok(should_terminate)
     };
 
-    while let Some(job) = {
-        debug!(?worker_id, "Locking work queue");
-        let mut work_queue = work_queue.lock().unwrap();
-        debug!(?worker_id, "Locked work queue");
-        let job = work_queue.pop_front();
-        // Ensure we don't hold the lock while we process the job.
-        drop(work_queue);
-        debug!(?worker_id, "Unlocked work queue");
-        job
-    } {
+    while let Some(job) = work_queue.pop_blocking() {
         debug!(?worker_id, ?job, "Worker accepted job");
         let job_result = run_job(job.clone());
         debug!(?worker_id, ?job, "Worker finished job");

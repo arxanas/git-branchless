@@ -148,11 +148,11 @@ pub enum Status {
 pub struct Bounds<Node: Debug + Eq + Hash> {
     /// The upper bounds of the search. The ancestors of this set have (or are
     /// assumed to have) `Status::Success`.
-    success: HashSet<Node>,
+    pub success: HashSet<Node>,
 
     /// The lower bounds of the search. The ancestors of this set have (or are
     /// assumed to have) `Status::Failure`.
-    failure: HashSet<Node>,
+    pub failure: HashSet<Node>,
 }
 
 impl<Node: Debug + Eq + Hash> Default for Bounds<Node> {

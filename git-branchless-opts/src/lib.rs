@@ -662,6 +662,22 @@ pub enum TestExecutionStrategy {
     Worktree,
 }
 
+/// How to conduct searches on the commit graph.
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub enum TestSearchStrategy {
+    /// Visit commits starting from the earliest commit and exit early when a
+    /// failing commit is found.
+    Linear,
+
+    /// Visit commits starting from the latest commit and exit early when a
+    /// passing commit is found.
+    Reverse,
+
+    /// Visit commits starting from the middle of the commit graph and exit
+    /// early when a failing commit is found.
+    Binary,
+}
+
 /// Arguments which apply to all commands. Used during setup.
 #[derive(Debug, Parser)]
 pub struct GlobalArgs {
@@ -747,6 +763,15 @@ pub enum TestSubcommand {
         /// How to execute the tests.
         #[clap(short = 's', long = "strategy")]
         strategy: Option<TestExecutionStrategy>,
+
+        /// Search for the first commit that fails the test command, rather than
+        /// running on all commits.
+        #[clap(short = 'S', long = "search")]
+        search: Option<TestSearchStrategy>,
+
+        /// Shorthand for `--search binary`.
+        #[clap(short = 'b', long = "bisect", conflicts_with("search"))]
+        bisect: bool,
 
         /// How many jobs to execute in parallel. The value `0` indicates to use all CPUs.
         #[clap(short = 'j', long = "jobs")]

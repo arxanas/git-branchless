@@ -1131,3 +1131,70 @@ fn test_test_forbid_on_disk_rebase() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_test_search_binary() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    git.init_repo()?;
+    git.detach_head()?;
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+    git.commit_file("test3", 3)?;
+    git.commit_file("test4", 4)?;
+    git.commit_file("test5", 5)?;
+
+    {
+        let (stdout, _stderr) = git.branchless(
+            "test",
+            &[
+                "run",
+                "--search",
+                "binary",
+                "--exec",
+                "! git grep -q 'test4'",
+            ],
+        )?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> diff --quiet
+        Calling Git for on-disk rebase...
+        branchless: running command: <git-executable> rebase --continue
+        Using test execution strategy: working-copy
+        Using test search strategy: binary
+        branchless: running command: <git-executable> rebase --abort
+        ✓ Passed: 70deb1e create test3.txt
+        X Failed (exit code 1): 355e173 create test4.txt
+        X Failed (exit code 1): f81d55c create test5.txt
+        Tested 3 commits with ! git grep -q 'test4':
+        1 passed, 2 failed, 0 skipped
+        Last passing commit:
+        - 70deb1e create test3.txt
+        First failing commit:
+        - 355e173 create test4.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_test_run_none() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+
+    {
+        // Shouldn't time out.
+        let (stdout, _stderr) = git.branchless("test", &["run", "-x", "true", "none()"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> diff --quiet
+        Calling Git for on-disk rebase...
+        branchless: running command: <git-executable> rebase --continue
+        Using test execution strategy: working-copy
+        branchless: running command: <git-executable> rebase --abort
+        Tested 0 commits with true:
+        0 passed, 0 failed, 0 skipped
+        "###);
+    }
+
+    Ok(())
+}
