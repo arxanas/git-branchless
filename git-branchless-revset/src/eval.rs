@@ -268,7 +268,7 @@ pub(super) fn eval1_pattern(
     match args {
         [Expr::Name(pattern)] => Ok(Pattern::new(pattern)?),
 
-        [Expr::FunctionCall(name, _args)] => Err(EvalError::ExpectedNumberNotFunction {
+        [Expr::FunctionCall(name, _args)] => Err(EvalError::ExpectedPatternNotFunction {
             function_name: name.clone().into_owned(),
         }),
 
