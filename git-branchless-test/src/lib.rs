@@ -92,6 +92,14 @@ lazy_static! {
 /// source control systems as well.
 const INDETERMINATE_EXIT_CODE: i32 = 125;
 
+/// Similarly to `INDETERMINATE_EXIT_CODE`, this exit code is used officially by
+/// `git-bisect` and others to abort the process. It's also typically raised by
+/// the shell when the command is not found, so it's technically ambiguous
+/// whether the command existed or not. Nonetheless, it's intuitive for a
+/// failure to run a given command to abort the process altogether, so it
+/// shouldn't be too confusing in practice.
+const ABORT_EXIT_CODE: i32 = 127;
+
 /// How verbose of output to produce.
 #[derive(Clone, Copy, Debug, Ord, PartialOrd, Eq, PartialEq)]
 enum Verbosity {
@@ -823,7 +831,7 @@ struct TestOutput {
 }
 
 /// The possible results of attempting to run a test.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 enum TestStatus {
     /// Attempting to set up the working directory for the repository failed.
     CheckoutFailed,
@@ -844,6 +852,9 @@ enum TestStatus {
 
     /// The test command indicated that the commit should be skipped for testing.
     Indeterminate { exit_code: i32 },
+
+    /// The test command indicated that the process should be aborted entirely.
+    Abort { exit_code: i32 },
 
     /// The test failed and returned the provided (non-zero) exit code.
     Failed {
@@ -886,7 +897,7 @@ impl TestStatus {
             | TestStatus::ReadCacheFailed(_)
             | TestStatus::TerminatedBySignal
             | TestStatus::Indeterminate { .. } => icons::EXCLAMATION,
-            TestStatus::Failed { .. } => icons::CROSS,
+            TestStatus::Failed { .. } | TestStatus::Abort { .. } => icons::CROSS,
             TestStatus::Passed { .. } => icons::CHECKMARK,
         }
     }
@@ -900,10 +911,16 @@ impl TestStatus {
             | TestStatus::ReadCacheFailed(_)
             | TestStatus::TerminatedBySignal
             | TestStatus::Indeterminate { .. } => *STYLE_SKIPPED,
-            TestStatus::Failed { .. } => *STYLE_FAILURE,
+            TestStatus::Failed { .. } | TestStatus::Abort { .. } => *STYLE_FAILURE,
             TestStatus::Passed { .. } => *STYLE_SUCCESS,
         }
     }
+}
+
+#[derive(Debug)]
+struct TestingAbortedError {
+    commit_oid: NonZeroOid,
+    exit_code: i32,
 }
 
 #[derive(Debug)]
@@ -970,6 +987,14 @@ fn make_test_status_description(
             .append_styled(
                 format!("Exit code indicated to skip this commit (exit code {exit_code}): "),
                 *STYLE_SKIPPED,
+            )
+            .append(commit.friendly_describe(glyphs)?)
+            .build(),
+
+        TestStatus::Abort { exit_code } => StyledStringBuilder::new()
+            .append_styled(
+                format!("Exit code indicated to abort testing (exit code {exit_code}): "),
+                *STYLE_FAILURE,
             )
             .append(commit.friendly_describe(glyphs)?)
             .build(),
@@ -1090,7 +1115,8 @@ impl TestOutput {
             | TestStatus::TerminatedBySignal
             | TestStatus::AlreadyInProgress
             | TestStatus::ReadCacheFailed(_)
-            | TestStatus::Indeterminate { .. } => false,
+            | TestStatus::Indeterminate { .. }
+            | TestStatus::Abort { .. } => false,
             TestStatus::Failed { interactive, .. } | TestStatus::Passed { interactive, .. } => {
                 interactive
             }
@@ -1195,6 +1221,7 @@ impl<'a> search::SearchGraph for SearchGraph<'a> {
 struct TestResults {
     search_bounds: search::Bounds<NonZeroOid>,
     test_outputs: IndexMap<NonZeroOid, TestOutput>,
+    testing_aborted_error: Option<TestingAbortedError>,
 }
 
 #[instrument]
@@ -1269,7 +1296,11 @@ fn run_tests<'a>(
         Some(TestSearchStrategy::Binary) => Some(search::Strategy::Binary),
     };
 
-    let (search, test_outputs_unordered) = {
+    let EventLoopOutput {
+        search,
+        test_outputs: test_outputs_unordered,
+        testing_aborted_error,
+    } = {
         let (effects, progress) =
             effects.start_operation(OperationType::RunTests(Arc::new(command.clone())));
         progress.notify_progress(0, commits.len());
@@ -1381,8 +1412,12 @@ fn run_tests<'a>(
                 result_rx,
             )?;
 
-            debug!("Waiting for workers");
             work_queue.close();
+            if test_results.testing_aborted_error.is_some() {
+                return Ok(test_results);
+            }
+
+            debug!("Waiting for workers");
             progress.notify_status(OperationIcon::InProgress, "Waiting for workers");
             if search_strategy.is_none() {
                 for (worker_id, worker) in workers {
@@ -1411,7 +1446,7 @@ fn run_tests<'a>(
                     test_outputs_ordered.insert(commit_oid, result);
                 }
                 None => {
-                    if search_strategy.is_none() {
+                    if search_strategy.is_none() && testing_aborted_error.is_none() {
                         warn!(?commit_oid, "No result was returned for commit");
                     }
                 }
@@ -1433,7 +1468,14 @@ fn run_tests<'a>(
             Some(search_strategy) => search.search(search_strategy)?.bounds,
         },
         test_outputs: test_outputs_ordered,
+        testing_aborted_error,
     }))
+}
+
+struct EventLoopOutput<'a> {
+    search: search::Search<SearchGraph<'a>>,
+    test_outputs: HashMap<NonZeroOid, TestOutput>,
+    testing_aborted_error: Option<TestingAbortedError>,
 }
 
 fn event_loop(
@@ -1443,8 +1485,9 @@ fn event_loop(
     num_jobs: usize,
     work_queue: WorkQueue<TestJob>,
     result_rx: Receiver<JobResult<TestJob, TestOutput>>,
-) -> eyre::Result<(search::Search<SearchGraph>, HashMap<NonZeroOid, TestOutput>)> {
+) -> eyre::Result<EventLoopOutput> {
     let mut test_outputs = HashMap::new();
+    let mut testing_aborted_error = None;
     while let Ok(message) = {
         debug!("Main thread waiting for new job result");
         let result = if commit_jobs.is_empty() {
@@ -1461,32 +1504,42 @@ fn event_loop(
                     commit_oid,
                     operation_type: _,
                 } = job;
-                search.notify(
-                    commit_oid,
-                    match &test_output.test_status {
-                        TestStatus::CheckoutFailed
-                        | TestStatus::SpawnTestFailed(_)
-                        | TestStatus::TerminatedBySignal
-                        | TestStatus::AlreadyInProgress
-                        | TestStatus::ReadCacheFailed(_)
-                        | TestStatus::Indeterminate { .. } => search::Status::Indeterminate,
+                let (maybe_testing_aborted_error, search_status) = match &test_output.test_status {
+                    TestStatus::CheckoutFailed
+                    | TestStatus::SpawnTestFailed(_)
+                    | TestStatus::TerminatedBySignal
+                    | TestStatus::AlreadyInProgress
+                    | TestStatus::ReadCacheFailed(_)
+                    | TestStatus::Indeterminate { .. } => (None, search::Status::Indeterminate),
 
-                        TestStatus::Failed {
-                            cached: _,
-                            interactive: _,
-                            exit_code: _,
-                        } => search::Status::Failure,
+                    TestStatus::Abort { exit_code } => (
+                        Some(TestingAbortedError {
+                            commit_oid,
+                            exit_code: *exit_code,
+                        }),
+                        search::Status::Indeterminate,
+                    ),
 
-                        TestStatus::Passed {
-                            cached: _,
-                            interactive: _,
-                            fixed_tree_oid: _,
-                        } => search::Status::Success,
-                    },
-                )?;
+                    TestStatus::Failed {
+                        cached: _,
+                        interactive: _,
+                        exit_code: _,
+                    } => (None, search::Status::Failure),
+
+                    TestStatus::Passed {
+                        cached: _,
+                        interactive: _,
+                        fixed_tree_oid: _,
+                    } => (None, search::Status::Success),
+                };
+                search.notify(commit_oid, search_status)?;
                 test_outputs.insert(commit_oid, test_output);
+                if let Some(err) = maybe_testing_aborted_error {
+                    testing_aborted_error = Some(err);
+                    break;
+                }
 
-                let should_exit = match search_strategy {
+                let search_completed = match search_strategy {
                     None => test_outputs.len() == commit_jobs.len(),
                     Some(search_strategy) => {
                         let solution = search.search(search_strategy)?;
@@ -1495,13 +1548,12 @@ fn event_loop(
                             .take(num_jobs)
                             .map(|commit_oid| commit_jobs[&commit_oid].clone())
                             .collect_vec();
-                        let should_exit = next_to_search.is_empty();
+                        let search_completed = next_to_search.is_empty();
                         work_queue.set(next_to_search);
-                        should_exit
+                        search_completed
                     }
                 };
-                if should_exit {
-                    drop(result_rx);
+                if search_completed {
                     break;
                 }
             }
@@ -1515,7 +1567,11 @@ fn event_loop(
         }
     }
 
-    Ok((search, test_outputs))
+    Ok(EventLoopOutput {
+        search,
+        test_outputs,
+        testing_aborted_error,
+    })
 }
 
 #[instrument]
@@ -1550,6 +1606,9 @@ fn print_summary(
             | TestStatus::TerminatedBySignal
             | TestStatus::Indeterminate { .. } => num_skipped += 1,
 
+            TestStatus::Abort { .. } => {
+                num_failed += 1;
+            }
             TestStatus::Failed {
                 cached,
                 exit_code: _,
@@ -1687,6 +1746,23 @@ fn print_summary(
         print_hint_suppression_notice(effects, Hint::CleanCachedTestResults)?;
     }
 
+    if let Some(testing_aborted_error) = &test_results.testing_aborted_error {
+        let TestingAbortedError {
+            commit_oid,
+            exit_code,
+        } = testing_aborted_error;
+        let commit = repo.find_commit_or_fail(*commit_oid)?;
+        writeln!(
+            effects.get_output_stream(),
+            "Aborted testing with exit code {} at commit: {}",
+            exit_code,
+            effects
+                .get_glyphs()
+                .render(commit.friendly_describe(effects.get_glyphs())?)?
+        )?;
+        return Ok(ExitCode(1));
+    }
+
     if is_search {
         Ok(ExitCode(0))
     } else if num_failed > 0 || num_skipped > 0 {
@@ -1730,7 +1806,8 @@ fn apply_fixes(
             | TestStatus::AlreadyInProgress
             | TestStatus::ReadCacheFailed(_)
             | TestStatus::Indeterminate { .. }
-            | TestStatus::Failed { .. } => None,
+            | TestStatus::Failed { .. }
+            | TestStatus::Abort { .. } => None,
         })
         .collect();
 
@@ -2069,7 +2146,9 @@ fn run_test(
             | TestStatus::ReadCacheFailed(_)
             | TestStatus::Indeterminate { .. } => OperationIcon::Warning,
 
-            TestStatus::TerminatedBySignal | TestStatus::Failed { .. } => OperationIcon::Failure,
+            TestStatus::TerminatedBySignal
+            | TestStatus::Failed { .. }
+            | TestStatus::Abort { .. } => OperationIcon::Failure,
 
             TestStatus::Passed { .. } => OperationIcon::Success,
         },
@@ -2159,6 +2238,13 @@ fn make_test_files(
                 }) if exit_code == INDETERMINATE_EXIT_CODE => {
                     TestStatus::Indeterminate { exit_code }
                 }
+
+                Ok(SerializedTestResult {
+                    command: _,
+                    exit_code,
+                    fixed_tree_oid: _,
+                    interactive: _,
+                }) if exit_code == ABORT_EXIT_CODE => TestStatus::Abort { exit_code },
 
                 Ok(SerializedTestResult {
                     command: _,
@@ -2376,6 +2462,9 @@ fn test_commit(
         let exit125 = effects
             .get_glyphs()
             .render(StyledString::styled("exit 125", *STYLE_SKIPPED))?;
+        let exit127 = effects
+            .get_glyphs()
+            .render(StyledString::styled("exit 127", *STYLE_FAILURE))?;
 
         // NB: use `println` here instead of
         // `writeln!(effects.get_output_stream(), ...)` because the effects are
@@ -2383,10 +2472,25 @@ fn test_commit(
         println!(
             "\
 You are now at: {commit_desc}
-To mark this commit as {passed}, run: {exit0}
-To mark this commit as {failed}, run: {exit1}
-To mark this commit as {skipped}, run: {exit125}",
+To mark this commit as {passed},run:   {exit0}
+To mark this commit as {failed}, run:  {exit1}
+To mark this commit as {skipped}, run: {exit125}
+To abort testing entirely, run:      {exit127}",
         );
+        match options.execution_strategy {
+            TestExecutionStrategy::WorkingCopy => {}
+            TestExecutionStrategy::Worktree => {
+                let warning = effects
+                    .get_glyphs()
+                    .render(StyledString::styled(
+                        "Warning: You are in a worktree. Your changes will not be propagated between the worktree and the main repository.",
+                        *STYLE_SKIPPED
+                    ))?;
+                println!("{warning}");
+                println!("To save your changes, create a new branch or note the commit hash.");
+                println!("To incorporate the changes from the main repository, switch to the main repository's current commit or branch.");
+            }
+        }
     } else {
         command
             .stdin(Stdio::null())
@@ -2468,6 +2572,7 @@ To mark this commit as {skipped}, run: {exit125}",
         }
 
         exit_code @ INDETERMINATE_EXIT_CODE => TestStatus::Indeterminate { exit_code },
+        exit_code @ ABORT_EXIT_CODE => TestStatus::Abort { exit_code },
 
         exit_code => TestStatus::Failed {
             cached: false,
@@ -2491,6 +2596,7 @@ To mark this commit as {skipped}, run: {exit125}",
             | TestStatus::AlreadyInProgress
             | TestStatus::ReadCacheFailed(_)
             | TestStatus::Failed { .. }
+            | TestStatus::Abort { .. }
             | TestStatus::Indeterminate { .. } => None,
         },
         interactive: options.interactive,

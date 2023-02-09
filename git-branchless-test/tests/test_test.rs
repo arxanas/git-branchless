@@ -747,13 +747,15 @@ fn test_test_jobs_argument_handling() -> eyre::Result<()> {
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
         You are now at: 62fc20d create test1.txt
-        To mark this commit as passed, run: exit 0
-        To mark this commit as failed, run: exit 1
+        To mark this commit as passed,run:   exit 0
+        To mark this commit as failed, run:  exit 1
         To mark this commit as skipped, run: exit 125
+        To abort testing entirely, run:      exit 127
         You are now at: 96d1c37 create test2.txt
-        To mark this commit as passed, run: exit 0
-        To mark this commit as failed, run: exit 1
+        To mark this commit as passed,run:   exit 0
+        To mark this commit as failed, run:  exit 1
         To mark this commit as skipped, run: exit 125
+        To abort testing entirely, run:      exit 127
         branchless: running command: <git-executable> rebase --abort
         ✓ Passed (interactive): 62fc20d create test1.txt
         ✓ Passed (interactive): 96d1c37 create test2.txt
@@ -1434,13 +1436,15 @@ fn test_test_interactive() -> eyre::Result<()> {
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
         You are now at: 62fc20d create test1.txt
-        To mark this commit as passed, run: exit 0
-        To mark this commit as failed, run: exit 1
+        To mark this commit as passed,run:   exit 0
+        To mark this commit as failed, run:  exit 1
         To mark this commit as skipped, run: exit 125
+        To abort testing entirely, run:      exit 127
         You are now at: 96d1c37 create test2.txt
-        To mark this commit as passed, run: exit 0
-        To mark this commit as failed, run: exit 1
+        To mark this commit as passed,run:   exit 0
+        To mark this commit as failed, run:  exit 1
         To mark this commit as skipped, run: exit 125
+        To abort testing entirely, run:      exit 127
         branchless: running command: <git-executable> rebase --abort
         ✓ Passed (interactive): 62fc20d create test1.txt
         ✓ Passed (interactive): 96d1c37 create test2.txt
@@ -1464,13 +1468,15 @@ fn test_test_interactive() -> eyre::Result<()> {
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
         You are now at: 62fc20d create test1.txt
-        To mark this commit as passed, run: exit 0
-        To mark this commit as failed, run: exit 1
+        To mark this commit as passed,run:   exit 0
+        To mark this commit as failed, run:  exit 1
         To mark this commit as skipped, run: exit 125
+        To abort testing entirely, run:      exit 127
         You are now at: 96d1c37 create test2.txt
-        To mark this commit as passed, run: exit 0
-        To mark this commit as failed, run: exit 1
+        To mark this commit as passed,run:   exit 0
+        To mark this commit as failed, run:  exit 1
         To mark this commit as skipped, run: exit 125
+        To abort testing entirely, run:      exit 127
         branchless: running command: <git-executable> rebase --abort
         X Failed (exit code 1, interactive): 62fc20d create test1.txt
         X Failed (exit code 1, interactive): 96d1c37 create test2.txt
@@ -1498,14 +1504,16 @@ fn test_test_interactive() -> eyre::Result<()> {
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
         You are now at: 62fc20d create test1.txt
-        To mark this commit as passed, run: exit 0
-        To mark this commit as failed, run: exit 1
+        To mark this commit as passed,run:   exit 0
+        To mark this commit as failed, run:  exit 1
         To mark this commit as skipped, run: exit 125
+        To abort testing entirely, run:      exit 127
         hi
         You are now at: 96d1c37 create test2.txt
-        To mark this commit as passed, run: exit 0
-        To mark this commit as failed, run: exit 1
+        To mark this commit as passed,run:   exit 0
+        To mark this commit as failed, run:  exit 1
         To mark this commit as skipped, run: exit 125
+        To abort testing entirely, run:      exit 127
         branchless: running command: <git-executable> rebase --abort
         ✓ Passed (interactive): 62fc20d create test1.txt
         ✓ Passed (interactive): 96d1c37 create test2.txt
@@ -1536,6 +1544,94 @@ fn test_test_interactive() -> eyre::Result<()> {
         hint: there were 2 cached test results
         hint: to clear these cached results, run: git test clean "stack() | @"
         hint: disable this hint by running: git config --global branchless.hint.cleanCachedTestResults false
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_test_search_abort() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    git.detach_head()?;
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+
+    git.write_file(
+        "test.sh",
+        r#"#!/bin/sh
+if [[ "$(git log)" =~ 'test2' ]]; then
+    exit 127
+else
+    exit 0
+fi
+"#,
+    )?;
+    {
+        let (stdout, stderr) = git.branchless_with_options(
+            "test",
+            &["run", "--search", "linear", "-x", "bash test.sh"],
+            &GitRunOptions {
+                expected_exit_code: 1,
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stderr, @r###"
+        Stopped at 96d1c37 (create test2.txt)
+        branchless: processing 1 update: ref HEAD
+        "###);
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> diff --quiet
+        Calling Git for on-disk rebase...
+        branchless: running command: <git-executable> rebase --continue
+        Using test execution strategy: working-copy
+        Using test search strategy: linear
+        branchless: running command: <git-executable> rebase --abort
+        ✓ Passed: 62fc20d create test1.txt
+        X Exit code indicated to abort testing (exit code 127): 96d1c37 create test2.txt
+        Tested 2 commits with bash test.sh:
+        1 passed, 1 failed, 0 skipped
+        Last passing commit:
+        - 62fc20d create test1.txt
+        There were no failing commits in the provided set.
+        Aborted testing with exit code 127 at commit: 96d1c37 create test2.txt
+        "###);
+    }
+
+    // Check aborting when results are cached.
+    {
+        let (stdout, _stderr) = git.branchless_with_options(
+            "test",
+            &["run", "--search", "linear", "-x", "bash test.sh"],
+            &GitRunOptions {
+                expected_exit_code: 1,
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> diff --quiet
+        Calling Git for on-disk rebase...
+        branchless: running command: <git-executable> rebase --continue
+        Using test execution strategy: working-copy
+        Using test search strategy: linear
+        branchless: running command: <git-executable> rebase --abort
+        ✓ Passed (cached): 62fc20d create test1.txt
+        X Exit code indicated to abort testing (exit code 127): 96d1c37 create test2.txt
+        Tested 2 commits with bash test.sh:
+        1 passed, 1 failed, 0 skipped
+        Last passing commit:
+        - 62fc20d create test1.txt
+        There were no failing commits in the provided set.
+        hint: there was 1 cached test result
+        hint: to clear these cached results, run: git test clean "stack() | @"
+        hint: disable this hint by running: git config --global branchless.hint.cleanCachedTestResults false
+        Aborted testing with exit code 127 at commit: 96d1c37 create test2.txt
         "###);
     }
 

@@ -7,8 +7,6 @@ use crossbeam::channel::{Receiver, RecvError, SendError, Sender, TryRecvError};
 use lib::core::effects::ProgressHandle;
 use tracing::debug;
 
-use crate::TestOutput;
-
 pub(crate) type WorkerId = usize;
 
 pub trait Job: Clone + Debug + Eq + Hash {}
@@ -70,6 +68,7 @@ impl<J: Job> WorkQueue<J> {
     }
 
     pub fn close(&self) {
+        self.set(Default::default());
         let mut job_tx = self.job_tx.lock().unwrap();
         *job_tx = None;
     }
@@ -94,13 +93,13 @@ impl<J: Job> WorkQueue<J> {
     }
 }
 
-pub(crate) fn worker<J: Job, Context>(
+pub(crate) fn worker<J: Job, Output, Context>(
     progress: &ProgressHandle,
     worker_id: WorkerId,
     work_queue: WorkQueue<J>,
-    result_tx: Sender<JobResult<J, TestOutput>>,
+    result_tx: Sender<JobResult<J, Output>>,
     setup: impl Fn() -> eyre::Result<Context>,
-    f: impl Fn(J, &Context) -> eyre::Result<TestOutput>,
+    f: impl Fn(J, &Context) -> eyre::Result<Output>,
 ) {
     debug!(?worker_id, "Worker spawned");
 
