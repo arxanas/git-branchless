@@ -1,4 +1,5 @@
 use lib::testing::{make_git, GitRunOptions, GitWrapper};
+use maplit::hashmap;
 
 fn write_test_script(git: &GitWrapper) -> eyre::Result<()> {
     git.write_file(
@@ -657,10 +658,15 @@ echo hello
 #[test]
 fn test_test_jobs_argument_handling() -> eyre::Result<()> {
     let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
     git.init_repo()?;
 
     git.detach_head()?;
     git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
     git.run(&["config", "branchless.test.alias.default", "exit 0"])?;
 
     {
@@ -674,8 +680,7 @@ fn test_test_jobs_argument_handling() -> eyre::Result<()> {
         )?;
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
-        The --jobs argument can only be used with --strategy worktree,
-        but --strategy working-copy was provided instead.
+        The --jobs option can only be used with --strategy worktree, but --strategy working-copy was provided instead.
         "###);
     }
 
@@ -692,8 +697,9 @@ fn test_test_jobs_argument_handling() -> eyre::Result<()> {
         Using test execution strategy: working-copy
         branchless: running command: <git-executable> rebase --abort
         ✓ Passed: 62fc20d create test1.txt
-        Tested 1 commit with exit 0:
-        1 passed, 0 failed, 0 skipped
+        ✓ Passed: 96d1c37 create test2.txt
+        Tested 2 commits with exit 0:
+        2 passed, 0 failed, 0 skipped
         "###);
     }
 
@@ -708,8 +714,7 @@ fn test_test_jobs_argument_handling() -> eyre::Result<()> {
         )?;
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
-        The --jobs argument can only be used with --strategy worktree,
-        but --strategy working-copy was provided instead.
+        The --jobs option can only be used with --strategy worktree, but --strategy working-copy was provided instead.
         "###);
     }
 
@@ -719,9 +724,78 @@ fn test_test_jobs_argument_handling() -> eyre::Result<()> {
         insta::assert_snapshot!(stdout, @r###"
         Using test execution strategy: worktree
         ✓ Passed (cached): 62fc20d create test1.txt
-        Tested 1 commit with exit 0:
-        1 passed, 0 failed, 0 skipped
-        hint: there was 1 cached test result
+        ✓ Passed (cached): 96d1c37 create test2.txt
+        Tested 2 commits with exit 0:
+        2 passed, 0 failed, 0 skipped
+        hint: there were 2 cached test results
+        hint: to clear these cached results, run: git test clean "stack() | @"
+        hint: disable this hint by running: git config --global branchless.hint.cleanCachedTestResults false
+        "###);
+    }
+
+    {
+        let (stdout, stderr) = git.branchless(
+            "test",
+            &["run", "--exec", "true", "--interactive", "--jobs", "1"],
+        )?;
+        insta::assert_snapshot!(stderr, @r###"
+        Stopped at 96d1c37 (create test2.txt)
+        branchless: processing 1 update: ref HEAD
+        "###);
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> diff --quiet
+        Calling Git for on-disk rebase...
+        branchless: running command: <git-executable> rebase --continue
+        You are now at: 62fc20d create test1.txt
+        To mark this commit as passed, run: exit 0
+        To mark this commit as failed, run: exit 1
+        To mark this commit as skipped, run: exit 125
+        You are now at: 96d1c37 create test2.txt
+        To mark this commit as passed, run: exit 0
+        To mark this commit as failed, run: exit 1
+        To mark this commit as skipped, run: exit 125
+        branchless: running command: <git-executable> rebase --abort
+        ✓ Passed (interactive): 62fc20d create test1.txt
+        ✓ Passed (interactive): 96d1c37 create test2.txt
+        Tested 2 commits with true:
+        2 passed, 0 failed, 0 skipped
+        "###);
+    }
+
+    {
+        let (stdout, stderr) = git.branchless_with_options(
+            "test",
+            &["run", "--exec", "true", "--interactive", "--jobs", "2"],
+            &GitRunOptions {
+                expected_exit_code: 1,
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stderr, @"");
+        insta::assert_snapshot!(stdout, @r###"
+        The --jobs option cannot be used with the --interactive option.
+        "###);
+    }
+
+    git.run(&["config", "branchless.test.jobs", "2"])?;
+
+    {
+        let (stdout, stderr) = git.branchless("test", &["run", "--strategy", "working-copy"])?;
+        insta::assert_snapshot!(stderr, @r###"
+        Stopped at 96d1c37 (create test2.txt)
+        branchless: processing 1 update: ref HEAD
+        "###);
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> diff --quiet
+        Calling Git for on-disk rebase...
+        branchless: running command: <git-executable> rebase --continue
+        Using test execution strategy: working-copy
+        branchless: running command: <git-executable> rebase --abort
+        ✓ Passed (cached): 62fc20d create test1.txt
+        ✓ Passed (cached): 96d1c37 create test2.txt
+        Tested 2 commits with exit 0:
+        2 passed, 0 failed, 0 skipped
+        hint: there were 2 cached test results
         hint: to clear these cached results, run: git test clean "stack() | @"
         hint: disable this hint by running: git config --global branchless.hint.cleanCachedTestResults false
         "###);
@@ -1325,6 +1399,141 @@ fi
         - 70deb1e create test3.txt
         There were no failing commits in the provided set.
         hint: there was 1 cached test result
+        hint: to clear these cached results, run: git test clean "stack() | @"
+        hint: disable this hint by running: git config --global branchless.hint.cleanCachedTestResults false
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_test_interactive() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    git.detach_head()?;
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+
+    {
+        let (stdout, _stderr) = git.branchless_with_options(
+            "test",
+            &["run", "--interactive"],
+            &GitRunOptions {
+                env: hashmap! {"SHELL".to_string() =>  "true".to_string()},
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> diff --quiet
+        Calling Git for on-disk rebase...
+        branchless: running command: <git-executable> rebase --continue
+        You are now at: 62fc20d create test1.txt
+        To mark this commit as passed, run: exit 0
+        To mark this commit as failed, run: exit 1
+        To mark this commit as skipped, run: exit 125
+        You are now at: 96d1c37 create test2.txt
+        To mark this commit as passed, run: exit 0
+        To mark this commit as failed, run: exit 1
+        To mark this commit as skipped, run: exit 125
+        branchless: running command: <git-executable> rebase --abort
+        ✓ Passed (interactive): 62fc20d create test1.txt
+        ✓ Passed (interactive): 96d1c37 create test2.txt
+        Tested 2 commits with true:
+        2 passed, 0 failed, 0 skipped
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.branchless_with_options(
+            "test",
+            &["run", "--interactive"],
+            &GitRunOptions {
+                expected_exit_code: 1,
+                env: hashmap! {"SHELL".to_string() =>  "false".to_string()},
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> diff --quiet
+        Calling Git for on-disk rebase...
+        branchless: running command: <git-executable> rebase --continue
+        You are now at: 62fc20d create test1.txt
+        To mark this commit as passed, run: exit 0
+        To mark this commit as failed, run: exit 1
+        To mark this commit as skipped, run: exit 125
+        You are now at: 96d1c37 create test2.txt
+        To mark this commit as passed, run: exit 0
+        To mark this commit as failed, run: exit 1
+        To mark this commit as skipped, run: exit 125
+        branchless: running command: <git-executable> rebase --abort
+        X Failed (exit code 1, interactive): 62fc20d create test1.txt
+        X Failed (exit code 1, interactive): 96d1c37 create test2.txt
+        Tested 2 commits with false:
+        0 passed, 2 failed, 0 skipped
+        "###);
+    }
+
+    {
+        let (stdout, stderr) = git.branchless_with_options(
+            "test",
+            &["run", "--interactive", "-vv"],
+            &GitRunOptions {
+                env: hashmap! {"SHELL".to_string() =>  "bash".to_string()},
+                input: Some("echo hi; exit 0".to_string()),
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stderr, @r###"
+        Stopped at 96d1c37 (create test2.txt)
+        branchless: processing 1 update: ref HEAD
+        "###);
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> diff --quiet
+        Calling Git for on-disk rebase...
+        branchless: running command: <git-executable> rebase --continue
+        You are now at: 62fc20d create test1.txt
+        To mark this commit as passed, run: exit 0
+        To mark this commit as failed, run: exit 1
+        To mark this commit as skipped, run: exit 125
+        hi
+        You are now at: 96d1c37 create test2.txt
+        To mark this commit as passed, run: exit 0
+        To mark this commit as failed, run: exit 1
+        To mark this commit as skipped, run: exit 125
+        branchless: running command: <git-executable> rebase --abort
+        ✓ Passed (interactive): 62fc20d create test1.txt
+        ✓ Passed (interactive): 96d1c37 create test2.txt
+        Tested 2 commits with bash:
+        2 passed, 0 failed, 0 skipped
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.branchless_with_options(
+            "test",
+            &["run", "--interactive", "-vv"],
+            &GitRunOptions {
+                env: hashmap! {"SHELL".to_string() =>  "bash".to_string()},
+                input: Some("echo hi; exit 0".to_string()),
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> diff --quiet
+        Calling Git for on-disk rebase...
+        branchless: running command: <git-executable> rebase --continue
+        branchless: running command: <git-executable> rebase --abort
+        ✓ Passed (cached, interactive): 62fc20d create test1.txt
+        ✓ Passed (cached, interactive): 96d1c37 create test2.txt
+        Tested 2 commits with bash:
+        2 passed, 0 failed, 0 skipped
+        hint: there were 2 cached test results
         hint: to clear these cached results, run: git test clean "stack() | @"
         hint: disable this hint by running: git config --global branchless.hint.cleanCachedTestResults false
         "###);

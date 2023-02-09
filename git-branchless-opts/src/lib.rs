@@ -773,6 +773,11 @@ pub enum TestSubcommand {
         #[clap(short = 'b', long = "bisect", conflicts_with("search"))]
         bisect: bool,
 
+        /// Run the test command in the foreground rather than the background so
+        /// that the user can interact with it.
+        #[clap(short = 'i', long = "interactive")]
+        interactive: bool,
+
         /// How many jobs to execute in parallel. The value `0` indicates to use all CPUs.
         #[clap(short = 'j', long = "jobs")]
         jobs: Option<usize>,
