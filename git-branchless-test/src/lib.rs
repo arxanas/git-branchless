@@ -57,7 +57,7 @@ use rayon::ThreadPoolBuilder;
 use scm_bisect::search;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
-use tracing::{debug, instrument, warn};
+use tracing::{debug, info, instrument, warn};
 
 use git_branchless_opts::{
     MoveOptions, ResolveRevsetOptions, Revset, TestArgs, TestExecutionStrategy, TestSearchStrategy,
@@ -139,6 +139,9 @@ struct RawTestOptions {
     /// Shorthand for the binary search strategy.
     pub bisect: bool,
 
+    /// Whether to run interactively.
+    pub interactive: bool,
+
     /// The number of jobs to run in parallel.
     pub jobs: Option<usize>,
 
@@ -211,6 +214,7 @@ struct ResolvedTestOptions {
     execution_strategy: TestExecutionStrategy,
     search_strategy: Option<TestSearchStrategy>,
     dry_run: bool,
+    interactive: bool,
     jobs: usize,
     verbosity: Verbosity,
     fix_options: Option<(ExecuteRebasePlanOptions, RebasePlanPermissions)>,
@@ -235,14 +239,24 @@ impl ResolvedTestOptions {
             strategy,
             search,
             bisect,
+            interactive,
             jobs,
             verbosity,
             apply_fixes,
         } = options;
         let resolved_command = match (command, command_alias) {
             (Some(command), None) => command.to_owned(),
-            (None, maybe_command_alias) => {
-                match resolve_test_command_alias(effects, repo, maybe_command_alias.as_deref())? {
+            (None, None) => match (interactive, std::env::var("SHELL")) {
+                (true, Ok(shell)) => shell,
+                _ => match resolve_test_command_alias(effects, repo, None)? {
+                    Ok(command) => command,
+                    Err(exit_code) => {
+                        return Ok(Err(exit_code));
+                    }
+                },
+            },
+            (None, Some(command_alias)) => {
+                match resolve_test_command_alias(effects, repo, Some(command_alias))? {
                     Ok(command) => command,
                     Err(exit_code) => {
                         return Ok(Err(exit_code));
@@ -254,7 +268,7 @@ impl ResolvedTestOptions {
                 command, command_alias
             ),
         };
-        let resolved_strategy = match strategy {
+        let configured_execution_strategy = match strategy {
             Some(strategy) => *strategy,
             None => {
                 let strategy_config_key = "branchless.test.strategy";
@@ -285,39 +299,73 @@ impl ResolvedTestOptions {
 
         let jobs_config_key = "branchless.test.jobs";
         let configured_jobs: Option<i32> = config.get(jobs_config_key)?;
-        let (resolved_jobs, resolved_execution_strategy) = match jobs {
-            None => match configured_jobs {
-                None => (1, resolved_strategy),
-                Some(jobs) => match usize::try_from(jobs) {
-                    Ok(jobs) => (jobs, resolved_strategy),
-                    Err(err) => {
-                        writeln!(
-                            effects.get_output_stream(),
-                            "Invalid value for config value for {jobs_config_key}: {err}"
-                        )?;
-                        return Ok(Err(ExitCode(1)));
-                    }
-                },
+        let configured_jobs = match configured_jobs {
+            None => None,
+            Some(configured_jobs) => match usize::try_from(configured_jobs) {
+                Ok(configured_jobs) => Some(configured_jobs),
+                Err(err) => {
+                    writeln!(
+                        effects.get_output_stream(),
+                        "Invalid value for config value for {jobs_config_key} ({configured_jobs}): {err}"
+                    )?;
+                    return Ok(Err(ExitCode(1)));
+                }
             },
-            Some(1) => (1, resolved_strategy),
+        };
+        let (resolved_jobs, resolved_execution_strategy, resolved_interactive) = match jobs {
+            None => match (strategy, *interactive) {
+                (Some(TestExecutionStrategy::WorkingCopy), interactive) => {
+                    (1, TestExecutionStrategy::WorkingCopy, interactive)
+                }
+                (Some(TestExecutionStrategy::Worktree), true) => {
+                    (1, TestExecutionStrategy::Worktree, true)
+                }
+                (Some(TestExecutionStrategy::Worktree), false) => (
+                    configured_jobs.unwrap_or(1),
+                    TestExecutionStrategy::Worktree,
+                    false,
+                ),
+                (None, true) => (1, configured_execution_strategy, true),
+                (None, false) => (
+                    configured_jobs.unwrap_or(1),
+                    configured_execution_strategy,
+                    false,
+                ),
+            },
+            Some(1) => (1, configured_execution_strategy, *interactive),
             Some(jobs) => {
+                if *interactive {
+                    writeln!(
+                        effects.get_output_stream(),
+                        "\
+The --jobs option cannot be used with the --interactive option."
+                    )?;
+                    return Ok(Err(ExitCode(1)));
+                }
                 // NB: match on the strategy passed on the command-line here, not the resolved strategy.
                 match strategy {
                     None | Some(TestExecutionStrategy::Worktree) => {
-                        (*jobs, TestExecutionStrategy::Worktree)
+                        (*jobs, TestExecutionStrategy::Worktree, false)
                     }
                     Some(TestExecutionStrategy::WorkingCopy) => {
                         writeln!(
                             effects.get_output_stream(),
                             "\
-The --jobs argument can only be used with --strategy worktree,
-but --strategy working-copy was provided instead."
+The --jobs option can only be used with --strategy worktree, but --strategy working-copy was provided instead."
                         )?;
                         return Ok(Err(ExitCode(1)));
                     }
                 }
             }
         };
+
+        if resolved_interactive != *interactive {
+            writeln!(effects.get_output_stream(),
+            "\
+BUG: Expected resolved_interactive ({resolved_interactive:?}) to match interactive ({interactive:?}). If it doesn't match, then multiple interactive jobs might inadvertently be launched in parallel."
+            )?;
+            return Ok(Err(ExitCode(1)));
+        }
 
         let resolved_jobs = if resolved_jobs == 0 {
             num_cpus::get_physical()
@@ -390,15 +438,18 @@ but --strategy working-copy was provided instead."
             *search
         };
 
-        Ok(Ok(ResolvedTestOptions {
+        let resolved_test_options = ResolvedTestOptions {
             command: resolved_command,
             execution_strategy: resolved_execution_strategy,
             search_strategy: resolved_search_strategy,
             dry_run: *dry_run,
+            interactive: resolved_interactive,
             jobs: resolved_jobs,
             verbosity: *verbosity,
             fix_options,
-        }))
+        };
+        debug!(?resolved_test_options, "Resolved test options");
+        Ok(Ok(resolved_test_options))
     }
 
     fn make_command_slug(&self) -> String {
@@ -429,6 +480,7 @@ pub fn command_main(ctx: CommandContext, args: TestArgs) -> eyre::Result<ExitCod
             strategy,
             search,
             bisect,
+            interactive,
             jobs,
         } => subcommand_run(
             &effects,
@@ -440,6 +492,7 @@ pub fn command_main(ctx: CommandContext, args: TestArgs) -> eyre::Result<ExitCod
                 strategy,
                 search,
                 bisect,
+                interactive,
                 jobs,
                 verbosity: Verbosity::from(verbosity),
                 apply_fixes: false,
@@ -464,6 +517,7 @@ pub fn command_main(ctx: CommandContext, args: TestArgs) -> eyre::Result<ExitCod
                 strategy: None,
                 search: None,
                 bisect: false,
+                interactive: false,
                 jobs: None,
                 verbosity: Verbosity::from(verbosity),
                 apply_fixes: false,
@@ -492,6 +546,7 @@ pub fn command_main(ctx: CommandContext, args: TestArgs) -> eyre::Result<ExitCod
                 strategy,
                 search: None,
                 bisect: false,
+                interactive: false,
                 jobs,
                 verbosity: Verbosity::from(verbosity),
                 apply_fixes: true,
@@ -571,17 +626,24 @@ fn subcommand_run(
     };
 
     let commits = sorted_commit_set(&repo, &dag, &commit_set)?;
-    let test_results: Result<_, _> = run_tests(
-        effects,
-        git_run_info,
-        &dag,
-        &repo,
-        &event_log_db,
-        event_tx_id,
-        &revset,
-        &commits,
-        &options,
-    );
+    let test_results: Result<_, _> = {
+        let effects = if options.interactive {
+            effects.suppress()
+        } else {
+            effects.clone()
+        };
+        run_tests(
+            &effects,
+            git_run_info,
+            &dag,
+            &repo,
+            &event_log_db,
+            event_tx_id,
+            &revset,
+            &commits,
+            &options,
+        )
+    };
     let abort_trap_exit_code = clear_abort_trap(effects, git_run_info, event_tx_id, abort_trap)?;
     if !abort_trap_exit_code.is_success() {
         return Ok(abort_trap_exit_code);
@@ -780,9 +842,8 @@ enum TestStatus {
     /// Attempting to read cached data failed.
     ReadCacheFailed(String),
 
-    Indeterminate {
-        exit_code: i32,
-    },
+    /// The test command indicated that the commit should be skipped for testing.
+    Indeterminate { exit_code: i32 },
 
     /// The test failed and returned the provided (non-zero) exit code.
     Failed {
@@ -792,6 +853,10 @@ enum TestStatus {
 
         /// The exit code of the process.
         exit_code: i32,
+
+        /// Whether the test was run interactively (the user executed the
+        /// command via `--interactive`).
+        interactive: bool,
     },
 
     /// The test passed and returned a successful exit code.
@@ -799,7 +864,15 @@ enum TestStatus {
         /// Whether or not the result was cached (indicating that we didn't
         /// actually re-run the test).
         cached: bool,
+
+        /// The resulting contents of the working copy after the command was
+        /// executed (if taking a working copy snapshot succeeded and there were
+        /// no merge conflicts, etc.).
         fixed_tree_oid: Option<NonZeroOid>,
+
+        /// Whether the test was run interactively (the user executed the
+        /// command via `--interactive`).
+        interactive: bool,
     },
 }
 
@@ -857,6 +930,8 @@ struct SerializedTestResult {
     command: String,
     exit_code: i32,
     fixed_tree_oid: Option<SerializedNonZeroOid>,
+    #[serde(default)]
+    interactive: bool,
 }
 
 #[instrument]
@@ -900,55 +975,50 @@ fn make_test_status_description(
             .build(),
 
         TestStatus::Failed {
-            cached: false,
+            cached,
+            interactive,
             exit_code,
-        } => StyledStringBuilder::new()
-            .append_styled(format!("Failed (exit code {exit_code}): "), *STYLE_FAILURE)
-            .append(commit.friendly_describe(glyphs)?)
-            .build(),
-
-        TestStatus::Failed {
-            cached: true,
-            exit_code,
-        } => StyledStringBuilder::new()
-            .append_styled(
-                format!("Failed (cached, exit code {exit_code}): "),
-                *STYLE_FAILURE,
-            )
-            .append(commit.friendly_describe(glyphs)?)
-            .build(),
-
-        TestStatus::Passed {
-            cached: false,
-            fixed_tree_oid: None,
-        } => StyledStringBuilder::new()
-            .append_styled("Passed: ", *STYLE_SUCCESS)
-            .append(commit.friendly_describe(glyphs)?)
-            .build(),
+        } => {
+            let mut descriptors = Vec::new();
+            if *cached {
+                descriptors.push("cached".to_string());
+            }
+            descriptors.push(format!("exit code {}", exit_code));
+            if *interactive {
+                descriptors.push("interactive".to_string());
+            }
+            let descriptors = descriptors.join(", ");
+            StyledStringBuilder::new()
+                .append_styled(format!("Failed ({descriptors}): "), *STYLE_FAILURE)
+                .append(commit.friendly_describe(glyphs)?)
+                .build()
+        }
 
         TestStatus::Passed {
-            cached: false,
-            fixed_tree_oid: Some(_),
-        } => StyledStringBuilder::new()
-            .append_styled("Passed (fixed): ", *STYLE_SUCCESS)
-            .append(commit.friendly_describe(glyphs)?)
-            .build(),
-
-        TestStatus::Passed {
-            cached: true,
-            fixed_tree_oid: None,
-        } => StyledStringBuilder::new()
-            .append_styled("Passed (cached): ", *STYLE_SUCCESS)
-            .append(commit.friendly_describe(glyphs)?)
-            .build(),
-
-        TestStatus::Passed {
-            cached: true,
-            fixed_tree_oid: Some(_),
-        } => StyledStringBuilder::new()
-            .append_styled("Passed (cached, fixed): ", *STYLE_SUCCESS)
-            .append(commit.friendly_describe(glyphs)?)
-            .build(),
+            cached,
+            interactive,
+            fixed_tree_oid,
+        } => {
+            let mut descriptors = Vec::new();
+            if *cached {
+                descriptors.push("cached".to_string());
+            }
+            if fixed_tree_oid.is_some() {
+                descriptors.push("fixed".to_string());
+            }
+            if *interactive {
+                descriptors.push("interactive".to_string());
+            }
+            let descriptors = if descriptors.is_empty() {
+                "".to_string()
+            } else {
+                format!(" ({})", descriptors.join(", "))
+            };
+            StyledStringBuilder::new()
+                .append_styled(format!("Passed{descriptors}: "), *STYLE_SUCCESS)
+                .append(commit.friendly_describe(glyphs)?)
+                .build()
+        }
     };
     Ok(description)
 }
@@ -1014,23 +1084,49 @@ impl TestOutput {
                 .collect()
         }
 
-        let stdout_path_line = StyledStringBuilder::new()
-            .append_styled("Stdout: ", Effect::Bold)
-            .append_plain(self.stdout_path.to_string_lossy())
-            .build();
-        let stdout_lines = abbreviate_lines(&self.stdout_path, verbosity);
-        let stderr_path_line = StyledStringBuilder::new()
-            .append_styled("Stderr: ", Effect::Bold)
-            .append_plain(self.stderr_path.to_string_lossy())
-            .build();
-        let stderr_lines = abbreviate_lines(&self.stderr_path, verbosity);
+        let interactive = match self.test_status {
+            TestStatus::CheckoutFailed
+            | TestStatus::SpawnTestFailed(_)
+            | TestStatus::TerminatedBySignal
+            | TestStatus::AlreadyInProgress
+            | TestStatus::ReadCacheFailed(_)
+            | TestStatus::Indeterminate { .. } => false,
+            TestStatus::Failed { interactive, .. } | TestStatus::Passed { interactive, .. } => {
+                interactive
+            }
+        };
+
+        let stdout_lines = {
+            let mut lines = Vec::new();
+            if !interactive {
+                lines.push(
+                    StyledStringBuilder::new()
+                        .append_styled("Stdout: ", Effect::Bold)
+                        .append_plain(self.stdout_path.to_string_lossy())
+                        .build(),
+                );
+                lines.extend(abbreviate_lines(&self.stdout_path, verbosity));
+            }
+            lines
+        };
+        let stderr_lines = {
+            let mut lines = Vec::new();
+            if !interactive {
+                lines.push(
+                    StyledStringBuilder::new()
+                        .append_styled("Stderr: ", Effect::Bold)
+                        .append_plain(self.stderr_path.to_string_lossy())
+                        .build(),
+                );
+                lines.extend(abbreviate_lines(&self.stderr_path, verbosity));
+            }
+            lines
+        };
 
         Ok(StyledStringBuilder::from_lines(
             [
                 &[description],
-                &[stdout_path_line],
                 stdout_lines.as_slice(),
-                &[stderr_path_line],
                 stderr_lines.as_slice(),
             ]
             .concat(),
@@ -1117,7 +1213,8 @@ fn run_tests<'a>(
         command,
         execution_strategy,
         search_strategy,
-        dry_run: _, // Used only in `apply_fixes`.
+        dry_run: _,     // Used only in `apply_fixes`.
+        interactive: _, // Used in `test_commit`.
         jobs,
         verbosity: _,   // Verbosity used by caller to print results.
         fix_options: _, // Whether to apply fixes is checked by `test_commit`, after the working directory is set up.
@@ -1376,11 +1473,13 @@ fn event_loop(
 
                         TestStatus::Failed {
                             cached: _,
+                            interactive: _,
                             exit_code: _,
                         } => search::Status::Failure,
 
                         TestStatus::Passed {
                             cached: _,
+                            interactive: _,
                             fixed_tree_oid: _,
                         } => search::Status::Success,
                     },
@@ -1454,6 +1553,7 @@ fn print_summary(
             TestStatus::Failed {
                 cached,
                 exit_code: _,
+                interactive: _,
             } => {
                 num_failed += 1;
                 if cached {
@@ -1463,6 +1563,7 @@ fn print_summary(
             TestStatus::Passed {
                 cached,
                 fixed_tree_oid: _,
+                interactive: _,
             } => {
                 num_passed += 1;
                 if cached {
@@ -1615,11 +1716,13 @@ fn apply_fixes(
             TestStatus::Passed {
                 cached: _,
                 fixed_tree_oid: Some(fixed_tree_oid),
+                interactive: _,
             } => Some((*commit_oid, fixed_tree_oid)),
 
             TestStatus::Passed {
                 cached: _,
                 fixed_tree_oid: None,
+                interactive: _,
             }
             | TestStatus::CheckoutFailed
             | TestStatus::SpawnTestFailed(_)
@@ -1867,10 +1970,11 @@ fn run_test(
     commit: &Commit,
 ) -> eyre::Result<TestOutput> {
     let ResolvedTestOptions {
-        command: _,
+        command: _, // Used in `test_commit`.
         execution_strategy,
         search_strategy: _, // Caller handles which commits to test.
         dry_run: _,         // Used only in `apply_fixes`.
+        interactive: _,     // Used in `test_commit`.
         jobs: _,            // Caller handles job management.
         verbosity: _,
         fix_options: _, // Checked in `test_commit`.
@@ -1897,7 +2001,8 @@ fn run_test(
                 *execution_strategy,
                 worker_id,
             )? {
-                Err(_) => {
+                Err(err) => {
+                    info!(?err, "Failed to prepare working directory for testing");
                     let TestFiles {
                         lock_file: _, // Drop lock.
                         result_path,
@@ -2039,15 +2144,18 @@ fn make_test_files(
                     command: _,
                     exit_code: 0,
                     fixed_tree_oid,
+                    interactive,
                 }) => TestStatus::Passed {
                     cached: true,
                     fixed_tree_oid: fixed_tree_oid.map(|SerializedNonZeroOid(oid)| oid),
+                    interactive,
                 },
 
                 Ok(SerializedTestResult {
                     command: _,
                     exit_code,
                     fixed_tree_oid: _,
+                    interactive: _,
                 }) if exit_code == INDETERMINATE_EXIT_CODE => {
                     TestStatus::Indeterminate { exit_code }
                 }
@@ -2056,9 +2164,11 @@ fn make_test_files(
                     command: _,
                     exit_code,
                     fixed_tree_oid: _,
+                    interactive,
                 }) => TestStatus::Failed {
                     cached: true,
                     exit_code,
+                    interactive,
                 },
                 Err(err) => TestStatus::ReadCacheFailed(err.to_string()),
             };
@@ -2243,16 +2353,49 @@ fn test_commit(
         stderr_path,
         stderr_file,
     } = test_files;
-    let exit_code = match Command::new(shell_path)
+
+    let mut command = Command::new(shell_path);
+    command
         .arg("-c")
         .arg(&options.command)
-        .current_dir(working_directory)
-        .stdin(Stdio::null())
-        .stdout(stdout_file)
-        .stderr(stderr_file)
-        .output()
-    {
-        Ok(output) => output.status.code(),
+        .current_dir(working_directory);
+
+    if options.interactive {
+        let commit_desc = effects
+            .get_glyphs()
+            .render(commit.friendly_describe(effects.get_glyphs())?)?;
+        let passed = "passed";
+        let exit0 = effects
+            .get_glyphs()
+            .render(StyledString::styled("exit 0", *STYLE_SUCCESS))?;
+        let failed = "failed";
+        let exit1 = effects
+            .get_glyphs()
+            .render(StyledString::styled("exit 1", *STYLE_FAILURE))?;
+        let skipped = "skipped";
+        let exit125 = effects
+            .get_glyphs()
+            .render(StyledString::styled("exit 125", *STYLE_SKIPPED))?;
+
+        // NB: use `println` here instead of
+        // `writeln!(effects.get_output_stream(), ...)` because the effects are
+        // suppressed in interactive mode.
+        println!(
+            "\
+You are now at: {commit_desc}
+To mark this commit as {passed}, run: {exit0}
+To mark this commit as {failed}, run: {exit1}
+To mark this commit as {skipped}, run: {exit125}",
+        );
+    } else {
+        command
+            .stdin(Stdio::null())
+            .stdout(stdout_file)
+            .stderr(stderr_file);
+    }
+
+    let exit_code = match command.status() {
+        Ok(status) => status.code(),
         Err(err) => {
             return Ok(TestOutput {
                 _result_path: result_path,
@@ -2320,6 +2463,7 @@ fn test_commit(
             TestStatus::Passed {
                 cached: false,
                 fixed_tree_oid,
+                interactive: options.interactive,
             }
         }
 
@@ -2328,6 +2472,7 @@ fn test_commit(
         exit_code => TestStatus::Failed {
             cached: false,
             exit_code,
+            interactive: options.interactive,
         },
     };
 
@@ -2338,6 +2483,7 @@ fn test_commit(
             TestStatus::Passed {
                 cached: _,
                 fixed_tree_oid,
+                interactive: _,
             } => (*fixed_tree_oid).map(SerializedNonZeroOid),
             TestStatus::CheckoutFailed
             | TestStatus::SpawnTestFailed(_)
@@ -2347,6 +2493,7 @@ fn test_commit(
             | TestStatus::Failed { .. }
             | TestStatus::Indeterminate { .. } => None,
         },
+        interactive: options.interactive,
     };
     serde_json::to_writer_pretty(result_file, &serialized_test_result)
         .wrap_err_with(|| format!("Writing test status {test_status:?} to {result_path:?}"))?;
