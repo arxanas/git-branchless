@@ -1375,6 +1375,7 @@ dependencies = [
  "scm-bisect",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror",
  "tracing",
 ]

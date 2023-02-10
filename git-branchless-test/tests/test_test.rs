@@ -1813,3 +1813,87 @@ esac
 
     Ok(())
 }
+
+#[test]
+fn test_test_no_cache() -> eyre::Result<()> {
+    // Tests the `--no-cache` flag of `git test run`.
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    git.detach_head()?;
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+
+    git.write_file(
+        "test.sh",
+        r#"#!/bin/bash
+    exit 0
+    "#,
+    )?;
+    {
+        let (stdout, _stderr) = git.branchless("test", &["run", "--exec", "bash test.sh"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> diff --quiet
+        Calling Git for on-disk rebase...
+        branchless: running command: <git-executable> rebase --continue
+        Using test execution strategy: working-copy
+        branchless: running command: <git-executable> rebase --abort
+        ✓ Passed: 62fc20d create test1.txt
+        ✓ Passed: 96d1c37 create test2.txt
+        Tested 2 commits with bash test.sh:
+        2 passed, 0 failed, 0 skipped
+        "###);
+    }
+
+    git.write_file(
+        "test.sh",
+        r#"#!/bin/bash
+    exit 1
+    "#,
+    )?;
+    {
+        let (stdout, _stderr) = git.branchless_with_options(
+            "test",
+            &["run", "--exec", "bash test.sh", "--no-cache"],
+            &GitRunOptions {
+                expected_exit_code: 1,
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> diff --quiet
+        Calling Git for on-disk rebase...
+        branchless: running command: <git-executable> rebase --continue
+        Using test execution strategy: working-copy
+        branchless: running command: <git-executable> rebase --abort
+        X Failed (exit code 1): 62fc20d create test1.txt
+        X Failed (exit code 1): 96d1c37 create test2.txt
+        Tested 2 commits with bash test.sh:
+        0 passed, 2 failed, 0 skipped
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.branchless("test", &["run", "--exec", "bash test.sh"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> diff --quiet
+        Calling Git for on-disk rebase...
+        branchless: running command: <git-executable> rebase --continue
+        Using test execution strategy: working-copy
+        branchless: running command: <git-executable> rebase --abort
+        ✓ Passed (cached): 62fc20d create test1.txt
+        ✓ Passed (cached): 96d1c37 create test2.txt
+        Tested 2 commits with bash test.sh:
+        2 passed, 0 failed, 0 skipped
+        hint: there were 2 cached test results
+        hint: to clear these cached results, run: git test clean "stack() | @"
+        hint: disable this hint by running: git config --global branchless.hint.cleanCachedTestResults false
+        "###);
+    }
+
+    Ok(())
+}

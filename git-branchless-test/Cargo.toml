@@ -25,6 +25,7 @@ rayon = "1.6.1"
 scm-bisect = { version = "0.1.0", path = "../scm-bisect" }
 serde = { version = "1.0.150", features = ["serde_derive", "derive"] }
 serde_json = "1.0.92"
+tempfile = "3.3.0"
 thiserror = "1.0.38"
 tracing = "0.1.37"
 
