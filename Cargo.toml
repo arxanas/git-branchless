@@ -13,6 +13,7 @@ members = [
     "git-branchless-move",
     "git-branchless-navigation",
     "git-branchless-opts",
+    "git-branchless-query",
     "git-branchless-record",
     "git-branchless-revset",
     "git-branchless-reword",

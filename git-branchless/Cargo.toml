@@ -31,6 +31,7 @@ git-branchless-invoke = { version = "0.7.0-pre.1", path = "../git-branchless-inv
 git-branchless-move = { version = "0.7.0-pre.1", path = "../git-branchless-move" }
 git-branchless-navigation = { version = "0.7.0-pre.1", path = "../git-branchless-navigation" }
 git-branchless-opts = { version = "0.7.0-pre.1", path = "../git-branchless-opts" }
+git-branchless-query = { version = "0.7.0-pre.1", path = "../git-branchless-query" }
 git-branchless-record = { version = "0.7.0-pre.1", path = "../git-branchless-record" }
 git-branchless-revset = { version = "0.7.0-pre.1", path = "../git-branchless-revset" }
 git-branchless-reword = { version = "0.7.0-pre.1", path = "../git-branchless-reword" }
@@ -97,9 +98,6 @@ name = "test_move"
 
 [[test]]
 name = "test_navigation"
-
-[[test]]
-name = "test_query"
 
 [[test]]
 name = "test_record"

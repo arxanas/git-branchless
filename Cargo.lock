@@ -1109,6 +1109,7 @@ dependencies = [
  "git-branchless-move",
  "git-branchless-navigation",
  "git-branchless-opts",
+ "git-branchless-query",
  "git-branchless-record",
  "git-branchless-revset",
  "git-branchless-reword",
@@ -1258,6 +1259,21 @@ dependencies = [
  "clap_mangen",
  "git-branchless-lib",
  "itertools 0.10.5",
+]
+
+[[package]]
+name = "git-branchless-query"
+version = "0.7.0-pre.1"
+dependencies = [
+ "esl01-dag",
+ "eyre",
+ "git-branchless-invoke",
+ "git-branchless-lib",
+ "git-branchless-opts",
+ "git-branchless-revset",
+ "insta",
+ "itertools 0.10.5",
+ "tracing",
 ]
 
 [[package]]

@@ -1,6 +1,7 @@
 use std::fmt::Write;
 
 use eden_dag::DagAlgorithm;
+use git_branchless_invoke::CommandContext;
 use itertools::Itertools;
 use lib::core::dag::{commit_set_to_vec, Dag};
 use lib::core::effects::{Effects, OperationType};
@@ -10,11 +11,34 @@ use lib::git::{CategorizedReferenceName, GitRunInfo, Repo};
 use lib::util::ExitCode;
 use tracing::instrument;
 
-use git_branchless_opts::{ResolveRevsetOptions, Revset};
+use git_branchless_opts::{QueryArgs, ResolveRevsetOptions, Revset};
 use git_branchless_revset::resolve_commits;
 
+/// `query` command.
 #[instrument]
-pub fn query(
+pub fn command_main(ctx: CommandContext, args: QueryArgs) -> eyre::Result<ExitCode> {
+    let CommandContext {
+        effects,
+        git_run_info,
+    } = ctx;
+    let QueryArgs {
+        revset,
+        resolve_revset_options,
+        show_branches,
+        raw,
+    } = args;
+    query(
+        &effects,
+        &git_run_info,
+        revset,
+        &resolve_revset_options,
+        show_branches,
+        raw,
+    )
+}
+
+#[instrument]
+fn query(
     effects: &Effects,
     git_run_info: &GitRunInfo,
     query: Revset,
