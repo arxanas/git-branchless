@@ -198,9 +198,9 @@ struct ResolvedTestOptions {
     command: String,
     execution_strategy: TestExecutionStrategy,
     search_strategy: Option<TestSearchStrategy>,
-    dry_run: bool,
-    interactive: bool,
-    jobs: usize,
+    is_dry_run: bool,
+    is_interactive: bool,
+    num_jobs: usize,
     verbosity: Verbosity,
     fix_options: Option<(ExecuteRebasePlanOptions, RebasePlanPermissions)>,
 }
@@ -297,7 +297,7 @@ impl ResolvedTestOptions {
                 }
             },
         };
-        let (resolved_jobs, resolved_execution_strategy, resolved_interactive) = match jobs {
+        let (resolved_num_jobs, resolved_execution_strategy, resolved_interactive) = match jobs {
             None => match (strategy, *interactive) {
                 (Some(TestExecutionStrategy::WorkingCopy), interactive) => {
                     (1, TestExecutionStrategy::WorkingCopy, interactive)
@@ -352,12 +352,12 @@ BUG: Expected resolved_interactive ({resolved_interactive:?}) to match interacti
             return Ok(Err(ExitCode(1)));
         }
 
-        let resolved_jobs = if resolved_jobs == 0 {
+        let resolved_num_jobs = if resolved_num_jobs == 0 {
             num_cpus::get_physical()
         } else {
-            resolved_jobs
+            resolved_num_jobs
         };
-        assert!(resolved_jobs > 0);
+        assert!(resolved_num_jobs > 0);
 
         let fix_options = if *apply_fixes {
             let move_options = match move_options {
@@ -427,9 +427,9 @@ BUG: Expected resolved_interactive ({resolved_interactive:?}) to match interacti
             command: resolved_command,
             execution_strategy: resolved_execution_strategy,
             search_strategy: resolved_search_strategy,
-            dry_run: *dry_run,
-            interactive: resolved_interactive,
-            jobs: resolved_jobs,
+            is_dry_run: *dry_run,
+            is_interactive: resolved_interactive,
+            num_jobs: resolved_num_jobs,
             verbosity: *verbosity,
             fix_options,
         };
@@ -612,7 +612,7 @@ fn subcommand_run(
 
     let commits = sorted_commit_set(&repo, &dag, &commit_set)?;
     let test_results: Result<_, _> = {
-        let effects = if options.interactive {
+        let effects = if options.is_interactive {
             effects.suppress()
         } else {
             effects.clone()
@@ -663,7 +663,7 @@ fn subcommand_run(
             &event_log_db,
             execute_options,
             permissions.clone(),
-            options.dry_run,
+            options.is_dry_run,
             &options.command,
             &test_results,
         )?;
@@ -1197,9 +1197,9 @@ fn run_tests<'a>(
         command,
         execution_strategy,
         search_strategy,
-        dry_run: _,     // Used only in `apply_fixes`.
-        interactive: _, // Used in `test_commit`.
-        jobs,
+        is_dry_run: _,     // Used only in `apply_fixes`.
+        is_interactive: _, // Used in `test_commit`.
+        num_jobs,
         verbosity: _,   // Verbosity used by caller to print results.
         fix_options: _, // Whether to apply fixes is checked by `test_commit`, after the working directory is set up.
     } = &options;
@@ -1317,7 +1317,7 @@ fn run_tests<'a>(
             let (result_tx, result_rx) = crossbeam::channel::unbounded();
             let workers: HashMap<WorkerId, crossbeam::thread::ScopedJoinHandle<()>> = {
                 let mut result = HashMap::new();
-                for worker_id in 1..=*jobs {
+                for worker_id in 1..=*num_jobs {
                     let effects = &effects;
                     let progress = &progress;
                     let shell_path = &shell_path;
@@ -1366,7 +1366,7 @@ fn run_tests<'a>(
                 commit_jobs,
                 search,
                 search_strategy,
-                *jobs,
+                *num_jobs,
                 work_queue.clone(),
                 result_rx,
             );
@@ -2103,9 +2103,9 @@ fn run_test(
         command: _, // Used in `test_commit`.
         execution_strategy,
         search_strategy: _, // Caller handles which commits to test.
-        dry_run: _,         // Used only in `apply_fixes`.
-        interactive: _,     // Used in `test_commit`.
-        jobs: _,            // Caller handles job management.
+        is_dry_run: _,      // Used only in `apply_fixes`.
+        is_interactive: _,  // Used in `test_commit`.
+        num_jobs: _,        // Caller handles job management.
         verbosity: _,
         fix_options,
     } = options;
@@ -2500,7 +2500,7 @@ fn test_commit(
         .env("BRANCHLESS_TEST_COMMIT", commit.get_oid().to_string())
         .env("BRANCHLESS_TEST_COMMAND", options.command.clone());
 
-    if options.interactive {
+    if options.is_interactive {
         let commit_desc = effects
             .get_glyphs()
             .render(commit.friendly_describe(effects.get_glyphs())?)?;
@@ -2621,7 +2621,7 @@ To abort testing entirely, run:      {exit127}",
             TestStatus::Passed {
                 cached: false,
                 fixed_tree_oid,
-                interactive: options.interactive,
+                interactive: options.is_interactive,
             }
         }
 
@@ -2631,7 +2631,7 @@ To abort testing entirely, run:      {exit127}",
         exit_code => TestStatus::Failed {
             cached: false,
             exit_code,
-            interactive: options.interactive,
+            interactive: options.is_interactive,
         },
     };
 
@@ -2653,7 +2653,7 @@ To abort testing entirely, run:      {exit127}",
             | TestStatus::Abort { .. }
             | TestStatus::Indeterminate { .. } => None,
         },
-        interactive: options.interactive,
+        interactive: options.is_interactive,
     };
     serde_json::to_writer_pretty(result_file, &serialized_test_result)
         .wrap_err_with(|| format!("Writing test status {test_status:?} to {result_path:?}"))?;
