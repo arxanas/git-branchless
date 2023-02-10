@@ -425,3 +425,45 @@ fn test_record_insert_merge_conflict() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_record_insert_obsolete_siblings() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+
+    git.detach_head()?;
+    let test1_oid = git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+    git.run(&["commit", "--amend", "-m", "updated message"])?;
+    git.run(&["checkout", &test1_oid.to_string()])?;
+
+    git.write_file_txt("test3", "test3 contents\n")?;
+    git.run(&["add", "."])?;
+    {
+        let (stdout, _stderr) = git.run(&["record", "-I", "-m", "new commit"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        [detached HEAD 1b3a1aa] new commit
+         1 file changed, 1 insertion(+)
+         create mode 100644 test3.txt
+        Attempting rebase in-memory...
+        [1/1] Committed as: 9253fc4 updated message
+        branchless: processing 1 rewritten commit
+        In-memory rebase succeeded.
+        "###);
+    }
+
+    {
+        let stdout = git.smartlog()?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        o 62fc20d create test1.txt
+        |
+        @ 1b3a1aa new commit
+        |
+        o 9253fc4 updated message
+        "###);
+    }
+
+    Ok(())
+}
