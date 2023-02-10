@@ -75,9 +75,7 @@ fn test_profiling() -> eyre::Result<()> {
         },
     )?;
 
-    let entries: Vec<_> = std::fs::read_dir(&git.repo_path)?
-        .into_iter()
-        .try_collect()?;
+    let entries: Vec<_> = std::fs::read_dir(&git.repo_path)?.try_collect()?;
     assert!(entries
         .iter()
         .any(|entry| entry.file_name().to_str().unwrap().contains("trace-")));
