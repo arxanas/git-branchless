@@ -308,6 +308,7 @@ fn insert_before_siblings(
     let parents = dag.query().parents(head_commit_set.clone())?;
     let children = dag.query().children(parents)?;
     let siblings = children.difference(&head_commit_set);
+    let siblings = dag.filter_visible_commits(siblings)?;
     let build_options = BuildRebasePlanOptions {
         force_rewrite_public_commits: false,
         dump_rebase_constraints: false,
