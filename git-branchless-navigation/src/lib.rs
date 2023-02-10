@@ -1,7 +1,12 @@
 //! Convenience commands to help the user move through a stack of commits.
 
 #![warn(missing_docs)]
-#![warn(clippy::all, clippy::as_conversions, clippy::clone_on_ref_ptr)]
+#![warn(
+    clippy::all,
+    clippy::as_conversions,
+    clippy::clone_on_ref_ptr,
+    clippy::dbg_macro
+)]
 #![allow(clippy::too_many_arguments, clippy::blocks_in_if_conditions)]
 
 pub mod prompt;

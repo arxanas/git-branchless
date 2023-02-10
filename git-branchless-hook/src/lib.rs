@@ -7,6 +7,15 @@
 //! The hooks are installed by the `branchless init` command. This module
 //! contains the implementations for the hooks.
 
+#![warn(missing_docs)]
+#![warn(
+    clippy::all,
+    clippy::as_conversions,
+    clippy::clone_on_ref_ptr,
+    clippy::dbg_macro
+)]
+#![allow(clippy::too_many_arguments, clippy::blocks_in_if_conditions)]
+
 use std::fmt::Write;
 use std::io::{stdin, BufRead};
 use std::time::SystemTime;
