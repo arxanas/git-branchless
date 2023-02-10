@@ -2444,7 +2444,9 @@ fn test_commit(
     command
         .arg("-c")
         .arg(&options.command)
-        .current_dir(working_directory);
+        .current_dir(working_directory)
+        .env("BRANCHLESS_TEST_COMMIT", commit.get_oid().to_string())
+        .env("BRANCHLESS_TEST_COMMAND", options.command.clone());
 
     if options.interactive {
         let commit_desc = effects

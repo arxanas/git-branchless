@@ -1637,3 +1637,39 @@ fi
 
     Ok(())
 }
+
+#[cfg(unix)] // Paths don't match on Windows.
+#[test]
+fn test_test_sets_env_vars() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+
+    git.write_file(
+        "test.sh",
+        r#"#!/bin/sh
+echo "Commit is: $BRANCHLESS_TEST_COMMIT"
+echo "Command is: $BRANCHLESS_TEST_COMMAND"
+"#,
+    )?;
+    {
+        let (stdout, _stderr) =
+            git.branchless("test", &["run", "--exec", "bash test.sh", "HEAD", "-vv"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> diff --quiet
+        Calling Git for on-disk rebase...
+        branchless: running command: <git-executable> rebase --continue
+        Using test execution strategy: working-copy
+        branchless: running command: <git-executable> rebase --abort
+        ✓ Passed: f777ecc create initial.txt
+        Stdout: <repo-path>/.git/branchless/test/d32758e20028dd1cffc2b359bc3766f80a258ee5/bash__test.sh/stdout
+        Commit is: f777ecc9b0db5ed372b2615695191a8a17f79f24
+        Command is: bash test.sh
+        Stderr: <repo-path>/.git/branchless/test/d32758e20028dd1cffc2b359bc3766f80a258ee5/bash__test.sh/stderr
+        <no output>
+        Tested 1 commit with bash test.sh:
+        1 passed, 0 failed, 0 skipped
+        "###);
+    }
+
+    Ok(())
+}
