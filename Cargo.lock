@@ -1347,13 +1347,16 @@ dependencies = [
  "git-branchless-lib",
  "git-branchless-opts",
  "git-branchless-revset",
+ "indexmap",
  "insta",
  "itertools 0.10.5",
  "lazy_static",
+ "maplit",
  "num_cpus",
  "rayon",
  "serde",
  "serde_json",
+ "thiserror",
  "tracing",
 ]
 
@@ -1792,6 +1795,12 @@ checksum = "ebf5fa795187a80147b1ac10aaedcf5ffd3bbeb1838bda61801a1c9ad700a1c9"
 dependencies = [
  "roff 0.1.0",
 ]
+
+[[package]]
+name = "maplit"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3e2e65a1a2e43cfcb47a895c4c8b10d1f4a61097f9f254f183aee60cad9c651d"
 
 [[package]]
 name = "matchers"
@@ -2559,6 +2568,17 @@ name = "scanlex"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "088c5d71572124929ea7549a8ce98e1a6fd33d0a38367b09027b382e67c033db"
+
+[[package]]
+name = "scm-bisect"
+version = "0.1.0"
+dependencies = [
+ "indexmap",
+ "insta",
+ "itertools 0.10.5",
+ "maplit",
+ "thiserror",
+]
 
 [[package]]
 name = "scopeguard"

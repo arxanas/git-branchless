@@ -1,0 +1,15 @@
+[package]
+name = "scm-bisect"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+indexmap = "1"
+itertools = "0.10"
+thiserror = "1"
+
+[dev-dependencies]
+insta = "1"
+maplit = "1"

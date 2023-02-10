@@ -21,6 +21,7 @@ members = [
     "git-branchless-undo",
     "git-branchless",
     "git-record",
+    "scm-bisect",
 ]
 
 [workspace.metadata.release]
