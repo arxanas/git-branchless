@@ -1685,3 +1685,131 @@ echo "Command is: $BRANCHLESS_TEST_COMMAND"
 
     Ok(())
 }
+
+#[test]
+fn test_test_revsets() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    git.detach_head()?;
+    let test1_oid = git.commit_file("test1", 1)?;
+    let test2_oid = git.commit_file("test2", 2)?;
+    let test3_oid = git.commit_file("test3", 3)?;
+    let test4_oid = git.commit_file("test4", 4)?;
+
+    {
+        let (stdout, stderr) = git.branchless_with_options(
+            "query",
+            &["tests.passed()"],
+            &GitRunOptions {
+                expected_exit_code: 1,
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stderr, @r###"
+        Evaluation error for expression 'tests.passed()': there was no latest command run with `git test`; try running `git test` first
+        "###);
+        insta::assert_snapshot!(stdout, @"");
+    }
+
+    git.write_file(
+        "test.sh",
+        &format!(
+            r#"#!/bin/bash
+case "$(git rev-parse HEAD)" in
+    {test1_oid})
+        echo "Updated contents" >test1.txt
+        exit 0
+        ;;
+    {test2_oid})
+        exit 1
+        ;;
+    {test3_oid})
+        exit 125
+        ;;
+    {test4_oid})
+        exit 0
+        ;;
+    *)
+        exit 127
+        ;;
+esac
+"#
+        ),
+    )?;
+
+    {
+        let (stdout, stderr) = git.branchless_with_options(
+            "test",
+            &["run", "--exec", "bash test.sh"],
+            &GitRunOptions {
+                expected_exit_code: 1,
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stderr, @r###"
+        Stopped at 355e173 (create test4.txt)
+        branchless: processing 1 update: ref HEAD
+        "###);
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> diff --quiet
+        Calling Git for on-disk rebase...
+        branchless: running command: <git-executable> rebase --continue
+        Using test execution strategy: working-copy
+        branchless: running command: <git-executable> rebase --abort
+        ✓ Passed (fixable): 62fc20d create test1.txt
+        X Failed (exit code 1): 96d1c37 create test2.txt
+        ⚠️ Exit code indicated to skip this commit (exit code 125): 70deb1e create test3.txt
+        ✓ Passed: 355e173 create test4.txt
+        Tested 4 commits with bash test.sh:
+        2 passed, 1 failed, 1 skipped
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.branchless("query", &["tests.passed()"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        62fc20d create test1.txt
+        355e173 create test4.txt
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.branchless("query", &["tests.failed()"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        96d1c37 create test2.txt
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.branchless("query", &["tests.fixable()"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        62fc20d create test1.txt
+        "###);
+    }
+
+    git.branchless("test", &["run", "--exec", "exit 0"])?;
+    {
+        let (stdout, _stderr) = git.branchless("query", &["tests.passed()"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        62fc20d create test1.txt
+        96d1c37 create test2.txt
+        70deb1e create test3.txt
+        355e173 create test4.txt
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.branchless("query", &["tests.passed('bash test.sh')"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        62fc20d create test1.txt
+        355e173 create test4.txt
+        "###);
+    }
+
+    Ok(())
+}

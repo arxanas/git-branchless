@@ -11,6 +11,33 @@ use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 
 use super::{Commit, NonZeroOid, Repo};
 
+/// The exit status to use when a test command succeeds.
+pub const TEST_SUCCESS_EXIT_CODE: i32 = 0;
+
+/// The exit status to use when a test command intends to skip the provided commit.
+/// This exit code is used officially by several source control systems:
+///
+/// - Git: "Note that the script (my_script in the above example) should exit
+/// with code 0 if the current source code is good/old, and exit with a code
+/// between 1 and 127 (inclusive), except 125, if the current source code is
+/// bad/new."
+/// - Mercurial: "The exit status of the command will be used to mark revisions
+/// as good or bad: status 0 means good, 125 means to skip the revision, 127
+/// (command not found) will abort the bisection, and any other non-zero exit
+/// status means the revision is bad."
+///
+/// And it's become the de-facto standard for custom bisection scripts for other
+/// source control systems as well.
+pub const TEST_INDETERMINATE_EXIT_CODE: i32 = 125;
+
+/// Similarly to `INDETERMINATE_EXIT_CODE`, this exit code is used officially by
+/// `git-bisect` and others to abort the process. It's also typically raised by
+/// the shell when the command is not found, so it's technically ambiguous
+/// whether the command existed or not. Nonetheless, it's intuitive for a
+/// failure to run a given command to abort the process altogether, so it
+/// shouldn't be too confusing in practice.
+pub const TEST_ABORT_EXIT_CODE: i32 = 127;
+
 /// Convert a command string into a string that's safe to use as a filename.
 pub fn make_test_command_slug(command: String) -> String {
     command.replace(['/', ' ', '\n'], "__")
@@ -70,4 +97,9 @@ pub fn get_test_locks_dir(repo: &Repo) -> PathBuf {
 /// Get the directory where the worktrees for running tests are stored.
 pub fn get_test_worktrees_dir(repo: &Repo) -> PathBuf {
     get_test_dir(repo).join("worktrees")
+}
+
+/// Get the path to the file where the latest test command is stored.
+pub fn get_latest_test_command_path(repo: &Repo) -> PathBuf {
+    get_test_dir(repo).join("latest-command")
 }

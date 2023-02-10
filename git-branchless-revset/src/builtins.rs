@@ -3,7 +3,11 @@ use eden_dag::DagAlgorithm;
 use lib::core::dag::CommitSet;
 use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::rewrite::find_rewrite_target;
-use lib::git::{Commit, MaybeZeroOid, NonZeroOid, Repo};
+use lib::git::{
+    get_latest_test_command_path, get_test_tree_dir, Commit, MaybeZeroOid, NonZeroOid, Repo,
+    SerializedNonZeroOid, SerializedTestResult, TEST_ABORT_EXIT_CODE, TEST_INDETERMINATE_EXIT_CODE,
+    TEST_SUCCESS_EXIT_CODE,
+};
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -13,9 +17,10 @@ use eyre::Context as EyreContext;
 use lazy_static::lazy_static;
 
 use crate::eval::{
-    eval0, eval0_or_1, eval1, eval1_pattern, eval2, eval_number_rhs, Context, EvalError, EvalResult,
+    eval0, eval0_or_1, eval0_or_1_pattern, eval1, eval1_pattern, eval2, eval_number_rhs, Context,
+    EvalError, EvalResult,
 };
-use crate::pattern::make_pattern_matcher_set;
+use crate::pattern::{make_pattern_matcher_set, Pattern};
 use crate::pattern::{PatternError, PatternMatcher};
 use crate::Expr;
 
@@ -55,6 +60,9 @@ lazy_static! {
             ("committer.date", &fn_committer_date),
             ("exactly", &fn_exactly),
             ("current", &fn_current),
+            ("tests.passed", &fn_tests_passed),
+            ("tests.failed", &fn_tests_failed),
+            ("tests.fixable", &fn_tests_fixable),
         ];
         functions.iter().cloned().collect()
     };
@@ -528,4 +536,125 @@ fn fn_current(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
         }
     }
     Ok(result.into_iter().collect::<CommitSet>())
+}
+
+fn read_all_test_results(repo: &Repo, commit: &Commit) -> Option<Vec<SerializedTestResult>> {
+    let commit_test_dir = get_test_tree_dir(repo, commit);
+    let mut all_results = Vec::new();
+    for dir in std::fs::read_dir(commit_test_dir).ok()? {
+        let dir = dir.ok()?;
+        if dir.file_type().ok()?.is_dir() {
+            let result_path = dir.path().join("result");
+            let result_contents = std::fs::read_to_string(result_path).ok()?;
+            let result: SerializedTestResult = serde_json::from_str(&result_contents).ok()?;
+            all_results.push(result);
+        }
+    }
+    Some(all_results)
+}
+
+fn read_latest_test_command(repo: &Repo) -> Option<String> {
+    let latest_command_path = get_latest_test_command_path(repo);
+    let latest_command = std::fs::read_to_string(latest_command_path).ok()?;
+    Some(latest_command)
+}
+
+fn eval_test_command_pattern(
+    ctx: &mut Context,
+    name: &str,
+    args: &[Expr],
+) -> Result<Pattern, EvalError> {
+    match eval0_or_1_pattern(ctx, name, args)? {
+        Some(pattern) => Ok(pattern),
+        None => {
+            let latest_test_command =
+                read_latest_test_command(ctx.repo).ok_or(EvalError::NoLatestTestCommand)?;
+            Ok(Pattern::Exact(latest_test_command))
+        }
+    }
+}
+
+#[instrument]
+fn fn_tests_passed(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+    let pattern = eval_test_command_pattern(ctx, name, args)?;
+    make_pattern_matcher(
+        ctx,
+        name,
+        args,
+        Box::new(move |repo: &Repo, commit: &Commit| {
+            let result = read_all_test_results(repo, commit)
+                .unwrap_or_default()
+                .into_iter()
+                .any(|test_result| {
+                    let SerializedTestResult {
+                        command,
+                        exit_code,
+                        fixed_tree_oid: _,
+                        interactive: _,
+                    } = test_result;
+                    exit_code == TEST_SUCCESS_EXIT_CODE && pattern.matches_text(&command)
+                });
+            Ok(result)
+        }),
+    )
+}
+
+#[instrument]
+fn fn_tests_failed(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+    let pattern = eval_test_command_pattern(ctx, name, args)?;
+    make_pattern_matcher(
+        ctx,
+        name,
+        args,
+        Box::new(move |repo: &Repo, commit: &Commit| {
+            let result = read_all_test_results(repo, commit)
+                .unwrap_or_default()
+                .into_iter()
+                .any(|test_result| {
+                    let SerializedTestResult {
+                        command,
+                        exit_code,
+                        fixed_tree_oid: _,
+                        interactive: _,
+                    } = test_result;
+                    exit_code != TEST_SUCCESS_EXIT_CODE
+                        && exit_code != TEST_INDETERMINATE_EXIT_CODE
+                        && exit_code != TEST_ABORT_EXIT_CODE
+                        && pattern.matches_text(&command)
+                });
+            Ok(result)
+        }),
+    )
+}
+
+#[instrument]
+fn fn_tests_fixable(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+    let pattern = eval_test_command_pattern(ctx, name, args)?;
+    make_pattern_matcher(
+        ctx,
+        name,
+        args,
+        Box::new(move |repo: &Repo, commit: &Commit| {
+            let result = read_all_test_results(repo, commit)
+                .unwrap_or_default()
+                .into_iter()
+                .any(|test_result| {
+                    let SerializedTestResult {
+                        command,
+                        exit_code,
+                        fixed_tree_oid,
+                        interactive: _,
+                    } = test_result;
+                    exit_code == TEST_SUCCESS_EXIT_CODE
+                        && pattern.matches_text(&command)
+                        && match fixed_tree_oid {
+                            None => false,
+                            Some(SerializedNonZeroOid(fixed_tree_oid)) => {
+                                commit.get_tree_oid() != MaybeZeroOid::NonZero(fixed_tree_oid)
+                            }
+                        }
+                });
+            Ok(result)
+        }),
+    )
 }

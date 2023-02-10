@@ -78,6 +78,9 @@ pub enum EvalError {
     #[error("expected a text-matching pattern, but got a call to function: {function_name}")]
     ExpectedPatternNotFunction { function_name: String },
 
+    #[error("there was no latest command run with `git test`; try running `git test` first")]
+    NoLatestTestCommand,
+
     #[error(transparent)]
     PatternError(#[from] PatternError),
 
@@ -254,6 +257,23 @@ pub(super) fn eval1(ctx: &mut Context, function_name: &str, args: &[Expr]) -> Ev
         args => Err(EvalError::ArityMismatch {
             function_name: function_name.to_string(),
             expected_arities: vec![1],
+            actual_arity: args.len(),
+        }),
+    }
+}
+
+#[instrument]
+pub(super) fn eval0_or_1_pattern(
+    ctx: &mut Context,
+    function_name: &str,
+    args: &[Expr],
+) -> Result<Option<Pattern>, EvalError> {
+    match args {
+        [] => Ok(None),
+        [_] => eval1_pattern(ctx, function_name, args).map(Some),
+        args => Err(EvalError::ArityMismatch {
+            function_name: function_name.to_string(),
+            expected_arities: vec![0, 1],
             actual_arity: args.len(),
         }),
     }
