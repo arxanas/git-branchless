@@ -49,13 +49,13 @@ use lib::core::rewrite::{
     RebaseCommand, RebasePlan, RebasePlanBuilder, RebasePlanPermissions, RepoResource,
 };
 use lib::git::{
-    Commit, ConfigRead, GitRunInfo, GitRunResult, MaybeZeroOid, NonZeroOid, Repo,
-    WorkingCopyChangesType,
+    get_test_locks_dir, get_test_tree_dir, get_test_worktrees_dir, make_test_command_slug, Commit,
+    ConfigRead, GitRunInfo, GitRunResult, MaybeZeroOid, NonZeroOid, Repo, SerializedNonZeroOid,
+    SerializedTestResult, WorkingCopyChangesType,
 };
 use lib::util::{get_sh, ExitCode};
 use rayon::ThreadPoolBuilder;
 use scm_bisect::search;
-use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use thiserror::Error;
 use tracing::{debug, info, instrument, warn};
 
@@ -461,7 +461,7 @@ BUG: Expected resolved_interactive ({resolved_interactive:?}) to match interacti
     }
 
     fn make_command_slug(&self) -> String {
-        self.command.replace(['/', ' ', '\n'], "__")
+        make_test_command_slug(self.command.clone())
     }
 }
 
@@ -921,34 +921,6 @@ impl TestStatus {
 struct TestingAbortedError {
     commit_oid: NonZeroOid,
     exit_code: i32,
-}
-
-#[derive(Debug)]
-struct SerializedNonZeroOid(NonZeroOid);
-
-impl Serialize for SerializedNonZeroOid {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        serializer.serialize_str(&self.0.to_string())
-    }
-}
-
-impl<'de> Deserialize<'de> for SerializedNonZeroOid {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let s = String::deserialize(deserializer)?;
-        let oid: NonZeroOid = s.parse().map_err(|_| {
-            de::Error::invalid_value(de::Unexpected::Str(&s), &"a valid non-zero OID")
-        })?;
-        Ok(SerializedNonZeroOid(oid))
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct SerializedTestResult {
-    command: String,
-    exit_code: i32,
-    fixed_tree_oid: Option<SerializedNonZeroOid>,
-    #[serde(default)]
-    interactive: bool,
 }
 
 #[instrument]
@@ -2252,9 +2224,7 @@ fn make_test_files(
     commit: &Commit,
     options: &ResolvedTestOptions,
 ) -> eyre::Result<TestFilesResult> {
-    let test_output_dir = repo.get_test_dir();
-    let tree_oid = commit.get_tree_oid();
-    let tree_dir = test_output_dir.join(tree_oid.to_string());
+    let tree_dir = get_test_tree_dir(repo, commit);
     std::fs::create_dir_all(&tree_dir)
         .wrap_err_with(|| format!("Creating tree directory {tree_dir:?}"))?;
 
@@ -2379,7 +2349,7 @@ fn prepare_working_directory(
     strategy: TestExecutionStrategy,
     worker_id: WorkerId,
 ) -> eyre::Result<Result<PreparedWorkingDirectory, PrepareWorkingDirectoryError>> {
-    let test_lock_dir_path = repo.get_test_dir().join("locks");
+    let test_lock_dir_path = get_test_locks_dir(repo);
     std::fs::create_dir_all(&test_lock_dir_path)
         .wrap_err_with(|| format!("Creating test lock dir path: {test_lock_dir_path:?}"))?;
 
@@ -2428,7 +2398,7 @@ fn prepare_working_directory(
         }
 
         TestExecutionStrategy::Worktree => {
-            let parent_dir = repo.get_test_dir().join("worktrees");
+            let parent_dir = get_test_worktrees_dir(repo);
             std::fs::create_dir_all(&parent_dir)
                 .wrap_err_with(|| format!("Creating worktree parent dir at {parent_dir:?}"))?;
 
@@ -2818,18 +2788,9 @@ pub fn subcommand_clean(
             }
         };
 
-    let test_dir = repo.get_test_dir();
-    if !test_dir.exists() {
-        writeln!(
-            effects.get_output_stream(),
-            "No cached test results to clean."
-        )?;
-    }
-
     let mut num_cleaned_commits = 0;
     for commit in sorted_commit_set(&repo, &dag, &commit_set)? {
-        let tree_oid = commit.get_tree_oid();
-        let tree_dir = test_dir.join(tree_oid.to_string());
+        let tree_dir = get_test_tree_dir(&repo, &commit);
         if tree_dir.exists() {
             writeln!(
                 effects.get_output_stream(),
