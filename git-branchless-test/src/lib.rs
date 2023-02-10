@@ -57,6 +57,7 @@ use lib::git::{
 use lib::util::{get_sh, ExitCode};
 use rayon::ThreadPoolBuilder;
 use scm_bisect::search;
+use tempfile::TempDir;
 use thiserror::Error;
 use tracing::{debug, info, instrument, warn};
 
@@ -123,6 +124,9 @@ struct RawTestOptions {
 
     /// Shorthand for the binary search strategy.
     pub bisect: bool,
+
+    /// Don't read or write to the cache when executing the test commands.
+    pub no_cache: bool,
 
     /// Whether to run interactively.
     pub interactive: bool,
@@ -199,6 +203,7 @@ struct ResolvedTestOptions {
     execution_strategy: TestExecutionStrategy,
     search_strategy: Option<TestSearchStrategy>,
     is_dry_run: bool,
+    use_cache: bool,
     is_interactive: bool,
     num_jobs: usize,
     verbosity: Verbosity,
@@ -224,6 +229,7 @@ impl ResolvedTestOptions {
             strategy,
             search,
             bisect,
+            no_cache,
             interactive,
             jobs,
             verbosity,
@@ -427,6 +433,7 @@ BUG: Expected resolved_interactive ({resolved_interactive:?}) to match interacti
             command: resolved_command,
             execution_strategy: resolved_execution_strategy,
             search_strategy: resolved_search_strategy,
+            use_cache: !no_cache,
             is_dry_run: *dry_run,
             is_interactive: resolved_interactive,
             num_jobs: resolved_num_jobs,
@@ -465,6 +472,7 @@ pub fn command_main(ctx: CommandContext, args: TestArgs) -> eyre::Result<ExitCod
             strategy,
             search,
             bisect,
+            no_cache,
             interactive,
             jobs,
         } => subcommand_run(
@@ -477,6 +485,7 @@ pub fn command_main(ctx: CommandContext, args: TestArgs) -> eyre::Result<ExitCod
                 strategy,
                 search,
                 bisect,
+                no_cache,
                 interactive,
                 jobs,
                 verbosity: Verbosity::from(verbosity),
@@ -502,6 +511,7 @@ pub fn command_main(ctx: CommandContext, args: TestArgs) -> eyre::Result<ExitCod
                 strategy: None,
                 search: None,
                 bisect: false,
+                no_cache: false,
                 interactive: false,
                 jobs: None,
                 verbosity: Verbosity::from(verbosity),
@@ -519,6 +529,7 @@ pub fn command_main(ctx: CommandContext, args: TestArgs) -> eyre::Result<ExitCod
             resolve_revset_options,
             verbosity,
             strategy,
+            no_cache,
             jobs,
             move_options,
         } => subcommand_run(
@@ -531,6 +542,7 @@ pub fn command_main(ctx: CommandContext, args: TestArgs) -> eyre::Result<ExitCod
                 strategy,
                 search: None,
                 bisect: false,
+                no_cache,
                 interactive: false,
                 jobs,
                 verbosity: Verbosity::from(verbosity),
@@ -802,6 +814,10 @@ fn clear_abort_trap(
 
 #[derive(Debug)]
 struct TestOutput {
+    /// Only used for `--no-cache` invocations, to ensure that we don't clobber
+    /// an existing cached entry.
+    _temp_dir: Option<TempDir>,
+
     _result_path: PathBuf,
     stdout_path: PathBuf,
     stderr_path: PathBuf,
@@ -1197,6 +1213,7 @@ fn run_tests<'a>(
         command,
         execution_strategy,
         search_strategy,
+        use_cache: _,      // Used only in `make_test_files`.
         is_dry_run: _,     // Used only in `apply_fixes`.
         is_interactive: _, // Used in `test_commit`.
         num_jobs,
@@ -2103,6 +2120,7 @@ fn run_test(
         command: _, // Used in `test_commit`.
         execution_strategy,
         search_strategy: _, // Caller handles which commits to test.
+        use_cache: _,       // Used only in `make_test_files`.
         is_dry_run: _,      // Used only in `apply_fixes`.
         is_interactive: _,  // Used in `test_commit`.
         num_jobs: _,        // Caller handles job management.
@@ -2134,6 +2152,7 @@ fn run_test(
                 Err(err) => {
                     info!(?err, "Failed to prepare working directory for testing");
                     let TestFiles {
+                        temp_dir,
                         lock_file: _, // Drop lock.
                         result_path,
                         result_file: _,
@@ -2143,6 +2162,7 @@ fn run_test(
                         stderr_file: _,
                     } = test_files;
                     TestOutput {
+                        _temp_dir: temp_dir,
                         _result_path: result_path,
                         stdout_path,
                         stderr_path,
@@ -2213,6 +2233,7 @@ fn run_test(
 
 #[derive(Debug)]
 struct TestFiles {
+    temp_dir: Option<TempDir>,
     lock_file: LockFile,
     result_path: PathBuf,
     result_file: File,
@@ -2234,6 +2255,40 @@ fn make_test_files(
     commit: &Commit,
     options: &ResolvedTestOptions,
 ) -> eyre::Result<TestFilesResult> {
+    if !options.use_cache {
+        let temp_dir = tempfile::tempdir().context("Creating temporary directory")?;
+        let lock_path = temp_dir.path().join("pid.lock");
+        let mut lock_file = LockFile::open(&lock_path)
+            .wrap_err_with(|| format!("Opening lock file {lock_path:?}"))?;
+        if !lock_file.try_lock_with_pid()? {
+            warn!(
+                ?temp_dir,
+                ?lock_file,
+                "Could not acquire lock despite being in a temporary directory"
+            );
+        }
+
+        let result_path = temp_dir.path().join("result");
+        let stdout_path = temp_dir.path().join("stdout");
+        let stderr_path = temp_dir.path().join("stderr");
+        let result_file = File::create(&result_path)
+            .wrap_err_with(|| format!("Opening result file {result_path:?}"))?;
+        let stdout_file = File::create(&stdout_path)
+            .wrap_err_with(|| format!("Opening stdout file {stdout_path:?}"))?;
+        let stderr_file = File::create(&stderr_path)
+            .wrap_err_with(|| format!("Opening stderr file {stderr_path:?}"))?;
+        return Ok(TestFilesResult::NotCached(TestFiles {
+            temp_dir: Some(temp_dir),
+            lock_file,
+            result_path,
+            result_file,
+            stdout_path,
+            stdout_file,
+            stderr_path,
+            stderr_file,
+        }));
+    }
+
     let tree_dir = get_test_tree_dir(repo, commit);
     std::fs::create_dir_all(&tree_dir)
         .wrap_err_with(|| format!("Creating tree directory {tree_dir:?}"))?;
@@ -2254,6 +2309,7 @@ fn make_test_files(
         .wrap_err_with(|| format!("Locking file {lock_path:?}"))?
     {
         return Ok(TestFilesResult::Cached(TestOutput {
+            _temp_dir: None,
             _result_path: result_path,
             stdout_path,
             stderr_path,
@@ -2311,6 +2367,7 @@ fn make_test_files(
                 Err(err) => TestStatus::ReadCacheFailed(err.to_string()),
             };
             return Ok(TestFilesResult::Cached(TestOutput {
+                _temp_dir: None,
                 _result_path: result_path,
                 stdout_path,
                 stderr_path,
@@ -2326,6 +2383,7 @@ fn make_test_files(
     let stderr_file = File::create(&stderr_path)
         .wrap_err_with(|| format!("Opening stderr file {stderr_path:?}"))?;
     Ok(TestFilesResult::NotCached(TestFiles {
+        temp_dir: None,
         lock_file,
         result_path,
         result_file,
@@ -2483,6 +2541,7 @@ fn test_commit(
     commit: &Commit,
 ) -> eyre::Result<TestOutput> {
     let TestFiles {
+        temp_dir,
         lock_file: _lock_file, // Make sure not to drop lock.
         result_path,
         result_file,
@@ -2556,6 +2615,7 @@ To abort testing entirely, run:      {exit127}",
         Ok(status) => status.code(),
         Err(err) => {
             return Ok(TestOutput {
+                _temp_dir: temp_dir,
                 _result_path: result_path,
                 stdout_path,
                 stderr_path,
@@ -2567,6 +2627,7 @@ To abort testing entirely, run:      {exit127}",
         Some(exit_code) => exit_code,
         None => {
             return Ok(TestOutput {
+                _temp_dir: temp_dir,
                 _result_path: result_path,
                 stdout_path,
                 stderr_path,
@@ -2659,6 +2720,7 @@ To abort testing entirely, run:      {exit127}",
         .wrap_err_with(|| format!("Writing test status {test_status:?} to {result_path:?}"))?;
 
     Ok(TestOutput {
+        _temp_dir: temp_dir,
         _result_path: result_path,
         stdout_path,
         stderr_path,
