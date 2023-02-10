@@ -581,12 +581,6 @@ impl Repo {
         self.get_path().join("branchless").join("man")
     }
 
-    /// Get the directory where the results of running tests are stored.
-    #[instrument]
-    pub fn get_test_dir(&self) -> PathBuf {
-        self.get_path().join("branchless").join("test")
-    }
-
     /// Get a directory suitable for storing temporary files.
     ///
     /// In particular, this directory is guaranteed to be on the same filesystem
