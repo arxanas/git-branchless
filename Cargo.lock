@@ -1311,6 +1311,7 @@ dependencies = [
  "lazy_static",
  "rayon",
  "regex",
+ "serde_json",
  "thiserror",
  "tracing",
 ]

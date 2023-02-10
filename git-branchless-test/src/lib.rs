@@ -49,9 +49,10 @@ use lib::core::rewrite::{
     RebaseCommand, RebasePlan, RebasePlanBuilder, RebasePlanPermissions, RepoResource,
 };
 use lib::git::{
-    get_test_locks_dir, get_test_tree_dir, get_test_worktrees_dir, make_test_command_slug, Commit,
-    ConfigRead, GitRunInfo, GitRunResult, MaybeZeroOid, NonZeroOid, Repo, SerializedNonZeroOid,
-    SerializedTestResult, WorkingCopyChangesType,
+    get_latest_test_command_path, get_test_locks_dir, get_test_tree_dir, get_test_worktrees_dir,
+    make_test_command_slug, Commit, ConfigRead, GitRunInfo, GitRunResult, MaybeZeroOid, NonZeroOid,
+    Repo, SerializedNonZeroOid, SerializedTestResult, WorkingCopyChangesType, TEST_ABORT_EXIT_CODE,
+    TEST_INDETERMINATE_EXIT_CODE, TEST_SUCCESS_EXIT_CODE,
 };
 use lib::util::{get_sh, ExitCode};
 use rayon::ThreadPoolBuilder;
@@ -75,30 +76,6 @@ lazy_static! {
     static ref STYLE_SKIPPED: Style =
         Style::merge(&[BaseColor::Yellow.light().into(), Effect::Bold.into()]);
 }
-
-/// The exit status to use when a test command intends to skip the provided commit.
-/// This exit code is used officially by several source control systems:
-///
-/// - Git: "Note that the script (my_script in the above example) should exit
-/// with code 0 if the current source code is good/old, and exit with a code
-/// between 1 and 127 (inclusive), except 125, if the current source code is
-/// bad/new."
-/// - Mercurial: "The exit status of the command will be used to mark revisions
-/// as good or bad: status 0 means good, 125 means to skip the revision, 127
-/// (command not found) will abort the bisection, and any other non-zero exit
-/// status means the revision is bad."
-///
-/// And it's become the de-facto standard for custom bisection scripts for other
-/// source control systems as well.
-const INDETERMINATE_EXIT_CODE: i32 = 125;
-
-/// Similarly to `INDETERMINATE_EXIT_CODE`, this exit code is used officially by
-/// `git-bisect` and others to abort the process. It's also typically raised by
-/// the shell when the command is not found, so it's technically ambiguous
-/// whether the command existed or not. Nonetheless, it's intuitive for a
-/// failure to run a given command to abort the process altogether, so it
-/// shouldn't be too confusing in practice.
-const ABORT_EXIT_CODE: i32 = 127;
 
 /// How verbose of output to produce.
 #[derive(Clone, Copy, Debug, Ord, PartialOrd, Eq, PartialEq)]
@@ -670,6 +647,7 @@ fn subcommand_run(
         &options.command,
         &test_results,
         options.search_strategy.is_some(),
+        options.fix_options.is_some(),
         &options.verbosity,
     )?;
     if !exit_code.is_success() {
@@ -928,6 +906,7 @@ fn make_test_status_description(
     glyphs: &Glyphs,
     commit: &Commit,
     test_status: &TestStatus,
+    apply_fixes: bool,
 ) -> eyre::Result<StyledString> {
     let description = match test_status {
         TestStatus::CheckoutFailed => StyledStringBuilder::new()
@@ -1001,7 +980,11 @@ fn make_test_status_description(
                 descriptors.push("cached".to_string());
             }
             if fixed_tree_oid.is_some() {
-                descriptors.push("fixed".to_string());
+                descriptors.push(if apply_fixes {
+                    "fixed".to_string()
+                } else {
+                    "fixable".to_string()
+                });
             }
             if *interactive {
                 descriptors.push("interactive".to_string());
@@ -1026,6 +1009,7 @@ impl TestOutput {
         &self,
         effects: &Effects,
         commit: &Commit,
+        apply_fixes: bool,
         verbosity: Verbosity,
     ) -> eyre::Result<StyledString> {
         let description = StyledStringBuilder::new()
@@ -1035,6 +1019,7 @@ impl TestOutput {
                 effects.get_glyphs(),
                 commit,
                 &self.test_status,
+                apply_fixes,
             )?)
             .build();
 
@@ -1267,6 +1252,24 @@ fn run_tests<'a>(
         Some(TestSearchStrategy::Reverse) => Some(search::Strategy::LinearReverse),
         Some(TestSearchStrategy::Binary) => Some(search::Strategy::Binary),
     };
+
+    let latest_test_command_path = get_latest_test_command_path(repo);
+    if let Some(parent) = latest_test_command_path.parent() {
+        if let Err(err) = std::fs::create_dir_all(parent) {
+            warn!(
+                ?err,
+                ?latest_test_command_path,
+                "Failed to create containing directory for latest test command"
+            );
+        }
+    }
+    if let Err(err) = std::fs::write(&latest_test_command_path, command) {
+        warn!(
+            ?err,
+            ?latest_test_command_path,
+            "Failed to write latest test command to disk"
+        );
+    }
 
     let EventLoopOutput {
         search,
@@ -1588,7 +1591,9 @@ fn event_loop(
                 fixed_tree_oid: _,
             } => (None, search::Status::Success),
         };
-        search.notify(commit_oid, search_status)?;
+        if search_strategy.is_some() {
+            search.notify(commit_oid, search_status)?;
+        }
         if scheduled_jobs
             .insert(commit_oid, ScheduledJob::Complete(test_output))
             .is_none()
@@ -1627,6 +1632,7 @@ fn print_summary(
     command: &str,
     test_results: &TestResults,
     is_search: bool,
+    apply_fixes: bool,
     verbosity: &Verbosity,
 ) -> eyre::Result<ExitCode> {
     let mut num_passed = 0;
@@ -1638,9 +1644,12 @@ fn print_summary(
         write!(
             effects.get_output_stream(),
             "{}",
-            effects
-                .get_glyphs()
-                .render(test_output.describe(effects, &commit, *verbosity)?)?
+            effects.get_glyphs().render(test_output.describe(
+                effects,
+                &commit,
+                apply_fixes,
+                *verbosity,
+            )?)?
         )?;
         match test_output.test_status {
             TestStatus::CheckoutFailed
@@ -2098,7 +2107,7 @@ fn run_test(
         interactive: _,     // Used in `test_commit`.
         jobs: _,            // Caller handles job management.
         verbosity: _,
-        fix_options: _, // Checked in `test_commit`.
+        fix_options,
     } = options;
     let (effects, progress) = effects.start_operation(operation_type);
     progress.notify_status(
@@ -2180,6 +2189,7 @@ fn run_test(
             effects.get_glyphs(),
             commit,
             &test_output.test_status,
+            fix_options.is_some(),
         )?)
         .build();
     progress.notify_status(
@@ -2277,7 +2287,7 @@ fn make_test_files(
                     exit_code,
                     fixed_tree_oid: _,
                     interactive: _,
-                }) if exit_code == INDETERMINATE_EXIT_CODE => {
+                }) if exit_code == TEST_INDETERMINATE_EXIT_CODE => {
                     TestStatus::Indeterminate { exit_code }
                 }
 
@@ -2286,7 +2296,7 @@ fn make_test_files(
                     exit_code,
                     fixed_tree_oid: _,
                     interactive: _,
-                }) if exit_code == ABORT_EXIT_CODE => TestStatus::Abort { exit_code },
+                }) if exit_code == TEST_ABORT_EXIT_CODE => TestStatus::Abort { exit_code },
 
                 Ok(SerializedTestResult {
                     command: _,
@@ -2565,7 +2575,7 @@ To abort testing entirely, run:      {exit127}",
         }
     };
     let test_status = match exit_code {
-        0 => {
+        TEST_SUCCESS_EXIT_CODE => {
             let fixed_tree_oid = {
                 let repo = Repo::from_dir(working_directory)?;
                 let snapshot = {
@@ -2615,8 +2625,8 @@ To abort testing entirely, run:      {exit127}",
             }
         }
 
-        exit_code @ INDETERMINATE_EXIT_CODE => TestStatus::Indeterminate { exit_code },
-        exit_code @ ABORT_EXIT_CODE => TestStatus::Abort { exit_code },
+        exit_code @ TEST_INDETERMINATE_EXIT_CODE => TestStatus::Indeterminate { exit_code },
+        exit_code @ TEST_ABORT_EXIT_CODE => TestStatus::Abort { exit_code },
 
         exit_code => TestStatus::Failed {
             cached: false,
@@ -2726,6 +2736,7 @@ fn subcommand_show(
                     effects.get_glyphs().render(test_output.describe(
                         effects,
                         &commit,
+                        false,
                         options.verbosity
                     )?)?,
                 )?;

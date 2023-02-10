@@ -30,7 +30,8 @@ pub use run::{GitRunInfo, GitRunOpts, GitRunResult};
 pub use snapshot::{WorkingCopyChangesType, WorkingCopySnapshot};
 pub use status::{FileMode, FileStatus, StatusEntry};
 pub use test::{
-    get_test_locks_dir, get_test_tree_dir, get_test_worktrees_dir, make_test_command_slug,
-    SerializedNonZeroOid, SerializedTestResult,
+    get_latest_test_command_path, get_test_locks_dir, get_test_tree_dir, get_test_worktrees_dir,
+    make_test_command_slug, SerializedNonZeroOid, SerializedTestResult, TEST_ABORT_EXIT_CODE,
+    TEST_INDETERMINATE_EXIT_CODE, TEST_SUCCESS_EXIT_CODE,
 };
 pub use tree::{dehydrate_tree, hydrate_tree, Tree};
