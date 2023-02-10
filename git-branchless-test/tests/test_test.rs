@@ -18,12 +18,20 @@ fn test_test() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
+    if !git.supports_log_exclude_decoration()? {
+        return Ok(());
+    }
+
     git.detach_head()?;
     git.commit_file("test2", 2)?;
     git.commit_file("test3", 3)?;
 
     {
-        let (stdout, _stderr) = git.branchless("test", &["run", "-x", "exit 0"])?;
+        let (stdout, stderr) = git.branchless("test", &["run", "-x", "exit 0"])?;
+        insta::assert_snapshot!(stderr, @r###"
+        Stopped at 0206717 (create test3.txt)
+        branchless: processing 1 update: ref HEAD
+        "###);
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
@@ -38,7 +46,7 @@ fn test_test() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.branchless_with_options(
+        let (stdout, stderr) = git.branchless_with_options(
             "test",
             &["run", "-x", "exit 1"],
             &GitRunOptions {
@@ -46,6 +54,10 @@ fn test_test() -> eyre::Result<()> {
                 ..Default::default()
             },
         )?;
+        insta::assert_snapshot!(stderr, @r###"
+        Stopped at 0206717 (create test3.txt)
+        branchless: processing 1 update: ref HEAD
+        "###);
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...

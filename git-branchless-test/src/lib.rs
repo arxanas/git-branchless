@@ -1337,22 +1337,6 @@ fn run_tests<'a>(
         let search = search::Search::new(graph, commits.iter().map(|c| c.get_oid()));
 
         let work_queue = WorkQueue::new();
-        match search_strategy {
-            None => {
-                work_queue.set(commit_jobs.values().cloned().collect());
-            }
-            Some(search_strategy) => {
-                let solution = search.search(search_strategy)?;
-                work_queue.set(
-                    solution
-                        .next_to_search
-                        .take(*jobs)
-                        .map(|commit_oid| commit_jobs[&commit_oid].clone())
-                        .collect(),
-                );
-            }
-        };
-
         let repo_dir = repo.get_path();
         crossbeam::thread::scope(|scope| -> eyre::Result<_> {
             let (result_tx, result_rx) = crossbeam::channel::unbounded();
@@ -1410,16 +1394,13 @@ fn run_tests<'a>(
                 *jobs,
                 work_queue.clone(),
                 result_rx,
-            )?;
-
+            );
             work_queue.close();
-            if test_results.testing_aborted_error.is_some() {
-                return Ok(test_results);
-            }
+            let test_results = test_results?;
 
-            debug!("Waiting for workers");
-            progress.notify_status(OperationIcon::InProgress, "Waiting for workers");
-            if search_strategy.is_none() {
+            if test_results.testing_aborted_error.is_none() && search_strategy.is_none() {
+                debug!("Waiting for workers");
+                progress.notify_status(OperationIcon::InProgress, "Waiting for workers");
                 for (worker_id, worker) in workers {
                     worker
                         .join()
@@ -1486,87 +1467,178 @@ fn event_loop(
     work_queue: WorkQueue<TestJob>,
     result_rx: Receiver<JobResult<TestJob, TestOutput>>,
 ) -> eyre::Result<EventLoopOutput> {
-    let mut test_outputs = HashMap::new();
+    #[derive(Debug)]
+    enum ScheduledJob {
+        Scheduled(TestJob),
+        Complete(TestOutput),
+    }
+    let mut scheduled_jobs: HashMap<NonZeroOid, ScheduledJob> = Default::default();
     let mut testing_aborted_error = None;
-    while let Ok(message) = {
-        debug!("Main thread waiting for new job result");
-        let result = if commit_jobs.is_empty() {
-            Err(RecvError)
-        } else {
-            result_rx.recv()
-        };
-        debug!("Main thread got new job result");
-        result
-    } {
-        match message {
-            JobResult::Done(job, test_output) => {
-                let TestJob {
-                    commit_oid,
-                    operation_type: _,
-                } = job;
-                let (maybe_testing_aborted_error, search_status) = match &test_output.test_status {
-                    TestStatus::CheckoutFailed
-                    | TestStatus::SpawnTestFailed(_)
-                    | TestStatus::TerminatedBySignal
-                    | TestStatus::AlreadyInProgress
-                    | TestStatus::ReadCacheFailed(_)
-                    | TestStatus::Indeterminate { .. } => (None, search::Status::Indeterminate),
 
-                    TestStatus::Abort { exit_code } => (
-                        Some(TestingAbortedError {
-                            commit_oid,
-                            exit_code: *exit_code,
-                        }),
-                        search::Status::Indeterminate,
-                    ),
+    if search_strategy.is_none() {
+        let jobs_to_schedule = commit_jobs
+            .keys()
+            .map(|commit_oid| commit_jobs[commit_oid].clone())
+            .collect_vec();
+        debug!(
+            ?jobs_to_schedule,
+            "Scheduling all jobs (since no search strategy was specified)"
+        );
+        for job in &jobs_to_schedule {
+            scheduled_jobs.insert(job.commit_oid, ScheduledJob::Scheduled(job.clone()));
+        }
+        work_queue.set(jobs_to_schedule);
+    }
 
-                    TestStatus::Failed {
-                        cached: _,
-                        interactive: _,
-                        exit_code: _,
-                    } => (None, search::Status::Failure),
+    loop {
+        if let Some(err) = &testing_aborted_error {
+            debug!(?err, "Testing aborted");
+            break;
+        }
 
-                    TestStatus::Passed {
-                        cached: _,
-                        interactive: _,
-                        fixed_tree_oid: _,
-                    } => (None, search::Status::Success),
-                };
-                search.notify(commit_oid, search_status)?;
-                test_outputs.insert(commit_oid, test_output);
-                if let Some(err) = maybe_testing_aborted_error {
-                    testing_aborted_error = Some(err);
-                    break;
-                }
+        if let Some(search_strategy) = search_strategy {
+            scheduled_jobs = scheduled_jobs
+                .into_iter()
+                .filter_map(|(commit_oid, scheduled_job)| match scheduled_job {
+                    ScheduledJob::Scheduled(_) => None,
+                    scheduled_job @ ScheduledJob::Complete(_) => Some((commit_oid, scheduled_job)),
+                })
+                .collect();
 
-                let search_completed = match search_strategy {
-                    None => test_outputs.len() == commit_jobs.len(),
-                    Some(search_strategy) => {
-                        let solution = search.search(search_strategy)?;
-                        let next_to_search = solution
-                            .next_to_search
-                            .take(num_jobs)
-                            .map(|commit_oid| commit_jobs[&commit_oid].clone())
-                            .collect_vec();
-                        let search_completed = next_to_search.is_empty();
-                        work_queue.set(next_to_search);
-                        search_completed
+            let solution = search.search(search_strategy)?;
+            let next_to_search = solution
+                .next_to_search
+                .filter(|commit_oid| {
+                    // At this point, `scheduled_jobs` should only contain completed jobs.
+                    match scheduled_jobs.get(commit_oid) {
+                        Some(ScheduledJob::Complete(_)) => false,
+                        Some(ScheduledJob::Scheduled(_)) => {
+                            warn!(?commit_oid, "Left-over scheduled job; this should have already been filtered out.");
+                            true
+                        }
+                        None => true
                     }
-                };
-                if search_completed {
-                    break;
+                })
+                .take(num_jobs)
+                .collect_vec();
+            if next_to_search.is_empty() {
+                debug!("Search completed, exiting.");
+                break;
+            }
+            let jobs_to_schedule = next_to_search
+                .into_iter()
+                .map(|commit_oid| commit_jobs[&commit_oid].clone())
+                .collect_vec();
+            debug!(
+                ?search_strategy,
+                ?jobs_to_schedule,
+                "Jobs to schedule for search"
+            );
+            for job in &jobs_to_schedule {
+                if let Some(previous_job) =
+                    scheduled_jobs.insert(job.commit_oid, ScheduledJob::Scheduled(job.clone()))
+                {
+                    warn!(?job, ?previous_job, "Overwriting previously-scheduled job");
                 }
             }
-            JobResult::Error(worker_id, job, error_message) => {
+            work_queue.set(jobs_to_schedule);
+        }
+
+        let message = {
+            let jobs_in_progress = scheduled_jobs
+                .values()
+                .filter_map(|scheduled_job| match scheduled_job {
+                    ScheduledJob::Scheduled(job) => Some(job),
+                    ScheduledJob::Complete(_) => None,
+                })
+                .collect_vec();
+            if jobs_in_progress.is_empty() {
+                debug!("No more in-progress jobs to wait on, exiting");
+                break;
+            }
+
+            // If there is work to be done, then block on the next result to
+            // be received from a worker. This is okay because we won't
+            // adjust the work queue until we've received the next result.
+            // (If we wanted to support cancellation or adjusting the number
+            // of running workers then this wouldn't be sufficient.)
+            debug!(?jobs_in_progress, "Event loop waiting for new job result");
+            let result = result_rx.recv();
+            debug!(?result, "Event loop got new job result");
+            result
+        };
+        let (job, test_output) = match message {
+            Err(RecvError) => {
+                debug!("No more job results could be received because result_rx closed");
+                break;
+            }
+
+            Ok(JobResult::Error(worker_id, job, error_message)) => {
                 let TestJob {
                     commit_oid,
                     operation_type: _,
                 } = job;
                 eyre::bail!("Worker {worker_id} failed when processing commit {commit_oid}: {error_message}");
             }
+
+            Ok(JobResult::Done(job, test_output)) => (job, test_output),
+        };
+
+        let TestJob {
+            commit_oid,
+            operation_type: _,
+        } = job;
+        let (maybe_testing_aborted_error, search_status) = match &test_output.test_status {
+            TestStatus::CheckoutFailed
+            | TestStatus::SpawnTestFailed(_)
+            | TestStatus::TerminatedBySignal
+            | TestStatus::AlreadyInProgress
+            | TestStatus::ReadCacheFailed(_)
+            | TestStatus::Indeterminate { .. } => (None, search::Status::Indeterminate),
+
+            TestStatus::Abort { exit_code } => (
+                Some(TestingAbortedError {
+                    commit_oid,
+                    exit_code: *exit_code,
+                }),
+                search::Status::Indeterminate,
+            ),
+
+            TestStatus::Failed {
+                cached: _,
+                interactive: _,
+                exit_code: _,
+            } => (None, search::Status::Failure),
+
+            TestStatus::Passed {
+                cached: _,
+                interactive: _,
+                fixed_tree_oid: _,
+            } => (None, search::Status::Success),
+        };
+        search.notify(commit_oid, search_status)?;
+        if scheduled_jobs
+            .insert(commit_oid, ScheduledJob::Complete(test_output))
+            .is_none()
+        {
+            warn!(
+                ?commit_oid,
+                "Received test result for commit that was not scheduled"
+            );
+        }
+
+        if let Some(err) = maybe_testing_aborted_error {
+            testing_aborted_error = Some(err);
         }
     }
 
+    let test_outputs = scheduled_jobs
+        .into_iter()
+        .filter_map(|(commit_oid, scheduled_job)| match scheduled_job {
+            ScheduledJob::Scheduled(_) => None,
+            ScheduledJob::Complete(test_output) => Some((commit_oid, test_output)),
+        })
+        .collect();
     Ok(EventLoopOutput {
         search,
         test_outputs,
