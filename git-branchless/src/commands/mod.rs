@@ -3,7 +3,6 @@
 mod amend;
 mod bug_report;
 mod hide;
-mod query;
 mod repair;
 mod restack;
 mod snapshot;
@@ -110,19 +109,7 @@ fn command_main(ctx: CommandContext, opts: Opts) -> eyre::Result<ExitCode> {
             &traverse_commits_options,
         )?,
 
-        Command::Query {
-            revset,
-            resolve_revset_options,
-            show_branches,
-            raw,
-        } => query::query(
-            &effects,
-            &git_run_info,
-            revset,
-            &resolve_revset_options,
-            show_branches,
-            raw,
-        )?,
+        Command::Query(args) => git_branchless_query::command_main(ctx, args)?,
 
         Command::Repair { dry_run } => repair::repair(&effects, dry_run)?,
 

@@ -265,6 +265,33 @@ pub struct InitArgs {
     pub main_branch_name: Option<String>,
 }
 
+/// Query the commit graph using the "revset" language and print matching
+/// commits.
+///
+/// See https://github.com/arxanas/git-branchless/wiki/Reference:-Revsets to
+/// learn more about revsets.
+///
+/// The outputted commits are guaranteed to be topologically sorted, with
+/// ancestor commits appearing first.
+#[derive(Debug, Parser)]
+pub struct QueryArgs {
+    /// The query to execute.
+    #[clap(value_parser)]
+    pub revset: Revset,
+
+    /// Options for resolving revset expressions.
+    #[clap(flatten)]
+    pub resolve_revset_options: ResolveRevsetOptions,
+
+    /// Print the branches attached to the resulting commits, rather than the commits themselves.
+    #[clap(action, short = 'b', long = "branches")]
+    pub show_branches: bool,
+
+    /// Print the OID of each matching commit, one per line. This output is
+    /// stable for use in scripts.
+    #[clap(action, short = 'r', long = "raw", conflicts_with("show_branches"))]
+    pub raw: bool,
+}
 /// Display a nice graph of the commits you've recently worked on.
 #[derive(Debug, Parser)]
 pub struct SmartlogArgs {
@@ -420,24 +447,7 @@ pub enum Command {
     ///
     /// The outputted commits are guaranteed to be topologically sorted, with
     /// ancestor commits appearing first.
-    Query {
-        /// The query to execute.
-        #[clap(value_parser)]
-        revset: Revset,
-
-        /// Options for resolving revset expressions.
-        #[clap(flatten)]
-        resolve_revset_options: ResolveRevsetOptions,
-
-        /// Print the branches attached to the resulting commits, rather than the commits themselves.
-        #[clap(action, short = 'b', long = "branches")]
-        show_branches: bool,
-
-        /// Print the OID of each matching commit, one per line. This output is
-        /// stable for use in scripts.
-        #[clap(action, short = 'r', long = "raw", conflicts_with("show_branches"))]
-        raw: bool,
-    },
+    Query(QueryArgs),
 
     /// Restore internal invariants by reconciling the internal operation log
     /// with the state of the Git repository.
