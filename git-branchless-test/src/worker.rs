@@ -1,92 +1,104 @@
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 use std::fmt::Debug;
 use std::hash::Hash;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 
-use crossbeam::channel::{Receiver, RecvError, SendError, Sender, TryRecvError};
+use crossbeam::channel::Sender;
 use lib::core::effects::ProgressHandle;
-use tracing::debug;
+use tracing::{debug, warn};
 
 pub(crate) type WorkerId = usize;
 
 pub trait Job: Clone + Debug + Eq + Hash {}
 impl<T: Clone + Debug + Eq + Hash> Job for T {}
 
+#[derive(Debug)]
 pub(crate) enum JobResult<J: Job, Output> {
     Done(J, Output),
     Error(WorkerId, J, String),
 }
 
+#[derive(Debug)]
+struct WorkQueueState<J: Job> {
+    jobs: VecDeque<J>,
+    accepted_jobs: HashSet<J>,
+    is_active: bool,
+}
+
+impl<J: Job> Default for WorkQueueState<J> {
+    fn default() -> Self {
+        Self {
+            jobs: Default::default(),
+            accepted_jobs: Default::default(),
+            is_active: true,
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub(crate) struct WorkQueue<J: Job> {
-    job_tx: Arc<Mutex<Option<Sender<J>>>>,
-    job_rx: Receiver<J>,
-    accepted_jobs: Arc<Mutex<HashSet<J>>>,
+    state: Arc<Mutex<WorkQueueState<J>>>,
+    cond_var: Arc<Condvar>,
 }
 
 impl<J: Job> WorkQueue<J> {
     pub fn new() -> Self {
-        let (job_tx, job_rx) = crossbeam::channel::unbounded();
         Self {
-            job_tx: Arc::new(Mutex::new(Some(job_tx))),
-            job_rx,
-            accepted_jobs: Default::default(),
+            state: Default::default(),
+            cond_var: Default::default(),
         }
     }
 
     pub fn set(&self, jobs: Vec<J>) {
-        let job_tx = self.job_tx.lock().unwrap();
-        let job_tx = match job_tx.as_ref() {
-            Some(job_tx) => job_tx,
-            None => {
-                debug!(?jobs, "Tried to set jobs when work queue was disconnected");
-                return;
-            }
-        };
-        loop {
-            match self.job_rx.try_recv() {
-                Ok(job) => {
-                    debug!(?job, "Cancelling scheduled job");
-                }
-                Err(TryRecvError::Empty) => {
-                    break;
-                }
-                Err(TryRecvError::Disconnected) => {
-                    return;
-                }
-            }
-        }
-        for job in jobs {
-            debug!(?job, "Scheduling job");
-            match job_tx.send(job) {
-                Ok(()) => {}
-                Err(SendError(job)) => {
-                    debug!(?job, "Failed to schedule job");
-                }
-            }
-        }
+        let mut state = self.state.lock().unwrap();
+        state.jobs = jobs
+            .into_iter()
+            .filter(|job| !state.accepted_jobs.contains(job))
+            .collect();
+        self.cond_var.notify_all();
     }
 
     pub fn close(&self) {
-        self.set(Default::default());
-        let mut job_tx = self.job_tx.lock().unwrap();
-        *job_tx = None;
+        let mut state = self.state.lock().unwrap();
+        state.jobs.clear();
+        state.is_active = false;
+        self.cond_var.notify_all();
     }
 
     pub fn pop_blocking(&self) -> Option<J> {
+        enum WakeupCond {
+            Inactive,
+            NewJob,
+        }
+        fn wakeup_cond<J: Job>(state: &WorkQueueState<J>) -> Option<WakeupCond> {
+            if !state.is_active {
+                Some(WakeupCond::Inactive)
+            } else if !state.jobs.is_empty() {
+                Some(WakeupCond::NewJob)
+            } else {
+                None
+            }
+        }
+
+        let mut state = self.state.lock().unwrap();
         loop {
-            match self.job_rx.recv() {
-                Ok(job) => {
-                    let mut accepted_jobs = self.accepted_jobs.lock().unwrap();
-                    if accepted_jobs.insert(job.clone()) {
-                        break Some(job);
-                    } else {
-                        debug!(?job, "Skipped already-accepted job");
+            match wakeup_cond(&state) {
+                Some(WakeupCond::Inactive) => break None,
+                Some(WakeupCond::NewJob) => {
+                    let job = state
+                        .jobs
+                        .pop_front()
+                        .expect("Condition variable should have ensured that jobs is non-empty");
+                    if !state.accepted_jobs.insert(job.clone()) {
+                        warn!(?job, "Job was already accepted");
                     }
+                    break Some(job);
                 }
-                Err(RecvError) => {
-                    debug!("Work queue disconnected");
-                    break None;
+                None => {
+                    state = self
+                        .cond_var
+                        .wait_while(state, |state| wakeup_cond(state).is_none())
+                        .unwrap();
                 }
             }
         }
@@ -118,7 +130,12 @@ pub(crate) fn worker<J: Job, Output, Context>(
         let should_terminate = result_tx
             .send(JobResult::Done(job.clone(), test_output))
             .is_err();
-        debug!(?worker_id, ?job, "Worker finished sending Done job result");
+        debug!(
+            ?worker_id,
+            ?job,
+            ?should_terminate,
+            "Worker finished sending Done job result"
+        );
         Ok(should_terminate)
     };
 

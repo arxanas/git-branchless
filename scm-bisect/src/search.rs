@@ -173,6 +173,9 @@ pub struct LazySolution<'a, Node: Debug + Eq + Hash + 'a> {
     /// consume the first node in this iterator and then call `Search::notify`
     /// with the result. However, if you want to parallelize or speculate on
     /// further nodes, you can consume more nodes from this iterator.
+    ///
+    /// This will be empty when the bounds are as tight as possible, i.e. the
+    /// search is complete.
     pub next_to_search: Box<dyn Iterator<Item = Node> + 'a>,
 }
 
@@ -248,7 +251,7 @@ pub enum Strategy {
 #[allow(missing_docs)]
 #[derive(Debug, Error)]
 pub enum Error2<Node, Error> {
-    #[error("inconsistent state transition: {ancestor_node:?} ({ancestor_status:?}) was marked as an ancestor of {descendant_node:?} ({descendant_status:?}")]
+    #[error("inconsistent state transition: {ancestor_node} ({ancestor_status:?}) was marked as an ancestor of {descendant_node} ({descendant_status:?}")]
     InconsistentStateTransition {
         ancestor_node: Node,
         ancestor_status: Status,
@@ -256,7 +259,7 @@ pub enum Error2<Node, Error> {
         descendant_status: Status,
     },
 
-    #[error("illegal state transition: {from:?} -> {to:?}")]
+    #[error("illegal state transition for {node}: {from:?} -> {to:?}")]
     IllegalStateTransition {
         node: Node,
         from: Status,
