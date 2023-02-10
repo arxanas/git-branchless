@@ -1,3 +1,18 @@
+//! This crate is used to invoke `git-branchless` either directly via a
+//! subcommand (such as `git-branchless foo`) or via an entirely separate
+//! executable (such as `git-branchless-foo`). The objective is to improve
+//! developer iteration times by allowing them to build and test a single
+//! subcommand in isolation.
+
+#![warn(missing_docs)]
+#![warn(
+    clippy::all,
+    clippy::as_conversions,
+    clippy::clone_on_ref_ptr,
+    clippy::dbg_macro
+)]
+#![allow(clippy::too_many_arguments, clippy::blocks_in_if_conditions)]
+
 use std::any::Any;
 use std::convert::TryInto;
 use std::ffi::OsString;
@@ -24,9 +39,13 @@ use tracing_subscriber::fmt as tracing_fmt;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber::EnvFilter;
 
+/// Shared context for all commands.
 #[derive(Clone, Debug)]
 pub struct CommandContext {
+    /// The `Effects` to use.
     pub effects: Effects,
+
+    /// Information about the Git executable currently being used.
     pub git_run_info: GitRunInfo,
 }
 
@@ -196,6 +215,14 @@ pub fn do_main_and_drop_locals<T: Parser>(
     Ok(exit_code)
 }
 
+/// Invoke the provided subcommand main function. This should be used in the
+/// `main.rs` file for the subcommand executable. For example:
+///
+/// ```ignore
+/// fn main() {
+///     git_branchless_invoke::invoke_subcommand_main(git_branchless_init::command_main)
+/// }
+/// ```
 #[instrument(skip(f))]
 pub fn invoke_subcommand_main<T: Parser>(f: impl Fn(CommandContext, T) -> eyre::Result<ExitCode>) {
     // Install panic handler.

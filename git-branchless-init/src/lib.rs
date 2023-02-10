@@ -1,5 +1,14 @@
 //! Install any hooks, aliases, etc. to set up `git-branchless` in this repo.
 
+#![warn(missing_docs)]
+#![warn(
+    clippy::all,
+    clippy::as_conversions,
+    clippy::clone_on_ref_ptr,
+    clippy::dbg_macro
+)]
+#![allow(clippy::too_many_arguments, clippy::blocks_in_if_conditions)]
+
 use std::fmt::Write;
 use std::io::{stdin, stdout, BufRead, BufReader, Write as WriteIo};
 use std::path::{Path, PathBuf};
@@ -21,6 +30,7 @@ use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::repo_ext::RepoExt;
 use lib::git::{BranchType, Config, ConfigRead, ConfigWrite, GitRunInfo, GitVersion, Repo};
 
+/// The contents of all Git hooks to install.
 pub const ALL_HOOKS: &[(&str, &str)] = &[
     (
         "post-applypatch",
@@ -92,15 +102,23 @@ const ALL_ALIASES: &[(&str, &str)] = &[
     ("unhide", "unhide"),
 ];
 
+/// A specification for installing a Git hook on disk.
 #[derive(Debug)]
 pub enum Hook {
     /// Regular Git hook.
-    RegularHook { path: PathBuf },
+    RegularHook {
+        /// The path to the hook script.
+        path: PathBuf,
+    },
 
-    /// For Twitter multihooks.
-    MultiHook { path: PathBuf },
+    /// For Twitter multihooks. (But does anyone even work at Twitter anymore?)
+    MultiHook {
+        /// The path to the hook script.
+        path: PathBuf,
+    },
 }
 
+/// Determine the path where all hooks are installed.
 #[instrument]
 pub fn determine_hook_path(repo: &Repo, hooks_dir: &Path, hook_type: &str) -> eyre::Result<Hook> {
     let multi_hooks_path = repo.get_path().join("hooks_multi");
@@ -638,7 +656,7 @@ fn command_init(
 
 /// Uninstall `git-branchless` in the current repo.
 #[instrument]
-pub fn command_uninstall(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<ExitCode> {
+fn command_uninstall(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<ExitCode> {
     let repo = Repo::from_current_dir()?;
     let readonly_config = repo.get_readonly_config().wrap_err("Getting repo config")?;
     delete_isolated_config(effects, &repo, readonly_config.into_config())?;
@@ -646,6 +664,7 @@ pub fn command_uninstall(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::
     Ok(ExitCode(0))
 }
 
+/// Install `git-branchless` in the current repo.
 #[instrument]
 pub fn command_main(ctx: CommandContext, args: InitArgs) -> eyre::Result<ExitCode> {
     let CommandContext {
