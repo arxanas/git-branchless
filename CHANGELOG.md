@@ -17,20 +17,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - (#589, #593) `git sync --pull` rebases the local main branch on top of the remote main branch.
 - (#619) `git smartlog` now renders revsets with non-contiguous commits.
 - (#638) `git smartlog` now deduplicates merge commits which appear in the smartlog.
+- (#646) `git amend` now supports a `--reparent` option to adjust the contents of a commit while keeping the children commits exactly the same.
+- (#686) `git branchless init` will now populate the internal commit graph structure, rather than waiting for the first invocation of a `git branchless` subcommand.
+- (#725) Added `siblings()` revset function to determine the siblings of a given commit.
+- (#725) Added an `-I`/`--insert` option to `git record` to insert the new commit before all of the current commit's children.
+- (#763) Added a `-d`/`--detach` option to `git branchless switch` to switch to a commit without checking out any associated branches (as might happen due to the `branchless.navigation.autoSwitchBranches` configuration variable), or to switch to a branch without checking it out.
+- (#766) Added a `git test fix` subcommand to apply formatters/linters/etc. to a set of commits.
+- (#777) Added the `--search` option to `git test run` to search a set of commits using linear or binary search for the first commit(s) which cause the tests to fail.
+- (#777) `git test run` now aborts the overall test run when a test returns exit code `127`.
+- (#777) `git test run` now sets the `BRANCHLESS_TEST_COMMIT` and `BRANCHLESS_TEST_COMMAND` environment variables when running the test command.
+- (#785) Added `tests.passed()`, `tests.failed()`, and `tests.fixable()` revset functions, whose results are populated by `git test`.
 
 ### Changed
 
 - (#526) BREAKING: When checking out a commit with a single branch attached to it, that branch will also be checked out.
 - (#589) BREAKING: Remote main branches are no longer supported. To upgrade you'll need to create a local main branch which tracks the remote main branch. You can use `git sync` to keep it up-to-date.
+- (#730) BREAKING: The default revset for `git reword` is now `stack() | @` instead of `@`, to simultaneously reword all commits in the current stack.
+- (#763) BREAKING: `git branchless switch` no longer implicitly opens the interactive commit selector when no target is provided. You must explicitly pass `-i`/`--interactive` to do so.
 - (#571) Added `current(<revset>)` revset function to determine the latest versions of a set of rewritten commits.
 - (#582) Added `main()`, `public()` revset functions.
 - (#593, #608) `git sync` produces more descriptive output.
+- (#685) `git submit` now colorizes the names of the affected branches.
+- (#763) Running `git branchless switch` with no arguments will switch to the branch associate with the current commit, if there is exactly one such branch and the `branchless.navigation.autoSwitchBranches` configuration variable is set to `true`.
 
 ### Fixed
 
 - (#588) `git branchless init` now works when invoked in a worktree.
 - (#589) `git reword --force-rewrite` no longer moves remote-tracking branches.
 - (#589) `git smartlog` no longer uses 100% CPU in certain cases with remote main branches (because remote main branches are no longer supported).
+- (#646) Adjusted messaging during merge conflicts with `git move --in-memory` to be more accurate.
+- (#647) `git test run` now recovers from previously-failed tests instead of failing indefinitely in future runs.
+- (#670) `git submit` no longer force-pushes the current branch in the circumstance that all branches are currently up-to-date.
+- (#688) `git amend` now respects the `--merge` option.
+- (#722) `git reword` now supports invoking editors with spaces in their names.
+- (#724) `git branchless init` now installs a `post-applypatch` hook, for users of `git am`.
+- (#742) `git branchless init` now respects a leading `~` in the `core.hooksPath` configuration variable.
+- (#743) `git sync`, etc. now correctly clean up remote branch information for branches which have been merged upstream. Previously, the remote branch information would be left behind, which would cause future branches with the same names to incorrectly become associated with the old remote branch.
+- (#764) `git sync` will no longer attempt to resolve merge conflicts unless you pass `--merge`. Previously, this could happen when attempting to sync merge commits.
 
 ## [0.5.0] - 2022-09-28
 
