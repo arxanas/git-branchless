@@ -119,7 +119,7 @@ impl Editor {
     /// entered text.
     pub fn edit(&self, s: &str) -> io::Result<Option<String>> {
         let mut f = tempfile::Builder::new()
-            .prefix("edit-")
+            .prefix("COMMIT_EDITMSG-")
             .suffix(&self.extension)
             .rand_bytes(12)
             .tempfile()?;
