@@ -1090,7 +1090,7 @@ checksum = "dec7af912d60cdbd3677c1af9352ebae6fb8394d165568a2234df0fa00f87793"
 
 [[package]]
 name = "git-branchless"
-version = "0.7.0-pre.1"
+version = "0.7.0-rc.1"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -1139,7 +1139,7 @@ dependencies = [
 
 [[package]]
 name = "git-branchless-hook"
-version = "0.7.0-pre.1"
+version = "0.7.0-rc.1"
 dependencies = [
  "console",
  "eyre",
@@ -1154,7 +1154,7 @@ dependencies = [
 
 [[package]]
 name = "git-branchless-init"
-version = "0.7.0-pre.1"
+version = "0.7.0-rc.1"
 dependencies = [
  "assert_cmd",
  "console",
@@ -1169,7 +1169,7 @@ dependencies = [
 
 [[package]]
 name = "git-branchless-invoke"
-version = "0.7.0-pre.1"
+version = "0.7.0-rc.1"
 dependencies = [
  "clap 4.0.32",
  "color-eyre",
@@ -1186,7 +1186,7 @@ dependencies = [
 
 [[package]]
 name = "git-branchless-lib"
-version = "0.7.0-pre.1"
+version = "0.7.0-rc.1"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -1225,7 +1225,7 @@ dependencies = [
 
 [[package]]
 name = "git-branchless-move"
-version = "0.7.0-pre.1"
+version = "0.7.0-rc.1"
 dependencies = [
  "esl01-dag",
  "eyre",
@@ -1239,7 +1239,7 @@ dependencies = [
 
 [[package]]
 name = "git-branchless-navigation"
-version = "0.7.0-pre.1"
+version = "0.7.0-rc.1"
 dependencies = [
  "cursive",
  "esl01-dag",
@@ -1255,7 +1255,7 @@ dependencies = [
 
 [[package]]
 name = "git-branchless-opts"
-version = "0.7.0-pre.1"
+version = "0.7.0-rc.1"
 dependencies = [
  "clap 4.0.32",
  "clap_mangen",
@@ -1265,7 +1265,7 @@ dependencies = [
 
 [[package]]
 name = "git-branchless-query"
-version = "0.7.0-pre.1"
+version = "0.7.0-rc.1"
 dependencies = [
  "esl01-dag",
  "eyre",
@@ -1280,7 +1280,7 @@ dependencies = [
 
 [[package]]
 name = "git-branchless-record"
-version = "0.7.0-pre.1"
+version = "0.7.0-rc.1"
 dependencies = [
  "cursive",
  "cursive_buffered_backend",
@@ -1294,7 +1294,7 @@ dependencies = [
 
 [[package]]
 name = "git-branchless-revset"
-version = "0.7.0-pre.1"
+version = "0.7.0-rc.1"
 dependencies = [
  "bstr",
  "chrono",
@@ -1319,7 +1319,7 @@ dependencies = [
 
 [[package]]
 name = "git-branchless-reword"
-version = "0.7.0-pre.1"
+version = "0.7.0-rc.1"
 dependencies = [
  "bstr",
  "chrono",
@@ -1337,7 +1337,7 @@ dependencies = [
 
 [[package]]
 name = "git-branchless-smartlog"
-version = "0.7.0-pre.1"
+version = "0.7.0-rc.1"
 dependencies = [
  "cursive_core",
  "esl01-dag",
@@ -1352,7 +1352,7 @@ dependencies = [
 
 [[package]]
 name = "git-branchless-submit"
-version = "0.7.0-pre.1"
+version = "0.7.0-rc.1"
 dependencies = [
  "cursive_core",
  "eyre",
@@ -1367,7 +1367,7 @@ dependencies = [
 
 [[package]]
 name = "git-branchless-test"
-version = "0.7.0-pre.1"
+version = "0.7.0-rc.1"
 dependencies = [
  "assert_cmd",
  "bstr",
@@ -1398,7 +1398,7 @@ dependencies = [
 
 [[package]]
 name = "git-branchless-undo"
-version = "0.7.0-pre.1"
+version = "0.7.0-rc.1"
 dependencies = [
  "cursive",
  "cursive_buffered_backend",

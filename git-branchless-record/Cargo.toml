@@ -1,7 +1,7 @@
 [package]
 edition = "2021"
 name = "git-branchless-record"
-version = "0.7.0-pre.1"
+version = "0.7.0-rc.1"
 
 [dependencies]
 cursive = { version = "0.20.0", default-features = false, features = [
@@ -12,5 +12,5 @@ eden_dag = { package = "esl01-dag", version = "0.2.1" }
 eyre = "0.6.8"
 git-record = { version = "0.3.0", path = "../git-record" }
 itertools = "0.10.5"
-lib = { version = "0.7.0-pre.1", path = "../git-branchless-lib", package = "git-branchless-lib" }
+lib = { version = "0.7.0-rc.1", path = "../git-branchless-lib", package = "git-branchless-lib" }
 rayon = "1.6.1"

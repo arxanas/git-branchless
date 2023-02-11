@@ -975,7 +975,7 @@ fn make_test_status_description(
             if *cached {
                 descriptors.push("cached".to_string());
             }
-            descriptors.push(format!("exit code {}", exit_code));
+            descriptors.push(format!("exit code {exit_code}"));
             if *interactive {
                 descriptors.push("interactive".to_string());
             }

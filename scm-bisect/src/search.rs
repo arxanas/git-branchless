@@ -457,12 +457,12 @@ mod tests {
 
         fn ancestors(&self, node: Self::Node) -> Result<HashSet<Self::Node>, Infallible> {
             assert!(node < self.max);
-            Ok((0..=node).into_iter().collect())
+            Ok((0..=node).collect())
         }
 
         fn descendants(&self, node: Self::Node) -> Result<HashSet<Self::Node>, Infallible> {
             assert!(node < self.max);
-            Ok((node..self.max).into_iter().collect())
+            Ok((node..self.max).collect())
         }
     }
 
@@ -784,10 +784,7 @@ mod tests {
             assert!(all_success_nodes.is_disjoint(&all_failure_nodes));
             assert!(
                 all_success_nodes.union(&all_failure_nodes).copied().collect::<HashSet<_>>() == nodes,
-                "all_success_nodes: {:?}, all_failure_nodes: {:?}, nodes: {:?}",
-                all_success_nodes,
-                all_failure_nodes,
-                nodes,
+                "all_success_nodes: {all_success_nodes:?}, all_failure_nodes: {all_failure_nodes:?}, nodes: {nodes:?}",
             );
         }
     }
