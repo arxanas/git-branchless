@@ -316,9 +316,9 @@ fn test_main_branch_not_found_error_message() -> eyre::Result<()> {
 
        0: branchless::core::eventlog::from_event_log_db with effects=<Output fancy=false> repo=<Git repository at: "<repo-path>/.git/"> event_log_db=<EventLogDb>
           at some/file/path.rs:123
-       1: git_branchless_smartlog::smartlog with effects=<Output fancy=false> git_run_info=<GitRunInfo path_to_git="<git-executable>" working_directory="<repo-path>" env=not shown> options=SmartlogOptions { event_id: None, revset: Revset("((draft() | branches() | @) % main()) | branches() | @"), resolve_revset_options: ResolveRevsetOptions { show_hidden_commits: false } }
+       1: git_branchless_smartlog::smartlog with effects=<Output fancy=false> git_run_info=<GitRunInfo path_to_git="<git-executable>" working_directory="<repo-path>" env=not shown> options=SmartlogOptions { event_id: None, revset: Revset("((draft() | branches() | @) % main()) | branches() | @"), resolve_revset_options: ResolveRevsetOptions { show_hidden_commits: false }, reverse: false }
           at some/file/path.rs:123
-       2: git_branchless_smartlog::command_main with ctx=CommandContext { effects: <Output fancy=false>, git_run_info: <GitRunInfo path_to_git="<git-executable>" working_directory="<repo-path>" env=not shown> } args=SmartlogArgs { event_id: None, revset: None, resolve_revset_options: ResolveRevsetOptions { show_hidden_commits: false } }
+       2: git_branchless_smartlog::command_main with ctx=CommandContext { effects: <Output fancy=false>, git_run_info: <GitRunInfo path_to_git="<git-executable>" working_directory="<repo-path>" env=not shown> } args=SmartlogArgs { event_id: None, revset: None, reverse: false, resolve_revset_options: ResolveRevsetOptions { show_hidden_commits: false } }
           at some/file/path.rs:123
 
     Suggestion:

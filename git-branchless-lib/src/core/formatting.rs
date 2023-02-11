@@ -218,6 +218,15 @@ impl Glyphs {
         }
     }
 
+    /// Return a `Glyphs` object suitable for rendering graphs in the reverse of
+    /// their usual order.
+    pub fn reverse_order(mut self, reverse: bool) -> Self {
+        if reverse {
+            std::mem::swap(&mut self.split, &mut self.merge);
+        }
+        self
+    }
+
     /// Write the provided string to `out`, using ANSI escape codes as necessary to
     /// style it.
     ///

@@ -279,6 +279,11 @@ pub struct SmartlogArgs {
     #[clap(value_parser)]
     pub revset: Option<Revset>,
 
+    /// Print the smartlog in the opposite of the usual order, with the latest
+    /// commits first.
+    #[clap(long)]
+    pub reverse: bool,
+
     /// Options for resolving revset expressions.
     #[clap(flatten)]
     pub resolve_revset_options: ResolveRevsetOptions,
