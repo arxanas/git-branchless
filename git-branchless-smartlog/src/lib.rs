@@ -749,6 +749,10 @@ mod render {
 
         /// The options to use when resolving the revset.
         pub resolve_revset_options: ResolveRevsetOptions,
+
+        /// Reverse the ordering of items in the smartlog output, list the most
+        /// recent commits first.
+        pub reverse: bool,
     }
 
     impl Default for SmartlogOptions {
@@ -757,6 +761,7 @@ mod render {
                 event_id: Default::default(),
                 revset: Revset::default_smartlog_revset(),
                 resolve_revset_options: Default::default(),
+                reverse: false,
             }
         }
     }
@@ -771,9 +776,10 @@ pub fn smartlog(
 ) -> eyre::Result<ExitCode> {
     let SmartlogOptions {
         event_id,
-        revset,
-        resolve_revset_options,
-    } = options;
+        ref revset,
+        ref resolve_revset_options,
+        reverse,
+    } = *options;
 
     let repo = Repo::from_dir(&git_run_info.working_directory)?;
     let head_info = repo.get_head_info()?;
@@ -786,8 +792,8 @@ pub fn smartlog(
             None => (repo.get_references_snapshot()?, default_cursor),
             Some(event_id) => {
                 let event_cursor = match event_id.cmp(&0) {
-                    Ordering::Less => event_replayer.advance_cursor(default_cursor, *event_id),
-                    Ordering::Equal | Ordering::Greater => event_replayer.make_cursor(*event_id),
+                    Ordering::Less => event_replayer.advance_cursor(default_cursor, event_id),
+                    Ordering::Equal | Ordering::Greater => event_replayer.make_cursor(event_id),
                 };
                 let references_snapshot =
                     event_replayer.get_references_snapshot(&repo, event_cursor)?;
@@ -829,8 +835,8 @@ pub fn smartlog(
         &commits,
     )?;
 
-    let lines = render_graph(
-        effects,
+    let mut lines = render_graph(
+        &effects.reverse_order(reverse),
         &repo,
         &dag,
         &graph,
@@ -851,8 +857,13 @@ pub fn smartlog(
             &mut DifferentialRevisionDescriptor::new(&repo, &Redactor::Disabled)?,
             &mut CommitMessageDescriptor::new(&Redactor::Disabled)?,
         ],
-    )?;
-    for line in lines {
+    )?
+    .into_iter();
+    while let Some(line) = if reverse {
+        lines.next_back()
+    } else {
+        lines.next()
+    } {
         writeln!(
             effects.get_output_stream(),
             "{}",
@@ -912,6 +923,7 @@ pub fn command_main(ctx: CommandContext, args: SmartlogArgs) -> eyre::Result<Exi
         event_id,
         revset,
         resolve_revset_options,
+        reverse,
     } = args;
 
     smartlog(
@@ -921,6 +933,7 @@ pub fn command_main(ctx: CommandContext, args: SmartlogArgs) -> eyre::Result<Exi
             event_id,
             revset: revset.unwrap_or_else(Revset::default_smartlog_revset),
             resolve_revset_options,
+            reverse,
         },
     )
 }

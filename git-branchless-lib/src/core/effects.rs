@@ -567,6 +567,15 @@ impl Effects {
         }
     }
 
+    /// Apply transformations to the returned `Effects` to support emitting
+    /// graphical output in the opposite of its usual order.
+    pub fn reverse_order(&self, reverse: bool) -> Self {
+        Self {
+            glyphs: self.glyphs.clone().reverse_order(reverse),
+            ..self.clone()
+        }
+    }
+
     /// Start reporting progress for the specified operation type.
     ///
     /// A progress spinner is shown until the returned `ProgressHandle` is

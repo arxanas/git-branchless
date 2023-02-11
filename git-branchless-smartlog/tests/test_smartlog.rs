@@ -179,6 +179,43 @@ fn test_merge_commit() -> eyre::Result<()> {
 }
 
 #[test]
+fn test_merge_commit_reverse_order() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    git.init_repo()?;
+    git.run(&["checkout", "-b", "test1", "master"])?;
+    git.commit_file("test1", 1)?;
+    git.run(&["checkout", "-b", "test2and3", "master"])?;
+    git.commit_file("test2", 2)?;
+    git.commit_file("test3", 3)?;
+    git.run_with_options(
+        &["merge", "test1"],
+        &GitRunOptions {
+            time: 4,
+            ..Default::default()
+        },
+    )?;
+
+    let (stdout, _) = git.branchless("smartlog", &["--reverse"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    @ fa4e4e1 (> test2and3) Merge branch 'test1' into test2and3
+    |\
+    | & (merge) 62fc20d (test1) create test1.txt
+    |
+    o 0206717 create test3.txt
+    |
+    o fe65c1f create test2.txt
+    |
+    | & (merge) fa4e4e1 (> test2and3) Merge branch 'test1' into test2and3
+    | o 62fc20d (test1) create test1.txt
+    |/
+    O f777ecc (master) create initial.txt
+    "###);
+
+    Ok(())
+}
+
+#[test]
 fn test_rebase_conflict() -> eyre::Result<()> {
     let git = make_git()?;
 
@@ -458,6 +495,39 @@ fn test_smartlog_hint_abandoned_except_current_commit() -> eyre::Result<()> {
         O ae94dc2 (master) amended test1
         "###);
     }
+
+    Ok(())
+}
+
+/// When --reverse is specified hints still appear at the end of output
+#[test]
+fn test_smartlog_hint_abandoned_reverse_order() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    git.detach_head()?;
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+    git.run(&["checkout", "HEAD^"])?;
+    git.run(&["commit", "--amend", "-m", "amended test1"])?;
+
+    let (stdout, _) = git.branchless("smartlog", &["--reverse"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    o 96d1c37 create test2.txt
+    |
+    x 62fc20d (rewritten as ae94dc2a) create test1.txt
+    |
+    | @ ae94dc2 amended test1
+    |/
+    O f777ecc (master) create initial.txt
+    hint: there is 1 abandoned commit in your commit graph
+    hint: to fix this, run: git restack
+    hint: disable this hint by running: git config --global branchless.hint.smartlogFixAbandoned false
+    "###);
 
     Ok(())
 }
