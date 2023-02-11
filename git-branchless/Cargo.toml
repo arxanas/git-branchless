@@ -12,7 +12,7 @@ name = "git-branchless"
 readme = "../README.md"
 repository = "https://github.com/arxanas/git-branchless"
 rust-version = "1.61.0"
-version = "0.7.0-pre.1"
+version = "0.7.0-rc.1"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -25,24 +25,24 @@ cursive_core = "0.3.7"
 eden_dag = { package = "esl01-dag", version = "0.2.1" }
 eyre = "0.6.8"
 fslock = "0.2.1"
-git-branchless-hook = { version = "0.7.0-pre.1", path = "../git-branchless-hook" }
-git-branchless-init = { version = "0.7.0-pre.1", path = "../git-branchless-init" }
-git-branchless-invoke = { version = "0.7.0-pre.1", path = "../git-branchless-invoke" }
-git-branchless-move = { version = "0.7.0-pre.1", path = "../git-branchless-move" }
-git-branchless-navigation = { version = "0.7.0-pre.1", path = "../git-branchless-navigation" }
-git-branchless-opts = { version = "0.7.0-pre.1", path = "../git-branchless-opts" }
-git-branchless-query = { version = "0.7.0-pre.1", path = "../git-branchless-query" }
-git-branchless-record = { version = "0.7.0-pre.1", path = "../git-branchless-record" }
-git-branchless-revset = { version = "0.7.0-pre.1", path = "../git-branchless-revset" }
-git-branchless-reword = { version = "0.7.0-pre.1", path = "../git-branchless-reword" }
-git-branchless-smartlog = { version = "0.7.0-pre.1", path = "../git-branchless-smartlog" }
-git-branchless-submit = { version = "0.7.0-pre.1", path = "../git-branchless-submit" }
-git-branchless-test = { version = "0.7.0-pre.1", path = "../git-branchless-test" }
-git-branchless-undo = { version = "0.7.0-pre.1", path = "../git-branchless-undo" }
+git-branchless-hook = { version = "0.7.0-rc.1", path = "../git-branchless-hook" }
+git-branchless-init = { version = "0.7.0-rc.1", path = "../git-branchless-init" }
+git-branchless-invoke = { version = "0.7.0-rc.1", path = "../git-branchless-invoke" }
+git-branchless-move = { version = "0.7.0-rc.1", path = "../git-branchless-move" }
+git-branchless-navigation = { version = "0.7.0-rc.1", path = "../git-branchless-navigation" }
+git-branchless-opts = { version = "0.7.0-rc.1", path = "../git-branchless-opts" }
+git-branchless-query = { version = "0.7.0-rc.1", path = "../git-branchless-query" }
+git-branchless-record = { version = "0.7.0-rc.1", path = "../git-branchless-record" }
+git-branchless-revset = { version = "0.7.0-rc.1", path = "../git-branchless-revset" }
+git-branchless-reword = { version = "0.7.0-rc.1", path = "../git-branchless-reword" }
+git-branchless-smartlog = { version = "0.7.0-rc.1", path = "../git-branchless-smartlog" }
+git-branchless-submit = { version = "0.7.0-rc.1", path = "../git-branchless-submit" }
+git-branchless-test = { version = "0.7.0-rc.1", path = "../git-branchless-test" }
+git-branchless-undo = { version = "0.7.0-rc.1", path = "../git-branchless-undo" }
 git-record = { version = "0.3", path = "../git-record" }
 itertools = "0.10.5"
 lazy_static = "1.4.0"
-lib = { package = "git-branchless-lib", version = "0.7.0-pre.1", path = "../git-branchless-lib" }
+lib = { package = "git-branchless-lib", version = "0.7.0-rc.1", path = "../git-branchless-lib" }
 man = "0.3.0"
 num_cpus = "1.13.1"
 once_cell = "1.17.0"
