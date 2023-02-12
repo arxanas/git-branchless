@@ -101,9 +101,6 @@ name = "test_move"
 name = "test_navigation"
 
 [[test]]
-name = "test_record"
-
-[[test]]
 name = "test_repair"
 
 [[test]]
