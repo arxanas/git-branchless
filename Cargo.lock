@@ -1288,6 +1288,7 @@ dependencies = [
  "eyre",
  "git-branchless-lib",
  "git-record",
+ "insta",
  "itertools 0.10.5",
  "rayon",
 ]
