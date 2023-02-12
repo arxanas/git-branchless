@@ -1,7 +1,10 @@
 [package]
-name = "scm-bisect"
-version = "0.1.0"
+description = "Supporting library for git-branchless"
 edition = "2021"
+license = "MIT or Apache-2.0"
+name = "scm-bisect"
+repository = "https://github.com/arxanas/git-branchless"
+version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
