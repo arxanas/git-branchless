@@ -1,5 +1,3 @@
-pub mod util;
-
 use lib::testing::{make_git, remove_rebase_lines, trim_lines, GitRunOptions};
 
 #[test]

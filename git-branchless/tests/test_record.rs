@@ -1,5 +1,3 @@
-pub mod util;
-
 use lib::testing::pty::{run_in_pty, PtyAction};
 use lib::testing::{make_git, GitInitOptions, GitRunOptions};
 

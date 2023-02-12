@@ -1,5 +1,3 @@
-pub mod util;
-
 use std::str::FromStr;
 
 use lib::git::NonZeroOid;
