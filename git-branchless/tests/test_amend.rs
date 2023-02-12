@@ -1,7 +1,6 @@
 pub mod util;
 
-use lib::testing::{make_git, remove_rebase_lines, GitRunOptions};
-use util::trim_lines;
+use lib::testing::{make_git, remove_rebase_lines, trim_lines, GitRunOptions};
 
 #[test]
 fn test_amend_with_children() -> eyre::Result<()> {

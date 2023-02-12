@@ -8,7 +8,6 @@ use lib::testing::{
     make_git, make_git_worktree, GitInitOptions, GitRunOptions, GitWorktreeWrapper,
 };
 use regex::Regex;
-use util::trim_lines;
 
 #[test]
 fn test_hook_installed() -> eyre::Result<()> {
@@ -283,6 +282,8 @@ fn test_init_prompt_for_main_branch() -> eyre::Result<()> {
 #[cfg(unix)]
 #[test]
 fn test_main_branch_not_found_error_message() -> eyre::Result<()> {
+    use lib::testing::trim_lines;
+
     let git = make_git()?;
 
     git.init_repo()?;

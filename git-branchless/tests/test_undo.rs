@@ -12,8 +12,7 @@ use lib::core::eventlog::{EventCursor, EventLogDb, EventReplayer};
 use lib::core::formatting::Glyphs;
 use lib::core::repo_ext::RepoExt;
 use lib::git::{GitRunInfo, GitVersion, Repo};
-use lib::testing::{make_git, Git, GitInitOptions};
-use util::trim_lines;
+use lib::testing::{make_git, trim_lines, Git, GitInitOptions};
 
 use cursive_core::event::Key;
 use cursive_core::{Cursive, CursiveRunner};

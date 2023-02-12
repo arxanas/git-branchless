@@ -7,13 +7,6 @@ use eyre::eyre;
 use lib::testing::Git;
 use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 
-pub fn trim_lines(output: String) -> String {
-    output
-        .lines()
-        .flat_map(|line| vec![line.trim_end(), "\n"].into_iter())
-        .collect()
-}
-
 pub enum PtyAction<'a> {
     Write(&'a str),
     WaitUntilContains(&'a str),
