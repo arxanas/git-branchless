@@ -70,6 +70,8 @@ tracing-subscriber = { version = "=0.3.11", features = ["env-filter"] }
 thiserror = "1.0.32"
 bstr = "1.2.0"
 serde = { version = "1.0.152", features = ["derive"] }
+portable-pty = "0.7.0"
+vt100 = "0.15.2"
 
 [dev-dependencies]
 criterion = { version = "0.4.0", features = ["html_reports"] }
