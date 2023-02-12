@@ -1,5 +1,3 @@
-pub mod util;
-
 use std::mem::swap;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
