@@ -750,3 +750,11 @@ pub fn remove_rebase_lines(output: String) -> String {
         .map(|line| format!("{line}\n"))
         .collect()
 }
+
+/// Remove whitespace from the end of each line in the provided string.
+pub fn trim_lines(output: String) -> String {
+    output
+        .lines()
+        .flat_map(|line| vec![line.trim_end(), "\n"].into_iter())
+        .collect()
+}

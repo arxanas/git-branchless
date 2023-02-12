@@ -3,8 +3,7 @@ pub mod util;
 use std::str::FromStr;
 
 use lib::git::NonZeroOid;
-use lib::testing::{make_git, GitInitOptions, GitRunOptions};
-use util::trim_lines;
+use lib::testing::{make_git, trim_lines, GitInitOptions, GitRunOptions};
 
 #[test]
 fn test_restore_snapshot_basic() -> eyre::Result<()> {
