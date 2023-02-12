@@ -847,11 +847,7 @@ pub mod pty {
                                 const BUF_SIZE: usize = 4096;
                                 let mut buffer = [0; BUF_SIZE];
                                 let n = reader.read(&mut buffer)?;
-                                assert!(
-                                    n < BUF_SIZE,
-                                    "filled up PTY buffer by reading {} bytes",
-                                    n
-                                );
+                                assert!(n < BUF_SIZE, "filled up PTY buffer by reading {n} bytes",);
 
                                 {
                                     let mut parser = parser.lock().unwrap();
