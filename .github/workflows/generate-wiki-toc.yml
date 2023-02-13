@@ -25,7 +25,7 @@ jobs:
           fi
 
       - name: Remove timestamps
-        uses: jacobtomlinson/gha-find-replace@v2
+        uses: jacobtomlinson/gha-find-replace@v3
         with:
           find: "<!-- Added by: runner, at: [^-]+ -->"
           replace: "<!-- Added by: runner, at: (timestamp removed) -->"
