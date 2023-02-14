@@ -1,3 +1,14 @@
+//! Push the user's commits to a remote.
+
+#![warn(missing_docs)]
+#![warn(
+    clippy::all,
+    clippy::as_conversions,
+    clippy::clone_on_ref_ptr,
+    clippy::dbg_macro
+)]
+#![allow(clippy::too_many_arguments, clippy::blocks_in_if_conditions)]
+
 use std::fmt::Write;
 use std::time::SystemTime;
 
@@ -23,6 +34,7 @@ lazy_static! {
         Style::merge(&[BaseColor::Yellow.light().into(), Effect::Bold.into()]);
 }
 
+/// `submit` command.
 pub fn command_main(ctx: CommandContext, args: SubmitArgs) -> eyre::Result<ExitCode> {
     let CommandContext {
         effects,
