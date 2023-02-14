@@ -1,7 +1,10 @@
 [package]
-name = "git-branchless-query"
-version = "0.7.0-rc.1"
+description = "Supporting library for git-branchless"
 edition = "2021"
+license = "GPL-2.0-only"
+name = "git-branchless-query"
+repository = "https://github.com/arxanas/git-branchless"
+version = "0.7.0-rc.1"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

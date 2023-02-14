@@ -1,6 +1,9 @@
 [package]
+description = "Supporting library for git-branchless"
 edition = "2021"
+license = "GPL-2.0-only"
 name = "git-branchless-record"
+repository = "https://github.com/arxanas/git-branchless"
 version = "0.7.0-rc.1"
 
 [dependencies]
