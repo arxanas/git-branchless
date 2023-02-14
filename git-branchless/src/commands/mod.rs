@@ -6,7 +6,6 @@ mod hide;
 mod repair;
 mod restack;
 mod snapshot;
-mod submit;
 mod sync;
 mod wrap;
 
@@ -176,17 +175,7 @@ fn command_main(ctx: CommandContext, opts: Opts) -> eyre::Result<ExitCode> {
             }
         },
 
-        Command::Submit {
-            create,
-            revset,
-            resolve_revset_options,
-        } => submit::submit(
-            &effects,
-            &git_run_info,
-            revset,
-            &resolve_revset_options,
-            create,
-        )?,
+        Command::Submit(args) => git_branchless_submit::command_main(ctx, args)?,
 
         Command::Sync {
             pull,

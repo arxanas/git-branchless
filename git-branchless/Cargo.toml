@@ -36,6 +36,7 @@ git-branchless-record = { version = "0.7.0-pre.1", path = "../git-branchless-rec
 git-branchless-revset = { version = "0.7.0-pre.1", path = "../git-branchless-revset" }
 git-branchless-reword = { version = "0.7.0-pre.1", path = "../git-branchless-reword" }
 git-branchless-smartlog = { version = "0.7.0-pre.1", path = "../git-branchless-smartlog" }
+git-branchless-submit = { version = "0.7.0-pre.1", path = "../git-branchless-submit" }
 git-branchless-test = { version = "0.7.0-pre.1", path = "../git-branchless-test" }
 git-branchless-undo = { version = "0.7.0-pre.1", path = "../git-branchless-undo" }
 git-record = { version = "0.3", path = "../git-record" }
@@ -113,9 +114,6 @@ name = "test_reword"
 
 [[test]]
 name = "test_snapshot"
-
-[[test]]
-name = "test_submit"
 
 [[test]]
 name = "test_sync"

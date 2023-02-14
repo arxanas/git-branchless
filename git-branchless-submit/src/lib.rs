@@ -2,6 +2,7 @@ use std::fmt::Write;
 use std::time::SystemTime;
 
 use cursive_core::theme::{BaseColor, Effect, Style};
+use git_branchless_invoke::CommandContext;
 use itertools::{Either, Itertools};
 use lazy_static::lazy_static;
 use lib::core::dag::{commit_set_to_vec, Dag};
@@ -12,7 +13,7 @@ use lib::core::repo_ext::RepoExt;
 use lib::git::{Branch, BranchType, CategorizedReferenceName, ConfigRead, GitRunInfo, Repo};
 use lib::util::ExitCode;
 
-use git_branchless_opts::{ResolveRevsetOptions, Revset};
+use git_branchless_opts::{ResolveRevsetOptions, Revset, SubmitArgs};
 use git_branchless_revset::resolve_commits;
 
 lazy_static! {
@@ -22,7 +23,26 @@ lazy_static! {
         Style::merge(&[BaseColor::Yellow.light().into(), Effect::Bold.into()]);
 }
 
-pub fn submit(
+pub fn command_main(ctx: CommandContext, args: SubmitArgs) -> eyre::Result<ExitCode> {
+    let CommandContext {
+        effects,
+        git_run_info,
+    } = ctx;
+    let SubmitArgs {
+        create,
+        revset,
+        resolve_revset_options,
+    } = args;
+    submit(
+        &effects,
+        &git_run_info,
+        revset,
+        &resolve_revset_options,
+        create,
+    )
+}
+
+fn submit(
     effects: &Effects,
     git_run_info: &GitRunInfo,
     revset: Revset,
