@@ -316,6 +316,28 @@ pub struct SmartlogArgs {
     pub resolve_revset_options: ResolveRevsetOptions,
 }
 
+/// Push commits to a remote.
+#[derive(Debug, Parser)]
+pub struct SubmitArgs {
+    /// If there is no remote branch for a given local branch, create the
+    /// remote branch by pushing the local branch to the default push
+    /// remote.
+    ///
+    /// You can configure the default push remote with `git config
+    /// remote.pushDefault <remote>`.
+    #[clap(action, short = 'c', long = "create")]
+    pub create: bool,
+
+    /// The commits to push. All branches attached to those commits will be
+    /// pushed.
+    #[clap(value_parser, default_value = "stack()")]
+    pub revset: Revset,
+
+    /// Options for resolving revset expressions.
+    #[clap(flatten)]
+    pub resolve_revset_options: ResolveRevsetOptions,
+}
+
 /// Run a command on each commit in a given set and aggregate the results.
 #[derive(Debug, Parser)]
 pub struct TestArgs {
@@ -555,25 +577,7 @@ pub enum Command {
     },
 
     /// Push commits to a remote.
-    Submit {
-        /// If there is no remote branch for a given local branch, create the
-        /// remote branch by pushing the local branch to the default push
-        /// remote.
-        ///
-        /// You can configure the default push remote with `git config
-        /// remote.pushDefault <remote>`.
-        #[clap(action, short = 'c', long = "create")]
-        create: bool,
-
-        /// The commits to push. All branches attached to those commits will be
-        /// pushed.
-        #[clap(value_parser, default_value = "stack()")]
-        revset: Revset,
-
-        /// Options for resolving revset expressions.
-        #[clap(flatten)]
-        resolve_revset_options: ResolveRevsetOptions,
-    },
+    Submit(SubmitArgs),
 
     /// Switch to the provided branch or commit.
     Switch {
