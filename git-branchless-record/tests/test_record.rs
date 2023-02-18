@@ -283,7 +283,7 @@ fn test_record_create_branch() -> eyre::Result<()> {
     git.commit_file("test1", 1)?;
     git.write_file_txt("test1", "new contents\n")?;
     {
-        let (stdout, _stderr) = git.branchless("record", &["-b", "foo", "-m", "Update"])?;
+        let (stdout, _stderr) = git.branchless("record", &["-c", "foo", "-m", "Update"])?;
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> checkout master -b foo
         M	test1.txt
