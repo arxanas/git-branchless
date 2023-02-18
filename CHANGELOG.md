@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - (#777) `git test run` now aborts the overall test run when a test returns exit code `127`.
 - (#777) `git test run` now sets the `BRANCHLESS_TEST_COMMIT` and `BRANCHLESS_TEST_COMMAND` environment variables when running the test command.
 - (#785) Added `tests.passed()`, `tests.failed()`, and `tests.fixable()` revset functions, whose results are populated by `git test`.
+- (#790) Added the `--reverse` option to `git smartlog`.
 
 ### Changed
 
@@ -39,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - (#593, #608) `git sync` produces more descriptive output.
 - (#685) `git submit` now colorizes the names of the affected branches.
 - (#763) Running `git branchless switch` with no arguments will switch to the branch associate with the current commit, if there is exactly one such branch and the `branchless.navigation.autoSwitchBranches` configuration variable is set to `true`.
+- (#791) The name for the temporary file created by `git reword` is now of the form `COMMIT_EDITMSG-*.txt`, which your editor can use to detect it as a Git commit message file.
 
 ### Fixed
 
