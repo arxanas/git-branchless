@@ -292,6 +292,35 @@ pub struct QueryArgs {
     #[clap(action, short = 'r', long = "raw", conflicts_with("show_branches"))]
     pub raw: bool,
 }
+
+/// Create a commit by interactively selecting which changes to include.
+#[derive(Debug, Parser)]
+pub struct RecordArgs {
+    /// The commit message to use. If not provided, will be prompted to provide a commit message
+    /// interactively.
+    #[clap(value_parser, short = 'm', long = "message")]
+    pub message: Option<String>,
+
+    /// Select changes to include interactively, rather than using the
+    /// current staged/unstaged changes.
+    #[clap(action, short = 'i', long = "interactive")]
+    pub interactive: bool,
+
+    /// Create and switch to a new branch with the given name before
+    /// committing.
+    #[clap(action, short = 'b', long = "branch")]
+    pub branch: Option<String>,
+
+    /// Detach the current branch before committing.
+    #[clap(action, short = 'd', long = "detach", conflicts_with("branch"))]
+    pub detach: bool,
+
+    /// Insert the new commit between the current commit and its children,
+    /// if any.
+    #[clap(action, short = 'I', long = "insert")]
+    pub insert: bool,
+}
+
 /// Display a nice graph of the commits you've recently worked on.
 #[derive(Debug, Parser)]
 pub struct SmartlogArgs {
@@ -501,31 +530,7 @@ pub enum Command {
     },
 
     /// Create a commit by interactively selecting which changes to include.
-    Record {
-        /// The commit message to use. If not provided, will be prompted to provide a commit message
-        /// interactively.
-        #[clap(value_parser, short = 'm', long = "message")]
-        message: Option<String>,
-
-        /// Select changes to include interactively, rather than using the
-        /// current staged/unstaged changes.
-        #[clap(action, short = 'i', long = "interactive")]
-        interactive: bool,
-
-        /// Create and switch to a new branch with the given name before
-        /// committing.
-        #[clap(action, short = 'b', long = "branch")]
-        branch: Option<String>,
-
-        /// Detach the current branch before committing.
-        #[clap(action, short = 'd', long = "detach", conflicts_with("branch"))]
-        detach: bool,
-
-        /// Insert the new commit between the current commit and its children,
-        /// if any.
-        #[clap(action, short = 'I', long = "insert")]
-        insert: bool,
-    },
+    Record(RecordArgs),
 
     /// Reword commits.
     Reword {

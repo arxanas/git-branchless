@@ -20,6 +20,8 @@ use cursive::CursiveRunnable;
 use cursive_buffered_backend::BufferedBackend;
 
 use eden_dag::DagAlgorithm;
+use git_branchless_invoke::CommandContext;
+use git_branchless_opts::RecordArgs;
 use git_record::Recorder;
 use git_record::{RecordError, RecordState};
 use itertools::Itertools;
@@ -42,9 +44,35 @@ use lib::git::{
 };
 use lib::util::ExitCode;
 use rayon::ThreadPoolBuilder;
+use tracing::instrument;
 
 /// Commit changes in the working copy.
-pub fn record(
+#[instrument]
+pub fn command_main(ctx: CommandContext, args: RecordArgs) -> eyre::Result<ExitCode> {
+    let CommandContext {
+        effects,
+        git_run_info,
+    } = ctx;
+    let RecordArgs {
+        message,
+        interactive,
+        branch,
+        detach,
+        insert,
+    } = args;
+    record(
+        &effects,
+        &git_run_info,
+        message,
+        interactive,
+        branch,
+        detach,
+        insert,
+    )
+}
+
+#[instrument]
+fn record(
     effects: &Effects,
     git_run_info: &GitRunInfo,
     message: Option<String>,
@@ -198,6 +226,7 @@ pub fn record(
     Ok(ExitCode(0))
 }
 
+#[instrument]
 fn record_interactive(
     effects: &Effects,
     git_run_info: &GitRunInfo,
@@ -274,6 +303,7 @@ fn record_interactive(
     git_run_info.run_direct_no_wrapping(Some(event_tx_id), &args)
 }
 
+#[instrument]
 fn insert_before_siblings(
     effects: &Effects,
     git_run_info: &GitRunInfo,
