@@ -1286,11 +1286,14 @@ dependencies = [
  "cursive_buffered_backend",
  "esl01-dag",
  "eyre",
+ "git-branchless-invoke",
  "git-branchless-lib",
+ "git-branchless-opts",
  "git-record",
  "insta",
  "itertools 0.10.5",
  "rayon",
+ "tracing",
 ]
 
 [[package]]

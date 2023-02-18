@@ -125,21 +125,7 @@ fn command_main(ctx: CommandContext, opts: Opts) -> eyre::Result<ExitCode> {
             MergeConflictRemediation::Retry,
         )?,
 
-        Command::Record {
-            message,
-            interactive,
-            branch,
-            detach,
-            insert,
-        } => git_branchless_record::record(
-            &effects,
-            &git_run_info,
-            message,
-            interactive,
-            branch,
-            detach,
-            insert,
-        )?,
+        Command::Record(args) => git_branchless_record::command_main(ctx, args)?,
 
         Command::Reword {
             revsets,
