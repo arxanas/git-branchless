@@ -308,11 +308,11 @@ pub struct RecordArgs {
 
     /// Create and switch to a new branch with the given name before
     /// committing.
-    #[clap(action, short = 'b', long = "branch")]
-    pub branch: Option<String>,
+    #[clap(action, short = 'c', long = "create")]
+    pub create: Option<String>,
 
     /// Detach the current branch before committing.
-    #[clap(action, short = 'd', long = "detach", conflicts_with("branch"))]
+    #[clap(action, short = 'd', long = "detach", conflicts_with("create"))]
     pub detach: bool,
 
     /// Insert the new commit between the current commit and its children,

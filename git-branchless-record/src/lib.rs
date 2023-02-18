@@ -56,7 +56,7 @@ pub fn command_main(ctx: CommandContext, args: RecordArgs) -> eyre::Result<ExitC
     let RecordArgs {
         message,
         interactive,
-        branch,
+        create,
         detach,
         insert,
     } = args;
@@ -65,7 +65,7 @@ pub fn command_main(ctx: CommandContext, args: RecordArgs) -> eyre::Result<ExitC
         &git_run_info,
         message,
         interactive,
-        branch,
+        create,
         detach,
         insert,
     )
