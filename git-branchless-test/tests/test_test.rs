@@ -1311,13 +1311,13 @@ fn test_test_search_skip_indeterminate() -> eyre::Result<()> {
         Using test execution strategy: working-copy
         Using test search strategy: binary
         branchless: running command: <git-executable> rebase --abort
-        ⚠️ Exit code indicated to skip this commit (exit code 125): 62fc20d create test1.txt
-        ⚠️ Exit code indicated to skip this commit (exit code 125): 96d1c37 create test2.txt
-        ⚠️ Exit code indicated to skip this commit (exit code 125): 70deb1e create test3.txt
-        ⚠️ Exit code indicated to skip this commit (exit code 125): 355e173 create test4.txt
-        ⚠️ Exit code indicated to skip this commit (exit code 125): f81d55c create test5.txt
-        ⚠️ Exit code indicated to skip this commit (exit code 125): 2831fb5 create test6.txt
-        ⚠️ Exit code indicated to skip this commit (exit code 125): c8933b3 create test7.txt
+        ! Exit code indicated to skip this commit (exit code 125): 62fc20d create test1.txt
+        ! Exit code indicated to skip this commit (exit code 125): 96d1c37 create test2.txt
+        ! Exit code indicated to skip this commit (exit code 125): 70deb1e create test3.txt
+        ! Exit code indicated to skip this commit (exit code 125): 355e173 create test4.txt
+        ! Exit code indicated to skip this commit (exit code 125): f81d55c create test5.txt
+        ! Exit code indicated to skip this commit (exit code 125): 2831fb5 create test6.txt
+        ! Exit code indicated to skip this commit (exit code 125): c8933b3 create test7.txt
         Tested 7 commits with exit 125:
         0 passed, 0 failed, 7 skipped
         There were no passing commits in the provided set.
@@ -1336,13 +1336,13 @@ fn test_test_search_skip_indeterminate() -> eyre::Result<()> {
         Using test execution strategy: working-copy
         Using test search strategy: binary
         branchless: running command: <git-executable> rebase --abort
-        ⚠️ Exit code indicated to skip this commit (exit code 125): 62fc20d create test1.txt
-        ⚠️ Exit code indicated to skip this commit (exit code 125): 96d1c37 create test2.txt
-        ⚠️ Exit code indicated to skip this commit (exit code 125): 70deb1e create test3.txt
-        ⚠️ Exit code indicated to skip this commit (exit code 125): 355e173 create test4.txt
-        ⚠️ Exit code indicated to skip this commit (exit code 125): f81d55c create test5.txt
-        ⚠️ Exit code indicated to skip this commit (exit code 125): 2831fb5 create test6.txt
-        ⚠️ Exit code indicated to skip this commit (exit code 125): c8933b3 create test7.txt
+        ! Exit code indicated to skip this commit (exit code 125): 62fc20d create test1.txt
+        ! Exit code indicated to skip this commit (exit code 125): 96d1c37 create test2.txt
+        ! Exit code indicated to skip this commit (exit code 125): 70deb1e create test3.txt
+        ! Exit code indicated to skip this commit (exit code 125): 355e173 create test4.txt
+        ! Exit code indicated to skip this commit (exit code 125): f81d55c create test5.txt
+        ! Exit code indicated to skip this commit (exit code 125): 2831fb5 create test6.txt
+        ! Exit code indicated to skip this commit (exit code 125): c8933b3 create test7.txt
         Tested 7 commits with exit 125:
         0 passed, 0 failed, 7 skipped
         There were no passing commits in the provided set.
@@ -1378,10 +1378,10 @@ fi
         ✓ Passed: 62fc20d create test1.txt
         ✓ Passed: 96d1c37 create test2.txt
         ✓ Passed: 70deb1e create test3.txt
-        ⚠️ Exit code indicated to skip this commit (exit code 125): 355e173 create test4.txt
-        ⚠️ Exit code indicated to skip this commit (exit code 125): f81d55c create test5.txt
-        ⚠️ Exit code indicated to skip this commit (exit code 125): 2831fb5 create test6.txt
-        ⚠️ Exit code indicated to skip this commit (exit code 125): c8933b3 create test7.txt
+        ! Exit code indicated to skip this commit (exit code 125): 355e173 create test4.txt
+        ! Exit code indicated to skip this commit (exit code 125): f81d55c create test5.txt
+        ! Exit code indicated to skip this commit (exit code 125): 2831fb5 create test6.txt
+        ! Exit code indicated to skip this commit (exit code 125): c8933b3 create test7.txt
         Tested 7 commits with bash test.sh:
         3 passed, 0 failed, 4 skipped
         Last passing commit:
@@ -1403,10 +1403,10 @@ fi
         Using test search strategy: binary
         branchless: running command: <git-executable> rebase --abort
         ✓ Passed (cached): 70deb1e create test3.txt
-        ⚠️ Exit code indicated to skip this commit (exit code 125): 355e173 create test4.txt
-        ⚠️ Exit code indicated to skip this commit (exit code 125): f81d55c create test5.txt
-        ⚠️ Exit code indicated to skip this commit (exit code 125): 2831fb5 create test6.txt
-        ⚠️ Exit code indicated to skip this commit (exit code 125): c8933b3 create test7.txt
+        ! Exit code indicated to skip this commit (exit code 125): 355e173 create test4.txt
+        ! Exit code indicated to skip this commit (exit code 125): f81d55c create test5.txt
+        ! Exit code indicated to skip this commit (exit code 125): 2831fb5 create test6.txt
+        ! Exit code indicated to skip this commit (exit code 125): c8933b3 create test7.txt
         Tested 5 commits with bash test.sh:
         1 passed, 0 failed, 4 skipped
         Last passing commit:
@@ -1763,7 +1763,7 @@ esac
         branchless: running command: <git-executable> rebase --abort
         ✓ Passed (fixable): 62fc20d create test1.txt
         X Failed (exit code 1): 96d1c37 create test2.txt
-        ⚠️ Exit code indicated to skip this commit (exit code 125): 70deb1e create test3.txt
+        ! Exit code indicated to skip this commit (exit code 125): 70deb1e create test3.txt
         ✓ Passed: 355e173 create test4.txt
         Tested 4 commits with bash test.sh:
         2 passed, 1 failed, 1 skipped

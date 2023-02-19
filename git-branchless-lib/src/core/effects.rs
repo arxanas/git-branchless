@@ -244,7 +244,7 @@ pub mod icons {
     pub const CHECKMARK: &str = "✓";
 
     /// Used to indicate a warning.
-    pub const EXCLAMATION: &str = "⚠️";
+    pub const EXCLAMATION: &str = "!";
 
     /// Used to indicate failure.
     ///
