@@ -926,34 +926,43 @@ fn make_test_status_description(
 ) -> eyre::Result<StyledString> {
     let description = match test_status {
         TestStatus::CheckoutFailed => StyledStringBuilder::new()
-            .append_styled("Failed to check out: ", *STYLE_SKIPPED)
+            .append_styled("Failed to check out: ", test_status.get_style())
             .append(commit.friendly_describe(glyphs)?)
             .build(),
 
         TestStatus::SpawnTestFailed(err) => StyledStringBuilder::new()
-            .append_styled(format!("Failed to spawn test: {err}: "), *STYLE_SKIPPED)
+            .append_styled(
+                format!("Failed to spawn test: {err}: "),
+                test_status.get_style(),
+            )
             .append(commit.friendly_describe(glyphs)?)
             .build(),
 
         TestStatus::TerminatedBySignal => StyledStringBuilder::new()
-            .append_styled("Test command terminated by signal: ", *STYLE_FAILURE)
+            .append_styled(
+                "Test command terminated by signal: ",
+                test_status.get_style(),
+            )
             .append(commit.friendly_describe(glyphs)?)
             .build(),
 
         TestStatus::AlreadyInProgress => StyledStringBuilder::new()
-            .append_styled("Test already in progress? ", *STYLE_SKIPPED)
+            .append_styled("Test already in progress? ", test_status.get_style())
             .append(commit.friendly_describe(glyphs)?)
             .build(),
 
         TestStatus::ReadCacheFailed(_) => StyledStringBuilder::new()
-            .append_styled("Could not read cached test result: ", *STYLE_SKIPPED)
+            .append_styled(
+                "Could not read cached test result: ",
+                test_status.get_style(),
+            )
             .append(commit.friendly_describe(glyphs)?)
             .build(),
 
         TestStatus::Indeterminate { exit_code } => StyledStringBuilder::new()
             .append_styled(
                 format!("Exit code indicated to skip this commit (exit code {exit_code}): "),
-                *STYLE_SKIPPED,
+                test_status.get_style(),
             )
             .append(commit.friendly_describe(glyphs)?)
             .build(),
@@ -961,7 +970,7 @@ fn make_test_status_description(
         TestStatus::Abort { exit_code } => StyledStringBuilder::new()
             .append_styled(
                 format!("Exit code indicated to abort testing (exit code {exit_code}): "),
-                *STYLE_FAILURE,
+                test_status.get_style(),
             )
             .append(commit.friendly_describe(glyphs)?)
             .build(),
@@ -981,7 +990,7 @@ fn make_test_status_description(
             }
             let descriptors = descriptors.join(", ");
             StyledStringBuilder::new()
-                .append_styled(format!("Failed ({descriptors}): "), *STYLE_FAILURE)
+                .append_styled(format!("Failed ({descriptors}): "), test_status.get_style())
                 .append(commit.friendly_describe(glyphs)?)
                 .build()
         }
@@ -1011,7 +1020,7 @@ fn make_test_status_description(
                 format!(" ({})", descriptors.join(", "))
             };
             StyledStringBuilder::new()
-                .append_styled(format!("Passed{descriptors}: "), *STYLE_SUCCESS)
+                .append_styled(format!("Passed{descriptors}: "), test_status.get_style())
                 .append(commit.friendly_describe(glyphs)?)
                 .build()
         }
