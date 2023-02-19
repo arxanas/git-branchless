@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - (#730) BREAKING: The default revset for `git reword` is now `stack() | @` instead of `@`, to simultaneously reword all commits in the current stack.
 - (#763) BREAKING: `git branchless switch` no longer implicitly opens the interactive commit selector when no target is provided. You must explicitly pass `-i`/`--interactive` to do so.
+- (#801) BREAKING: The parameter to `git record` has been renamed from `-b`/`--branch` to `-c`/`--create`.
 - (#685) `git submit` now colorizes the names of the affected branches.
 - (#763) Running `git branchless switch` with no arguments will switch to the branch associate with the current commit, if there is exactly one such branch and the `branchless.navigation.autoSwitchBranches` configuration variable is set to `true`.
 - (#791) The name for the temporary file created by `git reword` is now of the form `COMMIT_EDITMSG-*.txt`, which your editor can use to detect it as a Git commit message file.
