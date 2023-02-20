@@ -45,7 +45,7 @@ lazy_static = "1.4.0"
 lib = { package = "git-branchless-lib", version = "0.7.0-rc.1", path = "../git-branchless-lib" }
 man = "0.3.0"
 num_cpus = "1.13.1"
-once_cell = "1.17.0"
+once_cell = "1.17.1"
 path-slash = "0.2.1"
 rayon = "1.6.1"
 regex = "1.7.1"
