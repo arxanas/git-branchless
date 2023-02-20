@@ -75,7 +75,7 @@ vt100 = "0.15.2"
 
 [dev-dependencies]
 criterion = { version = "0.4.0", features = ["html_reports"] }
-insta = "1.24.1"
+insta = "1.28.0"
 lazy_static = "1.4.0"
 portable-pty = "0.7.0"
 vt100 = "0.15.2"
