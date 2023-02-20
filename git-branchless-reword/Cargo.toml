@@ -20,4 +20,4 @@ tempfile = "3.3.0"
 tracing = "0.1.37"
 
 [dev-dependencies]
-insta = "1.21.0"
+insta = "1.28.0"

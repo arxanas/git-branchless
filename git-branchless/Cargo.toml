@@ -59,7 +59,7 @@ tracing-subscriber = { version = "=0.3.11", features = ["env-filter"] }
 [dev-dependencies]
 anyhow = "1.0.69"
 assert_cmd = "2.0.7"
-insta = "1.24.1"
+insta = "1.28.0"
 portable-pty = "0.7.0"
 vt100 = "0.15.2"
 
