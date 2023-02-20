@@ -70,14 +70,14 @@ tracing-subscriber = { version = "=0.3.11", features = ["env-filter"] }
 thiserror = "1.0.32"
 bstr = "1.3.0"
 serde = { version = "1.0.152", features = ["derive"] }
-portable-pty = "0.7.0"
+portable-pty = "0.8.0"
 vt100 = "0.15.2"
 
 [dev-dependencies]
 criterion = { version = "0.4.0", features = ["html_reports"] }
 insta = "1.28.0"
 lazy_static = "1.4.0"
-portable-pty = "0.7.0"
+portable-pty = "0.8.0"
 vt100 = "0.15.2"
 
 # FIXME: when updated to `1.0.74`, the `cc` package causes Nix build failures.
