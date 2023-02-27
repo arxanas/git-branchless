@@ -16,7 +16,7 @@ git-branchless-revset = { version = "0.7.0-rc.1", path = "../git-branchless-revs
 lib = { package = "git-branchless-lib", version = "0.7.0-rc.1", path = "../git-branchless-lib" }
 rayon = "1.5.3"
 shell-words = "1.1.0"
-tempfile = "3.3.0"
+tempfile = "3.4.0"
 tracing = "0.1.37"
 
 [dev-dependencies]
