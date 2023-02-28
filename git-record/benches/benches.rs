@@ -9,7 +9,7 @@ use git_record::{
 };
 
 fn bench_record(c: &mut Criterion) {
-    c.bench_function("toggle line", |b| {
+    c.bench_function("git_record: toggle line", |b| {
         let before_line = SectionChangedLine {
             is_selected: false,
             line: Cow::Borrowed("foo\n"),
