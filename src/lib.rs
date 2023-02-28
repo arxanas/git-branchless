@@ -17,4 +17,4 @@ mod util;
 pub use types::{
     ChangeType, File, FileMode, RecordError, RecordState, Section, SectionChangedLine,
 };
-pub use ui::{Event, EventSource, Recorder};
+pub use ui::{Event, EventSource, Recorder, TestingScreenshot};

@@ -1,10 +1,14 @@
 //! UI implementation.
 
+use std::any::Any;
+use std::cell::RefCell;
 use std::collections::{BTreeMap, HashMap};
-use std::fmt::Debug;
+use std::fmt::Write;
+use std::fmt::{Debug, Display};
 use std::hash::Hash;
 use std::panic::AssertUnwindSafe;
 use std::path::Path;
+use std::rc::Rc;
 use std::{io, panic};
 
 use crossterm::event::{
@@ -17,6 +21,7 @@ use crossterm::terminal::{
 };
 use tracing::warn;
 use tui::backend::{Backend, TestBackend};
+use tui::buffer::Buffer;
 use tui::style::{Color, Modifier, Style};
 use tui::text::Span;
 use tui::{backend::CrosstermBackend, Terminal};
@@ -53,11 +58,36 @@ enum SelectionKey {
     Line(LineKey),
 }
 
+/// A copy of the contents of the screen at a certain point in time.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct TestingScreenshot {
+    contents: Rc<RefCell<String>>,
+}
+
+impl TestingScreenshot {
+    fn set(&self, new_contents: String) {
+        let Self { contents } = self;
+        *contents.borrow_mut() = new_contents;
+    }
+
+    /// Produce an `Event` which will record the screenshot when it's handled.
+    pub fn event(&self) -> Event {
+        Event::TakeScreenshot(self.clone())
+    }
+}
+
+impl Display for TestingScreenshot {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.contents.borrow())
+    }
+}
+
 #[allow(missing_docs)]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Event {
     None,
     Quit,
+    TakeScreenshot(TestingScreenshot),
     ScrollUp,
     ScrollDown,
     PageUp,
@@ -207,10 +237,41 @@ impl EventSource {
     }
 }
 
+/// Copied from internal implementation of `tui`.
+fn buffer_view(buffer: &Buffer) -> String {
+    let mut view =
+        String::with_capacity(buffer.content.len() + usize::from(buffer.area.height) * 3);
+    for cells in buffer.content.chunks(buffer.area.width.into()) {
+        let mut overwritten = vec![];
+        let mut skip: usize = 0;
+        view.push('"');
+        for (x, c) in cells.iter().enumerate() {
+            if skip == 0 {
+                view.push_str(&c.symbol);
+            } else {
+                overwritten.push((x, &c.symbol))
+            }
+            skip = std::cmp::max(skip, c.symbol.width()).saturating_sub(1);
+        }
+        view.push('"');
+        if !overwritten.is_empty() {
+            write!(
+                &mut view,
+                " Hidden by multi-width symbols: {:?}",
+                overwritten
+            )
+            .unwrap();
+        }
+        view.push('\n');
+    }
+    view
+}
+
 #[derive(Clone, Debug)]
 enum StateUpdate {
     None,
     Quit,
+    TakeScreenshot(TestingScreenshot),
     ScrollTo(isize),
     SelectItem(SelectionKey),
     ToggleItem(SelectionKey),
@@ -316,7 +377,7 @@ impl<'a> Recorder<'a> {
 
     fn run_inner(
         mut self,
-        term: &mut Terminal<impl Backend>,
+        term: &mut Terminal<impl Backend + Any>,
     ) -> Result<RecordState<'a>, RecordError> {
         self.selection_key = self.first_selection_key();
         let debug = std::env::var_os("SCM_RECORD_DEBUG").is_some();
@@ -371,6 +432,13 @@ impl<'a> Recorder<'a> {
             match self.handle_event(event, term_height, &drawn_rects) {
                 StateUpdate::None => {}
                 StateUpdate::Quit => break,
+                StateUpdate::TakeScreenshot(screenshot) => {
+                    let backend: &dyn Any = term.backend();
+                    let test_backend = backend
+                        .downcast_ref::<TestBackend>()
+                        .expect("TakeScreenshot event generated for non-testing backend");
+                    screenshot.set(buffer_view(test_backend.buffer()));
+                }
                 StateUpdate::ScrollTo(scroll_offset_y) => {
                     self.scroll_offset_y = scroll_offset_y
                         .clamp(0, drawn_rects[&ComponentId::App].height.unwrap_isize() - 1);
@@ -497,6 +565,7 @@ impl<'a> Recorder<'a> {
         match event {
             Event::None => StateUpdate::None,
             Event::Quit => StateUpdate::Quit,
+            Event::TakeScreenshot(screenshot) => StateUpdate::TakeScreenshot(screenshot),
             Event::ScrollUp => StateUpdate::ScrollTo(self.scroll_offset_y.saturating_sub(1)),
             Event::ScrollDown => StateUpdate::ScrollTo(self.scroll_offset_y.saturating_add(1)),
             Event::PageUp => StateUpdate::ScrollTo(
