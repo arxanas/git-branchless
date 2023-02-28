@@ -223,8 +223,8 @@ impl<'a> Recorder<'a> {
                 ) => break,
 
                 Event::Key(KeyEvent {
-                    code: KeyCode::Up,
-                    modifiers: KeyModifiers::NONE,
+                    code: KeyCode::Char('y'),
+                    modifiers: KeyModifiers::CONTROL,
                     kind: KeyEventKind::Press,
                     state: _,
                 })
@@ -237,8 +237,8 @@ impl<'a> Recorder<'a> {
                     scroll_offset_y = scroll_offset_y.saturating_sub(1);
                 }
                 Event::Key(KeyEvent {
-                    code: KeyCode::Down,
-                    modifiers: KeyModifiers::NONE,
+                    code: KeyCode::Char('e'),
+                    modifiers: KeyModifiers::CONTROL,
                     kind: KeyEventKind::Press,
                     state: _,
                 })
@@ -251,6 +251,23 @@ impl<'a> Recorder<'a> {
                     scroll_offset_y = scroll_offset_y.saturating_add(1);
                 }
 
+                Event::Key(KeyEvent {
+                    code: KeyCode::Char('u'),
+                    modifiers: KeyModifiers::CONTROL,
+                    kind: KeyEventKind::Press,
+                    state: _,
+                }) => {
+                    scroll_offset_y = scroll_offset_y.saturating_sub(term_height / 2);
+                }
+                Event::Key(KeyEvent {
+                    code: KeyCode::Char('d'),
+                    modifiers: KeyModifiers::CONTROL,
+                    kind: KeyEventKind::Press,
+                    state: _,
+                }) => {
+                    scroll_offset_y = scroll_offset_y.saturating_add(term_height / 2);
+                }
+
                 Event::Key(
                     KeyEvent {
                         code: KeyCode::PageUp,
@@ -259,7 +276,7 @@ impl<'a> Recorder<'a> {
                         state: _,
                     }
                     | KeyEvent {
-                        code: KeyCode::Char('u'),
+                        code: KeyCode::Char('b'),
                         modifiers: KeyModifiers::CONTROL,
                         kind: KeyEventKind::Press,
                         state: _,
@@ -275,7 +292,7 @@ impl<'a> Recorder<'a> {
                         state: _,
                     }
                     | KeyEvent {
-                        code: KeyCode::Char('d'),
+                        code: KeyCode::Char('f'),
                         modifiers: KeyModifiers::CONTROL,
                         kind: KeyEventKind::Press,
                         state: _,
