@@ -8,7 +8,7 @@ use thiserror::Error;
 
 /// The state used to render the changes. This is passed into [`Recorder::new`]
 /// and then updated and returned with [`Recorder::run`].
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct RecordState<'a> {
     /// The state of each file. This is rendered in order, so you may want to
     /// sort this list by path before providing it.
@@ -40,7 +40,7 @@ pub enum RecordError {
 pub type FileMode = usize;
 
 /// The state of a file to be recorded.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct File<'a> {
     /// The path to the file.
     pub path: Cow<'a, Path>,
@@ -170,7 +170,7 @@ impl File<'_> {
 }
 
 /// A section of a file to be rendered and recorded.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Section<'a> {
     /// This section of the file is unchanged and just used for context.
     ///
@@ -228,7 +228,7 @@ pub enum ChangeType {
 }
 
 /// A changed line inside a `Section`.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SectionChangedLine<'a> {
     /// Whether or not this line was selected to be recorded.
     pub is_toggled: bool,
