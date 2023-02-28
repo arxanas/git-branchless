@@ -16,6 +16,7 @@ use crossterm::terminal::{
     LeaveAlternateScreen,
 };
 use tracing::warn;
+use tui::backend::{Backend, TestBackend};
 use tui::style::{Color, Modifier, Style};
 use tui::text::Span;
 use tui::{backend::CrosstermBackend, Terminal};
@@ -25,9 +26,6 @@ use crate::render::{Component, Rect, Viewport};
 use crate::types::{ChangeType, RecordError, RecordState};
 use crate::util::UsizeExt;
 use crate::{File, Section, SectionChangedLine};
-
-type Backend = CrosstermBackend<io::Stdout>;
-type CrosstermTerminal = Terminal<Backend>;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 struct FileKey {
@@ -55,8 +53,9 @@ enum SelectionKey {
     Line(LineKey),
 }
 
-#[derive(Clone, Debug)]
-enum Event {
+#[allow(missing_docs)]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum Event {
     None,
     Quit,
     ScrollUp,
@@ -182,6 +181,32 @@ impl From<crossterm::event::Event> for Event {
     }
 }
 
+/// The source to read user events from.
+pub enum EventSource {
+    /// Read from the terminal with `crossterm`.
+    Crossterm,
+
+    /// Read from the provided sequence of events.
+    Testing(Box<dyn Iterator<Item = Event>>),
+}
+
+impl EventSource {
+    /// Helper function to construct an `EventSource::Testing`.
+    pub fn testing(events: impl IntoIterator<Item = Event> + 'static) -> Self {
+        Self::Testing(Box::new(events.into_iter()))
+    }
+
+    fn next_event(&mut self) -> Result<Event, RecordError> {
+        match self {
+            EventSource::Crossterm => {
+                let event = crossterm::event::read().map_err(RecordError::ReadInput)?;
+                Ok(event.into())
+            }
+            EventSource::Testing(events) => Ok(events.next().unwrap_or(Event::None)),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 enum StateUpdate {
     None,
@@ -194,15 +219,35 @@ enum StateUpdate {
 /// UI component to record the user's changes.
 pub struct Recorder<'a> {
     state: RecordState<'a>,
+    event_source: EventSource,
     use_unicode: bool,
     selection_key: SelectionKey,
     scroll_offset_y: isize,
 }
 
 impl<'a> Recorder<'a> {
+    /// Constructor.
+    pub fn new(state: RecordState<'a>, event_source: EventSource) -> Self {
+        Self {
+            state,
+            event_source,
+            use_unicode: true,
+            selection_key: SelectionKey::None,
+            scroll_offset_y: 0,
+        }
+    }
+
     /// Run the terminal user interface and have the user interactively select
     /// changes.
-    pub fn run(state: RecordState<'a>) -> Result<RecordState<'a>, RecordError> {
+    pub fn run(self) -> Result<RecordState<'a>, RecordError> {
+        match self.event_source {
+            EventSource::Crossterm => self.run_crossterm(),
+            EventSource::Testing(_) => self.run_testing(),
+        }
+    }
+
+    /// Run the recorder UI using `crossterm` as the backend connected to stdout.
+    fn run_crossterm(self) -> Result<RecordState<'a>, RecordError> {
         let mut stdout = io::stdout();
         if !is_raw_mode_enabled().map_err(RecordError::SetUpTerminal)? {
             enable_raw_mode().map_err(RecordError::SetUpTerminal)?;
@@ -213,22 +258,16 @@ impl<'a> Recorder<'a> {
         let mut term = Terminal::new(backend).map_err(RecordError::SetUpTerminal)?;
 
         let dump_panics = std::env::var_os("SCM_RECORD_DUMP_PANICS").is_some();
-        let recorder = Self {
-            state,
-            use_unicode: true,
-            selection_key: SelectionKey::None,
-            scroll_offset_y: 0,
-        };
         let state = if dump_panics {
-            recorder.run_inner(&mut term)
+            self.run_inner(&mut term)
         } else {
             // Catch any panics and restore terminal state, since otherwise the
             // terminal will be mostly unusable.
             let state = panic::catch_unwind(
                 // HACK: I don't actually know if the terminal is unwind-safe 🙃.
-                AssertUnwindSafe(|| recorder.run_inner(&mut term)),
+                AssertUnwindSafe(|| self.run_inner(&mut term)),
             );
-            if let Err(err) = Self::clean_up(&mut term) {
+            if let Err(err) = Self::clean_up_crossterm(&mut term) {
                 warn!(?err, "Failed to clean up terminal");
             }
             match state {
@@ -256,7 +295,7 @@ impl<'a> Recorder<'a> {
         state
     }
 
-    fn clean_up(term: &mut CrosstermTerminal) -> io::Result<()> {
+    fn clean_up_crossterm(term: &mut Terminal<CrosstermBackend<io::Stdout>>) -> io::Result<()> {
         term.show_cursor()?;
         if is_raw_mode_enabled()? {
             disable_raw_mode()?;
@@ -269,7 +308,16 @@ impl<'a> Recorder<'a> {
         Ok(())
     }
 
-    fn run_inner(mut self, term: &mut CrosstermTerminal) -> Result<RecordState<'a>, RecordError> {
+    fn run_testing(self) -> Result<RecordState<'a>, RecordError> {
+        let backend = TestBackend::new(80, 24);
+        let mut term = Terminal::new(backend).map_err(RecordError::SetUpTerminal)?;
+        self.run_inner(&mut term)
+    }
+
+    fn run_inner(
+        mut self,
+        term: &mut Terminal<impl Backend>,
+    ) -> Result<RecordState<'a>, RecordError> {
         self.selection_key = self.first_selection_key();
         let debug = std::env::var_os("SCM_RECORD_DEBUG").is_some();
 
@@ -319,8 +367,7 @@ impl<'a> Recorder<'a> {
                 .map_err(RecordError::RenderFrame)?;
             }
 
-            let event = crossterm::event::read().map_err(RecordError::ReadInput)?;
-            let event = Event::from(event);
+            let event = self.event_source.next_event()?;
             match self.handle_event(event, term_height, &drawn_rects) {
                 StateUpdate::None => {}
                 StateUpdate::Quit => break,
@@ -1284,4 +1331,16 @@ fn highlight_line<Id: Clone + Debug + Eq + Hash>(viewport: &mut Viewport<Id>, y:
         },
         Style::default().add_modifier(Modifier::REVERSED),
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_event_source_testing() {
+        let mut event_source = EventSource::testing([Event::Quit]);
+        assert_eq!(event_source.next_event().unwrap(), Event::Quit);
+        assert_eq!(event_source.next_event().unwrap(), Event::None);
+    }
 }
