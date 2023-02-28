@@ -217,13 +217,30 @@ pub enum EventSource {
     Crossterm,
 
     /// Read from the provided sequence of events.
-    Testing(Box<dyn Iterator<Item = Event>>),
+    Testing {
+        /// The width of the virtual terminal in columns.
+        width: usize,
+
+        /// The height of the virtual terminal in columns.
+        height: usize,
+
+        /// The sequence of events to emit.
+        events: Box<dyn Iterator<Item = Event>>,
+    },
 }
 
 impl EventSource {
     /// Helper function to construct an `EventSource::Testing`.
-    pub fn testing(events: impl IntoIterator<Item = Event> + 'static) -> Self {
-        Self::Testing(Box::new(events.into_iter()))
+    pub fn testing(
+        width: usize,
+        height: usize,
+        events: impl IntoIterator<Item = Event> + 'static,
+    ) -> Self {
+        Self::Testing {
+            width,
+            height,
+            events: Box::new(events.into_iter()),
+        }
     }
 
     fn next_event(&mut self) -> Result<Event, RecordError> {
@@ -232,7 +249,11 @@ impl EventSource {
                 let event = crossterm::event::read().map_err(RecordError::ReadInput)?;
                 Ok(event.into())
             }
-            EventSource::Testing(events) => Ok(events.next().unwrap_or(Event::None)),
+            EventSource::Testing {
+                width: _,
+                height: _,
+                events,
+            } => Ok(events.next().unwrap_or(Event::None)),
         }
     }
 }
@@ -303,7 +324,11 @@ impl<'a> Recorder<'a> {
     pub fn run(self) -> Result<RecordState<'a>, RecordError> {
         match self.event_source {
             EventSource::Crossterm => self.run_crossterm(),
-            EventSource::Testing(_) => self.run_testing(),
+            EventSource::Testing {
+                width,
+                height,
+                events: _,
+            } => self.run_testing(width, height),
         }
     }
 
@@ -369,8 +394,8 @@ impl<'a> Recorder<'a> {
         Ok(())
     }
 
-    fn run_testing(self) -> Result<RecordState<'a>, RecordError> {
-        let backend = TestBackend::new(80, 24);
+    fn run_testing(self, width: usize, height: usize) -> Result<RecordState<'a>, RecordError> {
+        let backend = TestBackend::new(width.clamp_into_u16(), height.clamp_into_u16());
         let mut term = Terminal::new(backend).map_err(RecordError::SetUpTerminal)?;
         self.run_inner(&mut term)
     }
@@ -1408,7 +1433,7 @@ mod tests {
 
     #[test]
     fn test_event_source_testing() {
-        let mut event_source = EventSource::testing([Event::Quit]);
+        let mut event_source = EventSource::testing(80, 24, [Event::Quit]);
         assert_eq!(event_source.next_event().unwrap(), Event::Quit);
         assert_eq!(event_source.next_event().unwrap(), Event::None);
     }
