@@ -8,7 +8,7 @@ use std::path::Path;
 use std::{io, panic};
 
 use crossterm::event::{
-    DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers,
+    DisableMouseCapture, EnableMouseCapture, KeyCode, KeyEvent, KeyEventKind, KeyModifiers,
     MouseEvent, MouseEventKind,
 };
 use crossterm::terminal::{
@@ -54,6 +54,134 @@ enum SelectionKey {
     Line(LineKey),
 }
 
+#[derive(Clone, Debug)]
+enum Event {
+    None,
+    Quit,
+    ScrollUp,
+    ScrollDown,
+    PageUp,
+    PageDown,
+    SelectPrev,
+    SelectPrevPage,
+    SelectNext,
+    SelectNextPage,
+    ToggleItem,
+}
+
+impl From<crossterm::event::Event> for Event {
+    fn from(event: crossterm::event::Event) -> Self {
+        use crossterm::event::Event;
+        match event {
+            Event::Key(
+                KeyEvent {
+                    code: KeyCode::Char('q'),
+                    modifiers: KeyModifiers::NONE,
+                    kind: KeyEventKind::Press,
+                    state: _,
+                }
+                | KeyEvent {
+                    code: KeyCode::Char('c'),
+                    modifiers: KeyModifiers::CONTROL,
+                    kind: KeyEventKind::Press,
+                    state: _,
+                },
+            ) => Self::Quit,
+
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('y'),
+                modifiers: KeyModifiers::CONTROL,
+                kind: KeyEventKind::Press,
+                state: _,
+            })
+            | Event::Mouse(MouseEvent {
+                kind: MouseEventKind::ScrollUp,
+                column: _,
+                row: _,
+                modifiers: _,
+            }) => Self::ScrollUp,
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('e'),
+                modifiers: KeyModifiers::CONTROL,
+                kind: KeyEventKind::Press,
+                state: _,
+            })
+            | Event::Mouse(MouseEvent {
+                kind: MouseEventKind::ScrollDown,
+                column: _,
+                row: _,
+                modifiers: _,
+            }) => Self::ScrollDown,
+
+            Event::Key(
+                KeyEvent {
+                    code: KeyCode::PageUp,
+                    modifiers: KeyModifiers::NONE,
+                    kind: KeyEventKind::Press,
+                    state: _,
+                }
+                | KeyEvent {
+                    code: KeyCode::Char('b'),
+                    modifiers: KeyModifiers::CONTROL,
+                    kind: KeyEventKind::Press,
+                    state: _,
+                },
+            ) => Self::PageUp,
+            Event::Key(
+                KeyEvent {
+                    code: KeyCode::PageDown,
+                    modifiers: KeyModifiers::NONE,
+                    kind: KeyEventKind::Press,
+                    state: _,
+                }
+                | KeyEvent {
+                    code: KeyCode::Char('f'),
+                    modifiers: KeyModifiers::CONTROL,
+                    kind: KeyEventKind::Press,
+                    state: _,
+                },
+            ) => Self::PageDown,
+
+            Event::Key(KeyEvent {
+                code: KeyCode::Up,
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                state: _,
+            }) => Self::SelectPrev,
+
+            Event::Key(KeyEvent {
+                code: KeyCode::Down,
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                state: _,
+            }) => Self::SelectNext,
+
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('u'),
+                modifiers: KeyModifiers::CONTROL,
+                kind: KeyEventKind::Press,
+                state: _,
+            }) => Self::SelectPrevPage,
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('d'),
+                modifiers: KeyModifiers::CONTROL,
+                kind: KeyEventKind::Press,
+                state: _,
+            }) => Self::SelectNextPage,
+
+            Event::Key(KeyEvent {
+                code: KeyCode::Char(' '),
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                state: _,
+            }) => Self::ToggleItem,
+
+            _event => Self::None,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 enum StateUpdate {
     None,
     Quit,
@@ -191,7 +319,8 @@ impl<'a> Recorder<'a> {
             }
 
             let event = crossterm::event::read().map_err(RecordError::ReadInput)?;
-            match self.handle_event(event, term_height, &drawn_rects)? {
+            let event = Event::from(event);
+            match self.handle_event(event, term_height, &drawn_rects) {
                 StateUpdate::None => {}
                 StateUpdate::Quit => break,
                 StateUpdate::ScrollTo(scroll_offset_y) => {
@@ -305,139 +434,43 @@ impl<'a> Recorder<'a> {
 
     fn handle_event(
         &self,
-        event: crossterm::event::Event,
+        event: Event,
         term_height: usize,
         drawn_rects: &HashMap<ComponentId, Rect>,
-    ) -> Result<StateUpdate, RecordError> {
-        let state_update = match event {
-            Event::Key(
-                KeyEvent {
-                    code: KeyCode::Char('q'),
-                    modifiers: KeyModifiers::NONE,
-                    kind: KeyEventKind::Press,
-                    state: _,
-                }
-                | KeyEvent {
-                    code: KeyCode::Char('c'),
-                    modifiers: KeyModifiers::CONTROL,
-                    kind: KeyEventKind::Press,
-                    state: _,
-                },
-            ) => StateUpdate::Quit,
-
-            Event::Key(KeyEvent {
-                code: KeyCode::Char('y'),
-                modifiers: KeyModifiers::CONTROL,
-                kind: KeyEventKind::Press,
-                state: _,
-            })
-            | Event::Mouse(MouseEvent {
-                kind: MouseEventKind::ScrollUp,
-                column: _,
-                row: _,
-                modifiers: _,
-            }) => StateUpdate::ScrollTo(self.scroll_offset_y.saturating_sub(1)),
-            Event::Key(KeyEvent {
-                code: KeyCode::Char('e'),
-                modifiers: KeyModifiers::CONTROL,
-                kind: KeyEventKind::Press,
-                state: _,
-            })
-            | Event::Mouse(MouseEvent {
-                kind: MouseEventKind::ScrollDown,
-                column: _,
-                row: _,
-                modifiers: _,
-            }) => StateUpdate::ScrollTo(self.scroll_offset_y.saturating_add(1)),
-
-            Event::Key(
-                KeyEvent {
-                    code: KeyCode::PageUp,
-                    modifiers: KeyModifiers::NONE,
-                    kind: KeyEventKind::Press,
-                    state: _,
-                }
-                | KeyEvent {
-                    code: KeyCode::Char('b'),
-                    modifiers: KeyModifiers::CONTROL,
-                    kind: KeyEventKind::Press,
-                    state: _,
-                },
-            ) => StateUpdate::ScrollTo(
+    ) -> StateUpdate {
+        match event {
+            Event::None => StateUpdate::None,
+            Event::Quit => StateUpdate::Quit,
+            Event::ScrollUp => StateUpdate::ScrollTo(self.scroll_offset_y.saturating_sub(1)),
+            Event::ScrollDown => StateUpdate::ScrollTo(self.scroll_offset_y.saturating_add(1)),
+            Event::PageUp => StateUpdate::ScrollTo(
                 self.scroll_offset_y
                     .saturating_sub(term_height.unwrap_isize()),
             ),
-            Event::Key(
-                KeyEvent {
-                    code: KeyCode::PageDown,
-                    modifiers: KeyModifiers::NONE,
-                    kind: KeyEventKind::Press,
-                    state: _,
-                }
-                | KeyEvent {
-                    code: KeyCode::Char('f'),
-                    modifiers: KeyModifiers::CONTROL,
-                    kind: KeyEventKind::Press,
-                    state: _,
-                },
-            ) => StateUpdate::ScrollTo(
+            Event::PageDown => StateUpdate::ScrollTo(
                 self.scroll_offset_y
                     .saturating_add(term_height.unwrap_isize()),
             ),
-
-            Event::Key(KeyEvent {
-                code: KeyCode::Up,
-                modifiers: KeyModifiers::NONE,
-                kind: KeyEventKind::Press,
-                state: _,
-            }) => {
+            Event::SelectPrev => {
                 let (keys, index) = self.find_selection();
                 let selection_key = self.select_prev(&keys, index);
                 StateUpdate::SelectItem(selection_key)
             }
-
-            Event::Key(KeyEvent {
-                code: KeyCode::Down,
-                modifiers: KeyModifiers::NONE,
-                kind: KeyEventKind::Press,
-                state: _,
-            }) => {
+            Event::SelectNext => {
                 let (keys, index) = self.find_selection();
                 let selection_key = self.select_next(&keys, index);
                 StateUpdate::SelectItem(selection_key)
             }
-
-            Event::Key(KeyEvent {
-                code: KeyCode::Char('u'),
-                modifiers: KeyModifiers::CONTROL,
-                kind: KeyEventKind::Press,
-                state: _,
-            }) => {
+            Event::SelectPrevPage => {
                 let selection_key = self.select_prev_page(term_height, drawn_rects);
                 StateUpdate::SelectItem(selection_key)
             }
-            Event::Key(KeyEvent {
-                code: KeyCode::Char('d'),
-                modifiers: KeyModifiers::CONTROL,
-                kind: KeyEventKind::Press,
-                state: _,
-            }) => {
+            Event::SelectNextPage => {
                 let selection_key = self.select_next_page(term_height, drawn_rects);
                 StateUpdate::SelectItem(selection_key)
             }
-
-            Event::Key(KeyEvent {
-                code: KeyCode::Char(' '),
-                modifiers: KeyModifiers::NONE,
-                kind: KeyEventKind::Press,
-                state: _,
-            }) => {
-                return Ok(StateUpdate::ToggleItem(self.selection_key));
-            }
-
-            _event => StateUpdate::None,
-        };
-        Ok(state_update)
+            Event::ToggleItem => StateUpdate::ToggleItem(self.selection_key),
+        }
     }
 
     fn first_selection_key(&self) -> SelectionKey {
