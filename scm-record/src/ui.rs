@@ -7,7 +7,6 @@ use std::collections::{BTreeMap, HashMap};
 use std::fmt::Write;
 use std::fmt::{Debug, Display};
 use std::hash::Hash;
-use std::panic::AssertUnwindSafe;
 use std::path::Path;
 use std::rc::Rc;
 use std::{io, panic};
@@ -20,7 +19,6 @@ use crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, is_raw_mode_enabled, EnterAlternateScreen,
     LeaveAlternateScreen,
 };
-use tracing::warn;
 use tui::backend::{Backend, TestBackend};
 use tui::buffer::Buffer;
 use tui::style::{Color, Modifier, Style};
@@ -350,56 +348,36 @@ impl<'a> Recorder<'a> {
             crossterm::execute!(stdout, EnterAlternateScreen, EnableMouseCapture)
                 .map_err(RecordError::SetUpTerminal)?;
         }
+        Self::install_panic_hook();
         let backend = CrosstermBackend::new(stdout);
         let mut term = Terminal::new(backend).map_err(RecordError::SetUpTerminal)?;
-
-        let dump_panics = std::env::var_os("SCM_RECORD_DUMP_PANICS").is_some();
-        let state = if dump_panics {
-            self.run_inner(&mut term)
-        } else {
-            // Catch any panics and restore terminal state, since otherwise the
-            // terminal will be mostly unusable.
-            let state = panic::catch_unwind(
-                // HACK: I don't actually know if the terminal is unwind-safe 🙃.
-                AssertUnwindSafe(|| self.run_inner(&mut term)),
-            );
-            if let Err(err) = Self::clean_up_crossterm(&mut term) {
-                warn!(?err, "Failed to clean up terminal");
-            }
-            match state {
-                Ok(state) => state,
-                Err(panic) => {
-                    // HACK: it should be possible to just call
-                    //
-                    //     panic::resume_unwind(panic)
-                    //
-                    // but, for some reason, when I do that, the panic information
-                    // is not printed. Then it generally looks like the program
-                    // exited successfully but did nothing. This at least ensures
-                    // that *something* is printed to indicate that there was a
-                    // panic, even if it doesn't include all of the panic details.
-                    if let Some(payload) = panic.downcast_ref::<String>() {
-                        panic!("panic occurred: {payload}");
-                    } else if let Some(payload) = panic.downcast_ref::<&str>() {
-                        panic!("panic occurred: {payload}");
-                    } else {
-                        panic!("panic occurred (message not available)");
-                    }
-                }
-            }
-        };
-        state
+        let result = self.run_inner(&mut term);
+        Self::clean_up_crossterm().map_err(RecordError::CleanUpTerminal)?;
+        result
     }
 
-    fn clean_up_crossterm(term: &mut Terminal<CrosstermBackend<io::Stdout>>) -> io::Result<()> {
-        term.show_cursor()?;
+    fn install_panic_hook() {
+        // HACK: installing a global hook here. This could be installed multiple
+        // times, and there's no way to uninstall it once we return.
+        //
+        // The idea is
+        // taken from
+        // https://github.com/fdehau/tui-rs/blob/fafad6c96109610825aad89c4bba5253e01101ed/examples/panic.rs.
+        //
+        // For some reason, simply catching the panic, cleaning up, and
+        // reraising the panic loses information about where the panic was
+        // originally raised, which is frustrating.
+        let original_hook = panic::take_hook();
+        panic::set_hook(Box::new(move |panic| {
+            Self::clean_up_crossterm().unwrap();
+            original_hook(panic);
+        }));
+    }
+
+    fn clean_up_crossterm() -> io::Result<()> {
         if is_raw_mode_enabled()? {
             disable_raw_mode()?;
-            crossterm::execute!(
-                term.backend_mut(),
-                LeaveAlternateScreen,
-                DisableMouseCapture
-            )?;
+            crossterm::execute!(io::stdout(), LeaveAlternateScreen, DisableMouseCapture)?;
         }
         Ok(())
     }
