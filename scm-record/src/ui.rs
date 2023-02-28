@@ -351,6 +351,10 @@ impl<'a> Recorder<'a> {
             .map(|(file_idx, file)| {
                 let file_key = FileKey { file_idx };
                 let file_tristate = self.file_tristate(file_key).unwrap();
+                let is_selected = match self.selection_key {
+                    SelectionKey::None | SelectionKey::Section(_) | SelectionKey::Line(_) => false,
+                    SelectionKey::File(selected_file_key) => file_key == selected_file_key,
+                };
                 FileView {
                     debug: debug_info.is_some(),
                     file_key,
@@ -358,13 +362,9 @@ impl<'a> Recorder<'a> {
                         use_unicode: self.use_unicode,
                         id: ComponentId::TristateBox,
                         tristate: file_tristate,
+                        is_selected,
                     },
-                    is_header_selected: match self.selection_key {
-                        SelectionKey::None | SelectionKey::Section(_) | SelectionKey::Line(_) => {
-                            false
-                        }
-                        SelectionKey::File(selected_file_key) => file_key == selected_file_key,
-                    },
+                    is_header_selected: is_selected,
                     path: &file.path,
                     section_views: {
                         let mut section_views = Vec::new();
@@ -391,6 +391,14 @@ impl<'a> Recorder<'a> {
                                     use_unicode: self.use_unicode,
                                     id: ComponentId::TristateBox,
                                     tristate: section_tristate,
+                                    is_selected: match self.selection_key {
+                                        SelectionKey::None
+                                        | SelectionKey::File(_)
+                                        | SelectionKey::Line(_) => false,
+                                        SelectionKey::Section(selection_section_key) => {
+                                            selection_section_key == section_key
+                                        }
+                                    },
                                 },
                                 selection: match self.selection_key {
                                     SelectionKey::None | SelectionKey::File(_) => None,
@@ -902,6 +910,7 @@ struct TristateBox<Id> {
     use_unicode: bool,
     id: Id,
     tristate: Tristate,
+    is_selected: bool,
 }
 
 impl<Id> TristateBox<Id> {
@@ -910,17 +919,18 @@ impl<Id> TristateBox<Id> {
             use_unicode,
             id: _,
             tristate,
+            is_selected,
         } = self;
-        match tristate {
-            Tristate::Unchecked => "[ ]",
-            Tristate::Partial => "[~]",
-            Tristate::Checked => {
-                if *use_unicode {
-                    "[✕]"
-                } else {
-                    "[x]"
-                }
-            }
+
+        match (tristate, is_selected, use_unicode) {
+            (Tristate::Unchecked, false, _) => "[ ]",
+            (Tristate::Unchecked, true, _) => "( )",
+            (Tristate::Partial, false, _) => "[~]",
+            (Tristate::Partial, true, _) => "(~)",
+            (Tristate::Checked, false, false) => "[x]",
+            (Tristate::Checked, true, false) => "(x)",
+            (Tristate::Checked, false, true) => "[\u{00D7}]", // Multiplication Sign
+            (Tristate::Checked, true, true) => "(\u{00D7})",  // Multiplication Sign
         }
     }
 }
@@ -1161,10 +1171,17 @@ impl Component for SectionView<'_> {
                         change_type,
                         line,
                     } = line;
+                    let is_selected = match selection {
+                        Some(SectionSelection::Line(selected_line_idx)) => {
+                            line_idx == *selected_line_idx
+                        }
+                        Some(SectionSelection::Header) | None => false,
+                    };
                     let tristate_box = TristateBox {
                         use_unicode: *use_unicode,
                         id: ComponentId::TristateBox,
                         tristate: Tristate::from(*is_toggled),
+                        is_selected,
                     };
                     let line_view = SectionLineView {
                         line_key: LineKey {
@@ -1180,14 +1197,8 @@ impl Component for SectionView<'_> {
                     };
                     let y = y + line_idx.unwrap_isize();
                     viewport.draw_component(x, y, &line_view);
-
-                    match selection {
-                        Some(SectionSelection::Line(selected_line_idx)) => {
-                            if line_idx == *selected_line_idx {
-                                highlight_line(viewport, y);
-                            }
-                        }
-                        Some(SectionSelection::Header) | None => {}
+                    if is_selected {
+                        highlight_line(viewport, y);
                     }
                 }
             }
