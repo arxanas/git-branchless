@@ -2,6 +2,7 @@
 
 use std::any::Any;
 use std::cell::RefCell;
+use std::cmp::min;
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::Write;
 use std::fmt::{Debug, Display};
@@ -1314,20 +1315,67 @@ impl Component for SectionView<'_> {
         } = *section_key;
         match section {
             Section::Unchanged { lines } => {
-                // TODO: only display a certain number of contextual lines
-                for (line_idx, line) in lines.iter().enumerate() {
+                if lines.is_empty() {
+                    return;
+                }
+
+                const NUM_CONTEXT_LINES: usize = 3;
+                let lines: Vec<_> = lines.iter().enumerate().collect();
+                let before_lines = &lines[..min(NUM_CONTEXT_LINES, lines.len())];
+                let after_lines = &lines[lines.len().saturating_sub(NUM_CONTEXT_LINES)..];
+                let (before_lines, after_lines) =
+                    if before_lines.last().unwrap().0 >= after_lines.first().unwrap().0 {
+                        let no_lines: &[_] = &[];
+                        (&lines[..], no_lines)
+                    } else {
+                        (before_lines, after_lines)
+                    };
+
+                let mut dy = 0;
+                for (line_idx, line) in before_lines {
                     let line_view = SectionLineView {
                         line_key: LineKey {
                             file_idx,
                             section_idx,
-                            line_idx,
+                            line_idx: *line_idx,
                         },
                         inner: SectionLineViewInner::Unchanged {
                             line: line.as_ref(),
                             line_num: line_start_num + line_idx,
                         },
                     };
-                    viewport.draw_component(x + 2, y + line_idx.unwrap_isize(), &line_view);
+                    viewport.draw_component(x + 2, y + dy, &line_view);
+                    dy += 1;
+                }
+
+                if !after_lines.is_empty() {
+                    let ellipsis = if *use_unicode {
+                        "\u{22EE}" // Vertical Ellipsis
+                    } else {
+                        ":"
+                    };
+                    viewport.draw_span(
+                        x + 6, // align with line numbering
+                        y + dy,
+                        &Span::styled(ellipsis, Style::default().add_modifier(Modifier::DIM)),
+                    );
+                    dy += 1;
+
+                    for (line_idx, line) in after_lines {
+                        let line_view = SectionLineView {
+                            line_key: LineKey {
+                                file_idx,
+                                section_idx,
+                                line_idx: *line_idx,
+                            },
+                            inner: SectionLineViewInner::Unchanged {
+                                line: line.as_ref(),
+                                line_num: line_start_num + line_idx,
+                            },
+                        };
+                        viewport.draw_component(x + 2, y + dy, &line_view);
+                        dy += 1;
+                    }
                 }
             }
 
