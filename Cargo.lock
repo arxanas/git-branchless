@@ -2707,6 +2707,7 @@ name = "scm-record"
 version = "0.1.0"
 dependencies = [
  "assert_matches",
+ "criterion",
  "crossterm 0.26.1",
  "eyre",
  "insta",
