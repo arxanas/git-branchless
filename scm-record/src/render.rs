@@ -9,6 +9,7 @@ use tui::style::{Color, Modifier, Style};
 use tui::text::Span;
 use tui::widgets::StatefulWidget;
 use tui::Frame;
+use unicode_width::UnicodeWidthStr;
 
 use crate::util::{IsizeExt, UsizeExt};
 
@@ -264,8 +265,7 @@ impl<'a, ComponentId: Clone + Debug + Eq + Hash> Viewport<'a, ComponentId> {
         let span_rect = Rect {
             x,
             y,
-            // FIXME: probably not Unicode-safe
-            width: content.chars().count(),
+            width: content.width(),
             height: 1,
         };
         self.current_trace_mut().merge_rect(span_rect);

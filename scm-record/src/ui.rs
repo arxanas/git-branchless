@@ -19,6 +19,7 @@ use tracing::warn;
 use tui::style::{Color, Modifier, Style};
 use tui::text::Span;
 use tui::{backend::CrosstermBackend, Terminal};
+use unicode_width::UnicodeWidthStr;
 
 use crate::render::{Component, Rect, Viewport};
 use crate::types::{ChangeType, RecordError, RecordState};
@@ -1253,7 +1254,7 @@ impl Component for SectionLineView<'_> {
                     ChangeType::Removed => ("- ", Style::default().fg(Color::Red)),
                 };
                 viewport.draw_span(x, y, &Span::styled(change_type_text, style));
-                let x = x + change_type_text.chars().count().unwrap_isize();
+                let x = x + change_type_text.width().unwrap_isize();
                 viewport.draw_span(x, y, &Span::styled(*line, style));
             }
 
