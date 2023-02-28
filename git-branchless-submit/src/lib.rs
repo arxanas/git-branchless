@@ -159,12 +159,13 @@ These remotes are available: {}",
     };
 
     // TODO: explain why fetching here.
-    let remote_names = remotes_to_branches.keys().sorted().collect_vec();
-    if !remote_names.is_empty() {
+    for (remote_name, branches) in remotes_to_branches.iter() {
         let remote_args = {
-            let mut result = vec!["fetch"];
-            for remote_name in &remote_names {
-                result.push(remote_name.as_str());
+            let mut result = vec!["fetch".to_owned()];
+            result.push((*remote_name).clone());
+            for branch in branches {
+                let branch_ref = branch.get_reference_name()?;
+                result.push(branch_ref.as_str().to_owned());
             }
             result
         };
@@ -172,8 +173,8 @@ These remotes are available: {}",
         if !exit_code.is_success() {
             writeln!(
                 effects.get_output_stream(),
-                "Failed to fetch from remotes: {}",
-                remote_names.into_iter().join(", ")
+                "Failed to fetch from remote: {}",
+                remote_name
             )?;
             return Ok(exit_code);
         }
