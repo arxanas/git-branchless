@@ -24,6 +24,7 @@ members = [
     "git-branchless",
     "git-record",
     "scm-bisect",
+    "scm-record",
 ]
 
 [workspace.metadata.release]
