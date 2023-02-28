@@ -6,3 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+crossterm = "0.25.0"
+thiserror = "1.0.38"
+tracing = "0.1.37"
+tui = "0.19.0"
