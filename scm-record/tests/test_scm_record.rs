@@ -111,7 +111,7 @@ fn test_select_scroll_into_view() -> eyre::Result<()> {
             Event::FocusNext,
             Event::FocusNext,
             screenshot3.event(),
-            Event::Quit,
+            Event::QuitAccept,
         ],
     );
     let state = example_contents();
