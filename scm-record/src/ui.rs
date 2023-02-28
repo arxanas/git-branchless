@@ -86,7 +86,8 @@ impl Display for TestingScreenshot {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Event {
     None,
-    Quit,
+    QuitAccept,
+    QuitCancel,
     TakeScreenshot(TestingScreenshot),
     ScrollUp,
     ScrollDown,
@@ -116,7 +117,14 @@ impl From<crossterm::event::Event> for Event {
                     kind: KeyEventKind::Press,
                     state: _,
                 },
-            ) => Self::Quit,
+            ) => Self::QuitCancel,
+
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('c'),
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                state: _,
+            }) => Self::QuitAccept,
 
             Event::Key(KeyEvent {
                 code: KeyCode::Char('y'),
@@ -291,7 +299,8 @@ fn buffer_view(buffer: &Buffer) -> String {
 #[derive(Clone, Debug)]
 enum StateUpdate {
     None,
-    Quit,
+    QuitAccept,
+    QuitCancel,
     TakeScreenshot(TestingScreenshot),
     ScrollTo(isize),
     SelectItem(SelectionKey),
@@ -456,7 +465,8 @@ impl<'a> Recorder<'a> {
             let event = self.event_source.next_event()?;
             match self.handle_event(event, term_height, &drawn_rects) {
                 StateUpdate::None => {}
-                StateUpdate::Quit => break,
+                StateUpdate::QuitCancel => return Err(RecordError::Cancelled),
+                StateUpdate::QuitAccept => break,
                 StateUpdate::TakeScreenshot(screenshot) => {
                     let backend: &dyn Any = term.backend();
                     let test_backend = backend
@@ -589,7 +599,8 @@ impl<'a> Recorder<'a> {
     ) -> StateUpdate {
         match event {
             Event::None => StateUpdate::None,
-            Event::Quit => StateUpdate::Quit,
+            Event::QuitAccept => StateUpdate::QuitAccept,
+            Event::QuitCancel => StateUpdate::QuitCancel,
             Event::TakeScreenshot(screenshot) => StateUpdate::TakeScreenshot(screenshot),
             Event::ScrollUp => StateUpdate::ScrollTo(self.scroll_offset_y.saturating_sub(1)),
             Event::ScrollDown => StateUpdate::ScrollTo(self.scroll_offset_y.saturating_add(1)),
@@ -1429,12 +1440,35 @@ fn highlight_line<Id: Clone + Debug + Eq + Hash>(viewport: &mut Viewport<Id>, y:
 
 #[cfg(test)]
 mod tests {
+    use std::borrow::Cow;
+
     use super::*;
+
+    use assert_matches::assert_matches;
 
     #[test]
     fn test_event_source_testing() {
-        let mut event_source = EventSource::testing(80, 24, [Event::Quit]);
-        assert_eq!(event_source.next_event().unwrap(), Event::Quit);
-        assert_eq!(event_source.next_event().unwrap(), Event::None);
+        let mut event_source = EventSource::testing(80, 24, [Event::QuitCancel]);
+        assert_matches!(event_source.next_event(), Ok(Event::QuitCancel));
+        assert_matches!(event_source.next_event(), Ok(Event::None));
+    }
+
+    #[test]
+    fn test_quit_returns_error() {
+        let state = RecordState::default();
+        let event_source = EventSource::testing(80, 24, [Event::QuitCancel]);
+        let recorder = Recorder::new(state, event_source);
+        assert_matches!(recorder.run(), Err(RecordError::Cancelled));
+
+        let state = RecordState {
+            files: vec![File {
+                path: Cow::Borrowed(Path::new("foo/bar")),
+                file_mode: None,
+                sections: Default::default(),
+            }],
+        };
+        let event_source = EventSource::testing(80, 24, [Event::QuitAccept]);
+        let recorder = Recorder::new(state.clone(), event_source);
+        assert_eq!(recorder.run().unwrap(), state);
     }
 }
