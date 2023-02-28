@@ -5,7 +5,7 @@ use std::borrow::Cow;
 use std::path::Path;
 
 use scm_record::{
-    ChangeType, File, RecordError, RecordState, Recorder, Section, SectionChangedLine,
+    ChangeType, EventSource, File, RecordError, RecordState, Recorder, Section, SectionChangedLine,
 };
 
 fn main() {
@@ -91,7 +91,8 @@ fn main() {
     ];
     let record_state = RecordState { files };
 
-    let result = Recorder::run(record_state);
+    let recorder = Recorder::new(record_state, EventSource::Crossterm);
+    let result = recorder.run();
     match result {
         Ok(result) => {
             let RecordState { files } = result;
