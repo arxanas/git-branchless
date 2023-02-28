@@ -47,7 +47,8 @@ struct LineKey {
 
 #[allow(dead_code)] // TODO: remove
 #[derive(Clone, Copy, Debug)]
-enum Key {
+enum SelectionKey {
+    None,
     File(FileKey),
     Section(SectionKey),
     Line(LineKey),
@@ -57,7 +58,7 @@ enum Key {
 pub struct Recorder<'a> {
     state: RecordState<'a>,
     use_unicode: bool,
-    key: Key,
+    selection: SelectionKey,
 }
 
 impl<'a> Recorder<'a> {
@@ -77,8 +78,7 @@ impl<'a> Recorder<'a> {
         let recorder = Self {
             state,
             use_unicode: true,
-            // FIXME: handle out of bounds indexing.
-            key: Key::File(FileKey { file_idx: 0 }),
+            selection: SelectionKey::None,
         };
         let state = if dump_panics {
             recorder.run_inner(&mut term)
@@ -131,6 +131,8 @@ impl<'a> Recorder<'a> {
     }
 
     fn run_inner(mut self, term: &mut CrosstermTerminal) -> Result<RecordState<'a>, RecordError> {
+        self.selection = self.first_selection_key();
+
         let mut scroll_offset_y = 0;
         loop {
             let layout = Layout::default()
@@ -151,14 +153,37 @@ impl<'a> Recorder<'a> {
                             tristate: file_tristate,
                         },
                         path: &file.path,
-                        section_views: file
-                            .sections
-                            .iter()
-                            .map(|section| SectionView {
-                                use_unicode: self.use_unicode,
-                                section,
-                            })
-                            .collect(),
+                        section_views: {
+                            let mut section_views = Vec::new();
+                            let total_num_sections = file
+                                .sections
+                                .iter()
+                                .filter(|section| section.is_editable())
+                                .count();
+
+                            let mut section_num = 0;
+                            for (section_idx, section) in file.sections.iter().enumerate() {
+                                let section_key = SectionKey {
+                                    file_idx,
+                                    section_idx,
+                                };
+                                let section_tristate = self.section_tristate(section_key).unwrap();
+                                if section.is_editable() {
+                                    section_num += 1;
+                                }
+                                section_views.push(SectionView {
+                                    use_unicode: self.use_unicode,
+                                    tristate_box: TristateBox {
+                                        use_unicode: self.use_unicode,
+                                        tristate: section_tristate,
+                                    },
+                                    section_num,
+                                    total_num_sections,
+                                    section,
+                                });
+                            }
+                            section_views
+                        },
                     }
                 })
                 .collect();
@@ -276,10 +301,11 @@ impl<'a> Recorder<'a> {
     }
 
     fn toggle_current_item(&mut self) -> Result<(), RecordError> {
-        match self.key {
-            Key::File(file_key) => {
+        match self.selection {
+            SelectionKey::None => {}
+            SelectionKey::File(file_key) => {
                 let tristate = self.file_tristate(file_key)?;
-                let is_selected_new = match tristate {
+                let is_toggled_new = match tristate {
                     Tristate::Unchecked => true,
                     Tristate::Partial | Tristate::Checked => false,
                 };
@@ -289,29 +315,56 @@ impl<'a> Recorder<'a> {
                             Section::Unchanged { .. } => {}
                             Section::Changed { lines } => {
                                 for line in lines {
-                                    line.is_selected = is_selected_new;
+                                    line.is_toggled = is_toggled_new;
                                 }
                             }
                             Section::FileMode {
-                                is_selected,
+                                is_toggled,
                                 before: _,
                                 after: _,
                             } => {
-                                *is_selected = is_selected_new;
+                                *is_toggled = is_toggled_new;
                             }
                         }
                     }
                 })?;
             }
-            Key::Section(_) => todo!(),
-            Key::Line(line_key) => {
-                // TODO: propagate upward checkboxes
+            SelectionKey::Section(section_key) => {
+                let tristate = self.section_tristate(section_key)?;
+                let is_selected_new = match tristate {
+                    Tristate::Unchecked => true,
+                    Tristate::Partial | Tristate::Checked => false,
+                };
+                self.visit_section(section_key, |section| match section {
+                    Section::Unchanged { .. } => {}
+                    Section::Changed { lines } => {
+                        for line in lines {
+                            line.is_toggled = is_selected_new;
+                        }
+                    }
+                    Section::FileMode {
+                        is_toggled,
+                        before: _,
+                        after: _,
+                    } => {
+                        *is_toggled = is_selected_new;
+                    }
+                })?;
+            }
+            SelectionKey::Line(line_key) => {
                 self.visit_line(line_key, |line| {
-                    line.is_selected = !line.is_selected;
+                    line.is_toggled = !line.is_toggled;
                 })?;
             }
         }
         Ok(())
+    }
+
+    fn first_selection_key(&self) -> SelectionKey {
+        match self.state.files.iter().enumerate().next() {
+            Some((file_idx, _)) => SelectionKey::File(FileKey { file_idx }),
+            None => SelectionKey::None,
+        }
     }
 
     fn file(&self, file_key: FileKey) -> Result<&File, RecordError> {
@@ -320,6 +373,20 @@ impl<'a> Recorder<'a> {
             Some(file) => Ok(file),
             None => Err(RecordError::Bug(format!(
                 "Out-of-bounds file key: {file_key:?}"
+            ))),
+        }
+    }
+
+    fn section(&self, section_key: SectionKey) -> Result<&Section, RecordError> {
+        let SectionKey {
+            file_idx,
+            section_idx,
+        } = section_key;
+        let file = self.file(FileKey { file_idx })?;
+        match file.sections.get(section_idx) {
+            Some(section) => Ok(section),
+            None => Err(RecordError::Bug(format!(
+                "Out-of-bounds section key: {section_key:?}"
             ))),
         }
     }
@@ -345,7 +412,7 @@ impl<'a> Recorder<'a> {
                 Section::Unchanged { .. } => {}
                 Section::Changed { lines } => {
                     for line in lines {
-                        seen_value = match (seen_value, line.is_selected) {
+                        seen_value = match (seen_value, line.is_toggled) {
                             (None, is_selected) => Some(is_selected),
                             (Some(true), true) => Some(true),
                             (Some(false), false) => Some(false),
@@ -356,16 +423,75 @@ impl<'a> Recorder<'a> {
                     }
                 }
                 Section::FileMode {
-                    is_selected,
+                    is_toggled,
                     before: _,
                     after: _,
                 } => {
-                    seen_value = match (seen_value, is_selected) {
+                    seen_value = match (seen_value, is_toggled) {
                         (None, is_selected) => Some(*is_selected),
                         (Some(true), true) => Some(true),
                         (Some(false), false) => Some(false),
                         (Some(true), false) | (Some(false), true) => return Ok(Tristate::Partial),
                     }
+                }
+            }
+        }
+        let result = match seen_value {
+            Some(true) => Tristate::Checked,
+            None | Some(false) => Tristate::Unchecked,
+        };
+        Ok(result)
+    }
+
+    fn visit_section<T>(
+        &mut self,
+        section_key: SectionKey,
+        f: impl Fn(&mut Section) -> T,
+    ) -> Result<T, RecordError> {
+        let SectionKey {
+            file_idx,
+            section_idx,
+        } = section_key;
+        let file = match self.state.files.get_mut(file_idx) {
+            Some(file) => file,
+            None => {
+                return Err(RecordError::Bug(format!(
+                    "Out-of-bounds file for section key: {section_key:?}"
+                )))
+            }
+        };
+        match file.sections.get_mut(section_idx) {
+            Some(section) => Ok(f(section)),
+            None => Err(RecordError::Bug(format!(
+                "Out-of-bounds section key: {section_key:?}"
+            ))),
+        }
+    }
+
+    fn section_tristate(&self, section_key: SectionKey) -> Result<Tristate, RecordError> {
+        let mut seen_value = None;
+        match self.section(section_key)? {
+            Section::Unchanged { .. } => {}
+            Section::Changed { lines } => {
+                for line in lines {
+                    seen_value = match (seen_value, line.is_toggled) {
+                        (None, is_selected) => Some(is_selected),
+                        (Some(true), true) => Some(true),
+                        (Some(false), false) => Some(false),
+                        (Some(true), false) | (Some(false), true) => return Ok(Tristate::Partial),
+                    };
+                }
+            }
+            Section::FileMode {
+                is_toggled,
+                before: _,
+                after: _,
+            } => {
+                seen_value = match (seen_value, is_toggled) {
+                    (None, is_toggled) => Some(*is_toggled),
+                    (Some(true), true) => Some(true),
+                    (Some(false), false) => Some(false),
+                    (Some(true), false) | (Some(false), true) => return Ok(Tristate::Partial),
                 }
             }
         }
@@ -394,7 +520,7 @@ impl<'a> Recorder<'a> {
             }
             section @ (Section::Unchanged { lines: _ }
             | Section::FileMode {
-                is_selected: _,
+                is_toggled: _,
                 before: _,
                 after: _,
             }) => Err(RecordError::Bug(format!(
@@ -534,16 +660,21 @@ impl Component for FileView<'_> {
 #[derive(Debug)]
 struct SectionView<'a> {
     use_unicode: bool,
+    tristate_box: TristateBox,
+    section_num: usize,
+    total_num_sections: usize,
     section: &'a Section<'a>,
 }
 
 impl SectionView<'_> {
     pub fn height(&self) -> usize {
-        match self.section {
-            Section::Unchanged { lines } => lines.len(),
-            Section::Changed { lines } => lines.len(),
-            Section::FileMode { .. } => 1,
-        }
+        let header_height = if self.section.is_editable() { 1 } else { 0 };
+        header_height
+            + match self.section {
+                Section::Unchanged { lines } => lines.len(),
+                Section::Changed { lines } => lines.len(),
+                Section::FileMode { .. } => 1,
+            }
     }
 }
 
@@ -551,12 +682,32 @@ impl Component for SectionView<'_> {
     fn draw(&self, viewport: &mut Viewport, x: isize, y: isize) {
         let Self {
             use_unicode,
+            tristate_box,
+            section_num,
+            total_num_sections,
             section,
         } = self;
+
+        let y = if !section.is_editable() {
+            y
+        } else {
+            tristate_box.draw(viewport, x, y);
+            viewport.draw_span(
+                x + tristate_box.width().unwrap_isize(),
+                y,
+                &Span::styled(
+                    format!("Section {section_num}/{total_num_sections}"),
+                    Style::default(),
+                ),
+            );
+            y + 1
+        };
+        let x = x + 2;
 
         match section {
             Section::Unchanged { lines } => {
                 // TODO: only display a certain number of contextual lines
+                let x = x + tristate_box.width().unwrap_isize() + "+ ".len().unwrap_isize();
                 for (dy, line) in lines.iter().enumerate() {
                     let span = Span::styled(line.as_ref(), Style::default());
                     viewport.draw_span(x, y + dy.unwrap_isize(), &span);
@@ -567,7 +718,7 @@ impl Component for SectionView<'_> {
                 for (dy, line) in lines.iter().enumerate() {
                     let y = y + dy.unwrap_isize();
                     let SectionChangedLine {
-                        is_selected,
+                        is_toggled: is_selected,
                         change_type,
                         line,
                     } = line;

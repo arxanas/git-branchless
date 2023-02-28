@@ -22,23 +22,23 @@ fn main() {
                 Section::Changed {
                     lines: vec![
                         SectionChangedLine {
-                            is_selected: true,
+                            is_toggled: true,
                             change_type: ChangeType::Removed,
                             line: Cow::Borrowed("before text 1"),
                         },
                         SectionChangedLine {
-                            is_selected: true,
+                            is_toggled: true,
                             change_type: ChangeType::Removed,
                             line: Cow::Borrowed("before text 2"),
                         },
                         SectionChangedLine {
-                            is_selected: true,
+                            is_toggled: true,
                             change_type: ChangeType::Added,
 
                             line: Cow::Borrowed("after text 1"),
                         },
                         SectionChangedLine {
-                            is_selected: false,
+                            is_toggled: false,
                             change_type: ChangeType::Added,
                             line: Cow::Borrowed("after text 2"),
                         },
@@ -62,22 +62,22 @@ fn main() {
                 Section::Changed {
                     lines: vec![
                         SectionChangedLine {
-                            is_selected: true,
+                            is_toggled: true,
                             change_type: ChangeType::Removed,
                             line: Cow::Borrowed("before text 1"),
                         },
                         SectionChangedLine {
-                            is_selected: true,
+                            is_toggled: true,
                             change_type: ChangeType::Removed,
                             line: Cow::Borrowed("before text 2"),
                         },
                         SectionChangedLine {
-                            is_selected: true,
+                            is_toggled: true,
                             change_type: ChangeType::Added,
                             line: Cow::Borrowed("after text 1"),
                         },
                         SectionChangedLine {
-                            is_selected: true,
+                            is_toggled: true,
                             change_type: ChangeType::Added,
                             line: Cow::Borrowed("after text 2"),
                         },
