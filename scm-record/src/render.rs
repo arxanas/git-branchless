@@ -391,9 +391,9 @@ pub(crate) trait Component: Sized {
     /// was drawn.
     type Id: Clone + Debug + Eq + Hash;
 
-    /// Get the ID for this compoent.
+    /// Get the ID for this component.
     fn id(&self) -> Self::Id;
 
     /// Draw this component and any child components.
-    fn draw<'a, 'b: 'a>(&'b self, viewport: &'a mut Viewport<Self::Id>, x: isize, y: isize);
+    fn draw(&self, viewport: &mut Viewport<Self::Id>, x: isize, y: isize);
 }

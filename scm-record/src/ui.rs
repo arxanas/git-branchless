@@ -931,7 +931,7 @@ impl<Id: Clone + Debug + Eq + Hash> Component for TristateBox<Id> {
         self.id.clone()
     }
 
-    fn draw<'a, 'b: 'a>(&'b self, viewport: &'a mut Viewport<Self::Id>, x: isize, y: isize) {
+    fn draw(&self, viewport: &mut Viewport<Self::Id>, x: isize, y: isize) {
         let span = Span::styled(self.text(), Style::default().add_modifier(Modifier::BOLD));
         viewport.draw_span(x, y, &span);
     }
@@ -971,7 +971,7 @@ impl Component for App<'_> {
         ComponentId::App
     }
 
-    fn draw<'a, 'b: 'a>(&'b self, viewport: &'a mut Viewport<Self::Id>, x: isize, y: isize) {
+    fn draw(&self, viewport: &mut Viewport<Self::Id>, x: isize, y: isize) {
         let Self {
             debug_info,
             file_views,
@@ -1023,7 +1023,7 @@ impl Component for FileView<'_> {
         ComponentId::SelectableItem(SelectionKey::File(self.file_key))
     }
 
-    fn draw<'a, 'b: 'a>(&'b self, viewport: &'a mut Viewport<Self::Id>, x: isize, y: isize) {
+    fn draw(&self, viewport: &mut Viewport<Self::Id>, x: isize, y: isize) {
         let Self {
             debug,
             file_key: _,
@@ -1099,7 +1099,7 @@ impl Component for SectionView<'_> {
         ComponentId::SelectableItem(SelectionKey::Section(self.section_key))
     }
 
-    fn draw<'a, 'b: 'a>(&'b self, viewport: &'a mut Viewport<Self::Id>, x: isize, y: isize) {
+    fn draw(&self, viewport: &mut Viewport<Self::Id>, x: isize, y: isize) {
         let Self {
             use_unicode,
             section_key,
@@ -1232,7 +1232,7 @@ impl Component for SectionLineView<'_> {
         ComponentId::SelectableItem(SelectionKey::Line(self.line_key))
     }
 
-    fn draw<'a, 'b: 'a>(&'b self, viewport: &'a mut Viewport<Self::Id>, x: isize, y: isize) {
+    fn draw(&self, viewport: &mut Viewport<Self::Id>, x: isize, y: isize) {
         let Self { line_key: _, inner } = self;
         match inner {
             SectionLineViewInner::Unchanged { line } => {
