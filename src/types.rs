@@ -102,13 +102,13 @@ impl File<'_> {
                 Section::Unchanged { .. }
                 | Section::Changed { .. }
                 | Section::FileMode {
-                    is_selected: false,
+                    is_toggled: false,
                     before: _,
                     after: _,
                 } => None,
 
                 Section::FileMode {
-                    is_selected: true,
+                    is_toggled: true,
                     before: _,
                     after,
                 } => Some(*after),
@@ -140,7 +140,7 @@ impl File<'_> {
                 Section::Changed { lines } => {
                     for line in lines {
                         let SectionChangedLine {
-                            is_selected,
+                            is_toggled: is_selected,
                             change_type,
                             line,
                         } = line;
@@ -157,7 +157,7 @@ impl File<'_> {
                     }
                 }
                 Section::FileMode {
-                    is_selected: _,
+                    is_toggled: _,
                     before: _,
                     after: _,
                 } => {
@@ -196,7 +196,7 @@ pub enum Section<'a> {
     /// "contents" of the file per se, but it's rendered inline as if it were.
     FileMode {
         /// Whether or not the file mode change was accepted.
-        is_selected: bool,
+        is_toggled: bool,
 
         /// The old file mode.
         before: FileMode,
@@ -204,6 +204,17 @@ pub enum Section<'a> {
         /// The new file mode.
         after: FileMode,
     },
+}
+
+impl Section<'_> {
+    /// Whether or not this section contains user-editable content (as opposed
+    /// to simply contextual content).
+    pub fn is_editable(&self) -> bool {
+        match self {
+            Section::Unchanged { .. } => false,
+            Section::Changed { .. } | Section::FileMode { .. } => true,
+        }
+    }
 }
 
 /// The type of change in the patch/diff.
@@ -220,7 +231,7 @@ pub enum ChangeType {
 #[derive(Clone, Debug)]
 pub struct SectionChangedLine<'a> {
     /// Whether or not this line was selected to be recorded.
-    pub is_selected: bool,
+    pub is_toggled: bool,
 
     /// The type of change this line was.
     pub change_type: ChangeType,
