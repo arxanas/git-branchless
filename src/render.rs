@@ -226,7 +226,6 @@ impl<'a, ComponentId: Clone + Debug + Eq + Hash> Viewport<'a, ComponentId> {
     /// accomplished using `draw_span` with a styled `Span`, but in some cases,
     /// it may be more appropriate to set the style of certain cells directly.
     pub fn set_style(&mut self, rect: Rect, style: Style) {
-        // TODO: track call.
         self.buf.set_style(self.translate_rect(rect), style);
         self.current_trace_mut().merge_rect(rect);
     }
@@ -247,12 +246,16 @@ impl<'a, ComponentId: Clone + Debug + Eq + Hash> Viewport<'a, ComponentId> {
         self.trace.push(Default::default());
         component.draw(self, x, y);
         let mut trace = self.trace.pop().unwrap();
-        let component_rect = trace.rect;
-        // TODO: do we need to get the bound with each child component too?
-        trace.components.insert(component.id(), component_rect);
+
+        let trace_rect = trace
+            .components
+            .values()
+            .fold(trace.rect, |acc, elem| acc.union_bounding(*elem));
+        trace.rect = trace_rect;
+        trace.components.insert(component.id(), trace_rect);
 
         self.current_trace_mut().merge(trace);
-        component_rect
+        trace_rect
     }
 
     /// Draw a `Span` directly to the screen at the given `(x, y)` location.
