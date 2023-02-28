@@ -1,5 +1,8 @@
 //! UI implementation.
 
+use std::collections::{BTreeMap, HashMap};
+use std::fmt::Debug;
+use std::hash::Hash;
 use std::panic::AssertUnwindSafe;
 use std::path::Path;
 use std::{io, panic};
@@ -13,12 +16,11 @@ use crossterm::terminal::{
     LeaveAlternateScreen,
 };
 use tracing::warn;
-use tui::layout::{Constraint, Direction, Layout};
 use tui::style::{Color, Modifier, Style};
 use tui::text::Span;
 use tui::{backend::CrosstermBackend, Terminal};
 
-use crate::render::{Component, Rect, TopLevelComponentWidget, Viewport};
+use crate::render::{Component, Rect, Viewport};
 use crate::types::{ChangeType, RecordError, RecordState};
 use crate::util::UsizeExt;
 use crate::{File, Section, SectionChangedLine};
@@ -26,27 +28,25 @@ use crate::{File, Section, SectionChangedLine};
 type Backend = CrosstermBackend<io::Stdout>;
 type CrosstermTerminal = Terminal<Backend>;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 struct FileKey {
     file_idx: usize,
 }
 
-#[allow(dead_code)] // TODO: remove
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 struct SectionKey {
     file_idx: usize,
     section_idx: usize,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 struct LineKey {
     file_idx: usize,
     section_idx: usize,
     line_idx: usize,
 }
 
-#[allow(dead_code)] // TODO: remove
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 enum SelectionKey {
     None,
     File(FileKey),
@@ -54,11 +54,20 @@ enum SelectionKey {
     Line(LineKey),
 }
 
+enum StateUpdate {
+    None,
+    Quit,
+    ScrollTo(isize),
+    SelectItem(SelectionKey),
+    ToggleItem(SelectionKey),
+}
+
 /// UI component to record the user's changes.
 pub struct Recorder<'a> {
     state: RecordState<'a>,
     use_unicode: bool,
-    selection: SelectionKey,
+    selection_key: SelectionKey,
+    scroll_offset_y: isize,
 }
 
 impl<'a> Recorder<'a> {
@@ -78,7 +87,8 @@ impl<'a> Recorder<'a> {
         let recorder = Self {
             state,
             use_unicode: true,
-            selection: SelectionKey::None,
+            selection_key: SelectionKey::None,
+            scroll_offset_y: 0,
         };
         let state = if dump_panics {
             recorder.run_inner(&mut term)
@@ -131,194 +141,462 @@ impl<'a> Recorder<'a> {
     }
 
     fn run_inner(mut self, term: &mut CrosstermTerminal) -> Result<RecordState<'a>, RecordError> {
-        self.selection = self.first_selection_key();
+        self.selection_key = self.first_selection_key();
+        let debug = std::env::var_os("SCM_RECORD_DEBUG").is_some();
 
-        let mut scroll_offset_y = 0;
         loop {
-            let layout = Layout::default()
-                .direction(Direction::Horizontal)
-                .constraints([Constraint::Percentage(100)]);
-
-            let file_views: Vec<FileView> = self
-                .state
-                .files
-                .iter()
-                .enumerate()
-                .map(|(file_idx, file)| {
-                    let file_key = FileKey { file_idx };
-                    let file_tristate = self.file_tristate(file_key).unwrap();
-                    FileView {
-                        tristate_box: TristateBox {
-                            use_unicode: self.use_unicode,
-                            tristate: file_tristate,
-                        },
-                        path: &file.path,
-                        section_views: {
-                            let mut section_views = Vec::new();
-                            let total_num_sections = file
-                                .sections
-                                .iter()
-                                .filter(|section| section.is_editable())
-                                .count();
-
-                            let mut section_num = 0;
-                            for (section_idx, section) in file.sections.iter().enumerate() {
-                                let section_key = SectionKey {
-                                    file_idx,
-                                    section_idx,
-                                };
-                                let section_tristate = self.section_tristate(section_key).unwrap();
-                                if section.is_editable() {
-                                    section_num += 1;
-                                }
-                                section_views.push(SectionView {
-                                    use_unicode: self.use_unicode,
-                                    tristate_box: TristateBox {
-                                        use_unicode: self.use_unicode,
-                                        tristate: section_tristate,
-                                    },
-                                    section_num,
-                                    total_num_sections,
-                                    section,
-                                });
-                            }
-                            section_views
-                        },
-                    }
-                })
-                .collect();
-            let app = App { file_views };
-
-            // Ensure that at least one line is always visible.
+            let app = self.make_app(None);
             let term_height = usize::from(term.get_frame().size().height);
-            let max_scroll_offset_y = app.height().saturating_sub(1);
 
-            scroll_offset_y = scroll_offset_y.clamp(0, max_scroll_offset_y);
-
+            let mut drawn_rects: Option<HashMap<ComponentId, Rect>> = None;
             term.draw(|frame| {
-                let chunks = layout.split(frame.size());
-                let widget = TopLevelComponentWidget {
-                    app,
-                    viewport_x: 0,
-                    viewport_y: scroll_offset_y.unwrap_isize(),
-                };
-                frame.render_widget(widget, chunks[0]);
+                drawn_rects = Some(Viewport::<ComponentId>::render_top_level(
+                    frame,
+                    0,
+                    self.scroll_offset_y,
+                    &app,
+                ));
             })
             .map_err(RecordError::RenderFrame)?;
+            let drawn_rects = drawn_rects.unwrap();
 
-            match crossterm::event::read().map_err(RecordError::ReadInput)? {
-                Event::Key(
-                    KeyEvent {
-                        code: KeyCode::Char('q'),
-                        modifiers: KeyModifiers::NONE,
-                        kind: KeyEventKind::Press,
-                        state: _,
-                    }
-                    | KeyEvent {
-                        code: KeyCode::Char('c'),
-                        modifiers: KeyModifiers::CONTROL,
-                        kind: KeyEventKind::Press,
-                        state: _,
+            // Dump debug info. We may need to use information about the
+            // rendered app, so we perform a re-render here.
+            if debug {
+                let debug_info = AppDebugInfo {
+                    term_height,
+                    scroll_offset_y: self.scroll_offset_y,
+                    selection_key: self.selection_key,
+                    selection_key_y: self.selection_key_y(&drawn_rects, self.selection_key),
+                    app_actual_vs_expected_height: {
+                        let actual_height = app.height();
+                        let drawn_height = drawn_rects[&ComponentId::App].height;
+                        (actual_height, drawn_height)
                     },
-                ) => break,
-
-                Event::Key(KeyEvent {
-                    code: KeyCode::Char('y'),
-                    modifiers: KeyModifiers::CONTROL,
-                    kind: KeyEventKind::Press,
-                    state: _,
+                    drawn_rects: drawn_rects.clone().into_iter().collect(),
+                };
+                let debug_app = App {
+                    debug_info: Some(debug_info),
+                    ..app.clone()
+                };
+                term.draw(|frame| {
+                    Viewport::<ComponentId>::render_top_level(
+                        frame,
+                        0,
+                        self.scroll_offset_y,
+                        &debug_app,
+                    );
                 })
-                | Event::Mouse(MouseEvent {
-                    kind: MouseEventKind::ScrollUp,
-                    column: _,
-                    row: _,
-                    modifiers: _,
-                }) => {
-                    scroll_offset_y = scroll_offset_y.saturating_sub(1);
-                }
-                Event::Key(KeyEvent {
-                    code: KeyCode::Char('e'),
-                    modifiers: KeyModifiers::CONTROL,
-                    kind: KeyEventKind::Press,
-                    state: _,
-                })
-                | Event::Mouse(MouseEvent {
-                    kind: MouseEventKind::ScrollDown,
-                    column: _,
-                    row: _,
-                    modifiers: _,
-                }) => {
-                    scroll_offset_y = scroll_offset_y.saturating_add(1);
-                }
+                .map_err(RecordError::RenderFrame)?;
+            }
 
-                Event::Key(KeyEvent {
-                    code: KeyCode::Char('u'),
-                    modifiers: KeyModifiers::CONTROL,
-                    kind: KeyEventKind::Press,
-                    state: _,
-                }) => {
-                    scroll_offset_y = scroll_offset_y.saturating_sub(term_height / 2);
+            let event = crossterm::event::read().map_err(RecordError::ReadInput)?;
+            match self.handle_event(event, term_height, &drawn_rects)? {
+                StateUpdate::None => {}
+                StateUpdate::Quit => break,
+                StateUpdate::ScrollTo(scroll_offset_y) => {
+                    self.scroll_offset_y = scroll_offset_y
+                        .clamp(0, drawn_rects[&ComponentId::App].height.unwrap_isize() - 1);
                 }
-                Event::Key(KeyEvent {
-                    code: KeyCode::Char('d'),
-                    modifiers: KeyModifiers::CONTROL,
-                    kind: KeyEventKind::Press,
-                    state: _,
-                }) => {
-                    scroll_offset_y = scroll_offset_y.saturating_add(term_height / 2);
+                StateUpdate::SelectItem(selection_key) => {
+                    self.selection_key = selection_key;
+                    self.scroll_offset_y =
+                        self.ensure_in_viewport(term_height, &drawn_rects, selection_key);
                 }
-
-                Event::Key(
-                    KeyEvent {
-                        code: KeyCode::PageUp,
-                        modifiers: KeyModifiers::NONE,
-                        kind: KeyEventKind::Press,
-                        state: _,
-                    }
-                    | KeyEvent {
-                        code: KeyCode::Char('b'),
-                        modifiers: KeyModifiers::CONTROL,
-                        kind: KeyEventKind::Press,
-                        state: _,
-                    },
-                ) => {
-                    scroll_offset_y = scroll_offset_y.saturating_sub(term_height);
+                StateUpdate::ToggleItem(selection_key) => {
+                    self.toggle_item(selection_key)?;
                 }
-                Event::Key(
-                    KeyEvent {
-                        code: KeyCode::PageDown,
-                        modifiers: KeyModifiers::NONE,
-                        kind: KeyEventKind::Press,
-                        state: _,
-                    }
-                    | KeyEvent {
-                        code: KeyCode::Char('f'),
-                        modifiers: KeyModifiers::CONTROL,
-                        kind: KeyEventKind::Press,
-                        state: _,
-                    },
-                ) => {
-                    scroll_offset_y = scroll_offset_y.saturating_add(term_height);
-                }
-
-                Event::Key(KeyEvent {
-                    code: KeyCode::Char(' '),
-                    modifiers: KeyModifiers::NONE,
-                    kind: KeyEventKind::Press,
-                    state: _,
-                }) => {
-                    self.toggle_current_item()?;
-                }
-
-                _event => {}
             }
         }
 
         Ok(self.state)
     }
 
-    fn toggle_current_item(&mut self) -> Result<(), RecordError> {
-        match self.selection {
+    fn make_app(&'a self, debug_info: Option<AppDebugInfo>) -> App<'a> {
+        let file_views: Vec<FileView> = self
+            .state
+            .files
+            .iter()
+            .enumerate()
+            .map(|(file_idx, file)| {
+                let file_key = FileKey { file_idx };
+                let file_tristate = self.file_tristate(file_key).unwrap();
+                FileView {
+                    debug: debug_info.is_some(),
+                    file_key,
+                    tristate_box: TristateBox {
+                        use_unicode: self.use_unicode,
+                        id: ComponentId::TristateBox,
+                        tristate: file_tristate,
+                    },
+                    is_header_selected: match self.selection_key {
+                        SelectionKey::None | SelectionKey::Section(_) | SelectionKey::Line(_) => {
+                            false
+                        }
+                        SelectionKey::File(selected_file_key) => file_key == selected_file_key,
+                    },
+                    path: &file.path,
+                    section_views: {
+                        let mut section_views = Vec::new();
+                        let total_num_sections = file
+                            .sections
+                            .iter()
+                            .filter(|section| section.is_editable())
+                            .count();
+
+                        let mut section_num = 0;
+                        for (section_idx, section) in file.sections.iter().enumerate() {
+                            let section_key = SectionKey {
+                                file_idx,
+                                section_idx,
+                            };
+                            let section_tristate = self.section_tristate(section_key).unwrap();
+                            if section.is_editable() {
+                                section_num += 1;
+                            }
+                            section_views.push(SectionView {
+                                use_unicode: self.use_unicode,
+                                section_key,
+                                tristate_box: TristateBox {
+                                    use_unicode: self.use_unicode,
+                                    id: ComponentId::TristateBox,
+                                    tristate: section_tristate,
+                                },
+                                selection: match self.selection_key {
+                                    SelectionKey::None | SelectionKey::File(_) => None,
+                                    SelectionKey::Section(selected_section_key) => {
+                                        if selected_section_key == section_key {
+                                            Some(SectionSelection::Header)
+                                        } else {
+                                            None
+                                        }
+                                    }
+                                    SelectionKey::Line(LineKey {
+                                        file_idx,
+                                        section_idx,
+                                        line_idx,
+                                    }) => {
+                                        let selected_section_key = SectionKey {
+                                            file_idx,
+                                            section_idx,
+                                        };
+                                        if selected_section_key == section_key {
+                                            Some(SectionSelection::Line(line_idx))
+                                        } else {
+                                            None
+                                        }
+                                    }
+                                },
+                                section_num,
+                                total_num_sections,
+                                section,
+                            });
+                        }
+                        section_views
+                    },
+                }
+            })
+            .collect();
+        App {
+            debug_info: None,
+            file_views,
+        }
+    }
+
+    fn handle_event(
+        &self,
+        event: crossterm::event::Event,
+        term_height: usize,
+        drawn_rects: &HashMap<ComponentId, Rect>,
+    ) -> Result<StateUpdate, RecordError> {
+        let state_update = match event {
+            Event::Key(
+                KeyEvent {
+                    code: KeyCode::Char('q'),
+                    modifiers: KeyModifiers::NONE,
+                    kind: KeyEventKind::Press,
+                    state: _,
+                }
+                | KeyEvent {
+                    code: KeyCode::Char('c'),
+                    modifiers: KeyModifiers::CONTROL,
+                    kind: KeyEventKind::Press,
+                    state: _,
+                },
+            ) => StateUpdate::Quit,
+
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('y'),
+                modifiers: KeyModifiers::CONTROL,
+                kind: KeyEventKind::Press,
+                state: _,
+            })
+            | Event::Mouse(MouseEvent {
+                kind: MouseEventKind::ScrollUp,
+                column: _,
+                row: _,
+                modifiers: _,
+            }) => StateUpdate::ScrollTo(self.scroll_offset_y.saturating_sub(1)),
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('e'),
+                modifiers: KeyModifiers::CONTROL,
+                kind: KeyEventKind::Press,
+                state: _,
+            })
+            | Event::Mouse(MouseEvent {
+                kind: MouseEventKind::ScrollDown,
+                column: _,
+                row: _,
+                modifiers: _,
+            }) => StateUpdate::ScrollTo(self.scroll_offset_y.saturating_add(1)),
+
+            Event::Key(
+                KeyEvent {
+                    code: KeyCode::PageUp,
+                    modifiers: KeyModifiers::NONE,
+                    kind: KeyEventKind::Press,
+                    state: _,
+                }
+                | KeyEvent {
+                    code: KeyCode::Char('b'),
+                    modifiers: KeyModifiers::CONTROL,
+                    kind: KeyEventKind::Press,
+                    state: _,
+                },
+            ) => StateUpdate::ScrollTo(
+                self.scroll_offset_y
+                    .saturating_sub(term_height.unwrap_isize()),
+            ),
+            Event::Key(
+                KeyEvent {
+                    code: KeyCode::PageDown,
+                    modifiers: KeyModifiers::NONE,
+                    kind: KeyEventKind::Press,
+                    state: _,
+                }
+                | KeyEvent {
+                    code: KeyCode::Char('f'),
+                    modifiers: KeyModifiers::CONTROL,
+                    kind: KeyEventKind::Press,
+                    state: _,
+                },
+            ) => StateUpdate::ScrollTo(
+                self.scroll_offset_y
+                    .saturating_add(term_height.unwrap_isize()),
+            ),
+
+            Event::Key(KeyEvent {
+                code: KeyCode::Up,
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                state: _,
+            }) => {
+                let (keys, index) = self.find_selection();
+                let selection_key = self.select_prev(&keys, index);
+                StateUpdate::SelectItem(selection_key)
+            }
+
+            Event::Key(KeyEvent {
+                code: KeyCode::Down,
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                state: _,
+            }) => {
+                let (keys, index) = self.find_selection();
+                let selection_key = self.select_next(&keys, index);
+                StateUpdate::SelectItem(selection_key)
+            }
+
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('u'),
+                modifiers: KeyModifiers::CONTROL,
+                kind: KeyEventKind::Press,
+                state: _,
+            }) => {
+                let selection_key = self.select_prev_page(term_height, drawn_rects);
+                StateUpdate::SelectItem(selection_key)
+            }
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('d'),
+                modifiers: KeyModifiers::CONTROL,
+                kind: KeyEventKind::Press,
+                state: _,
+            }) => {
+                let selection_key = self.select_next_page(term_height, drawn_rects);
+                StateUpdate::SelectItem(selection_key)
+            }
+
+            Event::Key(KeyEvent {
+                code: KeyCode::Char(' '),
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                state: _,
+            }) => {
+                return Ok(StateUpdate::ToggleItem(self.selection_key));
+            }
+
+            _event => StateUpdate::None,
+        };
+        Ok(state_update)
+    }
+
+    fn first_selection_key(&self) -> SelectionKey {
+        match self.state.files.iter().enumerate().next() {
+            Some((file_idx, _)) => SelectionKey::File(FileKey { file_idx }),
+            None => SelectionKey::None,
+        }
+    }
+
+    fn all_selection_keys(&self) -> Vec<SelectionKey> {
+        let mut result = Vec::new();
+        for (file_idx, file) in self.state.files.iter().enumerate() {
+            result.push(SelectionKey::File(FileKey { file_idx }));
+            for (section_idx, section) in file.sections.iter().enumerate() {
+                match section {
+                    Section::Unchanged { .. } => {}
+                    Section::Changed { lines } => {
+                        result.push(SelectionKey::Section(SectionKey {
+                            file_idx,
+                            section_idx,
+                        }));
+                        for (line_idx, _line) in lines.iter().enumerate() {
+                            result.push(SelectionKey::Line(LineKey {
+                                file_idx,
+                                section_idx,
+                                line_idx,
+                            }));
+                        }
+                    }
+                    Section::FileMode {
+                        is_toggled: _,
+                        before: _,
+                        after: _,
+                    } => {
+                        result.push(SelectionKey::Section(SectionKey {
+                            file_idx,
+                            section_idx,
+                        }));
+                        result.push(SelectionKey::Line(LineKey {
+                            file_idx,
+                            section_idx,
+                            line_idx: 0,
+                        }));
+                    }
+                }
+            }
+        }
+        result
+    }
+
+    fn find_selection(&self) -> (Vec<SelectionKey>, Option<usize>) {
+        // FIXME: O(n) algorithm
+        let keys = self.all_selection_keys();
+        let index = keys.iter().enumerate().find_map(|(k, v)| {
+            if v == &self.selection_key {
+                Some(k)
+            } else {
+                None
+            }
+        });
+        (keys, index)
+    }
+
+    fn select_prev(&self, keys: &[SelectionKey], index: Option<usize>) -> SelectionKey {
+        match index {
+            None => self.first_selection_key(),
+            Some(index) => match index.checked_sub(1) {
+                Some(index) => keys[index],
+                None => *keys.last().unwrap(),
+            },
+        }
+    }
+
+    fn select_next(&self, keys: &[SelectionKey], index: Option<usize>) -> SelectionKey {
+        match index {
+            None => self.first_selection_key(),
+            Some(index) => match keys.get(index + 1) {
+                Some(key) => *key,
+                None => keys[0],
+            },
+        }
+    }
+
+    fn select_prev_page(
+        &self,
+        term_height: usize,
+        drawn_rects: &HashMap<ComponentId, Rect>,
+    ) -> SelectionKey {
+        let (keys, index) = self.find_selection();
+        let mut index = match index {
+            Some(index) => index,
+            None => return SelectionKey::None,
+        };
+
+        let original_y = self.selection_key_y(drawn_rects, self.selection_key);
+        let target_y = original_y.saturating_sub(term_height.unwrap_isize() / 2);
+        while index > 0 {
+            index -= 1;
+            if self.selection_key_y(drawn_rects, keys[index]) <= target_y {
+                break;
+            }
+        }
+        keys[index]
+    }
+
+    fn select_next_page(
+        &self,
+        term_height: usize,
+        drawn_rects: &HashMap<ComponentId, Rect>,
+    ) -> SelectionKey {
+        let (keys, index) = self.find_selection();
+        let mut index = match index {
+            Some(index) => index,
+            None => return SelectionKey::None,
+        };
+
+        let original_y = self.selection_key_y(drawn_rects, self.selection_key);
+        let target_y = original_y.saturating_add(term_height.unwrap_isize() / 2);
+        while index + 1 < keys.len() {
+            index += 1;
+            if self.selection_key_y(drawn_rects, keys[index]) >= target_y {
+                break;
+            }
+        }
+        keys[index]
+    }
+
+    fn selection_key_y(
+        &self,
+        drawn_rects: &HashMap<ComponentId, Rect>,
+        selection_key: SelectionKey,
+    ) -> isize {
+        let id = ComponentId::SelectableItem(selection_key);
+        match drawn_rects.get(&id) {
+            Some(drawn_rect) => drawn_rect.y,
+            None => {
+                panic!("could not look up drawn rect for component with ID {id:?}; was it drawn?")
+            }
+        }
+    }
+
+    fn ensure_in_viewport(
+        &self,
+        term_height: usize,
+        drawn_rects: &HashMap<ComponentId, Rect>,
+        selection_key: SelectionKey,
+    ) -> isize {
+        let scroll_offset_y = self.selection_key_y(drawn_rects, selection_key);
+        if scroll_offset_y < self.scroll_offset_y {
+            scroll_offset_y
+        } else if self.scroll_offset_y + term_height.unwrap_isize() <= scroll_offset_y {
+            scroll_offset_y - term_height.unwrap_isize() + 1
+        } else {
+            self.scroll_offset_y
+        }
+    }
+
+    fn toggle_item(&mut self, selection: SelectionKey) -> Result<(), RecordError> {
+        match selection {
             SelectionKey::None => {}
             SelectionKey::File(file_key) => {
                 let tristate = self.file_tristate(file_key)?;
@@ -375,13 +653,6 @@ impl<'a> Recorder<'a> {
             }
         }
         Ok(())
-    }
-
-    fn first_selection_key(&self) -> SelectionKey {
-        match self.state.files.iter().enumerate().next() {
-            Some((file_idx, _)) => SelectionKey::File(FileKey { file_idx }),
-            None => SelectionKey::None,
-        }
     }
 
     fn file(&self, file_key: FileKey) -> Result<&File, RecordError> {
@@ -547,7 +818,14 @@ impl<'a> Recorder<'a> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
+enum ComponentId {
+    App,
+    SelectableItem(SelectionKey),
+    TristateBox,
+}
+
+#[derive(Clone, Debug)]
 enum Tristate {
     Unchecked,
     Partial,
@@ -564,72 +842,114 @@ impl From<bool> for Tristate {
     }
 }
 
-#[derive(Debug)]
-struct TristateBox {
-    pub(crate) use_unicode: bool,
-    pub(crate) tristate: Tristate,
+#[derive(Clone, Debug)]
+struct TristateBox<Id> {
+    use_unicode: bool,
+    id: Id,
+    tristate: Tristate,
 }
 
-impl TristateBox {
+impl<Id> TristateBox<Id> {
     fn text(&self) -> &'static str {
         let Self {
             use_unicode,
+            id: _,
             tristate,
         } = self;
         match tristate {
-            Tristate::Unchecked => "[ ] ",
-            Tristate::Partial => "[~] ",
+            Tristate::Unchecked => "[ ]",
+            Tristate::Partial => "[~]",
             Tristate::Checked => {
                 if *use_unicode {
-                    "[✕] "
+                    "[✕]"
                 } else {
-                    "[x] "
+                    "[x]"
                 }
             }
         }
     }
-
-    pub fn width(&self) -> usize {
-        self.text().chars().count()
-    }
 }
 
-impl Component for TristateBox {
-    fn draw(&self, viewport: &mut Viewport, x: isize, y: isize) {
+impl<Id: Clone + Debug + Eq + Hash> Component for TristateBox<Id> {
+    type Id = Id;
+
+    fn id(&self) -> Self::Id {
+        self.id.clone()
+    }
+
+    fn draw<'a, 'b: 'a>(&'b self, viewport: &'a mut Viewport<Self::Id>, x: isize, y: isize) {
         let span = Span::styled(self.text(), Style::default().add_modifier(Modifier::BOLD));
         viewport.draw_span(x, y, &span);
     }
 }
 
-#[derive(Debug)]
+#[allow(dead_code)]
+#[derive(Clone, Debug)]
+struct AppDebugInfo {
+    term_height: usize,
+    scroll_offset_y: isize,
+    selection_key: SelectionKey,
+    selection_key_y: isize,
+    app_actual_vs_expected_height: (usize, usize),
+    drawn_rects: BTreeMap<ComponentId, Rect>, // sorted for determinism
+}
+
+#[derive(Clone, Debug)]
 struct App<'a> {
+    debug_info: Option<AppDebugInfo>,
     file_views: Vec<FileView<'a>>,
 }
 
 impl App<'_> {
     fn height(&self) -> usize {
-        let Self { file_views } = self;
+        let Self {
+            debug_info: _,
+            file_views,
+        } = self;
         file_views.iter().map(|file_view| file_view.height()).sum()
     }
 }
 
 impl Component for App<'_> {
-    fn draw(&self, viewport: &mut Viewport, x: isize, y: isize) {
-        let Self { file_views } = self;
+    type Id = ComponentId;
+
+    fn id(&self) -> Self::Id {
+        ComponentId::App
+    }
+
+    fn draw<'a, 'b: 'a>(&'b self, viewport: &'a mut Viewport<Self::Id>, x: isize, y: isize) {
+        let Self {
+            debug_info,
+            file_views,
+        } = self;
+
+        if let Some(debug_info) = debug_info {
+            viewport.debug(format!("app debug info: {debug_info:#?}"));
+        }
 
         let mut y = y;
         for file_view in file_views {
-            file_view.draw(viewport, x, y);
-            y += file_view.height().unwrap_isize();
+            let file_view_rect = viewport.draw_component(x, y, file_view);
+            y += file_view_rect.height.unwrap_isize();
+
+            if debug_info.is_some() {
+                viewport.debug(format!(
+                    "file {} dims: {file_view_rect:?}",
+                    file_view.path.to_string_lossy()
+                ));
+            }
         }
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct FileView<'a> {
-    pub(crate) tristate_box: TristateBox,
-    pub(crate) path: &'a Path,
-    pub(crate) section_views: Vec<SectionView<'a>>,
+    debug: bool,
+    file_key: FileKey,
+    tristate_box: TristateBox<ComponentId>,
+    is_header_selected: bool,
+    path: &'a Path,
+    section_views: Vec<SectionView<'a>>,
 }
 
 impl FileView<'_> {
@@ -643,41 +963,64 @@ impl FileView<'_> {
 }
 
 impl Component for FileView<'_> {
-    fn draw(&self, viewport: &mut Viewport, x: isize, y: isize) {
+    type Id = ComponentId;
+
+    fn id(&self) -> Self::Id {
+        ComponentId::SelectableItem(SelectionKey::File(self.file_key))
+    }
+
+    fn draw<'a, 'b: 'a>(&'b self, viewport: &'a mut Viewport<Self::Id>, x: isize, y: isize) {
         let Self {
+            debug,
+            file_key: _,
             tristate_box,
             path,
-            section_views: sections,
+            section_views,
+            is_header_selected,
         } = self;
 
-        tristate_box.draw(viewport, x, y);
+        let tristate_box_rect = viewport.draw_component(x, y, tristate_box);
         viewport.draw_span(
-            x + tristate_box.width().unwrap_isize(),
+            x + tristate_box_rect.width.unwrap_isize() + 1,
             y,
-            &Span::styled(path.to_string_lossy(), Style::default()),
+            &Span::styled(
+                path.to_string_lossy(),
+                if *is_header_selected {
+                    Style::default().fg(Color::Blue)
+                } else {
+                    Style::default()
+                },
+            ),
         );
+        if *is_header_selected {
+            highlight_line(viewport, y);
+        }
 
         let x = x + 2;
         let mut y = y + 1;
-        for section_view in sections {
-            let section_area = Rect {
-                x,
-                y,
-                width: viewport.size().width,
-                height: section_view.height(),
-            };
-            if viewport.contains(section_area) {
-                section_view.draw(viewport, section_area.x, section_area.y);
+        for section_view in section_views {
+            let section_rect = viewport.draw_component(x, y, section_view);
+            y += section_rect.height.unwrap_isize();
+
+            if *debug {
+                viewport.debug(format!("section dims: {section_rect:?}",));
             }
-            y += section_area.height.unwrap_isize();
         }
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
+enum SectionSelection {
+    Header,
+    Line(usize),
+}
+
+#[derive(Clone, Debug)]
 struct SectionView<'a> {
     use_unicode: bool,
-    tristate_box: TristateBox,
+    section_key: SectionKey,
+    tristate_box: TristateBox<ComponentId>,
+    selection: Option<SectionSelection>,
     section_num: usize,
     total_num_sections: usize,
     section: &'a Section<'a>,
@@ -696,10 +1039,18 @@ impl SectionView<'_> {
 }
 
 impl Component for SectionView<'_> {
-    fn draw(&self, viewport: &mut Viewport, x: isize, y: isize) {
+    type Id = ComponentId;
+
+    fn id(&self) -> Self::Id {
+        ComponentId::SelectableItem(SelectionKey::Section(self.section_key))
+    }
+
+    fn draw<'a, 'b: 'a>(&'b self, viewport: &'a mut Viewport<Self::Id>, x: isize, y: isize) {
         let Self {
             use_unicode,
+            section_key,
             tristate_box,
+            selection,
             section_num,
             total_num_sections,
             section,
@@ -708,56 +1059,163 @@ impl Component for SectionView<'_> {
         let y = if !section.is_editable() {
             y
         } else {
-            tristate_box.draw(viewport, x, y);
+            let tristate_rect = viewport.draw_component(x, y, tristate_box);
             viewport.draw_span(
-                x + tristate_box.width().unwrap_isize(),
+                x + tristate_rect.width.unwrap_isize() + 1,
                 y,
                 &Span::styled(
                     format!("Section {section_num}/{total_num_sections}"),
                     Style::default(),
                 ),
             );
+            match selection {
+                Some(SectionSelection::Header) => highlight_line(viewport, y),
+                Some(SectionSelection::Line(_)) | None => {}
+            }
             y + 1
         };
         let x = x + 2;
 
+        let SectionKey {
+            file_idx,
+            section_idx,
+        } = *section_key;
         match section {
             Section::Unchanged { lines } => {
                 // TODO: only display a certain number of contextual lines
-                let x = x + tristate_box.width().unwrap_isize() + "+ ".len().unwrap_isize();
-                for (dy, line) in lines.iter().enumerate() {
-                    let span = Span::styled(line.as_ref(), Style::default());
-                    viewport.draw_span(x, y + dy.unwrap_isize(), &span);
+                let x = x + "[x] + ".len().unwrap_isize();
+                for (line_idx, line) in lines.iter().enumerate() {
+                    let line_view = SectionLineView {
+                        line_key: LineKey {
+                            file_idx,
+                            section_idx,
+                            line_idx,
+                        },
+                        inner: SectionLineViewInner::Unchanged {
+                            line: line.as_ref(),
+                        },
+                    };
+                    viewport.draw_component(x, y + line_idx.unwrap_isize(), &line_view);
                 }
             }
 
             Section::Changed { lines } => {
-                for (dy, line) in lines.iter().enumerate() {
-                    let y = y + dy.unwrap_isize();
+                for (line_idx, line) in lines.iter().enumerate() {
                     let SectionChangedLine {
-                        is_toggled: is_selected,
+                        is_toggled,
                         change_type,
                         line,
                     } = line;
-
                     let tristate_box = TristateBox {
                         use_unicode: *use_unicode,
-                        tristate: Tristate::from(*is_selected),
+                        id: ComponentId::TristateBox,
+                        tristate: Tristate::from(*is_toggled),
                     };
-                    tristate_box.draw(viewport, x, y);
-                    let x = x + tristate_box.width().unwrap_isize();
+                    let line_view = SectionLineView {
+                        line_key: LineKey {
+                            file_idx,
+                            section_idx,
+                            line_idx,
+                        },
+                        inner: SectionLineViewInner::Changed {
+                            tristate_box,
+                            change_type: *change_type,
+                            line: line.as_ref(),
+                        },
+                    };
+                    let y = y + line_idx.unwrap_isize();
+                    viewport.draw_component(x, y, &line_view);
 
-                    let (change_type_text, style) = match change_type {
-                        ChangeType::Added => ("+ ", Style::default().fg(Color::Green)),
-                        ChangeType::Removed => ("- ", Style::default().fg(Color::Red)),
-                    };
-                    viewport.draw_span(x, y, &Span::styled(change_type_text, style));
-                    let x = x + change_type_text.chars().count().unwrap_isize();
-                    viewport.draw_span(x, y, &Span::styled(line.as_ref(), style));
+                    match selection {
+                        Some(SectionSelection::Line(selected_line_idx)) => {
+                            if line_idx == *selected_line_idx {
+                                highlight_line(viewport, y);
+                            }
+                        }
+                        Some(SectionSelection::Header) | None => {}
+                    }
                 }
             }
 
-            Section::FileMode { .. } => unimplemented!("rendering file mode section"),
+            Section::FileMode { .. } => {
+                let line_view = SectionLineView {
+                    line_key: LineKey {
+                        file_idx,
+                        section_idx,
+                        line_idx: 0,
+                    },
+                    inner: SectionLineViewInner::FileMode,
+                };
+                viewport.draw_component(x, y, &line_view);
+            }
         }
     }
+}
+
+#[derive(Clone, Debug)]
+enum SectionLineViewInner<'a> {
+    Unchanged {
+        line: &'a str,
+    },
+    Changed {
+        tristate_box: TristateBox<ComponentId>,
+        change_type: ChangeType,
+        line: &'a str,
+    },
+    FileMode,
+}
+
+#[derive(Clone, Debug)]
+struct SectionLineView<'a> {
+    line_key: LineKey,
+    inner: SectionLineViewInner<'a>,
+}
+
+impl Component for SectionLineView<'_> {
+    type Id = ComponentId;
+
+    fn id(&self) -> Self::Id {
+        ComponentId::SelectableItem(SelectionKey::Line(self.line_key))
+    }
+
+    fn draw<'a, 'b: 'a>(&'b self, viewport: &'a mut Viewport<Self::Id>, x: isize, y: isize) {
+        let Self { line_key: _, inner } = self;
+        match inner {
+            SectionLineViewInner::Unchanged { line } => {
+                let span = Span::styled(*line, Style::default().add_modifier(Modifier::DIM));
+                viewport.draw_span(x, y, &span);
+            }
+
+            SectionLineViewInner::Changed {
+                tristate_box,
+                change_type,
+                line,
+            } => {
+                let tristate_rect = viewport.draw_component(x, y, tristate_box);
+                let x = x + tristate_rect.width.unwrap_isize() + 1;
+
+                let (change_type_text, style) = match change_type {
+                    ChangeType::Added => ("+ ", Style::default().fg(Color::Green)),
+                    ChangeType::Removed => ("- ", Style::default().fg(Color::Red)),
+                };
+                viewport.draw_span(x, y, &Span::styled(change_type_text, style));
+                let x = x + change_type_text.chars().count().unwrap_isize();
+                viewport.draw_span(x, y, &Span::styled(*line, style));
+            }
+
+            SectionLineViewInner::FileMode => unimplemented!("rendering file mode section"),
+        }
+    }
+}
+
+fn highlight_line<Id: Clone + Debug + Eq + Hash>(viewport: &mut Viewport<Id>, y: isize) {
+    viewport.set_style(
+        Rect {
+            x: 0,
+            y,
+            width: viewport.size().width,
+            height: 1,
+        },
+        Style::default().add_modifier(Modifier::REVERSED),
+    );
 }
