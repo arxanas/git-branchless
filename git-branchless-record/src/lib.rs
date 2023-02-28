@@ -258,6 +258,7 @@ fn record_interactive(
         }
         Err(
             err @ (RecordError::SetUpTerminal(_)
+            | RecordError::CleanUpTerminal(_)
             | RecordError::ReadInput(_)
             | RecordError::RenderFrame(_)),
         ) => {

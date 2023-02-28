@@ -26,6 +26,9 @@ pub enum RecordError {
     #[error("failed to set up terminal: {0}")]
     SetUpTerminal(#[source] io::Error),
 
+    #[error("failed to clean up terminal: {0}")]
+    CleanUpTerminal(#[source] io::Error),
+
     #[error("failed to render new frame: {0}")]
     RenderFrame(#[source] io::Error),
 
