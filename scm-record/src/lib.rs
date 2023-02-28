@@ -9,8 +9,12 @@
 )]
 #![allow(clippy::too_many_arguments, clippy::blocks_in_if_conditions)]
 
+mod render;
 mod types;
 mod ui;
+mod util;
 
-pub use types::{FileMode, FileState, RecordError, RecordState, Section, SectionChangedLine};
+pub use types::{
+    ChangeType, File, FileMode, RecordError, RecordState, Section, SectionChangedLine,
+};
 pub use ui::Recorder;

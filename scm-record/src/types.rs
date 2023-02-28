@@ -2,17 +2,17 @@
 
 use std::borrow::Cow;
 use std::io;
-use std::path::PathBuf;
+use std::path::Path;
 
 use thiserror::Error;
 
 /// The state used to render the changes. This is passed into [`Recorder::new`]
 /// and then updated and returned with [`Recorder::run`].
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct RecordState<'a> {
     /// The state of each file. This is rendered in order, so you may want to
     /// sort this list by path before providing it.
-    pub file_states: Vec<(PathBuf, FileState<'a>)>,
+    pub files: Vec<File<'a>>,
 }
 
 /// An error which occurred when attempting to record changes.
@@ -31,6 +31,9 @@ pub enum RecordError {
 
     #[error("failed to read user input: {0}")]
     ReadInput(#[source] crossterm::ErrorKind),
+
+    #[error("bug: {0}")]
+    Bug(String),
 }
 
 /// The Unix file mode.
@@ -38,7 +41,10 @@ pub type FileMode = usize;
 
 /// The state of a file to be recorded.
 #[derive(Clone, Debug)]
-pub struct FileState<'a> {
+pub struct File<'a> {
+    /// The path to the file.
+    pub path: Cow<'a, Path>,
+
     /// The Unix file mode of the file, if available.
     ///
     /// This value is not directly modified by the UI; instead, construct a
@@ -51,7 +57,7 @@ pub struct FileState<'a> {
     pub sections: Vec<Section<'a>>,
 }
 
-impl FileState<'_> {
+impl File<'_> {
     /// An absent file.
     pub fn absent() -> Self {
         unimplemented!("FileState::absent")
@@ -65,6 +71,7 @@ impl FileState<'_> {
     /// Count the number of changed sections in this file.
     pub fn count_changed_sections(&self) -> usize {
         let Self {
+            path: _,
             file_mode: _,
             sections,
         } = self;
@@ -85,6 +92,7 @@ impl FileState<'_> {
     /// the `file_mode` value that this [`FileState`] was constructed with.
     pub fn get_file_mode(&self) -> Option<FileMode> {
         let Self {
+            path: _,
             file_mode,
             sections,
         } = self;
@@ -115,38 +123,36 @@ impl FileState<'_> {
         let mut acc_selected = String::new();
         let mut acc_unselected = String::new();
         let Self {
+            path: _,
             file_mode: _,
             sections,
         } = self;
         for section in sections {
             match section {
-                Section::Unchanged { contents } => {
-                    for line in contents {
+                Section::Unchanged { lines } => {
+                    for line in lines {
                         acc_selected.push_str(line);
                         acc_selected.push('\n');
                         acc_unselected.push_str(line);
                         acc_unselected.push('\n');
                     }
                 }
-                Section::Changed { before, after } => {
-                    for SectionChangedLine { is_selected, line } in before {
-                        // Note the inverted condition here.
-                        if !*is_selected {
-                            acc_selected.push_str(line);
-                            acc_selected.push('\n');
-                        } else {
-                            acc_unselected.push_str(line);
-                            acc_unselected.push('\n');
-                        }
-                    }
-
-                    for SectionChangedLine { is_selected, line } in after {
-                        if *is_selected {
-                            acc_selected.push_str(line);
-                            acc_selected.push('\n');
-                        } else {
-                            acc_unselected.push_str(line);
-                            acc_unselected.push('\n');
+                Section::Changed { lines } => {
+                    for line in lines {
+                        let SectionChangedLine {
+                            is_selected,
+                            change_type,
+                            line,
+                        } = line;
+                        match (change_type, is_selected) {
+                            (ChangeType::Added, true) | (ChangeType::Removed, false) => {
+                                acc_selected.push_str(line);
+                                acc_selected.push('\n');
+                            }
+                            (ChangeType::Added, false) | (ChangeType::Removed, true) => {
+                                acc_unselected.push_str(line);
+                                acc_unselected.push('\n');
+                            }
                         }
                     }
                 }
@@ -167,26 +173,27 @@ impl FileState<'_> {
 #[derive(Clone, Debug)]
 pub enum Section<'a> {
     /// This section of the file is unchanged and just used for context.
+    ///
+    /// By default, only part of the context will be shown. However, all of the
+    /// context lines should be provided so that they can be used to globally
+    /// number the lines correctly.
     Unchanged {
-        /// The contents of the lines in this section. Each line includes its
-        /// trailing newline character(s), if any.
-        contents: Vec<Cow<'a, str>>,
+        /// The contents of the lines in this section. Each line does *not*
+        /// include a trailing newline character.
+        lines: Vec<Cow<'a, str>>,
     },
 
     /// This section of the file is changed, and the user needs to select which
     /// specific changed lines to record.
     Changed {
-        /// The contents of the lines before the user change was made. Each line
-        /// includes its trailing newline character(s), if any.
-        before: Vec<SectionChangedLine<'a>>,
-
-        /// The contents of the lines after the user change was made. Each line
-        /// includes its trailing newline character(s), if any.
-        after: Vec<SectionChangedLine<'a>>,
+        /// The contents of the lines caused by the user change. Each line does
+        /// *not* include a trailing newline character.
+        lines: Vec<SectionChangedLine<'a>>,
     },
 
-    /// The Unix file mode of the file changed, and the user needs to select
-    /// whether to accept that mode change or not.
+    /// This indicates that the Unix file mode of the file changed, and that the
+    /// user needs to accept that mode change or not. This is not part of the
+    /// "contents" of the file per se, but it's rendered inline as if it were.
     FileMode {
         /// Whether or not the file mode change was accepted.
         is_selected: bool,
@@ -199,25 +206,26 @@ pub enum Section<'a> {
     },
 }
 
+/// The type of change in the patch/diff.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ChangeType {
+    /// The line was added.
+    Added,
+
+    /// The line was removed.
+    Removed,
+}
+
 /// A changed line inside a `Section`.
 #[derive(Clone, Debug)]
 pub struct SectionChangedLine<'a> {
     /// Whether or not this line was selected to be recorded.
     pub is_selected: bool,
 
+    /// The type of change this line was.
+    pub change_type: ChangeType,
+
     /// The contents of the line, including its trailing newline character(s),
     /// if any.
     pub line: Cow<'a, str>,
-}
-
-impl<'a> SectionChangedLine<'a> {
-    /// Make a copy of this [`SectionChangedLine`] that borrows the content of
-    /// the line from the original.
-    pub fn borrow_line(&'a self) -> Self {
-        let Self { is_selected, line } = self;
-        Self {
-            is_selected: *is_selected,
-            line: Cow::Borrowed(line),
-        }
-    }
 }
