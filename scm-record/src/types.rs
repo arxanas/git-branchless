@@ -1,7 +1,10 @@
 //! Data types for the change selector interface.
 
 use std::borrow::Cow;
+use std::io;
 use std::path::PathBuf;
+
+use thiserror::Error;
 
 /// The state used to render the changes. This is passed into [`Recorder::new`]
 /// and then updated and returned with [`Recorder::run`].
@@ -13,10 +16,21 @@ pub struct RecordState<'a> {
 }
 
 /// An error which occurred when attempting to record changes.
-#[derive(Clone, Debug)]
+#[allow(missing_docs)]
+#[derive(Debug, Error)]
 pub enum RecordError {
     /// The user cancelled the operation.
+    #[error("cancelled by user")]
     Cancelled,
+
+    #[error("failed to set up terminal: {0}")]
+    SetUpTerminal(#[source] io::Error),
+
+    #[error("failed to render new frame: {0}")]
+    RenderFrame(#[source] io::Error),
+
+    #[error("failed to read user input: {0}")]
+    ReadInput(#[source] crossterm::ErrorKind),
 }
 
 /// The Unix file mode.
@@ -109,7 +123,9 @@ impl FileState<'_> {
                 Section::Unchanged { contents } => {
                     for line in contents {
                         acc_selected.push_str(line);
+                        acc_selected.push('\n');
                         acc_unselected.push_str(line);
+                        acc_unselected.push('\n');
                     }
                 }
                 Section::Changed { before, after } => {
@@ -117,16 +133,20 @@ impl FileState<'_> {
                         // Note the inverted condition here.
                         if !*is_selected {
                             acc_selected.push_str(line);
+                            acc_selected.push('\n');
                         } else {
                             acc_unselected.push_str(line);
+                            acc_unselected.push('\n');
                         }
                     }
 
                     for SectionChangedLine { is_selected, line } in after {
                         if *is_selected {
                             acc_selected.push_str(line);
+                            acc_selected.push('\n');
                         } else {
                             acc_unselected.push_str(line);
+                            acc_unselected.push('\n');
                         }
                     }
                 }
