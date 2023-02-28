@@ -12,6 +12,8 @@ fn redact_remotes(output: String) -> String {
         .map(|line| {
             if line.contains("To file://") {
                 "To: file://<remote>\n".to_string()
+            } else if line.contains("From file://") {
+                "From: file://<remote>\n".to_string()
             } else if line.contains("error: failed to push some refs to 'file://") {
                 "error: failed to push some refs to 'file://<remote>'\n".to_string()
             } else {
@@ -96,13 +98,16 @@ fn test_submit() -> eyre::Result<()> {
         let (stdout, stderr) = cloned_repo.run(&["submit"])?;
         let stderr = redact_remotes(stderr);
         insta::assert_snapshot!(stderr, @r###"
+        From: file://<remote>
+         * branch            qux        -> FETCH_HEAD
+         * branch            bar        -> FETCH_HEAD
         branchless: processing 1 update: branch qux
         To: file://<remote>
          + 20230db...bae8307 qux -> qux (forced update)
         branchless: processing 1 update: remote branch origin/qux
         "###);
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> fetch origin
+        branchless: running command: <git-executable> fetch origin refs/heads/qux refs/heads/bar
         branchless: running command: <git-executable> push --force-with-lease origin qux
         Pushed 1 branch: qux
         Skipped 1 branch (already up-to-date): bar
@@ -113,9 +118,13 @@ fn test_submit() -> eyre::Result<()> {
     {
         let (stdout, stderr) = cloned_repo.run(&["submit", "--create"])?;
         let stderr = redact_remotes(stderr);
-        insta::assert_snapshot!(stderr, @"");
+        insta::assert_snapshot!(stderr, @r###"
+        From: file://<remote>
+         * branch            qux        -> FETCH_HEAD
+         * branch            bar        -> FETCH_HEAD
+        "###);
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> fetch origin
+        branchless: running command: <git-executable> fetch origin refs/heads/qux refs/heads/bar
         Skipped 2 branches (already up-to-date): bar, qux
         "###);
     }
@@ -285,9 +294,12 @@ fn test_submit_up_to_date_branch() -> eyre::Result<()> {
     {
         let (stdout, stderr) = cloned_repo.run(&["submit", "feature"])?;
         let stderr = redact_remotes(stderr);
-        insta::assert_snapshot!(stderr, @"");
+        insta::assert_snapshot!(stderr, @r###"
+        From: file://<remote>
+         * branch            feature    -> FETCH_HEAD
+        "###);
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> fetch origin
+        branchless: running command: <git-executable> fetch origin refs/heads/feature
         Skipped 1 branch (already up-to-date): feature
         "###);
     }
