@@ -570,9 +570,18 @@ impl<'a> Recorder<'a> {
         drawn_rects: &HashMap<ComponentId, Rect>,
         selection_key: SelectionKey,
     ) -> isize {
+        let rect = self.selection_rect(drawn_rects, selection_key);
+        rect.y
+    }
+
+    fn selection_rect(
+        &self,
+        drawn_rects: &HashMap<ComponentId, Rect>,
+        selection_key: SelectionKey,
+    ) -> Rect {
         let id = ComponentId::SelectableItem(selection_key);
         match drawn_rects.get(&id) {
-            Some(drawn_rect) => drawn_rect.y,
+            Some(drawn_rect) => *drawn_rect,
             None => {
                 panic!("could not look up drawn rect for component with ID {id:?}; was it drawn?")
             }
@@ -585,13 +594,25 @@ impl<'a> Recorder<'a> {
         drawn_rects: &HashMap<ComponentId, Rect>,
         selection_key: SelectionKey,
     ) -> isize {
-        let scroll_offset_y = self.selection_key_y(drawn_rects, selection_key);
-        if scroll_offset_y < self.scroll_offset_y {
-            scroll_offset_y
-        } else if self.scroll_offset_y + term_height.unwrap_isize() <= scroll_offset_y {
-            scroll_offset_y - term_height.unwrap_isize() + 1
-        } else {
+        // Idea: scroll the entire component into the viewport, not just the
+        // first line, is possible. If the entire component is smaller than
+        // the viewport, then we scroll only enough so that the entire
+        // component becomes visible, i.e. align the component's bottom edge
+        // with the viewport's bottom edge. Otherwise, we scroll such that
+        // the component's top edge is aligned with the viewport's top edge.
+        let term_height = term_height.unwrap_isize();
+        let rect = self.selection_rect(drawn_rects, selection_key);
+        let rect_bottom_y = rect.y + rect.height.unwrap_isize();
+        if self.scroll_offset_y <= rect.y && rect_bottom_y < self.scroll_offset_y + term_height {
+            // Component is completely within the viewport, no need to scroll.
             self.scroll_offset_y
+        } else if rect.y < self.scroll_offset_y {
+            // Component is at least partially above the viewport.
+            rect.y
+        } else {
+            // Component is at least partially below the viewport. Want to satisfy:
+            // scroll_offset_y + term_height == rect_bottom_y
+            rect_bottom_y - term_height
         }
     }
 
