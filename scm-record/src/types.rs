@@ -1,3 +1,5 @@
+//! Data types for the change selector interface.
+
 use std::borrow::Cow;
 use std::path::PathBuf;
 
@@ -17,6 +19,7 @@ pub enum RecordError {
     Cancelled,
 }
 
+/// The Unix file mode.
 pub type FileMode = usize;
 
 /// The state of a file to be recorded.
