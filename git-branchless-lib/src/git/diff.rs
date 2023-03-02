@@ -283,5 +283,7 @@ pub fn process_diff_for_record(repo: &Repo, diff: &Diff) -> eyre::Result<Vec<Fil
             sections: [file_mode_section, file_hunks].concat().to_vec(),
         });
     }
+
+    result.sort_by_cached_key(|file| file.path.clone().into_owned());
     Ok(result)
 }
