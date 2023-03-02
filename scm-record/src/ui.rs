@@ -63,10 +63,10 @@ enum Event {
     ScrollDown,
     PageUp,
     PageDown,
-    SelectPrev,
-    SelectPrevPage,
-    SelectNext,
-    SelectNextPage,
+    FocusPrev,
+    FocusPrevPage,
+    FocusNext,
+    FocusNextPage,
     ToggleItem,
 }
 
@@ -148,27 +148,27 @@ impl From<crossterm::event::Event> for Event {
                 modifiers: KeyModifiers::NONE,
                 kind: KeyEventKind::Press,
                 state: _,
-            }) => Self::SelectPrev,
+            }) => Self::FocusPrev,
 
             Event::Key(KeyEvent {
                 code: KeyCode::Down,
                 modifiers: KeyModifiers::NONE,
                 kind: KeyEventKind::Press,
                 state: _,
-            }) => Self::SelectNext,
+            }) => Self::FocusNext,
 
             Event::Key(KeyEvent {
                 code: KeyCode::Char('u'),
                 modifiers: KeyModifiers::CONTROL,
                 kind: KeyEventKind::Press,
                 state: _,
-            }) => Self::SelectPrevPage,
+            }) => Self::FocusPrevPage,
             Event::Key(KeyEvent {
                 code: KeyCode::Char('d'),
                 modifiers: KeyModifiers::CONTROL,
                 kind: KeyEventKind::Press,
                 state: _,
-            }) => Self::SelectNextPage,
+            }) => Self::FocusNextPage,
 
             Event::Key(KeyEvent {
                 code: KeyCode::Char(' '),
@@ -351,7 +351,7 @@ impl<'a> Recorder<'a> {
             .map(|(file_idx, file)| {
                 let file_key = FileKey { file_idx };
                 let file_tristate = self.file_tristate(file_key).unwrap();
-                let is_selected = match self.selection_key {
+                let is_focused = match self.selection_key {
                     SelectionKey::None | SelectionKey::Section(_) | SelectionKey::Line(_) => false,
                     SelectionKey::File(selected_file_key) => file_key == selected_file_key,
                 };
@@ -362,9 +362,9 @@ impl<'a> Recorder<'a> {
                         use_unicode: self.use_unicode,
                         id: ComponentId::TristateBox,
                         tristate: file_tristate,
-                        is_selected,
+                        is_focused,
                     },
-                    is_header_selected: is_selected,
+                    is_header_selected: is_focused,
                     path: &file.path,
                     section_views: {
                         let mut section_views = Vec::new();
@@ -391,7 +391,7 @@ impl<'a> Recorder<'a> {
                                     use_unicode: self.use_unicode,
                                     id: ComponentId::TristateBox,
                                     tristate: section_tristate,
-                                    is_selected: match self.selection_key {
+                                    is_focused: match self.selection_key {
                                         SelectionKey::None
                                         | SelectionKey::File(_)
                                         | SelectionKey::Line(_) => false,
@@ -460,21 +460,21 @@ impl<'a> Recorder<'a> {
                 self.scroll_offset_y
                     .saturating_add(term_height.unwrap_isize()),
             ),
-            Event::SelectPrev => {
+            Event::FocusPrev => {
                 let (keys, index) = self.find_selection();
                 let selection_key = self.select_prev(&keys, index);
                 StateUpdate::SelectItem(selection_key)
             }
-            Event::SelectNext => {
+            Event::FocusNext => {
                 let (keys, index) = self.find_selection();
                 let selection_key = self.select_next(&keys, index);
                 StateUpdate::SelectItem(selection_key)
             }
-            Event::SelectPrevPage => {
+            Event::FocusPrevPage => {
                 let selection_key = self.select_prev_page(term_height, drawn_rects);
                 StateUpdate::SelectItem(selection_key)
             }
-            Event::SelectNextPage => {
+            Event::FocusNextPage => {
                 let selection_key = self.select_next_page(term_height, drawn_rects);
                 StateUpdate::SelectItem(selection_key)
             }
@@ -689,7 +689,7 @@ impl<'a> Recorder<'a> {
             }
             SelectionKey::Section(section_key) => {
                 let tristate = self.section_tristate(section_key)?;
-                let is_selected_new = match tristate {
+                let is_focused_new = match tristate {
                     Tristate::Unchecked => true,
                     Tristate::Partial | Tristate::Checked => false,
                 };
@@ -697,7 +697,7 @@ impl<'a> Recorder<'a> {
                     Section::Unchanged { .. } => {}
                     Section::Changed { lines } => {
                         for line in lines {
-                            line.is_toggled = is_selected_new;
+                            line.is_toggled = is_focused_new;
                         }
                     }
                     Section::FileMode {
@@ -705,7 +705,7 @@ impl<'a> Recorder<'a> {
                         before: _,
                         after: _,
                     } => {
-                        *is_toggled = is_selected_new;
+                        *is_toggled = is_focused_new;
                     }
                 })?;
             }
@@ -764,7 +764,7 @@ impl<'a> Recorder<'a> {
                 Section::Changed { lines } => {
                     for line in lines {
                         seen_value = match (seen_value, line.is_toggled) {
-                            (None, is_selected) => Some(is_selected),
+                            (None, is_focused) => Some(is_focused),
                             (Some(true), true) => Some(true),
                             (Some(false), false) => Some(false),
                             (Some(true), false) | (Some(false), true) => {
@@ -779,7 +779,7 @@ impl<'a> Recorder<'a> {
                     after: _,
                 } => {
                     seen_value = match (seen_value, is_toggled) {
-                        (None, is_selected) => Some(*is_selected),
+                        (None, is_focused) => Some(*is_focused),
                         (Some(true), true) => Some(true),
                         (Some(false), false) => Some(false),
                         (Some(true), false) | (Some(false), true) => return Ok(Tristate::Partial),
@@ -826,7 +826,7 @@ impl<'a> Recorder<'a> {
             Section::Changed { lines } => {
                 for line in lines {
                     seen_value = match (seen_value, line.is_toggled) {
-                        (None, is_selected) => Some(is_selected),
+                        (None, is_focused) => Some(is_focused),
                         (Some(true), true) => Some(true),
                         (Some(false), false) => Some(false),
                         (Some(true), false) | (Some(false), true) => return Ok(Tristate::Partial),
@@ -910,7 +910,7 @@ struct TristateBox<Id> {
     use_unicode: bool,
     id: Id,
     tristate: Tristate,
-    is_selected: bool,
+    is_focused: bool,
 }
 
 impl<Id> TristateBox<Id> {
@@ -919,10 +919,10 @@ impl<Id> TristateBox<Id> {
             use_unicode,
             id: _,
             tristate,
-            is_selected,
+            is_focused,
         } = self;
 
-        match (tristate, is_selected, use_unicode) {
+        match (tristate, is_focused, use_unicode) {
             (Tristate::Unchecked, false, _) => "[ ]",
             (Tristate::Unchecked, true, _) => "( )",
             (Tristate::Partial, false, _) => "[~]",
@@ -1171,7 +1171,7 @@ impl Component for SectionView<'_> {
                         change_type,
                         line,
                     } = line;
-                    let is_selected = match selection {
+                    let is_focused = match selection {
                         Some(SectionSelection::Line(selected_line_idx)) => {
                             line_idx == *selected_line_idx
                         }
@@ -1181,7 +1181,7 @@ impl Component for SectionView<'_> {
                         use_unicode: *use_unicode,
                         id: ComponentId::TristateBox,
                         tristate: Tristate::from(*is_toggled),
-                        is_selected,
+                        is_focused,
                     };
                     let line_view = SectionLineView {
                         line_key: LineKey {
@@ -1197,7 +1197,7 @@ impl Component for SectionView<'_> {
                     };
                     let y = y + line_idx.unwrap_isize();
                     viewport.draw_component(x, y, &line_view);
-                    if is_selected {
+                    if is_focused {
                         highlight_line(viewport, y);
                     }
                 }
