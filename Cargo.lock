@@ -2701,6 +2701,8 @@ name = "scm-record"
 version = "0.1.0"
 dependencies = [
  "crossterm 0.26.1",
+ "eyre",
+ "insta",
  "thiserror",
  "tracing",
  "tui",
