@@ -524,6 +524,7 @@ impl<'a> Recorder<'a> {
                             .filter(|section| section.is_editable())
                             .count();
 
+                        let mut line_num = 1;
                         let mut section_num = 0;
                         for (section_idx, section) in file.sections.iter().enumerate() {
                             let section_key = SectionKey {
@@ -578,7 +579,20 @@ impl<'a> Recorder<'a> {
                                 section_num,
                                 total_num_sections,
                                 section,
+                                line_start_num: line_num,
                             });
+
+                            line_num += match section {
+                                Section::Unchanged { lines } => lines.len(),
+                                Section::Changed { lines } => lines
+                                    .iter()
+                                    .filter(|changed_line| match changed_line.change_type {
+                                        ChangeType::Added => false,
+                                        ChangeType::Removed => true,
+                                    })
+                                    .count(),
+                                Section::FileMode { .. } => 0,
+                            };
                         }
                         section_views
                     },
@@ -1241,6 +1255,7 @@ struct SectionView<'a> {
     section_num: usize,
     total_num_sections: usize,
     section: &'a Section<'a>,
+    line_start_num: usize,
 }
 
 impl SectionView<'_> {
@@ -1271,6 +1286,7 @@ impl Component for SectionView<'_> {
             section_num,
             total_num_sections,
             section,
+            line_start_num,
         } = self;
 
         let y = if !section.is_editable() {
@@ -1291,7 +1307,6 @@ impl Component for SectionView<'_> {
             }
             y + 1
         };
-        let x = x + 2;
 
         let SectionKey {
             file_idx,
@@ -1300,7 +1315,6 @@ impl Component for SectionView<'_> {
         match section {
             Section::Unchanged { lines } => {
                 // TODO: only display a certain number of contextual lines
-                let x = x + "[x] + ".len().unwrap_isize();
                 for (line_idx, line) in lines.iter().enumerate() {
                     let line_view = SectionLineView {
                         line_key: LineKey {
@@ -1310,9 +1324,10 @@ impl Component for SectionView<'_> {
                         },
                         inner: SectionLineViewInner::Unchanged {
                             line: line.as_ref(),
+                            line_num: line_start_num + line_idx,
                         },
                     };
-                    viewport.draw_component(x, y + line_idx.unwrap_isize(), &line_view);
+                    viewport.draw_component(x + 2, y + line_idx.unwrap_isize(), &line_view);
                 }
             }
 
@@ -1348,7 +1363,7 @@ impl Component for SectionView<'_> {
                         },
                     };
                     let y = y + line_idx.unwrap_isize();
-                    viewport.draw_component(x, y, &line_view);
+                    viewport.draw_component(x + 2, y, &line_view);
                     if is_focused {
                         highlight_line(viewport, y);
                     }
@@ -1364,7 +1379,7 @@ impl Component for SectionView<'_> {
                     },
                     inner: SectionLineViewInner::FileMode,
                 };
-                viewport.draw_component(x, y, &line_view);
+                viewport.draw_component(x + 2, y, &line_view);
             }
         }
     }
@@ -1374,6 +1389,7 @@ impl Component for SectionView<'_> {
 enum SectionLineViewInner<'a> {
     Unchanged {
         line: &'a str,
+        line_num: usize,
     },
     Changed {
         tristate_box: TristateBox<ComponentId>,
@@ -1399,9 +1415,19 @@ impl Component for SectionLineView<'_> {
     fn draw(&self, viewport: &mut Viewport<Self::Id>, x: isize, y: isize) {
         let Self { line_key: _, inner } = self;
         match inner {
-            SectionLineViewInner::Unchanged { line } => {
-                let span = Span::styled(*line, Style::default().add_modifier(Modifier::DIM));
-                viewport.draw_span(x, y, &span);
+            SectionLineViewInner::Unchanged { line, line_num } => {
+                let style = Style::default().add_modifier(Modifier::DIM);
+                // Pad the number in 5 columns because that will align the
+                // beginning of the actual text with the `+`/`-` of the changed
+                // lines.
+                let span = Span::styled(format!("{line_num:5} "), style);
+                let line_num_rect = viewport.draw_span(x, y, &span);
+                let span = Span::styled(*line, style);
+                viewport.draw_span(
+                    line_num_rect.x + line_num_rect.width.unwrap_isize(),
+                    line_num_rect.y,
+                    &span,
+                );
             }
 
             SectionLineViewInner::Changed {
