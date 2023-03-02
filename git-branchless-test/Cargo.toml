@@ -4,7 +4,7 @@ edition = "2021"
 license = "GPL-2.0-only"
 name = "git-branchless-test"
 repository = "https://github.com/arxanas/git-branchless"
-version = "0.7.0-rc.1"
+version = "0.7.0"
 
 [dependencies]
 bstr = "1.3.0"
@@ -16,13 +16,13 @@ cursive = { version = "0.20.0", default-features = false, features = [
 eden_dag = { package = "esl01-dag", version = "0.2.1" }
 eyre = "0.6.8"
 fslock = "0.2.1"
-git-branchless-invoke = { version = "0.7.0-rc.1", path = "../git-branchless-invoke" }
-git-branchless-opts = { version = "0.7.0-rc.1", path = "../git-branchless-opts" }
-git-branchless-revset = { version = "0.7.0-rc.1", path = "../git-branchless-revset" }
+git-branchless-invoke = { version = "0.7.0", path = "../git-branchless-invoke" }
+git-branchless-opts = { version = "0.7.0", path = "../git-branchless-opts" }
+git-branchless-revset = { version = "0.7.0", path = "../git-branchless-revset" }
 indexmap = "1.9.2"
 itertools = "0.10.5"
 lazy_static = "1.4.0"
-lib = { package = "git-branchless-lib", version = "0.7.0-rc.1", path = "../git-branchless-lib" }
+lib = { package = "git-branchless-lib", version = "0.7.0", path = "../git-branchless-lib" }
 num_cpus = "1.14.0"
 rayon = "1.6.1"
 scm-bisect = { version = "0.1.0", path = "../scm-bisect" }

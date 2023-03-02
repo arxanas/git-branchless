@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - ReleaseDate
 
-## [0.7.0-rc.1] - 2023-02-19
+## [0.7.0] - 2023-03-01
 
 ### Added
 
@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - (#685) `git submit` now colorizes the names of the affected branches.
 - (#763) Running `git branchless switch` with no arguments will switch to the branch associate with the current commit, if there is exactly one such branch and the `branchless.navigation.autoSwitchBranches` configuration variable is set to `true`.
 - (#791) The name for the temporary file created by `git reword` is now of the form `COMMIT_EDITMSG-*.txt`, which your editor can use to detect it as a Git commit message file.
+- (#811) The styling for `git test` progress and output has been changed.
 
 ### Fixed
 
