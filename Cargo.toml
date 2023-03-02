@@ -1,7 +1,11 @@
 [package]
-name = "scm-record"
-version = "0.1.0"
+authors = ["Waleed Khan <me@waleedkhan.name>"]
+description = "UI component to interactively select changes to include in a commit."
 edition = "2021"
+license = "MIT OR Apache-2.0"
+name = "scm-record"
+repository = "https://github.com/arxanas/git-branchless"
+version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
