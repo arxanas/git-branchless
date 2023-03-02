@@ -140,11 +140,11 @@ impl File<'_> {
                 Section::Changed { lines } => {
                     for line in lines {
                         let SectionChangedLine {
-                            is_toggled: is_selected,
+                            is_toggled,
                             change_type,
                             line,
                         } = line;
-                        match (change_type, is_selected) {
+                        match (change_type, is_toggled) {
                             (ChangeType::Added, true) | (ChangeType::Removed, false) => {
                                 acc_selected.push_str(line);
                                 acc_selected.push('\n');
