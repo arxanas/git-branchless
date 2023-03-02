@@ -112,6 +112,7 @@ pub enum Event {
     FocusInner,
     FocusOuter,
     ToggleItem,
+    ToggleItemAndAdvance,
 }
 
 impl From<crossterm::event::Event> for Event {
@@ -241,6 +242,13 @@ impl From<crossterm::event::Event> for Event {
                 state: _,
             }) => Self::ToggleItem,
 
+            Event::Key(KeyEvent {
+                code: KeyCode::Enter,
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                state: _,
+            }) => Self::ToggleItemAndAdvance,
+
             _event => Self::None,
         }
     }
@@ -333,6 +341,7 @@ enum StateUpdate {
     ScrollTo(isize),
     SelectItem(SelectionKey),
     ToggleItem(SelectionKey),
+    ToggleItemAndAdvance(SelectionKey, SelectionKey),
 }
 
 /// UI component to record the user's changes.
@@ -499,6 +508,12 @@ impl<'a> Recorder<'a> {
                 StateUpdate::ToggleItem(selection_key) => {
                     self.toggle_item(selection_key)?;
                 }
+                StateUpdate::ToggleItemAndAdvance(selection_key, new_key) => {
+                    self.toggle_item(selection_key)?;
+                    self.selection_key = new_key;
+                    self.scroll_offset_y =
+                        self.ensure_in_viewport(term_height, &drawn_rects, selection_key);
+                }
             }
         }
 
@@ -664,7 +679,7 @@ impl<'a> Recorder<'a> {
                 }))
             }
             // Press the appropriate dialog button.
-            (Some(quit_dialog), Event::ToggleItem) => {
+            (Some(quit_dialog), Event::ToggleItem | Event::ToggleItemAndAdvance) => {
                 let QuitDialog {
                     num_changed_files: _,
                     focused_button,
@@ -728,6 +743,10 @@ impl<'a> Recorder<'a> {
                 StateUpdate::None
             }
             (None, Event::ToggleItem) => StateUpdate::ToggleItem(self.selection_key),
+            (None, Event::ToggleItemAndAdvance) => {
+                let advanced_key = self.advance_to_next_of_kind();
+                StateUpdate::ToggleItemAndAdvance(self.selection_key, advanced_key)
+            }
         };
         Ok(state_update)
     }
@@ -869,6 +888,36 @@ impl<'a> Recorder<'a> {
             }
         }
         keys[index]
+    }
+
+    fn advance_to_next_of_kind(&self) -> SelectionKey {
+        let (keys, index) = self.find_selection();
+        let index = match index {
+            Some(index) => index,
+            None => return SelectionKey::None,
+        };
+        keys.iter()
+            .skip(index + 1)
+            .copied()
+            .find(|key| match (self.selection_key, key) {
+                (SelectionKey::None, _)
+                | (SelectionKey::File(_), SelectionKey::File(_))
+                | (SelectionKey::Section(_), SelectionKey::Section(_))
+                | (SelectionKey::Line(_), SelectionKey::Line(_)) => true,
+                (
+                    SelectionKey::File(_),
+                    SelectionKey::None | SelectionKey::Section(_) | SelectionKey::Line(_),
+                )
+                | (
+                    SelectionKey::Section(_),
+                    SelectionKey::None | SelectionKey::File(_) | SelectionKey::Line(_),
+                )
+                | (
+                    SelectionKey::Line(_),
+                    SelectionKey::None | SelectionKey::File(_) | SelectionKey::Section(_),
+                ) => false,
+            })
+            .unwrap_or(self.selection_key)
     }
 
     fn selection_key_y(

@@ -364,3 +364,81 @@ fn test_quit_dialog_buttons() -> eyre::Result<()> {
     insta::assert_display_snapshot!(expect_exited, @"<this screenshot was never assigned>");
     Ok(())
 }
+
+#[test]
+fn test_enter_next() -> eyre::Result<()> {
+    let state = RecordState {
+        files: vec![
+            File {
+                path: Cow::Borrowed(Path::new("foo")),
+                file_mode: None,
+                sections: vec![Section::Changed {
+                    lines: vec![
+                        SectionChangedLine {
+                            is_toggled: false,
+                            change_type: ChangeType::Added,
+                            line: Cow::Borrowed("world"),
+                        },
+                        SectionChangedLine {
+                            is_toggled: false,
+                            change_type: ChangeType::Removed,
+                            line: Cow::Borrowed("hello"),
+                        },
+                    ],
+                }],
+            },
+            File {
+                path: Cow::Borrowed(Path::new("bar")),
+                file_mode: None,
+                sections: vec![Section::Changed {
+                    lines: vec![
+                        SectionChangedLine {
+                            is_toggled: false,
+                            change_type: ChangeType::Added,
+                            line: Cow::Borrowed("world"),
+                        },
+                        SectionChangedLine {
+                            is_toggled: false,
+                            change_type: ChangeType::Removed,
+                            line: Cow::Borrowed("hello"),
+                        },
+                    ],
+                }],
+            },
+        ],
+    };
+
+    let first_file_selected = TestingScreenshot::default();
+    let second_file_selected = TestingScreenshot::default();
+    let event_source = EventSource::testing(
+        80,
+        6,
+        [
+            Event::ToggleItemAndAdvance,
+            first_file_selected.event(),
+            Event::ToggleItemAndAdvance,
+            second_file_selected.event(),
+            Event::QuitCancel,
+            Event::ToggleItemAndAdvance,
+        ],
+    );
+    let recorder = Recorder::new(state, event_source);
+    assert_matches!(recorder.run(), Err(RecordError::Cancelled));
+    insta::assert_display_snapshot!(first_file_selected, @r###"
+    "[×] foo                                                                         "
+    "  [×] Section 1/1                                                               "
+    "    [×] + world                                                                 "
+    "    [×] - hello                                                                 "
+    "( ) bar                                                                         "
+    "  [ ] Section 1/1                                                               "
+    "###);
+    insta::assert_display_snapshot!(second_file_selected, @r###"
+    "    [×] + world                                                                 "
+    "    [×] - hello                                                                 "
+    "(×) bar                                                                         "
+    "  [×] Section 1/1                                                               "
+    "    [×] + world                                                                 "
+    "    [×] - hello                                                                 "
+    "###);
+    Ok(())
+}
