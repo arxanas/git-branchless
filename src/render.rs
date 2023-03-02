@@ -3,11 +3,13 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::{borrow::Cow, collections::HashMap};
 
+use cassowary::{Solver, Variable};
+use num_traits::cast;
 use tui::backend::Backend;
 use tui::buffer::Buffer;
 use tui::style::{Color, Modifier, Style};
 use tui::text::Span;
-use tui::widgets::StatefulWidget;
+use tui::widgets::{StatefulWidget, Widget};
 use tui::Frame;
 use unicode_width::UnicodeWidthStr;
 
@@ -133,6 +135,84 @@ impl Rect {
     }
 }
 
+/// Create a centered `Rect` of at least the given size and at most the provided
+/// percentages.
+pub(crate) fn centered_rect(
+    rect: Rect,
+    min_size: RectSize,
+    max_percent_width: usize,
+    max_percent_height: usize,
+) -> Rect {
+    // `tui` has a `Layout` system that wraps `cassowary`, but it doesn't seem
+    // to be flexible enough to express the constraints that we want? For
+    // example, there's no way to express that the width needs to have a minimum
+    // size *and* a preferred size.
+    use cassowary::strength::*;
+    use cassowary::WeightedRelation::*;
+
+    let Rect {
+        x: min_x,
+        y: min_y,
+        width: max_width,
+        height: max_height,
+    } = rect;
+    let min_x: f64 = cast(min_x).unwrap();
+    let min_y: f64 = cast(min_y).unwrap();
+    let max_width: f64 = cast(max_width).unwrap();
+    let max_height: f64 = cast(max_height).unwrap();
+    let max_x = min_x + max_width;
+    let max_y = min_y + max_height;
+
+    let max_percent_width: f64 = cast(max_percent_width).unwrap();
+    let max_percent_height: f64 = cast(max_percent_height).unwrap();
+    let preferred_width: f64 = max_percent_width * max_width / 100.0;
+    let preferred_height: f64 = max_percent_height * max_height / 100.0;
+
+    let RectSize {
+        width: min_width,
+        height: min_height,
+    } = min_size;
+    let min_width: f64 = cast(min_width).unwrap();
+    let min_height: f64 = cast(min_height).unwrap();
+
+    let mut solver = Solver::new();
+    let x = Variable::new();
+    let y = Variable::new();
+    let width = Variable::new();
+    let height = Variable::new();
+    solver
+        .add_constraints(&[
+            width | GE(REQUIRED) | min_width,
+            height | GE(REQUIRED) | min_height,
+            width | LE(REQUIRED) | max_width,
+            height | LE(REQUIRED) | max_height,
+            width | EQ(WEAK) | preferred_width,
+            height | EQ(WEAK) | preferred_height,
+        ])
+        .unwrap();
+    solver
+        .add_constraints(&[
+            x | GE(REQUIRED) | min_x,
+            y | GE(REQUIRED) | min_y,
+            x | LE(REQUIRED) | max_x,
+            y | LE(REQUIRED) | max_y,
+        ])
+        .unwrap();
+    solver
+        .add_constraints(&[
+            (x - min_x) | EQ(MEDIUM) | (max_x - (x + width)),
+            (y - min_y) | EQ(MEDIUM) | (max_y - (y + height)),
+        ])
+        .unwrap();
+    let changes: HashMap<Variable, f64> = solver.fetch_changes().iter().copied().collect();
+    Rect {
+        x: cast(changes.get(&x).unwrap_or(&0.0).floor()).unwrap(),
+        y: cast(changes.get(&y).unwrap_or(&0.0).floor()).unwrap(),
+        width: cast(changes.get(&width).unwrap_or(&0.0).floor()).unwrap(),
+        height: cast(changes.get(&height).unwrap_or(&0.0).floor()).unwrap(),
+    }
+}
+
 /// Recording of where the component with a certain ID drew on the virtual
 /// canvas.
 #[derive(Debug)]
@@ -195,6 +275,10 @@ pub(crate) struct Viewport<'a, ComponentId> {
 }
 
 impl<'a, ComponentId: Clone + Debug + Eq + Hash> Viewport<'a, ComponentId> {
+    pub fn rect(&self) -> Rect {
+        self.rect
+    }
+
     /// The size of the viewport.
     pub fn size(&self) -> RectSize {
         RectSize {
@@ -299,12 +383,17 @@ impl<'a, ComponentId: Clone + Debug + Eq + Hash> Viewport<'a, ComponentId> {
         span_rect
     }
 
+    pub fn draw_widget(&mut self, rect: tui::layout::Rect, widget: impl Widget) {
+        self.current_trace_mut().merge_rect(rect.into());
+        widget.render(rect, self.buf);
+    }
+
     /// Convert the virtual `Rect` being displayed on the viewport, potentially
     /// including an area off-screen, into a real terminal `tui::layout::Rect`
     /// indicating the actual positions of the characters to be printed
     /// on-screen.
-    fn translate_rect(&self, rect: Rect) -> tui::layout::Rect {
-        let draw_rect = self.rect.intersect(rect);
+    pub fn translate_rect(&self, rect: impl Into<Rect>) -> tui::layout::Rect {
+        let draw_rect = self.rect.intersect(rect.into());
         let x = draw_rect.x - self.rect.x;
         let y = draw_rect.y - self.rect.y;
         let width = draw_rect.width;
