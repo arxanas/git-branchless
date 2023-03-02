@@ -1,6 +1,7 @@
 //! UI implementation.
 
 use std::any::Any;
+use std::borrow::Cow;
 use std::cell::RefCell;
 use std::cmp::min;
 use std::collections::{BTreeMap, HashMap};
@@ -23,10 +24,11 @@ use tui::backend::{Backend, TestBackend};
 use tui::buffer::Buffer;
 use tui::style::{Color, Modifier, Style};
 use tui::text::Span;
+use tui::widgets::{Block, Borders, Clear, Paragraph};
 use tui::{backend::CrosstermBackend, Terminal};
 use unicode_width::UnicodeWidthStr;
 
-use crate::render::{Component, Rect, Viewport};
+use crate::render::{centered_rect, Component, Rect, RectSize, Viewport};
 use crate::types::{ChangeType, RecordError, RecordState};
 use crate::util::UsizeExt;
 use crate::{File, Section, SectionChangedLine};
@@ -50,6 +52,12 @@ struct LineKey {
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
+enum QuitDialogButtonId {
+    Quit,
+    GoBack,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 enum SelectionKey {
     None,
     File(FileKey),
@@ -60,13 +68,13 @@ enum SelectionKey {
 /// A copy of the contents of the screen at a certain point in time.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct TestingScreenshot {
-    contents: Rc<RefCell<String>>,
+    contents: Rc<RefCell<Option<String>>>,
 }
 
 impl TestingScreenshot {
     fn set(&self, new_contents: String) {
         let Self { contents } = self;
-        *contents.borrow_mut() = new_contents;
+        *contents.borrow_mut() = Some(new_contents);
     }
 
     /// Produce an `Event` which will record the screenshot when it's handled.
@@ -77,7 +85,11 @@ impl TestingScreenshot {
 
 impl Display for TestingScreenshot {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.contents.borrow())
+        let Self { contents } = self;
+        match contents.borrow().as_ref() {
+            Some(contents) => write!(f, "{contents}"),
+            None => write!(f, "<this screenshot was never assigned>"),
+        }
     }
 }
 
@@ -87,6 +99,7 @@ pub enum Event {
     None,
     QuitAccept,
     QuitCancel,
+    QuitInterrupt,
     TakeScreenshot(TestingScreenshot),
     ScrollUp,
     ScrollDown,
@@ -96,6 +109,8 @@ pub enum Event {
     FocusPrevPage,
     FocusNext,
     FocusNextPage,
+    FocusInner,
+    FocusOuter,
     ToggleItem,
 }
 
@@ -103,20 +118,19 @@ impl From<crossterm::event::Event> for Event {
     fn from(event: crossterm::event::Event) -> Self {
         use crossterm::event::Event;
         match event {
-            Event::Key(
-                KeyEvent {
-                    code: KeyCode::Char('q'),
-                    modifiers: KeyModifiers::NONE,
-                    kind: KeyEventKind::Press,
-                    state: _,
-                }
-                | KeyEvent {
-                    code: KeyCode::Char('c'),
-                    modifiers: KeyModifiers::CONTROL,
-                    kind: KeyEventKind::Press,
-                    state: _,
-                },
-            ) => Self::QuitCancel,
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('q'),
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                state: _,
+            }) => Self::QuitCancel,
+
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('c'),
+                modifiers: KeyModifiers::CONTROL,
+                kind: KeyEventKind::Press,
+                state: _,
+            }) => Self::QuitInterrupt,
 
             Event::Key(KeyEvent {
                 code: KeyCode::Char('c'),
@@ -192,6 +206,20 @@ impl From<crossterm::event::Event> for Event {
                 kind: KeyEventKind::Press,
                 state: _,
             }) => Self::FocusNext,
+
+            Event::Key(KeyEvent {
+                code: KeyCode::Left,
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                state: _,
+            }) => Self::FocusOuter,
+
+            Event::Key(KeyEvent {
+                code: KeyCode::Right,
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                state: _,
+            }) => Self::FocusInner,
 
             Event::Key(KeyEvent {
                 code: KeyCode::Char('u'),
@@ -295,9 +323,10 @@ fn buffer_view(buffer: &Buffer) -> String {
     view
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 enum StateUpdate {
     None,
+    SetQuitDialog(Option<QuitDialog>),
     QuitAccept,
     QuitCancel,
     TakeScreenshot(TestingScreenshot),
@@ -312,6 +341,7 @@ pub struct Recorder<'a> {
     event_source: EventSource,
     use_unicode: bool,
     selection_key: SelectionKey,
+    quit_dialog: Option<QuitDialog>,
     scroll_offset_y: isize,
 }
 
@@ -323,6 +353,7 @@ impl<'a> Recorder<'a> {
             event_source,
             use_unicode: true,
             selection_key: SelectionKey::None,
+            quit_dialog: None,
             scroll_offset_y: 0,
         }
     }
@@ -442,10 +473,13 @@ impl<'a> Recorder<'a> {
             }
 
             let event = self.event_source.next_event()?;
-            match self.handle_event(event, term_height, &drawn_rects) {
+            match self.handle_event(event, term_height, &drawn_rects)? {
                 StateUpdate::None => {}
-                StateUpdate::QuitCancel => return Err(RecordError::Cancelled),
+                StateUpdate::SetQuitDialog(quit_dialog) => {
+                    self.quit_dialog = quit_dialog;
+                }
                 StateUpdate::QuitAccept => break,
+                StateUpdate::QuitCancel => return Err(RecordError::Cancelled),
                 StateUpdate::TakeScreenshot(screenshot) => {
                     let backend: &dyn Any = term.backend();
                     let test_backend = backend
@@ -581,6 +615,7 @@ impl<'a> Recorder<'a> {
         App {
             debug_info: None,
             file_views,
+            quit_dialog: self.quit_dialog.clone(),
         }
     }
 
@@ -589,42 +624,112 @@ impl<'a> Recorder<'a> {
         event: Event,
         term_height: usize,
         drawn_rects: &HashMap<ComponentId, Rect>,
-    ) -> StateUpdate {
-        match event {
-            Event::None => StateUpdate::None,
-            Event::QuitAccept => StateUpdate::QuitAccept,
-            Event::QuitCancel => StateUpdate::QuitCancel,
-            Event::TakeScreenshot(screenshot) => StateUpdate::TakeScreenshot(screenshot),
-            Event::ScrollUp => StateUpdate::ScrollTo(self.scroll_offset_y.saturating_sub(1)),
-            Event::ScrollDown => StateUpdate::ScrollTo(self.scroll_offset_y.saturating_add(1)),
-            Event::PageUp => StateUpdate::ScrollTo(
+    ) -> Result<StateUpdate, RecordError> {
+        let state_update = match (&self.quit_dialog, event) {
+            (_, Event::None) => StateUpdate::None,
+
+            // Confirm the changes.
+            (None, Event::QuitAccept) => StateUpdate::QuitAccept,
+            // Ignore the confirm action if the quit dialog is open.
+            (Some(_), Event::QuitAccept) => StateUpdate::None,
+
+            // Render quit dialog if the user made changes.
+            (None, Event::QuitCancel | Event::QuitInterrupt) => {
+                let num_changed_files = self.num_user_file_changes()?;
+                if num_changed_files > 0 {
+                    StateUpdate::SetQuitDialog(Some(QuitDialog {
+                        num_changed_files,
+                        focused_button: QuitDialogButtonId::Quit,
+                    }))
+                } else {
+                    StateUpdate::QuitCancel
+                }
+            }
+            // If pressing quit again while the dialog is open, close it.
+            (Some(_), Event::QuitCancel) => StateUpdate::SetQuitDialog(None),
+            // If pressing ctrl-c again wile the dialog is open, force quit.
+            (Some(_), Event::QuitInterrupt) => StateUpdate::QuitCancel,
+            // Select left quit dialog button.
+            (Some(quit_dialog), Event::FocusOuter) => {
+                StateUpdate::SetQuitDialog(Some(QuitDialog {
+                    focused_button: QuitDialogButtonId::GoBack,
+                    ..quit_dialog.clone()
+                }))
+            }
+            // Select right quit dialog button.
+            (Some(quit_dialog), Event::FocusInner) => {
+                StateUpdate::SetQuitDialog(Some(QuitDialog {
+                    focused_button: QuitDialogButtonId::Quit,
+                    ..quit_dialog.clone()
+                }))
+            }
+            // Press the appropriate dialog button.
+            (Some(quit_dialog), Event::ToggleItem) => {
+                let QuitDialog {
+                    num_changed_files: _,
+                    focused_button,
+                } = quit_dialog;
+                match focused_button {
+                    QuitDialogButtonId::Quit => StateUpdate::QuitCancel,
+                    QuitDialogButtonId::GoBack => StateUpdate::SetQuitDialog(None),
+                }
+            }
+
+            // Disable most keyboard shortcuts while the quit dialog is open.
+            (
+                Some(_),
+                Event::ScrollUp
+                | Event::ScrollDown
+                | Event::PageUp
+                | Event::PageDown
+                | Event::FocusPrev
+                | Event::FocusNext
+                | Event::FocusPrevPage
+                | Event::FocusNextPage,
+            ) => StateUpdate::None,
+
+            (Some(_) | None, Event::TakeScreenshot(screenshot)) => {
+                StateUpdate::TakeScreenshot(screenshot)
+            }
+            (None, Event::ScrollUp) => {
+                StateUpdate::ScrollTo(self.scroll_offset_y.saturating_sub(1))
+            }
+            (None, Event::ScrollDown) => {
+                StateUpdate::ScrollTo(self.scroll_offset_y.saturating_add(1))
+            }
+            (None, Event::PageUp) => StateUpdate::ScrollTo(
                 self.scroll_offset_y
                     .saturating_sub(term_height.unwrap_isize()),
             ),
-            Event::PageDown => StateUpdate::ScrollTo(
+            (None, Event::PageDown) => StateUpdate::ScrollTo(
                 self.scroll_offset_y
                     .saturating_add(term_height.unwrap_isize()),
             ),
-            Event::FocusPrev => {
+            (None, Event::FocusPrev) => {
                 let (keys, index) = self.find_selection();
                 let selection_key = self.select_prev(&keys, index);
                 StateUpdate::SelectItem(selection_key)
             }
-            Event::FocusNext => {
+            (None, Event::FocusNext) => {
                 let (keys, index) = self.find_selection();
                 let selection_key = self.select_next(&keys, index);
                 StateUpdate::SelectItem(selection_key)
             }
-            Event::FocusPrevPage => {
+            (None, Event::FocusPrevPage) => {
                 let selection_key = self.select_prev_page(term_height, drawn_rects);
                 StateUpdate::SelectItem(selection_key)
             }
-            Event::FocusNextPage => {
+            (None, Event::FocusNextPage) => {
                 let selection_key = self.select_next_page(term_height, drawn_rects);
                 StateUpdate::SelectItem(selection_key)
             }
-            Event::ToggleItem => StateUpdate::ToggleItem(self.selection_key),
-        }
+            (None, Event::FocusInner | Event::FocusOuter) => {
+                // TODO: implement
+                StateUpdate::None
+            }
+            (None, Event::ToggleItem) => StateUpdate::ToggleItem(self.selection_key),
+        };
+        Ok(state_update)
     }
 
     fn first_selection_key(&self) -> SelectionKey {
@@ -632,6 +737,20 @@ impl<'a> Recorder<'a> {
             Some((file_idx, _)) => SelectionKey::File(FileKey { file_idx }),
             None => SelectionKey::None,
         }
+    }
+
+    fn num_user_file_changes(&self) -> Result<usize, RecordError> {
+        let RecordState { files } = &self.state;
+        let mut result = 0;
+        for (file_idx, _file) in files.iter().enumerate() {
+            match self.file_tristate(FileKey { file_idx })? {
+                Tristate::Unchecked => {}
+                Tristate::Partial | Tristate::Checked => {
+                    result += 1;
+                }
+            }
+        }
+        Ok(result)
     }
 
     fn all_selection_keys(&self) -> Vec<SelectionKey> {
@@ -1031,6 +1150,8 @@ enum ComponentId {
     App,
     SelectableItem(SelectionKey),
     TristateBox,
+    QuitDialog,
+    QuitDialogButton(QuitDialogButtonId),
 }
 
 #[derive(Clone, Debug)]
@@ -1108,6 +1229,7 @@ struct AppDebugInfo {
 struct App<'a> {
     debug_info: Option<AppDebugInfo>,
     file_views: Vec<FileView<'a>>,
+    quit_dialog: Option<QuitDialog>,
 }
 
 impl App<'_> {
@@ -1115,6 +1237,7 @@ impl App<'_> {
         let Self {
             debug_info: _,
             file_views,
+            quit_dialog: _,
         } = self;
         file_views.iter().map(|file_view| file_view.height()).sum()
     }
@@ -1131,6 +1254,7 @@ impl Component for App<'_> {
         let Self {
             debug_info,
             file_views,
+            quit_dialog,
         } = self;
 
         if let Some(debug_info) = debug_info {
@@ -1148,6 +1272,10 @@ impl Component for App<'_> {
                     file_view.path.to_string_lossy()
                 ));
             }
+        }
+
+        if let Some(quit_dialog) = quit_dialog {
+            viewport.draw_component(0, 0, quit_dialog);
         }
     }
 }
@@ -1474,6 +1602,160 @@ impl Component for SectionLineView<'_> {
             }
 
             SectionLineViewInner::FileMode => unimplemented!("rendering file mode section"),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct QuitDialog {
+    num_changed_files: usize,
+    focused_button: QuitDialogButtonId,
+}
+
+impl Component for QuitDialog {
+    type Id = ComponentId;
+
+    fn id(&self) -> Self::Id {
+        ComponentId::QuitDialog
+    }
+
+    fn draw(&self, viewport: &mut Viewport<Self::Id>, _x: isize, _y: isize) {
+        let Self {
+            num_changed_files,
+            focused_button,
+        } = self;
+        let title = "Quit";
+        let body = format!(
+            "You have changes to {num_changed_files} {}. Are you sure you want to quit?",
+            if *num_changed_files == 1 {
+                "file"
+            } else {
+                "files"
+            }
+        );
+
+        let quit_button = Button {
+            id: ComponentId::QuitDialogButton(QuitDialogButtonId::Quit),
+            label: Cow::Borrowed("Quit"),
+            is_focused: match focused_button {
+                QuitDialogButtonId::Quit => true,
+                QuitDialogButtonId::GoBack => false,
+            },
+        };
+        let go_back_button = Button {
+            id: ComponentId::QuitDialogButton(QuitDialogButtonId::GoBack),
+            label: Cow::Borrowed("Go Back"),
+            is_focused: match focused_button {
+                QuitDialogButtonId::GoBack => true,
+                QuitDialogButtonId::Quit => false,
+            },
+        };
+        let buttons = [quit_button, go_back_button];
+
+        let dialog = Dialog {
+            id: ComponentId::QuitDialog,
+            title: Cow::Borrowed(title),
+            body: Cow::Owned(body),
+            buttons: &buttons,
+        };
+        viewport.draw_component(0, 0, &dialog);
+    }
+}
+
+struct Button<'a, Id> {
+    id: Id,
+    label: Cow<'a, str>,
+    is_focused: bool,
+}
+
+impl<'a, Id> Button<'a, Id> {
+    fn span(&self) -> Span {
+        let Self {
+            id: _,
+            label,
+            is_focused,
+        } = self;
+        if *is_focused {
+            Span::styled(
+                format!("({label})"),
+                Style::default().add_modifier(Modifier::REVERSED),
+            )
+        } else {
+            Span::styled(format!("[{label}]"), Style::default())
+        }
+    }
+
+    fn width(&self) -> usize {
+        self.span().width()
+    }
+}
+
+impl<Id: Clone + Debug + Eq + Hash> Component for Button<'_, Id> {
+    type Id = Id;
+
+    fn id(&self) -> Self::Id {
+        self.id.clone()
+    }
+
+    fn draw(&self, viewport: &mut Viewport<Self::Id>, x: isize, y: isize) {
+        let span = self.span();
+        viewport.draw_span(x, y, &span);
+    }
+}
+
+struct Dialog<'a, Id> {
+    id: Id,
+    title: Cow<'a, str>,
+    body: Cow<'a, str>,
+    buttons: &'a [Button<'a, Id>],
+}
+
+impl<Id: Clone + Debug + Eq + Hash> Component for Dialog<'_, Id> {
+    type Id = Id;
+
+    fn id(&self) -> Self::Id {
+        self.id.clone()
+    }
+
+    fn draw(&self, viewport: &mut Viewport<Self::Id>, _x: isize, _y: isize) {
+        let Self {
+            id: _,
+            title,
+            body,
+            buttons,
+        } = self;
+        let rect = {
+            let border_size = 2;
+            let rect = centered_rect(
+                viewport.rect(),
+                RectSize {
+                    // FIXME: we might want to limit the width of the text and
+                    // let `Paragraph` wrap it.
+                    width: body.width() + border_size,
+                    height: 1 + border_size,
+                },
+                60,
+                20,
+            );
+
+            let paragraph = Paragraph::new(body.as_ref()).block(
+                Block::default()
+                    .title(title.as_ref())
+                    .borders(Borders::all()),
+            );
+            let tui_rect = viewport.translate_rect(rect);
+            viewport.draw_widget(tui_rect, Clear);
+            viewport.draw_widget(tui_rect, paragraph);
+
+            rect
+        };
+
+        let mut bottom_x = rect.x + rect.width.unwrap_isize() - 1;
+        let bottom_y = rect.y + rect.height.unwrap_isize() - 1;
+        for button in buttons.iter() {
+            bottom_x -= button.width().unwrap_isize();
+            let button_rect = viewport.draw_component(bottom_x, bottom_y, button);
+            bottom_x = button_rect.x - 1;
         }
     }
 }

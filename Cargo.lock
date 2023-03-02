@@ -2993,10 +2993,12 @@ name = "scm-record"
 version = "0.1.0"
 dependencies = [
  "assert_matches",
+ "cassowary",
  "criterion",
  "crossterm 0.26.1",
  "eyre",
  "insta",
+ "num-traits",
  "thiserror",
  "tracing",
  "tui",

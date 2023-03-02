@@ -1,8 +1,9 @@
 use std::{borrow::Cow, path::Path};
 
+use assert_matches::assert_matches;
 use scm_record::{
-    ChangeType, Event, EventSource, File, RecordState, Recorder, Section, SectionChangedLine,
-    TestingScreenshot,
+    ChangeType, Event, EventSource, File, RecordError, RecordState, Recorder, Section,
+    SectionChangedLine, TestingScreenshot,
 };
 
 fn example_contents() -> RecordState<'static> {
@@ -141,5 +142,225 @@ fn test_select_scroll_into_view() -> eyre::Result<()> {
     "    [×] + after text 2                                                          "
     "        5 this is some trailing text                                            "
     "###);
+    Ok(())
+}
+
+#[test]
+fn test_quit_dialog_size() -> eyre::Result<()> {
+    let expect_quit_dialog_to_be_centered = TestingScreenshot::default();
+    let event_source = EventSource::testing(
+        100,
+        40,
+        [
+            Event::QuitInterrupt,
+            expect_quit_dialog_to_be_centered.event(),
+            Event::QuitInterrupt,
+        ],
+    );
+    let state = example_contents();
+    let recorder = Recorder::new(state, event_source);
+    let result = recorder.run();
+    assert_matches!(result, Err(RecordError::Cancelled));
+    insta::assert_display_snapshot!(expect_quit_dialog_to_be_centered, @r###"
+    "(~) foo/bar                                                                                         "
+    "        1 this is some text                                                                         "
+    "        2 this is some text                                                                         "
+    "        3 this is some text                                                                         "
+    "        ⋮                                                                                           "
+    "       18 this is some text                                                                         "
+    "       19 this is some text                                                                         "
+    "       20 this is some text                                                                         "
+    "  [~] Section 1/1                                                                                   "
+    "    [×] - before text 1                                                                             "
+    "    [×] - before text 2                                                                             "
+    "    [×] + after text 1                                                                              "
+    "    [ ] + after text 2                                                                              "
+    "       23 this is some trailing text                                                                "
+    "[×] baz                                                                                             "
+    "        1 Some leading text 1                                                                       "
+    "        2 Some lead┌Quit───────────────────────────────────────────────────────┐                    "
+    "  [×] Section 1/1  │You have changes to 2 files. Are you sure you want to quit?│                    "
+    "    [×] - before te│                                                           │                    "
+    "    [×] - before te│                                                           │                    "
+    "    [×] + after tex│                                                           │                    "
+    "    [×] + after tex│                                                           │                    "
+    "        5 this is s│                                                           │                    "
+    "                   └───────────────────────────────────────────[Go Back]─(Quit)┘                    "
+    "                                                                                                    "
+    "                                                                                                    "
+    "                                                                                                    "
+    "                                                                                                    "
+    "                                                                                                    "
+    "                                                                                                    "
+    "                                                                                                    "
+    "                                                                                                    "
+    "                                                                                                    "
+    "                                                                                                    "
+    "                                                                                                    "
+    "                                                                                                    "
+    "                                                                                                    "
+    "                                                                                                    "
+    "                                                                                                    "
+    "                                                                                                    "
+    "###);
+    Ok(())
+}
+
+#[test]
+fn test_quit_dialog_keyboard_navigation() -> eyre::Result<()> {
+    let expect_q_opens_quit_dialog = TestingScreenshot::default();
+    let expect_c_does_nothing = TestingScreenshot::default();
+    let expect_q_closes_quit_dialog = TestingScreenshot::default();
+    let expect_ctrl_c_opens_quit_dialog = TestingScreenshot::default();
+    let expect_exited = TestingScreenshot::default();
+    let event_source = EventSource::testing(
+        80,
+        6,
+        [
+            // Pressing 'q' should display the quit dialog.
+            Event::QuitCancel,
+            expect_q_opens_quit_dialog.event(),
+            // Pressing 'c' now should do nothing.
+            Event::QuitAccept,
+            expect_c_does_nothing.event(),
+            // Pressing 'q' now should close the quit dialog.
+            Event::QuitCancel,
+            expect_q_closes_quit_dialog.event(),
+            // Pressing ctrl-c should display the quit dialog.
+            Event::QuitInterrupt,
+            expect_ctrl_c_opens_quit_dialog.event(),
+            // Pressing ctrl-c again should exit.
+            Event::QuitInterrupt,
+            expect_exited.event(),
+        ],
+    );
+    let state = example_contents();
+    let recorder = Recorder::new(state, event_source);
+    assert_matches!(recorder.run(), Err(RecordError::Cancelled));
+    insta::assert_display_snapshot!(expect_q_opens_quit_dialog, @r###"
+    "(~) foo/bar                                                                     "
+    "        1┌Quit───────────────────────────────────────────────────────┐          "
+    "        2│You have changes to 2 files. Are you sure you want to quit?│          "
+    "        3└───────────────────────────────────────────[Go Back]─(Quit)┘          "
+    "        ⋮                                                                       "
+    "       18 this is some text                                                     "
+    "###);
+    insta::assert_display_snapshot!(expect_c_does_nothing, @r###"
+    "(~) foo/bar                                                                     "
+    "        1┌Quit───────────────────────────────────────────────────────┐          "
+    "        2│You have changes to 2 files. Are you sure you want to quit?│          "
+    "        3└───────────────────────────────────────────[Go Back]─(Quit)┘          "
+    "        ⋮                                                                       "
+    "       18 this is some text                                                     "
+    "###);
+    insta::assert_display_snapshot!(expect_q_closes_quit_dialog, @r###"
+    "(~) foo/bar                                                                     "
+    "        1 this is some text                                                     "
+    "        2 this is some text                                                     "
+    "        3 this is some text                                                     "
+    "        ⋮                                                                       "
+    "       18 this is some text                                                     "
+    "###);
+    insta::assert_display_snapshot!(expect_ctrl_c_opens_quit_dialog, @r###"
+    "(~) foo/bar                                                                     "
+    "        1┌Quit───────────────────────────────────────────────────────┐          "
+    "        2│You have changes to 2 files. Are you sure you want to quit?│          "
+    "        3└───────────────────────────────────────────[Go Back]─(Quit)┘          "
+    "        ⋮                                                                       "
+    "       18 this is some text                                                     "
+    "###);
+    insta::assert_display_snapshot!(expect_exited, @"<this screenshot was never assigned>");
+    Ok(())
+}
+
+#[test]
+fn test_quit_dialog_buttons() -> eyre::Result<()> {
+    let expect_quit_button_focused_initially = TestingScreenshot::default();
+    let expect_left_focuses_go_back_button = TestingScreenshot::default();
+    let expect_left_again_does_not_wrap = TestingScreenshot::default();
+    let expect_back_button_closes_quit_dialog = TestingScreenshot::default();
+    let expect_right_focuses_quit_button = TestingScreenshot::default();
+    let expect_right_again_does_not_wrap = TestingScreenshot::default();
+    let expect_exited = TestingScreenshot::default();
+    let event_source = EventSource::testing(
+        80,
+        6,
+        [
+            Event::QuitCancel,
+            expect_quit_button_focused_initially.event(),
+            // Pressing left should select the back button.
+            Event::FocusOuter,
+            expect_left_focuses_go_back_button.event(),
+            // Pressing left again should do nothing.
+            Event::FocusOuter,
+            expect_left_again_does_not_wrap.event(),
+            // Selecting the back button should close the dialog.
+            Event::ToggleItem,
+            expect_back_button_closes_quit_dialog.event(),
+            Event::QuitCancel,
+            // Pressing right should select the quit button.
+            Event::FocusOuter,
+            Event::FocusInner,
+            expect_right_focuses_quit_button.event(),
+            // Pressing right again should do nothing.
+            Event::FocusInner,
+            expect_right_again_does_not_wrap.event(),
+            // Selecting the quit button should quit.
+            Event::ToggleItem,
+            expect_exited.event(),
+        ],
+    );
+    let state = example_contents();
+    let recorder = Recorder::new(state, event_source);
+    assert_matches!(recorder.run(), Err(RecordError::Cancelled));
+    insta::assert_display_snapshot!(expect_quit_button_focused_initially, @r###"
+    "(~) foo/bar                                                                     "
+    "        1┌Quit───────────────────────────────────────────────────────┐          "
+    "        2│You have changes to 2 files. Are you sure you want to quit?│          "
+    "        3└───────────────────────────────────────────[Go Back]─(Quit)┘          "
+    "        ⋮                                                                       "
+    "       18 this is some text                                                     "
+    "###);
+    insta::assert_display_snapshot!(expect_left_focuses_go_back_button, @r###"
+    "(~) foo/bar                                                                     "
+    "        1┌Quit───────────────────────────────────────────────────────┐          "
+    "        2│You have changes to 2 files. Are you sure you want to quit?│          "
+    "        3└───────────────────────────────────────────(Go Back)─[Quit]┘          "
+    "        ⋮                                                                       "
+    "       18 this is some text                                                     "
+    "###);
+    insta::assert_display_snapshot!(expect_left_again_does_not_wrap, @r###"
+    "(~) foo/bar                                                                     "
+    "        1┌Quit───────────────────────────────────────────────────────┐          "
+    "        2│You have changes to 2 files. Are you sure you want to quit?│          "
+    "        3└───────────────────────────────────────────(Go Back)─[Quit]┘          "
+    "        ⋮                                                                       "
+    "       18 this is some text                                                     "
+    "###);
+    insta::assert_display_snapshot!(expect_back_button_closes_quit_dialog, @r###"
+    "(~) foo/bar                                                                     "
+    "        1 this is some text                                                     "
+    "        2 this is some text                                                     "
+    "        3 this is some text                                                     "
+    "        ⋮                                                                       "
+    "       18 this is some text                                                     "
+    "###);
+    insta::assert_display_snapshot!(expect_right_focuses_quit_button, @r###"
+    "(~) foo/bar                                                                     "
+    "        1┌Quit───────────────────────────────────────────────────────┐          "
+    "        2│You have changes to 2 files. Are you sure you want to quit?│          "
+    "        3└───────────────────────────────────────────[Go Back]─(Quit)┘          "
+    "        ⋮                                                                       "
+    "       18 this is some text                                                     "
+    "###);
+    insta::assert_display_snapshot!(expect_right_again_does_not_wrap, @r###"
+    "(~) foo/bar                                                                     "
+    "        1┌Quit───────────────────────────────────────────────────────┐          "
+    "        2│You have changes to 2 files. Are you sure you want to quit?│          "
+    "        3└───────────────────────────────────────────[Go Back]─(Quit)┘          "
+    "        ⋮                                                                       "
+    "       18 this is some text                                                     "
+    "###);
+    insta::assert_display_snapshot!(expect_exited, @"<this screenshot was never assigned>");
     Ok(())
 }
