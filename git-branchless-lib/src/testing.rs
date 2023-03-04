@@ -369,6 +369,7 @@ then you can only run tests in the main `git-branchless` and \
         self.run(&["init"])?;
         self.run(&["config", "user.name", DUMMY_NAME])?;
         self.run(&["config", "user.email", DUMMY_EMAIL])?;
+        self.run(&["config", "core.abbrev", "7"])?;
 
         if options.make_initial_commit {
             self.commit_file("initial", 0)?;
