@@ -22,7 +22,7 @@ use lib::util::ExitCode;
 use path_slash::PathExt;
 use tracing::{instrument, warn};
 
-use git_branchless_opts::{write_man_pages, InitArgs};
+use git_branchless_opts::{write_man_pages, InitArgs, InstallManPagesArgs};
 use lib::core::config::{get_default_branch_name, get_default_hooks_dir, get_hooks_dir};
 use lib::core::dag::Dag;
 use lib::core::effects::Effects;
@@ -682,6 +682,17 @@ pub fn command_main(ctx: CommandContext, args: InitArgs) -> eyre::Result<ExitCod
             main_branch_name: _,
         } => command_uninstall(&effects, &git_run_info),
     }
+}
+
+/// Install the man-pages for `git-branchless` to the provided path.
+#[instrument]
+pub fn command_install_man_pages(
+    ctx: CommandContext,
+    args: InstallManPagesArgs,
+) -> eyre::Result<ExitCode> {
+    let InstallManPagesArgs { path } = args;
+    write_man_pages(&path)?;
+    Ok(ExitCode(0))
 }
 
 #[cfg(test)]
