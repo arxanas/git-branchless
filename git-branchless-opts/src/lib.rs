@@ -900,7 +900,11 @@ pub fn write_man_pages(man_dir: &Path) -> std::io::Result<()> {
     let man1_dir = man_dir.join("man1");
     std::fs::create_dir_all(&man1_dir)?;
 
-    let app = Opts::command();
+    let app =
+        // Explicitly set the name here, or else clap thinks that the name of the
+        // command is `git-branchless-opts` (and that its subcommands are
+        // `git-branchless-opts-amend`, etc.).
+        Opts::command().name("git-branchless");
     generate_man_page(&man1_dir, "git-branchless", &app)?;
     for subcommand in app.get_subcommands() {
         let subcommand_exe_name = format!("git-branchless-{}", subcommand.get_name());
@@ -912,7 +916,14 @@ pub fn write_man_pages(man_dir: &Path) -> std::io::Result<()> {
 fn generate_man_page(man1_dir: &Path, name: &str, command: &ClapCommand) -> std::io::Result<()> {
     let rendered_man_page = {
         let mut buffer = Vec::new();
-        clap_mangen::Man::new(command.clone()).render(&mut buffer)?;
+        clap_mangen::Man::new(command.clone())
+            // The rendered man-page command name would be the subcommand only
+            // (such as `amend(1)` instead of `git-branchless-amend(1)`), so
+            // override the name here. Also, the top-level man-page name will be
+            // `git-branchless-opts(1)` instead of `git-branchless(1)`, which is
+            // also handled by this call to `.title`.
+            .title(name)
+            .render(&mut buffer)?;
         buffer
     };
     let output_path = man1_dir.join(format!("{name}.1"));
