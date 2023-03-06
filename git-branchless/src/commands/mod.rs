@@ -70,6 +70,10 @@ fn command_main(ctx: CommandContext, opts: Opts) -> eyre::Result<ExitCode> {
 
         Command::Init(args) => git_branchless_init::command_main(ctx, args)?,
 
+        Command::InstallManPages(args) => {
+            git_branchless_init::command_install_man_pages(ctx, args)?
+        }
+
         Command::Move {
             source,
             dest,
