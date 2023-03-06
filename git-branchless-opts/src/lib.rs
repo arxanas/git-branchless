@@ -265,6 +265,14 @@ pub struct InitArgs {
     pub main_branch_name: Option<String>,
 }
 
+/// Install git-branchless's man-pages to the given path.
+#[derive(Debug, Parser)]
+pub struct InstallManPagesArgs {
+    /// The path to install to. An example path might be `/usr/share/man`. The
+    /// provded path will be appended with `man1`, etc., as appropriate.
+    pub path: PathBuf,
+}
+
 /// Query the commit graph using the "revset" language and print matching
 /// commits.
 ///
@@ -424,6 +432,9 @@ pub enum Command {
 
     /// Initialize the branchless workflow for this repository.
     Init(InitArgs),
+
+    /// Install git-branchless's man-pages to the given path.
+    InstallManPages(InstallManPagesArgs),
 
     /// Move a subtree of commits from one location to another.
     ///
