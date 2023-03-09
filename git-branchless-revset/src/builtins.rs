@@ -572,7 +572,8 @@ fn fn_tests_passed(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
                     let SerializedTestResult {
                         command,
                         exit_code,
-                        fixed_tree_oid: _,
+                        head_commit_oid: _,
+                        snapshot_tree_oid: _,
                         interactive: _,
                     } = test_result;
                     exit_code == TEST_SUCCESS_EXIT_CODE && pattern.matches_text(&command)
@@ -597,7 +598,8 @@ fn fn_tests_failed(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
                     let SerializedTestResult {
                         command,
                         exit_code,
-                        fixed_tree_oid: _,
+                        head_commit_oid: _,
+                        snapshot_tree_oid: _,
                         interactive: _,
                     } = test_result;
                     exit_code != TEST_SUCCESS_EXIT_CODE
@@ -625,16 +627,18 @@ fn fn_tests_fixable(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult 
                     let SerializedTestResult {
                         command,
                         exit_code,
-                        fixed_tree_oid,
+                        head_commit_oid: _,
+                        snapshot_tree_oid,
                         interactive: _,
                     } = test_result;
                     exit_code == TEST_SUCCESS_EXIT_CODE
                         && pattern.matches_text(&command)
-                        && match fixed_tree_oid {
-                            None => false,
-                            Some(SerializedNonZeroOid(fixed_tree_oid)) => {
-                                commit.get_tree_oid() != MaybeZeroOid::NonZero(fixed_tree_oid)
-                            }
+                        && match (snapshot_tree_oid, commit.get_tree_oid()) {
+                            (
+                                Some(SerializedNonZeroOid(snapshot_tree_oid)),
+                                MaybeZeroOid::NonZero(original_tree_oid),
+                            ) => snapshot_tree_oid != original_tree_oid,
+                            (None, _) | (_, MaybeZeroOid::Zero) => false,
                         }
                 });
             Ok(result)
