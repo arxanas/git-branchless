@@ -70,7 +70,8 @@ impl<'de> Deserialize<'de> for SerializedNonZeroOid {
 pub struct SerializedTestResult {
     pub command: String,
     pub exit_code: i32,
-    pub fixed_tree_oid: Option<SerializedNonZeroOid>,
+    pub head_commit_oid: Option<SerializedNonZeroOid>,
+    pub snapshot_tree_oid: Option<SerializedNonZeroOid>,
     #[serde(default)]
     pub interactive: bool,
 }

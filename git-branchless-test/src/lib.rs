@@ -870,15 +870,27 @@ enum TestStatus {
         /// actually re-run the test).
         cached: bool,
 
-        /// The resulting contents of the working copy after the command was
-        /// executed (if taking a working copy snapshot succeeded and there were
-        /// no merge conflicts, etc.).
-        fixed_tree_oid: Option<NonZeroOid>,
+        /// Information about the working copy state after running the test command.
+        fix_info: FixInfo,
 
         /// Whether the test was run interactively (the user executed the
         /// command via `--interactive`).
         interactive: bool,
     },
+}
+
+/// Information about the working copy state after running the test command.
+#[derive(Clone, Debug)]
+struct FixInfo {
+    /// The resulting commit which was checked out as `HEAD`. This is usually
+    /// the same commit as was being tested, but the test command could amend or
+    /// switch to a different commit.
+    head_commit_oid: Option<NonZeroOid>,
+
+    /// The resulting contents of the working copy after the command was
+    /// executed (if taking a working copy snapshot succeeded and there were no
+    /// merge conflicts, etc.).
+    snapshot_tree_oid: Option<NonZeroOid>,
 }
 
 impl TestStatus {
@@ -998,18 +1010,27 @@ fn make_test_status_description(
         TestStatus::Passed {
             cached,
             interactive,
-            fixed_tree_oid,
+            fix_info:
+                FixInfo {
+                    head_commit_oid: _,
+                    snapshot_tree_oid,
+                },
         } => {
             let mut descriptors = Vec::new();
             if *cached {
                 descriptors.push("cached".to_string());
             }
-            if fixed_tree_oid.is_some() {
-                descriptors.push(if apply_fixes {
-                    "fixed".to_string()
-                } else {
-                    "fixable".to_string()
-                });
+            match (snapshot_tree_oid, commit.get_tree_oid()) {
+                (Some(snapshot_tree_oid), MaybeZeroOid::NonZero(original_tree_oid)) => {
+                    if *snapshot_tree_oid != original_tree_oid {
+                        descriptors.push(if apply_fixes {
+                            "fixed".to_string()
+                        } else {
+                            "fixable".to_string()
+                        });
+                    }
+                }
+                (None, _) | (_, MaybeZeroOid::Zero) => {}
             }
             if *interactive {
                 descriptors.push("interactive".to_string());
@@ -1613,8 +1634,8 @@ fn event_loop(
 
             TestStatus::Passed {
                 cached: _,
+                fix_info: _,
                 interactive: _,
-                fixed_tree_oid: _,
             } => (None, search::Status::Success),
         };
         if search_strategy.is_some() {
@@ -1700,7 +1721,7 @@ fn print_summary(
             }
             TestStatus::Passed {
                 cached,
-                fixed_tree_oid: _,
+                fix_info: _,
                 interactive: _,
             } => {
                 num_passed += 1;
@@ -1870,13 +1891,21 @@ fn apply_fixes(
         .filter_map(|(commit_oid, test_output)| match test_output.test_status {
             TestStatus::Passed {
                 cached: _,
-                fixed_tree_oid: Some(fixed_tree_oid),
+                fix_info:
+                    FixInfo {
+                        head_commit_oid: _,
+                        snapshot_tree_oid: Some(snapshot_tree_oid),
+                    },
                 interactive: _,
-            } => Some((*commit_oid, fixed_tree_oid)),
+            } => Some((*commit_oid, snapshot_tree_oid)),
 
             TestStatus::Passed {
                 cached: _,
-                fixed_tree_oid: None,
+                fix_info:
+                    FixInfo {
+                        head_commit_oid: _,
+                        snapshot_tree_oid: None,
+                    },
                 interactive: _,
             }
             | TestStatus::CheckoutFailed
@@ -2339,18 +2368,24 @@ fn make_test_files(
                 Ok(SerializedTestResult {
                     command: _,
                     exit_code: 0,
-                    fixed_tree_oid,
+                    head_commit_oid,
+                    snapshot_tree_oid,
                     interactive,
                 }) => TestStatus::Passed {
                     cached: true,
-                    fixed_tree_oid: fixed_tree_oid.map(|SerializedNonZeroOid(oid)| oid),
+                    fix_info: FixInfo {
+                        head_commit_oid: head_commit_oid.map(|SerializedNonZeroOid(oid)| oid),
+                        snapshot_tree_oid: snapshot_tree_oid.map(|SerializedNonZeroOid(oid)| oid),
+                    },
+
                     interactive,
                 },
 
                 Ok(SerializedTestResult {
                     command: _,
                     exit_code,
-                    fixed_tree_oid: _,
+                    head_commit_oid: _,
+                    snapshot_tree_oid: _,
                     interactive: _,
                 }) if exit_code == TEST_INDETERMINATE_EXIT_CODE => {
                     TestStatus::Indeterminate { exit_code }
@@ -2359,14 +2394,16 @@ fn make_test_files(
                 Ok(SerializedTestResult {
                     command: _,
                     exit_code,
-                    fixed_tree_oid: _,
+                    head_commit_oid: _,
+                    snapshot_tree_oid: _,
                     interactive: _,
                 }) if exit_code == TEST_ABORT_EXIT_CODE => TestStatus::Abort { exit_code },
 
                 Ok(SerializedTestResult {
                     command: _,
                     exit_code,
-                    fixed_tree_oid: _,
+                    head_commit_oid: _,
+                    snapshot_tree_oid: _,
                     interactive,
                 }) => TestStatus::Failed {
                     cached: true,
@@ -2646,9 +2683,9 @@ To abort testing entirely, run:      {exit127}",
     };
     let test_status = match exit_code {
         TEST_SUCCESS_EXIT_CODE => {
-            let fixed_tree_oid = {
+            let fix_info = {
                 let repo = Repo::from_dir(working_directory)?;
-                let snapshot = {
+                let (head_commit_oid, snapshot) = {
                     let index = repo.get_index()?;
                     let head_info = repo.get_head_info()?;
                     let (snapshot, _status) = repo.get_status(
@@ -2658,24 +2695,12 @@ To abort testing entirely, run:      {exit127}",
                         &head_info,
                         Some(event_tx_id),
                     )?;
-                    if head_info.oid != Some(commit.get_oid()) {
-                        warn!(
-                            ?commit,
-                            ?head_info,
-                            "Repository was not checked out to expected commit"
-                        );
-                    }
-                    snapshot
+                    (head_info.oid, snapshot)
                 };
-                match snapshot.get_working_copy_changes_type()? {
+                let snapshot_tree_oid = match snapshot.get_working_copy_changes_type()? {
                     WorkingCopyChangesType::None | WorkingCopyChangesType::Unstaged => {
                         let fixed_tree_oid: MaybeZeroOid = snapshot.commit_unstaged.get_tree_oid();
-                        if commit.get_tree_oid() != fixed_tree_oid {
-                            let fixed_tree_oid: Option<NonZeroOid> = fixed_tree_oid.into();
-                            fixed_tree_oid
-                        } else {
-                            None
-                        }
+                        fixed_tree_oid.into()
                     }
                     changes_type @ (WorkingCopyChangesType::Staged
                     | WorkingCopyChangesType::Conflicts) => {
@@ -2686,11 +2711,15 @@ To abort testing entirely, run:      {exit127}",
                         );
                         None
                     }
+                };
+                FixInfo {
+                    head_commit_oid,
+                    snapshot_tree_oid,
                 }
             };
             TestStatus::Passed {
                 cached: false,
-                fixed_tree_oid,
+                fix_info,
                 interactive: options.is_interactive,
             }
         }
@@ -2705,24 +2734,28 @@ To abort testing entirely, run:      {exit127}",
         },
     };
 
+    let fix_info = match &test_status {
+        TestStatus::Passed {
+            cached: _,
+            fix_info,
+            interactive: _,
+        } => Some(fix_info),
+        TestStatus::CheckoutFailed
+        | TestStatus::SpawnTestFailed(_)
+        | TestStatus::TerminatedBySignal
+        | TestStatus::AlreadyInProgress
+        | TestStatus::ReadCacheFailed(_)
+        | TestStatus::Failed { .. }
+        | TestStatus::Abort { .. }
+        | TestStatus::Indeterminate { .. } => None,
+    };
     let serialized_test_result = SerializedTestResult {
         command: options.command.clone(),
         exit_code,
-        fixed_tree_oid: match &test_status {
-            TestStatus::Passed {
-                cached: _,
-                fixed_tree_oid,
-                interactive: _,
-            } => (*fixed_tree_oid).map(SerializedNonZeroOid),
-            TestStatus::CheckoutFailed
-            | TestStatus::SpawnTestFailed(_)
-            | TestStatus::TerminatedBySignal
-            | TestStatus::AlreadyInProgress
-            | TestStatus::ReadCacheFailed(_)
-            | TestStatus::Failed { .. }
-            | TestStatus::Abort { .. }
-            | TestStatus::Indeterminate { .. } => None,
-        },
+        head_commit_oid: fix_info
+            .and_then(|fix_info| fix_info.head_commit_oid.map(SerializedNonZeroOid)),
+        snapshot_tree_oid: fix_info
+            .and_then(|fix_info| fix_info.snapshot_tree_oid.map(SerializedNonZeroOid)),
         interactive: options.is_interactive,
     };
     serde_json::to_writer_pretty(result_file, &serialized_test_result)
