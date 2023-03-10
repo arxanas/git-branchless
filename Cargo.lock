@@ -1557,6 +1557,7 @@ dependencies = [
  "insta",
  "itertools",
  "lazy_static",
+ "tracing",
 ]
 
 [[package]]
