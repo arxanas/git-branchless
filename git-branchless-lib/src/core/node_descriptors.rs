@@ -432,7 +432,7 @@ impl<'a> NodeDescriptor for DifferentialRevisionDescriptor<'a> {
             NodeObject::GarbageCollected { oid: _ } => return Ok(None),
         };
 
-        let diff_number = match extract_diff_number(&commit.get_message_raw()?.to_str_lossy()) {
+        let diff_number = match extract_diff_number(&commit.get_message_raw().to_str_lossy()) {
             Some(diff_number) => diff_number,
             None => return Ok(None),
         };

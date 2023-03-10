@@ -254,7 +254,7 @@ pub fn amend(
                     .into_iter()
                     .map(|parent_oid| repo.find_commit_or_fail(parent_oid))
                     .try_collect()?;
-                let descendant_message = descendant_commit.get_message_raw()?;
+                let descendant_message = descendant_commit.get_message_raw();
                 let descendant_message = descendant_message.to_str().with_context(|| {
                     eyre::eyre!(
                         "Could not decode commit message for descendant commit: {:?}",
