@@ -105,14 +105,14 @@ impl<'repo> Commit<'repo> {
 
     /// Get the commit message with some whitespace trimmed.
     #[instrument]
-    pub fn get_message_pretty(&self) -> Result<BString> {
-        Ok(BString::from(self.inner.message_bytes()))
+    pub fn get_message_pretty(&self) -> BString {
+        BString::from(self.inner.message_bytes())
     }
 
     /// Get the commit message, without any whitespace trimmed.
     #[instrument]
-    pub fn get_message_raw(&self) -> Result<BString> {
-        Ok(BString::from(self.inner.message_raw_bytes()))
+    pub fn get_message_raw(&self) -> BString {
+        BString::from(self.inner.message_raw_bytes())
     }
 
     /// Get the author of this commit.
@@ -151,7 +151,7 @@ impl<'repo> Commit<'repo> {
     /// like `Signed-off-by: foo` which appear at the end of the commit message.
     #[instrument]
     pub fn get_trailers(&self) -> Result<Vec<(String, String)>> {
-        let message = self.get_message_raw()?;
+        let message = self.get_message_raw();
         let message = message.to_str().map_err(|_| Error::DecodeUtf8 {
             item: "raw message",
         })?;
@@ -249,7 +249,7 @@ impl<'repo> Commit<'repo> {
                 BaseColor::Green.light(),
             ),
             StyledString::plain(textwrap::indent(
-                &self.get_message_pretty()?.to_str_lossy(),
+                &self.get_message_pretty().to_str_lossy(),
                 "    ",
             )),
         ]);

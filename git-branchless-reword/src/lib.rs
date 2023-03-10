@@ -427,7 +427,7 @@ fn prepare_messages(
         let oid = commit.get_short_oid()?;
 
         let original_message = commit
-            .get_message_raw()?
+            .get_message_raw()
             .to_str()
             .with_context(|| {
                 eyre::eyre!(

@@ -1901,7 +1901,7 @@ fn apply_fixes(
         for (original_commit_oid, fixed_tree_oid) in fixed_tree_oids {
             let original_commit = repo.find_commit_or_fail(original_commit_oid)?;
             let original_tree_oid = original_commit.get_tree_oid();
-            let commit_message = original_commit.get_message_raw()?;
+            let commit_message = original_commit.get_message_raw();
             let commit_message = commit_message.to_str().with_context(|| {
                 eyre::eyre!(
                     "Could not decode commit message for commit: {:?}",

@@ -312,7 +312,7 @@ fn fn_message(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
         name,
         args,
         Box::new(move |_repo, commit| {
-            let message = commit.get_message_raw().map_err(PatternError::Repo)?;
+            let message = commit.get_message_raw();
             let message = match message.to_str() {
                 Ok(message) => message,
                 Err(err) => {

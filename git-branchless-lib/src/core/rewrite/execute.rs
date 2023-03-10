@@ -609,7 +609,7 @@ mod in_memory {
                         Err(other) => eyre::bail!(other),
                     };
 
-                    let commit_message = commit_to_apply.get_message_raw()?;
+                    let commit_message = commit_to_apply.get_message_raw();
                     let commit_message = commit_message.to_str().with_context(|| {
                         eyre::eyre!(
                             "Could not decode commit message for commit: {:?}",
@@ -706,7 +706,7 @@ mod in_memory {
 
                     let replacement_commit = repo.find_commit_or_fail(*replacement_commit_oid)?;
                     let replacement_tree = replacement_commit.get_tree()?;
-                    let replacement_message = replacement_commit.get_message_raw()?;
+                    let replacement_message = replacement_commit.get_message_raw();
                     let replacement_commit_message =
                         replacement_message.to_str().with_context(|| {
                             eyre::eyre!(

@@ -372,7 +372,7 @@ mod tests {
             .into_iter()
             .map(|oid| repo.find_commit_or_fail(oid))
             .try_collect()?;
-        commits.sort_by_key(|commit| (commit.get_message_pretty().unwrap(), commit.get_time()));
+        commits.sort_by_key(|commit| (commit.get_message_pretty(), commit.get_time()));
         Ok(commits)
     }
 

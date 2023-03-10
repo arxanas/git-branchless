@@ -100,7 +100,7 @@ fn main() -> eyre::Result<()> {
         let actual_commit = {
             let author = current_commit.get_author();
             let committer = current_commit.get_committer();
-            let message = current_commit.get_message_raw()?;
+            let message = current_commit.get_message_raw();
             let message = message.to_str_lossy();
             let parents = current_commit.get_parents();
             let actual_oid = repo.create_commit(
