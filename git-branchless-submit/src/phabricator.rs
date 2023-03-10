@@ -30,7 +30,7 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::{instrument, warn};
 
-use crate::{CommitStatus, Forge, SubmitOptions, SubmitStatus};
+use crate::{CommitStatus, CreateStatus, Forge, SubmitOptions, SubmitStatus};
 
 /// Wrapper around the Phabricator "ID" type. (This is *not* a PHID, just a
 /// regular ID).
@@ -232,7 +232,7 @@ impl Forge for PhabricatorForge<'_> {
         &mut self,
         commits: HashMap<NonZeroOid, CommitStatus>,
         options: &SubmitOptions,
-    ) -> eyre::Result<ExitCode> {
+    ) -> eyre::Result<std::result::Result<HashMap<NonZeroOid, CreateStatus>, ExitCode>> {
         let SubmitOptions {
             create: _,
             draft,
@@ -322,7 +322,7 @@ impl Forge for PhabricatorForge<'_> {
                         .friendly_describe_commit_from_oid(self.effects.get_glyphs(), commit_oid)?
                 )?,
             )?;
-            return Ok(ExitCode(1));
+            return Ok(Err(ExitCode(1)));
         }
 
         let rebase_plan = {
@@ -351,7 +351,7 @@ impl Forge for PhabricatorForge<'_> {
                         write!(self.effects.get_output_stream(), "Stdout:\n{stdout}")?;
                         let stderr = std::fs::read_to_string(&test_output.stderr_path)?;
                         write!(self.effects.get_output_stream(), "Stderr:\n{stderr}")?;
-                        return Ok(ExitCode(1));
+                        return Ok(Err(ExitCode(1)));
                     }
                     TestStatus::Passed {
                         cached: _,
@@ -373,10 +373,10 @@ impl Forge for PhabricatorForge<'_> {
             let repo_pool = RepoResource::new_pool(self.repo)?;
             match builder.build(self.effects, &pool, &repo_pool)? {
                 Ok(Some(rebase_plan)) => rebase_plan,
-                Ok(None) => return Ok(ExitCode(0)),
+                Ok(None) => return Ok(Ok(Default::default())),
                 Err(err) => {
                     err.describe(self.effects, self.repo, self.dag)?;
-                    return Ok(ExitCode(1));
+                    return Ok(Err(ExitCode(1)));
                 }
             }
         };
@@ -405,28 +405,69 @@ impl Forge for PhabricatorForge<'_> {
                     self.effects.get_error_stream(),
                     "BUG: Merge failed, but rewording shouldn't cause any merge failures."
                 )?;
-                return Ok(ExitCode(1));
+                return Ok(Err(ExitCode(1)));
             }
             ExecuteRebasePlanResult::Failed { exit_code } => {
-                return Ok(exit_code);
+                return Ok(Err(exit_code));
             }
         };
 
-        let latest_commit_oids = commit_oids
-            .iter()
-            .copied()
-            .map(|commit_oid| match rewritten_oids.get(&commit_oid) {
+        let mut create_statuses = HashMap::new();
+        for commit_oid in commit_oids {
+            let final_commit_oid = match rewritten_oids.get(&commit_oid) {
                 Some(MaybeZeroOid::NonZero(commit_oid)) => *commit_oid,
                 Some(MaybeZeroOid::Zero) => {
                     warn!(?commit_oid, "Commit was rewritten to the zero OID",);
                     commit_oid
                 }
                 None => commit_oid,
-            })
-            .collect_vec();
-        self.update_dependencies(&latest_commit_oids.into_iter().collect())?;
+            };
+            let local_branch_name = {
+                match self.get_revision_id(final_commit_oid)? {
+                    Some(Id(id)) => format!("D{id}"),
+                    None => {
+                        writeln!(
+                            self.effects.get_output_stream(),
+                            "Failed to upload {}",
+                            self.effects.get_glyphs().render(
+                                self.repo.friendly_describe_commit_from_oid(
+                                    self.effects.get_glyphs(),
+                                    final_commit_oid
+                                )?
+                            )?,
+                        )?;
+                        return Ok(Err(ExitCode(1)));
+                    }
+                }
+            };
+            create_statuses.insert(
+                commit_oid,
+                CreateStatus {
+                    final_commit_oid,
+                    local_branch_name,
+                },
+            );
+        }
 
-        Ok(ExitCode(0))
+        let final_commit_oids: CommitSet = create_statuses
+            .values()
+            .map(|create_status| {
+                let CreateStatus {
+                    final_commit_oid,
+                    local_branch_name: _,
+                } = create_status;
+                *final_commit_oid
+            })
+            .collect();
+        self.dag.sync_from_oids(
+            self.effects,
+            self.repo,
+            CommitSet::empty(),
+            final_commit_oids.clone(),
+        )?;
+        self.update_dependencies(&final_commit_oids)?;
+
+        Ok(Ok(create_statuses))
     }
 
     #[instrument]

@@ -14,7 +14,7 @@ use lib::git::{
 use lib::util::ExitCode;
 use tracing::warn;
 
-use crate::{CommitStatus, Forge, SubmitOptions, SubmitStatus};
+use crate::{CommitStatus, CreateStatus, Forge, SubmitOptions, SubmitStatus};
 
 pub struct BranchPushForge<'a> {
     pub effects: &'a Effects,
@@ -184,7 +184,7 @@ impl Forge for BranchPushForge<'_> {
         &mut self,
         commits: HashMap<NonZeroOid, CommitStatus>,
         _options: &SubmitOptions,
-    ) -> eyre::Result<ExitCode> {
+    ) -> eyre::Result<Result<HashMap<NonZeroOid, CreateStatus>, ExitCode>> {
         let unsubmitted_branch_names = commits
             .values()
             .filter_map(|commit_status| {
@@ -216,12 +216,12 @@ These remotes are available: {}",
                     unsubmitted_branch_names.join(", "),
                     self.repo.get_all_remote_names()?.join(", "),
                 )?;
-                return Ok(ExitCode(1));
+                return Ok(Err(ExitCode(1)));
             }
         };
 
         if unsubmitted_branch_names.is_empty() {
-            Ok(ExitCode(0))
+            Ok(Ok(Default::default()))
         } else {
             // This will fail if somebody else created the branch on the remote and we don't
             // know about it.
@@ -233,8 +233,26 @@ These remotes are available: {}",
             let (effects, progress) = self.effects.start_operation(OperationType::PushCommits);
             let _effects = effects;
             progress.notify_progress(0, unsubmitted_branch_names.len());
-            self.git_run_info
-                .run(self.effects, Some(event_tx_id), &args)
+            let exit_code = self
+                .git_run_info
+                .run(self.effects, Some(event_tx_id), &args)?;
+            if !exit_code.is_success() {
+                return Ok(Err(exit_code));
+            }
+            Ok(Ok(commits
+                .into_iter()
+                .filter_map(|(commit_oid, commit_status)| {
+                    commit_status.local_branch_name.map(|local_branch_name| {
+                        (
+                            commit_oid,
+                            CreateStatus {
+                                final_commit_oid: commit_oid,
+                                local_branch_name,
+                            },
+                        )
+                    })
+                })
+                .collect()))
         }
     }
 
