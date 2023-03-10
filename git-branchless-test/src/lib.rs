@@ -806,7 +806,7 @@ fn clear_abort_trap(
             effects.get_glyphs().render(
                 StyledStringBuilder::new()
                     .append_styled(
-                        "Error: Could not abort tests with `git rebase --abort`.",
+                        "Error: Could not abort running commands with `git rebase --abort`.",
                         BaseColor::Red.light()
                     )
                     .build()
@@ -956,22 +956,25 @@ impl TestStatus {
                 .build(),
 
             TestStatus::SpawnTestFailed(err) => StyledStringBuilder::new()
-                .append_styled(format!("Failed to spawn test: {err}: "), self.get_style())
+                .append_styled(
+                    format!("Failed to spawn command: {err}: "),
+                    self.get_style(),
+                )
                 .append(commit.friendly_describe(glyphs)?)
                 .build(),
 
             TestStatus::TerminatedBySignal => StyledStringBuilder::new()
-                .append_styled("Test command terminated by signal: ", self.get_style())
+                .append_styled("Command terminated by signal: ", self.get_style())
                 .append(commit.friendly_describe(glyphs)?)
                 .build(),
 
             TestStatus::AlreadyInProgress => StyledStringBuilder::new()
-                .append_styled("Test already in progress? ", self.get_style())
+                .append_styled("Command already in progress? ", self.get_style())
                 .append(commit.friendly_describe(glyphs)?)
                 .build(),
 
             TestStatus::ReadCacheFailed(_) => StyledStringBuilder::new()
-                .append_styled("Could not read cached test result: ", self.get_style())
+                .append_styled("Could not read cached command result: ", self.get_style())
                 .append(commit.friendly_describe(glyphs)?)
                 .build(),
 
@@ -985,7 +988,7 @@ impl TestStatus {
 
             TestStatus::Abort { exit_code } => StyledStringBuilder::new()
                 .append_styled(
-                    format!("Exit code indicated to abort testing (exit code {exit_code}): "),
+                    format!("Exit code indicated to abort command (exit code {exit_code}): "),
                     self.get_style(),
                 )
                 .append(commit.friendly_describe(glyphs)?)
@@ -1294,7 +1297,7 @@ pub fn run_tests<'a>(
     if let Some(strategy_value) = execution_strategy.to_possible_value() {
         writeln!(
             effects.get_output_stream(),
-            "Using test execution strategy: {}",
+            "Using command execution strategy: {}",
             effects.get_glyphs().render(
                 StyledStringBuilder::new()
                     .append_styled(strategy_value.get_name(), Effect::Bold)
@@ -1360,7 +1363,7 @@ pub fn run_tests<'a>(
                 let (_effects, progress) = effects.start_operation(operation_type.clone());
                 progress.notify_status(
                     OperationIcon::InProgress,
-                    format!("Waiting to test {commit_description}"),
+                    format!("Waiting to run on {commit_description}"),
                 );
                 results.insert(
                     commit.get_oid(),
@@ -1755,7 +1758,7 @@ fn print_summary(
 
     writeln!(
         effects.get_output_stream(),
-        "Tested {} with {}:",
+        "Ran command on {}: {}:",
         Pluralize {
             determiner: None,
             amount: test_results.test_outputs.len(),
@@ -1875,7 +1878,7 @@ fn print_summary(
         let commit = repo.find_commit_or_fail(*commit_oid)?;
         writeln!(
             effects.get_output_stream(),
-            "Aborted testing with exit code {} at commit: {}",
+            "Aborted running commands with exit code {} at commit: {}",
             exit_code,
             effects
                 .get_glyphs()
@@ -2235,7 +2238,7 @@ fn run_test(
                     progress.notify_status(
                         OperationIcon::InProgress,
                         format!(
-                            "Testing {}",
+                            "Running on {}",
                             effects
                                 .get_glyphs()
                                 .render(commit.friendly_describe(effects.get_glyphs())?)?
