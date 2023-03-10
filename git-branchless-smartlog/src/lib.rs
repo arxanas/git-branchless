@@ -16,7 +16,6 @@ use std::cmp::Ordering;
 use std::fmt::Write;
 use std::time::SystemTime;
 
-use eden_dag::DagAlgorithm;
 use git_branchless_invoke::CommandContext;
 use git_branchless_opts::{Revset, SmartlogArgs};
 use lib::core::config::{get_hint_enabled, get_hint_string, print_hint_suppression_notice, Hint};
@@ -45,11 +44,10 @@ mod graph {
     use std::collections::HashMap;
     use std::convert::TryFrom;
 
-    use eden_dag::DagAlgorithm;
     use lib::core::gc::mark_commit_reachable;
     use tracing::instrument;
 
-    use lib::core::dag::{commit_set_to_vec, CommitSet, CommitVertex, Dag};
+    use lib::core::dag::{CommitSet, CommitVertex, Dag};
     use lib::core::effects::{Effects, OperationType};
     use lib::core::eventlog::{EventCursor, EventReplayer};
     use lib::core::node_descriptors::NodeObject;
@@ -164,12 +162,12 @@ mod graph {
     ) -> eyre::Result<SmartlogGraph<'repo>> {
         let mut graph: HashMap<NonZeroOid, Node> = {
             let mut result = HashMap::new();
-            for vertex in commit_set_to_vec(commits)? {
+            for vertex in dag.commit_set_to_vec(commits)? {
                 let vertex = CommitSet::from(vertex);
-                let merge_bases = dag.query().gca_all(dag.main_branch_commit.union(&vertex))?;
+                let merge_bases = dag.query_gca_all(dag.main_branch_commit.union(&vertex))?;
                 let vertices = vertex.union(&merge_bases);
 
-                for oid in commit_set_to_vec(&vertices)? {
+                for oid in dag.commit_set_to_vec(&vertices)? {
                     let object = match repo.find_commit(oid)? {
                         Some(commit) => NodeObject::Commit { commit },
                         None => {
@@ -187,7 +185,7 @@ mod graph {
                             ancestor_info: None,
                             descendants: Vec::new(), // populated below
                             is_main: dag.is_public_commit(oid)?,
-                            is_obsolete: dag.query_obsolete_commits().contains(&oid.into())?,
+                            is_obsolete: dag.set_contains(&dag.query_obsolete_commits(), oid)?,
                             num_omitted_descendants: 0, // populated below
                         },
                     );
@@ -206,18 +204,18 @@ mod graph {
 
         let graph_vertices: CommitSet = graph.keys().cloned().collect();
         for child_oid in non_main_node_oids {
-            let parent_vertices = dag.query().parent_names(CommitVertex::from(*child_oid))?;
+            let parent_vertices = dag.query_parent_names(CommitVertex::from(*child_oid))?;
 
             // Find immediate parent-child links.
             match parent_vertices.as_slice() {
                 [] => {}
                 [first_parent_vertex, merge_parent_vertices @ ..] => {
-                    if graph_vertices.contains(first_parent_vertex)? {
+                    if dag.set_contains(&graph_vertices, first_parent_vertex.clone())? {
                         let first_parent_oid = NonZeroOid::try_from(first_parent_vertex.clone())?;
                         immediate_links.push((*child_oid, first_parent_oid, false));
                     }
                     for merge_parent_vertex in merge_parent_vertices {
-                        if graph_vertices.contains(merge_parent_vertex)? {
+                        if dag.set_contains(&graph_vertices, merge_parent_vertex.clone())? {
                             let merge_parent_oid =
                                 NonZeroOid::try_from(merge_parent_vertex.clone())?;
                             immediate_links.push((*child_oid, merge_parent_oid, true));
@@ -228,7 +226,7 @@ mod graph {
 
             // Find non-immediate ancestor links.
             for excluded_parent_vertex in parent_vertices {
-                if graph_vertices.contains(&excluded_parent_vertex)? {
+                if dag.set_contains(&graph_vertices, excluded_parent_vertex.clone())? {
                     continue;
                 }
 
@@ -236,21 +234,16 @@ mod graph {
                 // also on the same branch.
 
                 let parent_set = CommitSet::from(excluded_parent_vertex);
-                let merge_base = dag
-                    .query()
-                    .gca_one(dag.main_branch_commit.union(&parent_set))?;
+                let merge_base = dag.query_gca_one(dag.main_branch_commit.union(&parent_set))?;
 
                 let path_to_main_branch = match merge_base {
-                    Some(merge_base) => {
-                        dag.query().range(CommitSet::from(merge_base), parent_set)?
-                    }
+                    Some(merge_base) => dag.query_range(CommitSet::from(merge_base), parent_set)?,
                     None => CommitSet::empty(),
                 };
-                let nearest_branch_ancestor = dag
-                    .query()
-                    .heads_ancestors(path_to_main_branch.intersection(&graph_vertices))?;
+                let nearest_branch_ancestor =
+                    dag.query_heads_ancestors(path_to_main_branch.intersection(&graph_vertices))?;
 
-                let ancestor_oids = commit_set_to_vec(&nearest_branch_ancestor)?;
+                let ancestor_oids = dag.commit_set_to_vec(&nearest_branch_ancestor)?;
                 for ancestor_oid in ancestor_oids.iter() {
                     non_immediate_links.push((*ancestor_oid, *child_oid, false));
                 }
@@ -266,14 +259,13 @@ mod graph {
         }
 
         for (ancestor_oid, descendent_oid, is_merge_link) in non_immediate_links.iter() {
-            let distance = dag
-                .query()
-                .range(
+            let distance = dag.set_count(
+                &dag.query_range(
                     CommitSet::from(*ancestor_oid),
                     CommitSet::from(*descendent_oid),
                 )?
-                .difference(&vec![*ancestor_oid, *descendent_oid].into_iter().collect())
-                .count()?;
+                .difference(&vec![*ancestor_oid, *descendent_oid].into_iter().collect()),
+            )?;
             graph.get_mut(descendent_oid).unwrap().ancestor_info = Some(AncestorInfo {
                 oid: *ancestor_oid,
                 distance,
@@ -290,7 +282,7 @@ mod graph {
 
         for (oid, node) in graph.iter_mut() {
             let oid_set = CommitSet::from(*oid);
-            let is_main_head = !dag.main_branch_commit.intersection(&oid_set).is_empty()?;
+            let is_main_head = !dag.set_is_empty(&dag.main_branch_commit.intersection(&oid_set))?;
             let ancestor_of_main = node.is_main && !is_main_head;
             let has_descendants_in_graph =
                 !node.children.is_empty() || !node.descendants.is_empty();
@@ -301,13 +293,11 @@ mod graph {
 
             // This node has no descendants in the graph, so it's a
             // false head if it has *any* visible descendants.
-            let descendants_not_in_graph = dag
-                .query()
-                .descendants(oid_set.clone())?
-                .difference(&oid_set);
+            let descendants_not_in_graph =
+                dag.query_descendants(oid_set.clone())?.difference(&oid_set);
             let descendants_not_in_graph = dag.filter_visible_commits(descendants_not_in_graph)?;
 
-            node.num_omitted_descendants = descendants_not_in_graph.count()?;
+            node.num_omitted_descendants = dag.set_count(&descendants_not_in_graph)?;
         }
 
         Ok(SmartlogGraph { nodes: graph })
@@ -359,7 +349,7 @@ mod graph {
                 .union(&dag.head_commit)
                 .union(&dag.main_branch_commit);
 
-            for oid in commit_set_to_vec(&commits)? {
+            for oid in dag.commit_set_to_vec(&commits)? {
                 mark_commit_reachable(repo, oid)?;
             }
 
@@ -377,10 +367,9 @@ mod render {
 
     use cursive_core::theme::{BaseColor, Effect};
     use cursive_core::utils::markup::StyledString;
-    use eden_dag::DagAlgorithm;
     use tracing::instrument;
 
-    use lib::core::dag::{CommitSet, CommitVertex, Dag};
+    use lib::core::dag::{CommitSet, Dag};
     use lib::core::effects::Effects;
     use lib::core::formatting::{set_effect, Pluralize};
     use lib::core::formatting::{Glyphs, StyledStringBuilder};
@@ -420,9 +409,8 @@ mod render {
                 _ => return lhs_oid.cmp(rhs_oid),
             };
 
-            let merge_base_oid = dag
-                .query()
-                .gca_one(vec![*lhs_oid, *rhs_oid].into_iter().collect::<CommitSet>());
+            let merge_base_oid =
+                dag.query_gca_one(vec![*lhs_oid, *rhs_oid].into_iter().collect::<CommitSet>());
             let merge_base_oid = match merge_base_oid {
                 Err(_) => return lhs_oid.cmp(rhs_oid),
                 Ok(None) => None,
@@ -665,17 +653,13 @@ mod render {
         // since there may be links between adjacent main branch commits which
         // are not reflected in `graph`.
         let has_real_parent = |oid: NonZeroOid, parent_oid: NonZeroOid| -> eyre::Result<bool> {
-            let parents = dag.query().parents(CommitSet::from(oid))?;
-            let result = parents.contains(&CommitVertex::from(parent_oid))?;
+            let parents = dag.query_parents(CommitSet::from(oid))?;
+            let result = dag.set_contains(&parents, parent_oid)?;
             Ok(result)
         };
 
         for (root_idx, root_oid) in root_oids.iter().enumerate() {
-            if !dag
-                .query()
-                .parents(CommitSet::from(*root_oid))?
-                .is_empty()?
-            {
+            if !dag.set_is_empty(&dag.query_parents(CommitSet::from(*root_oid))?)? {
                 let line = if root_idx > 0 && has_real_parent(*root_oid, root_oids[root_idx - 1])? {
                     StyledString::plain(glyphs.line.to_owned())
                 } else {
@@ -887,8 +871,9 @@ pub fn smartlog(
                 }
             })
             .collect();
-        let children = dag.query().children(commits_with_abandoned_children)?;
-        let num_abandoned_children = children.difference(&dag.query_obsolete_commits()).count()?;
+        let children = dag.query_children(commits_with_abandoned_children)?;
+        let num_abandoned_children =
+            dag.set_count(&children.difference(&dag.query_obsolete_commits()))?;
         if num_abandoned_children > 0 {
             writeln!(
                 effects.get_output_stream(),

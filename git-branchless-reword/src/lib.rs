@@ -16,7 +16,7 @@ use lib::core::repo_ext::RepoExt;
 use lib::util::ExitCode;
 use rayon::ThreadPoolBuilder;
 use std::collections::{HashMap, HashSet};
-use std::convert::TryFrom;
+
 use std::fmt::Write;
 use std::fs::File;
 use std::time::SystemTime;
@@ -24,7 +24,7 @@ use std::time::SystemTime;
 use bstr::{ByteSlice, ByteVec};
 use chrono::Local;
 use dialoguer_edit::Editor;
-use eden_dag::DagAlgorithm;
+
 use eyre::Context;
 use tracing::{instrument, warn};
 
@@ -105,7 +105,7 @@ pub fn reword(
     )? {
         Ok(permissions) => permissions,
         Err(err) => {
-            err.describe(effects, &repo)?;
+            err.describe(effects, &repo, &dag)?;
             return Ok(ExitCode(1));
         }
     };
@@ -124,11 +124,10 @@ pub fn reword(
             let commit_to_fixup = match commits_to_fixup.as_slice() {
                 [commit_to_fixup] => {
                     let commits: CommitSet = commits.iter().map(|c| c.get_oid()).collect();
-                    if !dag
-                        .query()
-                        .common_ancestors(commits)?
-                        .contains(&commit_to_fixup.get_oid().into())?
-                    {
+                    if !dag.set_contains(
+                        &dag.query_common_ancestors(commits)?,
+                        commit_to_fixup.get_oid(),
+                    )? {
                         writeln!(
                             effects.get_error_stream(),
                             "The commit supplied to --fixup must be an ancestor of all commits being reworded.\nAborting.",
@@ -271,7 +270,7 @@ pub fn reword(
                 );
             }
             Err(err) => {
-                err.describe(effects, &repo)?;
+                err.describe(effects, &repo, &dag)?;
                 return Ok(ExitCode(1));
             }
         }
@@ -630,14 +629,13 @@ fn find_subtree_roots<'repo>(
 
     // Find the vertices representing the roots of this set of commits
     let subtree_roots = dag
-        .query()
-        .roots(commits)
+        .query_roots(commits)
         .wrap_err("Computing subtree roots")?;
 
     // convert the vertices back into actual Commits
-    let root_commits = subtree_roots
-        .iter()?
-        .filter_map(|vertex| NonZeroOid::try_from(vertex.ok()?).ok())
+    let root_commits = dag
+        .commit_set_to_vec(&subtree_roots)?
+        .into_iter()
         .filter_map(|oid| repo.find_commit(oid).ok()?)
         .collect();
 

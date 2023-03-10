@@ -5,13 +5,12 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use chashmap::CHashMap;
-use eden_dag::DagAlgorithm;
 use eyre::Context;
 use itertools::Itertools;
 use rayon::{prelude::*, ThreadPool};
 use tracing::{instrument, warn};
 
-use crate::core::dag::{commit_set_to_vec, union_all, CommitSet, Dag};
+use crate::core::dag::{union_all, CommitSet, Dag};
 use crate::core::effects::{Effects, OperationType};
 use crate::core::formatting::Pluralize;
 use crate::core::rewrite::{RepoPool, RepoResource};
@@ -200,12 +199,12 @@ impl RebasePlanPermissions {
     ) -> eyre::Result<Result<Self, BuildRebasePlanError>> {
         // This isn't necessary for correctness, but helps to produce a better
         // error message which indicates the magnitude of the issue.
-        let commits = dag.query().descendants(commits.clone())?;
+        let commits = dag.query_descendants(commits.clone())?;
 
         let public_commits = dag.query_public_commits_slow()?;
         if !build_options.force_rewrite_public_commits {
             let public_commits_to_move = public_commits.intersection(&commits);
-            if !public_commits_to_move.is_empty()? {
+            if !dag.set_is_empty(&public_commits_to_move)? {
                 return Ok(Err(BuildRebasePlanError::MovePublicCommits {
                     public_commits_to_move,
                 }));
@@ -222,7 +221,7 @@ impl RebasePlanPermissions {
     fn omnipotent_for_test(dag: &Dag, build_options: BuildRebasePlanOptions) -> eyre::Result<Self> {
         Ok(Self {
             build_options,
-            allowed_commits: dag.query().all()?,
+            allowed_commits: dag.query_all()?,
         })
     }
 }
@@ -308,12 +307,11 @@ impl<'a> ConstraintGraph<'a> {
                     let commits_to_move: CommitSet = commits_to_move.into_iter().collect();
                     let source_children: CommitSet = self
                         .dag
-                        .query()
-                        .children(CommitSet::from(*children_of_oid))?
+                        .query_children(CommitSet::from(*children_of_oid))?
                         .difference(&commits_to_move);
                     let source_children = self.dag.filter_visible_commits(source_children)?;
 
-                    for child_oid in commit_set_to_vec(&source_children)? {
+                    for child_oid in self.dag.commit_set_to_vec(&source_children)? {
                         self.inner.entry(parent_oid).or_default().insert(child_oid);
                     }
                 }
@@ -339,10 +337,9 @@ impl<'a> ConstraintGraph<'a> {
     ) -> eyre::Result<()> {
         let children_oids = self
             .dag
-            .query()
-            .children(CommitSet::from(current_oid))?
+            .query_children(CommitSet::from(current_oid))?
             .intersection(visible_commits);
-        let children_oids = commit_set_to_vec(&children_oids)?;
+        let children_oids = self.dag.commit_set_to_vec(&children_oids)?;
         for child_oid in children_oids {
             if self.commits_to_move().contains(&child_oid) {
                 continue;
@@ -421,7 +418,7 @@ impl<'a> ConstraintGraph<'a> {
         } = &self.permissions;
         let commits_to_move: CommitSet = self.commits_to_move().into_iter().collect();
         let illegal_commits_to_move = commits_to_move.difference(allowed_commits);
-        if !illegal_commits_to_move.is_empty()? {
+        if !self.dag.set_is_empty(&illegal_commits_to_move)? {
             Ok(Err(BuildRebasePlanError::MoveIllegalCommits {
                 illegal_commits_to_move,
             }))
@@ -600,7 +597,7 @@ pub enum BuildRebasePlanError {
 
 impl BuildRebasePlanError {
     /// Write the error message to `out`.
-    pub fn describe(&self, effects: &Effects, repo: &Repo) -> eyre::Result<()> {
+    pub fn describe(&self, effects: &Effects, repo: &Repo, dag: &Dag) -> eyre::Result<()> {
         match self {
             BuildRebasePlanError::ConstraintCycle { cycle_oids } => {
                 writeln!(
@@ -640,9 +637,10 @@ impl BuildRebasePlanError {
             BuildRebasePlanError::MovePublicCommits {
                 public_commits_to_move,
             } => {
-                let example_bad_commit_oid = public_commits_to_move.first()?.ok_or_else(|| {
-                    eyre::eyre!("BUG: could not get OID of a public commit to move")
-                })?;
+                let example_bad_commit_oid =
+                    dag.set_first(public_commits_to_move)?.ok_or_else(|| {
+                        eyre::eyre!("BUG: could not get OID of a public commit to move")
+                    })?;
                 let example_bad_commit_oid = NonZeroOid::try_from(example_bad_commit_oid)?;
                 let example_bad_commit = repo.find_commit_or_fail(example_bad_commit_oid)?;
                 writeln!(
@@ -654,7 +652,7 @@ collaborators will have difficulty merging your changes.
 Retry with -f/--force-rewrite to proceed anyways.",
                     Pluralize {
                         determiner: None,
-                        amount: public_commits_to_move.count()?,
+                        amount: dag.set_count(public_commits_to_move)?,
                         unit: ("public commit", "public commits")
                     },
                     effects
@@ -672,7 +670,7 @@ Retry with -f/--force-rewrite to proceed anyways.",
 BUG: The following commits were planned to be moved but not verified:
 {:?}
 This is a bug. Please report it.",
-                    commit_set_to_vec(illegal_commits_to_move)
+                    dag.commit_set_to_vec(illegal_commits_to_move)?
                 )?;
             }
         }
@@ -1176,7 +1174,7 @@ impl<'a> RebasePlanBuilder<'a> {
             .iter()
             .map(|dest_oid| {
                 let commit_set: CommitSet = [current_oid, *dest_oid].into_iter().collect();
-                self.dag.query().gca_all(commit_set)
+                self.dag.query_gca_all(commit_set)
             })
             .try_collect()?;
         let merge_base_oids = union_all(&merge_base_oids);
@@ -1188,8 +1186,7 @@ impl<'a> RebasePlanBuilder<'a> {
             let (effects, _progress) = effects.start_operation(OperationType::WalkCommits);
             let _effects = effects;
             self.dag
-                .query()
-                .range(merge_base_oids, dest_oids.iter().copied().collect())
+                .query_range(merge_base_oids, dest_oids.iter().copied().collect())
                 .wrap_err("Calculating upstream commits")?
         };
 
@@ -1244,7 +1241,7 @@ impl<'a> RebasePlanBuilder<'a> {
         touched_commit_oids: Vec<NonZeroOid>,
     ) -> eyre::Result<Vec<Commit<'a>>> {
         let (effects, _progress) = effects.start_operation(OperationType::FilterCommits);
-        let path = commit_set_to_vec(&path)?;
+        let path = self.dag.commit_set_to_vec(&path)?;
 
         let touched_commits: Vec<Commit> = touched_commit_oids
             .into_iter()

@@ -1,20 +1,17 @@
-use std::{
-    convert::TryFrom,
-    sync::{Arc, Mutex},
-};
+use std::convert::TryFrom;
+use std::fmt::Debug;
+use std::sync::{Arc, Mutex};
 
 use chrono::{Local, NaiveDateTime};
 use chrono_english::{parse_date_string, parse_duration, DateError, Dialect, Interval};
 use chronoutil::RelativeDuration;
-use lib::{
-    core::{
-        dag::{CommitSet, CommitVertex},
-        effects::{Effects, OperationType},
-        rewrite::RepoResource,
-    },
-    git::{Commit, NonZeroOid, Repo, RepoError, Time},
-};
-use rayon::prelude::{ParallelBridge, ParallelIterator};
+use eden_dag::nameset::hints::Hints;
+use futures::StreamExt;
+use lib::core::dag::{CommitSet, CommitVertex};
+use lib::core::effects::{Effects, OperationType};
+use lib::core::rewrite::RepoResource;
+use lib::git::{Commit, NonZeroOid, Repo, RepoError, Time};
+use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use regex::Regex;
 use thiserror::Error;
 
@@ -139,101 +136,108 @@ pub(super) fn make_pattern_matcher_set(
     repo: &Repo,
     matcher: Box<dyn PatternMatcher>,
 ) -> Result<CommitSet, PatternError> {
-    struct Wrapped {
+    struct MatcherNameSetQuery {
         effects: Effects,
-        repo: Repo,
-        visible_commits: CommitSet,
         matcher: Box<dyn PatternMatcher>,
+        repo: Arc<Mutex<Repo>>,
+        visible_commits: CommitSet,
     }
-    let wrapped = Arc::new(Mutex::new(Wrapped {
-        effects: ctx.effects.clone(),
-        repo: repo.try_clone().map_err(PatternError::Repo)?,
-        visible_commits: ctx
-            .dag
-            .query_visible_commits_slow()
-            .map_err(EvalError::OtherError)
-            .map_err(Box::new)?
-            .clone(),
-        matcher,
-    }));
 
-    Ok(CommitSet::from_evaluate_contains(
-        // Function to evaluate entire set.
-        {
-            let wrapped = Arc::clone(&wrapped);
-            move || {
-                let wrapped = wrapped.lock().unwrap();
-                let Wrapped {
-                    effects,
-                    repo,
-                    visible_commits,
-                    matcher,
-                } = &*wrapped;
-
-                let (effects, progress) = effects.start_operation(OperationType::EvaluateRevset(
-                    Arc::new(matcher.get_description().to_owned()),
-                ));
-                let _effects = effects;
-
-                let len = visible_commits.count()?;
-                progress.notify_progress(0, len);
-
-                let repo_pool = RepoResource::new_pool(repo).map_err(make_dag_backend_error)?;
-                let commit_oids = visible_commits.iter()?;
-                let result = commit_oids
-                    .par_bridge()
-                    .try_fold(
-                        Vec::new,
-                        |mut acc, commit_oid| -> Result<Vec<_>, eden_dag::Error> {
-                            let commit_oid: CommitVertex = commit_oid?;
-                            let commit_oid =
-                                NonZeroOid::try_from(commit_oid).map_err(make_dag_backend_error)?;
-                            let repo = repo_pool.try_create().map_err(make_dag_backend_error)?;
-                            let commit = repo
-                                .find_commit_or_fail(commit_oid)
-                                .map_err(make_dag_backend_error)?;
-                            if matcher
-                                .matches_commit(&repo, &commit)
-                                .map_err(make_dag_backend_error)?
-                            {
-                                acc.push(commit_oid);
-                            }
-                            progress.notify_progress_inc(1);
-                            Ok(acc)
-                        },
-                    )
-                    .try_reduce(Vec::new, |mut acc, item| {
-                        acc.extend(item);
-                        Ok(acc)
-                    })?;
-                let result: CommitSet = result.into_iter().collect();
-                Ok(result)
-            }
-        },
-        // Fast path to check for containment.
-        move |_self, vertex| {
-            let wrapped = wrapped.lock().unwrap();
-            let Wrapped {
-                effects,
-                repo,
-                visible_commits,
-                matcher,
-            } = &*wrapped;
+    impl MatcherNameSetQuery {
+        async fn evaluate(&self) -> eden_dag::Result<CommitSet> {
+            let (effects, progress) =
+                self.effects
+                    .start_operation(OperationType::EvaluateRevset(Arc::new(
+                        self.matcher.get_description().to_owned(),
+                    )));
             let _effects = effects;
 
-            if !visible_commits.contains(vertex)? {
+            let len = self.visible_commits.count().await?;
+            progress.notify_progress(0, len);
+
+            let stream = self.visible_commits.iter().await?;
+            let commit_oids = stream.collect::<Vec<_>>().await;
+            let repo = self.repo.lock().unwrap();
+            let repo_pool = RepoResource::new_pool(&repo).map_err(make_dag_backend_error)?;
+            let result = commit_oids
+                .into_par_iter()
+                .try_fold(
+                    Vec::new,
+                    |mut acc, commit_oid| -> Result<Vec<_>, eden_dag::Error> {
+                        let commit_oid: CommitVertex = commit_oid?;
+                        let commit_oid =
+                            NonZeroOid::try_from(commit_oid).map_err(make_dag_backend_error)?;
+                        let repo = repo_pool.try_create().map_err(make_dag_backend_error)?;
+                        let commit = repo
+                            .find_commit_or_fail(commit_oid)
+                            .map_err(make_dag_backend_error)?;
+                        if self
+                            .matcher
+                            .matches_commit(&repo, &commit)
+                            .map_err(make_dag_backend_error)?
+                        {
+                            acc.push(commit_oid);
+                        }
+                        progress.notify_progress_inc(1);
+                        Ok(acc)
+                    },
+                )
+                .try_reduce(Vec::new, |mut acc, item| {
+                    acc.extend(item);
+                    Ok(acc)
+                })?;
+            let result: CommitSet = result.into_iter().collect();
+            Ok(result)
+        }
+
+        async fn contains(&self, name: &CommitVertex) -> eden_dag::Result<bool> {
+            if !self.visible_commits.contains(name).await? {
                 return Ok(false);
             }
 
-            let oid = NonZeroOid::try_from(vertex.clone()).map_err(make_dag_backend_error)?;
+            let oid = NonZeroOid::try_from(name.clone()).map_err(make_dag_backend_error)?;
+            let repo = self.repo.lock().unwrap();
             let commit = repo
                 .find_commit_or_fail(oid)
                 .map_err(make_dag_backend_error)?;
-            let result = matcher
-                .matches_commit(repo, &commit)
+            let result = self
+                .matcher
+                .matches_commit(&repo, &commit)
                 .map_err(make_dag_backend_error)?;
             Ok(result)
+        }
+    }
+
+    let repo = repo.try_clone().map_err(PatternError::Repo)?;
+    let visible_commits = ctx
+        .dag
+        .query_visible_commits_slow()
+        .map_err(EvalError::OtherError)
+        .map_err(Box::new)?
+        .clone();
+
+    let matcher = Arc::new(MatcherNameSetQuery {
+        effects: ctx.effects.clone(),
+        matcher,
+        repo: Arc::new(Mutex::new(repo)),
+        visible_commits,
+    });
+    Ok(CommitSet::from_async_evaluate_contains(
+        {
+            let matcher = Arc::clone(&matcher);
+            Box::new(move || {
+                let matcher = Arc::clone(&matcher);
+                Box::pin(async move { matcher.evaluate().await })
+            })
         },
+        {
+            let matcher = Arc::clone(&matcher);
+            Box::new(move |_self, name| {
+                let matcher = Arc::clone(&matcher);
+                Box::pin(async move { matcher.contains(name).await })
+            })
+        },
+        Hints::default(),
     ))
 }
 

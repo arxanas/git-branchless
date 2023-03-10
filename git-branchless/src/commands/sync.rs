@@ -4,7 +4,6 @@ use cursive_core::theme::BaseColor;
 use std::fmt::Write;
 use std::time::SystemTime;
 
-use eden_dag::DagAlgorithm;
 use eyre::Report;
 use itertools::Itertools;
 use lib::core::check_out::CheckOutCommitOptions;
@@ -15,7 +14,7 @@ use rayon::{ThreadPool, ThreadPoolBuilder};
 use git_branchless_opts::{MoveOptions, ResolveRevsetOptions, Revset};
 use git_branchless_revset::{check_revset_syntax, resolve_commits};
 use lib::core::config::get_restack_preserve_timestamps;
-use lib::core::dag::{commit_set_to_vec, sorted_commit_set, union_all, CommitSet, Dag};
+use lib::core::dag::{sorted_commit_set, union_all, CommitSet, Dag};
 use lib::core::effects::{Effects, OperationType};
 use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::formatting::{Pluralize, StyledStringBuilder};
@@ -33,7 +32,7 @@ fn get_stack_roots(dag: &Dag) -> eyre::Result<CommitSet> {
     // FIXME: if two draft roots are ancestors of a single commit (due to a
     // merge commit), then the entire unit should be treated as one stack and
     // moved together, rather than attempting two separate rebases.
-    let draft_roots = dag.query().roots(draft_commits.clone())?;
+    let draft_roots = dag.query_roots(draft_commits.clone())?;
     Ok(draft_roots)
 }
 
@@ -182,11 +181,11 @@ fn execute_main_branch_sync_plan(
         CommitSet::from(upstream_main_branch_oid),
         CommitSet::empty(),
     )?;
-    let local_main_branch_commits = dag.query().only(
+    let local_main_branch_commits = dag.query_only(
         local_main_branch_oid.into_iter().collect(),
         CommitSet::from(upstream_main_branch_oid),
     )?;
-    if local_main_branch_commits.is_empty()? {
+    if dag.set_is_empty(&local_main_branch_commits)? {
         if local_main_branch_oid == Some(upstream_main_branch_oid) {
             let local_main_branch_commit = repo.find_commit_or_fail(upstream_main_branch_oid)?;
             writeln!(
@@ -235,13 +234,14 @@ fn execute_main_branch_sync_plan(
     )? {
         Ok(permissions) => permissions,
         Err(err) => {
-            err.describe(effects, repo)?;
+            err.describe(effects, repo, &dag)?;
             return Ok(ExitCode(1));
         }
     };
     let mut builder = RebasePlanBuilder::new(&dag, permissions);
-    let local_main_branch_roots = dag.query().roots(local_main_branch_commits)?;
-    let root_commit_oid = match commit_set_to_vec(&local_main_branch_roots)?
+    let local_main_branch_roots = dag.query_roots(local_main_branch_commits)?;
+    let root_commit_oid = match dag
+        .commit_set_to_vec(&local_main_branch_roots)?
         .into_iter()
         .exactly_one()
     {
@@ -252,7 +252,7 @@ fn execute_main_branch_sync_plan(
     let rebase_plan = match builder.build(effects, thread_pool, repo_pool)? {
         Ok(rebase_plan) => rebase_plan,
         Err(err) => {
-            err.describe(effects, repo)?;
+            err.describe(effects, repo, &dag)?;
             return Ok(ExitCode(1));
         }
     };
@@ -305,7 +305,7 @@ fn execute_sync_plans(
     let root_commit_oids = if commit_sets.is_empty() {
         get_stack_roots(&dag)?
     } else {
-        dag.query().roots(union_all(&commit_sets))?
+        dag.query_roots(union_all(&commit_sets))?
     };
 
     let root_commits = sorted_commit_set(repo, &dag, &root_commit_oids)?;
@@ -313,7 +313,7 @@ fn execute_sync_plans(
         match RebasePlanPermissions::verify_rewrite_set(&dag, build_options, &root_commit_oids)? {
             Ok(permissions) => permissions,
             Err(err) => {
-                err.describe(effects, repo)?;
+                err.describe(effects, repo, &dag)?;
                 return Ok(ExitCode(1));
             }
         };
@@ -357,7 +357,7 @@ fn execute_sync_plans(
     let root_commit_and_plans = match root_commit_and_plans {
         Ok(root_commit_and_plans) => root_commit_and_plans,
         Err(err) => {
-            err.describe(effects, repo)?;
+            err.describe(effects, repo, &dag)?;
             return Ok(ExitCode(1));
         }
     };
