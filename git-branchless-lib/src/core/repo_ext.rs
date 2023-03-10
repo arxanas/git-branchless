@@ -6,7 +6,9 @@ use color_eyre::Help;
 use eyre::Context;
 use tracing::instrument;
 
-use crate::git::{Branch, BranchType, NonZeroOid, ReferenceName, Repo};
+use crate::git::{
+    Branch, BranchType, CategorizedReferenceName, ConfigRead, NonZeroOid, ReferenceName, Repo,
+};
 
 use super::config::get_main_branch_name;
 
@@ -39,6 +41,9 @@ pub trait RepoExt {
 
     /// Get the positions of references in the repository.
     fn get_references_snapshot(&self) -> eyre::Result<RepoReferencesSnapshot>;
+
+    /// Get the default remote to push to for new branches in this repository.
+    fn get_default_push_remote(&self) -> eyre::Result<Option<String>>;
 }
 
 impl RepoExt for Repo {
@@ -118,5 +123,34 @@ https://github.com/arxanas/git-branchless/discussions/595 for more details.",
             main_branch_oid,
             branch_oid_to_names,
         })
+    }
+
+    fn get_default_push_remote(&self) -> eyre::Result<Option<String>> {
+        let main_branch_name = self.get_main_branch()?.get_reference_name()?;
+        match CategorizedReferenceName::new(&main_branch_name) {
+            name @ CategorizedReferenceName::LocalBranch { .. } => {
+                if let Some(main_branch) =
+                    self.find_branch(&name.remove_prefix()?, BranchType::Local)?
+                {
+                    if let Some(remote_name) = main_branch.get_push_remote_name()? {
+                        return Ok(Some(remote_name));
+                    }
+                }
+            }
+
+            name @ CategorizedReferenceName::RemoteBranch { .. } => {
+                let name = name.remove_prefix()?;
+                if let Some((remote_name, _reference_name)) = name.split_once('/') {
+                    return Ok(Some(remote_name.to_owned()));
+                }
+            }
+
+            CategorizedReferenceName::OtherRef { .. } => {
+                // Do nothing.
+            }
+        }
+
+        let push_default_remote_opt = self.get_readonly_config()?.get("remote.pushDefault")?;
+        Ok(push_default_remote_opt)
     }
 }

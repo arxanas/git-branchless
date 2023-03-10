@@ -9,19 +9,22 @@
 )]
 #![allow(clippy::too_many_arguments, clippy::blocks_in_if_conditions)]
 
-use std::fmt::Write;
-use std::time::SystemTime;
+mod branch_push_forge;
 
+use std::collections::{BTreeSet, HashMap};
+use std::fmt::Write;
+
+use branch_push_forge::BranchPushForge;
 use cursive_core::theme::{BaseColor, Effect, Style};
 use git_branchless_invoke::CommandContext;
-use itertools::{Either, Itertools};
+use itertools::Itertools;
 use lazy_static::lazy_static;
 use lib::core::dag::Dag;
-use lib::core::effects::{Effects, OperationType};
+use lib::core::effects::Effects;
 use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::formatting::{Pluralize, StyledStringBuilder};
 use lib::core::repo_ext::RepoExt;
-use lib::git::{Branch, BranchType, CategorizedReferenceName, ConfigRead, GitRunInfo, Repo};
+use lib::git::{GitRunInfo, NonZeroOid, Repo};
 use lib::util::ExitCode;
 
 use git_branchless_opts::{ResolveRevsetOptions, Revset, SubmitArgs};
@@ -32,6 +35,43 @@ lazy_static! {
         Style::merge(&[BaseColor::Green.light().into(), Effect::Bold.into()]);
     static ref STYLE_SKIPPED: Style =
         Style::merge(&[BaseColor::Yellow.light().into(), Effect::Bold.into()]);
+}
+
+/// The status of a commit, indicating whether it needs to be updated remotely.
+#[derive(Clone, Debug)]
+pub enum SubmitStatus {
+    /// The commit exists locally but has not been pushed remotely.
+    Unsubmitted,
+
+    /// It could not be determined whether the remote commit exists.
+    Unresolved,
+
+    /// The same commit exists both locally and remotely.
+    UpToDate,
+
+    /// The commit exists locally but is associated with a different remote
+    /// commit, so it needs to be updated.
+    NeedsUpdate,
+}
+
+/// Information about each commit.
+#[derive(Clone, Debug)]
+pub struct CommitStatus {
+    submit_status: SubmitStatus,
+    remote_name: Option<String>,
+    local_branch_name: Option<String>,
+    #[allow(dead_code)]
+    remote_branch_name: Option<String>,
+}
+
+/// Options for submitting commits to the forge.
+pub struct SubmitOptions {
+    /// Create associated branches, code reviews, etc. for each of the provided commits.
+    ///
+    /// This should be an idempotent behavior, i.e. setting `create` to `true`
+    /// and submitting a commit which already has an associated remote item
+    /// should not have any additional effect.
+    pub create: bool,
 }
 
 /// `submit` command.
@@ -64,8 +104,6 @@ fn submit(
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
-    let now = SystemTime::now();
-    let event_tx_id = event_log_db.make_transaction_id(now, "submit")?;
     let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
     let event_cursor = event_replayer.make_default_cursor();
     let references_snapshot = repo.get_references_snapshot()?;
@@ -86,163 +124,114 @@ fn submit(
             }
         };
 
-    let branches: Vec<Branch> = dag
-        .commit_set_to_vec(&commit_set)?
-        .into_iter()
-        .flat_map(|commit_oid| references_snapshot.branch_oid_to_names.get(&commit_oid))
-        .flatten()
-        .filter_map(
-            |reference_name| match CategorizedReferenceName::new(reference_name) {
-                name @ CategorizedReferenceName::LocalBranch { .. } => name.remove_prefix().ok(),
-                CategorizedReferenceName::RemoteBranch { .. }
-                | CategorizedReferenceName::OtherRef { .. } => None,
-            },
-        )
-        .map(|branch_name| -> eyre::Result<Branch> {
-            let branch = repo.find_branch(&branch_name, BranchType::Local)?;
-            let branch =
-                branch.ok_or_else(|| eyre::eyre!("Could not look up branch {branch_name:?}"))?;
-            Ok(branch)
-        })
-        .collect::<Result<_, _>>()?;
-    let branches_and_remotes: Vec<(Branch, Option<String>)> = branches
-        .into_iter()
-        .map(|branch| -> eyre::Result<_> {
-            let remote_name = branch.get_push_remote_name()?;
-            Ok((branch, remote_name))
-        })
-        .collect::<Result<_, _>>()?;
-    let (branches_without_remotes, branches_with_remotes): (Vec<_>, Vec<_>) = branches_and_remotes
-        .into_iter()
-        .partition_map(|(branch, remote_name)| match remote_name {
-            None => Either::Left(branch),
-            Some(remote_name) => Either::Right((branch, remote_name)),
-        });
-    let remotes_to_branches = branches_with_remotes
-        .into_iter()
-        .map(|(v, k)| (k, v))
-        .into_group_map();
+    let submit_options = SubmitOptions { create };
+    let forge = BranchPushForge {
+        effects,
+        git_run_info,
+        repo: &repo,
+        dag: &dag,
+        event_log_db: &event_log_db,
+        references_snapshot: &references_snapshot,
+    };
+    let statuses = match forge.query_status(commit_set)? {
+        Ok(statuses) => statuses,
+        Err(exit_code) => return Ok(exit_code),
+    };
 
-    let (created_branches, uncreated_branches) = {
-        let mut branch_names: Vec<&str> = branches_without_remotes
-            .iter()
-            .map(|branch| branch.get_name())
-            .collect::<Result<_, _>>()?;
-        branch_names.sort_unstable();
-        if branches_without_remotes.is_empty() {
+    let (unsubmitted_commits, commits_to_update, commits_to_skip): (
+        HashMap<NonZeroOid, CommitStatus>,
+        HashMap<NonZeroOid, CommitStatus>,
+        HashMap<NonZeroOid, CommitStatus>,
+    ) = statuses.into_iter().fold(Default::default(), |acc, elem| {
+        let (mut unsubmitted, mut to_update, mut to_skip) = acc;
+        let (commit_oid, commit_status) = elem;
+        match commit_status {
+            CommitStatus {
+                submit_status: SubmitStatus::Unsubmitted,
+                remote_name: _,
+                local_branch_name: Some(_),
+                remote_branch_name: _,
+            } => {
+                unsubmitted.insert(commit_oid, commit_status);
+            }
+
+            // Not currently implemented: generating a branch for
+            // unsubmitted commits which don't yet have branches.
+            CommitStatus {
+                submit_status: SubmitStatus::Unsubmitted,
+                remote_name: _,
+                local_branch_name: None,
+                remote_branch_name: _,
+            } => {}
+
+            CommitStatus {
+                submit_status: SubmitStatus::NeedsUpdate,
+                remote_name: _,
+                local_branch_name: _,
+                remote_branch_name: _,
+            } => {
+                to_update.insert(commit_oid, commit_status);
+            }
+
+            CommitStatus {
+                submit_status: SubmitStatus::UpToDate,
+                remote_name: _,
+                local_branch_name: Some(_),
+                remote_branch_name: _,
+            } => {
+                to_skip.insert(commit_oid, commit_status);
+            }
+
+            // Don't know what to do in these cases 🙃.
+            CommitStatus {
+                submit_status: SubmitStatus::Unresolved,
+                remote_name: _,
+                local_branch_name: _,
+                remote_branch_name: _,
+            }
+            | CommitStatus {
+                submit_status: SubmitStatus::UpToDate,
+                remote_name: _,
+                local_branch_name: None,
+                remote_branch_name: _,
+            } => {}
+        }
+        (unsubmitted, to_update, to_skip)
+    });
+
+    let (created_branches, uncreated_branches): (BTreeSet<String>, BTreeSet<String>) = {
+        let unsubmitted_branches = unsubmitted_commits
+            .values()
+            .flat_map(|commit_status| commit_status.local_branch_name.clone())
+            .collect();
+        if unsubmitted_commits.is_empty() {
             Default::default()
         } else if create {
-            let push_remote: String = match get_default_remote(&repo)? {
-                Some(push_remote) => push_remote,
-                None => {
-                    writeln!(
-                        effects.get_output_stream(),
-                        "\
-No upstream repository was associated with {} and no value was
-specified for `remote.pushDefault`, so cannot push these branches: {}
-Configure a value with: git config remote.pushDefault <remote>
-These remotes are available: {}",
-                        CategorizedReferenceName::new(
-                            &repo.get_main_branch()?.get_reference_name()?,
-                        )
-                        .friendly_describe(),
-                        branch_names.join(", "),
-                        repo.get_all_remote_names()?.join(", "),
-                    )?;
-                    return Ok(ExitCode(1));
-                }
-            };
-
-            // This will fail if somebody else created the branch on the remote and we don't
-            // know about it.
-            let mut args = vec!["push", "--set-upstream", &push_remote];
-            args.extend(branch_names.iter());
-            {
-                let (effects, progress) = effects.start_operation(OperationType::PushBranches);
-                progress.notify_progress(0, branch_names.len());
-                let exit_code = git_run_info.run(&effects, Some(event_tx_id), &args)?;
-                if !exit_code.is_success() {
-                    return Ok(exit_code);
-                }
+            let exit_code = forge.create(unsubmitted_commits, &submit_options)?;
+            if !exit_code.is_success() {
+                return Ok(exit_code);
             }
-            (branch_names, Default::default())
+            (unsubmitted_branches, Default::default())
         } else {
-            (Default::default(), branch_names)
+            (Default::default(), unsubmitted_branches)
         }
     };
 
-    // TODO: explain why fetching here.
-    for (remote_name, branches) in remotes_to_branches.iter() {
-        let remote_args = {
-            let mut result = vec!["fetch".to_owned()];
-            result.push((*remote_name).clone());
-            for branch in branches {
-                let branch_ref = branch.get_reference_name()?;
-                result.push(branch_ref.as_str().to_owned());
-            }
-            result
-        };
-        let exit_code = git_run_info.run(effects, Some(event_tx_id), &remote_args)?;
+    let (updated_branch_names, skipped_branch_names): (BTreeSet<String>, BTreeSet<String>) = {
+        let updated_branch_names = commits_to_update
+            .iter()
+            .flat_map(|(_commit_oid, commit_status)| commit_status.local_branch_name.clone())
+            .collect();
+        let skipped_branch_names = commits_to_skip
+            .iter()
+            .flat_map(|(_commit_oid, commit_status)| commit_status.local_branch_name.clone())
+            .collect();
+
+        let exit_code = forge.update(commits_to_update, &submit_options)?;
         if !exit_code.is_success() {
-            writeln!(
-                effects.get_output_stream(),
-                "Failed to fetch from remote: {}",
-                remote_name
-            )?;
             return Ok(exit_code);
         }
-    }
-
-    let (pushed_branches, skipped_branches) = {
-        let (effects, progress) = effects.start_operation(OperationType::PushBranches);
-
-        let mut pushed_branches: Vec<&str> = Vec::new();
-        let mut skipped_branches: Vec<&str> = Vec::new();
-        let total_num_branches = remotes_to_branches
-            .values()
-            .map(|branches| branches.len())
-            .sum();
-        progress.notify_progress(0, total_num_branches);
-        for (remote_name, branches) in remotes_to_branches
-            .iter()
-            .sorted_by(|(k1, _v1), (k2, _v2)| k1.cmp(k2))
-        {
-            let (branches_to_push_names, branches_to_skip_names) = {
-                let mut branches_to_push_names = Vec::new();
-                let mut branches_to_skip_names = Vec::new();
-                for branch in branches {
-                    let branch_name = branch.get_name()?;
-                    if let Some(upstream_branch) = branch.get_upstream_branch()? {
-                        if upstream_branch.get_oid()? == branch.get_oid()? {
-                            branches_to_skip_names.push(branch_name);
-                            continue;
-                        }
-                    }
-                    branches_to_push_names.push(branch_name);
-                }
-                branches_to_push_names.sort_unstable();
-                branches_to_skip_names.sort_unstable();
-                (branches_to_push_names, branches_to_skip_names)
-            };
-            pushed_branches.extend(branches_to_push_names.iter());
-            skipped_branches.extend(branches_to_skip_names.iter());
-
-            if !pushed_branches.is_empty() {
-                let mut args = vec!["push", "--force-with-lease", remote_name];
-                args.extend(branches_to_push_names.iter());
-                let exit_code = git_run_info.run(&effects, Some(event_tx_id), &args)?;
-                if !exit_code.is_success() {
-                    writeln!(
-                        effects.get_output_stream(),
-                        "Failed to push branches: {}",
-                        branches_to_push_names.into_iter().join(", ")
-                    )?;
-                    return Ok(exit_code);
-                }
-            }
-            progress.notify_progress_inc(branches.len());
-        }
-        (pushed_branches, skipped_branches)
+        (updated_branch_names, skipped_branch_names)
     };
 
     if !created_branches.is_empty() {
@@ -267,16 +256,16 @@ These remotes are available: {}",
                 .join(", ")
         )?;
     }
-    if !pushed_branches.is_empty() {
+    if !updated_branch_names.is_empty() {
         writeln!(
             effects.get_output_stream(),
             "Pushed {}: {}",
             Pluralize {
                 determiner: None,
-                amount: pushed_branches.len(),
+                amount: updated_branch_names.len(),
                 unit: ("branch", "branches")
             },
-            pushed_branches
+            updated_branch_names
                 .into_iter()
                 .map(|branch_name| effects
                     .get_glyphs()
@@ -289,16 +278,16 @@ These remotes are available: {}",
                 .join(", ")
         )?;
     }
-    if !skipped_branches.is_empty() {
+    if !skipped_branch_names.is_empty() {
         writeln!(
             effects.get_output_stream(),
             "Skipped {} (already up-to-date): {}",
             Pluralize {
                 determiner: None,
-                amount: skipped_branches.len(),
+                amount: skipped_branch_names.len(),
                 unit: ("branch", "branches")
             },
-            skipped_branches
+            skipped_branch_names
                 .into_iter()
                 .map(|branch_name| effects
                     .get_glyphs()
@@ -341,33 +330,4 @@ create and push them, retry this operation with the --create option."
     }
 
     Ok(ExitCode(0))
-}
-
-fn get_default_remote(repo: &Repo) -> eyre::Result<Option<String>> {
-    let main_branch_name = repo.get_main_branch()?.get_reference_name()?;
-    match CategorizedReferenceName::new(&main_branch_name) {
-        name @ CategorizedReferenceName::LocalBranch { .. } => {
-            if let Some(main_branch) =
-                repo.find_branch(&name.remove_prefix()?, BranchType::Local)?
-            {
-                if let Some(remote_name) = main_branch.get_push_remote_name()? {
-                    return Ok(Some(remote_name));
-                }
-            }
-        }
-
-        name @ CategorizedReferenceName::RemoteBranch { .. } => {
-            let name = name.remove_prefix()?;
-            if let Some((remote_name, _reference_name)) = name.split_once('/') {
-                return Ok(Some(remote_name.to_owned()));
-            }
-        }
-
-        CategorizedReferenceName::OtherRef { .. } => {
-            // Do nothing.
-        }
-    }
-
-    let push_default_remote_opt = repo.get_readonly_config()?.get("remote.pushDefault")?;
-    Ok(push_default_remote_opt)
 }

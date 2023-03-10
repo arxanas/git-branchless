@@ -99,15 +99,15 @@ fn test_submit() -> eyre::Result<()> {
         let stderr = redact_remotes(stderr);
         insta::assert_snapshot!(stderr, @r###"
         From: file://<remote>
-         * branch            qux        -> FETCH_HEAD
          * branch            bar        -> FETCH_HEAD
+         * branch            qux        -> FETCH_HEAD
         branchless: processing 1 update: branch qux
         To: file://<remote>
          + 20230db...bae8307 qux -> qux (forced update)
         branchless: processing 1 update: remote branch origin/qux
         "###);
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> fetch origin refs/heads/qux refs/heads/bar
+        branchless: running command: <git-executable> fetch origin refs/heads/bar refs/heads/qux
         branchless: running command: <git-executable> push --force-with-lease origin qux
         Pushed 1 branch: qux
         Skipped 1 branch (already up-to-date): bar
@@ -120,11 +120,11 @@ fn test_submit() -> eyre::Result<()> {
         let stderr = redact_remotes(stderr);
         insta::assert_snapshot!(stderr, @r###"
         From: file://<remote>
-         * branch            qux        -> FETCH_HEAD
          * branch            bar        -> FETCH_HEAD
+         * branch            qux        -> FETCH_HEAD
         "###);
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> fetch origin refs/heads/qux refs/heads/bar
+        branchless: running command: <git-executable> fetch origin refs/heads/bar refs/heads/qux
         Skipped 2 branches (already up-to-date): bar, qux
         "###);
     }
