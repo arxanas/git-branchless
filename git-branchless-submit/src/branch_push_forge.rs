@@ -14,7 +14,7 @@ use lib::git::{
 use lib::util::ExitCode;
 use tracing::warn;
 
-use crate::{CommitStatus, SubmitOptions, SubmitStatus};
+use crate::{CommitStatus, Forge, SubmitOptions, SubmitStatus};
 
 pub struct BranchPushForge<'a> {
     pub effects: &'a Effects,
@@ -25,9 +25,9 @@ pub struct BranchPushForge<'a> {
     pub references_snapshot: &'a RepoReferencesSnapshot,
 }
 
-impl BranchPushForge<'_> {
-    pub fn query_status(
-        &self,
+impl Forge for BranchPushForge<'_> {
+    fn query_status(
+        &mut self,
         commit_set: CommitSet,
     ) -> eyre::Result<Result<HashMap<NonZeroOid, CommitStatus>, ExitCode>> {
         struct BranchInfo<'a> {
@@ -168,7 +168,7 @@ impl BranchPushForge<'_> {
                 },
 
                 _branch_infos => CommitStatus {
-                    submit_status: SubmitStatus::Unresolved,
+                    submit_status: SubmitStatus::Unknown,
                     remote_name: None,
                     local_branch_name: None,
                     remote_branch_name: None,
@@ -180,8 +180,8 @@ impl BranchPushForge<'_> {
         Ok(Ok(commit_statuses))
     }
 
-    pub fn create(
-        &self,
+    fn create(
+        &mut self,
         commits: HashMap<NonZeroOid, CommitStatus>,
         _options: &SubmitOptions,
     ) -> eyre::Result<ExitCode> {
@@ -230,7 +230,7 @@ These remotes are available: {}",
             let event_tx_id = self
                 .event_log_db
                 .make_transaction_id(SystemTime::now(), "submit unsubmitted commits")?;
-            let (effects, progress) = self.effects.start_operation(OperationType::PushBranches);
+            let (effects, progress) = self.effects.start_operation(OperationType::PushCommits);
             let _effects = effects;
             progress.notify_progress(0, unsubmitted_branch_names.len());
             self.git_run_info
@@ -238,8 +238,8 @@ These remotes are available: {}",
         }
     }
 
-    pub fn update(
-        &self,
+    fn update(
+        &mut self,
         commits: HashMap<NonZeroOid, CommitStatus>,
         _options: &SubmitOptions,
     ) -> eyre::Result<ExitCode> {
@@ -267,7 +267,7 @@ These remotes are available: {}",
 
         let now = SystemTime::now();
         let event_tx_id = self.event_log_db.make_transaction_id(now, "submit")?;
-        let (effects, progress) = self.effects.start_operation(OperationType::PushBranches);
+        let (effects, progress) = self.effects.start_operation(OperationType::PushCommits);
         let total_num_branches = branches_by_remote
             .values()
             .map(|branch_names| branch_names.len())

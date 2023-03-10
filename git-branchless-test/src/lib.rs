@@ -80,7 +80,7 @@ lazy_static! {
 
 /// How verbose of output to produce.
 #[derive(Clone, Copy, Debug, Ord, PartialOrd, Eq, PartialEq)]
-enum Verbosity {
+pub enum Verbosity {
     /// Do not include test output at all.
     None,
 
@@ -104,7 +104,7 @@ impl From<u8> for Verbosity {
 /// The options for testing before they've assumed default values or been
 /// validated.
 #[derive(Debug)]
-struct RawTestOptions {
+pub struct RawTestOptions {
     /// The command to execute, if any.
     pub exec: Option<String>,
 
@@ -197,21 +197,25 @@ To run a specific command alias, run: git test run -c <alias>",
     Ok(Err(ExitCode(1)))
 }
 
+/// The values from a `RawTestOptions` but with defaults provided. See
+/// [`RawTestOptions`] for details on these options.
+#[allow(missing_docs)]
 #[derive(Debug)]
-struct ResolvedTestOptions {
-    command: String,
-    execution_strategy: TestExecutionStrategy,
-    search_strategy: Option<TestSearchStrategy>,
-    is_dry_run: bool,
-    use_cache: bool,
-    is_interactive: bool,
-    num_jobs: usize,
-    verbosity: Verbosity,
-    fix_options: Option<(ExecuteRebasePlanOptions, RebasePlanPermissions)>,
+pub struct ResolvedTestOptions {
+    pub command: String,
+    pub execution_strategy: TestExecutionStrategy,
+    pub search_strategy: Option<TestSearchStrategy>,
+    pub is_dry_run: bool,
+    pub use_cache: bool,
+    pub is_interactive: bool,
+    pub num_jobs: usize,
+    pub verbosity: Verbosity,
+    pub fix_options: Option<(ExecuteRebasePlanOptions, RebasePlanPermissions)>,
 }
 
 impl ResolvedTestOptions {
-    fn resolve(
+    /// Resolve any missing test options with their defaults from the environment.
+    pub fn resolve(
         now: SystemTime,
         effects: &Effects,
         dag: &Dag,
@@ -812,21 +816,30 @@ fn clear_abort_trap(
     Ok(exit_code)
 }
 
+/// The result of running a test.
 #[derive(Debug)]
-struct TestOutput {
+pub struct TestOutput {
     /// Only used for `--no-cache` invocations, to ensure that we don't clobber
     /// an existing cached entry.
-    _temp_dir: Option<TempDir>,
+    pub temp_dir: Option<TempDir>,
 
-    _result_path: PathBuf,
-    stdout_path: PathBuf,
-    stderr_path: PathBuf,
-    test_status: TestStatus,
+    /// The path to the file containing the serialized test result information
+    /// (such as the exit code).
+    pub result_path: PathBuf,
+
+    /// The path to the file containing the stdout of the test command.
+    pub stdout_path: PathBuf,
+
+    /// The path to the file containing the stderr of the test command.
+    pub stderr_path: PathBuf,
+
+    /// The resulting status of the test.
+    pub test_status: TestStatus,
 }
 
 /// The possible results of attempting to run a test.
 #[derive(Clone, Debug)]
-enum TestStatus {
+pub enum TestStatus {
     /// Attempting to set up the working directory for the repository failed.
     CheckoutFailed,
 
@@ -845,10 +858,16 @@ enum TestStatus {
     ReadCacheFailed(String),
 
     /// The test command indicated that the commit should be skipped for testing.
-    Indeterminate { exit_code: i32 },
+    Indeterminate {
+        /// The exit code of the command.
+        exit_code: i32,
+    },
 
     /// The test command indicated that the process should be aborted entirely.
-    Abort { exit_code: i32 },
+    Abort {
+        /// The exit code of the command.
+        exit_code: i32,
+    },
 
     /// The test failed and returned the provided (non-zero) exit code.
     Failed {
@@ -881,16 +900,16 @@ enum TestStatus {
 
 /// Information about the working copy state after running the test command.
 #[derive(Clone, Debug)]
-struct FixInfo {
+pub struct FixInfo {
     /// The resulting commit which was checked out as `HEAD`. This is usually
     /// the same commit as was being tested, but the test command could amend or
     /// switch to a different commit.
-    head_commit_oid: Option<NonZeroOid>,
+    pub head_commit_oid: Option<NonZeroOid>,
 
     /// The resulting contents of the working copy after the command was
     /// executed (if taking a working copy snapshot succeeded and there were no
     /// merge conflicts, etc.).
-    snapshot_tree_oid: Option<NonZeroOid>,
+    pub snapshot_tree_oid: Option<NonZeroOid>,
 }
 
 impl TestStatus {
@@ -921,132 +940,128 @@ impl TestStatus {
             TestStatus::Passed { .. } => *STYLE_SUCCESS,
         }
     }
-}
 
-#[derive(Debug)]
-struct TestingAbortedError {
-    commit_oid: NonZeroOid,
-    exit_code: i32,
-}
-
-#[instrument]
-fn make_test_status_description(
-    glyphs: &Glyphs,
-    commit: &Commit,
-    test_status: &TestStatus,
-    apply_fixes: bool,
-) -> eyre::Result<StyledString> {
-    let description = match test_status {
-        TestStatus::CheckoutFailed => StyledStringBuilder::new()
-            .append_styled("Failed to check out: ", test_status.get_style())
-            .append(commit.friendly_describe(glyphs)?)
-            .build(),
-
-        TestStatus::SpawnTestFailed(err) => StyledStringBuilder::new()
-            .append_styled(
-                format!("Failed to spawn test: {err}: "),
-                test_status.get_style(),
-            )
-            .append(commit.friendly_describe(glyphs)?)
-            .build(),
-
-        TestStatus::TerminatedBySignal => StyledStringBuilder::new()
-            .append_styled(
-                "Test command terminated by signal: ",
-                test_status.get_style(),
-            )
-            .append(commit.friendly_describe(glyphs)?)
-            .build(),
-
-        TestStatus::AlreadyInProgress => StyledStringBuilder::new()
-            .append_styled("Test already in progress? ", test_status.get_style())
-            .append(commit.friendly_describe(glyphs)?)
-            .build(),
-
-        TestStatus::ReadCacheFailed(_) => StyledStringBuilder::new()
-            .append_styled(
-                "Could not read cached test result: ",
-                test_status.get_style(),
-            )
-            .append(commit.friendly_describe(glyphs)?)
-            .build(),
-
-        TestStatus::Indeterminate { exit_code } => StyledStringBuilder::new()
-            .append_styled(
-                format!("Exit code indicated to skip this commit (exit code {exit_code}): "),
-                test_status.get_style(),
-            )
-            .append(commit.friendly_describe(glyphs)?)
-            .build(),
-
-        TestStatus::Abort { exit_code } => StyledStringBuilder::new()
-            .append_styled(
-                format!("Exit code indicated to abort testing (exit code {exit_code}): "),
-                test_status.get_style(),
-            )
-            .append(commit.friendly_describe(glyphs)?)
-            .build(),
-
-        TestStatus::Failed {
-            cached,
-            interactive,
-            exit_code,
-        } => {
-            let mut descriptors = Vec::new();
-            if *cached {
-                descriptors.push("cached".to_string());
-            }
-            descriptors.push(format!("exit code {exit_code}"));
-            if *interactive {
-                descriptors.push("interactive".to_string());
-            }
-            let descriptors = descriptors.join(", ");
-            StyledStringBuilder::new()
-                .append_styled(format!("Failed ({descriptors}): "), test_status.get_style())
+    /// Produce a friendly description of the test status.
+    #[instrument]
+    pub fn describe(
+        &self,
+        glyphs: &Glyphs,
+        commit: &Commit,
+        apply_fixes: bool,
+    ) -> eyre::Result<StyledString> {
+        let description = match self {
+            TestStatus::CheckoutFailed => StyledStringBuilder::new()
+                .append_styled("Failed to check out: ", self.get_style())
                 .append(commit.friendly_describe(glyphs)?)
-                .build()
-        }
+                .build(),
 
-        TestStatus::Passed {
-            cached,
-            interactive,
-            fix_info:
-                FixInfo {
-                    head_commit_oid: _,
-                    snapshot_tree_oid,
-                },
-        } => {
-            let mut descriptors = Vec::new();
-            if *cached {
-                descriptors.push("cached".to_string());
-            }
-            match (snapshot_tree_oid, commit.get_tree_oid()) {
-                (Some(snapshot_tree_oid), MaybeZeroOid::NonZero(original_tree_oid)) => {
-                    if *snapshot_tree_oid != original_tree_oid {
-                        descriptors.push(if apply_fixes {
-                            "fixed".to_string()
-                        } else {
-                            "fixable".to_string()
-                        });
-                    }
+            TestStatus::SpawnTestFailed(err) => StyledStringBuilder::new()
+                .append_styled(format!("Failed to spawn test: {err}: "), self.get_style())
+                .append(commit.friendly_describe(glyphs)?)
+                .build(),
+
+            TestStatus::TerminatedBySignal => StyledStringBuilder::new()
+                .append_styled("Test command terminated by signal: ", self.get_style())
+                .append(commit.friendly_describe(glyphs)?)
+                .build(),
+
+            TestStatus::AlreadyInProgress => StyledStringBuilder::new()
+                .append_styled("Test already in progress? ", self.get_style())
+                .append(commit.friendly_describe(glyphs)?)
+                .build(),
+
+            TestStatus::ReadCacheFailed(_) => StyledStringBuilder::new()
+                .append_styled("Could not read cached test result: ", self.get_style())
+                .append(commit.friendly_describe(glyphs)?)
+                .build(),
+
+            TestStatus::Indeterminate { exit_code } => StyledStringBuilder::new()
+                .append_styled(
+                    format!("Exit code indicated to skip this commit (exit code {exit_code}): "),
+                    self.get_style(),
+                )
+                .append(commit.friendly_describe(glyphs)?)
+                .build(),
+
+            TestStatus::Abort { exit_code } => StyledStringBuilder::new()
+                .append_styled(
+                    format!("Exit code indicated to abort testing (exit code {exit_code}): "),
+                    self.get_style(),
+                )
+                .append(commit.friendly_describe(glyphs)?)
+                .build(),
+
+            TestStatus::Failed {
+                cached,
+                interactive,
+                exit_code,
+            } => {
+                let mut descriptors = Vec::new();
+                if *cached {
+                    descriptors.push("cached".to_string());
                 }
-                (None, _) | (_, MaybeZeroOid::Zero) => {}
+                descriptors.push(format!("exit code {exit_code}"));
+                if *interactive {
+                    descriptors.push("interactive".to_string());
+                }
+                let descriptors = descriptors.join(", ");
+                StyledStringBuilder::new()
+                    .append_styled(format!("Failed ({descriptors}): "), self.get_style())
+                    .append(commit.friendly_describe(glyphs)?)
+                    .build()
             }
-            if *interactive {
-                descriptors.push("interactive".to_string());
+
+            TestStatus::Passed {
+                cached,
+                interactive,
+                fix_info:
+                    FixInfo {
+                        head_commit_oid: _,
+                        snapshot_tree_oid,
+                    },
+            } => {
+                let mut descriptors = Vec::new();
+                if *cached {
+                    descriptors.push("cached".to_string());
+                }
+                match (snapshot_tree_oid, commit.get_tree_oid()) {
+                    (Some(snapshot_tree_oid), MaybeZeroOid::NonZero(original_tree_oid)) => {
+                        if *snapshot_tree_oid != original_tree_oid {
+                            descriptors.push(if apply_fixes {
+                                "fixed".to_string()
+                            } else {
+                                "fixable".to_string()
+                            });
+                        }
+                    }
+                    (None, _) | (_, MaybeZeroOid::Zero) => {}
+                }
+                if *interactive {
+                    descriptors.push("interactive".to_string());
+                }
+                let descriptors = if descriptors.is_empty() {
+                    "".to_string()
+                } else {
+                    format!(" ({})", descriptors.join(", "))
+                };
+                StyledStringBuilder::new()
+                    .append_styled(format!("Passed{descriptors}: "), self.get_style())
+                    .append(commit.friendly_describe(glyphs)?)
+                    .build()
             }
-            let descriptors = if descriptors.is_empty() {
-                "".to_string()
-            } else {
-                format!(" ({})", descriptors.join(", "))
-            };
-            StyledStringBuilder::new()
-                .append_styled(format!("Passed{descriptors}: "), test_status.get_style())
-                .append(commit.friendly_describe(glyphs)?)
-                .build()
-        }
-    };
-    Ok(description)
+        };
+        Ok(description)
+    }
+}
+
+/// An error produced when testing is aborted due to a certain commit.
+#[derive(Debug)]
+pub struct TestingAbortedError {
+    /// The commit which aborted testing.
+    pub commit_oid: NonZeroOid,
+
+    /// The exit code of the test command when run on that commit.
+    pub exit_code: i32,
 }
 
 impl TestOutput {
@@ -1061,12 +1076,10 @@ impl TestOutput {
         let description = StyledStringBuilder::new()
             .append_styled(self.test_status.get_icon(), self.test_status.get_style())
             .append_plain(" ")
-            .append(make_test_status_description(
-                effects.get_glyphs(),
-                commit,
-                &self.test_status,
-                apply_fixes,
-            )?)
+            .append(
+                self.test_status
+                    .describe(effects.get_glyphs(), commit, apply_fixes)?,
+            )
             .build();
 
         if verbosity == Verbosity::None {
@@ -1220,15 +1233,23 @@ impl<'a> search::SearchGraph for SearchGraph<'a> {
     }
 }
 
+/// The results of running all tests.
 #[derive(Debug)]
-struct TestResults {
-    search_bounds: search::Bounds<NonZeroOid>,
-    test_outputs: IndexMap<NonZeroOid, TestOutput>,
-    testing_aborted_error: Option<TestingAbortedError>,
+pub struct TestResults {
+    /// If a search strategy was provided, the calculated bounds on the input
+    /// commit set.
+    pub search_bounds: search::Bounds<NonZeroOid>,
+
+    /// The test output for each commit.
+    pub test_outputs: IndexMap<NonZeroOid, TestOutput>,
+
+    /// If testing was aborted, the corresponding error.
+    pub testing_aborted_error: Option<TestingAbortedError>,
 }
 
+/// Run tests on the provided set of commits.
 #[instrument]
-fn run_tests<'a>(
+pub fn run_tests<'a>(
     effects: &Effects,
     git_run_info: &GitRunInfo,
     dag: &Dag,
@@ -2200,8 +2221,8 @@ fn run_test(
                         stderr_file: _,
                     } = test_files;
                     TestOutput {
-                        _temp_dir: temp_dir,
-                        _result_path: result_path,
+                        temp_dir,
+                        result_path,
                         stdout_path,
                         stderr_path,
                         test_status: TestStatus::CheckoutFailed,
@@ -2243,10 +2264,9 @@ fn run_test(
     };
 
     let description = StyledStringBuilder::new()
-        .append(make_test_status_description(
+        .append(test_output.test_status.describe(
             effects.get_glyphs(),
             commit,
-            &test_output.test_status,
             fix_options.is_some(),
         )?)
         .build();
@@ -2347,8 +2367,8 @@ fn make_test_files(
         .wrap_err_with(|| format!("Locking file {lock_path:?}"))?
     {
         return Ok(TestFilesResult::Cached(TestOutput {
-            _temp_dir: None,
-            _result_path: result_path,
+            temp_dir: None,
+            result_path,
             stdout_path,
             stderr_path,
             test_status: TestStatus::AlreadyInProgress,
@@ -2413,8 +2433,8 @@ fn make_test_files(
                 Err(err) => TestStatus::ReadCacheFailed(err.to_string()),
             };
             return Ok(TestFilesResult::Cached(TestOutput {
-                _temp_dir: None,
-                _result_path: result_path,
+                temp_dir: None,
+                result_path,
                 stdout_path,
                 stderr_path,
                 test_status,
@@ -2661,8 +2681,8 @@ To abort testing entirely, run:      {exit127}",
         Ok(status) => status.code(),
         Err(err) => {
             return Ok(TestOutput {
-                _temp_dir: temp_dir,
-                _result_path: result_path,
+                temp_dir,
+                result_path,
                 stdout_path,
                 stderr_path,
                 test_status: TestStatus::SpawnTestFailed(err.to_string()),
@@ -2673,8 +2693,8 @@ To abort testing entirely, run:      {exit127}",
         Some(exit_code) => exit_code,
         None => {
             return Ok(TestOutput {
-                _temp_dir: temp_dir,
-                _result_path: result_path,
+                temp_dir,
+                result_path,
                 stdout_path,
                 stderr_path,
                 test_status: TestStatus::TerminatedBySignal,
@@ -2762,8 +2782,8 @@ To abort testing entirely, run:      {exit127}",
         .wrap_err_with(|| format!("Writing test status {test_status:?} to {result_path:?}"))?;
 
     Ok(TestOutput {
-        _temp_dir: temp_dir,
-        _result_path: result_path,
+        temp_dir,
+        result_path,
         stdout_path,
         stderr_path,
         test_status,

@@ -10,25 +10,29 @@
 #![allow(clippy::too_many_arguments, clippy::blocks_in_if_conditions)]
 
 mod branch_push_forge;
+pub mod phabricator;
 
 use std::collections::{BTreeSet, HashMap};
 use std::fmt::Write;
+use std::time::SystemTime;
 
 use branch_push_forge::BranchPushForge;
 use cursive_core::theme::{BaseColor, Effect, Style};
 use git_branchless_invoke::CommandContext;
+use git_branchless_test::{RawTestOptions, ResolvedTestOptions, Verbosity};
 use itertools::Itertools;
 use lazy_static::lazy_static;
-use lib::core::dag::Dag;
+use lib::core::dag::{CommitSet, Dag};
 use lib::core::effects::Effects;
 use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::formatting::{Pluralize, StyledStringBuilder};
-use lib::core::repo_ext::RepoExt;
+use lib::core::repo_ext::{RepoExt, RepoReferencesSnapshot};
 use lib::git::{GitRunInfo, NonZeroOid, Repo};
 use lib::util::ExitCode;
 
-use git_branchless_opts::{ResolveRevsetOptions, Revset, SubmitArgs};
+use git_branchless_opts::{ResolveRevsetOptions, Revset, SubmitArgs, TestExecutionStrategy};
 use git_branchless_revset::resolve_commits;
+use phabricator::PhabricatorForge;
 
 lazy_static! {
     static ref STYLE_PUSHED: Style =
@@ -44,7 +48,7 @@ pub enum SubmitStatus {
     Unsubmitted,
 
     /// It could not be determined whether the remote commit exists.
-    Unresolved,
+    Unknown,
 
     /// The same commit exists both locally and remotely.
     UpToDate,
@@ -65,6 +69,7 @@ pub struct CommitStatus {
 }
 
 /// Options for submitting commits to the forge.
+#[derive(Clone, Debug)]
 pub struct SubmitOptions {
     /// Create associated branches, code reviews, etc. for each of the provided commits.
     ///
@@ -72,6 +77,46 @@ pub struct SubmitOptions {
     /// and submitting a commit which already has an associated remote item
     /// should not have any additional effect.
     pub create: bool,
+
+    /// When creating new code reviews for the currently-submitting commits,
+    /// configure those code reviews to indicate that they are not yet ready for
+    /// review.
+    ///
+    /// If a "draft" state is not meaningful for the forge, then has no effect.
+    /// If a given commit is already submitted, then has no effect for that
+    /// commit's code review.
+    pub draft: bool,
+
+    /// For implementations which need to use the working copy to create the
+    /// code review, the appropriate execution strategy to do so.
+    pub execution_strategy: TestExecutionStrategy,
+
+    /// The number of jobs to use when submitting commits.
+    pub num_jobs: usize,
+}
+
+/// "Forge" refers to a Git hosting provider, such as GitHub, GitLab, etc.
+/// Commits can be pushed for review to a forge.
+pub trait Forge {
+    /// Get the status of the provided commits.
+    fn query_status(
+        &mut self,
+        commit_set: CommitSet,
+    ) -> eyre::Result<Result<HashMap<NonZeroOid, CommitStatus>, ExitCode>>;
+
+    /// Submit the provided set of commits for review.
+    fn create(
+        &mut self,
+        commits: HashMap<NonZeroOid, CommitStatus>,
+        options: &SubmitOptions,
+    ) -> eyre::Result<ExitCode>;
+
+    /// Update existing remote commits to match their local versions.
+    fn update(
+        &mut self,
+        commits: HashMap<NonZeroOid, CommitStatus>,
+        options: &SubmitOptions,
+    ) -> eyre::Result<ExitCode>;
 }
 
 /// `submit` command.
@@ -82,6 +127,8 @@ pub fn command_main(ctx: CommandContext, args: SubmitArgs) -> eyre::Result<ExitC
     } = ctx;
     let SubmitArgs {
         create,
+        draft,
+        strategy,
         revset,
         resolve_revset_options,
     } = args;
@@ -91,6 +138,8 @@ pub fn command_main(ctx: CommandContext, args: SubmitArgs) -> eyre::Result<ExitC
         revset,
         &resolve_revset_options,
         create,
+        draft,
+        strategy,
     )
 }
 
@@ -100,6 +149,8 @@ fn submit(
     revset: Revset,
     resolve_revset_options: &ResolveRevsetOptions,
     create: bool,
+    draft: bool,
+    execution_strategy: Option<TestExecutionStrategy>,
 ) -> eyre::Result<ExitCode> {
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
@@ -115,24 +166,79 @@ fn submit(
         &references_snapshot,
     )?;
 
-    let commit_set =
-        match resolve_commits(effects, &repo, &mut dag, &[revset], resolve_revset_options) {
-            Ok(mut commit_sets) => commit_sets.pop().unwrap(),
-            Err(err) => {
-                err.describe(effects)?;
-                return Ok(ExitCode(1));
-            }
-        };
+    let commit_set = match resolve_commits(
+        effects,
+        &repo,
+        &mut dag,
+        &[revset.clone()],
+        resolve_revset_options,
+    ) {
+        Ok(mut commit_sets) => commit_sets.pop().unwrap(),
+        Err(err) => {
+            err.describe(effects)?;
+            return Ok(ExitCode(1));
+        }
+    };
 
-    let submit_options = SubmitOptions { create };
-    let forge = BranchPushForge {
+    let raw_test_options = RawTestOptions {
+        exec: Some("<dummy>".to_string()),
+        command: None,
+        dry_run: false,
+        strategy: execution_strategy,
+        search: None,
+        bisect: false,
+        no_cache: true,
+        interactive: false,
+        jobs: None,
+        verbosity: Verbosity::None,
+        apply_fixes: false,
+    };
+    let ResolvedTestOptions {
+        command: _,
+        execution_strategy,
+        search_strategy: _,
+        is_dry_run: _,
+        use_cache: _,
+        is_interactive: _,
+        num_jobs,
+        verbosity: _,
+        fix_options: _,
+    } = {
+        let now = SystemTime::now();
+        let event_tx_id =
+            event_log_db.make_transaction_id(now, "resolve test options for submit")?;
+        match ResolvedTestOptions::resolve(
+            now,
+            effects,
+            &dag,
+            &repo,
+            event_tx_id,
+            &commit_set,
+            None,
+            &raw_test_options,
+        )? {
+            Ok(resolved_test_options) => resolved_test_options,
+            Err(exit_code) => {
+                return Ok(exit_code);
+            }
+        }
+    };
+    let submit_options = SubmitOptions {
+        create,
+        draft,
+        execution_strategy,
+        num_jobs,
+    };
+
+    let mut forge = select_forge(
         effects,
         git_run_info,
-        repo: &repo,
-        dag: &dag,
-        event_log_db: &event_log_db,
-        references_snapshot: &references_snapshot,
-    };
+        &repo,
+        &mut dag,
+        &event_log_db,
+        &references_snapshot,
+        &revset,
+    );
     let statuses = match forge.query_status(commit_set)? {
         Ok(statuses) => statuses,
         Err(exit_code) => return Ok(exit_code),
@@ -149,20 +255,11 @@ fn submit(
             CommitStatus {
                 submit_status: SubmitStatus::Unsubmitted,
                 remote_name: _,
-                local_branch_name: Some(_),
+                local_branch_name: _,
                 remote_branch_name: _,
             } => {
                 unsubmitted.insert(commit_oid, commit_status);
             }
-
-            // Not currently implemented: generating a branch for
-            // unsubmitted commits which don't yet have branches.
-            CommitStatus {
-                submit_status: SubmitStatus::Unsubmitted,
-                remote_name: _,
-                local_branch_name: None,
-                remote_branch_name: _,
-            } => {}
 
             CommitStatus {
                 submit_status: SubmitStatus::NeedsUpdate,
@@ -184,7 +281,7 @@ fn submit(
 
             // Don't know what to do in these cases 🙃.
             CommitStatus {
-                submit_status: SubmitStatus::Unresolved,
+                submit_status: SubmitStatus::Unknown,
                 remote_name: _,
                 local_branch_name: _,
                 remote_branch_name: _,
@@ -330,4 +427,35 @@ create and push them, retry this operation with the --create option."
     }
 
     Ok(ExitCode(0))
+}
+
+fn select_forge<'a>(
+    effects: &'a Effects,
+    git_run_info: &'a GitRunInfo,
+    repo: &'a Repo,
+    dag: &'a mut Dag,
+    event_log_db: &'a EventLogDb,
+    references_snapshot: &'a RepoReferencesSnapshot,
+    revset: &'a Revset,
+) -> Box<dyn Forge + 'a> {
+    if let Some(working_copy_path) = repo.get_working_copy_path() {
+        if working_copy_path.join(".arcconfig").is_file() {
+            return Box::new(PhabricatorForge {
+                effects,
+                git_run_info,
+                repo,
+                dag,
+                event_log_db,
+                revset,
+            });
+        }
+    }
+    Box::new(BranchPushForge {
+        effects,
+        git_run_info,
+        repo,
+        dag,
+        event_log_db,
+        references_snapshot,
+    })
 }

@@ -365,6 +365,14 @@ pub struct SubmitArgs {
     #[clap(action, short = 'c', long = "create")]
     pub create: bool,
 
+    /// If the remote supports it, create code reviews in "draft" mode.
+    #[clap(action, short = 'd', long = "draft")]
+    pub draft: bool,
+
+    /// What kind of execution strategy to use for tools which need access to the working copy.
+    #[clap(short = 's', long = "strategy")]
+    pub strategy: Option<TestExecutionStrategy>,
+
     /// The commits to push. All branches attached to those commits will be
     /// pushed.
     #[clap(value_parser, default_value = "stack()")]
