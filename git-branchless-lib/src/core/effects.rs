@@ -81,8 +81,8 @@ impl ToString for OperationType {
             OperationType::RunGitCommand(command) => {
                 return format!("Running Git command: {}", &command)
             }
-            OperationType::RunTests(command) => return format!("Running tests: {command}"),
-            OperationType::RunTestOnCommit(commit) => return format!("Waiting to test {commit}"),
+            OperationType::RunTests(command) => return format!("Running command: {command}"),
+            OperationType::RunTestOnCommit(commit) => return format!("Waiting to run on {commit}"),
             OperationType::SortCommits => "Sorting commits",
             OperationType::SyncCommits => "Syncing commit stacks",
             OperationType::UpdateCommits => "Updating commits",

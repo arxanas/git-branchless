@@ -36,11 +36,11 @@ fn test_test() -> eyre::Result<()> {
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
-        Using test execution strategy: working-copy
+        Using command execution strategy: working-copy
         branchless: running command: <git-executable> rebase --abort
         ✓ Passed: fe65c1f create test2.txt
         ✓ Passed: 0206717 create test3.txt
-        Tested 2 commits with exit 0:
+        Ran command on 2 commits: exit 0:
         2 passed, 0 failed, 0 skipped
         "###);
     }
@@ -62,11 +62,11 @@ fn test_test() -> eyre::Result<()> {
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
-        Using test execution strategy: working-copy
+        Using command execution strategy: working-copy
         branchless: running command: <git-executable> rebase --abort
         X Failed (exit code 1): fe65c1f create test2.txt
         X Failed (exit code 1): 0206717 create test3.txt
-        Tested 2 commits with exit 1:
+        Ran command on 2 commits: exit 1:
         0 passed, 2 failed, 0 skipped
         "###);
     }
@@ -98,7 +98,7 @@ fn test_test_abort() -> eyre::Result<()> {
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
-        Using test execution strategy: working-copy
+        Using command execution strategy: working-copy
         "###);
     }
 
@@ -159,12 +159,12 @@ fn test_test_cached_results() -> eyre::Result<()> {
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
-        Using test execution strategy: working-copy
+        Using command execution strategy: working-copy
         branchless: running command: <git-executable> rebase --abort
         ✓ Passed: fe65c1f create test2.txt
         ✓ Passed: 0206717 create test3.txt
         ✓ Passed (cached): 1b0d484 Revert "create test3.txt"
-        Tested 3 commits with exit 0:
+        Ran command on 3 commits: exit 0:
         3 passed, 0 failed, 0 skipped
         hint: there was 1 cached test result
         hint: to clear these cached results, run: git test clean "stack() | @"
@@ -178,12 +178,12 @@ fn test_test_cached_results() -> eyre::Result<()> {
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
-        Using test execution strategy: working-copy
+        Using command execution strategy: working-copy
         branchless: running command: <git-executable> rebase --abort
         ✓ Passed (cached): fe65c1f create test2.txt
         ✓ Passed (cached): 0206717 create test3.txt
         ✓ Passed (cached): 1b0d484 Revert "create test3.txt"
-        Tested 3 commits with exit 0:
+        Ran command on 3 commits: exit 0:
         3 passed, 0 failed, 0 skipped
         hint: there were 3 cached test results
         hint: to clear these cached results, run: git test clean "stack() | @"
@@ -213,7 +213,7 @@ fn test_test_verbosity() -> eyre::Result<()> {
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
-        Using test execution strategy: working-copy
+        Using command execution strategy: working-copy
         branchless: running command: <git-executable> rebase --abort
         ✓ Passed: fe65c1f create test2.txt
         Stdout: <repo-path>/.git/branchless/test/48bb2464c55090a387ed70b3d229705a94856efb/bash__test.sh__10/stdout
@@ -229,7 +229,7 @@ fn test_test_verbosity() -> eyre::Result<()> {
         This is line 10
         Stderr: <repo-path>/.git/branchless/test/48bb2464c55090a387ed70b3d229705a94856efb/bash__test.sh__10/stderr
         <no output>
-        Tested 1 commit with bash test.sh 10:
+        Ran command on 1 commit: bash test.sh 10:
         1 passed, 0 failed, 0 skipped
         "###);
     }
@@ -240,7 +240,7 @@ fn test_test_verbosity() -> eyre::Result<()> {
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
-        Using test execution strategy: working-copy
+        Using command execution strategy: working-copy
         branchless: running command: <git-executable> rebase --abort
         ✓ Passed (cached): fe65c1f create test2.txt
         Stdout: <repo-path>/.git/branchless/test/48bb2464c55090a387ed70b3d229705a94856efb/bash__test.sh__10/stdout
@@ -256,7 +256,7 @@ fn test_test_verbosity() -> eyre::Result<()> {
         This is line 10
         Stderr: <repo-path>/.git/branchless/test/48bb2464c55090a387ed70b3d229705a94856efb/bash__test.sh__10/stderr
         <no output>
-        Tested 1 commit with bash test.sh 10:
+        Ran command on 1 commit: bash test.sh 10:
         1 passed, 0 failed, 0 skipped
         hint: there was 1 cached test result
         hint: to clear these cached results, run: git test clean "stack() | @"
@@ -270,7 +270,7 @@ fn test_test_verbosity() -> eyre::Result<()> {
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
-        Using test execution strategy: working-copy
+        Using command execution strategy: working-copy
         branchless: running command: <git-executable> rebase --abort
         ✓ Passed: fe65c1f create test2.txt
         Stdout: <repo-path>/.git/branchless/test/48bb2464c55090a387ed70b3d229705a94856efb/bash__test.sh__15/stdout
@@ -287,7 +287,7 @@ fn test_test_verbosity() -> eyre::Result<()> {
         This is line 15
         Stderr: <repo-path>/.git/branchless/test/48bb2464c55090a387ed70b3d229705a94856efb/bash__test.sh__15/stderr
         <no output>
-        Tested 1 commit with bash test.sh 15:
+        Ran command on 1 commit: bash test.sh 15:
         1 passed, 0 failed, 0 skipped
         "###);
     }
@@ -298,7 +298,7 @@ fn test_test_verbosity() -> eyre::Result<()> {
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
-        Using test execution strategy: working-copy
+        Using command execution strategy: working-copy
         branchless: running command: <git-executable> rebase --abort
         ✓ Passed (cached): fe65c1f create test2.txt
         Stdout: <repo-path>/.git/branchless/test/48bb2464c55090a387ed70b3d229705a94856efb/bash__test.sh__15/stdout
@@ -319,7 +319,7 @@ fn test_test_verbosity() -> eyre::Result<()> {
         This is line 15
         Stderr: <repo-path>/.git/branchless/test/48bb2464c55090a387ed70b3d229705a94856efb/bash__test.sh__15/stderr
         <no output>
-        Tested 1 commit with bash test.sh 15:
+        Ran command on 1 commit: bash test.sh 15:
         1 passed, 0 failed, 0 skipped
         hint: there was 1 cached test result
         hint: to clear these cached results, run: git test clean "stack() | @"
@@ -345,10 +345,10 @@ fn test_test_show() -> eyre::Result<()> {
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
-        Using test execution strategy: working-copy
+        Using command execution strategy: working-copy
         branchless: running command: <git-executable> rebase --abort
         ✓ Passed: 96d1c37 create test2.txt
-        Tested 1 commit with echo hi:
+        Ran command on 1 commit: echo hi:
         1 passed, 0 failed, 0 skipped
         "###);
     }
@@ -462,10 +462,10 @@ fn test_test_command_alias() -> eyre::Result<()> {
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
-        Using test execution strategy: working-copy
+        Using command execution strategy: working-copy
         branchless: running command: <git-executable> rebase --abort
         ✓ Passed: f777ecc create initial.txt
-        Tested 1 commit with echo default:
+        Ran command on 1 commit: echo default:
         1 passed, 0 failed, 0 skipped
         "###);
     }
@@ -476,10 +476,10 @@ fn test_test_command_alias() -> eyre::Result<()> {
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
-        Using test execution strategy: working-copy
+        Using command execution strategy: working-copy
         branchless: running command: <git-executable> rebase --abort
         ✓ Passed: f777ecc create initial.txt
-        Tested 1 commit with echo foo:
+        Ran command on 1 commit: echo foo:
         1 passed, 0 failed, 0 skipped
         "###);
     }
@@ -550,13 +550,13 @@ fn test_test_worktree_strategy() -> eyre::Result<()> {
         )?;
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
-        Using test execution strategy: worktree
+        Using command execution strategy: worktree
         ✓ Passed: 62fc20d create test1.txt
         Stdout: <repo-path>/.git/branchless/test/8108c01b1930423879f106c1ebf725fcbfedccda/echo__hello/stdout
         hello
         Stderr: <repo-path>/.git/branchless/test/8108c01b1930423879f106c1ebf725fcbfedccda/echo__hello/stderr
         <no output>
-        Tested 1 commit with echo hello:
+        Ran command on 1 commit: echo hello:
         1 passed, 0 failed, 0 skipped
         "###);
     }
@@ -576,13 +576,13 @@ fn test_test_worktree_strategy() -> eyre::Result<()> {
         )?;
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
-        Using test execution strategy: worktree
+        Using command execution strategy: worktree
         ✓ Passed (cached): 62fc20d create test1.txt
         Stdout: <repo-path>/.git/branchless/test/8108c01b1930423879f106c1ebf725fcbfedccda/echo__hello/stdout
         hello
         Stderr: <repo-path>/.git/branchless/test/8108c01b1930423879f106c1ebf725fcbfedccda/echo__hello/stderr
         <no output>
-        Tested 1 commit with echo hello:
+        Ran command on 1 commit: echo hello:
         1 passed, 0 failed, 0 skipped
         hint: there was 1 cached test result
         hint: to clear these cached results, run: git test clean "@"
@@ -636,13 +636,13 @@ echo hello
         let (stdout, stderr) = git.branchless("test", &["run", "-vv", "@"])?;
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
-        Using test execution strategy: worktree
+        Using command execution strategy: worktree
         ✓ Passed: c82ebfa create test2.txt
         Stdout: <repo-path>/.git/branchless/test/a3ae41e24abf7537423d8c72d07df7af456de6dd/bash__test.sh/stdout
         hello
         Stderr: <repo-path>/.git/branchless/test/a3ae41e24abf7537423d8c72d07df7af456de6dd/bash__test.sh/stderr
         <no output>
-        Tested 1 commit with bash test.sh:
+        Ran command on 1 commit: bash test.sh:
         1 passed, 0 failed, 0 skipped
         "###);
     }
@@ -706,11 +706,11 @@ fn test_test_jobs_argument_handling() -> eyre::Result<()> {
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
-        Using test execution strategy: working-copy
+        Using command execution strategy: working-copy
         branchless: running command: <git-executable> rebase --abort
         ✓ Passed: 62fc20d create test1.txt
         ✓ Passed: 96d1c37 create test2.txt
-        Tested 2 commits with exit 0:
+        Ran command on 2 commits: exit 0:
         2 passed, 0 failed, 0 skipped
         "###);
     }
@@ -734,10 +734,10 @@ fn test_test_jobs_argument_handling() -> eyre::Result<()> {
         let (stdout, stderr) = git.branchless("test", &["run", "--jobs", "2"])?;
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
-        Using test execution strategy: worktree
+        Using command execution strategy: worktree
         ✓ Passed (cached): 62fc20d create test1.txt
         ✓ Passed (cached): 96d1c37 create test2.txt
-        Tested 2 commits with exit 0:
+        Ran command on 2 commits: exit 0:
         2 passed, 0 failed, 0 skipped
         hint: there were 2 cached test results
         hint: to clear these cached results, run: git test clean "stack() | @"
@@ -771,7 +771,7 @@ fn test_test_jobs_argument_handling() -> eyre::Result<()> {
         branchless: running command: <git-executable> rebase --abort
         ✓ Passed (interactive): 62fc20d create test1.txt
         ✓ Passed (interactive): 96d1c37 create test2.txt
-        Tested 2 commits with true:
+        Ran command on 2 commits: true:
         2 passed, 0 failed, 0 skipped
         "###);
     }
@@ -803,11 +803,11 @@ fn test_test_jobs_argument_handling() -> eyre::Result<()> {
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
-        Using test execution strategy: working-copy
+        Using command execution strategy: working-copy
         branchless: running command: <git-executable> rebase --abort
         ✓ Passed (cached): 62fc20d create test1.txt
         ✓ Passed (cached): 96d1c37 create test2.txt
-        Tested 2 commits with exit 0:
+        Ran command on 2 commits: exit 0:
         2 passed, 0 failed, 0 skipped
         hint: there were 2 cached test results
         hint: to clear these cached results, run: git test clean "stack() | @"
@@ -855,12 +855,12 @@ done
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
-        Using test execution strategy: working-copy
+        Using command execution strategy: working-copy
         branchless: running command: <git-executable> rebase --abort
         ✓ Passed (fixed): 62fc20d create test1.txt
         ✓ Passed (fixed): 96d1c37 create test2.txt
         ✓ Passed (fixed): 70deb1e create test3.txt
-        Tested 3 commits with bash test.sh:
+        Ran command on 3 commits: bash test.sh:
         3 passed, 0 failed, 0 skipped
         Attempting rebase in-memory...
         [1/3] Committed as: 300cb54 create test1.txt
@@ -967,12 +967,12 @@ done
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
-        Using test execution strategy: working-copy
+        Using command execution strategy: working-copy
         branchless: running command: <git-executable> rebase --abort
         ✓ Passed: 300cb54 create test1.txt
         ✓ Passed: 2ee3aea create test2.txt
         ✓ Passed: 6f48e0a create test3.txt
-        Tested 3 commits with bash test.sh:
+        Ran command on 3 commits: bash test.sh:
         3 passed, 0 failed, 0 skipped
         No commits to fix.
         "###);
@@ -1026,12 +1026,12 @@ done
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
-        Using test execution strategy: working-copy
+        Using command execution strategy: working-copy
         branchless: running command: <git-executable> rebase --abort
         ✓ Passed (fixed): 62fc20d create test1.txt
         X Failed (exit code 1): 96d1c37 create test2.txt
         X Failed (exit code 1): 70deb1e create test3.txt
-        Tested 3 commits with bash test.sh:
+        Ran command on 3 commits: bash test.sh:
         1 passed, 2 failed, 0 skipped
         "###);
     }
@@ -1120,11 +1120,11 @@ done
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
-        Using test execution strategy: working-copy
+        Using command execution strategy: working-copy
         branchless: running command: <git-executable> rebase --abort
         ✓ Passed (fixed): 62fc20d create test1.txt
         ✓ Passed (fixed): 75e728f descendant commit
-        Tested 2 commits with bash test.sh:
+        Ran command on 2 commits: bash test.sh:
         2 passed, 0 failed, 0 skipped
         Attempting rebase in-memory...
         [1/2] Committed as: 300cb54 create test1.txt
@@ -1247,13 +1247,13 @@ fn test_test_search_binary() -> eyre::Result<()> {
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
-        Using test execution strategy: working-copy
+        Using command execution strategy: working-copy
         Using test search strategy: binary
         branchless: running command: <git-executable> rebase --abort
         ✓ Passed: 70deb1e create test3.txt
         X Failed (exit code 1): 355e173 create test4.txt
         X Failed (exit code 1): f81d55c create test5.txt
-        Tested 3 commits with ! git grep -q 'test4':
+        Ran command on 3 commits: ! git grep -q 'test4':
         1 passed, 2 failed, 0 skipped
         Last passing commit:
         - 70deb1e create test3.txt
@@ -1277,9 +1277,9 @@ fn test_test_run_none() -> eyre::Result<()> {
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
-        Using test execution strategy: working-copy
+        Using command execution strategy: working-copy
         branchless: running command: <git-executable> rebase --abort
-        Tested 0 commits with true:
+        Ran command on 0 commits: true:
         0 passed, 0 failed, 0 skipped
         "###);
     }
@@ -1308,7 +1308,7 @@ fn test_test_search_skip_indeterminate() -> eyre::Result<()> {
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
-        Using test execution strategy: working-copy
+        Using command execution strategy: working-copy
         Using test search strategy: binary
         branchless: running command: <git-executable> rebase --abort
         ! Exit code indicated to skip this commit (exit code 125): 62fc20d create test1.txt
@@ -1318,7 +1318,7 @@ fn test_test_search_skip_indeterminate() -> eyre::Result<()> {
         ! Exit code indicated to skip this commit (exit code 125): f81d55c create test5.txt
         ! Exit code indicated to skip this commit (exit code 125): 2831fb5 create test6.txt
         ! Exit code indicated to skip this commit (exit code 125): c8933b3 create test7.txt
-        Tested 7 commits with exit 125:
+        Ran command on 7 commits: exit 125:
         0 passed, 0 failed, 7 skipped
         There were no passing commits in the provided set.
         There were no failing commits in the provided set.
@@ -1333,7 +1333,7 @@ fn test_test_search_skip_indeterminate() -> eyre::Result<()> {
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
-        Using test execution strategy: working-copy
+        Using command execution strategy: working-copy
         Using test search strategy: binary
         branchless: running command: <git-executable> rebase --abort
         ! Exit code indicated to skip this commit (exit code 125): 62fc20d create test1.txt
@@ -1343,7 +1343,7 @@ fn test_test_search_skip_indeterminate() -> eyre::Result<()> {
         ! Exit code indicated to skip this commit (exit code 125): f81d55c create test5.txt
         ! Exit code indicated to skip this commit (exit code 125): 2831fb5 create test6.txt
         ! Exit code indicated to skip this commit (exit code 125): c8933b3 create test7.txt
-        Tested 7 commits with exit 125:
+        Ran command on 7 commits: exit 125:
         0 passed, 0 failed, 7 skipped
         There were no passing commits in the provided set.
         There were no failing commits in the provided set.
@@ -1372,7 +1372,7 @@ fi
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
-        Using test execution strategy: working-copy
+        Using command execution strategy: working-copy
         Using test search strategy: linear
         branchless: running command: <git-executable> rebase --abort
         ✓ Passed: 62fc20d create test1.txt
@@ -1382,7 +1382,7 @@ fi
         ! Exit code indicated to skip this commit (exit code 125): f81d55c create test5.txt
         ! Exit code indicated to skip this commit (exit code 125): 2831fb5 create test6.txt
         ! Exit code indicated to skip this commit (exit code 125): c8933b3 create test7.txt
-        Tested 7 commits with bash test.sh:
+        Ran command on 7 commits: bash test.sh:
         3 passed, 0 failed, 4 skipped
         Last passing commit:
         - 70deb1e create test3.txt
@@ -1399,7 +1399,7 @@ fi
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
-        Using test execution strategy: working-copy
+        Using command execution strategy: working-copy
         Using test search strategy: binary
         branchless: running command: <git-executable> rebase --abort
         ✓ Passed (cached): 70deb1e create test3.txt
@@ -1407,7 +1407,7 @@ fi
         ! Exit code indicated to skip this commit (exit code 125): f81d55c create test5.txt
         ! Exit code indicated to skip this commit (exit code 125): 2831fb5 create test6.txt
         ! Exit code indicated to skip this commit (exit code 125): c8933b3 create test7.txt
-        Tested 5 commits with bash test.sh:
+        Ran command on 5 commits: bash test.sh:
         1 passed, 0 failed, 4 skipped
         Last passing commit:
         - 70deb1e create test3.txt
@@ -1460,7 +1460,7 @@ fn test_test_interactive() -> eyre::Result<()> {
         branchless: running command: <git-executable> rebase --abort
         ✓ Passed (interactive): 62fc20d create test1.txt
         ✓ Passed (interactive): 96d1c37 create test2.txt
-        Tested 2 commits with true:
+        Ran command on 2 commits: true:
         2 passed, 0 failed, 0 skipped
         "###);
     }
@@ -1492,7 +1492,7 @@ fn test_test_interactive() -> eyre::Result<()> {
         branchless: running command: <git-executable> rebase --abort
         X Failed (exit code 1, interactive): 62fc20d create test1.txt
         X Failed (exit code 1, interactive): 96d1c37 create test2.txt
-        Tested 2 commits with false:
+        Ran command on 2 commits: false:
         0 passed, 2 failed, 0 skipped
         "###);
     }
@@ -1529,7 +1529,7 @@ fn test_test_interactive() -> eyre::Result<()> {
         branchless: running command: <git-executable> rebase --abort
         ✓ Passed (interactive): 62fc20d create test1.txt
         ✓ Passed (interactive): 96d1c37 create test2.txt
-        Tested 2 commits with bash:
+        Ran command on 2 commits: bash:
         2 passed, 0 failed, 0 skipped
         "###);
     }
@@ -1551,7 +1551,7 @@ fn test_test_interactive() -> eyre::Result<()> {
         branchless: running command: <git-executable> rebase --abort
         ✓ Passed (cached, interactive): 62fc20d create test1.txt
         ✓ Passed (cached, interactive): 96d1c37 create test2.txt
-        Tested 2 commits with bash:
+        Ran command on 2 commits: bash:
         2 passed, 0 failed, 0 skipped
         hint: there were 2 cached test results
         hint: to clear these cached results, run: git test clean "stack() | @"
@@ -1602,17 +1602,17 @@ fi
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
-        Using test execution strategy: working-copy
+        Using command execution strategy: working-copy
         Using test search strategy: linear
         branchless: running command: <git-executable> rebase --abort
         ✓ Passed: 62fc20d create test1.txt
-        X Exit code indicated to abort testing (exit code 127): 96d1c37 create test2.txt
-        Tested 2 commits with bash test.sh:
+        X Exit code indicated to abort command (exit code 127): 96d1c37 create test2.txt
+        Ran command on 2 commits: bash test.sh:
         1 passed, 1 failed, 0 skipped
         Last passing commit:
         - 62fc20d create test1.txt
         There were no failing commits in the provided set.
-        Aborted testing with exit code 127 at commit: 96d1c37 create test2.txt
+        Aborted running commands with exit code 127 at commit: 96d1c37 create test2.txt
         "###);
     }
 
@@ -1630,12 +1630,12 @@ fi
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
-        Using test execution strategy: working-copy
+        Using command execution strategy: working-copy
         Using test search strategy: linear
         branchless: running command: <git-executable> rebase --abort
         ✓ Passed (cached): 62fc20d create test1.txt
-        X Exit code indicated to abort testing (exit code 127): 96d1c37 create test2.txt
-        Tested 2 commits with bash test.sh:
+        X Exit code indicated to abort command (exit code 127): 96d1c37 create test2.txt
+        Ran command on 2 commits: bash test.sh:
         1 passed, 1 failed, 0 skipped
         Last passing commit:
         - 62fc20d create test1.txt
@@ -1643,7 +1643,7 @@ fi
         hint: there was 1 cached test result
         hint: to clear these cached results, run: git test clean "stack() | @"
         hint: disable this hint by running: git config --global branchless.hint.cleanCachedTestResults false
-        Aborted testing with exit code 127 at commit: 96d1c37 create test2.txt
+        Aborted running commands with exit code 127 at commit: 96d1c37 create test2.txt
         "###);
     }
 
@@ -1670,7 +1670,7 @@ echo "Command is: $BRANCHLESS_TEST_COMMAND"
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
-        Using test execution strategy: working-copy
+        Using command execution strategy: working-copy
         branchless: running command: <git-executable> rebase --abort
         ✓ Passed: f777ecc create initial.txt
         Stdout: <repo-path>/.git/branchless/test/d32758e20028dd1cffc2b359bc3766f80a258ee5/bash__test.sh/stdout
@@ -1678,7 +1678,7 @@ echo "Command is: $BRANCHLESS_TEST_COMMAND"
         Command is: bash test.sh
         Stderr: <repo-path>/.git/branchless/test/d32758e20028dd1cffc2b359bc3766f80a258ee5/bash__test.sh/stderr
         <no output>
-        Tested 1 commit with bash test.sh:
+        Ran command on 1 commit: bash test.sh:
         1 passed, 0 failed, 0 skipped
         "###);
     }
@@ -1759,13 +1759,13 @@ esac
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
-        Using test execution strategy: working-copy
+        Using command execution strategy: working-copy
         branchless: running command: <git-executable> rebase --abort
         ✓ Passed (fixable): 62fc20d create test1.txt
         X Failed (exit code 1): 96d1c37 create test2.txt
         ! Exit code indicated to skip this commit (exit code 125): 70deb1e create test3.txt
         ✓ Passed: 355e173 create test4.txt
-        Tested 4 commits with bash test.sh:
+        Ran command on 4 commits: bash test.sh:
         2 passed, 1 failed, 1 skipped
         "###);
     }
@@ -1840,11 +1840,11 @@ fn test_test_no_cache() -> eyre::Result<()> {
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
-        Using test execution strategy: working-copy
+        Using command execution strategy: working-copy
         branchless: running command: <git-executable> rebase --abort
         ✓ Passed: 62fc20d create test1.txt
         ✓ Passed: 96d1c37 create test2.txt
-        Tested 2 commits with bash test.sh:
+        Ran command on 2 commits: bash test.sh:
         2 passed, 0 failed, 0 skipped
         "###);
     }
@@ -1868,11 +1868,11 @@ fn test_test_no_cache() -> eyre::Result<()> {
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
-        Using test execution strategy: working-copy
+        Using command execution strategy: working-copy
         branchless: running command: <git-executable> rebase --abort
         X Failed (exit code 1): 62fc20d create test1.txt
         X Failed (exit code 1): 96d1c37 create test2.txt
-        Tested 2 commits with bash test.sh:
+        Ran command on 2 commits: bash test.sh:
         0 passed, 2 failed, 0 skipped
         "###);
     }
@@ -1883,11 +1883,11 @@ fn test_test_no_cache() -> eyre::Result<()> {
         branchless: running command: <git-executable> diff --quiet
         Calling Git for on-disk rebase...
         branchless: running command: <git-executable> rebase --continue
-        Using test execution strategy: working-copy
+        Using command execution strategy: working-copy
         branchless: running command: <git-executable> rebase --abort
         ✓ Passed (cached): 62fc20d create test1.txt
         ✓ Passed (cached): 96d1c37 create test2.txt
-        Tested 2 commits with bash test.sh:
+        Ran command on 2 commits: bash test.sh:
         2 passed, 0 failed, 0 skipped
         hint: there were 2 cached test results
         hint: to clear these cached results, run: git test clean "stack() | @"
