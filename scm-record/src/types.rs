@@ -59,13 +59,13 @@ pub struct File<'a> {
 
 impl File<'_> {
     /// An absent file.
-    pub fn absent() -> Self {
-        unimplemented!("FileState::absent")
+    pub fn absent(path: Cow<Path>) -> Self {
+        unimplemented!("FileState::absent for path {path:?}")
     }
 
     /// A binary file.
-    pub fn binary() -> Self {
-        unimplemented!("FileState::binary")
+    pub fn binary(path: Cow<Path>) -> Self {
+        unimplemented!("FileState::binary for path {path:?}")
     }
 
     /// Count the number of changed sections in this file.
@@ -132,9 +132,7 @@ impl File<'_> {
                 Section::Unchanged { lines } => {
                     for line in lines {
                         acc_selected.push_str(line);
-                        acc_selected.push('\n');
                         acc_unselected.push_str(line);
-                        acc_unselected.push('\n');
                     }
                 }
                 Section::Changed { lines } => {
@@ -147,11 +145,9 @@ impl File<'_> {
                         match (change_type, is_toggled) {
                             (ChangeType::Added, true) | (ChangeType::Removed, false) => {
                                 acc_selected.push_str(line);
-                                acc_selected.push('\n');
                             }
                             (ChangeType::Added, false) | (ChangeType::Removed, true) => {
                                 acc_unselected.push_str(line);
-                                acc_unselected.push('\n');
                             }
                         }
                     }
@@ -178,16 +174,16 @@ pub enum Section<'a> {
     /// context lines should be provided so that they can be used to globally
     /// number the lines correctly.
     Unchanged {
-        /// The contents of the lines in this section. Each line does *not*
-        /// include a trailing newline character.
+        /// The contents of the lines, including their trailing newline
+        /// character(s), if any.
         lines: Vec<Cow<'a, str>>,
     },
 
     /// This section of the file is changed, and the user needs to select which
     /// specific changed lines to record.
     Changed {
-        /// The contents of the lines caused by the user change. Each line does
-        /// *not* include a trailing newline character.
+        /// The contents of the lines, including their trailing newline
+        /// character(s), if any.
         lines: Vec<SectionChangedLine<'a>>,
     },
 

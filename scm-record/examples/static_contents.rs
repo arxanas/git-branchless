@@ -15,7 +15,7 @@ fn main() {
             file_mode: None,
             sections: vec![
                 Section::Unchanged {
-                    lines: std::iter::repeat(Cow::Borrowed("this is some text"))
+                    lines: std::iter::repeat(Cow::Borrowed("this is some text\n"))
                         .take(20)
                         .collect(),
                 },
@@ -24,28 +24,28 @@ fn main() {
                         SectionChangedLine {
                             is_toggled: true,
                             change_type: ChangeType::Removed,
-                            line: Cow::Borrowed("before text 1"),
+                            line: Cow::Borrowed("before text 1\n"),
                         },
                         SectionChangedLine {
                             is_toggled: true,
                             change_type: ChangeType::Removed,
-                            line: Cow::Borrowed("before text 2"),
+                            line: Cow::Borrowed("before text 2\n"),
                         },
                         SectionChangedLine {
                             is_toggled: true,
                             change_type: ChangeType::Added,
 
-                            line: Cow::Borrowed("after text 1"),
+                            line: Cow::Borrowed("after text 1\n"),
                         },
                         SectionChangedLine {
                             is_toggled: false,
                             change_type: ChangeType::Added,
-                            line: Cow::Borrowed("after text 2"),
+                            line: Cow::Borrowed("after text 2\n"),
                         },
                     ],
                 },
                 Section::Unchanged {
-                    lines: vec![Cow::Borrowed("this is some trailing text")],
+                    lines: vec![Cow::Borrowed("this is some trailing text\n")],
                 },
             ],
         },
@@ -55,8 +55,8 @@ fn main() {
             sections: vec![
                 Section::Unchanged {
                     lines: vec![
-                        Cow::Borrowed("Some leading text 1"),
-                        Cow::Borrowed("Some leading text 2"),
+                        Cow::Borrowed("Some leading text 1\n"),
+                        Cow::Borrowed("Some leading text 2\n"),
                     ],
                 },
                 Section::Changed {
@@ -64,22 +64,22 @@ fn main() {
                         SectionChangedLine {
                             is_toggled: true,
                             change_type: ChangeType::Removed,
-                            line: Cow::Borrowed("before text 1"),
+                            line: Cow::Borrowed("before text 1\n"),
                         },
                         SectionChangedLine {
                             is_toggled: true,
                             change_type: ChangeType::Removed,
-                            line: Cow::Borrowed("before text 2"),
+                            line: Cow::Borrowed("before text 2\n"),
                         },
                         SectionChangedLine {
                             is_toggled: true,
                             change_type: ChangeType::Added,
-                            line: Cow::Borrowed("after text 1"),
+                            line: Cow::Borrowed("after text 1\n"),
                         },
                         SectionChangedLine {
                             is_toggled: true,
                             change_type: ChangeType::Added,
-                            line: Cow::Borrowed("after text 2"),
+                            line: Cow::Borrowed("after text 2\n"),
                         },
                     ],
                 },
@@ -102,7 +102,7 @@ fn main() {
                 print!("{selected}");
             }
         }
-        Err(RecordError::Cancelled) => println!("Cancelled!"),
+        Err(RecordError::Cancelled) => println!("Cancelled!\n"),
         Err(err) => {
             println!("Error: {err}");
         }

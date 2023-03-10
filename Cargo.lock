@@ -1486,6 +1486,7 @@ dependencies = [
  "rayon",
  "regex",
  "rusqlite",
+ "scm-record",
  "serde",
  "tempfile",
  "textwrap",
@@ -1568,6 +1569,7 @@ dependencies = [
  "insta",
  "itertools 0.10.5",
  "rayon",
+ "scm-record",
  "tracing",
 ]
 
