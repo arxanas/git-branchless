@@ -1,7 +1,3 @@
-use std::convert::TryFrom;
-
-use eden_dag::DagAlgorithm;
-use itertools::Itertools;
 use tracing::instrument;
 
 use crate::core::dag::{CommitSet, Dag};
@@ -81,13 +77,10 @@ pub fn find_abandoned_children(
         Some(MaybeZeroOid::Zero) => oid,
         None => return Ok(None),
     };
-    let children = dag.query().children(CommitSet::from(oid))?;
+    let children = dag.query_children(CommitSet::from(oid))?;
     let children = dag.filter_visible_commits(children)?;
     let non_obsolete_children = children.difference(&dag.query_obsolete_commits());
-    let non_obsolete_children_oids: Vec<NonZeroOid> = non_obsolete_children
-        .iter()?
-        .map(|x| -> eyre::Result<NonZeroOid> { NonZeroOid::try_from(x?) })
-        .try_collect()?;
+    let non_obsolete_children_oids = dag.commit_set_to_vec(&non_obsolete_children)?;
 
     Ok(Some((rewritten_oid, non_obsolete_children_oids)))
 }

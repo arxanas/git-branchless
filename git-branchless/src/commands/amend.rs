@@ -9,13 +9,12 @@ use std::fmt::Write;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use bstr::ByteSlice;
-use eden_dag::DagAlgorithm;
+
 use eyre::Context;
 use git_branchless_opts::{MoveOptions, ResolveRevsetOptions};
 use itertools::Itertools;
 use lib::core::check_out::{check_out_commit, CheckOutCommitOptions, CheckoutTarget};
 use lib::core::config::get_restack_preserve_timestamps;
-use lib::core::dag::commit_set_to_vec;
 use lib::core::dag::{CommitSet, Dag};
 use lib::core::effects::Effects;
 use lib::core::eventlog::{Event, EventLogDb, EventReplayer};
@@ -87,12 +86,12 @@ pub fn amend(
         dump_rebase_plan: move_options.dump_rebase_plan,
         detect_duplicate_commits_via_patch_id: move_options.detect_duplicate_commits_via_patch_id,
     };
-    let commits_to_verify = dag.query().descendants(CommitSet::from(head_oid))?;
+    let commits_to_verify = dag.query_descendants(CommitSet::from(head_oid))?;
     let commits_to_verify = dag.filter_visible_commits(commits_to_verify)?;
     if let Err(err) =
         RebasePlanPermissions::verify_rewrite_set(&dag, build_options, &commits_to_verify)?
     {
-        err.describe(effects, &repo)?;
+        err.describe(effects, &repo, &dag)?;
         return Ok(ExitCode(1));
     };
 
@@ -215,8 +214,8 @@ pub fn amend(
             dump_rebase_constraints: move_options.dump_rebase_constraints,
             dump_rebase_plan: move_options.dump_rebase_plan,
         };
-        let children = dag.query().children(CommitSet::from(head_oid))?;
-        let descendants = dag.query().descendants(children)?;
+        let children = dag.query_children(CommitSet::from(head_oid))?;
+        let descendants = dag.query_descendants(children)?;
         let descendants = dag.filter_visible_commits(descendants)?;
         let commits_to_verify = &descendants;
         let permissions = match RebasePlanPermissions::verify_rewrite_set(
@@ -226,13 +225,13 @@ pub fn amend(
         )? {
             Ok(permissions) => permissions,
             Err(err) => {
-                err.describe(effects, &repo)?;
+                err.describe(effects, &repo, &dag)?;
                 return Ok(ExitCode(1));
             }
         };
 
         let mut builder = RebasePlanBuilder::new(&dag, permissions);
-        for descendant_oid in commit_set_to_vec(&descendants)? {
+        for descendant_oid in dag.commit_set_to_vec(&descendants)? {
             let descendant_commit = repo.find_commit_or_fail(descendant_oid)?;
             let parent_oids: Vec<_> = descendant_commit
                 .get_parent_oids()
@@ -279,7 +278,7 @@ pub fn amend(
         match builder.build(effects, &thread_pool, &repo_pool)? {
             Ok(rebase_plan) => rebase_plan,
             Err(err) => {
-                err.describe(effects, &repo)?;
+                err.describe(effects, &repo, &dag)?;
                 return Ok(ExitCode(1));
             }
         }

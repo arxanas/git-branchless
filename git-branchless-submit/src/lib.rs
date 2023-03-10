@@ -5,7 +5,7 @@ use cursive_core::theme::{BaseColor, Effect, Style};
 use git_branchless_invoke::CommandContext;
 use itertools::{Either, Itertools};
 use lazy_static::lazy_static;
-use lib::core::dag::{commit_set_to_vec, Dag};
+use lib::core::dag::Dag;
 use lib::core::effects::{Effects, OperationType};
 use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::formatting::{Pluralize, StyledStringBuilder};
@@ -74,7 +74,8 @@ fn submit(
             }
         };
 
-    let branches: Vec<Branch> = commit_set_to_vec(&commit_set)?
+    let branches: Vec<Branch> = dag
+        .commit_set_to_vec(&commit_set)?
         .into_iter()
         .flat_map(|commit_oid| references_snapshot.branch_oid_to_names.get(&commit_oid))
         .flatten()

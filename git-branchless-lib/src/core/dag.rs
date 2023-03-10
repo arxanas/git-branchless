@@ -5,11 +5,18 @@ use std::borrow::Borrow;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::convert::TryFrom;
+use std::fmt::Debug;
+use std::future::Future;
 use std::iter::FromIterator;
+use std::sync::{Arc, Mutex};
 
-use eden_dag::ops::DagPersistent;
-use eden_dag::DagAlgorithm;
+use async_trait::async_trait;
+use eden_dag::namedag::MemNameDag;
+use eden_dag::nameset::hints::Hints;
+use eden_dag::ops::{DagPersistent, Parents};
+use eden_dag::{DagAlgorithm, Group, VertexListWithOptions, VertexOptions};
 use eyre::Context;
+use futures::{StreamExt, TryStreamExt};
 use itertools::Itertools;
 use once_cell::sync::OnceCell;
 use tracing::{instrument, trace, warn};
@@ -66,21 +73,8 @@ impl FromIterator<NonZeroOid> for CommitSet {
             .map(CommitVertex::from)
             .map(Ok)
             .collect_vec();
-        CommitSet::from_iter(oids)
+        CommitSet::from_iter(oids, Hints::default())
     }
-}
-
-/// Eagerly convert a `CommitSet` into a `Vec<NonZeroOid>` by iterating over it, preserving order.
-#[instrument]
-pub fn commit_set_to_vec(commit_set: &CommitSet) -> eyre::Result<Vec<NonZeroOid>> {
-    let mut result = Vec::new();
-    for vertex in commit_set.iter().wrap_err("Iterating commit set")? {
-        let vertex = vertex.wrap_err("Evaluating vertex")?;
-        let vertex = NonZeroOid::try_from(vertex.clone())
-            .wrap_err_with(|| format!("Converting vertex to NonZeroOid: {:?}", &vertex))?;
-        result.push(vertex);
-    }
-    Ok(result)
 }
 
 /// Union together a list of [CommitSet]s.
@@ -88,6 +82,53 @@ pub fn union_all(commits: &[CommitSet]) -> CommitSet {
     commits
         .iter()
         .fold(CommitSet::empty(), |acc, elem| acc.union(elem))
+}
+
+struct GitParentsBlocking {
+    repo: Arc<Mutex<Repo>>,
+}
+
+#[async_trait]
+impl Parents for GitParentsBlocking {
+    async fn parent_names(&self, v: CommitVertex) -> eden_dag::Result<Vec<CommitVertex>> {
+        use eden_dag::errors::BackendError;
+        trace!(?v, "visiting Git commit");
+
+        let oid = MaybeZeroOid::from_bytes(v.as_ref())
+            .map_err(|_e| anyhow::anyhow!("Could not convert to Git oid: {:?}", &v))
+            .map_err(BackendError::Other)?;
+        let oid = match oid {
+            MaybeZeroOid::NonZero(oid) => oid,
+            MaybeZeroOid::Zero => return Ok(Vec::new()),
+        };
+
+        let repo = self.repo.lock().unwrap();
+        let commit = repo
+            .find_commit(oid)
+            .map_err(|_e| anyhow::anyhow!("Could not resolve to Git commit: {:?}", &v))
+            .map_err(BackendError::Other)?;
+        let commit = match commit {
+            Some(commit) => commit,
+            None => {
+                // This might be an OID that's been garbage collected, or
+                // just a non-commit object. Ignore it in either case.
+                return Ok(Vec::new());
+            }
+        };
+
+        Ok(commit
+            .get_parent_oids()
+            .into_iter()
+            .map(CommitVertex::from)
+            .collect())
+    }
+
+    async fn hint_subdag_for_insertion(
+        &self,
+        _heads: &[CommitVertex],
+    ) -> Result<MemNameDag, eden_dag::Error> {
+        Ok(MemNameDag::new())
+    }
 }
 
 /// Interface to access the directed acyclic graph (DAG) representing Git's
@@ -120,6 +161,23 @@ pub struct Dag {
 }
 
 impl Dag {
+    /// Reopen the DAG for the given repository.
+    pub fn try_clone(&self, repo: &Repo) -> eyre::Result<Self> {
+        let inner = Self::open_inner_dag(repo)?;
+        Ok(Self {
+            inner,
+            head_commit: self.head_commit.clone(),
+            main_branch_commit: self.main_branch_commit.clone(),
+            branch_commits: self.branch_commits.clone(),
+            observed_commits: self.observed_commits.clone(),
+            obsolete_commits: self.obsolete_commits.clone(),
+            public_commits: OnceCell::new(),
+            visible_heads: OnceCell::new(),
+            visible_commits: OnceCell::new(),
+            draft_commits: OnceCell::new(),
+        })
+    }
+
     /// Initialize the DAG for the given repository, and update it with any
     /// newly-referenced commits.
     #[instrument]
@@ -206,6 +264,10 @@ impl Dag {
         Ok(dag)
     }
 
+    fn run_blocking<T>(&self, fut: impl Future<Output = T>) -> T {
+        futures::executor::block_on(fut)
+    }
+
     /// This function's code adapted from `GitDag`, licensed under GPL-2.
     #[instrument]
     fn sync(&mut self, effects: &Effects, repo: &Repo) -> eyre::Result<()> {
@@ -229,56 +291,30 @@ impl Dag {
         let (effects, _progress) = effects.start_operation(OperationType::UpdateCommitGraph);
         let _effects = effects;
 
-        let parent_func = |v: CommitVertex| -> eden_dag::Result<Vec<CommitVertex>> {
-            use eden_dag::errors::BackendError;
-            trace!(?v, "visiting Git commit");
-
-            let oid = MaybeZeroOid::from_bytes(v.as_ref())
-                .map_err(|_e| anyhow::anyhow!("Could not convert to Git oid: {:?}", &v))
-                .map_err(BackendError::Other)?;
-            let oid = match oid {
-                MaybeZeroOid::NonZero(oid) => oid,
-                MaybeZeroOid::Zero => return Ok(Vec::new()),
-            };
-
-            let commit = repo
-                .find_commit(oid)
-                .map_err(|_e| anyhow::anyhow!("Could not resolve to Git commit: {:?}", &v))
-                .map_err(BackendError::Other)?;
-            let commit = match commit {
-                Some(commit) => commit,
-                None => {
-                    // This might be an OID that's been garbage collected, or
-                    // just a non-commit object. Ignore it in either case.
-                    return Ok(Vec::new());
-                }
-            };
-
-            Ok(commit
-                .get_parent_oids()
-                .into_iter()
-                .map(CommitVertex::from)
-                .collect())
+        let master_group_options = {
+            let mut options = VertexOptions::default();
+            options.highest_group = Group::MASTER;
+            options
         };
+        let master_heads = self
+            .commit_set_to_vec(&master_heads)?
+            .into_iter()
+            .map(|vertex| (CommitVertex::from(vertex), master_group_options.clone()))
+            .collect_vec();
+        let non_master_heads = self
+            .commit_set_to_vec(&non_master_heads)?
+            .into_iter()
+            .map(|vertex| (CommitVertex::from(vertex), VertexOptions::default()))
+            .collect_vec();
+        let heads = [master_heads, non_master_heads].concat();
 
-        let commit_set_to_vec = |commit_set: CommitSet| -> Vec<CommitVertex> {
-            let mut result = Vec::new();
-            for vertex in commit_set
-                .iter()
-                .expect("The commit set was produced statically, so iteration should not fail")
-            {
-                let vertex = vertex.expect(
-                    "The commit set was produced statically, so accessing a vertex should not fail",
-                );
-                result.push(vertex);
-            }
-            result
-        };
-        self.inner.add_heads_and_flush(
-            parent_func,
-            commit_set_to_vec(master_heads).as_slice(),
-            commit_set_to_vec(non_master_heads).as_slice(),
-        )?;
+        let repo = repo.try_clone()?;
+        futures::executor::block_on(self.inner.add_heads_and_flush(
+            &GitParentsBlocking {
+                repo: Arc::new(Mutex::new(repo)),
+            },
+            &VertexListWithOptions::from(heads),
+        ))?;
         Ok(())
     }
 
@@ -320,52 +356,41 @@ impl Dag {
         })
     }
 
+    /// Wrapper around DAG method.
+    #[instrument]
+    pub fn sort(&self, commit_set: &CommitSet) -> eyre::Result<CommitSet> {
+        let result = self.run_blocking(self.inner.sort(commit_set))?;
+        Ok(result)
+    }
+
+    /// Eagerly convert a `CommitSet` into a `Vec<NonZeroOid>` by iterating over it, preserving order.
+    #[instrument]
+    pub fn commit_set_to_vec(&self, commit_set: &CommitSet) -> eyre::Result<Vec<NonZeroOid>> {
+        async fn map_vertex(
+            vertex: Result<CommitVertex, eden_dag::Error>,
+        ) -> eyre::Result<NonZeroOid> {
+            let vertex = vertex.wrap_err("Evaluating vertex")?;
+            let vertex = NonZeroOid::try_from(vertex.clone())
+                .wrap_err_with(|| format!("Converting vertex to NonZeroOid: {:?}", &vertex))?;
+            Ok(vertex)
+        }
+        let stream = self
+            .run_blocking(commit_set.iter())
+            .wrap_err("Iterating commit set")?;
+        let result = self.run_blocking(stream.then(map_vertex).try_collect())?;
+        Ok(result)
+    }
+
     /// Get the parent OID for the given OID. Returns an error if the given OID
     /// does not have exactly 1 parent.
     #[instrument]
     pub fn get_only_parent_oid(&self, oid: NonZeroOid) -> eyre::Result<NonZeroOid> {
-        let parents: CommitSet = self.inner.parents(CommitSet::from(oid))?;
-        match commit_set_to_vec(&parents)?[..] {
+        let parents: CommitSet = self.run_blocking(self.inner.parents(CommitSet::from(oid)))?;
+        match self.commit_set_to_vec(&parents)?[..] {
             [oid] => Ok(oid),
             [] => Err(eyre::eyre!("Commit {} has no parents.", oid)),
             _ => Err(eyre::eyre!("Commit {} has more than 1 parents.", oid)),
         }
-    }
-
-    /// Get the range of OIDs from `parent_oid` to `child_oid`. Note that there
-    /// may be more than one path; in that case, the OIDs are returned in a
-    /// topologically-sorted order.
-    #[instrument]
-    pub fn get_range(
-        &self,
-        effects: &Effects,
-        repo: &Repo,
-        parent_oid: NonZeroOid,
-        child_oid: NonZeroOid,
-    ) -> eyre::Result<Vec<NonZeroOid>> {
-        let (effects, _progress) = effects.start_operation(OperationType::WalkCommits);
-        let _effects = effects;
-
-        let roots = CommitSet::from_static_names(vec![CommitVertex::from(parent_oid)]);
-        let heads = CommitSet::from_static_names(vec![CommitVertex::from(child_oid)]);
-        let range = self.inner.range(roots, heads).wrap_err("Computing range")?;
-        let range = self.inner.sort(&range).wrap_err("Sorting range")?;
-        let oids = {
-            let mut result = Vec::new();
-            for vertex in range.iter()? {
-                let vertex = vertex?;
-                let oid = vertex.as_ref();
-                let oid = MaybeZeroOid::from_bytes(oid)?;
-                match oid {
-                    MaybeZeroOid::Zero => {
-                        // Do nothing.
-                    }
-                    MaybeZeroOid::NonZero(oid) => result.push(oid),
-                }
-            }
-            result
-        };
-        Ok(oids)
     }
 
     /// Conduct an arbitrary query against the DAG.
@@ -377,16 +402,55 @@ impl Dag {
     /// ancestor of the main branch).
     #[instrument]
     pub fn is_public_commit(&self, commit_oid: NonZeroOid) -> eyre::Result<bool> {
-        let main_branch_commits = commit_set_to_vec(&self.main_branch_commit)?;
+        let main_branch_commits = self.commit_set_to_vec(&self.main_branch_commit)?;
         for main_branch_commit in main_branch_commits {
-            if self
-                .inner
-                .is_ancestor(commit_oid.into(), main_branch_commit.into())?
-            {
+            if self.run_blocking(
+                self.inner
+                    .is_ancestor(commit_oid.into(), main_branch_commit.into()),
+            )? {
                 return Ok(true);
             }
         }
         Ok(false)
+    }
+
+    /// Wrapper around DAG method.
+    #[instrument]
+    pub fn query_is_ancestor(&self, lhs: NonZeroOid, rhs: NonZeroOid) -> eden_dag::Result<bool> {
+        let result = self.run_blocking(self.inner.is_ancestor(lhs.into(), rhs.into()))?;
+        Ok(result)
+    }
+
+    /// Wrapper around NameSet method.
+    #[instrument]
+    pub fn set_is_empty(&self, commit_set: &CommitSet) -> eden_dag::Result<bool> {
+        let result = self.run_blocking(commit_set.is_empty())?;
+        Ok(result)
+    }
+
+    /// Wrapper around NameSet method.
+    #[instrument]
+    pub fn set_contains<T: Into<CommitVertex> + Debug>(
+        &self,
+        commit_set: &CommitSet,
+        oid: T,
+    ) -> eden_dag::Result<bool> {
+        let result = self.run_blocking(commit_set.contains(&oid.into()))?;
+        Ok(result)
+    }
+
+    /// Wrapper around NameSet method.
+    #[instrument]
+    pub fn set_count(&self, commit_set: &CommitSet) -> eden_dag::Result<usize> {
+        let result = self.run_blocking(commit_set.count())?;
+        Ok(result)
+    }
+
+    /// Wrapper around NameSet method.
+    #[instrument]
+    pub fn set_first(&self, commit_set: &CommitSet) -> eden_dag::Result<Option<CommitVertex>> {
+        let result = self.run_blocking(commit_set.first())?;
+        Ok(result)
     }
 
     /// Return the set of commits which are public, as per the definition in
@@ -395,7 +459,8 @@ impl Dag {
     #[instrument]
     pub fn query_public_commits_slow(&self) -> eyre::Result<&CommitSet> {
         self.public_commits.get_or_try_init(|| {
-            let public_commits = self.query().ancestors(self.main_branch_commit.clone())?;
+            let public_commits =
+                self.run_blocking(self.inner.ancestors(self.main_branch_commit.clone()))?;
             Ok(public_commits)
         })
     }
@@ -411,7 +476,7 @@ impl Dag {
                 .union(&self.head_commit)
                 .union(&self.main_branch_commit)
                 .union(&self.branch_commits);
-            let visible_heads = self.query().heads(visible_heads)?;
+            let visible_heads = self.run_blocking(self.inner.heads(visible_heads))?;
             Ok(visible_heads)
         })
     }
@@ -423,7 +488,7 @@ impl Dag {
     pub fn query_visible_commits_slow(&self) -> eyre::Result<&CommitSet> {
         self.visible_commits.get_or_try_init(|| {
             let visible_heads = self.query_visible_heads()?;
-            let result = self.inner.ancestors(visible_heads.clone())?;
+            let result = self.run_blocking(self.inner.ancestors(visible_heads.clone()))?;
             Ok(result)
         })
     }
@@ -433,7 +498,9 @@ impl Dag {
     #[instrument]
     pub fn filter_visible_commits(&self, commits: CommitSet) -> eyre::Result<CommitSet> {
         let visible_heads = self.query_visible_heads()?;
-        Ok(commits.intersection(&self.query().range(commits.clone(), visible_heads.clone())?))
+        Ok(commits.intersection(
+            &self.run_blocking(self.inner.range(commits.clone(), visible_heads.clone()))?,
+        ))
     }
 
     /// Determine the set of obsolete commits. These commits have been rewritten
@@ -449,11 +516,124 @@ impl Dag {
     pub fn query_draft_commits(&self) -> eyre::Result<&CommitSet> {
         self.draft_commits.get_or_try_init(|| {
             let visible_heads = self.query_visible_heads()?;
-            let draft_commits = self
-                .query()
-                .only(visible_heads.clone(), self.main_branch_commit.clone())?;
+            let draft_commits = self.run_blocking(
+                self.inner
+                    .only(visible_heads.clone(), self.main_branch_commit.clone()),
+            )?;
             Ok(draft_commits)
         })
+    }
+
+    /// Wrapper around DAG method.
+    #[instrument]
+    pub fn query_all(&self) -> eyre::Result<CommitSet> {
+        let result = self.run_blocking(self.inner.all())?;
+        Ok(result)
+    }
+
+    /// Wrapper around DAG method.
+    #[instrument]
+    pub fn query_parents(&self, commit_set: CommitSet) -> eden_dag::Result<CommitSet> {
+        let result = self.run_blocking(self.inner.parents(commit_set))?;
+        Ok(result)
+    }
+
+    /// Wrapper around DAG method.
+    #[instrument]
+    pub fn query_parent_names<T: Into<CommitVertex> + Debug>(
+        &self,
+        vertex: T,
+    ) -> eden_dag::Result<Vec<CommitVertex>> {
+        let result = self.run_blocking(self.inner.parent_names(vertex.into()))?;
+        Ok(result)
+    }
+
+    /// Wrapper around DAG method.
+    #[instrument]
+    pub fn query_ancestors(&self, commit_set: CommitSet) -> eden_dag::Result<CommitSet> {
+        let result = self.run_blocking(self.inner.ancestors(commit_set))?;
+        Ok(result)
+    }
+
+    /// Wrapper around DAG method.
+    #[instrument]
+    pub fn query_first_ancestor_nth(
+        &self,
+        vertex: CommitVertex,
+        n: u64,
+    ) -> eden_dag::Result<Option<CommitVertex>> {
+        let result = self.run_blocking(self.inner.first_ancestor_nth(vertex, n))?;
+        Ok(result)
+    }
+
+    /// Wrapper around DAG method.
+    #[instrument]
+    pub fn query_children(&self, commit_set: CommitSet) -> eden_dag::Result<CommitSet> {
+        let result = self.run_blocking(self.inner.children(commit_set))?;
+        Ok(result)
+    }
+
+    /// Wrapper around DAG method.
+    #[instrument]
+    pub fn query_descendants(&self, commit_set: CommitSet) -> eden_dag::Result<CommitSet> {
+        let result = self.run_blocking(self.inner.descendants(commit_set))?;
+        Ok(result)
+    }
+
+    /// Wrapper around DAG method.
+    #[instrument]
+    pub fn query_roots(&self, commit_set: CommitSet) -> eden_dag::Result<CommitSet> {
+        let result = self.run_blocking(self.inner.roots(commit_set))?;
+        Ok(result)
+    }
+
+    /// Wrapper around DAG method.
+    #[instrument]
+    pub fn query_heads(&self, commit_set: CommitSet) -> eden_dag::Result<CommitSet> {
+        let result = self.run_blocking(self.inner.heads(commit_set))?;
+        Ok(result)
+    }
+
+    /// Wrapper around DAG method.
+    #[instrument]
+    pub fn query_heads_ancestors(&self, commit_set: CommitSet) -> eden_dag::Result<CommitSet> {
+        let result = self.run_blocking(self.inner.heads_ancestors(commit_set))?;
+        Ok(result)
+    }
+
+    /// Wrapper around DAG method.
+    #[instrument]
+    pub fn query_only(&self, from: CommitSet, to: CommitSet) -> eden_dag::Result<CommitSet> {
+        let result = self.run_blocking(self.inner.only(from, to))?;
+        Ok(result)
+    }
+
+    /// Wrapper around DAG method.
+    #[instrument]
+    pub fn query_range(&self, from: CommitSet, to: CommitSet) -> eden_dag::Result<CommitSet> {
+        let result = self.run_blocking(self.inner.range(from, to))?;
+        Ok(result)
+    }
+
+    /// Wrapper around DAG method.
+    #[instrument]
+    pub fn query_common_ancestors(&self, commit_set: CommitSet) -> eden_dag::Result<CommitSet> {
+        let result = self.run_blocking(self.inner.common_ancestors(commit_set))?;
+        Ok(result)
+    }
+
+    /// Wrapper around DAG method.
+    #[instrument]
+    pub fn query_gca_one(&self, commit_set: CommitSet) -> eden_dag::Result<Option<CommitVertex>> {
+        let result = self.run_blocking(self.inner.gca_one(commit_set))?;
+        Ok(result)
+    }
+
+    /// Wrapper around DAG method.
+    #[instrument]
+    pub fn query_gca_all(&self, commit_set: CommitSet) -> eden_dag::Result<CommitSet> {
+        let result = self.run_blocking(self.inner.gca_all(commit_set))?;
+        Ok(result)
     }
 
     /// Given a CommitSet, return a list of CommitSets, each representing a
@@ -470,22 +650,22 @@ impl Dag {
 
         // FIXME: O(n^2) algorithm (
         // FMI see https://github.com/arxanas/git-branchless/pull/450#issuecomment-1188391763
-        for commit in commit_set_to_vec(commit_set)? {
-            if commits_to_connect.is_empty()? {
+        for commit in self.commit_set_to_vec(commit_set)? {
+            if self.run_blocking(commits_to_connect.is_empty())? {
                 break;
             }
 
-            if !commits_to_connect.contains(&commit.into())? {
+            if !self.run_blocking(commits_to_connect.contains(&commit.into()))? {
                 continue;
             }
 
             let mut commits = CommitSet::from(commit);
-            while !commits.is_empty()? {
+            while !self.run_blocking(commits.is_empty())? {
                 component = component.union(&commits);
                 commits_to_connect = commits_to_connect.difference(&commits);
 
-                let parents = self.query().parents(commits.clone())?;
-                let children = self.query().children(commits.clone())?;
+                let parents = self.run_blocking(self.inner.parents(commits.clone()))?;
+                let children = self.run_blocking(self.inner.children(commits.clone()))?;
                 commits = parents.union(&children).intersection(&commits_to_connect);
             }
 
@@ -494,9 +674,15 @@ impl Dag {
         }
 
         let connected_commits = union_all(&components);
-        assert_eq!(commit_set.count()?, connected_commits.count()?);
+        assert_eq!(
+            self.run_blocking(commit_set.count())?,
+            self.run_blocking(connected_commits.count())?
+        );
         let connected_commits = commit_set.intersection(&connected_commits);
-        assert_eq!(commit_set.count()?, connected_commits.count()?);
+        assert_eq!(
+            self.run_blocking(commit_set.count())?,
+            self.run_blocking(connected_commits.count())?
+        );
 
         Ok(components)
     }
@@ -526,7 +712,7 @@ pub fn sorted_commit_set<'repo>(
     dag: &Dag,
     commit_set: &CommitSet,
 ) -> eyre::Result<Vec<Commit<'repo>>> {
-    let commit_oids = commit_set_to_vec(commit_set)?;
+    let commit_oids = dag.commit_set_to_vec(commit_set)?;
     let mut commits: Vec<Commit> = {
         let mut commits = Vec::new();
         for commit_oid in commit_oids {
@@ -546,8 +732,7 @@ pub fn sorted_commit_set<'repo>(
         let lhs_vertex = CommitVertex::from(lhs.get_oid());
         let rhs_vertex = CommitVertex::from(rhs.get_oid());
         if dag
-            .query()
-            .is_ancestor(lhs_vertex.clone(), rhs_vertex.clone())
+            .query_is_ancestor(lhs.get_oid(), rhs.get_oid())
             .unwrap_or_else(|_| {
                 warn!(
                     ?lhs_vertex,
@@ -559,8 +744,7 @@ pub fn sorted_commit_set<'repo>(
         {
             return Ordering::Less;
         } else if dag
-            .query()
-            .is_ancestor(rhs_vertex.clone(), lhs_vertex.clone())
+            .query_is_ancestor(rhs.get_oid(), lhs.get_oid())
             .unwrap_or_else(|_| {
                 warn!(
                     ?lhs_vertex,

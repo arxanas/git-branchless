@@ -217,7 +217,8 @@ fn test_init_basic() -> eyre::Result<()> {
     })?;
 
     {
-        let (stdout, _stderr) = git.branchless("init", &[])?;
+        let (stdout, stderr) = git.branchless("init", &[])?;
+        insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
         Created config file at <repo-path>/.git/branchless/config
         Auto-detected your main branch as: master

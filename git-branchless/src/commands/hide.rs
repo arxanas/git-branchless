@@ -5,7 +5,6 @@ use std::collections::HashMap;
 use std::fmt::Write;
 use std::time::SystemTime;
 
-use eden_dag::DagAlgorithm;
 use git_branchless_opts::{ResolveRevsetOptions, Revset};
 use lib::core::dag::{sorted_commit_set, union_all, Dag};
 use lib::core::effects::Effects;
@@ -57,11 +56,11 @@ pub fn hide(
 
     let commits = union_all(&commit_sets);
     let commits = if recursive {
-        dag.filter_visible_commits(dag.query().descendants(commits)?)?
+        dag.filter_visible_commits(dag.query_descendants(commits)?)?
     } else {
         commits
     };
-    let commits = dag.query().sort(&commits)?;
+    let commits = dag.sort(&commits)?;
     let commits = sorted_commit_set(&repo, &dag, &commits)?;
 
     let timestamp = now.duration_since(SystemTime::UNIX_EPOCH)?.as_secs_f64();
@@ -213,13 +212,12 @@ pub fn unhide(
 
     let commits = union_all(&commit_sets);
     let commits = if recursive {
-        dag.query()
-            .descendants(commits)?
+        dag.query_descendants(commits)?
             .intersection(&dag.query_obsolete_commits())
     } else {
         commits
     };
-    let commits = dag.query().sort(&commits)?;
+    let commits = dag.sort(&commits)?;
     let commits = sorted_commit_set(&repo, &dag, &commits)?;
 
     let timestamp = now.duration_since(SystemTime::UNIX_EPOCH)?.as_secs_f64();

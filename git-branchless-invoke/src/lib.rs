@@ -54,7 +54,11 @@ pub struct CommandContext {
 fn install_tracing(effects: Effects) -> eyre::Result<impl Drop> {
     let env_filter = EnvFilter::builder()
         .with_default_directive(LevelFilter::WARN.into())
-        .from_env_lossy();
+        .parse(std::env::var(EnvFilter::DEFAULT_ENV).unwrap_or_else(|_|
+                // Limit to first-party logs by default in case third-party
+                // packages log spuriously. See
+                // https://discord.com/channels/968932220549103686/968932220549103689/1077096194276339772
+                "git_branchless=warn".to_string()))?;
     let fmt_layer = tracing_fmt::layer().with_writer(move || effects.clone().get_error_stream());
 
     let (profile_layer, flush_guard): (_, Box<dyn Any>) = {

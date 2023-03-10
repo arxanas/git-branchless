@@ -69,7 +69,7 @@ use git_branchless_opts::{MoveOptions, ResolveRevsetOptions, Revset};
 use git_branchless_revset::resolve_commits;
 use git_branchless_smartlog::smartlog;
 use lib::core::config::get_restack_preserve_timestamps;
-use lib::core::dag::{commit_set_to_vec, union_all, CommitSet, Dag};
+use lib::core::dag::{union_all, CommitSet, Dag};
 use lib::core::effects::Effects;
 use lib::core::eventlog::{EventCursor, EventLogDb, EventReplayer};
 use lib::core::rewrite::{
@@ -101,7 +101,7 @@ fn restack_commits(
     };
     // Don't use `sort_commit_set` since the set of obsolete commits may be very
     // large and we'll be throwing away most of them.
-    let commits = commit_set_to_vec(&commit_set)?;
+    let commits = dag.commit_set_to_vec(&commit_set)?;
 
     struct RebaseInfo {
         dest_oid: NonZeroOid,
@@ -138,7 +138,7 @@ fn restack_commits(
         )? {
             Ok(permissions) => permissions,
             Err(err) => {
-                err.describe(effects, &repo)?;
+                err.describe(effects, &repo, dag)?;
                 return Ok(ExitCode(1));
             }
         };
@@ -162,7 +162,7 @@ fn restack_commits(
                 return Ok(ExitCode(0));
             }
             Err(err) => {
-                err.describe(effects, &repo)?;
+                err.describe(effects, &repo, dag)?;
                 return Ok(ExitCode(1));
             }
         }
@@ -297,7 +297,7 @@ pub fn restack(
         None
     } else {
         Some(
-            commit_set_to_vec(&union_all(&commit_sets))?
+            dag.commit_set_to_vec(&union_all(&commit_sets))?
                 .into_iter()
                 .collect(),
         )
