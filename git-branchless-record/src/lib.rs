@@ -12,17 +12,10 @@
 use std::collections::HashSet;
 use std::ffi::OsString;
 use std::fmt::Write;
-use std::io;
 use std::time::SystemTime;
-
-use cursive::backends::crossterm;
-use cursive::CursiveRunnable;
-use cursive_buffered_backend::BufferedBackend;
 
 use git_branchless_invoke::CommandContext;
 use git_branchless_opts::RecordArgs;
-use git_record::Recorder;
-use git_record::{RecordError, RecordState};
 use itertools::Itertools;
 use lib::core::check_out::{check_out_commit, CheckOutCommitOptions};
 use lib::core::config::get_restack_preserve_timestamps;
@@ -43,6 +36,7 @@ use lib::git::{
 };
 use lib::util::ExitCode;
 use rayon::ThreadPoolBuilder;
+use scm_record::{EventSource, RecordError, RecordState, Recorder};
 use tracing::instrument;
 
 /// Commit changes in the working copy.
@@ -234,7 +228,7 @@ fn record_interactive(
     event_tx_id: EventTransactionId,
     message: Option<&str>,
 ) -> eyre::Result<ExitCode> {
-    let file_states = {
+    let files = {
         let (effects, _progress) = effects.start_operation(OperationType::CalculateDiff);
         let old_tree = snapshot.commit_stage0.get_tree()?;
         let new_tree = snapshot.commit_unstaged.get_tree()?;
@@ -247,34 +241,38 @@ fn record_interactive(
         )?;
         process_diff_for_record(repo, &diff)?
     };
-    let record_state = RecordState { file_states };
+    let record_state = RecordState { files };
 
-    let siv = CursiveRunnable::new(|| -> io::Result<_> {
-        // Use crossterm to ensure that we support Windows.
-        let crossterm_backend = crossterm::Backend::init()?;
-        Ok(Box::new(BufferedBackend::new(crossterm_backend)))
-    });
-    let siv = siv.into_runner();
-
-    let recorder = Recorder::new(record_state);
-    let result = recorder.run(siv);
-    let RecordState {
-        file_states: result,
-    } = match result {
+    let recorder = Recorder::new(record_state, EventSource::Crossterm);
+    let result = recorder.run();
+    let RecordState { files: result } = match result {
         Ok(result) => result,
         Err(RecordError::Cancelled) => {
             println!("Aborted.");
+            return Ok(ExitCode(1));
+        }
+        Err(RecordError::Bug(message)) => {
+            println!("BUG: {message}");
+            println!("This is a bug. Please report it.");
+            return Ok(ExitCode(1));
+        }
+        Err(
+            err @ (RecordError::SetUpTerminal(_)
+            | RecordError::ReadInput(_)
+            | RecordError::RenderFrame(_)),
+        ) => {
+            println!("Error: {err}");
             return Ok(ExitCode(1));
         }
     };
 
     let update_index_script: Vec<UpdateIndexCommand> = result
         .into_iter()
-        .map(|(path, file_state)| -> eyre::Result<UpdateIndexCommand> {
-            let (selected, _unselected) = file_state.get_selected_contents();
+        .map(|file| -> eyre::Result<UpdateIndexCommand> {
+            let (selected, _unselected) = file.get_selected_contents();
             let oid = repo.create_blob_from_contents(selected.as_bytes())?;
             let command = UpdateIndexCommand::Update {
-                path,
+                path: file.path.clone().into_owned(),
                 stage: Stage::Stage0,
                 // TODO: use `FileMode::BlobExecutable` when appropriate.
                 mode: FileMode::Blob,

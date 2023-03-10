@@ -4,8 +4,8 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use eyre::Context;
-use git_record::{FileState, Section, SectionChangedLine};
 use itertools::Itertools;
+use scm_record::{ChangeType, File, Section, SectionChangedLine};
 
 use super::{MaybeZeroOid, Repo};
 
@@ -23,10 +23,7 @@ struct GitHunk {
 }
 
 /// Calculate the diff between the index and the working copy.
-pub fn process_diff_for_record(
-    repo: &Repo,
-    diff: &Diff,
-) -> eyre::Result<Vec<(PathBuf, FileState<'static>)>> {
+pub fn process_diff_for_record(repo: &Repo, diff: &Diff) -> eyre::Result<Vec<File<'static>>> {
     let Diff { inner: diff } = diff;
 
     #[derive(Clone, Debug)]
@@ -110,13 +107,13 @@ pub fn process_diff_for_record(
         } = delta;
 
         if new_oid.is_zero() {
-            result.push((path, FileState::absent()));
+            result.push(File::absent(Cow::Owned(path)));
             continue;
         }
 
         let hunks = match content {
             DeltaFileContent::Binary => {
-                result.push((path, FileState::binary()));
+                result.push(File::binary(Cow::Owned(path)));
                 continue;
             }
             DeltaFileContent::Hunks(mut hunks) => {
@@ -155,14 +152,14 @@ pub fn process_diff_for_record(
         let before_lines = match get_lines_from_blob(old_oid)? {
             Some(lines) => lines,
             None => {
-                result.push((path, FileState::binary()));
+                result.push(File::binary(Cow::Owned(path)));
                 continue;
             }
         };
         let after_lines = match get_lines_from_blob(new_oid)? {
             Some(lines) => lines,
             None => {
-                result.push((path, FileState::binary()));
+                result.push(File::binary(Cow::Owned(path)));
                 continue;
             }
         };
@@ -203,7 +200,7 @@ pub fn process_diff_for_record(
                     old_start
                 };
                 file_hunks.push(Section::Unchanged {
-                    contents: before_lines[unchanged_hunk_line_idx..end]
+                    lines: before_lines[unchanged_hunk_line_idx..end]
                         .iter()
                         .cloned()
                         .map(Cow::Owned)
@@ -237,28 +234,31 @@ pub fn process_diff_for_record(
                 lines  = &after_lines[after_idx_start..],
             );
             file_hunks.push(Section::Changed {
-                before: before_lines[before_idx_start..before_idx_end]
+                lines: before_lines[before_idx_start..before_idx_end]
                     .iter()
                     .cloned()
-                    .map(|line| SectionChangedLine {
-                        is_selected: false,
-                        line: Cow::Owned(line),
+                    .map(|before_line| SectionChangedLine {
+                        is_toggled: false,
+                        change_type: ChangeType::Removed,
+                        line: Cow::Owned(before_line),
                     })
-                    .collect(),
-                after: after_lines[after_idx_start..after_idx_end]
-                    .iter()
-                    .cloned()
-                    .map(|line| SectionChangedLine {
-                        is_selected: false,
-                        line: Cow::Owned(line),
-                    })
+                    .chain(
+                        after_lines[after_idx_start..after_idx_end]
+                            .iter()
+                            .cloned()
+                            .map(|after_line| SectionChangedLine {
+                                is_toggled: false,
+                                change_type: ChangeType::Added,
+                                line: Cow::Owned(after_line),
+                            }),
+                    )
                     .collect(),
             });
         }
 
         if unchanged_hunk_line_idx < before_lines.len() {
             file_hunks.push(Section::Unchanged {
-                contents: before_lines[unchanged_hunk_line_idx..]
+                lines: before_lines[unchanged_hunk_line_idx..]
                     .iter()
                     .cloned()
                     .map(Cow::Owned)
@@ -270,20 +270,18 @@ pub fn process_diff_for_record(
         let new_file_mode: usize = u32::from(new_file_mode).try_into().unwrap();
         let file_mode_section = if old_file_mode != new_file_mode {
             vec![Section::FileMode {
-                is_selected: false,
+                is_toggled: false,
                 before: old_file_mode,
                 after: new_file_mode,
             }]
         } else {
             vec![]
         };
-        result.push((
-            path,
-            FileState {
-                file_mode: Some(old_file_mode),
-                sections: [file_mode_section, file_hunks].concat().to_vec(),
-            },
-        ));
+        result.push(File {
+            path: Cow::Owned(path),
+            file_mode: Some(old_file_mode),
+            sections: [file_mode_section, file_hunks].concat().to_vec(),
+        });
     }
     Ok(result)
 }
