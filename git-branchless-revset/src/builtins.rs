@@ -1,10 +1,11 @@
 use bstr::ByteSlice;
-use eden_dag::DagAlgorithm;
+use eden_dag::nameset::hints::Hints;
+
 use lib::core::dag::CommitSet;
 use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::rewrite::find_rewrite_target;
 use lib::git::{
-    get_latest_test_command_path, get_test_tree_dir, Commit, MaybeZeroOid, NonZeroOid, Repo,
+    get_latest_test_command_path, get_test_tree_dir, Commit, MaybeZeroOid, Repo,
     SerializedNonZeroOid, SerializedTestResult, TEST_ABORT_EXIT_CODE, TEST_INDETERMINATE_EXIT_CODE,
     TEST_SUCCESS_EXIT_CODE,
 };
@@ -75,7 +76,7 @@ fn fn_all(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
         .dag
         .query_visible_heads()
         .map_err(EvalError::OtherError)?;
-    let visible_commits = ctx.dag.query().ancestors(visible_heads.clone())?;
+    let visible_commits = ctx.dag.query_ancestors(visible_heads.clone())?;
     let visible_commits = ctx
         .dag
         .filter_visible_commits(visible_commits)
@@ -110,13 +111,13 @@ fn fn_difference(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
 #[instrument]
 fn fn_only(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     let (lhs, rhs) = eval2(ctx, name, args)?;
-    Ok(ctx.dag.query().only(lhs, rhs)?)
+    Ok(ctx.dag.query_only(lhs, rhs)?)
 }
 
 #[instrument]
 fn fn_range(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     let (lhs, rhs) = eval2(ctx, name, args)?;
-    Ok(ctx.dag.query().range(lhs, rhs)?)
+    Ok(ctx.dag.query_range(lhs, rhs)?)
 }
 
 #[instrument]
@@ -126,39 +127,39 @@ fn fn_not(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
         .dag
         .query_visible_heads()
         .map_err(EvalError::OtherError)?;
-    let visible_commits = ctx.dag.query().ancestors(visible_heads.clone())?;
+    let visible_commits = ctx.dag.query_ancestors(visible_heads.clone())?;
     Ok(visible_commits.difference(&expr))
 }
 
 #[instrument]
 fn fn_ancestors(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     let expr = eval1(ctx, name, args)?;
-    Ok(ctx.dag.query().ancestors(expr)?)
+    Ok(ctx.dag.query_ancestors(expr)?)
 }
 
 #[instrument]
 fn fn_descendants(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     let expr = eval1(ctx, name, args)?;
-    Ok(ctx.dag.query().descendants(expr)?)
+    Ok(ctx.dag.query_descendants(expr)?)
 }
 
 #[instrument]
 fn fn_parents(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     let expr = eval1(ctx, name, args)?;
-    Ok(ctx.dag.query().parents(expr)?)
+    Ok(ctx.dag.query_parents(expr)?)
 }
 
 #[instrument]
 fn fn_children(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     let expr = eval1(ctx, name, args)?;
-    Ok(ctx.dag.query().children(expr)?)
+    Ok(ctx.dag.query_children(expr)?)
 }
 
 #[instrument]
 fn fn_siblings(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     let expr = eval1(ctx, name, args)?;
-    let parents = ctx.dag.query().parents(expr.clone())?;
-    let children = ctx.dag.query().children(parents)?;
+    let parents = ctx.dag.query_parents(expr.clone())?;
+    let children = ctx.dag.query_children(parents)?;
     let siblings = children.difference(&expr);
     Ok(siblings)
 }
@@ -166,13 +167,13 @@ fn fn_siblings(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
 #[instrument]
 fn fn_roots(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     let expr = eval1(ctx, name, args)?;
-    Ok(ctx.dag.query().roots(expr)?)
+    Ok(ctx.dag.query_roots(expr)?)
 }
 
 #[instrument]
 fn fn_heads(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     let expr = eval1(ctx, name, args)?;
-    Ok(ctx.dag.query().heads(expr)?)
+    Ok(ctx.dag.query_heads(expr)?)
 }
 
 #[instrument]
@@ -184,44 +185,38 @@ fn fn_branches(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
 #[instrument]
 fn fn_parents_nth(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     let (lhs, n) = eval_number_rhs(ctx, name, args)?;
+    let commit_oids = ctx
+        .dag
+        .commit_set_to_vec(&lhs)
+        .map_err(EvalError::OtherError)?;
     let mut result = Vec::new();
-    for vertex in lhs
-        .iter()
-        .wrap_err("Iterating commit set")
-        .map_err(EvalError::OtherError)?
-    {
-        let vertex = vertex
-            .wrap_err("Evaluating vertex")
-            .map_err(EvalError::OtherError)?;
+    for commit_oid in commit_oids {
         if let Some(n) = n.checked_sub(1) {
-            let parents = ctx.dag.query().parent_names(vertex)?;
+            let parents = ctx.dag.query_parent_names(commit_oid)?;
             if let Some(parent) = parents.get(n) {
                 result.push(Ok(parent.clone()))
             }
         }
     }
-    Ok(CommitSet::from_iter(result.into_iter()))
+    Ok(CommitSet::from_iter(result.into_iter(), Hints::default()))
 }
 
 #[instrument]
 fn fn_nthancestor(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     let (lhs, n) = eval_number_rhs(ctx, name, args)?;
+    let commit_oids = ctx
+        .dag
+        .commit_set_to_vec(&lhs)
+        .map_err(EvalError::OtherError)?;
     let n: u64 = u64::try_from(n).unwrap();
     let mut result = Vec::new();
-    for vertex in lhs
-        .iter()
-        .wrap_err("Iterating commit set")
-        .map_err(EvalError::OtherError)?
-    {
-        let vertex = vertex
-            .wrap_err("Evaluating vertex")
-            .map_err(EvalError::OtherError)?;
-        let ancestor = ctx.dag.query().first_ancestor_nth(vertex, n);
-        if let Ok(ancestor) = ancestor {
+    for commit_oid in commit_oids {
+        let ancestor = ctx.dag.query_first_ancestor_nth(commit_oid.into(), n)?;
+        if let Some(ancestor) = ancestor {
             result.push(Ok(ancestor.clone()))
         }
     }
-    Ok(CommitSet::from_iter(result.into_iter()))
+    Ok(CommitSet::from_iter(result.into_iter(), Hints::default()))
 }
 
 #[instrument]
@@ -257,11 +252,10 @@ fn fn_stack(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
         .dag
         .query_draft_commits()
         .map_err(EvalError::OtherError)?;
-    let stack_roots = ctx.dag.query().roots(draft_commits.clone())?;
-    let stack_ancestors = ctx.dag.query().range(stack_roots, arg)?;
+    let stack_roots = ctx.dag.query_roots(draft_commits.clone())?;
+    let stack_ancestors = ctx.dag.query_range(stack_roots, arg)?;
     let stack = ctx
         .dag
-        .query()
         // Note that for a graph like
         //
         // ```
@@ -274,7 +268,7 @@ fn fn_stack(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
         // @ C
         // ```
         // this will return `{A, B, C}`, not just `{A, C}`.
-        .range(stack_ancestors, draft_commits.clone())?;
+        .query_range(stack_ancestors, draft_commits.clone())?;
     Ok(stack)
 }
 
@@ -469,10 +463,7 @@ fn fn_committer_date(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult
 #[instrument]
 fn fn_exactly(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     let (lhs, expected_len) = eval_number_rhs(ctx, name, args)?;
-    let actual_len: usize = lhs
-        .count()
-        .wrap_err("Counting commit set")
-        .map_err(EvalError::OtherError)?;
+    let actual_len: usize = ctx.dag.set_count(&lhs)?;
 
     if actual_len == expected_len {
         Ok(lhs)
@@ -507,21 +498,13 @@ fn fn_current(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
         .map_err(EvalError::OtherError)?;
     let event_cursor = event_replayer.make_default_cursor();
 
+    let commit_oids = ctx
+        .dag
+        .commit_set_to_vec(&expr)
+        .map_err(EvalError::OtherError)?;
     let mut result = Vec::new();
-    for vertex in expr
-        .iter()
-        .wrap_err("Iterating commit set")
-        .map_err(EvalError::OtherError)?
-    {
-        let vertex = vertex
-            .wrap_err("Evaluating vertex")
-            .map_err(EvalError::OtherError)?;
-
-        let oid = NonZeroOid::try_from(vertex)
-            .wrap_err("Converting vertex to oid")
-            .map_err(EvalError::OtherError)?;
-
-        match find_rewrite_target(&event_replayer, event_cursor, oid) {
+    for commit_oid in commit_oids {
+        match find_rewrite_target(&event_replayer, event_cursor, commit_oid) {
             Some(new_commit_oid) => match new_commit_oid {
                 MaybeZeroOid::NonZero(new_commit_oid) => {
                     // commit rewritten as new_commit_oid
@@ -532,7 +515,7 @@ fn fn_current(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
                 }
             },
             // commit not rewritten
-            None => result.push(oid),
+            None => result.push(commit_oid),
         }
     }
     Ok(result.into_iter().collect::<CommitSet>())

@@ -1,9 +1,8 @@
 use std::fmt::Write;
 
-use eden_dag::DagAlgorithm;
 use git_branchless_invoke::CommandContext;
 use itertools::Itertools;
-use lib::core::dag::{commit_set_to_vec, Dag};
+use lib::core::dag::Dag;
 use lib::core::effects::{Effects, OperationType};
 use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::repo_ext::RepoExt;
@@ -75,8 +74,8 @@ fn query(
             let _effects = effects;
 
             let commit_set = commit_set.intersection(&dag.branch_commits);
-            let commit_set = dag.query().sort(&commit_set)?;
-            commit_set_to_vec(&commit_set)?
+            let commit_set = dag.sort(&commit_set)?;
+            dag.commit_set_to_vec(&commit_set)?
         };
         let ref_names = commit_oids
             .into_iter()
@@ -97,8 +96,8 @@ fn query(
             let (effects, _progress) = effects.start_operation(OperationType::SortCommits);
             let _effects = effects;
 
-            let commit_set = dag.query().sort(&commit_set)?;
-            commit_set_to_vec(&commit_set)?
+            let commit_set = dag.sort(&commit_set)?;
+            dag.commit_set_to_vec(&commit_set)?
         };
         for commit_oid in commit_oids.into_iter().rev() {
             if raw {

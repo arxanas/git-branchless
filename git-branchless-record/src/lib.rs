@@ -19,7 +19,6 @@ use cursive::backends::crossterm;
 use cursive::CursiveRunnable;
 use cursive_buffered_backend::BufferedBackend;
 
-use eden_dag::DagAlgorithm;
 use git_branchless_invoke::CommandContext;
 use git_branchless_opts::RecordArgs;
 use git_record::Recorder;
@@ -27,7 +26,7 @@ use git_record::{RecordError, RecordState};
 use itertools::Itertools;
 use lib::core::check_out::{check_out_commit, CheckOutCommitOptions};
 use lib::core::config::get_restack_preserve_timestamps;
-use lib::core::dag::{commit_set_to_vec, CommitSet, Dag};
+use lib::core::dag::{CommitSet, Dag};
 use lib::core::effects::{Effects, OperationType};
 use lib::core::eventlog::{EventLogDb, EventReplayer, EventTransactionId};
 use lib::core::formatting::Pluralize;
@@ -340,8 +339,8 @@ fn insert_before_siblings(
     )?;
     let head_commit = repo.find_commit_or_fail(head_oid)?;
     let head_commit_set = CommitSet::from(head_oid);
-    let parents = dag.query().parents(head_commit_set.clone())?;
-    let children = dag.query().children(parents)?;
+    let parents = dag.query_parents(head_commit_set.clone())?;
+    let children = dag.query_children(parents)?;
     let siblings = children.difference(&head_commit_set);
     let siblings = dag.filter_visible_commits(siblings)?;
     let build_options = BuildRebasePlanOptions {
@@ -358,7 +357,7 @@ fn insert_before_siblings(
                 let head_commit_parents: HashSet<_> =
                     head_commit.get_parent_oids().into_iter().collect();
                 let mut builder = RebasePlanBuilder::new(&dag, permissions);
-                for sibling_oid in commit_set_to_vec(&siblings)? {
+                for sibling_oid in dag.commit_set_to_vec(&siblings)? {
                     let sibling_commit = repo.find_commit_or_fail(sibling_oid)?;
                     let parent_oids = sibling_commit.get_parent_oids();
                     let new_parent_oids = parent_oids
@@ -396,15 +395,15 @@ fn insert_before_siblings(
         }
 
         Err(err @ BuildRebasePlanError::MoveIllegalCommits { .. }) => {
-            err.describe(effects, &repo)?;
+            err.describe(effects, &repo, &dag)?;
             return Ok(ExitCode(1));
         }
 
         Err(BuildRebasePlanError::MovePublicCommits {
             public_commits_to_move,
         }) => {
-            let example_bad_commit_oid = public_commits_to_move
-                .first()?
+            let example_bad_commit_oid = dag
+                .set_first(&public_commits_to_move)?
                 .ok_or_else(|| eyre::eyre!("BUG: could not get OID of a public commit to move"))?;
             let example_bad_commit_oid = NonZeroOid::try_from(example_bad_commit_oid)?;
             let example_bad_commit = repo.find_commit_or_fail(example_bad_commit_oid)?;
@@ -417,7 +416,7 @@ collaborators will have difficulty merging your changes.
 To proceed anyways, run: git move -f -s 'siblings(.)",
                 Pluralize {
                     determiner: None,
-                    amount: public_commits_to_move.count()?,
+                    amount: dag.set_count(&public_commits_to_move)?,
                     unit: ("public commit", "public commits")
                 },
                 effects

@@ -27,7 +27,7 @@ use clap::ValueEnum;
 use crossbeam::channel::{Receiver, RecvError};
 use cursive::theme::{BaseColor, Effect, Style};
 use cursive::utils::markup::StyledString;
-use eden_dag::DagAlgorithm;
+
 use eyre::WrapErr;
 use fslock::LockFile;
 use git_branchless_invoke::CommandContext;
@@ -39,7 +39,7 @@ use lib::core::config::{
     get_hint_enabled, get_hint_string, get_restack_preserve_timestamps,
     print_hint_suppression_notice, Hint,
 };
-use lib::core::dag::{commit_set_to_vec, sorted_commit_set, CommitSet, Dag};
+use lib::core::dag::{sorted_commit_set, CommitSet, Dag};
 use lib::core::effects::{icons, Effects, OperationIcon, OperationType};
 use lib::core::eventlog::{EventLogDb, EventReplayer, EventTransactionId};
 use lib::core::formatting::{Glyphs, Pluralize, StyledStringBuilder};
@@ -414,7 +414,7 @@ BUG: Expected resolved_interactive ({resolved_interactive:?}) to match interacti
                 match RebasePlanPermissions::verify_rewrite_set(dag, build_options, commits)? {
                     Ok(permissions) => permissions,
                     Err(err) => {
-                        err.describe(effects, repo)?;
+                        err.describe(effects, repo, dag)?;
                         return Ok(Err(ExitCode(1)));
                     }
                 };
@@ -1184,17 +1184,17 @@ impl<'a> search::SearchGraph for SearchGraph<'a> {
 
     #[instrument]
     fn ancestors(&self, node: Self::Node) -> Result<HashSet<Self::Node>, Self::Error> {
-        let ancestors = self.dag.query().ancestors(CommitSet::from(node))?;
+        let ancestors = self.dag.query_ancestors(CommitSet::from(node))?;
         let ancestors = ancestors.intersection(&self.commit_set);
-        let ancestors = commit_set_to_vec(&ancestors)?;
+        let ancestors = self.dag.commit_set_to_vec(&ancestors)?;
         Ok(ancestors.into_iter().collect())
     }
 
     #[instrument]
     fn descendants(&self, node: Self::Node) -> Result<HashSet<Self::Node>, Self::Error> {
-        let descendants = self.dag.query().descendants(CommitSet::from(node))?;
+        let descendants = self.dag.query_descendants(CommitSet::from(node))?;
         let descendants = descendants.intersection(&self.commit_set);
-        let descendants = commit_set_to_vec(&descendants)?;
+        let descendants = self.dag.commit_set_to_vec(&descendants)?;
         Ok(descendants.into_iter().collect())
     }
 }
@@ -1984,11 +1984,11 @@ fn apply_fixes(
             })
             .copied()
             .collect();
-        let descendant_oids = dag.query().descendants(original_oids.clone())?;
+        let descendant_oids = dag.query_descendants(original_oids.clone())?;
         let descendant_oids = dag
             .filter_visible_commits(descendant_oids)?
             .difference(&original_oids);
-        for descendant_oid in commit_set_to_vec(&descendant_oids)? {
+        for descendant_oid in dag.commit_set_to_vec(&descendant_oids)? {
             let descendant_commit = repo.find_commit_or_fail(descendant_oid)?;
             builder.replace_commit(descendant_oid, descendant_oid)?;
             builder.move_subtree(descendant_oid, descendant_commit.get_parent_oids())?;
@@ -2006,7 +2006,7 @@ fn apply_fixes(
             return Ok(ExitCode(0));
         }
         Err(err) => {
-            err.describe(effects, repo)?;
+            err.describe(effects, repo, dag)?;
             return Ok(ExitCode(1));
         }
     };

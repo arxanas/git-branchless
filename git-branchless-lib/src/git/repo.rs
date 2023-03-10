@@ -570,7 +570,9 @@ impl Repo {
     /// Get the directory where the DAG for the repository is stored.
     #[instrument]
     pub fn get_dag_dir(&self) -> PathBuf {
-        self.get_path().join("branchless").join("dag")
+        // Updated from `dag` to `dag2` for `esl01-dag==0.3.0`, since it may
+        // not be backwards-compatible.
+        self.get_path().join("branchless").join("dag2")
     }
 
     /// Get the directory to store man-pages. Note that this is the `man`

@@ -19,7 +19,7 @@ use std::time::SystemTime;
 
 use cursive::theme::BaseColor;
 use cursive::utils::markup::StyledString;
-use eden_dag::DagAlgorithm;
+
 use lib::core::check_out::{check_out_commit, CheckOutCommitOptions, CheckoutTarget};
 use lib::core::repo_ext::RepoExt;
 use lib::util::ExitCode;
@@ -108,7 +108,7 @@ fn advance(
         }
     };
 
-    let public_commits = dag.query().ancestors(dag.main_branch_commit.clone())?;
+    let public_commits = dag.query_ancestors(dag.main_branch_commit.clone())?;
 
     let glyphs = effects.get_glyphs();
     let mut current_oid = current_oid;
@@ -117,16 +117,16 @@ fn advance(
         let candidate_commits = match command {
             Command::Next => {
                 let child_commits = || -> eyre::Result<CommitSet> {
-                    let result = dag.query().children(CommitSet::from(current_oid))?;
+                    let result = dag.query_children(CommitSet::from(current_oid))?;
                     let result = dag.filter_visible_commits(result)?;
                     Ok(result)
                 };
 
                 let descendant_branches = || -> eyre::Result<CommitSet> {
-                    let descendant_commits = dag.query().descendants(child_commits()?)?;
+                    let descendant_commits = dag.query_descendants(child_commits()?)?;
                     let descendant_branches = dag.branch_commits.intersection(&descendant_commits);
-                    let descendants = dag.query().descendants(descendant_branches)?;
-                    let nearest_descendant_branches = dag.query().roots(descendants)?;
+                    let descendants = dag.query_descendants(descendant_branches)?;
+                    let nearest_descendant_branches = dag.query_roots(descendants)?;
                     Ok(nearest_descendant_branches)
                 };
 
@@ -153,14 +153,13 @@ fn advance(
 
             Command::Prev => {
                 let parent_commits = || -> eyre::Result<CommitSet> {
-                    let result = dag.query().parents(CommitSet::from(current_oid))?;
+                    let result = dag.query_parents(CommitSet::from(current_oid))?;
                     Ok(result)
                 };
                 let ancestor_branches = || -> eyre::Result<CommitSet> {
-                    let ancestor_commits = dag.query().ancestors(parent_commits()?)?;
+                    let ancestor_commits = dag.query_ancestors(parent_commits()?)?;
                     let ancestor_branches = dag.branch_commits.intersection(&ancestor_commits);
-                    let nearest_ancestor_branches =
-                        dag.query().heads_ancestors(ancestor_branches)?;
+                    let nearest_ancestor_branches = dag.query_heads_ancestors(ancestor_branches)?;
                     Ok(nearest_ancestor_branches)
                 };
 
