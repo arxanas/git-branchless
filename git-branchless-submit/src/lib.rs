@@ -12,7 +12,7 @@
 mod branch_push_forge;
 pub mod phabricator;
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt::Write;
 use std::time::SystemTime;
 
@@ -27,7 +27,7 @@ use lib::core::effects::Effects;
 use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::formatting::{Pluralize, StyledStringBuilder};
 use lib::core::repo_ext::{RepoExt, RepoReferencesSnapshot};
-use lib::git::{GitRunInfo, NonZeroOid, Repo};
+use lib::git::{GitRunInfo, NonZeroOid, ReferenceName, Repo};
 use lib::util::ExitCode;
 
 use git_branchless_opts::{ResolveRevsetOptions, Revset, SubmitArgs, TestExecutionStrategy};
@@ -95,6 +95,18 @@ pub struct SubmitOptions {
     pub num_jobs: usize,
 }
 
+/// The result of creating a commit.
+pub struct CreateStatus {
+    /// The commit OID after carrying out the creation process. Usually, this
+    /// will be the same as the original commit OID, unless the forge amends it
+    /// (e.g. to include a change ID).
+    pub final_commit_oid: NonZeroOid,
+
+    /// The local branch name to use. The caller will try to create the branch
+    /// pointing to that commit (assuming that it doesn't already exist).
+    pub local_branch_name: String,
+}
+
 /// "Forge" refers to a Git hosting provider, such as GitHub, GitLab, etc.
 /// Commits can be pushed for review to a forge.
 pub trait Forge {
@@ -109,7 +121,7 @@ pub trait Forge {
         &mut self,
         commits: HashMap<NonZeroOid, CommitStatus>,
         options: &SubmitOptions,
-    ) -> eyre::Result<ExitCode>;
+    ) -> eyre::Result<Result<HashMap<NonZeroOid, CreateStatus>, ExitCode>>;
 
     /// Update existing remote commits to match their local versions.
     fn update(
@@ -304,11 +316,34 @@ fn submit(
         if unsubmitted_commits.is_empty() {
             Default::default()
         } else if create {
-            let exit_code = forge.create(unsubmitted_commits, &submit_options)?;
-            if !exit_code.is_success() {
-                return Ok(exit_code);
+            let create_statuses = match forge.create(unsubmitted_commits, &submit_options)? {
+                Ok(create_statuses) => create_statuses,
+                Err(exit_code) => return Ok(exit_code),
+            };
+            let all_branches: HashSet<_> = references_snapshot
+                .branch_oid_to_names
+                .values()
+                .flatten()
+                .collect();
+            let mut created_branches = BTreeSet::new();
+            for (_commit_oid, create_status) in create_statuses {
+                let CreateStatus {
+                    final_commit_oid,
+                    local_branch_name,
+                } = create_status;
+                let branch_reference_name =
+                    ReferenceName::from(format!("refs/heads/{local_branch_name}"));
+                created_branches.insert(local_branch_name);
+                if !all_branches.contains(&branch_reference_name) {
+                    repo.create_reference(
+                        &branch_reference_name,
+                        final_commit_oid,
+                        false,
+                        "submit",
+                    )?;
+                }
             }
-            (unsubmitted_branches, Default::default())
+            (created_branches, Default::default())
         } else {
             (Default::default(), unsubmitted_branches)
         }
