@@ -44,6 +44,8 @@ test = true
 [dependencies]
 anyhow = "1.0.69"
 assert_cmd = "2.0.7"
+async-trait = "0.1.64"
+bstr = "1.3.0"
 chashmap = "2.2.2"
 chrono = "0.4.19"
 color-eyre = "0.6.2"
@@ -52,28 +54,26 @@ console = "0.15.5"
 cursive = { version = "0.20.0", default-features = false }
 eden_dag = { package = "esl01-dag", version = "0.3.0" }
 eyre = "0.6.8"
-git2 = { version = "0.16.1", default-features = false }
+futures = "0.3.26"
 git-record = { version = "0.3", path = "../git-record" }
+git2 = { version = "0.16.1", default-features = false }
 indicatif = { version = "0.17.3", features = ["improved_unicode"] }
 itertools = "0.10.3"
 lazy_static = "1.4.0"
 once_cell = "1.17.1"
+portable-pty = "0.7.0"
 rayon = "1.6.1"
 regex = "1.7.1"
 rusqlite = { version = "0.28.0", features = ["bundled"] }
+serde = { version = "1.0.152", features = ["derive"] }
 tempfile = "3.4.0"
 textwrap = "0.16.0"
+thiserror = "1.0.39"
 tracing = "0.1.37"
 tracing-chrome = "0.6.0"
 tracing-error = "0.2.0"
 tracing-subscriber = { version = "=0.3.11", features = ["env-filter"] }
-thiserror = "1.0.39"
-bstr = "1.3.0"
-serde = { version = "1.0.152", features = ["derive"] }
-portable-pty = "0.7.0"
 vt100 = "0.15.2"
-async-trait = "0.1.64"
-futures = "0.3.26"
 
 [dev-dependencies]
 criterion = { version = "0.4.0", features = ["html_reports"] }
