@@ -268,7 +268,7 @@ impl Dag {
         futures::executor::block_on(fut)
     }
 
-    /// This function's code adapted from `GitDag`, licensed under GPL-2.
+    /// Update the DAG with all commits reachable from branches.
     #[instrument]
     fn sync(&mut self, effects: &Effects, repo: &Repo) -> eyre::Result<()> {
         let master_heads = self.main_branch_commit.clone();
