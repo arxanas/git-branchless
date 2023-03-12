@@ -519,10 +519,8 @@ impl NodeDescriptor for RelativeTimeDescriptor {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        ops::{Add, Sub},
-        time::Duration,
-    };
+    use std::ops::{Add, Sub};
+    use std::time::Duration;
 
     use super::*;
 

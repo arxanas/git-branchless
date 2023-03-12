@@ -2908,7 +2908,7 @@ pub fn subcommand_clean(
 
 #[cfg(test)]
 mod tests {
-    use lib::testing::make_git;
+    use git_branchless_testing::make_git;
 
     use super::*;
 

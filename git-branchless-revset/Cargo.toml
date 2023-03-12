@@ -31,4 +31,5 @@ tracing = "0.1.37"
 lalrpop = "0.19.8"
 
 [dev-dependencies]
+git-branchless-testing = { version = "0.7.0", path = "../git-branchless-testing" }
 insta = "1.28.0"

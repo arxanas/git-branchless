@@ -1345,9 +1345,19 @@ impl EventReplayer {
 pub mod testing {
     use super::*;
 
-    /// Make a dummy transaction ID, for testing.
-    pub fn make_dummy_transaction_id(id: isize) -> EventTransactionId {
+    /// Create a new `EventReplayer`, for testing.
+    pub fn new_event_replayer(main_branch_reference_name: ReferenceName) -> EventReplayer {
+        EventReplayer::new(main_branch_reference_name)
+    }
+
+    /// Create a new transaction ID, for testing.
+    pub fn new_event_transaction_id(id: isize) -> EventTransactionId {
         EventTransactionId(id)
+    }
+
+    /// Create a new event cursor, for testing.
+    pub fn new_event_cursor(event_id: isize) -> EventCursor {
+        EventCursor { event_id }
     }
 
     /// Remove the timestamp for the event, for determinism in testing.
@@ -1378,167 +1388,5 @@ pub mod testing {
     /// Get the events stored inside an `EventReplayer`.
     pub fn get_event_replayer_events(event_replayer: &EventReplayer) -> &Vec<Event> {
         &event_replayer.events
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    use crate::testing::make_git;
-    use testing::make_dummy_transaction_id;
-
-    #[test]
-    fn test_drop_non_meaningful_events() -> eyre::Result<()> {
-        let event_tx_id = make_dummy_transaction_id(123);
-        let meaningful_event = Event::CommitEvent {
-            timestamp: 0.0,
-            event_tx_id,
-            commit_oid: NonZeroOid::from_str("abc")?,
-        };
-        let mut replayer = EventReplayer::new("refs/heads/master".into());
-        replayer.process_event(&meaningful_event);
-        replayer.process_event(&Event::RefUpdateEvent {
-            timestamp: 0.0,
-            event_tx_id,
-            ref_name: ReferenceName::from("ORIG_HEAD"),
-            old_oid: MaybeZeroOid::from_str("abc")?,
-            new_oid: MaybeZeroOid::from_str("def")?,
-            message: None,
-        });
-        replayer.process_event(&Event::RefUpdateEvent {
-            timestamp: 0.0,
-            event_tx_id,
-            ref_name: ReferenceName::from("CHERRY_PICK_HEAD"),
-            old_oid: MaybeZeroOid::Zero,
-            new_oid: MaybeZeroOid::Zero,
-            message: None,
-        });
-
-        let cursor = replayer.make_default_cursor();
-        assert_eq!(
-            replayer.get_event_before_cursor(cursor),
-            Some((1, &meaningful_event))
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn test_different_event_transaction_ids() -> eyre::Result<()> {
-        let git = make_git()?;
-
-        git.init_repo()?;
-        git.commit_file("test1", 1)?;
-        git.branchless("hide", &["HEAD"])?;
-
-        let repo = git.get_repo()?;
-        let conn = repo.get_db_conn()?;
-        let event_log_db = EventLogDb::new(&conn)?;
-        let events = event_log_db.get_events()?;
-        let event_tx_ids: Vec<EventTransactionId> =
-            events.iter().map(|event| event.get_event_tx_id()).collect();
-        if git.supports_reference_transactions()? {
-            insta::assert_debug_snapshot!(event_tx_ids, @r###"
-                [
-                    EventTransactionId(
-                        1,
-                    ),
-                    EventTransactionId(
-                        1,
-                    ),
-                    EventTransactionId(
-                        2,
-                    ),
-                    EventTransactionId(
-                        3,
-                    ),
-                ]
-                "###);
-        } else {
-            insta::assert_debug_snapshot!(event_tx_ids, @r###"
-                [
-                    EventTransactionId(
-                        1,
-                    ),
-                    EventTransactionId(
-                        2,
-                    ),
-                ]
-                "###);
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn test_advance_cursor_by_transaction() -> eyre::Result<()> {
-        let mut event_replayer = EventReplayer::new("refs/heads/master".into());
-        for (timestamp, event_tx_id) in (0..).zip(&[1, 1, 2, 2, 3, 4]) {
-            let timestamp: f64 = timestamp.try_into()?;
-            event_replayer.process_event(&Event::UnobsoleteEvent {
-                timestamp,
-                event_tx_id: EventTransactionId(*event_tx_id),
-                commit_oid: NonZeroOid::from_str("abc")?,
-            });
-        }
-
-        assert_eq!(
-            event_replayer.advance_cursor_by_transaction(EventCursor { event_id: 0 }, 1),
-            EventCursor { event_id: 2 },
-        );
-        assert_eq!(
-            event_replayer.advance_cursor_by_transaction(EventCursor { event_id: 1 }, 1),
-            EventCursor { event_id: 4 },
-        );
-        assert_eq!(
-            event_replayer.advance_cursor_by_transaction(EventCursor { event_id: 2 }, 1),
-            EventCursor { event_id: 4 },
-        );
-        assert_eq!(
-            event_replayer.advance_cursor_by_transaction(EventCursor { event_id: 3 }, 1),
-            EventCursor { event_id: 5 },
-        );
-        assert_eq!(
-            event_replayer.advance_cursor_by_transaction(EventCursor { event_id: 4 }, 1),
-            EventCursor { event_id: 5 },
-        );
-        assert_eq!(
-            event_replayer.advance_cursor_by_transaction(EventCursor { event_id: 5 }, 1),
-            EventCursor { event_id: 6 },
-        );
-        assert_eq!(
-            event_replayer.advance_cursor_by_transaction(EventCursor { event_id: 6 }, 1),
-            EventCursor { event_id: 6 },
-        );
-
-        assert_eq!(
-            event_replayer.advance_cursor_by_transaction(EventCursor { event_id: 6 }, -1),
-            EventCursor { event_id: 5 },
-        );
-        assert_eq!(
-            event_replayer.advance_cursor_by_transaction(EventCursor { event_id: 5 }, -1),
-            EventCursor { event_id: 4 },
-        );
-        assert_eq!(
-            event_replayer.advance_cursor_by_transaction(EventCursor { event_id: 4 }, -1),
-            EventCursor { event_id: 2 },
-        );
-        assert_eq!(
-            event_replayer.advance_cursor_by_transaction(EventCursor { event_id: 3 }, -1),
-            EventCursor { event_id: 2 },
-        );
-        assert_eq!(
-            event_replayer.advance_cursor_by_transaction(EventCursor { event_id: 2 }, -1),
-            EventCursor { event_id: 0 },
-        );
-        assert_eq!(
-            event_replayer.advance_cursor_by_transaction(EventCursor { event_id: 1 }, -1),
-            EventCursor { event_id: 0 },
-        );
-        assert_eq!(
-            event_replayer.advance_cursor_by_transaction(EventCursor { event_id: 0 }, -1),
-            EventCursor { event_id: 0 },
-        );
-
-        Ok(())
     }
 }

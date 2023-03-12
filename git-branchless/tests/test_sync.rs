@@ -1,4 +1,6 @@
-use lib::testing::{make_git, make_git_with_remote_repo, GitInitOptions, GitWrapperWithRemoteRepo};
+use git_branchless_testing::{
+    make_git, make_git_with_remote_repo, GitInitOptions, GitWrapperWithRemoteRepo,
+};
 
 fn remove_nondeterministic_lines(output: String) -> String {
     output

@@ -1,7 +1,5 @@
-use lib::{
-    git::{BranchType, ReferenceName},
-    testing::make_git,
-};
+use git_branchless_testing::make_git;
+use lib::git::{BranchType, ReferenceName};
 
 #[test]
 fn test_repair_broken_commit() -> eyre::Result<()> {

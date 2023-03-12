@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
+use std::fmt::Debug;
 use std::iter::FromIterator;
 use std::path::{Path, PathBuf};
 
@@ -115,6 +116,22 @@ impl Tree<'_> {
     pub fn get_oid_for_path(&self, path: &Path) -> Result<Option<MaybeZeroOid>> {
         self.get_path(path)
             .map(|maybe_entry| maybe_entry.map(|entry| entry.inner.id().into()))
+    }
+
+    /// Get the (top-level) list of paths in this tree, for testing.
+    pub fn get_entry_paths_for_testing(&self) -> impl Debug {
+        self.inner
+            .iter()
+            .map(|entry| entry.name().unwrap().to_string())
+            .collect_vec()
+    }
+
+    /// Get the (top-level) list of paths and OIDs in this tree, for testing.
+    pub fn get_entries_for_testing(&self) -> impl Debug {
+        self.inner
+            .iter()
+            .map(|entry| (entry.name().unwrap().to_string(), entry.id().to_string()))
+            .collect_vec()
     }
 }
 
@@ -314,14 +331,23 @@ fn get_changed_paths_between_trees_internal(
     Ok(())
 }
 
+/// Get the paths which are different between two tree objects. This is faster
+/// than the `git2` implementation, which always iterates all tree entries in
+/// all tree objects recursively.
 #[instrument]
 pub fn get_changed_paths_between_trees(
     repo: &Repo,
-    lhs: Option<&git2::Tree>,
-    rhs: Option<&git2::Tree>,
+    lhs: Option<&Tree>,
+    rhs: Option<&Tree>,
 ) -> Result<HashSet<PathBuf>> {
     let mut acc = Vec::new();
-    get_changed_paths_between_trees_internal(repo, &mut acc, &Vec::new(), lhs, rhs)?;
+    get_changed_paths_between_trees_internal(
+        repo,
+        &mut acc,
+        &Vec::new(),
+        lhs.map(|tree| &tree.inner),
+        rhs.map(|tree| &tree.inner),
+    )?;
     let changed_paths: HashSet<PathBuf> = acc.into_iter().map(PathBuf::from_iter).collect();
     Ok(changed_paths)
 }
@@ -488,149 +514,4 @@ pub fn dehydrate_tree(repo: &Repo, tree: &Tree, paths: &[&Path]) -> Result<NonZe
         .try_collect()?;
 
     hydrate_tree(repo, None, entries)
-}
-
-#[cfg(test)]
-mod tests {
-    use std::convert::TryInto;
-
-    use super::*;
-
-    use crate::testing::make_git;
-
-    fn dump_tree_entries(tree: &Tree) -> String {
-        tree.inner
-            .iter()
-            .map(|entry| format!("{:?} {:?}\n", entry.name().unwrap(), entry.id()))
-            .collect()
-    }
-
-    #[test]
-    fn test_hydrate_tree() -> eyre::Result<()> {
-        let git = make_git()?;
-
-        git.init_repo()?;
-
-        git.write_file_txt("foo", "foo")?;
-        git.write_file_txt("bar/bar", "bar")?;
-        git.write_file_txt("bar/baz", "qux")?;
-        git.write_file_txt("xyzzy", "xyzzy")?;
-        git.run(&["add", "."])?;
-        git.run(&["commit", "-m", "commit"])?;
-
-        let repo = git.get_repo()?;
-        let head_oid = repo.get_head_info()?.oid.unwrap();
-        let head_commit = repo.find_commit_or_fail(head_oid)?;
-        let head_tree = head_commit.get_tree()?;
-
-        insta::assert_snapshot!(dump_tree_entries(&head_tree), @r###"
-        "bar" 778e23a1e80b1feb10e00b15b29a33315929c5b5
-        "foo.txt" 19102815663d23f8b75a47e7a01965dcdc96468c
-        "initial.txt" 63af22885f8665a312ba8b83db722134f1f8290d
-        "xyzzy.txt" 7c465afc533f95ff7d2c91e18921f94aac8292fc
-        "###);
-
-        {
-            let hydrated_tree = {
-                let hydrated_tree_oid = hydrate_tree(&repo, Some(&head_tree), {
-                    let mut result = HashMap::new();
-                    result.insert(
-                        PathBuf::from("foo-copy.txt"),
-                        Some((
-                            head_tree
-                                .get_oid_for_path(&PathBuf::from("foo.txt"))?
-                                .unwrap()
-                                .try_into()?,
-                            FileMode::from(0o100644),
-                        )),
-                    );
-                    result.insert(PathBuf::from("foo.txt"), None);
-                    result
-                })?;
-                repo.find_tree(hydrated_tree_oid)?.unwrap()
-            };
-            insta::assert_snapshot!(dump_tree_entries(&hydrated_tree), @r###"
-            "bar" 778e23a1e80b1feb10e00b15b29a33315929c5b5
-            "foo-copy.txt" 19102815663d23f8b75a47e7a01965dcdc96468c
-            "initial.txt" 63af22885f8665a312ba8b83db722134f1f8290d
-            "xyzzy.txt" 7c465afc533f95ff7d2c91e18921f94aac8292fc
-            "###);
-        }
-
-        {
-            let hydrated_tree = {
-                let hydrated_tree_oid = hydrate_tree(&repo, Some(&head_tree), {
-                    let mut result = HashMap::new();
-                    result.insert(PathBuf::from("bar/bar.txt"), None);
-                    result
-                })?;
-                repo.find_tree(hydrated_tree_oid)?.unwrap()
-            };
-            insta::assert_snapshot!(dump_tree_entries(&hydrated_tree), @r###"
-            "bar" 08ee88e1c53fbd01ab76f136a4f2c9d759b981d0
-            "foo.txt" 19102815663d23f8b75a47e7a01965dcdc96468c
-            "initial.txt" 63af22885f8665a312ba8b83db722134f1f8290d
-            "xyzzy.txt" 7c465afc533f95ff7d2c91e18921f94aac8292fc
-            "###);
-        }
-
-        {
-            let hydrated_tree = {
-                let hydrated_tree_oid = hydrate_tree(&repo, Some(&head_tree), {
-                    let mut result = HashMap::new();
-                    result.insert(PathBuf::from("bar/bar.txt"), None);
-                    result.insert(PathBuf::from("bar/baz.txt"), None);
-                    result
-                })?;
-                repo.find_tree(hydrated_tree_oid)?.unwrap()
-            };
-            insta::assert_snapshot!(dump_tree_entries(&hydrated_tree), @r###"
-            "foo.txt" 19102815663d23f8b75a47e7a01965dcdc96468c
-            "initial.txt" 63af22885f8665a312ba8b83db722134f1f8290d
-            "xyzzy.txt" 7c465afc533f95ff7d2c91e18921f94aac8292fc
-            "###);
-        }
-
-        {
-            let dehydrated_tree_oid = dehydrate_tree(
-                &repo,
-                &head_tree,
-                &[Path::new("bar/baz.txt"), Path::new("foo.txt")],
-            )?;
-            let dehydrated_tree = repo.find_tree(dehydrated_tree_oid)?.unwrap();
-            insta::assert_snapshot!(dump_tree_entries(&dehydrated_tree), @r###"
-            "bar" 08ee88e1c53fbd01ab76f136a4f2c9d759b981d0
-            "foo.txt" 19102815663d23f8b75a47e7a01965dcdc96468c
-            "###);
-        }
-
-        Ok(())
-    }
-
-    #[test]
-    fn test_detect_path_only_changed_file_mode() -> eyre::Result<()> {
-        let git = make_git()?;
-        git.init_repo()?;
-
-        git.run(&["update-index", "--chmod=+x", "initial.txt"])?;
-        git.run(&["commit", "-m", "update file mode"])?;
-
-        let repo = git.get_repo()?;
-        let oid = repo.get_head_info()?.oid.unwrap();
-        let commit = repo.find_commit_or_fail(oid)?;
-
-        let lhs = commit.get_only_parent().unwrap();
-        let lhs_tree = lhs.get_tree()?;
-        let rhs_tree = commit.get_tree()?;
-        let changed_paths =
-            get_changed_paths_between_trees(&repo, Some(&lhs_tree.inner), Some(&rhs_tree.inner))?;
-
-        insta::assert_debug_snapshot!(changed_paths, @r###"
-        {
-            "initial.txt",
-        }
-        "###);
-
-        Ok(())
-    }
 }

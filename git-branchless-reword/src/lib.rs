@@ -702,7 +702,7 @@ fn render_status_report(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lib::testing::make_git;
+    use git_branchless_testing::make_git;
     use std::collections::BTreeMap;
 
     #[test]

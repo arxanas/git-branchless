@@ -1,8 +1,8 @@
+use git_branchless_testing::make_git;
 use lib::core::effects::Effects;
 use lib::core::eventlog::testing::{get_event_replayer_events, redact_event_timestamp};
 use lib::core::eventlog::{Event, EventLogDb, EventReplayer};
 use lib::core::formatting::Glyphs;
-use lib::testing::make_git;
 
 #[test]
 fn test_git_v2_31_events() -> eyre::Result<()> {
