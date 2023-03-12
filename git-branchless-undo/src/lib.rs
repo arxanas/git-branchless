@@ -1037,11 +1037,11 @@ pub mod testing {
 mod tests {
     use super::*;
 
-    use lib::core::eventlog::testing::make_dummy_transaction_id;
+    use lib::core::eventlog::testing::new_event_transaction_id;
 
     #[test]
     fn test_optimize_inverse_events() -> eyre::Result<()> {
-        let event_tx_id = make_dummy_transaction_id(123);
+        let event_tx_id = new_event_transaction_id(123);
         let input = vec![
             Event::RefUpdateEvent {
                 timestamp: 1.0,

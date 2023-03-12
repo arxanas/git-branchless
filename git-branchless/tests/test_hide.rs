@@ -1,4 +1,4 @@
-use lib::testing::{
+use git_branchless_testing::{
     make_git, make_git_with_remote_repo, GitInitOptions, GitRunOptions, GitWrapperWithRemoteRepo,
 };
 

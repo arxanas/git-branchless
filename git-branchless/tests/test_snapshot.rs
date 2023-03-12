@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
+use git_branchless_testing::{make_git, trim_lines, GitInitOptions, GitRunOptions};
 use lib::git::NonZeroOid;
-use lib::testing::{make_git, trim_lines, GitInitOptions, GitRunOptions};
 
 #[test]
 fn test_restore_snapshot_basic() -> eyre::Result<()> {

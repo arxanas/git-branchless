@@ -55,3 +55,35 @@ impl Resource for RepoResource {
 
 /// Type synonym for [`ResourcePool<RepoResource>`].
 pub type RepoPool = ResourcePool<RepoResource>;
+
+/// Testing helpers.
+pub mod testing {
+    use std::collections::HashSet;
+    use std::path::PathBuf;
+
+    use chashmap::CHashMap;
+
+    use crate::core::dag::Dag;
+    use crate::core::rewrite::{BuildRebasePlanOptions, RebasePlanPermissions};
+    use crate::git::NonZeroOid;
+
+    use super::RebasePlanBuilder;
+
+    /// Create a `RebasePlanPermissions` that can rewrite any commit, for testing.
+    pub fn omnipotent_rebase_plan_permissions(
+        dag: &Dag,
+        build_options: BuildRebasePlanOptions,
+    ) -> eyre::Result<RebasePlanPermissions> {
+        Ok(RebasePlanPermissions {
+            build_options,
+            allowed_commits: dag.query_all()?,
+        })
+    }
+
+    /// Get the internal touched paths cache for a `RebasePlanBuilder`.
+    pub fn get_builder_touched_paths_cache<'a>(
+        builder: &'a RebasePlanBuilder,
+    ) -> &'a CHashMap<NonZeroOid, Option<HashSet<PathBuf>>> {
+        &builder.touched_paths_cache
+    }
+}

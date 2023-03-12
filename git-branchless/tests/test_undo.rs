@@ -2,6 +2,7 @@ use std::mem::swap;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 
+use git_branchless_testing::{make_git, trim_lines, Git, GitInitOptions};
 use git_branchless_undo::testing::{select_past_event, undo_events};
 use git_record::testing::{screen_to_string, CursiveTestingBackend, CursiveTestingEvent};
 use lib::core::dag::Dag;
@@ -10,7 +11,6 @@ use lib::core::eventlog::{EventCursor, EventLogDb, EventReplayer};
 use lib::core::formatting::Glyphs;
 use lib::core::repo_ext::RepoExt;
 use lib::git::{GitRunInfo, GitVersion, Repo};
-use lib::testing::{make_git, trim_lines, Git, GitInitOptions};
 
 use cursive_core::event::Key;
 use cursive_core::{Cursive, CursiveRunner};
@@ -817,7 +817,7 @@ fn test_undo_noninteractive() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run_with_options(
             &["undo"],
-            &lib::testing::GitRunOptions {
+            &git_branchless_testing::GitRunOptions {
                 expected_exit_code: 1,
                 input: Some("n".to_string()),
                 ..Default::default()
@@ -849,7 +849,7 @@ fn test_undo_noninteractive() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run_with_options(
             &["undo"],
-            &lib::testing::GitRunOptions {
+            &git_branchless_testing::GitRunOptions {
                 input: Some("y".to_string()),
                 ..Default::default()
             },
