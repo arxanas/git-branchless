@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
 use eyre::Context;
-use lib::git::GitVersion;
-use lib::testing::{
+use git_branchless_testing::{
     make_git, make_git_worktree, GitInitOptions, GitRunOptions, GitWorktreeWrapper,
 };
+use lib::git::GitVersion;
 use regex::Regex;
 
 #[test]
@@ -281,7 +281,7 @@ fn test_init_prompt_for_main_branch() -> eyre::Result<()> {
 #[cfg(unix)]
 #[test]
 fn test_main_branch_not_found_error_message() -> eyre::Result<()> {
-    use lib::testing::trim_lines;
+    use git_branchless_testing::trim_lines;
 
     let git = make_git()?;
 

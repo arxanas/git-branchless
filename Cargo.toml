@@ -20,6 +20,7 @@ members = [
     "git-branchless-smartlog",
     "git-branchless-submit",
     "git-branchless-test",
+    "git-branchless-testing",
     "git-branchless-undo",
     "git-branchless",
     "git-record",

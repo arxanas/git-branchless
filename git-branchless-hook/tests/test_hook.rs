@@ -1,4 +1,4 @@
-use lib::testing::{make_git, GitRunOptions};
+use git_branchless_testing::{make_git, GitRunOptions};
 
 #[test]
 fn test_is_rebase_underway() -> eyre::Result<()> {
