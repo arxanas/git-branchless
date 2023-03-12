@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
+use git_branchless_testing::{make_git, GitRunOptions};
 use itertools::Itertools;
-use lib::testing::{make_git, GitRunOptions};
 
 #[test]
 fn test_commands() -> eyre::Result<()> {

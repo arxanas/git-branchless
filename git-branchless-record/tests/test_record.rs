@@ -1,5 +1,5 @@
-use lib::testing::pty::{run_in_pty, PtyAction};
-use lib::testing::{make_git, GitInitOptions, GitRunOptions};
+use git_branchless_testing::pty::{run_in_pty, PtyAction};
+use git_branchless_testing::{make_git, GitInitOptions, GitRunOptions};
 
 #[test]
 fn test_record_unstaged_changes() -> eyre::Result<()> {
