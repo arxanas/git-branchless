@@ -792,9 +792,13 @@ pub mod pty {
         // Use the native pty implementation for the system
         let pty_system = native_pty_system();
         let pty_size = PtySize::default();
-        let mut pty = pty_system
+        let pty = pty_system
             .openpty(pty_size)
             .map_err(|e| eyre!("Could not open pty: {}", e))?;
+        let mut pty_master = pty
+            .master
+            .take_writer()
+            .map_err(|e| eyre!("Could not take PTY master writer: {e}"))?;
 
         // Spawn a git instance in the pty.
         let mut cmd = CommandBuilder::new(&git.path_to_git);
@@ -878,8 +882,8 @@ Screen contents:
                 }
 
                 PtyAction::Write(value) => {
-                    write!(pty.master, "{value}")?;
-                    pty.master.flush()?;
+                    write!(pty_master, "{value}")?;
+                    pty_master.flush()?;
                 }
             }
         }
