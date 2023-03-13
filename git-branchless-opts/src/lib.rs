@@ -9,25 +9,18 @@
 )]
 #![allow(clippy::too_many_arguments, clippy::blocks_in_if_conditions)]
 
-use clap::{Args, Command as ClapCommand, CommandFactory, Parser, ValueEnum};
-use lib::git::NonZeroOid;
-
 use std::ffi::OsString;
 use std::fmt::Display;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
+use clap::{Args, Command as ClapCommand, CommandFactory, Parser, ValueEnum};
+use lib::git::NonZeroOid;
+
 /// A revset expression. Can be a commit hash, branch name, or one of the
 /// various revset functions.
 #[derive(Clone, Debug)]
 pub struct Revset(pub String);
-
-impl Revset {
-    /// The default revset to render in the smartlog if no revset is provided by the user.
-    pub fn default_smartlog_revset() -> Self {
-        Self("((draft() | branches() | @) % main()) | branches() | @".to_string())
-    }
-}
 
 impl FromStr for Revset {
     type Err = std::convert::Infallible;

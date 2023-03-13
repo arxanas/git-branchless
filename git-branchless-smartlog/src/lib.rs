@@ -18,7 +18,10 @@ use std::time::SystemTime;
 
 use git_branchless_invoke::CommandContext;
 use git_branchless_opts::{Revset, SmartlogArgs};
-use lib::core::config::{get_hint_enabled, get_hint_string, print_hint_suppression_notice, Hint};
+use lib::core::config::{
+    get_hint_enabled, get_hint_string, get_smartlog_default_revset, print_hint_suppression_notice,
+    Hint,
+};
 use lib::core::repo_ext::RepoExt;
 use lib::core::rewrite::find_rewrite_target;
 use lib::util::ExitCode;
@@ -720,7 +723,7 @@ mod render {
     }
 
     /// Options for rendering the smartlog.
-    #[derive(Debug)]
+    #[derive(Debug, Default)]
     pub struct SmartlogOptions {
         /// The point in time at which to show the smartlog. If not provided,
         /// renders the smartlog as of the current time. If negative, is treated
@@ -728,8 +731,9 @@ mod render {
         pub event_id: Option<isize>,
 
         /// The commits to render. These commits, plus any related commits, will
-        /// be rendered.
-        pub revset: Revset,
+        /// be rendered. If not provided, the user's default revset will be used
+        /// instead.
+        pub revset: Option<Revset>,
 
         /// The options to use when resolving the revset.
         pub resolve_revset_options: ResolveRevsetOptions,
@@ -738,17 +742,6 @@ mod render {
         /// recent commits first.
         pub reverse: bool,
     }
-
-    impl Default for SmartlogOptions {
-        fn default() -> Self {
-            Self {
-                event_id: Default::default(),
-                revset: Revset::default_smartlog_revset(),
-                resolve_revset_options: Default::default(),
-                reverse: false,
-            }
-        }
-    }
 }
 
 /// Display a nice graph of commits you've recently worked on.
@@ -756,14 +749,14 @@ mod render {
 pub fn smartlog(
     effects: &Effects,
     git_run_info: &GitRunInfo,
-    options: &SmartlogOptions,
+    options: SmartlogOptions,
 ) -> eyre::Result<ExitCode> {
     let SmartlogOptions {
         event_id,
-        ref revset,
-        ref resolve_revset_options,
+        revset,
+        resolve_revset_options,
         reverse,
-    } = *options;
+    } = options;
 
     let repo = Repo::from_dir(&git_run_info.working_directory)?;
     let head_info = repo.get_head_info()?;
@@ -793,22 +786,21 @@ pub fn smartlog(
         &references_snapshot,
     )?;
 
-    let commits = match resolve_commits(
-        effects,
-        &repo,
-        &mut dag,
-        &[revset.clone()],
-        resolve_revset_options,
-    ) {
-        Ok(result) => match result.as_slice() {
-            [commit_set] => commit_set.clone(),
-            other => panic!("Expected exactly 1 result from resolve commits, got: {other:?}"),
-        },
-        Err(err) => {
-            err.describe(effects)?;
-            return Ok(ExitCode(1));
-        }
+    let revset = match revset {
+        Some(revset) => revset,
+        None => Revset(get_smartlog_default_revset(&repo)?),
     };
+    let commits =
+        match resolve_commits(effects, &repo, &mut dag, &[revset], &resolve_revset_options) {
+            Ok(result) => match result.as_slice() {
+                [commit_set] => commit_set.clone(),
+                other => panic!("Expected exactly 1 result from resolve commits, got: {other:?}"),
+            },
+            Err(err) => {
+                err.describe(effects)?;
+                return Ok(ExitCode(1));
+            }
+        };
 
     let graph = make_smartlog_graph(
         effects,
@@ -914,9 +906,9 @@ pub fn command_main(ctx: CommandContext, args: SmartlogArgs) -> eyre::Result<Exi
     smartlog(
         &effects,
         &git_run_info,
-        &SmartlogOptions {
+        SmartlogOptions {
             event_id,
-            revset: revset.unwrap_or_else(Revset::default_smartlog_revset),
+            revset,
             resolve_revset_options,
             reverse,
         },
