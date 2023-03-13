@@ -61,7 +61,7 @@ indicatif = { version = "0.17.3", features = ["improved_unicode"] }
 itertools = "0.10.3"
 lazy_static = "1.4.0"
 once_cell = "1.17.1"
-portable-pty = "0.7.0"
+portable-pty = "0.8.1"
 rayon = "1.6.1"
 regex = "1.7.1"
 rusqlite = { version = "0.28.0", features = ["bundled"] }
@@ -79,7 +79,7 @@ vt100 = "0.15.2"
 criterion = { version = "0.4.0", features = ["html_reports"] }
 insta = "1.28.0"
 lazy_static = "1.4.0"
-portable-pty = "0.7.0"
+portable-pty = "0.8.1"
 vt100 = "0.15.2"
 
 # FIXME: when updated to `1.0.74`, the `cc` package causes Nix build failures.
