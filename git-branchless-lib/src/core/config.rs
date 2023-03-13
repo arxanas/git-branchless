@@ -86,6 +86,17 @@ pub fn get_auto_switch_branches(repo: &Repo) -> eyre::Result<bool> {
         .get_or("branchless.navigation.autoSwitchBranches", true)
 }
 
+/// The default smartlog revset to render. This will be used when running `git
+/// smartlog` with no arguments, and also when the smartlog is rendered
+/// automatically as part of some commands like `git next`/`git prev`.
+#[instrument]
+pub fn get_smartlog_default_revset(repo: &Repo) -> eyre::Result<String> {
+    repo.get_readonly_config()?
+        .get_or_else("branchless.smartlog.defaultRevset", || {
+            "((draft() | branches() | @) % main()) | branches() | @".to_string()
+        })
+}
+
 /// Get the default comment character.
 #[instrument]
 pub fn get_comment_char(repo: &Repo) -> eyre::Result<char> {

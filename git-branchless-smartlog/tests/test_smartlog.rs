@@ -703,3 +703,42 @@ fn test_smartlog_sparse_vertical_ellipsis_sibling_commits() -> eyre::Result<()> 
 
     Ok(())
 }
+
+#[test]
+fn test_default_smartlog_revset() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+
+    git.detach_head()?;
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+    git.commit_file("test3", 3)?;
+
+    {
+        let smartlog = git.smartlog()?;
+        insta::assert_snapshot!(smartlog, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        o 62fc20d create test1.txt
+        |
+        o 96d1c37 create test2.txt
+        |
+        @ 70deb1e create test3.txt
+        "###);
+    }
+
+    git.run(&["config", "branchless.smartlog.defaultRevset", "none()"])?;
+
+    {
+        let smartlog = git.smartlog()?;
+        insta::assert_snapshot!(smartlog, @r###"
+        O f777ecc (master) create initial.txt
+        :
+        # 2 omitted commits
+        :
+        @ 70deb1e create test3.txt
+        "###);
+    }
+
+    Ok(())
+}

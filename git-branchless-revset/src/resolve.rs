@@ -2,6 +2,7 @@ use std::fmt::Write;
 
 use eyre::WrapErr;
 use git_branchless_opts::{ResolveRevsetOptions, Revset};
+use lib::core::config::get_smartlog_default_revset;
 use lib::core::dag::{CommitSet, Dag};
 use lib::core::effects::Effects;
 use lib::git::Repo;
@@ -122,7 +123,7 @@ pub fn resolve_default_smartlog_commits(
     repo: &Repo,
     dag: &mut Dag,
 ) -> eyre::Result<CommitSet> {
-    let revset = Revset::default_smartlog_revset();
+    let revset = Revset(get_smartlog_default_revset(repo)?);
     let results = resolve_commits(
         effects,
         repo,
