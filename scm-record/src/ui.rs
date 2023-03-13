@@ -28,6 +28,7 @@ use tui::widgets::{Block, Borders, Clear, Paragraph};
 use tui::{backend::CrosstermBackend, Terminal};
 use unicode_width::UnicodeWidthStr;
 
+use crate::consts::{DUMP_UI_STATE_FILENAME, ENV_VAR_DEBUG_UI, ENV_VAR_DUMP_UI_STATE};
 use crate::render::{centered_rect, Component, Rect, RectSize, Viewport};
 use crate::types::{ChangeType, RecordError, RecordState};
 use crate::util::UsizeExt;
@@ -371,10 +372,10 @@ impl<'a> Recorder<'a> {
     /// changes.
     pub fn run(self) -> Result<RecordState<'a>, RecordError> {
         #[cfg(feature = "debug")]
-        if std::env::var_os("SCM_RECORD_DUMP_UI_STATE").is_some() {
+        if std::env::var_os(ENV_VAR_DUMP_UI_STATE).is_some() {
             let ui_state =
                 serde_json::to_string_pretty(&self.state).map_err(RecordError::SerializeJson)?;
-            fs::write("scm_record_ui_state.json", ui_state).map_err(RecordError::WriteFile)?;
+            fs::write(DUMP_UI_STATE_FILENAME, ui_state).map_err(RecordError::WriteFile)?;
         }
 
         match self.event_source {
@@ -441,7 +442,7 @@ impl<'a> Recorder<'a> {
     ) -> Result<RecordState<'a>, RecordError> {
         self.selection_key = self.first_selection_key();
         let debug = if cfg!(feature = "debug") {
-            std::env::var_os("SCM_RECORD_DEBUG_UI").is_some()
+            std::env::var_os(ENV_VAR_DEBUG_UI).is_some()
         } else {
             false
         };
