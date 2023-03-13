@@ -9,6 +9,7 @@
 )]
 #![allow(clippy::too_many_arguments, clippy::blocks_in_if_conditions)]
 
+pub mod consts;
 mod render;
 mod types;
 mod ui;
