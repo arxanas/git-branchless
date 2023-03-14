@@ -34,6 +34,8 @@ use crate::types::{ChangeType, RecordError, RecordState};
 use crate::util::UsizeExt;
 use crate::{File, Section, SectionChangedLine};
 
+const NUM_CONTEXT_LINES: usize = 3;
+
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 struct FileKey {
     file_idx: usize,
@@ -471,10 +473,10 @@ impl<'a> Recorder<'a> {
                     scroll_offset_y: self.scroll_offset_y,
                     selection_key: self.selection_key,
                     selection_key_y: self.selection_key_y(&drawn_rects, self.selection_key),
-                    app_actual_vs_expected_height: {
-                        let actual_height = app.height();
+                    app_drawn_vs_expected_height: {
                         let drawn_height = drawn_rects[&ComponentId::App].height;
-                        (actual_height, drawn_height)
+                        let expected_height = app.height();
+                        (drawn_height, expected_height)
                     },
                     drawn_rects: drawn_rects.clone().into_iter().collect(),
                 };
@@ -558,14 +560,15 @@ impl<'a> Recorder<'a> {
                     path: &file.path,
                     section_views: {
                         let mut section_views = Vec::new();
-                        let total_num_sections = file
+                        let total_num_sections = file.sections.len();
+                        let total_num_editable_sections = file
                             .sections
                             .iter()
                             .filter(|section| section.is_editable())
                             .count();
 
                         let mut line_num = 1;
-                        let mut section_num = 0;
+                        let mut editable_section_num = 0;
                         for (section_idx, section) in file.sections.iter().enumerate() {
                             let section_key = SectionKey {
                                 file_idx,
@@ -573,7 +576,7 @@ impl<'a> Recorder<'a> {
                             };
                             let section_tristate = self.section_tristate(section_key).unwrap();
                             if section.is_editable() {
-                                section_num += 1;
+                                editable_section_num += 1;
                             }
                             section_views.push(SectionView {
                                 use_unicode: self.use_unicode,
@@ -616,8 +619,9 @@ impl<'a> Recorder<'a> {
                                         }
                                     }
                                 },
-                                section_num,
                                 total_num_sections,
+                                editable_section_num,
+                                total_num_editable_sections,
                                 section,
                                 line_start_num: line_num,
                             });
@@ -1277,7 +1281,7 @@ struct AppDebugInfo {
     scroll_offset_y: isize,
     selection_key: SelectionKey,
     selection_key_y: isize,
-    app_actual_vs_expected_height: (usize, usize),
+    app_drawn_vs_expected_height: (usize, usize),
     drawn_rects: BTreeMap<ComponentId, Rect>, // sorted for determinism
 }
 
@@ -1415,8 +1419,9 @@ struct SectionView<'a> {
     section_key: SectionKey,
     tristate_box: TristateBox<ComponentId>,
     selection: Option<SectionSelection>,
-    section_num: usize,
     total_num_sections: usize,
+    editable_section_num: usize,
+    total_num_editable_sections: usize,
     section: &'a Section<'a>,
     line_start_num: usize,
 }
@@ -1424,7 +1429,7 @@ struct SectionView<'a> {
 impl SectionView<'_> {
     pub fn height(&self) -> usize {
         match self.section {
-            Section::Unchanged { lines } => lines.len(),
+            Section::Unchanged { lines } => lines.len().min(NUM_CONTEXT_LINES * 2 + 1),
             Section::Changed { lines } => lines.len() + 1,
             Section::FileMode { .. } => 1,
         }
@@ -1444,8 +1449,9 @@ impl Component for SectionView<'_> {
             section_key,
             tristate_box,
             selection,
-            section_num,
             total_num_sections,
+            editable_section_num,
+            total_num_editable_sections,
             section,
             line_start_num,
         } = self;
@@ -1460,36 +1466,69 @@ impl Component for SectionView<'_> {
                     return;
                 }
 
-                const NUM_CONTEXT_LINES: usize = 3;
                 let lines: Vec<_> = lines.iter().enumerate().collect();
-                let before_lines = &lines[..min(NUM_CONTEXT_LINES, lines.len())];
-                let after_lines = &lines[lines.len().saturating_sub(NUM_CONTEXT_LINES)..];
-                let (before_lines, after_lines) =
-                    if before_lines.last().unwrap().0 >= after_lines.first().unwrap().0 {
-                        let no_lines: &[_] = &[];
-                        (&lines[..], no_lines)
-                    } else {
-                        (before_lines, after_lines)
-                    };
+                let is_first_section = section_idx == 0;
+                let is_last_section = section_idx + 1 == *total_num_sections;
+                let before_ellipsis_lines = &lines[..min(NUM_CONTEXT_LINES, lines.len())];
+                let after_ellipsis_lines = &lines[lines.len().saturating_sub(NUM_CONTEXT_LINES)..];
+
+                match (before_ellipsis_lines, after_ellipsis_lines) {
+                    ([.., (last_before_idx, _)], [(first_after_idx, _), ..])
+                        if *last_before_idx + 1 >= *first_after_idx
+                            && !is_first_section
+                            && !is_last_section =>
+                    {
+                        let first_before_idx = before_ellipsis_lines.first().unwrap().0;
+                        let last_after_idx = after_ellipsis_lines.last().unwrap().0;
+                        let overlapped_lines = &lines[first_before_idx..=last_after_idx];
+                        let overlapped_lines = if is_first_section {
+                            &overlapped_lines
+                                [overlapped_lines.len().saturating_sub(NUM_CONTEXT_LINES)..]
+                        } else if is_last_section {
+                            &overlapped_lines[..lines.len().min(NUM_CONTEXT_LINES)]
+                        } else {
+                            overlapped_lines
+                        };
+                        for (dy, (line_idx, line)) in overlapped_lines.iter().enumerate() {
+                            let line_view = SectionLineView {
+                                line_key: LineKey {
+                                    file_idx,
+                                    section_idx,
+                                    line_idx: *line_idx,
+                                },
+                                inner: SectionLineViewInner::Unchanged {
+                                    line: line.as_ref(),
+                                    line_num: line_start_num + line_idx,
+                                },
+                            };
+                            viewport.draw_component(x + 2, y + dy.unwrap_isize(), &line_view);
+                        }
+                        return;
+                    }
+                    _ => {}
+                };
 
                 let mut dy = 0;
-                for (line_idx, line) in before_lines {
-                    let line_view = SectionLineView {
-                        line_key: LineKey {
-                            file_idx,
-                            section_idx,
-                            line_idx: *line_idx,
-                        },
-                        inner: SectionLineViewInner::Unchanged {
-                            line: line.as_ref(),
-                            line_num: line_start_num + line_idx,
-                        },
-                    };
-                    viewport.draw_component(x + 2, y + dy, &line_view);
-                    dy += 1;
+                if !is_first_section {
+                    for (line_idx, line) in before_ellipsis_lines {
+                        let line_view = SectionLineView {
+                            line_key: LineKey {
+                                file_idx,
+                                section_idx,
+                                line_idx: *line_idx,
+                            },
+                            inner: SectionLineViewInner::Unchanged {
+                                line: line.as_ref(),
+                                line_num: line_start_num + line_idx,
+                            },
+                        };
+                        viewport.draw_component(x + 2, y + dy, &line_view);
+                        dy += 1;
+                    }
                 }
 
-                if !after_lines.is_empty() {
+                let should_render_ellipsis = lines.len() > NUM_CONTEXT_LINES;
+                if should_render_ellipsis {
                     let ellipsis = if *use_unicode {
                         "\u{22EE}" // Vertical Ellipsis
                     } else {
@@ -1501,8 +1540,10 @@ impl Component for SectionView<'_> {
                         &Span::styled(ellipsis, Style::default().add_modifier(Modifier::DIM)),
                     );
                     dy += 1;
+                }
 
-                    for (line_idx, line) in after_lines {
+                if !is_last_section {
+                    for (line_idx, line) in after_ellipsis_lines {
                         let line_view = SectionLineView {
                             line_key: LineKey {
                                 file_idx,
@@ -1527,7 +1568,7 @@ impl Component for SectionView<'_> {
                     x + tristate_rect.width.unwrap_isize() + 1,
                     y,
                     &Span::styled(
-                        format!("Section {section_num}/{total_num_sections}"),
+                        format!("Section {editable_section_num}/{total_num_editable_sections}"),
                         Style::default(),
                     ),
                 );
