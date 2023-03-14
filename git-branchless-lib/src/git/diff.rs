@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 
 use eyre::Context;
 use itertools::Itertools;
-use scm_record::{ChangeType, File, Section, SectionChangedLine};
+use scm_record::{ChangeType, File, FileMode, Section, SectionChangedLine};
 
 use super::{MaybeZeroOid, Repo};
 
@@ -266,8 +266,10 @@ pub fn process_diff_for_record(repo: &Repo, diff: &Diff) -> eyre::Result<Vec<Fil
             });
         }
 
-        let old_file_mode: usize = u32::from(old_file_mode).try_into().unwrap();
-        let new_file_mode: usize = u32::from(new_file_mode).try_into().unwrap();
+        let old_file_mode: u32 = old_file_mode.try_into().unwrap();
+        let old_file_mode: FileMode = old_file_mode.try_into().unwrap();
+        let new_file_mode: u32 = new_file_mode.try_into().unwrap();
+        let new_file_mode: FileMode = new_file_mode.try_into().unwrap();
         let file_mode_section = if old_file_mode != new_file_mode {
             vec![Section::FileMode {
                 is_toggled: false,
