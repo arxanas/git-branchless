@@ -2,7 +2,7 @@ use std::{borrow::Cow, path::Path};
 
 use assert_matches::assert_matches;
 use scm_record::{
-    ChangeType, Event, EventSource, File, RecordError, RecordState, Recorder, Section,
+    ChangeType, Event, EventSource, File, FileMode, RecordError, RecordState, Recorder, Section,
     SectionChangedLine, TestingScreenshot,
 };
 
@@ -457,8 +457,8 @@ fn test_file_mode_change() -> eyre::Result<()> {
                 file_mode: None,
                 sections: vec![Section::FileMode {
                     is_toggled: false,
-                    before: 0o100644,
-                    after: 0o100755,
+                    before: FileMode(0o100644),
+                    after: FileMode(0o100755),
                 }],
             },
             File {
@@ -501,8 +501,12 @@ fn test_file_mode_change() -> eyre::Result<()> {
                 sections: [
                     FileMode {
                         is_toggled: true,
-                        before: 33188,
-                        after: 33261,
+                        before: FileMode(
+                            33188,
+                        ),
+                        after: FileMode(
+                            33261,
+                        ),
                     },
                 ],
             },
