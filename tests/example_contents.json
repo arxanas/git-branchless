@@ -1,0 +1,116 @@
+{
+  "files": [
+    {
+      "path": "foo/bar",
+      "file_mode": null,
+      "sections": [
+        {
+          "Unchanged": {
+            "lines": [
+              "this is some text",
+              "this is some text",
+              "this is some text",
+              "this is some text",
+              "this is some text",
+              "this is some text",
+              "this is some text",
+              "this is some text",
+              "this is some text",
+              "this is some text",
+              "this is some text",
+              "this is some text",
+              "this is some text",
+              "this is some text",
+              "this is some text",
+              "this is some text",
+              "this is some text",
+              "this is some text",
+              "this is some text",
+              "this is some text"
+            ]
+          }
+        },
+        {
+          "Changed": {
+            "lines": [
+              {
+                "is_toggled": true,
+                "change_type": "Removed",
+                "line": "before text 1"
+              },
+              {
+                "is_toggled": true,
+                "change_type": "Removed",
+                "line": "before text 2"
+              },
+              {
+                "is_toggled": true,
+                "change_type": "Added",
+                "line": "after text 1"
+              },
+              {
+                "is_toggled": false,
+                "change_type": "Added",
+                "line": "after text 2"
+              }
+            ]
+          }
+        },
+        {
+          "Unchanged": {
+            "lines": [
+              "this is some trailing text"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "path": "baz",
+      "file_mode": null,
+      "sections": [
+        {
+          "Unchanged": {
+            "lines": [
+              "Some leading text 1",
+              "Some leading text 2"
+            ]
+          }
+        },
+        {
+          "Changed": {
+            "lines": [
+              {
+                "is_toggled": true,
+                "change_type": "Removed",
+                "line": "before text 1"
+              },
+              {
+                "is_toggled": true,
+                "change_type": "Removed",
+                "line": "before text 2"
+              },
+              {
+                "is_toggled": true,
+                "change_type": "Added",
+                "line": "after text 1"
+              },
+              {
+                "is_toggled": true,
+                "change_type": "Added",
+                "line": "after text 2"
+              }
+            ]
+          }
+        },
+        {
+          "Unchanged": {
+            "lines": [
+              "this is some trailing text"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
