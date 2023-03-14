@@ -257,7 +257,9 @@ fn record_interactive(
             err @ (RecordError::SetUpTerminal(_)
             | RecordError::CleanUpTerminal(_)
             | RecordError::ReadInput(_)
-            | RecordError::RenderFrame(_)),
+            | RecordError::RenderFrame(_)
+            | RecordError::SerializeJson(_)
+            | RecordError::WriteFile(_)),
         ) => {
             println!("Error: {err}");
             return Ok(Err(ExitCode(1)));

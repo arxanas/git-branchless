@@ -10,7 +10,7 @@ use std::fmt::{Debug, Display};
 use std::hash::Hash;
 use std::path::Path;
 use std::rc::Rc;
-use std::{io, panic};
+use std::{fs, io, panic};
 
 use crossterm::event::{
     DisableMouseCapture, EnableMouseCapture, KeyCode, KeyEvent, KeyEventKind, KeyModifiers,
@@ -370,6 +370,13 @@ impl<'a> Recorder<'a> {
     /// Run the terminal user interface and have the user interactively select
     /// changes.
     pub fn run(self) -> Result<RecordState<'a>, RecordError> {
+        #[cfg(feature = "debug")]
+        if std::env::var_os("SCM_RECORD_DUMP_UI_STATE").is_some() {
+            let ui_state =
+                serde_json::to_string_pretty(&self.state).map_err(RecordError::SerializeJson)?;
+            fs::write("scm_record_ui_state.json", ui_state).map_err(RecordError::WriteFile)?;
+        }
+
         match self.event_source {
             EventSource::Crossterm => self.run_crossterm(),
             EventSource::Testing {
@@ -433,7 +440,11 @@ impl<'a> Recorder<'a> {
         term: &mut Terminal<impl Backend + Any>,
     ) -> Result<RecordState<'a>, RecordError> {
         self.selection_key = self.first_selection_key();
-        let debug = std::env::var_os("SCM_RECORD_DEBUG").is_some();
+        let debug = if cfg!(feature = "debug") {
+            std::env::var_os("SCM_RECORD_DEBUG_UI").is_some()
+        } else {
+            false
+        };
 
         loop {
             let app = self.make_app(None);

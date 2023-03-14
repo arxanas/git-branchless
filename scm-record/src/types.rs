@@ -11,6 +11,7 @@ use thiserror::Error;
 /// The state used to render the changes. This is passed into [`Recorder::new`]
 /// and then updated and returned with [`Recorder::run`].
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct RecordState<'a> {
     /// The state of each file. This is rendered in order, so you may want to
     /// sort this list by path before providing it.
@@ -37,12 +38,19 @@ pub enum RecordError {
     #[error("failed to read user input: {0}")]
     ReadInput(#[source] crossterm::ErrorKind),
 
+    #[error("failed to serialize JSON: {0}")]
+    SerializeJson(#[source] serde_json::Error),
+
+    #[error("failed to wrote file: {0}")]
+    WriteFile(#[source] io::Error),
+
     #[error("bug: {0}")]
     Bug(String),
 }
 
 /// The Unix file mode. The special mode `0` indicates that the file did not exist.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct FileMode(pub usize);
 
 impl Display for FileMode {
@@ -101,6 +109,7 @@ impl TryFrom<FileMode> for i32 {
 
 /// The state of a file to be recorded.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct File<'a> {
     /// The path to the file.
     pub path: Cow<'a, Path>,
@@ -221,6 +230,7 @@ impl File<'_> {
 
 /// A section of a file to be rendered and recorded.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub enum Section<'a> {
     /// This section of the file is unchanged and just used for context.
     ///
@@ -269,6 +279,7 @@ impl Section<'_> {
 
 /// The type of change in the patch/diff.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub enum ChangeType {
     /// The line was added.
     Added,
@@ -279,6 +290,7 @@ pub enum ChangeType {
 
 /// A changed line inside a `Section`.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct SectionChangedLine<'a> {
     /// Whether or not this line was selected to be recorded.
     pub is_toggled: bool,
