@@ -9,10 +9,17 @@ version = "0.1.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+debug = ["serde"]
+default = ["debug"]
+serde = ["dep:serde", "dep:serde_json"]
+
 [dependencies]
 cassowary = "0.3.0"
 crossterm = "0.26.1"
 num-traits = "0.2.15"
+serde = { version = "1.0.155", features = ["serde_derive"], optional = true }
+serde_json = { version = "1.0.94", optional = true }
 thiserror = "1.0.40"
 tracing = "0.1.37"
 tui = "0.19.0"

@@ -3003,6 +3003,8 @@ dependencies = [
  "eyre",
  "insta",
  "num-traits",
+ "serde",
+ "serde_json",
  "thiserror",
  "tracing",
  "tui",
