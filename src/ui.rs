@@ -1581,7 +1581,7 @@ impl Component for SectionView<'_> {
                 };
                 let tristate_rect = viewport.draw_component(x, y, &tristate_box);
                 let x = x + tristate_rect.width.unwrap_isize() + 1;
-                let text = format!("File mode changed from {before:o} to {after:o}");
+                let text = format!("File mode changed from {before} to {after}");
                 viewport.draw_span(x, y, &Span::styled(text, Style::default().fg(Color::Blue)));
                 if is_focused {
                     highlight_line(viewport, y);
