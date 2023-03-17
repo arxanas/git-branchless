@@ -167,7 +167,7 @@ When you use `git rebase --interactive` with `git-branchless`, you will be promp
 
 See https://github.com/arxanas/git-branchless/wiki/Installation.
 
-Short version: run `cargo install --locked git-branchless`, then run `git branchless init` in your repository.
+Short version: check for packages in the repositories appropriate for your system or run `cargo install --locked git-branchless`. Once installed, run `git branchless init` in your repository.
 
 ## Status
 
