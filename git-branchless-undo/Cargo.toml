@@ -4,16 +4,16 @@ edition = "2021"
 license = "GPL-2.0-only"
 name = "git-branchless-undo"
 repository = "https://github.com/arxanas/git-branchless"
-version = "0.7.0"
+version = "0.7.1"
 
 [dependencies]
 cursive = { version = "0.20.0", default-features = false, features = [
   "crossterm-backend",
 ] }
 eyre = "0.6.8"
-lib = { package = "git-branchless-lib", version = "0.7.0", path = "../git-branchless-lib" }
-git-branchless-revset = { version = "0.7.0", path = "../git-branchless-revset" }
-git-branchless-smartlog = { version = "0.7.0", path = "../git-branchless-smartlog" }
+lib = { package = "git-branchless-lib", version = "0.7.1", path = "../git-branchless-lib" }
+git-branchless-revset = { version = "0.7.1", path = "../git-branchless-revset" }
+git-branchless-smartlog = { version = "0.7.1", path = "../git-branchless-smartlog" }
 tracing = "0.1.37"
 cursive_buffered_backend = "0.6.1"
 git-record = { version = "0.3.0", path = "../git-record" }
