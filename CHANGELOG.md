@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - ReleaseDate
 
+## [0.7.1] - 2023-03-13
+
+### Added
+
+- (#830) Added `git branchless install-man-pages` command to generate and install man-pages. This is primarily intended for those packaging git-branchless for package management systems.
+
+### Fixed
+
+- (#844) Fixed build for NetBSD.
+
 ## [0.7.0] - 2023-03-01
 
 ### Added
