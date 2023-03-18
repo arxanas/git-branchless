@@ -155,6 +155,11 @@ pub struct CreateStatus {
     pub local_commit_name: String,
 }
 
+pub struct UpdateStatus {
+    pub updated_commit: bool,
+    pub updated_dependencies: bool,
+}
+
 /// "Forge" refers to a Git hosting provider, such as GitHub, GitLab, etc.
 /// Commits can be pushed for review to a forge.
 pub trait Forge: Debug {
@@ -176,7 +181,7 @@ pub trait Forge: Debug {
         &mut self,
         commits: HashMap<NonZeroOid, CommitStatus>,
         options: &SubmitOptions,
-    ) -> EyreExitOr<()>;
+    ) -> EyreExitOr<Result<HashMap<NonZeroOid, UpdateStatus>>>;
 }
 
 /// `submit` command.
