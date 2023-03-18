@@ -10,7 +10,7 @@ use bugreport::report::ReportEntry;
 use itertools::Itertools;
 use lib::core::config::get_hooks_dir;
 use lib::core::repo_ext::{RepoExt, RepoReferencesSnapshot};
-use lib::util::ExitCode;
+use lib::util::EyreExitOr;
 
 use git_branchless_revset::resolve_default_smartlog_commits;
 use git_branchless_smartlog::{make_smartlog_graph, render_graph};
@@ -309,7 +309,7 @@ impl Collector for HookCollector {
 }
 
 /// Generate information suitable for inclusion in a bug report.
-pub fn bug_report(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<ExitCode> {
+pub fn bug_report(effects: &Effects, git_run_info: &GitRunInfo) -> EyreExitOr<()> {
     use bugreport::collector::*;
     bugreport!()
         .info(SoftwareVersion::default())
@@ -326,5 +326,5 @@ pub fn bug_report(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<
         })
         .print::<Markdown>();
 
-    Ok(ExitCode(0))
+    Ok(Ok(()))
 }

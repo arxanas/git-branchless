@@ -2,18 +2,14 @@ use std::fmt::Write;
 use std::{collections::HashSet, time::SystemTime};
 
 use itertools::Itertools;
+use lib::core::effects::{Effects, OperationType};
+use lib::core::eventlog::{Event, EventLogDb, EventReplayer};
+use lib::core::formatting::Pluralize;
+use lib::git::Repo;
 use lib::git::{CategorizedReferenceName, MaybeZeroOid};
-use lib::{
-    core::{
-        effects::{Effects, OperationType},
-        eventlog::{Event, EventLogDb, EventReplayer},
-        formatting::Pluralize,
-    },
-    git::Repo,
-    util::ExitCode,
-};
+use lib::util::EyreExitOr;
 
-pub fn repair(effects: &Effects, dry_run: bool) -> eyre::Result<ExitCode> {
+pub fn repair(effects: &Effects, dry_run: bool) -> EyreExitOr<()> {
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
@@ -129,5 +125,5 @@ pub fn repair(effects: &Effects, dry_run: bool) -> eyre::Result<ExitCode> {
         )?;
     }
 
-    Ok(ExitCode(0))
+    Ok(Ok(()))
 }

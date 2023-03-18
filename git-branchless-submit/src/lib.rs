@@ -28,7 +28,7 @@ use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::formatting::{Pluralize, StyledStringBuilder};
 use lib::core::repo_ext::{RepoExt, RepoReferencesSnapshot};
 use lib::git::{GitRunInfo, NonZeroOid, ReferenceName, Repo};
-use lib::util::ExitCode;
+use lib::util::{ExitCode, EyreExitOr};
 
 use git_branchless_opts::{ResolveRevsetOptions, Revset, SubmitArgs, TestExecutionStrategy};
 use git_branchless_revset::resolve_commits;
@@ -114,25 +114,25 @@ pub trait Forge {
     fn query_status(
         &mut self,
         commit_set: CommitSet,
-    ) -> eyre::Result<Result<HashMap<NonZeroOid, CommitStatus>, ExitCode>>;
+    ) -> EyreExitOr<HashMap<NonZeroOid, CommitStatus>>;
 
     /// Submit the provided set of commits for review.
     fn create(
         &mut self,
         commits: HashMap<NonZeroOid, CommitStatus>,
         options: &SubmitOptions,
-    ) -> eyre::Result<Result<HashMap<NonZeroOid, CreateStatus>, ExitCode>>;
+    ) -> EyreExitOr<HashMap<NonZeroOid, CreateStatus>>;
 
     /// Update existing remote commits to match their local versions.
     fn update(
         &mut self,
         commits: HashMap<NonZeroOid, CommitStatus>,
         options: &SubmitOptions,
-    ) -> eyre::Result<ExitCode>;
+    ) -> EyreExitOr<()>;
 }
 
 /// `submit` command.
-pub fn command_main(ctx: CommandContext, args: SubmitArgs) -> eyre::Result<ExitCode> {
+pub fn command_main(ctx: CommandContext, args: SubmitArgs) -> EyreExitOr<()> {
     let CommandContext {
         effects,
         git_run_info,
@@ -163,7 +163,7 @@ fn submit(
     create: bool,
     draft: bool,
     execution_strategy: Option<TestExecutionStrategy>,
-) -> eyre::Result<ExitCode> {
+) -> EyreExitOr<()> {
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
@@ -188,7 +188,7 @@ fn submit(
         Ok(mut commit_sets) => commit_sets.pop().unwrap(),
         Err(err) => {
             err.describe(effects)?;
-            return Ok(ExitCode(1));
+            return Ok(Err(ExitCode(1)));
         }
     };
 
@@ -219,7 +219,7 @@ fn submit(
         let now = SystemTime::now();
         let event_tx_id =
             event_log_db.make_transaction_id(now, "resolve test options for submit")?;
-        match ResolvedTestOptions::resolve(
+        ResolvedTestOptions::resolve(
             now,
             effects,
             &dag,
@@ -228,12 +228,7 @@ fn submit(
             &commit_set,
             None,
             &raw_test_options,
-        )? {
-            Ok(resolved_test_options) => resolved_test_options,
-            Err(exit_code) => {
-                return Ok(exit_code);
-            }
-        }
+        )??
     };
     let submit_options = SubmitOptions {
         create,
@@ -251,10 +246,7 @@ fn submit(
         &references_snapshot,
         &revset,
     );
-    let statuses = match forge.query_status(commit_set)? {
-        Ok(statuses) => statuses,
-        Err(exit_code) => return Ok(exit_code),
-    };
+    let statuses = forge.query_status(commit_set)??;
 
     let (unsubmitted_commits, commits_to_update, commits_to_skip): (
         HashMap<NonZeroOid, CommitStatus>,
@@ -316,10 +308,7 @@ fn submit(
         if unsubmitted_commits.is_empty() {
             Default::default()
         } else if create {
-            let create_statuses = match forge.create(unsubmitted_commits, &submit_options)? {
-                Ok(create_statuses) => create_statuses,
-                Err(exit_code) => return Ok(exit_code),
-            };
+            let create_statuses = forge.create(unsubmitted_commits, &submit_options)??;
             let all_branches: HashSet<_> = references_snapshot
                 .branch_oid_to_names
                 .values()
@@ -359,10 +348,7 @@ fn submit(
             .flat_map(|(_commit_oid, commit_status)| commit_status.local_branch_name.clone())
             .collect();
 
-        let exit_code = forge.update(commits_to_update, &submit_options)?;
-        if !exit_code.is_success() {
-            return Ok(exit_code);
-        }
+        forge.update(commits_to_update, &submit_options)??;
         (updated_branch_names, skipped_branch_names)
     };
 
@@ -461,7 +447,7 @@ create and push them, retry this operation with the --create option."
         )?;
     }
 
-    Ok(ExitCode(0))
+    Ok(Ok(()))
 }
 
 fn select_forge<'a>(

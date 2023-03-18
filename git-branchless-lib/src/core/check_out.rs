@@ -15,7 +15,7 @@ use crate::git::{
     update_index, CategorizedReferenceName, GitRunInfo, MaybeZeroOid, NonZeroOid, ReferenceName,
     Repo, Stage, UpdateIndexCommand, WorkingCopySnapshot,
 };
-use crate::util::ExitCode;
+use crate::util::EyreExitOr;
 
 use super::config::get_undo_create_snapshots;
 use super::effects::Effects;
@@ -112,7 +112,7 @@ pub fn check_out_commit(
     event_tx_id: EventTransactionId,
     target: Option<CheckoutTarget>,
     options: &CheckOutCommitOptions,
-) -> eyre::Result<ExitCode> {
+) -> EyreExitOr<()> {
     let CheckOutCommitOptions {
         additional_args,
         reset,
@@ -141,10 +141,7 @@ pub fn check_out_commit(
 
     if *reset {
         if let Some(target) = &target {
-            let exit_code = git_run_info.run(effects, Some(event_tx_id), &["reset", target])?;
-            if !exit_code.is_success() {
-                return Ok(exit_code);
-            }
+            git_run_info.run(effects, Some(event_tx_id), &["reset", target])??;
         }
     }
 
@@ -156,8 +153,7 @@ pub fn check_out_commit(
         args.extend(additional_args.iter().map(OsStr::new));
         args
     };
-    let exit_code = git_run_info.run(effects, Some(event_tx_id), checkout_args.as_slice())?;
-    if !exit_code.is_success() {
+    if let Err(err) = git_run_info.run(effects, Some(event_tx_id), checkout_args.as_slice())? {
         writeln!(
             effects.get_output_stream(),
             "{}",
@@ -169,7 +165,7 @@ pub fn check_out_commit(
                 BaseColor::Red.light()
             ))?
         )?;
-        return Ok(exit_code);
+        return Ok(Err(err));
     }
 
     // Determine if we currently have a snapshot checked out, and, if so,
@@ -179,22 +175,15 @@ pub fn check_out_commit(
         if let Some(head_oid) = head_info.oid {
             let head_commit = repo.find_commit_or_fail(head_oid)?;
             if let Some(snapshot) = WorkingCopySnapshot::try_from_base_commit(repo, &head_commit)? {
-                let exit_code =
-                    restore_snapshot(effects, git_run_info, repo, event_tx_id, &snapshot)?;
-                if !exit_code.is_success() {
-                    return Ok(exit_code);
-                }
+                restore_snapshot(effects, git_run_info, repo, event_tx_id, &snapshot)??;
             }
         }
     }
 
     if *render_smartlog {
-        let exit_code =
-            git_run_info.run_direct_no_wrapping(Some(event_tx_id), &["branchless", "smartlog"])?;
-        Ok(exit_code)
-    } else {
-        Ok(exit_code)
+        git_run_info.run_direct_no_wrapping(Some(event_tx_id), &["branchless", "smartlog"])??;
     }
+    Ok(Ok(()))
 }
 
 /// Create a working copy snapshot containing the working copy's current contents.
@@ -243,7 +232,7 @@ pub fn restore_snapshot(
     repo: &Repo,
     event_tx_id: EventTransactionId,
     snapshot: &WorkingCopySnapshot,
-) -> eyre::Result<ExitCode> {
+) -> EyreExitOr<()> {
     writeln!(
         effects.get_error_stream(),
         "branchless: restoring from snapshot"
@@ -251,44 +240,35 @@ pub fn restore_snapshot(
 
     // Discard any working copy changes. The caller is responsible for having
     // snapshotted them if necessary.
-    let exit_code = git_run_info
+    git_run_info
         .run(effects, Some(event_tx_id), &["reset", "--hard", "HEAD"])
-        .wrap_err("Discarding working copy changes")?;
-    if !exit_code.is_success() {
-        return Ok(exit_code);
-    }
+        .wrap_err("Discarding working copy changes")??;
 
     // Check out the unstaged changes. Note that we don't call `git reset --hard
     // <target>` directly as part of the previous step, and instead do this
     // two-step process. This second `git checkout` is so that untracked files
     // don't get thrown away as part of checking out the snapshot, but instead
     // abort the procedure.
-    let exit_code = git_run_info
+    git_run_info
         .run(
             effects,
             Some(event_tx_id),
             &["checkout", &snapshot.commit_unstaged.get_oid().to_string()],
         )
-        .wrap_err("Checking out unstaged changes (fail if conflict)")?;
-    if !exit_code.is_success() {
         // FIXME: it might be worth attempting to un-check-out this commit?
-        return Ok(exit_code);
-    }
+        .wrap_err("Checking out unstaged changes (fail if conflict)")??;
 
     // Restore any unstaged changes. They're already present in the working
     // copy, so we just have to adjust `HEAD`.
     match &snapshot.head_commit {
         Some(head_commit) => {
-            let exit_code = git_run_info
+            git_run_info
                 .run(
                     effects,
                     Some(event_tx_id),
                     &["reset", &head_commit.get_oid().to_string()],
                 )
-                .wrap_err("Update HEAD for unstaged changes")?;
-            if !exit_code.is_success() {
-                return Ok(exit_code);
-            }
+                .wrap_err("Update HEAD for unstaged changes")??;
         }
         None => {
             // Do nothing. The branch, if any, will be restored later below.
@@ -345,28 +325,22 @@ pub fn restore_snapshot(
             Some(head_commit) => MaybeZeroOid::NonZero(head_commit.get_oid()),
             None => MaybeZeroOid::Zero,
         };
-        let exit_code = git_run_info
+        git_run_info
             .run(
                 effects,
                 Some(event_tx_id),
                 &["update-ref", ref_name.as_str(), &head_oid.to_string()],
             )
-            .context("Restoring snapshot branch")?;
-        if !exit_code.is_success() {
-            return Ok(exit_code);
-        }
+            .context("Restoring snapshot branch")??;
 
-        let exit_code = git_run_info
+        git_run_info
             .run(
                 effects,
                 Some(event_tx_id),
                 &["symbolic-ref", "HEAD", ref_name.as_str()],
             )
-            .context("Checking out snapshot branch")?;
-        if !exit_code.is_success() {
-            return Ok(exit_code);
-        }
+            .context("Checking out snapshot branch")??;
     }
 
-    Ok(ExitCode(0))
+    Ok(Ok(()))
 }

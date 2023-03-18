@@ -4,11 +4,10 @@ use cursive_core::theme::BaseColor;
 use std::fmt::Write;
 use std::time::SystemTime;
 
-use eyre::Report;
 use itertools::Itertools;
 use lib::core::check_out::CheckOutCommitOptions;
 use lib::core::repo_ext::RepoExt;
-use lib::util::ExitCode;
+use lib::util::{ExitCode, EyreExitOr};
 use rayon::{ThreadPool, ThreadPoolBuilder};
 
 use git_branchless_opts::{MoveOptions, ResolveRevsetOptions, Revset};
@@ -44,7 +43,7 @@ pub fn sync(
     move_options: &MoveOptions,
     revsets: Vec<Revset>,
     resolve_revset_options: &ResolveRevsetOptions,
-) -> eyre::Result<ExitCode> {
+) -> EyreExitOr<()> {
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
@@ -56,10 +55,7 @@ pub fn sync(
     check_revset_syntax(&repo, &revsets)?;
 
     if pull {
-        let exit_code = git_run_info.run(effects, Some(event_tx_id), &["fetch", "--all"])?;
-        if !exit_code.is_success() {
-            return Ok(exit_code);
-        }
+        git_run_info.run(effects, Some(event_tx_id), &["fetch", "--all"])??;
     }
 
     let MoveOptions {
@@ -96,7 +92,7 @@ pub fn sync(
     let repo_pool = RepoResource::new_pool(&repo)?;
 
     if pull {
-        let exit_code = execute_main_branch_sync_plan(
+        execute_main_branch_sync_plan(
             effects,
             git_run_info,
             &repo,
@@ -105,10 +101,7 @@ pub fn sync(
             &execute_options,
             &thread_pool,
             &repo_pool,
-        )?;
-        if !exit_code.is_success() {
-            return Ok(exit_code);
-        }
+        )??;
     }
 
     // The main branch might have changed since we synced with `master`, so read its information again.
@@ -136,7 +129,7 @@ fn execute_main_branch_sync_plan(
     execute_options: &ExecuteRebasePlanOptions,
     thread_pool: &ThreadPool,
     repo_pool: &RepoPool,
-) -> eyre::Result<ExitCode> {
+) -> EyreExitOr<()> {
     let event_replayer = EventReplayer::from_event_log_db(effects, repo, event_log_db)?;
     let event_cursor = event_replayer.make_default_cursor();
     let references_snapshot = repo.get_references_snapshot()?;
@@ -168,12 +161,12 @@ fn execute_main_branch_sync_plan(
                 effects.get_output_stream(),
                 "{local_main_branch_description} does not track an upstream branch, so not pulling."
             )?;
-            return Ok(ExitCode(0));
+            return Ok(Ok(()));
         }
     };
     let upstream_main_branch_oid = match upstream_main_branch.get_oid()? {
         Some(upstream_main_branch_oid) => upstream_main_branch_oid,
-        None => return Ok(ExitCode(0)),
+        None => return Ok(Ok(())),
     };
     dag.sync_from_oids(
         effects,
@@ -213,7 +206,7 @@ fn execute_main_branch_sync_plan(
             true,
             "sync",
         )?;
-        return Ok(ExitCode(0));
+        return Ok(Ok(()));
     } else {
         writeln!(
             effects.get_output_stream(),
@@ -235,7 +228,7 @@ fn execute_main_branch_sync_plan(
         Ok(permissions) => permissions,
         Err(err) => {
             err.describe(effects, repo, &dag)?;
-            return Ok(ExitCode(1));
+            return Ok(Err(ExitCode(1)));
         }
     };
     let mut builder = RebasePlanBuilder::new(&dag, permissions);
@@ -246,19 +239,19 @@ fn execute_main_branch_sync_plan(
         .exactly_one()
     {
         Ok(root_oid) => root_oid,
-        Err(_) => return Ok(ExitCode(0)),
+        Err(_) => return Ok(Ok(())),
     };
     builder.move_subtree(root_commit_oid, vec![upstream_main_branch_oid])?;
     let rebase_plan = match builder.build(effects, thread_pool, repo_pool)? {
         Ok(rebase_plan) => rebase_plan,
         Err(err) => {
             err.describe(effects, repo, &dag)?;
-            return Ok(ExitCode(1));
+            return Ok(Err(ExitCode(1)));
         }
     };
     let rebase_plan = match rebase_plan {
         Some(rebase_plan) => rebase_plan,
-        None => return Ok(ExitCode(0)),
+        None => return Ok(Ok(())),
     };
 
     execute_plans(
@@ -282,7 +275,7 @@ fn execute_sync_plans(
     repo_pool: &ResourcePool<RepoResource>,
     revsets: Vec<Revset>,
     resolve_revset_options: &ResolveRevsetOptions,
-) -> eyre::Result<ExitCode> {
+) -> EyreExitOr<()> {
     let event_replayer = EventReplayer::from_event_log_db(effects, repo, event_log_db)?;
     let event_cursor = event_replayer.make_default_cursor();
     let references_snapshot = repo.get_references_snapshot()?;
@@ -298,7 +291,7 @@ fn execute_sync_plans(
             Ok(commit_sets) => commit_sets,
             Err(err) => {
                 err.describe(effects)?;
-                return Ok(ExitCode(1));
+                return Ok(Err(ExitCode(1)));
             }
         };
     let main_branch_oid = repo.get_main_branch_oid()?;
@@ -314,7 +307,7 @@ fn execute_sync_plans(
             Ok(permissions) => permissions,
             Err(err) => {
                 err.describe(effects, repo, &dag)?;
-                return Ok(ExitCode(1));
+                return Ok(Err(ExitCode(1)));
             }
         };
     let builder = RebasePlanBuilder::new(&dag, permissions);
@@ -358,7 +351,7 @@ fn execute_sync_plans(
         Ok(root_commit_and_plans) => root_commit_and_plans,
         Err(err) => {
             err.describe(effects, repo, &dag)?;
-            return Ok(ExitCode(1));
+            return Ok(Err(ExitCode(1)));
         }
     };
     execute_plans(
@@ -378,7 +371,7 @@ fn execute_plans(
     event_log_db: &EventLogDb,
     execute_options: &ExecuteRebasePlanOptions,
     root_commit_and_plans: Vec<(NonZeroOid, Option<RebasePlan>)>,
-) -> Result<ExitCode, Report> {
+) -> EyreExitOr<()> {
     let (success_commits, failed_merge_commits, skipped_commits) = {
         let mut success_commits: Vec<Commit> = Vec::new();
         let mut failed_merge_commits: Vec<(Commit, FailedMergeInfo)> = Vec::new();
@@ -414,7 +407,7 @@ fn execute_plans(
                     failed_merge_commits.push((root_commit, failed_merge_info));
                 }
                 ExecuteRebasePlanResult::Failed { exit_code } => {
-                    return Ok(exit_code);
+                    return Ok(Err(exit_code));
                 }
             }
         }
@@ -480,5 +473,5 @@ fn execute_plans(
         )?;
     }
 
-    Ok(ExitCode(0))
+    Ok(Ok(()))
 }

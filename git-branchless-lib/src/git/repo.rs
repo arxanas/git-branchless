@@ -38,6 +38,7 @@ use crate::git::reference::ReferenceNameError;
 use crate::git::run::GitRunInfo;
 use crate::git::tree::{dehydrate_tree, get_changed_paths_between_trees, hydrate_tree, Tree};
 use crate::git::{Branch, BranchType, Commit, Reference, ReferenceName};
+use crate::util::ExitCode;
 
 use super::index::{Index, IndexEntry};
 use super::snapshot::WorkingCopySnapshot;
@@ -891,7 +892,7 @@ impl Repo {
     /// are not included. This operation may take a while.
     #[instrument]
     pub fn has_changed_files(&self, effects: &Effects, git_run_info: &GitRunInfo) -> Result<bool> {
-        let exit_code = git_run_info
+        let map_err = git_run_info
             .run(
                 effects,
                 // This is not a mutating operation, so we don't need a transaction ID.
@@ -899,10 +900,14 @@ impl Repo {
                 &["diff", "--quiet"],
             )
             .map_err(Error::ExecGit)?;
-        if exit_code.is_success() {
-            Ok(false)
-        } else {
-            Ok(true)
+        match map_err {
+            Ok(()) => Ok(false),
+            Err(ExitCode(1)) => Ok(true),
+            Err(ExitCode(exit_code)) => {
+                // FIXME: raise error?
+                warn!(?exit_code, "Unexpected exit code from git diff");
+                Ok(true)
+            }
         }
     }
 

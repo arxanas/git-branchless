@@ -61,7 +61,7 @@ use std::time::SystemTime;
 
 use lib::core::check_out::CheckOutCommitOptions;
 use lib::core::repo_ext::RepoExt;
-use lib::util::ExitCode;
+use lib::util::{ExitCode, EyreExitOr};
 use rayon::{ThreadPool, ThreadPoolBuilder};
 use tracing::{instrument, warn};
 
@@ -93,7 +93,7 @@ fn restack_commits(
     build_options: BuildRebasePlanOptions,
     execute_options: &ExecuteRebasePlanOptions,
     merge_conflict_remediation: MergeConflictRemediation,
-) -> eyre::Result<ExitCode> {
+) -> EyreExitOr<()> {
     let repo = repo_pool.try_create()?;
     let commit_set: CommitSet = match commits {
         Some(commits) => commits.into_iter().collect(),
@@ -139,7 +139,7 @@ fn restack_commits(
             Ok(permissions) => permissions,
             Err(err) => {
                 err.describe(effects, &repo, dag)?;
-                return Ok(ExitCode(1));
+                return Ok(Err(ExitCode(1)));
             }
         };
         let mut builder = RebasePlanBuilder::new(dag, permissions);
@@ -159,11 +159,11 @@ fn restack_commits(
                     effects.get_output_stream(),
                     "No abandoned commits to restack."
                 )?;
-                return Ok(ExitCode(0));
+                return Ok(Ok(()));
             }
             Err(err) => {
                 err.describe(effects, &repo, dag)?;
-                return Ok(ExitCode(1));
+                return Ok(Err(ExitCode(1)));
             }
         }
     };
@@ -179,12 +179,12 @@ fn restack_commits(
     match execute_rebase_plan_result {
         ExecuteRebasePlanResult::Succeeded { rewritten_oids: _ } => {
             writeln!(effects.get_output_stream(), "Finished restacking commits.")?;
-            Ok(ExitCode(0))
+            Ok(Ok(()))
         }
 
         ExecuteRebasePlanResult::DeclinedToMerge { failed_merge_info } => {
             failed_merge_info.describe(effects, &repo, merge_conflict_remediation)?;
-            Ok(ExitCode(1))
+            Ok(Err(ExitCode(1)))
         }
 
         ExecuteRebasePlanResult::Failed { exit_code } => {
@@ -200,7 +200,7 @@ fn restack_commits(
                 effects.get_output_stream(),
                 "You can resolve the error and try running `git restack` again."
             )?;
-            Ok(exit_code)
+            Ok(Err(exit_code))
         }
     }
 }
@@ -213,7 +213,7 @@ fn restack_branches(
     git_run_info: &GitRunInfo,
     event_log_db: &EventLogDb,
     options: &ExecuteRebasePlanOptions,
-) -> eyre::Result<ExitCode> {
+) -> EyreExitOr<()> {
     let event_replayer = EventReplayer::from_event_log_db(effects, repo, event_log_db)?;
 
     let mut rewritten_oids = HashMap::new();
@@ -253,7 +253,7 @@ fn restack_branches(
         )?;
         writeln!(effects.get_output_stream(), "Finished restacking branches.")?;
     }
-    Ok(ExitCode(0))
+    Ok(Ok(()))
 }
 
 /// Restack all abandoned commits.
@@ -267,7 +267,7 @@ pub fn restack(
     resolve_revset_options: &ResolveRevsetOptions,
     move_options: &MoveOptions,
     merge_conflict_remediation: MergeConflictRemediation,
-) -> eyre::Result<ExitCode> {
+) -> EyreExitOr<()> {
     let now = SystemTime::now();
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
@@ -290,7 +290,7 @@ pub fn restack(
             Ok(commit_sets) => commit_sets,
             Err(err) => {
                 err.describe(effects)?;
-                return Ok(ExitCode(1));
+                return Ok(Err(ExitCode(1)));
             }
         };
     let commits: Option<HashSet<NonZeroOid>> = if commit_sets.is_empty() {
@@ -334,7 +334,7 @@ pub fn restack(
     let pool = ThreadPoolBuilder::new().build()?;
     let repo_pool = RepoResource::new_pool(&repo)?;
 
-    let exit_code = restack_commits(
+    restack_commits(
         effects,
         &pool,
         &repo_pool,
@@ -347,22 +347,16 @@ pub fn restack(
         build_options,
         &execute_options,
         merge_conflict_remediation,
-    )?;
-    if !exit_code.is_success() {
-        return Ok(exit_code);
-    }
+    )??;
 
-    let exit_code = restack_branches(
+    restack_branches(
         effects,
         &repo,
         &conn,
         git_run_info,
         &event_log_db,
         &execute_options,
-    )?;
-    if !exit_code.is_success() {
-        return Ok(exit_code);
-    }
+    )??;
 
     smartlog(effects, git_run_info, Default::default())
 }

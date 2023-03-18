@@ -23,7 +23,7 @@ use lib::core::rewrite::{
     ExecuteRebasePlanResult, RebasePlanBuilder, RebasePlanPermissions, RepoResource,
 };
 use lib::git::{Commit, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo, RepoError};
-use lib::util::ExitCode;
+use lib::util::{ExitCode, EyreExitOr};
 use rayon::ThreadPoolBuilder;
 use regex::bytes::Regex;
 use serde::{Deserialize, Serialize};
@@ -196,7 +196,7 @@ impl Forge for PhabricatorForge<'_> {
     fn query_status(
         &mut self,
         commit_set: CommitSet,
-    ) -> eyre::Result<std::result::Result<HashMap<NonZeroOid, CommitStatus>, ExitCode>> {
+    ) -> EyreExitOr<HashMap<NonZeroOid, CommitStatus>> {
         let commit_oids = self.dag.commit_set_to_vec(&commit_set)?;
         let commit_oid_to_revision: HashMap<NonZeroOid, Option<Id>> = commit_oids
             .into_iter()
@@ -232,7 +232,7 @@ impl Forge for PhabricatorForge<'_> {
         &mut self,
         commits: HashMap<NonZeroOid, CommitStatus>,
         options: &SubmitOptions,
-    ) -> eyre::Result<std::result::Result<HashMap<NonZeroOid, CreateStatus>, ExitCode>> {
+    ) -> EyreExitOr<HashMap<NonZeroOid, CreateStatus>> {
         let SubmitOptions {
             create: _,
             draft,
@@ -475,10 +475,10 @@ impl Forge for PhabricatorForge<'_> {
         &mut self,
         commits: HashMap<NonZeroOid, crate::CommitStatus>,
         options: &SubmitOptions,
-    ) -> eyre::Result<ExitCode> {
+    ) -> EyreExitOr<()> {
         let commit_set = commits.keys().copied().collect();
         self.update_dependencies(&commit_set)?;
-        Ok(ExitCode(0))
+        Ok(Ok(()))
     }
 }
 

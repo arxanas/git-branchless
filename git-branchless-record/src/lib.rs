@@ -34,14 +34,14 @@ use lib::git::{
     NonZeroOid, Repo, ResolvedReferenceInfo, Stage, UpdateIndexCommand, WorkingCopyChangesType,
     WorkingCopySnapshot,
 };
-use lib::util::ExitCode;
+use lib::util::{ExitCode, EyreExitOr};
 use rayon::ThreadPoolBuilder;
 use scm_record::{EventSource, RecordError, RecordState, Recorder};
 use tracing::instrument;
 
 /// Commit changes in the working copy.
 #[instrument]
-pub fn command_main(ctx: CommandContext, args: RecordArgs) -> eyre::Result<ExitCode> {
+pub fn command_main(ctx: CommandContext, args: RecordArgs) -> EyreExitOr<()> {
     let CommandContext {
         effects,
         git_run_info,
@@ -73,7 +73,7 @@ fn record(
     branch_name: Option<String>,
     detach: bool,
     insert: bool,
-) -> eyre::Result<ExitCode> {
+) -> EyreExitOr<()> {
     let now = SystemTime::now();
     let repo = Repo::from_dir(&git_run_info.working_directory)?;
     let conn = repo.get_db_conn()?;
@@ -93,7 +93,7 @@ fn record(
                     effects.get_output_stream(),
                     "There are no changes to tracked files in the working copy to commit."
                 )?;
-                return Ok(ExitCode(0));
+                return Ok(Ok(()));
             }
             WorkingCopyChangesType::Unstaged | WorkingCopyChangesType::Staged => {}
             WorkingCopyChangesType::Conflicts => {
@@ -105,14 +105,14 @@ fn record(
                     effects.get_output_stream(),
                     "Resolve them and try again. Aborting."
                 )?;
-                return Ok(ExitCode(1));
+                return Ok(Err(ExitCode(1)));
             }
         }
         (snapshot, working_copy_changes_type)
     };
 
     if let Some(branch_name) = branch_name {
-        let exit_code = check_out_commit(
+        check_out_commit(
             effects,
             git_run_info,
             &repo,
@@ -124,13 +124,10 @@ fn record(
                 reset: false,
                 render_smartlog: false,
             },
-        )?;
-        if !exit_code.is_success() {
-            return Ok(exit_code);
-        }
+        )??;
     }
 
-    let commit_exit_code = if interactive {
+    if interactive {
         if working_copy_changes_type == WorkingCopyChangesType::Staged {
             writeln!(
                 effects.get_output_stream(),
@@ -140,7 +137,7 @@ fn record(
                 effects.get_output_stream(),
                 "Either commit or unstage your changes and try again. Aborting."
             )?;
-            ExitCode(1)
+            return Ok(Err(ExitCode(1)));
         } else {
             record_interactive(
                 effects,
@@ -149,7 +146,7 @@ fn record(
                 &snapshot,
                 event_tx_id,
                 message.as_deref(),
-            )?
+            )??;
         }
     } else {
         let args = {
@@ -162,10 +159,7 @@ fn record(
             }
             args
         };
-        git_run_info.run_direct_no_wrapping(Some(event_tx_id), &args)?
-    };
-    if !commit_exit_code.is_success() {
-        return Ok(commit_exit_code);
+        git_run_info.run_direct_no_wrapping(Some(event_tx_id), &args)??;
     }
 
     if detach {
@@ -210,13 +204,10 @@ fn record(
     }
 
     if insert {
-        let exit_code = insert_before_siblings(effects, git_run_info, now, event_tx_id)?;
-        if !exit_code.is_success() {
-            return Ok(exit_code);
-        }
+        insert_before_siblings(effects, git_run_info, now, event_tx_id)??;
     }
 
-    Ok(ExitCode(0))
+    Ok(Ok(()))
 }
 
 #[instrument]
@@ -227,7 +218,7 @@ fn record_interactive(
     snapshot: &WorkingCopySnapshot,
     event_tx_id: EventTransactionId,
     message: Option<&str>,
-) -> eyre::Result<ExitCode> {
+) -> EyreExitOr<()> {
     let files = {
         let (effects, _progress) = effects.start_operation(OperationType::CalculateDiff);
         let old_tree = snapshot.commit_stage0.get_tree()?;
@@ -249,12 +240,12 @@ fn record_interactive(
         Ok(result) => result,
         Err(RecordError::Cancelled) => {
             println!("Aborted.");
-            return Ok(ExitCode(1));
+            return Ok(Err(ExitCode(1)));
         }
         Err(RecordError::Bug(message)) => {
             println!("BUG: {message}");
             println!("This is a bug. Please report it.");
-            return Ok(ExitCode(1));
+            return Ok(Err(ExitCode(1)));
         }
         Err(
             err @ (RecordError::SetUpTerminal(_)
@@ -263,7 +254,7 @@ fn record_interactive(
             | RecordError::RenderFrame(_)),
         ) => {
             println!("Error: {err}");
-            return Ok(ExitCode(1));
+            return Ok(Err(ExitCode(1)));
         }
     };
 
@@ -307,7 +298,7 @@ fn insert_before_siblings(
     git_run_info: &GitRunInfo,
     now: SystemTime,
     event_tx_id: EventTransactionId,
-) -> eyre::Result<ExitCode> {
+) -> EyreExitOr<()> {
     // Reopen the repository since references may have changed.
     let repo = Repo::from_dir(&git_run_info.working_directory)?;
     let conn = repo.get_db_conn()?;
@@ -325,7 +316,7 @@ fn insert_before_siblings(
             oid: None,
             reference_name: _,
         } => {
-            return Ok(ExitCode(0));
+            return Ok(Ok(()));
         }
     };
 
@@ -382,7 +373,7 @@ fn insert_before_siblings(
 
         Ok(None) => {
             // Nothing to do, since there were no siblings to move.
-            return Ok(ExitCode(0));
+            return Ok(Ok(()));
         }
 
         Err(BuildRebasePlanError::ConstraintCycle { .. }) => {
@@ -390,12 +381,12 @@ fn insert_before_siblings(
                 effects.get_output_stream(),
                 "BUG: constraint cycle detected when moving siblings, which shouldn't be possible."
             )?;
-            return Ok(ExitCode(1));
+            return Ok(Err(ExitCode(1)));
         }
 
         Err(err @ BuildRebasePlanError::MoveIllegalCommits { .. }) => {
             err.describe(effects, &repo, &dag)?;
-            return Ok(ExitCode(1));
+            return Ok(Err(ExitCode(1)));
         }
 
         Err(BuildRebasePlanError::MovePublicCommits {
@@ -422,7 +413,7 @@ To proceed anyways, run: git move -f -s 'siblings(.)",
                     .get_glyphs()
                     .render(example_bad_commit.friendly_describe(effects.get_glyphs())?)?,
             )?;
-            return Ok(ExitCode(0));
+            return Ok(Ok(()));
         }
     };
 
@@ -444,11 +435,11 @@ To proceed anyways, run: git move -f -s 'siblings(.)",
         &execute_options,
     )?;
     match result {
-        ExecuteRebasePlanResult::Succeeded { rewritten_oids: _ } => Ok(ExitCode(0)),
+        ExecuteRebasePlanResult::Succeeded { rewritten_oids: _ } => Ok(Ok(())),
         ExecuteRebasePlanResult::DeclinedToMerge { failed_merge_info } => {
             failed_merge_info.describe(effects, &repo, MergeConflictRemediation::Insert)?;
-            Ok(ExitCode(0))
+            Ok(Ok(()))
         }
-        ExecuteRebasePlanResult::Failed { exit_code } => Ok(exit_code),
+        ExecuteRebasePlanResult::Failed { exit_code } => Ok(Err(exit_code)),
     }
 }

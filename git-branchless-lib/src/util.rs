@@ -1,5 +1,7 @@
 //! Utility functions.
 
+use std::error::Error;
+use std::fmt::Display;
 use std::path::PathBuf;
 
 /// Represents the code to exit the process with.
@@ -16,7 +18,27 @@ impl ExitCode {
             ExitCode(_) => false,
         }
     }
+
+    /// Convert the exit code into an `i32`, or use the default failure exit
+    /// code if conversion fails.
+    pub fn into_i32_or_default(self) -> i32 {
+        let Self(exit_code) = self;
+        exit_code.try_into().unwrap_or(1)
+    }
 }
+
+impl Display for ExitCode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let Self(exit_code) = self;
+        write!(f, "exit code {exit_code}")
+    }
+}
+
+impl Error for ExitCode {}
+
+/// Helper type to wrap situations where we might return any normal error
+/// (wrapped by `eyre::Result`) or an `ExitCode`.
+pub type EyreExitOr<T> = eyre::Result<Result<T, ExitCode>>;
 
 /// Returns a path for a given file, searching through PATH to find it.
 pub fn get_from_path(exe_name: &str) -> Option<PathBuf> {

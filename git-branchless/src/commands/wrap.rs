@@ -10,13 +10,13 @@ use itertools::Itertools;
 
 use lib::core::eventlog::{EventLogDb, EventTransactionId, BRANCHLESS_TRANSACTION_ID_ENV_VAR};
 use lib::git::{GitRunInfo, Repo};
-use lib::util::ExitCode;
+use lib::util::{ExitCode, EyreExitOr};
 
 fn pass_through_git_command_inner(
     git_run_info: &GitRunInfo,
     args: &[&str],
     event_tx_id: Option<EventTransactionId>,
-) -> eyre::Result<ExitCode> {
+) -> EyreExitOr<()> {
     let GitRunInfo {
         path_to_git,
         working_directory,
@@ -33,14 +33,14 @@ fn pass_through_git_command_inner(
     let exit_status = command.status().wrap_err("Running Git command")?;
     let exit_code: isize = exit_status.code().unwrap_or(1).try_into()?;
     let exit_code = ExitCode(exit_code);
-    Ok(exit_code)
+    Ok(Err(exit_code))
 }
 
 fn pass_through_git_command<S: AsRef<str> + std::fmt::Debug>(
     git_run_info: &GitRunInfo,
     args: &[S],
     event_tx_id: Option<EventTransactionId>,
-) -> eyre::Result<ExitCode> {
+) -> EyreExitOr<()> {
     pass_through_git_command_inner(
         git_run_info,
         args.iter().map(AsRef::as_ref).collect_vec().as_slice(),
@@ -66,7 +66,7 @@ fn make_event_tx_id<S: AsRef<str> + std::fmt::Debug>(
 pub fn wrap<S: AsRef<str> + std::fmt::Debug>(
     git_run_info: &GitRunInfo,
     args: &[S],
-) -> eyre::Result<ExitCode> {
+) -> EyreExitOr<()> {
     // We may not be able to make an event transaction ID (such as if there is
     // no repository in the current directory). Ignore the error in that case.
     let event_tx_id = make_event_tx_id(args).ok();

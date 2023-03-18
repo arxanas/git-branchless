@@ -29,7 +29,7 @@ use lib::git::{
     AmendFastOptions, CategorizedReferenceName, GitRunInfo, MaybeZeroOid, Repo,
     ResolvedReferenceInfo,
 };
-use lib::util::ExitCode;
+use lib::util::{ExitCode, EyreExitOr};
 use rayon::ThreadPoolBuilder;
 use tracing::instrument;
 
@@ -41,7 +41,7 @@ pub fn amend(
     resolve_revset_options: &ResolveRevsetOptions,
     move_options: &MoveOptions,
     reparent: bool,
-) -> eyre::Result<ExitCode> {
+) -> EyreExitOr<()> {
     let now = SystemTime::now();
     let timestamp = now.duration_since(SystemTime::UNIX_EPOCH)?.as_secs_f64();
     let repo = Repo::from_current_dir()?;
@@ -66,7 +66,7 @@ pub fn amend(
                 effects.get_output_stream(),
                 "No commit is currently checked out. Check out a commit to amend and then try again.",
             )?;
-            return Ok(ExitCode(1));
+            return Ok(Err(ExitCode(1)));
         }
     };
     let head_commit = repo.find_commit_or_fail(head_oid)?;
@@ -77,7 +77,7 @@ pub fn amend(
             effects.get_output_stream(),
             "Cannot amend, because there are unresolved merge conflicts. Resolve the merge conflicts and try again."
         )?;
-        return Ok(ExitCode(1));
+        return Ok(Err(ExitCode(1)));
     }
 
     let build_options = BuildRebasePlanOptions {
@@ -92,7 +92,7 @@ pub fn amend(
         RebasePlanPermissions::verify_rewrite_set(&dag, build_options, &commits_to_verify)?
     {
         err.describe(effects, &repo, &dag)?;
-        return Ok(ExitCode(1));
+        return Ok(Err(ExitCode(1)));
     };
 
     let event_tx_id = event_log_db.make_transaction_id(now, "amend")?;
@@ -141,7 +141,7 @@ pub fn amend(
             effects.get_output_stream(),
             "There are no uncommitted or staged changes. Nothing to amend."
         )?;
-        return Ok(ExitCode(0));
+        return Ok(Ok(()));
     }
 
     let amended_tree = repo.amend_fast(&head_commit, &opts)?;
@@ -177,7 +177,8 @@ pub fn amend(
         CommitSet::empty(),
         CommitSet::from(amended_commit_oid),
     )?;
-    let exit_code = {
+
+    {
         let additional_args = match &head_info.reference_name {
             Some(name) => match CategorizedReferenceName::new(name) {
                 name @ CategorizedReferenceName::LocalBranch { .. } => {
@@ -200,10 +201,7 @@ pub fn amend(
                 reset: true,
                 render_smartlog: false,
             },
-        )?
-    };
-    if !exit_code.is_success() {
-        return Ok(exit_code);
+        )??;
     }
 
     let rebase_plan = {
@@ -226,7 +224,7 @@ pub fn amend(
             Ok(permissions) => permissions,
             Err(err) => {
                 err.describe(effects, &repo, &dag)?;
-                return Ok(ExitCode(1));
+                return Ok(Err(ExitCode(1)));
             }
         };
 
@@ -279,7 +277,7 @@ pub fn amend(
             Ok(rebase_plan) => rebase_plan,
             Err(err) => {
                 err.describe(effects, &repo, &dag)?;
-                return Ok(ExitCode(1));
+                return Ok(Err(ExitCode(1)));
             }
         }
     };
@@ -340,7 +338,7 @@ pub fn amend(
             }
 
             ExecuteRebasePlanResult::Failed { exit_code } => {
-                return Ok(exit_code);
+                return Ok(Err(exit_code));
             }
         }
     }
@@ -372,5 +370,5 @@ pub fn amend(
         }
     }
 
-    Ok(ExitCode(0))
+    Ok(Ok(()))
 }

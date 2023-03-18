@@ -22,7 +22,7 @@ use cursive::utils::markup::StyledString;
 
 use lib::core::check_out::{check_out_commit, CheckOutCommitOptions, CheckoutTarget};
 use lib::core::repo_ext::RepoExt;
-use lib::util::ExitCode;
+use lib::util::{ExitCode, EyreExitOr};
 use tracing::{instrument, warn};
 
 use git_branchless_opts::{SwitchOptions, TraverseCommitsOptions};
@@ -312,7 +312,7 @@ pub fn traverse_commits(
     git_run_info: &GitRunInfo,
     command: Command,
     options: &TraverseCommitsOptions,
-) -> eyre::Result<ExitCode> {
+) -> EyreExitOr<()> {
     let TraverseCommitsOptions {
         num_commits,
         all_the_way,
@@ -404,7 +404,7 @@ pub fn traverse_commits(
         towards,
     )?;
     let current_oid = match current_oid {
-        None => return Ok(ExitCode(1)),
+        None => return Ok(Err(ExitCode(1))),
         Some(current_oid) => current_oid,
     };
 
@@ -472,7 +472,7 @@ pub fn switch(
     effects: &Effects,
     git_run_info: &GitRunInfo,
     switch_options: &SwitchOptions,
-) -> eyre::Result<ExitCode> {
+) -> EyreExitOr<()> {
     let SwitchOptions {
         interactive: _,
         branch_name,
@@ -548,7 +548,7 @@ pub fn switch(
                 ],
             )? {
                 Some(oid) => Some(CheckoutTarget::Oid(oid)),
-                None => return Ok(ExitCode(1)),
+                None => return Ok(Err(ExitCode(1))),
             }
         }
     };

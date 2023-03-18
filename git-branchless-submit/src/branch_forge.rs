@@ -11,7 +11,7 @@ use lib::core::repo_ext::{RepoExt, RepoReferencesSnapshot};
 use lib::git::{
     Branch, BranchType, CategorizedReferenceName, GitRunInfo, NonZeroOid, ReferenceName, Repo,
 };
-use lib::util::ExitCode;
+use lib::util::{ExitCode, EyreExitOr};
 use tracing::warn;
 
 use crate::{CommitStatus, CreateStatus, Forge, SubmitOptions, SubmitStatus};
@@ -29,7 +29,7 @@ impl Forge for BranchForge<'_> {
     fn query_status(
         &mut self,
         commit_set: CommitSet,
-    ) -> eyre::Result<Result<HashMap<NonZeroOid, CommitStatus>, ExitCode>> {
+    ) -> EyreExitOr<HashMap<NonZeroOid, CommitStatus>> {
         struct BranchInfo<'a> {
             branch: Branch<'a>,
             branch_name: String,
@@ -113,16 +113,19 @@ impl Forge for BranchForge<'_> {
                 }
                 result
             };
-            let exit_code = self
+            match self
                 .git_run_info
-                .run(self.effects, Some(event_tx_id), &remote_args)?;
-            if !exit_code.is_success() {
-                writeln!(
-                    self.effects.get_output_stream(),
-                    "Failed to fetch from remote: {}",
-                    remote_name
-                )?;
-                return Ok(Err(exit_code));
+                .run(self.effects, Some(event_tx_id), &remote_args)?
+            {
+                Ok(()) => {}
+                Err(exit_code) => {
+                    writeln!(
+                        self.effects.get_output_stream(),
+                        "Failed to fetch from remote: {}",
+                        remote_name
+                    )?;
+                    return Ok(Err(exit_code));
+                }
             }
         }
 
@@ -184,7 +187,7 @@ impl Forge for BranchForge<'_> {
         &mut self,
         commits: HashMap<NonZeroOid, CommitStatus>,
         _options: &SubmitOptions,
-    ) -> eyre::Result<Result<HashMap<NonZeroOid, CreateStatus>, ExitCode>> {
+    ) -> EyreExitOr<HashMap<NonZeroOid, CreateStatus>> {
         let unsubmitted_branch_names = commits
             .values()
             .filter_map(|commit_status| {
@@ -233,12 +236,8 @@ These remotes are available: {}",
             let (effects, progress) = self.effects.start_operation(OperationType::PushCommits);
             let _effects = effects;
             progress.notify_progress(0, unsubmitted_branch_names.len());
-            let exit_code = self
-                .git_run_info
-                .run(self.effects, Some(event_tx_id), &args)?;
-            if !exit_code.is_success() {
-                return Ok(Err(exit_code));
-            }
+            self.git_run_info
+                .run(self.effects, Some(event_tx_id), &args)??;
             Ok(Ok(commits
                 .into_iter()
                 .filter_map(|(commit_oid, commit_status)| {
@@ -260,7 +259,7 @@ These remotes are available: {}",
         &mut self,
         commits: HashMap<NonZeroOid, CommitStatus>,
         _options: &SubmitOptions,
-    ) -> eyre::Result<ExitCode> {
+    ) -> EyreExitOr<()> {
         let branches_by_remote: BTreeMap<String, BTreeSet<String>> = commits
             .into_values()
             .flat_map(|commit_status| match commit_status {
@@ -294,18 +293,20 @@ These remotes are available: {}",
         for (remote_name, branch_names) in branches_by_remote {
             let mut args = vec!["push", "--force-with-lease", &remote_name];
             args.extend(branch_names.iter().map(|s| s.as_str()));
-            let exit_code = self.git_run_info.run(&effects, Some(event_tx_id), &args)?;
-            if !exit_code.is_success() {
-                writeln!(
-                    effects.get_output_stream(),
-                    "Failed to push branches: {}",
-                    branch_names.into_iter().join(", ")
-                )?;
-                return Ok(exit_code);
+            match self.git_run_info.run(&effects, Some(event_tx_id), &args)? {
+                Ok(()) => {}
+                Err(exit_code) => {
+                    writeln!(
+                        effects.get_output_stream(),
+                        "Failed to push branches: {}",
+                        branch_names.into_iter().join(", ")
+                    )?;
+                    return Ok(Err(exit_code));
+                }
             }
             progress.notify_progress_inc(branch_names.len());
         }
 
-        Ok(ExitCode(0))
+        Ok(Ok(()))
     }
 }

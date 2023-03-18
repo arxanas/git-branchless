@@ -13,7 +13,7 @@ pub mod dialoguer_edit;
 
 use lib::core::check_out::CheckOutCommitOptions;
 use lib::core::repo_ext::RepoExt;
-use lib::util::ExitCode;
+use lib::util::{ExitCode, EyreExitOr};
 use rayon::ThreadPoolBuilder;
 use std::collections::{HashMap, HashSet};
 
@@ -67,7 +67,7 @@ pub fn reword(
     messages: InitialCommitMessages,
     git_run_info: &GitRunInfo,
     force_rewrite_public_commits: bool,
-) -> eyre::Result<ExitCode> {
+) -> EyreExitOr<()> {
     let repo = Repo::from_current_dir()?;
     let references_snapshot = repo.get_references_snapshot()?;
     let conn = repo.get_db_conn()?;
@@ -90,7 +90,7 @@ pub fn reword(
         resolve_revset_options,
     )? {
         Some(commits) => commits,
-        None => return Ok(ExitCode(1)),
+        None => return Ok(Err(ExitCode(1))),
     };
     let build_options = BuildRebasePlanOptions {
         force_rewrite_public_commits,
@@ -106,7 +106,7 @@ pub fn reword(
         Ok(permissions) => permissions,
         Err(err) => {
             err.describe(effects, &repo, &dag)?;
-            return Ok(ExitCode(1));
+            return Ok(Err(ExitCode(1)));
         }
     };
 
@@ -132,7 +132,7 @@ pub fn reword(
                             effects.get_error_stream(),
                             "The commit supplied to --fixup must be an ancestor of all commits being reworded.\nAborting.",
                         )?;
-                        return Ok(ExitCode(1));
+                        return Ok(Err(ExitCode(1)));
                     }
                     commit_to_fixup
                 }
@@ -143,7 +143,7 @@ pub fn reword(
                         revset,
                         commits.len()
                     )?;
-                    return Ok(ExitCode(1));
+                    return Ok(Err(ExitCode(1)));
                 }
             };
             let message = commit_to_fixup.get_summary()?.to_vec();
@@ -179,14 +179,14 @@ pub fn reword(
                 effects.get_output_stream(),
                 "Aborting. The message was not edited; nothing to do."
             )?;
-            return Ok(ExitCode(1));
+            return Ok(Err(ExitCode(1)));
         }
         PrepareMessagesResult::EmptyMessage => {
             writeln!(
                 effects.get_error_stream(),
                 "Aborting reword due to empty commit message."
             )?;
-            return Ok(ExitCode(1));
+            return Ok(Err(ExitCode(1)));
         }
         PrepareMessagesResult::MismatchedCommits {
             mut duplicates,
@@ -244,7 +244,7 @@ pub fn reword(
                 effects.get_error_stream(),
                 "Your edited message has been saved to .git/REWORD_EDITMSG for review and/or manual recovery."
             )?;
-            return Ok(ExitCode(1));
+            return Ok(Err(ExitCode(1)));
         }
     };
 
@@ -271,7 +271,7 @@ pub fn reword(
             }
             Err(err) => {
                 err.describe(effects, &repo, &dag)?;
-                return Ok(ExitCode(1));
+                return Ok(Err(ExitCode(1)));
             }
         }
     };
@@ -300,16 +300,16 @@ pub fn reword(
         &execute_options,
     )?;
 
-    let exit_code = match result {
+    match result {
         ExecuteRebasePlanResult::Succeeded {
             rewritten_oids: Some(rewritten_oids),
         } => {
             render_status_report(&repo, effects, &commits, &rewritten_oids)?;
-            ExitCode(0)
+            Ok(Ok(()))
         }
         ExecuteRebasePlanResult::Succeeded {
             rewritten_oids: None,
-        } => ExitCode(0),
+        } => Ok(Ok(())),
         ExecuteRebasePlanResult::DeclinedToMerge {
             failed_merge_info: _,
         } => {
@@ -317,12 +317,10 @@ pub fn reword(
                 effects.get_error_stream(),
                 "BUG: Merge failed, but rewording shouldn't cause any merge failures."
             )?;
-            ExitCode(1)
+            Ok(Err(ExitCode(1)))
         }
-        ExecuteRebasePlanResult::Failed { exit_code } => exit_code,
-    };
-
-    Ok(exit_code)
+        ExecuteRebasePlanResult::Failed { exit_code } => Ok(Err(exit_code)),
+    }
 }
 
 /// Turn a list of ref-ish strings into a list of Commits.

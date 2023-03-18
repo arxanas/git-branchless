@@ -11,9 +11,9 @@ use lib::core::check_out::{create_snapshot, restore_snapshot};
 use lib::core::effects::Effects;
 use lib::core::eventlog::EventLogDb;
 use lib::git::{GitRunInfo, GitRunResult, NonZeroOid, Repo, WorkingCopySnapshot};
-use lib::util::ExitCode;
+use lib::util::{ExitCode, EyreExitOr};
 
-pub fn create(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<ExitCode> {
+pub fn create(effects: &Effects, git_run_info: &GitRunInfo) -> EyreExitOr<()> {
     let repo = Repo::from_dir(&git_run_info.working_directory)?;
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
@@ -39,7 +39,9 @@ pub fn create(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<Exit
         )
         .wrap_err("Discarding working copy")?;
 
-    if !exit_code.is_success() {
+    if exit_code.is_success() {
+        Ok(Ok(()))
+    } else {
         writeln!(
             effects.get_output_stream(),
             "{}",
@@ -48,15 +50,15 @@ pub fn create(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<Exit
                 BaseColor::Red.light()
             ))?
         )?;
+        Ok(Err(exit_code))
     }
-    Ok(exit_code)
 }
 
 pub fn restore(
     effects: &Effects,
     git_run_info: &GitRunInfo,
     snapshot_oid: NonZeroOid,
-) -> eyre::Result<ExitCode> {
+) -> EyreExitOr<()> {
     let repo = Repo::from_dir(&git_run_info.working_directory)?;
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
@@ -70,7 +72,7 @@ pub fn restore(
                 effects.get_error_stream(),
                 "Not a snapshot commit: {snapshot_oid}"
             )?;
-            return Ok(ExitCode(1));
+            return Ok(Err(ExitCode(1)));
         }
     };
 

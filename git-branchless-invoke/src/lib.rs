@@ -14,7 +14,6 @@
 #![allow(clippy::too_many_arguments, clippy::blocks_in_if_conditions)]
 
 use std::any::Any;
-use std::convert::TryInto;
 use std::ffi::OsString;
 use std::fmt::Write;
 use std::path::PathBuf;
@@ -30,7 +29,7 @@ use lib::core::effects::Effects;
 use lib::core::formatting::Glyphs;
 use lib::git::GitRunInfo;
 use lib::git::{Repo, RepoError};
-use lib::util::ExitCode;
+use lib::util::{ExitCode, EyreExitOr};
 use tracing::level_filters::LevelFilter;
 use tracing::{info, instrument, warn};
 use tracing_chrome::ChromeLayerBuilder;
@@ -166,7 +165,7 @@ support repositories with this configuration option enabled.",
 /// call `invoke_subcommand_main` instead.
 #[instrument(skip(f))]
 pub fn do_main_and_drop_locals<T: Parser>(
-    f: impl Fn(CommandContext, T) -> eyre::Result<ExitCode>,
+    f: impl Fn(CommandContext, T) -> EyreExitOr<()>,
     args: Vec<OsString>,
 ) -> eyre::Result<i32> {
     let command = GlobalArgs::command();
@@ -205,17 +204,18 @@ pub fn do_main_and_drop_locals<T: Parser>(
     let _tracing_guard = install_tracing(effects.clone());
     install_libgit2_tracing();
 
-    if let Some(ExitCode(exit_code)) = check_unsupported_config_options(&effects)? {
-        let exit_code: i32 = exit_code.try_into()?;
-        return Ok(exit_code);
+    if let Some(exit_code) = check_unsupported_config_options(&effects)? {
+        return Ok(exit_code.into_i32_or_default());
     }
 
     let ctx = CommandContext {
         effects,
         git_run_info,
     };
-    let ExitCode(exit_code) = f(ctx, command_args)?;
-    let exit_code: i32 = exit_code.try_into()?;
+    let exit_code = match f(ctx, command_args)? {
+        Ok(()) => 0_i32,
+        Err(exit_code) => exit_code.into_i32_or_default(),
+    };
     Ok(exit_code)
 }
 
@@ -228,7 +228,7 @@ pub fn do_main_and_drop_locals<T: Parser>(
 /// }
 /// ```
 #[instrument(skip(f))]
-pub fn invoke_subcommand_main<T: Parser>(f: impl Fn(CommandContext, T) -> eyre::Result<ExitCode>) {
+pub fn invoke_subcommand_main<T: Parser>(f: impl Fn(CommandContext, T) -> EyreExitOr<()>) {
     // Install panic handler.
     color_eyre::install().expect("Could not install panic handler");
     let args = std::env::args_os().collect();

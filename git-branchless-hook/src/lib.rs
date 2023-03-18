@@ -24,7 +24,7 @@ use eyre::Context;
 use git_branchless_invoke::CommandContext;
 use git_branchless_opts::{HookArgs, HookSubcommand};
 use itertools::Itertools;
-use lib::util::ExitCode;
+use lib::util::EyreExitOr;
 use tracing::{error, instrument, warn};
 
 use lib::core::eventlog::{should_ignore_ref_updates, Event, EventLogDb};
@@ -488,7 +488,7 @@ fn hook_reference_transaction(effects: &Effects, transaction_state: &str) -> eyr
 
 /// `hook` subcommand.
 #[instrument]
-pub fn command_main(ctx: CommandContext, args: HookArgs) -> eyre::Result<ExitCode> {
+pub fn command_main(ctx: CommandContext, args: HookArgs) -> EyreExitOr<()> {
     let CommandContext {
         effects,
         git_run_info,
@@ -548,5 +548,5 @@ pub fn command_main(ctx: CommandContext, args: HookArgs) -> eyre::Result<ExitCod
         }
     }
 
-    Ok(ExitCode(0))
+    Ok(Ok(()))
 }

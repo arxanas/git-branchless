@@ -14,7 +14,7 @@ use lib::core::formatting::{Glyphs, Pluralize};
 use lib::core::repo_ext::RepoExt;
 use lib::core::rewrite::move_branches;
 use lib::git::{CategorizedReferenceName, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo};
-use lib::util::ExitCode;
+use lib::util::{ExitCode, EyreExitOr};
 use tracing::instrument;
 
 use git_branchless_revset::resolve_commits;
@@ -28,7 +28,7 @@ pub fn hide(
     resolve_revset_options: &ResolveRevsetOptions,
     delete_branches: bool,
     recursive: bool,
-) -> eyre::Result<ExitCode> {
+) -> EyreExitOr<()> {
     let now = SystemTime::now();
     let glyphs = Glyphs::detect();
     let repo = Repo::from_current_dir()?;
@@ -50,7 +50,7 @@ pub fn hide(
             Ok(commit_sets) => commit_sets,
             Err(err) => {
                 err.describe(effects)?;
-                return Ok(ExitCode(1));
+                return Ok(Err(ExitCode(1)));
             }
         };
 
@@ -174,7 +174,7 @@ pub fn hide(
         delete_branches_message
     )?;
 
-    Ok(ExitCode(0))
+    Ok(Ok(()))
 }
 
 /// Unhide the hashes provided on the command-line.
@@ -184,7 +184,7 @@ pub fn unhide(
     revsets: Vec<Revset>,
     resolve_revset_options: &ResolveRevsetOptions,
     recursive: bool,
-) -> eyre::Result<ExitCode> {
+) -> EyreExitOr<()> {
     let now = SystemTime::now();
     let glyphs = Glyphs::detect();
     let repo = Repo::from_current_dir()?;
@@ -206,7 +206,7 @@ pub fn unhide(
             Ok(commit_sets) => commit_sets,
             Err(err) => {
                 err.describe(effects)?;
-                return Ok(ExitCode(1));
+                return Ok(Err(ExitCode(1)));
             }
         };
 
@@ -260,5 +260,5 @@ pub fn unhide(
         },
     )?;
 
-    Ok(ExitCode(0))
+    Ok(Ok(()))
 }
