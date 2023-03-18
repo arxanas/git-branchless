@@ -9,14 +9,14 @@
 )]
 #![allow(clippy::too_many_arguments, clippy::blocks_in_if_conditions)]
 
-mod branch_push_forge;
+mod branch_forge;
 pub mod phabricator;
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt::Write;
 use std::time::SystemTime;
 
-use branch_push_forge::BranchPushForge;
+use branch_forge::BranchForge;
 use cursive_core::theme::{BaseColor, Effect, Style};
 use git_branchless_invoke::CommandContext;
 use git_branchless_test::{RawTestOptions, ResolvedTestOptions, Verbosity};
@@ -485,7 +485,7 @@ fn select_forge<'a>(
             });
         }
     }
-    Box::new(BranchPushForge {
+    Box::new(BranchForge {
         effects,
         git_run_info,
         repo,
