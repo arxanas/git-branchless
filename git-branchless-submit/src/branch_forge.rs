@@ -16,7 +16,7 @@ use tracing::warn;
 
 use crate::{CommitStatus, CreateStatus, Forge, SubmitOptions, SubmitStatus};
 
-pub struct BranchPushForge<'a> {
+pub struct BranchForge<'a> {
     pub effects: &'a Effects,
     pub git_run_info: &'a GitRunInfo,
     pub repo: &'a Repo,
@@ -25,7 +25,7 @@ pub struct BranchPushForge<'a> {
     pub references_snapshot: &'a RepoReferencesSnapshot,
 }
 
-impl Forge for BranchPushForge<'_> {
+impl Forge for BranchForge<'_> {
     fn query_status(
         &mut self,
         commit_set: CommitSet,
