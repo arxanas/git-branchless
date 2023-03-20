@@ -7,7 +7,7 @@ repository = "https://github.com/arxanas/git-branchless"
 version = "0.7.0"
 
 [dependencies]
-bstr = "1.3.0"
+bstr = "1.4.0"
 chrono = "0.4.24"
 chrono-english = "0.1.7"
 chronoutil = "0.2.3"
