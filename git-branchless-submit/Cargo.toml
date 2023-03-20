@@ -21,7 +21,7 @@ lazy_static = "1.4.0"
 lib = { package = "git-branchless-lib", version = "0.7.0", path = "../git-branchless-lib" }
 rayon = "1.5.3"
 regex = "1.7.1"
-serde = { version = "1.0.152", features = ["derive"] }
+serde = { version = "1.0.158", features = ["derive"] }
 serde_json = "1.0.93"
 thiserror = "1.0.38"
 tracing = "0.1.37"
