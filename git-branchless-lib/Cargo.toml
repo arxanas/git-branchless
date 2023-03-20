@@ -42,7 +42,7 @@ required-features = ["integration-test-bin"]
 test = true
 
 [dependencies]
-anyhow = "1.0.69"
+anyhow = "1.0.70"
 assert_cmd = "2.0.7"
 async-trait = "0.1.66"
 bstr = "1.4.0"
