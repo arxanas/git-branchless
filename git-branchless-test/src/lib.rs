@@ -1758,7 +1758,7 @@ fn print_summary(
 
     writeln!(
         effects.get_output_stream(),
-        "Ran command on {}: {}:",
+        "Ran command on {}: {}",
         Pluralize {
             determiner: None,
             amount: test_results.test_outputs.len(),
