@@ -295,7 +295,8 @@ Differential Revision: https://phabricator.example.com/D000$(git rev-list --coun
             "#
             .to_string()
         };
-        let test_results = run_tests(
+
+        let test_results = match run_tests(
             now,
             self.effects,
             self.git_run_info,
@@ -316,9 +317,12 @@ Differential Revision: https://phabricator.example.com/D000$(git rev-list --coun
                 verbosity: Verbosity::None,
                 fix_options: Some((execute_options.clone(), permissions.clone())),
             },
-        )
-        .map_err(|err| Error::ExecuteArcDiff { source: err })?
-        .map_err(|exit_code| Error::RewriteCommits { exit_code })?;
+        ) {
+            Ok(Ok(test_results)) => test_results,
+            Ok(Err(exit_code)) => return Ok(Err(exit_code)),
+            Err(err) => return Err(Error::ExecuteArcDiff { source: err }.into()),
+        };
+
         let TestResults {
             search_bounds: _,
             test_outputs,
@@ -492,6 +496,30 @@ Differential Revision: https://phabricator.example.com/D000$(git rev-list --coun
         options: &SubmitOptions,
     ) -> eyre::Result<ExitCode> {
         let commit_set = commits.keys().copied().collect();
+
+        {
+            // Sort for consistency with `update_dependencies`.
+            let commit_oids = self.dag.sort(&commit_set)?;
+
+            let (effects, progress) = self.effects.start_operation(OperationType::UpdateCommits);
+            progress.notify_progress(0, commit_oids.len());
+            for commit_oid in commit_oids {
+                let commit = self.repo.find_commit_or_fail(commit_oid)?;
+                if should_mock() {
+                    writeln!(
+                        effects.get_output_stream(),
+                        "[mock-arc] Submitting {}",
+                        effects
+                            .get_glyphs()
+                            .render(commit.friendly_describe(effects.get_glyphs())?)?
+                    )?;
+                } else {
+                    todo!()
+                }
+                progress.notify_progress_inc(1);
+            }
+        }
+
         self.update_dependencies(&commit_set)?;
         Ok(ExitCode(0))
     }
