@@ -1,7 +1,7 @@
 //! Phabricator backend for submitting patch stacks.
 
 use std::collections::{HashMap, HashSet};
-use std::fmt::{self, Display, Write};
+use std::fmt::{self, Debug, Display, Write};
 use std::io;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
@@ -51,7 +51,7 @@ impl Display for Id {
 #[serde(transparent)]
 struct Phid(pub String);
 
-#[derive(Debug, Default, Serialize, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Serialize, Eq, PartialEq)]
 struct DifferentialQueryRequest {
     ids: Vec<Id>,
     phids: Vec<Phid>,
@@ -73,9 +73,24 @@ struct DifferentialEditTransaction {
 #[derive(Debug, Deserialize)]
 struct ConduitResponse<T> {
     #[serde(rename = "errorMessage")]
-    #[allow(dead_code)]
     error_message: Option<String>,
-    response: T,
+    response: Option<T>,
+}
+
+impl<T> ConduitResponse<T> {
+    fn check_err(self) -> std::result::Result<T, String> {
+        let Self {
+            error_message,
+            response,
+        } = self;
+        match error_message {
+            Some(error_message) => Err(error_message),
+            None => match response {
+                None => Err("(no error message)".to_string()),
+                Some(response) => Ok(response),
+            },
+        }
+    }
 }
 
 impl<T: Default> Default for ConduitResponse<T> {
@@ -161,6 +176,12 @@ pub enum Error {
         source: serde_json::Error,
         output: String,
         args: Vec<String>,
+    },
+
+    #[error("error when calling Conduit API with request {request:?}: {message}")]
+    Conduit {
+        request: Box<dyn Debug + Send + Sync>,
+        message: String,
     },
 
     #[error("could not make transaction ID: {source}")]
@@ -567,7 +588,7 @@ impl PhabricatorForge<'_> {
     fn query_revisions(
         &self,
         request: &DifferentialQueryRequest,
-    ) -> Result<ConduitResponse<Vec<DifferentialQueryRevisionResponse>>> {
+    ) -> Result<Vec<DifferentialQueryRevisionResponse>> {
         // The API call seems to hang if we don't specify any IDs; perhaps it's
         // fetching everything?
         if request == &DifferentialQueryRequest::default() {
@@ -613,7 +634,11 @@ impl PhabricatorForge<'_> {
                 output: String::from_utf8_lossy(&result.stdout).into_owned(),
                 args: args.clone(),
             })?;
-        Ok(output)
+        let response = output.check_err().map_err(|message| Error::Conduit {
+            request: Box::new(request.clone()),
+            message,
+        })?;
+        Ok(response)
     }
 
     /// Query the dependencies of a set of commits from Phabricator (not locally).
@@ -644,10 +669,7 @@ impl PhabricatorForge<'_> {
             .filter_map(|id| id.as_ref().cloned())
             .collect();
 
-        let ConduitResponse {
-            error_message: _,
-            response: revisions,
-        } = self.query_revisions(&DifferentialQueryRequest {
+        let revisions = self.query_revisions(&DifferentialQueryRequest {
             ids: query_ids,
             phids: Default::default(),
         })?;
@@ -671,10 +693,7 @@ impl PhabricatorForge<'_> {
         // Convert the dependency PHIDs back into revision IDs.
         let dependency_ids: HashMap<Id, Vec<Id>> = {
             let all_phids: Vec<Phid> = dependency_phids.values().flatten().cloned().collect();
-            let ConduitResponse {
-                error_message: _,
-                response: revisions,
-            } = self.query_revisions(&DifferentialQueryRequest {
+            let revisions = self.query_revisions(&DifferentialQueryRequest {
                 ids: Default::default(),
                 phids: all_phids,
             })?;
@@ -810,15 +829,14 @@ impl PhabricatorForge<'_> {
             return Ok(Ok(()));
         }
 
-        let ConduitResponse {
-            error_message: _,
-            response,
-        } = self.query_revisions(&DifferentialQueryRequest {
+        let revisions = self.query_revisions(&DifferentialQueryRequest {
             ids: parent_revision_ids,
             phids: Default::default(),
         })?;
-        let parent_revision_phids: Vec<Phid> =
-            response.into_iter().map(|response| response.phid).collect();
+        let parent_revision_phids: Vec<Phid> = revisions
+            .into_iter()
+            .map(|response| response.phid)
+            .collect();
         let request = DifferentialEditRequest {
             id,
             transactions: vec![DifferentialEditTransaction {
