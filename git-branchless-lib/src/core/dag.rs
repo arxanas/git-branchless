@@ -358,9 +358,13 @@ impl Dag {
 
     /// Wrapper around DAG method.
     #[instrument]
-    pub fn sort(&self, commit_set: &CommitSet) -> eyre::Result<CommitSet> {
-        let result = self.run_blocking(self.inner.sort(commit_set))?;
-        Ok(result)
+    pub fn sort(&self, commit_set: &CommitSet) -> eyre::Result<Vec<NonZeroOid>> {
+        let commit_set = self.run_blocking(self.inner.sort(commit_set))?;
+        let commit_oids = self.commit_set_to_vec(&commit_set)?;
+
+        // `.sort` seems to sort it such that the child-most commits are first?
+        // In all current use-cases, we want to start with the parent commits.
+        Ok(commit_oids.into_iter().rev().collect())
     }
 
     /// Eagerly convert a `CommitSet` into a `Vec<NonZeroOid>` by iterating over it, preserving order.

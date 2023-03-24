@@ -74,12 +74,10 @@ fn query(
             let _effects = effects;
 
             let commit_set = commit_set.intersection(&dag.branch_commits);
-            let commit_set = dag.sort(&commit_set)?;
-            dag.commit_set_to_vec(&commit_set)?
+            dag.sort(&commit_set)?
         };
         let ref_names = commit_oids
             .into_iter()
-            .rev()
             .flat_map(
                 |oid| match references_snapshot.branch_oid_to_names.get(&oid) {
                     Some(branch_names) => branch_names.iter().sorted().collect_vec(),
@@ -95,11 +93,9 @@ fn query(
         let commit_oids = {
             let (effects, _progress) = effects.start_operation(OperationType::SortCommits);
             let _effects = effects;
-
-            let commit_set = dag.sort(&commit_set)?;
-            dag.commit_set_to_vec(&commit_set)?
+            dag.sort(&commit_set)?
         };
-        for commit_oid in commit_oids.into_iter().rev() {
+        for commit_oid in commit_oids {
             if raw {
                 writeln!(effects.get_output_stream(), "{commit_oid}")?;
             } else {
