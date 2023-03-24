@@ -104,6 +104,7 @@ pub struct SubmitOptions {
 }
 
 /// The result of creating a commit.
+#[derive(Clone, Debug)]
 pub struct CreateStatus {
     /// The commit OID after carrying out the creation process. Usually, this
     /// will be the same as the original commit OID, unless the forge amends it
