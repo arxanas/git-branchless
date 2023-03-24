@@ -340,20 +340,45 @@ stderr:
         let result = self.run_with_options(&git_run_args, options);
 
         if !should_use_separate_command_binary(subcommand) {
-            result
+            let main_command_exe = assert_cmd::cargo::cargo_bin("git-branchless");
+            let subcommand_exe =
+                assert_cmd::cargo::cargo_bin(format!("git-branchless-{subcommand}"));
+            if main_command_exe.exists() && subcommand_exe.exists() {
+                let main_command_mtime = main_command_exe.metadata()?.modified()?;
+                let subcommand_mtime = subcommand_exe.metadata()?.modified()?;
+                if subcommand_mtime > main_command_mtime {
+                    result.suggestion(format!(
+                        "\
+The modified time for {main_command_exe:?} was before the modified time for
+{subcommand_exe:?}, which may indicate that you made changes to the subcommand
+without building the main executable. This may cause spurious test failures
+because the main executable code is out of date.
+
+If so, you should either explicitly run: cargo -p git-branchless
+to build the main executable before running this test; or, if it's okay to skip
+building the main executable and test only the subcommand executable, you
+can set the environment variable
+`{TEST_SEPARATE_COMMAND_BINARIES}={subcommand}` to directly invoke it.\
+"
+                    ))
+                } else {
+                    result
+                }
+            } else {
+                result
+            }
         } else {
             result.suggestion(format!(
                 "\
-If you have set the TEST_SEPARATE_COMMAND_BINARIES environment variable, then \
+If you have set the {TEST_SEPARATE_COMMAND_BINARIES} environment variable, then \
 the git-branchless-{subcommand} binary is NOT automatically built or updated when \
 running integration tests for other binaries (see \
 https://github.com/rust-lang/cargo/issues/4316 for more details).
 
 Make sure that git-branchless-{subcommand} has been built before running \
-integration tests. You can build it with: cargo build -p
-git-branchless-{subcommand}
+integration tests. You can build it with: cargo build -p git-branchless-{subcommand}
 
-If you have not set the TEST_SEPARATE_COMMAND_BINARIES environment variable, \
+If you have not set the {TEST_SEPARATE_COMMAND_BINARIES} environment variable, \
 then you can only run tests in the main `git-branchless` and \
 `git-branchless-lib` crates.\
         ",
