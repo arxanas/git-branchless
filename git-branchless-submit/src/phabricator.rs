@@ -296,6 +296,7 @@ Differential Revision: https://phabricator.example.com/D000$(git rev-list --coun
             .to_string()
         };
         let test_results = run_tests(
+            now,
             self.effects,
             self.git_run_info,
             self.dag,
