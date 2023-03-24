@@ -346,6 +346,20 @@ pub struct SmartlogArgs {
     pub resolve_revset_options: ResolveRevsetOptions,
 }
 
+/// The Git hosting provider to use, called a "forge".
+#[derive(Clone, Debug, ValueEnum)]
+pub enum ForgeKind {
+    /// Force-push branches to the default push remote.
+    Branch,
+
+    /// Force-push branches to the remote and create a pull request for each
+    /// branch using the `gh` command-line tool.
+    Github,
+
+    /// Submit code reviews to Phabricator using the `arc` command-line tool.
+    Phabricator,
+}
+
 /// Push commits to a remote.
 #[derive(Debug, Parser)]
 pub struct SubmitArgs {
@@ -374,6 +388,10 @@ pub struct SubmitArgs {
     /// Options for resolving revset expressions.
     #[clap(flatten)]
     pub resolve_revset_options: ResolveRevsetOptions,
+
+    /// The Git hosting provider to use.
+    #[clap(short = 'F', long = "forge")]
+    pub forge: Option<ForgeKind>,
 }
 
 /// Run a command on each commit in a given set and aggregate the results.

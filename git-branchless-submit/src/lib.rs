@@ -10,16 +10,18 @@
 #![allow(clippy::too_many_arguments, clippy::blocks_in_if_conditions)]
 
 mod branch_forge;
+pub mod github;
 pub mod phabricator;
 
 use std::collections::{BTreeSet, HashMap, HashSet};
-use std::fmt::Write;
+use std::fmt::{Debug, Write};
 use std::time::SystemTime;
 
 use branch_forge::BranchForge;
 use cursive_core::theme::{BaseColor, Effect, Style};
 use git_branchless_invoke::CommandContext;
 use git_branchless_test::{RawTestOptions, ResolvedTestOptions, Verbosity};
+use github::GithubForge;
 use itertools::Itertools;
 use lazy_static::lazy_static;
 use lib::core::dag::{CommitSet, Dag};
@@ -30,9 +32,12 @@ use lib::core::repo_ext::{RepoExt, RepoReferencesSnapshot};
 use lib::git::{GitRunInfo, NonZeroOid, ReferenceName, Repo};
 use lib::util::ExitCode;
 
-use git_branchless_opts::{ResolveRevsetOptions, Revset, SubmitArgs, TestExecutionStrategy};
+use git_branchless_opts::{
+    ForgeKind, ResolveRevsetOptions, Revset, SubmitArgs, TestExecutionStrategy,
+};
 use git_branchless_revset::resolve_commits;
 use phabricator::PhabricatorForge;
+use tracing::{debug, warn};
 
 lazy_static! {
     static ref STYLE_PUSHED: Style =
@@ -109,7 +114,7 @@ pub struct CreateStatus {
 
 /// "Forge" refers to a Git hosting provider, such as GitHub, GitLab, etc.
 /// Commits can be pushed for review to a forge.
-pub trait Forge {
+pub trait Forge: Debug {
     /// Get the status of the provided commits.
     fn query_status(
         &mut self,
@@ -143,6 +148,7 @@ pub fn command_main(ctx: CommandContext, args: SubmitArgs) -> eyre::Result<ExitC
         strategy,
         revset,
         resolve_revset_options,
+        forge,
     } = args;
     submit(
         &effects,
@@ -152,6 +158,7 @@ pub fn command_main(ctx: CommandContext, args: SubmitArgs) -> eyre::Result<ExitC
         create,
         draft,
         strategy,
+        forge,
     )
 }
 
@@ -163,6 +170,7 @@ fn submit(
     create: bool,
     draft: bool,
     execution_strategy: Option<TestExecutionStrategy>,
+    forge_kind: Option<ForgeKind>,
 ) -> eyre::Result<ExitCode> {
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
@@ -250,11 +258,13 @@ fn submit(
         &event_log_db,
         &references_snapshot,
         &revset,
+        forge_kind,
     );
     let statuses = match forge.query_status(commit_set)? {
         Ok(statuses) => statuses,
         Err(exit_code) => return Ok(exit_code),
     };
+    debug!(?statuses, "Commit statuses");
 
     let (unsubmitted_commits, commits_to_update, commits_to_skip): (
         HashMap<NonZeroOid, CommitStatus>,
@@ -472,25 +482,49 @@ fn select_forge<'a>(
     event_log_db: &'a EventLogDb,
     references_snapshot: &'a RepoReferencesSnapshot,
     revset: &'a Revset,
+    forge: Option<ForgeKind>,
 ) -> Box<dyn Forge + 'a> {
-    if let Some(working_copy_path) = repo.get_working_copy_path() {
-        if working_copy_path.join(".arcconfig").is_file() {
-            return Box::new(PhabricatorForge {
-                effects,
-                git_run_info,
-                repo,
-                dag,
-                event_log_db,
-                revset,
-            });
+    let forge_kind = match forge {
+        Some(forge_kind) => forge_kind,
+        None => {
+            let use_phabricator = if let Some(working_copy_path) = repo.get_working_copy_path() {
+                working_copy_path.join(".arcconfig").is_file()
+            } else {
+                false
+            };
+            if use_phabricator {
+                ForgeKind::Phabricator
+            } else {
+                ForgeKind::Branch
+            }
         }
+    };
+
+    match forge_kind {
+        ForgeKind::Branch => Box::new(BranchForge {
+            effects,
+            git_run_info,
+            repo,
+            dag,
+            event_log_db,
+            references_snapshot,
+        }),
+
+        ForgeKind::Github => Box::new(GithubForge {
+            effects,
+            git_run_info,
+            repo,
+            dag,
+            event_log_db,
+        }),
+
+        ForgeKind::Phabricator => Box::new(PhabricatorForge {
+            effects,
+            git_run_info,
+            repo,
+            dag,
+            event_log_db,
+            revset,
+        }),
     }
-    Box::new(BranchForge {
-        effects,
-        git_run_info,
-        repo,
-        dag,
-        event_log_db,
-        references_snapshot,
-    })
 }

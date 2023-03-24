@@ -1,6 +1,8 @@
 //! Utility functions.
 
+use std::num::TryFromIntError;
 use std::path::PathBuf;
+use std::process::ExitStatus;
 
 /// Represents the code to exit the process with.
 #[must_use]
@@ -15,6 +17,15 @@ impl ExitCode {
             ExitCode(0) => true,
             ExitCode(_) => false,
         }
+    }
+}
+
+impl TryFrom<ExitStatus> for ExitCode {
+    type Error = TryFromIntError;
+
+    fn try_from(status: ExitStatus) -> Result<Self, Self::Error> {
+        let exit_code = status.code().unwrap_or(1);
+        Ok(Self(exit_code.try_into()?))
     }
 }
 
