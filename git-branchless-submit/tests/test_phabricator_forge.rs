@@ -68,8 +68,8 @@ fn test_submit_phabricator_strategy_working_copy() -> eyre::Result<()> {
         branchless: processing 2 rewritten commits
         branchless: running command: <git-executable> checkout ccb7fd5d90c1888bea906a41c197e9215d6b9bb3
         In-memory rebase succeeded.
-        [mock-arc] Setting dependencies for Id("0002") to []
-        [mock-arc] Setting dependencies for Id("0003") to []
+        Setting D0002 as stack root (no dependencies)
+        Setting D0003 as stack root (no dependencies)
         Created 2 branches: D0002, D0003
         "###);
     }
@@ -120,8 +120,8 @@ fn test_submit_phabricator_strategy_worktree() -> eyre::Result<()> {
         branchless: processing 2 rewritten commits
         branchless: running command: <git-executable> checkout ccb7fd5d90c1888bea906a41c197e9215d6b9bb3
         In-memory rebase succeeded.
-        [mock-arc] Setting dependencies for Id("0002") to []
-        [mock-arc] Setting dependencies for Id("0003") to []
+        Setting D0002 as stack root (no dependencies)
+        Setting D0003 as stack root (no dependencies)
         Created 2 branches: D0002, D0003
         "###);
     }
@@ -170,8 +170,8 @@ fn test_submit_phabricator_update() -> eyre::Result<()> {
         branchless: processing 2 rewritten commits
         branchless: running command: <git-executable> checkout ccb7fd5d90c1888bea906a41c197e9215d6b9bb3
         In-memory rebase succeeded.
-        [mock-arc] Setting dependencies for Id("0002") to []
-        [mock-arc] Setting dependencies for Id("0003") to []
+        Setting D0002 as stack root (no dependencies)
+        Setting D0003 as stack root (no dependencies)
         Created 2 branches: D0002, D0003
         "###);
     }
@@ -186,10 +186,10 @@ fn test_submit_phabricator_update() -> eyre::Result<()> {
             },
         )?;
         insta::assert_snapshot!(stdout, @r###"
-          [mock-arc] Submitting 55af3db create test1.txt
-          [mock-arc] Submitting ccb7fd5 create test2.txt
-          [mock-arc] Setting dependencies for Id("0002") to []
-          [mock-arc] Setting dependencies for Id("0003") to [Id("0002")]
+        Submitting 55af3db create test1.txt
+        Submitting ccb7fd5 create test2.txt
+        Setting D0002 as stack root (no dependencies)
+        Stacking D0003 on top of D0002
         "###);
     }
 

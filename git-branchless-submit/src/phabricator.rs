@@ -1,12 +1,13 @@
 //! Phabricator backend for submitting patch stacks.
 
 use std::collections::{HashMap, HashSet};
-use std::fmt::Write;
+use std::fmt::{self, Display, Write};
 use std::io;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
 use std::time::SystemTime;
 
+use cursive_core::utils::markup::StyledString;
 use git_branchless_opts::Revset;
 use git_branchless_test::{
     run_tests, FixInfo, ResolvedTestOptions, TestResults, TestStatus, TestingAbortedError,
@@ -18,6 +19,7 @@ use lib::core::check_out::CheckOutCommitOptions;
 use lib::core::dag::{CommitSet, Dag};
 use lib::core::effects::{Effects, OperationType};
 use lib::core::eventlog::EventLogDb;
+use lib::core::formatting::StyledStringBuilder;
 use lib::core::rewrite::{
     execute_rebase_plan, BuildRebasePlanError, BuildRebasePlanOptions, ExecuteRebasePlanOptions,
     ExecuteRebasePlanResult, RebasePlanBuilder, RebasePlanPermissions, RepoResource,
@@ -30,13 +32,20 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::{instrument, warn};
 
-use crate::{CommitStatus, CreateStatus, Forge, SubmitOptions, SubmitStatus};
+use crate::{CommitStatus, CreateStatus, Forge, SubmitOptions, SubmitStatus, STYLE_PUSHED};
 
 /// Wrapper around the Phabricator "ID" type. (This is *not* a PHID, just a
 /// regular ID).
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, Hash, PartialEq)]
 #[serde(transparent)]
 pub struct Id(pub String);
+
+impl Display for Id {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let Self(id) = self;
+        write!(f, "D{id}")
+    }
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, Hash, PartialEq)]
 #[serde(transparent)]
@@ -168,6 +177,9 @@ pub enum Error {
 
     #[error("failed to rewrite commits with exit code {}", exit_code.0)]
     RewriteCommits { exit_code: ExitCode },
+
+    #[error(transparent)]
+    Fmt(#[from] fmt::Error),
 
     #[error(transparent)]
     DagError(#[from] eden_dag::Error),
@@ -484,7 +496,10 @@ Differential Revision: https://phabricator.example.com/D000$(git rev-list --coun
             CommitSet::empty(),
             final_commit_oids.clone(),
         )?;
-        self.update_dependencies(&final_commit_oids)?;
+        match self.update_dependencies(&final_commit_oids)? {
+            Ok(()) => {}
+            Err(exit_code) => return Ok(Err(exit_code)),
+        }
 
         Ok(Ok(create_statuses))
     }
@@ -505,23 +520,23 @@ Differential Revision: https://phabricator.example.com/D000$(git rev-list --coun
             progress.notify_progress(0, commit_oids.len());
             for commit_oid in commit_oids {
                 let commit = self.repo.find_commit_or_fail(commit_oid)?;
-                if should_mock() {
-                    writeln!(
-                        effects.get_output_stream(),
-                        "[mock-arc] Submitting {}",
-                        effects
-                            .get_glyphs()
-                            .render(commit.friendly_describe(effects.get_glyphs())?)?
-                    )?;
-                } else {
-                    todo!()
+                writeln!(
+                    effects.get_output_stream(),
+                    "Submitting {}",
+                    effects
+                        .get_glyphs()
+                        .render(commit.friendly_describe(effects.get_glyphs())?)?
+                )?;
+
+                if !should_mock() {
+                    todo!("update phab");
                 }
+
                 progress.notify_progress_inc(1);
             }
         }
 
-        self.update_dependencies(&commit_set)?;
-        Ok(Ok(()))
+        self.update_dependencies(&commit_set)
     }
 }
 
@@ -689,13 +704,15 @@ impl PhabricatorForge<'_> {
         Ok(result)
     }
 
-    fn update_dependencies(&self, commits: &CommitSet) -> eyre::Result<()> {
+    fn update_dependencies(
+        &self,
+        commits: &CommitSet,
+    ) -> eyre::Result<std::result::Result<(), ExitCode>> {
         // Make sure to update dependencies in topological order to prevent
         // dependency cycles.
         let commit_oids = self.dag.sort(commits)?;
 
         let (effects, progress) = self.effects.start_operation(OperationType::UpdateCommits);
-        let _effects = effects;
 
         let draft_commits = self.dag.query_draft_commits()?;
         progress.notify_progress(0, commit_oids.len());
@@ -723,20 +740,48 @@ impl PhabricatorForge<'_> {
                 };
                 parent_revision_ids.push(parent_revision_id);
             }
-            self.set_dependencies(id, parent_revision_ids)?;
+
+            let id_str = effects.get_glyphs().render(Self::render_id(&id))?;
+            if parent_revision_ids.is_empty() {
+                writeln!(
+                    effects.get_output_stream(),
+                    "Setting {id_str} as stack root (no dependencies)",
+                )?;
+            } else {
+                writeln!(
+                    effects.get_output_stream(),
+                    "Stacking {id_str} on top of {}",
+                    effects.get_glyphs().render(StyledStringBuilder::join(
+                        ", ",
+                        parent_revision_ids.iter().map(Self::render_id).collect()
+                    ))?,
+                )?;
+            }
+
+            match self.set_dependencies(id, parent_revision_ids)? {
+                Ok(()) => {}
+                Err(exit_code) => return Ok(Err(exit_code)),
+            }
             progress.notify_progress_inc(1);
         }
-        Ok(())
+        Ok(Ok(()))
     }
 
-    fn set_dependencies(&self, id: Id, parent_revision_ids: Vec<Id>) -> Result<()> {
+    fn render_id(id: &Id) -> StyledString {
+        StyledStringBuilder::new()
+            .append_styled(id.to_string(), *STYLE_PUSHED)
+            .build()
+    }
+
+    fn set_dependencies(
+        &self,
+        id: Id,
+        parent_revision_ids: Vec<Id>,
+    ) -> eyre::Result<std::result::Result<(), ExitCode>> {
+        let effects = self.effects;
+
         if should_mock() {
-            writeln!(
-                self.effects.get_output_stream(),
-                "[mock-arc] Setting dependencies for {id:?} to {parent_revision_ids:?}"
-            )
-            .unwrap();
-            return Ok(());
+            return Ok(Ok(()));
         }
 
         let ConduitResponse {
@@ -782,14 +827,22 @@ impl PhabricatorForge<'_> {
             args: args.clone(),
         })?;
         if !result.status.success() {
-            return Err(Error::UpdateDependencies {
-                exit_code: result.status.code().unwrap_or(-1),
-                message: String::from_utf8_lossy(&result.stdout).into_owned(),
-                args,
-            });
+            let args = args.join(" ");
+            let exit_code = ExitCode::try_from(result.status)?;
+            let ExitCode(exit_code_isize) = exit_code;
+            writeln!(
+                effects.get_output_stream(),
+                "Could not update dependencies when running `arc {args}` (exit code {exit_code_isize}):",
+            )?;
+            writeln!(
+                effects.get_output_stream(),
+                "{}",
+                String::from_utf8_lossy(&result.stdout)
+            )?;
+            return Ok(Err(exit_code));
         }
 
-        Ok(())
+        Ok(Ok(()))
     }
 
     /// Given a commit for D123, returns a string like "123" by parsing the

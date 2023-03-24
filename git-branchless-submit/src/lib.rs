@@ -40,9 +40,12 @@ use phabricator::PhabricatorForge;
 use tracing::{debug, warn};
 
 lazy_static! {
-    static ref STYLE_PUSHED: Style =
+    /// The style for branches which were successfully submitted.
+    pub static ref STYLE_PUSHED: Style =
         Style::merge(&[BaseColor::Green.light().into(), Effect::Bold.into()]);
-    static ref STYLE_SKIPPED: Style =
+
+    /// The style for branches which were not submitted.
+    pub static ref STYLE_SKIPPED: Style =
         Style::merge(&[BaseColor::Yellow.light().into(), Effect::Bold.into()]);
 }
 
