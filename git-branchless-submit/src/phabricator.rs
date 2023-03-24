@@ -5,6 +5,7 @@ use std::fmt::{self, Debug, Display, Write};
 use std::io;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
+use std::str::FromStr;
 use std::time::SystemTime;
 
 use cursive_core::utils::markup::StyledString;
@@ -106,6 +107,9 @@ impl<T: Default> Default for ConduitResponse<T> {
 struct DifferentialQueryRevisionResponse {
     id: Id,
     phid: Phid,
+
+    #[serde(default)]
+    hashes: Vec<(String, String)>,
 
     #[serde(default)]
     auxiliary: DifferentialQueryAuxiliaryResponse,
@@ -247,15 +251,57 @@ impl Forge for PhabricatorForge<'_> {
             })
             .try_collect()?;
 
+        let revisions = if should_mock() {
+            Default::default()
+        } else {
+            self.query_revisions(&DifferentialQueryRequest {
+                ids: commit_oid_to_revision.values().flatten().cloned().collect(),
+                phids: Default::default(),
+            })?
+        };
+        let commit_hashes: HashMap<Id, NonZeroOid> = revisions
+            .into_iter()
+            .filter_map(|item| {
+                let hashes: HashMap<String, String> = item.hashes.iter().cloned().collect();
+                if hashes.is_empty() {
+                    None
+                } else {
+                    // `gtcm` stands for "git commit" (as opposed to `gttr`, also returned in the same list, or `hgcm`, which stands for "hg commit").
+                    match hashes.get("gtcm") {
+                        None => {
+                            warn!(?item, "No Git commit hash in item");
+                            None
+                        }
+                        Some(commit_oid) => match NonZeroOid::from_str(commit_oid.as_str()) {
+                            Ok(commit_oid) => Some((item.id, commit_oid)),
+                            Err(err) => {
+                                warn!(?err, "Couldn't parse Git commit OID");
+                                None
+                            }
+                        },
+                    }
+                }
+            })
+            .collect();
+
         let statuses = commit_oid_to_revision
             .into_iter()
             .map(|(commit_oid, id)| {
                 let status = CommitStatus {
                     submit_status: match id {
-                        Some(_) => {
-                            // TODO: could also be `UpToDate`
-                            SubmitStatus::NeedsUpdate
-                        }
+                        Some(id) => match commit_hashes.get(&id) {
+                            Some(remote_commit_oid) => {
+                                if remote_commit_oid == &commit_oid {
+                                    SubmitStatus::UpToDate
+                                } else {
+                                    SubmitStatus::NeedsUpdate
+                                }
+                            }
+                            None => {
+                                warn!(?commit_oid, ?id, "No remote commit hash found for commit");
+                                SubmitStatus::NeedsUpdate
+                            }
+                        },
                         None => SubmitStatus::Unsubmitted,
                     },
                     remote_name: None,
@@ -681,6 +727,7 @@ impl PhabricatorForge<'_> {
                 let DifferentialQueryRevisionResponse {
                     id,
                     phid: _,
+                    hashes: _,
                     auxiliary:
                         DifferentialQueryAuxiliaryResponse {
                             phabricator_depends_on,
@@ -703,6 +750,7 @@ impl PhabricatorForge<'_> {
                     let DifferentialQueryRevisionResponse {
                         id,
                         phid,
+                        hashes: _,
                         auxiliary: _,
                     } = revision;
                     (phid, id)
