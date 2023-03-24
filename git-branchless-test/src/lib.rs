@@ -613,44 +613,19 @@ fn subcommand_run(
         Err(exit_code) => return Ok(exit_code),
     };
 
-    let abort_trap = match set_abort_trap(
+    let commits = sorted_commit_set(&repo, &dag, &commit_set)?;
+    let test_results = match run_tests(
         now,
         effects,
         git_run_info,
+        &dag,
         &repo,
         &event_log_db,
         event_tx_id,
-        options.execution_strategy,
+        &revset,
+        &commits,
+        &options,
     )? {
-        Ok(abort_trap) => abort_trap,
-        Err(exit_code) => return Ok(exit_code),
-    };
-
-    let commits = sorted_commit_set(&repo, &dag, &commit_set)?;
-    let test_results: Result<_, _> = {
-        let effects = if options.is_interactive {
-            effects.suppress()
-        } else {
-            effects.clone()
-        };
-        run_tests(
-            &effects,
-            git_run_info,
-            &dag,
-            &repo,
-            &event_log_db,
-            event_tx_id,
-            &revset,
-            &commits,
-            &options,
-        )
-    };
-    let abort_trap_exit_code = clear_abort_trap(effects, git_run_info, event_tx_id, abort_trap)?;
-    if !abort_trap_exit_code.is_success() {
-        return Ok(abort_trap_exit_code);
-    }
-
-    let test_results = match test_results? {
         Ok(test_results) => test_results,
         Err(exit_code) => return Ok(exit_code),
     };
@@ -1253,6 +1228,57 @@ pub struct TestResults {
 /// Run tests on the provided set of commits.
 #[instrument]
 pub fn run_tests<'a>(
+    now: SystemTime,
+    effects: &Effects,
+    git_run_info: &GitRunInfo,
+    dag: &Dag,
+    repo: &Repo,
+    event_log_db: &EventLogDb,
+    event_tx_id: EventTransactionId,
+    revset: &Revset,
+    commits: &[Commit],
+    options: &ResolvedTestOptions,
+) -> eyre::Result<Result<TestResults, ExitCode>> {
+    let abort_trap = match set_abort_trap(
+        now,
+        effects,
+        git_run_info,
+        repo,
+        event_log_db,
+        event_tx_id,
+        options.execution_strategy,
+    )? {
+        Ok(abort_trap) => abort_trap,
+        Err(exit_code) => return Ok(Err(exit_code)),
+    };
+    let test_results: Result<_, _> = {
+        let effects = if options.is_interactive {
+            effects.suppress()
+        } else {
+            effects.clone()
+        };
+        run_tests_inner(
+            &effects,
+            git_run_info,
+            dag,
+            repo,
+            event_log_db,
+            event_tx_id,
+            revset,
+            commits,
+            options,
+        )
+    };
+
+    let abort_trap_exit_code = clear_abort_trap(effects, git_run_info, event_tx_id, abort_trap)?;
+    if !abort_trap_exit_code.is_success() {
+        return Ok(Err(abort_trap_exit_code));
+    }
+    test_results
+}
+
+#[instrument]
+fn run_tests_inner<'a>(
     effects: &Effects,
     git_run_info: &GitRunInfo,
     dag: &Dag,
