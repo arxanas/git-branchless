@@ -24,10 +24,12 @@ use eyre::Context;
 use git_branchless_invoke::CommandContext;
 use git_branchless_opts::{HookArgs, HookSubcommand};
 use itertools::Itertools;
+use lib::core::dag::Dag;
+use lib::core::repo_ext::RepoExt;
 use lib::util::ExitCode;
 use tracing::{error, instrument, warn};
 
-use lib::core::eventlog::{should_ignore_ref_updates, Event, EventLogDb};
+use lib::core::eventlog::{should_ignore_ref_updates, Event, EventLogDb, EventReplayer};
 use lib::core::formatting::{Glyphs, Pluralize};
 use lib::core::gc::{gc, mark_commit_reachable};
 use lib::git::{CategorizedReferenceName, MaybeZeroOid, NonZeroOid, ReferenceName, Repo};
@@ -101,6 +103,17 @@ fn hook_post_commit_common(effects: &Effects, hook_name: &str) -> eyre::Result<(
         .wrap_err("Looking up `HEAD` commit")?;
     mark_commit_reachable(&repo, commit_oid)
         .wrap_err("Marking commit as reachable for GC purposes")?;
+
+    let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;
+    let event_cursor = event_replayer.make_default_cursor();
+    let references_snapshot = repo.get_references_snapshot()?;
+    Dag::open_and_sync(
+        effects,
+        &repo,
+        &event_replayer,
+        event_cursor,
+        &references_snapshot,
+    )?;
 
     let timestamp = commit.get_time().to_system_time()?;
 
