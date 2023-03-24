@@ -6,7 +6,7 @@ use std::fmt::Write;
 use std::time::SystemTime;
 
 use git_branchless_opts::{ResolveRevsetOptions, Revset};
-use lib::core::dag::{sorted_commit_set, union_all, Dag};
+use lib::core::dag::{union_all, Dag};
 use lib::core::effects::Effects;
 use lib::core::eventlog::{CommitActivityStatus, Event};
 use lib::core::eventlog::{EventLogDb, EventReplayer};
@@ -61,7 +61,10 @@ pub fn hide(
         commits
     };
     let commits = dag.sort(&commits)?;
-    let commits = sorted_commit_set(&repo, &dag, &commits)?;
+    let commits = commits
+        .into_iter()
+        .map(|commit_oid| repo.find_commit_or_fail(commit_oid))
+        .collect::<Result<Vec<_>, _>>()?;
 
     let timestamp = now.duration_since(SystemTime::UNIX_EPOCH)?.as_secs_f64();
     let event_tx_id = event_log_db.make_transaction_id(now, "hide")?;
@@ -218,7 +221,10 @@ pub fn unhide(
         commits
     };
     let commits = dag.sort(&commits)?;
-    let commits = sorted_commit_set(&repo, &dag, &commits)?;
+    let commits = commits
+        .into_iter()
+        .map(|commit_oid| repo.find_commit_or_fail(commit_oid))
+        .collect::<Result<Vec<_>, _>>()?;
 
     let timestamp = now.duration_since(SystemTime::UNIX_EPOCH)?.as_secs_f64();
     let event_tx_id = event_log_db.make_transaction_id(now, "unhide")?;

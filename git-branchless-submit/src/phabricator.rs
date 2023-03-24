@@ -240,11 +240,8 @@ impl Forge for PhabricatorForge<'_> {
             num_jobs,
         } = options;
 
-        let commit_set = self.dag.sort(&commits.keys().copied().collect())?;
-        let commit_oids = self
-            .dag
-            .commit_set_to_vec(&commit_set)
-            .map_err(Error::IterCommits)?;
+        let commit_set = commits.keys().copied().collect();
+        let commit_oids = self.dag.sort(&commit_set).map_err(Error::IterCommits)?;
         let commits: Vec<Commit> = commit_oids
             .iter()
             .map(|commit_oid| self.repo.find_commit_or_fail(*commit_oid))
@@ -649,11 +646,7 @@ impl PhabricatorForge<'_> {
     fn update_dependencies(&self, commits: &CommitSet) -> eyre::Result<()> {
         // Make sure to update dependencies in topological order to prevent
         // dependency cycles.
-        let commits = self.dag.sort(commits)?;
-        let commit_oids = self.dag.commit_set_to_vec(&commits)?;
-        // `.sort` seems to sort it such that the child-most commits are first?
-        // We need to start with the parent commits.
-        let commit_oids = commit_oids.into_iter().rev().collect_vec();
+        let commit_oids = self.dag.sort(commits)?;
 
         let (effects, progress) = self.effects.start_operation(OperationType::UpdateCommits);
         let _effects = effects;
