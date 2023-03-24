@@ -529,7 +529,30 @@ Differential Revision: https://phabricator.example.com/D000$(git rev-list --coun
                 )?;
 
                 if !should_mock() {
-                    todo!("update phab");
+                    let head_rev = commit_oid.to_string();
+                    let base_rev = format!("{head_rev}^");
+                    let args = [
+                        "diff",
+                        "--verbatim",
+                        "-m",
+                        "update",
+                        "--head",
+                        &head_rev,
+                        &base_rev,
+                    ];
+                    let mut child =
+                        Command::new("arc")
+                            .args(args)
+                            .spawn()
+                            .map_err(|err| Error::InvokeArc {
+                                source: err,
+                                args: args.iter().map(|s| s.to_string()).collect(),
+                            })?;
+                    let exit_status = child.wait()?;
+                    let exit_code = ExitCode::try_from(exit_status)?;
+                    if !exit_code.is_success() {
+                        return Ok(Err(exit_code));
+                    }
                 }
 
                 progress.notify_progress_inc(1);
