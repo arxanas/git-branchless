@@ -107,9 +107,7 @@ fn test_fixup_no_abandoned_commit_message() -> eyre::Result<()> {
         if git_version < GitVersion(2, 35, 0) {
             insta::assert_snapshot!(stderr, @r###"
             branchless: processing 1 update: ref HEAD
-            branchless: processed commit: a84541d # This is a combination of 2 commits. # This is the 1st commit message:
             branchless: processing 1 update: ref HEAD
-            branchless: processed commit: 7f023a1 create test1.txt
             branchless: processing 3 rewritten commits
             Successfully rebased and updated detached HEAD.
             "###);
@@ -139,7 +137,6 @@ fn test_rebase_individual_commit() -> eyre::Result<()> {
         if git_version < GitVersion(2, 35, 0) {
             insta::assert_snapshot!(stderr, @r###"
             branchless: processing 1 update: ref HEAD
-            branchless: processed commit: f8d9985 create test2.txt
             branchless: processing 1 rewritten commit
             branchless: This operation abandoned 1 commit!
             branchless: Consider running one of the following:

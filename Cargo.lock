@@ -1421,6 +1421,7 @@ dependencies = [
  "git-branchless-lib",
  "git-branchless-opts",
  "git-branchless-testing",
+ "insta",
  "itertools 0.10.5",
  "lazy_static",
  "regex",

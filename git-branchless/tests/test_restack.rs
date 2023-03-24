@@ -355,7 +355,6 @@ fn test_restack_single_of_many_commits() -> eyre::Result<()> {
         insta::assert_snapshot!(stderr, @r###"
         branchless: processing 1 update: ref HEAD
         branchless: processing 1 update: ref HEAD
-        branchless: processed commit: 944f78d create test3.txt
         Executing: git branchless hook-detect-empty-commit 70deb1e28791d8e7dd5a1f0c871a51b91282562f
         Executing: git branchless hook-register-extra-post-rewrite-hook
         branchless: processing 1 rewritten commit

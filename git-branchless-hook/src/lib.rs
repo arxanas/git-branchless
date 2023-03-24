@@ -17,6 +17,7 @@
 #![allow(clippy::too_many_arguments, clippy::blocks_in_if_conditions)]
 
 use std::fmt::Write;
+use std::fs::File;
 use std::io::{stdin, BufRead};
 use std::time::SystemTime;
 
@@ -26,6 +27,7 @@ use git_branchless_opts::{HookArgs, HookSubcommand};
 use itertools::Itertools;
 use lib::core::dag::Dag;
 use lib::core::repo_ext::RepoExt;
+use lib::core::rewrite::rewrite_hooks::get_deferred_commits_path;
 use lib::util::ExitCode;
 use tracing::{error, instrument, warn};
 
@@ -114,6 +116,21 @@ fn hook_post_commit_common(effects: &Effects, hook_name: &str) -> eyre::Result<(
         event_cursor,
         &references_snapshot,
     )?;
+
+    if repo.is_rebase_underway()? {
+        let deferred_commits_path = get_deferred_commits_path(&repo);
+        let mut deferred_commits_file = File::options()
+            .create(true)
+            .append(true)
+            .open(&deferred_commits_path)
+            .with_context(|| {
+                format!("Opening deferred commits file at {deferred_commits_path:?}")
+            })?;
+
+        use std::io::Write;
+        writeln!(deferred_commits_file, "{commit_oid}")?;
+        return Ok(());
+    }
 
     let timestamp = commit.get_time().to_system_time()?;
 

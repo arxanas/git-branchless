@@ -3096,13 +3096,10 @@ fn test_move_branches_after_move() -> eyre::Result<()> {
             insta::assert_snapshot!(stderr, @r###"
             branchless: processing 1 update: ref HEAD
             branchless: processing 1 update: ref HEAD
-            branchless: processed commit: 4838e49 create test3.txt
             Executing: git branchless hook-detect-empty-commit 70deb1e28791d8e7dd5a1f0c871a51b91282562f
             branchless: processing 1 update: ref HEAD
-            branchless: processed commit: a248207 create test4.txt
             Executing: git branchless hook-detect-empty-commit 355e173bf9c5d2efac2e451da0cdad3fb82b869a
             branchless: processing 1 update: ref HEAD
-            branchless: processed commit: 566e434 create test5.txt
             Executing: git branchless hook-detect-empty-commit f81d55c0d520ff8d02ef9294d95156dcb78a5255
             Executing: git branchless hook-register-extra-post-rewrite-hook
             branchless: processing 3 rewritten commits
@@ -3259,7 +3256,6 @@ fn test_move_no_reapply_upstream_commits() -> eyre::Result<()> {
             branchless: processing 1 update: ref HEAD
             Executing: git branchless hook-skip-upstream-applied-commit 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
             branchless: processing 1 update: ref HEAD
-            branchless: processed commit: fa46633 create test2.txt
             Executing: git branchless hook-detect-empty-commit 96d1c37a3d4363611c49f7e52186e189a04c531f
             Executing: git branchless hook-register-extra-post-rewrite-hook
             branchless: processing 2 rewritten commits
@@ -3374,10 +3370,8 @@ fn test_move_no_reapply_squashed_commits() -> eyre::Result<()> {
             insta::assert_snapshot!(stderr, @r###"
             branchless: processing 1 update: ref HEAD
             branchless: processing 1 update: ref HEAD
-            branchless: processed commit: e7bcdd6 create test1.txt
             Executing: git branchless hook-detect-empty-commit 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
             branchless: processing 1 update: ref HEAD
-            branchless: processed commit: 12d361a create test2.txt
             Executing: git branchless hook-detect-empty-commit 96d1c37a3d4363611c49f7e52186e189a04c531f
             Executing: git branchless hook-register-extra-post-rewrite-hook
             branchless: processing 4 rewritten commits
@@ -3514,7 +3508,6 @@ fn test_move_delete_checked_out_branch() -> eyre::Result<()> {
             Executing: git branchless hook-skip-upstream-applied-commit 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
             Executing: git branchless hook-skip-upstream-applied-commit 96d1c37a3d4363611c49f7e52186e189a04c531f
             branchless: processing 1 update: ref HEAD
-            branchless: processed commit: 012efd6 create test3.txt
             Executing: git branchless hook-detect-empty-commit ffcba554683d83de283de084a7d3896e332bbcdb
             Executing: git branchless hook-register-extra-post-rewrite-hook
             branchless: processing 3 rewritten commits
@@ -3744,7 +3737,6 @@ fn test_move_merge_commit() -> eyre::Result<()> {
             insta::assert_snapshot!(stderr, @r###"
             branchless: processing 1 update: ref HEAD
             branchless: processing 1 update: ref HEAD
-            branchless: processed commit: 96d1c37 create test2.txt
             Executing: git branchless hook-detect-empty-commit fe65c1fe15584744e649b2c79d4cf9b0d878f92e
             branchless: processing 1 update: ref refs/rewritten/parent-3
             branchless: processing 1 update: ref HEAD
@@ -3878,7 +3870,6 @@ fn test_move_merge_commit() -> eyre::Result<()> {
                 insta::assert_snapshot!(stderr, @r###"
                 branchless: processing 1 update: ref HEAD
                 branchless: processing 1 update: ref HEAD
-                branchless: processed commit: 96d1c37 create test2.txt
                 Executing: git branchless hook-detect-empty-commit fe65c1fe15584744e649b2c79d4cf9b0d878f92e
                 branchless: processing 1 update: ref refs/rewritten/parent-3
                 branchless: processing 1 update: ref HEAD
@@ -4074,10 +4065,8 @@ fn test_move_orphaned_root() -> eyre::Result<()> {
             insta::assert_snapshot!(stderr, @r###"
             branchless: processing 1 update: ref HEAD
             branchless: processing 1 update: ref HEAD
-            branchless: processed commit: 270b681 new root
             Executing: git branchless hook-detect-empty-commit da90168b4835f97f1a10bcc12833140056df9157
             branchless: processing 1 update: ref HEAD
-            branchless: processed commit: 70deb1e create test3.txt
             Executing: git branchless hook-detect-empty-commit fc09f3d9f0b7370dc38e761e3730a856dc5025c2
             Executing: git branchless hook-register-extra-post-rewrite-hook
             branchless: processing 3 rewritten commits
@@ -4385,7 +4374,6 @@ fn test_move_branch_on_merge_conflict_resolution() -> eyre::Result<()> {
         let (stdout, stderr) = git.run(&["rebase", "--continue"])?;
         insta::assert_snapshot!(stderr, @r###"
         branchless: processing 1 update: ref HEAD
-        branchless: processed commit: 3632ef4 create test1.txt
         Executing: git branchless hook-detect-empty-commit aec59174640c3e3dbb92fdade0bc44ca31552a85
         Executing: git branchless hook-register-extra-post-rewrite-hook
         branchless: processing 1 rewritten commit
