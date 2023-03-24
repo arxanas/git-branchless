@@ -3,9 +3,10 @@
 use std::collections::{HashMap, HashSet};
 
 use std::fmt::Write;
-use std::fs::File;
-use std::io::{stdin, BufRead, BufReader, Read, Write as WriteIo};
-use std::path::Path;
+use std::fs::{self, File};
+use std::io::{self, stdin, BufRead, BufReader, Read, Write as WriteIo};
+use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use std::time::SystemTime;
 
 use console::style;
@@ -28,6 +29,34 @@ use crate::git::{
 
 use super::execute::check_out_updated_head;
 use super::{find_abandoned_children, move_branches};
+
+/// Get the path to the file which stores the list of "deferred commits".
+///
+/// During a rebase, we make new commits, but if we abort the rebase, we don't
+/// want those new commits to persist in the smartlog, etc. To address this, we
+/// instead queue up the list of created commits and only confirm them once the
+/// rebase has completed.
+///
+/// Note that this has the effect that if the user manually creates a commit
+/// during a rebase, and then aborts the rebase, the commit will not be
+/// available in the event log anywhere. This is probably acceptable.
+pub fn get_deferred_commits_path(repo: &Repo) -> PathBuf {
+    repo.get_rebase_state_dir_path().join("deferred-commits")
+}
+
+fn read_deferred_commits(repo: &Repo) -> eyre::Result<Vec<NonZeroOid>> {
+    let deferred_commits_path = get_deferred_commits_path(repo);
+    let contents = match fs::read_to_string(&deferred_commits_path) {
+        Ok(contents) => contents,
+        Err(err) if err.kind() == io::ErrorKind::NotFound => Default::default(),
+        Err(err) => {
+            return Err(err)
+                .with_context(|| format!("Reading deferred commits at {deferred_commits_path:?}"))
+        }
+    };
+    let commit_oids = contents.lines().map(NonZeroOid::from_str).try_collect()?;
+    Ok(commit_oids)
+}
 
 #[instrument(skip(stream))]
 fn read_rewritten_list_entries(
@@ -110,11 +139,29 @@ pub fn hook_post_rewrite(
     let timestamp = now.duration_since(SystemTime::UNIX_EPOCH)?.as_secs_f64();
 
     let repo = Repo::from_current_dir()?;
+    let is_spurious_event = rewrite_type == "amend" && repo.is_rebase_underway()?;
+    if is_spurious_event {
+        return Ok(());
+    }
+
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
     let event_tx_id = event_log_db.make_transaction_id(now, "hook-post-rewrite")?;
 
-    let (rewritten_oids, events) = {
+    {
+        let deferred_commit_oids = read_deferred_commits(&repo)?;
+        let commit_events = deferred_commit_oids
+            .into_iter()
+            .map(|commit_oid| Event::CommitEvent {
+                timestamp,
+                event_tx_id,
+                commit_oid,
+            })
+            .collect_vec();
+        event_log_db.add_events(commit_events)?;
+    }
+
+    let (rewritten_oids, rewrite_events) = {
         let rewritten_oids = read_rewritten_list_entries(&mut stdin().lock())?;
         let events = rewritten_oids
             .iter()
@@ -131,21 +178,17 @@ pub fn hook_post_rewrite(
         (rewritten_oids_map, events)
     };
 
-    let is_spurious_event = rewrite_type == "amend" && repo.is_rebase_underway()?;
-    if !is_spurious_event {
-        let message_rewritten_commits = Pluralize {
-            determiner: None,
-            amount: rewritten_oids.len(),
-            unit: ("rewritten commit", "rewritten commits"),
-        }
-        .to_string();
-        writeln!(
-            effects.get_output_stream(),
-            "branchless: processing {message_rewritten_commits}"
-        )?;
+    let message_rewritten_commits = Pluralize {
+        determiner: None,
+        amount: rewritten_oids.len(),
+        unit: ("rewritten commit", "rewritten commits"),
     }
-
-    event_log_db.add_events(events)?;
+    .to_string();
+    writeln!(
+        effects.get_output_stream(),
+        "branchless: processing {message_rewritten_commits}"
+    )?;
+    event_log_db.add_events(rewrite_events)?;
 
     if repo
         .get_rebase_state_dir_path()

@@ -21,13 +21,13 @@ fn test_repair_broken_commit() -> eyre::Result<()> {
     {
         let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
-        o 70deb1e <garbage collected>
-
         O f777ecc (master) create initial.txt
         |
         o 62fc20d create test1.txt
         |
         @ 96d1c37 create test2.txt
+        |
+        o 70deb1e <garbage collected>
         "###);
     }
 
