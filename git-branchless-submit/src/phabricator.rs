@@ -176,6 +176,14 @@ pub enum Error {
 /// Result type.
 pub type Result<T> = std::result::Result<T, Error>;
 
+/// When this environment variable is set, the implementation of the Phabricator
+/// forge will make mock calls instead of actually invoking `arc`.
+pub const SHOULD_MOCK_ENV_KEY: &str = "BRANCHLESS_SUBMIT_PHABRICATOR_MOCK";
+
+fn should_mock() -> bool {
+    std::env::var_os(SHOULD_MOCK_ENV_KEY).is_some()
+}
+
 /// The [Phabricator](https://en.wikipedia.org/wiki/Phabricator) code review system.
 ///
 /// Note that Phabricator is no longer actively maintained, but many
@@ -274,10 +282,19 @@ impl Forge for PhabricatorForge<'_> {
             RebasePlanPermissions::verify_rewrite_set(self.dag, build_options, &commit_set)
                 .map_err(|err| Error::VerifyPermissions { source: err })?
                 .map_err(Error::BuildRebasePlan)?;
-        let command = format!(
-            "arc diff --create --verbatim {} -- HEAD^",
-            if *draft { "--draft" } else { "" }
-        );
+        let command = if !should_mock() {
+            format!(
+                "arc diff --create --verbatim {} -- HEAD^",
+                if *draft { "--draft" } else { "" }
+            )
+        } else {
+            r#"git commit --amend --message "$(git show --no-patch --format=%B HEAD)
+
+Differential Revision: https://phabricator.example.com/D000$(git rev-list --count HEAD)
+            "
+            "#
+            .to_string()
+        };
         let test_results = run_tests(
             self.effects,
             self.git_run_info,
@@ -684,6 +701,15 @@ impl PhabricatorForge<'_> {
     }
 
     fn set_dependencies(&self, id: Id, parent_revision_ids: Vec<Id>) -> Result<()> {
+        if should_mock() {
+            writeln!(
+                self.effects.get_output_stream(),
+                "[mock-arc] Setting dependencies for {id:?} to {parent_revision_ids:?}"
+            )
+            .unwrap();
+            return Ok(());
+        }
+
         let ConduitResponse {
             error_message: _,
             response,
