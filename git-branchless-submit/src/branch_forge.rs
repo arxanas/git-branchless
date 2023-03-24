@@ -261,7 +261,7 @@ These remotes are available: {}",
         &mut self,
         commits: HashMap<NonZeroOid, CommitStatus>,
         _options: &SubmitOptions,
-    ) -> eyre::Result<ExitCode> {
+    ) -> eyre::Result<Result<(), ExitCode>> {
         let branches_by_remote: BTreeMap<String, BTreeSet<String>> = commits
             .into_values()
             .flat_map(|commit_status| match commit_status {
@@ -302,11 +302,11 @@ These remotes are available: {}",
                     "Failed to push branches: {}",
                     branch_names.into_iter().join(", ")
                 )?;
-                return Ok(exit_code);
+                return Ok(Err(exit_code));
             }
             progress.notify_progress_inc(branch_names.len());
         }
 
-        Ok(ExitCode(0))
+        Ok(Ok(()))
     }
 }

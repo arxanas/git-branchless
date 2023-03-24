@@ -10,6 +10,11 @@ use std::process::ExitStatus;
 pub struct ExitCode(pub isize);
 
 impl ExitCode {
+    /// Return an exit code corresponding to success.
+    pub fn success() -> Self {
+        Self(0)
+    }
+
     /// Determine whether or not this exit code represents a successful
     /// termination.
     pub fn is_success(&self) -> bool {

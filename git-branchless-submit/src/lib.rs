@@ -133,7 +133,7 @@ pub trait Forge: Debug {
         &mut self,
         commits: HashMap<NonZeroOid, CommitStatus>,
         options: &SubmitOptions,
-    ) -> eyre::Result<ExitCode>;
+    ) -> eyre::Result<Result<(), ExitCode>>;
 }
 
 /// `submit` command.
@@ -150,7 +150,7 @@ pub fn command_main(ctx: CommandContext, args: SubmitArgs) -> eyre::Result<ExitC
         resolve_revset_options,
         forge,
     } = args;
-    submit(
+    match submit(
         &effects,
         &git_run_info,
         revset,
@@ -159,7 +159,10 @@ pub fn command_main(ctx: CommandContext, args: SubmitArgs) -> eyre::Result<ExitC
         draft,
         strategy,
         forge,
-    )
+    )? {
+        Ok(()) => Ok(ExitCode::success()),
+        Err(exit_code) => Ok(exit_code),
+    }
 }
 
 fn submit(
@@ -171,7 +174,7 @@ fn submit(
     draft: bool,
     execution_strategy: Option<TestExecutionStrategy>,
     forge_kind: Option<ForgeKind>,
-) -> eyre::Result<ExitCode> {
+) -> eyre::Result<Result<(), ExitCode>> {
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
@@ -196,7 +199,7 @@ fn submit(
         Ok(mut commit_sets) => commit_sets.pop().unwrap(),
         Err(err) => {
             err.describe(effects)?;
-            return Ok(ExitCode(1));
+            return Ok(Err(ExitCode(1)));
         }
     };
 
@@ -239,7 +242,7 @@ fn submit(
         )? {
             Ok(resolved_test_options) => resolved_test_options,
             Err(exit_code) => {
-                return Ok(exit_code);
+                return Ok(Err(exit_code));
             }
         }
     };
@@ -262,7 +265,7 @@ fn submit(
     );
     let statuses = match forge.query_status(commit_set)? {
         Ok(statuses) => statuses,
-        Err(exit_code) => return Ok(exit_code),
+        Err(exit_code) => return Ok(Err(exit_code)),
     };
     debug!(?statuses, "Commit statuses");
 
@@ -328,7 +331,7 @@ fn submit(
         } else if create {
             let create_statuses = match forge.create(unsubmitted_commits, &submit_options)? {
                 Ok(create_statuses) => create_statuses,
-                Err(exit_code) => return Ok(exit_code),
+                Err(exit_code) => return Ok(Err(exit_code)),
             };
             let all_branches: HashSet<_> = references_snapshot
                 .branch_oid_to_names
@@ -369,9 +372,9 @@ fn submit(
             .flat_map(|(_commit_oid, commit_status)| commit_status.local_branch_name.clone())
             .collect();
 
-        let exit_code = forge.update(commits_to_update, &submit_options)?;
-        if !exit_code.is_success() {
-            return Ok(exit_code);
+        match forge.update(commits_to_update, &submit_options)? {
+            Ok(()) => {}
+            Err(exit_code) => return Ok(Err(exit_code)),
         }
         (updated_branch_names, skipped_branch_names)
     };
@@ -471,7 +474,7 @@ create and push them, retry this operation with the --create option."
         )?;
     }
 
-    Ok(ExitCode(0))
+    Ok(Ok(()))
 }
 
 fn select_forge<'a>(

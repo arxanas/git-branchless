@@ -494,7 +494,7 @@ Differential Revision: https://phabricator.example.com/D000$(git rev-list --coun
         &mut self,
         commits: HashMap<NonZeroOid, crate::CommitStatus>,
         options: &SubmitOptions,
-    ) -> eyre::Result<ExitCode> {
+    ) -> eyre::Result<std::result::Result<(), ExitCode>> {
         let commit_set = commits.keys().copied().collect();
 
         {
@@ -521,7 +521,7 @@ Differential Revision: https://phabricator.example.com/D000$(git rev-list --coun
         }
 
         self.update_dependencies(&commit_set)?;
-        Ok(ExitCode(0))
+        Ok(Ok(()))
     }
 }
 
