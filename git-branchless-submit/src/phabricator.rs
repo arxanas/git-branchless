@@ -496,7 +496,7 @@ Differential Revision: https://phabricator.example.com/D000$(git rev-list --coun
             CommitSet::empty(),
             final_commit_oids.clone(),
         )?;
-        match self.update_dependencies(&final_commit_oids)? {
+        match self.update_dependencies(&final_commit_oids, &final_commit_oids)? {
             Ok(()) => {}
             Err(exit_code) => return Ok(Err(exit_code)),
         }
@@ -536,7 +536,7 @@ Differential Revision: https://phabricator.example.com/D000$(git rev-list --coun
             }
         }
 
-        self.update_dependencies(&commit_set)
+        self.update_dependencies(&commit_set, &CommitSet::empty())
     }
 }
 
@@ -707,6 +707,7 @@ impl PhabricatorForge<'_> {
     fn update_dependencies(
         &self,
         commits: &CommitSet,
+        newly_created_commits: &CommitSet,
     ) -> eyre::Result<std::result::Result<(), ExitCode>> {
         // Make sure to update dependencies in topological order to prevent
         // dependency cycles.
@@ -714,7 +715,9 @@ impl PhabricatorForge<'_> {
 
         let (effects, progress) = self.effects.start_operation(OperationType::UpdateCommits);
 
-        let draft_commits = self.dag.query_draft_commits()?;
+        // Newly-created commits won't have been observed by the DAG, so add them in manually here.
+        let draft_commits = self.dag.query_draft_commits()?.union(newly_created_commits);
+
         progress.notify_progress(0, commit_oids.len());
         for commit_oid in commit_oids {
             let id = match self.get_revision_id(commit_oid)? {
@@ -729,7 +732,7 @@ impl PhabricatorForge<'_> {
 
             let mut parent_revision_ids = Vec::new();
             for parent_oid in parent_oids {
-                if !self.dag.set_contains(draft_commits, parent_oid)? {
+                if !self.dag.set_contains(&draft_commits, parent_oid)? {
                     // FIXME: this will exclude commits that used to be part of
                     // the stack but have since landed.
                     continue;

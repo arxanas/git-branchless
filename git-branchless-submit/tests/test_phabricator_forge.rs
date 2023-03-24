@@ -69,7 +69,7 @@ fn test_submit_phabricator_strategy_working_copy() -> eyre::Result<()> {
         branchless: running command: <git-executable> checkout ccb7fd5d90c1888bea906a41c197e9215d6b9bb3
         In-memory rebase succeeded.
         Setting D0002 as stack root (no dependencies)
-        Setting D0003 as stack root (no dependencies)
+        Stacking D0003 on top of D0002
         Created 2 branches: D0002, D0003
         "###);
     }
@@ -121,7 +121,7 @@ fn test_submit_phabricator_strategy_worktree() -> eyre::Result<()> {
         branchless: running command: <git-executable> checkout ccb7fd5d90c1888bea906a41c197e9215d6b9bb3
         In-memory rebase succeeded.
         Setting D0002 as stack root (no dependencies)
-        Setting D0003 as stack root (no dependencies)
+        Stacking D0003 on top of D0002
         Created 2 branches: D0002, D0003
         "###);
     }
@@ -171,7 +171,7 @@ fn test_submit_phabricator_update() -> eyre::Result<()> {
         branchless: running command: <git-executable> checkout ccb7fd5d90c1888bea906a41c197e9215d6b9bb3
         In-memory rebase succeeded.
         Setting D0002 as stack root (no dependencies)
-        Setting D0003 as stack root (no dependencies)
+        Stacking D0003 on top of D0002
         Created 2 branches: D0002, D0003
         "###);
     }
