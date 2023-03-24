@@ -19,7 +19,7 @@ use std::time::SystemTime;
 
 use eden_dag::VertexName;
 use lib::core::repo_ext::RepoExt;
-use lib::util::ExitCode;
+use lib::util::{ExitCode, EyreExitOr};
 use rayon::ThreadPoolBuilder;
 use tracing::instrument;
 
@@ -74,7 +74,7 @@ pub fn r#move(
     resolve_revset_options: &ResolveRevsetOptions,
     move_options: &MoveOptions,
     insert: bool,
-) -> eyre::Result<ExitCode> {
+) -> EyreExitOr<()> {
     let sources_provided = !sources.is_empty();
     let bases_provided = !bases.is_empty();
     let exacts_provided = !exacts.is_empty();
@@ -90,7 +90,7 @@ pub fn r#move(
             Some(oid) => Revset(oid.to_string()),
             None => {
                 writeln!(effects.get_output_stream(), "No --dest argument was provided, and no OID for HEAD is available as a default")?;
-                return Ok(ExitCode(1));
+                return Ok(Err(ExitCode(1)));
             }
         },
     };
@@ -113,7 +113,7 @@ pub fn r#move(
             Ok(commit_sets) => union_all(&commit_sets),
             Err(err) => {
                 err.describe(effects)?;
-                return Ok(ExitCode(1));
+                return Ok(Err(ExitCode(1)));
             }
         };
     let base_oids: CommitSet =
@@ -121,7 +121,7 @@ pub fn r#move(
             Ok(commit_sets) => union_all(&commit_sets),
             Err(err) => {
                 err.describe(effects)?;
-                return Ok(ExitCode(1));
+                return Ok(Err(ExitCode(1)));
             }
         };
     let exact_components = match resolve_commits(
@@ -147,7 +147,7 @@ pub fn r#move(
                             dag.set_count(&component_roots)?,
                             component_roots
                         )?;
-                        return Ok(ExitCode(1));
+                        return Ok(Err(ExitCode(1)));
                     }
                 };
 
@@ -160,7 +160,7 @@ pub fn r#move(
                         dag.set_count(&component_parents)?,
                         component_parents
                     )?;
-                    return Ok(ExitCode(1));
+                    return Ok(Err(ExitCode(1)));
                 };
 
                 components.insert(component_root, component);
@@ -170,7 +170,7 @@ pub fn r#move(
         }
         Err(err) => {
             err.describe(effects)?;
-            return Ok(ExitCode(1));
+            return Ok(Err(ExitCode(1)));
         }
     };
 
@@ -191,12 +191,12 @@ pub fn r#move(
                     other.len(),
                     expr,
                 )?;
-                return Ok(ExitCode(1));
+                return Ok(Err(ExitCode(1)));
             }
         },
         Err(err) => {
             err.describe(effects)?;
-            return Ok(ExitCode(1));
+            return Ok(Err(ExitCode(1)));
         }
     };
 
@@ -205,7 +205,7 @@ pub fn r#move(
             Some(head_oid) => CommitSet::from(head_oid),
             None => {
                 writeln!(effects.get_output_stream(), "No --source or --base arguments were provided, and no OID for HEAD is available as a default")?;
-                return Ok(ExitCode(1));
+                return Ok(Err(ExitCode(1)));
             }
         }
     } else {
@@ -289,7 +289,7 @@ pub fn r#move(
                 Ok(permissions) => permissions,
                 Err(err) => {
                     err.describe(effects, &repo, &dag)?;
-                    return Ok(ExitCode(1));
+                    return Ok(Err(ExitCode(1)));
                 }
             }
         };
@@ -353,7 +353,7 @@ pub fn r#move(
                                 "range of commits"
                             },
                         )?;
-                        return Ok(ExitCode(1));
+                        return Ok(Err(ExitCode(1)));
                     }
                 }
 
@@ -414,7 +414,7 @@ pub fn r#move(
                                 component_roots[i - 1],
                                 component_roots[i]
                             )?;
-                            return Ok(ExitCode(1));
+                            return Ok(Err(ExitCode(1)));
                         }
                     }
 
@@ -434,7 +434,7 @@ pub fn r#move(
                             effects.get_output_stream(),
                             "The --insert flag cannot be used when moving subtrees or ranges with multiple heads."
                         )?;
-                        return Ok(ExitCode(1));
+                        return Ok(Err(ExitCode(1)));
                     }
                 }
             };
@@ -460,7 +460,7 @@ pub fn r#move(
     let result = match rebase_plan {
         Ok(None) => {
             writeln!(effects.get_output_stream(), "Nothing to do.")?;
-            return Ok(ExitCode(0));
+            return Ok(Ok(()));
         }
         Ok(Some(rebase_plan)) => {
             let options = ExecuteRebasePlanOptions {
@@ -483,18 +483,18 @@ pub fn r#move(
         }
         Err(err) => {
             err.describe(effects, &repo, &dag)?;
-            return Ok(ExitCode(1));
+            return Ok(Err(ExitCode(1)));
         }
     };
 
     match result {
-        ExecuteRebasePlanResult::Succeeded { rewritten_oids: _ } => Ok(ExitCode(0)),
+        ExecuteRebasePlanResult::Succeeded { rewritten_oids: _ } => Ok(Ok(())),
 
         ExecuteRebasePlanResult::DeclinedToMerge { failed_merge_info } => {
             failed_merge_info.describe(effects, &repo, MergeConflictRemediation::Retry)?;
-            Ok(ExitCode(1))
+            Ok(Err(ExitCode(1)))
         }
 
-        ExecuteRebasePlanResult::Failed { exit_code } => Ok(exit_code),
+        ExecuteRebasePlanResult::Failed { exit_code } => Ok(Err(exit_code)),
     }
 }

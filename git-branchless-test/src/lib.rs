@@ -54,7 +54,8 @@ use lib::git::{
     Repo, SerializedNonZeroOid, SerializedTestResult, WorkingCopyChangesType, TEST_ABORT_EXIT_CODE,
     TEST_INDETERMINATE_EXIT_CODE, TEST_SUCCESS_EXIT_CODE,
 };
-use lib::util::{get_sh, ExitCode};
+use lib::try_exit_code;
+use lib::util::{get_sh, ExitCode, EyreExitOr};
 use rayon::ThreadPoolBuilder;
 use scm_bisect::search;
 use tempfile::TempDir;
@@ -146,7 +147,7 @@ fn resolve_test_command_alias(
     effects: &Effects,
     repo: &Repo,
     alias: Option<&str>,
-) -> eyre::Result<Result<String, ExitCode>> {
+) -> EyreExitOr<String> {
     let config = repo.get_readonly_config()?;
     let config_key = format!("branchless.test.alias.{}", alias.unwrap_or("default"));
     let config_value: Option<String> = config.get(config_key).unwrap_or_default();
@@ -224,7 +225,7 @@ impl ResolvedTestOptions {
         commits: &CommitSet,
         move_options: Option<&MoveOptions>,
         options: &RawTestOptions,
-    ) -> eyre::Result<Result<Self, ExitCode>> {
+    ) -> EyreExitOr<Self> {
         let config = repo.get_readonly_config()?;
         let RawTestOptions {
             exec: command,
@@ -455,7 +456,7 @@ BUG: Expected resolved_interactive ({resolved_interactive:?}) to match interacti
 
 /// `test` command.
 #[instrument]
-pub fn command_main(ctx: CommandContext, args: TestArgs) -> eyre::Result<ExitCode> {
+pub fn command_main(ctx: CommandContext, args: TestArgs) -> EyreExitOr<()> {
     let CommandContext {
         effects,
         git_run_info,
@@ -568,7 +569,7 @@ fn subcommand_run(
     revset: Revset,
     resolve_revset_options: &ResolveRevsetOptions,
     move_options: Option<&MoveOptions>,
-) -> eyre::Result<ExitCode> {
+) -> EyreExitOr<()> {
     let now = SystemTime::now();
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
@@ -595,11 +596,11 @@ fn subcommand_run(
         Ok(mut commit_sets) => commit_sets.pop().unwrap(),
         Err(err) => {
             err.describe(effects)?;
-            return Ok(ExitCode(1));
+            return Ok(Err(ExitCode(1)));
         }
     };
 
-    let options = match ResolvedTestOptions::resolve(
+    let options = try_exit_code!(ResolvedTestOptions::resolve(
         now,
         effects,
         &dag,
@@ -608,13 +609,10 @@ fn subcommand_run(
         &commit_set,
         move_options,
         options,
-    )? {
-        Ok(options) => options,
-        Err(exit_code) => return Ok(exit_code),
-    };
+    )?);
 
     let commits = sorted_commit_set(&repo, &dag, &commit_set)?;
-    let test_results = match run_tests(
+    let test_results = try_exit_code!(run_tests(
         now,
         effects,
         git_run_info,
@@ -625,12 +623,9 @@ fn subcommand_run(
         &revset,
         &commits,
         &options,
-    )? {
-        Ok(test_results) => test_results,
-        Err(exit_code) => return Ok(exit_code),
-    };
+    )?);
 
-    let exit_code = print_summary(
+    try_exit_code!(print_summary(
         effects,
         &dag,
         &repo,
@@ -640,13 +635,10 @@ fn subcommand_run(
         options.search_strategy.is_some(),
         options.fix_options.is_some(),
         &options.verbosity,
-    )?;
-    if !exit_code.is_success() {
-        return Ok(exit_code);
-    }
+    )?);
 
     if let Some((execute_options, permissions)) = &options.fix_options {
-        let exit_code = apply_fixes(
+        try_exit_code!(apply_fixes(
             effects,
             git_run_info,
             &mut dag,
@@ -657,13 +649,10 @@ fn subcommand_run(
             options.is_dry_run,
             &options.command,
             &test_results,
-        )?;
-        if !exit_code.is_success() {
-            return Ok(exit_code);
-        }
+        )?);
     }
 
-    Ok(ExitCode(0))
+    Ok(Ok(()))
 }
 
 #[must_use]
@@ -686,7 +675,7 @@ fn set_abort_trap(
     event_log_db: &EventLogDb,
     event_tx_id: EventTransactionId,
     strategy: TestExecutionStrategy,
-) -> eyre::Result<Result<AbortTrap, ExitCode>> {
+) -> EyreExitOr<AbortTrap> {
     match strategy {
         TestExecutionStrategy::Worktree => return Ok(Ok(AbortTrap { is_active: false })),
         TestExecutionStrategy::WorkingCopy => {}
@@ -767,28 +756,12 @@ fn clear_abort_trap(
     git_run_info: &GitRunInfo,
     event_tx_id: EventTransactionId,
     abort_trap: AbortTrap,
-) -> eyre::Result<ExitCode> {
+) -> EyreExitOr<()> {
     let AbortTrap { is_active } = abort_trap;
-    if !is_active {
-        return Ok(ExitCode(0));
+    if is_active {
+        try_exit_code!(git_run_info.run(effects, Some(event_tx_id), &["rebase", "--abort"])?);
     }
-
-    let exit_code = git_run_info.run(effects, Some(event_tx_id), &["rebase", "--abort"])?;
-    if !exit_code.is_success() {
-        writeln!(
-            effects.get_output_stream(),
-            "{}",
-            effects.get_glyphs().render(
-                StyledStringBuilder::new()
-                    .append_styled(
-                        "Error: Could not abort running commands with `git rebase --abort`.",
-                        BaseColor::Red.light()
-                    )
-                    .build()
-            )?
-        )?;
-    }
-    Ok(exit_code)
+    Ok(Ok(()))
 }
 
 /// The result of running a test.
@@ -1238,7 +1211,7 @@ pub fn run_tests<'a>(
     revset: &Revset,
     commits: &[Commit],
     options: &ResolvedTestOptions,
-) -> eyre::Result<Result<TestResults, ExitCode>> {
+) -> EyreExitOr<TestResults> {
     let abort_trap = match set_abort_trap(
         now,
         effects,
@@ -1270,10 +1243,12 @@ pub fn run_tests<'a>(
         )
     };
 
-    let abort_trap_exit_code = clear_abort_trap(effects, git_run_info, event_tx_id, abort_trap)?;
-    if !abort_trap_exit_code.is_success() {
-        return Ok(Err(abort_trap_exit_code));
-    }
+    try_exit_code!(clear_abort_trap(
+        effects,
+        git_run_info,
+        event_tx_id,
+        abort_trap
+    )?);
     test_results
 }
 
@@ -1288,7 +1263,7 @@ fn run_tests_inner<'a>(
     revset: &Revset,
     commits: &[Commit],
     options: &ResolvedTestOptions,
-) -> eyre::Result<Result<TestResults, ExitCode>> {
+) -> EyreExitOr<TestResults> {
     let ResolvedTestOptions {
         command,
         execution_strategy,
@@ -1731,7 +1706,7 @@ fn print_summary(
     is_search: bool,
     apply_fixes: bool,
     verbosity: &Verbosity,
-) -> eyre::Result<ExitCode> {
+) -> EyreExitOr<()> {
     let mut num_passed = 0;
     let mut num_failed = 0;
     let mut num_skipped = 0;
@@ -1910,15 +1885,15 @@ fn print_summary(
                 .get_glyphs()
                 .render(commit.friendly_describe(effects.get_glyphs())?)?
         )?;
-        return Ok(ExitCode(1));
+        return Ok(Err(ExitCode(1)));
     }
 
     if is_search {
-        Ok(ExitCode(0))
+        Ok(Ok(()))
     } else if num_failed > 0 || num_skipped > 0 {
-        Ok(ExitCode(1))
+        Ok(Err(ExitCode(1)))
     } else {
-        Ok(ExitCode(0))
+        Ok(Ok(()))
     }
 }
 
@@ -1934,7 +1909,7 @@ fn apply_fixes(
     dry_run: bool,
     command: &str,
     test_results: &TestResults,
-) -> eyre::Result<ExitCode> {
+) -> EyreExitOr<()> {
     let fixed_tree_oids: Vec<(NonZeroOid, NonZeroOid)> = test_results
         .test_outputs
         .iter()
@@ -2082,11 +2057,11 @@ fn apply_fixes(
         Ok(Some(plan)) => plan,
         Ok(None) => {
             writeln!(effects.get_output_stream(), "No commits to fix.")?;
-            return Ok(ExitCode(0));
+            return Ok(Ok(()));
         }
         Err(err) => {
             err.describe(effects, repo, dag)?;
-            return Ok(ExitCode(1));
+            return Ok(Err(ExitCode(1)));
         }
     };
 
@@ -2104,9 +2079,9 @@ fn apply_fixes(
             ExecuteRebasePlanResult::Succeeded { rewritten_oids } => rewritten_oids,
             ExecuteRebasePlanResult::DeclinedToMerge { failed_merge_info } => {
                 writeln!(effects.get_output_stream(), "BUG: encountered merge conflicts during git test fix, but we should not be applying any patches: {failed_merge_info:?}")?;
-                return Ok(ExitCode(1));
+                return Ok(Err(ExitCode(1)));
             }
-            ExecuteRebasePlanResult::Failed { exit_code } => return Ok(exit_code),
+            ExecuteRebasePlanResult::Failed { exit_code } => return Ok(Err(exit_code)),
         }
     };
     let rewritten_oids = match rewritten_oids {
@@ -2189,7 +2164,7 @@ fn apply_fixes(
         writeln!(effects.get_output_stream(), "(This was a dry-run, so no commits were rewritten. Re-run without the --dry-run option to apply fixes.)")?;
     }
 
-    Ok(ExitCode(0))
+    Ok(Ok(()))
 }
 
 #[instrument]
@@ -2827,7 +2802,7 @@ fn subcommand_show(
     options: &RawTestOptions,
     revset: Revset,
     resolve_revset_options: &ResolveRevsetOptions,
-) -> eyre::Result<ExitCode> {
+) -> EyreExitOr<()> {
     let now = SystemTime::now();
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
@@ -2849,11 +2824,11 @@ fn subcommand_show(
             Ok(mut commit_sets) => commit_sets.pop().unwrap(),
             Err(err) => {
                 err.describe(effects)?;
-                return Ok(ExitCode(1));
+                return Ok(Err(ExitCode(1)));
             }
         };
 
-    let options = match ResolvedTestOptions::resolve(
+    let options = try_exit_code!(ResolvedTestOptions::resolve(
         now,
         effects,
         &dag,
@@ -2862,12 +2837,7 @@ fn subcommand_show(
         &commit_set,
         None,
         options,
-    )? {
-        Ok(options) => options,
-        Err(exit_code) => {
-            return Ok(exit_code);
-        }
-    };
+    )?);
 
     let commits = sorted_commit_set(&repo, &dag, &commit_set)?;
     for commit in commits {
@@ -2919,7 +2889,7 @@ fn subcommand_show(
         }
     }
 
-    Ok(ExitCode(0))
+    Ok(Ok(()))
 }
 
 /// Delete cached test output for the commits in `revset`.
@@ -2928,7 +2898,7 @@ pub fn subcommand_clean(
     effects: &Effects,
     revset: Revset,
     resolve_revset_options: &ResolveRevsetOptions,
-) -> eyre::Result<ExitCode> {
+) -> EyreExitOr<()> {
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
@@ -2948,7 +2918,7 @@ pub fn subcommand_clean(
             Ok(mut commit_sets) => commit_sets.pop().unwrap(),
             Err(err) => {
                 err.describe(effects)?;
-                return Ok(ExitCode(1));
+                return Ok(Err(ExitCode(1)));
             }
         };
 
@@ -2985,7 +2955,7 @@ pub fn subcommand_clean(
             unit: ("cached test result", "cached test results")
         }
     )?;
-    Ok(ExitCode(0))
+    Ok(Ok(()))
 }
 
 #[cfg(test)]

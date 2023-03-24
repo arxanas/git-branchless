@@ -891,18 +891,17 @@ impl Repo {
     /// are not included. This operation may take a while.
     #[instrument]
     pub fn has_changed_files(&self, effects: &Effects, git_run_info: &GitRunInfo) -> Result<bool> {
-        let exit_code = git_run_info
+        match git_run_info
             .run(
                 effects,
                 // This is not a mutating operation, so we don't need a transaction ID.
                 None,
                 &["diff", "--quiet"],
             )
-            .map_err(Error::ExecGit)?;
-        if exit_code.is_success() {
-            Ok(false)
-        } else {
-            Ok(true)
+            .map_err(Error::ExecGit)?
+        {
+            Ok(()) => Ok(false),
+            Err(_exit_code) => Ok(true),
         }
     }
 

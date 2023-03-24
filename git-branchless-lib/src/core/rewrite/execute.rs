@@ -17,7 +17,7 @@ use crate::git::{
     BranchType, CategorizedReferenceName, GitRunInfo, MaybeZeroOid, NonZeroOid, ReferenceName,
     Repo, ResolvedReferenceInfo,
 };
-use crate::util::ExitCode;
+use crate::util::{ExitCode, EyreExitOr};
 
 use super::plan::RebasePlan;
 
@@ -182,7 +182,7 @@ pub fn check_out_updated_head(
     previous_head_info: &ResolvedReferenceInfo,
     skipped_head_updated_oid: Option<NonZeroOid>,
     check_out_commit_options: &CheckOutCommitOptions,
-) -> eyre::Result<ExitCode> {
+) -> EyreExitOr<()> {
     let checkout_target: ResolvedReferenceInfo = match previous_head_info {
         ResolvedReferenceInfo {
             oid: None,
@@ -274,14 +274,14 @@ pub fn check_out_updated_head(
 
     let head_info = repo.get_head_info()?;
     if head_info == checkout_target {
-        return Ok(ExitCode(0));
+        return Ok(Ok(()));
     }
 
     let checkout_target: CheckoutTarget = match &checkout_target {
         ResolvedReferenceInfo {
             oid: None,
             reference_name: None,
-        } => return Ok(ExitCode(0)),
+        } => return Ok(Ok(())),
 
         ResolvedReferenceInfo {
             oid: Some(oid),
@@ -437,7 +437,7 @@ mod in_memory {
     use crate::git::{
         CherryPickFastError, CherryPickFastOptions, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo,
     };
-    use crate::util::ExitCode;
+    use crate::util::EyreExitOr;
 
     use super::{ExecuteRebasePlanOptions, FailedMergeInfo};
 
@@ -855,7 +855,7 @@ mod in_memory {
         rewritten_oids: &[(NonZeroOid, MaybeZeroOid)],
         skipped_head_updated_oid: Option<NonZeroOid>,
         options: &ExecuteRebasePlanOptions,
-    ) -> eyre::Result<ExitCode> {
+    ) -> EyreExitOr<()> {
         let ExecuteRebasePlanOptions {
             now: _,
             event_tx_id,
@@ -934,6 +934,7 @@ mod on_disk {
     use crate::core::rewrite::plan::RebasePlan;
     use crate::core::rewrite::rewrite_hooks::save_original_head_info;
     use crate::git::{GitRunInfo, Repo};
+
     use crate::util::ExitCode;
 
     use super::ExecuteRebasePlanOptions;
@@ -1142,8 +1143,10 @@ mod on_disk {
             effects.get_output_stream(),
             "Calling Git for on-disk rebase..."
         )?;
-        let exit_code = git_run_info.run(effects, Some(*event_tx_id), &["rebase", "--continue"])?;
-        Ok(Ok(exit_code))
+        match git_run_info.run(effects, Some(*event_tx_id), &["rebase", "--continue"])? {
+            Ok(()) => Ok(Ok(ExitCode::success())),
+            Err(err) => Ok(Ok(err)),
+        }
     }
 }
 
@@ -1238,10 +1241,7 @@ pub fn execute_rebase_plan(
                 // checkout failed (which might happen if the user has changes
                 // which don't merge cleanly). The user can resolve that
                 // themselves.
-                //
-                // FIXME: we may still want to propagate the exit code to the
-                // caller.
-                let ExitCode(_exit_code) = post_rebase_in_memory(
+                match post_rebase_in_memory(
                     effects,
                     git_run_info,
                     repo,
@@ -1249,7 +1249,13 @@ pub fn execute_rebase_plan(
                     &rewritten_oids,
                     new_head_oid,
                     options,
-                )?;
+                )? {
+                    Ok(()) => {}
+                    Err(_exit_code) => {
+                        // FIXME: we may still want to propagate the exit code to the
+                        // caller.
+                    }
+                }
 
                 let rewritten_oids: HashMap<NonZeroOid, MaybeZeroOid> =
                     rewritten_oids.into_iter().collect();
@@ -1283,7 +1289,7 @@ pub fn execute_rebase_plan(
     if !force_in_memory {
         use on_disk::*;
         match rebase_on_disk(effects, git_run_info, repo, rebase_plan, options)? {
-            Ok(ExitCode(0)) => {
+            Ok(exit_code) if exit_code.is_success() => {
                 return Ok(ExecuteRebasePlanResult::Succeeded {
                     rewritten_oids: None,
                 });

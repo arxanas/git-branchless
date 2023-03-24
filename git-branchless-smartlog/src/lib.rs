@@ -24,7 +24,7 @@ use lib::core::config::{
 };
 use lib::core::repo_ext::RepoExt;
 use lib::core::rewrite::find_rewrite_target;
-use lib::util::ExitCode;
+use lib::util::{ExitCode, EyreExitOr};
 use tracing::instrument;
 
 use lib::core::dag::{CommitSet, Dag};
@@ -750,7 +750,7 @@ pub fn smartlog(
     effects: &Effects,
     git_run_info: &GitRunInfo,
     options: SmartlogOptions,
-) -> eyre::Result<ExitCode> {
+) -> EyreExitOr<()> {
     let SmartlogOptions {
         event_id,
         revset,
@@ -798,7 +798,7 @@ pub fn smartlog(
             },
             Err(err) => {
                 err.describe(effects)?;
-                return Ok(ExitCode(1));
+                return Ok(Err(ExitCode(1)));
             }
         };
 
@@ -886,12 +886,12 @@ pub fn smartlog(
         }
     }
 
-    Ok(ExitCode(0))
+    Ok(Ok(()))
 }
 
 /// `smartlog` command.
 #[instrument]
-pub fn command_main(ctx: CommandContext, args: SmartlogArgs) -> eyre::Result<ExitCode> {
+pub fn command_main(ctx: CommandContext, args: SmartlogArgs) -> EyreExitOr<()> {
     let CommandContext {
         effects,
         git_run_info,

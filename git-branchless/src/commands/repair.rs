@@ -3,6 +3,7 @@ use std::{collections::HashSet, time::SystemTime};
 
 use itertools::Itertools;
 use lib::git::{CategorizedReferenceName, MaybeZeroOid};
+use lib::util::EyreExitOr;
 use lib::{
     core::{
         effects::{Effects, OperationType},
@@ -10,10 +11,9 @@ use lib::{
         formatting::Pluralize,
     },
     git::Repo,
-    util::ExitCode,
 };
 
-pub fn repair(effects: &Effects, dry_run: bool) -> eyre::Result<ExitCode> {
+pub fn repair(effects: &Effects, dry_run: bool) -> EyreExitOr<()> {
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
@@ -129,5 +129,5 @@ pub fn repair(effects: &Effects, dry_run: bool) -> eyre::Result<ExitCode> {
         )?;
     }
 
-    Ok(ExitCode(0))
+    Ok(Ok(()))
 }

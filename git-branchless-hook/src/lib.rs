@@ -28,7 +28,7 @@ use itertools::Itertools;
 use lib::core::dag::Dag;
 use lib::core::repo_ext::RepoExt;
 use lib::core::rewrite::rewrite_hooks::get_deferred_commits_path;
-use lib::util::ExitCode;
+use lib::util::EyreExitOr;
 use tracing::{error, instrument, warn};
 
 use lib::core::eventlog::{should_ignore_ref_updates, Event, EventLogDb, EventReplayer};
@@ -518,7 +518,7 @@ fn hook_reference_transaction(effects: &Effects, transaction_state: &str) -> eyr
 
 /// `hook` subcommand.
 #[instrument]
-pub fn command_main(ctx: CommandContext, args: HookArgs) -> eyre::Result<ExitCode> {
+pub fn command_main(ctx: CommandContext, args: HookArgs) -> EyreExitOr<()> {
     let CommandContext {
         effects,
         git_run_info,
@@ -578,5 +578,5 @@ pub fn command_main(ctx: CommandContext, args: HookArgs) -> eyre::Result<ExitCod
         }
     }
 
-    Ok(ExitCode(0))
+    Ok(Ok(()))
 }
