@@ -201,7 +201,7 @@ pub fn hook_post_rewrite(
         move_branches(effects, git_run_info, &repo, event_tx_id, &rewritten_oids)?;
 
         let skipped_head_updated_oid = load_updated_head_oid(&repo)?;
-        let exit_code = check_out_updated_head(
+        match check_out_updated_head(
             effects,
             git_run_info,
             &repo,
@@ -211,9 +211,11 @@ pub fn hook_post_rewrite(
             &previous_head_info,
             skipped_head_updated_oid,
             &CheckOutCommitOptions::default(),
-        )?;
-        if !exit_code.is_success() {
-            eyre::bail!("Could not check out your updated `HEAD` commit.");
+        )? {
+            Ok(()) => {}
+            Err(_exit_code) => {
+                eyre::bail!("Could not check out your updated `HEAD` commit.");
+            }
         }
     }
 

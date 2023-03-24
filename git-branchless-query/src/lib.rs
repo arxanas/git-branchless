@@ -7,7 +7,7 @@ use lib::core::effects::{Effects, OperationType};
 use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::repo_ext::RepoExt;
 use lib::git::{CategorizedReferenceName, GitRunInfo, Repo};
-use lib::util::ExitCode;
+use lib::util::{ExitCode, EyreExitOr};
 use tracing::instrument;
 
 use git_branchless_opts::{QueryArgs, ResolveRevsetOptions, Revset};
@@ -15,7 +15,7 @@ use git_branchless_revset::resolve_commits;
 
 /// `query` command.
 #[instrument]
-pub fn command_main(ctx: CommandContext, args: QueryArgs) -> eyre::Result<ExitCode> {
+pub fn command_main(ctx: CommandContext, args: QueryArgs) -> EyreExitOr<()> {
     let CommandContext {
         effects,
         git_run_info,
@@ -44,7 +44,7 @@ fn query(
     resolve_revset_options: &ResolveRevsetOptions,
     show_branches: bool,
     raw: bool,
-) -> eyre::Result<ExitCode> {
+) -> EyreExitOr<()> {
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
@@ -64,7 +64,7 @@ fn query(
             Ok(commit_sets) => commit_sets[0].clone(),
             Err(err) => {
                 err.describe(effects)?;
-                return Ok(ExitCode(1));
+                return Ok(Err(ExitCode(1)));
             }
         };
 
@@ -111,5 +111,5 @@ fn query(
         }
     }
 
-    Ok(ExitCode(0))
+    Ok(Ok(()))
 }

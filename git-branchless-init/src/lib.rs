@@ -18,7 +18,7 @@ use eyre::Context;
 use git_branchless_invoke::CommandContext;
 use itertools::Itertools;
 use lib::core::config::env_vars::should_use_separate_command_binary;
-use lib::util::ExitCode;
+use lib::util::EyreExitOr;
 use path_slash::PathExt;
 use tracing::{instrument, warn};
 
@@ -601,7 +601,7 @@ fn command_init(
     effects: &Effects,
     git_run_info: &GitRunInfo,
     main_branch_name: Option<&str>,
-) -> eyre::Result<ExitCode> {
+) -> EyreExitOr<()> {
     let mut in_ = BufReader::new(stdin());
     let repo = Repo::from_current_dir()?;
     let mut repo = repo.open_worktree_parent_repo()?.unwrap_or(repo);
@@ -651,22 +651,22 @@ fn command_init(
         console::style("git branchless init --uninstall").bold()
     )?;
 
-    Ok(ExitCode(0))
+    Ok(Ok(()))
 }
 
 /// Uninstall `git-branchless` in the current repo.
 #[instrument]
-fn command_uninstall(effects: &Effects, git_run_info: &GitRunInfo) -> eyre::Result<ExitCode> {
+fn command_uninstall(effects: &Effects, git_run_info: &GitRunInfo) -> EyreExitOr<()> {
     let repo = Repo::from_current_dir()?;
     let readonly_config = repo.get_readonly_config().wrap_err("Getting repo config")?;
     delete_isolated_config(effects, &repo, readonly_config.into_config())?;
     uninstall_hooks(effects, git_run_info, &repo)?;
-    Ok(ExitCode(0))
+    Ok(Ok(()))
 }
 
 /// Install `git-branchless` in the current repo.
 #[instrument]
-pub fn command_main(ctx: CommandContext, args: InitArgs) -> eyre::Result<ExitCode> {
+pub fn command_main(ctx: CommandContext, args: InitArgs) -> EyreExitOr<()> {
     let CommandContext {
         effects,
         git_run_info,
@@ -686,13 +686,10 @@ pub fn command_main(ctx: CommandContext, args: InitArgs) -> eyre::Result<ExitCod
 
 /// Install the man-pages for `git-branchless` to the provided path.
 #[instrument]
-pub fn command_install_man_pages(
-    ctx: CommandContext,
-    args: InstallManPagesArgs,
-) -> eyre::Result<ExitCode> {
+pub fn command_install_man_pages(ctx: CommandContext, args: InstallManPagesArgs) -> EyreExitOr<()> {
     let InstallManPagesArgs { path } = args;
     write_man_pages(&path)?;
-    Ok(ExitCode(0))
+    Ok(Ok(()))
 }
 
 #[cfg(test)]

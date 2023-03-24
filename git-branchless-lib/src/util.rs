@@ -34,6 +34,32 @@ impl TryFrom<ExitStatus> for ExitCode {
     }
 }
 
+/// Helper type alias for the common case that we want to run a computation and
+/// return `eyre::Result<T>`, but it's also possible that we run a subcommand
+/// which returns an exit code that we want to propagate. See also `try_exit_code`.
+pub type EyreExitOr<T> = eyre::Result<Result<T, ExitCode>>;
+
+/// Macro to propagate `ExitCode`s in the same way as the `try!` macro/the `?`
+/// operator.
+///
+/// Ideally, we would make `ExitCode` implement `std::ops::Try`, but that's a
+/// nightly API. We could also make `ExitCode` implement `Error`, but this
+/// interacts badly with `eyre::Result`, because all `Error`s are convertible to
+/// `eyre::Error`, so our exit codes get treated at the same as other errors.
+/// So, instead, we have this macro to accomplish the same thing, but for
+/// `Result<T, ExitCode>`s specifically.
+#[macro_export]
+macro_rules! try_exit_code {
+    ($e:expr) => {
+        match $e {
+            Ok(value) => value,
+            Err(exit_code) => {
+                return Ok(Err(exit_code));
+            }
+        }
+    };
+}
+
 /// Returns a path for a given file, searching through PATH to find it.
 pub fn get_from_path(exe_name: &str) -> Option<PathBuf> {
     std::env::var_os("PATH").and_then(|paths| {

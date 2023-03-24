@@ -17,7 +17,7 @@ use crate::core::config::get_hooks_dir;
 use crate::core::effects::{Effects, OperationType};
 use crate::core::eventlog::{EventTransactionId, BRANCHLESS_TRANSACTION_ID_ENV_VAR};
 use crate::git::repo::Repo;
-use crate::util::{get_sh, ExitCode};
+use crate::util::{get_sh, ExitCode, EyreExitOr};
 
 /// Path to the `git` executable on disk to be executed.
 #[derive(Clone)]
@@ -113,7 +113,7 @@ impl GitRunInfo {
         effects: &Effects,
         event_tx_id: Option<EventTransactionId>,
         args: &[&OsStr],
-    ) -> eyre::Result<ExitCode> {
+    ) -> EyreExitOr<()> {
         let GitRunInfo {
             path_to_git,
             working_directory,
@@ -167,7 +167,11 @@ impl GitRunInfo {
             .try_into()
             .wrap_err("Converting exit code from i32 to isize")?;
         let exit_code = ExitCode(exit_code);
-        Ok(exit_code)
+        if exit_code.is_success() {
+            Ok(Ok(()))
+        } else {
+            Ok(Err(exit_code))
+        }
     }
 
     /// Run Git in a subprocess, and inform the user.
@@ -186,7 +190,7 @@ impl GitRunInfo {
         effects: &Effects,
         event_tx_id: Option<EventTransactionId>,
         args: &[S],
-    ) -> eyre::Result<ExitCode> {
+    ) -> EyreExitOr<()> {
         self.run_inner(
             effects,
             event_tx_id,
@@ -203,7 +207,7 @@ impl GitRunInfo {
         &self,
         event_tx_id: Option<EventTransactionId>,
         args: &[impl AsRef<OsStr> + std::fmt::Debug],
-    ) -> eyre::Result<ExitCode> {
+    ) -> EyreExitOr<()> {
         let GitRunInfo {
             path_to_git,
             working_directory,
@@ -232,7 +236,11 @@ impl GitRunInfo {
             .try_into()
             .wrap_err("Converting exit code from i32 to isize")?;
         let exit_code = ExitCode(exit_code);
-        Ok(exit_code)
+        if exit_code.is_success() {
+            Ok(Ok(()))
+        } else {
+            Ok(Err(exit_code))
+        }
     }
 
     fn run_silent_inner(

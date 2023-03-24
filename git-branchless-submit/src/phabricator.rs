@@ -26,7 +26,8 @@ use lib::core::rewrite::{
     ExecuteRebasePlanResult, RebasePlanBuilder, RebasePlanPermissions, RepoResource,
 };
 use lib::git::{Commit, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo, RepoError};
-use lib::util::ExitCode;
+use lib::try_exit_code;
+use lib::util::{ExitCode, EyreExitOr};
 use rayon::ThreadPoolBuilder;
 use regex::bytes::Regex;
 use serde::{Deserialize, Serialize};
@@ -576,7 +577,7 @@ Differential Revision: https://phabricator.example.com/D000$(git rev-list --coun
         &mut self,
         commits: HashMap<NonZeroOid, crate::CommitStatus>,
         options: &SubmitOptions,
-    ) -> eyre::Result<std::result::Result<(), ExitCode>> {
+    ) -> EyreExitOr<()> {
         let commit_set = commits.keys().copied().collect();
 
         {
@@ -626,7 +627,8 @@ Differential Revision: https://phabricator.example.com/D000$(git rev-list --coun
             }
         }
 
-        self.update_dependencies(&commit_set, &CommitSet::empty())
+        try_exit_code!(self.update_dependencies(&commit_set, &CommitSet::empty())?);
+        Ok(Ok(()))
     }
 }
 

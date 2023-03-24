@@ -8,7 +8,8 @@ use lib::core::effects::Effects;
 use lib::core::eventlog::EventLogDb;
 use lib::git::GitRunInfo;
 use lib::git::{NonZeroOid, Repo};
-use lib::util::ExitCode;
+
+use lib::util::EyreExitOr;
 
 use crate::{CommitStatus, CreateStatus, Forge, SubmitOptions};
 
@@ -28,7 +29,7 @@ impl Forge for GithubForge<'_> {
     fn query_status(
         &mut self,
         _commit_set: CommitSet,
-    ) -> eyre::Result<Result<HashMap<NonZeroOid, CommitStatus>, ExitCode>> {
+    ) -> EyreExitOr<HashMap<NonZeroOid, CommitStatus>> {
         unimplemented!("stub")
     }
 
@@ -36,7 +37,7 @@ impl Forge for GithubForge<'_> {
         &mut self,
         _commits: HashMap<NonZeroOid, CommitStatus>,
         _options: &SubmitOptions,
-    ) -> eyre::Result<Result<HashMap<NonZeroOid, CreateStatus>, ExitCode>> {
+    ) -> EyreExitOr<HashMap<NonZeroOid, CreateStatus>> {
         unimplemented!("stub")
     }
 
@@ -44,7 +45,7 @@ impl Forge for GithubForge<'_> {
         &mut self,
         _commits: HashMap<NonZeroOid, CommitStatus>,
         _options: &SubmitOptions,
-    ) -> eyre::Result<Result<(), ExitCode>> {
+    ) -> EyreExitOr<()> {
         unimplemented!("stub")
     }
 }

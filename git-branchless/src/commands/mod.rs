@@ -10,16 +10,16 @@ mod sync;
 mod wrap;
 
 use git_branchless_invoke::CommandContext;
-use lib::core::gc;
 use lib::core::rewrite::MergeConflictRemediation;
-use lib::util::ExitCode;
+
+use lib::{core::gc, util::EyreExitOr};
 
 use git_branchless_opts::{
     rewrite_args, Command, Opts, ResolveRevsetOptions, SnapshotSubcommand, WrappedCommand,
 };
 use lib::git::GitRunInfo;
 
-fn command_main(ctx: CommandContext, opts: Opts) -> eyre::Result<ExitCode> {
+fn command_main(ctx: CommandContext, opts: Opts) -> EyreExitOr<()> {
     let CommandContext {
         effects,
         git_run_info,
@@ -49,7 +49,7 @@ fn command_main(ctx: CommandContext, opts: Opts) -> eyre::Result<ExitCode> {
 
         Command::Gc => {
             gc::gc(&effects)?;
-            ExitCode(0)
+            Ok(())
         }
 
         Command::Hook(args) => git_branchless_hook::command_main(ctx, args)?,

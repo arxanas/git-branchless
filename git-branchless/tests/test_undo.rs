@@ -58,7 +58,7 @@ fn run_undo_events(git: &Git, event_cursor: EventCursor) -> eyre::Result<(isize,
         env: git.get_base_env(0).into_iter().collect(),
     };
 
-    let ExitCode(exit_code) = undo_events(
+    let exit_code = match undo_events(
         &mut in_,
         &Effects::new_from_buffer_for_test(glyphs, &stdout, &stderr),
         &repo,
@@ -66,7 +66,10 @@ fn run_undo_events(git: &Git, event_cursor: EventCursor) -> eyre::Result<(isize,
         &mut event_log_db,
         &event_replayer,
         event_cursor,
-    )?;
+    )? {
+        Ok(()) => 0,
+        Err(ExitCode(exit_code)) => exit_code,
+    };
 
     let stdout = {
         let mut buf = stdout.lock().unwrap();
