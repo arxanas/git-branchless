@@ -44,7 +44,7 @@ impl Forge for GithubForge<'_> {
         &mut self,
         _commits: HashMap<NonZeroOid, CommitStatus>,
         _options: &SubmitOptions,
-    ) -> eyre::Result<ExitCode> {
+    ) -> eyre::Result<Result<(), ExitCode>> {
         unimplemented!("stub")
     }
 }
