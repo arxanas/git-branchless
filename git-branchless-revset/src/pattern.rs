@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex};
 use chrono::{Local, NaiveDateTime};
 use chrono_english::{parse_date_string, parse_duration, DateError, Dialect, Interval};
 use chronoutil::RelativeDuration;
-use eden_dag::nameset::hints::Hints;
+use eden_dag::nameset::hints::{Flags, Hints};
 use futures::StreamExt;
 use lib::core::dag::{CommitSet, CommitVertex};
 use lib::core::effects::{Effects, OperationType};
@@ -237,7 +237,11 @@ pub(super) fn make_pattern_matcher_set(
                 Box::pin(async move { matcher.contains(name).await })
             })
         },
-        Hints::default(),
+        {
+            let hints = Hints::default();
+            hints.add_flags(Flags::FILTER);
+            hints
+        },
     ))
 }
 
