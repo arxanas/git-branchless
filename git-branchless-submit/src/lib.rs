@@ -53,7 +53,12 @@ lazy_static! {
 /// The status of a commit, indicating whether it needs to be updated remotely.
 #[derive(Clone, Debug)]
 pub enum SubmitStatus {
-    /// The commit exists locally but has not been pushed remotely.
+    /// The commit exists locally and there is no intention to push it to the
+    /// remote.
+    Local,
+
+    /// The commit exists locally and will eventually be pushed to the remote,
+    /// but it has not been pushed yet.
     Unsubmitted,
 
     /// It could not be determined whether the remote commit exists.
@@ -270,14 +275,24 @@ fn submit(
     let statuses = try_exit_code!(forge.query_status(commit_set)?);
     debug!(?statuses, "Commit statuses");
 
-    let (unsubmitted_commits, commits_to_update, commits_to_skip): (
+    let (_local_commits, unsubmitted_commits, commits_to_update, commits_to_skip): (
+        HashMap<NonZeroOid, CommitStatus>,
         HashMap<NonZeroOid, CommitStatus>,
         HashMap<NonZeroOid, CommitStatus>,
         HashMap<NonZeroOid, CommitStatus>,
     ) = statuses.into_iter().fold(Default::default(), |acc, elem| {
-        let (mut unsubmitted, mut to_update, mut to_skip) = acc;
+        let (mut local, mut unsubmitted, mut to_update, mut to_skip) = acc;
         let (commit_oid, commit_status) = elem;
         match commit_status {
+            CommitStatus {
+                submit_status: SubmitStatus::Local,
+                remote_name: _,
+                local_branch_name: _,
+                remote_branch_name: _,
+            } => {
+                local.insert(commit_oid, commit_status);
+            }
+
             CommitStatus {
                 submit_status: SubmitStatus::Unsubmitted,
                 remote_name: _,
@@ -319,7 +334,7 @@ fn submit(
                 remote_branch_name: _,
             } => {}
         }
-        (unsubmitted, to_update, to_skip)
+        (local, unsubmitted, to_update, to_skip)
     });
 
     let (created_branches, uncreated_branches): (BTreeSet<String>, BTreeSet<String>) = {
