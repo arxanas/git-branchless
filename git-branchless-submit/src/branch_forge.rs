@@ -13,7 +13,7 @@ use lib::git::{
 };
 use lib::try_exit_code;
 use lib::util::{ExitCode, EyreExitOr};
-use tracing::warn;
+use tracing::{instrument, warn};
 
 use crate::{CommitStatus, CreateStatus, Forge, SubmitOptions, SubmitStatus};
 
@@ -28,6 +28,7 @@ pub struct BranchForge<'a> {
 }
 
 impl Forge for BranchForge<'_> {
+    #[instrument]
     fn query_status(
         &mut self,
         commit_set: CommitSet,
@@ -185,6 +186,7 @@ impl Forge for BranchForge<'_> {
         Ok(Ok(commit_statuses))
     }
 
+    #[instrument]
     fn create(
         &mut self,
         commits: HashMap<NonZeroOid, CommitStatus>,
@@ -203,7 +205,12 @@ impl Forge for BranchForge<'_> {
             })
             .sorted()
             .collect_vec();
+        dbg!(&commits, &unsubmitted_branch_names);
 
+        // FIXME: in principle, it's possible for a branch to have been assigned
+        // a remote without having been pushed and having created a
+        // corresponding remote branch. In those cases, we should use the
+        // branch's associated remote.
         let push_remote: String = match self.repo.get_default_push_remote()? {
             Some(push_remote) => push_remote,
             None => {
@@ -258,6 +265,7 @@ These remotes are available: {}",
         }
     }
 
+    #[instrument]
     fn update(
         &mut self,
         commits: HashMap<NonZeroOid, CommitStatus>,
