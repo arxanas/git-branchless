@@ -68,7 +68,7 @@ scm-record = { version = "0.1.0", path = "../scm-record" }
 serde = { version = "1.0.158", features = ["derive"] }
 tempfile = "3.4.0"
 textwrap = "0.16.0"
-thiserror = "1.0.39"
+thiserror = "1.0.40"
 tracing = "0.1.37"
 tracing-chrome = "0.6.0"
 tracing-error = "0.2.0"
