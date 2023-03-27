@@ -23,7 +23,7 @@ rayon = "1.5.3"
 regex = "1.7.1"
 serde = { version = "1.0.158", features = ["derive"] }
 serde_json = "1.0.93"
-thiserror = "1.0.38"
+thiserror = "1.0.40"
 tracing = "0.1.37"
 
 [dev-dependencies]
