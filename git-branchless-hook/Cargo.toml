@@ -15,7 +15,7 @@ itertools = "0.10.5"
 tracing = "0.1.37"
 lazy_static = "1.4.0"
 console = "0.15.3"
-regex = "1.7.0"
+regex = "1.7.3"
 git-branchless-invoke = { version = "0.7.0", path = "../git-branchless-invoke" }
 git-branchless-opts = { version = "0.7.0", path = "../git-branchless-opts" }
 

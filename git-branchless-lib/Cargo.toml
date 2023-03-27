@@ -62,7 +62,7 @@ itertools = "0.10.3"
 lazy_static = "1.4.0"
 once_cell = "1.17.1"
 rayon = "1.6.1"
-regex = "1.7.1"
+regex = "1.7.3"
 rusqlite = { version = "0.28.0", features = ["bundled"] }
 scm-record = { version = "0.1.0", path = "../scm-record" }
 serde = { version = "1.0.158", features = ["derive"] }
