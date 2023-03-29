@@ -144,31 +144,31 @@ pub fn check_out_commit(
         if let Some(target) = &target {
             try_exit_code!(git_run_info.run(effects, Some(event_tx_id), &["reset", target])?);
         }
-    }
-
-    let checkout_args = {
-        let mut args = vec![OsStr::new("checkout")];
-        if let Some(target) = &target {
-            args.push(OsStr::new(target.as_str()));
-        }
-        args.extend(additional_args.iter().map(OsStr::new));
-        args
-    };
-    match git_run_info.run(effects, Some(event_tx_id), checkout_args.as_slice())? {
-        Ok(()) => {}
-        Err(exit_code) => {
-            writeln!(
-                effects.get_output_stream(),
-                "{}",
-                effects.get_glyphs().render(StyledString::styled(
-                    match target {
-                        Some(target) => format!("Failed to check out commit: {target}"),
-                        None => "Failed to check out commit".to_string(),
-                    },
-                    BaseColor::Red.light()
-                ))?
-            )?;
-            return Ok(Err(exit_code));
+    } else {
+        let checkout_args = {
+            let mut args = vec![OsStr::new("checkout")];
+            if let Some(target) = &target {
+                args.push(OsStr::new(target.as_str()));
+            }
+            args.extend(additional_args.iter().map(OsStr::new));
+            args
+        };
+        match git_run_info.run(effects, Some(event_tx_id), checkout_args.as_slice())? {
+            Ok(()) => {}
+            Err(exit_code) => {
+                writeln!(
+                    effects.get_output_stream(),
+                    "{}",
+                    effects.get_glyphs().render(StyledString::styled(
+                        match target {
+                            Some(target) => format!("Failed to check out commit: {target}"),
+                            None => "Failed to check out commit".to_string(),
+                        },
+                        BaseColor::Red.light()
+                    ))?
+                )?;
+                return Ok(Err(exit_code));
+            }
         }
     }
 
