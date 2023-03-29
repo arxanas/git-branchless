@@ -4,6 +4,9 @@ use git_branchless_testing::{make_git, remove_rebase_lines, trim_lines, GitRunOp
 fn test_amend_with_children() -> eyre::Result<()> {
     let git = make_git()?;
 
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
     if !git.supports_committer_date_is_author_date()? {
         return Ok(());
     }
@@ -18,7 +21,14 @@ fn test_amend_with_children() -> eyre::Result<()> {
     git.write_file_txt("test2", "updated contents")?;
 
     {
-        let (stdout, _stderr) = git.branchless("amend", &[])?;
+        let (stdout, stderr) = git.branchless("amend", &[])?;
+        insta::assert_snapshot!(stderr, @r###"
+        branchless: creating working copy snapshot
+        branchless: processing 1 update: ref HEAD
+        branchless: processing 1 update: ref HEAD
+        HEAD is now at 7ac317b create test2.txt
+        branchless: processing checkout
+        "###);
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> reset 7ac317b9d1dd1bbdf46e8ee692b9b9e280f28a50
         branchless: running command: <git-executable> checkout 7ac317b9d1dd1bbdf46e8ee692b9b9e280f28a50
@@ -537,8 +547,9 @@ fn test_amend_undo() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.branchless("amend", &[])?;
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> reset 94b10776514a5a182d920265fc3c42f2147b1201
-        branchless: running command: <git-executable> checkout 94b10776514a5a182d920265fc3c42f2147b1201 -B foo
+        branchless: processing 1 update: branch foo
+        branchless: running command: <git-executable> reset foo
+        branchless: running command: <git-executable> checkout foo
         Amended with 1 uncommitted change.
         "###);
     }
@@ -567,15 +578,15 @@ fn test_amend_undo() -> eyre::Result<()> {
         Will apply these actions:
         1. Check out from 94b1077 create file1.txt
                        to 94b1077 create file1.txt
-        2. Delete branch foo at 94b1077 create file1.txt
-
-        3. Move branch foo from 94b1077 create file1.txt
+        2. Move branch foo from 94b1077 create file1.txt
+                             to 94b1077 create file1.txt
+        3. Check out from 94b1077 create file1.txt
+                       to 94b1077 create file1.txt
+        4. Restore snapshot for branch foo
+                    pointing to 94b1077 create file1.txt
+                backed up using b4371f8 branchless: automated working copy snapshot
+        5. Move branch foo from 94b1077 create file1.txt
                              to c0bdfb5 create file1.txt
-        4. Check out from 94b1077 create file1.txt
-                       to c0bdfb5 create file1.txt
-        5. Restore snapshot for branch foo
-                    pointing to c0bdfb5 create file1.txt
-                backed up using a293e0b branchless: automated working copy snapshot
         6. Rewrite commit 94b1077 create file1.txt
                       as c0bdfb5 create file1.txt
         7. Restore snapshot for branch foo
@@ -1022,8 +1033,9 @@ fn test_amend_no_detach_branch() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.branchless("amend", &[])?;
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> reset 7143ebcc44407b0553d9f50eaf29e0e4f0f0d6c0
-        branchless: running command: <git-executable> checkout 7143ebcc44407b0553d9f50eaf29e0e4f0f0d6c0 -B foo
+        branchless: processing 1 update: branch foo
+        branchless: running command: <git-executable> reset foo
+        branchless: running command: <git-executable> checkout foo
         Amended with 1 uncommitted change.
         "###);
     }
@@ -1107,6 +1119,42 @@ fn test_amend_merge() -> eyre::Result<()> {
         @ 3d8543b create test1.txt
         |
         o 47a1f4a create test2.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_amend_move_detached_branch() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    git.detach_head()?;
+    git.commit_file("test1", 1)?;
+    git.run(&["branch", "foo"])?;
+
+    git.write_file_txt("test1", "new contents\n")?;
+    {
+        let (stdout, _stderr) = git.branchless("amend", &[])?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: processing 1 update: branch foo
+        branchless: running command: <git-executable> reset 7143ebcc44407b0553d9f50eaf29e0e4f0f0d6c0
+        branchless: running command: <git-executable> checkout 7143ebcc44407b0553d9f50eaf29e0e4f0f0d6c0
+        Amended with 1 uncommitted change.
+        "###);
+    }
+
+    {
+        let stdout = git.smartlog()?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        @ 7143ebc (foo) create test1.txt
         "###);
     }
 

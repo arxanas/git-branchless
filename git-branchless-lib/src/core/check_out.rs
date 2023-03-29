@@ -134,7 +134,7 @@ pub fn check_out_commit(
         create_snapshot(effects, git_run_info, repo, event_log_db, event_tx_id)?;
     }
 
-    let target = if get_auto_switch_branches(repo)? {
+    let target = if get_auto_switch_branches(repo)? && !reset {
         maybe_get_branch_name(target, oid, repo)?
     } else {
         target

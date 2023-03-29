@@ -4,7 +4,8 @@
 //! that are already tracked in the repo. Following the amend,
 //! the command performs a restack.
 
-use std::ffi::OsString;
+use std::collections::HashMap;
+
 use std::fmt::Write;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -22,13 +23,10 @@ use lib::core::formatting::Pluralize;
 use lib::core::gc::mark_commit_reachable;
 use lib::core::repo_ext::RepoExt;
 use lib::core::rewrite::{
-    execute_rebase_plan, BuildRebasePlanOptions, ExecuteRebasePlanOptions, ExecuteRebasePlanResult,
-    RebasePlanBuilder, RebasePlanPermissions, RepoResource,
+    execute_rebase_plan, move_branches, BuildRebasePlanOptions, ExecuteRebasePlanOptions,
+    ExecuteRebasePlanResult, RebasePlanBuilder, RebasePlanPermissions, RepoResource,
 };
-use lib::git::{
-    AmendFastOptions, CategorizedReferenceName, GitRunInfo, MaybeZeroOid, Repo,
-    ResolvedReferenceInfo,
-};
+use lib::git::{AmendFastOptions, GitRunInfo, MaybeZeroOid, Repo, ResolvedReferenceInfo};
 use lib::try_exit_code;
 use lib::util::{ExitCode, EyreExitOr};
 use rayon::ThreadPoolBuilder;
@@ -164,30 +162,37 @@ pub fn amend(
         None,
         Some(&amended_tree),
     )?;
-    mark_commit_reachable(&repo, amended_commit_oid)
-        .wrap_err("Marking commit as reachable for GC purposes.")?;
-    event_log_db.add_events(vec![Event::RewriteEvent {
-        timestamp: now.duration_since(UNIX_EPOCH)?.as_secs_f64(),
-        event_tx_id,
-        old_commit_oid: MaybeZeroOid::NonZero(head_oid),
-        new_commit_oid: MaybeZeroOid::NonZero(amended_commit_oid),
-    }])?;
-    dag.sync_from_oids(
-        effects,
-        &repo,
-        CommitSet::empty(),
-        CommitSet::from(amended_commit_oid),
-    )?;
+
+    // Switch to the new commit and move any branches. This is kind of a hack:
+    // ideally, we would use the same rebase plan machinery to accomplish this
+    // and also rebase any descendants. However, this operation should always
+    // succeed, and we want to execute it regardless of whether the rest of the
+    // rebase would succeed without conflicts, so instead we (re)write a bunch
+    // of logic to switch commits and move branches.
     {
-        let additional_args = match &head_info.reference_name {
-            Some(name) => match CategorizedReferenceName::new(name) {
-                name @ CategorizedReferenceName::LocalBranch { .. } => {
-                    vec![OsString::from("-B"), OsString::from(name.remove_prefix()?)]
-                }
-                CategorizedReferenceName::RemoteBranch { .. }
-                | CategorizedReferenceName::OtherRef { .. } => Default::default(),
-            },
-            None => Default::default(),
+        mark_commit_reachable(&repo, amended_commit_oid)
+            .wrap_err("Marking commit as reachable for GC purposes.")?;
+        event_log_db.add_events(vec![Event::RewriteEvent {
+            timestamp: now.duration_since(UNIX_EPOCH)?.as_secs_f64(),
+            event_tx_id,
+            old_commit_oid: MaybeZeroOid::NonZero(head_oid),
+            new_commit_oid: MaybeZeroOid::NonZero(amended_commit_oid),
+        }])?;
+        dag.sync_from_oids(
+            effects,
+            &repo,
+            CommitSet::empty(),
+            CommitSet::from(amended_commit_oid),
+        )?;
+        move_branches(effects, git_run_info, &repo, event_tx_id, &{
+            let mut result = HashMap::new();
+            result.insert(head_oid, MaybeZeroOid::NonZero(amended_commit_oid));
+            result
+        })?;
+
+        let target = match &head_info.reference_name {
+            Some(name) => CheckoutTarget::Reference(name.clone()),
+            None => CheckoutTarget::Oid(amended_commit_oid),
         };
         try_exit_code!(check_out_commit(
             effects,
@@ -195,9 +200,9 @@ pub fn amend(
             &repo,
             &event_log_db,
             event_tx_id,
-            Some(CheckoutTarget::Oid(amended_commit_oid)),
+            Some(target),
             &CheckOutCommitOptions {
-                additional_args,
+                additional_args: Default::default(),
                 reset: true,
                 render_smartlog: false,
             },
