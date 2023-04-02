@@ -55,11 +55,11 @@ fn test_select_scroll_into_view() -> eyre::Result<()> {
     "    [ ] + after text 2                                                          "
     "###);
     insta::assert_display_snapshot!(scroll_to_second_file, @r###"
+    "(×) baz                                                                         "
+    "        1 Some leading text 1                                                   "
+    "        2 Some leading text 2                                                   "
+    "  [×] Section 1/1                                                               "
     "    [×] - before text 1                                                         "
-    "    [×] - before text 2                                                         "
-    "    [×] + after text 1                                                          "
-    "    [×] + after text 2                                                          "
-    "        5 this is some trailing text                                            "
     "###);
     Ok(())
 }
