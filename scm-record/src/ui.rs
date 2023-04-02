@@ -961,19 +961,30 @@ impl<'a> Recorder<'a> {
         selection_key: SelectionKey,
     ) -> isize {
         // Idea: scroll the entire component into the viewport, not just the
-        // first line, is possible. If the entire component is smaller than
+        // first line, if possible. If the entire component is smaller than
         // the viewport, then we scroll only enough so that the entire
         // component becomes visible, i.e. align the component's bottom edge
         // with the viewport's bottom edge. Otherwise, we scroll such that
         // the component's top edge is aligned with the viewport's top edge.
+        //
+        // FIXME: if we scroll up from below, we would want to align the top
+        // edge of the component, not the bottom edge. Thus, we should also
+        // accept the previous `SelectionKey` and use that when making the
+        // decision of where to scroll.
         let term_height = term_height.unwrap_isize();
         let rect = self.selection_rect(drawn_rects, selection_key);
-        let rect_bottom_y = rect.y + rect.height.unwrap_isize();
+        let rect_height = rect.height.unwrap_isize();
+        let rect_bottom_y = rect.y + rect_height;
         if self.scroll_offset_y <= rect.y && rect_bottom_y < self.scroll_offset_y + term_height {
             // Component is completely within the viewport, no need to scroll.
             self.scroll_offset_y
-        } else if rect.y < self.scroll_offset_y {
+        } else if (
+            // Component doesn't fit in the viewport; just render the top.
+            rect_height >= term_height
+        ) || (
             // Component is at least partially above the viewport.
+            rect.y < self.scroll_offset_y
+        ) {
             rect.y
         } else {
             // Component is at least partially below the viewport. Want to satisfy:
