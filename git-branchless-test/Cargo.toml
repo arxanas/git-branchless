@@ -19,7 +19,7 @@ fslock = "0.2.1"
 git-branchless-invoke = { version = "0.7.0", path = "../git-branchless-invoke" }
 git-branchless-opts = { version = "0.7.0", path = "../git-branchless-opts" }
 git-branchless-revset = { version = "0.7.0", path = "../git-branchless-revset" }
-indexmap = "1.9.2"
+indexmap = "1.9.3"
 itertools = "0.10.5"
 lazy_static = "1.4.0"
 lib = { package = "git-branchless-lib", version = "0.7.0", path = "../git-branchless-lib" }
