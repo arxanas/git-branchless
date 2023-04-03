@@ -21,4 +21,4 @@ git-branchless-opts = { version = "0.7.0", path = "../git-branchless-opts" }
 
 [dev-dependencies]
 git-branchless-testing = { version = "0.7.0", path = "../git-branchless-testing" }
-insta = "1.28.0"
+insta = "1.29.0"
