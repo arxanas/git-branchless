@@ -583,7 +583,7 @@ impl<'a> Recorder<'a> {
                                     SelectionKey::None | SelectionKey::File(_) => None,
                                     SelectionKey::Section(selected_section_key) => {
                                         if selected_section_key == section_key {
-                                            Some(SectionSelection::Header)
+                                            Some(SectionSelection::SectionHeader)
                                         } else {
                                             None
                                         }
@@ -598,7 +598,7 @@ impl<'a> Recorder<'a> {
                                             section_idx,
                                         };
                                         if selected_section_key == section_key {
-                                            Some(SectionSelection::Line(line_idx))
+                                            Some(SectionSelection::ChangedLine(line_idx))
                                         } else {
                                             None
                                         }
@@ -800,11 +800,6 @@ impl<'a> Recorder<'a> {
                         result.push(SelectionKey::Section(SectionKey {
                             file_idx,
                             section_idx,
-                        }));
-                        result.push(SelectionKey::Line(LineKey {
-                            file_idx,
-                            section_idx,
-                            line_idx: 0,
                         }));
                     }
                 }
@@ -1398,8 +1393,8 @@ impl Component for FileView<'_> {
 
 #[derive(Clone, Debug)]
 enum SectionSelection {
-    Header,
-    Line(usize),
+    SectionHeader,
+    ChangedLine(usize),
 }
 
 #[derive(Clone, Debug)]
@@ -1416,13 +1411,11 @@ struct SectionView<'a> {
 
 impl SectionView<'_> {
     pub fn height(&self) -> usize {
-        let header_height = if self.section.is_editable() { 1 } else { 0 };
-        header_height
-            + match self.section {
-                Section::Unchanged { lines } => lines.len(),
-                Section::Changed { lines } => lines.len(),
-                Section::FileMode { .. } => 1,
-            }
+        match self.section {
+            Section::Unchanged { lines } => lines.len(),
+            Section::Changed { lines } => lines.len() + 1,
+            Section::FileMode { .. } => 1,
+        }
     }
 }
 
@@ -1444,25 +1437,6 @@ impl Component for SectionView<'_> {
             section,
             line_start_num,
         } = self;
-
-        let y = if !section.is_editable() {
-            y
-        } else {
-            let tristate_rect = viewport.draw_component(x, y, tristate_box);
-            viewport.draw_span(
-                x + tristate_rect.width.unwrap_isize() + 1,
-                y,
-                &Span::styled(
-                    format!("Section {section_num}/{total_num_sections}"),
-                    Style::default(),
-                ),
-            );
-            match selection {
-                Some(SectionSelection::Header) => highlight_line(viewport, y),
-                Some(SectionSelection::Line(_)) | None => {}
-            }
-            y + 1
-        };
 
         let SectionKey {
             file_idx,
@@ -1535,6 +1509,23 @@ impl Component for SectionView<'_> {
             }
 
             Section::Changed { lines } => {
+                // Draw section header.
+                let tristate_rect = viewport.draw_component(x, y, tristate_box);
+                viewport.draw_span(
+                    x + tristate_rect.width.unwrap_isize() + 1,
+                    y,
+                    &Span::styled(
+                        format!("Section {section_num}/{total_num_sections}"),
+                        Style::default(),
+                    ),
+                );
+                match selection {
+                    Some(SectionSelection::SectionHeader) => highlight_line(viewport, y),
+                    Some(SectionSelection::ChangedLine(_)) | None => {}
+                }
+                let y = y + 1;
+
+                // Draw changed lines.
                 for (line_idx, line) in lines.iter().enumerate() {
                     let SectionChangedLine {
                         is_toggled,
@@ -1542,10 +1533,10 @@ impl Component for SectionView<'_> {
                         line,
                     } = line;
                     let is_focused = match selection {
-                        Some(SectionSelection::Line(selected_line_idx)) => {
+                        Some(SectionSelection::ChangedLine(selected_line_idx)) => {
                             line_idx == *selected_line_idx
                         }
-                        Some(SectionSelection::Header) | None => false,
+                        Some(SectionSelection::SectionHeader) | None => false,
                     };
                     let tristate_box = TristateBox {
                         use_unicode: *use_unicode,
@@ -1573,16 +1564,28 @@ impl Component for SectionView<'_> {
                 }
             }
 
-            Section::FileMode { .. } => {
-                let line_view = SectionLineView {
-                    line_key: LineKey {
-                        file_idx,
-                        section_idx,
-                        line_idx: 0,
-                    },
-                    inner: SectionLineViewInner::FileMode,
+            Section::FileMode {
+                is_toggled,
+                before,
+                after,
+            } => {
+                let is_focused = match selection {
+                    Some(SectionSelection::SectionHeader) => true,
+                    Some(SectionSelection::ChangedLine(_)) | None => false,
                 };
-                viewport.draw_component(x + 2, y, &line_view);
+                let tristate_box = TristateBox {
+                    use_unicode: *use_unicode,
+                    id: ComponentId::TristateBox,
+                    tristate: Tristate::from(*is_toggled),
+                    is_focused,
+                };
+                let tristate_rect = viewport.draw_component(x, y, &tristate_box);
+                let x = x + tristate_rect.width.unwrap_isize() + 1;
+                let text = format!("File mode changed from {before:o} to {after:o}");
+                viewport.draw_span(x, y, &Span::styled(text, Style::default().fg(Color::Blue)));
+                if is_focused {
+                    highlight_line(viewport, y);
+                }
             }
         }
     }
@@ -1599,7 +1602,6 @@ enum SectionLineViewInner<'a> {
         change_type: ChangeType,
         line: &'a str,
     },
-    FileMode,
 }
 
 #[derive(Clone, Debug)]
@@ -1649,8 +1651,6 @@ impl Component for SectionLineView<'_> {
                 let x = x + change_type_text.width().unwrap_isize();
                 viewport.draw_span(x, y, &Span::styled(*line, style));
             }
-
-            SectionLineViewInner::FileMode => unimplemented!("rendering file mode section"),
         }
     }
 }
