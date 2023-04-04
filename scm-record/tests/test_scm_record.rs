@@ -442,3 +442,101 @@ fn test_enter_next() -> eyre::Result<()> {
     "###);
     Ok(())
 }
+
+#[test]
+fn test_file_mode_change() -> eyre::Result<()> {
+    let state = RecordState {
+        files: vec![
+            File {
+                path: Cow::Borrowed(Path::new("foo")),
+                file_mode: None,
+                sections: vec![],
+            },
+            File {
+                path: Cow::Borrowed(Path::new("bar")),
+                file_mode: None,
+                sections: vec![Section::FileMode {
+                    is_toggled: false,
+                    before: 0o100644,
+                    after: 0o100755,
+                }],
+            },
+            File {
+                path: Cow::Borrowed(Path::new("qux")),
+                file_mode: None,
+                sections: vec![],
+            },
+        ],
+    };
+
+    let before_toggle = TestingScreenshot::default();
+    let after_toggle = TestingScreenshot::default();
+    let expect_no_crash = TestingScreenshot::default();
+    let event_source = EventSource::testing(
+        80,
+        6,
+        [
+            before_toggle.event(),
+            Event::FocusNext,
+            Event::FocusNext,
+            Event::ToggleItem,
+            after_toggle.event(),
+            Event::FocusNext,
+            expect_no_crash.event(),
+            Event::QuitAccept,
+        ],
+    );
+    let recorder = Recorder::new(state, event_source);
+    insta::assert_debug_snapshot!(recorder.run()?, @r###"
+    RecordState {
+        files: [
+            File {
+                path: "foo",
+                file_mode: None,
+                sections: [],
+            },
+            File {
+                path: "bar",
+                file_mode: None,
+                sections: [
+                    FileMode {
+                        is_toggled: true,
+                        before: 33188,
+                        after: 33261,
+                    },
+                ],
+            },
+            File {
+                path: "qux",
+                file_mode: None,
+                sections: [],
+            },
+        ],
+    }
+    "###);
+    insta::assert_display_snapshot!(before_toggle, @r###"
+    "( ) foo                                                                         "
+    "[ ] bar                                                                         "
+    "  [ ] File mode changed from 100644 to 100755                                   "
+    "[ ] qux                                                                         "
+    "                                                                                "
+    "                                                                                "
+    "###);
+    insta::assert_display_snapshot!(after_toggle, @r###"
+    "[ ] foo                                                                         "
+    "[×] bar                                                                         "
+    "  (×) File mode changed from 100644 to 100755                                   "
+    "[ ] qux                                                                         "
+    "                                                                                "
+    "                                                                                "
+    "###);
+    insta::assert_display_snapshot!(expect_no_crash, @r###"
+    "[ ] foo                                                                         "
+    "[×] bar                                                                         "
+    "  [×] File mode changed from 100644 to 100755                                   "
+    "( ) qux                                                                         "
+    "                                                                                "
+    "                                                                                "
+    "###);
+    Ok(())
+}

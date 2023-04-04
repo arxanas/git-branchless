@@ -38,7 +38,7 @@ use lib::try_exit_code;
 use lib::util::{ExitCode, EyreExitOr};
 use rayon::ThreadPoolBuilder;
 use scm_record::{EventSource, RecordError, RecordState, Recorder};
-use tracing::instrument;
+use tracing::{instrument, warn};
 
 /// Commit changes in the working copy.
 #[instrument]
@@ -267,13 +267,38 @@ fn record_interactive(
     let update_index_script: Vec<UpdateIndexCommand> = result
         .into_iter()
         .map(|file| -> eyre::Result<UpdateIndexCommand> {
+            let mode = {
+                let default_mode = FileMode::Blob;
+                match file.get_file_mode() {
+                    None => {
+                        warn!(
+                            ?file,
+                            ?default_mode,
+                            "No file mode was set for file, using default"
+                        );
+                        default_mode
+                    }
+                    Some(mode) => match i32::try_from(mode) {
+                        Ok(mode) => FileMode::from(mode),
+                        Err(err) => {
+                            warn!(
+                                ?mode,
+                                ?default_mode,
+                                ?err,
+                                "File mode did not fit into i32, using default"
+                            );
+                            default_mode
+                        }
+                    },
+                }
+            };
+
             let (selected, _unselected) = file.get_selected_contents();
             let oid = repo.create_blob_from_contents(selected.as_bytes())?;
             let command = UpdateIndexCommand::Update {
                 path: file.path.clone().into_owned(),
                 stage: Stage::Stage0,
-                // TODO: use `FileMode::BlobExecutable` when appropriate.
-                mode: FileMode::Blob,
+                mode,
                 oid,
             };
             Ok(command)

@@ -155,13 +155,7 @@ impl File<'_> {
                         }
                     }
                 }
-                Section::FileMode {
-                    is_toggled: _,
-                    before: _,
-                    after: _,
-                } => {
-                    unimplemented!("get_selected_contents for Section::FileMode");
-                }
+                Section::FileMode { .. } => {}
             }
         }
         (acc_selected, acc_unselected)
