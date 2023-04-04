@@ -793,9 +793,15 @@ pub mod pty {
     };
 
     use eyre::eyre;
-    use portable_pty::{native_pty_system, CommandBuilder, PtySize};
+    use portable_pty::{native_pty_system, CommandBuilder, ExitStatus, PtySize};
 
     use super::Git;
+
+    /// Terminal escape code corresponding to pressing the up arrow key.
+    pub const UP_ARROW: &str = "\x1b[A";
+
+    /// Terminal escape code corresponding to pressing the down arrow key.
+    pub const DOWN_ARROW: &str = "\x1b[B";
 
     /// An action to take as part of the PTY test script.
     pub enum PtyAction<'a> {
@@ -813,7 +819,7 @@ pub mod pty {
         branchless_subcommand: &str,
         args: &[&str],
         inputs: &[PtyAction],
-    ) -> eyre::Result<()> {
+    ) -> eyre::Result<ExitStatus> {
         // Use the native pty implementation for the system
         let pty_system = native_pty_system();
         let pty_size = PtySize::default();
@@ -922,7 +928,7 @@ Screen contents:
                 String::from_utf8(buffer).unwrap()
             }
         });
-        child.wait()?;
+        let exit_status = child.wait()?;
 
         let _ = read_remainder_of_pty_output_thread;
         // Useful for debugging, but seems to deadlock on some tests:
@@ -933,6 +939,6 @@ Screen contents:
         //     console::strip_ansi_codes(&remainder_of_pty_output)
         // );
 
-        Ok(())
+        Ok(exit_status)
     }
 }

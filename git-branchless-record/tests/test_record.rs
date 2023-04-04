@@ -1,4 +1,4 @@
-use git_branchless_testing::pty::{run_in_pty, PtyAction};
+use git_branchless_testing::pty::{run_in_pty, PtyAction, DOWN_ARROW};
 use git_branchless_testing::{make_git, GitInitOptions, GitRunOptions};
 
 #[test]
@@ -460,6 +460,129 @@ fn test_record_insert_obsolete_siblings() -> eyre::Result<()> {
         @ 1b3a1aa new commit
         |
         o 9253fc4 updated message
+        "###);
+    }
+
+    Ok(())
+}
+
+#[cfg(unix)] // file modes behave differently on Windows
+#[test]
+fn test_record_file_mode_change() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+
+    git.detach_head()?;
+    git.commit_file("test1", 1)?;
+    git.run(&["update-index", "--chmod=+x", "test1.txt"])?;
+    git.branchless("record", &["-m", "update file mode"])?;
+    {
+        let (stdout, _stderr) = git.run(&["show"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        commit a0568bf022a0211551dd8e4d3b9db40288633e47
+        Author: Testy McTestface <test@example.com>
+        Date:   Thu Oct 29 12:34:56 2020 +0000
+
+            update file mode
+
+        diff --git a/test1.txt b/test1.txt
+        old mode 100644
+        new mode 100755
+        "###);
+    }
+
+    // The file mode change was only to the index, so we don't need to revert the
+    // file mode on disk. It will already be non-executable on disk.
+    {
+        let (stdout, _stderr) = git.run(&["status"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        HEAD detached from f777ecc
+        Changes not staged for commit:
+          (use "git add <file>..." to update what will be committed)
+          (use "git restore <file>..." to discard changes in working directory)
+        	modified:   test1.txt
+
+        no changes added to commit (use "git add" and/or "git commit -a")
+        "###);
+    }
+
+    git.write_file_txt("test1", "new contents\n")?;
+    let exit_status = run_in_pty(
+        &git,
+        "record",
+        &["-i", "-m", "update contents only"],
+        &[
+            PtyAction::WaitUntilContains("test1.txt"),
+            PtyAction::Write(DOWN_ARROW), // move to file mode
+            PtyAction::Write(DOWN_ARROW), // move to changed contents
+            PtyAction::Write(" "),
+            PtyAction::Write("c"),
+        ],
+    )?;
+    assert!(exit_status.success());
+
+    {
+        let (stdout, _stderr) = git.run(&["show"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        commit 6d2873ff3352132d510a9f98a169105529b31974
+        Author: Testy McTestface <test@example.com>
+        Date:   Thu Oct 29 12:34:56 2020 +0000
+
+            update contents only
+
+        diff --git a/test1.txt b/test1.txt
+        index 7432a8f..014fd71 100755
+        --- a/test1.txt
+        +++ b/test1.txt
+        @@ -1 +1 @@
+        -test1 contents
+        +new contents
+        "###);
+    }
+    {
+        let (stdout, _stderr) = git.run(&["status"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        HEAD detached from f777ecc
+        Changes not staged for commit:
+          (use "git add <file>..." to update what will be committed)
+          (use "git restore <file>..." to discard changes in working directory)
+        	modified:   test1.txt
+
+        no changes added to commit (use "git add" and/or "git commit -a")
+        "###);
+    }
+
+    let exit_status = run_in_pty(
+        &git,
+        "record",
+        &["-i", "-m", "revert file mode"],
+        &[
+            PtyAction::WaitUntilContains("test1.txt"),
+            PtyAction::Write(" "),
+            PtyAction::Write("c"),
+        ],
+    )?;
+    assert!(exit_status.success());
+    {
+        let (stdout, _stderr) = git.run(&["show"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        commit dae4fe3e4c7defeba5605f9ae9b018dce8993a8a
+        Author: Testy McTestface <test@example.com>
+        Date:   Thu Oct 29 12:34:56 2020 +0000
+
+            revert file mode
+
+        diff --git a/test1.txt b/test1.txt
+        old mode 100755
+        new mode 100644
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["status"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        HEAD detached from f777ecc
+        nothing to commit, working tree clean
         "###);
     }
 
