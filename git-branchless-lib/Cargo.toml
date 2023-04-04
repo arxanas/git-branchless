@@ -65,7 +65,7 @@ rayon = "1.7.0"
 regex = "1.7.3"
 rusqlite = { version = "0.28.0", features = ["bundled"] }
 scm-record = { version = "0.1.0", path = "../scm-record" }
-serde = { version = "1.0.158", features = ["derive"] }
+serde = { version = "1.0.159", features = ["derive"] }
 tempfile = "3.4.0"
 textwrap = "0.16.0"
 thiserror = "1.0.40"
