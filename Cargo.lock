@@ -350,30 +350,38 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.0.32"
+version = "4.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7db700bc935f9e43e88d00b0850dae18a63773cfbec6d8e070fccf7fef89a39"
+checksum = "906f7fe1da4185b7a282b2bc90172a496f9def1aca4545fe7526810741591e14"
+dependencies = [
+ "clap_builder",
+ "clap_derive",
+ "once_cell",
+]
+
+[[package]]
+name = "clap_builder"
+version = "4.1.14"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "351f9ad9688141ed83dfd8f5fb998a06225ef444b48ff4dc43de6d409b7fd10b"
 dependencies = [
  "bitflags",
- "clap_derive",
- "clap_lex 0.3.0",
+ "clap_lex 0.4.1",
  "is-terminal",
- "once_cell",
  "strsim",
  "termcolor",
 ]
 
 [[package]]
 name = "clap_derive"
-version = "4.0.21"
+version = "4.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0177313f9f02afc995627906bbd8967e2be069f5261954222dac78290c2b9014"
+checksum = "81d7dc0031c3a59a04fc2ba395c8e2dd463cba1859275f065d225f6122221b45"
 dependencies = [
  "heck",
- "proc-macro-error",
  "proc-macro2",
  "quote",
- "syn 1.0.107",
+ "syn 2.0.13",
 ]
 
 [[package]]
@@ -387,12 +395,9 @@ dependencies = [
 
 [[package]]
 name = "clap_lex"
-version = "0.3.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d4198f73e42b4936b35b5bb248d81d2b595ecb170da0bac7655c54eedfa8da8"
-dependencies = [
- "os_str_bytes",
-]
+checksum = "8a2dd5a6fe8c6e3502f568a6353e5273bbb15193ad9a89e457b9970798efbea1"
 
 [[package]]
 name = "clap_mangen"
@@ -400,7 +405,7 @@ version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "904eb24d05ad587557e0f484ddce5c737c30cf81372badb16d13e41c4b8340b1"
 dependencies = [
- "clap 4.0.32",
+ "clap 4.1.14",
  "roff 0.2.1",
 ]
 
@@ -1447,7 +1452,7 @@ dependencies = [
 name = "git-branchless-invoke"
 version = "0.7.0"
 dependencies = [
- "clap 4.0.32",
+ "clap 4.1.14",
  "color-eyre",
  "cursive_core",
  "eyre",
@@ -1535,7 +1540,7 @@ dependencies = [
 name = "git-branchless-opts"
 version = "0.7.0"
 dependencies = [
- "clap 4.0.32",
+ "clap 4.1.14",
  "clap_mangen",
  "git-branchless-lib",
  "itertools 0.10.5",
@@ -1643,7 +1648,7 @@ dependencies = [
 name = "git-branchless-submit"
 version = "0.7.0"
 dependencies = [
- "clap 4.0.32",
+ "clap 4.1.14",
  "cursive_core",
  "esl01-dag 0.2.1",
  "eyre",
@@ -1670,7 +1675,7 @@ version = "0.7.0"
 dependencies = [
  "assert_cmd",
  "bstr",
- "clap 4.0.32",
+ "clap 4.1.14",
  "crossbeam",
  "cursive",
  "esl01-dag 0.3.0",
@@ -2620,30 +2625,6 @@ checksum = "54ff541861505aabf6ea722d2131ee980b8276e10a1297b94e896dd8b621850d"
 dependencies = [
  "predicates-core",
  "termtree",
-]
-
-[[package]]
-name = "proc-macro-error"
-version = "1.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da25490ff9892aab3fcf7c36f08cfb902dd3e71ca0f9f9517bea02a73a5ce38c"
-dependencies = [
- "proc-macro-error-attr",
- "proc-macro2",
- "quote",
- "syn 1.0.107",
- "version_check",
-]
-
-[[package]]
-name = "proc-macro-error-attr"
-version = "1.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1be40180e52ecc98ad80b184934baf3d0d29f979574e439af5a55274b35f869"
-dependencies = [
- "proc-macro2",
- "quote",
- "version_check",
 ]
 
 [[package]]
