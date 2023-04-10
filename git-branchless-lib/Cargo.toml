@@ -54,7 +54,7 @@ console = "0.15.5"
 cursive = { version = "0.20.0", default-features = false }
 eden_dag = { package = "esl01-dag", version = "0.3.0" }
 eyre = "0.6.8"
-futures = "0.3.27"
+futures = "0.3.28"
 git-record = { version = "0.3", path = "../git-record" }
 git2 = { version = "0.16.1", default-features = false }
 indicatif = { version = "0.17.3", features = ["improved_unicode"] }

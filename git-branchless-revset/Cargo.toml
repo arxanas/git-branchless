@@ -13,7 +13,7 @@ chrono-english = "0.1.7"
 chronoutil = "0.2.3"
 eden_dag = { package = "esl01-dag", version = "0.3.0" }
 eyre = "0.6.8"
-futures = "0.3.27"
+futures = "0.3.28"
 git-branchless-opts = { version = "0.7.0", path = "../git-branchless-opts" }
 glob = "0.3.0"
 itertools = "0.10.5"
