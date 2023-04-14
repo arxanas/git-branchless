@@ -839,3 +839,60 @@ fn test_mouse_support() -> eyre::Result<()> {
 
     Ok(())
 }
+#[test]
+fn test_mouse_click_checkbox() -> eyre::Result<()> {
+    let state = RecordState {
+        files: vec![
+            File {
+                path: Cow::Borrowed(Path::new("foo")),
+                file_mode: None,
+                sections: vec![],
+            },
+            File {
+                path: Cow::Borrowed(Path::new("bar")),
+                file_mode: None,
+                sections: vec![Section::FileMode {
+                    is_toggled: false,
+                    before: FileMode::absent(),
+                    after: FileMode(0o100644),
+                }],
+            },
+        ],
+    };
+
+    let initial = TestingScreenshot::default();
+    let click_unselected_checkbox = TestingScreenshot::default();
+    let click_selected_checkbox = TestingScreenshot::default();
+    let event_source = EventSource::testing(
+        80,
+        3,
+        [
+            initial.event(),
+            Event::Click { row: 1, column: 1 },
+            click_unselected_checkbox.event(),
+            Event::Click { row: 1, column: 1 },
+            click_selected_checkbox.event(),
+            Event::QuitAccept,
+        ],
+    );
+    let recorder = Recorder::new(state, event_source);
+    recorder.run()?;
+
+    insta::assert_display_snapshot!(initial, @r###"
+    "( ) foo                                                                         "
+    "[ ] bar                                                                         "
+    "  [ ] File mode changed from 0 to 100644                                        "
+    "###);
+    insta::assert_display_snapshot!(click_unselected_checkbox, @r###"
+    "[ ] foo                                                                         "
+    "( ) bar                                                                         "
+    "  [ ] File mode changed from 0 to 100644                                        "
+    "###);
+    insta::assert_display_snapshot!(click_selected_checkbox, @r###"
+    "[ ] foo                                                                         "
+    "(×) bar                                                                         "
+    "  [×] File mode changed from 0 to 100644                                        "
+    "###);
+
+    Ok(())
+}
