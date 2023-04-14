@@ -8,11 +8,12 @@ use std::process::{Command, Stdio};
 use std::str::FromStr;
 use std::time::SystemTime;
 
+use cursive_core::theme::Effect;
 use cursive_core::utils::markup::StyledString;
 use git_branchless_opts::Revset;
 use git_branchless_test::{
-    run_tests, FixInfo, ResolvedTestOptions, TestResults, TestStatus, TestingAbortedError,
-    Verbosity,
+    run_tests, FixInfo, ResolvedTestOptions, TestOutput, TestResults, TestStatus,
+    TestingAbortedError, Verbosity,
 };
 use itertools::Itertools;
 use lazy_static::lazy_static;
@@ -339,7 +340,7 @@ impl Forge for PhabricatorForge<'_> {
         let now = SystemTime::now();
         let event_tx_id = self
             .event_log_db
-            .make_transaction_id(now, "arc diff")
+            .make_transaction_id(now, "phabricator create")
             .map_err(|err| Error::MakeTransactionId { source: err })?;
         let build_options = BuildRebasePlanOptions {
             force_rewrite_public_commits: false,
@@ -365,8 +366,8 @@ impl Forge for PhabricatorForge<'_> {
                 .map_err(Error::BuildRebasePlan)?;
         let command = if !should_mock() {
             format!(
-                "arc diff --create --verbatim {} -- HEAD^",
-                if *draft { "--draft" } else { "" }
+                "arc diff --create --verbatim {draft} -- HEAD^",
+                draft = if *draft { "--draft" } else { "" },
             )
         } else {
             r#"git commit --amend --message "$(git show --no-patch --format=%B HEAD)
@@ -429,28 +430,15 @@ Differential Revision: https://phabricator.example.com/D000$(git rev-list --coun
             let mut builder = RebasePlanBuilder::new(self.dag, permissions);
             for (commit_oid, test_output) in test_outputs {
                 let head_commit_oid = match test_output.test_status {
-                    test_status @ (TestStatus::CheckoutFailed
+                    TestStatus::CheckoutFailed
                     | TestStatus::SpawnTestFailed(_)
                     | TestStatus::TerminatedBySignal
                     | TestStatus::AlreadyInProgress
                     | TestStatus::ReadCacheFailed(_)
                     | TestStatus::Indeterminate { .. }
                     | TestStatus::Abort { .. }
-                    | TestStatus::Failed { .. }) => {
-                        let commit = self.repo.find_commit_or_fail(commit_oid)?;
-                        writeln!(
-                            self.effects.get_output_stream(),
-                            "{}",
-                            self.effects.get_glyphs().render(test_status.describe(
-                                self.effects.get_glyphs(),
-                                &commit,
-                                false
-                            )?)?,
-                        )?;
-                        let stdout = std::fs::read_to_string(&test_output.stdout_path)?;
-                        write!(self.effects.get_output_stream(), "Stdout:\n{stdout}")?;
-                        let stderr = std::fs::read_to_string(&test_output.stderr_path)?;
-                        write!(self.effects.get_output_stream(), "Stderr:\n{stderr}")?;
+                    | TestStatus::Failed { .. } => {
+                        self.render_failed_test(commit_oid, &test_output)?;
                         return Ok(Err(ExitCode(1)));
                     }
                     TestStatus::Passed {
@@ -582,60 +570,134 @@ Differential Revision: https://phabricator.example.com/D000$(git rev-list --coun
         let SubmitOptions {
             create: _,
             draft: _,
-            execution_strategy: _,
-            num_jobs: _,
+            execution_strategy,
+            num_jobs,
             message,
         } = options;
 
         let commit_set = commits.keys().copied().collect();
+        // Sort for consistency with `update_dependencies`.
+        let commit_oids = self.dag.sort(&commit_set)?;
+        let commits: Vec<_> = commit_oids
+            .into_iter()
+            .map(|commit_oid| self.repo.find_commit_or_fail(commit_oid))
+            .try_collect()?;
 
-        {
-            // Sort for consistency with `update_dependencies`.
-            let commit_oids = self.dag.sort(&commit_set)?;
-
-            let (effects, progress) = self.effects.start_operation(OperationType::UpdateCommits);
-            progress.notify_progress(0, commit_oids.len());
-            for commit_oid in commit_oids {
-                let commit = self.repo.find_commit_or_fail(commit_oid)?;
-                writeln!(
-                    effects.get_output_stream(),
-                    "Submitting {}",
-                    effects
-                        .get_glyphs()
-                        .render(commit.friendly_describe(effects.get_glyphs())?)?
-                )?;
-
-                if !should_mock() {
-                    let args = {
-                        let mut args = vec![
-                            "diff".to_string(),
-                            "--verbatim".to_string(),
-                            "--head".to_string(),
-                            commit_oid.to_string(),
-                            format!("{commit_oid}^"),
-                        ];
-                        args.extend(match message {
-                            Some(message) => ["-m".to_string(), message.clone()],
-                            None => ["-m".to_string(), "update".to_string()],
-                        });
-                        args
-                    };
-                    let mut child = Command::new("arc")
-                        .args(&args)
-                        .spawn()
-                        .map_err(|err| Error::InvokeArc { source: err, args })?;
-                    let exit_status = child.wait()?;
-                    let exit_code = ExitCode::try_from(exit_status)?;
-                    if !exit_code.is_success() {
-                        return Ok(Err(exit_code));
-                    }
-                }
-
-                progress.notify_progress_inc(1);
-            }
+        let now = SystemTime::now();
+        let event_tx_id = self
+            .event_log_db
+            .make_transaction_id(now, "phabricator update")?;
+        let build_options = BuildRebasePlanOptions {
+            force_rewrite_public_commits: false,
+            dump_rebase_constraints: false,
+            dump_rebase_plan: false,
+            detect_duplicate_commits_via_patch_id: false,
+        };
+        let execute_options = ExecuteRebasePlanOptions {
+            now,
+            event_tx_id,
+            preserve_timestamps: true,
+            force_in_memory: true,
+            force_on_disk: false,
+            resolve_merge_conflicts: false,
+            check_out_commit_options: CheckOutCommitOptions {
+                render_smartlog: false,
+                ..Default::default()
+            },
+        };
+        let permissions =
+            RebasePlanPermissions::verify_rewrite_set(self.dag, build_options, &commit_set)
+                .map_err(|err| Error::VerifyPermissions { source: err })?
+                .map_err(Error::BuildRebasePlan)?;
+        let test_options = ResolvedTestOptions {
+            command: if !should_mock() {
+                let mut args = vec!["arc", "diff", "--verbatim", "--head", "HEAD", "HEAD^"];
+                args.extend(match message {
+                    Some(message) => ["-m", message.as_ref()],
+                    None => ["-m", "update"],
+                });
+                args.join(" ")
+            } else {
+                "echo Submitting $(git rev-parse HEAD)".to_string()
+            },
+            execution_strategy: *execution_strategy,
+            search_strategy: None,
+            is_dry_run: false,
+            use_cache: false,
+            is_interactive: false,
+            num_jobs: *num_jobs,
+            verbosity: Verbosity::None,
+            fix_options: Some((execute_options, permissions)),
+        };
+        let TestResults {
+            search_bounds: _,
+            test_outputs,
+            testing_aborted_error,
+        } = try_exit_code!(run_tests(
+            now,
+            self.effects,
+            self.git_run_info,
+            self.dag,
+            self.repo,
+            self.event_log_db,
+            event_tx_id,
+            self.revset,
+            &commits,
+            &test_options,
+        )?);
+        if let Some(testing_aborted_error) = testing_aborted_error {
+            let TestingAbortedError {
+                commit_oid,
+                exit_code,
+            } = testing_aborted_error;
+            writeln!(
+                self.effects.get_output_stream(),
+                "Updating was aborted with exit code {exit_code} due to commit {}",
+                self.effects.get_glyphs().render(
+                    self.repo
+                        .friendly_describe_commit_from_oid(self.effects.get_glyphs(), commit_oid)?
+                )?,
+            )?;
+            return Ok(Err(ExitCode(1)));
         }
 
-        try_exit_code!(self.update_dependencies(&commit_set, &CommitSet::empty())?);
+        let (success_commits, failure_commits): (Vec<_>, Vec<_>) = test_outputs
+            .into_iter()
+            .partition(|(_commit_oid, test_output)| match test_output.test_status {
+                TestStatus::Passed { .. } => true,
+                TestStatus::CheckoutFailed
+                | TestStatus::SpawnTestFailed(_)
+                | TestStatus::TerminatedBySignal
+                | TestStatus::AlreadyInProgress
+                | TestStatus::ReadCacheFailed(_)
+                | TestStatus::Indeterminate { .. }
+                | TestStatus::Abort { .. }
+                | TestStatus::Failed { .. } => false,
+            });
+        if !failure_commits.is_empty() {
+            let effects = self.effects;
+            writeln!(
+                effects.get_output_stream(),
+                "Failed when running command: {}",
+                effects.get_glyphs().render(
+                    StyledStringBuilder::new()
+                        .append_styled(test_options.command, Effect::Bold)
+                        .build()
+                )?
+            )?;
+            for (commit_oid, test_output) in failure_commits {
+                self.render_failed_test(commit_oid, &test_output)?;
+            }
+            return Ok(Err(ExitCode(1)));
+        }
+
+        try_exit_code!(self.update_dependencies(
+            &success_commits
+                .into_iter()
+                .map(|(commit_oid, _test_output)| commit_oid)
+                .collect(),
+            &CommitSet::empty()
+        )?);
         Ok(Ok(()))
     }
 }
@@ -978,5 +1040,29 @@ $",
         let diff_number = String::from_utf8(diff_number.to_vec())
             .expect("Regex should have confirmed that this string was only ASCII digits");
         Ok(Some(Id(diff_number)))
+    }
+
+    fn render_failed_test(
+        &self,
+        commit_oid: NonZeroOid,
+        test_output: &TestOutput,
+    ) -> eyre::Result<()> {
+        let commit = self.repo.find_commit_or_fail(commit_oid)?;
+        writeln!(
+            self.effects.get_output_stream(),
+            "{}",
+            self.effects
+                .get_glyphs()
+                .render(test_output.test_status.describe(
+                    self.effects.get_glyphs(),
+                    &commit,
+                    false
+                )?)?,
+        )?;
+        let stdout = std::fs::read_to_string(&test_output.stdout_path)?;
+        write!(self.effects.get_output_stream(), "Stdout:\n{stdout}")?;
+        let stderr = std::fs::read_to_string(&test_output.stderr_path)?;
+        write!(self.effects.get_output_stream(), "Stderr:\n{stderr}")?;
+        Ok(())
     }
 }
