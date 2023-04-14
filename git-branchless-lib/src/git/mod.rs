@@ -31,7 +31,7 @@ pub use snapshot::{WorkingCopyChangesType, WorkingCopySnapshot};
 pub use status::{FileMode, FileStatus, StatusEntry};
 pub use test::{
     get_latest_test_command_path, get_test_locks_dir, get_test_tree_dir, get_test_worktrees_dir,
-    make_test_command_slug, SerializedNonZeroOid, SerializedTestResult, TEST_ABORT_EXIT_CODE,
-    TEST_INDETERMINATE_EXIT_CODE, TEST_SUCCESS_EXIT_CODE,
+    make_test_command_slug, SerializedNonZeroOid, SerializedTestResult, TestCommand,
+    TEST_ABORT_EXIT_CODE, TEST_INDETERMINATE_EXIT_CODE, TEST_SUCCESS_EXIT_CODE,
 };
 pub use tree::{dehydrate_tree, get_changed_paths_between_trees, hydrate_tree, Tree};

@@ -1498,6 +1498,7 @@ dependencies = [
  "rusqlite",
  "scm-record",
  "serde",
+ "shell-words",
  "tempfile",
  "textwrap",
  "thiserror",

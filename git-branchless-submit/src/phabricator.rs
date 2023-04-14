@@ -26,7 +26,7 @@ use lib::core::rewrite::{
     execute_rebase_plan, BuildRebasePlanError, BuildRebasePlanOptions, ExecuteRebasePlanOptions,
     ExecuteRebasePlanResult, RebasePlanBuilder, RebasePlanPermissions, RepoResource,
 };
-use lib::git::{Commit, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo, RepoError};
+use lib::git::{Commit, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo, RepoError, TestCommand};
 use lib::try_exit_code;
 use lib::util::{ExitCode, EyreExitOr};
 use rayon::ThreadPoolBuilder;
@@ -365,17 +365,21 @@ impl Forge for PhabricatorForge<'_> {
                 .map_err(|err| Error::VerifyPermissions { source: err })?
                 .map_err(Error::BuildRebasePlan)?;
         let command = if !should_mock() {
-            format!(
-                "arc diff --create --verbatim {draft} -- HEAD^",
-                draft = if *draft { "--draft" } else { "" },
-            )
+            let mut args = vec!["arc", "diff", "--create", "--verbatim"];
+            if *draft {
+                args.push("--draft");
+            }
+            args.extend(["--", "HEAD^"]);
+            TestCommand::Args(args.into_iter().map(ToString::to_string).collect())
         } else {
-            r#"git commit --amend --message "$(git show --no-patch --format=%B HEAD)
+            TestCommand::String(
+                r#"git commit --amend --message "$(git show --no-patch --format=%B HEAD)
 
 Differential Revision: https://phabricator.example.com/D000$(git rev-list --count HEAD)
             "
             "#
-            .to_string()
+                .to_string(),
+            )
         };
 
         let test_results = match run_tests(
@@ -516,7 +520,7 @@ Differential Revision: https://phabricator.example.com/D000$(git rev-list --coun
                     None => {
                         writeln!(
                             self.effects.get_output_stream(),
-                            "Failed to upload {}",
+                            "Failed to upload (link to newly-created revision not found in commit message): {}",
                             self.effects.get_glyphs().render(
                                 self.repo.friendly_describe_commit_from_oid(
                                     self.effects.get_glyphs(),
@@ -616,9 +620,9 @@ Differential Revision: https://phabricator.example.com/D000$(git rev-list --coun
                     Some(message) => ["-m", message.as_ref()],
                     None => ["-m", "update"],
                 });
-                args.join(" ")
+                TestCommand::Args(args.into_iter().map(ToString::to_string).collect())
             } else {
-                "echo Submitting $(git rev-parse HEAD)".to_string()
+                TestCommand::String("echo Submitting $(git rev-parse HEAD)".to_string())
             },
             execution_strategy: *execution_strategy,
             search_strategy: None,
@@ -681,7 +685,7 @@ Differential Revision: https://phabricator.example.com/D000$(git rev-list --coun
                 "Failed when running command: {}",
                 effects.get_glyphs().render(
                     StyledStringBuilder::new()
-                        .append_styled(test_options.command, Effect::Bold)
+                        .append_styled(test_options.command.to_string(), Effect::Bold)
                         .build()
                 )?
             )?;

@@ -576,7 +576,8 @@ fn fn_tests_passed(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
                         snapshot_tree_oid: _,
                         interactive: _,
                     } = test_result;
-                    exit_code == TEST_SUCCESS_EXIT_CODE && pattern.matches_text(&command)
+                    exit_code == TEST_SUCCESS_EXIT_CODE
+                        && pattern.matches_text(&command.to_string())
                 });
             Ok(result)
         }),
@@ -605,7 +606,7 @@ fn fn_tests_failed(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
                     exit_code != TEST_SUCCESS_EXIT_CODE
                         && exit_code != TEST_INDETERMINATE_EXIT_CODE
                         && exit_code != TEST_ABORT_EXIT_CODE
-                        && pattern.matches_text(&command)
+                        && pattern.matches_text(&command.to_string())
                 });
             Ok(result)
         }),
@@ -632,7 +633,7 @@ fn fn_tests_fixable(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult 
                         interactive: _,
                     } = test_result;
                     exit_code == TEST_SUCCESS_EXIT_CODE
-                        && pattern.matches_text(&command)
+                        && pattern.matches_text(&command.to_string())
                         && match (snapshot_tree_oid, commit.get_tree_oid()) {
                             (
                                 Some(SerializedNonZeroOid(snapshot_tree_oid)),
