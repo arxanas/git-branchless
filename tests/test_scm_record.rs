@@ -789,3 +789,53 @@ fn test_state_binary_selected_contents() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_mouse_support() -> eyre::Result<()> {
+    let state = example_contents();
+
+    let initial = TestingScreenshot::default();
+    let first_click = TestingScreenshot::default();
+    let click_scrolled_item = TestingScreenshot::default();
+    let event_source = EventSource::testing(
+        80,
+        6,
+        [
+            initial.event(),
+            Event::Click { row: 5, column: 8 },
+            first_click.event(),
+            Event::Click { row: 5, column: 8 },
+            click_scrolled_item.event(),
+            Event::QuitAccept,
+        ],
+    );
+    let recorder = Recorder::new(state, event_source);
+    recorder.run()?;
+
+    insta::assert_display_snapshot!(initial, @r###"
+    "(~) foo/bar                                                                     "
+    "        ⋮                                                                       "
+    "       18 this is some text                                                     "
+    "       19 this is some text                                                     "
+    "       20 this is some text                                                     "
+    "  [~] Section 1/1                                                               "
+    "###);
+    insta::assert_display_snapshot!(first_click, @r###"
+    "       20 this is some text                                                     "
+    "  (~) Section 1/1                                                               "
+    "    [×] - before text 1                                                         "
+    "    [×] - before text 2                                                         "
+    "    [×] + after text 1                                                          "
+    "    [ ] + after text 2                                                          "
+    "###);
+    insta::assert_display_snapshot!(click_scrolled_item, @r###"
+    "       20 this is some text                                                     "
+    "  [~] Section 1/1                                                               "
+    "    [×] - before text 1                                                         "
+    "    [×] - before text 2                                                         "
+    "    [×] + after text 1                                                          "
+    "    ( ) + after text 2                                                          "
+    "###);
+
+    Ok(())
+}
