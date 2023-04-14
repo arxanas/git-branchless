@@ -1028,9 +1028,18 @@ impl<'a> Recorder<'a> {
         let y = row.unwrap_isize() + self.scroll_offset_y;
         drawn_rects
             .iter()
-            .filter(|(_id, rect)| rect.contains_point(x, y))
-            .min_by(|(_, lhs), (_, rhs)| lhs.size().area().cmp(&rhs.size().area()))
-            .map(|(id, _rect)| id.clone())
+            .filter(|(id, rect)| {
+                rect.contains_point(x, y)
+                    && match id {
+                        ComponentId::App => false,
+                        ComponentId::SelectableItem(_)
+                        | ComponentId::TristateBox(_)
+                        | ComponentId::QuitDialog
+                        | ComponentId::QuitDialogButton(_) => true,
+                    }
+            })
+            .min_by_key(|(id, rect)| (rect.size().area(), (rect.y, rect.x), *id))
+            .map(|(id, _rect)| *id)
             .unwrap_or(ComponentId::App)
     }
 
@@ -1463,6 +1472,7 @@ impl Component for FileView<'_> {
             section_views,
             is_header_selected,
         } = self;
+        viewport.fill_rest_of_line(x, y);
 
         let tristate_box_rect = viewport.draw_component(x, y, tristate_box);
         viewport.draw_span(
@@ -1542,6 +1552,7 @@ impl Component for SectionView<'_> {
             section,
             line_start_num,
         } = self;
+        viewport.fill_rest_of_line(x, y);
 
         let SectionKey {
             file_idx,
@@ -1811,6 +1822,7 @@ impl Component for SectionLineView<'_> {
 
     fn draw(&self, viewport: &mut Viewport<Self::Id>, x: isize, y: isize) {
         let Self { line_key: _, inner } = self;
+        viewport.fill_rest_of_line(x, y);
         match inner {
             SectionLineViewInner::Unchanged { line, line_num } => {
                 let style = Style::default().add_modifier(Modifier::DIM);
