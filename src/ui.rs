@@ -569,7 +569,7 @@ impl<'a> Recorder<'a> {
                     file_key,
                     tristate_box: TristateBox {
                         use_unicode: self.use_unicode,
-                        id: ComponentId::TristateBox,
+                        id: ComponentId::TristateBox(SelectionKey::File(file_key)),
                         tristate: file_tristate,
                         is_focused,
                     },
@@ -600,7 +600,9 @@ impl<'a> Recorder<'a> {
                                 section_key,
                                 tristate_box: TristateBox {
                                     use_unicode: self.use_unicode,
-                                    id: ComponentId::TristateBox,
+                                    id: ComponentId::TristateBox(SelectionKey::Section(
+                                        section_key,
+                                    )),
                                     tristate: section_tristate,
                                     is_focused: match self.selection_key {
                                         SelectionKey::None
@@ -1036,9 +1038,12 @@ impl<'a> Recorder<'a> {
         match component_id {
             ComponentId::App | ComponentId::QuitDialog => StateUpdate::None,
             ComponentId::SelectableItem(selection_key) => StateUpdate::SelectItem(selection_key),
-            ComponentId::TristateBox => {
-                // TODO: implement toggling the checkbox
-                StateUpdate::None
+            ComponentId::TristateBox(selection_key) => {
+                if self.selection_key == selection_key {
+                    StateUpdate::ToggleItem(selection_key)
+                } else {
+                    StateUpdate::SelectItem(selection_key)
+                }
             }
             ComponentId::QuitDialogButton(QuitDialogButtonId::GoBack) => {
                 StateUpdate::SetQuitDialog(None)
@@ -1291,7 +1296,7 @@ impl<'a> Recorder<'a> {
 enum ComponentId {
     App,
     SelectableItem(SelectionKey),
-    TristateBox,
+    TristateBox(SelectionKey),
     QuitDialog,
     QuitDialogButton(QuitDialogButtonId),
 }
@@ -1673,18 +1678,19 @@ impl Component for SectionView<'_> {
                         }
                         Some(SectionSelection::SectionHeader) | None => false,
                     };
+                    let line_key = LineKey {
+                        file_idx,
+                        section_idx,
+                        line_idx,
+                    };
                     let tristate_box = TristateBox {
                         use_unicode: *use_unicode,
-                        id: ComponentId::TristateBox,
+                        id: ComponentId::TristateBox(SelectionKey::Line(line_key)),
                         tristate: Tristate::from(*is_toggled),
                         is_focused,
                     };
                     let line_view = SectionLineView {
-                        line_key: LineKey {
-                            file_idx,
-                            section_idx,
-                            line_idx,
-                        },
+                        line_key,
                         inner: SectionLineViewInner::Changed {
                             tristate_box,
                             change_type: *change_type,
@@ -1708,9 +1714,14 @@ impl Component for SectionView<'_> {
                     Some(SectionSelection::SectionHeader) => true,
                     Some(SectionSelection::ChangedLine(_)) | None => false,
                 };
+                let section_key = SectionKey {
+                    file_idx,
+                    section_idx,
+                };
+                let selection_key = SelectionKey::Section(section_key);
                 let tristate_box = TristateBox {
                     use_unicode: *use_unicode,
-                    id: ComponentId::TristateBox,
+                    id: ComponentId::TristateBox(selection_key),
                     tristate: Tristate::from(*is_toggled),
                     is_focused,
                 };
@@ -1732,9 +1743,13 @@ impl Component for SectionView<'_> {
                     Some(SectionSelection::SectionHeader) => true,
                     Some(SectionSelection::ChangedLine(_)) | None => false,
                 };
+                let section_key = SectionKey {
+                    file_idx,
+                    section_idx,
+                };
                 let tristate_box = TristateBox {
                     use_unicode: *use_unicode,
-                    id: ComponentId::TristateBox,
+                    id: ComponentId::TristateBox(SelectionKey::Section(section_key)),
                     tristate: Tristate::from(*is_toggled),
                     is_focused,
                 };
