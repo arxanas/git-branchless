@@ -31,13 +31,13 @@ use lib::core::rewrite::{
 };
 use lib::git::{
     process_diff_for_record, update_index, CategorizedReferenceName, FileMode, GitRunInfo,
-    NonZeroOid, Repo, ResolvedReferenceInfo, Stage, UpdateIndexCommand, WorkingCopyChangesType,
-    WorkingCopySnapshot,
+    MaybeZeroOid, NonZeroOid, Repo, ResolvedReferenceInfo, Stage, UpdateIndexCommand,
+    WorkingCopyChangesType, WorkingCopySnapshot,
 };
 use lib::try_exit_code;
 use lib::util::{ExitCode, EyreExitOr};
 use rayon::ThreadPoolBuilder;
-use scm_record::{EventSource, RecordError, RecordState, Recorder};
+use scm_record::{EventSource, RecordError, RecordState, Recorder, SelectedContents};
 use tracing::{instrument, warn};
 
 /// Commit changes in the working copy.
@@ -225,10 +225,10 @@ fn record_interactive(
     event_tx_id: EventTransactionId,
     message: Option<&str>,
 ) -> EyreExitOr<()> {
+    let old_tree = snapshot.commit_stage0.get_tree()?;
+    let new_tree = snapshot.commit_unstaged.get_tree()?;
     let files = {
         let (effects, _progress) = effects.start_operation(OperationType::CalculateDiff);
-        let old_tree = snapshot.commit_stage0.get_tree()?;
-        let new_tree = snapshot.commit_unstaged.get_tree()?;
         let diff = repo.get_diff_between_trees(
             &effects,
             Some(&old_tree),
@@ -296,12 +296,29 @@ fn record_interactive(
             };
 
             let (selected, _unselected) = file.get_selected_contents();
-            let oid = repo.create_blob_from_contents(selected.as_bytes())?;
-            let command = UpdateIndexCommand::Update {
-                path: file.path.clone().into_owned(),
-                stage: Stage::Stage0,
-                mode,
-                oid,
+            let oid = match selected {
+                SelectedContents::Absent => MaybeZeroOid::Zero,
+                SelectedContents::Unchanged => {
+                    old_tree.get_oid_for_path(&file.path)?.unwrap_or_default()
+                }
+                SelectedContents::Binary {
+                    old_description: _,
+                    new_description: _,
+                } => new_tree.get_oid_for_path(&file.path)?.unwrap(),
+                SelectedContents::Present { contents } => {
+                    MaybeZeroOid::NonZero(repo.create_blob_from_contents(contents.as_bytes())?)
+                }
+            };
+            let command = match oid {
+                MaybeZeroOid::Zero => UpdateIndexCommand::Delete {
+                    path: file.path.clone().into_owned(),
+                },
+                MaybeZeroOid::NonZero(oid) => UpdateIndexCommand::Update {
+                    path: file.path.clone().into_owned(),
+                    stage: Stage::Stage0,
+                    mode,
+                    oid,
+                },
             };
             Ok(command)
         })

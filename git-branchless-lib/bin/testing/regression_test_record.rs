@@ -6,10 +6,10 @@ use std::path::PathBuf;
 
 use branchless::core::effects::Effects;
 use branchless::core::formatting::Glyphs;
-use branchless::git::{hydrate_tree, process_diff_for_record, FileMode, Repo};
+use branchless::git::{hydrate_tree, process_diff_for_record, FileMode, MaybeZeroOid, Repo};
 use bstr::ByteSlice;
 use eyre::Context;
-use scm_record::{File, Section};
+use scm_record::{File, Section, SelectedContents};
 
 fn main() -> eyre::Result<()> {
     let path_to_repo = std::env::var("PATH_TO_REPO")
@@ -51,11 +51,16 @@ fn main() -> eyre::Result<()> {
                             }
                         }
                         Section::FileMode {
-                            is_toggled: _,
+                            is_toggled,
                             before: _,
                             after: _,
+                        }
+                        | Section::Binary {
+                            is_toggled,
+                            old_description: _,
+                            new_description: _,
                         } => {
-                            unimplemented!("selecting Section::FileMode");
+                            *is_toggled = true;
                         }
                     }
                 }
@@ -65,17 +70,35 @@ fn main() -> eyre::Result<()> {
         let entries: HashMap<_, _> = entries
             .into_iter()
             .map(|file| {
+                let file_path = file.path.clone().into_owned();
                 let value = {
-                    let new_file_mode = file
-                        .get_file_mode()
-                        .expect("File mode should have been set");
                     let (selected, _unselected) = file.get_selected_contents();
-                    let blob_oid = repo.create_blob_from_contents(selected.as_bytes())?;
-                    let file_mode = i32::try_from(new_file_mode).unwrap();
-                    let file_mode = FileMode::from(file_mode);
-                    Some((blob_oid, file_mode))
+                    let blob_oid = match selected {
+                        SelectedContents::Absent => return Ok((file_path, None)),
+                        SelectedContents::Unchanged => {
+                            old_tree.get_oid_for_path(&file.path)?.unwrap_or_default()
+                        }
+                        SelectedContents::Binary {
+                            old_description: _,
+                            new_description: _,
+                        } => new_tree.get_oid_for_path(&file.path)?.unwrap(),
+                        SelectedContents::Present { contents } => MaybeZeroOid::NonZero(
+                            repo.create_blob_from_contents(contents.as_bytes())?,
+                        ),
+                    };
+                    match blob_oid {
+                        MaybeZeroOid::Zero => None,
+                        MaybeZeroOid::NonZero(blob_oid) => {
+                            let new_file_mode = file
+                                .get_file_mode()
+                                .expect("File mode should have been set");
+                            let file_mode = i32::try_from(new_file_mode).unwrap();
+                            let file_mode = FileMode::from(file_mode);
+                            Some((blob_oid, file_mode))
+                        }
+                    }
                 };
-                Ok((file.path.clone().into_owned(), value))
+                Ok((file_path, value))
             })
             .collect::<eyre::Result<_>>()?;
 

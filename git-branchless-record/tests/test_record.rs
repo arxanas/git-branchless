@@ -588,3 +588,45 @@ fn test_record_file_mode_change() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_record_binary_contents() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+
+    git.write_file("foo", "initial text contents\n")?;
+    git.run(&["add", "."])?;
+    git.run(&["commit", "-m", "initial foo"])?;
+
+    git.write_file("foo", "initial binary contents\0")?;
+    {
+        let exit_status = run_in_pty(
+            &git,
+            "record",
+            &["-i", "-m", "update foo to binary"],
+            &[
+                PtyAction::WaitUntilContains("foo"),
+                PtyAction::Write(" "),
+                PtyAction::Write("c"),
+            ],
+        )?;
+        assert!(exit_status.success());
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["show"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        commit 7f10d49c57bba90e7dbeb59282de954bd0a53535
+        Author: Testy McTestface <test@example.com>
+        Date:   Thu Oct 29 12:34:56 2020 +0000
+
+            update foo to binary
+
+        diff --git a/foo b/foo
+        index 21317ba..c2575e5 100644
+        Binary files a/foo and b/foo differ
+        "###);
+    }
+
+    Ok(())
+}

@@ -635,7 +635,7 @@ impl<'a> Recorder<'a> {
                                         ChangeType::Removed => true,
                                     })
                                     .count(),
-                                Section::FileMode { .. } => 0,
+                                Section::FileMode { .. } | Section::Binary { .. } => 0,
                             };
                         }
                         section_views
@@ -812,7 +812,8 @@ impl<'a> Recorder<'a> {
                         is_toggled: _,
                         before: _,
                         after: _,
-                    } => {
+                    }
+                    | Section::Binary { .. } => {
                         result.push(SelectionKey::Section(SectionKey {
                             file_idx,
                             section_idx,
@@ -1015,6 +1016,11 @@ impl<'a> Recorder<'a> {
                                 is_toggled,
                                 before: _,
                                 after: _,
+                            }
+                            | Section::Binary {
+                                is_toggled,
+                                old_description: _,
+                                new_description: _,
                             } => {
                                 *is_toggled = is_toggled_new;
                             }
@@ -1039,6 +1045,11 @@ impl<'a> Recorder<'a> {
                         is_toggled,
                         before: _,
                         after: _,
+                    }
+                    | Section::Binary {
+                        is_toggled,
+                        old_description: _,
+                        new_description: _,
                     } => {
                         *is_toggled = is_focused_new;
                     }
@@ -1112,6 +1123,11 @@ impl<'a> Recorder<'a> {
                     is_toggled,
                     before: _,
                     after: _,
+                }
+                | Section::Binary {
+                    is_toggled,
+                    old_description: _,
+                    new_description: _,
                 } => {
                     seen_value = match (seen_value, is_toggled) {
                         (None, is_focused) => Some(*is_focused),
@@ -1172,6 +1188,11 @@ impl<'a> Recorder<'a> {
                 is_toggled,
                 before: _,
                 after: _,
+            }
+            | Section::Binary {
+                is_toggled,
+                old_description: _,
+                new_description: _,
             } => {
                 seen_value = match (seen_value, is_toggled) {
                     (None, is_toggled) => Some(*is_toggled),
@@ -1204,12 +1225,9 @@ impl<'a> Recorder<'a> {
                 let line = &mut lines[line_idx];
                 Ok(f(line))
             }
-            section @ (Section::Unchanged { lines: _ }
-            | Section::FileMode {
-                is_toggled: _,
-                before: _,
-                after: _,
-            }) => Err(RecordError::Bug(format!(
+            section @ (Section::Unchanged { .. }
+            | Section::FileMode { .. }
+            | Section::Binary { .. }) => Err(RecordError::Bug(format!(
                 "Bad line key {line_key:?}, tried to index section {section:?}"
             ))),
         }
@@ -1442,7 +1460,7 @@ impl SectionView<'_> {
         match self.section {
             Section::Unchanged { lines } => lines.len().min(NUM_CONTEXT_LINES * 2 + 1),
             Section::Changed { lines } => lines.len() + 1,
-            Section::FileMode { .. } => 1,
+            Section::FileMode { .. } | Section::Binary { .. } => 1,
         }
     }
 }
@@ -1647,6 +1665,48 @@ impl Component for SectionView<'_> {
                 let x = x + tristate_rect.width.unwrap_isize() + 1;
                 let text = format!("File mode changed from {before} to {after}");
                 viewport.draw_span(x, y, &Span::styled(text, Style::default().fg(Color::Blue)));
+                if is_focused {
+                    highlight_line(viewport, y);
+                }
+            }
+
+            Section::Binary {
+                is_toggled,
+                old_description,
+                new_description,
+            } => {
+                let is_focused = match selection {
+                    Some(SectionSelection::SectionHeader) => true,
+                    Some(SectionSelection::ChangedLine(_)) | None => false,
+                };
+                let tristate_box = TristateBox {
+                    use_unicode: *use_unicode,
+                    id: ComponentId::TristateBox,
+                    tristate: Tristate::from(*is_toggled),
+                    is_focused,
+                };
+                let tristate_rect = viewport.draw_component(x, y, &tristate_box);
+                let x = x + tristate_rect.width.unwrap_isize() + 1;
+
+                let text = {
+                    let mut result =
+                        vec![if old_description.is_some() || new_description.is_some() {
+                            "binary contents:"
+                        } else {
+                            "binary contents"
+                        }
+                        .to_string()];
+                    let description: Vec<_> = [old_description, new_description]
+                        .iter()
+                        .copied()
+                        .flatten()
+                        .map(|s| s.as_ref())
+                        .collect();
+                    result.push(description.join(" -> "));
+                    format!("({})", result.join(" "))
+                };
+                viewport.draw_span(x, y, &Span::styled(text, Style::default().fg(Color::Blue)));
+
                 if is_focused {
                     highlight_line(viewport, y);
                 }
