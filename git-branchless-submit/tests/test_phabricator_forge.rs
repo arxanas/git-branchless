@@ -70,6 +70,11 @@ fn test_submit_phabricator_strategy_working_copy() -> eyre::Result<()> {
         In-memory rebase succeeded.
         Setting D0002 as stack root (no dependencies)
         Stacking D0003 on top of D0002
+        branchless: running command: <git-executable> diff --quiet
+        Calling Git for on-disk rebase...
+        branchless: running command: <git-executable> rebase --continue
+        Using command execution strategy: working-copy
+        branchless: running command: <git-executable> rebase --abort
         Created 2 branches: D0002, D0003
         "###);
     }
@@ -122,6 +127,7 @@ fn test_submit_phabricator_strategy_worktree() -> eyre::Result<()> {
         In-memory rebase succeeded.
         Setting D0002 as stack root (no dependencies)
         Stacking D0003 on top of D0002
+        Using command execution strategy: worktree
         Created 2 branches: D0002, D0003
         "###);
     }
@@ -172,6 +178,11 @@ fn test_submit_phabricator_update() -> eyre::Result<()> {
         In-memory rebase succeeded.
         Setting D0002 as stack root (no dependencies)
         Stacking D0003 on top of D0002
+        branchless: running command: <git-executable> diff --quiet
+        Calling Git for on-disk rebase...
+        branchless: running command: <git-executable> rebase --continue
+        Using command execution strategy: working-copy
+        branchless: running command: <git-executable> rebase --abort
         Created 2 branches: D0002, D0003
         "###);
     }
@@ -186,8 +197,11 @@ fn test_submit_phabricator_update() -> eyre::Result<()> {
             },
         )?;
         insta::assert_snapshot!(stdout, @r###"
-        Submitting 55af3db create test1.txt
-        Submitting ccb7fd5 create test2.txt
+        branchless: running command: <git-executable> diff --quiet
+        Calling Git for on-disk rebase...
+        branchless: running command: <git-executable> rebase --continue
+        Using command execution strategy: working-copy
+        branchless: running command: <git-executable> rebase --abort
         Setting D0002 as stack root (no dependencies)
         Stacking D0003 on top of D0002
         "###);
