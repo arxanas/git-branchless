@@ -68,6 +68,7 @@ pub enum FileMode {
     Tree,
     Blob,
     BlobExecutable,
+    BlobGroupWritable,
     Link,
     Commit,
 }
@@ -77,6 +78,7 @@ impl From<git2::FileMode> for FileMode {
         match file_mode {
             git2::FileMode::Blob => FileMode::Blob,
             git2::FileMode::BlobExecutable => FileMode::BlobExecutable,
+            git2::FileMode::BlobGroupWritable => FileMode::BlobGroupWritable,
             git2::FileMode::Commit => FileMode::Commit,
             git2::FileMode::Link => FileMode::Link,
             git2::FileMode::Tree => FileMode::Tree,
@@ -108,6 +110,7 @@ impl From<FileMode> for i32 {
         match file_mode {
             FileMode::Blob => git2::FileMode::Blob.into(),
             FileMode::BlobExecutable => git2::FileMode::BlobExecutable.into(),
+            FileMode::BlobGroupWritable => git2::FileMode::BlobGroupWritable.into(),
             FileMode::Commit => git2::FileMode::Commit.into(),
             FileMode::Link => git2::FileMode::Link.into(),
             FileMode::Tree => git2::FileMode::Tree.into(),
@@ -134,6 +137,7 @@ impl FromStr for FileMode {
             "040000" => FileMode::Tree,
             "100644" => FileMode::Blob,
             "100755" => FileMode::BlobExecutable,
+            "100664" => FileMode::BlobGroupWritable,
             "120000" => FileMode::Link,
             "160000" => FileMode::Commit,
             _ => eyre::bail!("unknown file mode: {}", file_mode),
@@ -149,6 +153,7 @@ impl ToString for FileMode {
             FileMode::Tree => "040000".to_string(),
             FileMode::Blob => "100644".to_string(),
             FileMode::BlobExecutable => "100755".to_string(),
+            FileMode::BlobGroupWritable => "100664".to_string(),
             FileMode::Link => "120000".to_string(),
             FileMode::Commit => "160000".to_string(),
         }
