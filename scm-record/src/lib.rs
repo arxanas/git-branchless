@@ -9,13 +9,15 @@
 )]
 #![allow(clippy::too_many_arguments, clippy::blocks_in_if_conditions)]
 
-pub mod consts;
 mod render;
 mod types;
 mod ui;
 mod util;
 
+pub mod consts;
+pub mod helpers;
 pub use types::{
     ChangeType, File, FileMode, RecordError, RecordState, Section, SectionChangedLine,
+    SelectedContents,
 };
 pub use ui::{Event, EventSource, Recorder, TestingScreenshot};

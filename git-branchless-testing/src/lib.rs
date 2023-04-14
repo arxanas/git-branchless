@@ -913,6 +913,16 @@ Screen contents:
                 }
 
                 PtyAction::Write(value) => {
+                    if let Ok(Some(exit_status)) = child.try_wait() {
+                        panic!(
+                            "\
+Tried to write {value:?} to PTY, but the process has already exited with status {exit_status:?}. Screen contents:
+-----
+{}
+-----
+", parser.lock().unwrap().screen().contents(),
+                        );
+                    }
                     write!(pty_master, "{value}")?;
                     pty_master.flush()?;
                 }

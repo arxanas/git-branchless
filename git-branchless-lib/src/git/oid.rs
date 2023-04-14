@@ -117,6 +117,12 @@ pub enum MaybeZeroOid {
     NonZero(NonZeroOid),
 }
 
+impl Default for MaybeZeroOid {
+    fn default() -> Self {
+        Self::Zero
+    }
+}
+
 impl MaybeZeroOid {
     /// Construct an OID from a raw 20-byte slice.
     pub fn from_bytes(bytes: &[u8]) -> eyre::Result<Self> {

@@ -5,6 +5,7 @@ use std::sync::{Arc, Mutex};
 
 use eyre::Context;
 use itertools::Itertools;
+use scm_record::helpers::make_binary_description;
 use scm_record::{ChangeType, File, FileMode, Section, SectionChangedLine};
 
 use super::{MaybeZeroOid, Repo};
@@ -29,7 +30,10 @@ pub fn process_diff_for_record(repo: &Repo, diff: &Diff) -> eyre::Result<Vec<Fil
     #[derive(Clone, Debug)]
     enum DeltaFileContent {
         Hunks(Vec<GitHunk>),
-        Binary,
+        Binary {
+            old_num_bytes: u64,
+            new_num_bytes: u64,
+        },
     }
 
     #[derive(Clone, Debug)]
@@ -67,7 +71,10 @@ pub fn process_diff_for_record(repo: &Repo, diff: &Diff) -> eyre::Result<Vec<Fil
                 old_file_mode: delta.old_file().mode(),
                 new_oid: delta.new_file().id(),
                 new_file_mode: delta.new_file().mode(),
-                content: DeltaFileContent::Binary,
+                content: DeltaFileContent::Binary {
+                    old_num_bytes: delta.old_file().size(),
+                    new_num_bytes: delta.new_file().size(),
+                },
             };
             deltas.insert(old_file, delta.clone());
             deltas.insert(new_file, delta);
@@ -85,7 +92,7 @@ pub fn process_diff_for_record(repo: &Repo, diff: &Diff) -> eyre::Result<Vec<Fil
                         new_lines: hunk.new_lines().try_into().unwrap(),
                     });
                 }
-                DeltaFileContent::Binary => {
+                DeltaFileContent::Binary { .. } => {
                     panic!("File {path:?} got a hunk callback, but it was a binary file")
                 }
             }
@@ -105,15 +112,44 @@ pub fn process_diff_for_record(repo: &Repo, diff: &Diff) -> eyre::Result<Vec<Fil
             new_file_mode,
             content,
         } = delta;
+        let old_file_mode = u32::from(old_file_mode);
+        let old_file_mode = FileMode::try_from(old_file_mode).unwrap();
+        let new_file_mode = u32::from(new_file_mode);
+        let new_file_mode = FileMode::try_from(new_file_mode).unwrap();
 
         if new_oid.is_zero() {
-            result.push(File::absent(Cow::Owned(path)));
+            result.push(File {
+                path: Cow::Owned(path),
+                file_mode: Some(old_file_mode),
+                sections: vec![Section::FileMode {
+                    is_toggled: false,
+                    before: old_file_mode,
+                    after: FileMode::absent(),
+                }],
+            });
             continue;
         }
 
         let hunks = match content {
-            DeltaFileContent::Binary => {
-                result.push(File::binary(Cow::Owned(path)));
+            DeltaFileContent::Binary {
+                old_num_bytes,
+                new_num_bytes,
+            } => {
+                result.push(File {
+                    path: Cow::Owned(path),
+                    file_mode: Some(old_file_mode),
+                    sections: vec![Section::Binary {
+                        is_toggled: false,
+                        old_description: Some(Cow::Owned(make_binary_description(
+                            &old_oid.to_string(),
+                            old_num_bytes,
+                        ))),
+                        new_description: Some(Cow::Owned(make_binary_description(
+                            &new_oid.to_string(),
+                            new_num_bytes,
+                        ))),
+                    }],
+                });
                 continue;
             }
             DeltaFileContent::Hunks(mut hunks) => {
@@ -121,23 +157,36 @@ pub fn process_diff_for_record(repo: &Repo, diff: &Diff) -> eyre::Result<Vec<Fil
                 hunks
             }
         };
-        let get_lines_from_blob = |oid| -> eyre::Result<Option<Vec<String>>> {
+
+        enum BlobContents {
+            Absent,
+            Binary(u64),
+            Text(Vec<String>),
+        }
+        let get_lines_from_blob = |oid| -> eyre::Result<BlobContents> {
             let oid = MaybeZeroOid::from(oid);
             match oid {
-                MaybeZeroOid::Zero => Ok(Default::default()),
+                MaybeZeroOid::Zero => Ok(BlobContents::Absent),
                 MaybeZeroOid::NonZero(oid) => {
-                    let contents = repo.find_blob_or_fail(oid)?.get_content().to_vec();
-                    let contents = match String::from_utf8(contents) {
+                    let blob = repo.find_blob_or_fail(oid)?;
+                    let num_bytes = blob.size();
+                    if blob.is_binary() {
+                        return Ok(BlobContents::Binary(num_bytes));
+                    }
+
+                    let contents = blob.get_content();
+                    let contents = match std::str::from_utf8(contents) {
                         Ok(contents) => contents,
                         Err(_) => {
-                            return Ok(None);
+                            return Ok(BlobContents::Binary(num_bytes));
                         }
                     };
+
                     let lines: Vec<String> = contents
                         .split_inclusive('\n')
                         .map(|line| line.to_owned())
                         .collect();
-                    Ok(Some(lines))
+                    Ok(BlobContents::Text(lines))
                 }
             }
         };
@@ -149,24 +198,61 @@ pub fn process_diff_for_record(repo: &Repo, diff: &Diff) -> eyre::Result<Vec<Fil
             Err(err) if err.code() == git2::ErrorCode::NotFound => {}
             Err(err) => return Err(err.into()),
         }
-        let before_lines = match get_lines_from_blob(old_oid)? {
-            Some(lines) => lines,
-            None => {
-                result.push(File::binary(Cow::Owned(path)));
-                continue;
-            }
-        };
-        let after_lines = match get_lines_from_blob(new_oid)? {
-            Some(lines) => lines,
-            None => {
-                result.push(File::binary(Cow::Owned(path)));
-                continue;
-            }
-        };
+        let before_lines = get_lines_from_blob(old_oid)?;
+        let after_lines = get_lines_from_blob(new_oid)?;
 
         let mut unchanged_hunk_line_idx = 0;
-        let mut file_hunks = Vec::new();
+        let mut file_sections = Vec::new();
         for hunk in hunks {
+            #[derive(Debug)]
+            enum Lines<'a> {
+                Lines(&'a [String]),
+                BinaryDescription(String),
+            }
+            let empty_lines: Vec<String> = Default::default();
+            let before_lines = match &before_lines {
+                BlobContents::Absent => Lines::Lines(&empty_lines),
+                BlobContents::Text(before_lines) => Lines::Lines(before_lines),
+                BlobContents::Binary(num_bytes) => Lines::BinaryDescription(
+                    make_binary_description(&old_oid.to_string(), *num_bytes),
+                ),
+            };
+            let after_lines = match &after_lines {
+                BlobContents::Absent => Lines::Lines(Default::default()),
+                BlobContents::Text(after_lines) => Lines::Lines(after_lines),
+                BlobContents::Binary(num_bytes) => Lines::BinaryDescription(
+                    make_binary_description(&new_oid.to_string(), *num_bytes),
+                ),
+            };
+
+            let (before_lines, after_lines) = match (before_lines, after_lines) {
+                (Lines::Lines(before_lines), Lines::Lines(after_lines)) => {
+                    (before_lines, after_lines)
+                }
+                (Lines::BinaryDescription(_), Lines::Lines(after_lines)) => {
+                    (Default::default(), after_lines)
+                }
+                (Lines::Lines(_), Lines::BinaryDescription(new_description)) => {
+                    file_sections.push(Section::Binary {
+                        is_toggled: false,
+                        old_description: None,
+                        new_description: Some(Cow::Owned(new_description)),
+                    });
+                    continue;
+                }
+                (
+                    Lines::BinaryDescription(old_description),
+                    Lines::BinaryDescription(new_description),
+                ) => {
+                    file_sections.push(Section::Binary {
+                        is_toggled: false,
+                        old_description: Some(Cow::Owned(old_description)),
+                        new_description: Some(Cow::Owned(new_description)),
+                    });
+                    continue;
+                }
+            };
+
             let GitHunk {
                 old_start,
                 old_lines,
@@ -199,7 +285,7 @@ pub fn process_diff_for_record(repo: &Repo, diff: &Diff) -> eyre::Result<Vec<Fil
                 } else {
                     old_start
                 };
-                file_hunks.push(Section::Unchanged {
+                file_sections.push(Section::Unchanged {
                     lines: before_lines[unchanged_hunk_line_idx..end]
                         .iter()
                         .cloned()
@@ -212,7 +298,7 @@ pub fn process_diff_for_record(repo: &Repo, diff: &Diff) -> eyre::Result<Vec<Fil
             let before_idx_start = old_start;
             let before_idx_end = before_idx_start + old_lines;
             assert!(
-                before_idx_end <= before_lines.len(),
+            before_idx_end <= before_lines.len(),
                 "before_idx_end {end} was not in range [0, {len}): {hunk:?}, path: {path:?}; lines {start}-... are: {lines:?}",
                 start = before_idx_start,
                 end = before_idx_end,
@@ -221,6 +307,16 @@ pub fn process_diff_for_record(repo: &Repo, diff: &Diff) -> eyre::Result<Vec<Fil
                 path = path,
                 lines = &before_lines[before_idx_start..],
             );
+            let before_section_lines = before_lines[before_idx_start..before_idx_end]
+                .iter()
+                .cloned()
+                .map(|before_line| SectionChangedLine {
+                    is_toggled: false,
+                    change_type: ChangeType::Removed,
+                    line: Cow::Owned(before_line),
+                })
+                .collect_vec();
+
             let after_idx_start = new_start;
             let after_idx_end = after_idx_start + new_lines;
             assert!(
@@ -233,43 +329,38 @@ pub fn process_diff_for_record(repo: &Repo, diff: &Diff) -> eyre::Result<Vec<Fil
                 path = path,
                 lines  = &after_lines[after_idx_start..],
             );
-            file_hunks.push(Section::Changed {
-                lines: before_lines[before_idx_start..before_idx_end]
-                    .iter()
-                    .cloned()
-                    .map(|before_line| SectionChangedLine {
-                        is_toggled: false,
-                        change_type: ChangeType::Removed,
-                        line: Cow::Owned(before_line),
-                    })
-                    .chain(
-                        after_lines[after_idx_start..after_idx_end]
-                            .iter()
-                            .cloned()
-                            .map(|after_line| SectionChangedLine {
-                                is_toggled: false,
-                                change_type: ChangeType::Added,
-                                line: Cow::Owned(after_line),
-                            }),
-                    )
-                    .collect(),
-            });
+            let after_section_lines = after_lines[after_idx_start..after_idx_end]
+                .iter()
+                .cloned()
+                .map(|after_line| SectionChangedLine {
+                    is_toggled: false,
+                    change_type: ChangeType::Added,
+                    line: Cow::Owned(after_line),
+                })
+                .collect_vec();
+
+            if !(before_section_lines.is_empty() && after_section_lines.is_empty()) {
+                file_sections.push(Section::Changed {
+                    lines: before_section_lines
+                        .into_iter()
+                        .chain(after_section_lines)
+                        .collect(),
+                });
+            }
         }
 
-        if unchanged_hunk_line_idx < before_lines.len() {
-            file_hunks.push(Section::Unchanged {
-                lines: before_lines[unchanged_hunk_line_idx..]
-                    .iter()
-                    .cloned()
-                    .map(Cow::Owned)
-                    .collect(),
-            });
+        if let BlobContents::Text(before_lines) = before_lines {
+            if unchanged_hunk_line_idx < before_lines.len() {
+                file_sections.push(Section::Unchanged {
+                    lines: before_lines[unchanged_hunk_line_idx..]
+                        .iter()
+                        .cloned()
+                        .map(Cow::Owned)
+                        .collect(),
+                });
+            }
         }
 
-        let old_file_mode: u32 = old_file_mode.try_into().unwrap();
-        let old_file_mode: FileMode = old_file_mode.try_into().unwrap();
-        let new_file_mode: u32 = new_file_mode.try_into().unwrap();
-        let new_file_mode: FileMode = new_file_mode.try_into().unwrap();
         let file_mode_section = if old_file_mode != new_file_mode {
             vec![Section::FileMode {
                 is_toggled: false,
@@ -282,7 +373,7 @@ pub fn process_diff_for_record(repo: &Repo, diff: &Diff) -> eyre::Result<Vec<Fil
         result.push(File {
             path: Cow::Owned(path),
             file_mode: Some(old_file_mode),
-            sections: [file_mode_section, file_hunks].concat().to_vec(),
+            sections: [file_mode_section, file_sections].concat().to_vec(),
         });
     }
 
