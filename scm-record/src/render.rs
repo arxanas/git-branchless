@@ -21,6 +21,12 @@ pub(crate) struct RectSize {
     pub height: usize,
 }
 
+impl RectSize {
+    pub fn area(self) -> usize {
+        self.width * self.height
+    }
+}
+
 impl From<tui::layout::Rect> for RectSize {
     fn from(rect: tui::layout::Rect) -> Self {
         Rect::from(rect).into()
@@ -67,6 +73,14 @@ impl From<tui::layout::Rect> for Rect {
 }
 
 impl Rect {
+    /// The size of the `Rect`. (To get the area as a scalar, call `.size().area()`.)
+    pub fn size(self) -> RectSize {
+        RectSize {
+            width: self.width,
+            height: self.height,
+        }
+    }
+
     /// The (x, y) coordinate of the top-left corner of this `Rect`.
     fn top_left(self) -> (isize, isize) {
         (self.x, self.y)
@@ -78,6 +92,13 @@ impl Rect {
             self.x + self.width.unwrap_isize(),
             self.y + self.height.unwrap_isize(),
         )
+    }
+
+    /// Whether or not this `Rect` contains the given point.
+    pub fn contains_point(self, x: isize, y: isize) -> bool {
+        let (x1, y1) = self.top_left();
+        let (x2, y2) = self.bottom_right();
+        x1 <= x && x < x2 && y1 <= y && y < y2
     }
 
     /// Whether this `Rect` has zero area.

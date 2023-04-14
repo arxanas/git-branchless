@@ -14,7 +14,7 @@ use std::{fs, io, panic};
 
 use crossterm::event::{
     DisableMouseCapture, EnableMouseCapture, KeyCode, KeyEvent, KeyEventKind, KeyModifiers,
-    MouseEvent, MouseEventKind,
+    MouseButton, MouseEvent, MouseEventKind,
 };
 use crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, is_raw_mode_enabled, EnterAlternateScreen,
@@ -68,6 +68,12 @@ enum SelectionKey {
     Line(LineKey),
 }
 
+impl Default for SelectionKey {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
 /// A copy of the contents of the screen at a certain point in time.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct TestingScreenshot {
@@ -116,6 +122,7 @@ pub enum Event {
     FocusOuter,
     ToggleItem,
     ToggleItemAndAdvance,
+    Click { row: usize, column: usize },
 }
 
 impl From<crossterm::event::Event> for Event {
@@ -251,6 +258,16 @@ impl From<crossterm::event::Event> for Event {
                 kind: KeyEventKind::Press,
                 state: _,
             }) => Self::ToggleItemAndAdvance,
+
+            Event::Mouse(MouseEvent {
+                kind: MouseEventKind::Down(MouseButton::Left),
+                column,
+                row,
+                modifiers: _,
+            }) => Self::Click {
+                row: row.into(),
+                column: column.into(),
+            },
 
             _event => Self::None,
         }
@@ -763,6 +780,11 @@ impl<'a> Recorder<'a> {
                 let advanced_key = self.advance_to_next_of_kind();
                 StateUpdate::ToggleItemAndAdvance(self.selection_key, advanced_key)
             }
+
+            (_, Event::Click { row, column }) => {
+                let component_id = self.find_component_at(drawn_rects, row, column);
+                self.click_component(component_id)
+            }
         };
         Ok(state_update)
     }
@@ -991,6 +1013,37 @@ impl<'a> Recorder<'a> {
             // Component is at least partially below the viewport. Want to satisfy:
             // scroll_offset_y + term_height == rect_bottom_y
             rect_bottom_y - term_height
+        }
+    }
+
+    fn find_component_at(
+        &self,
+        drawn_rects: &HashMap<ComponentId, Rect>,
+        row: usize,
+        column: usize,
+    ) -> ComponentId {
+        let x = column.unwrap_isize();
+        let y = row.unwrap_isize() + self.scroll_offset_y;
+        drawn_rects
+            .iter()
+            .filter(|(_id, rect)| rect.contains_point(x, y))
+            .min_by(|(_, lhs), (_, rhs)| lhs.size().area().cmp(&rhs.size().area()))
+            .map(|(id, _rect)| id.clone())
+            .unwrap_or(ComponentId::App)
+    }
+
+    fn click_component(&self, component_id: ComponentId) -> StateUpdate {
+        match component_id {
+            ComponentId::App | ComponentId::QuitDialog => StateUpdate::None,
+            ComponentId::SelectableItem(selection_key) => StateUpdate::SelectItem(selection_key),
+            ComponentId::TristateBox => {
+                // TODO: implement toggling the checkbox
+                StateUpdate::None
+            }
+            ComponentId::QuitDialogButton(QuitDialogButtonId::GoBack) => {
+                StateUpdate::SetQuitDialog(None)
+            }
+            ComponentId::QuitDialogButton(QuitDialogButtonId::Quit) => StateUpdate::QuitCancel,
         }
     }
 
