@@ -326,6 +326,7 @@ impl Forge for PhabricatorForge<'_> {
             draft,
             execution_strategy,
             num_jobs,
+            message: _,
         } = options;
 
         let commit_set = commits.keys().copied().collect();
@@ -578,6 +579,14 @@ Differential Revision: https://phabricator.example.com/D000$(git rev-list --coun
         commits: HashMap<NonZeroOid, crate::CommitStatus>,
         options: &SubmitOptions,
     ) -> EyreExitOr<()> {
+        let SubmitOptions {
+            create: _,
+            draft: _,
+            execution_strategy: _,
+            num_jobs: _,
+            message,
+        } = options;
+
         let commit_set = commits.keys().copied().collect();
 
         {
@@ -597,25 +606,24 @@ Differential Revision: https://phabricator.example.com/D000$(git rev-list --coun
                 )?;
 
                 if !should_mock() {
-                    let head_rev = commit_oid.to_string();
-                    let base_rev = format!("{head_rev}^");
-                    let args = [
-                        "diff",
-                        "--verbatim",
-                        "-m",
-                        "update",
-                        "--head",
-                        &head_rev,
-                        &base_rev,
-                    ];
-                    let mut child =
-                        Command::new("arc")
-                            .args(args)
-                            .spawn()
-                            .map_err(|err| Error::InvokeArc {
-                                source: err,
-                                args: args.iter().map(|s| s.to_string()).collect(),
-                            })?;
+                    let args = {
+                        let mut args = vec![
+                            "diff".to_string(),
+                            "--verbatim".to_string(),
+                            "--head".to_string(),
+                            commit_oid.to_string(),
+                            format!("{commit_oid}^"),
+                        ];
+                        args.extend(match message {
+                            Some(message) => ["-m".to_string(), message.clone()],
+                            None => ["-m".to_string(), "update".to_string()],
+                        });
+                        args
+                    };
+                    let mut child = Command::new("arc")
+                        .args(&args)
+                        .spawn()
+                        .map_err(|err| Error::InvokeArc { source: err, args })?;
                     let exit_status = child.wait()?;
                     let exit_code = ExitCode::try_from(exit_status)?;
                     if !exit_code.is_success() {
