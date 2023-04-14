@@ -977,3 +977,51 @@ fn test_mouse_click_wide_line() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_mouse_click_dialog_buttons() -> eyre::Result<()> {
+    let state = RecordState {
+        files: vec![File {
+            path: Cow::Borrowed(Path::new("foo")),
+            file_mode: None,
+            sections: vec![Section::Changed {
+                lines: vec![SectionChangedLine {
+                    is_toggled: true,
+                    change_type: ChangeType::Removed,
+                    line: Cow::Borrowed("foo\n"),
+                }],
+            }],
+        }],
+    };
+
+    let click_nothing = TestingScreenshot::default();
+    let click_go_back = TestingScreenshot::default();
+    let events = [
+        Event::QuitCancel,
+        Event::Click { row: 3, column: 55 },
+        click_nothing.event(),
+        Event::QuitCancel,
+        Event::Click { row: 3, column: 65 },
+        click_go_back.event(),
+    ];
+    let event_source = EventSource::testing(80, 6, events);
+    let recorder = Recorder::new(state, event_source);
+    let result = recorder.run();
+    insta::assert_debug_snapshot!(result, @r###"
+    Err(
+        Cancelled,
+    )
+    "###);
+
+    insta::assert_display_snapshot!(click_nothing, @r###"
+    "(×) foo                                                                         "
+    "  [×] Section 1/1                                                               "
+    "    [×] - foo                                                                   "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "###);
+    insta::assert_display_snapshot!(click_go_back, @"<this screenshot was never assigned>");
+
+    Ok(())
+}
