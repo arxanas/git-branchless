@@ -896,3 +896,84 @@ fn test_mouse_click_checkbox() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_mouse_click_wide_line() -> eyre::Result<()> {
+    let state = RecordState {
+        files: vec![File {
+            path: Cow::Borrowed(Path::new("foo")),
+            file_mode: None,
+            sections: vec![
+                Section::FileMode {
+                    is_toggled: false,
+                    before: FileMode::absent(),
+                    after: FileMode(0o100644),
+                },
+                Section::Changed {
+                    lines: vec![SectionChangedLine {
+                        is_toggled: false,
+                        change_type: ChangeType::Removed,
+                        line: Cow::Borrowed("foo\n"),
+                    }],
+                },
+            ],
+        }],
+    };
+
+    let initial = TestingScreenshot::default();
+    let click_line = TestingScreenshot::default();
+    let click_line_section = TestingScreenshot::default();
+    let click_file_mode_section = TestingScreenshot::default();
+    let click_file = TestingScreenshot::default();
+    let event_source = EventSource::testing(
+        80,
+        4,
+        [
+            initial.event(),
+            Event::Click { row: 3, column: 50 },
+            click_line.event(),
+            Event::Click { row: 2, column: 50 },
+            click_line_section.event(),
+            Event::Click { row: 1, column: 50 },
+            click_file_mode_section.event(),
+            Event::Click { row: 0, column: 50 },
+            click_file.event(),
+            Event::QuitAccept,
+        ],
+    );
+    let recorder = Recorder::new(state, event_source);
+    recorder.run()?;
+
+    insta::assert_display_snapshot!(initial, @r###"
+    "( ) foo                                                                         "
+    "  [ ] File mode changed from 0 to 100644                                        "
+    "  [ ] Section 2/2                                                               "
+    "    [ ] - foo                                                                   "
+    "###);
+    insta::assert_display_snapshot!(click_line, @r###"
+    "[ ] foo                                                                         "
+    "  [ ] File mode changed from 0 to 100644                                        "
+    "  [ ] Section 2/2                                                               "
+    "    ( ) - foo                                                                   "
+    "###);
+    insta::assert_display_snapshot!(click_line_section, @r###"
+    "[ ] foo                                                                         "
+    "  [ ] File mode changed from 0 to 100644                                        "
+    "  ( ) Section 2/2                                                               "
+    "    [ ] - foo                                                                   "
+    "###);
+    insta::assert_display_snapshot!(click_file_mode_section, @r###"
+    "[ ] foo                                                                         "
+    "  ( ) File mode changed from 0 to 100644                                        "
+    "  [ ] Section 2/2                                                               "
+    "    [ ] - foo                                                                   "
+    "###);
+    insta::assert_display_snapshot!(click_file, @r###"
+    "( ) foo                                                                         "
+    "  [ ] File mode changed from 0 to 100644                                        "
+    "  [ ] Section 2/2                                                               "
+    "    [ ] - foo                                                                   "
+    "###);
+
+    Ok(())
+}

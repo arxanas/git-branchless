@@ -409,6 +409,32 @@ impl<'a, ComponentId: Clone + Debug + Eq + Hash> Viewport<'a, ComponentId> {
         widget.render(rect, self.buf);
     }
 
+    pub fn fill_rest_of_line(&mut self, x: isize, y: isize) {
+        let line_width = self.rect.width.unwrap_isize() - x;
+        let line_width: usize = match line_width.try_into() {
+            Ok(0) | Err(_) => return,
+            Ok(line_width) => line_width,
+        };
+
+        let line_rect = Rect {
+            x,
+            y,
+            width: line_width,
+            height: 1,
+        };
+        self.current_trace_mut().merge_rect(line_rect);
+        let draw_rect = self.rect.intersect(line_rect);
+        if !draw_rect.is_empty() {
+            let buf_rect = self.translate_rect(draw_rect);
+            self.buf.set_span(
+                buf_rect.x,
+                buf_rect.y,
+                &Span::raw(" ".repeat(line_width)),
+                buf_rect.width,
+            );
+        }
+    }
+
     /// Convert the virtual `Rect` being displayed on the viewport, potentially
     /// including an area off-screen, into a real terminal `tui::layout::Rect`
     /// indicating the actual positions of the characters to be printed
