@@ -18,10 +18,10 @@ fn main() -> eyre::Result<()> {
     let glyphs = Glyphs::detect();
     let effects = Effects::new(glyphs);
 
-    let mut next_commit = repo.find_commit_or_fail(repo.get_head_info()?.oid.unwrap())?;
+    let mut parent_commit = repo.find_commit_or_fail(repo.get_head_info()?.oid.unwrap())?;
     for i in 1..1000 {
-        let current_commit = next_commit;
-        next_commit = match current_commit.get_parents().first() {
+        let current_commit = parent_commit;
+        parent_commit = match current_commit.get_parents().first() {
             Some(parent_commit) => parent_commit.clone(),
             None => {
                 println!("Reached root commit, exiting.");
@@ -29,17 +29,6 @@ fn main() -> eyre::Result<()> {
             }
         };
         println!("Test #{i}: {current_commit:?}");
-
-        let parent_commit = match current_commit.get_only_parent() {
-            Some(parent_commit) => parent_commit,
-            None => {
-                println!(
-                    "Skipping since commit had multiple parents: {:?}",
-                    current_commit.get_parents(),
-                );
-                continue;
-            }
-        };
 
         let old_tree = parent_commit.get_tree()?;
         let new_tree = current_commit.get_tree()?;
