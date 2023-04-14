@@ -6,10 +6,135 @@ use std::path::PathBuf;
 
 use branchless::core::effects::Effects;
 use branchless::core::formatting::Glyphs;
-use branchless::git::{hydrate_tree, process_diff_for_record, FileMode, MaybeZeroOid, Repo};
+use branchless::git::{
+    hydrate_tree, process_diff_for_record, Commit, FileMode, MaybeZeroOid, NonZeroOid, Repo, Tree,
+};
 use bstr::ByteSlice;
 use eyre::Context;
 use scm_record::{File, Section, SelectedContents};
+
+fn entries_from_files(
+    repo: &Repo,
+    old_tree: &Tree,
+    new_tree: &Tree,
+    files: &[File],
+) -> eyre::Result<HashMap<PathBuf, Option<(NonZeroOid, FileMode)>>> {
+    let entries = files
+        .into_iter()
+        .map(|file| {
+            let file_path = file.path.clone().into_owned();
+            let value = {
+                let (selected, _unselected) = file.get_selected_contents();
+                let blob_oid = match selected {
+                    SelectedContents::Absent => return Ok((file_path, None)),
+                    SelectedContents::Unchanged => {
+                        old_tree.get_oid_for_path(&file.path)?.unwrap_or_default()
+                    }
+                    SelectedContents::Binary {
+                        old_description: _,
+                        new_description: _,
+                    } => new_tree.get_oid_for_path(&file.path)?.unwrap(),
+                    SelectedContents::Present { contents } => {
+                        MaybeZeroOid::NonZero(repo.create_blob_from_contents(contents.as_bytes())?)
+                    }
+                };
+                match blob_oid {
+                    MaybeZeroOid::Zero => None,
+                    MaybeZeroOid::NonZero(blob_oid) => {
+                        let new_file_mode = file
+                            .get_file_mode()
+                            .expect("File mode should have been set");
+                        let file_mode = i32::try_from(new_file_mode).unwrap();
+                        let file_mode = FileMode::from(file_mode);
+                        Some((blob_oid, file_mode))
+                    }
+                }
+            };
+            Ok((file_path, value))
+        })
+        .collect::<eyre::Result<_>>()?;
+    Ok(entries)
+}
+
+fn select_all(mut entries: Vec<File>) -> Vec<File> {
+    for File {
+        path: _,
+        file_mode: _,
+        sections,
+    } in &mut entries
+    {
+        for section in sections {
+            match section {
+                Section::Unchanged { lines: _ } => {}
+                Section::Changed { lines } => {
+                    for line in lines {
+                        line.is_toggled = true;
+                    }
+                }
+                Section::FileMode {
+                    is_toggled,
+                    before: _,
+                    after: _,
+                }
+                | Section::Binary {
+                    is_toggled,
+                    old_description: _,
+                    new_description: _,
+                } => {
+                    *is_toggled = true;
+                }
+            }
+        }
+    }
+    entries
+}
+
+fn assert_trees_equal(
+    test: &str,
+    repo: &Repo,
+    parent_commit: &Commit,
+    current_commit: &Commit,
+    expected_tree: &Tree,
+    entries: &[File],
+) -> eyre::Result<()> {
+    let old_tree = parent_commit.get_tree()?;
+    let new_tree = current_commit.get_tree()?;
+    let entries = entries_from_files(repo, &old_tree, &new_tree, entries)?;
+    let actual_tree_oid = hydrate_tree(&repo, Some(&old_tree), entries)?;
+    let actual_tree = repo.find_tree_or_fail(actual_tree_oid)?;
+    let actual_commit = {
+        let author = current_commit.get_author();
+        let committer = current_commit.get_committer();
+        let message = current_commit.get_message_raw();
+        let message = message.to_str_lossy();
+        let parents = current_commit.get_parents();
+        let actual_oid = repo.create_commit(
+            None,
+            &author,
+            &committer,
+            &message,
+            &actual_tree,
+            parents.iter().collect(),
+        )?;
+        repo.find_commit_or_fail(actual_oid)?
+    };
+    if actual_tree.get_oid() != expected_tree.get_oid() {
+        eyre::bail!(
+            "\
+Trees are NOT equal for test {test:?}
+Actual: {actual} vs expected: {expected}
+Try running:
+git diff-tree -p {expected} {actual}
+Or examine the new (wrong) commit with:
+git show {commit_oid}",
+            expected = expected_tree.get_oid().to_string(),
+            actual = actual_tree.get_oid().to_string(),
+            commit_oid = actual_commit.get_oid(),
+        );
+    }
+
+    Ok(())
+}
 
 fn main() -> eyre::Result<()> {
     let path_to_repo = std::env::var("PATH_TO_REPO")
@@ -34,105 +159,29 @@ fn main() -> eyre::Result<()> {
         let new_tree = current_commit.get_tree()?;
         let diff = repo.get_diff_between_trees(&effects, Some(&old_tree), &new_tree, 0)?;
 
-        let entries = {
-            let mut entries = process_diff_for_record(&repo, &diff)?;
-            for File {
-                path: _,
-                file_mode: _,
-                sections,
-            } in &mut entries
-            {
-                for section in sections {
-                    match section {
-                        Section::Unchanged { lines: _ } => {}
-                        Section::Changed { lines } => {
-                            for line in lines {
-                                line.is_toggled = true;
-                            }
-                        }
-                        Section::FileMode {
-                            is_toggled,
-                            before: _,
-                            after: _,
-                        }
-                        | Section::Binary {
-                            is_toggled,
-                            old_description: _,
-                            new_description: _,
-                        } => {
-                            *is_toggled = true;
-                        }
-                    }
-                }
-            }
-            entries
-        };
-        let entries: HashMap<_, _> = entries
-            .into_iter()
-            .map(|file| {
-                let file_path = file.path.clone().into_owned();
-                let value = {
-                    let (selected, _unselected) = file.get_selected_contents();
-                    let blob_oid = match selected {
-                        SelectedContents::Absent => return Ok((file_path, None)),
-                        SelectedContents::Unchanged => {
-                            old_tree.get_oid_for_path(&file.path)?.unwrap_or_default()
-                        }
-                        SelectedContents::Binary {
-                            old_description: _,
-                            new_description: _,
-                        } => new_tree.get_oid_for_path(&file.path)?.unwrap(),
-                        SelectedContents::Present { contents } => MaybeZeroOid::NonZero(
-                            repo.create_blob_from_contents(contents.as_bytes())?,
-                        ),
-                    };
-                    match blob_oid {
-                        MaybeZeroOid::Zero => None,
-                        MaybeZeroOid::NonZero(blob_oid) => {
-                            let new_file_mode = file
-                                .get_file_mode()
-                                .expect("File mode should have been set");
-                            let file_mode = i32::try_from(new_file_mode).unwrap();
-                            let file_mode = FileMode::from(file_mode);
-                            Some((blob_oid, file_mode))
-                        }
-                    }
-                };
-                Ok((file_path, value))
-            })
-            .collect::<eyre::Result<_>>()?;
-
-        let actual_tree_oid = hydrate_tree(&repo, Some(&old_tree), entries)?;
-        let actual_tree = repo.find_tree_or_fail(actual_tree_oid)?;
-        let actual_commit = {
-            let author = current_commit.get_author();
-            let committer = current_commit.get_committer();
-            let message = current_commit.get_message_raw();
-            let message = message.to_str_lossy();
-            let parents = current_commit.get_parents();
-            let actual_oid = repo.create_commit(
-                None,
-                &author,
-                &committer,
-                &message,
-                &actual_tree,
-                parents.iter().collect(),
+        let entries = process_diff_for_record(&repo, &diff)?;
+        {
+            assert_trees_equal(
+                &format!("select-none {parent_commit:?}"),
+                &repo,
+                &parent_commit,
+                &current_commit,
+                &parent_commit.get_tree()?,
+                &entries,
             )?;
-            repo.find_commit_or_fail(actual_oid)?
-        };
-        let expected_tree = current_commit.get_tree()?;
-        if actual_tree.get_oid() != expected_tree.get_oid() {
-            println!(
-                "Trees are NOT equal, actual {actual} vs expected {expected}\n\
-                Try running:\n\
-                git diff-tree -p {expected} {actual}\n\
-                Or examine the new (wrong) commit with:\n\
-                git show {commit_oid}",
-                expected = expected_tree.get_oid().to_string(),
-                actual = actual_tree.get_oid().to_string(),
-                commit_oid = actual_commit.get_oid(),
-            );
-            std::process::exit(1);
+        }
+
+        // Select all changes (the resulting tree should be identical).
+        {
+            let entries = select_all(entries);
+            assert_trees_equal(
+                &format!("select-all {current_commit:?}"),
+                &repo,
+                &parent_commit,
+                &current_commit,
+                &current_commit.get_tree()?,
+                &entries,
+            )?;
         }
     }
 
