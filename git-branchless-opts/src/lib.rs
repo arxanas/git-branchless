@@ -392,6 +392,10 @@ pub struct SubmitArgs {
     /// The Git hosting provider to use.
     #[clap(short = 'F', long = "forge")]
     pub forge: Option<ForgeKind>,
+
+    /// An optional message to include with the create or update operation.
+    #[clap(short = 'm', long = "message")]
+    pub message: Option<String>,
 }
 
 /// Run a command on each commit in a given set and aggregate the results.

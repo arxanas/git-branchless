@@ -102,6 +102,9 @@ pub struct SubmitOptions {
 
     /// The number of jobs to use when submitting commits.
     pub num_jobs: usize,
+
+    /// An optional message to include with the create or update operation.
+    pub message: Option<String>,
 }
 
 /// The result of creating a commit.
@@ -154,6 +157,7 @@ pub fn command_main(ctx: CommandContext, args: SubmitArgs) -> EyreExitOr<()> {
         revset,
         resolve_revset_options,
         forge,
+        message,
     } = args;
     submit(
         &effects,
@@ -164,6 +168,7 @@ pub fn command_main(ctx: CommandContext, args: SubmitArgs) -> EyreExitOr<()> {
         draft,
         strategy,
         forge,
+        message,
     )
 }
 
@@ -176,6 +181,7 @@ fn submit(
     draft: bool,
     execution_strategy: Option<TestExecutionStrategy>,
     forge_kind: Option<ForgeKind>,
+    message: Option<String>,
 ) -> EyreExitOr<()> {
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
@@ -248,6 +254,7 @@ fn submit(
         draft,
         execution_strategy,
         num_jobs,
+        message,
     };
 
     let mut forge = select_forge(
