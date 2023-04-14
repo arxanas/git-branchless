@@ -53,6 +53,15 @@ pub enum RecordError {
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct FileMode(pub usize);
 
+impl FileMode {
+    /// Get the file mode corresponding to an absent file. This typically
+    /// indicates that the file was created (if the "before" mode) or deleted
+    /// (if the "after" mode).
+    pub fn absent() -> Self {
+        Self(0)
+    }
+}
+
 impl Display for FileMode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let Self(mode) = self;
@@ -114,48 +123,65 @@ pub struct File<'a> {
     /// The path to the file.
     pub path: Cow<'a, Path>,
 
-    /// The Unix file mode of the file, if available.
+    /// The Unix file mode of the file (before any changes), if available. This
+    /// may be rendered by the UI.
     ///
     /// This value is not directly modified by the UI; instead, construct a
     /// [`Section::FileMode`] and use the [`FileState::get_file_mode`] function
     /// to read a user-provided updated to the file mode function to read a
-    /// user-provided updated to the file mode
+    /// user-provided updated to the file mode.
     pub file_mode: Option<FileMode>,
 
     /// The set of [`Section`]s inside the file.
     pub sections: Vec<Section<'a>>,
 }
 
+/// The contents of a file selected as part of the record operation.
+#[derive(Clone, Debug, Hash, Eq, PartialEq, PartialOrd, Ord)]
+pub enum SelectedContents<'a> {
+    /// The file didn't exist or was deleted.
+    Absent,
+
+    /// The file contents have not changed.
+    Unchanged,
+
+    /// The file contains binary contents.
+    Binary {
+        /// The UI description of the old version of the file.
+        old_description: Option<Cow<'a, str>>,
+        /// The UI description of the new version of the file.
+        new_description: Option<Cow<'a, str>>,
+    },
+
+    /// The file contained the following text contents.
+    Present {
+        /// The contents of the file.
+        contents: String,
+    },
+}
+
+impl SelectedContents<'_> {
+    fn push_str(&mut self, s: &str) {
+        match self {
+            SelectedContents::Absent | SelectedContents::Unchanged => {
+                *self = SelectedContents::Present {
+                    contents: s.to_owned(),
+                };
+            }
+            SelectedContents::Binary {
+                old_description: _,
+                new_description: _,
+            } => {
+                // Do nothing.
+            }
+            SelectedContents::Present { contents } => {
+                contents.push_str(s);
+            }
+        }
+    }
+}
+
 impl File<'_> {
-    /// An absent file.
-    pub fn absent(path: Cow<Path>) -> Self {
-        unimplemented!("FileState::absent for path {path:?}")
-    }
-
-    /// A binary file.
-    pub fn binary(path: Cow<Path>) -> Self {
-        unimplemented!("FileState::binary for path {path:?}")
-    }
-
-    /// Count the number of changed sections in this file.
-    pub fn count_changed_sections(&self) -> usize {
-        let Self {
-            path: _,
-            file_mode: _,
-            sections,
-        } = self;
-        sections
-            .iter()
-            .filter(|section| match section {
-                Section::Unchanged { .. } => false,
-                Section::Changed { .. } => true,
-                Section::FileMode { .. } => {
-                    unimplemented!("count_changed_sections for Section::FileMode")
-                }
-            })
-            .count()
-    }
-
     /// Get the new Unix file mode. If the user selected a
     /// [`Section::FileMode`], then returns that file mode. Otherwise, returns
     /// the `file_mode` value that this [`FileState`] was constructed with.
@@ -174,7 +200,8 @@ impl File<'_> {
                     is_toggled: false,
                     before: _,
                     after: _,
-                } => None,
+                }
+                | Section::Binary { .. } => None,
 
                 Section::FileMode {
                     is_toggled: true,
@@ -188,9 +215,9 @@ impl File<'_> {
     /// Calculate the `(selected, unselected)` contents of the file. For
     /// example, the first value would be suitable for staging or committing,
     /// and the second value would be suitable for potentially recording again.
-    pub fn get_selected_contents(&self) -> (String, String) {
-        let mut acc_selected = String::new();
-        let mut acc_unselected = String::new();
+    pub fn get_selected_contents(&self) -> (SelectedContents, SelectedContents) {
+        let mut acc_selected = SelectedContents::Unchanged;
+        let mut acc_unselected = SelectedContents::Unchanged;
         let Self {
             path: _,
             file_mode: _,
@@ -204,6 +231,7 @@ impl File<'_> {
                         acc_unselected.push_str(line);
                     }
                 }
+
                 Section::Changed { lines } => {
                     for line in lines {
                         let SectionChangedLine {
@@ -221,7 +249,34 @@ impl File<'_> {
                         }
                     }
                 }
-                Section::FileMode { .. } => {}
+
+                Section::FileMode {
+                    is_toggled,
+                    before,
+                    after,
+                } => {
+                    if *is_toggled && after == &FileMode::absent() {
+                        acc_selected = SelectedContents::Absent;
+                    } else if !is_toggled && before == &FileMode::absent() {
+                        acc_unselected = SelectedContents::Absent;
+                    }
+                }
+
+                Section::Binary {
+                    is_toggled,
+                    old_description,
+                    new_description,
+                } => {
+                    let selected_contents = SelectedContents::Binary {
+                        old_description: old_description.clone(),
+                        new_description: new_description.clone(),
+                    };
+                    if *is_toggled {
+                        acc_selected = selected_contents;
+                    } else {
+                        acc_unselected = selected_contents;
+                    }
+                }
             }
         }
         (acc_selected, acc_unselected)
@@ -264,6 +319,18 @@ pub enum Section<'a> {
         /// The new file mode.
         after: FileMode,
     },
+
+    /// This file contains binary contents.
+    Binary {
+        /// Whether or not the binary contents change was accepted.
+        is_toggled: bool,
+
+        /// The description of the old binary contents, for use in the UI only.
+        old_description: Option<Cow<'a, str>>,
+
+        /// The description of the new binary contents, for use in the UI only.
+        new_description: Option<Cow<'a, str>>,
+    },
 }
 
 impl Section<'_> {
@@ -272,13 +339,13 @@ impl Section<'_> {
     pub fn is_editable(&self) -> bool {
         match self {
             Section::Unchanged { .. } => false,
-            Section::Changed { .. } | Section::FileMode { .. } => true,
+            Section::Changed { .. } | Section::FileMode { .. } | Section::Binary { .. } => true,
         }
     }
 }
 
 /// The type of change in the patch/diff.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub enum ChangeType {
     /// The line was added.

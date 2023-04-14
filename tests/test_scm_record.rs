@@ -2,9 +2,10 @@ use std::borrow::Cow;
 use std::path::Path;
 
 use assert_matches::assert_matches;
+use insta::{assert_debug_snapshot, assert_snapshot};
 use scm_record::{
-    ChangeType, Event, EventSource, File, FileMode, RecordError, RecordState, Recorder, Section,
-    SectionChangedLine, TestingScreenshot,
+    helpers::make_binary_description, ChangeType, Event, EventSource, File, FileMode, RecordError,
+    RecordState, Recorder, Section, SectionChangedLine, TestingScreenshot,
 };
 
 fn example_contents() -> RecordState<'static> {
@@ -610,6 +611,181 @@ fn test_no_abbreviate_short_unchanged_sections() -> eyre::Result<()> {
     "                                                                                "
     "                                                                                "
     "###);
+
+    Ok(())
+}
+
+#[test]
+fn test_record_binary_file() -> eyre::Result<()> {
+    let state = RecordState {
+        files: vec![File {
+            path: Cow::Borrowed(Path::new("foo")),
+            file_mode: None,
+            sections: vec![Section::Binary {
+                is_toggled: false,
+                old_description: Some(Cow::Owned(make_binary_description("abc123", 123))),
+                new_description: Some(Cow::Owned(make_binary_description("def456", 456))),
+            }],
+        }],
+    };
+
+    let initial = TestingScreenshot::default();
+    let event_source = EventSource::testing(
+        80,
+        6,
+        [initial.event(), Event::ToggleItem, Event::QuitAccept],
+    );
+    let recorder = Recorder::new(state, event_source);
+    let state = recorder.run()?;
+
+    insta::assert_display_snapshot!(initial, @r###"
+    "( ) foo                                                                         "
+    "  [ ] (binary contents: abc123 (123 bytes) -> def456 (456 bytes))               "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "###);
+
+    assert_debug_snapshot!(state, @r###"
+    RecordState {
+        files: [
+            File {
+                path: "foo",
+                file_mode: None,
+                sections: [
+                    Binary {
+                        is_toggled: true,
+                        old_description: Some(
+                            "abc123 (123 bytes)",
+                        ),
+                        new_description: Some(
+                            "def456 (456 bytes)",
+                        ),
+                    },
+                ],
+            },
+        ],
+    }
+    "###);
+
+    let (selected, unselected) = state.files[0].get_selected_contents();
+    assert_debug_snapshot!(selected, @r###"
+    Binary {
+        old_description: Some(
+            "abc123 (123 bytes)",
+        ),
+        new_description: Some(
+            "def456 (456 bytes)",
+        ),
+    }
+    "###);
+    assert_debug_snapshot!(unselected, @"Unchanged");
+
+    Ok(())
+}
+
+#[test]
+fn test_record_binary_file_noop() -> eyre::Result<()> {
+    let state = RecordState {
+        files: vec![File {
+            path: Cow::Borrowed(Path::new("foo")),
+            file_mode: None,
+            sections: vec![Section::Binary {
+                is_toggled: false,
+                old_description: Some(Cow::Owned(make_binary_description("abc123", 123))),
+                new_description: Some(Cow::Owned(make_binary_description("def456", 456))),
+            }],
+        }],
+    };
+
+    let initial = TestingScreenshot::default();
+    let event_source = EventSource::testing(80, 6, [initial.event(), Event::QuitAccept]);
+    let recorder = Recorder::new(state, event_source);
+    let state = recorder.run()?;
+
+    insta::assert_display_snapshot!(initial, @r###"
+    "( ) foo                                                                         "
+    "  [ ] (binary contents: abc123 (123 bytes) -> def456 (456 bytes))               "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "###);
+
+    assert_debug_snapshot!(state, @r###"
+    RecordState {
+        files: [
+            File {
+                path: "foo",
+                file_mode: None,
+                sections: [
+                    Binary {
+                        is_toggled: false,
+                        old_description: Some(
+                            "abc123 (123 bytes)",
+                        ),
+                        new_description: Some(
+                            "def456 (456 bytes)",
+                        ),
+                    },
+                ],
+            },
+        ],
+    }
+    "###);
+
+    let (selected, unselected) = state.files[0].get_selected_contents();
+    assert_debug_snapshot!(selected, @"Unchanged");
+    assert_debug_snapshot!(unselected, @r###"
+    Binary {
+        old_description: Some(
+            "abc123 (123 bytes)",
+        ),
+        new_description: Some(
+            "def456 (456 bytes)",
+        ),
+    }
+    "###);
+
+    Ok(())
+}
+
+#[test]
+fn test_state_binary_selected_contents() -> eyre::Result<()> {
+    let test = |text, binary| {
+        let file = File {
+            path: Cow::Borrowed(Path::new("foo")),
+            file_mode: None,
+            sections: vec![
+                Section::Changed {
+                    lines: vec![SectionChangedLine {
+                        is_toggled: text,
+                        change_type: ChangeType::Removed,
+                        line: Cow::Borrowed("foo\n"),
+                    }],
+                },
+                Section::Binary {
+                    is_toggled: binary,
+                    old_description: Some(Cow::Owned(make_binary_description("abc123", 123))),
+                    new_description: Some(Cow::Owned(make_binary_description("def456", 456))),
+                },
+            ],
+        };
+        let selection = file.get_selected_contents();
+        format!("{selection:?}")
+    };
+
+    assert_snapshot!(test(false, false), @r###"(Present { contents: "foo\n" }, Binary { old_description: Some("abc123 (123 bytes)"), new_description: Some("def456 (456 bytes)") })"###);
+    assert_snapshot!(test(true, false), @r###"(Unchanged, Binary { old_description: Some("abc123 (123 bytes)"), new_description: Some("def456 (456 bytes)") })"###);
+
+    // NB: The result for this situation, where we've selected both a text and
+    // binary segment for inclusion, is arbitrary. The caller should avoid
+    // generating both kinds of sections in the same file (or we should improve
+    // the UI to never allow selecting both).
+    assert_snapshot!(test(false, true), @r###"(Binary { old_description: Some("abc123 (123 bytes)"), new_description: Some("def456 (456 bytes)") }, Unchanged)"###);
+
+    assert_snapshot!(test(true, true), @r###"(Binary { old_description: Some("abc123 (123 bytes)"), new_description: Some("def456 (456 bytes)") }, Present { contents: "foo\n" })"###);
 
     Ok(())
 }

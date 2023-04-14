@@ -6,6 +6,7 @@ use std::path::Path;
 
 use scm_record::{
     ChangeType, EventSource, File, RecordError, RecordState, Recorder, Section, SectionChangedLine,
+    SelectedContents,
 };
 
 fn main() {
@@ -99,7 +100,24 @@ fn main() {
             for file in files {
                 println!("--- Path {:?} final lines: ---", file.path);
                 let (selected, _unselected) = file.get_selected_contents();
-                print!("{selected}");
+                print!(
+                    "{}",
+                    match &selected {
+                        SelectedContents::Absent => "<absent>\n".to_string(),
+                        SelectedContents::Binary {
+                            old_description: _,
+                            new_description: None,
+                        } => "<binary>\n".to_string(),
+                        SelectedContents::Binary {
+                            old_description: _,
+                            new_description: Some(description),
+                        } => format!("<binary description={description}>\n"),
+                        SelectedContents::Present { contents } => {
+                            contents.clone()
+                        }
+                        SelectedContents::Unchanged => "<unchanged\n>".to_string(),
+                    }
+                );
             }
         }
         Err(RecordError::Cancelled) => println!("Cancelled!\n"),

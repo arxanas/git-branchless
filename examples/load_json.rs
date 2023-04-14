@@ -3,7 +3,7 @@
 
 use std::fs::File;
 
-use scm_record::{EventSource, RecordError, RecordState, Recorder};
+use scm_record::{EventSource, RecordError, RecordState, Recorder, SelectedContents};
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -20,7 +20,22 @@ fn main() {
             for file in files {
                 println!("--- Path {:?} final lines: ---", file.path);
                 let (selected, _unselected) = file.get_selected_contents();
-                print!("{selected}");
+                print!(
+                    "{}",
+                    match &selected {
+                        SelectedContents::Absent => "<absent>\n".to_string(),
+                        SelectedContents::Unchanged => "<unchanged\n>".to_string(),
+                        SelectedContents::Binary {
+                            old_description: _,
+                            new_description: None,
+                        } => "<binary>\n".to_string(),
+                        SelectedContents::Binary {
+                            old_description: _,
+                            new_description: Some(description),
+                        } => format!("<binary description={description}>\n"),
+                        SelectedContents::Present { contents } => contents.clone(),
+                    }
+                );
             }
         }
         Err(RecordError::Cancelled) => println!("Cancelled!\n"),
