@@ -5,7 +5,7 @@
 //! Regrettably, this adds `serde` as a new dependency to `git-branchless-lib`,
 //! which will increase build times.
 
-use std::path::PathBuf;
+use std::{fmt::Display, path::PathBuf};
 
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 
@@ -65,10 +65,37 @@ impl<'de> Deserialize<'de> for SerializedNonZeroOid {
     }
 }
 
+/// A test command to run.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum TestCommand {
+    /// A full command string (to be passed to a shell for processing).
+    String(String),
+
+    /// A list of arguments. The first argument indicates the program to invoke.
+    Args(Vec<String>),
+}
+
+impl Display for TestCommand {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TestCommand::String(s) => write!(f, "{s}"),
+            TestCommand::Args(args) => {
+                for (i, arg) in args.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, " ")?;
+                    }
+                    write!(f, "{}", shell_words::quote(arg))?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[allow(missing_docs)]
 pub struct SerializedTestResult {
-    pub command: String,
+    pub command: TestCommand,
     pub exit_code: i32,
     pub head_commit_oid: Option<SerializedNonZeroOid>,
     pub snapshot_tree_oid: Option<SerializedNonZeroOid>,

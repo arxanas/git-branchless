@@ -51,8 +51,8 @@ use lib::core::rewrite::{
 use lib::git::{
     get_latest_test_command_path, get_test_locks_dir, get_test_tree_dir, get_test_worktrees_dir,
     make_test_command_slug, Commit, ConfigRead, GitRunInfo, GitRunResult, MaybeZeroOid, NonZeroOid,
-    Repo, SerializedNonZeroOid, SerializedTestResult, WorkingCopyChangesType, TEST_ABORT_EXIT_CODE,
-    TEST_INDETERMINATE_EXIT_CODE, TEST_SUCCESS_EXIT_CODE,
+    Repo, SerializedNonZeroOid, SerializedTestResult, TestCommand, WorkingCopyChangesType,
+    TEST_ABORT_EXIT_CODE, TEST_INDETERMINATE_EXIT_CODE, TEST_SUCCESS_EXIT_CODE,
 };
 use lib::try_exit_code;
 use lib::util::{get_sh, ExitCode, EyreExitOr};
@@ -203,7 +203,7 @@ To run a specific command alias, run: git test run -c <alias>",
 #[allow(missing_docs)]
 #[derive(Debug)]
 pub struct ResolvedTestOptions {
-    pub command: String,
+    pub command: TestCommand,
     pub execution_strategy: TestExecutionStrategy,
     pub search_strategy: Option<TestSearchStrategy>,
     pub is_dry_run: bool,
@@ -435,7 +435,7 @@ BUG: Expected resolved_interactive ({resolved_interactive:?}) to match interacti
         };
 
         let resolved_test_options = ResolvedTestOptions {
-            command: resolved_command,
+            command: TestCommand::String(resolved_command),
             execution_strategy: resolved_execution_strategy,
             search_strategy: resolved_search_strategy,
             use_cache: !no_cache,
@@ -450,7 +450,7 @@ BUG: Expected resolved_interactive ({resolved_interactive:?}) to match interacti
     }
 
     fn make_command_slug(&self) -> String {
-        make_test_command_slug(self.command.clone())
+        make_test_command_slug(self.command.to_string())
     }
 }
 
@@ -1335,7 +1335,7 @@ fn run_tests_inner<'a>(
             );
         }
     }
-    if let Err(err) = std::fs::write(&latest_test_command_path, command) {
+    if let Err(err) = std::fs::write(&latest_test_command_path, command.to_string()) {
         warn!(
             ?err,
             ?latest_test_command_path,
@@ -1349,7 +1349,7 @@ fn run_tests_inner<'a>(
         testing_aborted_error,
     } = {
         let (effects, progress) =
-            effects.start_operation(OperationType::RunTests(Arc::new(command.clone())));
+            effects.start_operation(OperationType::RunTests(Arc::new(command.to_string())));
         progress.notify_progress(0, commits.len());
         let commit_jobs = {
             let mut results = IndexMap::new();
@@ -1701,7 +1701,7 @@ fn print_summary(
     dag: &Dag,
     repo: &Repo,
     revset: &Revset,
-    command: &str,
+    command: &TestCommand,
     test_results: &TestResults,
     is_search: bool,
     apply_fixes: bool,
@@ -1767,7 +1767,7 @@ fn print_summary(
         },
         effects.get_glyphs().render(
             StyledStringBuilder::new()
-                .append_styled(command, Effect::Bold)
+                .append_styled(command.to_string(), Effect::Bold)
                 .build()
         )?,
     )?;
@@ -1907,7 +1907,7 @@ fn apply_fixes(
     execute_options: &ExecuteRebasePlanOptions,
     permissions: RebasePlanPermissions,
     dry_run: bool,
-    command: &str,
+    command: &TestCommand,
     test_results: &TestResults,
 ) -> EyreExitOr<()> {
     let fixed_tree_oids: Vec<(NonZeroOid, NonZeroOid)> = test_results
@@ -2117,7 +2117,7 @@ fn apply_fixes(
         },
         effects.get_glyphs().render(
             StyledStringBuilder::new()
-                .append_styled(command, Effect::Bold)
+                .append_styled(command.to_string(), Effect::Bold)
                 .build()
         )?,
     )?;
@@ -2624,10 +2624,10 @@ fn test_commit(
     let mut command = Command::new(shell_path);
     command
         .arg("-c")
-        .arg(&options.command)
+        .arg(options.command.to_string())
         .current_dir(working_directory)
         .env("BRANCHLESS_TEST_COMMIT", commit.get_oid().to_string())
-        .env("BRANCHLESS_TEST_COMMAND", options.command.clone());
+        .env("BRANCHLESS_TEST_COMMAND", options.command.to_string());
 
     if options.is_interactive {
         let commit_desc = effects
