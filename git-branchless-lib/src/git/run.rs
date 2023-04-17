@@ -3,7 +3,7 @@ use std::convert::TryInto;
 use std::ffi::{OsStr, OsString};
 use std::fmt::Write;
 use std::io::{BufRead, BufReader, Read, Write as WriteIo};
-use std::path::PathBuf;
+use std::path::{Component, Path, PathBuf};
 use std::process::{Command, ExitStatus, Stdio};
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
@@ -243,6 +243,48 @@ impl GitRunInfo {
         }
     }
 
+    /// Returns the working directory for commands run on a given `Repo`.
+    ///
+    /// This is typically the working copy path for the repo.
+    ///
+    /// Some commands (notably `git status`) do not function correctly when run
+    /// from the git repo (i.e. `.git`) path.
+    /// Hooks should also be run from the working copy path - from
+    /// `githooks(5)`: Before Git invokes a hook, it changes its working
+    /// directory to either $GIT_DIR in a bare repository or the root of the
+    /// working tree in a non-bare repository.
+    ///
+    /// This contains additional logic for `repo`-managed projects to work
+    /// around an upstream `libgit2` issue.
+    fn working_directory<'a>(&'a self, repo: &'a Repo) -> &'a Path {
+        repo.get_working_copy_path()
+            // `libgit2` returns the working copy path as the parent of the
+            // `.git` directory. However, if the `.git` directory is a symlink,
+            // `libgit2` *resolves the symlink*, returning an incorrect working
+            // directory: https://github.com/libgit2/libgit2/issues/6401
+            //
+            // This notably occurs when working with `repo`-managed projects,
+            // which symlinks `.git` directories to a subdirectory of a shared
+            // `.repo` directory. To work around this bug, we instead use the
+            // current working directory when we detect a `repo`-managed
+            // project.
+            //
+            // This workaround may result in slightly incorrect hook behavior
+            // for `repo`-managed projects, as the current working directory may
+            // be a subdirectory of the root of the working tree.
+            .map(|working_copy| {
+                if working_copy
+                    .components()
+                    .contains(&Component::Normal(OsStr::new(".repo")))
+                {
+                    &self.working_directory
+                } else {
+                    working_copy
+                }
+            })
+            .unwrap_or_else(|| repo.get_path())
+    }
+
     fn run_silent_inner(
         &self,
         repo: &Repo,
@@ -260,12 +302,7 @@ impl GitRunInfo {
             stdin,
         } = opts;
 
-        // Prefer running in the working copy path to the repo path, because
-        // some commands (notably `git status`) to not function correctly
-        // when run from the git repo (i.e. `.git`) path.
-        let repo_path = repo
-            .get_working_copy_path()
-            .unwrap_or_else(|| repo.get_path());
+        let repo_path = self.working_directory(repo);
         // Technically speaking, we should be able to work with non-UTF-8 repository
         // paths. Need to make the typechecker accept it.
         let repo_path = repo_path.to_str().ok_or_else(|| {
@@ -383,13 +420,7 @@ impl GitRunInfo {
 
         if hook_dir.join(hook_name).exists() {
             let mut child = Command::new(get_sh().ok_or_else(|| eyre!("could not get sh"))?)
-                // From `githooks(5)`: Before Git invokes a hook, it changes its
-                // working directory to either $GIT_DIR in a bare repository or the
-                // root of the working tree in a non-bare repository.
-                .current_dir(
-                    repo.get_working_copy_path()
-                        .unwrap_or_else(|| repo.get_path()),
-                )
+                .current_dir(self.working_directory(repo))
                 .arg("-c")
                 .arg(format!("{hook_name} \"$@\""))
                 .arg(hook_name) // "$@" expands "$1" "$2" "$3" ... but we also must specify $0.
