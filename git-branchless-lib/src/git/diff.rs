@@ -119,6 +119,7 @@ pub fn process_diff_for_record(repo: &Repo, diff: &Diff) -> eyre::Result<Vec<Fil
 
         if new_oid.is_zero() {
             result.push(File {
+                old_path: None,
                 path: Cow::Owned(path),
                 file_mode: Some(old_file_mode),
                 sections: vec![Section::FileMode {
@@ -136,6 +137,7 @@ pub fn process_diff_for_record(repo: &Repo, diff: &Diff) -> eyre::Result<Vec<Fil
                 new_num_bytes,
             } => {
                 result.push(File {
+                    old_path: None,
                     path: Cow::Owned(path),
                     file_mode: Some(old_file_mode),
                     sections: vec![Section::Binary {
@@ -371,6 +373,7 @@ pub fn process_diff_for_record(repo: &Repo, diff: &Diff) -> eyre::Result<Vec<Fil
             vec![]
         };
         result.push(File {
+            old_path: None,
             path: Cow::Owned(path),
             file_mode: Some(old_file_mode),
             sections: [file_mode_section, file_sections].concat().to_vec(),
