@@ -79,3 +79,43 @@ fn test_run_silent_failures() -> eyre::Result<()> {
 
     Ok(())
 }
+
+// Creating symlinks on Windows may fail without administrator or developer
+// privileges, so this test is Unix only. See
+// https://doc.rust-lang.org/std/os/windows/fs/fn.symlink_dir.html#limitations
+// for more details.
+#[cfg(unix)]
+#[test]
+fn test_run_in_repo_tool_project() -> eyre::Result<()> {
+    use std::{fs, os::unix};
+
+    let git = make_git()?;
+    git.init_repo()?;
+
+    let git_dir = git.repo_path.join(".git");
+    let repo_managed_dir = tempfile::tempdir()?;
+    let repo_managed_git_dir = repo_managed_dir.path().join(".repo/test_repo");
+    fs::create_dir_all(&repo_managed_git_dir)?;
+    fs::rename(&git_dir, &repo_managed_git_dir)?;
+
+    unix::fs::symlink(repo_managed_git_dir, git_dir)?;
+
+    let git_run_info = GitRunInfo {
+        path_to_git: git.path_to_git.clone(),
+        working_directory: git.repo_path.clone(),
+        env: Default::default(),
+    };
+
+    let result = git_run_info.run_silent(
+        &git.get_repo()?,
+        None,
+        &["status"],
+        GitRunOpts {
+            treat_git_failure_as_error: true,
+            stdin: None,
+        },
+    );
+    assert!(result.is_ok());
+
+    Ok(())
+}
