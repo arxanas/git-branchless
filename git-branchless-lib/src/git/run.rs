@@ -3,7 +3,7 @@ use std::convert::TryInto;
 use std::ffi::{OsStr, OsString};
 use std::fmt::Write;
 use std::io::{BufRead, BufReader, Read, Write as WriteIo};
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Stdio};
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
@@ -254,7 +254,7 @@ impl GitRunInfo {
     /// directory to either $GIT_DIR in a bare repository or the root of the
     /// working tree in a non-bare repository.
     ///
-    /// This contains additional logic for `repo`-managed projects to work
+    /// This contains additional logic for symlinked `.git` directories to work
     /// around an upstream `libgit2` issue.
     fn working_directory<'a>(&'a self, repo: &'a Repo) -> &'a Path {
         repo.get_working_copy_path()
@@ -263,20 +263,18 @@ impl GitRunInfo {
             // `libgit2` *resolves the symlink*, returning an incorrect working
             // directory: https://github.com/libgit2/libgit2/issues/6401
             //
-            // This notably occurs when working with `repo`-managed projects,
-            // which symlinks `.git` directories to a subdirectory of a shared
-            // `.repo` directory. To work around this bug, we instead use the
-            // current working directory when we detect a `repo`-managed
-            // project.
+            // Detect this case by checking if the current working directory is
+            // not a subdirectory of the returned working copy. While this does
+            // not work if the symlinked `.git` directory points to a child of
+            // an ancestor of the directory, this should handle most cases,
+            // including working copies managed by the `repo` tool.
             //
-            // This workaround may result in slightly incorrect hook behavior
-            // for `repo`-managed projects, as the current working directory may
-            // be a subdirectory of the root of the working tree.
+            // This workaround may result in slightly incorrect hook behavior,
+            // as the current working directory may be a subdirectory of the
+            // root of the working tree.
             .map(|working_copy| {
-                if working_copy
-                    .components()
-                    .contains(&Component::Normal(OsStr::new(".repo")))
-                {
+                // Both paths are already "canonicalized".
+                if !self.working_directory.starts_with(working_copy) {
                     &self.working_directory
                 } else {
                     working_copy
