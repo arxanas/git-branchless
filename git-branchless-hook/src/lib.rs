@@ -456,7 +456,12 @@ fn hook_reference_transaction(effects: &Effects, transaction_state: &str) -> eyr
                  ref_name,
                  old_oid: _,
                  new_oid: _,
-             }| !should_ignore_ref_updates(ref_name),
+             }| {
+                !should_ignore_ref_updates(ref_name)
+                    && !CategorizedReferenceName::new(ref_name)
+                        .friendly_describe()
+                        .starts_with("remote")
+            },
         )
         .map(|parsed_line| fix_packed_reference_oid(&repo, &packed_references, parsed_line))
         .collect();

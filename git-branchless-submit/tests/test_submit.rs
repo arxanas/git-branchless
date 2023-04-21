@@ -72,8 +72,6 @@ fn test_submit() -> eyre::Result<()> {
         To: file://<remote>
          * [new branch]      bar -> bar
          * [new branch]      qux -> qux
-        branchless: processing 1 update: remote branch origin/bar
-        branchless: processing 1 update: remote branch origin/qux
         "###);
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> push --set-upstream origin bar qux
@@ -104,7 +102,6 @@ fn test_submit() -> eyre::Result<()> {
         branchless: processing 1 update: branch qux
         To: file://<remote>
          + 20230db...bae8307 qux -> qux (forced update)
-        branchless: processing 1 update: remote branch origin/qux
         "###);
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> fetch origin refs/heads/bar refs/heads/qux
@@ -281,7 +278,6 @@ fn test_submit_up_to_date_branch() -> eyre::Result<()> {
         branchless: processing 1 update: branch feature
         To: file://<remote>
          * [new branch]      feature -> feature
-        branchless: processing 1 update: remote branch origin/feature
         "###);
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> push --set-upstream origin feature
