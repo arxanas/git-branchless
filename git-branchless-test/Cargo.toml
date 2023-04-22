@@ -8,7 +8,7 @@ version = "0.7.0"
 
 [dependencies]
 bstr = "1.4.0"
-clap = "4.0.23"
+clap = "4.2.4"
 crossbeam = "0.8.2"
 cursive = { version = "0.20.0", default-features = false, features = [
   "crossterm-backend",
