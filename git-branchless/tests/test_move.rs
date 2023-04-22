@@ -2824,11 +2824,11 @@ fn test_move_force_in_memory() -> eyre::Result<()> {
             },
         )?;
         insta::assert_snapshot!(stderr, @r###"
-        error: The argument '--in-memory' cannot be used with '--merge'
+        error: the argument '--in-memory' cannot be used with '--merge'
 
         Usage: git-branchless move --dest <DEST> --in-memory
 
-        For more information try '--help'
+        For more information, try '--help'.
         "###);
         insta::assert_snapshot!(stdout, @"");
     }
@@ -3805,11 +3805,11 @@ fn test_move_merge_commit() -> eyre::Result<()> {
                 },
             )?;
             insta::assert_snapshot!(stderr, @r###"
-            error: The argument '--in-memory' cannot be used with '--merge'
+            error: the argument '--in-memory' cannot be used with '--merge'
 
             Usage: git-branchless move --in-memory --source <SOURCE> --dest <DEST>
 
-            For more information try '--help'
+            For more information, try '--help'.
             "###);
             insta::assert_snapshot!(stdout, @"");
         }

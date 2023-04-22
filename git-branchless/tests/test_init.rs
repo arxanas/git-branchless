@@ -681,10 +681,10 @@ fn test_install_man_pages() -> eyre::Result<()> {
     .RE
     .TP
     \fB\-h\fR, \fB\-\-help\fR
-    Print help information (use `\-h` for a summary)
+    Print help (see a summary with \*(Aq\-h\*(Aq)
     .TP
     \fB\-V\fR, \fB\-\-version\fR
-    Print version information
+    Print version
     .SH SUBCOMMANDS
     .TP
     git\-branchless\-amend(1)
