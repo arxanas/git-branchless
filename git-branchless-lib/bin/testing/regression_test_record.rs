@@ -20,7 +20,7 @@ fn entries_from_files(
     files: &[File],
 ) -> eyre::Result<HashMap<PathBuf, Option<(NonZeroOid, FileMode)>>> {
     let entries = files
-        .into_iter()
+        .iter()
         .map(|file| {
             let file_path = file.path.clone().into_owned();
             let value = {
@@ -100,7 +100,7 @@ fn assert_trees_equal(
     let old_tree = parent_commit.get_tree()?;
     let new_tree = current_commit.get_tree()?;
     let entries = entries_from_files(repo, &old_tree, &new_tree, entries)?;
-    let actual_tree_oid = hydrate_tree(&repo, Some(&old_tree), entries)?;
+    let actual_tree_oid = hydrate_tree(repo, Some(&old_tree), entries)?;
     let actual_tree = repo.find_tree_or_fail(actual_tree_oid)?;
     let actual_commit = {
         let author = current_commit.get_author();

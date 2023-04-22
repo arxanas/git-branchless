@@ -274,7 +274,7 @@ pub fn r#move(
             detect_duplicate_commits_via_patch_id,
         };
         let permissions = {
-            let commits_to_move = source_oids.clone();
+            let commits_to_move = &source_oids;
             let commits_to_move = commits_to_move.union(&union_all(
                 &exact_components.values().cloned().collect::<Vec<_>>(),
             ));
