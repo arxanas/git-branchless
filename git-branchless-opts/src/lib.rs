@@ -551,7 +551,7 @@ pub enum Command {
     Restack {
         /// The IDs of the abandoned commits whose descendants should be
         /// restacked. If not provided, all abandoned commits are restacked.
-        #[clap(value_parser)]
+        #[clap(value_parser, default_value = "draft()")]
         revsets: Vec<Revset>,
 
         /// Options for resolving revset expressions.

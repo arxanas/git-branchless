@@ -151,7 +151,8 @@ fn test_amended_initial_commit() -> eyre::Result<()> {
     }
 
     {
-        let (stdout, _stderr) = git.branchless("restack", &["--on-disk", "--force-rewrite"])?;
+        let (stdout, _stderr) =
+            git.branchless("restack", &["--on-disk", "--force-rewrite", "all()"])?;
         let stdout = remove_rebase_lines(stdout);
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> diff --quiet
@@ -185,7 +186,8 @@ fn test_restack_amended_master() -> eyre::Result<()> {
     git.run(&["commit", "--amend", "-m", "amended test1"])?;
 
     {
-        let (stdout, _stderr) = git.branchless("restack", &["--on-disk", "--force-rewrite"])?;
+        let (stdout, _stderr) =
+            git.branchless("restack", &["--on-disk", "--force-rewrite", "all()"])?;
         let stdout = remove_rebase_lines(stdout);
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> diff --quiet
@@ -220,7 +222,7 @@ fn test_restack_aborts_during_rebase_conflict() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.branchless_with_options(
             "restack",
-            &["-f"],
+            &["-f", "all()"],
             &GitRunOptions {
                 expected_exit_code: 1,
                 ..Default::default()
@@ -237,7 +239,7 @@ fn test_restack_aborts_during_rebase_conflict() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.branchless_with_options(
             "restack",
-            &["--force-rewrite", "--merge"],
+            &["--force-rewrite", "--merge", "all()"],
             &GitRunOptions {
                 expected_exit_code: 1,
                 ..Default::default()
@@ -480,7 +482,7 @@ fn test_restack_checked_out_branch() -> eyre::Result<()> {
     git.run(&["checkout", "foo"])?;
 
     {
-        let (stdout, _stderr) = git.branchless("restack", &["-f"])?;
+        let (stdout, _stderr) = git.branchless("restack", &["-f", "all()"])?;
         insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
         [1/1] Committed as: 59e7581 create test2.txt
@@ -513,7 +515,7 @@ fn test_restack_non_observed_branch_commit() -> eyre::Result<()> {
     git.run(&["checkout", "foo"])?;
 
     {
-        let (stdout, _stderr) = git.branchless("restack", &["-f"])?;
+        let (stdout, _stderr) = git.branchless("restack", &["-f", "all()"])?;
         insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
         [1/1] Committed as: 59e7581 create test2.txt
