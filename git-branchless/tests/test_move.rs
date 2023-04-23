@@ -2104,6 +2104,7 @@ fn test_move_exact_range_one_side_of_merged_stack_including_base_and_merge_commi
     git.branchless(
         "move",
         &[
+            "--merge",
             "--exact",
             &format!("{}+{}+{}+{}", test2_oid, test3_oid, test4_oid, "178e00f"),
             "-d",
@@ -2112,33 +2113,24 @@ fn test_move_exact_range_one_side_of_merged_stack_including_base_and_merge_commi
     )?;
 
     let stdout = git.smartlog()?;
-    // FIXME: This output is correct except for a known issue involving moving
-    // merge commits. (See `test_move_merge_commit_both_parents`.)
     insta::assert_snapshot!(stdout, @r###"
     :
     O 62fc20d (master) create test1.txt
     |\
     | o 96d1c37 create test2.txt
-    | |\
-    | | o 70deb1e create test3.txt
-    | | |
-    | | o 355e173 create test4.txt
-    | | & (merge) 178e00f Merge commit '355e173bf9c5d2efac2e451da0cdad3fb82b869a' into HEAD
     | |
-    | x d2e18e3 (rewritten as ea7aa064) create test5.txt
+    | o 70deb1e create test3.txt
     | |
-    | x d43fec8 (rewritten as da42aeb4) create test6.txt
-    | |
-    | | & (merge) 355e173 create test4.txt
-    | |/
-    | @ 178e00f Merge commit '355e173bf9c5d2efac2e451da0cdad3fb82b869a' into HEAD
+    | o 355e173 create test4.txt
+    | & (merge) 3774d8f Merge commit '355e173bf9c5d2efac2e451da0cdad3fb82b869a' into HEAD
     |
     o ea7aa06 create test5.txt
     |
     o da42aeb create test6.txt
-    hint: there is 1 abandoned commit in your commit graph
-    hint: to fix this, run: git restack
-    hint: disable this hint by running: git config --global branchless.hint.smartlogFixAbandoned false
+    |
+    | & (merge) 355e173 create test4.txt
+    |/
+    @ 3774d8f Merge commit '355e173bf9c5d2efac2e451da0cdad3fb82b869a' into HEAD
     "###);
 
     Ok(())
@@ -2160,15 +2152,6 @@ fn test_move_exact_range_two_partial_components_of_merged_stack() -> eyre::Resul
     let test5_oid = git.commit_file("test5", 5)?;
     git.commit_file("test6", 6)?;
     git.run(&["merge", &test4_oid.to_string()])?;
-
-    // Given this graph: 1-2-3-4-7
-    //                      \5-6/
-    // Moving 2,3,6,7 (leaving 4,5) should produce:
-    // 1-2-3
-    //  | \6-7
-    //  +4
-    //  \5
-    // FIXME Is it Ok that 3&7 are no longer directly connected?
 
     let stdout = git.smartlog()?;
     insta::assert_snapshot!(stdout, @r###"
@@ -2194,6 +2177,7 @@ fn test_move_exact_range_two_partial_components_of_merged_stack() -> eyre::Resul
     git.branchless(
         "move",
         &[
+            "--merge",
             "--exact",
             &format!("{test2_oid}:: - {test4_oid} - {test5_oid}"),
             "-d",
@@ -2202,8 +2186,6 @@ fn test_move_exact_range_two_partial_components_of_merged_stack() -> eyre::Resul
     )?;
 
     let stdout = git.smartlog()?;
-    // FIXME: This output is correct except for a known issue involving moving
-    // merge commits. (See `test_move_merge_commit_both_parents`.)
     insta::assert_snapshot!(stdout, @r###"
     :
     O 62fc20d (master) create test1.txt
@@ -2211,26 +2193,17 @@ fn test_move_exact_range_two_partial_components_of_merged_stack() -> eyre::Resul
     | o 96d1c37 create test2.txt
     | |\
     | | o 70deb1e create test3.txt
-    | | |
-    | | x 355e173 (rewritten as bf0d52a6) create test4.txt
-    | | & (merge) 178e00f Merge commit '355e173bf9c5d2efac2e451da0cdad3fb82b869a' into HEAD
-    | |\
-    | | x d2e18e3 (rewritten as ea7aa064) create test5.txt
-    | | |
-    | | x d43fec8 (rewritten as d071649c) create test6.txt
-    | | |
-    | | | & (merge) 355e173 (rewritten as bf0d52a6) create test4.txt
-    | | |/
-    | | @ 178e00f Merge commit '355e173bf9c5d2efac2e451da0cdad3fb82b869a' into HEAD
     | |
     | o d071649 create test6.txt
+    | |
+    | | & (merge) bf0d52a create test4.txt
+    | |/
+    | @ d15eb08 Merge commit '355e173bf9c5d2efac2e451da0cdad3fb82b869a' into HEAD
     |\
     | o bf0d52a create test4.txt
+    | & (merge) d15eb08 Merge commit '355e173bf9c5d2efac2e451da0cdad3fb82b869a' into HEAD
     |
     o ea7aa06 create test5.txt
-    hint: there is 1 abandoned commit in your commit graph
-    hint: to fix this, run: git restack
-    hint: disable this hint by running: git config --global branchless.hint.smartlogFixAbandoned false
     "###);
 
     Ok(())
@@ -3688,6 +3661,12 @@ fn test_move_merge_commit() -> eyre::Result<()> {
                     ],
                 ),
                 (
+                    NonZeroOid(98b9119d16974f372e76cb64a3b77c528fc0b18b),
+                    [
+                        NonZeroOid(28790c73f13f38ce0d3beb6cfeb2d818b32bcd09),
+                    ],
+                ),
+                (
                     NonZeroOid(fe65c1fe15584744e649b2c79d4cf9b0d878f92e),
                     [
                         NonZeroOid(28790c73f13f38ce0d3beb6cfeb2d818b32bcd09),
@@ -3726,6 +3705,11 @@ fn test_move_merge_commit() -> eyre::Result<()> {
                                 ),
                             ],
                         },
+                        Reset {
+                            target: Oid(
+                                NonZeroOid(98b9119d16974f372e76cb64a3b77c528fc0b18b),
+                            ),
+                        },
                         RegisterExtraPostRewriteHook,
                     ],
                 },
@@ -3740,26 +3724,9 @@ fn test_move_merge_commit() -> eyre::Result<()> {
             Executing: git branchless hook-detect-empty-commit fe65c1fe15584744e649b2c79d4cf9b0d878f92e
             branchless: processing 1 update: ref refs/rewritten/parent-3
             branchless: processing 1 update: ref HEAD
+            branchless: processing 1 update: ref HEAD
             Executing: git branchless hook-register-extra-post-rewrite-hook
             branchless: processing 2 rewritten commits
-            branchless: creating working copy snapshot
-            branchless: running command: <git-executable> checkout 98b9119d16974f372e76cb64a3b77c528fc0b18b
-            Previous HEAD position was 5a6a761 Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
-            branchless: processing 1 update: ref HEAD
-            HEAD is now at 98b9119 create test3.txt
-            branchless: processing checkout
-            O f777ecc create initial.txt
-            |\
-            | @ 98b9119 create test3.txt
-            | |
-            | | & (merge) 96d1c37 create test2.txt
-            | |/
-            | o 5a6a761 Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
-            |
-            O 62fc20d (master) create test1.txt
-            |
-            o 96d1c37 create test2.txt
-            & (merge) 5a6a761 Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
             Successfully rebased and updated detached HEAD.
             branchless: processing 1 update: ref refs/rewritten/parent-3
             "###);
@@ -3873,26 +3840,9 @@ fn test_move_merge_commit() -> eyre::Result<()> {
                 Executing: git branchless hook-detect-empty-commit fe65c1fe15584744e649b2c79d4cf9b0d878f92e
                 branchless: processing 1 update: ref refs/rewritten/parent-3
                 branchless: processing 1 update: ref HEAD
+                branchless: processing 1 update: ref HEAD
                 Executing: git branchless hook-register-extra-post-rewrite-hook
                 branchless: processing 2 rewritten commits
-                branchless: creating working copy snapshot
-                branchless: running command: <git-executable> checkout 98b9119d16974f372e76cb64a3b77c528fc0b18b
-                Previous HEAD position was 5a6a761 Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
-                branchless: processing 1 update: ref HEAD
-                HEAD is now at 98b9119 create test3.txt
-                branchless: processing checkout
-                O f777ecc create initial.txt
-                |\
-                | @ 98b9119 create test3.txt
-                | |
-                | | & (merge) 96d1c37 create test2.txt
-                | |/
-                | o 5a6a761 Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
-                |
-                O 62fc20d (master) create test1.txt
-                |
-                o 96d1c37 create test2.txt
-                & (merge) 5a6a761 Merge commit 'fe65c1fe15584744e649b2c79d4cf9b0d878f92e' into HEAD
                 Successfully rebased and updated detached HEAD.
                 branchless: processing 1 update: ref refs/rewritten/parent-3
                 "###);
@@ -3964,24 +3914,20 @@ fn test_move_merge_commit_both_parents() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.branchless(
             "move",
-            &["-s", &test3_oid.to_string(), "-d", &test1_oid.to_string()],
+            &[
+                "--merge",
+                "-s",
+                &test3_oid.to_string(),
+                "-d",
+                &test1_oid.to_string(),
+            ],
         )?;
-        // FIXME: this operation should successfully move the merge commit.
         insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
-        [1/3] Committed as: 4838e49 create test3.txt
-        [2/3] Committed as: a248207 create test4.txt
-        [3/3] Committed as: b1f9efa create test5.txt
-        branchless: processing 3 rewritten commits
-        branchless: This operation abandoned 1 commit!
-        branchless: Consider running one of the following:
-        branchless:   - git restack: re-apply the abandoned commits/branches
-        branchless:     (this is most likely what you want to do)
-        branchless:   - git smartlog: assess the situation
-        branchless:   - git hide [<commit>...]: hide the commits from the smartlog
-        branchless:   - git undo: undo the operation
-        hint: disable this hint by running: git config --global branchless.hint.restackWarnAbandoned false
-        In-memory rebase succeeded.
+        Failed to merge in-memory, trying again on-disk...
+        branchless: running command: <git-executable> diff --quiet
+        Calling Git for on-disk rebase...
+        branchless: running command: <git-executable> rebase --continue
         "###);
     }
 
@@ -3993,26 +3939,220 @@ fn test_move_merge_commit_both_parents() -> eyre::Result<()> {
         o 62fc20d create test1.txt
         |\
         | o 96d1c37 create test2.txt
-        | |
-        | x 70deb1e (rewritten as 4838e49b) create test3.txt
-        | |\
-        | | x 355e173 (rewritten as a2482074) create test4.txt
-        | | & (merge) 8fb706a Merge commit '355e173bf9c5d2efac2e451da0cdad3fb82b869a' into HEAD
-        | |
-        | x 9ea1b36 (rewritten as b1f9efa0) create test5.txt
-        | |
-        | | & (merge) 355e173 (rewritten as a2482074) create test4.txt
-        | |/
-        | @ 8fb706a Merge commit '355e173bf9c5d2efac2e451da0cdad3fb82b869a' into HEAD
         |
         o 4838e49 create test3.txt
         |\
         | o a248207 create test4.txt
+        | & (merge) d9a0a04 Merge commit '355e173bf9c5d2efac2e451da0cdad3fb82b869a' into HEAD
         |
         o b1f9efa create test5.txt
-        hint: there is 1 abandoned commit in your commit graph
-        hint: to fix this, run: git restack
-        hint: disable this hint by running: git config --global branchless.hint.smartlogFixAbandoned false
+        |
+        | & (merge) a248207 create test4.txt
+        |/
+        @ d9a0a04 Merge commit '355e173bf9c5d2efac2e451da0cdad3fb82b869a' into HEAD
+        "###);
+    }
+
+    Ok(())
+}
+
+/// Regression test for https://github.com/arxanas/git-branchless/issues/912
+#[test]
+fn test_move_merge_commit_issue_912() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    git.commit_file("A", 1)?;
+    git.commit_file("B", 2)?;
+    git.run(&["checkout", "HEAD~"])?;
+    let c_oid = git.commit_file("C", 3)?;
+    let d_oid = git.commit_file("D", 4)?;
+    git.run(&["checkout", "HEAD~"])?;
+    git.commit_file("E", 5)?;
+    git.run(&["merge", "-m", "Merge D and E", &d_oid.to_string()])?;
+    git.commit_file("F", 6)?;
+
+    {
+        let stdout = git.smartlog()?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O d59c43f create A.txt
+        |\
+        | o 50eef92 create C.txt
+        | |\
+        | | o 00aa7ad create D.txt
+        | | & (merge) 52f100c Merge D and E
+        | |
+        | o af1a4ce create E.txt
+        | |
+        | | & (merge) 00aa7ad create D.txt
+        | |/
+        | o 52f100c Merge D and E
+        | |
+        | @ 7f5857e create F.txt
+        |
+        O 33790e1 (master) create B.txt
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.branchless(
+            "move",
+            &[
+                "--merge",
+                "-s",
+                &c_oid.to_string(),
+                "-d",
+                "master",
+                "--debug-dump-rebase-constraints",
+                "--debug-dump-rebase-plan",
+            ],
+        )?;
+        insta::assert_snapshot!(stdout, @r###"
+        Rebase constraints before adding descendants: [
+            (
+                NonZeroOid(33790e10045c924645cd69f7819de927eb1a42a0),
+                [
+                    NonZeroOid(50eef922b99bc8a8829a1ded374231f9a025d28c),
+                ],
+            ),
+        ]
+        Rebase constraints after adding descendants: [
+            (
+                NonZeroOid(00aa7adb4f38b8b1c04b062a1fdc897fcc6c471d),
+                [
+                    NonZeroOid(52f100ccd161017d4cafd15057536f3c2c1d32aa),
+                ],
+            ),
+            (
+                NonZeroOid(33790e10045c924645cd69f7819de927eb1a42a0),
+                [
+                    NonZeroOid(50eef922b99bc8a8829a1ded374231f9a025d28c),
+                ],
+            ),
+            (
+                NonZeroOid(50eef922b99bc8a8829a1ded374231f9a025d28c),
+                [
+                    NonZeroOid(00aa7adb4f38b8b1c04b062a1fdc897fcc6c471d),
+                    NonZeroOid(af1a4cee7c63ea7eba381967223d17a6386e5a4c),
+                ],
+            ),
+            (
+                NonZeroOid(52f100ccd161017d4cafd15057536f3c2c1d32aa),
+                [
+                    NonZeroOid(7f5857ec34dab5bf7991da2512bf529789204413),
+                ],
+            ),
+            (
+                NonZeroOid(af1a4cee7c63ea7eba381967223d17a6386e5a4c),
+                [
+                    NonZeroOid(52f100ccd161017d4cafd15057536f3c2c1d32aa),
+                ],
+            ),
+        ]
+        Rebase plan: Some(
+            RebasePlan {
+                first_dest_oid: NonZeroOid(33790e10045c924645cd69f7819de927eb1a42a0),
+                commands: [
+                    Reset {
+                        target: Oid(
+                            NonZeroOid(33790e10045c924645cd69f7819de927eb1a42a0),
+                        ),
+                    },
+                    Pick {
+                        original_commit_oid: NonZeroOid(50eef922b99bc8a8829a1ded374231f9a025d28c),
+                        commit_to_apply_oid: NonZeroOid(50eef922b99bc8a8829a1ded374231f9a025d28c),
+                    },
+                    DetectEmptyCommit {
+                        commit_oid: NonZeroOid(50eef922b99bc8a8829a1ded374231f9a025d28c),
+                    },
+                    CreateLabel {
+                        label_name: "label-3",
+                    },
+                    Pick {
+                        original_commit_oid: NonZeroOid(00aa7adb4f38b8b1c04b062a1fdc897fcc6c471d),
+                        commit_to_apply_oid: NonZeroOid(00aa7adb4f38b8b1c04b062a1fdc897fcc6c471d),
+                    },
+                    DetectEmptyCommit {
+                        commit_oid: NonZeroOid(00aa7adb4f38b8b1c04b062a1fdc897fcc6c471d),
+                    },
+                    CreateLabel {
+                        label_name: "parent-6",
+                    },
+                    Reset {
+                        target: Label(
+                            "label-3",
+                        ),
+                    },
+                    Pick {
+                        original_commit_oid: NonZeroOid(af1a4cee7c63ea7eba381967223d17a6386e5a4c),
+                        commit_to_apply_oid: NonZeroOid(af1a4cee7c63ea7eba381967223d17a6386e5a4c),
+                    },
+                    DetectEmptyCommit {
+                        commit_oid: NonZeroOid(af1a4cee7c63ea7eba381967223d17a6386e5a4c),
+                    },
+                    CreateLabel {
+                        label_name: "parent-10",
+                    },
+                    Reset {
+                        target: Label(
+                            "parent-10",
+                        ),
+                    },
+                    Merge {
+                        commit_oid: NonZeroOid(52f100ccd161017d4cafd15057536f3c2c1d32aa),
+                        commits_to_merge: [
+                            Label(
+                                "parent-6",
+                            ),
+                        ],
+                    },
+                    Pick {
+                        original_commit_oid: NonZeroOid(7f5857ec34dab5bf7991da2512bf529789204413),
+                        commit_to_apply_oid: NonZeroOid(7f5857ec34dab5bf7991da2512bf529789204413),
+                    },
+                    DetectEmptyCommit {
+                        commit_oid: NonZeroOid(7f5857ec34dab5bf7991da2512bf529789204413),
+                    },
+                    Reset {
+                        target: Label(
+                            "label-3",
+                        ),
+                    },
+                    RegisterExtraPostRewriteHook,
+                ],
+            },
+        )
+        Attempting rebase in-memory...
+        Failed to merge in-memory, trying again on-disk...
+        branchless: running command: <git-executable> diff --quiet
+        Calling Git for on-disk rebase...
+        branchless: running command: <git-executable> rebase --continue
+        "###);
+    }
+
+    {
+        let stdout = git.smartlog()?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 33790e1 (master) create B.txt
+        |
+        o ffe2812 create C.txt
+        |\
+        | o 53671af create D.txt
+        | & (merge) f7c3c92 Merge D and E
+        |
+        o 8b81b37 create E.txt
+        |
+        | & (merge) 53671af create D.txt
+        |/
+        o f7c3c92 Merge D and E
+        |
+        @ 235027c create F.txt
         "###);
     }
 
