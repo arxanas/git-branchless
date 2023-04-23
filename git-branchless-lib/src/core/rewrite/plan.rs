@@ -320,48 +320,31 @@ impl<'a> ConstraintGraph<'a> {
         Ok(())
     }
 
-    #[instrument]
-    fn collect_descendants(
-        &self,
-        visible_commits: &CommitSet,
-        acc: &mut Vec<Constraint>,
-        current_oid: NonZeroOid,
-    ) -> eyre::Result<()> {
-        let children_oids = self
-            .dag
-            .query_children(CommitSet::from(current_oid))?
-            .intersection(visible_commits);
-        let children_oids = self.dag.commit_set_to_vec(&children_oids)?;
-        for child_oid in children_oids {
-            if self.commits_to_move().contains(&child_oid) {
-                continue;
-            }
-            acc.push(Constraint::MoveSubtree {
-                parent_oids: vec![current_oid],
-                child_oid,
-            });
-            self.collect_descendants(visible_commits, acc, child_oid)?;
-        }
-        Ok(())
-    }
-
     /// Add additional edges to the constraint graph for each descendant commit
     /// of a referred-to commit. This adds enough information to the constraint
     /// graph that it now represents the actual end-state commit graph that we
     /// want to create, not just a list of constraints.
     fn add_descendant_constraints(&mut self, effects: &Effects) -> eyre::Result<()> {
-        let (effects, progress) = effects.start_operation(OperationType::ConstrainCommits);
+        let (effects, _progress) = effects.start_operation(OperationType::ConstrainCommits);
         let _effects = effects;
 
         let all_descendants_of_constrained_nodes = {
-            let visible_commits = self.dag.query_visible_commits_slow()?;
-
             let mut acc = Vec::new();
-            let parents = self.commits_to_move();
-            progress.notify_progress(0, parents.len());
-            for parent_oid in parents {
-                self.collect_descendants(visible_commits, &mut acc, parent_oid)?;
-                progress.notify_progress_inc(1);
+            let commits_to_move: CommitSet = self.commits_to_move().into_iter().collect();
+            let descendants = self.dag.query_descendants(commits_to_move.clone())?;
+            let descendants = descendants.difference(&commits_to_move);
+            let descendants = self.dag.filter_visible_commits(descendants)?;
+            let descendant_oids = self.dag.commit_set_to_vec(&descendants)?;
+            for descendant_oid in descendant_oids {
+                let parents = self.dag.query_parent_names(descendant_oid)?;
+                let parent_oids = parents
+                    .into_iter()
+                    .map(NonZeroOid::try_from)
+                    .try_collect()?;
+                acc.push(Constraint::MoveSubtree {
+                    parent_oids,
+                    child_oid: descendant_oid,
+                });
             }
             acc
         };
@@ -796,33 +779,39 @@ impl<'a> RebasePlanBuilder<'a> {
                     }
                 };
 
-                if let Some(commits_to_merge) = commits_to_merge {
-                    // All parents have been committed.
-                    let (first_parent, merge_parents) = match commits_to_merge.as_slice() {
-                        [] => {
-                            unreachable!("Already verified that there's at least one parent commit")
-                        }
-                        [first, rest @ ..] => (first, rest.to_vec()),
-                    };
-                    acc.push(RebaseCommand::Reset {
-                        target: first_parent.clone(),
-                    });
-                    acc.push(
-                        match self.replacement_commits.get(&current_commit.get_oid()) {
-                            None => RebaseCommand::Merge {
-                                commit_oid: current_commit.get_oid(),
-                                commits_to_merge: merge_parents.to_vec(),
-                            },
-                            Some(replacement_commit_oid) => RebaseCommand::Replace {
-                                commit_oid: current_commit.get_oid(),
-                                replacement_commit_oid: *replacement_commit_oid,
-                                parents: commits_to_merge,
-                            },
-                        },
-                    );
-                }
+                let commits_to_merge = match commits_to_merge {
+                    None => {
+                        // Some parents need to be committed. Wait for caller to come back to this commit later and then proceed to any child commits.
+                        return Ok(acc);
+                    }
+                    Some(commits_to_merge) => {
+                        // All parents have been committed.
+                        commits_to_merge
+                    }
+                };
 
-                return Ok(acc);
+                let (first_parent, merge_parents) = match commits_to_merge.as_slice() {
+                    [] => {
+                        unreachable!("Already verified that there's at least one parent commit")
+                    }
+                    [first, rest @ ..] => (first, rest.to_vec()),
+                };
+                acc.push(RebaseCommand::Reset {
+                    target: first_parent.clone(),
+                });
+                acc.push(
+                    match self.replacement_commits.get(&current_commit.get_oid()) {
+                        None => RebaseCommand::Merge {
+                            commit_oid: current_commit.get_oid(),
+                            commits_to_merge: merge_parents.to_vec(),
+                        },
+                        Some(replacement_commit_oid) => RebaseCommand::Replace {
+                            commit_oid: current_commit.get_oid(),
+                            replacement_commit_oid: *replacement_commit_oid,
+                            parents: commits_to_merge,
+                        },
+                    },
+                );
             } else {
                 // Normal one-parent commit (or a zero-parent commit?), just
                 // rebase it and continue.
