@@ -142,7 +142,7 @@ impl Forge for BranchForge<'_> {
 
             let commit_status = match branch_infos.as_slice() {
                 [] => CommitStatus {
-                    submit_status: SubmitStatus::Unsubmitted,
+                    submit_status: SubmitStatus::Local,
                     remote_name: None,
                     local_branch_name: None,
                     remote_branch_name: None,
