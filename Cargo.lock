@@ -3141,6 +3141,7 @@ dependencies = [
  "diffy",
  "eyre",
  "insta",
+ "maplit",
  "num-traits",
  "serde",
  "serde_json",
