@@ -1,5 +1,5 @@
 use git_branchless_testing::{
-    make_git, make_git_with_remote_repo, GitInitOptions, GitWrapperWithRemoteRepo,
+    make_git, make_git_with_remote_repo, GitInitOptions, GitRunOptions, GitWrapperWithRemoteRepo,
 };
 
 fn remove_nondeterministic_lines(output: String) -> String {
@@ -447,6 +447,96 @@ fn test_sync_merge_commit() -> eyre::Result<()> {
         Attempting rebase in-memory...
         Can't rebase merge commit in-memory: 62fc20d create test1.txt
         Can't rebase merge commit in-memory: 98b9119 create test3.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+/// Regression test for https://github.com/arxanas/git-branchless/issues/838
+#[test]
+fn test_sync_checked_out_main_branch() -> eyre::Result<()> {
+    let GitWrapperWithRemoteRepo {
+        temp_dir: _guard,
+        original_repo,
+        cloned_repo,
+    } = make_git_with_remote_repo()?;
+    if !original_repo.supports_reference_transactions()? {
+        return Ok(());
+    }
+
+    original_repo.init_repo()?;
+    original_repo.commit_file("test1", 1)?;
+
+    original_repo.clone_repo_into(&cloned_repo, &["--branch", "master"])?;
+    cloned_repo.init_repo_with_options(&GitInitOptions {
+        make_initial_commit: false,
+        ..Default::default()
+    })?;
+
+    original_repo.commit_file("test2", 2)?;
+    {
+        let (stdout, _stderr) = cloned_repo.branchless("sync", &["--pull"])?;
+        let stdout: String = remove_nondeterministic_lines(stdout);
+        insta::assert_snapshot!(stdout, @r###"
+            branchless: running command: <git-executable> fetch --all
+            Fast-forwarding branch master to 96d1c37 create test2.txt
+            branchless: running command: <git-executable> rebase 96d1c37a3d4363611c49f7e52186e189a04c531f
+            "###);
+    }
+
+    {
+        let (stdout, _stderr) = cloned_repo.run(&["status"])?;
+        insta::assert_snapshot!(stdout, @r###"
+            On branch master
+            Your branch is up to date with 'origin/master'.
+
+            nothing to commit, working tree clean
+            "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_sync_checked_out_main_with_dirty_working_copy() -> eyre::Result<()> {
+    let GitWrapperWithRemoteRepo {
+        temp_dir: _guard,
+        original_repo,
+        cloned_repo,
+    } = make_git_with_remote_repo()?;
+    if !original_repo.supports_reference_transactions()? {
+        return Ok(());
+    }
+
+    original_repo.init_repo()?;
+    original_repo.commit_file("test1", 1)?;
+
+    original_repo.clone_repo_into(&cloned_repo, &["--branch", "master"])?;
+    cloned_repo.init_repo_with_options(&GitInitOptions {
+        make_initial_commit: false,
+        ..Default::default()
+    })?;
+
+    cloned_repo.write_file_txt("test1", "new contents, do not overwrite\n")?;
+    {
+        let (stdout, stderr) = cloned_repo.branchless_with_options(
+            "sync",
+            &["--pull"],
+            &GitRunOptions {
+                expected_exit_code: 1,
+                ..Default::default()
+            },
+        )?;
+        let stdout: String = remove_nondeterministic_lines(stdout);
+        insta::assert_snapshot!(stderr, @r###"
+        error: cannot rebase: You have unstaged changes.
+        error: Please commit or stash them.
+        "###);
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> fetch --all
+        Not updating branch master at 62fc20d create test1.txt
+        branchless: running command: <git-executable> rebase 62fc20d2a290daea0d52bdc2ed2ad4be6491010e
         "###);
     }
 
