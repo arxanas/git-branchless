@@ -24,7 +24,9 @@ use lib::core::rewrite::{
     RepoPool, RepoResource,
 };
 use lib::core::task::ResourcePool;
-use lib::git::{CategorizedReferenceName, Commit, GitRunInfo, NonZeroOid, Repo};
+use lib::git::{
+    CategorizedReferenceName, Commit, GitRunInfo, NonZeroOid, Repo, ResolvedReferenceInfo,
+};
 
 fn get_stack_roots(dag: &Dag) -> eyre::Result<CommitSet> {
     let draft_commits = dag.query_draft_commits()?;
@@ -92,6 +94,7 @@ pub fn sync(
     let thread_pool = ThreadPoolBuilder::new().build()?;
     let repo_pool = RepoResource::new_pool(&repo)?;
 
+    let head_info = repo.get_head_info()?;
     if pull {
         try_exit_code!(execute_main_branch_sync_plan(
             effects,
@@ -102,6 +105,7 @@ pub fn sync(
             &execute_options,
             &thread_pool,
             &repo_pool,
+            &head_info,
         )?);
     }
 
@@ -130,6 +134,7 @@ fn execute_main_branch_sync_plan(
     execute_options: &ExecuteRebasePlanOptions,
     thread_pool: &ThreadPool,
     repo_pool: &RepoPool,
+    head_info: &ResolvedReferenceInfo,
 ) -> EyreExitOr<()> {
     let event_replayer = EventReplayer::from_event_log_db(effects, repo, event_log_db)?;
     let event_cursor = event_replayer.make_default_cursor();
@@ -201,12 +206,29 @@ fn execute_main_branch_sync_plan(
                     .render(remote_main_branch_commit.friendly_describe(effects.get_glyphs())?)?,
             )?;
         }
-        repo.create_reference(
-            &local_main_branch_reference_name,
-            upstream_main_branch_oid,
-            true,
-            "sync",
-        )?;
+
+        if head_info.reference_name.as_ref() == Some(&local_main_branch_reference_name) {
+            // If the main branch is checked out, make sure to update the index
+            // as well as the reference itself. Otherwise, staged changes will
+            // appear in `git status`.
+            //
+            // FIXME: this is suboptimal since it relies on the working copy.
+            // However, handling e.g. dirty working copy changes is error-prone
+            // and I haven't implemented it for now.
+            try_exit_code!(git_run_info.run(
+                effects,
+                Some(execute_options.event_tx_id),
+                &["rebase", &upstream_main_branch_oid.to_string()],
+            )?);
+        } else {
+            repo.create_reference(
+                &local_main_branch_reference_name,
+                upstream_main_branch_oid,
+                true,
+                "sync",
+            )?;
+        }
+
         return Ok(Ok(()));
     } else {
         writeln!(
