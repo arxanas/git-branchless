@@ -10,6 +10,7 @@ use std::fmt::{Debug, Display};
 use std::hash::Hash;
 use std::path::Path;
 use std::rc::Rc;
+use std::time::Duration;
 use std::{fs, io, panic};
 
 use crossterm::event::{
@@ -306,17 +307,24 @@ impl EventSource {
         }
     }
 
-    fn next_event(&mut self) -> Result<Event, RecordError> {
+    fn next_events(&mut self) -> Result<Vec<Event>, RecordError> {
         match self {
             EventSource::Crossterm => {
-                let event = crossterm::event::read().map_err(RecordError::ReadInput)?;
-                Ok(event.into())
+                // Some events, like scrolling, are generated more quickly than
+                // we can render the UI. In those cases, batch up all available
+                // events and process them before the next render.
+                let mut events = Vec::new();
+                while crossterm::event::poll(Duration::ZERO).map_err(RecordError::ReadInput)? {
+                    let event = crossterm::event::read().map_err(RecordError::ReadInput)?;
+                    events.push(event.into());
+                }
+                Ok(events)
             }
             EventSource::Testing {
                 width: _,
                 height: _,
                 events,
-            } => Ok(events.next().unwrap_or(Event::None)),
+            } => Ok(vec![events.next().unwrap_or(Event::None)]),
         }
     }
 }
@@ -466,7 +474,7 @@ impl<'a> Recorder<'a> {
             false
         };
 
-        loop {
+        'outer: loop {
             let app = self.make_app(None);
             let term_height = usize::from(term.get_frame().size().height);
 
@@ -512,38 +520,40 @@ impl<'a> Recorder<'a> {
                 .map_err(RecordError::RenderFrame)?;
             }
 
-            let event = self.event_source.next_event()?;
-            match self.handle_event(event, term_height, &drawn_rects)? {
-                StateUpdate::None => {}
-                StateUpdate::SetQuitDialog(quit_dialog) => {
-                    self.quit_dialog = quit_dialog;
-                }
-                StateUpdate::QuitAccept => break,
-                StateUpdate::QuitCancel => return Err(RecordError::Cancelled),
-                StateUpdate::TakeScreenshot(screenshot) => {
-                    let backend: &dyn Any = term.backend();
-                    let test_backend = backend
-                        .downcast_ref::<TestBackend>()
-                        .expect("TakeScreenshot event generated for non-testing backend");
-                    screenshot.set(buffer_view(test_backend.buffer()));
-                }
-                StateUpdate::ScrollTo(scroll_offset_y) => {
-                    self.scroll_offset_y = scroll_offset_y
-                        .clamp(0, drawn_rects[&ComponentId::App].height.unwrap_isize() - 1);
-                }
-                StateUpdate::SelectItem(selection_key) => {
-                    self.selection_key = selection_key;
-                    self.scroll_offset_y =
-                        self.ensure_in_viewport(term_height, &drawn_rects, selection_key);
-                }
-                StateUpdate::ToggleItem(selection_key) => {
-                    self.toggle_item(selection_key)?;
-                }
-                StateUpdate::ToggleItemAndAdvance(selection_key, new_key) => {
-                    self.toggle_item(selection_key)?;
-                    self.selection_key = new_key;
-                    self.scroll_offset_y =
-                        self.ensure_in_viewport(term_height, &drawn_rects, selection_key);
+            let events = self.event_source.next_events()?;
+            for event in events {
+                match self.handle_event(event, term_height, &drawn_rects)? {
+                    StateUpdate::None => {}
+                    StateUpdate::SetQuitDialog(quit_dialog) => {
+                        self.quit_dialog = quit_dialog;
+                    }
+                    StateUpdate::QuitAccept => break 'outer,
+                    StateUpdate::QuitCancel => return Err(RecordError::Cancelled),
+                    StateUpdate::TakeScreenshot(screenshot) => {
+                        let backend: &dyn Any = term.backend();
+                        let test_backend = backend
+                            .downcast_ref::<TestBackend>()
+                            .expect("TakeScreenshot event generated for non-testing backend");
+                        screenshot.set(buffer_view(test_backend.buffer()));
+                    }
+                    StateUpdate::ScrollTo(scroll_offset_y) => {
+                        self.scroll_offset_y = scroll_offset_y
+                            .clamp(0, drawn_rects[&ComponentId::App].height.unwrap_isize() - 1);
+                    }
+                    StateUpdate::SelectItem(selection_key) => {
+                        self.selection_key = selection_key;
+                        self.scroll_offset_y =
+                            self.ensure_in_viewport(term_height, &drawn_rects, selection_key);
+                    }
+                    StateUpdate::ToggleItem(selection_key) => {
+                        self.toggle_item(selection_key)?;
+                    }
+                    StateUpdate::ToggleItemAndAdvance(selection_key, new_key) => {
+                        self.toggle_item(selection_key)?;
+                        self.selection_key = new_key;
+                        self.scroll_offset_y =
+                            self.ensure_in_viewport(term_height, &drawn_rects, selection_key);
+                    }
                 }
             }
         }
@@ -2036,8 +2046,14 @@ mod tests {
     #[test]
     fn test_event_source_testing() {
         let mut event_source = EventSource::testing(80, 24, [Event::QuitCancel]);
-        assert_matches!(event_source.next_event(), Ok(Event::QuitCancel));
-        assert_matches!(event_source.next_event(), Ok(Event::None));
+        assert_matches!(
+            event_source.next_events().unwrap().as_slice(),
+            &[Event::QuitCancel]
+        );
+        assert_matches!(
+            event_source.next_events().unwrap().as_slice(),
+            &[Event::None]
+        );
     }
 
     #[test]
