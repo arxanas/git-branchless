@@ -584,6 +584,7 @@ impl<'a> Recorder<'a> {
                         is_focused,
                     },
                     is_header_selected: is_focused,
+                    old_path: file.old_path.as_deref(),
                     path: &file.path,
                     section_views: {
                         let mut section_views = Vec::new();
@@ -1452,6 +1453,7 @@ struct FileView<'a> {
     file_key: FileKey,
     tristate_box: TristateBox<ComponentId>,
     is_header_selected: bool,
+    old_path: Option<&'a Path>,
     path: &'a Path,
     section_views: Vec<SectionView<'a>>,
 }
@@ -1478,6 +1480,7 @@ impl Component for FileView<'_> {
             debug,
             file_key: _,
             tristate_box,
+            old_path,
             path,
             section_views,
             is_header_selected,
@@ -1489,7 +1492,14 @@ impl Component for FileView<'_> {
             x + tristate_box_rect.width.unwrap_isize() + 1,
             y,
             &Span::styled(
-                path.to_string_lossy(),
+                format!(
+                    "{}{}",
+                    match old_path {
+                        Some(old_path) => format!("{} => ", old_path.to_string_lossy()),
+                        None => String::new(),
+                    },
+                    path.to_string_lossy(),
+                ),
                 if *is_header_selected {
                     Style::default().fg(Color::Blue)
                 } else {
@@ -2065,6 +2075,7 @@ mod tests {
 
         let state = RecordState {
             files: vec![File {
+                old_path: None,
                 path: Cow::Borrowed(Path::new("foo/bar")),
                 file_mode: None,
                 sections: Default::default(),
