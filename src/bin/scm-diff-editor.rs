@@ -298,7 +298,7 @@ mod render {
         change_type: ChangeType,
     ) -> Vec<SectionChangedLine<'static>> {
         contents
-            .lines()
+            .split_inclusive('\n')
             .map(|line| SectionChangedLine {
                 is_toggled: false,
                 change_type,
@@ -903,7 +903,7 @@ qux2
                             SectionChangedLine {
                                 is_toggled: false,
                                 change_type: Added,
-                                line: "right",
+                                line: "right\n",
                             },
                         ],
                     },
@@ -922,9 +922,9 @@ qux2
                         33188,
                     ),
                     contents: Text {
-                        contents: "right",
+                        contents: "right\n",
                         hash: "abc123",
-                        num_bytes: 5,
+                        num_bytes: 6,
                     },
                 },
             },
@@ -965,7 +965,7 @@ qux2
                             SectionChangedLine {
                                 is_toggled: false,
                                 change_type: Removed,
-                                line: "left",
+                                line: "left\n",
                             },
                         ],
                     },
