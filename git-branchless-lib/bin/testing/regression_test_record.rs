@@ -58,6 +58,7 @@ fn entries_from_files(
 
 fn select_all(mut entries: Vec<File>) -> Vec<File> {
     for File {
+        old_path: _,
         path: _,
         file_mode: _,
         sections,

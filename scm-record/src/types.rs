@@ -120,7 +120,11 @@ impl TryFrom<FileMode> for i32 {
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct File<'a> {
-    /// The path to the file.
+    /// The path to the previous version of the file, for display purposes. This
+    /// should be set if the file was renamed or copied from another file.
+    pub old_path: Option<Cow<'a, Path>>,
+
+    /// The path to the current version of the file, for display purposes.
     pub path: Cow<'a, Path>,
 
     /// The Unix file mode of the file (before any changes), if available. This
@@ -187,6 +191,7 @@ impl File<'_> {
     /// the `file_mode` value that this [`FileState`] was constructed with.
     pub fn get_file_mode(&self) -> Option<FileMode> {
         let Self {
+            old_path: _,
             path: _,
             file_mode,
             sections,
@@ -219,6 +224,7 @@ impl File<'_> {
         let mut acc_selected = SelectedContents::Unchanged;
         let mut acc_unselected = SelectedContents::Unchanged;
         let Self {
+            old_path: _,
             path: _,
             file_mode: _,
             sections,
