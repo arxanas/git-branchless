@@ -585,10 +585,6 @@ fn process_opts(filesystem: &dyn Filesystem, opts: &Opts) -> Result<(Vec<File<'s
             right,
             dry_run: _,
         } => {
-            let write_root = right
-                .parent()
-                .map(|path| path.to_owned())
-                .unwrap_or_default();
             let files = vec![render::create_file(
                 filesystem,
                 left.clone(),
@@ -596,7 +592,7 @@ fn process_opts(filesystem: &dyn Filesystem, opts: &Opts) -> Result<(Vec<File<'s
                 right.clone(),
                 right.clone(),
             )?];
-            (files, write_root)
+            (files, PathBuf::new())
         }
         Opts {
             dir_diff: true,
@@ -700,10 +696,16 @@ mod tests {
         fn read_file_info(&self, path: &Path) -> Result<FileInfo> {
             match self.files.get(path) {
                 Some(file_info) => Ok(file_info.clone()),
-                None => Ok(FileInfo {
-                    file_mode: FileMode::absent(),
-                    contents: FileContents::Absent,
-                }),
+                None => match self.dirs.get(path) {
+                    Some(_path) => Err(Error::ReadFile {
+                        path: path.to_owned(),
+                        source: io::Error::new(io::ErrorKind::Other, "is a directory"),
+                    }),
+                    None => Ok(FileInfo {
+                        file_mode: FileMode::absent(),
+                        contents: FileContents::Absent,
+                    }),
+                },
             }
         }
 
@@ -992,6 +994,89 @@ qux2
             },
             dirs: {
                 "",
+            },
+        }
+        "###);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_reject_diff_non_files() -> Result<()> {
+        let filesystem = TestFilesystem::new(btreemap! {
+            PathBuf::from("left/foo") => file_info("left\n"),
+            PathBuf::from("right/foo") => file_info("right\n"),
+        });
+        let result = process_opts(
+            &filesystem,
+            &Opts {
+                dir_diff: false,
+                left: PathBuf::from("left"),
+                right: PathBuf::from("right"),
+                dry_run: false,
+            },
+        );
+        insta::assert_debug_snapshot!(result, @r###"
+        Err(
+            ReadFile {
+                path: "left",
+                source: Custom {
+                    kind: Other,
+                    error: "is a directory",
+                },
+            },
+        )
+        "###);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_diff_files_in_subdirectories() -> Result<()> {
+        let mut filesystem = TestFilesystem::new(btreemap! {
+            PathBuf::from("left/foo") => file_info("left contents\n"),
+            PathBuf::from("right/foo") => file_info("right contents\n"),
+        });
+
+        let (files, write_root) = process_opts(
+            &filesystem,
+            &Opts {
+                dir_diff: false,
+                left: PathBuf::from("left/foo"),
+                right: PathBuf::from("right/foo"),
+                dry_run: false,
+            },
+        )?;
+
+        apply_changes(&mut filesystem, &write_root, RecordState { files })?;
+        assert_debug_snapshot!(filesystem, @r###"
+        TestFilesystem {
+            files: {
+                "left/foo": FileInfo {
+                    file_mode: FileMode(
+                        33188,
+                    ),
+                    contents: Text {
+                        contents: "left contents\n",
+                        hash: "abc123",
+                        num_bytes: 14,
+                    },
+                },
+                "right/foo": FileInfo {
+                    file_mode: FileMode(
+                        33188,
+                    ),
+                    contents: Text {
+                        contents: "left contents\n",
+                        hash: "abc123",
+                        num_bytes: 14,
+                    },
+                },
+            },
+            dirs: {
+                "",
+                "left",
+                "right",
             },
         }
         "###);
