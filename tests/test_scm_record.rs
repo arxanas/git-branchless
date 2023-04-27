@@ -290,6 +290,7 @@ fn test_enter_next() -> eyre::Result<()> {
     let state = RecordState {
         files: vec![
             File {
+                old_path: None,
                 path: Cow::Borrowed(Path::new("foo")),
                 file_mode: None,
                 sections: vec![Section::Changed {
@@ -308,6 +309,7 @@ fn test_enter_next() -> eyre::Result<()> {
                 }],
             },
             File {
+                old_path: None,
                 path: Cow::Borrowed(Path::new("bar")),
                 file_mode: None,
                 sections: vec![Section::Changed {
@@ -368,11 +370,13 @@ fn test_file_mode_change() -> eyre::Result<()> {
     let state = RecordState {
         files: vec![
             File {
+                old_path: None,
                 path: Cow::Borrowed(Path::new("foo")),
                 file_mode: None,
                 sections: vec![],
             },
             File {
+                old_path: None,
                 path: Cow::Borrowed(Path::new("bar")),
                 file_mode: None,
                 sections: vec![Section::FileMode {
@@ -382,6 +386,7 @@ fn test_file_mode_change() -> eyre::Result<()> {
                 }],
             },
             File {
+                old_path: None,
                 path: Cow::Borrowed(Path::new("qux")),
                 file_mode: None,
                 sections: vec![],
@@ -411,11 +416,13 @@ fn test_file_mode_change() -> eyre::Result<()> {
     RecordState {
         files: [
             File {
+                old_path: None,
                 path: "foo",
                 file_mode: None,
                 sections: [],
             },
             File {
+                old_path: None,
                 path: "bar",
                 file_mode: None,
                 sections: [
@@ -431,6 +438,7 @@ fn test_file_mode_change() -> eyre::Result<()> {
                 ],
             },
             File {
+                old_path: None,
                 path: "qux",
                 file_mode: None,
                 sections: [],
@@ -472,6 +480,7 @@ fn test_abbreviate_unchanged_sections() -> eyre::Result<()> {
     let middle_length = section_length + 1;
     let state = RecordState {
         files: vec![File {
+            old_path: None,
             path: Cow::Borrowed(Path::new("foo")),
             file_mode: None,
             sections: vec![
@@ -549,6 +558,7 @@ fn test_no_abbreviate_short_unchanged_sections() -> eyre::Result<()> {
     let middle_length = num_context_lines * 2;
     let state = RecordState {
         files: vec![File {
+            old_path: None,
             path: Cow::Borrowed(Path::new("foo")),
             file_mode: None,
             sections: vec![
@@ -619,6 +629,7 @@ fn test_no_abbreviate_short_unchanged_sections() -> eyre::Result<()> {
 fn test_record_binary_file() -> eyre::Result<()> {
     let state = RecordState {
         files: vec![File {
+            old_path: None,
             path: Cow::Borrowed(Path::new("foo")),
             file_mode: None,
             sections: vec![Section::Binary {
@@ -651,6 +662,7 @@ fn test_record_binary_file() -> eyre::Result<()> {
     RecordState {
         files: [
             File {
+                old_path: None,
                 path: "foo",
                 file_mode: None,
                 sections: [
@@ -689,6 +701,7 @@ fn test_record_binary_file() -> eyre::Result<()> {
 fn test_record_binary_file_noop() -> eyre::Result<()> {
     let state = RecordState {
         files: vec![File {
+            old_path: None,
             path: Cow::Borrowed(Path::new("foo")),
             file_mode: None,
             sections: vec![Section::Binary {
@@ -717,6 +730,7 @@ fn test_record_binary_file_noop() -> eyre::Result<()> {
     RecordState {
         files: [
             File {
+                old_path: None,
                 path: "foo",
                 file_mode: None,
                 sections: [
@@ -755,6 +769,7 @@ fn test_record_binary_file_noop() -> eyre::Result<()> {
 fn test_state_binary_selected_contents() -> eyre::Result<()> {
     let test = |text, binary| {
         let file = File {
+            old_path: None,
             path: Cow::Borrowed(Path::new("foo")),
             file_mode: None,
             sections: vec![
@@ -844,11 +859,13 @@ fn test_mouse_click_checkbox() -> eyre::Result<()> {
     let state = RecordState {
         files: vec![
             File {
+                old_path: None,
                 path: Cow::Borrowed(Path::new("foo")),
                 file_mode: None,
                 sections: vec![],
             },
             File {
+                old_path: None,
                 path: Cow::Borrowed(Path::new("bar")),
                 file_mode: None,
                 sections: vec![Section::FileMode {
@@ -901,6 +918,7 @@ fn test_mouse_click_checkbox() -> eyre::Result<()> {
 fn test_mouse_click_wide_line() -> eyre::Result<()> {
     let state = RecordState {
         files: vec![File {
+            old_path: None,
             path: Cow::Borrowed(Path::new("foo")),
             file_mode: None,
             sections: vec![
@@ -982,6 +1000,7 @@ fn test_mouse_click_wide_line() -> eyre::Result<()> {
 fn test_mouse_click_dialog_buttons() -> eyre::Result<()> {
     let state = RecordState {
         files: vec![File {
+            old_path: None,
             path: Cow::Borrowed(Path::new("foo")),
             file_mode: None,
             sections: vec![Section::Changed {
@@ -1022,6 +1041,33 @@ fn test_mouse_click_dialog_buttons() -> eyre::Result<()> {
     "                                                                                "
     "###);
     insta::assert_display_snapshot!(click_go_back, @"<this screenshot was never assigned>");
+
+    Ok(())
+}
+
+#[test]
+fn test_render_old_path() -> eyre::Result<()> {
+    let state = RecordState {
+        files: vec![File {
+            old_path: Some(Cow::Borrowed(Path::new("foo"))),
+            path: Cow::Borrowed(Path::new("bar")),
+            file_mode: None,
+            sections: vec![],
+        }],
+    };
+    let screenshot = TestingScreenshot::default();
+    let event_source = EventSource::testing(80, 6, [screenshot.event(), Event::QuitAccept]);
+    let recorder = Recorder::new(state, event_source);
+    recorder.run()?;
+
+    insta::assert_display_snapshot!(screenshot, @r###"
+    "( ) foo => bar                                                                  "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "###);
 
     Ok(())
 }
