@@ -12,6 +12,7 @@ version = "0.1.0"
 [features]
 debug = ["serde"]
 default = ["debug"]
+scm-diff-editor = ["clap", "diffy", "sha1", "walkdir"]
 serde = ["dep:serde", "dep:serde_json"]
 
 [dependencies]
@@ -25,11 +26,20 @@ tracing = "0.1.37"
 tui = "0.19.0"
 unicode-width = "0.1.10"
 
+clap = { version = "4.2.3", features = ["derive"], optional = true }
+diffy = {version = "0.3.0", optional = true}
+sha1 = { version = "0.10.5", optional = true}
+walkdir = { version = "2.3.3", optional = true }
+
 [dev-dependencies]
 assert_matches = "1.5.0"
 criterion = "0.4.0"
 eyre = "0.6.8"
 insta = "1.29.0"
+
+[[bin]]
+name = "scm-diff-editor"
+required-features = ["scm-diff-editor"]
 
 [[bench]]
 name = "benches"
