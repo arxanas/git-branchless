@@ -878,6 +878,66 @@ qux2
     }
 
     #[test]
+    fn test_diff_no_changes() -> Result<()> {
+        let mut filesystem = TestFilesystem::new(btreemap! {
+            PathBuf::from("left") => file_info("\
+foo
+common1
+common2
+bar
+"),
+            PathBuf::from("right") => file_info("\
+qux1
+common1
+common2
+qux2
+"),
+        });
+        let (files, write_root) = process_opts(
+            &filesystem,
+            &Opts {
+                dir_diff: false,
+                left: PathBuf::from("left"),
+                right: PathBuf::from("right"),
+                dry_run: false,
+            },
+        )?;
+
+        apply_changes(&mut filesystem, &write_root, RecordState { files })?;
+        insta::assert_debug_snapshot!(filesystem, @r###"
+        TestFilesystem {
+            files: {
+                "left": FileInfo {
+                    file_mode: FileMode(
+                        33188,
+                    ),
+                    contents: Text {
+                        contents: "foo\ncommon1\ncommon2\nbar\n",
+                        hash: "abc123",
+                        num_bytes: 24,
+                    },
+                },
+                "right": FileInfo {
+                    file_mode: FileMode(
+                        33188,
+                    ),
+                    contents: Text {
+                        contents: "foo\ncommon1\ncommon2\nbar\n",
+                        hash: "abc123",
+                        num_bytes: 24,
+                    },
+                },
+            },
+            dirs: {
+                "",
+            },
+        }
+        "###);
+
+        Ok(())
+    }
+
+    #[test]
     fn test_diff_absent_left() -> Result<()> {
         let mut filesystem = TestFilesystem::new(btreemap! {
             PathBuf::from("right") => file_info("right\n"),
@@ -1033,6 +1093,59 @@ qux2
 
     #[test]
     fn test_diff_files_in_subdirectories() -> Result<()> {
+        let mut filesystem = TestFilesystem::new(btreemap! {
+            PathBuf::from("left/foo") => file_info("left contents\n"),
+            PathBuf::from("right/foo") => file_info("right contents\n"),
+        });
+
+        let (files, write_root) = process_opts(
+            &filesystem,
+            &Opts {
+                dir_diff: false,
+                left: PathBuf::from("left/foo"),
+                right: PathBuf::from("right/foo"),
+                dry_run: false,
+            },
+        )?;
+
+        apply_changes(&mut filesystem, &write_root, RecordState { files })?;
+        assert_debug_snapshot!(filesystem, @r###"
+        TestFilesystem {
+            files: {
+                "left/foo": FileInfo {
+                    file_mode: FileMode(
+                        33188,
+                    ),
+                    contents: Text {
+                        contents: "left contents\n",
+                        hash: "abc123",
+                        num_bytes: 14,
+                    },
+                },
+                "right/foo": FileInfo {
+                    file_mode: FileMode(
+                        33188,
+                    ),
+                    contents: Text {
+                        contents: "left contents\n",
+                        hash: "abc123",
+                        num_bytes: 14,
+                    },
+                },
+            },
+            dirs: {
+                "",
+                "left",
+                "right",
+            },
+        }
+        "###);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_dir_diff_no_changes() -> Result<()> {
         let mut filesystem = TestFilesystem::new(btreemap! {
             PathBuf::from("left/foo") => file_info("left contents\n"),
             PathBuf::from("right/foo") => file_info("right contents\n"),
