@@ -11,7 +11,6 @@
 #![allow(clippy::too_many_arguments, clippy::blocks_in_if_conditions)]
 
 use std::borrow::Cow;
-use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::error;
 use std::fmt::Display;
@@ -118,6 +117,8 @@ impl Display for Error {
 
 type Result<T> = std::result::Result<T, Error>;
 
+/// Information about a file that was read from disk. Note that the file may not have existed, in
+/// which case its contents will be marked as absent.
 #[derive(Clone, Debug)]
 pub struct FileInfo {
     file_mode: FileMode,
@@ -654,6 +655,7 @@ fn main() {
 mod tests {
     use insta::assert_debug_snapshot;
     use maplit::btreemap;
+    use std::collections::BTreeMap;
 
     use super::*;
 
