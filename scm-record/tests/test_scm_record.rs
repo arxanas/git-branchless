@@ -66,6 +66,71 @@ fn test_select_scroll_into_view() -> eyre::Result<()> {
 }
 
 #[test]
+fn test_toggle_all() -> eyre::Result<()> {
+    let before = TestingScreenshot::default();
+    let after = TestingScreenshot::default();
+    let event_source = EventSource::testing(
+        80,
+        20,
+        [
+            before.event(),
+            Event::ToggleAll,
+            after.event(),
+            Event::QuitAccept,
+        ],
+    );
+    let state = example_contents();
+    let recorder = Recorder::new(state, event_source);
+    recorder.run()?;
+
+    insta::assert_display_snapshot!(before, @r###"
+    "(~) foo/bar                                                                     "
+    "        ⋮                                                                       "
+    "       18 this is some text                                                     "
+    "       19 this is some text                                                     "
+    "       20 this is some text                                                     "
+    "  [~] Section 1/1                                                               "
+    "    [×] - before text 1                                                         "
+    "    [×] - before text 2                                                         "
+    "    [×] + after text 1                                                          "
+    "    [ ] + after text 2                                                          "
+    "       23 this is some trailing text                                            "
+    "[×] baz                                                                         "
+    "        1 Some leading text 1                                                   "
+    "        2 Some leading text 2                                                   "
+    "  [×] Section 1/1                                                               "
+    "    [×] - before text 1                                                         "
+    "    [×] - before text 2                                                         "
+    "    [×] + after text 1                                                          "
+    "    [×] + after text 2                                                          "
+    "        5 this is some trailing text                                            "
+    "###);
+    insta::assert_display_snapshot!(after, @r###"
+    "(~) foo/bar                                                                     "
+    "        ⋮                                                                       "
+    "       18 this is some text                                                     "
+    "       19 this is some text                                                     "
+    "       20 this is some text                                                     "
+    "  [~] Section 1/1                                                               "
+    "    [ ] - before text 1                                                         "
+    "    [ ] - before text 2                                                         "
+    "    [ ] + after text 1                                                          "
+    "    [×] + after text 2                                                          "
+    "       23 this is some trailing text                                            "
+    "[ ] baz                                                                         "
+    "        1 Some leading text 1                                                   "
+    "        2 Some leading text 2                                                   "
+    "  [ ] Section 1/1                                                               "
+    "    [ ] - before text 1                                                         "
+    "    [ ] - before text 2                                                         "
+    "    [ ] + after text 1                                                          "
+    "    [ ] + after text 2                                                          "
+    "        5 this is some trailing text                                            "
+    "###);
+    Ok(())
+}
+
+#[test]
 fn test_quit_dialog_size() -> eyre::Result<()> {
     let expect_quit_dialog_to_be_centered = TestingScreenshot::default();
     let event_source = EventSource::testing(

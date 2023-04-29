@@ -123,6 +123,7 @@ pub enum Event {
     FocusOuter,
     ToggleItem,
     ToggleItemAndAdvance,
+    ToggleAll,
     Click { row: usize, column: usize },
 }
 
@@ -260,6 +261,13 @@ impl From<crossterm::event::Event> for Event {
                 state: _,
             }) => Self::ToggleItemAndAdvance,
 
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('a'),
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                state: _,
+            }) => Self::ToggleAll,
+
             Event::Mouse(MouseEvent {
                 kind: MouseEventKind::Down(MouseButton::Left),
                 column,
@@ -370,6 +378,7 @@ enum StateUpdate {
     SelectItem(SelectionKey),
     ToggleItem(SelectionKey),
     ToggleItemAndAdvance(SelectionKey, SelectionKey),
+    ToggleAll,
 }
 
 /// UI component to record the user's changes.
@@ -553,6 +562,9 @@ impl<'a> Recorder<'a> {
                         self.selection_key = new_key;
                         self.scroll_offset_y =
                             self.ensure_in_viewport(term_height, &drawn_rects, selection_key);
+                    }
+                    StateUpdate::ToggleAll => {
+                        self.toggle_all();
                     }
                 }
             }
@@ -746,7 +758,8 @@ impl<'a> Recorder<'a> {
                 | Event::FocusPrev
                 | Event::FocusNext
                 | Event::FocusPrevPage
-                | Event::FocusNextPage,
+                | Event::FocusNextPage
+                | Event::ToggleAll,
             ) => StateUpdate::None,
 
             (Some(_) | None, Event::TakeScreenshot(screenshot)) => {
@@ -793,6 +806,7 @@ impl<'a> Recorder<'a> {
                 let advanced_key = self.advance_to_next_of_kind();
                 StateUpdate::ToggleItemAndAdvance(self.selection_key, advanced_key)
             }
+            (None, Event::ToggleAll) => StateUpdate::ToggleAll,
 
             (_, Event::Click { row, column }) => {
                 let component_id = self.find_component_at(drawn_rects, row, column);
@@ -1140,6 +1154,14 @@ impl<'a> Recorder<'a> {
             }
         }
         Ok(())
+    }
+
+    fn toggle_all(&mut self) {
+        for file in &mut self.state.files {
+            for section in &mut file.sections {
+                section.toggle_all();
+            }
+        }
     }
 
     fn file(&self, file_key: FileKey) -> Result<&File, RecordError> {
