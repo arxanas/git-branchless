@@ -348,6 +348,24 @@ impl Section<'_> {
             Section::Changed { .. } | Section::FileMode { .. } | Section::Binary { .. } => true,
         }
     }
+
+    /// Toggle the selection of this section.
+    pub fn toggle_all(&mut self) {
+        match self {
+            Section::Unchanged { .. } => {}
+            Section::Changed { lines } => {
+                for line in lines {
+                    line.is_toggled = !line.is_toggled;
+                }
+            }
+            Section::FileMode { is_toggled, .. } => {
+                *is_toggled = !*is_toggled;
+            }
+            Section::Binary { is_toggled, .. } => {
+                *is_toggled = !*is_toggled;
+            }
+        }
+    }
 }
 
 /// The type of change in the patch/diff.
