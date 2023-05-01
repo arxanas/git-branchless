@@ -7,7 +7,7 @@ repository = "https://github.com/arxanas/git-branchless"
 version = "0.7.0"
 
 [dependencies]
-clap = { version = "4.2.4", features = ["derive"] }
+clap = { version = "4.2.5", features = ["derive"] }
 clap_mangen = "0.2.4"
 itertools = "0.10.5"
 lib = { package = "git-branchless-lib", version = "0.7.0", path = "../git-branchless-lib" }
