@@ -52,17 +52,22 @@ pub enum RebaseCommand {
         target: OidOrLabel,
     },
 
-    /// Apply the provided commit on top of the rebase head, and update the
+    /// Apply the provided commits on top of the rebase head, and update the
     /// rebase head to point to the newly-applied commit.
     Pick {
         /// The original commit, which contains the relevant metadata such as
         /// the commit message.
         original_commit_oid: NonZeroOid,
 
-        /// The commit whose patch should be applied to the rebase head. This
-        /// will be different from [`original_commit_oid`] when a commit is
-        /// being replaced.
-        commit_to_apply_oid: NonZeroOid,
+        /// The commits whose patches should be applied to the rebase head.
+        ///  - This will be different from [`original_commit_oid`] when a commit
+        ///    is being replaced.
+        ///  - If this is a single commit, then the rebase will perform a normal
+        ///    `pick`.
+        ///  - If this is multiple commits, they will all be squashed into a
+        ///    single commit, reusing the metadata (message, author, timestamps,
+        ///    etc) from `original_commit_oid`.
+        commits_to_apply_oids: Vec<NonZeroOid>,
     },
 
     /// Merge two or more parent commits.
@@ -136,8 +141,11 @@ impl ToString for RebaseCommand {
             RebaseCommand::Reset { target } => format!("reset {target}"),
             RebaseCommand::Pick {
                 original_commit_oid: _,
-                commit_to_apply_oid: commit_oid,
-            } => format!("pick {commit_oid}"),
+                commits_to_apply_oids: commit_oids,
+            } => match commit_oids.as_slice() {
+                [commit_oid] => format!("pick {commit_oid}"),
+                [..] => unimplemented!("Picking multiple commits"),
+            },
             RebaseCommand::Merge {
                 commit_oid,
                 commits_to_merge,
@@ -837,7 +845,7 @@ impl<'a> RebasePlanBuilder<'a> {
                     None => {
                         acc.push(RebaseCommand::Pick {
                             original_commit_oid,
-                            commit_to_apply_oid: original_commit_oid,
+                            commits_to_apply_oids: vec![original_commit_oid],
                         });
                         acc.push(RebaseCommand::DetectEmptyCommit {
                             commit_oid: current_commit.get_oid(),
@@ -1109,8 +1117,12 @@ impl<'a> RebasePlanBuilder<'a> {
                 | RebaseCommand::DetectEmptyCommit { commit_oid: _ } => Vec::new(),
                 RebaseCommand::Pick {
                     original_commit_oid,
-                    commit_to_apply_oid,
-                } => vec![*original_commit_oid, *commit_to_apply_oid],
+                    commits_to_apply_oids,
+                } => {
+                    let mut commit_oids = vec![*original_commit_oid];
+                    commit_oids.extend(commits_to_apply_oids);
+                    commit_oids
+                }
                 RebaseCommand::Merge {
                     commit_oid,
                     commits_to_merge: _,
