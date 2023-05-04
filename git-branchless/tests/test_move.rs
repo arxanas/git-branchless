@@ -4905,6 +4905,37 @@ fn test_move_fixup_head_into_parent() -> eyre::Result<()> {
     +line 3
     "###);
 
+    // --on-disk
+    {
+        let git = git.duplicate_repo()?;
+        git.run(&[
+            "move",
+            "--on-disk",
+            "--fixup",
+            "-s",
+            "HEAD",
+            "-d",
+            &test2_oid.to_string(),
+        ])?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        o 307a04c create test.txt
+        |
+        @ 8c3aa56 update 2 test.txt
+        "###);
+
+        let diff = git.get_trimmed_diff("test.txt", "HEAD")?;
+        insta::assert_snapshot!(diff, @r###"
+        @@ -1 +1,3 @@
+        +line 1
+         line 2
+        +line 3
+        "###);
+    }
+
     // --in-memory
     {
         let (stdout, _stderr) = git.branchless(
@@ -4974,6 +5005,13 @@ fn test_move_fixup_parent_into_head() -> eyre::Result<()> {
     @ da38dc8 update 3 test.txt
     "###);
 
+    let diff = git.get_trimmed_diff("test.txt", "HEAD~")?;
+    insta::assert_snapshot!(diff, @r###"
+    @@ -1 +1,2 @@
+    +line 1
+     line 2
+    "###);
+
     let diff = git.get_trimmed_diff("test.txt", "HEAD")?;
     insta::assert_snapshot!(diff, @r###"
     @@ -1,2 +1,3 @@
@@ -4981,6 +5019,32 @@ fn test_move_fixup_parent_into_head() -> eyre::Result<()> {
      line 2
     +line 3
     "###);
+
+    // --on-disk
+    let on_disk_commit_snapshot = {
+        let git = git.duplicate_repo()?;
+        git.run_with_options(
+            &["move", "--on-disk", "--fixup", "-x", &test2_oid.to_string()],
+            // Use the same mocked system time as the destination commit to coax
+            // the commit hashs to match their in-mem counterparts.
+            &GitRunOptions {
+                time: 3,
+                ..Default::default()
+            },
+        )?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        o 307a04c create test.txt
+        |
+        @ ff6183f update 3 test.txt
+        "###);
+
+        let (stdout, _stderr) = git.run(&["show", "HEAD", "--pretty=fuller"])?;
+        stdout
+    };
 
     // --in-memory
     {
@@ -5001,8 +5065,23 @@ fn test_move_fixup_parent_into_head() -> eyre::Result<()> {
         In-memory rebase succeeded.
         "###);
 
-        let diff = git.get_trimmed_diff("test.txt", "HEAD")?;
-        insta::assert_snapshot!(diff, @r###"
+        let (stdout, _stderr) = git.run(&["show", "HEAD", "--pretty=fuller"])?;
+
+        assert_eq!(stdout, on_disk_commit_snapshot);
+
+        insta::assert_snapshot!(stdout, @r###"
+        commit ff6183fc6b71c3fcf6f26247162bde4e34bc5193
+        Author:     Testy McTestface <test@example.com>
+        AuthorDate: Thu Oct 29 12:34:56 2020 -0300
+        Commit:     Testy McTestface <test@example.com>
+        CommitDate: Thu Oct 29 12:34:56 2020 -0300
+
+            update 3 test.txt
+
+        diff --git a/test.txt b/test.txt
+        index b7e242c..a92d664 100644
+        --- a/test.txt
+        +++ b/test.txt
         @@ -1 +1,3 @@
         +line 1
          line 2
@@ -5052,6 +5131,36 @@ fn test_move_fixup_head_into_ancestor() -> eyre::Result<()> {
      line 2
     +line 3
     "###);
+
+    // --on-disk
+    {
+        let git = git.duplicate_repo()?;
+        git.run(&[
+            "move",
+            "--on-disk",
+            "--fixup",
+            "-s",
+            "HEAD",
+            "-d",
+            &test1_oid.to_string(),
+        ])?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        @ 963fb93 create test.txt
+        |
+        o b9da1e0 (test) update 2 test.txt
+        "###);
+
+        let diff = git.get_trimmed_diff("test.txt", "HEAD")?;
+        insta::assert_snapshot!(diff, @r###"
+        @@ -0,0 +1,2 @@
+        +line 2
+        +line 3
+        "###);
+    }
 
     // --in-memory
     {
@@ -5147,6 +5256,40 @@ fn test_move_fixup_ancestor_into_head() -> eyre::Result<()> {
     +line 4
     "###);
 
+    // --on-disk
+    {
+        let git = git.duplicate_repo()?;
+        git.run_with_options(
+            &["move", "--on-disk", "--fixup", "-x", &test2_oid.to_string()],
+            // Use the same mocked system time as the destination commit to coax
+            // the commit hashs to match their in-mem counterparts.
+            &GitRunOptions {
+                time: 4,
+                ..Default::default()
+            },
+        )?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        o 307a04c create test.txt
+        |
+        o dbcd17a update 3 test.txt
+        |
+        @ 2b97091 update 4 test.txt
+        "###);
+
+        let diff = git.get_trimmed_diff("test.txt", "HEAD")?;
+        insta::assert_snapshot!(diff, @r###"
+        @@ -1,2 +1,4 @@
+         line 1
+         line 2
+        +line 3
+        +line 4
+        "###);
+    }
+
     // --in-memory
     {
         let (stdout, _stderr) = git.branchless(
@@ -5221,6 +5364,41 @@ fn test_move_fixup_multiple_into_head() -> eyre::Result<()> {
      line 2
     +line 3
     "###);
+
+    // --on-disk
+    {
+        let git = git.duplicate_repo()?;
+        git.run_with_options(
+            &[
+                "move",
+                "--on-disk",
+                "--fixup",
+                "-x",
+                &format!("{}+{}", test1_oid, test2_oid),
+            ],
+            // Use the same mocked system time as the destination commit to coax
+            // the commit hashs to match their in-mem counterparts.
+            &GitRunOptions {
+                time: 3,
+                ..Default::default()
+            },
+        )?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        @ c4f6746 update 3 test.txt
+        "###);
+
+        let diff = git.get_trimmed_diff("test.txt", "HEAD")?;
+        insta::assert_snapshot!(diff, @r###"
+        @@ -0,0 +1,3 @@
+        +line 1
+        +line 2
+        +line 3
+        "###);
+    }
 
     // --in-memory
     {
@@ -5310,6 +5488,53 @@ fn test_move_fixup_multiple_into_ancestor_with_unmoved_head() -> eyre::Result<()
      line 3
     +line 4
     "###);
+
+    // --on-disk
+    {
+        let git = git.duplicate_repo()?;
+        git.run_with_options(
+            &[
+                "move",
+                "--on-disk",
+                "--fixup",
+                "-x",
+                &format!("{}+{}", test2_oid, test3_oid),
+                "-d",
+                &test1_oid.to_string(),
+            ],
+            // Use the same mocked system time as the destination commit to coax
+            // the commit hashs to match their in-mem counterparts.
+            &GitRunOptions {
+                time: 1,
+                ..Default::default()
+            },
+        )?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        o 23d4bdd create test.txt
+        |
+        @ 797ef91 update 4 test.txt
+        "###);
+
+        let diff = git.get_trimmed_diff("test.txt", "HEAD~")?;
+        insta::assert_snapshot!(diff, @r###"
+        @@ -0,0 +1,3 @@
+        +line 1
+        +line 2
+        +line 3
+        "###);
+        let diff = git.get_trimmed_diff("test.txt", "HEAD")?;
+        insta::assert_snapshot!(diff, @r###"
+        @@ -1,3 +1,4 @@
+         line 1
+         line 2
+         line 3
+        +line 4
+        "###);
+    }
 
     // --in-memory
     {
@@ -5490,6 +5715,65 @@ fn test_move_fixup_multiple_disconnected_into_ancestor() -> eyre::Result<()> {
     +# Section C
      Line C-1
     "###);
+
+    // --on-disk
+    {
+        let git = git.duplicate_repo()?;
+        git.run_with_options(
+            &[
+                "move",
+                "--on-disk",
+                "--fixup",
+                "-x",
+                &format!("{}+{}", test3_oid, test5_oid),
+                "-d",
+                &test1_oid.to_string(),
+            ],
+            // Use the same mocked system time as the destination commit to coax
+            // the commit hashs to match their in-mem counterparts.
+            &GitRunOptions {
+                time: 1,
+                ..Default::default()
+            },
+        )?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        o 38caaaf create test.txt
+        |
+        o 6783c86 update 2 test.txt
+        |
+        o 7e2a64a update 4 test.txt
+        |
+        @ 472b70b update 6 test.txt
+        "###);
+
+        // diff for "create test.txt"
+        let diff = git.get_trimmed_diff("test.txt", "38caaaf")?;
+        insta::assert_snapshot!(diff, @r###"
+        @@ -0,0 +1,8 @@
+        +# Section A
+        +.
+        +.
+        +# Section B
+        +.
+        +.
+        +# Section 3
+        +Line C-1
+        "###);
+        let diff = git.get_trimmed_diff("test.txt", "HEAD")?;
+        insta::assert_snapshot!(diff, @r###"
+        @@ -5,5 +5,5 @@ Line A-1
+         Line B-1
+         Line B-2
+         .
+        -# Section 3
+        +# Section C
+         Line C-1
+        "###);
+    }
 
     // --in-memory
     {
@@ -5687,6 +5971,62 @@ fn test_move_fixup_multiple_disconnected_into_head() -> eyre::Result<()> {
      Line C-1
     "###);
 
+    // --on-disk
+    {
+        let git = git.duplicate_repo()?;
+        git.run_with_options(
+            &[
+                "move",
+                "--on-disk",
+                "--fixup",
+                "-x",
+                &format!("{}+{}", test3_oid, test5_oid),
+            ],
+            // Use the same mocked system time as the destination commit to coax
+            // the commit hashs to match their in-mem counterparts.
+            &GitRunOptions {
+                time: 6,
+                ..Default::default()
+            },
+        )?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        o 64eb9bf create test.txt
+        |
+        o 087914d update 2 test.txt
+        |
+        o c21e0d7 (test) update 4 test.txt
+        |
+        @ 237b381 update 6 test.txt
+        "###);
+
+        // diff for "update 4" should not include the changes from "update 3"
+        let diff = git.get_trimmed_diff("test.txt", "c21e0d7")?;
+        insta::assert_snapshot!(diff, @r###"
+        @@ -2,6 +2,7 @@
+         Line A-1
+         .
+         # Section B
+        -.
+        +Line B-1
+        +Line B-2
+         .
+         # Section C
+        "###);
+
+        let diff = git.get_trimmed_diff("test.txt", "HEAD")?;
+        insta::assert_snapshot!(diff, @r###"
+        @@ -6,3 +6,4 @@ Line B-1
+         Line B-2
+         .
+         # Section C
+        +Line C-1
+        "###);
+    }
+
     // --in-memory
     {
         let (stdout, _stderr) = git.branchless(
@@ -5803,6 +6143,36 @@ fn test_move_fixup_squash_branch() -> eyre::Result<()> {
      }
     "###);
 
+    // --on-disk
+    {
+        let git = git.duplicate_repo()?;
+        git.run(&[
+            "move",
+            "--on-disk",
+            "--fixup",
+            "-s",
+            &test2_oid.to_string(),
+            "-d",
+            &test1_oid.to_string(),
+        ])?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        @ c513440 (> test) create test.txt
+        "###);
+
+        let diff = git.get_trimmed_diff("test.txt", "HEAD")?;
+        insta::assert_snapshot!(diff, @r###"
+        @@ -0,0 +1,4 @@
+        +function name(): int
+        +{
+        +return 123;
+        +}
+        "###);
+    }
+
     // --in-memory
     {
         let (stdout, _stderr) = git.branchless(
@@ -5916,6 +6286,49 @@ fn test_move_fixup_branch_tip() -> eyre::Result<()> {
     +return 123;
     +}
     "###);
+
+    // --on-disk
+    {
+        let git = git.duplicate_repo()?;
+        git.run(&[
+            "move",
+            "--on-disk",
+            "--fixup",
+            "-x",
+            "test-3",
+            "-d",
+            "test-1",
+        ])?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        @ f4321df (> test-3, test-1) create test.txt
+        |
+        o 2746e2a (test-2) update 2 test.txt
+        "###);
+
+        let diff = git.get_trimmed_diff("test.txt", "HEAD")?;
+        insta::assert_snapshot!(diff, @r###"
+        @@ -0,0 +1,3 @@
+        +# Just a function
+        +function name()
+        +{}
+        "###);
+
+        // diff for "update 2"
+        let diff = git.get_trimmed_diff("test.txt", "2746e2a")?;
+        insta::assert_snapshot!(diff, @r###"
+        @@ -1,3 +1,5 @@
+         # Just a function
+         function name()
+        -{}
+        +{
+        +return 123;
+        +}
+        "###);
+    }
 
     // --in-memory
     {
@@ -6099,6 +6512,68 @@ fn test_move_fixup_tree() -> eyre::Result<()> {
      .
      # Section C
     "###);
+
+    // --on-disk
+    {
+        let git = git.duplicate_repo()?;
+        git.run_with_options(
+            &[
+                "move",
+                "--on-disk",
+                "--fixup",
+                "-x",
+                &format!("{}+{}", test2_oid, test6_oid),
+                "-d",
+                "test",
+            ],
+            // Use the same mocked system time as the destination commit to coax
+            // the commit hashs to match their in-mem counterparts.
+            &GitRunOptions {
+                time: 4,
+                ..Default::default()
+            },
+        )?;
+
+        let (stdout, _stderr) = git.run(&["smartlog"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        o 64eb9bf create test.txt
+        |
+        o b479fa3 update 3 test.txt
+        |\
+        | o 59a95b3 (test) update 4 test.txt
+        | |
+        | o 1e7fdb8 update 5 test.txt
+        |
+        @ 5e6d3e4 update 7 test.txt
+        "###);
+
+        // diff for update 4 test.txt
+        let diff = git.get_trimmed_diff("test.txt", "59a95b3")?;
+        insta::assert_snapshot!(diff, @r###"
+        @@ -1,7 +1,8 @@
+         # Section A
+        +Line A-1
+         .
+        -.
+        -# Section B
+        +## Section A-2
+         Line B-1
+        +Line B-2
+         .
+         # Section C
+        "###);
+        let diff = git.get_trimmed_diff("test.txt", "HEAD")?;
+        insta::assert_snapshot!(diff, @r###"
+        @@ -5,3 +5,4 @@
+         Line B-1
+         .
+         # Section C
+        +Line C-1
+        "###);
+    }
+
     // --in-memory
     {
         let (stdout, _stderr) = git.branchless(
@@ -6174,6 +6649,27 @@ fn test_move_fixup_conflict() -> eyre::Result<()> {
     git.commit_file_with_contents("test", 1, "line 1\n")?;
     git.commit_file_with_contents_and_message("test", 2, "line 1, 2\n", "update 2")?;
     git.commit_file_with_contents_and_message("test", 3, "line 1, 2, 3\n", "update 3")?;
+
+    // --on-disk
+    {
+        let git = git.duplicate_repo()?;
+        let (stdout, _stderr) = git.run_with_options(
+            &["move", "--on-disk", "--fixup", "-x", "HEAD", "-d", "HEAD~2"],
+            &GitRunOptions {
+                expected_exit_code: 1,
+                ..Default::default()
+            },
+        )?;
+
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> diff --quiet
+        Calling Git for on-disk rebase...
+        branchless: running command: <git-executable> rebase --continue
+        Auto-merging test.txt
+        CONFLICT (content): Merge conflict in test.txt
+        "###);
+    }
+
     // --in-memory
     {
         let (stdout, _stderr) = git.branchless_with_options(

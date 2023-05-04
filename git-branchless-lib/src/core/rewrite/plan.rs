@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use chashmap::CHashMap;
 use eyre::Context;
-use itertools::Itertools;
+use itertools::{intersperse, Itertools};
 use rayon::{prelude::*, ThreadPool};
 use tracing::{instrument, warn};
 
@@ -133,12 +133,68 @@ impl RebaseCommand {
             RebaseCommand::CreateLabel { label_name } => format!("label {label_name}"),
             RebaseCommand::Reset { target } => format!("reset {target}"),
             RebaseCommand::Pick {
-                original_commit_oid: _,
+                original_commit_oid,
                 commits_to_apply_oids,
             } => match commits_to_apply_oids.as_slice() {
                 [] => String::new(),
                 [commit_oid] => format!("pick {commit_oid}"),
-                [..] => unimplemented!("On-disk fixups are not yet supported"),
+                [pick_oid, fixup_oids @ ..] => {
+                    let mut picks = vec![format!("pick {pick_oid}")];
+                    let mut fixups = fixup_oids
+                        .iter()
+                        .map(|oid| format!("fixup {oid}"))
+                        .collect::<Vec<String>>();
+                    let mut cleanups = vec![];
+
+                    // Since 0ca8681, the intermediate commits created as each
+                    // fixup is applied are left behind in the smartlog. This
+                    // forcibly removes all but the last of them. I don't
+                    // understand why this happens during `git branchless`
+                    // initiated rebases, but not during "normal" fixup rebases,
+                    // but this makes these artifacts go away.
+                    if fixups.len() > 1 {
+                        fixups = intersperse(
+                            fixups,
+                            "exec git branchless hook-skip-upstream-applied-commit $(git rev-parse HEAD)".to_string()
+                        ).collect()
+                    }
+
+                    // If the destination commit (ie `original_commit_oid`) does
+                    // not come first topologically among the commits being
+                    // rebased, then the final squashed commit will end up with
+                    // the wrong metadata. (It will end up with the metadata
+                    // from the commit that *does* come first, ie `pick_oid`.)
+                    // We have to add some additional steps to make sure the
+                    // smartlog and commit metadata are left as the user
+                    // expects.
+                    if pick_oid != original_commit_oid {
+                        // See above comment related to 0ca8681
+                        picks.insert(
+                            1,
+                            "exec git branchless hook-skip-upstream-applied-commit $(git rev-parse HEAD)".to_string()
+                        );
+
+                        cleanups = vec![
+                            // Hide the final squashed commit
+                            "exec git branchless hook-skip-upstream-applied-commit $(git rev-parse HEAD)".to_string(),
+
+                            // Create a new final commit by applying the
+                            // metadata from the destination commit to the just
+                            // now hidden commit.
+                            format!("exec git commit --amend --no-edit --reuse-message {original_commit_oid}"),
+
+                            // Finally, register the new final commit as the
+                            // rewritten version of original_commit_oid
+                            format!("exec git branchless hook-skip-upstream-applied-commit {original_commit_oid} $(git rev-parse HEAD)")
+                        ];
+                    }
+
+                    picks
+                        .iter()
+                        .chain(fixups.iter())
+                        .chain(cleanups.iter())
+                        .join("\n")
+                }
             },
             RebaseCommand::Merge {
                 commit_oid,
@@ -1172,9 +1228,16 @@ impl<'a> RebasePlanBuilder<'a> {
 
             let first_parent_oid = *parent_oids.first().unwrap();
             first_dest_oid.get_or_insert(first_parent_oid);
-            acc.push(RebaseCommand::Reset {
-                target: OidOrLabel::Oid(first_parent_oid),
-            });
+            // FIXME This feels heavy handed, but seems to be necessary for some fixup cases.
+            if !state
+                .constraints
+                .commits_to_move()
+                .contains(&first_parent_oid)
+            {
+                acc.push(RebaseCommand::Reset {
+                    target: OidOrLabel::Oid(first_parent_oid),
+                });
+            }
 
             let upstream_patch_ids = if *detect_duplicate_commits_via_patch_id {
                 let (effects, _progress) =
