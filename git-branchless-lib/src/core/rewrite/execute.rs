@@ -558,11 +558,15 @@ mod in_memory {
 
                 RebaseCommand::Pick {
                     original_commit_oid,
-                    commit_to_apply_oid,
+                    commits_to_apply_oids,
                 } => {
                     let current_commit = repo
                         .find_commit_or_fail(current_oid)
                         .wrap_err("Finding current commit")?;
+                    let commit_to_apply_oid = match commits_to_apply_oids.as_slice() {
+                        [commit_to_apply_oid] => commit_to_apply_oid,
+                        [..] => unimplemented!("Picking multiple commits"),
+                    };
                     let commit_to_apply = repo
                         .find_commit_or_fail(*commit_to_apply_oid)
                         .wrap_err("Finding commit to apply")?;
@@ -1032,8 +1036,10 @@ mod on_disk {
         if rebase_plan.commands.iter().any(|command| match command {
             RebaseCommand::Pick {
                 original_commit_oid,
-                commit_to_apply_oid,
-            } => original_commit_oid != commit_to_apply_oid,
+                commits_to_apply_oids,
+            } => !commits_to_apply_oids
+                .iter()
+                .any(|oid| oid == original_commit_oid),
             _ => false,
         }) {
             eyre::bail!("Not implemented: replacing commits in an on disk rebase");

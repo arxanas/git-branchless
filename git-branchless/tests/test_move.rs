@@ -71,14 +71,18 @@ fn test_move_stick() -> eyre::Result<()> {
                     },
                     Pick {
                         original_commit_oid: NonZeroOid(70deb1e28791d8e7dd5a1f0c871a51b91282562f),
-                        commit_to_apply_oid: NonZeroOid(70deb1e28791d8e7dd5a1f0c871a51b91282562f),
+                        commits_to_apply_oids: [
+                            NonZeroOid(70deb1e28791d8e7dd5a1f0c871a51b91282562f),
+                        ],
                     },
                     DetectEmptyCommit {
                         commit_oid: NonZeroOid(70deb1e28791d8e7dd5a1f0c871a51b91282562f),
                     },
                     Pick {
                         original_commit_oid: NonZeroOid(355e173bf9c5d2efac2e451da0cdad3fb82b869a),
-                        commit_to_apply_oid: NonZeroOid(355e173bf9c5d2efac2e451da0cdad3fb82b869a),
+                        commits_to_apply_oids: [
+                            NonZeroOid(355e173bf9c5d2efac2e451da0cdad3fb82b869a),
+                        ],
                     },
                     DetectEmptyCommit {
                         commit_oid: NonZeroOid(355e173bf9c5d2efac2e451da0cdad3fb82b869a),
@@ -202,21 +206,27 @@ fn test_move_insert_stick() -> eyre::Result<()> {
                     },
                     Pick {
                         original_commit_oid: NonZeroOid(70deb1e28791d8e7dd5a1f0c871a51b91282562f),
-                        commit_to_apply_oid: NonZeroOid(70deb1e28791d8e7dd5a1f0c871a51b91282562f),
+                        commits_to_apply_oids: [
+                            NonZeroOid(70deb1e28791d8e7dd5a1f0c871a51b91282562f),
+                        ],
                     },
                     DetectEmptyCommit {
                         commit_oid: NonZeroOid(70deb1e28791d8e7dd5a1f0c871a51b91282562f),
                     },
                     Pick {
                         original_commit_oid: NonZeroOid(355e173bf9c5d2efac2e451da0cdad3fb82b869a),
-                        commit_to_apply_oid: NonZeroOid(355e173bf9c5d2efac2e451da0cdad3fb82b869a),
+                        commits_to_apply_oids: [
+                            NonZeroOid(355e173bf9c5d2efac2e451da0cdad3fb82b869a),
+                        ],
                     },
                     DetectEmptyCommit {
                         commit_oid: NonZeroOid(355e173bf9c5d2efac2e451da0cdad3fb82b869a),
                     },
                     Pick {
                         original_commit_oid: NonZeroOid(96d1c37a3d4363611c49f7e52186e189a04c531f),
-                        commit_to_apply_oid: NonZeroOid(96d1c37a3d4363611c49f7e52186e189a04c531f),
+                        commits_to_apply_oids: [
+                            NonZeroOid(96d1c37a3d4363611c49f7e52186e189a04c531f),
+                        ],
                     },
                     DetectEmptyCommit {
                         commit_oid: NonZeroOid(96d1c37a3d4363611c49f7e52186e189a04c531f),
@@ -2280,14 +2290,18 @@ fn test_move_with_source_not_in_smartlog() -> eyre::Result<()> {
                         },
                         Pick {
                             original_commit_oid: NonZeroOid(70deb1e28791d8e7dd5a1f0c871a51b91282562f),
-                            commit_to_apply_oid: NonZeroOid(70deb1e28791d8e7dd5a1f0c871a51b91282562f),
+                            commits_to_apply_oids: [
+                                NonZeroOid(70deb1e28791d8e7dd5a1f0c871a51b91282562f),
+                            ],
                         },
                         DetectEmptyCommit {
                             commit_oid: NonZeroOid(70deb1e28791d8e7dd5a1f0c871a51b91282562f),
                         },
                         Pick {
                             original_commit_oid: NonZeroOid(355e173bf9c5d2efac2e451da0cdad3fb82b869a),
-                            commit_to_apply_oid: NonZeroOid(355e173bf9c5d2efac2e451da0cdad3fb82b869a),
+                            commits_to_apply_oids: [
+                                NonZeroOid(355e173bf9c5d2efac2e451da0cdad3fb82b869a),
+                            ],
                         },
                         DetectEmptyCommit {
                             commit_oid: NonZeroOid(355e173bf9c5d2efac2e451da0cdad3fb82b869a),
@@ -2388,7 +2402,9 @@ fn test_move_merge_conflict() -> eyre::Result<()> {
                     },
                     Pick {
                         original_commit_oid: NonZeroOid(e85d25c772a05b5c73ea8ec43881c12bbf588848),
-                        commit_to_apply_oid: NonZeroOid(e85d25c772a05b5c73ea8ec43881c12bbf588848),
+                        commits_to_apply_oids: [
+                            NonZeroOid(e85d25c772a05b5c73ea8ec43881c12bbf588848),
+                        ],
                     },
                     DetectEmptyCommit {
                         commit_oid: NonZeroOid(e85d25c772a05b5c73ea8ec43881c12bbf588848),
@@ -2460,14 +2476,18 @@ fn test_move_base() -> eyre::Result<()> {
                     },
                     Pick {
                         original_commit_oid: NonZeroOid(96d1c37a3d4363611c49f7e52186e189a04c531f),
-                        commit_to_apply_oid: NonZeroOid(96d1c37a3d4363611c49f7e52186e189a04c531f),
+                        commits_to_apply_oids: [
+                            NonZeroOid(96d1c37a3d4363611c49f7e52186e189a04c531f),
+                        ],
                     },
                     DetectEmptyCommit {
                         commit_oid: NonZeroOid(96d1c37a3d4363611c49f7e52186e189a04c531f),
                     },
                     Pick {
                         original_commit_oid: NonZeroOid(70deb1e28791d8e7dd5a1f0c871a51b91282562f),
-                        commit_to_apply_oid: NonZeroOid(70deb1e28791d8e7dd5a1f0c871a51b91282562f),
+                        commits_to_apply_oids: [
+                            NonZeroOid(70deb1e28791d8e7dd5a1f0c871a51b91282562f),
+                        ],
                     },
                     DetectEmptyCommit {
                         commit_oid: NonZeroOid(70deb1e28791d8e7dd5a1f0c871a51b91282562f),
@@ -2596,7 +2616,9 @@ fn test_move_checkout_new_head() -> eyre::Result<()> {
                     },
                     Pick {
                         original_commit_oid: NonZeroOid(fe65c1fe15584744e649b2c79d4cf9b0d878f92e),
-                        commit_to_apply_oid: NonZeroOid(fe65c1fe15584744e649b2c79d4cf9b0d878f92e),
+                        commits_to_apply_oids: [
+                            NonZeroOid(fe65c1fe15584744e649b2c79d4cf9b0d878f92e),
+                        ],
                     },
                     DetectEmptyCommit {
                         commit_oid: NonZeroOid(fe65c1fe15584744e649b2c79d4cf9b0d878f92e),
@@ -2670,7 +2692,9 @@ fn test_move_branch() -> eyre::Result<()> {
                     },
                     Pick {
                         original_commit_oid: NonZeroOid(98b9119d16974f372e76cb64a3b77c528fc0b18b),
-                        commit_to_apply_oid: NonZeroOid(98b9119d16974f372e76cb64a3b77c528fc0b18b),
+                        commits_to_apply_oids: [
+                            NonZeroOid(98b9119d16974f372e76cb64a3b77c528fc0b18b),
+                        ],
                     },
                     DetectEmptyCommit {
                         commit_oid: NonZeroOid(98b9119d16974f372e76cb64a3b77c528fc0b18b),
@@ -2884,7 +2908,9 @@ fn test_move_in_memory_gc() -> eyre::Result<()> {
                     },
                     Pick {
                         original_commit_oid: NonZeroOid(96d1c37a3d4363611c49f7e52186e189a04c531f),
-                        commit_to_apply_oid: NonZeroOid(96d1c37a3d4363611c49f7e52186e189a04c531f),
+                        commits_to_apply_oids: [
+                            NonZeroOid(96d1c37a3d4363611c49f7e52186e189a04c531f),
+                        ],
                     },
                     DetectEmptyCommit {
                         commit_oid: NonZeroOid(96d1c37a3d4363611c49f7e52186e189a04c531f),
@@ -3684,7 +3710,9 @@ fn test_move_merge_commit() -> eyre::Result<()> {
                         },
                         Pick {
                             original_commit_oid: NonZeroOid(fe65c1fe15584744e649b2c79d4cf9b0d878f92e),
-                            commit_to_apply_oid: NonZeroOid(fe65c1fe15584744e649b2c79d4cf9b0d878f92e),
+                            commits_to_apply_oids: [
+                                NonZeroOid(fe65c1fe15584744e649b2c79d4cf9b0d878f92e),
+                            ],
                         },
                         DetectEmptyCommit {
                             commit_oid: NonZeroOid(fe65c1fe15584744e649b2c79d4cf9b0d878f92e),
@@ -4065,7 +4093,9 @@ fn test_move_merge_commit_issue_912() -> eyre::Result<()> {
                     },
                     Pick {
                         original_commit_oid: NonZeroOid(50eef922b99bc8a8829a1ded374231f9a025d28c),
-                        commit_to_apply_oid: NonZeroOid(50eef922b99bc8a8829a1ded374231f9a025d28c),
+                        commits_to_apply_oids: [
+                            NonZeroOid(50eef922b99bc8a8829a1ded374231f9a025d28c),
+                        ],
                     },
                     DetectEmptyCommit {
                         commit_oid: NonZeroOid(50eef922b99bc8a8829a1ded374231f9a025d28c),
@@ -4075,7 +4105,9 @@ fn test_move_merge_commit_issue_912() -> eyre::Result<()> {
                     },
                     Pick {
                         original_commit_oid: NonZeroOid(00aa7adb4f38b8b1c04b062a1fdc897fcc6c471d),
-                        commit_to_apply_oid: NonZeroOid(00aa7adb4f38b8b1c04b062a1fdc897fcc6c471d),
+                        commits_to_apply_oids: [
+                            NonZeroOid(00aa7adb4f38b8b1c04b062a1fdc897fcc6c471d),
+                        ],
                     },
                     DetectEmptyCommit {
                         commit_oid: NonZeroOid(00aa7adb4f38b8b1c04b062a1fdc897fcc6c471d),
@@ -4090,7 +4122,9 @@ fn test_move_merge_commit_issue_912() -> eyre::Result<()> {
                     },
                     Pick {
                         original_commit_oid: NonZeroOid(af1a4cee7c63ea7eba381967223d17a6386e5a4c),
-                        commit_to_apply_oid: NonZeroOid(af1a4cee7c63ea7eba381967223d17a6386e5a4c),
+                        commits_to_apply_oids: [
+                            NonZeroOid(af1a4cee7c63ea7eba381967223d17a6386e5a4c),
+                        ],
                     },
                     DetectEmptyCommit {
                         commit_oid: NonZeroOid(af1a4cee7c63ea7eba381967223d17a6386e5a4c),
@@ -4113,7 +4147,9 @@ fn test_move_merge_commit_issue_912() -> eyre::Result<()> {
                     },
                     Pick {
                         original_commit_oid: NonZeroOid(7f5857ec34dab5bf7991da2512bf529789204413),
-                        commit_to_apply_oid: NonZeroOid(7f5857ec34dab5bf7991da2512bf529789204413),
+                        commits_to_apply_oids: [
+                            NonZeroOid(7f5857ec34dab5bf7991da2512bf529789204413),
+                        ],
                     },
                     DetectEmptyCommit {
                         commit_oid: NonZeroOid(7f5857ec34dab5bf7991da2512bf529789204413),
