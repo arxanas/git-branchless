@@ -4866,3 +4866,1374 @@ fn test_move_delete_branch_config_entry() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_move_fixup_head_into_parent() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    git.detach_head()?;
+    let _test1_oid = git.commit_file_with_contents("test", 1, "line 2\n")?;
+    let test2_oid =
+        git.commit_file_with_contents_and_message("test", 2, "line 1\nline 2\n", "update 2")?;
+    let _test3_oid = git.commit_file_with_contents_and_message(
+        "test",
+        3,
+        "line 1\nline 2\nline 3\n",
+        "update 3",
+    )?;
+
+    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    O f777ecc (master) create initial.txt
+    |
+    o 307a04c create test.txt
+    |
+    o 6d92723 update 2 test.txt
+    |
+    @ da38dc8 update 3 test.txt
+    "###);
+
+    let diff = git.get_trimmed_diff("test.txt", "HEAD")?;
+    insta::assert_snapshot!(diff, @r###"
+    @@ -1,2 +1,3 @@
+     line 1
+     line 2
+    +line 3
+    "###);
+
+    // --in-memory
+    {
+        let (stdout, _stderr) = git.run(&[
+            "move",
+            "--in-memory",
+            "--fixup",
+            "-s",
+            "HEAD",
+            "-d",
+            &test2_oid.to_string(),
+        ])?;
+        insta::assert_snapshot!(stdout, @r###"
+        Attempting rebase in-memory...
+        [1/1] Committed as: 8c3aa56 update 2 test.txt
+        branchless: processing 2 rewritten commits
+        branchless: running command: <git-executable> checkout 8c3aa56b40afc7aa8b61ac5d6f6bff9fd8407896
+        O f777ecc (master) create initial.txt
+        |
+        o 307a04c create test.txt
+        |
+        @ 8c3aa56 update 2 test.txt
+        In-memory rebase succeeded.
+        "###);
+
+        let diff = git.get_trimmed_diff("test.txt", "HEAD")?;
+        insta::assert_snapshot!(diff, @r###"
+        @@ -1 +1,3 @@
+        +line 1
+         line 2
+        +line 3
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_move_fixup_parent_into_head() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    git.detach_head()?;
+    let _test1_oid = git.commit_file_with_contents("test", 1, "line 2\n")?;
+    let test2_oid =
+        git.commit_file_with_contents_and_message("test", 2, "line 1\nline 2\n", "update 2")?;
+    let _test3_oid = git.commit_file_with_contents_and_message(
+        "test",
+        3,
+        "line 1\nline 2\nline 3\n",
+        "update 3",
+    )?;
+
+    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    O f777ecc (master) create initial.txt
+    |
+    o 307a04c create test.txt
+    |
+    o 6d92723 update 2 test.txt
+    |
+    @ da38dc8 update 3 test.txt
+    "###);
+
+    let diff = git.get_trimmed_diff("test.txt", "HEAD")?;
+    insta::assert_snapshot!(diff, @r###"
+    @@ -1,2 +1,3 @@
+     line 1
+     line 2
+    +line 3
+    "###);
+
+    // --in-memory
+    {
+        let (stdout, _stderr) = git.run(&[
+            "move",
+            "--in-memory",
+            "--fixup",
+            "-x",
+            &test2_oid.to_string(),
+        ])?;
+        insta::assert_snapshot!(stdout, @r###"
+        Attempting rebase in-memory...
+        [1/1] Committed as: ff6183f update 3 test.txt
+        branchless: processing 2 rewritten commits
+        branchless: running command: <git-executable> checkout ff6183fc6b71c3fcf6f26247162bde4e34bc5193
+        O f777ecc (master) create initial.txt
+        |
+        o 307a04c create test.txt
+        |
+        @ ff6183f update 3 test.txt
+        In-memory rebase succeeded.
+        "###);
+
+        let diff = git.get_trimmed_diff("test.txt", "HEAD")?;
+        insta::assert_snapshot!(diff, @r###"
+        @@ -1 +1,3 @@
+        +line 1
+         line 2
+        +line 3
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_move_fixup_head_into_ancestor() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    git.detach_head()?;
+    let test1_oid = git.commit_file_with_contents("test", 1, "line 2\n")?;
+    let _test2_oid =
+        git.commit_file_with_contents_and_message("test", 2, "line 1\nline 2\n", "update 2")?;
+    git.run(&["branch", "test"])?;
+    let _test3_oid = git.commit_file_with_contents_and_message(
+        "test",
+        3,
+        "line 1\nline 2\nline 3\n",
+        "update 3",
+    )?;
+
+    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    O f777ecc (master) create initial.txt
+    |
+    o 307a04c create test.txt
+    |
+    o 6d92723 (test) update 2 test.txt
+    |
+    @ da38dc8 update 3 test.txt
+    "###);
+
+    let diff = git.get_trimmed_diff("test.txt", "HEAD")?;
+    insta::assert_snapshot!(diff, @r###"
+    @@ -1,2 +1,3 @@
+     line 1
+     line 2
+    +line 3
+    "###);
+
+    // --in-memory
+    {
+        let (stdout, _stderr) = git.run(&[
+            "move",
+            "--in-memory",
+            "--fixup",
+            "-s",
+            "HEAD",
+            "-d",
+            &test1_oid.to_string(),
+        ])?;
+        insta::assert_snapshot!(stdout, @r###"
+        Attempting rebase in-memory...
+        [1/2] Committed as: 963fb93 create test.txt
+        [2/2] Committed as: b9da1e0 update 2 test.txt
+        branchless: processing 1 update: branch test
+        branchless: processing 3 rewritten commits
+        branchless: running command: <git-executable> checkout 963fb93e7a4b7c53a1feb565106a1a4e5a298bf4
+        O f777ecc (master) create initial.txt
+        |
+        @ 963fb93 create test.txt
+        |
+        o b9da1e0 (test) update 2 test.txt
+        In-memory rebase succeeded.
+        "###);
+
+        let diff = git.get_trimmed_diff("test.txt", "HEAD")?;
+        insta::assert_snapshot!(diff, @r###"
+        @@ -0,0 +1,2 @@
+        +line 2
+        +line 3
+        "###);
+        let diff = git.get_trimmed_diff("test.txt", "test")?;
+        insta::assert_snapshot!(diff, @r###"
+        @@ -1,2 +1,3 @@
+        +line 1
+         line 2
+         line 3
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_move_fixup_ancestor_into_head() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    git.detach_head()?;
+    let _test1_oid = git.commit_file_with_contents("test", 1, "line 2\n")?;
+    let test2_oid =
+        git.commit_file_with_contents_and_message("test", 2, "line 2\nline 3\n", "update 2")?;
+    let _test3_oid = git.commit_file_with_contents_and_message(
+        "test",
+        3,
+        "line 1\nline 2\nline 3\n",
+        "update 3",
+    )?;
+    let _test4_oid = git.commit_file_with_contents_and_message(
+        "test",
+        4,
+        "line 1\nline 2\nline 3\nline 4\n",
+        "update 4",
+    )?;
+
+    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    O f777ecc (master) create initial.txt
+    |
+    o 307a04c create test.txt
+    |
+    o 21819d4 update 2 test.txt
+    |
+    o 04a457d update 3 test.txt
+    |
+    @ b2a4062 update 4 test.txt
+    "###);
+
+    let diff = git.get_trimmed_diff("test.txt", "HEAD")?;
+    insta::assert_snapshot!(diff, @r###"
+    @@ -1,3 +1,4 @@
+     line 1
+     line 2
+     line 3
+    +line 4
+    "###);
+
+    // --in-memory
+    {
+        let (stdout, _stderr) = git.run(&[
+            "move",
+            "--in-memory",
+            "--fixup",
+            "-x",
+            &test2_oid.to_string(),
+        ])?;
+
+        insta::assert_snapshot!(stdout, @r###"
+        Attempting rebase in-memory...
+        [1/2] Committed as: dbcd17a update 3 test.txt
+        [2/2] Committed as: 2b97091 update 4 test.txt
+        branchless: processing 3 rewritten commits
+        branchless: running command: <git-executable> checkout 2b970915e7142b451375b5df3dc7a02db6022357
+        O f777ecc (master) create initial.txt
+        |
+        o 307a04c create test.txt
+        |
+        o dbcd17a update 3 test.txt
+        |
+        @ 2b97091 update 4 test.txt
+        In-memory rebase succeeded.
+        "###);
+
+        let diff = git.get_trimmed_diff("test.txt", "HEAD")?;
+        insta::assert_snapshot!(diff, @r###"
+        @@ -1,2 +1,4 @@
+         line 1
+         line 2
+        +line 3
+        +line 4
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_move_fixup_multiple_into_head() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    git.detach_head()?;
+    let test1_oid = git.commit_file_with_contents("test", 1, "line 1\n")?;
+    let test2_oid =
+        git.commit_file_with_contents_and_message("test", 2, "line 1\nline 2\n", "update 2")?;
+    let _test3_oid = git.commit_file_with_contents_and_message(
+        "test",
+        3,
+        "line 1\nline 2\nline 3\n",
+        "update 3",
+    )?;
+
+    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    O f777ecc (master) create initial.txt
+    |
+    o 1f31d98 create test.txt
+    |
+    o 73ae0c5 update 2 test.txt
+    |
+    @ 622207d update 3 test.txt
+    "###);
+
+    let diff = git.get_trimmed_diff("test.txt", "HEAD")?;
+    insta::assert_snapshot!(diff, @r###"
+    @@ -1,2 +1,3 @@
+     line 1
+     line 2
+    +line 3
+    "###);
+
+    // --in-memory
+    {
+        let (stdout, _stderr) = git.run(&[
+            "move",
+            "--in-memory",
+            "--fixup",
+            "-x",
+            &format!("{}+{}", test1_oid, test2_oid),
+        ])?;
+        insta::assert_snapshot!(stdout, @r###"
+        Attempting rebase in-memory...
+        [1/1] Committed as: c4f6746 update 3 test.txt
+        branchless: processing 3 rewritten commits
+        branchless: running command: <git-executable> checkout c4f67465a26371b485ddd7eacfe61d0b962f92a6
+        O f777ecc (master) create initial.txt
+        |
+        @ c4f6746 update 3 test.txt
+        In-memory rebase succeeded.
+        "###);
+
+        let diff = git.get_trimmed_diff("test.txt", "HEAD")?;
+        insta::assert_snapshot!(diff, @r###"
+        @@ -0,0 +1,3 @@
+        +line 1
+        +line 2
+        +line 3
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_move_fixup_multiple_into_ancestor_with_unmoved_head() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    git.detach_head()?;
+    let test1_oid = git.commit_file_with_contents("test", 1, "line 1\n")?;
+    let test2_oid =
+        git.commit_file_with_contents_and_message("test", 2, "line 1\nline 2\n", "update 2")?;
+    let test3_oid = git.commit_file_with_contents_and_message(
+        "test",
+        3,
+        "line 1\nline 2\nline 3\n",
+        "update 3",
+    )?;
+    let _test4_oid = git.commit_file_with_contents_and_message(
+        "test",
+        4,
+        "line 1\nline 2\nline 3\nline 4\n",
+        "update 4",
+    )?;
+
+    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    O f777ecc (master) create initial.txt
+    |
+    o 1f31d98 create test.txt
+    |
+    o 73ae0c5 update 2 test.txt
+    |
+    o 622207d update 3 test.txt
+    |
+    @ a392af0 update 4 test.txt
+    "###);
+
+    let diff = git.get_trimmed_diff("test.txt", "HEAD~")?;
+    insta::assert_snapshot!(diff, @r###"
+    @@ -1,2 +1,3 @@
+     line 1
+     line 2
+    +line 3
+    "###);
+    let diff = git.get_trimmed_diff("test.txt", "HEAD")?;
+    insta::assert_snapshot!(diff, @r###"
+    @@ -1,3 +1,4 @@
+     line 1
+     line 2
+     line 3
+    +line 4
+    "###);
+
+    // --in-memory
+    {
+        let (stdout, _stderr) = git.run(&[
+            "move",
+            "--in-memory",
+            "--fixup",
+            "-x",
+            &format!("{}+{}", test2_oid, test3_oid),
+            "-d",
+            &test1_oid.to_string(),
+        ])?;
+        insta::assert_snapshot!(stdout, @r###"
+        Attempting rebase in-memory...
+        [1/2] Committed as: 23d4bdd create test.txt
+        [2/2] Committed as: 797ef91 update 4 test.txt
+        branchless: processing 4 rewritten commits
+        branchless: running command: <git-executable> checkout 797ef91eb97d58cc1898de8ddcdfc31388a8893e
+        O f777ecc (master) create initial.txt
+        |
+        o 23d4bdd create test.txt
+        |
+        @ 797ef91 update 4 test.txt
+        In-memory rebase succeeded.
+        "###);
+
+        let diff = git.get_trimmed_diff("test.txt", "HEAD~")?;
+        insta::assert_snapshot!(diff, @r###"
+        @@ -0,0 +1,3 @@
+        +line 1
+        +line 2
+        +line 3
+        "###);
+        let diff = git.get_trimmed_diff("test.txt", "HEAD")?;
+        insta::assert_snapshot!(diff, @r###"
+        @@ -1,3 +1,4 @@
+         line 1
+         line 2
+         line 3
+        +line 4
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_move_fixup_multiple_disconnected_into_ancestor() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    git.detach_head()?;
+    let _test1_oid = git.commit_file_with_contents(
+        "test",
+        1,
+        "# Section A\n\
+         .\n\
+         .\n\
+         # Section B\n\
+         .\n\
+         .\n\
+         # Section C\n\
+         ",
+    )?;
+    git.run(&["branch", "test"])?;
+    let _test2_oid = git.commit_file_with_contents_and_message(
+        "test",
+        2,
+        "# Section A\n\
+         Line A-1\n\
+         .\n\
+         # Section B\n\
+         .\n\
+         .\n\
+         # Section C\n\
+         ",
+        "update 2",
+    )?;
+    let test3_oid = git.commit_file_with_contents_and_message(
+        "test",
+        3,
+        "# Section A\n\
+         Line A-1\n\
+         .\n\
+         # Section B\n\
+         .\n\
+         .\n\
+         # Section 3\n\
+         ",
+        "update 3",
+    )?;
+    let _test4_oid = git.commit_file_with_contents_and_message(
+        "test",
+        4,
+        "# Section A\n\
+         Line A-1\n\
+         .\n\
+         # Section B\n\
+         Line B-1\n\
+         Line B-2\n\
+         .\n\
+         # Section 3\n\
+         ",
+        "update 4",
+    )?;
+    let test5_oid = git.commit_file_with_contents_and_message(
+        "test",
+        5,
+        "# Section A\n\
+         Line A-1\n\
+         .\n\
+         # Section B\n\
+         Line B-1\n\
+         Line B-2\n\
+         .\n\
+         # Section 3\n\
+         Line C-1\n\
+         ",
+        "update 5",
+    )?;
+    let _test6_oid = git.commit_file_with_contents_and_message(
+        "test",
+        6,
+        "# Section A\n\
+         Line A-1\n\
+         .\n\
+         # Section B\n\
+         Line B-1\n\
+         Line B-2\n\
+         .\n\
+         # Section C\n\
+         Line C-1\n\
+         ",
+        "update 6",
+    )?;
+
+    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    O f777ecc (master) create initial.txt
+    |
+    o 64eb9bf (test) create test.txt
+    |
+    o 087914d update 2 test.txt
+    |
+    o 7f8adf4 update 3 test.txt
+    |
+    o acf72de update 4 test.txt
+    |
+    o 1ff1932 update 5 test.txt
+    |
+    @ e982189 update 6 test.txt
+    "###);
+
+    let diff = git.get_trimmed_diff("test.txt", "test")?;
+    insta::assert_snapshot!(diff, @r###"
+    @@ -0,0 +1,7 @@
+    +# Section A
+    +.
+    +.
+    +# Section B
+    +.
+    +.
+    +# Section C
+    "###);
+    let diff = git.get_trimmed_diff("test.txt", "HEAD")?;
+    insta::assert_snapshot!(diff, @r###"
+    @@ -5,5 +5,5 @@ Line A-1
+     Line B-1
+     Line B-2
+     .
+    -# Section 3
+    +# Section C
+     Line C-1
+    "###);
+
+    // --in-memory
+    {
+        let (stdout, _stderr) = git.run(&[
+            "move",
+            "--in-memory",
+            "--fixup",
+            "-x",
+            &format!("{}+{}", test3_oid, test5_oid),
+            "-d",
+            "test",
+        ])?;
+        insta::assert_snapshot!(stdout, @r###"
+        Attempting rebase in-memory...
+        [1/4] Committed as: 38caaaf create test.txt
+        [2/4] Committed as: 6783c86 update 2 test.txt
+        [3/4] Committed as: 7e2a64a update 4 test.txt
+        [4/4] Committed as: 472b70b update 6 test.txt
+        branchless: processing 1 update: branch test
+        branchless: processing 6 rewritten commits
+        branchless: running command: <git-executable> checkout 472b70be50d5c91210b3f2a089dbbb6af3a6bb71
+        O f777ecc (master) create initial.txt
+        |
+        o 38caaaf (test) create test.txt
+        |
+        o 6783c86 update 2 test.txt
+        |
+        o 7e2a64a update 4 test.txt
+        |
+        @ 472b70b update 6 test.txt
+        In-memory rebase succeeded.
+        "###);
+
+        // diff for "create test.txt"
+        let diff = git.get_trimmed_diff("test.txt", "test")?;
+        insta::assert_snapshot!(diff, @r###"
+        @@ -0,0 +1,8 @@
+        +# Section A
+        +.
+        +.
+        +# Section B
+        +.
+        +.
+        +# Section 3
+        +Line C-1
+        "###);
+        let diff = git.get_trimmed_diff("test.txt", "HEAD")?;
+        insta::assert_snapshot!(diff, @r###"
+        @@ -5,5 +5,5 @@ Line A-1
+         Line B-1
+         Line B-2
+         .
+        -# Section 3
+        +# Section C
+         Line C-1
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_move_fixup_multiple_disconnected_into_head() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    git.detach_head()?;
+    let _test1_oid = git.commit_file_with_contents(
+        "test",
+        1,
+        "# Section A\n\
+         .\n\
+         .\n\
+         # Section B\n\
+         .\n\
+         .\n\
+         # Section C\n\
+         ",
+    )?;
+    let _test2_oid = git.commit_file_with_contents_and_message(
+        "test",
+        2,
+        "# Section A\n\
+         Line A-1\n\
+         .\n\
+         # Section B\n\
+         .\n\
+         .\n\
+         # Section C\n\
+         ",
+        "update 2",
+    )?;
+    let test3_oid = git.commit_file_with_contents_and_message(
+        "test",
+        3,
+        "# Section A\n\
+         Line A-1\n\
+         .\n\
+         # Section B\n\
+         .\n\
+         .\n\
+         # Section 3\n\
+         ",
+        "update 3",
+    )?;
+    let _test4_oid = git.commit_file_with_contents_and_message(
+        "test",
+        4,
+        "# Section A\n\
+         Line A-1\n\
+         .\n\
+         # Section B\n\
+         Line B-1\n\
+         Line B-2\n\
+         .\n\
+         # Section 3\n\
+         ",
+        "update 4",
+    )?;
+    git.run(&["branch", "test"])?;
+    let test5_oid = git.commit_file_with_contents_and_message(
+        "test",
+        5,
+        "# Section A\n\
+         Line A-1\n\
+         .\n\
+         # Section B\n\
+         Line B-1\n\
+         Line B-2\n\
+         .\n\
+         # Section 3\n\
+         Line C-1\n\
+         ",
+        "update 5",
+    )?;
+    let _test6_oid = git.commit_file_with_contents_and_message(
+        "test",
+        6,
+        "# Section A\n\
+         Line A-1\n\
+         .\n\
+         # Section B\n\
+         Line B-1\n\
+         Line B-2\n\
+         .\n\
+         # Section C\n\
+         Line C-1\n\
+         ",
+        "update 6",
+    )?;
+
+    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    O f777ecc (master) create initial.txt
+    |
+    o 64eb9bf create test.txt
+    |
+    o 087914d update 2 test.txt
+    |
+    o 7f8adf4 update 3 test.txt
+    |
+    o acf72de (test) update 4 test.txt
+    |
+    o 1ff1932 update 5 test.txt
+    |
+    @ e982189 update 6 test.txt
+    "###);
+
+    let diff = git.get_trimmed_diff("test.txt", "test")?;
+    insta::assert_snapshot!(diff, @r###"
+    @@ -2,6 +2,7 @@
+     Line A-1
+     .
+     # Section B
+    -.
+    +Line B-1
+    +Line B-2
+     .
+     # Section 3
+    "###);
+    let diff = git.get_trimmed_diff("test.txt", "HEAD")?;
+    insta::assert_snapshot!(diff, @r###"
+    @@ -5,5 +5,5 @@ Line A-1
+     Line B-1
+     Line B-2
+     .
+    -# Section 3
+    +# Section C
+     Line C-1
+    "###);
+
+    // --in-memory
+    {
+        let (stdout, _stderr) = git.run(&[
+            "move",
+            "--in-memory",
+            "--fixup",
+            "-x",
+            &format!("{}+{}", test3_oid, test5_oid),
+        ])?;
+        insta::assert_snapshot!(stdout, @r###"
+        Attempting rebase in-memory...
+        [1/2] Committed as: c21e0d7 update 4 test.txt
+        [2/2] Committed as: 237b381 update 6 test.txt
+        branchless: processing 1 update: branch test
+        branchless: processing 4 rewritten commits
+        branchless: running command: <git-executable> checkout 237b381bee4b7d2fdb4a300affdf9f5aa3e78a0c
+        O f777ecc (master) create initial.txt
+        |
+        o 64eb9bf create test.txt
+        |
+        o 087914d update 2 test.txt
+        |
+        o c21e0d7 (test) update 4 test.txt
+        |
+        @ 237b381 update 6 test.txt
+        In-memory rebase succeeded.
+        "###);
+
+        // diff for "update 4" should not include the changes from "update 3"
+        let diff = git.get_trimmed_diff("test.txt", "test")?;
+        insta::assert_snapshot!(diff, @r###"
+        @@ -2,6 +2,7 @@
+         Line A-1
+         .
+         # Section B
+        -.
+        +Line B-1
+        +Line B-2
+         .
+         # Section C
+        "###);
+
+        let diff = git.get_trimmed_diff("test.txt", "HEAD")?;
+        insta::assert_snapshot!(diff, @r###"
+        @@ -6,3 +6,4 @@ Line B-1
+         Line B-2
+         .
+         # Section C
+        +Line C-1
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_move_fixup_squash_branch() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    git.run(&["switch", "-c", "test"])?;
+    let test1_oid = git.commit_file_with_contents(
+        "test",
+        1,
+        "function name()\n\
+        {}\n\
+        ",
+    )?;
+    let test2_oid = git.commit_file_with_contents_and_message(
+        "test",
+        2,
+        "function name()\n\
+        {\n\
+        return 123;\n\
+        }\n\
+        ",
+        "update 2",
+    )?;
+    let _test3_oid = git.commit_file_with_contents_and_message(
+        "test",
+        3,
+        "function name(): int\n\
+        {\n\
+        return 123;\n\
+        }\n\
+        ",
+        "update 3",
+    )?;
+
+    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    O f777ecc (master) create initial.txt
+    |
+    o a5407aa create test.txt
+    |
+    o 92c935b update 2 test.txt
+    |
+    @ 994e3c7 (> test) update 3 test.txt
+    "###);
+
+    let diff = git.get_trimmed_diff("test.txt", "HEAD")?;
+    insta::assert_snapshot!(diff, @r###"
+    @@ -1,4 +1,4 @@
+    -function name()
+    +function name(): int
+     {
+     return 123;
+     }
+    "###);
+
+    // --in-memory
+    {
+        let (stdout, _stderr) = git.run(&[
+            "move",
+            "--in-memory",
+            "--fixup",
+            "-s",
+            &test2_oid.to_string(),
+            "-d",
+            &test1_oid.to_string(),
+        ])?;
+        insta::assert_snapshot!(stdout, @r###"
+        Attempting rebase in-memory...
+        [1/1] Committed as: c513440 create test.txt
+        branchless: processing 1 update: branch test
+        branchless: processing 3 rewritten commits
+        branchless: running command: <git-executable> checkout test
+        O f777ecc (master) create initial.txt
+        |
+        @ c513440 (> test) create test.txt
+        In-memory rebase succeeded.
+        "###);
+
+        let diff = git.get_trimmed_diff("test.txt", "HEAD")?;
+        insta::assert_snapshot!(diff, @r###"
+        @@ -0,0 +1,4 @@
+        +function name(): int
+        +{
+        +return 123;
+        +}
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_move_fixup_branch_tip() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    git.detach_head()?;
+    let _test1_oid = git.commit_file_with_contents(
+        "test",
+        1,
+        "#\n\
+        function name()\n\
+        {}\n\
+        ",
+    )?;
+    git.run(&["branch", "test-1"])?;
+    let _test2_oid = git.commit_file_with_contents_and_message(
+        "test",
+        2,
+        "#\n\
+        function name()\n\
+        {\n\
+        return 123;\n\
+        }\n\
+        ",
+        "update 2",
+    )?;
+    git.run(&["branch", "test-2"])?;
+    let _test3_oid = git.commit_file_with_contents_and_message(
+        "test",
+        3,
+        "# Just a function\n\
+        function name()\n\
+        {\n\
+        return 123;\n\
+        }\n\
+        ",
+        "update 3",
+    )?;
+    git.run(&["switch", "-c", "test-3"])?;
+
+    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    O f777ecc (master) create initial.txt
+    |
+    o 3c5d257 (test-1) create test.txt
+    |
+    o a84e38f (test-2) update 2 test.txt
+    |
+    @ 732f40d (> test-3) update 3 test.txt
+    "###);
+
+    let diff = git.get_trimmed_diff("test.txt", "HEAD")?;
+    insta::assert_snapshot!(diff, @r###"
+    @@ -1,4 +1,4 @@
+    -#
+    +# Just a function
+     function name()
+     {
+     return 123;
+    "###);
+
+    let diff = git.get_trimmed_diff("test.txt", "test-2")?;
+    insta::assert_snapshot!(diff, @r###"
+    @@ -1,3 +1,5 @@
+     #
+     function name()
+    -{}
+    +{
+    +return 123;
+    +}
+    "###);
+
+    // --in-memory
+    {
+        let (stdout, _stderr) = git.run(&[
+            "move",
+            "--in-memory",
+            "--fixup",
+            "-x",
+            "test-3",
+            "-d",
+            "test-1",
+        ])?;
+        insta::assert_snapshot!(stdout, @r###"
+        Attempting rebase in-memory...
+        [1/2] Committed as: f4321df create test.txt
+        [2/2] Committed as: 2746e2a update 2 test.txt
+        branchless: processing 3 updates: branch test-1, branch test-2, branch test-3
+        branchless: processing 3 rewritten commits
+        branchless: running command: <git-executable> checkout test-3
+        O f777ecc (master) create initial.txt
+        |
+        @ f4321df (> test-3, test-1) create test.txt
+        |
+        o 2746e2a (test-2) update 2 test.txt
+        In-memory rebase succeeded.
+        "###);
+
+        let diff = git.get_trimmed_diff("test.txt", "HEAD")?;
+        insta::assert_snapshot!(diff, @r###"
+        @@ -0,0 +1,3 @@
+        +# Just a function
+        +function name()
+        +{}
+        "###);
+
+        // diff for "update 2"
+        let diff = git.get_trimmed_diff("test.txt", "test-2")?;
+        insta::assert_snapshot!(diff, @r###"
+        @@ -1,3 +1,5 @@
+         # Just a function
+         function name()
+        -{}
+        +{
+        +return 123;
+        +}
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_move_fixup_tree() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    git.detach_head()?;
+    let _test1_oid = git.commit_file_with_contents(
+        "test",
+        1,
+        "# Section A\n\
+         .\n\
+         .\n\
+         # Section B\n\
+         .\n\
+         .\n\
+         # Section C\n\
+         ",
+    );
+    let test2_oid = git.commit_file_with_contents_and_message(
+        "test",
+        2,
+        "# Section A\n\
+         Line A-1\n\
+         .\n\
+         # Section B\n\
+         .\n\
+         .\n\
+         # Section C\n\
+         ",
+        "update 2",
+    )?;
+    git.run(&["checkout", "HEAD~"])?;
+    let _test3_oid = git.commit_file_with_contents_and_message(
+        "test",
+        3,
+        "# Section A\n\
+         .\n\
+         .\n\
+         # Section B\n\
+         Line B-1\n\
+         .\n\
+         # Section C\n\
+         ",
+        "update 3",
+    )?;
+    let _test4_oid = git.commit_file_with_contents_and_message(
+        "test",
+        4,
+        "# Section A\n\
+         .\n\
+         .\n\
+         # Section B\n\
+         Line B-1\n\
+         Line B-2\n\
+         .\n\
+         # Section C\n\
+         ",
+        "update 4",
+    )?;
+    git.run(&["branch", "test"])?;
+    let _test5_oid = git.commit_file_with_contents_and_message(
+        "test",
+        5,
+        "# Section A\n\
+         .\n\
+         .\n\
+         # Section B\n\
+         Line B-1\n\
+         Line B-2\n\
+         Line B-3\n\
+         .\n\
+         # Section C\n\
+         ",
+        "update 5",
+    )?;
+    git.run(&["checkout", "HEAD~2"])?;
+    let test6_oid = git.commit_file_with_contents_and_message(
+        "test",
+        6,
+        "# Section A\n\
+         .\n\
+         .\n\
+         ## Section A-2\n\
+         Line B-1\n\
+         .\n\
+         # Section C\n\
+         ",
+        "update 6",
+    )?;
+    let _test7_oid = git.commit_file_with_contents_and_message(
+        "test",
+        7,
+        "# Section A\n\
+         .\n\
+         .\n\
+         ## Section A-2\n\
+         Line B-1\n\
+         .\n\
+         # Section C\n\
+         Line C-1\n\
+         ",
+        "update 7",
+    )?;
+
+    let (stdout, _stderr) = git.run(&["smartlog"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    O f777ecc (master) create initial.txt
+    |
+    o 64eb9bf create test.txt
+    |\
+    | o 087914d update 2 test.txt
+    |
+    o b479fa3 update 3 test.txt
+    |\
+    | o 6c56aea (test) update 4 test.txt
+    | |
+    | o a1a58d0 update 5 test.txt
+    |
+    o 5f84b2f update 6 test.txt
+    |
+    @ 49b63ec update 7 test.txt
+    "###);
+
+    let diff = git.get_trimmed_diff("test.txt", "test")?;
+    insta::assert_snapshot!(diff, @r###"
+    @@ -3,5 +3,6 @@
+     .
+     # Section B
+     Line B-1
+    +Line B-2
+     .
+     # Section C
+    "###);
+    // --in-memory
+    {
+        let (stdout, _stderr) = git.run(&[
+            "move",
+            "--in-memory",
+            "--fixup",
+            "-x",
+            &format!("{}+{}", test2_oid, test6_oid),
+            "-d",
+            "test",
+        ])?;
+        insta::assert_snapshot!(stdout, @r###"
+        Attempting rebase in-memory...
+        [1/3] Committed as: 5e6d3e4 update 7 test.txt
+        [2/3] Committed as: 59a95b3 update 4 test.txt
+        [3/3] Committed as: 1e7fdb8 update 5 test.txt
+        branchless: processing 1 update: branch test
+        branchless: processing 5 rewritten commits
+        branchless: running command: <git-executable> checkout 5e6d3e476b7c3dfb2e1344d8b13ef12523fc07af
+        O f777ecc (master) create initial.txt
+        |
+        o 64eb9bf create test.txt
+        |
+        o b479fa3 update 3 test.txt
+        |\
+        | o 59a95b3 (test) update 4 test.txt
+        | |
+        | o 1e7fdb8 update 5 test.txt
+        |
+        @ 5e6d3e4 update 7 test.txt
+        In-memory rebase succeeded.
+        "###);
+
+        let diff = git.get_trimmed_diff("test.txt", "test")?;
+        insta::assert_snapshot!(diff, @r###"
+        @@ -1,7 +1,8 @@
+         # Section A
+        +Line A-1
+         .
+        -.
+        -# Section B
+        +## Section A-2
+         Line B-1
+        +Line B-2
+         .
+         # Section C
+        "###);
+        let diff = git.get_trimmed_diff("test.txt", "HEAD")?;
+        insta::assert_snapshot!(diff, @r###"
+        @@ -5,3 +5,4 @@
+         Line B-1
+         .
+         # Section C
+        +Line C-1
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_move_fixup_conflict() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    git.detach_head()?;
+    git.commit_file_with_contents("test", 1, "line 1\n")?;
+    git.commit_file_with_contents_and_message("test", 2, "line 1, 2\n", "update 2")?;
+    git.commit_file_with_contents_and_message("test", 3, "line 1, 2, 3\n", "update 3")?;
+    // --in-memory
+    {
+        let (stdout, _stderr) = git.run_with_options(
+            &[
+                "move",
+                "--in-memory",
+                "--fixup",
+                "-s",
+                "HEAD",
+                "-d",
+                "HEAD~2",
+            ],
+            &GitRunOptions {
+                expected_exit_code: 1,
+                ..Default::default()
+            },
+        )?;
+        insta::assert_snapshot!(stdout, @r###"
+        Attempting rebase in-memory...
+        This operation would cause a merge conflict:
+        - (1 conflicting file) 91970eb update 3 test.txt
+        To resolve merge conflicts, retry this operation with the --merge option.
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_move_fixup_added_files() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+    git.detach_head()?;
+
+    git.commit_file("test1", 1)?;
+    git.commit_file("test2", 2)?;
+
+    let (stdout, _stderr) = git.run(&[
+        "move",
+        "--in-memory",
+        "--fixup",
+        "-x",
+        "HEAD",
+        "-d",
+        "HEAD~",
+    ])?;
+
+    insta::assert_snapshot!(stdout, @r###"
+    Attempting rebase in-memory...
+    [1/1] Committed as: e9f8a2b create test1.txt
+    branchless: processing 2 rewritten commits
+    branchless: running command: <git-executable> checkout e9f8a2b1e4c72b2ca31c5f2feffabc947e2f1b5a
+    O f777ecc (master) create initial.txt
+    |
+    @ e9f8a2b create test1.txt
+    In-memory rebase succeeded.
+    "###);
+
+    let (stdout, _stderr) = git.run(&["ls-files"])?;
+    insta::assert_snapshot!(stdout, @r###"
+    initial.txt
+    test1.txt
+    test2.txt
+    "###);
+
+    Ok(())
+}

@@ -513,6 +513,10 @@ pub enum Command {
         #[clap(flatten)]
         move_options: MoveOptions,
 
+        /// Combine the moved commits and squash them into the destination commit.
+        #[clap(action, short = 'F', long = "fixup", conflicts_with = "insert")]
+        fixup: bool,
+
         /// Insert the subtree between the destination and it's children, if any.
         /// Only supported if the moved subtree has a single head.
         #[clap(action, short = 'I', long = "insert")]
