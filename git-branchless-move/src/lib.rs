@@ -73,6 +73,7 @@ pub fn r#move(
     exacts: Vec<Revset>,
     resolve_revset_options: &ResolveRevsetOptions,
     move_options: &MoveOptions,
+    fixup: bool,
     insert: bool,
 ) -> EyreExitOr<()> {
     let sources_provided = !sources.is_empty();
@@ -278,7 +279,7 @@ pub fn r#move(
             let commits_to_move = commits_to_move.union(&union_all(
                 &exact_components.values().cloned().collect::<Vec<_>>(),
             ));
-            let commits_to_move = if insert {
+            let commits_to_move = if insert || fixup {
                 commits_to_move.union(&dag.query_children(CommitSet::from(dest_oid))?)
             } else {
                 commits_to_move
@@ -297,7 +298,15 @@ pub fn r#move(
 
         let source_roots = dag.query_roots(source_oids.clone())?;
         for source_root in dag.commit_set_to_vec(&source_roots)? {
-            builder.move_subtree(source_root, vec![dest_oid])?;
+            if fixup {
+                let commits = dag.query_descendants(CommitSet::from(source_root))?;
+                let commits = dag.commit_set_to_vec(&commits)?;
+                for commit in commits.iter() {
+                    builder.fixup_commit(*commit, dest_oid)?;
+                }
+            } else {
+                builder.move_subtree(source_root, vec![dest_oid])?;
+            }
         }
 
         let component_roots: CommitSet = exact_components.keys().cloned().collect();
@@ -394,7 +403,14 @@ pub fn r#move(
                 }
             }
 
-            builder.move_subtree(component_root, vec![component_dest_oid])?;
+            if fixup {
+                let commits = dag.commit_set_to_vec(component)?;
+                for commit in commits.iter() {
+                    builder.fixup_commit(*commit, dest_oid)?;
+                }
+            } else {
+                builder.move_subtree(component_root, vec![component_dest_oid])?;
+            }
         }
 
         if insert {
