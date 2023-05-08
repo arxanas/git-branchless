@@ -362,9 +362,9 @@ dependencies = [
 
 [[package]]
 name = "chronoutil"
-version = "0.2.3"
+version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43a58c924bb772aa201da3acf5308c46b60275c64e6d3bc89c23dd63d71e83fd"
+checksum = "ce5f90c3470252c073f12e34c9953a26330ab8a2dec6e5b9ffdd72fa254e0bea"
 dependencies = [
  "chrono",
 ]
