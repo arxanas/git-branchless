@@ -31,8 +31,8 @@ Ideally, these would be documented in the UI itself.
 - `c`: confirm changes and quit.
 - `f`: expand/collapse the current item.
 - `F`: expand/collapse all items.
-- `up`: select the next item.
-- `down`: select the previous item.
+- `up`/`k`: select the next item.
+- `down`/`j`: select the previous item.
 - `space`: toggle the current item.
 - `enter`: toggle the current item and move to the next item of the same kind.
 - `a`: invert the toggled state of each item.
