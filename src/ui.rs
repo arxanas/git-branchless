@@ -592,6 +592,7 @@ impl<'a> Recorder<'a> {
                     tristate_box: TristateBox {
                         use_unicode: self.use_unicode,
                         id: ComponentId::TristateBox(SelectionKey::File(file_key)),
+                        icon_style: TristateIconStyle::Check,
                         tristate: file_tristate,
                         is_focused,
                     },
@@ -626,6 +627,7 @@ impl<'a> Recorder<'a> {
                                     id: ComponentId::TristateBox(SelectionKey::Section(
                                         section_key,
                                     )),
+                                    icon_style: TristateIconStyle::Check,
                                     tristate: section_tristate,
                                     is_focused: match self.selection_key {
                                         SelectionKey::None
@@ -1232,10 +1234,18 @@ enum ComponentId {
 }
 
 #[derive(Clone, Debug)]
+enum TristateIconStyle {
+    Check,
+    #[allow(dead_code)]
+    Expand,
+}
+
+#[derive(Clone, Debug)]
 struct TristateBox<Id> {
     use_unicode: bool,
     id: Id,
     tristate: Tristate,
+    icon_style: TristateIconStyle,
     is_focused: bool,
 }
 
@@ -1245,18 +1255,29 @@ impl<Id> TristateBox<Id> {
             use_unicode,
             id: _,
             tristate,
+            icon_style,
             is_focused,
         } = self;
 
-        match (tristate, is_focused, use_unicode) {
-            (Tristate::False, false, _) => "[ ]",
-            (Tristate::False, true, _) => "( )",
-            (Tristate::Partial, false, _) => "[~]",
-            (Tristate::Partial, true, _) => "(~)",
-            (Tristate::True, false, false) => "[x]",
-            (Tristate::True, true, false) => "(x)",
-            (Tristate::True, false, true) => "[\u{00D7}]", // Multiplication Sign
-            (Tristate::True, true, true) => "(\u{00D7})",  // Multiplication Sign
+        match (icon_style, tristate, is_focused, use_unicode) {
+            (TristateIconStyle::Expand, Tristate::False, false, _) => "[+]",
+            (TristateIconStyle::Expand, Tristate::False, true, _) => "(+)",
+            (TristateIconStyle::Expand, Tristate::True, false, _) => "[-]",
+            (TristateIconStyle::Expand, Tristate::True, true, _) => "(-)",
+
+            (TristateIconStyle::Check | TristateIconStyle::Expand, Tristate::Partial, false, _) => {
+                "[~]"
+            }
+            (TristateIconStyle::Check | TristateIconStyle::Expand, Tristate::Partial, true, _) => {
+                "(~)"
+            }
+
+            (TristateIconStyle::Check, Tristate::False, false, _) => "[ ]",
+            (TristateIconStyle::Check, Tristate::False, true, _) => "( )",
+            (TristateIconStyle::Check, Tristate::True, false, false) => "[x]",
+            (TristateIconStyle::Check, Tristate::True, true, false) => "(x)",
+            (TristateIconStyle::Check, Tristate::True, false, true) => "[\u{00D7}]", // Multiplication Sign
+            (TristateIconStyle::Check, Tristate::True, true, true) => "(\u{00D7})", // Multiplication Sign
         }
     }
 }
@@ -1610,6 +1631,7 @@ impl Component for SectionView<'_> {
                     let tristate_box = TristateBox {
                         use_unicode: *use_unicode,
                         id: ComponentId::TristateBox(SelectionKey::Line(line_key)),
+                        icon_style: TristateIconStyle::Check,
                         tristate: Tristate::from(*is_toggled),
                         is_focused,
                     };
@@ -1646,6 +1668,7 @@ impl Component for SectionView<'_> {
                 let tristate_box = TristateBox {
                     use_unicode: *use_unicode,
                     id: ComponentId::TristateBox(selection_key),
+                    icon_style: TristateIconStyle::Check,
                     tristate: Tristate::from(*is_toggled),
                     is_focused,
                 };
@@ -1674,6 +1697,7 @@ impl Component for SectionView<'_> {
                 let tristate_box = TristateBox {
                     use_unicode: *use_unicode,
                     id: ComponentId::TristateBox(SelectionKey::Section(section_key)),
+                    icon_style: TristateIconStyle::Check,
                     tristate: Tristate::from(*is_toggled),
                     is_focused,
                 };
