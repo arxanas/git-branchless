@@ -63,5 +63,4 @@ Here are some features in the UI which are not yet implemented:
 
 - Jump to next/previous element of same kind.
 - Menu bar to explain available actions and keybindings.
-- "Sticky" file and/or section headers.
 - Edit one side of the diff in an editor.
