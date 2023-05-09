@@ -11,7 +11,7 @@ use branchless::git::{
 };
 use bstr::ByteSlice;
 use eyre::Context;
-use scm_record::{File, Section, SelectedContents};
+use scm_record::{File, SelectedContents};
 
 fn entries_from_files(
     repo: &Repo,
@@ -54,40 +54,6 @@ fn entries_from_files(
         })
         .collect::<eyre::Result<_>>()?;
     Ok(entries)
-}
-
-fn select_all(mut entries: Vec<File>) -> Vec<File> {
-    for File {
-        old_path: _,
-        path: _,
-        file_mode: _,
-        sections,
-    } in &mut entries
-    {
-        for section in sections {
-            match section {
-                Section::Unchanged { lines: _ } => {}
-                Section::Changed { lines } => {
-                    for line in lines {
-                        line.is_toggled = true;
-                    }
-                }
-                Section::FileMode {
-                    is_toggled,
-                    before: _,
-                    after: _,
-                }
-                | Section::Binary {
-                    is_toggled,
-                    old_description: _,
-                    new_description: _,
-                } => {
-                    *is_toggled = true;
-                }
-            }
-        }
-    }
-    entries
 }
 
 fn assert_trees_equal(
@@ -160,7 +126,7 @@ fn main() -> eyre::Result<()> {
         let new_tree = current_commit.get_tree()?;
         let diff = repo.get_diff_between_trees(&effects, Some(&old_tree), &new_tree, 0)?;
 
-        let entries = process_diff_for_record(&repo, &diff)?;
+        let files = process_diff_for_record(&repo, &diff)?;
         {
             assert_trees_equal(
                 &format!("select-none {parent_commit:?}"),
@@ -168,20 +134,23 @@ fn main() -> eyre::Result<()> {
                 &parent_commit,
                 &current_commit,
                 &parent_commit.get_tree()?,
-                &entries,
+                &files,
             )?;
         }
 
         // Select all changes (the resulting tree should be identical).
         {
-            let entries = select_all(entries);
+            let mut files = files;
+            for file in &mut files {
+                file.set_toggled(true);
+            }
             assert_trees_equal(
                 &format!("select-all {current_commit:?}"),
                 &repo,
                 &parent_commit,
                 &current_commit,
                 &current_commit.get_tree()?,
-                &entries,
+                &files,
             )?;
         }
     }

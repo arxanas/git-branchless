@@ -288,6 +288,19 @@ impl File<'_> {
         (acc_selected, acc_unselected)
     }
 
+    /// Set the selection of all sections in this file.
+    pub fn set_toggled(&mut self, toggled: bool) {
+        let Self {
+            old_path: _,
+            path: _,
+            file_mode: _,
+            sections,
+        } = self;
+        for section in sections {
+            section.set_toggled(toggled);
+        }
+    }
+
     /// Toggle the selection of all sections in this file.
     pub fn toggle_all(&mut self) {
         let Self {
@@ -359,6 +372,24 @@ impl Section<'_> {
         match self {
             Section::Unchanged { .. } => false,
             Section::Changed { .. } | Section::FileMode { .. } | Section::Binary { .. } => true,
+        }
+    }
+
+    /// Select or unselect all items in this section.
+    pub fn set_toggled(&mut self, toggled: bool) {
+        match self {
+            Section::Unchanged { .. } => {}
+            Section::Changed { lines } => {
+                for line in lines {
+                    line.is_toggled = toggled;
+                }
+            }
+            Section::FileMode { is_toggled, .. } => {
+                *is_toggled = toggled;
+            }
+            Section::Binary { is_toggled, .. } => {
+                *is_toggled = toggled;
+            }
         }
     }
 
