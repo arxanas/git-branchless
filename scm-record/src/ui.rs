@@ -828,8 +828,8 @@ impl<'a> Recorder<'a> {
         let mut result = 0;
         for (file_idx, _file) in files.iter().enumerate() {
             match self.file_tristate(FileKey { file_idx })? {
-                Tristate::Unchecked => {}
-                Tristate::Partial | Tristate::Checked => {
+                Tristate::False => {}
+                Tristate::Partial | Tristate::True => {
                     result += 1;
                 }
             }
@@ -1092,8 +1092,8 @@ impl<'a> Recorder<'a> {
             SelectionKey::File(file_key) => {
                 let tristate = self.file_tristate(file_key)?;
                 let is_toggled_new = match tristate {
-                    Tristate::Unchecked => true,
-                    Tristate::Partial | Tristate::Checked => false,
+                    Tristate::False => true,
+                    Tristate::Partial | Tristate::True => false,
                 };
                 self.visit_file(file_key, |file| {
                     file.set_toggled(is_toggled_new);
@@ -1102,8 +1102,8 @@ impl<'a> Recorder<'a> {
             SelectionKey::Section(section_key) => {
                 let tristate = self.section_tristate(section_key)?;
                 let is_toggled_new = match tristate {
-                    Tristate::Unchecked => true,
-                    Tristate::Partial | Tristate::Checked => false,
+                    Tristate::False => true,
+                    Tristate::Partial | Tristate::True => false,
                 };
                 self.visit_section(section_key, |section| {
                     section.set_toggled(is_toggled_new);
@@ -1199,8 +1199,8 @@ impl<'a> Recorder<'a> {
             }
         }
         let result = match seen_value {
-            Some(true) => Tristate::Checked,
-            None | Some(false) => Tristate::Unchecked,
+            Some(true) => Tristate::True,
+            None | Some(false) => Tristate::False,
         };
         Ok(result)
     }
@@ -1263,8 +1263,8 @@ impl<'a> Recorder<'a> {
             }
         }
         let result = match seen_value {
-            Some(true) => Tristate::Checked,
-            None | Some(false) => Tristate::Unchecked,
+            Some(true) => Tristate::True,
+            None | Some(false) => Tristate::False,
         };
         Ok(result)
     }
@@ -1305,17 +1305,16 @@ enum ComponentId {
 
 #[derive(Clone, Debug)]
 enum Tristate {
-    Unchecked,
+    False,
     Partial,
-    Checked,
+    True,
 }
 
 impl From<bool> for Tristate {
     fn from(value: bool) -> Self {
-        if value {
-            Tristate::Checked
-        } else {
-            Tristate::Unchecked
+        match value {
+            true => Tristate::True,
+            false => Tristate::False,
         }
     }
 }
@@ -1338,14 +1337,14 @@ impl<Id> TristateBox<Id> {
         } = self;
 
         match (tristate, is_focused, use_unicode) {
-            (Tristate::Unchecked, false, _) => "[ ]",
-            (Tristate::Unchecked, true, _) => "( )",
+            (Tristate::False, false, _) => "[ ]",
+            (Tristate::False, true, _) => "( )",
             (Tristate::Partial, false, _) => "[~]",
             (Tristate::Partial, true, _) => "(~)",
-            (Tristate::Checked, false, false) => "[x]",
-            (Tristate::Checked, true, false) => "(x)",
-            (Tristate::Checked, false, true) => "[\u{00D7}]", // Multiplication Sign
-            (Tristate::Checked, true, true) => "(\u{00D7})",  // Multiplication Sign
+            (Tristate::True, false, false) => "[x]",
+            (Tristate::True, true, false) => "(x)",
+            (Tristate::True, false, true) => "[\u{00D7}]", // Multiplication Sign
+            (Tristate::True, true, true) => "(\u{00D7})",  // Multiplication Sign
         }
     }
 }
