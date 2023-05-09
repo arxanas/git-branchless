@@ -116,6 +116,22 @@ impl TryFrom<FileMode> for i32 {
     }
 }
 
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub enum Tristate {
+    False,
+    Partial,
+    True,
+}
+
+impl From<bool> for Tristate {
+    fn from(value: bool) -> Self {
+        match value {
+            true => Tristate::True,
+            false => Tristate::False,
+        }
+    }
+}
+
 /// The state of a file to be recorded.
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
@@ -288,6 +304,54 @@ impl File<'_> {
         (acc_selected, acc_unselected)
     }
 
+    /// Get the tristate value of the file. If there are no sections in this
+    /// file, returns `Tristate::False`.
+    pub fn tristate(&self) -> Tristate {
+        let Self {
+            old_path: _,
+            path: _,
+            file_mode: _,
+            sections,
+        } = self;
+        let mut seen_value = None;
+        for section in sections {
+            match section {
+                Section::Unchanged { .. } => {}
+                Section::Changed { lines } => {
+                    for line in lines {
+                        seen_value = match (seen_value, line.is_toggled) {
+                            (None, is_focused) => Some(is_focused),
+                            (Some(true), true) => Some(true),
+                            (Some(false), false) => Some(false),
+                            (Some(true), false) | (Some(false), true) => return Tristate::Partial,
+                        };
+                    }
+                }
+                Section::FileMode {
+                    is_toggled,
+                    before: _,
+                    after: _,
+                }
+                | Section::Binary {
+                    is_toggled,
+                    old_description: _,
+                    new_description: _,
+                } => {
+                    seen_value = match (seen_value, is_toggled) {
+                        (None, is_focused) => Some(*is_focused),
+                        (Some(true), true) => Some(true),
+                        (Some(false), false) => Some(false),
+                        (Some(true), false) | (Some(false), true) => return Tristate::Partial,
+                    }
+                }
+            }
+        }
+        match seen_value {
+            Some(true) => Tristate::True,
+            None | Some(false) => Tristate::False,
+        }
+    }
+
     /// Set the selection of all sections in this file.
     pub fn set_toggled(&mut self, toggled: bool) {
         let Self {
@@ -372,6 +436,46 @@ impl Section<'_> {
         match self {
             Section::Unchanged { .. } => false,
             Section::Changed { .. } | Section::FileMode { .. } | Section::Binary { .. } => true,
+        }
+    }
+
+    /// Get the tristate value of this section. If there are no items in this
+    /// section, returns `Tristate::False`.
+    pub fn tristate(&self) -> Tristate {
+        let mut seen_value = None;
+        match self {
+            Section::Unchanged { .. } => {}
+            Section::Changed { lines } => {
+                for line in lines {
+                    seen_value = match (seen_value, line.is_toggled) {
+                        (None, is_focused) => Some(is_focused),
+                        (Some(true), true) => Some(true),
+                        (Some(false), false) => Some(false),
+                        (Some(true), false) | (Some(false), true) => return Tristate::Partial,
+                    };
+                }
+            }
+            Section::FileMode {
+                is_toggled,
+                before: _,
+                after: _,
+            }
+            | Section::Binary {
+                is_toggled,
+                old_description: _,
+                new_description: _,
+            } => {
+                seen_value = match (seen_value, is_toggled) {
+                    (None, is_toggled) => Some(*is_toggled),
+                    (Some(true), true) => Some(true),
+                    (Some(false), false) => Some(false),
+                    (Some(true), false) | (Some(false), true) => return Tristate::Partial,
+                }
+            }
+        }
+        match seen_value {
+            Some(true) => Tristate::True,
+            None | Some(false) => Tristate::False,
         }
     }
 

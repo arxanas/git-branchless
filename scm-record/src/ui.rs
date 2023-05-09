@@ -31,7 +31,7 @@ use unicode_width::UnicodeWidthStr;
 
 use crate::consts::{DUMP_UI_STATE_FILENAME, ENV_VAR_DEBUG_UI, ENV_VAR_DUMP_UI_STATE};
 use crate::render::{centered_rect, Component, Rect, RectSize, Viewport};
-use crate::types::{ChangeType, RecordError, RecordState};
+use crate::types::{ChangeType, RecordError, RecordState, Tristate};
 use crate::util::UsizeExt;
 use crate::{File, Section, SectionChangedLine};
 
@@ -1163,46 +1163,8 @@ impl<'a> Recorder<'a> {
     }
 
     fn file_tristate(&self, file_key: FileKey) -> Result<Tristate, RecordError> {
-        let mut seen_value = None;
-        for section in &self.file(file_key)?.sections {
-            match section {
-                Section::Unchanged { .. } => {}
-                Section::Changed { lines } => {
-                    for line in lines {
-                        seen_value = match (seen_value, line.is_toggled) {
-                            (None, is_focused) => Some(is_focused),
-                            (Some(true), true) => Some(true),
-                            (Some(false), false) => Some(false),
-                            (Some(true), false) | (Some(false), true) => {
-                                return Ok(Tristate::Partial)
-                            }
-                        };
-                    }
-                }
-                Section::FileMode {
-                    is_toggled,
-                    before: _,
-                    after: _,
-                }
-                | Section::Binary {
-                    is_toggled,
-                    old_description: _,
-                    new_description: _,
-                } => {
-                    seen_value = match (seen_value, is_toggled) {
-                        (None, is_focused) => Some(*is_focused),
-                        (Some(true), true) => Some(true),
-                        (Some(false), false) => Some(false),
-                        (Some(true), false) | (Some(false), true) => return Ok(Tristate::Partial),
-                    }
-                }
-            }
-        }
-        let result = match seen_value {
-            Some(true) => Tristate::True,
-            None | Some(false) => Tristate::False,
-        };
-        Ok(result)
+        let file = self.file(file_key)?;
+        Ok(file.tristate())
     }
 
     fn visit_section<T>(
@@ -1231,42 +1193,8 @@ impl<'a> Recorder<'a> {
     }
 
     fn section_tristate(&self, section_key: SectionKey) -> Result<Tristate, RecordError> {
-        let mut seen_value = None;
-        match self.section(section_key)? {
-            Section::Unchanged { .. } => {}
-            Section::Changed { lines } => {
-                for line in lines {
-                    seen_value = match (seen_value, line.is_toggled) {
-                        (None, is_focused) => Some(is_focused),
-                        (Some(true), true) => Some(true),
-                        (Some(false), false) => Some(false),
-                        (Some(true), false) | (Some(false), true) => return Ok(Tristate::Partial),
-                    };
-                }
-            }
-            Section::FileMode {
-                is_toggled,
-                before: _,
-                after: _,
-            }
-            | Section::Binary {
-                is_toggled,
-                old_description: _,
-                new_description: _,
-            } => {
-                seen_value = match (seen_value, is_toggled) {
-                    (None, is_toggled) => Some(*is_toggled),
-                    (Some(true), true) => Some(true),
-                    (Some(false), false) => Some(false),
-                    (Some(true), false) | (Some(false), true) => return Ok(Tristate::Partial),
-                }
-            }
-        }
-        let result = match seen_value {
-            Some(true) => Tristate::True,
-            None | Some(false) => Tristate::False,
-        };
-        Ok(result)
+        let section = self.section(section_key)?;
+        Ok(section.tristate())
     }
 
     fn visit_line<T>(
@@ -1301,22 +1229,6 @@ enum ComponentId {
     TristateBox(SelectionKey),
     QuitDialog,
     QuitDialogButton(QuitDialogButtonId),
-}
-
-#[derive(Clone, Debug)]
-enum Tristate {
-    False,
-    Partial,
-    True,
-}
-
-impl From<bool> for Tristate {
-    fn from(value: bool) -> Self {
-        match value {
-            true => Tristate::True,
-            false => Tristate::False,
-        }
-    }
 }
 
 #[derive(Clone, Debug)]
