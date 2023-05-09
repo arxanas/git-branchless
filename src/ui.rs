@@ -400,7 +400,10 @@ enum StateUpdate {
     TakeScreenshot(TestingScreenshot),
     EnsureSelectionInViewport,
     ScrollTo(isize),
-    SelectItem(SelectionKey),
+    SelectItem {
+        selection_key: SelectionKey,
+        ensure_in_viewport: bool,
+    },
     ToggleItem(SelectionKey),
     ToggleItemAndAdvance(SelectionKey, SelectionKey),
     ToggleAll,
@@ -595,10 +598,15 @@ impl<'a> Recorder<'a> {
                         self.scroll_offset_y = scroll_offset_y
                             .clamp(0, drawn_rects[&ComponentId::App].height.unwrap_isize() - 1);
                     }
-                    StateUpdate::SelectItem(selection_key) => {
+                    StateUpdate::SelectItem {
+                        selection_key,
+                        ensure_in_viewport,
+                    } => {
                         self.selection_key = selection_key;
                         self.expand_item_ancestors(selection_key);
-                        self.pending_events.push(Event::EnsureSelectionInViewport);
+                        if ensure_in_viewport {
+                            self.pending_events.push(Event::EnsureSelectionInViewport);
+                        }
                     }
                     StateUpdate::ToggleItem(selection_key) => {
                         self.toggle_item(selection_key)?;
@@ -866,25 +874,40 @@ impl<'a> Recorder<'a> {
             (None, Event::FocusPrev) => {
                 let (keys, index) = self.find_selection();
                 let selection_key = self.select_prev(&keys, index);
-                StateUpdate::SelectItem(selection_key)
+                StateUpdate::SelectItem {
+                    selection_key,
+                    ensure_in_viewport: true,
+                }
             }
             (None, Event::FocusNext) => {
                 let (keys, index) = self.find_selection();
                 let selection_key = self.select_next(&keys, index);
-                StateUpdate::SelectItem(selection_key)
+                StateUpdate::SelectItem {
+                    selection_key,
+                    ensure_in_viewport: true,
+                }
             }
             (None, Event::FocusPrevPage) => {
                 let selection_key = self.select_prev_page(term_height, drawn_rects);
-                StateUpdate::SelectItem(selection_key)
+                StateUpdate::SelectItem {
+                    selection_key,
+                    ensure_in_viewport: true,
+                }
             }
             (None, Event::FocusNextPage) => {
                 let selection_key = self.select_next_page(term_height, drawn_rects);
-                StateUpdate::SelectItem(selection_key)
+                StateUpdate::SelectItem {
+                    selection_key,
+                    ensure_in_viewport: true,
+                }
             }
             (None, Event::FocusOuter) => self.select_outer(),
             (None, Event::FocusInner) => {
                 let selection_key = self.select_inner();
-                StateUpdate::SelectItem(selection_key)
+                StateUpdate::SelectItem {
+                    selection_key,
+                    ensure_in_viewport: true,
+                }
             }
             (None, Event::ToggleItem) => StateUpdate::ToggleItem(self.selection_key),
             (None, Event::ToggleItemAndAdvance) => {
@@ -1102,15 +1125,21 @@ impl<'a> Recorder<'a> {
             SelectionKey::Section(SectionKey {
                 file_idx,
                 section_idx: _,
-            }) => StateUpdate::SelectItem(SelectionKey::File(FileKey { file_idx })),
+            }) => StateUpdate::SelectItem {
+                selection_key: SelectionKey::File(FileKey { file_idx }),
+                ensure_in_viewport: true,
+            },
             SelectionKey::Line(LineKey {
                 file_idx,
                 section_idx,
                 line_idx: _,
-            }) => StateUpdate::SelectItem(SelectionKey::Section(SectionKey {
-                file_idx,
-                section_idx,
-            })),
+            }) => StateUpdate::SelectItem {
+                selection_key: SelectionKey::Section(SectionKey {
+                    file_idx,
+                    section_idx,
+                }),
+                ensure_in_viewport: true,
+            },
         }
     }
 
@@ -1252,22 +1281,32 @@ impl<'a> Recorder<'a> {
     fn click_component(&self, component_id: ComponentId) -> StateUpdate {
         match component_id {
             ComponentId::App | ComponentId::QuitDialog => StateUpdate::None,
-            ComponentId::StickyFileViewHeader(file_key) => {
-                StateUpdate::SelectItem(SelectionKey::File(file_key))
-            }
-            ComponentId::SelectableItem(selection_key) => StateUpdate::SelectItem(selection_key),
+            ComponentId::StickyFileViewHeader(file_key) => StateUpdate::SelectItem {
+                selection_key: SelectionKey::File(file_key),
+                ensure_in_viewport: false,
+            },
+            ComponentId::SelectableItem(selection_key) => StateUpdate::SelectItem {
+                selection_key,
+                ensure_in_viewport: false,
+            },
             ComponentId::ToggleBox(selection_key) => {
                 if self.selection_key == selection_key {
                     StateUpdate::ToggleItem(selection_key)
                 } else {
-                    StateUpdate::SelectItem(selection_key)
+                    StateUpdate::SelectItem {
+                        selection_key,
+                        ensure_in_viewport: false,
+                    }
                 }
             }
             ComponentId::ExpandBox(selection_key) => {
                 if self.selection_key == selection_key {
                     StateUpdate::ToggleExpandItem(selection_key)
                 } else {
-                    StateUpdate::SelectItem(selection_key)
+                    StateUpdate::SelectItem {
+                        selection_key,
+                        ensure_in_viewport: false,
+                    }
                 }
             }
             ComponentId::QuitDialogButton(QuitDialogButtonId::GoBack) => {

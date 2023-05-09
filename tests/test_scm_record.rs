@@ -985,8 +985,10 @@ fn test_mouse_support() -> eyre::Result<()> {
             Event::ExpandAll,
             initial.event(),
             Event::Click { row: 5, column: 8 },
+            Event::EnsureSelectionInViewport,
             first_click.event(),
             Event::Click { row: 5, column: 8 },
+            Event::EnsureSelectionInViewport,
             click_scrolled_item.event(),
             Event::QuitAccept,
         ],
@@ -1687,11 +1689,50 @@ fn test_sticky_header_click_expand() -> eyre::Result<()> {
     "###);
     insta::assert_display_snapshot!(after_click, @r###"
     "(~) foo/bar                                                                  (-)"
+    "  [~] Section 1/1                                                            [-]"
+    "    [×] - before text 1                                                         "
+    "    [×] - before text 2                                                         "
+    "    [×] + after text 1                                                          "
+    "    [ ] + after text 2                                                          "
+    "###);
+
+    Ok(())
+}
+
+#[test]
+fn test_scroll_click_no_jump() -> eyre::Result<()> {
+    let state = example_contents();
+    let initial = TestingScreenshot::default();
+    let after_click = TestingScreenshot::default();
+    let event_source = EventSource::testing(
+        80,
+        6,
+        [
+            Event::ExpandAll,
+            initial.event(),
+            Event::Click { row: 5, column: 5 },
+            after_click.event(),
+            Event::QuitAccept,
+        ],
+    );
+    let recorder = Recorder::new(state, event_source);
+    recorder.run()?;
+
+    insta::assert_display_snapshot!(initial, @r###"
+    "(~) foo/bar                                                                  (-)"
     "        ⋮                                                                       "
     "       18 this is some text                                                     "
     "       19 this is some text                                                     "
     "       20 this is some text                                                     "
     "  [~] Section 1/1                                                            [-]"
+    "###);
+    insta::assert_display_snapshot!(after_click, @r###"
+    "[~] foo/bar                                                                  [-]"
+    "        ⋮                                                                       "
+    "       18 this is some text                                                     "
+    "       19 this is some text                                                     "
+    "       20 this is some text                                                     "
+    "  (~) Section 1/1                                                            (-)"
     "###);
 
     Ok(())
