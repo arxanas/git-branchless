@@ -29,6 +29,8 @@ Ideally, these would be documented in the UI itself.
 
 - `ctrl-c`, `q`: discard changes and quit. If there are unsaved changes, you will be prompted to confirm discarding them.
 - `c`: confirm changes and quit.
+- `f`: expand/collapse the current item.
+- `F`: expand/collapse all items.
 - `up`: select the next item.
 - `down`: select the previous item.
 - `space`: toggle the current item.
@@ -58,7 +60,6 @@ Here are some features in the UI which are not yet implemented:
 
 - Select inner/outer element.
 - Jump to next/previous element of same kind.
-- Expand/collapse sections.
 - Menu bar to explain available actions and keybindings.
 - Toggle all items within some scope.
 - "Sticky" file and/or section headers.
