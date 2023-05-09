@@ -50,11 +50,11 @@ fn test_select_scroll_into_view() -> eyre::Result<()> {
     "       20 this is some text                                                     "
     "###);
     insta::assert_display_snapshot!(scroll_to_first_section, @r###"
+    "[~] foo/bar                                                                  [-]"
     "  (~) Section 1/1                                                            (-)"
     "    [×] - before text 1                                                         "
     "    [×] - before text 2                                                         "
     "    [×] + after text 1                                                          "
-    "    [ ] + after text 2                                                          "
     "###);
     insta::assert_display_snapshot!(scroll_to_second_file, @r###"
     "(×) baz                                                                      (-)"
@@ -495,7 +495,7 @@ fn test_enter_next() -> eyre::Result<()> {
     let recorder = Recorder::new(state, event_source);
     assert_matches!(recorder.run(), Err(RecordError::Cancelled));
     insta::assert_display_snapshot!(first_file_selected, @r###"
-    "    [×] + world                                                                 "
+    "[×] foo                                                                      [-]"
     "    [×] - hello                                                                 "
     "( ) bar                                                                      (-)"
     "  [ ] Section 1/1                                                            [-]"
@@ -503,7 +503,7 @@ fn test_enter_next() -> eyre::Result<()> {
     "    [ ] - hello                                                                 "
     "###);
     insta::assert_display_snapshot!(second_file_selected, @r###"
-    "    [×] + world                                                                 "
+    "[×] foo                                                                      [-]"
     "    [×] - hello                                                                 "
     "(×) bar                                                                      (-)"
     "  [×] Section 1/1                                                            [-]"
@@ -1003,7 +1003,7 @@ fn test_mouse_support() -> eyre::Result<()> {
     "  [~] Section 1/1                                                            [-]"
     "###);
     insta::assert_display_snapshot!(first_click, @r###"
-    "       20 this is some text                                                     "
+    "[~] foo/bar                                                                  [-]"
     "  (~) Section 1/1                                                            (-)"
     "    [×] - before text 1                                                         "
     "    [×] - before text 2                                                         "
@@ -1011,7 +1011,7 @@ fn test_mouse_support() -> eyre::Result<()> {
     "    [ ] + after text 2                                                          "
     "###);
     insta::assert_display_snapshot!(click_scrolled_item, @r###"
-    "       20 this is some text                                                     "
+    "[~] foo/bar                                                                  [-]"
     "  [~] Section 1/1                                                            [-]"
     "    [×] - before text 1                                                         "
     "    [×] - before text 2                                                         "
@@ -1329,7 +1329,7 @@ fn test_expand_line_noop() -> eyre::Result<()> {
     recorder.run()?;
 
     insta::assert_display_snapshot!(after_select, @r###"
-    "       20 this is some text                                                     "
+    "[~] foo/bar                                                                  [-]"
     "  [~] Section 1/1                                                            [-]"
     "    (×) - before text 1                                                         "
     "    [×] - before text 2                                                         "
@@ -1337,7 +1337,7 @@ fn test_expand_line_noop() -> eyre::Result<()> {
     "    [ ] + after text 2                                                          "
     "###);
     insta::assert_display_snapshot!(after_expand_noop, @r###"
-    "       20 this is some text                                                     "
+    "[~] foo/bar                                                                  [-]"
     "  [~] Section 1/1                                                            [-]"
     "    (×) - before text 1                                                         "
     "    [×] - before text 2                                                         "
@@ -1408,7 +1408,7 @@ fn test_collapse_select_ancestor() -> eyre::Result<()> {
     recorder.run()?;
 
     insta::assert_display_snapshot!(before_collapse, @r###"
-    "       20 this is some text                                                     "
+    "[~] foo/bar                                                                  [-]"
     "  (~) Section 1/1                                                            (-)"
     "    [×] - before text 1                                                         "
     "    [×] - before text 2                                                         "
@@ -1460,7 +1460,7 @@ fn test_focus_inner() -> eyre::Result<()> {
     "                                                                                "
     "###);
     insta::assert_display_snapshot!(inner1, @r###"
-    "       20 this is some text                                                     "
+    "[~] foo/bar                                                                  [-]"
     "  (~) Section 1/1                                                            (-)"
     "    [×] - before text 1                                                         "
     "    [×] - before text 2                                                         "
@@ -1468,7 +1468,7 @@ fn test_focus_inner() -> eyre::Result<()> {
     "    [ ] + after text 2                                                          "
     "###);
     insta::assert_display_snapshot!(inner2, @r###"
-    "       20 this is some text                                                     "
+    "[~] foo/bar                                                                  [-]"
     "  [~] Section 1/1                                                            [-]"
     "    (×) - before text 1                                                         "
     "    [×] - before text 2                                                         "
@@ -1476,7 +1476,7 @@ fn test_focus_inner() -> eyre::Result<()> {
     "    [ ] + after text 2                                                          "
     "###);
     insta::assert_display_snapshot!(inner3, @r###"
-    "       20 this is some text                                                     "
+    "[~] foo/bar                                                                  [-]"
     "  [~] Section 1/1                                                            [-]"
     "    (×) - before text 1                                                         "
     "    [×] - before text 2                                                         "
@@ -1520,7 +1520,7 @@ fn test_focus_outer() -> eyre::Result<()> {
     recorder.run()?;
 
     insta::assert_display_snapshot!(initial, @r###"
-    "        2 Some leading text 2                                                   "
+    "[×] baz                                                                      [-]"
     "  [×] Section 1/1                                                            [-]"
     "    [×] - before text 1                                                         "
     "    (×) - before text 2                                                         "
@@ -1528,7 +1528,7 @@ fn test_focus_outer() -> eyre::Result<()> {
     "    [×] + after text 2                                                          "
     "###);
     insta::assert_display_snapshot!(outer1, @r###"
-    "        2 Some leading text 2                                                   "
+    "[×] baz                                                                      [-]"
     "  (×) Section 1/1                                                            (-)"
     "    [×] - before text 1                                                         "
     "    [×] - before text 2                                                         "
@@ -1558,6 +1558,140 @@ fn test_focus_outer() -> eyre::Result<()> {
     "                                                                                "
     "                                                                                "
     "                                                                                "
+    "###);
+
+    Ok(())
+}
+
+#[test]
+fn test_sticky_header_scroll() -> eyre::Result<()> {
+    let state = example_contents();
+    let initial = TestingScreenshot::default();
+    let scroll1 = TestingScreenshot::default();
+    let scroll2 = TestingScreenshot::default();
+    let scroll3 = TestingScreenshot::default();
+    let scroll4 = TestingScreenshot::default();
+    let scroll5 = TestingScreenshot::default();
+    let event_source = EventSource::testing(
+        80,
+        6,
+        [
+            Event::ExpandAll,
+            initial.event(),
+            Event::ScrollDown,
+            scroll1.event(),
+            Event::ScrollDown,
+            scroll2.event(),
+            Event::ScrollDown,
+            scroll3.event(),
+            Event::ScrollDown,
+            scroll4.event(),
+            Event::ScrollDown,
+            scroll5.event(),
+            Event::QuitAccept,
+        ],
+    );
+    let recorder = Recorder::new(state, event_source);
+    recorder.run()?;
+
+    insta::assert_display_snapshot!(initial, @r###"
+    "(~) foo/bar                                                                  (-)"
+    "        ⋮                                                                       "
+    "       18 this is some text                                                     "
+    "       19 this is some text                                                     "
+    "       20 this is some text                                                     "
+    "  [~] Section 1/1                                                            [-]"
+    "###);
+    insta::assert_display_snapshot!(scroll1, @r###"
+    "(~) foo/bar                                                                  (-)"
+    "       18 this is some text                                                     "
+    "       19 this is some text                                                     "
+    "       20 this is some text                                                     "
+    "  [~] Section 1/1                                                            [-]"
+    "    [×] - before text 1                                                         "
+    "###);
+    insta::assert_display_snapshot!(scroll2, @r###"
+    "(~) foo/bar                                                                  (-)"
+    "       19 this is some text                                                     "
+    "       20 this is some text                                                     "
+    "  [~] Section 1/1                                                            [-]"
+    "    [×] - before text 1                                                         "
+    "    [×] - before text 2                                                         "
+    "###);
+    insta::assert_display_snapshot!(scroll3, @r###"
+    "(~) foo/bar                                                                  (-)"
+    "       20 this is some text                                                     "
+    "  [~] Section 1/1                                                            [-]"
+    "    [×] - before text 1                                                         "
+    "    [×] - before text 2                                                         "
+    "    [×] + after text 1                                                          "
+    "###);
+    insta::assert_display_snapshot!(scroll4, @r###"
+    "(~) foo/bar                                                                  (-)"
+    "  [~] Section 1/1                                                            [-]"
+    "    [×] - before text 1                                                         "
+    "    [×] - before text 2                                                         "
+    "    [×] + after text 1                                                          "
+    "    [ ] + after text 2                                                          "
+    "###);
+    insta::assert_display_snapshot!(scroll5, @r###"
+    "(~) foo/bar                                                                  (-)"
+    "    [×] - before text 1                                                         "
+    "    [×] - before text 2                                                         "
+    "    [×] + after text 1                                                          "
+    "    [ ] + after text 2                                                          "
+    "       23 this is some trailing text                                            "
+    "###);
+
+    Ok(())
+}
+
+#[test]
+fn test_sticky_header_click_expand() -> eyre::Result<()> {
+    let state = example_contents();
+    let initial = TestingScreenshot::default();
+    let after_scroll = TestingScreenshot::default();
+    let after_click = TestingScreenshot::default();
+    let event_source = EventSource::testing(
+        80,
+        6,
+        [
+            Event::ExpandAll,
+            initial.event(),
+            Event::FocusNext,
+            Event::FocusNext,
+            after_scroll.event(),
+            Event::Click { row: 0, column: 78 },
+            after_click.event(),
+            Event::QuitAccept,
+        ],
+    );
+    let recorder = Recorder::new(state, event_source);
+    recorder.run()?;
+
+    insta::assert_display_snapshot!(initial, @r###"
+    "(~) foo/bar                                                                  (-)"
+    "        ⋮                                                                       "
+    "       18 this is some text                                                     "
+    "       19 this is some text                                                     "
+    "       20 this is some text                                                     "
+    "  [~] Section 1/1                                                            [-]"
+    "###);
+    insta::assert_display_snapshot!(after_scroll, @r###"
+    "[~] foo/bar                                                                  [-]"
+    "  [~] Section 1/1                                                            [-]"
+    "    (×) - before text 1                                                         "
+    "    [×] - before text 2                                                         "
+    "    [×] + after text 1                                                          "
+    "    [ ] + after text 2                                                          "
+    "###);
+    insta::assert_display_snapshot!(after_click, @r###"
+    "(~) foo/bar                                                                  (-)"
+    "        ⋮                                                                       "
+    "       18 this is some text                                                     "
+    "       19 this is some text                                                     "
+    "       20 this is some text                                                     "
+    "  [~] Section 1/1                                                            [-]"
     "###);
 
     Ok(())
