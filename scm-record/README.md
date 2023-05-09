@@ -35,7 +35,8 @@ Ideally, these would be documented in the UI itself.
 - `down`: select the previous item.
 - `space`: toggle the current item.
 - `enter`: toggle the current item and move to the next item of the same kind.
-- `a`: toggle all items.
+- `a`: invert the toggled state of each item.
+- `A`: toggle or untoggle all items uniformly.
 - `ctrl-y`: scroll the viewport up by one line.
 - `ctrl-e`: scroll the viewport down by one line.
 - `page-up`/`ctrl-b`: scroll the viewport up by one screen.
@@ -61,6 +62,5 @@ Here are some features in the UI which are not yet implemented:
 - Select inner/outer element.
 - Jump to next/previous element of same kind.
 - Menu bar to explain available actions and keybindings.
-- Toggle all items within some scope.
 - "Sticky" file and/or section headers.
 - Edit one side of the diff in an editor.
