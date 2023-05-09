@@ -211,28 +211,27 @@ impl From<crossterm::event::Event> for Event {
             ) => Self::PageDown,
 
             Event::Key(KeyEvent {
-                code: KeyCode::Up,
+                code: KeyCode::Up | KeyCode::Char('k'),
                 modifiers: KeyModifiers::NONE,
                 kind: KeyEventKind::Press,
                 state: _,
             }) => Self::FocusPrev,
-
             Event::Key(KeyEvent {
-                code: KeyCode::Down,
+                code: KeyCode::Down | KeyCode::Char('j'),
                 modifiers: KeyModifiers::NONE,
                 kind: KeyEventKind::Press,
                 state: _,
             }) => Self::FocusNext,
 
             Event::Key(KeyEvent {
-                code: KeyCode::Left,
+                code: KeyCode::Left | KeyCode::Char('h'),
                 modifiers: KeyModifiers::NONE,
                 kind: KeyEventKind::Press,
                 state: _,
             }) => Self::FocusOuter,
 
             Event::Key(KeyEvent {
-                code: KeyCode::Right,
+                code: KeyCode::Right | KeyCode::Char('l'),
                 modifiers: KeyModifiers::NONE,
                 kind: KeyEventKind::Press,
                 state: _,
