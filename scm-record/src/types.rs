@@ -287,6 +287,19 @@ impl File<'_> {
         }
         (acc_selected, acc_unselected)
     }
+
+    /// Toggle the selection of all sections in this file.
+    pub fn toggle_all(&mut self) {
+        let Self {
+            old_path: _,
+            path: _,
+            file_mode: _,
+            sections,
+        } = self;
+        for section in sections {
+            section.toggle_all();
+        }
+    }
 }
 
 /// A section of a file to be rendered and recorded.
