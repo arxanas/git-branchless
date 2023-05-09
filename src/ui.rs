@@ -340,10 +340,12 @@ impl EventSource {
     fn next_events(&mut self) -> Result<Vec<Event>, RecordError> {
         match self {
             EventSource::Crossterm => {
+                // Ensure we block for at least one event.
+                let first_event = crossterm::event::read().map_err(RecordError::ReadInput)?;
+                let mut events = vec![first_event.into()];
                 // Some events, like scrolling, are generated more quickly than
                 // we can render the UI. In those cases, batch up all available
                 // events and process them before the next render.
-                let mut events = Vec::new();
                 while crossterm::event::poll(Duration::ZERO).map_err(RecordError::ReadInput)? {
                     let event = crossterm::event::read().map_err(RecordError::ReadInput)?;
                     events.push(event.into());
