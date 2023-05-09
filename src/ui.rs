@@ -1158,9 +1158,7 @@ impl<'a> Recorder<'a> {
 
     fn toggle_all(&mut self) {
         for file in &mut self.state.files {
-            for section in &mut file.sections {
-                section.toggle_all();
-            }
+            file.toggle_all();
         }
     }
 
