@@ -429,7 +429,7 @@ impl<'a, ComponentId: Clone + Debug + Eq + Hash> Viewport<'a, ComponentId> {
             self.buf.set_span(
                 buf_rect.x,
                 buf_rect.y,
-                &Span::raw(" ".repeat(line_width)),
+                &Span::styled(" ".repeat(line_width), Style::reset()),
                 buf_rect.width,
             );
         }

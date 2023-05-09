@@ -1180,6 +1180,19 @@ impl<'a> Recorder<'a> {
         drawn_rects: &HashMap<ComponentId, Rect>,
         selection_key: SelectionKey,
     ) -> isize {
+        let sticky_height = match selection_key {
+            SelectionKey::None | SelectionKey::File(_) => 0,
+            SelectionKey::Section(_) | SelectionKey::Line(_) => 1,
+        };
+        let viewport_top_y = self.scroll_offset_y + sticky_height;
+        let viewport_height = term_height.unwrap_isize() - sticky_height;
+        let viewport_bottom_y = viewport_top_y + viewport_height;
+
+        let selection_rect = self.selection_rect(drawn_rects, selection_key);
+        let selection_top_y = selection_rect.y;
+        let selection_height = selection_rect.height.unwrap_isize();
+        let selection_bottom_y = selection_top_y + selection_height;
+
         // Idea: scroll the entire component into the viewport, not just the
         // first line, if possible. If the entire component is smaller than
         // the viewport, then we scroll only enough so that the entire
@@ -1191,25 +1204,21 @@ impl<'a> Recorder<'a> {
         // edge of the component, not the bottom edge. Thus, we should also
         // accept the previous `SelectionKey` and use that when making the
         // decision of where to scroll.
-        let term_height = term_height.unwrap_isize();
-        let rect = self.selection_rect(drawn_rects, selection_key);
-        let rect_height = rect.height.unwrap_isize();
-        let rect_bottom_y = rect.y + rect_height;
-        if self.scroll_offset_y <= rect.y && rect_bottom_y < self.scroll_offset_y + term_height {
+        if viewport_top_y <= selection_top_y && selection_bottom_y < viewport_bottom_y {
             // Component is completely within the viewport, no need to scroll.
             self.scroll_offset_y
         } else if (
             // Component doesn't fit in the viewport; just render the top.
-            rect_height >= term_height
+            selection_height >= viewport_height
         ) || (
             // Component is at least partially above the viewport.
-            rect.y < self.scroll_offset_y
+            selection_top_y < viewport_top_y
         ) {
-            rect.y
+            selection_top_y - sticky_height
         } else {
             // Component is at least partially below the viewport. Want to satisfy:
             // scroll_offset_y + term_height == rect_bottom_y
-            rect_bottom_y - term_height
+            selection_bottom_y - sticky_height - viewport_height
         }
     }
 
@@ -1227,7 +1236,8 @@ impl<'a> Recorder<'a> {
                 rect.contains_point(x, y)
                     && match id {
                         ComponentId::App => false,
-                        ComponentId::SelectableItem(_)
+                        ComponentId::StickyFileViewHeader(_)
+                        | ComponentId::SelectableItem(_)
                         | ComponentId::ToggleBox(_)
                         | ComponentId::ExpandBox(_)
                         | ComponentId::QuitDialog
@@ -1242,6 +1252,9 @@ impl<'a> Recorder<'a> {
     fn click_component(&self, component_id: ComponentId) -> StateUpdate {
         match component_id {
             ComponentId::App | ComponentId::QuitDialog => StateUpdate::None,
+            ComponentId::StickyFileViewHeader(file_key) => {
+                StateUpdate::SelectItem(SelectionKey::File(file_key))
+            }
             ComponentId::SelectableItem(selection_key) => StateUpdate::SelectItem(selection_key),
             ComponentId::ToggleBox(selection_key) => {
                 if self.selection_key == selection_key {
@@ -1556,6 +1569,7 @@ impl<'a> Recorder<'a> {
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 enum ComponentId {
     App,
+    StickyFileViewHeader(FileKey),
     SelectableItem(SelectionKey),
     ToggleBox(SelectionKey),
     ExpandBox(SelectionKey),
@@ -1740,8 +1754,88 @@ impl Component for FileView<'_> {
             section_views,
             is_header_selected,
         } = self;
+
+        // We may render a sticky header below, but render to the regular header
+        // line as well. The viewport observes the regions we draw to calculate
+        // the height of this component. We still want to have the viewport
+        // calculate the drawn rect for this file view as if it had its regular
+        // header, or else later elements will jump upwards when the header
+        // "disappears" during rendering because the height of the rendered rect
+        // will be reduced by 1.
         viewport.fill_rest_of_line(x, y);
 
+        let header_y = if self.is_expanded() {
+            let x = x + 2;
+            let mut section_y = y + 1;
+            for section_view in section_views {
+                let section_rect = viewport.draw_component(x, section_y, section_view);
+                section_y += section_rect.height.unwrap_isize();
+
+                if *debug {
+                    viewport.debug(format!("section dims: {section_rect:?}",));
+                }
+            }
+            let viewport_top_y = viewport.rect().y;
+            if y <= viewport_top_y && viewport_top_y < section_y {
+                viewport_top_y
+            } else {
+                y
+            }
+        } else {
+            y
+        };
+
+        let sticky_file_view_header = StickyFileViewHeader {
+            file_key: self.file_key,
+            path,
+            old_path: *old_path,
+            is_selected: self.is_header_selected,
+            toggle_box: toggle_box.clone(),
+            expand_box: expand_box.clone(),
+        };
+        viewport.draw_component(x, header_y, &sticky_file_view_header);
+
+        if *is_header_selected {
+            highlight_line(viewport, header_y);
+        }
+    }
+}
+
+struct StickyFileViewHeader<'a> {
+    file_key: FileKey,
+    path: &'a Path,
+    old_path: Option<&'a Path>,
+    is_selected: bool,
+    toggle_box: TristateBox<ComponentId>,
+    expand_box: TristateBox<ComponentId>,
+}
+
+impl Component for StickyFileViewHeader<'_> {
+    type Id = ComponentId;
+
+    fn id(&self) -> Self::Id {
+        let Self {
+            file_key,
+            path: _,
+            old_path: _,
+            is_selected: _,
+            toggle_box: _,
+            expand_box: _,
+        } = self;
+        ComponentId::StickyFileViewHeader(*file_key)
+    }
+
+    fn draw(&self, viewport: &mut Viewport<Self::Id>, x: isize, y: isize) {
+        let Self {
+            file_key: _,
+            path,
+            old_path,
+            is_selected,
+            toggle_box,
+            expand_box,
+        } = self;
+
+        viewport.fill_rest_of_line(x, y);
         let toggle_box_rect = viewport.draw_component(x, y, toggle_box);
         viewport.draw_span(
             x + toggle_box_rect.width.unwrap_isize() + 1,
@@ -1755,7 +1849,7 @@ impl Component for FileView<'_> {
                     },
                     path.to_string_lossy(),
                 ),
-                if *is_header_selected {
+                if *is_selected {
                     Style::default().fg(Color::Blue)
                 } else {
                     Style::default()
@@ -1770,23 +1864,6 @@ impl Component for FileView<'_> {
             y,
             expand_box,
         );
-
-        if *is_header_selected {
-            highlight_line(viewport, y);
-        }
-
-        if self.is_expanded() {
-            let x = x + 2;
-            let mut y = y + 1;
-            for section_view in section_views {
-                let section_rect = viewport.draw_component(x, y, section_view);
-                y += section_rect.height.unwrap_isize();
-
-                if *debug {
-                    viewport.debug(format!("section dims: {section_rect:?}",));
-                }
-            }
-        }
     }
 }
 
