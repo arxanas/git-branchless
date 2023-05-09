@@ -1096,55 +1096,17 @@ impl<'a> Recorder<'a> {
                     Tristate::Partial | Tristate::Checked => false,
                 };
                 self.visit_file(file_key, |file| {
-                    for section in file.sections.iter_mut() {
-                        match section {
-                            Section::Unchanged { .. } => {}
-                            Section::Changed { lines } => {
-                                for line in lines {
-                                    line.is_toggled = is_toggled_new;
-                                }
-                            }
-                            Section::FileMode {
-                                is_toggled,
-                                before: _,
-                                after: _,
-                            }
-                            | Section::Binary {
-                                is_toggled,
-                                old_description: _,
-                                new_description: _,
-                            } => {
-                                *is_toggled = is_toggled_new;
-                            }
-                        }
-                    }
+                    file.set_toggled(is_toggled_new);
                 })?;
             }
             SelectionKey::Section(section_key) => {
                 let tristate = self.section_tristate(section_key)?;
-                let is_focused_new = match tristate {
+                let is_toggled_new = match tristate {
                     Tristate::Unchecked => true,
                     Tristate::Partial | Tristate::Checked => false,
                 };
-                self.visit_section(section_key, |section| match section {
-                    Section::Unchanged { .. } => {}
-                    Section::Changed { lines } => {
-                        for line in lines {
-                            line.is_toggled = is_focused_new;
-                        }
-                    }
-                    Section::FileMode {
-                        is_toggled,
-                        before: _,
-                        after: _,
-                    }
-                    | Section::Binary {
-                        is_toggled,
-                        old_description: _,
-                        new_description: _,
-                    } => {
-                        *is_toggled = is_focused_new;
-                    }
+                self.visit_section(section_key, |section| {
+                    section.set_toggled(is_toggled_new);
                 })?;
             }
             SelectionKey::Line(line_key) => {
