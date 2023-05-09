@@ -59,6 +59,7 @@ fn test_record_unstaged_changes_interactive() -> eyre::Result<()> {
             "record",
             &["-i", "-m", "foo"],
             &[
+                PtyAction::Write("f"), // expand files
                 PtyAction::WaitUntilContains("contents1"),
                 PtyAction::Write("q"),
             ],
@@ -91,6 +92,7 @@ fn test_record_unstaged_changes_interactive() -> eyre::Result<()> {
             "record",
             &["-i", "-m", "foo"],
             &[
+                PtyAction::Write("f"), // expand files
                 PtyAction::WaitUntilContains("contents1"),
                 PtyAction::Write(" "),
                 PtyAction::WaitUntilContains("(×)"),
@@ -513,6 +515,7 @@ fn test_record_file_mode_change() -> eyre::Result<()> {
         &["-i", "-m", "update contents only"],
         &[
             PtyAction::WaitUntilContains("test1.txt"),
+            PtyAction::Write("f"),        // expand files
             PtyAction::Write(DOWN_ARROW), // move to file mode
             PtyAction::Write(DOWN_ARROW), // move to changed contents
             PtyAction::Write(" "),

@@ -4,14 +4,14 @@ use std::any::Any;
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::cmp::min;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::Write;
 use std::fmt::{Debug, Display};
 use std::hash::Hash;
 use std::path::Path;
 use std::rc::Rc;
 use std::time::Duration;
-use std::{fs, io, panic};
+use std::{fs, io, mem, panic};
 
 use crossterm::event::{
     DisableMouseCapture, EnableMouseCapture, KeyCode, KeyEvent, KeyEventKind, KeyModifiers,
@@ -111,6 +111,7 @@ pub enum Event {
     QuitCancel,
     QuitInterrupt,
     TakeScreenshot(TestingScreenshot),
+    EnsureSelectionInViewport,
     ScrollUp,
     ScrollDown,
     PageUp,
@@ -124,6 +125,8 @@ pub enum Event {
     ToggleItem,
     ToggleItemAndAdvance,
     ToggleAll,
+    ExpandItem,
+    ExpandAll,
     Click { row: usize, column: usize },
 }
 
@@ -268,6 +271,19 @@ impl From<crossterm::event::Event> for Event {
                 state: _,
             }) => Self::ToggleAll,
 
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('f'),
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                state: _,
+            }) => Self::ExpandItem,
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('F'),
+                modifiers: KeyModifiers::SHIFT,
+                kind: KeyEventKind::Press,
+                state: _,
+            }) => Self::ExpandAll,
+
             Event::Mouse(MouseEvent {
                 kind: MouseEventKind::Down(MouseButton::Left),
                 column,
@@ -374,18 +390,23 @@ enum StateUpdate {
     QuitAccept,
     QuitCancel,
     TakeScreenshot(TestingScreenshot),
+    EnsureSelectionInViewport,
     ScrollTo(isize),
     SelectItem(SelectionKey),
     ToggleItem(SelectionKey),
     ToggleItemAndAdvance(SelectionKey, SelectionKey),
     ToggleAll,
+    ExpandItem(SelectionKey),
+    ExpandAll,
 }
 
 /// UI component to record the user's changes.
 pub struct Recorder<'a> {
     state: RecordState<'a>,
     event_source: EventSource,
+    pending_events: Vec<Event>,
     use_unicode: bool,
+    expanded_items: HashSet<SelectionKey>,
     selection_key: SelectionKey,
     quit_dialog: Option<QuitDialog>,
     scroll_offset_y: isize,
@@ -394,14 +415,18 @@ pub struct Recorder<'a> {
 impl<'a> Recorder<'a> {
     /// Constructor.
     pub fn new(state: RecordState<'a>, event_source: EventSource) -> Self {
-        Self {
+        let mut recorder = Self {
             state,
             event_source,
+            pending_events: Default::default(),
             use_unicode: true,
+            expanded_items: Default::default(),
             selection_key: SelectionKey::None,
             quit_dialog: None,
             scroll_offset_y: 0,
-        }
+        };
+        recorder.expand_initial_items();
+        recorder
     }
 
     /// Run the terminal user interface and have the user interactively select
@@ -529,7 +554,14 @@ impl<'a> Recorder<'a> {
                 .map_err(RecordError::RenderFrame)?;
             }
 
-            let events = self.event_source.next_events()?;
+            let events = if self.pending_events.is_empty() {
+                self.event_source.next_events()?
+            } else {
+                // FIXME: the pending events should be applied without redrawing
+                // the screen, as otherwise there may be a flash of content
+                // containing the screen contents before the event is applied.
+                mem::take(&mut self.pending_events)
+            };
             for event in events {
                 match self.handle_event(event, term_height, &drawn_rects)? {
                     StateUpdate::None => {}
@@ -545,14 +577,17 @@ impl<'a> Recorder<'a> {
                             .expect("TakeScreenshot event generated for non-testing backend");
                         screenshot.set(buffer_view(test_backend.buffer()));
                     }
+                    StateUpdate::EnsureSelectionInViewport => {
+                        self.scroll_offset_y =
+                            self.ensure_in_viewport(term_height, &drawn_rects, self.selection_key);
+                    }
                     StateUpdate::ScrollTo(scroll_offset_y) => {
                         self.scroll_offset_y = scroll_offset_y
                             .clamp(0, drawn_rects[&ComponentId::App].height.unwrap_isize() - 1);
                     }
                     StateUpdate::SelectItem(selection_key) => {
                         self.selection_key = selection_key;
-                        self.scroll_offset_y =
-                            self.ensure_in_viewport(term_height, &drawn_rects, selection_key);
+                        self.pending_events.push(Event::EnsureSelectionInViewport);
                     }
                     StateUpdate::ToggleItem(selection_key) => {
                         self.toggle_item(selection_key)?;
@@ -560,11 +595,18 @@ impl<'a> Recorder<'a> {
                     StateUpdate::ToggleItemAndAdvance(selection_key, new_key) => {
                         self.toggle_item(selection_key)?;
                         self.selection_key = new_key;
-                        self.scroll_offset_y =
-                            self.ensure_in_viewport(term_height, &drawn_rects, selection_key);
+                        self.pending_events.push(Event::EnsureSelectionInViewport);
                     }
                     StateUpdate::ToggleAll => {
                         self.toggle_all();
+                    }
+                    StateUpdate::ExpandItem(selection_key) => {
+                        self.expand_item(selection_key)?;
+                        self.pending_events.push(Event::EnsureSelectionInViewport)
+                    }
+                    StateUpdate::ExpandAll => {
+                        self.expand_all()?;
+                        self.pending_events.push(Event::EnsureSelectionInViewport)
                     }
                 }
             }
@@ -581,7 +623,8 @@ impl<'a> Recorder<'a> {
             .enumerate()
             .map(|(file_idx, file)| {
                 let file_key = FileKey { file_idx };
-                let file_tristate = self.file_tristate(file_key).unwrap();
+                let file_toggled = self.file_tristate(file_key).unwrap();
+                let file_expanded = self.file_expanded(file_key);
                 let is_focused = match self.selection_key {
                     SelectionKey::None | SelectionKey::Section(_) | SelectionKey::Line(_) => false,
                     SelectionKey::File(selected_file_key) => file_key == selected_file_key,
@@ -589,11 +632,18 @@ impl<'a> Recorder<'a> {
                 FileView {
                     debug: debug_info.is_some(),
                     file_key,
-                    tristate_box: TristateBox {
+                    toggle_box: TristateBox {
                         use_unicode: self.use_unicode,
-                        id: ComponentId::TristateBox(SelectionKey::File(file_key)),
+                        id: ComponentId::ToggleBox(SelectionKey::File(file_key)),
                         icon_style: TristateIconStyle::Check,
-                        tristate: file_tristate,
+                        tristate: file_toggled,
+                        is_focused,
+                    },
+                    expand_box: TristateBox {
+                        use_unicode: self.use_unicode,
+                        id: ComponentId::ExpandBox(SelectionKey::File(file_key)),
+                        icon_style: TristateIconStyle::Expand,
+                        tristate: file_expanded,
                         is_focused,
                     },
                     is_header_selected: is_focused,
@@ -615,28 +665,38 @@ impl<'a> Recorder<'a> {
                                 file_idx,
                                 section_idx,
                             };
-                            let section_tristate = self.section_tristate(section_key).unwrap();
+                            let section_toggled = self.section_tristate(section_key).unwrap();
+                            let section_expanded = Tristate::from(
+                                self.expanded_items
+                                    .contains(&SelectionKey::Section(section_key)),
+                            );
+                            let is_focused = match self.selection_key {
+                                SelectionKey::None
+                                | SelectionKey::File(_)
+                                | SelectionKey::Line(_) => false,
+                                SelectionKey::Section(selection_section_key) => {
+                                    selection_section_key == section_key
+                                }
+                            };
                             if section.is_editable() {
                                 editable_section_num += 1;
                             }
                             section_views.push(SectionView {
                                 use_unicode: self.use_unicode,
                                 section_key,
-                                tristate_box: TristateBox {
+                                toggle_box: TristateBox {
                                     use_unicode: self.use_unicode,
-                                    id: ComponentId::TristateBox(SelectionKey::Section(
-                                        section_key,
-                                    )),
+                                    id: ComponentId::ToggleBox(SelectionKey::Section(section_key)),
+                                    tristate: section_toggled,
                                     icon_style: TristateIconStyle::Check,
-                                    tristate: section_tristate,
-                                    is_focused: match self.selection_key {
-                                        SelectionKey::None
-                                        | SelectionKey::File(_)
-                                        | SelectionKey::Line(_) => false,
-                                        SelectionKey::Section(selection_section_key) => {
-                                            selection_section_key == section_key
-                                        }
-                                    },
+                                    is_focused,
+                                },
+                                expand_box: TristateBox {
+                                    use_unicode: self.use_unicode,
+                                    id: ComponentId::ExpandBox(SelectionKey::Section(section_key)),
+                                    tristate: section_expanded,
+                                    icon_style: TristateIconStyle::Expand,
+                                    is_focused,
                                 },
                                 selection: match self.selection_key {
                                     SelectionKey::None | SelectionKey::File(_) => None,
@@ -702,6 +762,7 @@ impl<'a> Recorder<'a> {
     ) -> Result<StateUpdate, RecordError> {
         let state_update = match (&self.quit_dialog, event) {
             (_, Event::None) => StateUpdate::None,
+            (_, Event::EnsureSelectionInViewport) => StateUpdate::EnsureSelectionInViewport,
 
             // Confirm the changes.
             (None, Event::QuitAccept) => StateUpdate::QuitAccept,
@@ -761,7 +822,9 @@ impl<'a> Recorder<'a> {
                 | Event::FocusNext
                 | Event::FocusPrevPage
                 | Event::FocusNextPage
-                | Event::ToggleAll,
+                | Event::ToggleAll
+                | Event::ExpandItem
+                | Event::ExpandAll,
             ) => StateUpdate::None,
 
             (Some(_) | None, Event::TakeScreenshot(screenshot)) => {
@@ -809,6 +872,8 @@ impl<'a> Recorder<'a> {
                 StateUpdate::ToggleItemAndAdvance(self.selection_key, advanced_key)
             }
             (None, Event::ToggleAll) => StateUpdate::ToggleAll,
+            (None, Event::ExpandItem) => StateUpdate::ExpandItem(self.selection_key),
+            (None, Event::ExpandAll) => StateUpdate::ExpandAll,
 
             (_, Event::Click { row, column }) => {
                 let component_id = self.find_component_at(drawn_rects, row, column);
@@ -877,16 +942,46 @@ impl<'a> Recorder<'a> {
     }
 
     fn find_selection(&self) -> (Vec<SelectionKey>, Option<usize>) {
-        // FIXME: O(n) algorithm
-        let keys = self.all_selection_keys();
-        let index = keys.iter().enumerate().find_map(|(k, v)| {
+        // FIXME: finding the selected key is an O(n) algorithm (instead of O(log(n)) or O(1)).
+        let visible_keys: Vec<_> = self
+            .all_selection_keys()
+            .iter()
+            .cloned()
+            .filter(|key| match key {
+                SelectionKey::None => false,
+                SelectionKey::File(_) => true,
+                SelectionKey::Section(section_key) => {
+                    let file_key = FileKey {
+                        file_idx: section_key.file_idx,
+                    };
+                    match self.file_expanded(file_key) {
+                        Tristate::False => false,
+                        Tristate::Partial | Tristate::True => true,
+                    }
+                }
+                SelectionKey::Line(line_key) => {
+                    let file_key = FileKey {
+                        file_idx: line_key.file_idx,
+                    };
+                    let section_key = SectionKey {
+                        file_idx: line_key.file_idx,
+                        section_idx: line_key.section_idx,
+                    };
+                    self.expanded_items.contains(&SelectionKey::File(file_key))
+                        && self
+                            .expanded_items
+                            .contains(&SelectionKey::Section(section_key))
+                }
+            })
+            .collect();
+        let index = visible_keys.iter().enumerate().find_map(|(k, v)| {
             if v == &self.selection_key {
                 Some(k)
             } else {
                 None
             }
         });
-        (keys, index)
+        (visible_keys, index)
     }
 
     fn select_prev(&self, keys: &[SelectionKey], index: Option<usize>) -> SelectionKey {
@@ -1060,7 +1155,8 @@ impl<'a> Recorder<'a> {
                     && match id {
                         ComponentId::App => false,
                         ComponentId::SelectableItem(_)
-                        | ComponentId::TristateBox(_)
+                        | ComponentId::ToggleBox(_)
+                        | ComponentId::ExpandBox(_)
                         | ComponentId::QuitDialog
                         | ComponentId::QuitDialogButton(_) => true,
                     }
@@ -1074,9 +1170,16 @@ impl<'a> Recorder<'a> {
         match component_id {
             ComponentId::App | ComponentId::QuitDialog => StateUpdate::None,
             ComponentId::SelectableItem(selection_key) => StateUpdate::SelectItem(selection_key),
-            ComponentId::TristateBox(selection_key) => {
+            ComponentId::ToggleBox(selection_key) => {
                 if self.selection_key == selection_key {
                     StateUpdate::ToggleItem(selection_key)
+                } else {
+                    StateUpdate::SelectItem(selection_key)
+                }
+            }
+            ComponentId::ExpandBox(selection_key) => {
+                if self.selection_key == selection_key {
+                    StateUpdate::ExpandItem(selection_key)
                 } else {
                     StateUpdate::SelectItem(selection_key)
                 }
@@ -1126,6 +1229,64 @@ impl<'a> Recorder<'a> {
         }
     }
 
+    fn expand_item(&mut self, selection: SelectionKey) -> Result<(), RecordError> {
+        match selection {
+            SelectionKey::None => {}
+            SelectionKey::File(file_key) => {
+                if !self.expanded_items.insert(SelectionKey::File(file_key)) {
+                    self.expanded_items.remove(&SelectionKey::File(file_key));
+                }
+            }
+            SelectionKey::Section(section_key) => {
+                if !self
+                    .expanded_items
+                    .insert(SelectionKey::Section(section_key))
+                {
+                    self.expanded_items
+                        .remove(&SelectionKey::Section(section_key));
+                }
+            }
+            SelectionKey::Line(_) => {
+                // Do nothing.
+            }
+        }
+        Ok(())
+    }
+
+    fn expand_initial_items(&mut self) {
+        self.expanded_items = self
+            .all_selection_keys()
+            .into_iter()
+            .filter(|selection_key| match selection_key {
+                SelectionKey::None | SelectionKey::File(_) | SelectionKey::Line(_) => false,
+                SelectionKey::Section(_) => true,
+            })
+            .collect();
+    }
+
+    fn expand_all(&mut self) -> Result<(), RecordError> {
+        let all_selection_keys: HashSet<_> = self.all_selection_keys().into_iter().collect();
+        self.expanded_items = if self.expanded_items == all_selection_keys {
+            // Select an ancestor file key that will still be visible.
+            self.selection_key = match self.selection_key {
+                selection_key @ (SelectionKey::None | SelectionKey::File(_)) => selection_key,
+                SelectionKey::Section(SectionKey {
+                    file_idx,
+                    section_idx: _,
+                })
+                | SelectionKey::Line(LineKey {
+                    file_idx,
+                    section_idx: _,
+                    line_idx: _,
+                }) => SelectionKey::File(FileKey { file_idx }),
+            };
+            Default::default()
+        } else {
+            all_selection_keys
+        };
+        Ok(())
+    }
+
     fn file(&self, file_key: FileKey) -> Result<&File, RecordError> {
         let FileKey { file_idx } = file_key;
         match self.state.files.get(file_idx) {
@@ -1169,6 +1330,44 @@ impl<'a> Recorder<'a> {
         Ok(file.tristate())
     }
 
+    fn file_expanded(&self, file_key: FileKey) -> Tristate {
+        let is_expanded = self.expanded_items.contains(&SelectionKey::File(file_key));
+        if !is_expanded {
+            Tristate::False
+        } else {
+            let any_section_unexpanded = self
+                .file(file_key)
+                .unwrap()
+                .sections
+                .iter()
+                .enumerate()
+                .any(|(section_idx, section)| {
+                    match section {
+                        Section::Unchanged { .. }
+                        | Section::FileMode { .. }
+                        | Section::Binary { .. } => {
+                            // Not collapsible/expandable.
+                            false
+                        }
+                        Section::Changed { .. } => {
+                            let section_key = SectionKey {
+                                file_idx: file_key.file_idx,
+                                section_idx,
+                            };
+                            !self
+                                .expanded_items
+                                .contains(&SelectionKey::Section(section_key))
+                        }
+                    }
+                });
+            if any_section_unexpanded {
+                Tristate::Partial
+            } else {
+                Tristate::True
+            }
+        }
+    }
+
     fn visit_section<T>(
         &mut self,
         section_key: SectionKey,
@@ -1183,7 +1382,7 @@ impl<'a> Recorder<'a> {
             None => {
                 return Err(RecordError::Bug(format!(
                     "Out-of-bounds file for section key: {section_key:?}"
-                )))
+                )));
             }
         };
         match file.sections.get_mut(section_idx) {
@@ -1228,7 +1427,8 @@ impl<'a> Recorder<'a> {
 enum ComponentId {
     App,
     SelectableItem(SelectionKey),
-    TristateBox(SelectionKey),
+    ToggleBox(SelectionKey),
+    ExpandBox(SelectionKey),
     QuitDialog,
     QuitDialogButton(QuitDialogButtonId),
 }
@@ -1236,7 +1436,6 @@ enum ComponentId {
 #[derive(Clone, Debug)]
 enum TristateIconStyle {
     Check,
-    #[allow(dead_code)]
     Expand,
 }
 
@@ -1365,7 +1564,8 @@ impl Component for App<'_> {
 struct FileView<'a> {
     debug: bool,
     file_key: FileKey,
-    tristate_box: TristateBox<ComponentId>,
+    toggle_box: TristateBox<ComponentId>,
+    expand_box: TristateBox<ComponentId>,
     is_header_selected: bool,
     old_path: Option<&'a Path>,
     path: &'a Path,
@@ -1374,11 +1574,21 @@ struct FileView<'a> {
 
 impl FileView<'_> {
     pub fn height(&self) -> usize {
-        1 + self
-            .section_views
-            .iter()
-            .map(|section_view| section_view.height())
-            .sum::<usize>()
+        1 + if self.is_expanded() {
+            self.section_views
+                .iter()
+                .map(|section_view| section_view.height())
+                .sum::<usize>()
+        } else {
+            0
+        }
+    }
+
+    fn is_expanded(&self) -> bool {
+        match self.expand_box.tristate {
+            Tristate::False => false,
+            Tristate::Partial | Tristate::True => true,
+        }
     }
 }
 
@@ -1393,7 +1603,8 @@ impl Component for FileView<'_> {
         let Self {
             debug,
             file_key: _,
-            tristate_box,
+            toggle_box,
+            expand_box,
             old_path,
             path,
             section_views,
@@ -1401,9 +1612,9 @@ impl Component for FileView<'_> {
         } = self;
         viewport.fill_rest_of_line(x, y);
 
-        let tristate_box_rect = viewport.draw_component(x, y, tristate_box);
+        let toggle_box_rect = viewport.draw_component(x, y, toggle_box);
         viewport.draw_span(
-            x + tristate_box_rect.width.unwrap_isize() + 1,
+            x + toggle_box_rect.width.unwrap_isize() + 1,
             y,
             &Span::styled(
                 format!(
@@ -1421,18 +1632,29 @@ impl Component for FileView<'_> {
                 },
             ),
         );
+
+        // Draw expand box at end of line.
+        let expand_box_width = expand_box.text().width().unwrap_isize();
+        viewport.draw_component(
+            viewport.rect().width.unwrap_isize() - expand_box_width,
+            y,
+            expand_box,
+        );
+
         if *is_header_selected {
             highlight_line(viewport, y);
         }
 
-        let x = x + 2;
-        let mut y = y + 1;
-        for section_view in section_views {
-            let section_rect = viewport.draw_component(x, y, section_view);
-            y += section_rect.height.unwrap_isize();
+        if self.is_expanded() {
+            let x = x + 2;
+            let mut y = y + 1;
+            for section_view in section_views {
+                let section_rect = viewport.draw_component(x, y, section_view);
+                y += section_rect.height.unwrap_isize();
 
-            if *debug {
-                viewport.debug(format!("section dims: {section_rect:?}",));
+                if *debug {
+                    viewport.debug(format!("section dims: {section_rect:?}",));
+                }
             }
         }
     }
@@ -1448,7 +1670,8 @@ enum SectionSelection {
 struct SectionView<'a> {
     use_unicode: bool,
     section_key: SectionKey,
-    tristate_box: TristateBox<ComponentId>,
+    toggle_box: TristateBox<ComponentId>,
+    expand_box: TristateBox<ComponentId>,
     selection: Option<SectionSelection>,
     total_num_sections: usize,
     editable_section_num: usize,
@@ -1461,8 +1684,19 @@ impl SectionView<'_> {
     pub fn height(&self) -> usize {
         match self.section {
             Section::Unchanged { lines } => lines.len().min(NUM_CONTEXT_LINES * 2 + 1),
-            Section::Changed { lines } => lines.len() + 1,
+            Section::Changed { lines } => 1 + if self.is_expanded() { lines.len() } else { 0 },
             Section::FileMode { .. } | Section::Binary { .. } => 1,
+        }
+    }
+
+    fn is_expanded(&self) -> bool {
+        match self.expand_box.tristate {
+            Tristate::False => false,
+            Tristate::Partial => {
+                // Shouldn't happen.
+                true
+            }
+            Tristate::True => true,
         }
     }
 }
@@ -1478,7 +1712,8 @@ impl Component for SectionView<'_> {
         let Self {
             use_unicode,
             section_key,
-            tristate_box,
+            toggle_box,
+            expand_box,
             selection,
             total_num_sections,
             editable_section_num,
@@ -1595,58 +1830,69 @@ impl Component for SectionView<'_> {
 
             Section::Changed { lines } => {
                 // Draw section header.
-                let tristate_rect = viewport.draw_component(x, y, tristate_box);
+                let toggle_box_rect = viewport.draw_component(x, y, toggle_box);
                 viewport.draw_span(
-                    x + tristate_rect.width.unwrap_isize() + 1,
+                    x + toggle_box_rect.width.unwrap_isize() + 1,
                     y,
                     &Span::styled(
                         format!("Section {editable_section_num}/{total_num_editable_sections}"),
                         Style::default(),
                     ),
                 );
+
+                // Draw expand box at end of line.
+                let expand_box_width = expand_box.text().width().unwrap_isize();
+                viewport.draw_component(
+                    viewport.rect().width.unwrap_isize() - expand_box_width,
+                    y,
+                    expand_box,
+                );
+
                 match selection {
                     Some(SectionSelection::SectionHeader) => highlight_line(viewport, y),
                     Some(SectionSelection::ChangedLine(_)) | None => {}
                 }
-                let y = y + 1;
 
-                // Draw changed lines.
-                for (line_idx, line) in lines.iter().enumerate() {
-                    let SectionChangedLine {
-                        is_toggled,
-                        change_type,
-                        line,
-                    } = line;
-                    let is_focused = match selection {
-                        Some(SectionSelection::ChangedLine(selected_line_idx)) => {
-                            line_idx == *selected_line_idx
+                if self.is_expanded() {
+                    // Draw changed lines.
+                    let y = y + 1;
+                    for (line_idx, line) in lines.iter().enumerate() {
+                        let SectionChangedLine {
+                            is_toggled,
+                            change_type,
+                            line,
+                        } = line;
+                        let is_focused = match selection {
+                            Some(SectionSelection::ChangedLine(selected_line_idx)) => {
+                                line_idx == *selected_line_idx
+                            }
+                            Some(SectionSelection::SectionHeader) | None => false,
+                        };
+                        let line_key = LineKey {
+                            file_idx,
+                            section_idx,
+                            line_idx,
+                        };
+                        let toggle_box = TristateBox {
+                            use_unicode: *use_unicode,
+                            id: ComponentId::ToggleBox(SelectionKey::Line(line_key)),
+                            icon_style: TristateIconStyle::Check,
+                            tristate: Tristate::from(*is_toggled),
+                            is_focused,
+                        };
+                        let line_view = SectionLineView {
+                            line_key,
+                            inner: SectionLineViewInner::Changed {
+                                toggle_box,
+                                change_type: *change_type,
+                                line: line.as_ref(),
+                            },
+                        };
+                        let y = y + line_idx.unwrap_isize();
+                        viewport.draw_component(x + 2, y, &line_view);
+                        if is_focused {
+                            highlight_line(viewport, y);
                         }
-                        Some(SectionSelection::SectionHeader) | None => false,
-                    };
-                    let line_key = LineKey {
-                        file_idx,
-                        section_idx,
-                        line_idx,
-                    };
-                    let tristate_box = TristateBox {
-                        use_unicode: *use_unicode,
-                        id: ComponentId::TristateBox(SelectionKey::Line(line_key)),
-                        icon_style: TristateIconStyle::Check,
-                        tristate: Tristate::from(*is_toggled),
-                        is_focused,
-                    };
-                    let line_view = SectionLineView {
-                        line_key,
-                        inner: SectionLineViewInner::Changed {
-                            tristate_box,
-                            change_type: *change_type,
-                            line: line.as_ref(),
-                        },
-                    };
-                    let y = y + line_idx.unwrap_isize();
-                    viewport.draw_component(x + 2, y, &line_view);
-                    if is_focused {
-                        highlight_line(viewport, y);
                     }
                 }
             }
@@ -1665,15 +1911,15 @@ impl Component for SectionView<'_> {
                     section_idx,
                 };
                 let selection_key = SelectionKey::Section(section_key);
-                let tristate_box = TristateBox {
+                let toggle_box = TristateBox {
                     use_unicode: *use_unicode,
-                    id: ComponentId::TristateBox(selection_key),
+                    id: ComponentId::ToggleBox(selection_key),
                     icon_style: TristateIconStyle::Check,
                     tristate: Tristate::from(*is_toggled),
                     is_focused,
                 };
-                let tristate_rect = viewport.draw_component(x, y, &tristate_box);
-                let x = x + tristate_rect.width.unwrap_isize() + 1;
+                let toggle_box_rect = viewport.draw_component(x, y, &toggle_box);
+                let x = x + toggle_box_rect.width.unwrap_isize() + 1;
                 let text = format!("File mode changed from {before} to {after}");
                 viewport.draw_span(x, y, &Span::styled(text, Style::default().fg(Color::Blue)));
                 if is_focused {
@@ -1694,15 +1940,15 @@ impl Component for SectionView<'_> {
                     file_idx,
                     section_idx,
                 };
-                let tristate_box = TristateBox {
+                let toggle_box = TristateBox {
                     use_unicode: *use_unicode,
-                    id: ComponentId::TristateBox(SelectionKey::Section(section_key)),
+                    id: ComponentId::ToggleBox(SelectionKey::Section(section_key)),
                     icon_style: TristateIconStyle::Check,
                     tristate: Tristate::from(*is_toggled),
                     is_focused,
                 };
-                let tristate_rect = viewport.draw_component(x, y, &tristate_box);
-                let x = x + tristate_rect.width.unwrap_isize() + 1;
+                let toggle_box_rect = viewport.draw_component(x, y, &toggle_box);
+                let x = x + toggle_box_rect.width.unwrap_isize() + 1;
 
                 let text = {
                     let mut result =
@@ -1738,7 +1984,7 @@ enum SectionLineViewInner<'a> {
         line_num: usize,
     },
     Changed {
-        tristate_box: TristateBox<ComponentId>,
+        toggle_box: TristateBox<ComponentId>,
         change_type: ChangeType,
         line: &'a str,
     },
@@ -1777,12 +2023,12 @@ impl Component for SectionLineView<'_> {
             }
 
             SectionLineViewInner::Changed {
-                tristate_box,
+                toggle_box,
                 change_type,
                 line,
             } => {
-                let tristate_rect = viewport.draw_component(x, y, tristate_box);
-                let x = x + tristate_rect.width.unwrap_isize() + 1;
+                let toggle_box_rect = viewport.draw_component(x, y, toggle_box);
+                let x = x + toggle_box_rect.width.unwrap_isize() + 1;
 
                 let (change_type_text, style) = match change_type {
                     ChangeType::Added => ("+ ", Style::default().fg(Color::Green)),
