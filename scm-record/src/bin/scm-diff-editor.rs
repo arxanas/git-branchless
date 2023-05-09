@@ -752,22 +752,9 @@ mod tests {
         }
     }
 
-    fn toggle_all(files: &mut [File]) {
+    fn select_all(files: &mut [File]) {
         for file in files {
-            for section in &mut file.sections {
-                match section {
-                    scm_record::Section::Unchanged { .. } => {}
-                    scm_record::Section::Changed { lines } => {
-                        for line in lines {
-                            line.is_toggled = true;
-                        }
-                    }
-                    scm_record::Section::FileMode { is_toggled, .. }
-                    | scm_record::Section::Binary { is_toggled, .. } => {
-                        *is_toggled = true;
-                    }
-                }
-            }
+            file.set_toggled(true);
         }
     }
 
@@ -844,7 +831,7 @@ qux2
         ]
         "###);
 
-        toggle_all(&mut files);
+        select_all(&mut files);
         apply_changes(&mut filesystem, &write_root, RecordState { files })?;
         insta::assert_debug_snapshot!(filesystem, @r###"
         TestFilesystem {
@@ -976,7 +963,7 @@ qux2
         ]
         "###);
 
-        toggle_all(&mut files);
+        select_all(&mut files);
         apply_changes(&mut filesystem, &write_root, RecordState { files })?;
         insta::assert_debug_snapshot!(filesystem, @r###"
         TestFilesystem {
@@ -1038,7 +1025,7 @@ qux2
         ]
         "###);
 
-        toggle_all(&mut files);
+        select_all(&mut files);
         apply_changes(&mut filesystem, &write_root, RecordState { files })?;
         insta::assert_debug_snapshot!(filesystem, @r###"
         TestFilesystem {
