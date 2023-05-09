@@ -786,11 +786,9 @@ pub fn trim_lines(output: String) -> String {
 
 /// Utilities for testing in a virtual terminal (PTY).
 pub mod pty {
-    use std::{
-        sync::{mpsc::channel, Arc, Mutex},
-        thread,
-        time::Duration,
-    };
+    use std::sync::{mpsc::channel, Arc, Mutex};
+    use std::thread;
+    use std::time::Duration;
 
     use eyre::eyre;
     use portable_pty::{native_pty_system, CommandBuilder, ExitStatus, PtySize};
@@ -814,6 +812,7 @@ pub mod pty {
     }
 
     /// Run the provided script in the context of a virtual terminal.
+    #[track_caller]
     pub fn run_in_pty(
         git: &Git,
         branchless_subcommand: &str,
