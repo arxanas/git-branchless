@@ -133,6 +133,83 @@ fn test_toggle_all() -> eyre::Result<()> {
 }
 
 #[test]
+fn test_toggle_all_uniform() -> eyre::Result<()> {
+    let initial = TestingScreenshot::default();
+    let first_toggle = TestingScreenshot::default();
+    let second_toggle = TestingScreenshot::default();
+    let third_toggle = TestingScreenshot::default();
+    let event_source = EventSource::testing(
+        80,
+        10,
+        [
+            Event::ExpandAll,
+            initial.event(),
+            Event::ToggleAllUniform,
+            first_toggle.event(),
+            Event::ToggleAllUniform,
+            second_toggle.event(),
+            Event::ToggleAllUniform,
+            third_toggle.event(),
+            Event::QuitAccept,
+        ],
+    );
+    let state = example_contents();
+    let recorder = Recorder::new(state, event_source);
+    recorder.run()?;
+
+    insta::assert_display_snapshot!(initial, @r###"
+    "(~) foo/bar                                                                  (-)"
+    "        ⋮                                                                       "
+    "       18 this is some text                                                     "
+    "       19 this is some text                                                     "
+    "       20 this is some text                                                     "
+    "  [~] Section 1/1                                                            [-]"
+    "    [×] - before text 1                                                         "
+    "    [×] - before text 2                                                         "
+    "    [×] + after text 1                                                          "
+    "    [ ] + after text 2                                                          "
+    "###);
+    insta::assert_display_snapshot!(first_toggle, @r###"
+    "(×) foo/bar                                                                  (-)"
+    "        ⋮                                                                       "
+    "       18 this is some text                                                     "
+    "       19 this is some text                                                     "
+    "       20 this is some text                                                     "
+    "  [×] Section 1/1                                                            [-]"
+    "    [×] - before text 1                                                         "
+    "    [×] - before text 2                                                         "
+    "    [×] + after text 1                                                          "
+    "    [×] + after text 2                                                          "
+    "###);
+    insta::assert_display_snapshot!(second_toggle, @r###"
+    "( ) foo/bar                                                                  (-)"
+    "        ⋮                                                                       "
+    "       18 this is some text                                                     "
+    "       19 this is some text                                                     "
+    "       20 this is some text                                                     "
+    "  [ ] Section 1/1                                                            [-]"
+    "    [ ] - before text 1                                                         "
+    "    [ ] - before text 2                                                         "
+    "    [ ] + after text 1                                                          "
+    "    [ ] + after text 2                                                          "
+    "###);
+    insta::assert_display_snapshot!(third_toggle, @r###"
+    "(×) foo/bar                                                                  (-)"
+    "        ⋮                                                                       "
+    "       18 this is some text                                                     "
+    "       19 this is some text                                                     "
+    "       20 this is some text                                                     "
+    "  [×] Section 1/1                                                            [-]"
+    "    [×] - before text 1                                                         "
+    "    [×] - before text 2                                                         "
+    "    [×] + after text 1                                                          "
+    "    [×] + after text 2                                                          "
+    "###);
+
+    Ok(())
+}
+
+#[test]
 fn test_quit_dialog_size() -> eyre::Result<()> {
     let expect_quit_dialog_to_be_centered = TestingScreenshot::default();
     let event_source = EventSource::testing(

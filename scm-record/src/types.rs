@@ -352,7 +352,7 @@ impl File<'_> {
         }
     }
 
-    /// Set the selection of all sections in this file.
+    /// Set the selection of all sections and lines in this file.
     pub fn set_toggled(&mut self, toggled: bool) {
         let Self {
             old_path: _,

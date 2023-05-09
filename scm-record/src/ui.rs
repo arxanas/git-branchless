@@ -125,6 +125,7 @@ pub enum Event {
     ToggleItem,
     ToggleItemAndAdvance,
     ToggleAll,
+    ToggleAllUniform,
     ExpandItem,
     ExpandAll,
     Click { row: usize, column: usize },
@@ -270,6 +271,12 @@ impl From<crossterm::event::Event> for Event {
                 kind: KeyEventKind::Press,
                 state: _,
             }) => Self::ToggleAll,
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('A'),
+                modifiers: KeyModifiers::SHIFT,
+                kind: KeyEventKind::Press,
+                state: _,
+            }) => Self::ToggleAllUniform,
 
             Event::Key(KeyEvent {
                 code: KeyCode::Char('f'),
@@ -396,6 +403,7 @@ enum StateUpdate {
     ToggleItem(SelectionKey),
     ToggleItemAndAdvance(SelectionKey, SelectionKey),
     ToggleAll,
+    ToggleAllUniform,
     ExpandItem(SelectionKey),
     ExpandAll,
 }
@@ -599,6 +607,9 @@ impl<'a> Recorder<'a> {
                     }
                     StateUpdate::ToggleAll => {
                         self.toggle_all();
+                    }
+                    StateUpdate::ToggleAllUniform => {
+                        self.toggle_all_uniform();
                     }
                     StateUpdate::ExpandItem(selection_key) => {
                         self.expand_item(selection_key)?;
@@ -823,6 +834,7 @@ impl<'a> Recorder<'a> {
                 | Event::FocusPrevPage
                 | Event::FocusNextPage
                 | Event::ToggleAll
+                | Event::ToggleAllUniform
                 | Event::ExpandItem
                 | Event::ExpandAll,
             ) => StateUpdate::None,
@@ -872,6 +884,7 @@ impl<'a> Recorder<'a> {
                 StateUpdate::ToggleItemAndAdvance(self.selection_key, advanced_key)
             }
             (None, Event::ToggleAll) => StateUpdate::ToggleAll,
+            (None, Event::ToggleAllUniform) => StateUpdate::ToggleAllUniform,
             (None, Event::ExpandItem) => StateUpdate::ExpandItem(self.selection_key),
             (None, Event::ExpandAll) => StateUpdate::ExpandAll,
 
@@ -1226,6 +1239,29 @@ impl<'a> Recorder<'a> {
     fn toggle_all(&mut self) {
         for file in &mut self.state.files {
             file.toggle_all();
+        }
+    }
+
+    fn toggle_all_uniform(&mut self) {
+        let toggled = {
+            let tristate = self
+                .state
+                .files
+                .iter()
+                .map(|file| file.tristate())
+                .fold(None, |acc, elem| match (acc, elem) {
+                    (None, tristate) => Some(tristate),
+                    (Some(acc_tristate), tristate) if acc_tristate == tristate => Some(tristate),
+                    _ => Some(Tristate::Partial),
+                })
+                .unwrap_or(Tristate::False);
+            match tristate {
+                Tristate::False | Tristate::Partial => true,
+                Tristate::True => false,
+            }
+        };
+        for file in &mut self.state.files {
+            file.set_toggled(toggled);
         }
     }
 
