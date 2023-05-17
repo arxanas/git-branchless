@@ -301,7 +301,7 @@ mod render {
         contents
             .split_inclusive('\n')
             .map(|line| SectionChangedLine {
-                is_toggled: false,
+                is_checked: false,
                 change_type,
                 line: Cow::Owned(line.to_owned()),
             })
@@ -330,7 +330,7 @@ mod render {
             && right_file_mode != FileMode::absent()
         {
             sections.push(Section::FileMode {
-                is_toggled: false,
+                is_checked: false,
                 before: left_file_mode,
                 after: right_file_mode,
             });
@@ -351,7 +351,7 @@ mod render {
 
             (FileContents::Absent, FileContents::Binary { hash, num_bytes }) => {
                 sections.push(Section::Binary {
-                    is_toggled: false,
+                    is_checked: false,
                     old_description: None,
                     new_description: Some(Cow::Owned(make_binary_description(&hash, num_bytes))),
                 })
@@ -403,7 +403,7 @@ mod render {
                     num_bytes: new_num_bytes,
                 },
             ) => sections.push(Section::Binary {
-                is_toggled: false,
+                is_checked: false,
                 old_description: Some(Cow::Owned(make_binary_description(
                     &old_hash,
                     old_num_bytes,
@@ -416,7 +416,7 @@ mod render {
 
             (FileContents::Binary { hash, num_bytes }, FileContents::Absent) => {
                 sections.push(Section::Binary {
-                    is_toggled: false,
+                    is_checked: false,
                     old_description: Some(Cow::Owned(make_binary_description(&hash, num_bytes))),
                     new_description: None,
                 })
@@ -464,7 +464,7 @@ mod render {
                     },
                     diffy::Line::Delete(line) => {
                         let line = SectionChangedLine {
-                            is_toggled: false,
+                            is_checked: false,
                             change_type: ChangeType::Removed,
                             line: Cow::Owned((*line).to_owned()),
                         };
@@ -479,7 +479,7 @@ mod render {
                     }
                     diffy::Line::Insert(line) => {
                         let line = SectionChangedLine {
-                            is_toggled: false,
+                            is_checked: false,
                             change_type: ChangeType::Added,
                             line: Cow::Owned((*line).to_owned()),
                         };
@@ -754,7 +754,7 @@ mod tests {
 
     fn select_all(files: &mut [File]) {
         for file in files {
-            file.set_toggled(true);
+            file.set_checked(true);
         }
     }
 
@@ -795,12 +795,12 @@ qux2
                     Changed {
                         lines: [
                             SectionChangedLine {
-                                is_toggled: false,
+                                is_checked: false,
                                 change_type: Removed,
                                 line: "foo\n",
                             },
                             SectionChangedLine {
-                                is_toggled: false,
+                                is_checked: false,
                                 change_type: Added,
                                 line: "qux1\n",
                             },
@@ -815,12 +815,12 @@ qux2
                     Changed {
                         lines: [
                             SectionChangedLine {
-                                is_toggled: false,
+                                is_checked: false,
                                 change_type: Removed,
                                 line: "bar\n",
                             },
                             SectionChangedLine {
-                                is_toggled: false,
+                                is_checked: false,
                                 change_type: Added,
                                 line: "qux2\n",
                             },
@@ -952,7 +952,7 @@ qux2
                     Changed {
                         lines: [
                             SectionChangedLine {
-                                is_toggled: false,
+                                is_checked: false,
                                 change_type: Added,
                                 line: "right\n",
                             },
@@ -1014,7 +1014,7 @@ qux2
                     Changed {
                         lines: [
                             SectionChangedLine {
-                                is_toggled: false,
+                                is_checked: false,
                                 change_type: Removed,
                                 line: "left\n",
                             },

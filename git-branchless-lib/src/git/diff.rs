@@ -123,7 +123,7 @@ pub fn process_diff_for_record(repo: &Repo, diff: &Diff) -> eyre::Result<Vec<Fil
                 path: Cow::Owned(path),
                 file_mode: Some(old_file_mode),
                 sections: vec![Section::FileMode {
-                    is_toggled: false,
+                    is_checked: false,
                     before: old_file_mode,
                     after: FileMode::absent(),
                 }],
@@ -141,7 +141,7 @@ pub fn process_diff_for_record(repo: &Repo, diff: &Diff) -> eyre::Result<Vec<Fil
                     path: Cow::Owned(path),
                     file_mode: Some(old_file_mode),
                     sections: vec![Section::Binary {
-                        is_toggled: false,
+                        is_checked: false,
                         old_description: Some(Cow::Owned(make_binary_description(
                             &old_oid.to_string(),
                             old_num_bytes,
@@ -236,7 +236,7 @@ pub fn process_diff_for_record(repo: &Repo, diff: &Diff) -> eyre::Result<Vec<Fil
                 }
                 (Lines::Lines(_), Lines::BinaryDescription(new_description)) => {
                     file_sections.push(Section::Binary {
-                        is_toggled: false,
+                        is_checked: false,
                         old_description: None,
                         new_description: Some(Cow::Owned(new_description)),
                     });
@@ -247,7 +247,7 @@ pub fn process_diff_for_record(repo: &Repo, diff: &Diff) -> eyre::Result<Vec<Fil
                     Lines::BinaryDescription(new_description),
                 ) => {
                     file_sections.push(Section::Binary {
-                        is_toggled: false,
+                        is_checked: false,
                         old_description: Some(Cow::Owned(old_description)),
                         new_description: Some(Cow::Owned(new_description)),
                     });
@@ -313,7 +313,7 @@ pub fn process_diff_for_record(repo: &Repo, diff: &Diff) -> eyre::Result<Vec<Fil
                 .iter()
                 .cloned()
                 .map(|before_line| SectionChangedLine {
-                    is_toggled: false,
+                    is_checked: false,
                     change_type: ChangeType::Removed,
                     line: Cow::Owned(before_line),
                 })
@@ -335,7 +335,7 @@ pub fn process_diff_for_record(repo: &Repo, diff: &Diff) -> eyre::Result<Vec<Fil
                 .iter()
                 .cloned()
                 .map(|after_line| SectionChangedLine {
-                    is_toggled: false,
+                    is_checked: false,
                     change_type: ChangeType::Added,
                     line: Cow::Owned(after_line),
                 })
@@ -365,7 +365,7 @@ pub fn process_diff_for_record(repo: &Repo, diff: &Diff) -> eyre::Result<Vec<Fil
 
         let file_mode_section = if old_file_mode != new_file_mode {
             vec![Section::FileMode {
-                is_toggled: false,
+                is_checked: false,
                 before: old_file_mode,
                 after: new_file_mode,
             }]
