@@ -218,14 +218,14 @@ impl File<'_> {
                 Section::Unchanged { .. }
                 | Section::Changed { .. }
                 | Section::FileMode {
-                    is_toggled: false,
+                    is_checked: false,
                     before: _,
                     after: _,
                 }
                 | Section::Binary { .. } => None,
 
                 Section::FileMode {
-                    is_toggled: true,
+                    is_checked: true,
                     before: _,
                     after,
                 } => Some(*after),
@@ -257,11 +257,11 @@ impl File<'_> {
                 Section::Changed { lines } => {
                     for line in lines {
                         let SectionChangedLine {
-                            is_toggled,
+                            is_checked,
                             change_type,
                             line,
                         } = line;
-                        match (change_type, is_toggled) {
+                        match (change_type, is_checked) {
                             (ChangeType::Added, true) | (ChangeType::Removed, false) => {
                                 acc_selected.push_str(line);
                             }
@@ -273,19 +273,19 @@ impl File<'_> {
                 }
 
                 Section::FileMode {
-                    is_toggled,
+                    is_checked,
                     before,
                     after,
                 } => {
-                    if *is_toggled && after == &FileMode::absent() {
+                    if *is_checked && after == &FileMode::absent() {
                         acc_selected = SelectedContents::Absent;
-                    } else if !is_toggled && before == &FileMode::absent() {
+                    } else if !is_checked && before == &FileMode::absent() {
                         acc_unselected = SelectedContents::Absent;
                     }
                 }
 
                 Section::Binary {
-                    is_toggled,
+                    is_checked,
                     old_description,
                     new_description,
                 } => {
@@ -293,7 +293,7 @@ impl File<'_> {
                         old_description: old_description.clone(),
                         new_description: new_description.clone(),
                     };
-                    if *is_toggled {
+                    if *is_checked {
                         acc_selected = selected_contents;
                     } else {
                         acc_unselected = selected_contents;
@@ -319,8 +319,8 @@ impl File<'_> {
                 Section::Unchanged { .. } => {}
                 Section::Changed { lines } => {
                     for line in lines {
-                        seen_value = match (seen_value, line.is_toggled) {
-                            (None, is_focused) => Some(is_focused),
+                        seen_value = match (seen_value, line.is_checked) {
+                            (None, is_checked) => Some(is_checked),
                             (Some(true), true) => Some(true),
                             (Some(false), false) => Some(false),
                             (Some(true), false) | (Some(false), true) => return Tristate::Partial,
@@ -328,17 +328,17 @@ impl File<'_> {
                     }
                 }
                 Section::FileMode {
-                    is_toggled,
+                    is_checked,
                     before: _,
                     after: _,
                 }
                 | Section::Binary {
-                    is_toggled,
+                    is_checked,
                     old_description: _,
                     new_description: _,
                 } => {
-                    seen_value = match (seen_value, is_toggled) {
-                        (None, is_focused) => Some(*is_focused),
+                    seen_value = match (seen_value, is_checked) {
+                        (None, is_checked) => Some(*is_checked),
                         (Some(true), true) => Some(true),
                         (Some(false), false) => Some(false),
                         (Some(true), false) | (Some(false), true) => return Tristate::Partial,
@@ -353,7 +353,7 @@ impl File<'_> {
     }
 
     /// Set the selection of all sections and lines in this file.
-    pub fn set_toggled(&mut self, toggled: bool) {
+    pub fn set_checked(&mut self, checked: bool) {
         let Self {
             old_path: _,
             path: _,
@@ -361,7 +361,7 @@ impl File<'_> {
             sections,
         } = self;
         for section in sections {
-            section.set_toggled(toggled);
+            section.set_checked(checked);
         }
     }
 
@@ -406,8 +406,9 @@ pub enum Section<'a> {
     /// user needs to accept that mode change or not. This is not part of the
     /// "contents" of the file per se, but it's rendered inline as if it were.
     FileMode {
-        /// Whether or not the file mode change was accepted.
-        is_toggled: bool,
+        /// Whether or not the file mode change was selected for inclusion in
+        /// the UI.
+        is_checked: bool,
 
         /// The old file mode.
         before: FileMode,
@@ -418,8 +419,9 @@ pub enum Section<'a> {
 
     /// This file contains binary contents.
     Binary {
-        /// Whether or not the binary contents change was accepted.
-        is_toggled: bool,
+        /// Whether or not the binary contents change was selected for inclusion
+        /// in the UI.
+        is_checked: bool,
 
         /// The description of the old binary contents, for use in the UI only.
         old_description: Option<Cow<'a, str>>,
@@ -447,8 +449,8 @@ impl Section<'_> {
             Section::Unchanged { .. } => {}
             Section::Changed { lines } => {
                 for line in lines {
-                    seen_value = match (seen_value, line.is_toggled) {
-                        (None, is_focused) => Some(is_focused),
+                    seen_value = match (seen_value, line.is_checked) {
+                        (None, is_checked) => Some(is_checked),
                         (Some(true), true) => Some(true),
                         (Some(false), false) => Some(false),
                         (Some(true), false) | (Some(false), true) => return Tristate::Partial,
@@ -456,17 +458,17 @@ impl Section<'_> {
                 }
             }
             Section::FileMode {
-                is_toggled,
+                is_checked,
                 before: _,
                 after: _,
             }
             | Section::Binary {
-                is_toggled,
+                is_checked,
                 old_description: _,
                 new_description: _,
             } => {
-                seen_value = match (seen_value, is_toggled) {
-                    (None, is_toggled) => Some(*is_toggled),
+                seen_value = match (seen_value, is_checked) {
+                    (None, is_checked) => Some(*is_checked),
                     (Some(true), true) => Some(true),
                     (Some(false), false) => Some(false),
                     (Some(true), false) | (Some(false), true) => return Tristate::Partial,
@@ -480,19 +482,19 @@ impl Section<'_> {
     }
 
     /// Select or unselect all items in this section.
-    pub fn set_toggled(&mut self, toggled: bool) {
+    pub fn set_checked(&mut self, checked: bool) {
         match self {
             Section::Unchanged { .. } => {}
             Section::Changed { lines } => {
                 for line in lines {
-                    line.is_toggled = toggled;
+                    line.is_checked = checked;
                 }
             }
-            Section::FileMode { is_toggled, .. } => {
-                *is_toggled = toggled;
+            Section::FileMode { is_checked, .. } => {
+                *is_checked = checked;
             }
-            Section::Binary { is_toggled, .. } => {
-                *is_toggled = toggled;
+            Section::Binary { is_checked, .. } => {
+                *is_checked = checked;
             }
         }
     }
@@ -503,14 +505,14 @@ impl Section<'_> {
             Section::Unchanged { .. } => {}
             Section::Changed { lines } => {
                 for line in lines {
-                    line.is_toggled = !line.is_toggled;
+                    line.is_checked = !line.is_checked;
                 }
             }
-            Section::FileMode { is_toggled, .. } => {
-                *is_toggled = !*is_toggled;
+            Section::FileMode { is_checked, .. } => {
+                *is_checked = !*is_checked;
             }
-            Section::Binary { is_toggled, .. } => {
-                *is_toggled = !*is_toggled;
+            Section::Binary { is_checked, .. } => {
+                *is_checked = !*is_checked;
             }
         }
     }
@@ -532,7 +534,7 @@ pub enum ChangeType {
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct SectionChangedLine<'a> {
     /// Whether or not this line was selected to be recorded.
-    pub is_toggled: bool,
+    pub is_checked: bool,
 
     /// The type of change this line was.
     pub change_type: ChangeType,

@@ -969,7 +969,7 @@ impl<'a> Recorder<'a> {
                         }
                     }
                     Section::FileMode {
-                        is_toggled: _,
+                        is_checked: _,
                         before: _,
                         after: _,
                     }
@@ -1321,27 +1321,27 @@ impl<'a> Recorder<'a> {
             SelectionKey::None => {}
             SelectionKey::File(file_key) => {
                 let tristate = self.file_tristate(file_key)?;
-                let is_toggled_new = match tristate {
+                let is_checked_new = match tristate {
                     Tristate::False => true,
                     Tristate::Partial | Tristate::True => false,
                 };
                 self.visit_file(file_key, |file| {
-                    file.set_toggled(is_toggled_new);
+                    file.set_checked(is_checked_new);
                 })?;
             }
             SelectionKey::Section(section_key) => {
                 let tristate = self.section_tristate(section_key)?;
-                let is_toggled_new = match tristate {
+                let is_checked_new = match tristate {
                     Tristate::False => true,
                     Tristate::Partial | Tristate::True => false,
                 };
                 self.visit_section(section_key, |section| {
-                    section.set_toggled(is_toggled_new);
+                    section.set_checked(is_checked_new);
                 })?;
             }
             SelectionKey::Line(line_key) => {
                 self.visit_line(line_key, |line| {
-                    line.is_toggled = !line.is_toggled;
+                    line.is_checked = !line.is_checked;
                 })?;
             }
         }
@@ -1355,7 +1355,7 @@ impl<'a> Recorder<'a> {
     }
 
     fn toggle_all_uniform(&mut self) {
-        let toggled = {
+        let checked = {
             let tristate = self
                 .state
                 .files
@@ -1373,7 +1373,7 @@ impl<'a> Recorder<'a> {
             }
         };
         for file in &mut self.state.files {
-            file.set_toggled(toggled);
+            file.set_checked(checked);
         }
     }
 
@@ -2104,7 +2104,7 @@ impl Component for SectionView<'_> {
                     let y = y + 1;
                     for (line_idx, line) in lines.iter().enumerate() {
                         let SectionChangedLine {
-                            is_toggled,
+                            is_checked,
                             change_type,
                             line,
                         } = line;
@@ -2123,7 +2123,7 @@ impl Component for SectionView<'_> {
                             use_unicode: *use_unicode,
                             id: ComponentId::ToggleBox(SelectionKey::Line(line_key)),
                             icon_style: TristateIconStyle::Check,
-                            tristate: Tristate::from(*is_toggled),
+                            tristate: Tristate::from(*is_checked),
                             is_focused,
                         };
                         let line_view = SectionLineView {
@@ -2144,7 +2144,7 @@ impl Component for SectionView<'_> {
             }
 
             Section::FileMode {
-                is_toggled,
+                is_checked,
                 before,
                 after,
             } => {
@@ -2161,7 +2161,7 @@ impl Component for SectionView<'_> {
                     use_unicode: *use_unicode,
                     id: ComponentId::ToggleBox(selection_key),
                     icon_style: TristateIconStyle::Check,
-                    tristate: Tristate::from(*is_toggled),
+                    tristate: Tristate::from(*is_checked),
                     is_focused,
                 };
                 let toggle_box_rect = viewport.draw_component(x, y, &toggle_box);
@@ -2174,7 +2174,7 @@ impl Component for SectionView<'_> {
             }
 
             Section::Binary {
-                is_toggled,
+                is_checked,
                 old_description,
                 new_description,
             } => {
@@ -2190,7 +2190,7 @@ impl Component for SectionView<'_> {
                     use_unicode: *use_unicode,
                     id: ComponentId::ToggleBox(SelectionKey::Section(section_key)),
                     icon_style: TristateIconStyle::Check,
-                    tristate: Tristate::from(*is_toggled),
+                    tristate: Tristate::from(*is_checked),
                     is_focused,
                 };
                 let toggle_box_rect = viewport.draw_component(x, y, &toggle_box);

@@ -56,12 +56,12 @@
           "Changed": {
             "lines": [
               {
-                "is_toggled": false,
+                "is_checked": false,
                 "change_type": "Removed",
                 "line": "version = \"1.0.152\"\n"
               },
               {
-                "is_toggled": false,
+                "is_checked": false,
                 "change_type": "Added",
                 "line": "version = \"1.0.155\"\n"
               }

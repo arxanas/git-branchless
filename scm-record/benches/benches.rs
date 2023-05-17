@@ -10,12 +10,12 @@ fn bench_record(c: &mut Criterion) {
     c.bench_function("scm_record: toggle line", |b| {
         let before_line = SectionChangedLine {
             line: Cow::Borrowed("foo"),
-            is_toggled: false,
+            is_checked: false,
             change_type: ChangeType::Removed,
         };
         let after_line = SectionChangedLine {
             line: Cow::Borrowed("foo"),
-            is_toggled: false,
+            is_checked: false,
             change_type: ChangeType::Added,
         };
         let record_state = RecordState {

@@ -34,22 +34,22 @@
           "Changed": {
             "lines": [
               {
-                "is_toggled": true,
+                "is_checked": true,
                 "change_type": "Removed",
                 "line": "before text 1"
               },
               {
-                "is_toggled": true,
+                "is_checked": true,
                 "change_type": "Removed",
                 "line": "before text 2"
               },
               {
-                "is_toggled": true,
+                "is_checked": true,
                 "change_type": "Added",
                 "line": "after text 1"
               },
               {
-                "is_toggled": false,
+                "is_checked": false,
                 "change_type": "Added",
                 "line": "after text 2"
               }
@@ -81,22 +81,22 @@
           "Changed": {
             "lines": [
               {
-                "is_toggled": true,
+                "is_checked": true,
                 "change_type": "Removed",
                 "line": "before text 1"
               },
               {
-                "is_toggled": true,
+                "is_checked": true,
                 "change_type": "Removed",
                 "line": "before text 2"
               },
               {
-                "is_toggled": true,
+                "is_checked": true,
                 "change_type": "Added",
                 "line": "after text 1"
               },
               {
-                "is_toggled": true,
+                "is_checked": true,
                 "change_type": "Added",
                 "line": "after text 2"
               }

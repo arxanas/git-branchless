@@ -142,7 +142,7 @@ fn main() -> eyre::Result<()> {
         {
             let mut files = files;
             for file in &mut files {
-                file.set_toggled(true);
+                file.set_checked(true);
             }
             assert_trees_equal(
                 &format!("select-all {current_commit:?}"),
