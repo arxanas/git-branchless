@@ -33,6 +33,8 @@ Ideally, these would be documented in the UI itself.
 - `F`: expand/collapse all items.
 - `up`/`k`: select the next item.
 - `down`/`j`: select the previous item.
+- `left`/`h`: select the outer item.
+- `right`/`l`: select the inner item.
 - `space`: toggle the current item.
 - `enter`: toggle the current item and move to the next item of the same kind.
 - `a`: invert the toggled state of each item.
@@ -59,7 +61,6 @@ Here's some projects that don't use `scm-record`, but could benefit from integra
 
 Here are some features in the UI which are not yet implemented:
 
-- Select inner/outer element.
 - Jump to next/previous element of same kind.
 - Menu bar to explain available actions and keybindings.
 - "Sticky" file and/or section headers.
