@@ -443,12 +443,12 @@ fn test_enter_next() -> eyre::Result<()> {
                 sections: vec![Section::Changed {
                     lines: vec![
                         SectionChangedLine {
-                            is_toggled: false,
+                            is_checked: false,
                             change_type: ChangeType::Added,
                             line: Cow::Borrowed("world"),
                         },
                         SectionChangedLine {
-                            is_toggled: false,
+                            is_checked: false,
                             change_type: ChangeType::Removed,
                             line: Cow::Borrowed("hello"),
                         },
@@ -462,12 +462,12 @@ fn test_enter_next() -> eyre::Result<()> {
                 sections: vec![Section::Changed {
                     lines: vec![
                         SectionChangedLine {
-                            is_toggled: false,
+                            is_checked: false,
                             change_type: ChangeType::Added,
                             line: Cow::Borrowed("world"),
                         },
                         SectionChangedLine {
-                            is_toggled: false,
+                            is_checked: false,
                             change_type: ChangeType::Removed,
                             line: Cow::Borrowed("hello"),
                         },
@@ -528,7 +528,7 @@ fn test_file_mode_change() -> eyre::Result<()> {
                 path: Cow::Borrowed(Path::new("bar")),
                 file_mode: None,
                 sections: vec![Section::FileMode {
-                    is_toggled: false,
+                    is_checked: false,
                     before: FileMode(0o100644),
                     after: FileMode(0o100755),
                 }],
@@ -576,7 +576,7 @@ fn test_file_mode_change() -> eyre::Result<()> {
                 file_mode: None,
                 sections: [
                     FileMode {
-                        is_toggled: true,
+                        is_checked: true,
                         before: FileMode(
                             33188,
                         ),
@@ -640,7 +640,7 @@ fn test_abbreviate_unchanged_sections() -> eyre::Result<()> {
                 },
                 Section::Changed {
                     lines: vec![SectionChangedLine {
-                        is_toggled: false,
+                        is_checked: false,
                         change_type: ChangeType::Added,
                         line: Cow::Borrowed("changed\n"),
                     }],
@@ -652,7 +652,7 @@ fn test_abbreviate_unchanged_sections() -> eyre::Result<()> {
                 },
                 Section::Changed {
                     lines: vec![SectionChangedLine {
-                        is_toggled: false,
+                        is_checked: false,
                         change_type: ChangeType::Added,
                         line: Cow::Borrowed("changed\n"),
                     }],
@@ -722,7 +722,7 @@ fn test_no_abbreviate_short_unchanged_sections() -> eyre::Result<()> {
                 },
                 Section::Changed {
                     lines: vec![SectionChangedLine {
-                        is_toggled: false,
+                        is_checked: false,
                         change_type: ChangeType::Added,
                         line: Cow::Borrowed("changed\n"),
                     }],
@@ -734,7 +734,7 @@ fn test_no_abbreviate_short_unchanged_sections() -> eyre::Result<()> {
                 },
                 Section::Changed {
                     lines: vec![SectionChangedLine {
-                        is_toggled: false,
+                        is_checked: false,
                         change_type: ChangeType::Added,
                         line: Cow::Borrowed("changed\n"),
                     }],
@@ -790,7 +790,7 @@ fn test_record_binary_file() -> eyre::Result<()> {
             path: Cow::Borrowed(Path::new("foo")),
             file_mode: None,
             sections: vec![Section::Binary {
-                is_toggled: false,
+                is_checked: false,
                 old_description: Some(Cow::Owned(make_binary_description("abc123", 123))),
                 new_description: Some(Cow::Owned(make_binary_description("def456", 456))),
             }],
@@ -829,7 +829,7 @@ fn test_record_binary_file() -> eyre::Result<()> {
                 file_mode: None,
                 sections: [
                     Binary {
-                        is_toggled: true,
+                        is_checked: true,
                         old_description: Some(
                             "abc123 (123 bytes)",
                         ),
@@ -867,7 +867,7 @@ fn test_record_binary_file_noop() -> eyre::Result<()> {
             path: Cow::Borrowed(Path::new("foo")),
             file_mode: None,
             sections: vec![Section::Binary {
-                is_toggled: false,
+                is_checked: false,
                 old_description: Some(Cow::Owned(make_binary_description("abc123", 123))),
                 new_description: Some(Cow::Owned(make_binary_description("def456", 456))),
             }],
@@ -901,7 +901,7 @@ fn test_record_binary_file_noop() -> eyre::Result<()> {
                 file_mode: None,
                 sections: [
                     Binary {
-                        is_toggled: false,
+                        is_checked: false,
                         old_description: Some(
                             "abc123 (123 bytes)",
                         ),
@@ -933,7 +933,7 @@ fn test_record_binary_file_noop() -> eyre::Result<()> {
 
 #[test]
 fn test_state_binary_selected_contents() -> eyre::Result<()> {
-    let test = |text, binary| {
+    let test = |is_checked, binary| {
         let file = File {
             old_path: None,
             path: Cow::Borrowed(Path::new("foo")),
@@ -941,13 +941,13 @@ fn test_state_binary_selected_contents() -> eyre::Result<()> {
             sections: vec![
                 Section::Changed {
                     lines: vec![SectionChangedLine {
-                        is_toggled: text,
+                        is_checked,
                         change_type: ChangeType::Removed,
                         line: Cow::Borrowed("foo\n"),
                     }],
                 },
                 Section::Binary {
-                    is_toggled: binary,
+                    is_checked: binary,
                     old_description: Some(Cow::Owned(make_binary_description("abc123", 123))),
                     new_description: Some(Cow::Owned(make_binary_description("def456", 456))),
                 },
@@ -1038,7 +1038,7 @@ fn test_mouse_click_checkbox() -> eyre::Result<()> {
                 path: Cow::Borrowed(Path::new("bar")),
                 file_mode: None,
                 sections: vec![Section::FileMode {
-                    is_toggled: false,
+                    is_checked: false,
                     before: FileMode::absent(),
                     after: FileMode(0o100644),
                 }],
@@ -1093,13 +1093,13 @@ fn test_mouse_click_wide_line() -> eyre::Result<()> {
             file_mode: None,
             sections: vec![
                 Section::FileMode {
-                    is_toggled: false,
+                    is_checked: false,
                     before: FileMode::absent(),
                     after: FileMode(0o100644),
                 },
                 Section::Changed {
                     lines: vec![SectionChangedLine {
-                        is_toggled: false,
+                        is_checked: false,
                         change_type: ChangeType::Removed,
                         line: Cow::Borrowed("foo\n"),
                     }],
@@ -1176,7 +1176,7 @@ fn test_mouse_click_dialog_buttons() -> eyre::Result<()> {
             file_mode: None,
             sections: vec![Section::Changed {
                 lines: vec![SectionChangedLine {
-                    is_toggled: true,
+                    is_checked: true,
                     change_type: ChangeType::Removed,
                     line: Cow::Borrowed("foo\n"),
                 }],
