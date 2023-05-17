@@ -21,6 +21,7 @@ use crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, is_raw_mode_enabled, EnterAlternateScreen,
     LeaveAlternateScreen,
 };
+use tracing::warn;
 use tui::backend::{Backend, TestBackend};
 use tui::buffer::Buffer;
 use tui::style::{Color, Modifier, Style};
@@ -229,7 +230,6 @@ impl From<crossterm::event::Event> for Event {
                 kind: KeyEventKind::Press,
                 state: _,
             }) => Self::FocusOuter,
-
             Event::Key(KeyEvent {
                 code: KeyCode::Right | KeyCode::Char('l'),
                 modifiers: KeyModifiers::NONE,
@@ -403,8 +403,9 @@ enum StateUpdate {
     ToggleItemAndAdvance(SelectionKey, SelectionKey),
     ToggleAll,
     ToggleAllUniform,
-    ExpandItem(SelectionKey),
-    ExpandAll,
+    SetExpandItem(SelectionKey, bool),
+    ToggleExpandItem(SelectionKey),
+    ToggleExpandAll,
 }
 
 /// UI component to record the user's changes.
@@ -594,6 +595,7 @@ impl<'a> Recorder<'a> {
                     }
                     StateUpdate::SelectItem(selection_key) => {
                         self.selection_key = selection_key;
+                        self.expand_item_ancestors(selection_key);
                         self.pending_events.push(Event::EnsureSelectionInViewport);
                     }
                     StateUpdate::ToggleItem(selection_key) => {
@@ -610,13 +612,17 @@ impl<'a> Recorder<'a> {
                     StateUpdate::ToggleAllUniform => {
                         self.toggle_all_uniform();
                     }
-                    StateUpdate::ExpandItem(selection_key) => {
-                        self.expand_item(selection_key)?;
-                        self.pending_events.push(Event::EnsureSelectionInViewport)
+                    StateUpdate::SetExpandItem(selection_key, is_expanded) => {
+                        self.set_expand_item(selection_key, is_expanded);
+                        self.pending_events.push(Event::EnsureSelectionInViewport);
                     }
-                    StateUpdate::ExpandAll => {
-                        self.expand_all()?;
-                        self.pending_events.push(Event::EnsureSelectionInViewport)
+                    StateUpdate::ToggleExpandItem(selection_key) => {
+                        self.toggle_expand_item(selection_key)?;
+                        self.pending_events.push(Event::EnsureSelectionInViewport);
+                    }
+                    StateUpdate::ToggleExpandAll => {
+                        self.toggle_expand_all()?;
+                        self.pending_events.push(Event::EnsureSelectionInViewport);
                     }
                 }
             }
@@ -873,9 +879,10 @@ impl<'a> Recorder<'a> {
                 let selection_key = self.select_next_page(term_height, drawn_rects);
                 StateUpdate::SelectItem(selection_key)
             }
-            (None, Event::FocusInner | Event::FocusOuter) => {
-                // TODO: implement
-                StateUpdate::None
+            (None, Event::FocusOuter) => self.select_outer(),
+            (None, Event::FocusInner) => {
+                let selection_key = self.select_inner();
+                StateUpdate::SelectItem(selection_key)
             }
             (None, Event::ToggleItem) => StateUpdate::ToggleItem(self.selection_key),
             (None, Event::ToggleItemAndAdvance) => {
@@ -884,8 +891,8 @@ impl<'a> Recorder<'a> {
             }
             (None, Event::ToggleAll) => StateUpdate::ToggleAll,
             (None, Event::ToggleAllUniform) => StateUpdate::ToggleAllUniform,
-            (None, Event::ExpandItem) => StateUpdate::ExpandItem(self.selection_key),
-            (None, Event::ExpandAll) => StateUpdate::ExpandAll,
+            (None, Event::ExpandItem) => StateUpdate::ToggleExpandItem(self.selection_key),
+            (None, Event::ExpandAll) => StateUpdate::ToggleExpandAll,
 
             (_, Event::Click { row, column }) => {
                 let component_id = self.find_component_at(drawn_rects, row, column);
@@ -1060,6 +1067,51 @@ impl<'a> Recorder<'a> {
         keys[index]
     }
 
+    fn select_inner(&self) -> SelectionKey {
+        self.all_selection_keys()
+            .into_iter()
+            .skip_while(|selection_key| selection_key != &self.selection_key)
+            .skip(1)
+            .find(|selection_key| {
+                match (self.selection_key, selection_key) {
+                    (SelectionKey::None, _) => true,
+                    (_, SelectionKey::None) => false, // shouldn't happen
+
+                    (SelectionKey::File(_), SelectionKey::File(_)) => false,
+                    (SelectionKey::File(_), SelectionKey::Section(_)) => true,
+                    (SelectionKey::File(_), SelectionKey::Line(_)) => false, // shouldn't happen
+
+                    (SelectionKey::Section(_), SelectionKey::File(_))
+                    | (SelectionKey::Section(_), SelectionKey::Section(_)) => false,
+                    (SelectionKey::Section(_), SelectionKey::Line(_)) => true,
+
+                    (SelectionKey::Line(_), _) => false,
+                }
+            })
+            .unwrap_or(self.selection_key)
+    }
+
+    fn select_outer(&self) -> StateUpdate {
+        match self.selection_key {
+            SelectionKey::None => StateUpdate::None,
+            selection_key @ SelectionKey::File(_) => {
+                StateUpdate::SetExpandItem(selection_key, false)
+            }
+            SelectionKey::Section(SectionKey {
+                file_idx,
+                section_idx: _,
+            }) => StateUpdate::SelectItem(SelectionKey::File(FileKey { file_idx })),
+            SelectionKey::Line(LineKey {
+                file_idx,
+                section_idx,
+                line_idx: _,
+            }) => StateUpdate::SelectItem(SelectionKey::Section(SectionKey {
+                file_idx,
+                section_idx,
+            })),
+        }
+    }
+
     fn advance_to_next_of_kind(&self) -> SelectionKey {
         let (keys, index) = self.find_selection();
         let index = match index {
@@ -1108,7 +1160,14 @@ impl<'a> Recorder<'a> {
         match drawn_rects.get(&id) {
             Some(drawn_rect) => *drawn_rect,
             None => {
-                panic!("could not look up drawn rect for component with ID {id:?}; was it drawn?")
+                if cfg!(debug_assertions) {
+                    panic!(
+                        "could not look up drawn rect for component with ID {id:?}; was it drawn?"
+                    )
+                } else {
+                    warn!(component_id = ?id, "could not look up drawn rect for component; was it drawn?");
+                    Rect::default()
+                }
             }
         }
     }
@@ -1191,7 +1250,7 @@ impl<'a> Recorder<'a> {
             }
             ComponentId::ExpandBox(selection_key) => {
                 if self.selection_key == selection_key {
-                    StateUpdate::ExpandItem(selection_key)
+                    StateUpdate::ToggleExpandItem(selection_key)
                 } else {
                     StateUpdate::SelectItem(selection_key)
                 }
@@ -1264,7 +1323,41 @@ impl<'a> Recorder<'a> {
         }
     }
 
-    fn expand_item(&mut self, selection: SelectionKey) -> Result<(), RecordError> {
+    fn expand_item_ancestors(&mut self, selection: SelectionKey) {
+        match selection {
+            SelectionKey::None | SelectionKey::File(_) => {}
+            SelectionKey::Section(SectionKey {
+                file_idx,
+                section_idx: _,
+            }) => {
+                self.expanded_items
+                    .insert(SelectionKey::File(FileKey { file_idx }));
+            }
+            SelectionKey::Line(LineKey {
+                file_idx,
+                section_idx,
+                line_idx: _,
+            }) => {
+                self.expanded_items
+                    .insert(SelectionKey::File(FileKey { file_idx }));
+                self.expanded_items
+                    .insert(SelectionKey::Section(SectionKey {
+                        file_idx,
+                        section_idx,
+                    }));
+            }
+        }
+    }
+
+    fn set_expand_item(&mut self, selection: SelectionKey, is_expanded: bool) {
+        if is_expanded {
+            self.expanded_items.insert(selection);
+        } else {
+            self.expanded_items.remove(&selection);
+        }
+    }
+
+    fn toggle_expand_item(&mut self, selection: SelectionKey) -> Result<(), RecordError> {
         match selection {
             SelectionKey::None => {}
             SelectionKey::File(file_key) => {
@@ -1299,7 +1392,7 @@ impl<'a> Recorder<'a> {
             .collect();
     }
 
-    fn expand_all(&mut self) -> Result<(), RecordError> {
+    fn toggle_expand_all(&mut self) -> Result<(), RecordError> {
         let all_selection_keys: HashSet<_> = self.all_selection_keys().into_iter().collect();
         self.expanded_items = if self.expanded_items == all_selection_keys {
             // Select an ancestor file key that will still be visible.

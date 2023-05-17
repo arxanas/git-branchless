@@ -1426,3 +1426,139 @@ fn test_collapse_select_ancestor() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_focus_inner() -> eyre::Result<()> {
+    let state = example_contents();
+    let initial = TestingScreenshot::default();
+    let inner1 = TestingScreenshot::default();
+    let inner2 = TestingScreenshot::default();
+    let inner3 = TestingScreenshot::default();
+    let event_source = EventSource::testing(
+        80,
+        6,
+        [
+            initial.event(),
+            Event::FocusInner,
+            inner1.event(),
+            Event::FocusInner,
+            inner2.event(),
+            Event::FocusInner,
+            inner3.event(),
+            Event::QuitAccept,
+        ],
+    );
+    let recorder = Recorder::new(state, event_source);
+    recorder.run()?;
+
+    insta::assert_display_snapshot!(initial, @r###"
+    "(~) foo/bar                                                                  (+)"
+    "[×] baz                                                                      [+]"
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "###);
+    insta::assert_display_snapshot!(inner1, @r###"
+    "       20 this is some text                                                     "
+    "  (~) Section 1/1                                                            (-)"
+    "    [×] - before text 1                                                         "
+    "    [×] - before text 2                                                         "
+    "    [×] + after text 1                                                          "
+    "    [ ] + after text 2                                                          "
+    "###);
+    insta::assert_display_snapshot!(inner2, @r###"
+    "       20 this is some text                                                     "
+    "  [~] Section 1/1                                                            [-]"
+    "    (×) - before text 1                                                         "
+    "    [×] - before text 2                                                         "
+    "    [×] + after text 1                                                          "
+    "    [ ] + after text 2                                                          "
+    "###);
+    insta::assert_display_snapshot!(inner3, @r###"
+    "       20 this is some text                                                     "
+    "  [~] Section 1/1                                                            [-]"
+    "    (×) - before text 1                                                         "
+    "    [×] - before text 2                                                         "
+    "    [×] + after text 1                                                          "
+    "    [ ] + after text 2                                                          "
+    "###);
+
+    Ok(())
+}
+
+#[test]
+fn test_focus_outer() -> eyre::Result<()> {
+    let state = example_contents();
+    let initial = TestingScreenshot::default();
+    let outer1 = TestingScreenshot::default();
+    let outer2 = TestingScreenshot::default();
+    let outer3 = TestingScreenshot::default();
+    let outer4 = TestingScreenshot::default();
+    let event_source = EventSource::testing(
+        80,
+        6,
+        [
+            Event::FocusNext,
+            Event::ExpandItem,
+            Event::FocusNext,
+            Event::FocusNext,
+            Event::FocusNext,
+            initial.event(),
+            Event::FocusOuter,
+            outer1.event(),
+            Event::FocusOuter,
+            outer2.event(),
+            Event::FocusOuter,
+            outer3.event(),
+            Event::FocusOuter,
+            outer4.event(),
+            Event::QuitAccept,
+        ],
+    );
+    let recorder = Recorder::new(state, event_source);
+    recorder.run()?;
+
+    insta::assert_display_snapshot!(initial, @r###"
+    "        2 Some leading text 2                                                   "
+    "  [×] Section 1/1                                                            [-]"
+    "    [×] - before text 1                                                         "
+    "    (×) - before text 2                                                         "
+    "    [×] + after text 1                                                          "
+    "    [×] + after text 2                                                          "
+    "###);
+    insta::assert_display_snapshot!(outer1, @r###"
+    "        2 Some leading text 2                                                   "
+    "  (×) Section 1/1                                                            (-)"
+    "    [×] - before text 1                                                         "
+    "    [×] - before text 2                                                         "
+    "    [×] + after text 1                                                          "
+    "    [×] + after text 2                                                          "
+    "###);
+    insta::assert_display_snapshot!(outer2, @r###"
+    "(×) baz                                                                      (-)"
+    "        1 Some leading text 1                                                   "
+    "        2 Some leading text 2                                                   "
+    "  [×] Section 1/1                                                            [-]"
+    "    [×] - before text 1                                                         "
+    "    [×] - before text 2                                                         "
+    "###);
+    insta::assert_display_snapshot!(outer3, @r###"
+    "(×) baz                                                                      (+)"
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "###);
+    insta::assert_display_snapshot!(outer4, @r###"
+    "(×) baz                                                                      (+)"
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "###);
+
+    Ok(())
+}
