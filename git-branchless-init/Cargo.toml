@@ -9,7 +9,7 @@ version = "0.7.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-console = "0.15.3"
+console = "0.15.7"
 eyre = "0.6.8"
 git-branchless-invoke = { version = "0.7.0", path = "../git-branchless-invoke" }
 git-branchless-opts = { version = "0.7.0", path = "../git-branchless-opts" }
