@@ -206,8 +206,12 @@ mod reference_transaction {
             // The leading `# pack-refs with:` pragma.
             return None;
         }
+        if line.starts_with('^') {
+            // A peeled ref
+            // FIXME actually support peeled refs in packed-refs
+            return None;
+        }
         if !line.starts_with(|c: char| c.is_ascii_hexdigit()) {
-            // The leading `# pack-refs with:` pragma.
             warn!(?line, "Unrecognized pack-refs line starting character");
             return None;
         }
