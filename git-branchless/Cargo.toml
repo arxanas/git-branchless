@@ -20,7 +20,7 @@ version = "0.7.0"
 bstr = "1.4.0"
 bugreport = "0.5.0"
 color-eyre = "0.6.2"
-console = "0.15.5"
+console = "0.15.7"
 cursive_core = "0.3.7"
 eden_dag = { package = "esl01-dag", version = "0.3.0" }
 eyre = "0.6.8"

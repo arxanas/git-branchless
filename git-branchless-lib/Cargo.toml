@@ -50,7 +50,7 @@ chashmap = "2.2.2"
 chrono = "0.4.24"
 color-eyre = "0.6.2"
 concolor = { version = "0.1.1", features = ["auto"] }
-console = "0.15.5"
+console = "0.15.7"
 cursive = { version = "0.20.0", default-features = false }
 eden_dag = { package = "esl01-dag", version = "0.3.0" }
 eyre = "0.6.8"
