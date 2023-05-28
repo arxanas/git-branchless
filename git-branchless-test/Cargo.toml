@@ -7,7 +7,7 @@ repository = "https://github.com/arxanas/git-branchless"
 version = "0.7.0"
 
 [dependencies]
-bstr = "1.4.0"
+bstr = "1.5.0"
 clap = "4.3.0"
 crossbeam = "0.8.2"
 cursive = { version = "0.20.0", default-features = false, features = [

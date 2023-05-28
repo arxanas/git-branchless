@@ -7,7 +7,7 @@ repository = "https://github.com/arxanas/git-branchless"
 version = "0.7.0"
 
 [dependencies]
-bstr = "1.4.0"
+bstr = "1.5.0"
 chrono = "0.4.24"
 eden_dag = { package = "esl01-dag", version = "0.3.0" }
 eyre = "0.6.8"
