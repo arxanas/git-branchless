@@ -47,7 +47,7 @@ assert_cmd = "2.0.7"
 async-trait = "0.1.68"
 bstr = "1.5.0"
 chashmap = "2.2.2"
-chrono = "0.4.24"
+chrono = "0.4.25"
 color-eyre = "0.6.2"
 concolor = { version = "0.1.1", features = ["auto"] }
 console = "0.15.7"
