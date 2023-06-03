@@ -552,7 +552,7 @@ impl<'a> Recorder<'a> {
                     },
                     drawn_rects: drawn_rects.clone().into_iter().collect(),
                 };
-                let debug_app = App {
+                let debug_app = AppView {
                     debug_info: Some(debug_info),
                     ..app.clone()
                 };
@@ -641,7 +641,7 @@ impl<'a> Recorder<'a> {
         Ok(self.state)
     }
 
-    fn make_app(&'a self, debug_info: Option<AppDebugInfo>) -> App<'a> {
+    fn make_app(&'a self, debug_info: Option<AppDebugInfo>) -> AppView<'a> {
         let file_views: Vec<FileView> = self
             .state
             .files
@@ -773,7 +773,7 @@ impl<'a> Recorder<'a> {
                 }
             })
             .collect();
-        App {
+        AppView {
             debug_info: None,
             file_views,
             quit_dialog: self.quit_dialog.clone(),
@@ -1689,13 +1689,13 @@ struct AppDebugInfo {
 }
 
 #[derive(Clone, Debug)]
-struct App<'a> {
+struct AppView<'a> {
     debug_info: Option<AppDebugInfo>,
     file_views: Vec<FileView<'a>>,
     quit_dialog: Option<QuitDialog>,
 }
 
-impl App<'_> {
+impl AppView<'_> {
     fn height(&self) -> usize {
         let Self {
             debug_info: _,
@@ -1706,7 +1706,7 @@ impl App<'_> {
     }
 }
 
-impl Component for App<'_> {
+impl Component for AppView<'_> {
     type Id = ComponentId;
 
     fn id(&self) -> Self::Id {
