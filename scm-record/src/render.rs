@@ -1,7 +1,9 @@
+use std::borrow::Cow;
 use std::cmp::{max, min};
+use std::collections::HashMap;
 use std::fmt::Debug;
 use std::hash::Hash;
-use std::{borrow::Cow, collections::HashMap};
+use std::mem;
 
 use cassowary::{Solver, Variable};
 use num_traits::cast;
@@ -19,12 +21,6 @@ use crate::util::{IsizeExt, UsizeExt};
 pub(crate) struct RectSize {
     pub width: usize,
     pub height: usize,
-}
-
-impl RectSize {
-    pub fn area(self) -> usize {
-        self.width * self.height
-    }
 }
 
 impl From<tui::layout::Rect> for RectSize {
@@ -73,14 +69,6 @@ impl From<tui::layout::Rect> for Rect {
 }
 
 impl Rect {
-    /// The size of the `Rect`. (To get the area as a scalar, call `.size().area()`.)
-    pub fn size(self) -> RectSize {
-        RectSize {
-            width: self.width,
-            height: self.height,
-        }
-    }
-
     /// The (x, y) coordinate of the top-left corner of this `Rect`.
     fn top_left(self) -> (isize, isize) {
         (self.x, self.y)
@@ -246,7 +234,7 @@ struct DrawTrace<ComponentId> {
     rect: Rect,
 
     /// The bounding boxes of where each child component drew.
-    components: HashMap<ComponentId, Rect>,
+    components: HashMap<ComponentId, DrawnRect>,
 }
 
 impl<ComponentId: Clone + Debug + Eq + Hash> DrawTrace<ComponentId> {
@@ -283,6 +271,14 @@ impl<ComponentId> Default for DrawTrace<ComponentId> {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) struct DrawnRect {
+    pub rect: Rect,
+    pub timestamp: usize,
+}
+
+pub(crate) type DrawnRects<C> = HashMap<C, DrawnRect>;
+
 /// Accessor to draw on the virtual canvas. The caller can draw anywhere on the
 /// canvas, but the actual renering will be restricted to this viewport. All
 /// draw calls are also tracked so that we know where each component was drawn
@@ -291,13 +287,35 @@ impl<ComponentId> Default for DrawTrace<ComponentId> {
 pub(crate) struct Viewport<'a, ComponentId> {
     buf: &'a mut Buffer,
     rect: Rect,
+    mask: Option<Rect>,
+    timestamp: usize,
     trace: Vec<DrawTrace<ComponentId>>,
     debug_messages: Vec<String>,
 }
 
 impl<'a, ComponentId: Clone + Debug + Eq + Hash> Viewport<'a, ComponentId> {
+    pub fn new(buf: &'a mut Buffer, rect: Rect) -> Self {
+        Self {
+            buf,
+            rect,
+            mask: Default::default(),
+            timestamp: Default::default(),
+            trace: vec![Default::default()],
+            debug_messages: Default::default(),
+        }
+    }
+
+    /// The portion of the virtual canvas that will be rendered to the terminal.
+    /// Thus, this `Rect` should have the same dimensions as the terminal.
     pub fn rect(&self) -> Rect {
         self.rect
+    }
+
+    /// The mask used for rendering. If this is `Some`, then calls to
+    /// `draw_span` will only render inside the mask area. This can be used to
+    /// overlay one component on top of another in a fixed area.
+    pub fn mask(&self) -> Option<Rect> {
+        self.mask
     }
 
     /// The size of the viewport.
@@ -315,7 +333,7 @@ impl<'a, ComponentId: Clone + Debug + Eq + Hash> Viewport<'a, ComponentId> {
         x: isize,
         y: isize,
         component: &C,
-    ) -> HashMap<C::Id, Rect> {
+    ) -> DrawnRects<C::Id> {
         let widget = TopLevelWidget { component, x, y };
         let term_area = frame.size();
         let mut drawn_rects = Default::default();
@@ -341,6 +359,15 @@ impl<'a, ComponentId: Clone + Debug + Eq + Hash> Viewport<'a, ComponentId> {
         self.debug_messages.push(message.into())
     }
 
+    /// Set a mask to be used for rendering inside `f`.
+    pub fn with_mask<T>(&mut self, mask: Rect, f: impl FnOnce(&mut Self) -> T) -> T {
+        let mut mask = Some(mask);
+        mem::swap(&mut self.mask, &mut mask);
+        let result = f(self);
+        mem::swap(&mut self.mask, &mut mask);
+        result
+    }
+
     /// Draw the provided child component to the screen at the given `(x, y)`
     /// location.
     pub fn draw_component<C: Component<Id = ComponentId>>(
@@ -349,16 +376,29 @@ impl<'a, ComponentId: Clone + Debug + Eq + Hash> Viewport<'a, ComponentId> {
         y: isize,
         component: &C,
     ) -> Rect {
-        self.trace.push(Default::default());
-        component.draw(self, x, y);
-        let mut trace = self.trace.pop().unwrap();
+        let timestamp = {
+            let timestamp = self.timestamp;
+            self.timestamp += 1;
+            timestamp
+        };
+        let mut trace = {
+            self.trace.push(Default::default());
+            component.draw(self, x, y);
+            self.trace.pop().unwrap()
+        };
 
-        let trace_rect = trace
-            .components
-            .values()
-            .fold(trace.rect, |acc, elem| acc.union_bounding(*elem));
+        let trace_rect = trace.components.values().fold(trace.rect, |acc, elem| {
+            let DrawnRect { rect, timestamp: _ } = elem;
+            acc.union_bounding(*rect)
+        });
         trace.rect = trace_rect;
-        trace.components.insert(component.id(), trace_rect);
+        trace.components.insert(
+            component.id(),
+            DrawnRect {
+                rect: trace_rect,
+                timestamp,
+            },
+        );
 
         self.current_trace_mut().merge(trace);
         trace_rect
@@ -376,6 +416,10 @@ impl<'a, ComponentId: Clone + Debug + Eq + Hash> Viewport<'a, ComponentId> {
         self.current_trace_mut().merge_rect(span_rect);
 
         let draw_rect = self.rect.intersect(span_rect);
+        let draw_rect = match self.mask {
+            Some(mask) => draw_rect.intersect(mask),
+            None => draw_rect,
+        };
         if !draw_rect.is_empty() {
             let span_start_idx = (draw_rect.x - span_rect.x).unwrap_usize();
             let span_start_byte_idx = content
@@ -462,22 +506,19 @@ struct TopLevelWidget<'a, C> {
 }
 
 impl<C: Component> StatefulWidget for TopLevelWidget<'_, C> {
-    type State = HashMap<C::Id, Rect>;
+    type State = DrawnRects<C::Id>;
 
     fn render(self, area: tui::layout::Rect, buf: &mut Buffer, state: &mut Self::State) {
         let Self { component, x, y } = self;
-        let trace = vec![Default::default()];
-        let mut viewport = Viewport::<C::Id> {
+        let mut viewport: Viewport<C::Id> = Viewport::new(
             buf,
-            rect: Rect {
+            Rect {
                 x,
                 y,
                 width: area.width.into(),
                 height: area.height.into(),
             },
-            trace,
-            debug_messages: Default::default(),
-        };
+        );
         viewport.draw_component(0, 0, component);
         *state = viewport.trace.pop().unwrap().components;
         debug_assert!(viewport.trace.is_empty());
