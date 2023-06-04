@@ -4,7 +4,7 @@ use std::any::Any;
 use std::borrow::Cow;
 use std::cell::RefCell;
 use std::cmp::min;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashSet};
 use std::fmt::Write;
 use std::fmt::{Debug, Display};
 use std::hash::Hash;
@@ -31,7 +31,7 @@ use tui::{backend::CrosstermBackend, Terminal};
 use unicode_width::UnicodeWidthStr;
 
 use crate::consts::{DUMP_UI_STATE_FILENAME, ENV_VAR_DEBUG_UI, ENV_VAR_DUMP_UI_STATE};
-use crate::render::{centered_rect, Component, Rect, RectSize, Viewport};
+use crate::render::{centered_rect, Component, DrawnRect, DrawnRects, Rect, RectSize, Viewport};
 use crate::types::{ChangeType, RecordError, RecordState, Tristate};
 use crate::util::UsizeExt;
 use crate::{File, Section, SectionChangedLine};
@@ -411,6 +411,11 @@ enum StateUpdate {
     SetExpandItem(SelectionKey, bool),
     ToggleExpandItem(SelectionKey),
     ToggleExpandAll,
+    UnfocusMenuBar,
+    ClickMenu {
+        menu_idx: usize,
+    },
+    ClickMenuItem(Event),
 }
 
 /// UI component to record the user's changes.
@@ -420,6 +425,7 @@ pub struct Recorder<'a> {
     pending_events: Vec<Event>,
     use_unicode: bool,
     expanded_items: HashSet<SelectionKey>,
+    expanded_menu_idx: Option<usize>,
     selection_key: SelectionKey,
     quit_dialog: Option<QuitDialog>,
     scroll_offset_y: isize,
@@ -434,6 +440,7 @@ impl<'a> Recorder<'a> {
             pending_events: Default::default(),
             use_unicode: true,
             expanded_items: Default::default(),
+            expanded_menu_idx: Default::default(),
             selection_key: SelectionKey::None,
             quit_dialog: None,
             scroll_offset_y: 0,
@@ -522,10 +529,11 @@ impl<'a> Recorder<'a> {
         };
 
         'outer: loop {
-            let app = self.make_app(None);
+            let menu_bar = self.make_menu_bar();
+            let app = self.make_app(menu_bar.clone(), None);
             let term_height = usize::from(term.get_frame().size().height);
 
-            let mut drawn_rects: Option<HashMap<ComponentId, Rect>> = None;
+            let mut drawn_rects: Option<DrawnRects<ComponentId>> = None;
             term.draw(|frame| {
                 drawn_rects = Some(Viewport::<ComponentId>::render_top_level(
                     frame,
@@ -546,7 +554,8 @@ impl<'a> Recorder<'a> {
                     selection_key: self.selection_key,
                     selection_key_y: self.selection_key_y(&drawn_rects, self.selection_key),
                     app_drawn_vs_expected_height: {
-                        let drawn_height = drawn_rects[&ComponentId::App].height;
+                        let DrawnRect { rect, timestamp: _ } = drawn_rects[&ComponentId::App];
+                        let drawn_height = rect.height;
                         let expected_height = app.height();
                         (drawn_height, expected_height)
                     },
@@ -576,7 +585,7 @@ impl<'a> Recorder<'a> {
                 mem::take(&mut self.pending_events)
             };
             for event in events {
-                match self.handle_event(event, term_height, &drawn_rects)? {
+                match self.handle_event(event, term_height, &drawn_rects, &menu_bar)? {
                     StateUpdate::None => {}
                     StateUpdate::SetQuitDialog(quit_dialog) => {
                         self.quit_dialog = quit_dialog;
@@ -595,8 +604,10 @@ impl<'a> Recorder<'a> {
                             self.ensure_in_viewport(term_height, &drawn_rects, self.selection_key);
                     }
                     StateUpdate::ScrollTo(scroll_offset_y) => {
-                        self.scroll_offset_y = scroll_offset_y
-                            .clamp(0, drawn_rects[&ComponentId::App].height.unwrap_isize() - 1);
+                        self.scroll_offset_y = scroll_offset_y.clamp(0, {
+                            let DrawnRect { rect, timestamp: _ } = drawn_rects[&ComponentId::App];
+                            rect.height.unwrap_isize() - 1
+                        });
                     }
                     StateUpdate::SelectItem {
                         selection_key,
@@ -634,6 +645,15 @@ impl<'a> Recorder<'a> {
                         self.toggle_expand_all()?;
                         self.pending_events.push(Event::EnsureSelectionInViewport);
                     }
+                    StateUpdate::UnfocusMenuBar => {
+                        self.unfocus_menu_bar();
+                    }
+                    StateUpdate::ClickMenu { menu_idx } => {
+                        self.click_menu_header(menu_idx);
+                    }
+                    StateUpdate::ClickMenuItem(event) => {
+                        self.click_menu_item(event);
+                    }
                 }
             }
         }
@@ -641,7 +661,111 @@ impl<'a> Recorder<'a> {
         Ok(self.state)
     }
 
-    fn make_app(&'a self, debug_info: Option<AppDebugInfo>) -> AppView<'a> {
+    fn make_menu_bar(&self) -> MenuBar<'static> {
+        MenuBar {
+            menus: vec![
+                Menu {
+                    label: Cow::Borrowed("File"),
+                    items: vec![
+                        MenuItem {
+                            label: Cow::Borrowed("Confirm (c)"),
+                            event: Event::QuitAccept,
+                        },
+                        MenuItem {
+                            label: Cow::Borrowed("Quit (q)"),
+                            event: Event::QuitCancel,
+                        },
+                    ],
+                },
+                Menu {
+                    label: Cow::Borrowed("Edit"),
+                    items: vec![
+                        MenuItem {
+                            label: Cow::Borrowed("Toggle current (space)"),
+                            event: Event::ToggleItem,
+                        },
+                        MenuItem {
+                            label: Cow::Borrowed("Toggle current and advance (enter)"),
+                            event: Event::ToggleItemAndAdvance,
+                        },
+                        MenuItem {
+                            label: Cow::Borrowed("Invert all items (a)"),
+                            event: Event::ToggleAll,
+                        },
+                        MenuItem {
+                            label: Cow::Borrowed("Invert all items uniformly (A)"),
+                            event: Event::ToggleAllUniform,
+                        },
+                    ],
+                },
+                Menu {
+                    label: Cow::Borrowed("Select"),
+                    items: vec![
+                        MenuItem {
+                            label: Cow::Borrowed("Previous item (up, k)"),
+                            event: Event::FocusPrev,
+                        },
+                        MenuItem {
+                            label: Cow::Borrowed("Next item (down, k)"),
+                            event: Event::FocusNext,
+                        },
+                        MenuItem {
+                            label: Cow::Borrowed("Outer item (left, h)"),
+                            event: Event::FocusOuter,
+                        },
+                        MenuItem {
+                            label: Cow::Borrowed("Inner item (right, l)"),
+                            event: Event::FocusInner,
+                        },
+                        MenuItem {
+                            label: Cow::Borrowed("Previous page (ctrl-u)"),
+                            event: Event::FocusPrevPage,
+                        },
+                        MenuItem {
+                            label: Cow::Borrowed("Next page (ctrl-d)"),
+                            event: Event::FocusNextPage,
+                        },
+                    ],
+                },
+                Menu {
+                    label: Cow::Borrowed("View"),
+                    items: vec![
+                        MenuItem {
+                            label: Cow::Borrowed("Fold/unfold current (f)"),
+                            event: Event::ExpandItem,
+                        },
+                        MenuItem {
+                            label: Cow::Borrowed("Fold/unfold all (F)"),
+                            event: Event::ExpandAll,
+                        },
+                        MenuItem {
+                            label: Cow::Borrowed("Scroll up (ctrl-y)"),
+                            event: Event::ScrollUp,
+                        },
+                        MenuItem {
+                            label: Cow::Borrowed("Scroll down (ctrl-e)"),
+                            event: Event::ScrollDown,
+                        },
+                        MenuItem {
+                            label: Cow::Borrowed("Page up (page-up, ctrl-b)"),
+                            event: Event::PageUp,
+                        },
+                        MenuItem {
+                            label: Cow::Borrowed("Page down (page-down, ctrl-f)"),
+                            event: Event::PageDown,
+                        },
+                    ],
+                },
+            ],
+            expanded_menu_idx: self.expanded_menu_idx,
+        }
+    }
+
+    fn make_app(
+        &'a self,
+        menu_bar: MenuBar<'static>,
+        debug_info: Option<AppDebugInfo>,
+    ) -> AppView<'a> {
         let file_views: Vec<FileView> = self
             .state
             .files
@@ -775,6 +899,7 @@ impl<'a> Recorder<'a> {
             .collect();
         AppView {
             debug_info: None,
+            menu_bar,
             file_views,
             quit_dialog: self.quit_dialog.clone(),
         }
@@ -784,7 +909,8 @@ impl<'a> Recorder<'a> {
         &self,
         event: Event,
         term_height: usize,
-        drawn_rects: &HashMap<ComponentId, Rect>,
+        drawn_rects: &DrawnRects<ComponentId>,
+        menu_bar: &MenuBar,
     ) -> Result<StateUpdate, RecordError> {
         let state_update = match (&self.quit_dialog, event) {
             (_, Event::None) => StateUpdate::None,
@@ -921,7 +1047,7 @@ impl<'a> Recorder<'a> {
 
             (_, Event::Click { row, column }) => {
                 let component_id = self.find_component_at(drawn_rects, row, column);
-                self.click_component(component_id)
+                self.click_component(menu_bar, component_id)
             }
         };
         Ok(state_update)
@@ -1051,7 +1177,7 @@ impl<'a> Recorder<'a> {
     fn select_prev_page(
         &self,
         term_height: usize,
-        drawn_rects: &HashMap<ComponentId, Rect>,
+        drawn_rects: &DrawnRects<ComponentId>,
     ) -> SelectionKey {
         let (keys, index) = self.find_selection();
         let mut index = match index {
@@ -1073,7 +1199,7 @@ impl<'a> Recorder<'a> {
     fn select_next_page(
         &self,
         term_height: usize,
-        drawn_rects: &HashMap<ComponentId, Rect>,
+        drawn_rects: &DrawnRects<ComponentId>,
     ) -> SelectionKey {
         let (keys, index) = self.find_selection();
         let mut index = match index {
@@ -1175,7 +1301,7 @@ impl<'a> Recorder<'a> {
 
     fn selection_key_y(
         &self,
-        drawn_rects: &HashMap<ComponentId, Rect>,
+        drawn_rects: &DrawnRects<ComponentId>,
         selection_key: SelectionKey,
     ) -> isize {
         let rect = self.selection_rect(drawn_rects, selection_key);
@@ -1184,12 +1310,12 @@ impl<'a> Recorder<'a> {
 
     fn selection_rect(
         &self,
-        drawn_rects: &HashMap<ComponentId, Rect>,
+        drawn_rects: &DrawnRects<ComponentId>,
         selection_key: SelectionKey,
     ) -> Rect {
         let id = ComponentId::SelectableItem(selection_key);
         match drawn_rects.get(&id) {
-            Some(drawn_rect) => *drawn_rect,
+            Some(DrawnRect { rect, timestamp: _ }) => *rect,
             None => {
                 if cfg!(debug_assertions) {
                     panic!(
@@ -1206,15 +1332,18 @@ impl<'a> Recorder<'a> {
     fn ensure_in_viewport(
         &self,
         term_height: usize,
-        drawn_rects: &HashMap<ComponentId, Rect>,
+        drawn_rects: &DrawnRects<ComponentId>,
         selection_key: SelectionKey,
     ) -> isize {
-        let sticky_height = match selection_key {
+        let menu_bar_height = 1;
+        let sticky_file_header_height = match selection_key {
             SelectionKey::None | SelectionKey::File(_) => 0,
             SelectionKey::Section(_) | SelectionKey::Line(_) => 1,
         };
-        let viewport_top_y = self.scroll_offset_y + sticky_height;
-        let viewport_height = term_height.unwrap_isize() - sticky_height;
+        let top_margin = sticky_file_header_height + menu_bar_height;
+
+        let viewport_top_y = self.scroll_offset_y + top_margin;
+        let viewport_height = term_height.unwrap_isize() - top_margin;
         let viewport_bottom_y = viewport_top_y + viewport_height;
 
         let selection_rect = self.selection_rect(drawn_rects, selection_key);
@@ -1243,17 +1372,17 @@ impl<'a> Recorder<'a> {
             // Component is at least partially above the viewport.
             selection_top_y < viewport_top_y
         ) {
-            selection_top_y - sticky_height
+            selection_top_y - top_margin
         } else {
             // Component is at least partially below the viewport. Want to satisfy:
             // scroll_offset_y + term_height == rect_bottom_y
-            selection_bottom_y - sticky_height - viewport_height
+            selection_bottom_y - top_margin - viewport_height
         }
     }
 
     fn find_component_at(
         &self,
-        drawn_rects: &HashMap<ComponentId, Rect>,
+        drawn_rects: &DrawnRects<ComponentId>,
         row: usize,
         column: usize,
     ) -> ComponentId {
@@ -1261,11 +1390,15 @@ impl<'a> Recorder<'a> {
         let y = row.unwrap_isize() + self.scroll_offset_y;
         drawn_rects
             .iter()
-            .filter(|(id, rect)| {
+            .filter(|(id, drawn_rect)| {
+                let DrawnRect { rect, timestamp: _ } = drawn_rect;
                 rect.contains_point(x, y)
                     && match id {
-                        ComponentId::App => false,
-                        ComponentId::StickyFileViewHeader(_)
+                        ComponentId::App | ComponentId::AppFiles | ComponentId::MenuHeader => false,
+                        ComponentId::MenuBar
+                        | ComponentId::MenuItem(_)
+                        | ComponentId::Menu(_)
+                        | ComponentId::FileViewHeader(_)
                         | ComponentId::SelectableItem(_)
                         | ComponentId::ToggleBox(_)
                         | ComponentId::ExpandBox(_)
@@ -1273,15 +1406,28 @@ impl<'a> Recorder<'a> {
                         | ComponentId::QuitDialogButton(_) => true,
                     }
             })
-            .min_by_key(|(id, rect)| (rect.size().area(), (rect.y, rect.x), *id))
+            .max_by_key(|(id, rect)| {
+                let DrawnRect { rect: _, timestamp } = rect;
+                (timestamp, *id)
+            })
             .map(|(id, _rect)| *id)
             .unwrap_or(ComponentId::App)
     }
 
-    fn click_component(&self, component_id: ComponentId) -> StateUpdate {
+    fn click_component(&self, menu_bar: &MenuBar, component_id: ComponentId) -> StateUpdate {
         match component_id {
-            ComponentId::App | ComponentId::QuitDialog => StateUpdate::None,
-            ComponentId::StickyFileViewHeader(file_key) => StateUpdate::SelectItem {
+            ComponentId::App
+            | ComponentId::AppFiles
+            | ComponentId::MenuHeader
+            | ComponentId::QuitDialog => StateUpdate::None,
+            ComponentId::MenuBar => StateUpdate::UnfocusMenuBar,
+            ComponentId::Menu(section_idx) => StateUpdate::ClickMenu {
+                menu_idx: section_idx,
+            },
+            ComponentId::MenuItem(item_idx) => {
+                StateUpdate::ClickMenuItem(self.get_menu_item_event(menu_bar, item_idx))
+            }
+            ComponentId::FileViewHeader(file_key) => StateUpdate::SelectItem {
                 selection_key: SelectionKey::File(file_key),
                 ensure_in_viewport: false,
             },
@@ -1314,6 +1460,39 @@ impl<'a> Recorder<'a> {
             }
             ComponentId::QuitDialogButton(QuitDialogButtonId::Quit) => StateUpdate::QuitCancel,
         }
+    }
+
+    fn get_menu_item_event(&self, menu_bar: &MenuBar, item_idx: usize) -> Event {
+        let MenuBar {
+            menus,
+            expanded_menu_idx,
+        } = menu_bar;
+        let menu_idx = match expanded_menu_idx {
+            Some(section_idx) => section_idx,
+            None => {
+                warn!(?item_idx, "Clicking menu item when no menu is expanded");
+                return Event::None;
+            }
+        };
+        let menu = match menus.get(*menu_idx) {
+            Some(menu) => menu,
+            None => {
+                warn!(?menu_idx, "Clicking out-of-bounds menu");
+                return Event::None;
+            }
+        };
+        let item = match menu.items.get(item_idx) {
+            Some(item) => item,
+            None => {
+                warn!(
+                    ?menu_idx,
+                    ?item_idx,
+                    "Clicking menu bar section item that is out of bounds"
+                );
+                return Event::None;
+            }
+        };
+        item.event.clone()
     }
 
     fn toggle_item(&mut self, selection: SelectionKey) -> Result<(), RecordError> {
@@ -1469,6 +1648,24 @@ impl<'a> Recorder<'a> {
         Ok(())
     }
 
+    fn unfocus_menu_bar(&mut self) {
+        self.expanded_menu_idx = None;
+    }
+
+    fn click_menu_header(&mut self, menu_idx: usize) {
+        let menu_idx = Some(menu_idx);
+        self.expanded_menu_idx = if self.expanded_menu_idx == menu_idx {
+            None
+        } else {
+            menu_idx
+        };
+    }
+
+    fn click_menu_item(&mut self, event: Event) {
+        self.expanded_menu_idx = None;
+        self.pending_events.push(event);
+    }
+
     fn file(&self, file_key: FileKey) -> Result<&File, RecordError> {
         let FileKey { file_idx } = file_key;
         match self.state.files.get(file_idx) {
@@ -1608,7 +1805,12 @@ impl<'a> Recorder<'a> {
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 enum ComponentId {
     App,
-    StickyFileViewHeader(FileKey),
+    AppFiles,
+    MenuBar,
+    MenuHeader,
+    Menu(usize),
+    MenuItem(usize),
+    FileViewHeader(FileKey),
     SelectableItem(SelectionKey),
     ToggleBox(SelectionKey),
     ExpandBox(SelectionKey),
@@ -1685,12 +1887,13 @@ struct AppDebugInfo {
     selection_key: SelectionKey,
     selection_key_y: isize,
     app_drawn_vs_expected_height: (usize, usize),
-    drawn_rects: BTreeMap<ComponentId, Rect>, // sorted for determinism
+    drawn_rects: BTreeMap<ComponentId, DrawnRect>, // sorted for determinism
 }
 
 #[derive(Clone, Debug)]
 struct AppView<'a> {
     debug_info: Option<AppDebugInfo>,
+    menu_bar: MenuBar<'a>,
     file_views: Vec<FileView<'a>>,
     quit_dialog: Option<QuitDialog>,
 }
@@ -1699,6 +1902,7 @@ impl AppView<'_> {
     fn height(&self) -> usize {
         let Self {
             debug_info: _,
+            menu_bar: _,
             file_views,
             quit_dialog: _,
         } = self;
@@ -1713,9 +1917,10 @@ impl Component for AppView<'_> {
         ComponentId::App
     }
 
-    fn draw(&self, viewport: &mut Viewport<Self::Id>, x: isize, y: isize) {
+    fn draw(&self, viewport: &mut Viewport<Self::Id>, x: isize, _y: isize) {
         let Self {
             debug_info,
+            menu_bar,
             file_views,
             quit_dialog,
         } = self;
@@ -1724,9 +1929,73 @@ impl Component for AppView<'_> {
             viewport.debug(format!("app debug info: {debug_info:#?}"));
         }
 
+        let viewport_rect = viewport.rect();
+
+        let menu_bar_height = 1usize;
+        let app_files_view_mask = Rect {
+            x: viewport_rect.x,
+            y: viewport_rect.y + menu_bar_height.unwrap_isize(),
+            width: viewport_rect.width,
+            height: viewport_rect.height.saturating_sub(menu_bar_height),
+        };
+        viewport.with_mask(app_files_view_mask, |viewport| {
+            let app_files = AppFilesView {
+                debug_info: self.debug_info.as_ref(),
+                file_views: file_views.clone(),
+            };
+            viewport.draw_component(x, menu_bar_height.unwrap_isize(), &app_files);
+        });
+
+        viewport.draw_component(x, viewport_rect.y, menu_bar);
+
+        if let Some(quit_dialog) = quit_dialog {
+            viewport.draw_component(0, 0, quit_dialog);
+        }
+    }
+}
+
+struct AppFilesView<'a> {
+    debug_info: Option<&'a AppDebugInfo>,
+    file_views: Vec<FileView<'a>>,
+}
+
+impl Component for AppFilesView<'_> {
+    type Id = ComponentId;
+
+    fn id(&self) -> Self::Id {
+        ComponentId::AppFiles
+    }
+
+    fn draw(&self, viewport: &mut Viewport<Self::Id>, x: isize, y: isize) {
+        let Self {
+            debug_info,
+            file_views,
+        } = self;
+
         let mut y = y;
         for file_view in file_views {
             let file_view_rect = viewport.draw_component(x, y, file_view);
+
+            // Render a sticky header if necessary.
+            if let Some(mask) = viewport.mask() {
+                if file_view_rect.y < mask.y
+                    && mask.y < file_view_rect.y + file_view_rect.height.unwrap_isize()
+                {
+                    viewport.draw_component(
+                        x,
+                        mask.y,
+                        &FileViewHeader {
+                            file_key: file_view.file_key,
+                            path: file_view.path,
+                            old_path: file_view.old_path,
+                            is_selected: file_view.is_header_selected,
+                            toggle_box: file_view.toggle_box.clone(),
+                            expand_box: file_view.expand_box.clone(),
+                        },
+                    );
+                }
+            }
+
             y += file_view_rect.height.unwrap_isize();
 
             if debug_info.is_some() {
@@ -1736,9 +2005,94 @@ impl Component for AppView<'_> {
                 ));
             }
         }
+    }
+}
 
-        if let Some(quit_dialog) = quit_dialog {
-            viewport.draw_component(0, 0, quit_dialog);
+#[derive(Clone, Debug)]
+struct MenuItem<'a> {
+    label: Cow<'a, str>,
+    event: Event,
+}
+
+#[derive(Clone, Debug)]
+struct Menu<'a> {
+    label: Cow<'a, str>,
+    items: Vec<MenuItem<'a>>,
+}
+
+impl Component for Menu<'_> {
+    type Id = ComponentId;
+
+    fn id(&self) -> Self::Id {
+        ComponentId::MenuHeader
+    }
+
+    fn draw(&self, viewport: &mut Viewport<Self::Id>, x: isize, y: isize) {
+        let Self { label: _, items } = self;
+
+        let buttons = items
+            .iter()
+            .enumerate()
+            .map(|(i, item)| Button {
+                id: ComponentId::MenuItem(i),
+                label: Cow::Borrowed(&item.label),
+                is_focused: false,
+            })
+            .collect::<Vec<_>>();
+        let max_width = buttons
+            .iter()
+            .map(|button| button.width())
+            .max()
+            .unwrap_or_default();
+        let mut y = y;
+        for button in buttons {
+            viewport.draw_span(
+                x,
+                y,
+                &Span::styled(
+                    " ".repeat(max_width),
+                    Style::reset().add_modifier(Modifier::REVERSED),
+                ),
+            );
+            viewport.draw_component(x, y, &button);
+            y += 1;
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct MenuBar<'a> {
+    menus: Vec<Menu<'a>>,
+    expanded_menu_idx: Option<usize>,
+}
+
+impl Component for MenuBar<'_> {
+    type Id = ComponentId;
+
+    fn id(&self) -> Self::Id {
+        ComponentId::MenuBar
+    }
+
+    fn draw(&self, viewport: &mut Viewport<Self::Id>, x: isize, y: isize) {
+        let Self {
+            menus,
+            expanded_menu_idx,
+        } = self;
+
+        viewport.fill_rest_of_line(x, viewport.rect().y);
+        highlight_line(viewport, viewport.rect().y);
+        let mut x = x;
+        for (i, menu) in menus.iter().enumerate() {
+            let menu_header = Button {
+                id: ComponentId::Menu(i),
+                label: Cow::Borrowed(&menu.label),
+                is_focused: false,
+            };
+            let rect = viewport.draw_component(x, y, &menu_header);
+            if expanded_menu_idx == &Some(i) {
+                viewport.draw_component(x, y + 1, menu);
+            }
+            x += rect.width.unwrap_isize() + 1;
         }
     }
 }
@@ -1785,7 +2139,7 @@ impl Component for FileView<'_> {
     fn draw(&self, viewport: &mut Viewport<Self::Id>, x: isize, y: isize) {
         let Self {
             debug,
-            file_key: _,
+            file_key,
             toggle_box,
             expand_box,
             old_path,
@@ -1794,18 +2148,21 @@ impl Component for FileView<'_> {
             is_header_selected,
         } = self;
 
-        // We may render a sticky header below, but render to the regular header
-        // line as well. The viewport observes the regions we draw to calculate
-        // the height of this component. We still want to have the viewport
-        // calculate the drawn rect for this file view as if it had its regular
-        // header, or else later elements will jump upwards when the header
-        // "disappears" during rendering because the height of the rendered rect
-        // will be reduced by 1.
-        viewport.fill_rest_of_line(x, y);
-
-        let header_y = if self.is_expanded() {
+        let file_view_header_rect = viewport.draw_component(
+            x,
+            y,
+            &FileViewHeader {
+                file_key: *file_key,
+                path,
+                old_path: *old_path,
+                is_selected: *is_header_selected,
+                toggle_box: toggle_box.clone(),
+                expand_box: expand_box.clone(),
+            },
+        );
+        if self.is_expanded() {
             let x = x + 2;
-            let mut section_y = y + 1;
+            let mut section_y = y + file_view_header_rect.height.unwrap_isize();
             for section_view in section_views {
                 let section_rect = viewport.draw_component(x, section_y, section_view);
                 section_y += section_rect.height.unwrap_isize();
@@ -1814,33 +2171,11 @@ impl Component for FileView<'_> {
                     viewport.debug(format!("section dims: {section_rect:?}",));
                 }
             }
-            let viewport_top_y = viewport.rect().y;
-            if y <= viewport_top_y && viewport_top_y < section_y {
-                viewport_top_y
-            } else {
-                y
-            }
-        } else {
-            y
-        };
-
-        let sticky_file_view_header = StickyFileViewHeader {
-            file_key: self.file_key,
-            path,
-            old_path: *old_path,
-            is_selected: self.is_header_selected,
-            toggle_box: toggle_box.clone(),
-            expand_box: expand_box.clone(),
-        };
-        viewport.draw_component(x, header_y, &sticky_file_view_header);
-
-        if *is_header_selected {
-            highlight_line(viewport, header_y);
         }
     }
 }
 
-struct StickyFileViewHeader<'a> {
+struct FileViewHeader<'a> {
     file_key: FileKey,
     path: &'a Path,
     old_path: Option<&'a Path>,
@@ -1849,7 +2184,7 @@ struct StickyFileViewHeader<'a> {
     expand_box: TristateBox<ComponentId>,
 }
 
-impl Component for StickyFileViewHeader<'_> {
+impl Component for FileViewHeader<'_> {
     type Id = ComponentId;
 
     fn id(&self) -> Self::Id {
@@ -1861,7 +2196,7 @@ impl Component for StickyFileViewHeader<'_> {
             toggle_box: _,
             expand_box: _,
         } = self;
-        ComponentId::StickyFileViewHeader(*file_key)
+        ComponentId::FileViewHeader(*file_key)
     }
 
     fn draw(&self, viewport: &mut Viewport<Self::Id>, x: isize, y: isize) {
@@ -1903,6 +2238,10 @@ impl Component for StickyFileViewHeader<'_> {
             y,
             expand_box,
         );
+
+        if *is_selected {
+            highlight_line(viewport, y);
+        }
     }
 }
 
@@ -2258,13 +2597,12 @@ impl Component for SectionLineView<'_> {
                 // Pad the number in 5 columns because that will align the
                 // beginning of the actual text with the `+`/`-` of the changed
                 // lines.
-                let span = Span::styled(format!("{line_num:5} "), style);
-                let line_num_rect = viewport.draw_span(x, y, &span);
-                let span = Span::styled(*line, style);
+                let line_num_rect =
+                    viewport.draw_span(x, y, &Span::styled(format!("{line_num:5} "), style));
                 viewport.draw_span(
                     line_num_rect.x + line_num_rect.width.unwrap_isize(),
                     line_num_rect.y,
-                    &span,
+                    &Span::styled(*line, style),
                 );
             }
 
