@@ -40,3 +40,7 @@ Here are some features in the UI which are not yet implemented:
 
 - Jump to next/previous element of same kind.
 - Edit one side of the diff in an editor.
+- Commit message entry.
+- Multi-way split UI to split a commit into more than 2 commits.
+- Support for use as a mergetool.
+- Commands to select ours/theirs for diffs representing merge conflicts.
