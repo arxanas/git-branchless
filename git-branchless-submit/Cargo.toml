@@ -20,7 +20,7 @@ itertools = "0.10.5"
 lazy_static = "1.4.0"
 lib = { package = "git-branchless-lib", version = "0.7.0", path = "../git-branchless-lib" }
 rayon = "1.7.0"
-regex = "1.8.1"
+regex = "1.8.4"
 serde = { version = "1.0.163", features = ["derive"] }
 serde_json = "1.0.96"
 thiserror = "1.0.40"
