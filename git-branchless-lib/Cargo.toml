@@ -57,7 +57,7 @@ eyre = "0.6.8"
 futures = "0.3.28"
 git-record = { version = "0.3", path = "../git-record" }
 git2 = { version = "0.17.2", default-features = false }
-indicatif = { version = "0.17.4", features = ["improved_unicode"] }
+indicatif = { version = "0.17.5", features = ["improved_unicode"] }
 itertools = "0.10.3"
 lazy_static = "1.4.0"
 once_cell = "1.17.1"
