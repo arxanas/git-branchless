@@ -8,6 +8,6 @@ version = "0.7.0"
 
 [dependencies]
 clap = { version = "4.3.0", features = ["derive"] }
-clap_mangen = "0.2.11"
+clap_mangen = "0.2.12"
 itertools = "0.10.5"
 lib = { package = "git-branchless-lib", version = "0.7.0", path = "../git-branchless-lib" }
