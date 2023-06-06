@@ -57,6 +57,12 @@ pub enum Error {
         path: PathBuf,
         source: io::Error,
     },
+    MissingMergeFile {
+        path: PathBuf,
+    },
+    BinaryMergeFile {
+        path: PathBuf,
+    },
     Record {
         source: scm_record::RecordError,
     },
@@ -107,6 +113,12 @@ impl Display for Error {
             }
             Error::WriteFile { path, source } => {
                 write!(f, "writing file {}: {source}", path.display())
+            }
+            Error::MissingMergeFile { path } => {
+                write!(f, "file did not exist: {}", path.display())
+            }
+            Error::BinaryMergeFile { path } => {
+                write!(f, "file was not text: {}", path.display())
             }
             Error::Record { source } => {
                 write!(f, "recording changes: {source}")
@@ -291,6 +303,7 @@ mod render {
 
     use scm_record::helpers::make_binary_description;
     use scm_record::{ChangeType, File, FileMode, Section, SectionChangedLine};
+    use tracing::warn;
 
     use crate::{Error, FileContents, FileInfo, Filesystem};
 
@@ -435,6 +448,74 @@ mod render {
         })
     }
 
+    pub fn create_merge_file(
+        filesystem: &dyn Filesystem,
+        base_path: PathBuf,
+        left_path: PathBuf,
+        right_path: PathBuf,
+        output_path: PathBuf,
+    ) -> Result<File<'static>, Error> {
+        let FileInfo {
+            file_mode: _,
+            contents: left_contents,
+        } = filesystem.read_file_info(&left_path)?;
+        let FileInfo {
+            file_mode: _,
+            contents: right_contents,
+        } = filesystem.read_file_info(&right_path)?;
+        let FileInfo {
+            file_mode: _,
+            contents: base_contents,
+        } = filesystem.read_file_info(&base_path)?;
+
+        let (base_contents, left_contents, right_contents) =
+            match (base_contents, left_contents, right_contents) {
+                (FileContents::Absent, _, _) => {
+                    return Err(Error::MissingMergeFile { path: base_path })
+                }
+                (_, FileContents::Absent, _) => {
+                    return Err(Error::MissingMergeFile { path: left_path })
+                }
+                (_, _, FileContents::Absent) => {
+                    return Err(Error::MissingMergeFile { path: right_path })
+                }
+                (FileContents::Binary { .. }, _, _) => {
+                    return Err(Error::BinaryMergeFile { path: base_path })
+                }
+                (_, FileContents::Binary { .. }, _) => {
+                    return Err(Error::BinaryMergeFile { path: left_path })
+                }
+                (_, _, FileContents::Binary { .. }) => {
+                    return Err(Error::BinaryMergeFile { path: right_path })
+                }
+                (
+                    FileContents::Text {
+                        contents: base_contents,
+                        hash: _,
+                        num_bytes: _,
+                    },
+                    FileContents::Text {
+                        contents: left_contents,
+                        hash: _,
+                        num_bytes: _,
+                    },
+                    FileContents::Text {
+                        contents: right_contents,
+                        hash: _,
+                        num_bytes: _,
+                    },
+                ) => (base_contents, left_contents, right_contents),
+            };
+
+        let sections = create_merge(&base_contents, &left_contents, &right_contents);
+        Ok(File {
+            old_path: Some(Cow::Owned(base_path)),
+            path: Cow::Owned(output_path),
+            file_mode: None,
+            sections,
+        })
+    }
+
     fn create_diff(old_contents: &str, new_contents: &str) -> Vec<Section<'static>> {
         let patch = {
             // Set the context length to the maximum number of lines in either file,
@@ -496,6 +577,233 @@ mod render {
                 acc
             }));
         }
+        sections
+    }
+
+    fn make_conflict_markers(
+        base: &str,
+        left: &str,
+        right: &str,
+    ) -> (String, String, String, String) {
+        let all = [base, left, right].concat();
+        let left_char = "<";
+        let base_start_char = "|";
+        let base_end_char = "=";
+        let right_char = ">";
+        let mut len = 7;
+        loop {
+            let left_marker = left_char.repeat(len);
+            let base_start_marker = base_start_char.repeat(len);
+            let base_end_marker = base_end_char.repeat(len);
+            let right_marker = right_char.repeat(len);
+            if !all.contains(&left_marker)
+                && !all.contains(&base_start_marker)
+                && !all.contains(&base_end_marker)
+                && !all.contains(&right_marker)
+            {
+                return (
+                    left_marker,
+                    base_start_marker,
+                    base_end_marker,
+                    right_marker,
+                );
+            }
+            len += 1;
+        }
+    }
+
+    fn create_merge(
+        base_contents: &str,
+        left_contents: &str,
+        right_contents: &str,
+    ) -> Vec<Section<'static>> {
+        let (left_marker, base_start_marker, base_end_marker, right_marker) =
+            make_conflict_markers(&base_contents, &left_contents, &right_contents);
+
+        let mut merge_options = diffy::MergeOptions::new();
+        merge_options.set_conflict_marker_length(right_marker.len());
+        merge_options.set_conflict_style(diffy::ConflictStyle::Diff3);
+        let merge = merge_options.merge(&base_contents, &left_contents, &right_contents);
+        let conflicted_text = match merge {
+            Ok(_) => return Default::default(),
+            Err(conflicted_text) => conflicted_text,
+        };
+
+        enum MarkerType {
+            Left,
+            BaseStart,
+            BaseEnd,
+            Right,
+        }
+        #[derive(Debug)]
+        enum State<'a> {
+            Empty,
+            Unchanged {
+                lines: Vec<Cow<'a, str>>,
+            },
+            Left {
+                left_lines: Vec<Cow<'a, str>>,
+            },
+            Base {
+                left_lines: Vec<Cow<'a, str>>,
+                base_lines: Vec<Cow<'a, str>>,
+            },
+            Right {
+                left_lines: Vec<Cow<'a, str>>,
+                base_lines: Vec<Cow<'a, str>>,
+                right_lines: Vec<Cow<'a, str>>,
+            },
+        }
+
+        let mut sections = vec![];
+        let mut state = State::Empty;
+        for line in conflicted_text.split_inclusive('\n') {
+            let marker_type = if line.starts_with(&left_marker) {
+                Some(MarkerType::Left)
+            } else if line.starts_with(&base_start_marker) {
+                Some(MarkerType::BaseStart)
+            } else if line.starts_with(&base_end_marker) {
+                Some(MarkerType::BaseEnd)
+            } else if line.starts_with(&right_marker) {
+                Some(MarkerType::Right)
+            } else {
+                None
+            };
+
+            let line = Cow::Owned(line.to_owned());
+            let (new_state, new_section) = match (state, marker_type) {
+                (State::Empty, Some(MarkerType::Left)) => {
+                    let new_state = State::Left {
+                        left_lines: Default::default(),
+                    };
+                    (new_state, None)
+                }
+                (State::Empty, _) => {
+                    let new_state = State::Unchanged { lines: vec![line] };
+                    (new_state, None)
+                }
+
+                (State::Unchanged { lines }, Some(MarkerType::Left)) => {
+                    let new_state = State::Left {
+                        left_lines: Default::default(),
+                    };
+                    let new_section = Section::Unchanged { lines };
+                    (new_state, Some(new_section))
+                }
+                (State::Unchanged { mut lines }, _) => {
+                    lines.push(line);
+                    let new_state = State::Unchanged { lines };
+                    (new_state, None)
+                }
+
+                (State::Left { left_lines }, Some(MarkerType::BaseStart)) => {
+                    let new_state = State::Base {
+                        left_lines,
+                        base_lines: Default::default(),
+                    };
+                    (new_state, None)
+                }
+                (State::Left { mut left_lines }, _) => {
+                    left_lines.push(line);
+                    let new_state = State::Left { left_lines };
+                    (new_state, None)
+                }
+
+                (
+                    State::Base {
+                        left_lines,
+                        base_lines,
+                    },
+                    Some(MarkerType::BaseEnd),
+                ) => {
+                    let new_state = State::Right {
+                        left_lines,
+                        base_lines,
+                        right_lines: Default::default(),
+                    };
+                    (new_state, None)
+                }
+                (
+                    State::Base {
+                        left_lines,
+                        mut base_lines,
+                    },
+                    _,
+                ) => {
+                    base_lines.push(line);
+                    let new_state = State::Base {
+                        left_lines,
+                        base_lines,
+                    };
+                    (new_state, None)
+                }
+
+                (
+                    State::Right {
+                        left_lines,
+                        base_lines,
+                        right_lines,
+                    },
+                    Some(MarkerType::Right),
+                ) => {
+                    let new_state = State::Empty;
+                    let new_section = Section::Changed {
+                        lines: left_lines
+                            .into_iter()
+                            .map(|line| (line, ChangeType::Added))
+                            .chain(
+                                base_lines
+                                    .into_iter()
+                                    .map(|line| (line, ChangeType::Removed)),
+                            )
+                            .chain(
+                                right_lines
+                                    .into_iter()
+                                    .map(|line| (line, ChangeType::Added)),
+                            )
+                            .map(|(line, change_type)| SectionChangedLine {
+                                is_checked: false,
+                                change_type,
+                                line,
+                            })
+                            .collect(),
+                    };
+                    (new_state, Some(new_section))
+                }
+                (
+                    State::Right {
+                        left_lines,
+                        base_lines,
+                        mut right_lines,
+                    },
+                    _,
+                ) => {
+                    right_lines.push(line);
+                    let new_state = State::Right {
+                        left_lines,
+                        base_lines,
+                        right_lines,
+                    };
+                    (new_state, None)
+                }
+            };
+
+            state = new_state;
+            if let Some(new_section) = new_section {
+                sections.push(new_section);
+            }
+        }
+
+        match state {
+            State::Empty => {}
+            State::Unchanged { lines } => {
+                sections.push(Section::Unchanged { lines });
+            }
+            state @ (State::Left { .. } | State::Base { .. } | State::Right { .. }) => {
+                warn!(?state, "Diff section not terminated");
+            }
+        }
+
         sections
     }
 }
@@ -576,6 +884,15 @@ struct Opts {
     right: PathBuf,
     #[clap(short = 'N', long = "dry-run")]
     dry_run: bool,
+    #[clap(
+        short = 'b',
+        long = "base",
+        requires("output"),
+        conflicts_with("dir_diff")
+    )]
+    base: Option<PathBuf>,
+    #[clap(short = 'o', long = "output", conflicts_with("dir_diff"))]
+    output: Option<PathBuf>,
 }
 
 fn process_opts(filesystem: &dyn Filesystem, opts: &Opts) -> Result<(Vec<File<'static>>, PathBuf)> {
@@ -584,6 +901,8 @@ fn process_opts(filesystem: &dyn Filesystem, opts: &Opts) -> Result<(Vec<File<'s
             dir_diff: false,
             left,
             right,
+            base: None,
+            output: _,
             dry_run: _,
         } => {
             let files = vec![render::create_file(
@@ -595,10 +914,13 @@ fn process_opts(filesystem: &dyn Filesystem, opts: &Opts) -> Result<(Vec<File<'s
             )?];
             (files, PathBuf::new())
         }
+
         Opts {
             dir_diff: true,
             left,
             right,
+            base: None,
+            output: _,
             dry_run: _,
         } => {
             let display_paths = filesystem.read_dir_diff_paths(left, right)?;
@@ -613,6 +935,46 @@ fn process_opts(filesystem: &dyn Filesystem, opts: &Opts) -> Result<(Vec<File<'s
                 )?);
             }
             (files, right.clone())
+        }
+
+        Opts {
+            dir_diff: false,
+            left,
+            right,
+            base: Some(base),
+            output: Some(output),
+            dry_run: _,
+        } => {
+            let files = vec![render::create_merge_file(
+                filesystem,
+                base.clone(),
+                left.clone(),
+                right.clone(),
+                output.clone(),
+            )?];
+            (files, PathBuf::new())
+        }
+
+        Opts {
+            dir_diff: false,
+            left: _,
+            right: _,
+            base: Some(_),
+            output: None,
+            dry_run: _,
+        } => {
+            unreachable!("--output is required when --base is provided");
+        }
+
+        Opts {
+            dir_diff: true,
+            left: _,
+            right: _,
+            base: Some(_),
+            output: _,
+            dry_run: _,
+        } => {
+            unimplemented!("--base cannot be used with --dir-diff");
         }
     };
     Ok(result)
@@ -656,6 +1018,8 @@ mod tests {
     use insta::assert_debug_snapshot;
     use maplit::btreemap;
     use std::collections::BTreeMap;
+
+    use crate::render::create_merge_file;
 
     use super::*;
 
@@ -780,6 +1144,8 @@ qux2
                 dir_diff: false,
                 left: PathBuf::from("left"),
                 right: PathBuf::from("right"),
+                base: None,
+                output: None,
                 dry_run: false,
             },
         )?;
@@ -888,6 +1254,8 @@ qux2
                 dir_diff: false,
                 left: PathBuf::from("left"),
                 right: PathBuf::from("right"),
+                base: None,
+                output: None,
                 dry_run: false,
             },
         )?;
@@ -937,6 +1305,8 @@ qux2
                 dir_diff: false,
                 left: PathBuf::from("left"),
                 right: PathBuf::from("right"),
+                base: None,
+                output: None,
                 dry_run: false,
             },
         )?;
@@ -999,6 +1369,8 @@ qux2
                 dir_diff: false,
                 left: PathBuf::from("left"),
                 right: PathBuf::from("right"),
+                base: None,
+                output: None,
                 dry_run: false,
             },
         )?;
@@ -1062,6 +1434,8 @@ qux2
                 dir_diff: false,
                 left: PathBuf::from("left"),
                 right: PathBuf::from("right"),
+                base: None,
+                output: None,
                 dry_run: false,
             },
         );
@@ -1093,6 +1467,8 @@ qux2
                 dir_diff: false,
                 left: PathBuf::from("left/foo"),
                 right: PathBuf::from("right/foo"),
+                base: None,
+                output: None,
                 dry_run: false,
             },
         )?;
@@ -1146,6 +1522,8 @@ qux2
                 dir_diff: false,
                 left: PathBuf::from("left/foo"),
                 right: PathBuf::from("right/foo"),
+                base: None,
+                output: None,
                 dry_run: false,
             },
         )?;
@@ -1179,6 +1557,143 @@ qux2
                 "",
                 "left",
                 "right",
+            },
+        }
+        "###);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_create_merge() -> Result<()> {
+        let base_contents = "\
+Hello world 1
+Hello world 2
+Hello world 3
+Hello world 4
+";
+        let left_contents = "\
+Hello world 1
+Hello world 2
+Hello world L
+Hello world 4
+";
+        let right_contents = "\
+Hello world 1
+Hello world 2
+Hello world R
+Hello world 4
+";
+        let mut filesystem = TestFilesystem::new(btreemap! {
+            PathBuf::from("base") => file_info(base_contents),
+            PathBuf::from("left") => file_info(left_contents),
+            PathBuf::from("right") => file_info(right_contents),
+        });
+
+        let (mut files, write_root) = process_opts(
+            &filesystem,
+            &Opts {
+                dir_diff: false,
+                left: "left".into(),
+                right: "right".into(),
+                dry_run: false,
+                base: Some("base".into()),
+                output: Some("output".into()),
+            },
+        )?;
+        insta::assert_debug_snapshot!(files, @r###"
+        [
+            File {
+                old_path: Some(
+                    "base",
+                ),
+                path: "output",
+                file_mode: None,
+                sections: [
+                    Unchanged {
+                        lines: [
+                            "Hello world 1\n",
+                            "Hello world 2\n",
+                        ],
+                    },
+                    Changed {
+                        lines: [
+                            SectionChangedLine {
+                                is_checked: false,
+                                change_type: Added,
+                                line: "Hello world L\n",
+                            },
+                            SectionChangedLine {
+                                is_checked: false,
+                                change_type: Removed,
+                                line: "Hello world 3\n",
+                            },
+                            SectionChangedLine {
+                                is_checked: false,
+                                change_type: Added,
+                                line: "Hello world R\n",
+                            },
+                        ],
+                    },
+                    Unchanged {
+                        lines: [
+                            "Hello world 4\n",
+                        ],
+                    },
+                ],
+            },
+        ]
+        "###);
+
+        select_all(&mut files);
+        apply_changes(&mut filesystem, &write_root, RecordState { files })?;
+
+        assert_debug_snapshot!(filesystem, @r###"
+        TestFilesystem {
+            files: {
+                "base": FileInfo {
+                    file_mode: FileMode(
+                        33188,
+                    ),
+                    contents: Text {
+                        contents: "Hello world 1\nHello world 2\nHello world 3\nHello world 4\n",
+                        hash: "abc123",
+                        num_bytes: 56,
+                    },
+                },
+                "left": FileInfo {
+                    file_mode: FileMode(
+                        33188,
+                    ),
+                    contents: Text {
+                        contents: "Hello world 1\nHello world 2\nHello world L\nHello world 4\n",
+                        hash: "abc123",
+                        num_bytes: 56,
+                    },
+                },
+                "output": FileInfo {
+                    file_mode: FileMode(
+                        33188,
+                    ),
+                    contents: Text {
+                        contents: "Hello world 1\nHello world 2\nHello world L\nHello world R\nHello world 4\n",
+                        hash: "abc123",
+                        num_bytes: 70,
+                    },
+                },
+                "right": FileInfo {
+                    file_mode: FileMode(
+                        33188,
+                    ),
+                    contents: Text {
+                        contents: "Hello world 1\nHello world 2\nHello world R\nHello world 4\n",
+                        hash: "abc123",
+                        num_bytes: 56,
+                    },
+                },
+            },
+            dirs: {
+                "",
             },
         }
         "###);
