@@ -67,7 +67,7 @@ rusqlite = { version = "0.29.0", features = ["bundled"] }
 scm-record = { version = "0.1.0", path = "../scm-record" }
 serde = { version = "1.0.163", features = ["derive"] }
 shell-words = "1.1.0"
-tempfile = "3.5.0"
+tempfile = "3.6.0"
 textwrap = "0.16.0"
 thiserror = "1.0.40"
 tracing = "0.1.37"
