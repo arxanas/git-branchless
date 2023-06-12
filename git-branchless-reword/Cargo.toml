@@ -8,7 +8,7 @@ version = "0.7.0"
 
 [dependencies]
 bstr = "1.5.0"
-chrono = "0.4.25"
+chrono = "0.4.26"
 eden_dag = { package = "esl01-dag", version = "0.3.0" }
 eyre = "0.6.8"
 git-branchless-opts = { version = "0.7.0", path = "../git-branchless-opts" }
