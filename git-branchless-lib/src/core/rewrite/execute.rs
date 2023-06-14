@@ -628,12 +628,12 @@ mod in_memory {
                     };
                     let rebased_commit_oid = repo
                         .create_commit(
-                            None,
                             &commit_to_apply.get_author(),
                             &committer_signature,
                             commit_message,
                             &commit_tree,
                             vec![&current_commit],
+                            None,
                         )
                         .wrap_err("Applying rebased commit")?;
 
@@ -748,12 +748,12 @@ mod in_memory {
                     };
                     let rebased_commit_oid = repo
                         .create_commit(
-                            None,
                             &replacement_commit.get_author(),
                             &committer_signature,
                             replacement_commit_message,
                             &replacement_tree,
                             parents.iter().collect(),
+                            None,
                         )
                         .wrap_err("Applying rebased commit")?;
 

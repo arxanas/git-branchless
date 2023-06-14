@@ -26,6 +26,7 @@ use lib::core::rewrite::{
     execute_rebase_plan, move_branches, BuildRebasePlanOptions, ExecuteRebasePlanOptions,
     ExecuteRebasePlanResult, RebasePlanBuilder, RebasePlanPermissions, RepoResource,
 };
+use lib::git::{get_signer, SignOption};
 use lib::git::{AmendFastOptions, GitRunInfo, MaybeZeroOid, Repo, ResolvedReferenceInfo};
 use lib::try_exit_code;
 use lib::util::{ExitCode, EyreExitOr};
@@ -40,6 +41,7 @@ pub fn amend(
     resolve_revset_options: &ResolveRevsetOptions,
     move_options: &MoveOptions,
     reparent: bool,
+    sign_option: SignOption,
 ) -> EyreExitOr<()> {
     let now = SystemTime::now();
     let timestamp = now.duration_since(SystemTime::UNIX_EPOCH)?.as_secs_f64();
@@ -155,12 +157,15 @@ pub fn amend(
         )
     };
 
-    let amended_commit_oid = head_commit.amend_commit(
-        None,
+    let signer = get_signer(&repo, &sign_option)?;
+
+    let amended_commit_oid = repo.amend_commit(
+        &head_commit,
         Some(&author),
         Some(&committer),
         None,
         Some(&amended_tree),
+        signer.as_deref(),
     )?;
 
     // Switch to the new commit and move any branches. This is kind of a hack:
@@ -265,12 +270,12 @@ pub fn amend(
                     )
                 })?;
                 let reparented_descendant_oid = repo.create_commit(
-                    None,
                     &descendant_commit.get_author(),
                     &descendant_commit.get_committer(),
                     descendant_message,
                     &descendant_commit.get_tree()?,
                     parents.iter().collect(),
+                    signer.as_deref(),
                 )?;
                 builder.replace_commit(descendant_oid, reparented_descendant_oid)?;
             }

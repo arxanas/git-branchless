@@ -213,7 +213,7 @@ branchless: automated working copy snapshot
             parents
         };
         let commit_oid =
-            repo.create_commit(None, &signature, &signature, &message, &tree, parents)?;
+            repo.create_commit(&signature, &signature, &message, &tree, parents, None)?;
 
         Ok(WorkingCopySnapshot {
             base_commit: repo.find_commit_or_fail(commit_oid)?,
@@ -365,12 +365,12 @@ branchless: automated working copy snapshot
             }
         );
         let commit = repo.create_commit(
-            None,
             &signature,
             &signature,
             &message,
             &tree_unstaged,
             Vec::from_iter(head_commit),
+            None,
         )?;
         Ok(commit)
     }
@@ -452,7 +452,6 @@ branchless: automated working copy snapshot
             }
         );
         let commit_oid = repo.create_commit(
-            None,
             &signature,
             &signature,
             &message,
@@ -461,6 +460,7 @@ branchless: automated working copy snapshot
                 Some(parent_commit) => vec![parent_commit],
                 None => vec![],
             },
+            None,
         )?;
         Ok(commit_oid)
     }

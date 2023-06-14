@@ -33,12 +33,14 @@ fn command_main(ctx: CommandContext, opts: Opts) -> EyreExitOr<()> {
         Command::Amend {
             move_options,
             reparent,
+            sign_options,
         } => amend::amend(
             &effects,
             &git_run_info,
             &ResolveRevsetOptions::default(),
             &move_options,
             reparent,
+            sign_options.into(),
         )?,
 
         Command::BugReport => bug_report::bug_report(&effects, &git_run_info)?,

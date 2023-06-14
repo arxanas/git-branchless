@@ -1969,12 +1969,12 @@ fn apply_fixes(
                 .try_collect()?;
             let fixed_tree = repo.find_tree_or_fail(fixed_tree_oid)?;
             let fixed_commit_oid = repo.create_commit(
-                None,
                 &original_commit.get_author(),
                 &original_commit.get_committer(),
                 commit_message,
                 &fixed_tree,
                 parents.iter().collect(),
+                None,
             )?;
             if original_commit_oid == fixed_commit_oid {
                 continue;
