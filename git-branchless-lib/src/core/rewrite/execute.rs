@@ -15,7 +15,7 @@ use crate::core::formatting::Pluralize;
 use crate::core::repo_ext::RepoExt;
 use crate::git::{
     BranchType, CategorizedReferenceName, GitRunInfo, MaybeZeroOid, NonZeroOid, ReferenceName,
-    Repo, ResolvedReferenceInfo,
+    Repo, ResolvedReferenceInfo, SignOption,
 };
 use crate::util::{ExitCode, EyreExitOr};
 
@@ -436,8 +436,15 @@ mod in_memory {
     use crate::core::rewrite::move_branches;
     use crate::core::rewrite::plan::{OidOrLabel, RebaseCommand, RebasePlan};
     use crate::git::{
-        AmendFastOptions, CherryPickFastOptions, CreateCommitFastError, GitRunInfo, MaybeZeroOid,
-        NonZeroOid, Repo,
+        self, // from the incoming changes
+        AmendFastOptions,       // from HEAD side
+        CherryPickFastError,    // from incoming
+        CherryPickFastOptions,  // from both sides
+        CreateCommitFastError,  // from HEAD side
+        GitRunInfo,             // from both
+        MaybeZeroOid,           // from both
+        NonZeroOid,             // from both
+        Repo,                   // from both
     };
     use crate::util::EyreExitOr;
 
@@ -500,6 +507,7 @@ mod in_memory {
             force_on_disk: _,
             resolve_merge_conflicts: _, // May be needed once we can resolve merge conflicts in memory.
             check_out_commit_options: _, // Caller is responsible for checking out to new HEAD.
+            sign_option,
         } = options;
 
         let mut current_oid = rebase_plan.first_dest_oid;
@@ -536,6 +544,8 @@ mod in_memory {
             })
             .count();
         let (effects, progress) = effects.start_operation(OperationType::RebaseCommits);
+
+        let signer = git::get_signer(&repo, sign_option)?;
 
         for command in rebase_plan.commands.iter() {
             match command {
@@ -599,8 +609,16 @@ mod in_memory {
                     } else {
                         original_commit.get_committer().update_timestamp(*now)?
                     };
-                    let mut rebased_commit_oid = None;
-                    let mut rebased_commit = None;
+                    let rebased_commit_oid = repo
+                        .create_commit(
+                            &commit_to_apply.get_author(),
+                            &committer_signature,
+                            commit_message,
+                            &commit_tree,
+                            vec![&current_commit],
+                            signer.as_deref(),
+                        )
+                        .wrap_err("Applying rebased commit")?;
 
                     for commit_oid in commits_to_apply_oids.iter() {
                         let commit_to_apply = repo
@@ -802,12 +820,12 @@ mod in_memory {
                     };
                     let rebased_commit_oid = repo
                         .create_commit(
-                            None,
                             &replacement_commit.get_author(),
                             &committer_signature,
                             replacement_commit_message,
                             &replacement_tree,
                             parents.iter().collect(),
+                            signer.as_deref(),
                         )
                         .wrap_err("Applying rebased commit")?;
 
@@ -911,6 +929,7 @@ mod in_memory {
             force_on_disk: _,
             resolve_merge_conflicts: _,
             check_out_commit_options,
+            sign_option: _,
         } = options;
 
         for new_oid in rewritten_oids.values() {
@@ -996,6 +1015,7 @@ mod on_disk {
             force_on_disk: _,
             resolve_merge_conflicts: _,
             check_out_commit_options: _, // Checkout happens after rebase has concluded.
+            sign_option,
         } = options;
 
         let (effects, _progress) = effects.start_operation(OperationType::InitializeRebase);
@@ -1113,6 +1133,16 @@ mod on_disk {
             )
         })?;
 
+        let gpg_sign_opt_file = rebase_state_dir.join("gpg_sign_opt");
+        if let Some(sign_flag) = sign_option.as_rebase_flag(repo)? {
+            std::fs::write(&gpg_sign_opt_file, sign_flag).wrap_err_with(|| {
+                format!(
+                    "Writing `gpg_sign_opt` to: {:?}",
+                    gpg_sign_opt_file.as_path()
+                )
+            })?;
+        }
+
         let end_file_path = rebase_state_dir.join("end");
         std::fs::write(
             end_file_path.as_path(),
@@ -1172,6 +1202,7 @@ mod on_disk {
             force_on_disk: _,
             resolve_merge_conflicts: _,
             check_out_commit_options: _, // Checkout happens after rebase has concluded.
+            sign_option: _,
         } = options;
 
         match write_rebase_state_to_disk(effects, git_run_info, repo, rebase_plan, options)? {
@@ -1216,6 +1247,9 @@ pub struct ExecuteRebasePlanOptions {
 
     /// If `HEAD` was moved, the options for checking out the new `HEAD` commit.
     pub check_out_commit_options: CheckOutCommitOptions,
+
+    /// GPG-sign commits.
+    pub sign_option: SignOption,
 }
 
 /// The result of executing a rebase plan.
@@ -1261,6 +1295,7 @@ pub fn execute_rebase_plan(
         force_on_disk,
         resolve_merge_conflicts,
         check_out_commit_options: _,
+        sign_option: _,
     } = options;
 
     if !force_on_disk {

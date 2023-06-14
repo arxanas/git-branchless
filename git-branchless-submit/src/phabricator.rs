@@ -26,7 +26,9 @@ use lib::core::rewrite::{
     execute_rebase_plan, BuildRebasePlanError, BuildRebasePlanOptions, ExecuteRebasePlanOptions,
     ExecuteRebasePlanResult, RebasePlanBuilder, RebasePlanPermissions, RepoResource,
 };
-use lib::git::{Commit, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo, RepoError, TestCommand};
+use lib::git::{
+    Commit, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo, RepoError, SignOption, TestCommand,
+};
 use lib::try_exit_code;
 use lib::util::{ExitCode, EyreExitOr};
 use rayon::ThreadPoolBuilder;
@@ -359,6 +361,7 @@ impl Forge for PhabricatorForge<'_> {
                 render_smartlog: false,
                 ..Default::default()
             },
+            sign_option: SignOption::Disable,
         };
         let permissions =
             RebasePlanPermissions::verify_rewrite_set(self.dag, build_options, &commit_set)
@@ -607,6 +610,7 @@ Differential Revision: https://phabricator.example.com/D000$(git rev-list --coun
                 render_smartlog: false,
                 ..Default::default()
             },
+            sign_option: SignOption::Disable,
         };
         let permissions =
             RebasePlanPermissions::verify_rewrite_set(self.dag, build_options, &commit_set)

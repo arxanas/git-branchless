@@ -16,6 +16,7 @@ use branchless::core::rewrite::{
     RebasePlan, RebasePlanBuilder, RepoResource,
 };
 use branchless::testing::{make_git, Git};
+use branchless::git::SignOption;
 
 #[test]
 fn test_cache_shared_between_builders() -> eyre::Result<()> {
@@ -765,6 +766,7 @@ fn create_and_execute_plan(
             reset: false,
             render_smartlog: false,
         },
+        sign_option: SignOption::Disable,
     };
     let git_run_info = git.get_git_run_info();
     let result = execute_rebase_plan(
