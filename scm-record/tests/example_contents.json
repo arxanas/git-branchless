@@ -7,26 +7,26 @@
         {
           "Unchanged": {
             "lines": [
-              "this is some text",
-              "this is some text",
-              "this is some text",
-              "this is some text",
-              "this is some text",
-              "this is some text",
-              "this is some text",
-              "this is some text",
-              "this is some text",
-              "this is some text",
-              "this is some text",
-              "this is some text",
-              "this is some text",
-              "this is some text",
-              "this is some text",
-              "this is some text",
-              "this is some text",
-              "this is some text",
-              "this is some text",
-              "this is some text"
+              "this is some text\n",
+              "this is some text\n",
+              "this is some text\n",
+              "this is some text\n",
+              "this is some text\n",
+              "this is some text\n",
+              "this is some text\n",
+              "this is some text\n",
+              "this is some text\n",
+              "this is some text\n",
+              "this is some text\n",
+              "this is some text\n",
+              "this is some text\n",
+              "this is some text\n",
+              "this is some text\n",
+              "this is some text\n",
+              "this is some text\n",
+              "this is some text\n",
+              "this is some text\n",
+              "this is some text\n"
             ]
           }
         },
@@ -36,22 +36,22 @@
               {
                 "is_checked": true,
                 "change_type": "Removed",
-                "line": "before text 1"
+                "line": "before text 1\n"
               },
               {
                 "is_checked": true,
                 "change_type": "Removed",
-                "line": "before text 2"
+                "line": "before text 2\n"
               },
               {
                 "is_checked": true,
                 "change_type": "Added",
-                "line": "after text 1"
+                "line": "after text 1\n"
               },
               {
                 "is_checked": false,
                 "change_type": "Added",
-                "line": "after text 2"
+                "line": "after text 2\n"
               }
             ]
           }
@@ -59,7 +59,7 @@
         {
           "Unchanged": {
             "lines": [
-              "this is some trailing text"
+              "this is some trailing text\n"
             ]
           }
         }
@@ -72,8 +72,8 @@
         {
           "Unchanged": {
             "lines": [
-              "Some leading text 1",
-              "Some leading text 2"
+              "Some leading text 1\n",
+              "Some leading text 2\n"
             ]
           }
         },
@@ -83,22 +83,22 @@
               {
                 "is_checked": true,
                 "change_type": "Removed",
-                "line": "before text 1"
+                "line": "before text 1\n"
               },
               {
                 "is_checked": true,
                 "change_type": "Removed",
-                "line": "before text 2"
+                "line": "before text 2\n"
               },
               {
                 "is_checked": true,
                 "change_type": "Added",
-                "line": "after text 1"
+                "line": "after text 1\n"
               },
               {
                 "is_checked": true,
                 "change_type": "Added",
-                "line": "after text 2"
+                "line": "after text 2\n"
               }
             ]
           }
@@ -106,7 +106,7 @@
         {
           "Unchanged": {
             "lines": [
-              "this is some trailing text"
+              "this is some trailing text\n"
             ]
           }
         }
