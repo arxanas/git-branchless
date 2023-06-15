@@ -448,12 +448,12 @@ fn test_enter_next() -> eyre::Result<()> {
                         SectionChangedLine {
                             is_checked: false,
                             change_type: ChangeType::Added,
-                            line: Cow::Borrowed("world"),
+                            line: Cow::Borrowed("world\n"),
                         },
                         SectionChangedLine {
                             is_checked: false,
                             change_type: ChangeType::Removed,
-                            line: Cow::Borrowed("hello"),
+                            line: Cow::Borrowed("hello\n"),
                         },
                     ],
                 }],
@@ -467,12 +467,12 @@ fn test_enter_next() -> eyre::Result<()> {
                         SectionChangedLine {
                             is_checked: false,
                             change_type: ChangeType::Added,
-                            line: Cow::Borrowed("world"),
+                            line: Cow::Borrowed("world\n"),
                         },
                         SectionChangedLine {
                             is_checked: false,
                             change_type: ChangeType::Removed,
-                            line: Cow::Borrowed("hello"),
+                            line: Cow::Borrowed("hello\n"),
                         },
                     ],
                 }],
