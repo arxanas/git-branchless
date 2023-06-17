@@ -31,7 +31,7 @@ use lib::core::rewrite::{
 };
 use lib::git::{
     process_diff_for_record, update_index, CategorizedReferenceName, FileMode, GitRunInfo,
-    MaybeZeroOid, NonZeroOid, Repo, ResolvedReferenceInfo, Stage, UpdateIndexCommand,
+    MaybeZeroOid, NonZeroOid, Repo, ResolvedReferenceInfo, SignOption, Stage, UpdateIndexCommand,
     WorkingCopyChangesType, WorkingCopySnapshot,
 };
 use lib::try_exit_code;
@@ -53,6 +53,7 @@ pub fn command_main(ctx: CommandContext, args: RecordArgs) -> EyreExitOr<()> {
         create,
         detach,
         insert,
+        sign_options,
     } = args;
     record(
         &effects,
@@ -62,6 +63,7 @@ pub fn command_main(ctx: CommandContext, args: RecordArgs) -> EyreExitOr<()> {
         create,
         detach,
         insert,
+        &sign_options.into(),
     )
 }
 
@@ -74,6 +76,7 @@ fn record(
     branch_name: Option<String>,
     detach: bool,
     insert: bool,
+    sign_option: &SignOption,
 ) -> EyreExitOr<()> {
     let now = SystemTime::now();
     let repo = Repo::from_dir(&git_run_info.working_directory)?;
@@ -147,19 +150,22 @@ fn record(
                 &snapshot,
                 event_tx_id,
                 message.as_deref(),
+                sign_option,
             )?);
         }
     } else {
-        let args = {
-            let mut args = vec!["commit"];
-            if let Some(message) = &message {
-                args.extend(["--message", message]);
-            }
-            if working_copy_changes_type == WorkingCopyChangesType::Unstaged {
-                args.push("--all");
-            }
-            args
-        };
+        let mut args = vec!["commit"];
+        if let Some(message) = &message {
+            args.extend(["--message", message]);
+        }
+        if working_copy_changes_type == WorkingCopyChangesType::Unstaged {
+            args.push("--all");
+        }
+        let sign_flag = sign_option.as_git_flag();
+        if let Some(flag) = &sign_flag {
+            args.push(flag);
+        }
+
         try_exit_code!(git_run_info.run_direct_no_wrapping(Some(event_tx_id), &args)?);
     }
 
@@ -224,6 +230,7 @@ fn record_interactive(
     snapshot: &WorkingCopySnapshot,
     event_tx_id: EventTransactionId,
     message: Option<&str>,
+    sign_option: &SignOption,
 ) -> EyreExitOr<()> {
     let old_tree = snapshot.commit_stage0.get_tree()?;
     let new_tree = snapshot.commit_unstaged.get_tree()?;
@@ -332,13 +339,15 @@ fn record_interactive(
         &update_index_script,
     )?;
 
-    let args = {
-        let mut args = vec!["commit"];
-        if let Some(message) = message {
-            args.extend(["--message", message]);
-        }
-        args
-    };
+    let mut args = vec!["commit"];
+    if let Some(message) = message {
+        args.extend(["--message", message]);
+    }
+    let sign_flag = sign_option.as_git_flag();
+    if let Some(flag) = &sign_flag {
+        args.push(flag);
+    }
+
     git_run_info.run_direct_no_wrapping(Some(event_tx_id), &args)
 }
 

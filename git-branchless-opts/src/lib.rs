@@ -360,6 +360,10 @@ pub struct RecordArgs {
     /// if any.
     #[clap(action, short = 'I', long = "insert")]
     pub insert: bool,
+
+    /// Options for signing commits.
+    #[clap(flatten)]
+    pub sign_options: SignOptions,
 }
 
 /// Display a nice graph of the commits you've recently worked on.

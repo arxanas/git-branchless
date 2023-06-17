@@ -16,6 +16,18 @@ pub enum SignOption {
     Disable,
 }
 
+impl SignOption {
+    /// GPG-signing flag to pass to Git.
+    pub fn as_git_flag(&self) -> Option<String> {
+        match self {
+            Self::UseConfig => None,
+            Self::UseConfigKey => Some("--gpg-sign".to_string()),
+            Self::KeyOverride(keyid) => Some(format!("--gpg-sign={}", keyid)),
+            Self::Disable => Some("--no-gpg-sign".to_string()),
+        }
+    }
+}
+
 /// Get commit signer configured from CLI arguments and repository configurations.
 #[instrument]
 pub fn get_signer(
