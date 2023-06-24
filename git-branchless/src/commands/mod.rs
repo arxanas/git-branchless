@@ -33,14 +33,12 @@ fn command_main(ctx: CommandContext, opts: Opts) -> EyreExitOr<()> {
         Command::Amend {
             move_options,
             reparent,
-            sign_options,
         } => amend::amend(
             &effects,
             &git_run_info,
             &ResolveRevsetOptions::default(),
             &move_options,
             reparent,
-            sign_options.into(),
         )?,
 
         Command::BugReport => bug_report::bug_report(&effects, &git_run_info)?,
@@ -140,6 +138,7 @@ fn command_main(ctx: CommandContext, opts: Opts) -> EyreExitOr<()> {
             force_rewrite_public_commits,
             discard,
             commit_to_fixup,
+            sign_options,
         } => {
             let messages = if discard {
                 git_branchless_reword::InitialCommitMessages::Discard
@@ -155,6 +154,7 @@ fn command_main(ctx: CommandContext, opts: Opts) -> EyreExitOr<()> {
                 messages,
                 &git_run_info,
                 force_rewrite_public_commits,
+                sign_options,
             )?
         }
 

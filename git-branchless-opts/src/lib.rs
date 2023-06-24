@@ -91,6 +91,10 @@ pub struct MoveOptions {
     /// executing it.
     #[clap(action, long = "debug-dump-rebase-plan")]
     pub dump_rebase_plan: bool,
+
+    /// GPG-sign commits.
+    #[clap(flatten)]
+    pub sign_options: SignOptions,
 }
 
 /// Options for traversing commits.
@@ -179,7 +183,7 @@ pub struct SwitchOptions {
 }
 
 /// Options for signing commits
-#[derive(Args, Debug)]
+#[derive(Args, Debug, Clone)]
 pub struct SignOptions {
     /// GPG-sign commits. The `keyid` argument is optional and defaults to the committer
     /// identity.
@@ -464,10 +468,6 @@ pub enum Command {
         /// formatting or refactoring changes.
         #[clap(long)]
         reparent: bool,
-
-        /// Options for signing commits.
-        #[clap(flatten)]
-        sign_options: SignOptions,
     },
 
     /// Gather information about recent operations to upload as part of a bug
@@ -650,6 +650,10 @@ pub enum Command {
         /// use with `git rebase --autosquash`) targeting the supplied commit.
         #[clap(value_parser, long = "fixup", conflicts_with_all(&["messages", "discard"]))]
         commit_to_fixup: Option<Revset>,
+
+        /// GPG-sign commits.
+        #[clap(flatten)]
+        sign_options: SignOptions,
     },
 
     /// `smartlog` command.

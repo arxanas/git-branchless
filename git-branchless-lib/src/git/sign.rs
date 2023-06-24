@@ -3,7 +3,7 @@ use tracing::instrument;
 use super::{repo::Result, Repo, RepoError};
 
 /// GPG-signing option.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SignOption {
     /// Sign commits conditionally based on the `commit.gpgsign` configuration and
     /// and the key `user.signingkey`.
@@ -25,6 +25,22 @@ impl SignOption {
             Self::KeyOverride(keyid) => Some(format!("--gpg-sign={}", keyid)),
             Self::Disable => Some("--no-gpg-sign".to_string()),
         }
+    }
+
+    /// GPG-signing flag to use for interactive rebase
+    pub fn as_rebase_flag(&self, repo: &Repo) -> Result<Option<String>> {
+        Ok(match self {
+            Self::UseConfig => {
+                let config = repo.inner.config().map_err(RepoError::ReadConfig)?;
+                match config.get_bool("commit.gpgsign").ok() {
+                    Some(true) => Some("-S".to_string()),
+                    Some(false) | None => None,
+                }
+            }
+            Self::UseConfigKey => Some("-S".to_string()),
+            Self::KeyOverride(keyid) => Some(format!("-S{}", keyid)),
+            Self::Disable => None,
+        })
     }
 }
 

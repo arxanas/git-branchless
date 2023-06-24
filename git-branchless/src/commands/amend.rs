@@ -26,7 +26,7 @@ use lib::core::rewrite::{
     execute_rebase_plan, move_branches, BuildRebasePlanOptions, ExecuteRebasePlanOptions,
     ExecuteRebasePlanResult, RebasePlanBuilder, RebasePlanPermissions, RepoResource,
 };
-use lib::git::{get_signer, SignOption};
+use lib::git::get_signer;
 use lib::git::{AmendFastOptions, GitRunInfo, MaybeZeroOid, Repo, ResolvedReferenceInfo};
 use lib::try_exit_code;
 use lib::util::{ExitCode, EyreExitOr};
@@ -41,7 +41,6 @@ pub fn amend(
     resolve_revset_options: &ResolveRevsetOptions,
     move_options: &MoveOptions,
     reparent: bool,
-    sign_option: SignOption,
 ) -> EyreExitOr<()> {
     let now = SystemTime::now();
     let timestamp = now.duration_since(SystemTime::UNIX_EPOCH)?.as_secs_f64();
@@ -157,6 +156,7 @@ pub fn amend(
         )
     };
 
+    let sign_option = move_options.sign_options.to_owned().into();
     let signer = get_signer(&repo, &sign_option)?;
 
     let amended_commit_oid = repo.amend_commit(
@@ -305,6 +305,7 @@ pub fn amend(
                 reset: true,
                 render_smartlog: false,
             },
+            sign_option,
         };
         match execute_rebase_plan(
             effects,

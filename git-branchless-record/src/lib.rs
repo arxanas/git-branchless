@@ -215,7 +215,8 @@ fn record(
             effects,
             git_run_info,
             now,
-            event_tx_id
+            event_tx_id,
+            sign_option,
         )?);
     }
 
@@ -357,6 +358,7 @@ fn insert_before_siblings(
     git_run_info: &GitRunInfo,
     now: SystemTime,
     event_tx_id: EventTransactionId,
+    sign_option: &SignOption,
 ) -> EyreExitOr<()> {
     // Reopen the repository since references may have changed.
     let repo = Repo::from_dir(&git_run_info.working_directory)?;
@@ -484,6 +486,7 @@ To proceed anyways, run: git move -f -s 'siblings(.)",
         force_on_disk: false,
         resolve_merge_conflicts: false,
         check_out_commit_options: Default::default(),
+        sign_option: sign_option.to_owned(),
     };
     let result = execute_rebase_plan(
         effects,
