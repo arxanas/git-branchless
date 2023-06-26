@@ -9,7 +9,7 @@ version = "0.1.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-indexmap = "1"
+indexmap = "2"
 itertools = "0.10"
 thiserror = "1"
 tracing = "0.1"

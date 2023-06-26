@@ -411,7 +411,7 @@ dependencies = [
  "atty",
  "bitflags 1.3.2",
  "clap_lex 0.2.4",
- "indexmap",
+ "indexmap 1.9.3",
  "once_cell",
  "strsim",
  "termcolor",
@@ -1052,6 +1052,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "equivalent"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "88bffebc5d80432c9b140ee17875ff173a8ab62faad5b257da912bd2f6c1c0a1"
+
+[[package]]
 name = "errno"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1096,7 +1102,7 @@ dependencies = [
  "esl01-minibytes 0.2.0",
  "esl01-vlqencoding 0.1.0",
  "fs2",
- "indexmap",
+ "indexmap 1.9.3",
  "itertools 0.8.2",
  "once_cell",
  "parking_lot 0.10.2",
@@ -1127,7 +1133,7 @@ dependencies = [
  "fail",
  "fs2",
  "futures",
- "indexmap",
+ "indexmap 1.9.3",
  "rand 0.8.5",
  "serde",
  "tempfile",
@@ -1811,7 +1817,7 @@ dependencies = [
  "git-branchless-opts",
  "git-branchless-revset",
  "git-branchless-testing",
- "indexmap",
+ "indexmap 2.0.0",
  "insta",
  "itertools 0.10.5",
  "lazy_static",
@@ -1930,12 +1936,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "hashbrown"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2c6201b9ff9fd90a5a3bac2e56a830d0caa509576f0e503818ee82c181b3437a"
+
+[[package]]
 name = "hashlink"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "69fe1fcf8b4278d860ad0548329f892a3631fb63f82574df68275f34cdbe0ffa"
 dependencies = [
- "hashbrown",
+ "hashbrown 0.12.3",
 ]
 
 [[package]]
@@ -2033,7 +2045,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bd070e393353796e801d209ad339e89596eb4c8d430d18ede6a1cced8fafbd99"
 dependencies = [
  "autocfg",
- "hashbrown",
+ "hashbrown 0.12.3",
+]
+
+[[package]]
+name = "indexmap"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d5477fe2230a79769d8dc68e0eabf5437907c0457a5614a9e8dddb67f65eb65d"
+dependencies = [
+ "equivalent",
+ "hashbrown 0.14.0",
 ]
 
 [[package]]
@@ -2645,7 +2667,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e6d5014253a1331579ce62aa67443b4a658c5e7dd03d4bc6d302b94474888143"
 dependencies = [
  "fixedbitset",
- "indexmap",
+ "indexmap 1.9.3",
 ]
 
 [[package]]
@@ -3114,7 +3136,7 @@ checksum = "088c5d71572124929ea7549a8ce98e1a6fd33d0a38367b09027b382e67c033db"
 name = "scm-bisect"
 version = "0.1.0"
 dependencies = [
- "indexmap",
+ "indexmap 2.0.0",
  "insta",
  "itertools 0.10.5",
  "maplit",
@@ -3768,7 +3790,7 @@ version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c5faade31a542b8b35855fff6e8def199853b2da8da256da52f52f1316ee3137"
 dependencies = [
- "hashbrown",
+ "hashbrown 0.12.3",
  "regex",
 ]
 
