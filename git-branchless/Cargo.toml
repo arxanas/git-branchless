@@ -58,7 +58,7 @@ tracing-subscriber = { version = "=0.3.11", features = ["env-filter"] }
 
 [dev-dependencies]
 git-branchless-testing = { version = "0.7.0", path = "../git-branchless-testing" }
-insta = "1.29.0"
+insta = "1.30.0"
 
 [package.metadata.release]
 pre-release-replacements = [
