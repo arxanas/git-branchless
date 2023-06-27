@@ -435,7 +435,7 @@ mod in_memory {
     use crate::core::rewrite::move_branches;
     use crate::core::rewrite::plan::{OidOrLabel, RebaseCommand, RebasePlan};
     use crate::git::{
-        CherryPickFastError, CherryPickFastOptions, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo,
+        CherryPickFastOptions, CreateCommitFastError, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo,
     };
     use crate::util::EyreExitOr;
 
@@ -598,7 +598,7 @@ mod in_memory {
                         },
                     ) {
                         Ok(rebased_commit) => rebased_commit,
-                        Err(CherryPickFastError::MergeConflict { conflicting_paths }) => {
+                        Err(CreateCommitFastError::MergeConflict { conflicting_paths }) => {
                             return Ok(RebaseInMemoryResult::MergeFailed(
                                 FailedMergeInfo::Conflict {
                                     commit_oid: *commit_to_apply_oid,
