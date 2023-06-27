@@ -435,7 +435,8 @@ mod in_memory {
     use crate::core::rewrite::move_branches;
     use crate::core::rewrite::plan::{OidOrLabel, RebaseCommand, RebasePlan};
     use crate::git::{
-        CherryPickFastOptions, CreateCommitFastError, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo,
+        AmendFastOptions, CherryPickFastOptions, CreateCommitFastError, GitRunInfo, MaybeZeroOid,
+        NonZeroOid, Repo,
     };
     use crate::util::EyreExitOr;
 
@@ -546,14 +547,25 @@ mod in_memory {
                 } => {
                     current_oid = match labels.get(label_name) {
                         Some(oid) => *oid,
-                        None => eyre::bail!("BUG: no associated OID for label: {}", label_name),
+                        None => eyre::bail!("BUG: no associated OID for label: {label_name}"),
                     };
                 }
 
                 RebaseCommand::Reset {
                     target: OidOrLabel::Oid(commit_oid),
                 } => {
-                    current_oid = *commit_oid;
+                    current_oid = match rewritten_oids.get(commit_oid) {
+                        Some(MaybeZeroOid::NonZero(rewritten_oid)) => {
+                            // HEAD has been rewritten.
+                            *rewritten_oid
+                        }
+                        Some(MaybeZeroOid::Zero) | None => {
+                            // Either HEAD was not rewritten, or it was but its
+                            // associated commit was skipped. Either way, just
+                            // use the current OID.
+                            *commit_oid
+                        }
+                    };
                 }
 
                 RebaseCommand::Pick {
@@ -563,87 +575,115 @@ mod in_memory {
                     let current_commit = repo
                         .find_commit_or_fail(current_oid)
                         .wrap_err("Finding current commit")?;
-                    let commit_to_apply_oid = match commits_to_apply_oids.as_slice() {
-                        [commit_to_apply_oid] => commit_to_apply_oid,
-                        [..] => unimplemented!("Picking multiple commits"),
-                    };
-                    let commit_to_apply = repo
-                        .find_commit_or_fail(*commit_to_apply_oid)
+
+                    let original_commit = repo
+                        .find_commit_or_fail(*original_commit_oid)
                         .wrap_err("Finding commit to apply")?;
                     i += 1;
 
-                    let commit_description = effects
-                        .get_glyphs()
-                        .render(commit_to_apply.friendly_describe(effects.get_glyphs())?)?;
                     let commit_num = format!("[{i}/{num_picks}]");
                     progress.notify_progress(i, num_picks);
 
-                    if commit_to_apply.get_parent_count() > 1 {
-                        warn!(
-                            ?commit_to_apply_oid,
-                            "BUG: Merge commit should have been detected during planning phase"
-                        );
-                        return Ok(RebaseInMemoryResult::MergeFailed(
-                            FailedMergeInfo::CannotRebaseMergeInMemory {
-                                commit_oid: *commit_to_apply_oid,
-                            },
-                        ));
-                    };
-
-                    progress.notify_status(
-                        OperationIcon::InProgress,
-                        format!("Applying patch for commit: {commit_description}"),
-                    );
-                    let commit_tree = match repo.cherry_pick_fast(
-                        &commit_to_apply,
-                        &current_commit,
-                        &CherryPickFastOptions {
-                            reuse_parent_tree_if_possible: true,
-                        },
-                    ) {
-                        Ok(rebased_commit) => rebased_commit,
-                        Err(CreateCommitFastError::MergeConflict { conflicting_paths }) => {
-                            return Ok(RebaseInMemoryResult::MergeFailed(
-                                FailedMergeInfo::Conflict {
-                                    commit_oid: *commit_to_apply_oid,
-                                    conflicting_paths,
-                                },
-                            ))
-                        }
-                        Err(other) => eyre::bail!(other),
-                    };
-
-                    let commit_message = commit_to_apply.get_message_raw();
+                    let commit_message = original_commit.get_message_raw();
                     let commit_message = commit_message.to_str().with_context(|| {
                         eyre::eyre!(
                             "Could not decode commit message for commit: {:?}",
-                            commit_to_apply_oid
+                            original_commit_oid
                         )
                     })?;
 
-                    progress.notify_status(
-                        OperationIcon::InProgress,
-                        format!("Committing to repository: {commit_description}"),
-                    );
+                    let commit_author = original_commit.get_author();
                     let committer_signature = if *preserve_timestamps {
-                        commit_to_apply.get_committer()
+                        original_commit.get_committer()
                     } else {
-                        commit_to_apply.get_committer().update_timestamp(*now)?
+                        original_commit.get_committer().update_timestamp(*now)?
                     };
-                    let rebased_commit_oid = repo
-                        .create_commit(
-                            None,
-                            &commit_to_apply.get_author(),
-                            &committer_signature,
-                            commit_message,
-                            &commit_tree,
-                            vec![&current_commit],
-                        )
-                        .wrap_err("Applying rebased commit")?;
+                    let mut rebased_commit_oid = None;
+                    let mut rebased_commit = None;
 
-                    let rebased_commit = repo
-                        .find_commit_or_fail(rebased_commit_oid)
-                        .wrap_err("Looking up just-rebased commit")?;
+                    for commit_oid in commits_to_apply_oids.iter() {
+                        let commit_to_apply = repo
+                            .find_commit_or_fail(*commit_oid)
+                            .wrap_err("Finding commit to apply")?;
+                        let commit_description = effects
+                            .get_glyphs()
+                            .render(commit_to_apply.friendly_describe(effects.get_glyphs())?)?;
+
+                        if commit_to_apply.get_parent_count() > 1 {
+                            warn!(
+                                ?commit_oid,
+                                "BUG: Merge commit should have been detected during planning phase"
+                            );
+                            return Ok(RebaseInMemoryResult::MergeFailed(
+                                FailedMergeInfo::CannotRebaseMergeInMemory {
+                                    commit_oid: *commit_oid,
+                                },
+                            ));
+                        };
+
+                        progress.notify_status(
+                            OperationIcon::InProgress,
+                            format!("Applying patch for commit: {commit_description}"),
+                        );
+
+                        // Create a commit and then repeatedly amend & re-create it
+                        // FIXME what #perf gains can be had by working directly on a tree?
+                        // Is it even possible to repeatedly amend a tree and then commit
+                        // it once at the end?
+
+                        let maybe_tree = if rebased_commit.is_none() {
+                            repo.cherry_pick_fast(
+                                &commit_to_apply,
+                                &current_commit,
+                                &CherryPickFastOptions {
+                                    reuse_parent_tree_if_possible: true,
+                                },
+                            )
+                        } else {
+                            repo.amend_fast(
+                                &rebased_commit.expect("rebased commit should not be None"),
+                                &AmendFastOptions::FromCommit {
+                                    commit: commit_to_apply,
+                                },
+                            )
+                        };
+                        let commit_tree = match maybe_tree {
+                            Ok(tree) => tree,
+                            Err(CreateCommitFastError::MergeConflict { conflicting_paths }) => {
+                                return Ok(RebaseInMemoryResult::MergeFailed(
+                                    FailedMergeInfo::Conflict {
+                                        commit_oid: *commit_oid,
+                                        conflicting_paths,
+                                    },
+                                ))
+                            }
+                            Err(other) => eyre::bail!(other),
+                        };
+
+                        // this is the description of each fixup commit
+                        // FIXME should we instead be using the description of the base commit?
+                        // or use a different message altogether when squashing multiple commits?
+                        progress.notify_status(
+                            OperationIcon::InProgress,
+                            format!("Committing to repository: {commit_description}"),
+                        );
+                        rebased_commit_oid = Some(
+                            repo.create_commit(
+                                None,
+                                &commit_author,
+                                &committer_signature,
+                                commit_message,
+                                &commit_tree,
+                                vec![&current_commit],
+                            )
+                            .wrap_err("Applying rebased commit")?,
+                        );
+
+                        rebased_commit = repo.find_commit(rebased_commit_oid.unwrap())?;
+                    }
+
+                    let rebased_commit_oid =
+                        rebased_commit_oid.expect("rebased oid should not be None");
                     let commit_description =
                         effects
                             .get_glyphs()
@@ -651,19 +691,28 @@ mod in_memory {
                                 effects.get_glyphs(),
                                 rebased_commit_oid,
                             )?)?;
-                    if rebased_commit.is_empty() {
+
+                    if rebased_commit
+                        .expect("rebased commit should not be None")
+                        .is_empty()
+                    {
                         rewritten_oids.insert(*original_commit_oid, MaybeZeroOid::Zero);
                         maybe_set_skipped_head_new_oid(*original_commit_oid, current_oid);
 
                         writeln!(
                             effects.get_output_stream(),
-                            "[{i}/{num_picks}] Skipped now-empty commit: {commit_description}"
+                            "{commit_num} Skipped now-empty commit: {commit_description}",
                         )?;
                     } else {
                         rewritten_oids.insert(
                             *original_commit_oid,
                             MaybeZeroOid::NonZero(rebased_commit_oid),
                         );
+                        for commit_oid in commits_to_apply_oids {
+                            rewritten_oids
+                                .insert(*commit_oid, MaybeZeroOid::NonZero(rebased_commit_oid));
+                        }
+
                         current_oid = rebased_commit_oid;
 
                         writeln!(

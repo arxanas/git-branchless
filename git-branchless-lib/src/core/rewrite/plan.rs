@@ -10,7 +10,7 @@ use itertools::Itertools;
 use rayon::{prelude::*, ThreadPool};
 use tracing::{instrument, warn};
 
-use crate::core::dag::{union_all, CommitSet, Dag};
+use crate::core::dag::{sorted_commit_set, union_all, CommitSet, Dag};
 use crate::core::effects::{Effects, OperationType};
 use crate::core::formatting::Pluralize;
 use crate::core::rewrite::{RepoPool, RepoResource};
@@ -54,6 +54,9 @@ pub enum RebaseCommand {
 
     /// Apply the provided commits on top of the rebase head, and update the
     /// rebase head to point to the newly-applied commit.
+    ///
+    /// If multiple commits are provided, they will be squashed into a single
+    /// commit.
     Pick {
         /// The original commit, which contains the relevant metadata such as
         /// the commit message.
@@ -141,10 +144,11 @@ impl ToString for RebaseCommand {
             RebaseCommand::Reset { target } => format!("reset {target}"),
             RebaseCommand::Pick {
                 original_commit_oid: _,
-                commits_to_apply_oids: commit_oids,
-            } => match commit_oids.as_slice() {
+                commits_to_apply_oids,
+            } => match commits_to_apply_oids.as_slice() {
+                [] => String::new(),
                 [commit_oid] => format!("pick {commit_oid}"),
-                [..] => unimplemented!("Picking multiple commits"),
+                [..] => unimplemented!("On-disk fixups are not yet supported"),
             },
             RebaseCommand::Merge {
                 commit_oid,
@@ -234,6 +238,9 @@ struct ConstraintGraph<'a> {
 
     /// This is a mapping from `x` to `y` if `x` must be applied before `y`
     inner: HashMap<NonZeroOid, HashSet<NonZeroOid>>,
+
+    /// A mapping of commits being fixed up to the commits being absorbed into them.
+    fixups: HashMap<NonZeroOid, HashSet<NonZeroOid>>,
 }
 
 impl<'a> ConstraintGraph<'a> {
@@ -242,16 +249,14 @@ impl<'a> ConstraintGraph<'a> {
             dag,
             permissions,
             inner: HashMap::new(),
+            fixups: HashMap::new(),
         }
     }
 
     pub fn add_constraints(&mut self, constraints: &Vec<Constraint>) -> eyre::Result<()> {
         for constraint in constraints {
             match constraint {
-                Constraint::MoveChildren {
-                    parent_of_oid: _,
-                    children_of_oid: _,
-                } => {
+                Constraint::MoveChildren { .. } => {
                     // do nothing; these will be handled in the next pass
                 }
 
@@ -271,55 +276,77 @@ impl<'a> ConstraintGraph<'a> {
                             .insert(*child_oid);
                     }
                 }
+
+                Constraint::FixUpCommit {
+                    commit_to_fixup_oid,
+                    fixup_commit_oid,
+                } => {
+                    // remove previous (if any) constraints on commit
+                    for commits in self.inner.values_mut() {
+                        commits.remove(fixup_commit_oid);
+                    }
+
+                    self.fixups
+                        .entry(*commit_to_fixup_oid)
+                        .or_default()
+                        .insert(*fixup_commit_oid);
+                }
             }
         }
 
         let range_heads: HashSet<&NonZeroOid> = constraints
             .iter()
             .filter_map(|c| match c {
-                Constraint::MoveSubtree {
-                    parent_oids: _,
-                    child_oid: _,
-                } => None,
+                Constraint::MoveSubtree { .. } => None,
                 Constraint::MoveChildren {
                     parent_of_oid: _,
                     children_of_oid,
+                }
+                | Constraint::FixUpCommit {
+                    commit_to_fixup_oid: _,
+                    fixup_commit_oid: children_of_oid,
                 } => Some(children_of_oid),
             })
             .collect();
+
+        let mut move_children =
+            |parent_of_oid: &NonZeroOid, children_of_oid: &NonZeroOid| -> eyre::Result<()> {
+                let mut parent_oid = self.dag.get_only_parent_oid(*parent_of_oid)?;
+                let commits_to_move = self.commits_to_move();
+
+                // If parent_oid is part of another range and is itself
+                // constrained, keep looking for an unconstrained ancestor.
+                while range_heads.contains(&parent_oid) && commits_to_move.contains(&parent_oid) {
+                    parent_oid = self.dag.get_only_parent_oid(parent_oid)?;
+                }
+
+                let commits_to_move: CommitSet = commits_to_move.into_iter().collect();
+                let source_children: CommitSet = self
+                    .dag
+                    .query_children(CommitSet::from(*children_of_oid))?
+                    .difference(&commits_to_move);
+                let source_children = self.dag.filter_visible_commits(source_children)?;
+
+                for child_oid in self.dag.commit_set_to_vec(&source_children)? {
+                    self.inner.entry(parent_oid).or_default().insert(child_oid);
+                }
+
+                Ok(())
+            };
 
         for constraint in constraints {
             match constraint {
                 Constraint::MoveChildren {
                     parent_of_oid,
                     children_of_oid,
-                } => {
-                    let mut parent_oid = self.dag.get_only_parent_oid(*parent_of_oid)?;
-                    let commits_to_move = self.commits_to_move();
+                } => move_children(parent_of_oid, children_of_oid)?,
 
-                    // If parent_oid is part of another range and is itself
-                    // constrained, keep looking for an unconstrained ancestor.
-                    while range_heads.contains(&parent_oid) && commits_to_move.contains(&parent_oid)
-                    {
-                        parent_oid = self.dag.get_only_parent_oid(parent_oid)?;
-                    }
+                Constraint::FixUpCommit {
+                    commit_to_fixup_oid: _,
+                    fixup_commit_oid,
+                } => move_children(fixup_commit_oid, fixup_commit_oid)?,
 
-                    let commits_to_move: CommitSet = commits_to_move.into_iter().collect();
-                    let source_children: CommitSet = self
-                        .dag
-                        .query_children(CommitSet::from(*children_of_oid))?
-                        .difference(&commits_to_move);
-                    let source_children = self.dag.filter_visible_commits(source_children)?;
-
-                    for child_oid in self.dag.commit_set_to_vec(&source_children)? {
-                        self.inner.entry(parent_oid).or_default().insert(child_oid);
-                    }
-                }
-
-                Constraint::MoveSubtree {
-                    parent_oids: _,
-                    child_oid: _,
-                } => {
+                Constraint::MoveSubtree { .. } => {
                     // do nothing; these were handled in the first pass
                 }
             }
@@ -338,7 +365,12 @@ impl<'a> ConstraintGraph<'a> {
 
         let all_descendants_of_constrained_nodes = {
             let mut acc = Vec::new();
-            let commits_to_move: CommitSet = self.commits_to_move().into_iter().collect();
+            let commits_to_fixup = self.commits_to_fixup();
+            let commits_to_move: CommitSet = self
+                .commits_to_move()
+                .union(&commits_to_fixup)
+                .cloned()
+                .collect();
             let descendants = self.dag.query_descendants(commits_to_move.clone())?;
             let descendants = descendants.difference(&commits_to_move);
             let descendants = self.dag.filter_visible_commits(descendants)?;
@@ -411,14 +443,14 @@ impl<'a> ConstraintGraph<'a> {
     }
 
     fn find_roots(&self) -> Vec<Constraint> {
+        let unconstrained_fixup_nodes = &self.commits_to_fixup() - &self.commits_to_move();
         let unconstrained_nodes = {
-            let mut unconstrained_nodes: HashSet<NonZeroOid> = self.parents().into_iter().collect();
-            for child_oid in self.commits_to_move() {
-                unconstrained_nodes.remove(&child_oid);
-            }
-            unconstrained_nodes
+            let unconstrained_nodes: HashSet<NonZeroOid> = self.parents().into_iter().collect();
+            let unconstrained_nodes = &unconstrained_nodes - &self.commits_to_move();
+            &unconstrained_nodes - &unconstrained_fixup_nodes
         };
-        let mut root_edges: Vec<Constraint> = unconstrained_nodes
+
+        let root_edge_iter = unconstrained_nodes
             .into_iter()
             .filter_map(|unconstrained_oid| {
                 self.commits_to_move_to(&unconstrained_oid).map(|children| {
@@ -430,8 +462,17 @@ impl<'a> ConstraintGraph<'a> {
                         })
                 })
             })
-            .flatten()
-            .collect();
+            .flatten();
+
+        let fixup_edge_iter = unconstrained_fixup_nodes
+            .into_iter()
+            .map(|commit_to_fixup_oid| Constraint::FixUpCommit {
+                commit_to_fixup_oid,
+                // HACK but this is unused
+                fixup_commit_oid: commit_to_fixup_oid,
+            });
+
+        let mut root_edges: Vec<Constraint> = root_edge_iter.chain(fixup_edge_iter).collect();
         root_edges.sort_unstable();
         root_edges
     }
@@ -468,6 +509,17 @@ impl<'a> ConstraintGraph<'a> {
         self.inner
             .get(parent_oid)
             .map(|child_oids| child_oids.iter().copied().collect())
+    }
+
+    /// All of the commits being fixed up.
+    pub fn commits_to_fixup(&self) -> HashSet<NonZeroOid> {
+        self.fixups.keys().copied().collect()
+    }
+
+    /// All of the fixup commits. This is set of all commits which need
+    /// to be absorbed into other commits and removed from the commit graph.
+    pub fn fixup_commits(&self) -> HashSet<NonZeroOid> {
+        self.fixups.values().flatten().copied().collect()
     }
 }
 
@@ -533,6 +585,13 @@ enum Constraint {
     MoveSubtree {
         parent_oids: Vec<NonZeroOid>,
         child_oid: NonZeroOid,
+    },
+
+    /// Indicates that `fixup_commit` should be squashed into `commit_to_fixup`
+    /// and all of its descendants should be moved on top of its parent.
+    FixUpCommit {
+        commit_to_fixup_oid: NonZeroOid,
+        fixup_commit_oid: NonZeroOid,
     },
 }
 
@@ -820,6 +879,12 @@ impl<'a> RebasePlanBuilder<'a> {
                         },
                     },
                 );
+            } else if state
+                .constraints
+                .fixup_commits()
+                .contains(&current_commit.get_oid())
+            {
+                // Do nothing for fixup commits.
             } else {
                 // Normal one-parent commit (or a zero-parent commit?), just
                 // rebase it and continue.
@@ -843,9 +908,29 @@ impl<'a> RebasePlanBuilder<'a> {
                         });
                     }
                     None => {
+                        let commits_to_apply_oids = match state
+                            .constraints
+                            .fixups
+                            .get(&original_commit_oid)
+                        {
+                            None => vec![original_commit_oid],
+                            Some(fixup_commit_oids) => {
+                                let mut commits_to_apply = vec![original_commit_oid];
+                                commits_to_apply.extend(fixup_commit_oids);
+
+                                let commit_set: CommitSet = commits_to_apply.into_iter().collect();
+                                let commits_to_apply =
+                                    sorted_commit_set(repo, state.constraints.dag, &commit_set)?;
+
+                                commits_to_apply
+                                    .iter()
+                                    .map(|commit| commit.get_oid())
+                                    .collect()
+                            }
+                        };
                         acc.push(RebaseCommand::Pick {
                             original_commit_oid,
-                            commits_to_apply_oids: vec![original_commit_oid],
+                            commits_to_apply_oids,
                         });
                         acc.push(RebaseCommand::DetectEmptyCommit {
                             commit_oid: current_commit.get_oid(),
@@ -975,6 +1060,21 @@ impl<'a> RebasePlanBuilder<'a> {
         Ok(())
     }
 
+    /// Generate a sequence of rebase steps that cause the commit at
+    /// `source_oid` to be squashed into `dest_oid`, and for the descendants
+    /// of `source_oid` to be rebased on top of its parent.
+    pub fn fixup_commit(
+        &mut self,
+        source_oid: NonZeroOid,
+        dest_oid: NonZeroOid,
+    ) -> eyre::Result<()> {
+        self.initial_constraints.push(Constraint::FixUpCommit {
+            commit_to_fixup_oid: dest_oid,
+            fixup_commit_oid: source_oid,
+        });
+        Ok(())
+    }
+
     /// Instruct the rebase planner to replace the commit at `original_oid` with the commit at
     /// `replacement_oid`.
     pub fn replace_commit(
@@ -1046,16 +1146,28 @@ impl<'a> RebasePlanBuilder<'a> {
         let mut acc = Vec::new();
         let mut first_dest_oid = None;
         for constraint in roots {
+            // NOTE that these are coming from find_roots() and are not the
+            // original Constraints used to build the plan
             let (parent_oids, child_oid) = match constraint {
                 Constraint::MoveSubtree {
                     parent_oids,
                     child_oid,
                 } => (parent_oids, child_oid),
+
+                Constraint::FixUpCommit {
+                    commit_to_fixup_oid,
+                    fixup_commit_oid: _,
+                } => {
+                    let parents = repo.find_commit_or_fail(commit_to_fixup_oid)?.get_parent_oids();
+                    (parents, commit_to_fixup_oid)
+                },
+
                 Constraint::MoveChildren {
                     parent_of_oid: _,
                     children_of_oid: _,
                 } => eyre::bail!("BUG: Invalid constraint encountered while preparing rebase plan.\nThis should be unreachable."),
             };
+
             let first_parent_oid = *parent_oids.first().unwrap();
             first_dest_oid.get_or_insert(first_parent_oid);
             acc.push(RebaseCommand::Reset {
