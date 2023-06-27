@@ -427,7 +427,7 @@ pub enum CreateCommitFastError {
 
 /// Options for `Repo::amend_fast`
 #[derive(Debug)]
-pub enum AmendFastOptions {
+pub enum AmendFastOptions<'repo> {
     /// Amend a set of paths from the current state of the working copy.
     FromWorkingCopy {
         /// The status entries for the files to amend.
@@ -438,14 +438,20 @@ pub enum AmendFastOptions {
         /// The paths to amend.
         paths: Vec<PathBuf>,
     },
+    /// Amend a set of paths from a different commit.
+    FromCommit {
+        /// The commit whose contents will be amended.
+        commit: Commit<'repo>,
+    },
 }
 
-impl AmendFastOptions {
+impl<'repo> AmendFastOptions<'repo> {
     /// Returns whether there are any paths to be amended.
     pub fn is_empty(&self) -> bool {
         match &self {
             AmendFastOptions::FromIndex { paths } => paths.is_empty(),
             AmendFastOptions::FromWorkingCopy { status_entries } => status_entries.is_empty(),
+            AmendFastOptions::FromCommit { commit } => commit.is_empty(),
         }
     }
 }
@@ -1422,10 +1428,14 @@ impl Repo {
     /// See `Repo::cherry_pick_fast` for motivation for performing the operation
     /// in-memory.
     #[instrument]
-    pub fn amend_fast(&self, parent_commit: &Commit, opts: &AmendFastOptions) -> Result<Tree> {
+    pub fn amend_fast(
+        &self,
+        parent_commit: &Commit,
+        opts: &AmendFastOptions,
+    ) -> std::result::Result<Tree, CreateCommitFastError> {
         let parent_commit_pathbufs = self
             .get_paths_touched_by_commit(parent_commit)?
-            .ok_or_else(|| Error::GetPatch {
+            .ok_or_else(|| CreateCommitFastError::GetPatch {
                 commit: parent_commit.get_oid(),
             })?
             .into_iter()
@@ -1437,6 +1447,11 @@ impl Repo {
                 AmendFastOptions::FromWorkingCopy { ref status_entries } => {
                     for entry in status_entries {
                         result.extend(entry.paths().iter().cloned());
+                    }
+                }
+                AmendFastOptions::FromCommit { commit } => {
+                    if let Some(paths) = self.get_paths_touched_by_commit(commit)? {
+                        result.extend(paths.iter().cloned());
                     }
                 }
             };
@@ -1489,6 +1504,25 @@ impl Repo {
                             ..
                         }) => Some((path.clone(), Some((oid, file_mode)))),
                         None => Some((path.clone(), None)),
+                    })
+                    .collect::<HashMap<_, _>>()
+            }
+            AmendFastOptions::FromCommit { commit } => {
+                let amended_tree = self.cherry_pick_fast(
+                    commit,
+                    parent_commit,
+                    &CherryPickFastOptions {
+                        reuse_parent_tree_if_possible: false,
+                    },
+                )?;
+                self.get_paths_touched_by_commit(commit)?
+                    .unwrap_or_default()
+                    .iter()
+                    .filter_map(|path| match amended_tree.get_path(path) {
+                        Ok(Some(entry)) => {
+                            Some((path.clone(), Some((entry.get_oid(), entry.get_filemode()))))
+                        }
+                        Ok(None) | Err(_) => None,
                     })
                     .collect::<HashMap<_, _>>()
             }
