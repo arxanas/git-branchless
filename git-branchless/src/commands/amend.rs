@@ -373,6 +373,9 @@ pub fn amend(
                 "Amended with {uncommitted_changes}.",
             )?;
         }
+        AmendFastOptions::FromCommit { .. } => {
+            unreachable!("BUG: AmendFastOptions::FromCommit should not have been constructed.")
+        }
     }
 
     Ok(Ok(()))
