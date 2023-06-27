@@ -387,10 +387,11 @@ pub struct CherryPickFastOptions {
     pub reuse_parent_tree_if_possible: bool,
 }
 
-/// An error raised when attempting the `Repo::cherry_pick_fast` operation.
+/// An error raised when attempting to create create a commit via
+/// `Repo::cherry_pick_fast`.
 #[allow(missing_docs)]
 #[derive(Debug, Error)]
-pub enum CherryPickFastError {
+pub enum CreateCommitFastError {
     /// A merge conflict occurred, so the cherry-pick could not continue.
     #[error("merge conflict in {} paths", conflicting_paths.len())]
     MergeConflict {
@@ -1214,7 +1215,7 @@ impl Repo {
         patch_commit: &'repo Commit,
         target_commit: &'repo Commit,
         options: &CherryPickFastOptions,
-    ) -> std::result::Result<Tree<'repo>, CherryPickFastError> {
+    ) -> std::result::Result<Tree<'repo>, CreateCommitFastError> {
         let CherryPickFastOptions {
             reuse_parent_tree_if_possible,
         } = options;
@@ -1233,7 +1234,7 @@ impl Repo {
 
         let changed_pathbufs = self
             .get_paths_touched_by_commit(patch_commit)?
-            .ok_or_else(|| CherryPickFastError::GetPatch {
+            .ok_or_else(|| CreateCommitFastError::GetPatch {
                 commit: patch_commit.get_oid(),
             })?
             .into_iter()
@@ -1252,21 +1253,21 @@ impl Repo {
                 let conflicting_paths = {
                     let mut result = HashSet::new();
                     for conflict in rebased_index.inner.conflicts().map_err(|err| {
-                        CherryPickFastError::GetConflicts {
+                        CreateCommitFastError::GetConflicts {
                             source: err,
                             commit: patch_commit.get_oid(),
                             onto: target_commit.get_oid(),
                         }
                     })? {
                         let conflict =
-                            conflict.map_err(|err| CherryPickFastError::GetConflicts {
+                            conflict.map_err(|err| CreateCommitFastError::GetConflicts {
                                 source: err,
                                 commit: patch_commit.get_oid(),
                                 onto: target_commit.get_oid(),
                             })?;
                         if let Some(ancestor) = conflict.ancestor {
                             result.insert(ancestor.path.into_path_buf().map_err(|err| {
-                                CherryPickFastError::DecodePath {
+                                CreateCommitFastError::DecodePath {
                                     source: err,
                                     item: "ancestor",
                                 }
@@ -1274,7 +1275,7 @@ impl Repo {
                         }
                         if let Some(our) = conflict.our {
                             result.insert(our.path.into_path_buf().map_err(|err| {
-                                CherryPickFastError::DecodePath {
+                                CreateCommitFastError::DecodePath {
                                     source: err,
                                     item: "our",
                                 }
@@ -1282,7 +1283,7 @@ impl Repo {
                         }
                         if let Some(their) = conflict.their {
                             result.insert(their.path.into_path_buf().map_err(|err| {
-                                CherryPickFastError::DecodePath {
+                                CreateCommitFastError::DecodePath {
                                     source: err,
                                     item: "their",
                                 }
@@ -1296,7 +1297,7 @@ impl Repo {
                     warn!("BUG: A merge conflict was detected, but there were no entries in `conflicting_paths`. Maybe the wrong index entry was used?")
                 }
 
-                return Err(CherryPickFastError::MergeConflict { conflicting_paths });
+                return Err(CreateCommitFastError::MergeConflict { conflicting_paths });
             }
             let rebased_entries: HashMap<PathBuf, Option<(NonZeroOid, FileMode)>> =
                 changed_pathbufs
@@ -1327,7 +1328,7 @@ impl Repo {
                     .collect();
             let rebased_tree_oid =
                 hydrate_tree(self, Some(&target_commit.get_tree()?), rebased_entries)
-                    .map_err(CherryPickFastError::HydrateTree)?;
+                    .map_err(CreateCommitFastError::HydrateTree)?;
             self.find_tree_or_fail(rebased_tree_oid)?
         };
         Ok(rebased_tree)

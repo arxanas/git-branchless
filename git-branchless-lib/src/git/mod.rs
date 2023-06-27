@@ -22,7 +22,7 @@ pub use reference::{
     Branch, BranchType, CategorizedReferenceName, Reference, ReferenceName, ReferenceTarget,
 };
 pub use repo::{
-    message_prettify, AmendFastOptions, CherryPickFastError, CherryPickFastOptions,
+    message_prettify, AmendFastOptions, CherryPickFastOptions, CreateCommitFastError,
     Error as RepoError, GitVersion, PatchId, Repo, ResolvedReferenceInfo, Result as RepoResult,
     Time,
 };
