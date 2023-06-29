@@ -66,6 +66,49 @@
           {
             inherit (final.darwin.apple_sdk.frameworks) Security SystemConfiguration;
           };
+
+        scm-diff-editor = final.callPackage
+          (
+            { lib
+            , git
+            , libiconv
+            , ncurses
+            , openssl
+            , pkg-config
+            , rustPlatform
+            , sqlite
+            , stdenv
+            , Security
+            , SystemConfiguration
+            }:
+
+            rustPlatform.buildRustPackage {
+              name = "scm-diff-editor";
+
+              src = self;
+
+              cargoLock = {
+                lockFile = "${self}/Cargo.lock";
+              };
+
+              buildAndTestSubdir = "scm-record";
+              buildFeatures = [ "scm-diff-editor" ];
+              nativeBuildInputs = [ pkg-config ];
+
+              buildInputs = [
+                ncurses
+                openssl
+                sqlite
+              ] ++ lib.optionals stdenv.isDarwin [
+                Security
+                SystemConfiguration
+                libiconv
+              ];
+            }
+          )
+          {
+            inherit (final.darwin.apple_sdk.frameworks) Security SystemConfiguration;
+          };
       });
     } //
     (foreachSystem (system:
@@ -76,7 +119,11 @@
         };
       in
       {
-        packages.${system}.git-branchless = pkgs.git-branchless;
+        packages.${system} = {
+          inherit (pkgs)
+            git-branchless scm-diff-editor;
+        };
+
         defaultPackage.${system} = self.packages.${system}.git-branchless;
         checks.${system}.git-branchless = pkgs.git-branchless.overrideAttrs ({ preCheck, ... }: {
           cargoBuildType = "debug";
