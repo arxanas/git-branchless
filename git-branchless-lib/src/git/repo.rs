@@ -24,6 +24,7 @@ use chrono::NaiveDateTime;
 use cursive::theme::BaseColor;
 use cursive::utils::markup::StyledString;
 use git2::DiffOptions;
+use git2_ext::ops::Sign;
 use itertools::Itertools;
 use thiserror::Error;
 use tracing::{instrument, warn};
@@ -1152,31 +1153,81 @@ impl Repo {
     }
 
     /// Create a new commit.
-    #[instrument]
+    #[instrument(skip(signer))]
     pub fn create_commit(
         &self,
-        update_ref: Option<&str>,
         author: &Signature,
         committer: &Signature,
         message: &str,
         tree: &Tree,
         parents: Vec<&Commit>,
+        signer: Option<&dyn Sign>,
     ) -> Result<NonZeroOid> {
         let parents = parents
             .iter()
             .map(|commit| &commit.inner)
             .collect::<Vec<_>>();
-        let oid = self
-            .inner
-            .commit(
-                update_ref,
-                &author.inner,
-                &committer.inner,
-                message,
-                &tree.inner,
-                parents.as_slice(),
-            )
-            .map_err(Error::CreateCommit)?;
+        let oid = git2_ext::ops::commit(
+            &self.inner,
+            &author.inner,
+            &committer.inner,
+            message,
+            &tree.inner,
+            parents.as_slice(),
+            signer,
+        )
+        .map_err(Error::CreateCommit)?;
+        Ok(make_non_zero_oid(oid))
+    }
+
+    /// Amend a commit with all non-`None` values
+    #[instrument(skip(signer))]
+    pub fn amend_commit(
+        &self,
+        commit_to_amend: &Commit,
+        author: Option<&Signature>,
+        committer: Option<&Signature>,
+        message: Option<&str>,
+        tree: Option<&Tree>,
+        signer: Option<&dyn Sign>,
+    ) -> Result<NonZeroOid> {
+        macro_rules! owning_unwrap_or {
+            ($name:ident, $value_source:expr) => {
+                let owned_value;
+                let $name = if let Some(value) = $name {
+                    value
+                } else {
+                    owned_value = $value_source;
+                    &owned_value
+                };
+            };
+        }
+        owning_unwrap_or!(author, commit_to_amend.get_author());
+        owning_unwrap_or!(committer, commit_to_amend.get_committer());
+        owning_unwrap_or!(
+            message,
+            commit_to_amend
+                .inner
+                .message_raw()
+                .ok_or(Error::DecodeUtf8 {
+                    item: "raw message",
+                })?
+        );
+        owning_unwrap_or!(tree, commit_to_amend.get_tree()?);
+
+        let parents = commit_to_amend.get_parents();
+        let parents = parents.iter().map(|parent| &parent.inner).collect_vec();
+
+        let oid = git2_ext::ops::commit(
+            &self.inner,
+            &author.inner,
+            &committer.inner,
+            message,
+            &tree.inner,
+            parents.as_slice(),
+            signer,
+        )
+        .map_err(Error::Amend)?;
         Ok(make_non_zero_oid(oid))
     }
 
@@ -1365,12 +1416,12 @@ impl Repo {
             vec![]
         };
         let dehydrated_commit_oid = self.create_commit(
-            None,
             &signature,
             &signature,
             &message,
             &dehydrated_tree,
             parents.iter().collect_vec(),
+            None,
         )?;
         let dehydrated_commit = self.find_commit_or_fail(dehydrated_commit_oid)?;
         Ok(dehydrated_commit)

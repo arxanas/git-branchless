@@ -1523,6 +1523,7 @@ dependencies = [
  "git-branchless-testing",
  "git-branchless-undo",
  "git-record",
+ "git2-ext",
  "insta",
  "itertools 0.10.5",
  "lazy_static",
@@ -1611,6 +1612,7 @@ dependencies = [
  "git-branchless-testing",
  "git-record",
  "git2",
+ "git2-ext",
  "indicatif",
  "insta",
  "itertools 0.10.5",
@@ -1906,6 +1908,21 @@ dependencies = [
  "libgit2-sys",
  "log",
  "url",
+]
+
+[[package]]
+name = "git2-ext"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a02e722c7e38969577e2f7a59b13fde0ee93e32b21d64bcbc3befedb9dd57a8b"
+dependencies = [
+ "bstr",
+ "git2",
+ "itertools 0.10.5",
+ "log",
+ "shlex",
+ "tempfile",
+ "which",
 ]
 
 [[package]]
@@ -3966,6 +3983,17 @@ checksum = "bcda906d8be16e728fd5adc5b729afad4e444e106ab28cd1c7256e54fa61510f"
 dependencies = [
  "js-sys",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "which"
+version = "4.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2441c784c52b289a054b7201fc93253e288f094e2f4be9058343127c4226a269"
+dependencies = [
+ "either",
+ "libc",
+ "once_cell",
 ]
 
 [[package]]

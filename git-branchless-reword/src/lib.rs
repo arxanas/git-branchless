@@ -42,7 +42,7 @@ use lib::core::rewrite::{
 };
 use lib::git::{message_prettify, Commit, GitRunInfo, MaybeZeroOid, NonZeroOid, Repo};
 
-use git_branchless_opts::{ResolveRevsetOptions, Revset};
+use git_branchless_opts::{ResolveRevsetOptions, Revset, SignOptions};
 use git_branchless_revset::resolve_commits;
 
 /// The commit message(s) provided by the user.
@@ -67,6 +67,7 @@ pub fn reword(
     messages: InitialCommitMessages,
     git_run_info: &GitRunInfo,
     force_rewrite_public_commits: bool,
+    sign_options: SignOptions,
 ) -> EyreExitOr<()> {
     let repo = Repo::from_current_dir()?;
     let references_snapshot = repo.get_references_snapshot()?;
@@ -290,6 +291,7 @@ pub fn reword(
             reset: false,
             render_smartlog: false,
         },
+        sign_option: sign_options.into(),
     };
     let result = execute_rebase_plan(
         effects,
