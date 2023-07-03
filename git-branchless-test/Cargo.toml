@@ -20,7 +20,7 @@ git-branchless-invoke = { version = "0.7.0", path = "../git-branchless-invoke" }
 git-branchless-opts = { version = "0.7.0", path = "../git-branchless-opts" }
 git-branchless-revset = { version = "0.7.0", path = "../git-branchless-revset" }
 indexmap = "2.0.0"
-itertools = "0.10.5"
+itertools = "0.11.0"
 lazy_static = "1.4.0"
 lib = { package = "git-branchless-lib", version = "0.7.0", path = "../git-branchless-lib" }
 num_cpus = "1.14.0"
