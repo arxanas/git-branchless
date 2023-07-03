@@ -238,11 +238,17 @@ fn record_interactive(
         )?;
         process_diff_for_record(repo, &diff)?
     };
-    let record_state = RecordState { files };
+    let record_state = RecordState {
+        is_read_only: false,
+        files,
+    };
 
     let recorder = Recorder::new(record_state, EventSource::Crossterm);
     let result = recorder.run();
-    let RecordState { files: result } = match result {
+    let RecordState {
+        is_read_only: _,
+        files: result,
+    } = match result {
         Ok(result) => result,
         Err(RecordError::Cancelled) => {
             println!("Aborted.");

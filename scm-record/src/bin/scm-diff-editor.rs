@@ -809,7 +809,10 @@ mod render {
 }
 
 fn print_dry_run(write_root: &Path, state: RecordState) {
-    let scm_record::RecordState { files } = state;
+    let scm_record::RecordState {
+        is_read_only: _,
+        files,
+    } = state;
     for file in files {
         let file_path = write_root.join(file.path.clone());
         let (selected_contents, _unselected_contents) = file.get_selected_contents();
@@ -843,7 +846,13 @@ fn apply_changes(
     write_root: &Path,
     state: RecordState,
 ) -> Result<()> {
-    let scm_record::RecordState { files } = state;
+    let scm_record::RecordState {
+        is_read_only,
+        files,
+    } = state;
+    if is_read_only {
+        return Ok(());
+    }
     for file in files {
         let file_path = write_root.join(file.path.clone());
         let (selected_contents, _unselected_contents) = file.get_selected_contents();
@@ -882,6 +891,8 @@ struct Opts {
     dir_diff: bool,
     left: PathBuf,
     right: PathBuf,
+    #[clap(long = "read-only")]
+    read_only: bool,
     #[clap(short = 'N', long = "dry-run")]
     dry_run: bool,
     #[clap(
@@ -903,6 +914,7 @@ fn process_opts(filesystem: &dyn Filesystem, opts: &Opts) -> Result<(Vec<File<'s
             right,
             base: None,
             output: _,
+            read_only: _,
             dry_run: _,
         } => {
             let files = vec![render::create_file(
@@ -921,6 +933,7 @@ fn process_opts(filesystem: &dyn Filesystem, opts: &Opts) -> Result<(Vec<File<'s
             right,
             base: None,
             output: _,
+            read_only: _,
             dry_run: _,
         } => {
             let display_paths = filesystem.read_dir_diff_paths(left, right)?;
@@ -943,6 +956,7 @@ fn process_opts(filesystem: &dyn Filesystem, opts: &Opts) -> Result<(Vec<File<'s
             right,
             base: Some(base),
             output: Some(output),
+            read_only: _,
             dry_run: _,
         } => {
             let files = vec![render::create_merge_file(
@@ -961,6 +975,7 @@ fn process_opts(filesystem: &dyn Filesystem, opts: &Opts) -> Result<(Vec<File<'s
             right: _,
             base: Some(_),
             output: None,
+            read_only: _,
             dry_run: _,
         } => {
             unreachable!("--output is required when --base is provided");
@@ -972,6 +987,7 @@ fn process_opts(filesystem: &dyn Filesystem, opts: &Opts) -> Result<(Vec<File<'s
             right: _,
             base: Some(_),
             output: _,
+            read_only: _,
             dry_run: _,
         } => {
             unimplemented!("--base cannot be used with --dir-diff");
@@ -984,7 +1000,10 @@ fn main_inner() -> Result<()> {
     let opts = Opts::parse();
     let filesystem = RealFilesystem;
     let (files, write_root) = process_opts(&filesystem, &opts)?;
-    let state = scm_record::RecordState { files };
+    let state = scm_record::RecordState {
+        is_read_only: opts.read_only,
+        files,
+    };
     let event_source = scm_record::EventSource::Crossterm;
     let recorder = scm_record::Recorder::new(state, event_source);
     match recorder.run() {
@@ -1144,6 +1163,7 @@ qux2
                 right: PathBuf::from("right"),
                 base: None,
                 output: None,
+                read_only: false,
                 dry_run: false,
             },
         )?;
@@ -1196,7 +1216,14 @@ qux2
         "###);
 
         select_all(&mut files);
-        apply_changes(&mut filesystem, &write_root, RecordState { files })?;
+        apply_changes(
+            &mut filesystem,
+            &write_root,
+            RecordState {
+                is_read_only: false,
+                files,
+            },
+        )?;
         insta::assert_debug_snapshot!(filesystem, @r###"
         TestFilesystem {
             files: {
@@ -1254,11 +1281,19 @@ qux2
                 right: PathBuf::from("right"),
                 base: None,
                 output: None,
+                read_only: false,
                 dry_run: false,
             },
         )?;
 
-        apply_changes(&mut filesystem, &write_root, RecordState { files })?;
+        apply_changes(
+            &mut filesystem,
+            &write_root,
+            RecordState {
+                is_read_only: false,
+                files,
+            },
+        )?;
         insta::assert_debug_snapshot!(filesystem, @r###"
         TestFilesystem {
             files: {
@@ -1305,6 +1340,7 @@ qux2
                 right: PathBuf::from("right"),
                 base: None,
                 output: None,
+                read_only: false,
                 dry_run: false,
             },
         )?;
@@ -1332,7 +1368,14 @@ qux2
         "###);
 
         select_all(&mut files);
-        apply_changes(&mut filesystem, &write_root, RecordState { files })?;
+        apply_changes(
+            &mut filesystem,
+            &write_root,
+            RecordState {
+                is_read_only: false,
+                files,
+            },
+        )?;
         insta::assert_debug_snapshot!(filesystem, @r###"
         TestFilesystem {
             files: {
@@ -1369,6 +1412,7 @@ qux2
                 right: PathBuf::from("right"),
                 base: None,
                 output: None,
+                read_only: false,
                 dry_run: false,
             },
         )?;
@@ -1396,7 +1440,14 @@ qux2
         "###);
 
         select_all(&mut files);
-        apply_changes(&mut filesystem, &write_root, RecordState { files })?;
+        apply_changes(
+            &mut filesystem,
+            &write_root,
+            RecordState {
+                is_read_only: false,
+                files,
+            },
+        )?;
         insta::assert_debug_snapshot!(filesystem, @r###"
         TestFilesystem {
             files: {
@@ -1434,6 +1485,7 @@ qux2
                 right: PathBuf::from("right"),
                 base: None,
                 output: None,
+                read_only: false,
                 dry_run: false,
             },
         );
@@ -1467,11 +1519,19 @@ qux2
                 right: PathBuf::from("right/foo"),
                 base: None,
                 output: None,
+                read_only: false,
                 dry_run: false,
             },
         )?;
 
-        apply_changes(&mut filesystem, &write_root, RecordState { files })?;
+        apply_changes(
+            &mut filesystem,
+            &write_root,
+            RecordState {
+                is_read_only: false,
+                files,
+            },
+        )?;
         assert_debug_snapshot!(filesystem, @r###"
         TestFilesystem {
             files: {
@@ -1522,11 +1582,19 @@ qux2
                 right: PathBuf::from("right/foo"),
                 base: None,
                 output: None,
+                read_only: false,
                 dry_run: false,
             },
         )?;
 
-        apply_changes(&mut filesystem, &write_root, RecordState { files })?;
+        apply_changes(
+            &mut filesystem,
+            &write_root,
+            RecordState {
+                is_read_only: false,
+                files,
+            },
+        )?;
         assert_debug_snapshot!(filesystem, @r###"
         TestFilesystem {
             files: {
@@ -1594,6 +1662,7 @@ Hello world 4
                 dir_diff: false,
                 left: "left".into(),
                 right: "right".into(),
+                read_only: false,
                 dry_run: false,
                 base: Some("base".into()),
                 output: Some("output".into()),
@@ -1644,7 +1713,14 @@ Hello world 4
         "###);
 
         select_all(&mut files);
-        apply_changes(&mut filesystem, &write_root, RecordState { files })?;
+        apply_changes(
+            &mut filesystem,
+            &write_root,
+            RecordState {
+                is_read_only: false,
+                files,
+            },
+        )?;
 
         assert_debug_snapshot!(filesystem, @r###"
         TestFilesystem {
