@@ -40,7 +40,7 @@ git-branchless-submit = { version = "0.7.0", path = "../git-branchless-submit" }
 git-branchless-test = { version = "0.7.0", path = "../git-branchless-test" }
 git-branchless-undo = { version = "0.7.0", path = "../git-branchless-undo" }
 git-record = { version = "0.3", path = "../git-record" }
-itertools = "0.10.5"
+itertools = "0.11.0"
 lazy_static = "1.4.0"
 lib = { package = "git-branchless-lib", version = "0.7.0", path = "../git-branchless-lib" }
 man = "0.3.0"
