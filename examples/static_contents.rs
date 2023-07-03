@@ -92,13 +92,19 @@ fn main() {
             ],
         },
     ];
-    let record_state = RecordState { files };
+    let record_state = RecordState {
+        is_read_only: false,
+        files,
+    };
 
     let recorder = Recorder::new(record_state, EventSource::Crossterm);
     let result = recorder.run();
     match result {
         Ok(result) => {
-            let RecordState { files } = result;
+            let RecordState {
+                is_read_only: _,
+                files,
+            } = result;
             for file in files {
                 println!("--- Path {:?} final lines: ---", file.path);
                 let (selected, _unselected) = file.get_selected_contents();

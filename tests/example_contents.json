@@ -1,4 +1,5 @@
 {
+  "is_read_only": false,
   "files": [
     {
       "path": "foo/bar",
@@ -58,9 +59,7 @@
         },
         {
           "Unchanged": {
-            "lines": [
-              "this is some trailing text\n"
-            ]
+            "lines": ["this is some trailing text\n"]
           }
         }
       ]
@@ -71,10 +70,7 @@
       "sections": [
         {
           "Unchanged": {
-            "lines": [
-              "Some leading text 1\n",
-              "Some leading text 2\n"
-            ]
+            "lines": ["Some leading text 1\n", "Some leading text 2\n"]
           }
         },
         {
@@ -105,9 +101,7 @@
         },
         {
           "Unchanged": {
-            "lines": [
-              "this is some trailing text\n"
-            ]
+            "lines": ["this is some trailing text\n"]
           }
         }
       ]
