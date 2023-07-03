@@ -766,9 +766,11 @@ impl<'a> Recorder<'a> {
         menu_bar: MenuBar<'static>,
         debug_info: Option<AppDebugInfo>,
     ) -> AppView<'a> {
-        let file_views: Vec<FileView> = self
-            .state
-            .files
+        let RecordState {
+            is_read_only,
+            files,
+        } = &self.state;
+        let file_views: Vec<FileView> = files
             .iter()
             .enumerate()
             .map(|(file_idx, file)| {
@@ -788,6 +790,7 @@ impl<'a> Recorder<'a> {
                         icon_style: TristateIconStyle::Check,
                         tristate: file_toggled,
                         is_focused,
+                        is_read_only: *is_read_only,
                     },
                     expand_box: TristateBox {
                         use_unicode: self.use_unicode,
@@ -795,6 +798,7 @@ impl<'a> Recorder<'a> {
                         icon_style: TristateIconStyle::Expand,
                         tristate: file_expanded,
                         is_focused,
+                        is_read_only: false,
                     },
                     is_header_selected: is_focused,
                     old_path: file.old_path.as_deref(),
@@ -833,9 +837,11 @@ impl<'a> Recorder<'a> {
                             }
                             section_views.push(SectionView {
                                 use_unicode: self.use_unicode,
+                                is_read_only: *is_read_only,
                                 section_key,
                                 toggle_box: TristateBox {
                                     use_unicode: self.use_unicode,
+                                    is_read_only: *is_read_only,
                                     id: ComponentId::ToggleBox(SelectionKey::Section(section_key)),
                                     tristate: section_toggled,
                                     icon_style: TristateIconStyle::Check,
@@ -843,6 +849,7 @@ impl<'a> Recorder<'a> {
                                 },
                                 expand_box: TristateBox {
                                     use_unicode: self.use_unicode,
+                                    is_read_only: false,
                                     id: ComponentId::ExpandBox(SelectionKey::Section(section_key)),
                                     tristate: section_expanded,
                                     icon_style: TristateIconStyle::Expand,
@@ -1061,7 +1068,10 @@ impl<'a> Recorder<'a> {
     }
 
     fn num_user_file_changes(&self) -> Result<usize, RecordError> {
-        let RecordState { files } = &self.state;
+        let RecordState {
+            files,
+            is_read_only: _,
+        } = &self.state;
         let mut result = 0;
         for (file_idx, _file) in files.iter().enumerate() {
             match self.file_tristate(FileKey { file_idx })? {
@@ -1496,6 +1506,10 @@ impl<'a> Recorder<'a> {
     }
 
     fn toggle_item(&mut self, selection: SelectionKey) -> Result<(), RecordError> {
+        if self.state.is_read_only {
+            return Ok(());
+        }
+
         match selection {
             SelectionKey::None => {}
             SelectionKey::File(file_key) => {
@@ -1831,38 +1845,38 @@ struct TristateBox<Id> {
     tristate: Tristate,
     icon_style: TristateIconStyle,
     is_focused: bool,
+    is_read_only: bool,
 }
 
 impl<Id> TristateBox<Id> {
-    fn text(&self) -> &'static str {
+    fn text(&self) -> String {
         let Self {
             use_unicode,
             id: _,
             tristate,
             icon_style,
             is_focused,
+            is_read_only,
         } = self;
 
-        match (icon_style, tristate, is_focused, use_unicode) {
-            (TristateIconStyle::Expand, Tristate::False, false, _) => "[+]",
-            (TristateIconStyle::Expand, Tristate::False, true, _) => "(+)",
-            (TristateIconStyle::Expand, Tristate::True, false, _) => "[-]",
-            (TristateIconStyle::Expand, Tristate::True, true, _) => "(-)",
+        let (l, r) = match (is_read_only, is_focused, use_unicode) {
+            (true, _, false) => ("<", ">"),
+            (true, _, true) => ("〈", "〉"),
+            (false, false, _) => ("[", "]"),
+            (false, true, _) => ("(", ")"),
+        };
 
-            (TristateIconStyle::Check | TristateIconStyle::Expand, Tristate::Partial, false, _) => {
-                "[~]"
-            }
-            (TristateIconStyle::Check | TristateIconStyle::Expand, Tristate::Partial, true, _) => {
-                "(~)"
-            }
+        let inner = match (icon_style, tristate, use_unicode) {
+            (TristateIconStyle::Expand, Tristate::False, _) => "+",
+            (TristateIconStyle::Expand, Tristate::True, _) => "-",
 
-            (TristateIconStyle::Check, Tristate::False, false, _) => "[ ]",
-            (TristateIconStyle::Check, Tristate::False, true, _) => "( )",
-            (TristateIconStyle::Check, Tristate::True, false, false) => "[x]",
-            (TristateIconStyle::Check, Tristate::True, true, false) => "(x)",
-            (TristateIconStyle::Check, Tristate::True, false, true) => "[\u{00D7}]", // Multiplication Sign
-            (TristateIconStyle::Check, Tristate::True, true, true) => "(\u{00D7})", // Multiplication Sign
-        }
+            (TristateIconStyle::Check | TristateIconStyle::Expand, Tristate::Partial, _) => "~",
+
+            (TristateIconStyle::Check, Tristate::False, _) => " ",
+            (TristateIconStyle::Check, Tristate::True, false) => "x",
+            (TristateIconStyle::Check, Tristate::True, true) => "\u{00D7}", // Multiplication Sign
+        };
+        format!("{l}{inner}{r}")
     }
 }
 
@@ -1874,7 +1888,15 @@ impl<Id: Clone + Debug + Eq + Hash> Component for TristateBox<Id> {
     }
 
     fn draw(&self, viewport: &mut Viewport<Self::Id>, x: isize, y: isize) {
-        let span = Span::styled(self.text(), Style::default().add_modifier(Modifier::BOLD));
+        let style = if self.is_read_only {
+            Style::default()
+                .fg(Color::Gray)
+                // .bg(Color::DarkGray)
+                .add_modifier(Modifier::DIM)
+        } else {
+            Style::default().add_modifier(Modifier::BOLD)
+        };
+        let span = Span::styled(self.text(), style);
         viewport.draw_span(x, y, &span);
     }
 }
@@ -2254,6 +2276,7 @@ enum SectionSelection {
 #[derive(Clone, Debug)]
 struct SectionView<'a> {
     use_unicode: bool,
+    is_read_only: bool,
     section_key: SectionKey,
     toggle_box: TristateBox<ComponentId>,
     expand_box: TristateBox<ComponentId>,
@@ -2296,6 +2319,7 @@ impl Component for SectionView<'_> {
     fn draw(&self, viewport: &mut Viewport<Self::Id>, x: isize, y: isize) {
         let Self {
             use_unicode,
+            is_read_only,
             section_key,
             toggle_box,
             expand_box,
@@ -2464,6 +2488,7 @@ impl Component for SectionView<'_> {
                             icon_style: TristateIconStyle::Check,
                             tristate: Tristate::from(*is_checked),
                             is_focused,
+                            is_read_only: *is_read_only,
                         };
                         let line_view = SectionLineView {
                             line_key,
@@ -2502,6 +2527,7 @@ impl Component for SectionView<'_> {
                     icon_style: TristateIconStyle::Check,
                     tristate: Tristate::from(*is_checked),
                     is_focused,
+                    is_read_only: *is_read_only,
                 };
                 let toggle_box_rect = viewport.draw_component(x, y, &toggle_box);
                 let x = x + toggle_box_rect.width.unwrap_isize() + 1;
@@ -2531,6 +2557,7 @@ impl Component for SectionView<'_> {
                     icon_style: TristateIconStyle::Check,
                     tristate: Tristate::from(*is_checked),
                     is_focused,
+                    is_read_only: *is_read_only,
                 };
                 let toggle_box_rect = viewport.draw_component(x, y, &toggle_box);
                 let x = x + toggle_box_rect.width.unwrap_isize() + 1;
@@ -2848,6 +2875,7 @@ mod tests {
         assert_matches!(recorder.run(), Err(RecordError::Cancelled));
 
         let state = RecordState {
+            is_read_only: false,
             files: vec![File {
                 old_path: None,
                 path: Cow::Borrowed(Path::new("foo/bar")),

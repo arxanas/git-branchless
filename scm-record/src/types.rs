@@ -13,6 +13,10 @@ use thiserror::Error;
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct RecordState<'a> {
+    /// Render the UI as read-only, such that the checkbox states cannot be
+    /// changed by the user.
+    pub is_read_only: bool,
+
     /// The state of each file. This is rendered in order, so you may want to
     /// sort this list by path before providing it.
     pub files: Vec<File<'a>>,

@@ -438,6 +438,7 @@ fn test_quit_dialog_buttons() -> eyre::Result<()> {
 #[test]
 fn test_enter_next() -> eyre::Result<()> {
     let state = RecordState {
+        is_read_only: false,
         files: vec![
             File {
                 old_path: None,
@@ -521,6 +522,7 @@ fn test_enter_next() -> eyre::Result<()> {
 #[test]
 fn test_file_mode_change() -> eyre::Result<()> {
     let state = RecordState {
+        is_read_only: false,
         files: vec![
             File {
                 old_path: None,
@@ -568,6 +570,7 @@ fn test_file_mode_change() -> eyre::Result<()> {
     let recorder = Recorder::new(state, event_source);
     insta::assert_debug_snapshot!(recorder.run()?, @r###"
     RecordState {
+        is_read_only: false,
         files: [
             File {
                 old_path: None,
@@ -633,6 +636,7 @@ fn test_abbreviate_unchanged_sections() -> eyre::Result<()> {
     let section_length = num_context_lines * 2;
     let middle_length = section_length + 1;
     let state = RecordState {
+        is_read_only: false,
         files: vec![File {
             old_path: None,
             path: Cow::Borrowed(Path::new("foo")),
@@ -715,6 +719,7 @@ fn test_no_abbreviate_short_unchanged_sections() -> eyre::Result<()> {
     let section_length = num_context_lines - 1;
     let middle_length = num_context_lines * 2;
     let state = RecordState {
+        is_read_only: false,
         files: vec![File {
             old_path: None,
             path: Cow::Borrowed(Path::new("foo")),
@@ -790,6 +795,7 @@ fn test_no_abbreviate_short_unchanged_sections() -> eyre::Result<()> {
 #[test]
 fn test_record_binary_file() -> eyre::Result<()> {
     let state = RecordState {
+        is_read_only: false,
         files: vec![File {
             old_path: None,
             path: Cow::Borrowed(Path::new("foo")),
@@ -827,6 +833,7 @@ fn test_record_binary_file() -> eyre::Result<()> {
 
     assert_debug_snapshot!(state, @r###"
     RecordState {
+        is_read_only: false,
         files: [
             File {
                 old_path: None,
@@ -867,6 +874,7 @@ fn test_record_binary_file() -> eyre::Result<()> {
 #[test]
 fn test_record_binary_file_noop() -> eyre::Result<()> {
     let state = RecordState {
+        is_read_only: false,
         files: vec![File {
             old_path: None,
             path: Cow::Borrowed(Path::new("foo")),
@@ -899,6 +907,7 @@ fn test_record_binary_file_noop() -> eyre::Result<()> {
 
     assert_debug_snapshot!(state, @r###"
     RecordState {
+        is_read_only: false,
         files: [
             File {
                 old_path: None,
@@ -1034,6 +1043,7 @@ fn test_mouse_support() -> eyre::Result<()> {
 #[test]
 fn test_mouse_click_checkbox() -> eyre::Result<()> {
     let state = RecordState {
+        is_read_only: false,
         files: vec![
             File {
                 old_path: None,
@@ -1098,6 +1108,7 @@ fn test_mouse_click_checkbox() -> eyre::Result<()> {
 #[test]
 fn test_mouse_click_wide_line() -> eyre::Result<()> {
     let state = RecordState {
+        is_read_only: false,
         files: vec![File {
             old_path: None,
             path: Cow::Borrowed(Path::new("foo")),
@@ -1186,6 +1197,7 @@ fn test_mouse_click_wide_line() -> eyre::Result<()> {
 #[test]
 fn test_mouse_click_dialog_buttons() -> eyre::Result<()> {
     let state = RecordState {
+        is_read_only: false,
         files: vec![File {
             old_path: None,
             path: Cow::Borrowed(Path::new("foo")),
@@ -1236,6 +1248,7 @@ fn test_mouse_click_dialog_buttons() -> eyre::Result<()> {
 #[test]
 fn test_render_old_path() -> eyre::Result<()> {
     let state = RecordState {
+        is_read_only: false,
         files: vec![File {
             old_path: Some(Cow::Borrowed(Path::new("foo"))),
             path: Cow::Borrowed(Path::new("bar")),
@@ -1915,6 +1928,194 @@ fn test_expand_menu() -> eyre::Result<()> {
     "                                                                                "
     "                                                                                "
     "                                                                                "
+    "###);
+
+    Ok(())
+}
+
+#[test]
+fn test_read_only() -> eyre::Result<()> {
+    let state = RecordState {
+        is_read_only: true,
+        ..example_contents()
+    };
+    let initial = TestingScreenshot::default();
+    let after_toggle_ignored = TestingScreenshot::default();
+    let recorder = Recorder::new(
+        state,
+        EventSource::testing(
+            80,
+            23,
+            [
+                Event::ExpandAll,
+                initial.event(),
+                Event::ToggleAll,
+                after_toggle_ignored.event(),
+                Event::QuitAccept,
+            ],
+        ),
+    );
+    let state = recorder.run()?;
+
+    insta::assert_display_snapshot!(initial, @r###"
+    "[File] [Edit] [Select] [View]                                                   "
+    "〈~〉 foo/bar                                                                (-)" Hidden by multi-width symbols: [(1, " "), (4, " ")]
+    "        ⋮                                                                       "
+    "       18 this is some text⏎                                                    "
+    "       19 this is some text⏎                                                    "
+    "       20 this is some text⏎                                                    "
+    "  〈~〉 Section 1/1                                                          [-]" Hidden by multi-width symbols: [(3, " "), (6, " ")]
+    "    〈×〉 - before text 1⏎                                                      " Hidden by multi-width symbols: [(5, " "), (8, " ")]
+    "    〈×〉 - before text 2⏎                                                      " Hidden by multi-width symbols: [(5, " "), (8, " ")]
+    "    〈×〉 + after text 1⏎                                                       " Hidden by multi-width symbols: [(5, " "), (8, " ")]
+    "    〈 〉 + after text 2⏎                                                       " Hidden by multi-width symbols: [(5, " "), (8, " ")]
+    "       23 this is some trailing text⏎                                           "
+    "〈×〉 baz                                                                    [-]" Hidden by multi-width symbols: [(1, " "), (4, " ")]
+    "        1 Some leading text 1⏎                                                  "
+    "        2 Some leading text 2⏎                                                  "
+    "  〈×〉 Section 1/1                                                          [-]" Hidden by multi-width symbols: [(3, " "), (6, " ")]
+    "    〈×〉 - before text 1⏎                                                      " Hidden by multi-width symbols: [(5, " "), (8, " ")]
+    "    〈×〉 - before text 2⏎                                                      " Hidden by multi-width symbols: [(5, " "), (8, " ")]
+    "    〈×〉 + after text 1⏎                                                       " Hidden by multi-width symbols: [(5, " "), (8, " ")]
+    "    〈×〉 + after text 2⏎                                                       " Hidden by multi-width symbols: [(5, " "), (8, " ")]
+    "        5 this is some trailing text⏎                                           "
+    "                                                                                "
+    "                                                                                "
+    "###);
+    insta::assert_display_snapshot!(after_toggle_ignored, @r###"
+    "[File] [Edit] [Select] [View]                                                   "
+    "〈~〉 foo/bar                                                                (-)" Hidden by multi-width symbols: [(1, " "), (4, " ")]
+    "        ⋮                                                                       "
+    "       18 this is some text⏎                                                    "
+    "       19 this is some text⏎                                                    "
+    "       20 this is some text⏎                                                    "
+    "  〈~〉 Section 1/1                                                          [-]" Hidden by multi-width symbols: [(3, " "), (6, " ")]
+    "    〈 〉 - before text 1⏎                                                      " Hidden by multi-width symbols: [(5, " "), (8, " ")]
+    "    〈 〉 - before text 2⏎                                                      " Hidden by multi-width symbols: [(5, " "), (8, " ")]
+    "    〈 〉 + after text 1⏎                                                       " Hidden by multi-width symbols: [(5, " "), (8, " ")]
+    "    〈×〉 + after text 2⏎                                                       " Hidden by multi-width symbols: [(5, " "), (8, " ")]
+    "       23 this is some trailing text⏎                                           "
+    "〈 〉 baz                                                                    [-]" Hidden by multi-width symbols: [(1, " "), (4, " ")]
+    "        1 Some leading text 1⏎                                                  "
+    "        2 Some leading text 2⏎                                                  "
+    "  〈 〉 Section 1/1                                                          [-]" Hidden by multi-width symbols: [(3, " "), (6, " ")]
+    "    〈 〉 - before text 1⏎                                                      " Hidden by multi-width symbols: [(5, " "), (8, " ")]
+    "    〈 〉 - before text 2⏎                                                      " Hidden by multi-width symbols: [(5, " "), (8, " ")]
+    "    〈 〉 + after text 1⏎                                                       " Hidden by multi-width symbols: [(5, " "), (8, " ")]
+    "    〈 〉 + after text 2⏎                                                       " Hidden by multi-width symbols: [(5, " "), (8, " ")]
+    "        5 this is some trailing text⏎                                           "
+    "                                                                                "
+    "                                                                                "
+    "###);
+
+    insta::assert_debug_snapshot!(state, @r###"
+    RecordState {
+        is_read_only: true,
+        files: [
+            File {
+                old_path: None,
+                path: "foo/bar",
+                file_mode: None,
+                sections: [
+                    Unchanged {
+                        lines: [
+                            "this is some text\n",
+                            "this is some text\n",
+                            "this is some text\n",
+                            "this is some text\n",
+                            "this is some text\n",
+                            "this is some text\n",
+                            "this is some text\n",
+                            "this is some text\n",
+                            "this is some text\n",
+                            "this is some text\n",
+                            "this is some text\n",
+                            "this is some text\n",
+                            "this is some text\n",
+                            "this is some text\n",
+                            "this is some text\n",
+                            "this is some text\n",
+                            "this is some text\n",
+                            "this is some text\n",
+                            "this is some text\n",
+                            "this is some text\n",
+                        ],
+                    },
+                    Changed {
+                        lines: [
+                            SectionChangedLine {
+                                is_checked: false,
+                                change_type: Removed,
+                                line: "before text 1\n",
+                            },
+                            SectionChangedLine {
+                                is_checked: false,
+                                change_type: Removed,
+                                line: "before text 2\n",
+                            },
+                            SectionChangedLine {
+                                is_checked: false,
+                                change_type: Added,
+                                line: "after text 1\n",
+                            },
+                            SectionChangedLine {
+                                is_checked: true,
+                                change_type: Added,
+                                line: "after text 2\n",
+                            },
+                        ],
+                    },
+                    Unchanged {
+                        lines: [
+                            "this is some trailing text\n",
+                        ],
+                    },
+                ],
+            },
+            File {
+                old_path: None,
+                path: "baz",
+                file_mode: None,
+                sections: [
+                    Unchanged {
+                        lines: [
+                            "Some leading text 1\n",
+                            "Some leading text 2\n",
+                        ],
+                    },
+                    Changed {
+                        lines: [
+                            SectionChangedLine {
+                                is_checked: false,
+                                change_type: Removed,
+                                line: "before text 1\n",
+                            },
+                            SectionChangedLine {
+                                is_checked: false,
+                                change_type: Removed,
+                                line: "before text 2\n",
+                            },
+                            SectionChangedLine {
+                                is_checked: false,
+                                change_type: Added,
+                                line: "after text 1\n",
+                            },
+                            SectionChangedLine {
+                                is_checked: false,
+                                change_type: Added,
+                                line: "after text 2\n",
+                            },
+                        ],
+                    },
+                    Unchanged {
+                        lines: [
+                            "this is some trailing text\n",
+                        ],
+                    },
+                ],
+            },
+        ],
+    }
     "###);
 
     Ok(())
