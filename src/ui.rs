@@ -2589,6 +2589,7 @@ impl Component for SectionLineView<'_> {
     }
 
     fn draw(&self, viewport: &mut Viewport<Self::Id>, x: isize, y: isize) {
+        const NEWLINE_ICON: &str = "⏎";
         let Self { line_key: _, inner } = self;
         viewport.fill_rest_of_line(x, y);
         match inner {
@@ -2599,11 +2600,24 @@ impl Component for SectionLineView<'_> {
                 // lines.
                 let line_num_rect =
                     viewport.draw_span(x, y, &Span::styled(format!("{line_num:5} "), style));
-                viewport.draw_span(
+                let (line, line_end) = match line.strip_suffix('\n') {
+                    Some(line) => (
+                        Span::styled(line, style),
+                        Some(Span::styled(
+                            NEWLINE_ICON,
+                            Style::default().fg(Color::DarkGray),
+                        )),
+                    ),
+                    None => (Span::styled(*line, style), None),
+                };
+                let line_rect = viewport.draw_span(
                     line_num_rect.x + line_num_rect.width.unwrap_isize(),
                     line_num_rect.y,
-                    &Span::styled(*line, style),
+                    &line,
                 );
+                if let Some(line_end) = line_end {
+                    viewport.draw_span(line_rect.x + line_rect.width.unwrap_isize(), y, &line_end);
+                }
             }
 
             SectionLineViewInner::Changed {
@@ -2620,7 +2634,20 @@ impl Component for SectionLineView<'_> {
                 };
                 viewport.draw_span(x, y, &Span::styled(change_type_text, style));
                 let x = x + change_type_text.width().unwrap_isize();
-                viewport.draw_span(x, y, &Span::styled(*line, style));
+                let (line, line_end) = match line.strip_suffix('\n') {
+                    Some(line) => (
+                        Span::styled(line, style),
+                        Some(Span::styled(
+                            NEWLINE_ICON,
+                            Style::default().fg(Color::DarkGray),
+                        )),
+                    ),
+                    None => (Span::styled(*line, style), None),
+                };
+                let line_rect = viewport.draw_span(x, y, &line);
+                if let Some(line_end) = line_end {
+                    viewport.draw_span(line_rect.x + line_rect.width.unwrap_isize(), y, &line_end);
+                }
             }
         }
     }
