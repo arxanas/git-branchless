@@ -420,9 +420,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.3.8"
+version = "4.3.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d9394150f5b4273a1763355bd1c2ec54cc5a2593f790587bcd6b2c947cfa9211"
+checksum = "384e169cc618c613d5e3ca6404dda77a8685a63e08660dcc64abaf7da7cb0c7a"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -431,13 +431,12 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.3.8"
+version = "4.3.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a78fbdd3cc2914ddf37ba444114bc7765bbdcb55ec9cbe6fa054f0137400717"
+checksum = "ef137bbe35aab78bdb468ccfba75a5f4d8321ae011d34063770780545176af2d"
 dependencies = [
  "anstream",
  "anstyle",
- "bitflags 1.3.2",
  "clap_lex 0.5.0",
  "strsim",
 ]
@@ -475,7 +474,7 @@ version = "0.2.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f2e32b579dae093c2424a8b7e2bea09c89da01e1ce5065eb2f0a6f1cc15cc1f"
 dependencies = [
- "clap 4.3.8",
+ "clap 4.3.10",
  "roff 0.2.1",
 ]
 
@@ -588,7 +587,7 @@ dependencies = [
  "anes",
  "cast",
  "ciborium",
- "clap 4.3.8",
+ "clap 4.3.10",
  "criterion-plot",
  "is-terminal",
  "itertools 0.10.5",
@@ -1582,7 +1581,7 @@ dependencies = [
 name = "git-branchless-invoke"
 version = "0.7.0"
 dependencies = [
- "clap 4.3.8",
+ "clap 4.3.10",
  "color-eyre",
  "cursive_core",
  "eyre",
@@ -1671,7 +1670,7 @@ dependencies = [
 name = "git-branchless-opts"
 version = "0.7.0"
 dependencies = [
- "clap 4.3.8",
+ "clap 4.3.10",
  "clap_mangen",
  "git-branchless-lib",
  "itertools 0.11.0",
@@ -1779,7 +1778,7 @@ dependencies = [
 name = "git-branchless-submit"
 version = "0.7.0"
 dependencies = [
- "clap 4.3.8",
+ "clap 4.3.10",
  "cursive_core",
  "esl01-dag 0.2.1",
  "eyre",
@@ -1806,7 +1805,7 @@ version = "0.7.0"
 dependencies = [
  "assert_cmd",
  "bstr",
- "clap 4.3.8",
+ "clap 4.3.10",
  "crossbeam",
  "cursive",
  "esl01-dag 0.3.0",
@@ -3151,7 +3150,7 @@ version = "0.1.0"
 dependencies = [
  "assert_matches",
  "cassowary",
- "clap 4.3.8",
+ "clap 4.3.10",
  "criterion",
  "crossterm 0.26.1",
  "diffy",
