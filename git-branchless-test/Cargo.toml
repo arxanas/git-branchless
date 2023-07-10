@@ -29,7 +29,7 @@ scm-bisect = { version = "0.1.0", path = "../scm-bisect" }
 serde = { version = "1.0.166", features = ["serde_derive", "derive"] }
 serde_json = "1.0.100"
 tempfile = "3.6.0"
-thiserror = "1.0.40"
+thiserror = "1.0.43"
 tracing = "0.1.37"
 
 [dev-dependencies]
