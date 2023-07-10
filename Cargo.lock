@@ -420,9 +420,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.3.10"
+version = "4.3.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "384e169cc618c613d5e3ca6404dda77a8685a63e08660dcc64abaf7da7cb0c7a"
+checksum = "1640e5cc7fb47dbb8338fd471b105e7ed6c3cb2aeb00c2e067127ffd3764a05d"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -431,9 +431,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.3.10"
+version = "4.3.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ef137bbe35aab78bdb468ccfba75a5f4d8321ae011d34063770780545176af2d"
+checksum = "98c59138d527eeaf9b53f35a77fcc1fad9d883116070c63d5de1c7dc7b00c72b"
 dependencies = [
  "anstream",
  "anstyle",
@@ -474,7 +474,7 @@ version = "0.2.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f2e32b579dae093c2424a8b7e2bea09c89da01e1ce5065eb2f0a6f1cc15cc1f"
 dependencies = [
- "clap 4.3.10",
+ "clap 4.3.11",
  "roff 0.2.1",
 ]
 
@@ -587,7 +587,7 @@ dependencies = [
  "anes",
  "cast",
  "ciborium",
- "clap 4.3.10",
+ "clap 4.3.11",
  "criterion-plot",
  "is-terminal",
  "itertools 0.10.5",
@@ -1581,7 +1581,7 @@ dependencies = [
 name = "git-branchless-invoke"
 version = "0.7.0"
 dependencies = [
- "clap 4.3.10",
+ "clap 4.3.11",
  "color-eyre",
  "cursive_core",
  "eyre",
@@ -1670,7 +1670,7 @@ dependencies = [
 name = "git-branchless-opts"
 version = "0.7.0"
 dependencies = [
- "clap 4.3.10",
+ "clap 4.3.11",
  "clap_mangen",
  "git-branchless-lib",
  "itertools 0.11.0",
@@ -1778,7 +1778,7 @@ dependencies = [
 name = "git-branchless-submit"
 version = "0.7.0"
 dependencies = [
- "clap 4.3.10",
+ "clap 4.3.11",
  "cursive_core",
  "esl01-dag 0.2.1",
  "eyre",
@@ -1805,7 +1805,7 @@ version = "0.7.0"
 dependencies = [
  "assert_cmd",
  "bstr",
- "clap 4.3.10",
+ "clap 4.3.11",
  "crossbeam",
  "cursive",
  "esl01-dag 0.3.0",
@@ -3150,7 +3150,7 @@ version = "0.1.0"
 dependencies = [
  "assert_matches",
  "cassowary",
- "clap 4.3.10",
+ "clap 4.3.11",
  "criterion",
  "crossterm 0.26.1",
  "diffy",
