@@ -1940,7 +1940,8 @@ fn test_read_only() -> eyre::Result<()> {
         ..example_contents()
     };
     let initial = TestingScreenshot::default();
-    let after_toggle_ignored = TestingScreenshot::default();
+    let after_toggle_all_ignored = TestingScreenshot::default();
+    let after_toggle_all_uniform_ignored = TestingScreenshot::default();
     let recorder = Recorder::new(
         state,
         EventSource::testing(
@@ -1950,7 +1951,9 @@ fn test_read_only() -> eyre::Result<()> {
                 Event::ExpandAll,
                 initial.event(),
                 Event::ToggleAll,
-                after_toggle_ignored.event(),
+                after_toggle_all_ignored.event(),
+                Event::ToggleAllUniform,
+                after_toggle_all_uniform_ignored.event(),
                 Event::QuitAccept,
             ],
         ),
@@ -1982,7 +1985,7 @@ fn test_read_only() -> eyre::Result<()> {
     "                                                                                "
     "                                                                                "
     "###);
-    insta::assert_display_snapshot!(after_toggle_ignored, @r###"
+    insta::assert_display_snapshot!(after_toggle_all_ignored, @r###"
     "[File] [Edit] [Select] [View]                                                   "
     "〈~〉 foo/bar                                                                (-)" Hidden by multi-width symbols: [(1, " "), (4, " ")]
     "        ⋮                                                                       "
@@ -1990,19 +1993,44 @@ fn test_read_only() -> eyre::Result<()> {
     "       19 this is some text⏎                                                    "
     "       20 this is some text⏎                                                    "
     "  〈~〉 Section 1/1                                                          [-]" Hidden by multi-width symbols: [(3, " "), (6, " ")]
-    "    〈 〉 - before text 1⏎                                                      " Hidden by multi-width symbols: [(5, " "), (8, " ")]
-    "    〈 〉 - before text 2⏎                                                      " Hidden by multi-width symbols: [(5, " "), (8, " ")]
-    "    〈 〉 + after text 1⏎                                                       " Hidden by multi-width symbols: [(5, " "), (8, " ")]
-    "    〈×〉 + after text 2⏎                                                       " Hidden by multi-width symbols: [(5, " "), (8, " ")]
+    "    〈×〉 - before text 1⏎                                                      " Hidden by multi-width symbols: [(5, " "), (8, " ")]
+    "    〈×〉 - before text 2⏎                                                      " Hidden by multi-width symbols: [(5, " "), (8, " ")]
+    "    〈×〉 + after text 1⏎                                                       " Hidden by multi-width symbols: [(5, " "), (8, " ")]
+    "    〈 〉 + after text 2⏎                                                       " Hidden by multi-width symbols: [(5, " "), (8, " ")]
     "       23 this is some trailing text⏎                                           "
-    "〈 〉 baz                                                                    [-]" Hidden by multi-width symbols: [(1, " "), (4, " ")]
+    "〈×〉 baz                                                                    [-]" Hidden by multi-width symbols: [(1, " "), (4, " ")]
     "        1 Some leading text 1⏎                                                  "
     "        2 Some leading text 2⏎                                                  "
-    "  〈 〉 Section 1/1                                                          [-]" Hidden by multi-width symbols: [(3, " "), (6, " ")]
-    "    〈 〉 - before text 1⏎                                                      " Hidden by multi-width symbols: [(5, " "), (8, " ")]
-    "    〈 〉 - before text 2⏎                                                      " Hidden by multi-width symbols: [(5, " "), (8, " ")]
-    "    〈 〉 + after text 1⏎                                                       " Hidden by multi-width symbols: [(5, " "), (8, " ")]
+    "  〈×〉 Section 1/1                                                          [-]" Hidden by multi-width symbols: [(3, " "), (6, " ")]
+    "    〈×〉 - before text 1⏎                                                      " Hidden by multi-width symbols: [(5, " "), (8, " ")]
+    "    〈×〉 - before text 2⏎                                                      " Hidden by multi-width symbols: [(5, " "), (8, " ")]
+    "    〈×〉 + after text 1⏎                                                       " Hidden by multi-width symbols: [(5, " "), (8, " ")]
+    "    〈×〉 + after text 2⏎                                                       " Hidden by multi-width symbols: [(5, " "), (8, " ")]
+    "        5 this is some trailing text⏎                                           "
+    "                                                                                "
+    "                                                                                "
+    "###);
+    insta::assert_display_snapshot!(after_toggle_all_uniform_ignored, @r###"
+    "[File] [Edit] [Select] [View]                                                   "
+    "〈~〉 foo/bar                                                                (-)" Hidden by multi-width symbols: [(1, " "), (4, " ")]
+    "        ⋮                                                                       "
+    "       18 this is some text⏎                                                    "
+    "       19 this is some text⏎                                                    "
+    "       20 this is some text⏎                                                    "
+    "  〈~〉 Section 1/1                                                          [-]" Hidden by multi-width symbols: [(3, " "), (6, " ")]
+    "    〈×〉 - before text 1⏎                                                      " Hidden by multi-width symbols: [(5, " "), (8, " ")]
+    "    〈×〉 - before text 2⏎                                                      " Hidden by multi-width symbols: [(5, " "), (8, " ")]
+    "    〈×〉 + after text 1⏎                                                       " Hidden by multi-width symbols: [(5, " "), (8, " ")]
     "    〈 〉 + after text 2⏎                                                       " Hidden by multi-width symbols: [(5, " "), (8, " ")]
+    "       23 this is some trailing text⏎                                           "
+    "〈×〉 baz                                                                    [-]" Hidden by multi-width symbols: [(1, " "), (4, " ")]
+    "        1 Some leading text 1⏎                                                  "
+    "        2 Some leading text 2⏎                                                  "
+    "  〈×〉 Section 1/1                                                          [-]" Hidden by multi-width symbols: [(3, " "), (6, " ")]
+    "    〈×〉 - before text 1⏎                                                      " Hidden by multi-width symbols: [(5, " "), (8, " ")]
+    "    〈×〉 - before text 2⏎                                                      " Hidden by multi-width symbols: [(5, " "), (8, " ")]
+    "    〈×〉 + after text 1⏎                                                       " Hidden by multi-width symbols: [(5, " "), (8, " ")]
+    "    〈×〉 + after text 2⏎                                                       " Hidden by multi-width symbols: [(5, " "), (8, " ")]
     "        5 this is some trailing text⏎                                           "
     "                                                                                "
     "                                                                                "
@@ -2044,22 +2072,22 @@ fn test_read_only() -> eyre::Result<()> {
                     Changed {
                         lines: [
                             SectionChangedLine {
-                                is_checked: false,
+                                is_checked: true,
                                 change_type: Removed,
                                 line: "before text 1\n",
                             },
                             SectionChangedLine {
-                                is_checked: false,
+                                is_checked: true,
                                 change_type: Removed,
                                 line: "before text 2\n",
                             },
                             SectionChangedLine {
-                                is_checked: false,
+                                is_checked: true,
                                 change_type: Added,
                                 line: "after text 1\n",
                             },
                             SectionChangedLine {
-                                is_checked: true,
+                                is_checked: false,
                                 change_type: Added,
                                 line: "after text 2\n",
                             },
@@ -2086,22 +2114,22 @@ fn test_read_only() -> eyre::Result<()> {
                     Changed {
                         lines: [
                             SectionChangedLine {
-                                is_checked: false,
+                                is_checked: true,
                                 change_type: Removed,
                                 line: "before text 1\n",
                             },
                             SectionChangedLine {
-                                is_checked: false,
+                                is_checked: true,
                                 change_type: Removed,
                                 line: "before text 2\n",
                             },
                             SectionChangedLine {
-                                is_checked: false,
+                                is_checked: true,
                                 change_type: Added,
                                 line: "after text 1\n",
                             },
                             SectionChangedLine {
-                                is_checked: false,
+                                is_checked: true,
                                 change_type: Added,
                                 line: "after text 2\n",
                             },

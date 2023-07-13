@@ -1542,12 +1542,20 @@ impl<'a> Recorder<'a> {
     }
 
     fn toggle_all(&mut self) {
+        if self.state.is_read_only {
+            return;
+        }
+
         for file in &mut self.state.files {
             file.toggle_all();
         }
     }
 
     fn toggle_all_uniform(&mut self) {
+        if self.state.is_read_only {
+            return;
+        }
+
         let checked = {
             let tristate = self
                 .state
