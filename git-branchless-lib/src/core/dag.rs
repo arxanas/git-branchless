@@ -1,7 +1,6 @@
 //! Wrapper around the Eden SCM directed acyclic graph implementation, which
 //! allows for efficient graph queries.
 
-use std::borrow::Borrow;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::convert::TryFrom;
@@ -399,7 +398,7 @@ impl Dag {
 
     /// Conduct an arbitrary query against the DAG.
     pub fn query(&self) -> &eden_dag::Dag {
-        self.inner.borrow()
+        &self.inner
     }
 
     /// Determine whether or not the given commit is a public commit (i.e. is an
