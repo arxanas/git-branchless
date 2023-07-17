@@ -29,4 +29,4 @@ tracing = "0.1.37"
 [dev-dependencies]
 clap = { version = "4.3.11", features = ["derive"] }
 git-branchless-testing = { version = "0.7.0", path = "../git-branchless-testing" }
-insta = "1.30.0"
+insta = "1.31.0"

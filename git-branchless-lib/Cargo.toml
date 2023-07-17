@@ -78,7 +78,7 @@ tracing-subscriber = { version = "=0.3.11", features = ["env-filter"] }
 [dev-dependencies]
 criterion = { version = "0.5.1", features = ["html_reports"] }
 git-branchless-testing = { version = "0.7.0", path = "../git-branchless-testing" }
-insta = "1.30.0"
+insta = "1.31.0"
 
 # FIXME: when updated to `1.0.74`, the `cc` package causes Nix build failures.
 # See https://github.com/arxanas/git-branchless/pull/618.
