@@ -4347,6 +4347,7 @@ fn test_move_dest_not_in_dag() -> eyre::Result<()> {
         cloned_repo.branchless("init", &["--main-branch", "other-branch"])?;
 
         let (stdout, _stderr) = cloned_repo.branchless("move", &["-d", "origin/master", "-f"])?;
+        let stdout = remove_rebase_lines(stdout);
         insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
         [1/1] Committed as: 70deb1e create test3.txt
@@ -4355,7 +4356,6 @@ fn test_move_dest_not_in_dag() -> eyre::Result<()> {
         branchless: running command: <git-executable> checkout other-branch
         Your branch and 'origin/other-branch' have diverged,
         and have 2 and 1 different commits each, respectively.
-          (use "git pull" to merge the remote branch into yours)
         :
         @ 70deb1e (> other-branch) create test3.txt
         In-memory rebase succeeded.
