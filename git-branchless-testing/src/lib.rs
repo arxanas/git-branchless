@@ -771,6 +771,10 @@ pub fn remove_rebase_lines(output: String) -> String {
             // to deal with multiple possible output formats, just remove the
             // line in question.
             !line.contains("Auto-merging")
+            // Message changed between Git versions (due to be included in Git
+            // v2.42) in
+            // https://github.com/git/git/commit/d92304ff5cfdca463e9ecd1345807d0b46d6af33.
+            && !line.contains("use \"git pull\"")
         })
         .map(|line| format!("{line}\n"))
         .collect()
