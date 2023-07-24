@@ -18,7 +18,7 @@ serde = ["dep:serde", "dep:serde_json"]
 [dependencies]
 cassowary = "0.3.0"
 crossterm = "0.26.1"
-num-traits = "0.2.15"
+num-traits = "0.2.16"
 serde = { version = "1.0.168", features = ["serde_derive"], optional = true }
 serde_json = { version = "1.0.103", optional = true }
 thiserror = "1.0.43"
