@@ -12,6 +12,7 @@ mod wrap;
 use git_branchless_invoke::CommandContext;
 use lib::core::rewrite::MergeConflictRemediation;
 
+use lib::util::ExitCode;
 use lib::{core::gc, util::EyreExitOr};
 
 use git_branchless_opts::{
@@ -42,6 +43,17 @@ fn command_main(ctx: CommandContext, opts: Opts) -> EyreExitOr<()> {
         )?,
 
         Command::BugReport => bug_report::bug_report(&effects, &git_run_info)?,
+
+        Command::Difftool(opts) => {
+            let result = scm_record::scm_diff_editor::scm_diff_editor_main(opts);
+            match result {
+                Ok(()) | Err(scm_record::scm_diff_editor::Error::Cancelled) => Ok(()),
+                Err(err) => {
+                    eprintln!("Error: {err}");
+                    Err(ExitCode(1))
+                }
+            }
+        }
 
         Command::Switch { switch_options } => {
             git_branchless_navigation::switch(&effects, &git_run_info, &switch_options)?

@@ -1537,6 +1537,7 @@ dependencies = [
  "rayon",
  "regex",
  "rusqlite",
+ "scm-record",
  "thiserror",
  "tracing",
  "tracing-chrome",
@@ -1673,6 +1674,7 @@ dependencies = [
  "clap_mangen",
  "git-branchless-lib",
  "itertools 0.11.0",
+ "scm-record",
 ]
 
 [[package]]

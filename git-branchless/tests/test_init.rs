@@ -693,6 +693,9 @@ fn test_install_man_pages() -> eyre::Result<()> {
     git\-branchless\-bug\-report(1)
     Gather information about recent operations to upload as part of a bug report
     .TP
+    git\-branchless\-difftool(1)
+    Use the partial commit selector UI as a Git\-compatible difftool; see git\-difftool(1) for more information on Git difftools
+    .TP
     git\-branchless\-gc(1)
     Run internal garbage collection
     .TP
