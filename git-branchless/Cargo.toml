@@ -50,6 +50,9 @@ path-slash = "0.2.1"
 rayon = "1.7.0"
 regex = "1.9.1"
 rusqlite = { version = "0.29.0", features = ["bundled"] }
+scm-record = { version = "0.1.0", path = "../scm-record", features = [
+  "scm-diff-editor",
+] }
 thiserror = "1.0.44"
 tracing = "0.1.37"
 tracing-chrome = "0.6.0"
@@ -117,6 +120,3 @@ name = "test_undo"
 
 [[test]]
 name = "test_wrap"
-
-
-

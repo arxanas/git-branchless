@@ -11,3 +11,4 @@ clap = { version = "4.3.19", features = ["derive"] }
 clap_mangen = "0.2.12"
 itertools = "0.11.0"
 lib = { package = "git-branchless-lib", version = "0.7.0", path = "../git-branchless-lib" }
+scm-record = { version = "0.1.0", path = "../scm-record", features = ["scm-diff-editor"] }
