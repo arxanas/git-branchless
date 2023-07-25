@@ -44,7 +44,7 @@ test = true
 [dependencies]
 anyhow = "1.0.72"
 assert_cmd = "2.0.7"
-async-trait = "0.1.71"
+async-trait = "0.1.72"
 bstr = "1.6.0"
 chashmap = "2.2.2"
 chrono = "0.4.26"
