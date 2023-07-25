@@ -69,7 +69,7 @@ serde = { version = "1.0.168", features = ["derive"] }
 shell-words = "1.1.0"
 tempfile = "3.6.0"
 textwrap = "0.16.0"
-thiserror = "1.0.43"
+thiserror = "1.0.44"
 tracing = "0.1.37"
 tracing-chrome = "0.6.0"
 tracing-error = "0.2.0"
