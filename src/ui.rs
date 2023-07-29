@@ -1867,11 +1867,10 @@ impl<Id> TristateBox<Id> {
             is_read_only,
         } = self;
 
-        let (l, r) = match (is_read_only, is_focused, use_unicode) {
-            (true, _, false) => ("<", ">"),
-            (true, _, true) => ("〈", "〉"),
-            (false, false, _) => ("[", "]"),
-            (false, true, _) => ("(", ")"),
+        let (l, r) = match (is_read_only, is_focused) {
+            (true, _) => ("<", ">"),
+            (false, false) => ("[", "]"),
+            (false, true) => ("(", ")"),
         };
 
         let inner = match (icon_style, tristate, use_unicode) {
