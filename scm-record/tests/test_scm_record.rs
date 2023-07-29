@@ -2120,3 +2120,147 @@ fn test_read_only() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_toggle_unchanged_line() -> eyre::Result<()> {
+    let state = example_contents();
+    let initial = TestingScreenshot::default();
+    let after_toggle = TestingScreenshot::default();
+    let recorder = Recorder::new(
+        state,
+        EventSource::testing(
+            80,
+            6,
+            [
+                Event::ExpandAll,
+                initial.event(),
+                Event::Click { row: 4, column: 10 },
+                Event::ToggleItem, // should not crash
+                after_toggle.event(),
+                Event::QuitAccept,
+            ],
+        ),
+    );
+    let state = recorder.run()?;
+
+    insta::assert_display_snapshot!(initial, @r###"
+    "[File] [Edit] [Select] [View]                                                   "
+    "(~) foo/bar                                                                  (-)"
+    "        ⋮                                                                       "
+    "       18 this is some text⏎                                                    "
+    "       19 this is some text⏎                                                    "
+    "       20 this is some text⏎                                                    "
+    "###);
+
+    insta::assert_debug_snapshot!(state, @r###"
+    RecordState {
+        is_read_only: false,
+        files: [
+            File {
+                old_path: None,
+                path: "foo/bar",
+                file_mode: None,
+                sections: [
+                    Unchanged {
+                        lines: [
+                            "this is some text\n",
+                            "this is some text\n",
+                            "this is some text\n",
+                            "this is some text\n",
+                            "this is some text\n",
+                            "this is some text\n",
+                            "this is some text\n",
+                            "this is some text\n",
+                            "this is some text\n",
+                            "this is some text\n",
+                            "this is some text\n",
+                            "this is some text\n",
+                            "this is some text\n",
+                            "this is some text\n",
+                            "this is some text\n",
+                            "this is some text\n",
+                            "this is some text\n",
+                            "this is some text\n",
+                            "this is some text\n",
+                            "this is some text\n",
+                        ],
+                    },
+                    Changed {
+                        lines: [
+                            SectionChangedLine {
+                                is_checked: true,
+                                change_type: Removed,
+                                line: "before text 1\n",
+                            },
+                            SectionChangedLine {
+                                is_checked: true,
+                                change_type: Removed,
+                                line: "before text 2\n",
+                            },
+                            SectionChangedLine {
+                                is_checked: true,
+                                change_type: Added,
+                                line: "after text 1\n",
+                            },
+                            SectionChangedLine {
+                                is_checked: false,
+                                change_type: Added,
+                                line: "after text 2\n",
+                            },
+                        ],
+                    },
+                    Unchanged {
+                        lines: [
+                            "this is some trailing text\n",
+                        ],
+                    },
+                ],
+            },
+            File {
+                old_path: None,
+                path: "baz",
+                file_mode: None,
+                sections: [
+                    Unchanged {
+                        lines: [
+                            "Some leading text 1\n",
+                            "Some leading text 2\n",
+                        ],
+                    },
+                    Changed {
+                        lines: [
+                            SectionChangedLine {
+                                is_checked: true,
+                                change_type: Removed,
+                                line: "before text 1\n",
+                            },
+                            SectionChangedLine {
+                                is_checked: true,
+                                change_type: Removed,
+                                line: "before text 2\n",
+                            },
+                            SectionChangedLine {
+                                is_checked: true,
+                                change_type: Added,
+                                line: "after text 1\n",
+                            },
+                            SectionChangedLine {
+                                is_checked: true,
+                                change_type: Added,
+                                line: "after text 2\n",
+                            },
+                        ],
+                    },
+                    Unchanged {
+                        lines: [
+                            "this is some trailing text\n",
+                        ],
+                    },
+                ],
+            },
+        ],
+    }
+    "###);
+
+    Ok(())
+}
