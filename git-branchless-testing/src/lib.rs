@@ -788,6 +788,29 @@ pub fn trim_lines(output: String) -> String {
         .collect()
 }
 
+/// Remove lines which are not present or different between Git versions.
+pub fn remove_nondeterministic_lines(output: String) -> String {
+    output
+        .lines()
+        .filter(|line| {
+            // This line is not present in some Git versions.
+            !line.contains("Fetching")
+                // This line is produced in a different order in some Git versions.
+                && !line.contains("Your branch is up to date")
+                // This line is only sometimes produced in CI for some reason? I
+                // don't understand how it would only sometimes print this
+                // message, but it does.
+                && !line.contains("Switched to branch")
+                // There are weird non-deterministic failures for test
+                // `test_sync_no_delete_main_branch` where an extra newline is
+                // printed, such as in
+                // https://github.com/arxanas/git-branchless/actions/runs/5609690113/jobs/10263760651?pr=1002
+                && !line.is_empty()
+        })
+        .map(|line| format!("{line}\n"))
+        .collect()
+}
+
 /// Utilities for testing in a virtual terminal (PTY).
 pub mod pty {
     use std::sync::{mpsc::channel, Arc, Mutex};
