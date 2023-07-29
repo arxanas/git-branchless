@@ -1791,11 +1791,11 @@ impl<'a> Recorder<'a> {
         Ok(section.tristate())
     }
 
-    fn visit_line<T>(
+    fn visit_line(
         &mut self,
         line_key: LineKey,
-        f: impl FnOnce(&mut SectionChangedLine) -> T,
-    ) -> Result<T, RecordError> {
+        f: impl FnOnce(&mut SectionChangedLine),
+    ) -> Result<(), RecordError> {
         let LineKey {
             file_idx,
             section_idx,
@@ -1805,13 +1805,13 @@ impl<'a> Recorder<'a> {
         match section {
             Section::Changed { lines } => {
                 let line = &mut lines[line_idx];
-                Ok(f(line))
+                f(line);
+                Ok(())
             }
-            section @ (Section::Unchanged { .. }
-            | Section::FileMode { .. }
-            | Section::Binary { .. }) => Err(RecordError::Bug(format!(
-                "Bad line key {line_key:?}, tried to index section {section:?}"
-            ))),
+            Section::Unchanged { .. } | Section::FileMode { .. } | Section::Binary { .. } => {
+                // Do nothing.
+                Ok(())
+            }
         }
     }
 }
