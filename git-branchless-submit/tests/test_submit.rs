@@ -1,5 +1,6 @@
 use git_branchless_testing::{
-    make_git_with_remote_repo, GitInitOptions, GitRunOptions, GitWrapperWithRemoteRepo,
+    make_git_with_remote_repo, remove_nondeterministic_lines, GitInitOptions, GitRunOptions,
+    GitWrapperWithRemoteRepo,
 };
 use lib::git::GitVersion;
 
@@ -219,15 +220,11 @@ fn test_submit_existing_branch() -> eyre::Result<()> {
             },
         )?;
         let stderr = redact_remotes(stderr);
+        let stderr = remove_nondeterministic_lines(stderr);
         insta::assert_snapshot!(stderr, @r###"
         To: file://<remote>
          ! [rejected]        feature -> feature (fetch first)
         error: failed to push some refs to 'file://<remote>'
-        hint: Updates were rejected because the remote contains work that you do
-        hint: not have locally. This is usually caused by another repository pushing
-        hint: to the same ref. You may want to first integrate the remote changes
-        hint: (e.g., 'git pull ...') before pushing again.
-        hint: See the 'Note about fast-forwards' in 'git push --help' for details.
         "###);
         insta::assert_snapshot!(stdout, @"branchless: running command: <git-executable> push --set-upstream origin feature
 ");
