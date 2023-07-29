@@ -1962,75 +1962,75 @@ fn test_read_only() -> eyre::Result<()> {
 
     insta::assert_display_snapshot!(initial, @r###"
     "[File] [Edit] [Select] [View]                                                   "
-    "〈~〉 foo/bar                                                                (-)" Hidden by multi-width symbols: [(1, " "), (4, " ")]
+    "<~> foo/bar                                                                  (-)"
     "        ⋮                                                                       "
     "       18 this is some text⏎                                                    "
     "       19 this is some text⏎                                                    "
     "       20 this is some text⏎                                                    "
-    "  〈~〉 Section 1/1                                                          [-]" Hidden by multi-width symbols: [(3, " "), (6, " ")]
-    "    〈×〉 - before text 1⏎                                                      " Hidden by multi-width symbols: [(5, " "), (8, " ")]
-    "    〈×〉 - before text 2⏎                                                      " Hidden by multi-width symbols: [(5, " "), (8, " ")]
-    "    〈×〉 + after text 1⏎                                                       " Hidden by multi-width symbols: [(5, " "), (8, " ")]
-    "    〈 〉 + after text 2⏎                                                       " Hidden by multi-width symbols: [(5, " "), (8, " ")]
+    "  <~> Section 1/1                                                            [-]"
+    "    <×> - before text 1⏎                                                        "
+    "    <×> - before text 2⏎                                                        "
+    "    <×> + after text 1⏎                                                         "
+    "    < > + after text 2⏎                                                         "
     "       23 this is some trailing text⏎                                           "
-    "〈×〉 baz                                                                    [-]" Hidden by multi-width symbols: [(1, " "), (4, " ")]
+    "<×> baz                                                                      [-]"
     "        1 Some leading text 1⏎                                                  "
     "        2 Some leading text 2⏎                                                  "
-    "  〈×〉 Section 1/1                                                          [-]" Hidden by multi-width symbols: [(3, " "), (6, " ")]
-    "    〈×〉 - before text 1⏎                                                      " Hidden by multi-width symbols: [(5, " "), (8, " ")]
-    "    〈×〉 - before text 2⏎                                                      " Hidden by multi-width symbols: [(5, " "), (8, " ")]
-    "    〈×〉 + after text 1⏎                                                       " Hidden by multi-width symbols: [(5, " "), (8, " ")]
-    "    〈×〉 + after text 2⏎                                                       " Hidden by multi-width symbols: [(5, " "), (8, " ")]
+    "  <×> Section 1/1                                                            [-]"
+    "    <×> - before text 1⏎                                                        "
+    "    <×> - before text 2⏎                                                        "
+    "    <×> + after text 1⏎                                                         "
+    "    <×> + after text 2⏎                                                         "
     "        5 this is some trailing text⏎                                           "
     "                                                                                "
     "                                                                                "
     "###);
     insta::assert_display_snapshot!(after_toggle_all_ignored, @r###"
     "[File] [Edit] [Select] [View]                                                   "
-    "〈~〉 foo/bar                                                                (-)" Hidden by multi-width symbols: [(1, " "), (4, " ")]
+    "<~> foo/bar                                                                  (-)"
     "        ⋮                                                                       "
     "       18 this is some text⏎                                                    "
     "       19 this is some text⏎                                                    "
     "       20 this is some text⏎                                                    "
-    "  〈~〉 Section 1/1                                                          [-]" Hidden by multi-width symbols: [(3, " "), (6, " ")]
-    "    〈×〉 - before text 1⏎                                                      " Hidden by multi-width symbols: [(5, " "), (8, " ")]
-    "    〈×〉 - before text 2⏎                                                      " Hidden by multi-width symbols: [(5, " "), (8, " ")]
-    "    〈×〉 + after text 1⏎                                                       " Hidden by multi-width symbols: [(5, " "), (8, " ")]
-    "    〈 〉 + after text 2⏎                                                       " Hidden by multi-width symbols: [(5, " "), (8, " ")]
+    "  <~> Section 1/1                                                            [-]"
+    "    <×> - before text 1⏎                                                        "
+    "    <×> - before text 2⏎                                                        "
+    "    <×> + after text 1⏎                                                         "
+    "    < > + after text 2⏎                                                         "
     "       23 this is some trailing text⏎                                           "
-    "〈×〉 baz                                                                    [-]" Hidden by multi-width symbols: [(1, " "), (4, " ")]
+    "<×> baz                                                                      [-]"
     "        1 Some leading text 1⏎                                                  "
     "        2 Some leading text 2⏎                                                  "
-    "  〈×〉 Section 1/1                                                          [-]" Hidden by multi-width symbols: [(3, " "), (6, " ")]
-    "    〈×〉 - before text 1⏎                                                      " Hidden by multi-width symbols: [(5, " "), (8, " ")]
-    "    〈×〉 - before text 2⏎                                                      " Hidden by multi-width symbols: [(5, " "), (8, " ")]
-    "    〈×〉 + after text 1⏎                                                       " Hidden by multi-width symbols: [(5, " "), (8, " ")]
-    "    〈×〉 + after text 2⏎                                                       " Hidden by multi-width symbols: [(5, " "), (8, " ")]
+    "  <×> Section 1/1                                                            [-]"
+    "    <×> - before text 1⏎                                                        "
+    "    <×> - before text 2⏎                                                        "
+    "    <×> + after text 1⏎                                                         "
+    "    <×> + after text 2⏎                                                         "
     "        5 this is some trailing text⏎                                           "
     "                                                                                "
     "                                                                                "
     "###);
     insta::assert_display_snapshot!(after_toggle_all_uniform_ignored, @r###"
     "[File] [Edit] [Select] [View]                                                   "
-    "〈~〉 foo/bar                                                                (-)" Hidden by multi-width symbols: [(1, " "), (4, " ")]
+    "<~> foo/bar                                                                  (-)"
     "        ⋮                                                                       "
     "       18 this is some text⏎                                                    "
     "       19 this is some text⏎                                                    "
     "       20 this is some text⏎                                                    "
-    "  〈~〉 Section 1/1                                                          [-]" Hidden by multi-width symbols: [(3, " "), (6, " ")]
-    "    〈×〉 - before text 1⏎                                                      " Hidden by multi-width symbols: [(5, " "), (8, " ")]
-    "    〈×〉 - before text 2⏎                                                      " Hidden by multi-width symbols: [(5, " "), (8, " ")]
-    "    〈×〉 + after text 1⏎                                                       " Hidden by multi-width symbols: [(5, " "), (8, " ")]
-    "    〈 〉 + after text 2⏎                                                       " Hidden by multi-width symbols: [(5, " "), (8, " ")]
+    "  <~> Section 1/1                                                            [-]"
+    "    <×> - before text 1⏎                                                        "
+    "    <×> - before text 2⏎                                                        "
+    "    <×> + after text 1⏎                                                         "
+    "    < > + after text 2⏎                                                         "
     "       23 this is some trailing text⏎                                           "
-    "〈×〉 baz                                                                    [-]" Hidden by multi-width symbols: [(1, " "), (4, " ")]
+    "<×> baz                                                                      [-]"
     "        1 Some leading text 1⏎                                                  "
     "        2 Some leading text 2⏎                                                  "
-    "  〈×〉 Section 1/1                                                          [-]" Hidden by multi-width symbols: [(3, " "), (6, " ")]
-    "    〈×〉 - before text 1⏎                                                      " Hidden by multi-width symbols: [(5, " "), (8, " ")]
-    "    〈×〉 - before text 2⏎                                                      " Hidden by multi-width symbols: [(5, " "), (8, " ")]
-    "    〈×〉 + after text 1⏎                                                       " Hidden by multi-width symbols: [(5, " "), (8, " ")]
-    "    〈×〉 + after text 2⏎                                                       " Hidden by multi-width symbols: [(5, " "), (8, " ")]
+    "  <×> Section 1/1                                                            [-]"
+    "    <×> - before text 1⏎                                                        "
+    "    <×> - before text 2⏎                                                        "
+    "    <×> + after text 1⏎                                                         "
+    "    <×> + after text 2⏎                                                         "
     "        5 this is some trailing text⏎                                           "
     "                                                                                "
     "                                                                                "
