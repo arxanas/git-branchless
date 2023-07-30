@@ -1052,6 +1052,8 @@ mod tests {
     use maplit::btreemap;
     use std::collections::BTreeMap;
 
+    use crate::Section;
+
     use super::*;
 
     #[derive(Debug)]
@@ -1120,12 +1122,8 @@ mod tests {
         }
 
         fn remove_file(&mut self, path: &Path) -> Result<()> {
-            match self.files.remove(path) {
-                Some(_) => Ok(()),
-                None => {
-                    panic!("tried to remove non-existent file: {path:?}");
-                }
-            }
+            self.files.remove(path);
+            Ok(())
         }
 
         fn create_dir_all(&mut self, path: &Path) -> Result<()> {
@@ -1777,6 +1775,140 @@ Hello world 4
                         contents: "Hello world 1\nHello world 2\nHello world R\nHello world 4\n",
                         hash: "abc123",
                         num_bytes: 56,
+                    },
+                },
+            },
+            dirs: {
+                "",
+            },
+        }
+        "###);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_new_file() -> eyre::Result<()> {
+        let new_file_contents = "\
+Hello world 1
+Hello world 2
+";
+        let mut filesystem = TestFilesystem::new(btreemap! {
+            PathBuf::from("right") => file_info(new_file_contents),
+        });
+
+        let (mut files, write_root) = process_opts(
+            &filesystem,
+            &Opts {
+                dir_diff: false,
+                left: "left".into(),
+                right: "right".into(),
+                read_only: false,
+                dry_run: false,
+                base: None,
+                output: None,
+            },
+        )?;
+        insta::assert_debug_snapshot!(files, @r###"
+        [
+            File {
+                old_path: Some(
+                    "left",
+                ),
+                path: "right",
+                file_mode: None,
+                sections: [
+                    Changed {
+                        lines: [
+                            SectionChangedLine {
+                                is_checked: false,
+                                change_type: Added,
+                                line: "Hello world 1\n",
+                            },
+                            SectionChangedLine {
+                                is_checked: false,
+                                change_type: Added,
+                                line: "Hello world 2\n",
+                            },
+                        ],
+                    },
+                ],
+            },
+        ]
+        "###);
+
+        // Select no changes from new file.
+        apply_changes(
+            &mut filesystem,
+            &write_root,
+            RecordState {
+                is_read_only: false,
+                files: files.clone(),
+            },
+        )?;
+        insta::assert_debug_snapshot!(filesystem, @r###"
+        TestFilesystem {
+            files: {},
+            dirs: {
+                "",
+            },
+        }
+        "###);
+
+        // Select all changes from new file.
+        select_all(&mut files);
+        apply_changes(
+            &mut filesystem,
+            &write_root,
+            RecordState {
+                is_read_only: false,
+                files: files.clone(),
+            },
+        )?;
+        insta::assert_debug_snapshot!(filesystem, @r###"
+        TestFilesystem {
+            files: {
+                "right": FileInfo {
+                    file_mode: FileMode(
+                        33188,
+                    ),
+                    contents: Text {
+                        contents: "Hello world 1\nHello world 2\n",
+                        hash: "abc123",
+                        num_bytes: 28,
+                    },
+                },
+            },
+            dirs: {
+                "",
+            },
+        }
+        "###);
+
+        // Select only some changes from new file.
+        match files[0].sections.get_mut(0).unwrap() {
+            Section::Changed { ref mut lines } => lines[0].is_checked = false,
+            _ => panic!("Expected changed section"),
+        }
+        apply_changes(
+            &mut filesystem,
+            &write_root,
+            RecordState {
+                is_read_only: false,
+                files: files.clone(),
+            },
+        )?;
+        insta::assert_debug_snapshot!(filesystem, @r###"
+        TestFilesystem {
+            files: {
+                "right": FileInfo {
+                    file_mode: FileMode(
+                        33188,
+                    ),
+                    contents: Text {
+                        contents: "Hello world 2\n",
+                        hash: "abc123",
+                        num_bytes: 14,
                     },
                 },
             },
