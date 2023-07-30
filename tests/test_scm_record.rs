@@ -971,7 +971,10 @@ fn test_state_binary_selected_contents() -> eyre::Result<()> {
         format!("{selection:?}")
     };
 
-    assert_snapshot!(test(false, false), @r###"(Present { contents: "foo\n" }, Binary { old_description: Some("abc123 (123 bytes)"), new_description: Some("def456 (456 bytes)") })"###);
+    assert_snapshot!(test(false, false), @r###"(Unchanged, Binary { old_description: Some("abc123 (123 bytes)"), new_description: Some("def456 (456 bytes)") })"###);
+
+    // FIXME: should the selected contents be `Present { contents: "" }`? (Or
+    // possibly `Absent`?)
     assert_snapshot!(test(true, false), @r###"(Unchanged, Binary { old_description: Some("abc123 (123 bytes)"), new_description: Some("def456 (456 bytes)") })"###);
 
     // NB: The result for this situation, where we've selected both a text and
@@ -980,7 +983,7 @@ fn test_state_binary_selected_contents() -> eyre::Result<()> {
     // the UI to never allow selecting both).
     assert_snapshot!(test(false, true), @r###"(Binary { old_description: Some("abc123 (123 bytes)"), new_description: Some("def456 (456 bytes)") }, Unchanged)"###);
 
-    assert_snapshot!(test(true, true), @r###"(Binary { old_description: Some("abc123 (123 bytes)"), new_description: Some("def456 (456 bytes)") }, Present { contents: "foo\n" })"###);
+    assert_snapshot!(test(true, true), @r###"(Binary { old_description: Some("abc123 (123 bytes)"), new_description: Some("def456 (456 bytes)") }, Unchanged)"###);
 
     Ok(())
 }

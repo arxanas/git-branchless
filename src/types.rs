@@ -241,8 +241,8 @@ impl File<'_> {
     /// example, the first value would be suitable for staging or committing,
     /// and the second value would be suitable for potentially recording again.
     pub fn get_selected_contents(&self) -> (SelectedContents, SelectedContents) {
-        let mut acc_selected = SelectedContents::Unchanged;
-        let mut acc_unselected = SelectedContents::Unchanged;
+        let mut acc_selected = SelectedContents::Absent;
+        let mut acc_unselected = SelectedContents::Absent;
         let Self {
             old_path: _,
             path: _,
@@ -299,7 +299,9 @@ impl File<'_> {
                     };
                     if *is_checked {
                         acc_selected = selected_contents;
+                        acc_unselected = SelectedContents::Unchanged;
                     } else {
+                        acc_selected = SelectedContents::Unchanged;
                         acc_unselected = selected_contents;
                     }
                 }
