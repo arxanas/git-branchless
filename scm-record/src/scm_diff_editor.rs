@@ -18,10 +18,11 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf, StripPrefixError};
 
-use crate::{File, FileMode, RecordState};
 use clap::Parser;
 use sha1::Digest;
 use walkdir::WalkDir;
+
+use crate::{EventSource, File, FileMode, RecordError, RecordState, Recorder, SelectedContents};
 
 #[allow(missing_docs)]
 #[derive(Debug)]
@@ -64,7 +65,7 @@ pub enum Error {
         path: PathBuf,
     },
     Record {
-        source: crate::RecordError,
+        source: RecordError,
     },
 }
 
@@ -809,7 +810,7 @@ mod render {
 }
 
 fn print_dry_run(write_root: &Path, state: RecordState) {
-    let crate::RecordState {
+    let RecordState {
         is_read_only: _,
         files,
     } = state;
@@ -817,13 +818,13 @@ fn print_dry_run(write_root: &Path, state: RecordState) {
         let file_path = write_root.join(file.path.clone());
         let (selected_contents, _unselected_contents) = file.get_selected_contents();
         match selected_contents {
-            crate::SelectedContents::Absent => {
+            SelectedContents::Absent => {
                 println!("Would delete file: {}", file_path.display())
             }
-            crate::SelectedContents::Unchanged => {
+            SelectedContents::Unchanged => {
                 println!("Would leave file unchanged: {}", file_path.display())
             }
-            crate::SelectedContents::Binary {
+            SelectedContents::Binary {
                 old_description,
                 new_description,
             } => {
@@ -831,7 +832,7 @@ fn print_dry_run(write_root: &Path, state: RecordState) {
                 println!("  Old: {:?}", old_description);
                 println!("  New: {:?}", new_description);
             }
-            crate::SelectedContents::Present { contents } => {
+            SelectedContents::Present { contents } => {
                 println!("Would update text file: {}", file_path.display());
                 for line in contents.lines() {
                     println!("  {line}");
@@ -846,7 +847,7 @@ fn apply_changes(
     write_root: &Path,
     state: RecordState,
 ) -> Result<()> {
-    let crate::RecordState {
+    let RecordState {
         is_read_only,
         files,
     } = state;
@@ -857,13 +858,13 @@ fn apply_changes(
         let file_path = write_root.join(file.path.clone());
         let (selected_contents, _unselected_contents) = file.get_selected_contents();
         match selected_contents {
-            crate::SelectedContents::Absent => {
+            SelectedContents::Absent => {
                 filesystem.remove_file(&file_path)?;
             }
-            crate::SelectedContents::Unchanged => {
+            SelectedContents::Unchanged => {
                 // Do nothing.
             }
-            crate::SelectedContents::Binary {
+            SelectedContents::Binary {
                 old_description: _,
                 new_description: _,
             } => {
@@ -874,7 +875,7 @@ fn apply_changes(
                 };
                 filesystem.copy_file(&old_path, &new_path)?;
             }
-            crate::SelectedContents::Present { contents } => {
+            SelectedContents::Present { contents } => {
                 if let Some(parent_dir) = file_path.parent() {
                     filesystem.create_dir_all(parent_dir)?;
                 }
@@ -1023,12 +1024,12 @@ fn process_opts(filesystem: &dyn Filesystem, opts: &Opts) -> Result<(Vec<File<'s
 pub fn scm_diff_editor_main(opts: Opts) -> Result<()> {
     let filesystem = RealFilesystem;
     let (files, write_root) = process_opts(&filesystem, &opts)?;
-    let state = crate::RecordState {
+    let state = RecordState {
         is_read_only: opts.read_only,
         files,
     };
-    let event_source = crate::EventSource::Crossterm;
-    let recorder = crate::Recorder::new(state, event_source);
+    let event_source = EventSource::Crossterm;
+    let recorder = Recorder::new(state, event_source);
     match recorder.run() {
         Ok(state) => {
             if opts.dry_run {
@@ -1040,7 +1041,7 @@ pub fn scm_diff_editor_main(opts: Opts) -> Result<()> {
                 Ok(())
             }
         }
-        Err(crate::RecordError::Cancelled) => Err(Error::Cancelled),
+        Err(RecordError::Cancelled) => Err(Error::Cancelled),
         Err(err) => Err(Error::Record { source: err }),
     }
 }
