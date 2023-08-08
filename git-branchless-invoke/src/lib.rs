@@ -14,6 +14,7 @@
 #![allow(clippy::too_many_arguments, clippy::blocks_in_if_conditions)]
 
 use std::any::Any;
+use std::collections::HashMap;
 use std::convert::TryInto;
 use std::ffi::OsString;
 use std::fmt::Write;
@@ -25,7 +26,7 @@ use cursive_core::theme::BaseColor;
 use cursive_core::utils::markup::StyledString;
 use eyre::Context;
 use git_branchless_opts::{ColorSetting, GlobalArgs};
-use lib::core::config::env_vars::get_path_to_git;
+use lib::core::config::env_vars::{get_git_exec_path, get_path_to_git};
 use lib::core::effects::Effects;
 use lib::core::formatting::Glyphs;
 use lib::git::GitRunInfo;
@@ -192,7 +193,14 @@ pub fn do_main_and_drop_locals<T: Parser>(
     let git_run_info = GitRunInfo {
         path_to_git,
         working_directory: std::env::current_dir()?,
-        env: std::env::vars_os().collect(),
+        env: {
+            let mut env: HashMap<OsString, OsString> = std::env::vars_os().collect();
+            if let Ok(git_exec_path) = get_git_exec_path() {
+                env.entry("GIT_EXEC_PATH".into())
+                    .or_insert(git_exec_path.into());
+            }
+            env
+        },
     };
 
     let color = match color {
