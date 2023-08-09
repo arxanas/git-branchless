@@ -82,4 +82,4 @@ insta = "1.31.0"
 
 # FIXME: when updated to `1.0.74`, the `cc` package causes Nix build failures.
 # See https://github.com/arxanas/git-branchless/pull/618.
-cc = "=1.0.73"
+cc = "=1.0.82"
