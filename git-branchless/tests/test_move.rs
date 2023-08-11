@@ -5727,7 +5727,7 @@ fn test_move_fixup_multiple_disconnected_into_ancestor() -> eyre::Result<()> {
                 "-x",
                 &format!("{}+{}", test3_oid, test5_oid),
                 "-d",
-                &test1_oid.to_string(),
+                "test",
             ],
             // Use the same mocked system time as the destination commit to coax
             // the commit hashs to match their in-mem counterparts.
@@ -5741,7 +5741,7 @@ fn test_move_fixup_multiple_disconnected_into_ancestor() -> eyre::Result<()> {
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
-        o 38caaaf create test.txt
+        o 38caaaf (test) create test.txt
         |
         o 6783c86 update 2 test.txt
         |
@@ -5751,7 +5751,7 @@ fn test_move_fixup_multiple_disconnected_into_ancestor() -> eyre::Result<()> {
         "###);
 
         // diff for "create test.txt"
-        let diff = git.get_trimmed_diff("test.txt", "38caaaf")?;
+        let diff = git.get_trimmed_diff("test.txt", "test")?;
         insta::assert_snapshot!(diff, @r###"
         @@ -0,0 +1,8 @@
         +# Section A
