@@ -144,7 +144,6 @@ impl RebaseCommand {
                         .iter()
                         .map(|oid| format!("fixup {oid}"))
                         .collect::<Vec<String>>();
-                    let mut cleanups = vec![];
 
                     // Since 0ca8681, the intermediate commits created as each
                     // fixup is applied are left behind in the smartlog. This
@@ -167,14 +166,14 @@ impl RebaseCommand {
                     // We have to add some additional steps to make sure the
                     // smartlog and commit metadata are left as the user
                     // expects.
-                    if pick_oid != original_commit_oid {
+                    let cleanups = if pick_oid != original_commit_oid {
                         // See above comment related to 0ca8681
                         picks.insert(
                             1,
                             "exec git branchless hook-skip-upstream-applied-commit $(git rev-parse HEAD)".to_string()
                         );
 
-                        cleanups = vec![
+                        vec![
                             // Hide the final squashed commit
                             "exec git branchless hook-skip-upstream-applied-commit $(git rev-parse HEAD)".to_string(),
 
@@ -186,8 +185,14 @@ impl RebaseCommand {
                             // Finally, register the new final commit as the
                             // rewritten version of original_commit_oid
                             format!("exec git branchless hook-skip-upstream-applied-commit {original_commit_oid} $(git rev-parse HEAD)")
-                        ];
-                    }
+                        ]
+                    } else {
+                        vec![
+                            // HACK force move branches that used to point at original_commit_oid to new HEAD
+                            // FIXME Yuck! The for loop works by word, not by line; will not work for branches w/ spaces ... is that a thing?
+                            format!("exec for BRANCH in $(git branch --points-at {original_commit_oid}); do git branch --force \"$BRANCH\" HEAD; done"),
+                        ]
+                    };
 
                     picks
                         .iter()
