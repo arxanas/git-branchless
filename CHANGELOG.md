@@ -9,8 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - ReleaseDate
 
+### Added
+
+- (#830) Added `git branchless install-man-pages` command. This may be useful for package maintainers or those who install git-branchless from source.
+- (#840) git-branchless supports Phabricator as a backend forge for `git submit`.
+- (#845) Added the `branchless.smartlog.defaultRevset` configuration variable.
+- (#910) Added support for repositories managed by the `repo` tool.
+- (#1009) Added `git branchless difftool` subcommand.
+
+### Changed
+
+- BREAKING (#841): git-branchless is now dual-licensed as MIT/Apache 2.0.
+- (#825) `git submit` only fetches the necessary branches, rather than all branches, before pushing.
+- (#826) Switch to `scm-record` crate to provide the partial commit interface.
+- (#914) The default revset for `git restack` is now `draft()`.
+
 ### Fixed
 
+- (#866) New commits created during `git rebase` are no longer kept if the rebase is aborted.
+- (#866) `git test` no longer clobbers working copy changes.
+- (#876) After `git amend`, detached branches previously pointing to the amended commit are now updated.
+- (#915) Fixed certain situations of rebasing merge commits when all parents have also been rebased.
+- (#920) Running `git sync` when the main branch is checked out no longer leaves a dirty index.
 - (#938) Somehow fixed mysterious hang.
 
 ## [0.7.1] - 2023-03-13
