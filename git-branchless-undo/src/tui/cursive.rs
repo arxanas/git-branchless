@@ -84,6 +84,3 @@ macro_rules! declare_views {
         )*
     };
 }
-
-/// Testing helpers for interactive interfaces.
-pub use git_record::testing;
