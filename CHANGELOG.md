@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- (#545) EXPERIMENTAL: Added a `--fixup` option to `git move` to squash moved commits into the destination
 - (#830) Added `git branchless install-man-pages` command. This may be useful for package maintainers or those who install git-branchless from source.
 - (#840) git-branchless supports Phabricator as a backend forge for `git submit`.
 - (#845) Added the `branchless.smartlog.defaultRevset` configuration variable.
