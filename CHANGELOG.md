@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - (#845) Added the `branchless.smartlog.defaultRevset` configuration variable.
 - (#910) Added support for repositories managed by the `repo` tool.
 - (#1009) Added `git branchless difftool` subcommand.
+- (#545) EXPERIMENTAL: Added a `--fixup` option to `git move` to squash moved commits into the destination
 
 ### Changed
 
