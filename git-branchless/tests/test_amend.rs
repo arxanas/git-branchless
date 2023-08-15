@@ -1135,3 +1135,66 @@ fn test_amend_move_detached_branch() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_amend_merge_commit() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+    git.detach_head()?;
+    let test1_oid = git.commit_file("test1", 1)?;
+    git.run(&["checkout", "HEAD^"])?;
+    git.commit_file("test2", 2)?;
+    git.run(&["merge", &test1_oid.to_string()])?;
+
+    git.write_file_txt("test1", "new test1 contents\n")?;
+    {
+        let (stdout, _stderr) = git.branchless("amend", &[])?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> reset 3ebbc8fdaff7b5d5d0f1101feb3640d06b0297a2
+        Amended with 1 uncommitted change.
+        "###);
+    }
+
+    {
+        let stdout = git.smartlog()?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |\
+        | o 62fc20d create test1.txt
+        | & (merge) 3ebbc8f Merge commit '62fc20d2a290daea0d52bdc2ed2ad4be6491010e' into HEAD
+        |
+        o fe65c1f create test2.txt
+        |
+        | & (merge) 62fc20d create test1.txt
+        |/
+        @ 3ebbc8f Merge commit '62fc20d2a290daea0d52bdc2ed2ad4be6491010e' into HEAD
+        "###);
+    }
+
+    {
+        let (stdout, _stderr) = git.run(&["show"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        commit 3ebbc8fdaff7b5d5d0f1101feb3640d06b0297a2
+        Merge: fe65c1f 62fc20d
+        Author: Testy McTestface <test@example.com>
+        Date:   Thu Oct 29 12:34:56 2020 +0000
+
+            Merge commit '62fc20d2a290daea0d52bdc2ed2ad4be6491010e' into HEAD
+
+        diff --cc test1.txt
+        index 0000000,7432a8f..2121042
+        mode 000000,100644..100644
+        --- a/test1.txt
+        +++ b/test1.txt
+        @@@ -1,0 -1,1 +1,1 @@@
+         -test1 contents
+        ++new test1 contents
+        "###);
+    }
+
+    Ok(())
+}

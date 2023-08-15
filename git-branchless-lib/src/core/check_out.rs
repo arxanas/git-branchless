@@ -296,10 +296,7 @@ pub fn restore_snapshot(
             (Stage::Stage2, &snapshot.commit_stage2),
             (Stage::Stage3, &snapshot.commit_stage3),
         ] {
-            let changed_paths = match repo.get_paths_touched_by_commit(commit)? {
-                Some(changed_paths) => changed_paths,
-                None => continue,
-            };
+            let changed_paths = repo.get_paths_touched_by_commit(commit)?;
             for path in changed_paths {
                 let tree = commit.get_tree()?;
                 let tree_entry = tree.get_path(&path)?;

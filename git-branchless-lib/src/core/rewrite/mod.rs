@@ -83,7 +83,7 @@ pub mod testing {
     /// Get the internal touched paths cache for a `RebasePlanBuilder`.
     pub fn get_builder_touched_paths_cache<'a>(
         builder: &'a RebasePlanBuilder,
-    ) -> &'a CHashMap<NonZeroOid, Option<HashSet<PathBuf>>> {
+    ) -> &'a CHashMap<NonZeroOid, HashSet<PathBuf>> {
         &builder.touched_paths_cache
     }
 }
