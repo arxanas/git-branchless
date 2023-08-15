@@ -338,17 +338,9 @@ fn fn_path_changed(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
         name,
         args,
         Box::new(move |repo: &Repo, commit: &Commit| {
-            let touched_paths = match repo
+            let touched_paths = repo
                 .get_paths_touched_by_commit(commit)
-                .map_err(PatternError::Repo)?
-            {
-                Some(touched_paths) => touched_paths,
-                None => {
-                    // FIXME: it might be more intuitive to check all changed
-                    // paths with respect to any parent.
-                    return Ok(false);
-                }
-            };
+                .map_err(PatternError::Repo)?;
             let result = touched_paths.into_iter().any(|path| {
                 let path = match path.to_str() {
                     Some(path) => path,

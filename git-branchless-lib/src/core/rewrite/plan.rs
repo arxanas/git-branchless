@@ -568,7 +568,7 @@ pub struct RebasePlanBuilder<'a> {
     /// Cache mapping from commit OID to the paths changed in the diff for that
     /// commit. The value is `None` if the commit doesn't have an associated
     /// diff (i.e. is a merge commit).
-    pub(crate) touched_paths_cache: Arc<CHashMap<NonZeroOid, Option<HashSet<PathBuf>>>>,
+    pub(crate) touched_paths_cache: Arc<CHashMap<NonZeroOid, HashSet<PathBuf>>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -1356,7 +1356,6 @@ impl<'a> RebasePlanBuilder<'a> {
         let local_touched_paths: Vec<HashSet<PathBuf>> = touched_commits
             .into_iter()
             .map(|commit| repo.get_paths_touched_by_commit(&commit))
-            .filter_map(|x| x.transpose())
             .try_collect()?;
 
         let filtered_path = {
@@ -1435,19 +1434,14 @@ impl<'a> RebasePlanBuilder<'a> {
     }
 
     fn should_check_patch_id(
-        upstream_touched_paths: &Option<HashSet<PathBuf>>,
+        upstream_touched_paths: &HashSet<PathBuf>,
         local_touched_paths: &[HashSet<PathBuf>],
     ) -> bool {
-        match upstream_touched_paths {
-            Some(upstream_touched_paths) => {
-                // It's possible that the same commit was applied after a parent
-                // commit renamed a certain path. In that case, this check won't
-                // trigger. We'll rely on the empty-commit check after the
-                // commit has been made to deduplicate the commit in that case.
-                // FIXME: this code path could be optimized further.
-                local_touched_paths.iter().contains(upstream_touched_paths)
-            }
-            None => true,
-        }
+        // It's possible that the same commit was applied after a parent
+        // commit renamed a certain path. In that case, this check won't
+        // trigger. We'll rely on the empty-commit check after the
+        // commit has been made to deduplicate the commit in that case.
+        // FIXME: this code path could be optimized further.
+        local_touched_paths.iter().contains(upstream_touched_paths)
     }
 }

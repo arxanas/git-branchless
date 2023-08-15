@@ -157,9 +157,7 @@ fn bench_get_paths_touched_by_commits(c: &mut Criterion) {
         let oid = repo.get_head_info().unwrap().oid.unwrap();
         let commit = repo.find_commit_or_fail(oid).unwrap();
 
-        b.iter(|| -> Option<HashSet<PathBuf>> {
-            repo.get_paths_touched_by_commit(&commit).unwrap()
-        });
+        b.iter(|| -> HashSet<PathBuf> { repo.get_paths_touched_by_commit(&commit).unwrap() });
     });
 }
 
