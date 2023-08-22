@@ -27,6 +27,6 @@ thiserror = "1.0.44"
 tracing = "0.1.37"
 
 [dev-dependencies]
-clap = { version = "4.3.19", features = ["derive"] }
+clap = { version = "4.3.23", features = ["derive"] }
 git-branchless-testing = { version = "0.7.0", path = "../git-branchless-testing" }
 insta = "1.31.0"
