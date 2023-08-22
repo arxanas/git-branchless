@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - BREAKING (#841): git-branchless is now dual-licensed as MIT/Apache 2.0.
+- BREAKING: (#1024) Rust v1.67 or later is required to build.
 - (#825) `git submit` only fetches the necessary branches, rather than all branches, before pushing.
 - (#826) Switch to `scm-record` crate to provide the partial commit interface.
 - (#914) The default revset for `git restack` is now `draft()`.
