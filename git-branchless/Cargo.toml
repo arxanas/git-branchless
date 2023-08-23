@@ -17,50 +17,48 @@ version = "0.7.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-bstr = "1.6.0"
-bugreport = "0.5.0"
-color-eyre = "0.6.2"
-console = "0.15.7"
-cursive_core = "0.3.7"
-eden_dag = { package = "esl01-dag", version = "0.3.0" }
-eyre = "0.6.8"
-fslock = "0.2.1"
-git-branchless-hook = { version = "0.7.0", path = "../git-branchless-hook" }
-git-branchless-init = { version = "0.7.0", path = "../git-branchless-init" }
-git-branchless-invoke = { version = "0.7.0", path = "../git-branchless-invoke" }
-git-branchless-move = { version = "0.7.0", path = "../git-branchless-move" }
-git-branchless-navigation = { version = "0.7.0", path = "../git-branchless-navigation" }
-git-branchless-opts = { version = "0.7.0", path = "../git-branchless-opts" }
-git-branchless-query = { version = "0.7.0", path = "../git-branchless-query" }
-git-branchless-record = { version = "0.7.0", path = "../git-branchless-record" }
-git-branchless-revset = { version = "0.7.0", path = "../git-branchless-revset" }
-git-branchless-reword = { version = "0.7.0", path = "../git-branchless-reword" }
-git-branchless-smartlog = { version = "0.7.0", path = "../git-branchless-smartlog" }
-git-branchless-submit = { version = "0.7.0", path = "../git-branchless-submit" }
-git-branchless-test = { version = "0.7.0", path = "../git-branchless-test" }
-git-branchless-undo = { version = "0.7.0", path = "../git-branchless-undo" }
-itertools = "0.11.0"
-lazy_static = "1.4.0"
-lib = { package = "git-branchless-lib", version = "0.7.0", path = "../git-branchless-lib" }
-man = "0.3.0"
-num_cpus = "1.16.0"
-once_cell = "1.18.0"
-path-slash = "0.2.1"
-rayon = "1.7.0"
-regex = "1.9.3"
-rusqlite = { version = "0.29.0", features = ["bundled"] }
-scm-record = { version = "0.1.0", path = "../scm-record", features = [
-  "scm-diff-editor",
-] }
-thiserror = "1.0.47"
-tracing = "0.1.37"
-tracing-chrome = "0.6.0"
-tracing-error = "0.2.0"
-tracing-subscriber = { version = "=0.3.11", features = ["env-filter"] }
+bstr = { workspace = true }
+bugreport = { workspace = true }
+color-eyre = { workspace = true }
+console = { workspace = true }
+cursive_core = { workspace = true }
+eden_dag = { workspace = true }
+eyre = { workspace = true }
+fslock = { workspace = true }
+git-branchless-hook = { workspace = true }
+git-branchless-init = { workspace = true }
+git-branchless-invoke = { workspace = true }
+git-branchless-move = { workspace = true }
+git-branchless-navigation = { workspace = true }
+git-branchless-opts = { workspace = true }
+git-branchless-query = { workspace = true }
+git-branchless-record = { workspace = true }
+git-branchless-revset = { workspace = true }
+git-branchless-reword = { workspace = true }
+git-branchless-smartlog = { workspace = true }
+git-branchless-submit = { workspace = true }
+git-branchless-test = { workspace = true }
+git-branchless-undo = { workspace = true }
+itertools = { workspace = true }
+lazy_static = { workspace = true }
+lib = { workspace = true }
+man = { workspace = true }
+num_cpus = { workspace = true }
+once_cell = { workspace = true }
+path-slash = { workspace = true }
+rayon = { workspace = true }
+regex = { workspace = true }
+rusqlite = { workspace = true }
+scm-record = { workspace = true, features = ["scm-diff-editor"] }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tracing-chrome = { workspace = true }
+tracing-error = { workspace = true }
+tracing-subscriber = { workspace = true }
 
 [dev-dependencies]
-git-branchless-testing = { version = "0.7.0", path = "../git-branchless-testing" }
-insta = "1.31.0"
+git-branchless-testing = { workspace = true }
+insta = { workspace = true }
 
 [package.metadata.release]
 pre-release-replacements = [

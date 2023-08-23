@@ -7,15 +7,15 @@ repository = "https://github.com/arxanas/git-branchless"
 version = "0.7.0"
 
 [dependencies]
-cursive_core = { version = "0.3.5", default-features = false }
-eden_dag = { package = "esl01-dag", version = "0.3.0" }
-eyre = "0.6.8"
-git-branchless-invoke = { version = "0.7.0", path = "../git-branchless-invoke" }
-git-branchless-opts = { version = "0.7.0", path = "../git-branchless-opts" }
-git-branchless-revset = { version = "0.7.0", path = "../git-branchless-revset" }
-lib = { version = "0.7.0", path = "../git-branchless-lib", package = "git-branchless-lib" }
-tracing = "0.1.37"
+cursive_core = { workspace = true }
+eden_dag = { workspace = true }
+eyre = { workspace = true }
+git-branchless-invoke = { workspace = true }
+git-branchless-opts = { workspace = true }
+git-branchless-revset = { workspace = true }
+lib = { workspace = true }
+tracing = { workspace = true }
 
 [dev-dependencies]
-git-branchless-testing = { version = "0.7.0", path = "../git-branchless-testing" }
-insta = "1.31.0"
+git-branchless-testing = { workspace = true }
+insta = { workspace = true }

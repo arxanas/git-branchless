@@ -9,14 +9,14 @@ version = "0.7.0"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-clap = { version = "4.3.23", features = ["derive"] }
-color-eyre = "0.6.2"
-cursive_core = "0.3.6"
-eyre = "0.6.8"
-git-branchless-opts = { version = "0.7.0", path = "../git-branchless-opts" }
-git2 = { version = "0.17.2", default-features = false }
-lib = { package = "git-branchless-lib", version = "0.7.0", path = "../git-branchless-lib" }
-tracing = "0.1.37"
-tracing-chrome = "0.6.0"
-tracing-error = "0.2.0"
-tracing-subscriber = { version = "0.3.11", features = ["env-filter"] }
+clap = { workspace = true, features = ["derive"] }
+color-eyre = { workspace = true }
+cursive_core = { workspace = true }
+eyre = { workspace = true }
+git-branchless-opts = { workspace = true }
+git2 = { workspace = true }
+lib = { workspace = true }
+tracing = { workspace = true }
+tracing-chrome = { workspace = true }
+tracing-error = { workspace = true }
+tracing-subscriber = { workspace = true }
