@@ -140,17 +140,14 @@ impl Git {
             .expect("Unable to find git-branchless path parent");
         let bash = get_sh().expect("bash missing?");
         let bash_path = bash.parent().unwrap();
-        std::env::join_paths(
-            vec![
-                // For Git to be able to launch `git-branchless`.
-                branchless_path.as_os_str(),
-                // For our hooks to be able to call back into `git`.
-                self.git_exec_path.as_os_str(),
-                // For branchless to manually invoke bash when needed.
-                bash_path.as_os_str(),
-            ]
-            .into_iter(),
-        )
+        std::env::join_paths(vec![
+            // For Git to be able to launch `git-branchless`.
+            branchless_path.as_os_str(),
+            // For our hooks to be able to call back into `git`.
+            self.git_exec_path.as_os_str(),
+            // For branchless to manually invoke bash when needed.
+            bash_path.as_os_str(),
+        ])
         .expect("joining paths")
     }
 
@@ -804,7 +801,7 @@ pub fn remove_rebase_lines(output: String) -> String {
             // https://github.com/git/git/commit/d92304ff5cfdca463e9ecd1345807d0b46d6af33.
             && !line.contains("use \"git pull\"")
         })
-        .map(|line| format!("{line}\n"))
+        .flat_map(|line| [line, "\n"])
         .collect()
 }
 
@@ -837,7 +834,7 @@ pub fn remove_nondeterministic_lines(output: String) -> String {
                 // https://github.com/arxanas/git-branchless/actions/runs/5609690113/jobs/10263760651?pr=1002
                 && !line.is_empty()
         })
-        .map(|line| format!("{line}\n"))
+        .flat_map(|line| [line, "\n"])
         .collect()
 }
 

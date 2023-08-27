@@ -105,7 +105,7 @@ https://github.com/arxanas/git-branchless/discussions/595 for more details.",
             if let Some(reference_oid) = reference_info.oid {
                 result
                     .entry(reference_oid)
-                    .or_insert_with(HashSet::new)
+                    .or_default()
                     .insert(reference_name);
             }
         }
