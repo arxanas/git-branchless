@@ -192,7 +192,7 @@ impl Filesystem for RealFilesystem {
         let right_files = walk_dir(right)?;
         let paths = left_files
             .into_iter()
-            .chain(right_files.into_iter())
+            .chain(right_files)
             .collect::<BTreeSet<_>>();
         Ok(paths)
     }
