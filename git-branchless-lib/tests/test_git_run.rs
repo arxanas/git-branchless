@@ -1,5 +1,5 @@
 use branchless::git::{GitRunInfo, GitRunOpts};
-use git_branchless_testing::make_git;
+use branchless::testing::make_git;
 
 #[test]
 fn test_hook_working_dir() -> eyre::Result<()> {

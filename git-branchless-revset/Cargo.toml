@@ -31,5 +31,4 @@ tracing = { workspace = true }
 lalrpop = { workspace = true }
 
 [dev-dependencies]
-git-branchless-testing = { workspace = true }
 insta = { workspace = true }

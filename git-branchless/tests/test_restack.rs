@@ -1,4 +1,4 @@
-use git_branchless_testing::{make_git, remove_rebase_lines, GitInitOptions, GitRunOptions};
+use lib::testing::{make_git, remove_rebase_lines, GitInitOptions, GitRunOptions};
 
 #[test]
 fn test_restack_amended_commit() -> eyre::Result<()> {

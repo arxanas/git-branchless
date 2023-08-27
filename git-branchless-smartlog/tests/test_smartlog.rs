@@ -1,4 +1,4 @@
-use git_branchless_testing::{extract_hint_command, make_git, GitRunOptions};
+use lib::testing::{extract_hint_command, make_git, GitRunOptions};
 
 #[test]
 fn test_init_smartlog() -> eyre::Result<()> {

@@ -1,5 +1,5 @@
-use git_branchless_testing::make_git;
 use lazy_static::lazy_static;
+use lib::testing::make_git;
 use regex::Regex;
 
 lazy_static! {

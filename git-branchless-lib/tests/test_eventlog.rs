@@ -5,7 +5,7 @@ use branchless::core::eventlog::{
     testing::new_event_replayer, Event, EventLogDb, EventTransactionId,
 };
 use branchless::git::{MaybeZeroOid, NonZeroOid, ReferenceName};
-use git_branchless_testing::make_git;
+use branchless::testing::make_git;
 
 #[test]
 fn test_drop_non_meaningful_events() -> eyre::Result<()> {
