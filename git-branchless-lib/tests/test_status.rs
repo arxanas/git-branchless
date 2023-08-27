@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use branchless::core::effects::Effects;
 use branchless::core::formatting::Glyphs;
 use branchless::git::{FileMode, FileStatus, StatusEntry, WorkingCopyChangesType};
-use git_branchless_testing::make_git;
+use branchless::testing::make_git;
 
 #[test]
 fn test_parse_status_line() {

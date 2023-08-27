@@ -1,4 +1,4 @@
-use git_branchless_testing::{make_git, GitRunOptions};
+use lib::testing::{make_git, GitRunOptions};
 use lib::core::effects::Effects;
 use lib::core::eventlog::testing::{get_event_replayer_events, redact_event_timestamp};
 use lib::core::eventlog::{Event, EventLogDb, EventReplayer};

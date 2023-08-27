@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use git_branchless_testing::{make_git, trim_lines, GitInitOptions, GitRunOptions};
+use lib::testing::{make_git, trim_lines, GitInitOptions, GitRunOptions};
 use lib::git::NonZeroOid;
 
 #[test]

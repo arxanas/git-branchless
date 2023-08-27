@@ -1,4 +1,4 @@
-use git_branchless_testing::{make_git, GitRunOptions};
+use lib::testing::{make_git, GitRunOptions};
 
 #[test]
 fn test_query() -> eyre::Result<()> {

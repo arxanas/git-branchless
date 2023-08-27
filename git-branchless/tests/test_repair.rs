@@ -1,4 +1,4 @@
-use git_branchless_testing::make_git;
+use lib::testing::make_git;
 use lib::git::{BranchType, ReferenceName};
 
 #[test]

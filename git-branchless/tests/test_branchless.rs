@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use git_branchless_testing::{make_git, GitRunOptions};
+use lib::testing::{make_git, GitRunOptions};
 use itertools::Itertools;
 
 #[test]

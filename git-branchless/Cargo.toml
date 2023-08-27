@@ -57,7 +57,6 @@ tracing-error = { workspace = true }
 tracing-subscriber = { workspace = true }
 
 [dev-dependencies]
-git-branchless-testing = { workspace = true }
 insta = { workspace = true }
 
 [package.metadata.release]

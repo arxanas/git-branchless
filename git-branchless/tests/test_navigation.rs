@@ -1,5 +1,5 @@
-use git_branchless_testing::pty::{run_in_pty, PtyAction};
-use git_branchless_testing::{make_git, GitRunOptions};
+use lib::testing::pty::{run_in_pty, PtyAction};
+use lib::testing::{make_git, GitRunOptions};
 
 const CARRIAGE_RETURN: &str = "\r";
 const END_OF_TEXT: &str = "\x03";
