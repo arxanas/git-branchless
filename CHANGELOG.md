@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - ReleaseDate
 
+## [v0.8.0] - 2023-08-27
+
 ### Added
 
 - (#545) EXPERIMENTAL: Added a `--fixup` option to `git move` to squash moved commits into the destination
