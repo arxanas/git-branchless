@@ -28,22 +28,22 @@ pub fn parse(s: &str) -> Result<Expr, ParseError> {
             // interpreted by insignificant-whitespace mode as a comment, so we
             // use `\x23` instead.
             static ref OBJECT_RE: Regex = Regex::new(
-                r###"(?x)
+                r#"(?x)
                     r\x23"
                     \(
                     \[
                     [^"]+
                     "\x23
-                "###
+                "#
             )
             .unwrap();
             static ref STRING_LITERAL_RE: Regex = Regex::new(
-                r###"(?x)
+                r#"(?x)
                     r\x23"
                     \\
                     [^"]+
                     "\x23
-                "###
+                "#
             )
             .unwrap();
         }
@@ -373,7 +373,7 @@ mod tests {
             ),
         )
         "###);
-        insta::assert_debug_snapshot!(parse(r#" 'foo\nbar\\baz' "#), @r###"
+        insta::assert_debug_snapshot!(parse(r" 'foo\nbar\\baz' "), @r###"
         Ok(
             Name(
                 "foo\nba\r\\\\baz",

@@ -1134,7 +1134,7 @@ fn shell_escape(s: impl AsRef<str>) -> String {
     for c in s.chars() {
         match c {
             '"' => escaped.push_str(r#"\""#),
-            '\\' => escaped.push_str(r#"\\\\"#),
+            '\\' => escaped.push_str(r"\\\\"),
             c => escaped.push(c),
         }
     }

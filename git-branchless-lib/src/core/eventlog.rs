@@ -817,7 +817,7 @@ impl EventReplayer {
                 if let MaybeZeroOid::NonZero(old_commit_oid) = old_commit_oid {
                     self.commit_history
                         .entry(*old_commit_oid)
-                        .or_insert_with(Vec::new)
+                        .or_default()
                         .push(EventInfo {
                             id,
                             event: event.clone(),
@@ -827,7 +827,7 @@ impl EventReplayer {
                 if let MaybeZeroOid::NonZero(new_commit_oid) = new_commit_oid {
                     self.commit_history
                         .entry(*new_commit_oid)
-                        .or_insert_with(Vec::new)
+                        .or_default()
                         .push(EventInfo {
                             id,
                             event: event.clone(),
@@ -858,7 +858,7 @@ impl EventReplayer {
             } => self
                 .commit_history
                 .entry(*commit_oid)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(EventInfo {
                     id,
                     event: event.clone(),
@@ -872,7 +872,7 @@ impl EventReplayer {
             } => self
                 .commit_history
                 .entry(*commit_oid)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(EventInfo {
                     id,
                     event: event.clone(),
@@ -886,7 +886,7 @@ impl EventReplayer {
             } => self
                 .commit_history
                 .entry(*commit_oid)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(EventInfo {
                     id,
                     event: event.clone(),
@@ -1267,7 +1267,7 @@ impl EventReplayer {
             {
                 result
                     .entry(*ref_oid)
-                    .or_insert_with(HashSet::new)
+                    .or_default()
                     .insert((*ref_name).clone());
             }
         }
@@ -1275,7 +1275,7 @@ impl EventReplayer {
         let main_branch_oid = self.get_cursor_main_branch_oid(cursor, repo)?;
         result
             .entry(main_branch_oid)
-            .or_insert_with(HashSet::new)
+            .or_default()
             .insert(self.main_branch_reference_name.clone());
         Ok(result)
     }

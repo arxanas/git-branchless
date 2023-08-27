@@ -15,7 +15,7 @@ fn test_gc() -> eyre::Result<()> {
 
     {
         let repo = git.get_repo()?;
-        assert!(matches!(repo.revparse_single_commit("62fc20d2"), Ok(_)));
+        assert!(repo.revparse_single_commit("62fc20d2").is_ok());
     }
 
     git.run(&["gc", "--prune=now"])?;
