@@ -7,7 +7,7 @@ license = "MIT OR Apache-2.0"
 name = "git-branchless-lib"
 repository = "https://github.com/arxanas/git-branchless"
 rust-version = "1.64.0"
-version = "0.7.0"
+version = "0.8.0"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
