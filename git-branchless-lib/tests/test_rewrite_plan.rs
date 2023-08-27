@@ -15,7 +15,7 @@ use branchless::core::rewrite::{
     execute_rebase_plan, BuildRebasePlanOptions, ExecuteRebasePlanOptions, ExecuteRebasePlanResult,
     RebasePlan, RebasePlanBuilder, RepoResource,
 };
-use git_branchless_testing::{make_git, Git};
+use branchless::testing::{make_git, Git};
 
 #[test]
 fn test_cache_shared_between_builders() -> eyre::Result<()> {

@@ -1,8 +1,8 @@
-use git_branchless_testing::{
+use lib::git::GitVersion;
+use lib::testing::{
     make_git_with_remote_repo, remove_nondeterministic_lines, GitInitOptions, GitRunOptions,
     GitWrapperWithRemoteRepo,
 };
-use lib::git::GitVersion;
 
 /// Minimum version due to changes in the output of `git push`.
 const MIN_VERSION: GitVersion = GitVersion(2, 36, 0);

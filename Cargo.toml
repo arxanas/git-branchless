@@ -20,7 +20,6 @@ members = [
     "git-branchless-smartlog",
     "git-branchless-submit",
     "git-branchless-test",
-    "git-branchless-testing",
     "git-branchless-undo",
     "git-branchless",
     "git-record",
@@ -105,6 +104,5 @@ vt100 = "0.15.2"
 assert_cmd = "2.0.7"
 cc = "1.0.83"
 criterion = { version = "0.5.1", features = ["html_reports"] }
-git-branchless-testing = { version = "0.8.0", path = "git-branchless-testing" }
 insta = "1.31.0"
 maplit = "1.0.2"

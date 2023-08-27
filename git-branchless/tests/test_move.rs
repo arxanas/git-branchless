@@ -1,4 +1,4 @@
-use git_branchless_testing::{
+use lib::testing::{
     extract_hint_command, make_git, make_git_with_remote_repo, remove_rebase_lines, GitInitOptions,
     GitRunOptions, GitWrapperWithRemoteRepo,
 };

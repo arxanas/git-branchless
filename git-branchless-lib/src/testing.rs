@@ -11,16 +11,16 @@ use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
+use crate::core::config::env_vars::{
+    get_git_exec_path, get_path_to_git, should_use_separate_command_binary, TEST_GIT,
+    TEST_SEPARATE_COMMAND_BINARIES,
+};
+use crate::git::{GitRunInfo, GitVersion, NonZeroOid, Repo};
+use crate::util::get_sh;
 use color_eyre::Help;
 use eyre::Context;
 use itertools::Itertools;
 use lazy_static::lazy_static;
-use lib::core::config::env_vars::{
-    get_git_exec_path, get_path_to_git, should_use_separate_command_binary, TEST_GIT,
-    TEST_SEPARATE_COMMAND_BINARIES,
-};
-use lib::git::{GitRunInfo, GitVersion, NonZeroOid, Repo};
-use lib::util::get_sh;
 use once_cell::sync::OnceCell;
 use regex::{Captures, Regex};
 use tempfile::TempDir;

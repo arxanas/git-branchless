@@ -5,7 +5,7 @@ use std::{
 };
 
 use branchless::git::{dehydrate_tree, get_changed_paths_between_trees, hydrate_tree, FileMode};
-use git_branchless_testing::make_git;
+use branchless::testing::make_git;
 
 #[test]
 fn test_hydrate_tree() -> eyre::Result<()> {

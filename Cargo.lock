@@ -1423,7 +1423,6 @@ dependencies = [
  "git-branchless-smartlog",
  "git-branchless-submit",
  "git-branchless-test",
- "git-branchless-testing",
  "git-branchless-undo",
  "insta",
  "itertools 0.11.0",
@@ -1452,7 +1451,6 @@ dependencies = [
  "git-branchless-invoke",
  "git-branchless-lib",
  "git-branchless-opts",
- "git-branchless-testing",
  "insta",
  "itertools 0.11.0",
  "lazy_static",
@@ -1511,13 +1509,13 @@ dependencies = [
  "esl01-dag",
  "eyre",
  "futures",
- "git-branchless-testing",
  "git2",
  "indicatif",
  "insta",
  "itertools 0.11.0",
  "lazy_static",
  "once_cell",
+ "portable-pty",
  "rayon",
  "regex",
  "rusqlite",
@@ -1531,6 +1529,7 @@ dependencies = [
  "tracing-chrome",
  "tracing-error",
  "tracing-subscriber",
+ "vt100",
 ]
 
 [[package]]
@@ -1584,7 +1583,6 @@ dependencies = [
  "git-branchless-lib",
  "git-branchless-opts",
  "git-branchless-revset",
- "git-branchless-testing",
  "insta",
  "itertools 0.11.0",
  "tracing",
@@ -1601,7 +1599,6 @@ dependencies = [
  "git-branchless-invoke",
  "git-branchless-lib",
  "git-branchless-opts",
- "git-branchless-testing",
  "insta",
  "itertools 0.11.0",
  "rayon",
@@ -1622,7 +1619,6 @@ dependencies = [
  "futures",
  "git-branchless-lib",
  "git-branchless-opts",
- "git-branchless-testing",
  "glob",
  "insta",
  "itertools 0.11.0",
@@ -1647,7 +1643,6 @@ dependencies = [
  "git-branchless-lib",
  "git-branchless-opts",
  "git-branchless-revset",
- "git-branchless-testing",
  "insta",
  "rayon",
  "shell-words",
@@ -1666,7 +1661,6 @@ dependencies = [
  "git-branchless-lib",
  "git-branchless-opts",
  "git-branchless-revset",
- "git-branchless-testing",
  "insta",
  "tracing",
 ]
@@ -1684,7 +1678,6 @@ dependencies = [
  "git-branchless-opts",
  "git-branchless-revset",
  "git-branchless-test",
- "git-branchless-testing",
  "insta",
  "itertools 0.11.0",
  "lazy_static",
@@ -1712,7 +1705,6 @@ dependencies = [
  "git-branchless-lib",
  "git-branchless-opts",
  "git-branchless-revset",
- "git-branchless-testing",
  "indexmap 2.0.0",
  "insta",
  "itertools 0.11.0",
@@ -1726,25 +1718,6 @@ dependencies = [
  "tempfile",
  "thiserror",
  "tracing",
-]
-
-[[package]]
-name = "git-branchless-testing"
-version = "0.8.0"
-dependencies = [
- "anyhow",
- "assert_cmd",
- "color-eyre",
- "eyre",
- "git-branchless-lib",
- "itertools 0.11.0",
- "lazy_static",
- "once_cell",
- "portable-pty",
- "regex",
- "tempfile",
- "tracing",
- "vt100",
 ]
 
 [[package]]

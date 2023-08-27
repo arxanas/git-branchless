@@ -1,4 +1,4 @@
-use git_branchless_testing::{make_git, remove_rebase_lines, trim_lines, GitRunOptions};
+use lib::testing::{make_git, remove_rebase_lines, trim_lines, GitRunOptions};
 
 #[test]
 fn test_amend_with_children() -> eyre::Result<()> {

@@ -1,8 +1,8 @@
-use git_branchless_testing::{make_git, GitInitOptions};
 use itertools::Itertools;
 use lib::core::eventlog::testing::redact_event_timestamp;
 use lib::core::eventlog::EventLogDb;
 use lib::git::GitVersion;
+use lib::testing::{make_git, GitInitOptions};
 
 #[test]
 fn test_gc() -> eyre::Result<()> {

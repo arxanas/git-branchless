@@ -60,6 +60,7 @@ indicatif = { workspace = true }
 itertools = { workspace = true }
 lazy_static = { workspace = true }
 once_cell = { workspace = true }
+portable-pty = { workspace = true }
 rayon = { workspace = true }
 regex = { workspace = true }
 rusqlite = { workspace = true }
@@ -73,9 +74,9 @@ tracing = { workspace = true }
 tracing-chrome = { workspace = true }
 tracing-error = { workspace = true }
 tracing-subscriber = { workspace = true }
+vt100 = { workspace = true }
 
 [dev-dependencies]
 cc = { workspace = true }
 criterion = { workspace = true }
-git-branchless-testing = { workspace = true }
 insta = { workspace = true }

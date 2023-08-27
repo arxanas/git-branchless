@@ -350,12 +350,12 @@ pub(super) fn eval_number_rhs(
 mod tests {
     use std::borrow::Cow;
 
-    use git_branchless_testing::{make_git, GitRunOptions};
     use lib::core::effects::Effects;
     use lib::core::eventlog::{EventLogDb, EventReplayer};
     use lib::core::formatting::Glyphs;
     use lib::core::repo_ext::RepoExt;
     use lib::git::Commit;
+    use lib::testing::{make_git, GitRunOptions};
 
     use super::*;
     use crate::Expr;

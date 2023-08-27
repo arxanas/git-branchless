@@ -2,7 +2,7 @@ use branchless::git::{
     AmendFastOptions, BranchType, CherryPickFastOptions, FileMode, FileStatus, GitVersion,
     StatusEntry,
 };
-use git_branchless_testing::make_git;
+use branchless::testing::make_git;
 
 #[test]
 fn test_parse_git_version_output() {

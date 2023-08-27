@@ -28,5 +28,4 @@ tracing = { workspace = true }
 
 [dev-dependencies]
 clap = { workspace = true }
-git-branchless-testing = { workspace = true }
 insta = { workspace = true }
