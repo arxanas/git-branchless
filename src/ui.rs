@@ -706,7 +706,7 @@ impl<'a> Recorder<'a> {
                             event: Event::FocusPrev,
                         },
                         MenuItem {
-                            label: Cow::Borrowed("Next item (down, k)"),
+                            label: Cow::Borrowed("Next item (down, j)"),
                             event: Event::FocusNext,
                         },
                         MenuItem {
