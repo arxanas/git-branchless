@@ -42,6 +42,7 @@ pub enum RecordError {
     #[error("failed to read user input: {0}")]
     ReadInput(#[source] crossterm::ErrorKind),
 
+    #[cfg(feature = "serde")]
     #[error("failed to serialize JSON: {0}")]
     SerializeJson(#[source] serde_json::Error),
 
