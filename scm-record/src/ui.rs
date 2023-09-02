@@ -21,13 +21,13 @@ use crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, is_raw_mode_enabled, EnterAlternateScreen,
     LeaveAlternateScreen,
 };
+use ratatui::backend::{Backend, TestBackend};
+use ratatui::buffer::Buffer;
+use ratatui::style::{Color, Modifier, Style};
+use ratatui::text::Span;
+use ratatui::widgets::{Block, Borders, Clear, Paragraph};
+use ratatui::{backend::CrosstermBackend, Terminal};
 use tracing::warn;
-use tui::backend::{Backend, TestBackend};
-use tui::buffer::Buffer;
-use tui::style::{Color, Modifier, Style};
-use tui::text::Span;
-use tui::widgets::{Block, Borders, Clear, Paragraph};
-use tui::{backend::CrosstermBackend, Terminal};
 use unicode_width::UnicodeWidthStr;
 
 use crate::consts::{DUMP_UI_STATE_FILENAME, ENV_VAR_DEBUG_UI, ENV_VAR_DUMP_UI_STATE};
