@@ -7,12 +7,12 @@ use std::mem;
 
 use cassowary::{Solver, Variable};
 use num_traits::cast;
-use tui::backend::Backend;
-use tui::buffer::Buffer;
-use tui::style::{Color, Modifier, Style};
-use tui::text::Span;
-use tui::widgets::{StatefulWidget, Widget};
-use tui::Frame;
+use ratatui::backend::Backend;
+use ratatui::buffer::Buffer;
+use ratatui::style::{Color, Modifier, Style};
+use ratatui::text::Span;
+use ratatui::widgets::{StatefulWidget, Widget};
+use ratatui::Frame;
 use unicode_width::UnicodeWidthStr;
 
 use crate::util::{IsizeExt, UsizeExt};
@@ -23,8 +23,8 @@ pub(crate) struct RectSize {
     pub height: usize,
 }
 
-impl From<tui::layout::Rect> for RectSize {
-    fn from(rect: tui::layout::Rect) -> Self {
+impl From<ratatui::layout::Rect> for RectSize {
+    fn from(rect: ratatui::layout::Rect) -> Self {
         Rect::from(rect).into()
     }
 }
@@ -41,7 +41,7 @@ impl From<Rect> for RectSize {
     }
 }
 
-/// Like `tui::layout::Rect`, but supports addressing negative coordinates. (These
+/// Like `ratatui::layout::Rect`, but supports addressing negative coordinates. (These
 /// coordinates shouldn't be rendered.)
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub(crate) struct Rect {
@@ -51,9 +51,9 @@ pub(crate) struct Rect {
     pub height: usize,
 }
 
-impl From<tui::layout::Rect> for Rect {
-    fn from(value: tui::layout::Rect) -> Self {
-        let tui::layout::Rect {
+impl From<ratatui::layout::Rect> for Rect {
+    fn from(value: ratatui::layout::Rect) -> Self {
+        let ratatui::layout::Rect {
             x,
             y,
             width,
@@ -448,7 +448,7 @@ impl<'a, ComponentId: Clone + Debug + Eq + Hash> Viewport<'a, ComponentId> {
         span_rect
     }
 
-    pub fn draw_widget(&mut self, rect: tui::layout::Rect, widget: impl Widget) {
+    pub fn draw_widget(&mut self, rect: ratatui::layout::Rect, widget: impl Widget) {
         self.current_trace_mut().merge_rect(rect.into());
         widget.render(rect, self.buf);
     }
@@ -480,16 +480,16 @@ impl<'a, ComponentId: Clone + Debug + Eq + Hash> Viewport<'a, ComponentId> {
     }
 
     /// Convert the virtual `Rect` being displayed on the viewport, potentially
-    /// including an area off-screen, into a real terminal `tui::layout::Rect`
+    /// including an area off-screen, into a real terminal `ratatui::layout::Rect`
     /// indicating the actual positions of the characters to be printed
     /// on-screen.
-    pub fn translate_rect(&self, rect: impl Into<Rect>) -> tui::layout::Rect {
+    pub fn translate_rect(&self, rect: impl Into<Rect>) -> ratatui::layout::Rect {
         let draw_rect = self.rect.intersect(rect.into());
         let x = draw_rect.x - self.rect.x;
         let y = draw_rect.y - self.rect.y;
         let width = draw_rect.width;
         let height = draw_rect.height;
-        tui::layout::Rect {
+        ratatui::layout::Rect {
             x: x.try_into().unwrap(),
             y: y.try_into().unwrap(),
             width: width.try_into().unwrap(),
@@ -498,7 +498,7 @@ impl<'a, ComponentId: Clone + Debug + Eq + Hash> Viewport<'a, ComponentId> {
     }
 }
 
-/// Wrapper to render via `tui::Frame`.
+/// Wrapper to render via `ratatui::Frame`.
 struct TopLevelWidget<'a, C> {
     component: &'a C,
     x: isize,
@@ -508,7 +508,7 @@ struct TopLevelWidget<'a, C> {
 impl<C: Component> StatefulWidget for TopLevelWidget<'_, C> {
     type State = DrawnRects<C::Id>;
 
-    fn render(self, area: tui::layout::Rect, buf: &mut Buffer, state: &mut Self::State) {
+    fn render(self, area: ratatui::layout::Rect, buf: &mut Buffer, state: &mut Self::State) {
         let Self { component, x, y } = self;
         let mut viewport: Viewport<C::Id> = Viewport::new(
             buf,
