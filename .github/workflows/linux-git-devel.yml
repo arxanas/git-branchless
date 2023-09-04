@@ -25,13 +25,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           path: git-master
           repository: git/git
           ref: master
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           path: git-next
           repository: git/git
@@ -56,7 +56,7 @@ jobs:
           toolchain: 1.67.0
           override: true
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           path: git-branchless
 

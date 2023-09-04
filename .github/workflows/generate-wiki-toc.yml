@@ -8,7 +8,7 @@ jobs:
   "generate-toc":
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           repository: ${{ github.repository }}.wiki
           token: ${{ secrets.WIKI_UPDATE_TOC_TOKEN }}
