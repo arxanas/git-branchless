@@ -42,7 +42,7 @@ chrono = "0.4.26"
 chrono-english = "0.1.7"
 chronoutil = "0.2.5"
 clap = "4.3.23"
-clap_mangen = "0.2.12"
+clap_mangen = "0.2.13"
 color-eyre = "0.6.2"
 concolor = { version = "0.1.1", features = ["auto"] }
 console = "0.15.7"
