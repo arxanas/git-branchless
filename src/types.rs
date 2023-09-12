@@ -40,7 +40,7 @@ pub enum RecordError {
     RenderFrame(#[source] io::Error),
 
     #[error("failed to read user input: {0}")]
-    ReadInput(#[source] crossterm::ErrorKind),
+    ReadInput(#[source] io::Error),
 
     #[cfg(feature = "serde")]
     #[error("failed to serialize JSON: {0}")]
