@@ -29,7 +29,7 @@ unicode-width = "0.1"
 clap = { version = "4.3", features = ["derive"], optional = true }
 diffy = { version = "0.3", optional = true }
 sha1 = { version = "0.10", optional = true }
-walkdir = { version = "2.3", optional = true }
+walkdir = { version = "2.4", optional = true }
 
 [dev-dependencies]
 assert_matches = "1.5"
