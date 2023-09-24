@@ -996,6 +996,9 @@ fn test_amend_no_detach_branch() -> eyre::Result<()> {
 
     git.run(&["checkout", "-b", "foo"])?;
     git.commit_file("test1", 1)?;
+    git.run(&["checkout", "-b", "bar"])?;
+    git.commit_file("test2", 2)?;
+    git.run(&["checkout", "foo"])?;
 
     {
         let stdout = git.smartlog()?;
@@ -1003,6 +1006,8 @@ fn test_amend_no_detach_branch() -> eyre::Result<()> {
         O f777ecc (master) create initial.txt
         |
         @ 62fc20d (> foo) create test1.txt
+        |
+        o 96d1c37 (bar) create test2.txt
         "###);
     }
 
@@ -1013,6 +1018,13 @@ fn test_amend_no_detach_branch() -> eyre::Result<()> {
         insta::assert_snapshot!(stdout, @r###"
         branchless: processing 1 update: branch foo
         branchless: running command: <git-executable> reset foo
+        Attempting rebase in-memory...
+        [1/1] Committed as: fc597fa create test2.txt
+        branchless: processing 1 update: branch bar
+        branchless: processing 1 rewritten commit
+        branchless: running command: <git-executable> checkout foo
+        In-memory rebase succeeded.
+        Restacked 1 commit.
         Amended with 1 uncommitted change.
         "###);
     }
@@ -1023,6 +1035,8 @@ fn test_amend_no_detach_branch() -> eyre::Result<()> {
         O f777ecc (master) create initial.txt
         |
         @ 7143ebc (> foo) create test1.txt
+        |
+        o fc597fa (bar) create test2.txt
         "###);
     }
 
