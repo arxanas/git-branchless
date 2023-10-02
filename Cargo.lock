@@ -76,16 +76,15 @@ dependencies = [
 
 [[package]]
 name = "anstream"
-version = "0.3.2"
+version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ca84f3628370c59db74ee214b3263d58f9aadd9b4fe7e711fd87dc452b7f163"
+checksum = "2ab91ebe16eb252986481c5b62f6098f3b698a45e34b5b98200cf20dd2484a44"
 dependencies = [
  "anstyle",
  "anstyle-parse",
  "anstyle-query",
  "anstyle-wincon",
  "colorchoice",
- "is-terminal",
  "utf8parse",
 ]
 
@@ -115,9 +114,9 @@ dependencies = [
 
 [[package]]
 name = "anstyle-wincon"
-version = "1.0.2"
+version = "3.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c677ab05e09154296dd37acecd46420c17b9713e8366facafa8fc0885167cf4c"
+checksum = "f0699d10d2f4d628a98ee7b57b289abbc98ff3bad977cb3152709d4bf2330628"
 dependencies = [
  "anstyle",
  "windows-sys 0.48.0",
@@ -409,20 +408,19 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.3.23"
+version = "4.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "03aef18ddf7d879c15ce20f04826ef8418101c7e528014c3eeea13321047dca3"
+checksum = "d04704f56c2cde07f43e8e2c154b43f216dc5c92fc98ada720177362f953b956"
 dependencies = [
  "clap_builder",
  "clap_derive",
- "once_cell",
 ]
 
 [[package]]
 name = "clap_builder"
-version = "4.3.23"
+version = "4.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f8ce6fffb678c9b80a70b6b6de0aad31df727623a70fd9a842c30cd573e2fa98"
+checksum = "0e231faeaca65ebd1ea3c737966bf858971cd38c3849107aa3ea7de90a804e45"
 dependencies = [
  "anstream",
  "anstyle",
@@ -432,9 +430,9 @@ dependencies = [
 
 [[package]]
 name = "clap_derive"
-version = "4.3.12"
+version = "4.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "54a9bb5758fc5dfe728d1019941681eccaf0cf8a4189b692a0ee2f2ecf90a050"
+checksum = "0862016ff20d69b84ef8247369fabf5c008a7417002411897d40ee1f4532b873"
 dependencies = [
  "heck",
  "proc-macro2",
@@ -463,7 +461,7 @@ version = "0.2.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f2e32b579dae093c2424a8b7e2bea09c89da01e1ce5065eb2f0a6f1cc15cc1f"
 dependencies = [
- "clap 4.3.23",
+ "clap 4.4.6",
  "roff 0.2.1",
 ]
 
@@ -557,7 +555,7 @@ dependencies = [
  "anes",
  "cast",
  "ciborium",
- "clap 4.3.23",
+ "clap 4.4.6",
  "criterion-plot",
  "is-terminal",
  "itertools 0.10.5",
@@ -1492,7 +1490,7 @@ dependencies = [
 name = "git-branchless-invoke"
 version = "0.8.0"
 dependencies = [
- "clap 4.3.23",
+ "clap 4.4.6",
  "color-eyre",
  "cursive_core",
  "eyre",
@@ -1581,7 +1579,7 @@ dependencies = [
 name = "git-branchless-opts"
 version = "0.8.0"
 dependencies = [
- "clap 4.3.23",
+ "clap 4.4.6",
  "clap_mangen",
  "git-branchless-lib",
  "itertools 0.11.0",
@@ -1684,7 +1682,7 @@ dependencies = [
 name = "git-branchless-submit"
 version = "0.8.0"
 dependencies = [
- "clap 4.3.23",
+ "clap 4.4.6",
  "cursive_core",
  "esl01-dag",
  "eyre",
@@ -1710,7 +1708,7 @@ version = "0.8.0"
 dependencies = [
  "assert_cmd",
  "bstr",
- "clap 4.3.23",
+ "clap 4.4.6",
  "crossbeam",
  "cursive",
  "esl01-dag",
@@ -3001,7 +2999,7 @@ version = "0.1.0"
 dependencies = [
  "assert_matches",
  "cassowary",
- "clap 4.3.23",
+ "clap 4.4.6",
  "criterion",
  "crossterm 0.27.0",
  "diffy",
