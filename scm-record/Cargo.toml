@@ -35,7 +35,7 @@ walkdir = { version = "2.4", optional = true }
 assert_matches = "1.5"
 criterion = "0.5"
 eyre = "0.6"
-insta = "1.32"
+insta = "1.33"
 maplit = "1.0"
 
 [[bin]]
