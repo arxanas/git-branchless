@@ -17,7 +17,7 @@ mod util;
 pub mod consts;
 pub mod helpers;
 pub use types::{
-    ChangeType, File, FileMode, RecordError, RecordState, Section, SectionChangedLine,
+    ChangeType, Commit, File, FileMode, RecordError, RecordState, Section, SectionChangedLine,
     SelectedContents,
 };
 pub use ui::{Event, RecordInput, Recorder, TerminalKind, TestingScreenshot};

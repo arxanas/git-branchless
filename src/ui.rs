@@ -116,6 +116,7 @@ pub enum Event {
     QuitCancel,
     QuitInterrupt,
     TakeScreenshot(TestingScreenshot),
+    Redraw,
     EnsureSelectionInViewport,
     ScrollUp,
     ScrollDown,
@@ -135,6 +136,7 @@ pub enum Event {
     ExpandAll,
     Click { row: usize, column: usize },
     ToggleCommitViewMode, // no key binding currently
+    EditCommitMessage,
 }
 
 impl From<crossterm::event::Event> for Event {
@@ -295,6 +297,13 @@ impl From<crossterm::event::Event> for Event {
                 state: _,
             }) => Self::ExpandAll,
 
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('e'),
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                state: _event,
+            }) => Self::EditCommitMessage,
+
             Event::Mouse(MouseEvent {
                 kind: MouseEventKind::Down(MouseButton::Left),
                 column,
@@ -333,6 +342,12 @@ pub trait RecordInput {
     /// Get all available user events. This should block until there is at least
     /// one available event.
     fn next_events(&mut self) -> Result<Vec<Event>, RecordError>;
+
+    /// Open a commit editor and interactively edit the given message.
+    ///
+    /// This function will only be invoked if one of the provided `Commit`s had
+    /// a non-`None` commit message.
+    fn edit_commit_message(&mut self, message: &str) -> Result<String, RecordError>;
 }
 
 /// Copied from internal implementation of `tui`.
@@ -372,6 +387,7 @@ enum StateUpdate {
     QuitAccept,
     QuitCancel,
     TakeScreenshot(TestingScreenshot),
+    Redraw,
     EnsureSelectionInViewport,
     ScrollTo(isize),
     SelectItem {
@@ -391,6 +407,9 @@ enum StateUpdate {
     },
     ClickMenuItem(Event),
     ToggleCommitViewMode,
+    EditCommitMessage {
+        commit_idx: usize,
+    },
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -460,17 +479,12 @@ impl<'state, 'input> Recorder<'state, 'input> {
 
     /// Run the recorder UI using `crossterm` as the backend connected to stdout.
     fn run_crossterm(self) -> Result<RecordState<'state>, RecordError> {
-        let mut stdout = io::stdout();
-        if !is_raw_mode_enabled().map_err(RecordError::SetUpTerminal)? {
-            enable_raw_mode().map_err(RecordError::SetUpTerminal)?;
-            crossterm::execute!(stdout, EnterAlternateScreen, EnableMouseCapture)
-                .map_err(RecordError::SetUpTerminal)?;
-        }
+        Self::set_up_crossterm()?;
         Self::install_panic_hook();
-        let backend = CrosstermBackend::new(stdout);
+        let backend = CrosstermBackend::new(io::stdout());
         let mut term = Terminal::new(backend).map_err(RecordError::SetUpTerminal)?;
         let result = self.run_inner(&mut term);
-        Self::clean_up_crossterm().map_err(RecordError::CleanUpTerminal)?;
+        Self::clean_up_crossterm()?;
         result
     }
 
@@ -492,10 +506,20 @@ impl<'state, 'input> Recorder<'state, 'input> {
         }));
     }
 
-    fn clean_up_crossterm() -> io::Result<()> {
-        if is_raw_mode_enabled()? {
-            disable_raw_mode()?;
-            crossterm::execute!(io::stdout(), LeaveAlternateScreen, DisableMouseCapture)?;
+    fn set_up_crossterm() -> Result<(), RecordError> {
+        if !is_raw_mode_enabled().map_err(RecordError::SetUpTerminal)? {
+            enable_raw_mode().map_err(RecordError::SetUpTerminal)?;
+            crossterm::execute!(io::stdout(), EnterAlternateScreen, EnableMouseCapture)
+                .map_err(RecordError::SetUpTerminal)?;
+        }
+        Ok(())
+    }
+
+    fn clean_up_crossterm() -> Result<(), RecordError> {
+        if is_raw_mode_enabled().map_err(RecordError::CleanUpTerminal)? {
+            disable_raw_mode().map_err(RecordError::CleanUpTerminal)?;
+            crossterm::execute!(io::stdout(), LeaveAlternateScreen, DisableMouseCapture)
+                .map_err(RecordError::CleanUpTerminal)?;
         }
         Ok(())
     }
@@ -582,6 +606,9 @@ impl<'state, 'input> Recorder<'state, 'input> {
                             .expect("TakeScreenshot event generated for non-testing backend");
                         screenshot.set(buffer_view(test_backend.buffer()));
                     }
+                    StateUpdate::Redraw => {
+                        term.clear().map_err(RecordError::RenderFrame)?;
+                    }
                     StateUpdate::EnsureSelectionInViewport => {
                         self.scroll_offset_y =
                             self.ensure_in_viewport(term_height, &drawn_rects, self.selection_key);
@@ -643,6 +670,10 @@ impl<'state, 'input> Recorder<'state, 'input> {
                             CommitViewMode::Adjacent => CommitViewMode::Inline,
                         };
                     }
+                    StateUpdate::EditCommitMessage { commit_idx } => {
+                        self.pending_events.push(Event::Redraw);
+                        self.edit_commit_message(commit_idx)?;
+                    }
                 }
             }
         }
@@ -669,6 +700,10 @@ impl<'state, 'input> Recorder<'state, 'input> {
                 Menu {
                     label: Cow::Borrowed("Edit"),
                     items: vec![
+                        MenuItem {
+                            label: Cow::Borrowed("Edit message (e)"),
+                            event: Event::EditCommitMessage,
+                        },
                         MenuItem {
                             label: Cow::Borrowed("Toggle current (space)"),
                             event: Event::ToggleItem,
@@ -764,6 +799,10 @@ impl<'state, 'input> Recorder<'state, 'input> {
             CommitViewMode::Inline => {
                 vec![CommitView {
                     debug_info: None,
+                    commit_message_view: CommitMessageView {
+                        commit_idx: self.focused_commit_idx,
+                        commit: &commits[self.focused_commit_idx],
+                    },
                     file_views: self.make_file_views(
                         self.focused_commit_idx,
                         files,
@@ -773,24 +812,15 @@ impl<'state, 'input> Recorder<'state, 'input> {
                 }]
             }
 
-            CommitViewMode::Adjacent => {
-                commits
-                    .iter()
-                    .enumerate()
-                    .map(|(commit_idx, commit)| {
-                        let Commit {} = commit; // not yet used
-                        CommitView {
-                            debug_info: None,
-                            file_views: self.make_file_views(
-                                commit_idx,
-                                files,
-                                &debug_info,
-                                *is_read_only,
-                            ),
-                        }
-                    })
-                    .collect()
-            }
+            CommitViewMode::Adjacent => commits
+                .iter()
+                .enumerate()
+                .map(|(commit_idx, commit)| CommitView {
+                    debug_info: None,
+                    commit_message_view: CommitMessageView { commit_idx, commit },
+                    file_views: self.make_file_views(commit_idx, files, &debug_info, *is_read_only),
+                })
+                .collect(),
         };
         AppView {
             debug_info: None,
@@ -959,6 +989,7 @@ impl<'state, 'input> Recorder<'state, 'input> {
     ) -> Result<StateUpdate, RecordError> {
         let state_update = match (&self.quit_dialog, event) {
             (_, Event::None) => StateUpdate::None,
+            (_, Event::Redraw) => StateUpdate::Redraw,
             (_, Event::EnsureSelectionInViewport) => StateUpdate::EnsureSelectionInViewport,
 
             // Confirm the changes.
@@ -1022,7 +1053,8 @@ impl<'state, 'input> Recorder<'state, 'input> {
                 | Event::ToggleAll
                 | Event::ToggleAllUniform
                 | Event::ExpandItem
-                | Event::ExpandAll,
+                | Event::ExpandAll
+                | Event::EditCommitMessage,
             ) => StateUpdate::None,
 
             (Some(_) | None, Event::TakeScreenshot(screenshot)) => {
@@ -1089,6 +1121,9 @@ impl<'state, 'input> Recorder<'state, 'input> {
             (None, Event::ToggleAllUniform) => StateUpdate::ToggleAllUniform,
             (None, Event::ExpandItem) => StateUpdate::ToggleExpandItem(self.selection_key),
             (None, Event::ExpandAll) => StateUpdate::ToggleExpandAll,
+            (None, Event::EditCommitMessage) => StateUpdate::EditCommitMessage {
+                commit_idx: self.focused_commit_idx,
+            },
 
             (_, Event::Click { row, column }) => {
                 let component_id = self.find_component_at(drawn_rects, row, column);
@@ -1474,10 +1509,14 @@ impl<'state, 'input> Recorder<'state, 'input> {
                 let DrawnRect { rect, timestamp: _ } = drawn_rect;
                 rect.contains_point(x, y)
                     && match id {
-                        ComponentId::App | ComponentId::AppFiles | ComponentId::MenuHeader => false,
+                        ComponentId::App
+                        | ComponentId::AppFiles
+                        | ComponentId::MenuHeader
+                        | ComponentId::CommitMessageView => false,
                         ComponentId::MenuBar
                         | ComponentId::MenuItem(_)
                         | ComponentId::Menu(_)
+                        | ComponentId::CommitEditMessageButton(_)
                         | ComponentId::FileViewHeader(_)
                         | ComponentId::SelectableItem(_)
                         | ComponentId::ToggleBox(_)
@@ -1499,6 +1538,7 @@ impl<'state, 'input> Recorder<'state, 'input> {
             ComponentId::App
             | ComponentId::AppFiles
             | ComponentId::MenuHeader
+            | ComponentId::CommitMessageView
             | ComponentId::QuitDialog => StateUpdate::None,
             ComponentId::MenuBar => StateUpdate::UnfocusMenuBar,
             ComponentId::Menu(section_idx) => StateUpdate::ClickMenu {
@@ -1506,6 +1546,9 @@ impl<'state, 'input> Recorder<'state, 'input> {
             },
             ComponentId::MenuItem(item_idx) => {
                 StateUpdate::ClickMenuItem(self.get_menu_item_event(menu_bar, item_idx))
+            }
+            ComponentId::CommitEditMessageButton(commit_idx) => {
+                StateUpdate::EditCommitMessage { commit_idx }
             }
             ComponentId::FileViewHeader(file_key) => StateUpdate::SelectItem {
                 selection_key: SelectionKey::File(file_key),
@@ -1770,6 +1813,32 @@ impl<'state, 'input> Recorder<'state, 'input> {
         self.pending_events.push(event);
     }
 
+    fn edit_commit_message(&mut self, commit_idx: usize) -> Result<(), RecordError> {
+        let message = &mut self.state.commits[commit_idx].message;
+        let message_str = match message.as_ref() {
+            Some(message) => message,
+            None => return Ok(()),
+        };
+        let new_message = {
+            match self.input.terminal_kind() {
+                TerminalKind::Testing { .. } => {}
+                TerminalKind::Crossterm => {
+                    Self::clean_up_crossterm()?;
+                }
+            }
+            let result = self.input.edit_commit_message(message_str);
+            match self.input.terminal_kind() {
+                TerminalKind::Testing { .. } => {}
+                TerminalKind::Crossterm => {
+                    Self::set_up_crossterm()?;
+                }
+            }
+            result?
+        };
+        *message = Some(new_message);
+        Ok(())
+    }
+
     fn file(&self, file_key: FileKey) -> Result<&File, RecordError> {
         let FileKey {
             commit_idx: _,
@@ -1927,6 +1996,8 @@ enum ComponentId {
     MenuHeader,
     Menu(usize),
     MenuItem(usize),
+    CommitMessageView,
+    CommitEditMessageButton(usize),
     FileViewHeader(FileKey),
     SelectableItem(SelectionKey),
     ToggleBox(SelectionKey),
@@ -2087,8 +2158,60 @@ impl Component for AppView<'_> {
 }
 
 #[derive(Clone, Debug)]
+struct CommitMessageView<'a> {
+    commit_idx: usize,
+    commit: &'a Commit,
+}
+
+impl<'a> Component for CommitMessageView<'a> {
+    type Id = ComponentId;
+
+    fn id(&self) -> Self::Id {
+        ComponentId::CommitMessageView
+    }
+
+    fn draw(&self, viewport: &mut Viewport<Self::Id>, x: isize, y: isize) {
+        let Self { commit_idx, commit } = self;
+        match commit {
+            Commit { message: None } => {}
+            Commit {
+                message: Some(message),
+            } => {
+                let style = Style::default().add_modifier(Modifier::UNDERLINED);
+                let button_rect = viewport.draw_component(
+                    x,
+                    y,
+                    &Button {
+                        id: ComponentId::CommitEditMessageButton(*commit_idx),
+                        label: Cow::Borrowed("Edit message"),
+                        style,
+                        is_focused: false,
+                    },
+                );
+                let first_line = match message.split_once('\n') {
+                    Some((before, _after)) => before,
+                    None => message,
+                };
+                let first_line = first_line.trim();
+                let first_line = if first_line.is_empty() {
+                    "(no message)"
+                } else {
+                    first_line
+                };
+                viewport.draw_span(
+                    button_rect.x + button_rect.width.unwrap_isize() + 1,
+                    y,
+                    &Span::styled(Cow::Borrowed(first_line), style),
+                );
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 struct CommitView<'a> {
     debug_info: Option<&'a AppDebugInfo>,
+    commit_message_view: CommitMessageView<'a>,
     file_views: Vec<FileView<'a>>,
 }
 
@@ -2106,10 +2229,13 @@ impl Component for CommitView<'_> {
     fn draw(&self, viewport: &mut Viewport<Self::Id>, x: isize, y: isize) {
         let Self {
             debug_info,
+            commit_message_view,
             file_views,
         } = self;
 
         let mut y = y;
+        let commit_message_view_rect = viewport.draw_component(x, y, commit_message_view);
+        y += commit_message_view_rect.height.unwrap_isize();
         for file_view in file_views {
             let file_view_rect = {
                 let file_view_mask = Mask {
@@ -2192,6 +2318,7 @@ impl Component for Menu<'_> {
             .map(|(i, item)| Button {
                 id: ComponentId::MenuItem(i),
                 label: Cow::Borrowed(&item.label),
+                style: Style::default(),
                 is_focused: false,
             })
             .collect::<Vec<_>>();
@@ -2242,6 +2369,7 @@ impl Component for MenuBar<'_> {
             let menu_header = Button {
                 id: ComponentId::Menu(i),
                 label: Cow::Borrowed(&menu.label),
+                style: Style::default(),
                 is_focused: false,
             };
             let rect = viewport.draw_component(x, y, &menu_header);
@@ -2912,6 +3040,7 @@ impl Component for QuitDialog {
         let quit_button = Button {
             id: ComponentId::QuitDialogButton(QuitDialogButtonId::Quit),
             label: Cow::Borrowed("Quit"),
+            style: Style::default(),
             is_focused: match focused_button {
                 QuitDialogButtonId::Quit => true,
                 QuitDialogButtonId::GoBack => false,
@@ -2920,6 +3049,7 @@ impl Component for QuitDialog {
         let go_back_button = Button {
             id: ComponentId::QuitDialogButton(QuitDialogButtonId::GoBack),
             label: Cow::Borrowed("Go Back"),
+            style: Style::default(),
             is_focused: match focused_button {
                 QuitDialogButtonId::GoBack => true,
                 QuitDialogButtonId::Quit => false,
@@ -2940,6 +3070,7 @@ impl Component for QuitDialog {
 struct Button<'a, Id> {
     id: Id,
     label: Cow<'a, str>,
+    style: Style,
     is_focused: bool,
 }
 
@@ -2948,15 +3079,13 @@ impl<'a, Id> Button<'a, Id> {
         let Self {
             id: _,
             label,
+            style,
             is_focused,
         } = self;
         if *is_focused {
-            Span::styled(
-                format!("({label})"),
-                Style::default().add_modifier(Modifier::REVERSED),
-            )
+            Span::styled(format!("({label})"), style.add_modifier(Modifier::REVERSED))
         } else {
-            Span::styled(format!("[{label}]"), Style::default())
+            Span::styled(format!("[{label}]"), *style)
         }
     }
 

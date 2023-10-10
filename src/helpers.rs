@@ -1,6 +1,6 @@
 //! Helper functions for rendering UI components.
 
-use std::time::Duration;
+use std::{collections::VecDeque, time::Duration};
 
 use crate::{Event, RecordError, RecordInput, TerminalKind};
 
@@ -10,6 +10,9 @@ pub fn make_binary_description(hash: &str, num_bytes: u64) -> String {
 }
 
 /// Reads input events from the terminal using `crossterm`.
+///
+/// Its default implementation of `edit_commit_message` returns the provided
+/// message unchanged.
 pub struct CrosstermInput;
 
 impl RecordInput for CrosstermInput {
@@ -30,6 +33,10 @@ impl RecordInput for CrosstermInput {
         }
         Ok(events)
     }
+
+    fn edit_commit_message(&mut self, message: &str) -> Result<String, RecordError> {
+        Ok(message.to_owned())
+    }
 }
 
 /// Reads events from the provided sequence of events.
@@ -42,6 +49,9 @@ pub struct TestingInput {
 
     /// The sequence of events to emit.
     pub events: Box<dyn Iterator<Item = Event>>,
+
+    /// Commit messages to use when the commit editor is opened.
+    pub commit_messages: VecDeque<String>,
 }
 
 impl TestingInput {
@@ -55,6 +65,7 @@ impl TestingInput {
             width,
             height,
             events: Box::new(events.into_iter()),
+            commit_messages: Default::default(),
         }
     }
 }
@@ -65,6 +76,7 @@ impl RecordInput for TestingInput {
             width,
             height,
             events: _,
+            commit_messages: _,
         } = self;
         TerminalKind::Testing {
             width: *width,
@@ -74,5 +86,11 @@ impl RecordInput for TestingInput {
 
     fn next_events(&mut self) -> Result<Vec<Event>, RecordError> {
         Ok(vec![self.events.next().unwrap_or(Event::None)])
+    }
+
+    fn edit_commit_message(&mut self, _message: &str) -> Result<String, RecordError> {
+        self.commit_messages
+            .pop_front()
+            .ok_or_else(|| RecordError::Other("No more commit messages available".to_string()))
     }
 }

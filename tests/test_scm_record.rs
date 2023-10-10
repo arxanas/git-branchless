@@ -5,7 +5,7 @@ use assert_matches::assert_matches;
 use insta::{assert_debug_snapshot, assert_snapshot};
 use scm_record::{
     helpers::{make_binary_description, TestingInput},
-    ChangeType, Event, File, FileMode, RecordError, RecordState, Recorder, Section,
+    ChangeType, Commit, Event, File, FileMode, RecordError, RecordState, Recorder, Section,
     SectionChangedLine, TestingScreenshot,
 };
 
@@ -575,8 +575,12 @@ fn test_file_mode_change() -> eyre::Result<()> {
     RecordState {
         is_read_only: false,
         commits: [
-            Commit,
-            Commit,
+            Commit {
+                message: None,
+            },
+            Commit {
+                message: None,
+            },
         ],
         files: [
             File {
@@ -845,8 +849,12 @@ fn test_record_binary_file() -> eyre::Result<()> {
     RecordState {
         is_read_only: false,
         commits: [
-            Commit,
-            Commit,
+            Commit {
+                message: None,
+            },
+            Commit {
+                message: None,
+            },
         ],
         files: [
             File {
@@ -924,8 +932,12 @@ fn test_record_binary_file_noop() -> eyre::Result<()> {
     RecordState {
         is_read_only: false,
         commits: [
-            Commit,
-            Commit,
+            Commit {
+                message: None,
+            },
+            Commit {
+                message: None,
+            },
         ],
         files: [
             File {
@@ -1921,11 +1933,11 @@ fn test_expand_menu() -> eyre::Result<()> {
     "###);
     insta::assert_display_snapshot!(after_click, @r###"
     "[File] [Edit] [Select] [View]                                                   "
-    "(~) foo[Toggle current (space)]                                              (+)"
-    "[×] baz[Toggle current and advance (enter)]                                  [+]"
+    "(~) foo[Edit message (e)]                                                    (+)"
+    "[×] baz[Toggle current (space)]                                              [+]"
+    "       [Toggle current and advance (enter)]                                     "
     "       [Invert all items (a)]                                                   "
     "       [Invert all items uniformly (A)]                                         "
-    "                                                                                "
     "###);
     insta::assert_display_snapshot!(after_click_different, @r###"
     "[File] [Edit] [Select] [View]                                                   "
@@ -2060,8 +2072,12 @@ fn test_read_only() -> eyre::Result<()> {
     RecordState {
         is_read_only: true,
         commits: [
-            Commit,
-            Commit,
+            Commit {
+                message: None,
+            },
+            Commit {
+                message: None,
+            },
         ],
         files: [
             File {
@@ -2206,8 +2222,12 @@ fn test_toggle_unchanged_line() -> eyre::Result<()> {
     RecordState {
         is_read_only: false,
         commits: [
-            Commit,
-            Commit,
+            Commit {
+                message: None,
+            },
+            Commit {
+                message: None,
+            },
         ],
         files: [
             File {
@@ -2381,6 +2401,89 @@ fn test_max_file_view_width() -> eyre::Result<()> {
     "  [ ] Secti…[-]"
     "    [ ] + very…"
     "               "
+    "###);
+
+    Ok(())
+}
+
+#[test]
+fn test_commit_message_view() -> eyre::Result<()> {
+    let mut state = example_contents();
+    state.commits = vec![Commit {
+        message: Some("".to_string()),
+    }];
+
+    let initial = TestingScreenshot::default();
+    let after_edit = TestingScreenshot::default();
+    let mut input = TestingInput {
+        width: 80,
+        height: 24,
+        events: Box::new(
+            [
+                Event::ExpandAll,
+                initial.event(),
+                Event::EditCommitMessage,
+                after_edit.event(),
+                Event::QuitAccept,
+            ]
+            .into_iter(),
+        ),
+        commit_messages: ["Hello, world!".to_string()].into_iter().collect(),
+    };
+    let recorder = Recorder::new(state, &mut input);
+    recorder.run()?;
+
+    insta::assert_display_snapshot!(initial, @r###"
+    "[File] [Edit] [Select] [View]                                                   "
+    "[Edit message] (no message)                                                     "
+    "(~) foo/bar                                                                  (-)"
+    "        ⋮                                                                       "
+    "       18 this is some text⏎                                                    "
+    "       19 this is some text⏎                                                    "
+    "       20 this is some text⏎                                                    "
+    "  [~] Section 1/1                                                            [-]"
+    "    [×] - before text 1⏎                                                        "
+    "    [×] - before text 2⏎                                                        "
+    "    [×] + after text 1⏎                                                         "
+    "    [ ] + after text 2⏎                                                         "
+    "       23 this is some trailing text⏎                                           "
+    "[×] baz                                                                      [-]"
+    "        1 Some leading text 1⏎                                                  "
+    "        2 Some leading text 2⏎                                                  "
+    "  [×] Section 1/1                                                            [-]"
+    "    [×] - before text 1⏎                                                        "
+    "    [×] - before text 2⏎                                                        "
+    "    [×] + after text 1⏎                                                         "
+    "    [×] + after text 2⏎                                                         "
+    "        5 this is some trailing text⏎                                           "
+    "                                                                                "
+    "                                                                                "
+    "###);
+    insta::assert_display_snapshot!(after_edit, @r###"
+    "[File] [Edit] [Select] [View]                                                   "
+    "[Edit message] Hello, world!                                                    "
+    "(~) foo/bar                                                                  (-)"
+    "        ⋮                                                                       "
+    "       18 this is some text⏎                                                    "
+    "       19 this is some text⏎                                                    "
+    "       20 this is some text⏎                                                    "
+    "  [~] Section 1/1                                                            [-]"
+    "    [×] - before text 1⏎                                                        "
+    "    [×] - before text 2⏎                                                        "
+    "    [×] + after text 1⏎                                                         "
+    "    [ ] + after text 2⏎                                                         "
+    "       23 this is some trailing text⏎                                           "
+    "[×] baz                                                                      [-]"
+    "        1 Some leading text 1⏎                                                  "
+    "        2 Some leading text 2⏎                                                  "
+    "  [×] Section 1/1                                                            [-]"
+    "    [×] - before text 1⏎                                                        "
+    "    [×] - before text 2⏎                                                        "
+    "    [×] + after text 1⏎                                                         "
+    "    [×] + after text 2⏎                                                         "
+    "        5 this is some trailing text⏎                                           "
+    "                                                                                "
+    "                                                                                "
     "###);
 
     Ok(())
