@@ -999,9 +999,11 @@ impl<'state, 'input> Recorder<'state, 'input> {
 
             // Render quit dialog if the user made changes.
             (None, Event::QuitCancel | Event::QuitInterrupt) => {
+                let num_commit_messages = self.num_user_commit_messages()?;
                 let num_changed_files = self.num_user_file_changes()?;
-                if num_changed_files > 0 {
+                if num_commit_messages > 0 || num_changed_files > 0 {
                     StateUpdate::SetQuitDialog(Some(QuitDialog {
+                        num_commit_messages,
                         num_changed_files,
                         focused_button: QuitDialogButtonId::Quit,
                     }))
@@ -1030,6 +1032,7 @@ impl<'state, 'input> Recorder<'state, 'input> {
             // Press the appropriate dialog button.
             (Some(quit_dialog), Event::ToggleItem | Event::ToggleItemAndAdvance) => {
                 let QuitDialog {
+                    num_commit_messages: _,
                     num_changed_files: _,
                     focused_button,
                 } = quit_dialog;
@@ -1142,6 +1145,24 @@ impl<'state, 'input> Recorder<'state, 'input> {
             }),
             None => SelectionKey::None,
         }
+    }
+
+    fn num_user_commit_messages(&self) -> Result<usize, RecordError> {
+        let RecordState {
+            files: _,
+            commits,
+            is_read_only: _,
+        } = &self.state;
+        Ok(commits
+            .iter()
+            .map(|commit| {
+                let Commit { message } = commit;
+                match message {
+                    Some(message) if !message.is_empty() => 1,
+                    _ => 0,
+                }
+            })
+            .sum())
     }
 
     fn num_user_file_changes(&self) -> Result<usize, RecordError> {
@@ -3033,6 +3054,7 @@ impl Component for SectionLineView<'_> {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct QuitDialog {
+    num_commit_messages: usize,
     num_changed_files: usize,
     focused_button: QuitDialogButtonId,
 }
@@ -3046,18 +3068,42 @@ impl Component for QuitDialog {
 
     fn draw(&self, viewport: &mut Viewport<Self::Id>, _x: isize, _y: isize) {
         let Self {
+            num_commit_messages,
             num_changed_files,
             focused_button,
         } = self;
         let title = "Quit";
-        let body = format!(
-            "You have changes to {num_changed_files} {}. Are you sure you want to quit?",
-            if *num_changed_files == 1 {
-                "file"
-            } else {
-                "files"
+        let alert_items = {
+            let mut result = Vec::new();
+            if *num_commit_messages > 0 {
+                result.push(format!(
+                    "{num_commit_messages} {}",
+                    if *num_commit_messages == 1 {
+                        "message"
+                    } else {
+                        "messages"
+                    }
+                ));
             }
-        );
+            if *num_changed_files > 0 {
+                result.push(format!(
+                    "{num_changed_files} {}",
+                    if *num_changed_files == 1 {
+                        "file"
+                    } else {
+                        "files"
+                    }
+                ));
+            }
+            result
+        };
+        let alert = if alert_items.is_empty() {
+            // Shouldn't happen.
+            "".to_string()
+        } else {
+            format!("You have changes to {}. ", alert_items.join(" and "))
+        };
+        let body = format!("{alert}Are you sure you want to quit?",);
 
         let quit_button = Button {
             id: ComponentId::QuitDialogButton(QuitDialogButtonId::Quit),
