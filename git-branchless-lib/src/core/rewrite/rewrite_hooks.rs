@@ -3,10 +3,9 @@
 use std::collections::{HashMap, HashSet};
 
 use std::fmt::Write;
-use std::fs::{self, File};
-use std::io::{self, stdin, BufRead, BufReader, Read, Write as WriteIo};
+use std::fs::File;
+use std::io::{stdin, BufRead, BufReader, Read, Write as WriteIo};
 use std::path::{Path, PathBuf};
-use std::str::FromStr;
 use std::time::SystemTime;
 
 use console::style;
@@ -42,20 +41,6 @@ use super::{find_abandoned_children, move_branches};
 /// available in the event log anywhere. This is probably acceptable.
 pub fn get_deferred_commits_path(repo: &Repo) -> PathBuf {
     repo.get_rebase_state_dir_path().join("deferred-commits")
-}
-
-fn read_deferred_commits(repo: &Repo) -> eyre::Result<Vec<NonZeroOid>> {
-    let deferred_commits_path = get_deferred_commits_path(repo);
-    let contents = match fs::read_to_string(&deferred_commits_path) {
-        Ok(contents) => contents,
-        Err(err) if err.kind() == io::ErrorKind::NotFound => Default::default(),
-        Err(err) => {
-            return Err(err)
-                .with_context(|| format!("Reading deferred commits at {deferred_commits_path:?}"))
-        }
-    };
-    let commit_oids = contents.lines().map(NonZeroOid::from_str).try_collect()?;
-    Ok(commit_oids)
 }
 
 #[instrument(skip(stream))]
@@ -147,19 +132,6 @@ pub fn hook_post_rewrite(
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
     let event_tx_id = event_log_db.make_transaction_id(now, "hook-post-rewrite")?;
-
-    {
-        let deferred_commit_oids = read_deferred_commits(&repo)?;
-        let commit_events = deferred_commit_oids
-            .into_iter()
-            .map(|commit_oid| Event::CommitEvent {
-                timestamp,
-                event_tx_id,
-                commit_oid,
-            })
-            .collect_vec();
-        event_log_db.add_events(commit_events)?;
-    }
 
     let (rewritten_oids, rewrite_events) = {
         let rewritten_oids = read_rewritten_list_entries(&mut stdin().lock())?;
