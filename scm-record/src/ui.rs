@@ -2177,7 +2177,15 @@ impl<'a> Component for CommitMessageView<'a> {
             Commit {
                 message: Some(message),
             } => {
-                let style = Style::default().add_modifier(Modifier::UNDERLINED);
+                viewport.draw_blank(Rect {
+                    x,
+                    y,
+                    width: viewport.mask_rect().width,
+                    height: 1,
+                });
+                let y = y + 1;
+
+                let style = Style::default();
                 let button_rect = viewport.draw_component(
                     x,
                     y,
@@ -2188,21 +2196,35 @@ impl<'a> Component for CommitMessageView<'a> {
                         is_focused: false,
                     },
                 );
-                let first_line = match message.split_once('\n') {
-                    Some((before, _after)) => before,
-                    None => message,
-                };
-                let first_line = first_line.trim();
-                let first_line = if first_line.is_empty() {
-                    "(no message)"
-                } else {
-                    first_line
-                };
-                viewport.draw_span(
-                    button_rect.x + button_rect.width.unwrap_isize() + 1,
+                let divider_rect =
+                    viewport.draw_span(button_rect.end_x() + 1, y, &Span::raw(" • "));
+                viewport.draw_text(
+                    divider_rect.end_x() + 1,
                     y,
-                    &Span::styled(Cow::Borrowed(first_line), style),
+                    &Span::styled(
+                        Cow::Borrowed({
+                            let first_line = match message.split_once('\n') {
+                                Some((before, _after)) => before,
+                                None => message,
+                            };
+                            let first_line = first_line.trim();
+                            if first_line.is_empty() {
+                                "(no message)"
+                            } else {
+                                first_line
+                            }
+                        }),
+                        style.add_modifier(Modifier::UNDERLINED),
+                    ),
                 );
+                let y = y + 1;
+
+                viewport.draw_blank(Rect {
+                    x,
+                    y,
+                    width: viewport.mask_rect().width,
+                    height: 1,
+                });
             }
         }
     }
