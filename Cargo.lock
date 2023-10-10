@@ -1614,6 +1614,7 @@ dependencies = [
  "git-branchless-invoke",
  "git-branchless-lib",
  "git-branchless-opts",
+ "git-branchless-reword",
  "insta",
  "itertools 0.11.0",
  "rayon",
