@@ -1986,9 +1986,9 @@ impl Component for AppFilesView<'_> {
 
         let mut y = y;
         for file_view in file_views {
+            const MAX_FILE_VIEW_WIDTH: usize = 120;
+            let file_view_width = MAX_FILE_VIEW_WIDTH.min(viewport.rect().width);
             let file_view_rect = {
-                const MAX_FILE_VIEW_WIDTH: usize = 120;
-                let file_view_width = MAX_FILE_VIEW_WIDTH.min(viewport.rect().width);
                 let file_view_mask = Mask {
                     x,
                     y,
@@ -2005,16 +2005,26 @@ impl Component for AppFilesView<'_> {
             if file_view_rect.y < mask.y
                 && mask.y < file_view_rect.y + file_view_rect.height.unwrap_isize()
             {
-                viewport.draw_component(
-                    x,
-                    mask.y,
-                    &FileViewHeader {
-                        file_key: file_view.file_key,
-                        path: file_view.path,
-                        old_path: file_view.old_path,
-                        is_selected: file_view.is_header_selected,
-                        toggle_box: file_view.toggle_box.clone(),
-                        expand_box: file_view.expand_box.clone(),
+                viewport.with_mask(
+                    Mask {
+                        x,
+                        y: mask.y,
+                        width: Some(file_view_width),
+                        height: Some(1),
+                    },
+                    |viewport| {
+                        viewport.draw_component(
+                            x,
+                            mask.y,
+                            &FileViewHeader {
+                                file_key: file_view.file_key,
+                                path: file_view.path,
+                                old_path: file_view.old_path,
+                                is_selected: file_view.is_header_selected,
+                                toggle_box: file_view.toggle_box.clone(),
+                                expand_box: file_view.expand_box.clone(),
+                            },
+                        );
                     },
                 );
             }
