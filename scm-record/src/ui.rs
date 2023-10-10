@@ -135,6 +135,7 @@ pub enum Event {
     ExpandItem,
     ExpandAll,
     Click { row: usize, column: usize },
+    ToggleCommitViewMode, // no key binding currently
 }
 
 impl From<crossterm::event::Event> for Event {
@@ -421,6 +422,13 @@ enum StateUpdate {
         menu_idx: usize,
     },
     ClickMenuItem(Event),
+    ToggleCommitViewMode,
+}
+
+#[derive(Clone, Copy, Debug)]
+enum CommitViewMode {
+    Inline,
+    Adjacent,
 }
 
 /// UI component to record the user's changes.
@@ -429,6 +437,7 @@ pub struct Recorder<'a> {
     event_source: EventSource,
     pending_events: Vec<Event>,
     use_unicode: bool,
+    commit_view_mode: CommitViewMode,
     expanded_items: HashSet<SelectionKey>,
     expanded_menu_idx: Option<usize>,
     selection_key: SelectionKey,
@@ -453,6 +462,7 @@ impl<'a> Recorder<'a> {
             event_source,
             pending_events: Default::default(),
             use_unicode: true,
+            commit_view_mode: CommitViewMode::Inline,
             expanded_items: Default::default(),
             expanded_menu_idx: Default::default(),
             selection_key: SelectionKey::None,
@@ -663,6 +673,12 @@ impl<'a> Recorder<'a> {
                     StateUpdate::ClickMenuItem(event) => {
                         self.click_menu_item(event);
                     }
+                    StateUpdate::ToggleCommitViewMode => {
+                        self.commit_view_mode = match self.commit_view_mode {
+                            CommitViewMode::Inline => CommitViewMode::Adjacent,
+                            CommitViewMode::Adjacent => CommitViewMode::Inline,
+                        };
+                    }
                 }
             }
         }
@@ -777,15 +793,63 @@ impl<'a> Recorder<'a> {
     ) -> AppView<'a> {
         let RecordState {
             is_read_only,
-            commits: _,
+            commits,
             files,
         } = &self.state;
-        let file_views: Vec<FileView> = files
+        let commit_views = match self.commit_view_mode {
+            CommitViewMode::Inline => {
+                vec![CommitView {
+                    debug_info: None,
+                    file_views: self.make_file_views(
+                        self.focused_commit_idx,
+                        files,
+                        &debug_info,
+                        *is_read_only,
+                    ),
+                }]
+            }
+
+            CommitViewMode::Adjacent => {
+                commits
+                    .iter()
+                    .enumerate()
+                    .map(|(commit_idx, commit)| {
+                        let Commit {} = commit; // not yet used
+                        CommitView {
+                            debug_info: None,
+                            file_views: self.make_file_views(
+                                commit_idx,
+                                files,
+                                &debug_info,
+                                *is_read_only,
+                            ),
+                        }
+                    })
+                    .collect()
+            }
+        };
+        AppView {
+            debug_info: None,
+            menu_bar,
+            commit_view_mode: self.commit_view_mode,
+            commit_views,
+            quit_dialog: self.quit_dialog.clone(),
+        }
+    }
+
+    fn make_file_views(
+        &'a self,
+        commit_idx: usize,
+        files: &'a [File<'a>],
+        debug_info: &Option<AppDebugInfo>,
+        is_read_only: bool,
+    ) -> Vec<FileView<'a>> {
+        files
             .iter()
             .enumerate()
             .map(|(file_idx, file)| {
                 let file_key = FileKey {
-                    commit_idx: self.focused_commit_idx,
+                    commit_idx,
                     file_idx,
                 };
                 let file_toggled = self.file_tristate(file_key).unwrap();
@@ -803,7 +867,7 @@ impl<'a> Recorder<'a> {
                         icon_style: TristateIconStyle::Check,
                         tristate: file_toggled,
                         is_focused,
-                        is_read_only: *is_read_only,
+                        is_read_only,
                     },
                     expand_box: TristateBox {
                         use_unicode: self.use_unicode,
@@ -829,7 +893,7 @@ impl<'a> Recorder<'a> {
                         let mut editable_section_num = 0;
                         for (section_idx, section) in file.sections.iter().enumerate() {
                             let section_key = SectionKey {
-                                commit_idx: self.focused_commit_idx,
+                                commit_idx,
                                 file_idx,
                                 section_idx,
                             };
@@ -851,11 +915,11 @@ impl<'a> Recorder<'a> {
                             }
                             section_views.push(SectionView {
                                 use_unicode: self.use_unicode,
-                                is_read_only: *is_read_only,
+                                is_read_only,
                                 section_key,
                                 toggle_box: TristateBox {
                                     use_unicode: self.use_unicode,
-                                    is_read_only: *is_read_only,
+                                    is_read_only,
                                     id: ComponentId::ToggleBox(SelectionKey::Section(section_key)),
                                     tristate: section_toggled,
                                     icon_style: TristateIconStyle::Check,
@@ -919,13 +983,7 @@ impl<'a> Recorder<'a> {
                     },
                 }
             })
-            .collect();
-        AppView {
-            debug_info: None,
-            menu_bar,
-            file_views,
-            quit_dialog: self.quit_dialog.clone(),
-        }
+            .collect()
     }
 
     fn handle_event(
@@ -1072,6 +1130,7 @@ impl<'a> Recorder<'a> {
                 let component_id = self.find_component_at(drawn_rects, row, column);
                 self.click_component(menu_bar, component_id)
             }
+            (_, Event::ToggleCommitViewMode) => StateUpdate::ToggleCommitViewMode,
         };
         Ok(state_update)
     }
@@ -1991,7 +2050,8 @@ struct AppDebugInfo {
 struct AppView<'a> {
     debug_info: Option<AppDebugInfo>,
     menu_bar: MenuBar<'a>,
-    file_views: Vec<FileView<'a>>,
+    commit_view_mode: CommitViewMode,
+    commit_views: Vec<CommitView<'a>>,
     quit_dialog: Option<QuitDialog>,
 }
 
@@ -2006,7 +2066,8 @@ impl Component for AppView<'_> {
         let Self {
             debug_info,
             menu_bar,
-            file_views,
+            commit_view_mode,
+            commit_views,
             quit_dialog,
         } = self;
 
@@ -2014,21 +2075,43 @@ impl Component for AppView<'_> {
             viewport.debug(format!("app debug info: {debug_info:#?}"));
         }
 
-        let viewport_rect = viewport.rect();
+        let viewport_rect = viewport.mask_rect();
 
         let menu_bar_height = 1usize;
-        let app_files_view_mask = Mask {
+        let commit_view_width = match commit_view_mode {
+            CommitViewMode::Inline => viewport.rect().width,
+            CommitViewMode::Adjacent => {
+                const MAX_COMMIT_VIEW_WIDTH: usize = 120;
+                MAX_COMMIT_VIEW_WIDTH
+                    .min(viewport.rect().width.saturating_sub(CommitView::MARGIN) / 2)
+            }
+        };
+        let commit_views_mask = Mask {
             x: viewport_rect.x,
             y: viewport_rect.y + menu_bar_height.unwrap_isize(),
             width: Some(viewport_rect.width),
             height: None,
         };
-        viewport.with_mask(app_files_view_mask, |viewport| {
-            let app_files = AppFilesView {
-                debug_info: self.debug_info.as_ref(),
-                file_views: file_views.clone(),
-            };
-            viewport.draw_component(x, menu_bar_height.unwrap_isize(), &app_files);
+        viewport.with_mask(commit_views_mask, |viewport| {
+            let mut commit_view_x = 0;
+            for commit_view in commit_views {
+                let commit_view_mask = Mask {
+                    x: commit_views_mask.x + commit_view_x,
+                    y: commit_views_mask.y,
+                    width: Some(commit_view_width),
+                    height: None,
+                };
+                let commit_view_rect = viewport.with_mask(commit_view_mask, |viewport| {
+                    viewport.draw_component(
+                        commit_view_x,
+                        menu_bar_height.unwrap_isize(),
+                        commit_view,
+                    )
+                });
+                commit_view_x += (CommitView::MARGIN
+                    + commit_view_mask.apply(commit_view_rect).width)
+                    .unwrap_isize();
+            }
         });
 
         viewport.draw_component(x, viewport_rect.y, menu_bar);
@@ -2039,12 +2122,17 @@ impl Component for AppView<'_> {
     }
 }
 
-struct AppFilesView<'a> {
+#[derive(Clone, Debug)]
+struct CommitView<'a> {
     debug_info: Option<&'a AppDebugInfo>,
     file_views: Vec<FileView<'a>>,
 }
 
-impl Component for AppFilesView<'_> {
+impl<'a> CommitView<'a> {
+    const MARGIN: usize = 1;
+}
+
+impl Component for CommitView<'_> {
     type Id = ComponentId;
 
     fn id(&self) -> Self::Id {
@@ -2059,13 +2147,11 @@ impl Component for AppFilesView<'_> {
 
         let mut y = y;
         for file_view in file_views {
-            const MAX_FILE_VIEW_WIDTH: usize = 120;
-            let file_view_width = MAX_FILE_VIEW_WIDTH.min(viewport.rect().width);
             let file_view_rect = {
                 let file_view_mask = Mask {
                     x,
                     y,
-                    width: Some(file_view_width),
+                    width: viewport.mask().width,
                     height: None,
                 };
                 viewport.with_mask(file_view_mask, |viewport| {
@@ -2082,7 +2168,7 @@ impl Component for AppFilesView<'_> {
                     Mask {
                         x,
                         y: mask.y,
-                        width: Some(file_view_width),
+                        width: Some(viewport.mask_rect().width),
                         height: Some(1),
                     },
                     |viewport| {

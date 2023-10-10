@@ -2353,20 +2353,25 @@ fn test_max_file_view_width() -> eyre::Result<()> {
     let recorder = Recorder::new(
         state.clone(),
         EventSource::testing(
-            150,
+            250,
             6,
-            [Event::ExpandAll, initial_wide.event(), Event::QuitAccept],
+            [
+                Event::ExpandAll,
+                Event::ToggleCommitViewMode,
+                initial_wide.event(),
+                Event::QuitAccept,
+            ],
         ),
     );
     recorder.run()?;
 
     insta::assert_display_snapshot!(initial_wide, @r###"
-    "[File] [Edit] [Select] [View]                                                                                                                         "
-    "( ) very/very/very/very/very/very/very/very/very/very/very/very/very/very/very/very/very/very/very/very/very/very/ve…(-)                              "
-    "        1 very very very very very very very very very very very very very very very very very very very very very very…                              "
-    "  [ ] Section 1/1                                                                                                    [-]                              "
-    "    [ ] + very very very very very very very very very very very very very very very very very very very very very very…                              "
-    "                                                                                                                                                      "
+    "[File] [Edit] [Select] [View]                                                                                                                                                                                                                             "
+    "( ) very/very/very/very/very/very/very/very/very/very/very/very/very/very/very/very/very/very/very/very/very/very/ve…(-) [ ] very/very/very/very/very/very/very/very/very/very/very/very/very/very/very/very/very/very/very/very/very/very/ve…[+]         "
+    "        1 very very very very very very very very very very very very very very very very very very very very very very…                                                                                                                                  "
+    "  [ ] Section 1/1                                                                                                    [-]                                                                                                                                  "
+    "    [ ] + very very very very very very very very very very very very very very very very very very very very very very…                                                                                                                                  "
+    "                                                                                                                                                                                                                                                          "
     "###);
 
     let initial_narrow = TestingScreenshot::default();
