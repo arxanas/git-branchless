@@ -22,7 +22,6 @@ members = [
     "git-branchless-test",
     "git-branchless-undo",
     "git-branchless",
-    "git-record",
     "scm-bisect",
     "scm-record",
 ]
