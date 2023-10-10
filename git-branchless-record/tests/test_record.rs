@@ -57,8 +57,9 @@ fn test_record_unstaged_changes_interactive() -> eyre::Result<()> {
         run_in_pty(
             &git,
             "record",
-            &["-i", "-m", "foo"],
+            &["-i", "-m", "initial message"],
             &[
+                PtyAction::WaitUntilContains("initial message"),
                 PtyAction::Write("f"), // expand files
                 PtyAction::WaitUntilContains("contents1"),
                 PtyAction::Write("q"),

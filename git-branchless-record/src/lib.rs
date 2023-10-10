@@ -16,6 +16,7 @@ use std::time::SystemTime;
 
 use git_branchless_invoke::CommandContext;
 use git_branchless_opts::RecordArgs;
+use git_branchless_reword::edit_message;
 use itertools::Itertools;
 use lib::core::check_out::{check_out_commit, CheckOutCommitOptions};
 use lib::core::config::get_restack_preserve_timestamps;
@@ -38,7 +39,9 @@ use lib::try_exit_code;
 use lib::util::{ExitCode, EyreExitOr};
 use rayon::ThreadPoolBuilder;
 use scm_record::helpers::CrosstermInput;
-use scm_record::{RecordError, RecordState, Recorder, SelectedContents};
+use scm_record::{
+    Commit, Event, RecordError, RecordInput, RecordState, Recorder, SelectedContents, TerminalKind,
+};
 use tracing::{instrument, warn};
 
 /// Commit changes in the working copy.
@@ -241,11 +244,35 @@ fn record_interactive(
     };
     let record_state = RecordState {
         is_read_only: false,
-        commits: Default::default(),
+        commits: vec![
+            Commit {
+                message: Some(message.map(|s| s.to_owned()).unwrap_or_default()),
+            },
+            Commit { message: None },
+        ],
         files,
     };
 
-    let mut input = CrosstermInput;
+    struct Input<'a> {
+        git_run_info: &'a GitRunInfo,
+        repo: &'a Repo,
+    }
+    impl RecordInput for Input<'_> {
+        fn terminal_kind(&self) -> TerminalKind {
+            TerminalKind::Crossterm
+        }
+
+        fn next_events(&mut self) -> Result<Vec<Event>, RecordError> {
+            CrosstermInput.next_events()
+        }
+
+        fn edit_commit_message(&mut self, message: &str) -> Result<String, RecordError> {
+            let Self { git_run_info, repo } = self;
+            edit_message(git_run_info, repo, message)
+                .map_err(|err| RecordError::Other(err.to_string()))
+        }
+    }
+    let mut input = Input { git_run_info, repo };
     let recorder = Recorder::new(record_state, &mut input);
     let result = recorder.run();
     let RecordState {
@@ -269,7 +296,8 @@ fn record_interactive(
             | RecordError::ReadInput(_)
             | RecordError::RenderFrame(_)
             | RecordError::SerializeJson(_)
-            | RecordError::WriteFile(_)),
+            | RecordError::WriteFile(_)
+            | RecordError::Other(_)),
         ) => {
             println!("Error: {err}");
             return Ok(Err(ExitCode(1)));

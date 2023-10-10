@@ -66,6 +66,9 @@ pub enum RecordError {
     #[error("failed to wrote file: {0}")]
     WriteFile(#[source] io::Error),
 
+    #[error("{0}")]
+    Other(String),
+
     #[error("bug: {0}")]
     Bug(String),
 }
@@ -157,7 +160,12 @@ impl From<bool> for Tristate {
 /// A container of selected changes and commit metadata.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
-pub struct Commit {}
+pub struct Commit {
+    /// The commit message. If `Some`, then the commit message will be previewed
+    /// in the UI and the user will be able to edit it. If `None`, the commit
+    /// message will not be shown or editable.
+    pub message: Option<String>,
+}
 
 /// The state of a file to be recorded.
 #[derive(Clone, Debug, Eq, PartialEq)]
