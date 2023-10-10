@@ -17,6 +17,23 @@ pub struct RecordState<'a> {
     /// changed by the user.
     pub is_read_only: bool,
 
+    /// The commits containing the selected changes. Each changed section be
+    /// assigned to exactly one commit.
+    ///
+    /// If there are fewer than two commits in this list, then it is padded to
+    /// two commits using `Commit::default` before being returned.
+    ///
+    /// It's important to note that the `Commit`s do not literally contain the
+    /// selected changes. They are stored out-of-band in the `files` field. It
+    /// would be possible to store the changes in the `Commit`s, but we would no
+    /// longer get the invariant that each change belongs to a single commit for
+    /// free. (That being said, we now have to uphold the invariant that the
+    /// changes are all assigned to valid commits.) It would also be somewhat
+    /// more tedious to write the code that removes the change from one `Commit`
+    /// and adds it to the correct relative position (with respect to all of the
+    /// other changes) in another `Commit`.
+    pub commits: Vec<Commit>,
+
     /// The state of each file. This is rendered in order, so you may want to
     /// sort this list by path before providing it.
     pub files: Vec<File<'a>>,
@@ -136,6 +153,11 @@ impl From<bool> for Tristate {
         }
     }
 }
+
+/// A container of selected changes and commit metadata.
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+pub struct Commit {}
 
 /// The state of a file to be recorded.
 #[derive(Clone, Debug, Eq, PartialEq)]
