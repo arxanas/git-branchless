@@ -2415,6 +2415,8 @@ fn test_commit_message_view() -> eyre::Result<()> {
 
     let initial = TestingScreenshot::default();
     let after_edit = TestingScreenshot::default();
+    let after_scroll1 = TestingScreenshot::default();
+    let after_scroll2 = TestingScreenshot::default();
     let mut input = TestingInput {
         width: 80,
         height: 24,
@@ -2424,6 +2426,12 @@ fn test_commit_message_view() -> eyre::Result<()> {
                 initial.event(),
                 Event::EditCommitMessage,
                 after_edit.event(),
+                Event::ScrollDown,
+                after_scroll1.event(),
+                Event::ScrollDown,
+                Event::ScrollDown,
+                Event::ScrollDown,
+                after_scroll2.event(),
                 Event::QuitAccept,
             ]
             .into_iter(),
@@ -2435,7 +2443,9 @@ fn test_commit_message_view() -> eyre::Result<()> {
 
     insta::assert_display_snapshot!(initial, @r###"
     "[File] [Edit] [Select] [View]                                                   "
-    "[Edit message] (no message)                                                     "
+    "                                                                                "
+    "[Edit message]  •  (no message)                                                 "
+    "                                                                                "
     "(~) foo/bar                                                                  (-)"
     "        ⋮                                                                       "
     "       18 this is some text⏎                                                    "
@@ -2456,12 +2466,12 @@ fn test_commit_message_view() -> eyre::Result<()> {
     "    [×] + after text 1⏎                                                         "
     "    [×] + after text 2⏎                                                         "
     "        5 this is some trailing text⏎                                           "
-    "                                                                                "
-    "                                                                                "
     "###);
     insta::assert_display_snapshot!(after_edit, @r###"
     "[File] [Edit] [Select] [View]                                                   "
-    "[Edit message] Hello, world!                                                    "
+    "                                                                                "
+    "[Edit message]  •  Hello, world!                                                "
+    "                                                                                "
     "(~) foo/bar                                                                  (-)"
     "        ⋮                                                                       "
     "       18 this is some text⏎                                                    "
@@ -2482,6 +2492,56 @@ fn test_commit_message_view() -> eyre::Result<()> {
     "    [×] + after text 1⏎                                                         "
     "    [×] + after text 2⏎                                                         "
     "        5 this is some trailing text⏎                                           "
+    "###);
+    insta::assert_display_snapshot!(after_scroll1, @r###"
+    "[File] [Edit] [Select] [View]                                                   "
+    "[Edit message]  •  Hello, world!                                                "
+    "                                                                                "
+    "(~) foo/bar                                                                  (-)"
+    "        ⋮                                                                       "
+    "       18 this is some text⏎                                                    "
+    "       19 this is some text⏎                                                    "
+    "       20 this is some text⏎                                                    "
+    "  [~] Section 1/1                                                            [-]"
+    "    [×] - before text 1⏎                                                        "
+    "    [×] - before text 2⏎                                                        "
+    "    [×] + after text 1⏎                                                         "
+    "    [ ] + after text 2⏎                                                         "
+    "       23 this is some trailing text⏎                                           "
+    "[×] baz                                                                      [-]"
+    "        1 Some leading text 1⏎                                                  "
+    "        2 Some leading text 2⏎                                                  "
+    "  [×] Section 1/1                                                            [-]"
+    "    [×] - before text 1⏎                                                        "
+    "    [×] - before text 2⏎                                                        "
+    "    [×] + after text 1⏎                                                         "
+    "    [×] + after text 2⏎                                                         "
+    "        5 this is some trailing text⏎                                           "
+    "                                                                                "
+    "###);
+    insta::assert_display_snapshot!(after_scroll2, @r###"
+    "[File] [Edit] [Select] [View]                                                   "
+    "(~) foo/bar                                                                  (-)"
+    "       18 this is some text⏎                                                    "
+    "       19 this is some text⏎                                                    "
+    "       20 this is some text⏎                                                    "
+    "  [~] Section 1/1                                                            [-]"
+    "    [×] - before text 1⏎                                                        "
+    "    [×] - before text 2⏎                                                        "
+    "    [×] + after text 1⏎                                                         "
+    "    [ ] + after text 2⏎                                                         "
+    "       23 this is some trailing text⏎                                           "
+    "[×] baz                                                                      [-]"
+    "        1 Some leading text 1⏎                                                  "
+    "        2 Some leading text 2⏎                                                  "
+    "  [×] Section 1/1                                                            [-]"
+    "    [×] - before text 1⏎                                                        "
+    "    [×] - before text 2⏎                                                        "
+    "    [×] + after text 1⏎                                                         "
+    "    [×] + after text 2⏎                                                         "
+    "        5 this is some trailing text⏎                                           "
+    "                                                                                "
+    "                                                                                "
     "                                                                                "
     "                                                                                "
     "###);
