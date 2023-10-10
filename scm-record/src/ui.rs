@@ -31,7 +31,9 @@ use tracing::warn;
 use unicode_width::UnicodeWidthStr;
 
 use crate::consts::{DUMP_UI_STATE_FILENAME, ENV_VAR_DEBUG_UI, ENV_VAR_DUMP_UI_STATE};
-use crate::render::{centered_rect, Component, DrawnRect, DrawnRects, Rect, RectSize, Viewport};
+use crate::render::{
+    centered_rect, Component, DrawnRect, DrawnRects, Mask, Rect, RectSize, Viewport,
+};
 use crate::types::{ChangeType, RecordError, RecordState, Tristate};
 use crate::util::UsizeExt;
 use crate::{File, Section, SectionChangedLine};
@@ -1961,11 +1963,11 @@ impl Component for AppView<'_> {
         let viewport_rect = viewport.rect();
 
         let menu_bar_height = 1usize;
-        let app_files_view_mask = Rect {
+        let app_files_view_mask = Mask {
             x: viewport_rect.x,
             y: viewport_rect.y + menu_bar_height.unwrap_isize(),
-            width: viewport_rect.width,
-            height: viewport_rect.height.saturating_sub(menu_bar_height),
+            width: Some(viewport_rect.width),
+            height: None,
         };
         viewport.with_mask(app_files_view_mask, |viewport| {
             let app_files = AppFilesView {
@@ -2237,11 +2239,10 @@ impl Component for FileViewHeader<'_> {
             expand_box,
         } = self;
 
-        let mask = viewport.mask();
         viewport.draw_blank(Rect {
             x,
             y,
-            width: mask.width,
+            width: viewport.mask_rect().width,
             height: 1,
         });
         let toggle_box_rect = viewport.draw_component(x, y, toggle_box);
@@ -2267,15 +2268,19 @@ impl Component for FileViewHeader<'_> {
 
         // Draw expand box at end of line.
         let expand_box_width = expand_box.text().width().unwrap_isize();
-        viewport.draw_component(mask.end_x() - expand_box_width, y, expand_box);
+        viewport.draw_component(
+            viewport.mask_rect().end_x() - expand_box_width,
+            y,
+            expand_box,
+        );
 
         if *is_selected {
             highlight_rect(
                 viewport,
                 Rect {
-                    x: mask.x,
+                    x: viewport.mask_rect().x,
                     y,
-                    width: mask.width,
+                    width: viewport.mask_rect().width,
                     height: 1,
                 },
             );
@@ -2346,11 +2351,10 @@ impl Component for SectionView<'_> {
             section,
             line_start_num,
         } = self;
-        let mask = viewport.mask();
         viewport.draw_blank(Rect {
             x,
             y,
-            width: mask.width,
+            width: viewport.mask_rect().width,
             height: 1,
         });
 
@@ -2474,7 +2478,7 @@ impl Component for SectionView<'_> {
                 // Draw expand box at end of line.
                 let expand_box_width = expand_box.text().width().unwrap_isize();
                 viewport.draw_component(
-                    mask.width.unwrap_isize() - expand_box_width,
+                    viewport.mask_rect().width.unwrap_isize() - expand_box_width,
                     y,
                     expand_box,
                 );
@@ -2484,9 +2488,9 @@ impl Component for SectionView<'_> {
                         highlight_rect(
                             viewport,
                             Rect {
-                                x: mask.x,
+                                x: viewport.mask_rect().x,
                                 y,
-                                width: mask.width,
+                                width: viewport.mask_rect().width,
                                 height: 1,
                             },
                         );
@@ -2536,9 +2540,9 @@ impl Component for SectionView<'_> {
                             highlight_rect(
                                 viewport,
                                 Rect {
-                                    x: mask.x,
+                                    x: viewport.mask_rect().x,
                                     y,
-                                    width: mask.width,
+                                    width: viewport.mask_rect().width,
                                     height: 1,
                                 },
                             );
@@ -2574,13 +2578,12 @@ impl Component for SectionView<'_> {
                 let text = format!("File mode changed from {before} to {after}");
                 viewport.draw_span(x, y, &Span::styled(text, Style::default().fg(Color::Blue)));
                 if is_focused {
-                    let mask = viewport.mask();
                     highlight_rect(
                         viewport,
                         Rect {
-                            x: mask.x,
+                            x: viewport.mask_rect().x,
                             y,
-                            width: mask.width,
+                            width: viewport.mask_rect().width,
                             height: 1,
                         },
                     );
@@ -2631,13 +2634,12 @@ impl Component for SectionView<'_> {
                 viewport.draw_span(x, y, &Span::styled(text, Style::default().fg(Color::Blue)));
 
                 if is_focused {
-                    let mask = viewport.mask();
                     highlight_rect(
                         viewport,
                         Rect {
-                            x: mask.x,
+                            x: viewport.mask_rect().x,
                             y,
-                            width: mask.width,
+                            width: viewport.mask_rect().width,
                             height: 1,
                         },
                     );
@@ -2676,11 +2678,10 @@ impl Component for SectionLineView<'_> {
     fn draw(&self, viewport: &mut Viewport<Self::Id>, x: isize, y: isize) {
         const NEWLINE_ICON: &str = "⏎";
         let Self { line_key: _, inner } = self;
-        let mask = viewport.mask();
         viewport.draw_blank(Rect {
-            x: mask.x,
+            x: viewport.mask_rect().x,
             y,
-            width: mask.width,
+            width: viewport.mask_rect().width,
             height: 1,
         });
         match inner {

@@ -20,6 +20,7 @@ impl UsizeExt for usize {
 pub(crate) trait IsizeExt {
     fn unwrap_usize(self) -> usize;
     fn clamp_into_u16(self) -> u16;
+    fn clamp_into_usize(self) -> usize;
 }
 
 impl IsizeExt for isize {
@@ -30,10 +31,16 @@ impl IsizeExt for isize {
     fn clamp_into_u16(self) -> u16 {
         if self < 0 {
             0
-        } else if self > u16::MAX.try_into().unwrap() {
-            u16::MAX
         } else {
-            self.try_into().unwrap()
+            self.try_into().unwrap_or(u16::MAX)
+        }
+    }
+
+    fn clamp_into_usize(self) -> usize {
+        if self < 0 {
+            0
+        } else {
+            self.try_into().unwrap_or(usize::MAX)
         }
     }
 }

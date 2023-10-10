@@ -240,6 +240,61 @@ pub(crate) fn centered_rect(
     }
 }
 
+/// A "half-open" `Rect` used to to restrict drawing to a certain portion of the screen.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub(crate) struct Mask {
+    pub x: isize,
+    pub y: isize,
+
+    /// If `None`, the mask is unrestricted on the x-axis past the `x` value.
+    pub width: Option<usize>,
+
+    /// If `None`, the mask is unrestricted on the y-axis past the `y` value.
+    pub height: Option<usize>,
+}
+
+impl Mask {
+    /// Restrict the `Rect` size to be only the portion that is inside the mask.
+    pub fn apply(self, rect: Rect) -> Rect {
+        let end_x = self.end_x().unwrap_or_else(|| rect.end_x());
+        let end_y = self.end_y().unwrap_or_else(|| rect.end_y());
+        let width = (end_x - self.x).clamp_into_usize();
+        let height = (end_y - self.y).clamp_into_usize();
+        let mask_rect = Rect {
+            x: self.x,
+            y: self.y,
+            width,
+            height,
+        };
+        mask_rect.intersect(rect)
+    }
+
+    pub fn end_x(self) -> Option<isize> {
+        self.width.map(|width| self.x + width.unwrap_isize())
+    }
+
+    pub fn end_y(self) -> Option<isize> {
+        self.height.map(|height| self.y + height.unwrap_isize())
+    }
+}
+
+impl From<Rect> for Mask {
+    fn from(rect: Rect) -> Self {
+        let Rect {
+            x,
+            y,
+            width,
+            height,
+        } = rect;
+        Self {
+            x,
+            y,
+            width: Some(width),
+            height: Some(height),
+        }
+    }
+}
+
 /// Recording of where the component with a certain ID drew on the virtual
 /// canvas.
 #[derive(Debug)]
@@ -305,7 +360,7 @@ pub(crate) type DrawnRects<C> = HashMap<C, DrawnRect>;
 pub(crate) struct Viewport<'a, ComponentId> {
     buf: &'a mut Buffer,
     rect: Rect,
-    mask: Option<Rect>,
+    mask: Option<Mask>,
     timestamp: usize,
     trace: Vec<DrawTrace<ComponentId>>,
     debug_messages: Vec<String>,
@@ -336,8 +391,15 @@ impl<'a, ComponentId: Clone + Debug + Eq + Hash> Viewport<'a, ComponentId> {
     /// This can be set with `Viewport::with_mask`. If no mask has been set in
     /// the current call stack, then the returned value defaults to
     /// `Viewport::rect`, i.e. the area representing the entire terminal.
-    pub fn mask(&self) -> Rect {
-        self.mask.unwrap_or_else(|| self.rect())
+    pub fn mask(&self) -> Mask {
+        self.mask.unwrap_or_else(|| self.rect().into())
+    }
+
+    /// Get the masked area restricted to the portion that is viewable in the
+    /// viewport. This lets us return a `Rect` instead of a `Mask`, which could
+    /// otherwise have `None` `width` or `height` fields.
+    pub fn mask_rect(&self) -> Rect {
+        self.mask().apply(self.rect())
     }
 
     /// Render the provided component using the given `Frame`. Returns a mapping
@@ -374,7 +436,7 @@ impl<'a, ComponentId: Clone + Debug + Eq + Hash> Viewport<'a, ComponentId> {
     }
 
     /// Set a mask to be used for rendering inside `f`.
-    pub fn with_mask<T>(&mut self, mask: Rect, f: impl FnOnce(&mut Self) -> T) -> T {
+    pub fn with_mask<T>(&mut self, mask: Mask, f: impl FnOnce(&mut Self) -> T) -> T {
         let mut mask = Some(mask);
         mem::swap(&mut self.mask, &mut mask);
         let result = f(self);
@@ -431,7 +493,7 @@ impl<'a, ComponentId: Clone + Debug + Eq + Hash> Viewport<'a, ComponentId> {
 
         let draw_rect = self.rect.intersect(span_rect);
         let draw_rect = match self.mask {
-            Some(mask) => draw_rect.intersect(mask),
+            Some(mask) => mask.apply(draw_rect),
             None => draw_rect,
         };
         if !draw_rect.is_empty() {
