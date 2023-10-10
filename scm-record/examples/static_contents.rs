@@ -5,8 +5,8 @@ use std::borrow::Cow;
 use std::path::Path;
 
 use scm_record::{
-    ChangeType, EventSource, File, RecordError, RecordState, Recorder, Section, SectionChangedLine,
-    SelectedContents,
+    helpers::CrosstermInput, ChangeType, File, RecordError, RecordState, Recorder, Section,
+    SectionChangedLine, SelectedContents,
 };
 
 fn main() {
@@ -97,8 +97,8 @@ fn main() {
         commits: Default::default(),
         files,
     };
-
-    let recorder = Recorder::new(record_state, EventSource::Crossterm);
+    let mut input = CrosstermInput;
+    let recorder = Recorder::new(record_state, &mut input);
     let result = recorder.run();
     match result {
         Ok(result) => {

@@ -37,7 +37,8 @@ use lib::git::{
 use lib::try_exit_code;
 use lib::util::{ExitCode, EyreExitOr};
 use rayon::ThreadPoolBuilder;
-use scm_record::{EventSource, RecordError, RecordState, Recorder, SelectedContents};
+use scm_record::helpers::CrosstermInput;
+use scm_record::{RecordError, RecordState, Recorder, SelectedContents};
 use tracing::{instrument, warn};
 
 /// Commit changes in the working copy.
@@ -244,7 +245,8 @@ fn record_interactive(
         files,
     };
 
-    let recorder = Recorder::new(record_state, EventSource::Crossterm);
+    let mut input = CrosstermInput;
+    let recorder = Recorder::new(record_state, &mut input);
     let result = recorder.run();
     let RecordState {
         is_read_only: _,
