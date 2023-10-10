@@ -2295,3 +2295,43 @@ fn test_toggle_unchanged_line() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_max_file_view_width() -> eyre::Result<()> {
+    let state = RecordState {
+        is_read_only: false,
+        files: vec![File {
+            old_path: None,
+            path: Cow::Borrowed(Path::new("foo/bar")),
+            file_mode: None,
+            sections: vec![Section::Changed {
+                lines: vec![SectionChangedLine {
+                    is_checked: false,
+                    change_type: ChangeType::Added,
+                    line: Cow::Owned("very ".repeat(100)),
+                }],
+            }],
+        }],
+    };
+    let initial = TestingScreenshot::default();
+    let recorder = Recorder::new(
+        state,
+        EventSource::testing(
+            150,
+            6,
+            [Event::ExpandAll, initial.event(), Event::QuitAccept],
+        ),
+    );
+    recorder.run()?;
+
+    insta::assert_display_snapshot!(initial, @r###"
+    "[File] [Edit] [Select] [View]                                                                                                                         "
+    "( ) foo/bar                                                                                                          (-)                              "
+    "  [ ] Section 1/1                                                                                                    [-]                              "
+    "    [ ] + very very very very very very very very very very very very very very very very very very very very very very                               "
+    "                                                                                                                                                      "
+    "                                                                                                                                                      "
+    "###);
+
+    Ok(())
+}
