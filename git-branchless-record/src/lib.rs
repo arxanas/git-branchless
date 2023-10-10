@@ -240,6 +240,7 @@ fn record_interactive(
     };
     let record_state = RecordState {
         is_read_only: false,
+        commits: Default::default(),
         files,
     };
 
@@ -247,6 +248,7 @@ fn record_interactive(
     let result = recorder.run();
     let RecordState {
         is_read_only: _,
+        commits: _,
         files: result,
     } = match result {
         Ok(result) => result,

@@ -20,6 +20,7 @@ fn bench_record(c: &mut Criterion) {
         };
         let record_state = RecordState {
             is_read_only: false,
+            commits: Default::default(),
             files: vec![File {
                 old_path: None,
                 path: Cow::Borrowed(Path::new("foo")),
