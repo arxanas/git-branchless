@@ -555,12 +555,6 @@ impl<'a> Recorder<'a> {
                     scroll_offset_y: self.scroll_offset_y,
                     selection_key: self.selection_key,
                     selection_key_y: self.selection_key_y(&drawn_rects, self.selection_key),
-                    app_drawn_vs_expected_height: {
-                        let DrawnRect { rect, timestamp: _ } = drawn_rects[&ComponentId::App];
-                        let drawn_height = rect.height;
-                        let expected_height = app.height();
-                        (drawn_height, expected_height)
-                    },
                     drawn_rects: drawn_rects.clone().into_iter().collect(),
                 };
                 let debug_app = AppView {
@@ -1917,7 +1911,6 @@ struct AppDebugInfo {
     scroll_offset_y: isize,
     selection_key: SelectionKey,
     selection_key_y: isize,
-    app_drawn_vs_expected_height: (usize, usize),
     drawn_rects: BTreeMap<ComponentId, DrawnRect>, // sorted for determinism
 }
 
@@ -1927,18 +1920,6 @@ struct AppView<'a> {
     menu_bar: MenuBar<'a>,
     file_views: Vec<FileView<'a>>,
     quit_dialog: Option<QuitDialog>,
-}
-
-impl AppView<'_> {
-    fn height(&self) -> usize {
-        let Self {
-            debug_info: _,
-            menu_bar: _,
-            file_views,
-            quit_dialog: _,
-        } = self;
-        file_views.iter().map(|file_view| file_view.height()).sum()
-    }
 }
 
 impl Component for AppView<'_> {
@@ -2140,17 +2121,6 @@ struct FileView<'a> {
 }
 
 impl FileView<'_> {
-    pub fn height(&self) -> usize {
-        1 + if self.is_expanded() {
-            self.section_views
-                .iter()
-                .map(|section_view| section_view.height())
-                .sum::<usize>()
-        } else {
-            0
-        }
-    }
-
     fn is_expanded(&self) -> bool {
         match self.expand_box.tristate {
             Tristate::False => false,
@@ -2310,14 +2280,6 @@ struct SectionView<'a> {
 }
 
 impl SectionView<'_> {
-    pub fn height(&self) -> usize {
-        match self.section {
-            Section::Unchanged { lines } => lines.len().min(NUM_CONTEXT_LINES * 2 + 1),
-            Section::Changed { lines } => 1 + if self.is_expanded() { lines.len() } else { 0 },
-            Section::FileMode { .. } | Section::Binary { .. } => 1,
-        }
-    }
-
     fn is_expanded(&self) -> bool {
         match self.expand_box.tristate {
             Tristate::False => false,
