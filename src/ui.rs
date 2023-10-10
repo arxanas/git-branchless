@@ -1986,7 +1986,19 @@ impl Component for AppFilesView<'_> {
 
         let mut y = y;
         for file_view in file_views {
-            let file_view_rect = viewport.draw_component(x, y, file_view);
+            let file_view_rect = {
+                const MAX_FILE_VIEW_WIDTH: usize = 120;
+                let file_view_width = MAX_FILE_VIEW_WIDTH.min(viewport.rect().width);
+                let file_view_mask = Mask {
+                    x,
+                    y,
+                    width: Some(file_view_width),
+                    height: None,
+                };
+                viewport.with_mask(file_view_mask, |viewport| {
+                    viewport.draw_component(x, y, file_view)
+                })
+            };
 
             // Render a sticky header if necessary.
             let mask = viewport.mask();
