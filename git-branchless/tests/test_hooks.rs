@@ -5,8 +5,11 @@ use lib::core::eventlog::{Event, EventLogDb, EventReplayer};
 use lib::core::formatting::Glyphs;
 use lib::git::GitVersion;
 use lib::testing::make_git;
+use lib::testing::pty::{run_in_pty_with_command, PtyAction};
 use lib::util::get_sh;
 use std::process::Command;
+
+const CARRIAGE_RETURN: &str = "\r";
 
 #[test]
 fn test_abandoned_commit_message() -> eyre::Result<()> {
@@ -411,5 +414,57 @@ fn test_symbolic_transaction_ref() -> eyre::Result<()> {
         branchless: processing checkout
         "###);
     }
+
+    Ok(())
+}
+
+#[cfg(unix)]
+#[test]
+fn test_git_rebase_multiple_fixup_does_not_strand_commits() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+
+    git.detach_head()?;
+    git.commit_file_with_contents_and_message_and_file_name(
+        "test1",
+        1,
+        "bleh",
+        "create",
+        "test1.txt",
+    )?;
+    git.commit_file_with_contents_and_message_and_file_name(
+        "test2",
+        2,
+        "bleh",
+        "fixup! create",
+        "test1.txt",
+    )?;
+    git.commit_file_with_contents_and_message_and_file_name(
+        "test3",
+        3,
+        "bleh",
+        "fixup! create",
+        "test1.txt",
+    )?;
+
+    run_in_pty_with_command(
+        &git,
+        &["rebase"],
+        &["-i", "--autosquash", "master"],
+        &[
+            PtyAction::WaitUntilContains(" "),
+            PtyAction::Write(CARRIAGE_RETURN),
+        ],
+    )?;
+
+    {
+        let stdout = git.smartlog()?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        @ 916a41f create test1.txt
+        "###);
+    }
+
     Ok(())
 }
