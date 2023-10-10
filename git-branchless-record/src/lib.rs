@@ -277,7 +277,7 @@ fn record_interactive(
     let result = recorder.run();
     let RecordState {
         is_read_only: _,
-        commits: _,
+        commits,
         files: result,
     } = match result {
         Ok(result) => result,
@@ -303,6 +303,7 @@ fn record_interactive(
             return Ok(Err(ExitCode(1)));
         }
     };
+    let message = commits[0].message.clone().unwrap_or_default();
 
     let update_index_script: Vec<UpdateIndexCommand> = result
         .into_iter()
@@ -372,8 +373,8 @@ fn record_interactive(
 
     let args = {
         let mut args = vec!["commit"];
-        if let Some(message) = message {
-            args.extend(["--message", message]);
+        if !message.is_empty() {
+            args.extend(["--message", &message]);
         }
         args
     };
