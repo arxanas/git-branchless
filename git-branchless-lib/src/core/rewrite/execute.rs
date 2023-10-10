@@ -143,6 +143,7 @@ pub fn move_branches<'a>(
         }
     }
 
+    #[allow(clippy::format_collect)]
     let branch_moves_stdin: String = branch_moves
         .into_iter()
         .map(|(old_oid, new_oid, name)| {
@@ -929,6 +930,7 @@ mod in_memory {
 
         // Call the `post-rewrite` hook only after moving branches so that we don't
         // produce a spurious abandoned-branch warning.
+        #[allow(clippy::format_collect)]
         let post_rewrite_stdin: String = rewritten_oids
             .iter()
             .map(|(old_oid, new_oid)| format!("{old_oid} {new_oid}\n"))
@@ -1095,6 +1097,7 @@ mod on_disk {
         }
 
         let todo_file_path = rebase_state_dir.join("git-rebase-todo");
+        #[allow(clippy::format_collect)]
         std::fs::write(
             &todo_file_path,
             rebase_plan
