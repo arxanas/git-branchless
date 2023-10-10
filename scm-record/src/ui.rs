@@ -2006,23 +2006,22 @@ impl Component for AppFilesView<'_> {
             let file_view_rect = viewport.draw_component(x, y, file_view);
 
             // Render a sticky header if necessary.
-            if let Some(mask) = viewport.mask() {
-                if file_view_rect.y < mask.y
-                    && mask.y < file_view_rect.y + file_view_rect.height.unwrap_isize()
-                {
-                    viewport.draw_component(
-                        x,
-                        mask.y,
-                        &FileViewHeader {
-                            file_key: file_view.file_key,
-                            path: file_view.path,
-                            old_path: file_view.old_path,
-                            is_selected: file_view.is_header_selected,
-                            toggle_box: file_view.toggle_box.clone(),
-                            expand_box: file_view.expand_box.clone(),
-                        },
-                    );
-                }
+            let mask = viewport.mask();
+            if file_view_rect.y < mask.y
+                && mask.y < file_view_rect.y + file_view_rect.height.unwrap_isize()
+            {
+                viewport.draw_component(
+                    x,
+                    mask.y,
+                    &FileViewHeader {
+                        file_key: file_view.file_key,
+                        path: file_view.path,
+                        old_path: file_view.old_path,
+                        is_selected: file_view.is_header_selected,
+                        toggle_box: file_view.toggle_box.clone(),
+                        expand_box: file_view.expand_box.clone(),
+                    },
+                );
             }
 
             y += file_view_rect.height.unwrap_isize();
@@ -2108,8 +2107,8 @@ impl Component for MenuBar<'_> {
             expanded_menu_idx,
         } = self;
 
-        viewport.fill_rest_of_line(x, viewport.rect().y);
-        highlight_line(viewport, viewport.rect().y);
+        viewport.draw_blank(viewport.rect().top_row());
+        highlight_rect(viewport, viewport.rect().top_row());
         let mut x = x;
         for (i, menu) in menus.iter().enumerate() {
             let menu_header = Button {
@@ -2238,7 +2237,13 @@ impl Component for FileViewHeader<'_> {
             expand_box,
         } = self;
 
-        viewport.fill_rest_of_line(x, y);
+        let mask = viewport.mask();
+        viewport.draw_blank(Rect {
+            x,
+            y,
+            width: mask.width,
+            height: 1,
+        });
         let toggle_box_rect = viewport.draw_component(x, y, toggle_box);
         viewport.draw_span(
             x + toggle_box_rect.width.unwrap_isize() + 1,
@@ -2262,14 +2267,18 @@ impl Component for FileViewHeader<'_> {
 
         // Draw expand box at end of line.
         let expand_box_width = expand_box.text().width().unwrap_isize();
-        viewport.draw_component(
-            viewport.rect().width.unwrap_isize() - expand_box_width,
-            y,
-            expand_box,
-        );
+        viewport.draw_component(mask.end_x() - expand_box_width, y, expand_box);
 
         if *is_selected {
-            highlight_line(viewport, y);
+            highlight_rect(
+                viewport,
+                Rect {
+                    x: mask.x,
+                    y,
+                    width: mask.width,
+                    height: 1,
+                },
+            );
         }
     }
 }
@@ -2337,7 +2346,13 @@ impl Component for SectionView<'_> {
             section,
             line_start_num,
         } = self;
-        viewport.fill_rest_of_line(x, y);
+        let mask = viewport.mask();
+        viewport.draw_blank(Rect {
+            x,
+            y,
+            width: mask.width,
+            height: 1,
+        });
 
         let SectionKey {
             file_idx,
@@ -2459,13 +2474,23 @@ impl Component for SectionView<'_> {
                 // Draw expand box at end of line.
                 let expand_box_width = expand_box.text().width().unwrap_isize();
                 viewport.draw_component(
-                    viewport.rect().width.unwrap_isize() - expand_box_width,
+                    mask.width.unwrap_isize() - expand_box_width,
                     y,
                     expand_box,
                 );
 
                 match selection {
-                    Some(SectionSelection::SectionHeader) => highlight_line(viewport, y),
+                    Some(SectionSelection::SectionHeader) => {
+                        highlight_rect(
+                            viewport,
+                            Rect {
+                                x: mask.x,
+                                y,
+                                width: mask.width,
+                                height: 1,
+                            },
+                        );
+                    }
                     Some(SectionSelection::ChangedLine(_)) | None => {}
                 }
 
@@ -2508,7 +2533,15 @@ impl Component for SectionView<'_> {
                         let y = y + line_idx.unwrap_isize();
                         viewport.draw_component(x + 2, y, &line_view);
                         if is_focused {
-                            highlight_line(viewport, y);
+                            highlight_rect(
+                                viewport,
+                                Rect {
+                                    x: mask.x,
+                                    y,
+                                    width: mask.width,
+                                    height: 1,
+                                },
+                            );
                         }
                     }
                 }
@@ -2541,7 +2574,16 @@ impl Component for SectionView<'_> {
                 let text = format!("File mode changed from {before} to {after}");
                 viewport.draw_span(x, y, &Span::styled(text, Style::default().fg(Color::Blue)));
                 if is_focused {
-                    highlight_line(viewport, y);
+                    let mask = viewport.mask();
+                    highlight_rect(
+                        viewport,
+                        Rect {
+                            x: mask.x,
+                            y,
+                            width: mask.width,
+                            height: 1,
+                        },
+                    );
                 }
             }
 
@@ -2589,7 +2631,16 @@ impl Component for SectionView<'_> {
                 viewport.draw_span(x, y, &Span::styled(text, Style::default().fg(Color::Blue)));
 
                 if is_focused {
-                    highlight_line(viewport, y);
+                    let mask = viewport.mask();
+                    highlight_rect(
+                        viewport,
+                        Rect {
+                            x: mask.x,
+                            y,
+                            width: mask.width,
+                            height: 1,
+                        },
+                    );
                 }
             }
         }
@@ -2625,7 +2676,13 @@ impl Component for SectionLineView<'_> {
     fn draw(&self, viewport: &mut Viewport<Self::Id>, x: isize, y: isize) {
         const NEWLINE_ICON: &str = "⏎";
         let Self { line_key: _, inner } = self;
-        viewport.fill_rest_of_line(x, y);
+        let mask = viewport.mask();
+        viewport.draw_blank(Rect {
+            x: mask.x,
+            y,
+            width: mask.width,
+            height: 1,
+        });
         match inner {
             SectionLineViewInner::Unchanged { line, line_num } => {
                 let style = Style::default().add_modifier(Modifier::DIM);
@@ -2841,16 +2898,8 @@ impl<Id: Clone + Debug + Eq + Hash> Component for Dialog<'_, Id> {
     }
 }
 
-fn highlight_line<Id: Clone + Debug + Eq + Hash>(viewport: &mut Viewport<Id>, y: isize) {
-    viewport.set_style(
-        Rect {
-            x: 0,
-            y,
-            width: viewport.size().width,
-            height: 1,
-        },
-        Style::default().add_modifier(Modifier::REVERSED),
-    );
+fn highlight_rect<Id: Clone + Debug + Eq + Hash>(viewport: &mut Viewport<Id>, rect: Rect) {
+    viewport.set_style(rect, Style::default().add_modifier(Modifier::REVERSED));
 }
 
 #[cfg(test)]
