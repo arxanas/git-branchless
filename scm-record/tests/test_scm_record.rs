@@ -2302,35 +2302,60 @@ fn test_max_file_view_width() -> eyre::Result<()> {
         is_read_only: false,
         files: vec![File {
             old_path: None,
-            path: Cow::Borrowed(Path::new("foo/bar")),
+            path: Cow::Owned("very/".repeat(100).into()),
             file_mode: None,
-            sections: vec![Section::Changed {
-                lines: vec![SectionChangedLine {
-                    is_checked: false,
-                    change_type: ChangeType::Added,
-                    line: Cow::Owned("very ".repeat(100)),
-                }],
-            }],
+            sections: vec![
+                Section::Unchanged {
+                    lines: vec![Cow::Owned("very ".repeat(100))],
+                },
+                Section::Changed {
+                    lines: vec![SectionChangedLine {
+                        is_checked: false,
+                        change_type: ChangeType::Added,
+                        line: Cow::Owned("very ".repeat(100)),
+                    }],
+                },
+            ],
         }],
     };
-    let initial = TestingScreenshot::default();
+    let initial_wide = TestingScreenshot::default();
     let recorder = Recorder::new(
-        state,
+        state.clone(),
         EventSource::testing(
             150,
             6,
-            [Event::ExpandAll, initial.event(), Event::QuitAccept],
+            [Event::ExpandAll, initial_wide.event(), Event::QuitAccept],
         ),
     );
     recorder.run()?;
 
-    insta::assert_display_snapshot!(initial, @r###"
+    insta::assert_display_snapshot!(initial_wide, @r###"
     "[File] [Edit] [Select] [View]                                                                                                                         "
-    "( ) foo/bar                                                                                                          (-)                              "
+    "( ) very/very/very/very/very/very/very/very/very/very/very/very/very/very/very/very/very/very/very/very/very/very/ve…(-)                              "
+    "        1 very very very very very very very very very very very very very very very very very very very very very very…                              "
     "  [ ] Section 1/1                                                                                                    [-]                              "
-    "    [ ] + very very very very very very very very very very very very very very very very very very very very very very                               "
+    "    [ ] + very very very very very very very very very very very very very very very very very very very very very very…                              "
     "                                                                                                                                                      "
-    "                                                                                                                                                      "
+    "###);
+
+    let initial_narrow = TestingScreenshot::default();
+    let recorder = Recorder::new(
+        state,
+        EventSource::testing(
+            15,
+            6,
+            [Event::ExpandAll, initial_narrow.event(), Event::QuitAccept],
+        ),
+    );
+    recorder.run()?;
+
+    insta::assert_display_snapshot!(initial_narrow, @r###"
+    "[File] [Edit] ["
+    "( ) very/ve…(-)"
+    "        1 very…"
+    "  [ ] Secti…[-]"
+    "    [ ] + very…"
+    "               "
     "###);
 
     Ok(())

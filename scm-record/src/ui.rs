@@ -35,7 +35,7 @@ use crate::render::{
     centered_rect, Component, DrawnRect, DrawnRects, Mask, Rect, RectSize, Viewport,
 };
 use crate::types::{ChangeType, RecordError, RecordState, Tristate};
-use crate::util::UsizeExt;
+use crate::util::{IsizeExt, UsizeExt};
 use crate::{File, Section, SectionChangedLine};
 
 const NUM_CONTEXT_LINES: usize = 3;
@@ -1892,10 +1892,7 @@ impl<Id: Clone + Debug + Eq + Hash> Component for TristateBox<Id> {
 
     fn draw(&self, viewport: &mut Viewport<Self::Id>, x: isize, y: isize) {
         let style = if self.is_read_only {
-            Style::default()
-                .fg(Color::Gray)
-                // .bg(Color::DarkGray)
-                .add_modifier(Modifier::DIM)
+            Style::default().fg(Color::Gray).add_modifier(Modifier::DIM)
         } else {
             Style::default().add_modifier(Modifier::BOLD)
         };
@@ -2231,39 +2228,49 @@ impl Component for FileViewHeader<'_> {
             expand_box,
         } = self;
 
-        viewport.draw_blank(Rect {
-            x,
-            y,
-            width: viewport.mask_rect().width,
-            height: 1,
-        });
-        let toggle_box_rect = viewport.draw_component(x, y, toggle_box);
-        viewport.draw_span(
-            x + toggle_box_rect.width.unwrap_isize() + 1,
-            y,
-            &Span::styled(
-                format!(
-                    "{}{}",
-                    match old_path {
-                        Some(old_path) => format!("{} => ", old_path.to_string_lossy()),
-                        None => String::new(),
-                    },
-                    path.to_string_lossy(),
-                ),
-                if *is_selected {
-                    Style::default().fg(Color::Blue)
-                } else {
-                    Style::default()
-                },
-            ),
-        );
-
         // Draw expand box at end of line.
         let expand_box_width = expand_box.text().width().unwrap_isize();
-        viewport.draw_component(
+        let expand_box_rect = viewport.draw_component(
             viewport.mask_rect().end_x() - expand_box_width,
             y,
             expand_box,
+        );
+
+        viewport.with_mask(
+            Mask {
+                x,
+                y,
+                width: Some((expand_box_rect.x - x).clamp_into_usize()),
+                height: Some(1),
+            },
+            |viewport| {
+                viewport.draw_blank(Rect {
+                    x,
+                    y,
+                    width: viewport.mask_rect().width,
+                    height: 1,
+                });
+                let toggle_box_rect = viewport.draw_component(x, y, toggle_box);
+                viewport.draw_text(
+                    x + toggle_box_rect.width.unwrap_isize() + 1,
+                    y,
+                    &Span::styled(
+                        format!(
+                            "{}{}",
+                            match old_path {
+                                Some(old_path) => format!("{} => ", old_path.to_string_lossy()),
+                                None => String::new(),
+                            },
+                            path.to_string_lossy(),
+                        ),
+                        if *is_selected {
+                            Style::default().fg(Color::Blue)
+                        } else {
+                            Style::default()
+                        },
+                    ),
+                );
+            },
         );
 
         if *is_selected {
@@ -2448,23 +2455,35 @@ impl Component for SectionView<'_> {
             }
 
             Section::Changed { lines } => {
-                // Draw section header.
-                let toggle_box_rect = viewport.draw_component(x, y, toggle_box);
-                viewport.draw_span(
-                    x + toggle_box_rect.width.unwrap_isize() + 1,
-                    y,
-                    &Span::styled(
-                        format!("Section {editable_section_num}/{total_num_editable_sections}"),
-                        Style::default(),
-                    ),
-                );
-
                 // Draw expand box at end of line.
                 let expand_box_width = expand_box.text().width().unwrap_isize();
-                viewport.draw_component(
+                let expand_box_rect = viewport.draw_component(
                     viewport.mask_rect().width.unwrap_isize() - expand_box_width,
                     y,
                     expand_box,
+                );
+
+                // Draw section header.
+                viewport.with_mask(
+                    Mask {
+                        x,
+                        y,
+                        width: Some((expand_box_rect.x - x).clamp_into_usize()),
+                        height: Some(1),
+                    },
+                    |viewport| {
+                        let toggle_box_rect = viewport.draw_component(x, y, toggle_box);
+                        viewport.draw_text(
+                            x + toggle_box_rect.width.unwrap_isize() + 1,
+                            y,
+                            &Span::styled(
+                                format!(
+                                    "Section {editable_section_num}/{total_num_editable_sections}"
+                                ),
+                                Style::default(),
+                            ),
+                        )
+                    },
                 );
 
                 match selection {
@@ -2560,7 +2579,7 @@ impl Component for SectionView<'_> {
                 let toggle_box_rect = viewport.draw_component(x, y, &toggle_box);
                 let x = x + toggle_box_rect.width.unwrap_isize() + 1;
                 let text = format!("File mode changed from {before} to {after}");
-                viewport.draw_span(x, y, &Span::styled(text, Style::default().fg(Color::Blue)));
+                viewport.draw_text(x, y, &Span::styled(text, Style::default().fg(Color::Blue)));
                 if is_focused {
                     highlight_rect(
                         viewport,
@@ -2615,7 +2634,7 @@ impl Component for SectionView<'_> {
                     result.push(description.join(" -> "));
                     format!("({})", result.join(" "))
                 };
-                viewport.draw_span(x, y, &Span::styled(text, Style::default().fg(Color::Blue)));
+                viewport.draw_text(x, y, &Span::styled(text, Style::default().fg(Color::Blue)));
 
                 if is_focused {
                     highlight_rect(
@@ -2686,7 +2705,7 @@ impl Component for SectionLineView<'_> {
                     ),
                     None => (Span::styled(*line, style), None),
                 };
-                let line_rect = viewport.draw_span(
+                let line_rect = viewport.draw_text(
                     line_num_rect.x + line_num_rect.width.unwrap_isize(),
                     line_num_rect.y,
                     &line,
@@ -2720,7 +2739,7 @@ impl Component for SectionLineView<'_> {
                     ),
                     None => (Span::styled(*line, style), None),
                 };
-                let line_rect = viewport.draw_span(x, y, &line);
+                let line_rect = viewport.draw_text(x, y, &line);
                 if let Some(line_end) = line_end {
                     viewport.draw_span(line_rect.x + line_rect.width.unwrap_isize(), y, &line_end);
                 }
