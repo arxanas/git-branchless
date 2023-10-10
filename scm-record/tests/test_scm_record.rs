@@ -573,7 +573,10 @@ fn test_file_mode_change() -> eyre::Result<()> {
     insta::assert_debug_snapshot!(recorder.run()?, @r###"
     RecordState {
         is_read_only: false,
-        commits: [],
+        commits: [
+            Commit,
+            Commit,
+        ],
         files: [
             File {
                 old_path: None,
@@ -840,7 +843,10 @@ fn test_record_binary_file() -> eyre::Result<()> {
     assert_debug_snapshot!(state, @r###"
     RecordState {
         is_read_only: false,
-        commits: [],
+        commits: [
+            Commit,
+            Commit,
+        ],
         files: [
             File {
                 old_path: None,
@@ -916,7 +922,10 @@ fn test_record_binary_file_noop() -> eyre::Result<()> {
     assert_debug_snapshot!(state, @r###"
     RecordState {
         is_read_only: false,
-        commits: [],
+        commits: [
+            Commit,
+            Commit,
+        ],
         files: [
             File {
                 old_path: None,
@@ -2055,7 +2064,10 @@ fn test_read_only() -> eyre::Result<()> {
     insta::assert_debug_snapshot!(state, @r###"
     RecordState {
         is_read_only: true,
-        commits: [],
+        commits: [
+            Commit,
+            Commit,
+        ],
         files: [
             File {
                 old_path: None,
@@ -2200,7 +2212,10 @@ fn test_toggle_unchanged_line() -> eyre::Result<()> {
     insta::assert_debug_snapshot!(state, @r###"
     RecordState {
         is_read_only: false,
-        commits: [],
+        commits: [
+            Commit,
+            Commit,
+        ],
         files: [
             File {
                 old_path: None,
