@@ -758,7 +758,13 @@ pub fn smartlog(
         reverse,
     } = options;
 
-    let repo = Repo::from_dir(&git_run_info.working_directory)?;
+    let repo = match Repo::from_dir(&git_run_info.working_directory) {
+        Ok(repo) => repo,
+        Err(err) => {
+            writeln!(effects.get_error_stream(), "{err}",)?;
+            return Ok(Err(ExitCode(1)));
+        }
+    };
     let head_info = repo.get_head_info()?;
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
