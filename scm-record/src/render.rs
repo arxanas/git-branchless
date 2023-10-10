@@ -524,6 +524,17 @@ impl<'a, ComponentId: Clone + Debug + Eq + Hash> Viewport<'a, ComponentId> {
         span_rect
     }
 
+    /// Draw the given text. If the text would overflow the current mask, then
+    /// it is truncated with an ellipsis.
+    pub fn draw_text(&mut self, x: isize, y: isize, span: &Span) -> Rect {
+        let span_rect = self.draw_span(x, y, span);
+        let mask_rect = self.mask_rect();
+        if span_rect.end_x() > mask_rect.end_x() {
+            self.draw_span(mask_rect.end_x() - 1, span_rect.y, &Span::raw("…"));
+        }
+        span_rect
+    }
+
     pub fn draw_widget(&mut self, rect: ratatui::layout::Rect, widget: impl Widget) {
         self.current_trace_mut().merge_rect(rect.into());
         widget.render(rect, self.buf);
