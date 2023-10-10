@@ -155,7 +155,7 @@ impl From<bool> for Tristate {
 }
 
 /// A container of selected changes and commit metadata.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
 pub struct Commit {}
 

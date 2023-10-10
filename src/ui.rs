@@ -11,7 +11,7 @@ use std::hash::Hash;
 use std::path::Path;
 use std::rc::Rc;
 use std::time::Duration;
-use std::{fs, io, mem, panic};
+use std::{fs, io, iter, mem, panic};
 
 use crossterm::event::{
     DisableMouseCapture, EnableMouseCapture, KeyCode, KeyEvent, KeyEventKind, KeyModifiers,
@@ -34,7 +34,7 @@ use crate::consts::{DUMP_UI_STATE_FILENAME, ENV_VAR_DEBUG_UI, ENV_VAR_DUMP_UI_ST
 use crate::render::{
     centered_rect, Component, DrawnRect, DrawnRects, Mask, Rect, RectSize, Viewport,
 };
-use crate::types::{ChangeType, RecordError, RecordState, Tristate};
+use crate::types::{ChangeType, Commit, RecordError, RecordState, Tristate};
 use crate::util::{IsizeExt, UsizeExt};
 use crate::{File, Section, SectionChangedLine};
 
@@ -42,17 +42,20 @@ const NUM_CONTEXT_LINES: usize = 3;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 struct FileKey {
+    commit_idx: usize,
     file_idx: usize,
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 struct SectionKey {
+    commit_idx: usize,
     file_idx: usize,
     section_idx: usize,
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 struct LineKey {
+    commit_idx: usize,
     file_idx: usize,
     section_idx: usize,
     line_idx: usize,
@@ -429,13 +432,22 @@ pub struct Recorder<'a> {
     expanded_items: HashSet<SelectionKey>,
     expanded_menu_idx: Option<usize>,
     selection_key: SelectionKey,
+    focused_commit_idx: usize,
     quit_dialog: Option<QuitDialog>,
     scroll_offset_y: isize,
 }
 
 impl<'a> Recorder<'a> {
     /// Constructor.
-    pub fn new(state: RecordState<'a>, event_source: EventSource) -> Self {
+    pub fn new(mut state: RecordState<'a>, event_source: EventSource) -> Self {
+        // Ensure that there are at least two commits.
+        state.commits.extend(
+            iter::repeat_with(Commit::default).take(2_usize.saturating_sub(state.commits.len())),
+        );
+        if state.commits.len() > 2 {
+            unimplemented!("more than two commits");
+        }
+
         let mut recorder = Self {
             state,
             event_source,
@@ -444,6 +456,7 @@ impl<'a> Recorder<'a> {
             expanded_items: Default::default(),
             expanded_menu_idx: Default::default(),
             selection_key: SelectionKey::None,
+            focused_commit_idx: 0,
             quit_dialog: None,
             scroll_offset_y: 0,
         };
@@ -771,7 +784,10 @@ impl<'a> Recorder<'a> {
             .iter()
             .enumerate()
             .map(|(file_idx, file)| {
-                let file_key = FileKey { file_idx };
+                let file_key = FileKey {
+                    commit_idx: self.focused_commit_idx,
+                    file_idx,
+                };
                 let file_toggled = self.file_tristate(file_key).unwrap();
                 let file_expanded = self.file_expanded(file_key);
                 let is_focused = match self.selection_key {
@@ -813,6 +829,7 @@ impl<'a> Recorder<'a> {
                         let mut editable_section_num = 0;
                         for (section_idx, section) in file.sections.iter().enumerate() {
                             let section_key = SectionKey {
+                                commit_idx: self.focused_commit_idx,
                                 file_idx,
                                 section_idx,
                             };
@@ -862,11 +879,13 @@ impl<'a> Recorder<'a> {
                                         }
                                     }
                                     SelectionKey::Line(LineKey {
+                                        commit_idx,
                                         file_idx,
                                         section_idx,
                                         line_idx,
                                     }) => {
                                         let selected_section_key = SectionKey {
+                                            commit_idx,
                                             file_idx,
                                             section_idx,
                                         };
@@ -1059,7 +1078,10 @@ impl<'a> Recorder<'a> {
 
     fn first_selection_key(&self) -> SelectionKey {
         match self.state.files.iter().enumerate().next() {
-            Some((file_idx, _)) => SelectionKey::File(FileKey { file_idx }),
+            Some((file_idx, _)) => SelectionKey::File(FileKey {
+                commit_idx: self.focused_commit_idx,
+                file_idx,
+            }),
             None => SelectionKey::None,
         }
     }
@@ -1072,7 +1094,10 @@ impl<'a> Recorder<'a> {
         } = &self.state;
         let mut result = 0;
         for (file_idx, _file) in files.iter().enumerate() {
-            match self.file_tristate(FileKey { file_idx })? {
+            match self.file_tristate(FileKey {
+                commit_idx: self.focused_commit_idx,
+                file_idx,
+            })? {
                 Tristate::False => {}
                 Tristate::Partial | Tristate::True => {
                     result += 1;
@@ -1084,34 +1109,46 @@ impl<'a> Recorder<'a> {
 
     fn all_selection_keys(&self) -> Vec<SelectionKey> {
         let mut result = Vec::new();
-        for (file_idx, file) in self.state.files.iter().enumerate() {
-            result.push(SelectionKey::File(FileKey { file_idx }));
-            for (section_idx, section) in file.sections.iter().enumerate() {
-                match section {
-                    Section::Unchanged { .. } => {}
-                    Section::Changed { lines } => {
-                        result.push(SelectionKey::Section(SectionKey {
-                            file_idx,
-                            section_idx,
-                        }));
-                        for (line_idx, _line) in lines.iter().enumerate() {
-                            result.push(SelectionKey::Line(LineKey {
+        for (commit_idx, _) in self.state.commits.iter().enumerate() {
+            if commit_idx > 0 {
+                // TODO: implement adjacent `CommitView s.
+                continue;
+            }
+            for (file_idx, file) in self.state.files.iter().enumerate() {
+                result.push(SelectionKey::File(FileKey {
+                    commit_idx,
+                    file_idx,
+                }));
+                for (section_idx, section) in file.sections.iter().enumerate() {
+                    match section {
+                        Section::Unchanged { .. } => {}
+                        Section::Changed { lines } => {
+                            result.push(SelectionKey::Section(SectionKey {
+                                commit_idx,
                                 file_idx,
                                 section_idx,
-                                line_idx,
+                            }));
+                            for (line_idx, _line) in lines.iter().enumerate() {
+                                result.push(SelectionKey::Line(LineKey {
+                                    commit_idx,
+                                    file_idx,
+                                    section_idx,
+                                    line_idx,
+                                }));
+                            }
+                        }
+                        Section::FileMode {
+                            is_checked: _,
+                            before: _,
+                            after: _,
+                        }
+                        | Section::Binary { .. } => {
+                            result.push(SelectionKey::Section(SectionKey {
+                                commit_idx,
+                                file_idx,
+                                section_idx,
                             }));
                         }
-                    }
-                    Section::FileMode {
-                        is_checked: _,
-                        before: _,
-                        after: _,
-                    }
-                    | Section::Binary { .. } => {
-                        result.push(SelectionKey::Section(SectionKey {
-                            file_idx,
-                            section_idx,
-                        }));
                     }
                 }
             }
@@ -1130,6 +1167,7 @@ impl<'a> Recorder<'a> {
                 SelectionKey::File(_) => true,
                 SelectionKey::Section(section_key) => {
                     let file_key = FileKey {
+                        commit_idx: section_key.commit_idx,
                         file_idx: section_key.file_idx,
                     };
                     match self.file_expanded(file_key) {
@@ -1139,9 +1177,11 @@ impl<'a> Recorder<'a> {
                 }
                 SelectionKey::Line(line_key) => {
                     let file_key = FileKey {
+                        commit_idx: line_key.commit_idx,
                         file_idx: line_key.file_idx,
                     };
                     let section_key = SectionKey {
+                        commit_idx: line_key.commit_idx,
                         file_idx: line_key.file_idx,
                         section_idx: line_key.section_idx,
                     };
@@ -1167,7 +1207,10 @@ impl<'a> Recorder<'a> {
             None => self.first_selection_key(),
             Some(index) => match index.checked_sub(1) {
                 Some(index) => keys[index],
-                None => *keys.last().unwrap(),
+                None => {
+                    // TODO: this behavior will be wrong if we have keys for each `Commit` (which currently isn't the case).
+                    *keys.last().unwrap()
+                }
             },
         }
     }
@@ -1257,18 +1300,24 @@ impl<'a> Recorder<'a> {
                 StateUpdate::SetExpandItem(selection_key, false)
             }
             SelectionKey::Section(SectionKey {
+                commit_idx,
                 file_idx,
                 section_idx: _,
             }) => StateUpdate::SelectItem {
-                selection_key: SelectionKey::File(FileKey { file_idx }),
+                selection_key: SelectionKey::File(FileKey {
+                    commit_idx,
+                    file_idx,
+                }),
                 ensure_in_viewport: true,
             },
             SelectionKey::Line(LineKey {
+                commit_idx,
                 file_idx,
                 section_idx,
                 line_idx: _,
             }) => StateUpdate::SelectItem {
                 selection_key: SelectionKey::Section(SectionKey {
+                    commit_idx,
                     file_idx,
                     section_idx,
                 }),
@@ -1580,21 +1629,28 @@ impl<'a> Recorder<'a> {
         match selection {
             SelectionKey::None | SelectionKey::File(_) => {}
             SelectionKey::Section(SectionKey {
+                commit_idx,
                 file_idx,
                 section_idx: _,
             }) => {
-                self.expanded_items
-                    .insert(SelectionKey::File(FileKey { file_idx }));
+                self.expanded_items.insert(SelectionKey::File(FileKey {
+                    commit_idx,
+                    file_idx,
+                }));
             }
             SelectionKey::Line(LineKey {
+                commit_idx,
                 file_idx,
                 section_idx,
                 line_idx: _,
             }) => {
-                self.expanded_items
-                    .insert(SelectionKey::File(FileKey { file_idx }));
+                self.expanded_items.insert(SelectionKey::File(FileKey {
+                    commit_idx,
+                    file_idx,
+                }));
                 self.expanded_items
                     .insert(SelectionKey::Section(SectionKey {
+                        commit_idx,
                         file_idx,
                         section_idx,
                     }));
@@ -1652,14 +1708,19 @@ impl<'a> Recorder<'a> {
             self.selection_key = match self.selection_key {
                 selection_key @ (SelectionKey::None | SelectionKey::File(_)) => selection_key,
                 SelectionKey::Section(SectionKey {
+                    commit_idx,
                     file_idx,
                     section_idx: _,
                 })
                 | SelectionKey::Line(LineKey {
+                    commit_idx,
                     file_idx,
                     section_idx: _,
                     line_idx: _,
-                }) => SelectionKey::File(FileKey { file_idx }),
+                }) => SelectionKey::File(FileKey {
+                    commit_idx,
+                    file_idx,
+                }),
             };
             Default::default()
         } else {
@@ -1687,7 +1748,10 @@ impl<'a> Recorder<'a> {
     }
 
     fn file(&self, file_key: FileKey) -> Result<&File, RecordError> {
-        let FileKey { file_idx } = file_key;
+        let FileKey {
+            commit_idx: _,
+            file_idx,
+        } = file_key;
         match self.state.files.get(file_idx) {
             Some(file) => Ok(file),
             None => Err(RecordError::Bug(format!(
@@ -1698,10 +1762,14 @@ impl<'a> Recorder<'a> {
 
     fn section(&self, section_key: SectionKey) -> Result<&Section, RecordError> {
         let SectionKey {
+            commit_idx,
             file_idx,
             section_idx,
         } = section_key;
-        let file = self.file(FileKey { file_idx })?;
+        let file = self.file(FileKey {
+            commit_idx,
+            file_idx,
+        })?;
         match file.sections.get(section_idx) {
             Some(section) => Ok(section),
             None => Err(RecordError::Bug(format!(
@@ -1715,7 +1783,10 @@ impl<'a> Recorder<'a> {
         file_key: FileKey,
         f: impl Fn(&mut File) -> T,
     ) -> Result<T, RecordError> {
-        let FileKey { file_idx } = file_key;
+        let FileKey {
+            commit_idx: _,
+            file_idx,
+        } = file_key;
         match self.state.files.get_mut(file_idx) {
             Some(file) => Ok(f(file)),
             None => Err(RecordError::Bug(format!(
@@ -1750,6 +1821,7 @@ impl<'a> Recorder<'a> {
                         }
                         Section::Changed { .. } => {
                             let section_key = SectionKey {
+                                commit_idx: file_key.commit_idx,
                                 file_idx: file_key.file_idx,
                                 section_idx,
                             };
@@ -1773,6 +1845,7 @@ impl<'a> Recorder<'a> {
         f: impl Fn(&mut Section) -> T,
     ) -> Result<T, RecordError> {
         let SectionKey {
+            commit_idx: _,
             file_idx,
             section_idx,
         } = section_key;
@@ -1803,6 +1876,7 @@ impl<'a> Recorder<'a> {
         f: impl FnOnce(&mut SectionChangedLine),
     ) -> Result<(), RecordError> {
         let LineKey {
+            commit_idx: _,
             file_idx,
             section_idx,
             line_idx,
@@ -2352,6 +2426,7 @@ impl Component for SectionView<'_> {
         });
 
         let SectionKey {
+            commit_idx,
             file_idx,
             section_idx,
         } = *section_key;
@@ -2387,6 +2462,7 @@ impl Component for SectionView<'_> {
                         for (dy, (line_idx, line)) in overlapped_lines.iter().enumerate() {
                             let line_view = SectionLineView {
                                 line_key: LineKey {
+                                    commit_idx,
                                     file_idx,
                                     section_idx,
                                     line_idx: *line_idx,
@@ -2408,6 +2484,7 @@ impl Component for SectionView<'_> {
                     for (line_idx, line) in before_ellipsis_lines {
                         let line_view = SectionLineView {
                             line_key: LineKey {
+                                commit_idx,
                                 file_idx,
                                 section_idx,
                                 line_idx: *line_idx,
@@ -2441,6 +2518,7 @@ impl Component for SectionView<'_> {
                     for (line_idx, line) in after_ellipsis_lines {
                         let line_view = SectionLineView {
                             line_key: LineKey {
+                                commit_idx,
                                 file_idx,
                                 section_idx,
                                 line_idx: *line_idx,
@@ -2519,6 +2597,7 @@ impl Component for SectionView<'_> {
                             Some(SectionSelection::SectionHeader) | None => false,
                         };
                         let line_key = LineKey {
+                            commit_idx,
                             file_idx,
                             section_idx,
                             line_idx,
@@ -2566,6 +2645,7 @@ impl Component for SectionView<'_> {
                     Some(SectionSelection::ChangedLine(_)) | None => false,
                 };
                 let section_key = SectionKey {
+                    commit_idx,
                     file_idx,
                     section_idx,
                 };
@@ -2605,6 +2685,7 @@ impl Component for SectionView<'_> {
                     Some(SectionSelection::ChangedLine(_)) | None => false,
                 };
                 let section_key = SectionKey {
+                    commit_idx,
                     file_idx,
                     section_idx,
                 };
@@ -2938,7 +3019,7 @@ mod tests {
 
         let state = RecordState {
             is_read_only: false,
-            commits: Default::default(),
+            commits: vec![Commit::default(), Commit::default()],
             files: vec![File {
                 old_path: None,
                 path: Cow::Borrowed(Path::new("foo/bar")),
