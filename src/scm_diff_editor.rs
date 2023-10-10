@@ -812,6 +812,7 @@ mod render {
 fn print_dry_run(write_root: &Path, state: RecordState) {
     let RecordState {
         is_read_only: _,
+        commits: _,
         files,
     } = state;
     for file in files {
@@ -849,6 +850,7 @@ fn apply_changes(
 ) -> Result<()> {
     let RecordState {
         is_read_only,
+        commits: _,
         files,
     } = state;
     if is_read_only {
@@ -1026,6 +1028,7 @@ pub fn scm_diff_editor_main(opts: Opts) -> Result<()> {
     let (files, write_root) = process_opts(&filesystem, &opts)?;
     let state = RecordState {
         is_read_only: opts.read_only,
+        commits: Default::default(),
         files,
     };
     let event_source = EventSource::Crossterm;
@@ -1233,6 +1236,7 @@ qux2
             &write_root,
             RecordState {
                 is_read_only: false,
+                commits: Default::default(),
                 files,
             },
         )?;
@@ -1303,6 +1307,7 @@ qux2
             &write_root,
             RecordState {
                 is_read_only: false,
+                commits: Default::default(),
                 files,
             },
         )?;
@@ -1385,6 +1390,7 @@ qux2
             &write_root,
             RecordState {
                 is_read_only: false,
+                commits: Default::default(),
                 files,
             },
         )?;
@@ -1457,6 +1463,7 @@ qux2
             &write_root,
             RecordState {
                 is_read_only: false,
+                commits: Default::default(),
                 files,
             },
         )?;
@@ -1541,6 +1548,7 @@ qux2
             &write_root,
             RecordState {
                 is_read_only: false,
+                commits: Default::default(),
                 files,
             },
         )?;
@@ -1604,6 +1612,7 @@ qux2
             &write_root,
             RecordState {
                 is_read_only: false,
+                commits: Default::default(),
                 files,
             },
         )?;
@@ -1730,6 +1739,7 @@ Hello world 4
             &write_root,
             RecordState {
                 is_read_only: false,
+                commits: Default::default(),
                 files,
             },
         )?;
@@ -1843,6 +1853,7 @@ Hello world 2
             &write_root,
             RecordState {
                 is_read_only: false,
+                commits: Default::default(),
                 files: files.clone(),
             },
         )?;
@@ -1862,6 +1873,7 @@ Hello world 2
             &write_root,
             RecordState {
                 is_read_only: false,
+                commits: Default::default(),
                 files: files.clone(),
             },
         )?;
@@ -1895,6 +1907,7 @@ Hello world 2
             &write_root,
             RecordState {
                 is_read_only: false,
+                commits: Default::default(),
                 files: files.clone(),
             },
         )?;

@@ -18,6 +18,7 @@ fn main() {
         Ok(result) => {
             let RecordState {
                 is_read_only: _,
+                commits: _,
                 files,
             } = result;
             for file in files {

@@ -764,6 +764,7 @@ impl<'a> Recorder<'a> {
     ) -> AppView<'a> {
         let RecordState {
             is_read_only,
+            commits: _,
             files,
         } = &self.state;
         let file_views: Vec<FileView> = files
@@ -1066,6 +1067,7 @@ impl<'a> Recorder<'a> {
     fn num_user_file_changes(&self) -> Result<usize, RecordError> {
         let RecordState {
             files,
+            commits: _,
             is_read_only: _,
         } = &self.state;
         let mut result = 0;
@@ -2936,6 +2938,7 @@ mod tests {
 
         let state = RecordState {
             is_read_only: false,
+            commits: Default::default(),
             files: vec![File {
                 old_path: None,
                 path: Cow::Borrowed(Path::new("foo/bar")),

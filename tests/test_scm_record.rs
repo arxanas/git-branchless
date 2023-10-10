@@ -439,6 +439,7 @@ fn test_quit_dialog_buttons() -> eyre::Result<()> {
 fn test_enter_next() -> eyre::Result<()> {
     let state = RecordState {
         is_read_only: false,
+        commits: Default::default(),
         files: vec![
             File {
                 old_path: None,
@@ -523,6 +524,7 @@ fn test_enter_next() -> eyre::Result<()> {
 fn test_file_mode_change() -> eyre::Result<()> {
     let state = RecordState {
         is_read_only: false,
+        commits: Default::default(),
         files: vec![
             File {
                 old_path: None,
@@ -571,6 +573,7 @@ fn test_file_mode_change() -> eyre::Result<()> {
     insta::assert_debug_snapshot!(recorder.run()?, @r###"
     RecordState {
         is_read_only: false,
+        commits: [],
         files: [
             File {
                 old_path: None,
@@ -637,6 +640,7 @@ fn test_abbreviate_unchanged_sections() -> eyre::Result<()> {
     let middle_length = section_length + 1;
     let state = RecordState {
         is_read_only: false,
+        commits: Default::default(),
         files: vec![File {
             old_path: None,
             path: Cow::Borrowed(Path::new("foo")),
@@ -720,6 +724,7 @@ fn test_no_abbreviate_short_unchanged_sections() -> eyre::Result<()> {
     let middle_length = num_context_lines * 2;
     let state = RecordState {
         is_read_only: false,
+        commits: Default::default(),
         files: vec![File {
             old_path: None,
             path: Cow::Borrowed(Path::new("foo")),
@@ -796,6 +801,7 @@ fn test_no_abbreviate_short_unchanged_sections() -> eyre::Result<()> {
 fn test_record_binary_file() -> eyre::Result<()> {
     let state = RecordState {
         is_read_only: false,
+        commits: Default::default(),
         files: vec![File {
             old_path: None,
             path: Cow::Borrowed(Path::new("foo")),
@@ -834,6 +840,7 @@ fn test_record_binary_file() -> eyre::Result<()> {
     assert_debug_snapshot!(state, @r###"
     RecordState {
         is_read_only: false,
+        commits: [],
         files: [
             File {
                 old_path: None,
@@ -875,6 +882,7 @@ fn test_record_binary_file() -> eyre::Result<()> {
 fn test_record_binary_file_noop() -> eyre::Result<()> {
     let state = RecordState {
         is_read_only: false,
+        commits: Default::default(),
         files: vec![File {
             old_path: None,
             path: Cow::Borrowed(Path::new("foo")),
@@ -908,6 +916,7 @@ fn test_record_binary_file_noop() -> eyre::Result<()> {
     assert_debug_snapshot!(state, @r###"
     RecordState {
         is_read_only: false,
+        commits: [],
         files: [
             File {
                 old_path: None,
@@ -1047,6 +1056,7 @@ fn test_mouse_support() -> eyre::Result<()> {
 fn test_mouse_click_checkbox() -> eyre::Result<()> {
     let state = RecordState {
         is_read_only: false,
+        commits: Default::default(),
         files: vec![
             File {
                 old_path: None,
@@ -1112,6 +1122,7 @@ fn test_mouse_click_checkbox() -> eyre::Result<()> {
 fn test_mouse_click_wide_line() -> eyre::Result<()> {
     let state = RecordState {
         is_read_only: false,
+        commits: Default::default(),
         files: vec![File {
             old_path: None,
             path: Cow::Borrowed(Path::new("foo")),
@@ -1201,6 +1212,7 @@ fn test_mouse_click_wide_line() -> eyre::Result<()> {
 fn test_mouse_click_dialog_buttons() -> eyre::Result<()> {
     let state = RecordState {
         is_read_only: false,
+        commits: Default::default(),
         files: vec![File {
             old_path: None,
             path: Cow::Borrowed(Path::new("foo")),
@@ -1252,6 +1264,7 @@ fn test_mouse_click_dialog_buttons() -> eyre::Result<()> {
 fn test_render_old_path() -> eyre::Result<()> {
     let state = RecordState {
         is_read_only: false,
+        commits: Default::default(),
         files: vec![File {
             old_path: Some(Cow::Borrowed(Path::new("foo"))),
             path: Cow::Borrowed(Path::new("bar")),
@@ -2042,6 +2055,7 @@ fn test_read_only() -> eyre::Result<()> {
     insta::assert_debug_snapshot!(state, @r###"
     RecordState {
         is_read_only: true,
+        commits: [],
         files: [
             File {
                 old_path: None,
@@ -2186,6 +2200,7 @@ fn test_toggle_unchanged_line() -> eyre::Result<()> {
     insta::assert_debug_snapshot!(state, @r###"
     RecordState {
         is_read_only: false,
+        commits: [],
         files: [
             File {
                 old_path: None,
@@ -2300,6 +2315,7 @@ fn test_toggle_unchanged_line() -> eyre::Result<()> {
 fn test_max_file_view_width() -> eyre::Result<()> {
     let state = RecordState {
         is_read_only: false,
+        commits: Default::default(),
         files: vec![File {
             old_path: None,
             path: Cow::Owned("very/".repeat(100).into()),
