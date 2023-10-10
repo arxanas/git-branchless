@@ -22,7 +22,8 @@ use clap::Parser;
 use sha1::Digest;
 use walkdir::WalkDir;
 
-use crate::{EventSource, File, FileMode, RecordError, RecordState, Recorder, SelectedContents};
+use crate::helpers::CrosstermInput;
+use crate::{File, FileMode, RecordError, RecordState, Recorder, SelectedContents};
 
 #[allow(missing_docs)]
 #[derive(Debug)]
@@ -1031,8 +1032,8 @@ pub fn scm_diff_editor_main(opts: Opts) -> Result<()> {
         commits: Default::default(),
         files,
     };
-    let event_source = EventSource::Crossterm;
-    let recorder = Recorder::new(state, event_source);
+    let mut input = CrosstermInput;
+    let recorder = Recorder::new(state, &mut input);
     match recorder.run() {
         Ok(state) => {
             if opts.dry_run {

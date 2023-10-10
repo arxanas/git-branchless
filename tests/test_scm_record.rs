@@ -4,8 +4,9 @@ use std::path::Path;
 use assert_matches::assert_matches;
 use insta::{assert_debug_snapshot, assert_snapshot};
 use scm_record::{
-    helpers::make_binary_description, ChangeType, Event, EventSource, File, FileMode, RecordError,
-    RecordState, Recorder, Section, SectionChangedLine, TestingScreenshot,
+    helpers::{make_binary_description, TestingInput},
+    ChangeType, Event, File, FileMode, RecordError, RecordState, Recorder, Section,
+    SectionChangedLine, TestingScreenshot,
 };
 
 fn example_contents() -> RecordState<'static> {
@@ -18,7 +19,7 @@ fn test_select_scroll_into_view() -> eyre::Result<()> {
     let initial = TestingScreenshot::default();
     let scroll_to_first_section = TestingScreenshot::default();
     let scroll_to_second_file = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         80,
         6,
         [
@@ -39,7 +40,7 @@ fn test_select_scroll_into_view() -> eyre::Result<()> {
         ],
     );
     let state = example_contents();
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     recorder.run()?;
 
     insta::assert_display_snapshot!(initial, @r###"
@@ -73,7 +74,7 @@ fn test_select_scroll_into_view() -> eyre::Result<()> {
 fn test_toggle_all() -> eyre::Result<()> {
     let before = TestingScreenshot::default();
     let after = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         80,
         20,
         [
@@ -85,7 +86,7 @@ fn test_toggle_all() -> eyre::Result<()> {
         ],
     );
     let state = example_contents();
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     recorder.run()?;
 
     insta::assert_display_snapshot!(before, @r###"
@@ -141,7 +142,7 @@ fn test_toggle_all_uniform() -> eyre::Result<()> {
     let first_toggle = TestingScreenshot::default();
     let second_toggle = TestingScreenshot::default();
     let third_toggle = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         80,
         10,
         [
@@ -157,7 +158,7 @@ fn test_toggle_all_uniform() -> eyre::Result<()> {
         ],
     );
     let state = example_contents();
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     recorder.run()?;
 
     insta::assert_display_snapshot!(initial, @r###"
@@ -215,7 +216,7 @@ fn test_toggle_all_uniform() -> eyre::Result<()> {
 #[test]
 fn test_quit_dialog_size() -> eyre::Result<()> {
     let expect_quit_dialog_to_be_centered = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         100,
         40,
         [
@@ -226,7 +227,7 @@ fn test_quit_dialog_size() -> eyre::Result<()> {
         ],
     );
     let state = example_contents();
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     let result = recorder.run();
     assert_matches!(result, Err(RecordError::Cancelled));
     insta::assert_display_snapshot!(expect_quit_dialog_to_be_centered, @r###"
@@ -281,7 +282,7 @@ fn test_quit_dialog_keyboard_navigation() -> eyre::Result<()> {
     let expect_q_closes_quit_dialog = TestingScreenshot::default();
     let expect_ctrl_c_opens_quit_dialog = TestingScreenshot::default();
     let expect_exited = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         80,
         6,
         [
@@ -304,7 +305,7 @@ fn test_quit_dialog_keyboard_navigation() -> eyre::Result<()> {
         ],
     );
     let state = example_contents();
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     assert_matches!(recorder.run(), Err(RecordError::Cancelled));
     insta::assert_display_snapshot!(expect_q_opens_quit_dialog, @r###"
     "[File] [Edit] [Select] [View]                                                   "
@@ -351,7 +352,7 @@ fn test_quit_dialog_buttons() -> eyre::Result<()> {
     let expect_right_focuses_quit_button = TestingScreenshot::default();
     let expect_right_again_does_not_wrap = TestingScreenshot::default();
     let expect_exited = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         80,
         6,
         [
@@ -381,7 +382,7 @@ fn test_quit_dialog_buttons() -> eyre::Result<()> {
         ],
     );
     let state = example_contents();
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     assert_matches!(recorder.run(), Err(RecordError::Cancelled));
     insta::assert_display_snapshot!(expect_quit_button_focused_initially, @r###"
     "[File] [Edit] [Select] [View]                                                   "
@@ -484,7 +485,7 @@ fn test_enter_next() -> eyre::Result<()> {
 
     let first_file_selected = TestingScreenshot::default();
     let second_file_selected = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         80,
         7,
         [
@@ -497,7 +498,7 @@ fn test_enter_next() -> eyre::Result<()> {
             Event::ToggleItemAndAdvance,
         ],
     );
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     assert_matches!(recorder.run(), Err(RecordError::Cancelled));
     insta::assert_display_snapshot!(first_file_selected, @r###"
     "[File] [Edit] [Select] [View]                                                   "
@@ -554,7 +555,7 @@ fn test_file_mode_change() -> eyre::Result<()> {
     let before_toggle = TestingScreenshot::default();
     let after_toggle = TestingScreenshot::default();
     let expect_no_crash = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         80,
         6,
         [
@@ -569,7 +570,7 @@ fn test_file_mode_change() -> eyre::Result<()> {
             Event::QuitAccept,
         ],
     );
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     insta::assert_debug_snapshot!(recorder.run()?, @r###"
     RecordState {
         is_read_only: false,
@@ -683,12 +684,12 @@ fn test_abbreviate_unchanged_sections() -> eyre::Result<()> {
     };
 
     let screenshot = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         80,
         24,
         [Event::ExpandAll, screenshot.event(), Event::QuitAccept],
     );
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     recorder.run()?;
     insta::assert_display_snapshot!(screenshot, @r###"
     "[File] [Edit] [Select] [View]                                                   "
@@ -767,12 +768,12 @@ fn test_no_abbreviate_short_unchanged_sections() -> eyre::Result<()> {
     };
 
     let screenshot = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         80,
         20,
         [Event::ExpandAll, screenshot.event(), Event::QuitAccept],
     );
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     recorder.run()?;
     insta::assert_display_snapshot!(screenshot, @r###"
     "[File] [Edit] [Select] [View]                                                   "
@@ -818,7 +819,7 @@ fn test_record_binary_file() -> eyre::Result<()> {
     };
 
     let initial = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         80,
         6,
         [
@@ -828,7 +829,7 @@ fn test_record_binary_file() -> eyre::Result<()> {
             Event::QuitAccept,
         ],
     );
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     let state = recorder.run()?;
 
     insta::assert_display_snapshot!(initial, @r###"
@@ -902,12 +903,12 @@ fn test_record_binary_file_noop() -> eyre::Result<()> {
     };
 
     let initial = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         80,
         6,
         [Event::ExpandAll, initial.event(), Event::QuitAccept],
     );
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     let state = recorder.run()?;
 
     insta::assert_display_snapshot!(initial, @r###"
@@ -1013,7 +1014,7 @@ fn test_mouse_support() -> eyre::Result<()> {
     let initial = TestingScreenshot::default();
     let first_click = TestingScreenshot::default();
     let click_scrolled_item = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         80,
         7,
         [
@@ -1028,7 +1029,7 @@ fn test_mouse_support() -> eyre::Result<()> {
             Event::QuitAccept,
         ],
     );
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     recorder.run()?;
 
     insta::assert_display_snapshot!(initial, @r###"
@@ -1089,7 +1090,7 @@ fn test_mouse_click_checkbox() -> eyre::Result<()> {
     let initial = TestingScreenshot::default();
     let click_unselected_checkbox = TestingScreenshot::default();
     let click_selected_checkbox = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         80,
         4,
         [
@@ -1102,7 +1103,7 @@ fn test_mouse_click_checkbox() -> eyre::Result<()> {
             Event::QuitAccept,
         ],
     );
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     recorder.run()?;
 
     insta::assert_display_snapshot!(initial, @r###"
@@ -1158,7 +1159,7 @@ fn test_mouse_click_wide_line() -> eyre::Result<()> {
     let click_line_section = TestingScreenshot::default();
     let click_file_mode_section = TestingScreenshot::default();
     let click_file = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         80,
         5,
         [
@@ -1175,7 +1176,7 @@ fn test_mouse_click_wide_line() -> eyre::Result<()> {
             Event::QuitAccept,
         ],
     );
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     recorder.run()?;
 
     insta::assert_display_snapshot!(initial, @r###"
@@ -1247,8 +1248,8 @@ fn test_mouse_click_dialog_buttons() -> eyre::Result<()> {
         Event::Click { row: 3, column: 65 },
         click_go_back.event(),
     ];
-    let event_source = EventSource::testing(80, 6, events);
-    let recorder = Recorder::new(state, event_source);
+    let mut input = TestingInput::new(80, 6, events);
+    let recorder = Recorder::new(state, &mut input);
     let result = recorder.run();
     insta::assert_debug_snapshot!(result, @r###"
     Err(
@@ -1282,12 +1283,12 @@ fn test_render_old_path() -> eyre::Result<()> {
         }],
     };
     let screenshot = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         80,
         6,
         [Event::ExpandAll, screenshot.event(), Event::QuitAccept],
     );
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     recorder.run()?;
 
     insta::assert_display_snapshot!(screenshot, @r###"
@@ -1309,7 +1310,7 @@ fn test_expand() -> eyre::Result<()> {
     let after_expand = TestingScreenshot::default();
     let after_collapse = TestingScreenshot::default();
     let after_expand_mouse = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         80,
         7,
         [
@@ -1324,7 +1325,7 @@ fn test_expand() -> eyre::Result<()> {
             Event::QuitAccept,
         ],
     );
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     recorder.run()?;
 
     insta::assert_display_snapshot!(initial, @r###"
@@ -1372,7 +1373,7 @@ fn test_expand_line_noop() -> eyre::Result<()> {
     let state = example_contents();
     let after_select = TestingScreenshot::default();
     let after_expand_noop = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         80,
         7,
         [
@@ -1385,7 +1386,7 @@ fn test_expand_line_noop() -> eyre::Result<()> {
             Event::QuitAccept,
         ],
     );
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     recorder.run()?;
 
     insta::assert_display_snapshot!(after_select, @r###"
@@ -1415,7 +1416,7 @@ fn test_expand_scroll_into_view() -> eyre::Result<()> {
     let state = example_contents();
     let before_expand = TestingScreenshot::default();
     let after_expand = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         80,
         7,
         [
@@ -1426,7 +1427,7 @@ fn test_expand_scroll_into_view() -> eyre::Result<()> {
             Event::QuitAccept,
         ],
     );
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     recorder.run()?;
 
     insta::assert_display_snapshot!(before_expand, @r###"
@@ -1456,7 +1457,7 @@ fn test_collapse_select_ancestor() -> eyre::Result<()> {
     let state = example_contents();
     let before_collapse = TestingScreenshot::default();
     let after_collapse = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         80,
         7,
         [
@@ -1468,7 +1469,7 @@ fn test_collapse_select_ancestor() -> eyre::Result<()> {
             Event::QuitAccept,
         ],
     );
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     recorder.run()?;
 
     insta::assert_display_snapshot!(before_collapse, @r###"
@@ -1500,7 +1501,7 @@ fn test_focus_inner() -> eyre::Result<()> {
     let inner1 = TestingScreenshot::default();
     let inner2 = TestingScreenshot::default();
     let inner3 = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         80,
         7,
         [
@@ -1514,7 +1515,7 @@ fn test_focus_inner() -> eyre::Result<()> {
             Event::QuitAccept,
         ],
     );
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     recorder.run()?;
 
     insta::assert_display_snapshot!(initial, @r###"
@@ -1565,7 +1566,7 @@ fn test_focus_outer() -> eyre::Result<()> {
     let outer2 = TestingScreenshot::default();
     let outer3 = TestingScreenshot::default();
     let outer4 = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         80,
         7,
         [
@@ -1586,7 +1587,7 @@ fn test_focus_outer() -> eyre::Result<()> {
             Event::QuitAccept,
         ],
     );
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     recorder.run()?;
 
     insta::assert_display_snapshot!(initial, @r###"
@@ -1647,7 +1648,7 @@ fn test_sticky_header_scroll() -> eyre::Result<()> {
     let scroll3 = TestingScreenshot::default();
     let scroll4 = TestingScreenshot::default();
     let scroll5 = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         80,
         7,
         [
@@ -1666,7 +1667,7 @@ fn test_sticky_header_scroll() -> eyre::Result<()> {
             Event::QuitAccept,
         ],
     );
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     recorder.run()?;
 
     insta::assert_display_snapshot!(initial, @r###"
@@ -1734,7 +1735,7 @@ fn test_sticky_header_click_expand() -> eyre::Result<()> {
     let after_scroll = TestingScreenshot::default();
     let after_click1 = TestingScreenshot::default();
     let after_click2 = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         80,
         7,
         [
@@ -1750,7 +1751,7 @@ fn test_sticky_header_click_expand() -> eyre::Result<()> {
             Event::QuitAccept,
         ],
     );
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     recorder.run()?;
 
     insta::assert_display_snapshot!(initial, @r###"
@@ -1798,7 +1799,7 @@ fn test_scroll_click_no_jump() -> eyre::Result<()> {
     let state = example_contents();
     let initial = TestingScreenshot::default();
     let after_click = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         80,
         7,
         [
@@ -1809,7 +1810,7 @@ fn test_scroll_click_no_jump() -> eyre::Result<()> {
             Event::QuitAccept,
         ],
     );
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     recorder.run()?;
 
     insta::assert_display_snapshot!(initial, @r###"
@@ -1840,21 +1841,19 @@ fn test_menu_bar_scroll_into_view() -> eyre::Result<()> {
     let initial = TestingScreenshot::default();
     let after_scroll1 = TestingScreenshot::default();
     let after_scroll2 = TestingScreenshot::default();
-    let recorder = Recorder::new(
-        state,
-        EventSource::testing(
-            80,
-            6,
-            [
-                initial.event(),
-                Event::ScrollDown,
-                after_scroll1.event(),
-                Event::ScrollDown,
-                after_scroll2.event(),
-                Event::QuitAccept,
-            ],
-        ),
+    let mut input = TestingInput::new(
+        80,
+        6,
+        [
+            initial.event(),
+            Event::ScrollDown,
+            after_scroll1.event(),
+            Event::ScrollDown,
+            after_scroll2.event(),
+            Event::QuitAccept,
+        ],
     );
+    let recorder = Recorder::new(state, &mut input);
     recorder.run()?;
 
     insta::assert_display_snapshot!(initial, @r###"
@@ -1893,25 +1892,23 @@ fn test_expand_menu() -> eyre::Result<()> {
     let after_click_different = TestingScreenshot::default();
     let after_click_same = TestingScreenshot::default();
     let after_click_menu_bar = TestingScreenshot::default();
-    let recorder = Recorder::new(
-        state,
-        EventSource::testing(
-            80,
-            6,
-            [
-                initial.event(),
-                Event::Click { row: 0, column: 8 },
-                after_click.event(),
-                Event::Click { row: 0, column: 0 },
-                after_click_different.event(),
-                Event::Click { row: 0, column: 0 },
-                after_click_same.event(),
-                Event::Click { row: 0, column: 79 },
-                after_click_menu_bar.event(),
-                Event::QuitAccept,
-            ],
-        ),
+    let mut input = TestingInput::new(
+        80,
+        6,
+        [
+            initial.event(),
+            Event::Click { row: 0, column: 8 },
+            after_click.event(),
+            Event::Click { row: 0, column: 0 },
+            after_click_different.event(),
+            Event::Click { row: 0, column: 0 },
+            after_click_same.event(),
+            Event::Click { row: 0, column: 79 },
+            after_click_menu_bar.event(),
+            Event::QuitAccept,
+        ],
     );
+    let recorder = Recorder::new(state, &mut input);
     recorder.run()?;
 
     insta::assert_display_snapshot!(initial, @r###"
@@ -1967,22 +1964,20 @@ fn test_read_only() -> eyre::Result<()> {
     let initial = TestingScreenshot::default();
     let after_toggle_all_ignored = TestingScreenshot::default();
     let after_toggle_all_uniform_ignored = TestingScreenshot::default();
-    let recorder = Recorder::new(
-        state,
-        EventSource::testing(
-            80,
-            23,
-            [
-                Event::ExpandAll,
-                initial.event(),
-                Event::ToggleAll,
-                after_toggle_all_ignored.event(),
-                Event::ToggleAllUniform,
-                after_toggle_all_uniform_ignored.event(),
-                Event::QuitAccept,
-            ],
-        ),
+    let mut input = TestingInput::new(
+        80,
+        23,
+        [
+            Event::ExpandAll,
+            initial.event(),
+            Event::ToggleAll,
+            after_toggle_all_ignored.event(),
+            Event::ToggleAllUniform,
+            after_toggle_all_uniform_ignored.event(),
+            Event::QuitAccept,
+        ],
     );
+    let recorder = Recorder::new(state, &mut input);
     let state = recorder.run()?;
 
     insta::assert_display_snapshot!(initial, @r###"
@@ -2183,21 +2178,19 @@ fn test_toggle_unchanged_line() -> eyre::Result<()> {
     let state = example_contents();
     let initial = TestingScreenshot::default();
     let after_toggle = TestingScreenshot::default();
-    let recorder = Recorder::new(
-        state,
-        EventSource::testing(
-            80,
-            6,
-            [
-                Event::ExpandAll,
-                initial.event(),
-                Event::Click { row: 4, column: 10 },
-                Event::ToggleItem, // should not crash
-                after_toggle.event(),
-                Event::QuitAccept,
-            ],
-        ),
+    let mut input = TestingInput::new(
+        80,
+        6,
+        [
+            Event::ExpandAll,
+            initial.event(),
+            Event::Click { row: 4, column: 10 },
+            Event::ToggleItem, // should not crash
+            after_toggle.event(),
+            Event::QuitAccept,
+        ],
     );
+    let recorder = Recorder::new(state, &mut input);
     let state = recorder.run()?;
 
     insta::assert_display_snapshot!(initial, @r###"
@@ -2350,19 +2343,17 @@ fn test_max_file_view_width() -> eyre::Result<()> {
         }],
     };
     let initial_wide = TestingScreenshot::default();
-    let recorder = Recorder::new(
-        state.clone(),
-        EventSource::testing(
-            250,
-            6,
-            [
-                Event::ExpandAll,
-                Event::ToggleCommitViewMode,
-                initial_wide.event(),
-                Event::QuitAccept,
-            ],
-        ),
+    let mut input = TestingInput::new(
+        250,
+        6,
+        [
+            Event::ExpandAll,
+            Event::ToggleCommitViewMode,
+            initial_wide.event(),
+            Event::QuitAccept,
+        ],
     );
+    let recorder = Recorder::new(state.clone(), &mut input);
     recorder.run()?;
 
     insta::assert_display_snapshot!(initial_wide, @r###"
@@ -2375,14 +2366,12 @@ fn test_max_file_view_width() -> eyre::Result<()> {
     "###);
 
     let initial_narrow = TestingScreenshot::default();
-    let recorder = Recorder::new(
-        state,
-        EventSource::testing(
-            15,
-            6,
-            [Event::ExpandAll, initial_narrow.event(), Event::QuitAccept],
-        ),
+    let mut input = TestingInput::new(
+        15,
+        6,
+        [Event::ExpandAll, initial_narrow.event(), Event::QuitAccept],
     );
+    let recorder = Recorder::new(state, &mut input);
     recorder.run()?;
 
     insta::assert_display_snapshot!(initial_narrow, @r###"

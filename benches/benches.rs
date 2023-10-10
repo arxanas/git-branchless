@@ -3,7 +3,8 @@ use std::{borrow::Cow, path::Path};
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 
 use scm_record::{
-    ChangeType, Event, EventSource, File, RecordState, Recorder, Section, SectionChangedLine,
+    helpers::TestingInput, ChangeType, Event, File, RecordState, Recorder, Section,
+    SectionChangedLine,
 };
 
 fn bench_record(c: &mut Criterion) {
@@ -30,17 +31,17 @@ fn bench_record(c: &mut Criterion) {
                 }],
             }],
         };
+        let mut input = TestingInput::new(
+            80,
+            24,
+            [Event::ToggleItem, Event::ToggleItem, Event::QuitAccept],
+        );
         b.iter_batched(
-            || {
-                let event_source = EventSource::testing(
-                    80,
-                    24,
-                    [Event::ToggleItem, Event::ToggleItem, Event::QuitAccept],
-                );
-                let recorder = Recorder::new(record_state.clone(), event_source);
-                recorder
+            || record_state.clone(),
+            |record_state| {
+                let recorder = Recorder::new(record_state, &mut input);
+                recorder.run()
             },
-            |recorder| recorder.run(),
             BatchSize::PerIteration,
         )
     });
