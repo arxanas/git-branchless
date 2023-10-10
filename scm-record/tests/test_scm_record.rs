@@ -2548,3 +2548,89 @@ fn test_commit_message_view() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_quit_dialog_when_commit_message_provided() -> eyre::Result<()> {
+    let mut state = example_contents();
+    state.commits = vec![Commit {
+        message: Some("hello".to_string()),
+    }];
+
+    let changed_message_and_files = TestingScreenshot::default();
+    let changed_message_only = TestingScreenshot::default();
+    let mut input = TestingInput {
+        width: 80,
+        height: 24,
+        events: Box::new(
+            [
+                Event::QuitInterrupt,
+                changed_message_and_files.event(),
+                Event::QuitCancel,
+                Event::ToggleAllUniform, // toggle all
+                Event::ToggleAllUniform, // toggle none
+                Event::QuitInterrupt,
+                changed_message_only.event(),
+                Event::QuitInterrupt,
+            ]
+            .into_iter(),
+        ),
+        commit_messages: [].into_iter().collect(),
+    };
+    let recorder = Recorder::new(state, &mut input);
+    assert_matches!(recorder.run(), Err(RecordError::Cancelled));
+
+    insta::assert_display_snapshot!(changed_message_and_files, @r###"
+    "[File] [Edit] [Select] [View]                                                   "
+    "                                                                                "
+    "[Edit message]  •  hello                                                        "
+    "                                                                                "
+    "(~) foo/bar                                                                  (+)"
+    "[×] baz                                                                      [+]"
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "  ┌Quit─────────────────────────────────────────────────────────────────────┐   "
+    "  │You have changes to 1 message and 2 files. Are you sure you want to quit?│   "
+    "  │                                                                         │   "
+    "  └─────────────────────────────────────────────────────────[Go Back]─(Quit)┘   "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "###);
+    insta::assert_display_snapshot!(changed_message_only, @r###"
+    "[File] [Edit] [Select] [View]                                                   "
+    "                                                                                "
+    "[Edit message]  •  hello                                                        "
+    "                                                                                "
+    "( ) foo/bar                                                                  (+)"
+    "[ ] baz                                                                      [+]"
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "        ┌Quit─────────────────────────────────────────────────────────┐         "
+    "        │You have changes to 1 message. Are you sure you want to quit?│         "
+    "        │                                                             │         "
+    "        └─────────────────────────────────────────────[Go Back]─(Quit)┘         "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "###);
+
+    Ok(())
+}
