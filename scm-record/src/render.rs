@@ -69,6 +69,27 @@ impl From<ratatui::layout::Rect> for Rect {
 }
 
 impl Rect {
+    pub fn end_x(self) -> isize {
+        self.x + self.width.unwrap_isize()
+    }
+
+    pub fn end_y(self) -> isize {
+        self.y + self.height.unwrap_isize()
+    }
+
+    pub fn iter_ys(self) -> impl Iterator<Item = isize> {
+        self.y..self.end_y()
+    }
+
+    pub fn top_row(self) -> Rect {
+        Rect {
+            x: self.x,
+            y: self.y,
+            width: self.width,
+            height: 1,
+        }
+    }
+
     /// The (x, y) coordinate of the top-left corner of this `Rect`.
     fn top_left(self) -> (isize, isize) {
         (self.x, self.y)
@@ -76,10 +97,7 @@ impl Rect {
 
     /// The (x, y) coordinate of the bottom-right corner of this `Rect`.
     fn bottom_right(self) -> (isize, isize) {
-        (
-            self.x + self.width.unwrap_isize(),
-            self.y + self.height.unwrap_isize(),
-        )
+        (self.end_x(), self.end_y())
     }
 
     /// Whether or not this `Rect` contains the given point.
@@ -311,19 +329,15 @@ impl<'a, ComponentId: Clone + Debug + Eq + Hash> Viewport<'a, ComponentId> {
         self.rect
     }
 
-    /// The mask used for rendering. If this is `Some`, then calls to
-    /// `draw_span` will only render inside the mask area. This can be used to
-    /// overlay one component on top of another in a fixed area.
-    pub fn mask(&self) -> Option<Rect> {
-        self.mask
-    }
-
-    /// The size of the viewport.
-    pub fn size(&self) -> RectSize {
-        RectSize {
-            width: self.buf.area().width.into(),
-            height: self.buf.area().height.into(),
-        }
+    /// The mask used for rendering. Calls to `draw_span` will only render
+    /// inside the mask area. This can be used to overlay one component on top
+    /// of another in a fixed area.
+    ///
+    /// This can be set with `Viewport::with_mask`. If no mask has been set in
+    /// the current call stack, then the returned value defaults to
+    /// `Viewport::rect`, i.e. the area representing the entire terminal.
+    pub fn mask(&self) -> Rect {
+        self.mask.unwrap_or_else(|| self.rect())
     }
 
     /// Render the provided component using the given `Frame`. Returns a mapping
@@ -453,28 +467,12 @@ impl<'a, ComponentId: Clone + Debug + Eq + Hash> Viewport<'a, ComponentId> {
         widget.render(rect, self.buf);
     }
 
-    pub fn fill_rest_of_line(&mut self, x: isize, y: isize) {
-        let line_width = self.rect.width.unwrap_isize() - x;
-        let line_width: usize = match line_width.try_into() {
-            Ok(0) | Err(_) => return,
-            Ok(line_width) => line_width,
-        };
-
-        let line_rect = Rect {
-            x,
-            y,
-            width: line_width,
-            height: 1,
-        };
-        self.current_trace_mut().merge_rect(line_rect);
-        let draw_rect = self.rect.intersect(line_rect);
-        if !draw_rect.is_empty() {
-            let buf_rect = self.translate_rect(draw_rect);
-            self.buf.set_span(
-                buf_rect.x,
-                buf_rect.y,
-                &Span::styled(" ".repeat(line_width), Style::reset()),
-                buf_rect.width,
+    pub fn draw_blank(&mut self, rect: Rect) {
+        for y in rect.iter_ys() {
+            self.draw_span(
+                rect.x,
+                y,
+                &Span::styled(" ".repeat(rect.width), Style::reset()),
             );
         }
     }
