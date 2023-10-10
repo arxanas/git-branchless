@@ -10,7 +10,6 @@ use std::fmt::{Debug, Display};
 use std::hash::Hash;
 use std::path::Path;
 use std::rc::Rc;
-use std::time::Duration;
 use std::{fs, io, iter, mem, panic};
 
 use crossterm::event::{
@@ -311,60 +310,29 @@ impl From<crossterm::event::Event> for Event {
     }
 }
 
-/// The source to read user events from.
-pub enum EventSource {
-    /// Read from the terminal with `crossterm`.
+/// The terminal backend to use.
+pub enum TerminalKind {
+    /// Use the `CrosstermBackend` backend.
     Crossterm,
 
-    /// Read from the provided sequence of events.
+    /// Use the `TestingBackend` backend.
     Testing {
-        /// The width of the virtual terminal in columns.
+        /// The width of the virtual terminal.
         width: usize,
 
-        /// The height of the virtual terminal in columns.
+        /// The height of the virtual terminal.
         height: usize,
-
-        /// The sequence of events to emit.
-        events: Box<dyn Iterator<Item = Event>>,
     },
 }
 
-impl EventSource {
-    /// Helper function to construct an `EventSource::Testing`.
-    pub fn testing(
-        width: usize,
-        height: usize,
-        events: impl IntoIterator<Item = Event> + 'static,
-    ) -> Self {
-        Self::Testing {
-            width,
-            height,
-            events: Box::new(events.into_iter()),
-        }
-    }
+/// Get user input.
+pub trait RecordInput {
+    /// Return the kind of terminal to use.
+    fn terminal_kind(&self) -> TerminalKind;
 
-    fn next_events(&mut self) -> Result<Vec<Event>, RecordError> {
-        match self {
-            EventSource::Crossterm => {
-                // Ensure we block for at least one event.
-                let first_event = crossterm::event::read().map_err(RecordError::ReadInput)?;
-                let mut events = vec![first_event.into()];
-                // Some events, like scrolling, are generated more quickly than
-                // we can render the UI. In those cases, batch up all available
-                // events and process them before the next render.
-                while crossterm::event::poll(Duration::ZERO).map_err(RecordError::ReadInput)? {
-                    let event = crossterm::event::read().map_err(RecordError::ReadInput)?;
-                    events.push(event.into());
-                }
-                Ok(events)
-            }
-            EventSource::Testing {
-                width: _,
-                height: _,
-                events,
-            } => Ok(vec![events.next().unwrap_or(Event::None)]),
-        }
-    }
+    /// Get all available user events. This should block until there is at least
+    /// one available event.
+    fn next_events(&mut self) -> Result<Vec<Event>, RecordError>;
 }
 
 /// Copied from internal implementation of `tui`.
@@ -432,9 +400,9 @@ enum CommitViewMode {
 }
 
 /// UI component to record the user's changes.
-pub struct Recorder<'a> {
-    state: RecordState<'a>,
-    event_source: EventSource,
+pub struct Recorder<'state, 'input> {
+    state: RecordState<'state>,
+    input: &'input mut dyn RecordInput,
     pending_events: Vec<Event>,
     use_unicode: bool,
     commit_view_mode: CommitViewMode,
@@ -446,9 +414,9 @@ pub struct Recorder<'a> {
     scroll_offset_y: isize,
 }
 
-impl<'a> Recorder<'a> {
+impl<'state, 'input> Recorder<'state, 'input> {
     /// Constructor.
-    pub fn new(mut state: RecordState<'a>, event_source: EventSource) -> Self {
+    pub fn new(mut state: RecordState<'state>, input: &'input mut dyn RecordInput) -> Self {
         // Ensure that there are at least two commits.
         state.commits.extend(
             iter::repeat_with(Commit::default).take(2_usize.saturating_sub(state.commits.len())),
@@ -459,7 +427,7 @@ impl<'a> Recorder<'a> {
 
         let mut recorder = Self {
             state,
-            event_source,
+            input,
             pending_events: Default::default(),
             use_unicode: true,
             commit_view_mode: CommitViewMode::Inline,
@@ -476,7 +444,7 @@ impl<'a> Recorder<'a> {
 
     /// Run the terminal user interface and have the user interactively select
     /// changes.
-    pub fn run(self) -> Result<RecordState<'a>, RecordError> {
+    pub fn run(self) -> Result<RecordState<'state>, RecordError> {
         #[cfg(feature = "debug")]
         if std::env::var_os(ENV_VAR_DUMP_UI_STATE).is_some() {
             let ui_state =
@@ -484,18 +452,14 @@ impl<'a> Recorder<'a> {
             fs::write(DUMP_UI_STATE_FILENAME, ui_state).map_err(RecordError::WriteFile)?;
         }
 
-        match self.event_source {
-            EventSource::Crossterm => self.run_crossterm(),
-            EventSource::Testing {
-                width,
-                height,
-                events: _,
-            } => self.run_testing(width, height),
+        match self.input.terminal_kind() {
+            TerminalKind::Crossterm => self.run_crossterm(),
+            TerminalKind::Testing { width, height } => self.run_testing(width, height),
         }
     }
 
     /// Run the recorder UI using `crossterm` as the backend connected to stdout.
-    fn run_crossterm(self) -> Result<RecordState<'a>, RecordError> {
+    fn run_crossterm(self) -> Result<RecordState<'state>, RecordError> {
         let mut stdout = io::stdout();
         if !is_raw_mode_enabled().map_err(RecordError::SetUpTerminal)? {
             enable_raw_mode().map_err(RecordError::SetUpTerminal)?;
@@ -536,7 +500,7 @@ impl<'a> Recorder<'a> {
         Ok(())
     }
 
-    fn run_testing(self, width: usize, height: usize) -> Result<RecordState<'a>, RecordError> {
+    fn run_testing(self, width: usize, height: usize) -> Result<RecordState<'state>, RecordError> {
         let backend = TestBackend::new(width.clamp_into_u16(), height.clamp_into_u16());
         let mut term = Terminal::new(backend).map_err(RecordError::SetUpTerminal)?;
         self.run_inner(&mut term)
@@ -545,7 +509,7 @@ impl<'a> Recorder<'a> {
     fn run_inner(
         mut self,
         term: &mut Terminal<impl Backend + Any>,
-    ) -> Result<RecordState<'a>, RecordError> {
+    ) -> Result<RecordState<'state>, RecordError> {
         self.selection_key = self.first_selection_key();
         let debug = if cfg!(feature = "debug") {
             std::env::var_os(ENV_VAR_DEBUG_UI).is_some()
@@ -596,7 +560,7 @@ impl<'a> Recorder<'a> {
             }
 
             let events = if self.pending_events.is_empty() {
-                self.event_source.next_events()?
+                self.input.next_events()?
             } else {
                 // FIXME: the pending events should be applied without redrawing
                 // the screen, as otherwise there may be a flash of content
@@ -787,10 +751,10 @@ impl<'a> Recorder<'a> {
     }
 
     fn make_app(
-        &'a self,
+        &'state self,
         menu_bar: MenuBar<'static>,
         debug_info: Option<AppDebugInfo>,
-    ) -> AppView<'a> {
+    ) -> AppView<'state> {
         let RecordState {
             is_read_only,
             commits,
@@ -838,12 +802,12 @@ impl<'a> Recorder<'a> {
     }
 
     fn make_file_views(
-        &'a self,
+        &'state self,
         commit_idx: usize,
-        files: &'a [File<'a>],
+        files: &'state [File<'state>],
         debug_info: &Option<AppDebugInfo>,
         is_read_only: bool,
-    ) -> Vec<FileView<'a>> {
+    ) -> Vec<FileView<'state>> {
         files
             .iter()
             .enumerate()
@@ -3079,13 +3043,15 @@ fn highlight_rect<Id: Clone + Debug + Eq + Hash>(viewport: &mut Viewport<Id>, re
 mod tests {
     use std::borrow::Cow;
 
+    use crate::helpers::TestingInput;
+
     use super::*;
 
     use assert_matches::assert_matches;
 
     #[test]
     fn test_event_source_testing() {
-        let mut event_source = EventSource::testing(80, 24, [Event::QuitCancel]);
+        let mut event_source = TestingInput::new(80, 24, [Event::QuitCancel]);
         assert_matches!(
             event_source.next_events().unwrap().as_slice(),
             &[Event::QuitCancel]
@@ -3099,8 +3065,8 @@ mod tests {
     #[test]
     fn test_quit_returns_error() {
         let state = RecordState::default();
-        let event_source = EventSource::testing(80, 24, [Event::QuitCancel]);
-        let recorder = Recorder::new(state, event_source);
+        let mut input = TestingInput::new(80, 24, [Event::QuitCancel]);
+        let recorder = Recorder::new(state, &mut input);
         assert_matches!(recorder.run(), Err(RecordError::Cancelled));
 
         let state = RecordState {
@@ -3113,8 +3079,8 @@ mod tests {
                 sections: Default::default(),
             }],
         };
-        let event_source = EventSource::testing(80, 24, [Event::QuitAccept]);
-        let recorder = Recorder::new(state.clone(), event_source);
+        let mut input = TestingInput::new(80, 24, [Event::QuitAccept]);
+        let recorder = Recorder::new(state.clone(), &mut input);
         assert_eq!(recorder.run().unwrap(), state);
     }
 }
