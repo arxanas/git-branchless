@@ -4,8 +4,9 @@ use std::path::Path;
 use assert_matches::assert_matches;
 use insta::{assert_debug_snapshot, assert_snapshot};
 use scm_record::{
-    helpers::make_binary_description, ChangeType, Event, EventSource, File, FileMode, RecordError,
-    RecordState, Recorder, Section, SectionChangedLine, TestingScreenshot,
+    helpers::{make_binary_description, TestingInput},
+    ChangeType, Commit, Event, File, FileMode, RecordError, RecordState, Recorder, Section,
+    SectionChangedLine, TestingScreenshot,
 };
 
 fn example_contents() -> RecordState<'static> {
@@ -18,7 +19,7 @@ fn test_select_scroll_into_view() -> eyre::Result<()> {
     let initial = TestingScreenshot::default();
     let scroll_to_first_section = TestingScreenshot::default();
     let scroll_to_second_file = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         80,
         6,
         [
@@ -39,7 +40,7 @@ fn test_select_scroll_into_view() -> eyre::Result<()> {
         ],
     );
     let state = example_contents();
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     recorder.run()?;
 
     insta::assert_display_snapshot!(initial, @r###"
@@ -73,7 +74,7 @@ fn test_select_scroll_into_view() -> eyre::Result<()> {
 fn test_toggle_all() -> eyre::Result<()> {
     let before = TestingScreenshot::default();
     let after = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         80,
         20,
         [
@@ -85,7 +86,7 @@ fn test_toggle_all() -> eyre::Result<()> {
         ],
     );
     let state = example_contents();
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     recorder.run()?;
 
     insta::assert_display_snapshot!(before, @r###"
@@ -141,7 +142,7 @@ fn test_toggle_all_uniform() -> eyre::Result<()> {
     let first_toggle = TestingScreenshot::default();
     let second_toggle = TestingScreenshot::default();
     let third_toggle = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         80,
         10,
         [
@@ -157,7 +158,7 @@ fn test_toggle_all_uniform() -> eyre::Result<()> {
         ],
     );
     let state = example_contents();
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     recorder.run()?;
 
     insta::assert_display_snapshot!(initial, @r###"
@@ -215,7 +216,7 @@ fn test_toggle_all_uniform() -> eyre::Result<()> {
 #[test]
 fn test_quit_dialog_size() -> eyre::Result<()> {
     let expect_quit_dialog_to_be_centered = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         100,
         40,
         [
@@ -226,7 +227,7 @@ fn test_quit_dialog_size() -> eyre::Result<()> {
         ],
     );
     let state = example_contents();
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     let result = recorder.run();
     assert_matches!(result, Err(RecordError::Cancelled));
     insta::assert_display_snapshot!(expect_quit_dialog_to_be_centered, @r###"
@@ -281,7 +282,7 @@ fn test_quit_dialog_keyboard_navigation() -> eyre::Result<()> {
     let expect_q_closes_quit_dialog = TestingScreenshot::default();
     let expect_ctrl_c_opens_quit_dialog = TestingScreenshot::default();
     let expect_exited = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         80,
         6,
         [
@@ -304,7 +305,7 @@ fn test_quit_dialog_keyboard_navigation() -> eyre::Result<()> {
         ],
     );
     let state = example_contents();
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     assert_matches!(recorder.run(), Err(RecordError::Cancelled));
     insta::assert_display_snapshot!(expect_q_opens_quit_dialog, @r###"
     "[File] [Edit] [Select] [View]                                                   "
@@ -351,7 +352,7 @@ fn test_quit_dialog_buttons() -> eyre::Result<()> {
     let expect_right_focuses_quit_button = TestingScreenshot::default();
     let expect_right_again_does_not_wrap = TestingScreenshot::default();
     let expect_exited = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         80,
         6,
         [
@@ -381,7 +382,7 @@ fn test_quit_dialog_buttons() -> eyre::Result<()> {
         ],
     );
     let state = example_contents();
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     assert_matches!(recorder.run(), Err(RecordError::Cancelled));
     insta::assert_display_snapshot!(expect_quit_button_focused_initially, @r###"
     "[File] [Edit] [Select] [View]                                                   "
@@ -439,6 +440,7 @@ fn test_quit_dialog_buttons() -> eyre::Result<()> {
 fn test_enter_next() -> eyre::Result<()> {
     let state = RecordState {
         is_read_only: false,
+        commits: Default::default(),
         files: vec![
             File {
                 old_path: None,
@@ -483,7 +485,7 @@ fn test_enter_next() -> eyre::Result<()> {
 
     let first_file_selected = TestingScreenshot::default();
     let second_file_selected = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         80,
         7,
         [
@@ -496,7 +498,7 @@ fn test_enter_next() -> eyre::Result<()> {
             Event::ToggleItemAndAdvance,
         ],
     );
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     assert_matches!(recorder.run(), Err(RecordError::Cancelled));
     insta::assert_display_snapshot!(first_file_selected, @r###"
     "[File] [Edit] [Select] [View]                                                   "
@@ -523,6 +525,7 @@ fn test_enter_next() -> eyre::Result<()> {
 fn test_file_mode_change() -> eyre::Result<()> {
     let state = RecordState {
         is_read_only: false,
+        commits: Default::default(),
         files: vec![
             File {
                 old_path: None,
@@ -552,7 +555,7 @@ fn test_file_mode_change() -> eyre::Result<()> {
     let before_toggle = TestingScreenshot::default();
     let after_toggle = TestingScreenshot::default();
     let expect_no_crash = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         80,
         6,
         [
@@ -567,10 +570,18 @@ fn test_file_mode_change() -> eyre::Result<()> {
             Event::QuitAccept,
         ],
     );
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     insta::assert_debug_snapshot!(recorder.run()?, @r###"
     RecordState {
         is_read_only: false,
+        commits: [
+            Commit {
+                message: None,
+            },
+            Commit {
+                message: None,
+            },
+        ],
         files: [
             File {
                 old_path: None,
@@ -637,6 +648,7 @@ fn test_abbreviate_unchanged_sections() -> eyre::Result<()> {
     let middle_length = section_length + 1;
     let state = RecordState {
         is_read_only: false,
+        commits: Default::default(),
         files: vec![File {
             old_path: None,
             path: Cow::Borrowed(Path::new("foo")),
@@ -676,12 +688,12 @@ fn test_abbreviate_unchanged_sections() -> eyre::Result<()> {
     };
 
     let screenshot = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         80,
         24,
         [Event::ExpandAll, screenshot.event(), Event::QuitAccept],
     );
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     recorder.run()?;
     insta::assert_display_snapshot!(screenshot, @r###"
     "[File] [Edit] [Select] [View]                                                   "
@@ -720,6 +732,7 @@ fn test_no_abbreviate_short_unchanged_sections() -> eyre::Result<()> {
     let middle_length = num_context_lines * 2;
     let state = RecordState {
         is_read_only: false,
+        commits: Default::default(),
         files: vec![File {
             old_path: None,
             path: Cow::Borrowed(Path::new("foo")),
@@ -759,12 +772,12 @@ fn test_no_abbreviate_short_unchanged_sections() -> eyre::Result<()> {
     };
 
     let screenshot = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         80,
         20,
         [Event::ExpandAll, screenshot.event(), Event::QuitAccept],
     );
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     recorder.run()?;
     insta::assert_display_snapshot!(screenshot, @r###"
     "[File] [Edit] [Select] [View]                                                   "
@@ -796,6 +809,7 @@ fn test_no_abbreviate_short_unchanged_sections() -> eyre::Result<()> {
 fn test_record_binary_file() -> eyre::Result<()> {
     let state = RecordState {
         is_read_only: false,
+        commits: Default::default(),
         files: vec![File {
             old_path: None,
             path: Cow::Borrowed(Path::new("foo")),
@@ -809,7 +823,7 @@ fn test_record_binary_file() -> eyre::Result<()> {
     };
 
     let initial = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         80,
         6,
         [
@@ -819,7 +833,7 @@ fn test_record_binary_file() -> eyre::Result<()> {
             Event::QuitAccept,
         ],
     );
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     let state = recorder.run()?;
 
     insta::assert_display_snapshot!(initial, @r###"
@@ -834,6 +848,14 @@ fn test_record_binary_file() -> eyre::Result<()> {
     assert_debug_snapshot!(state, @r###"
     RecordState {
         is_read_only: false,
+        commits: [
+            Commit {
+                message: None,
+            },
+            Commit {
+                message: None,
+            },
+        ],
         files: [
             File {
                 old_path: None,
@@ -875,6 +897,7 @@ fn test_record_binary_file() -> eyre::Result<()> {
 fn test_record_binary_file_noop() -> eyre::Result<()> {
     let state = RecordState {
         is_read_only: false,
+        commits: Default::default(),
         files: vec![File {
             old_path: None,
             path: Cow::Borrowed(Path::new("foo")),
@@ -888,12 +911,12 @@ fn test_record_binary_file_noop() -> eyre::Result<()> {
     };
 
     let initial = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         80,
         6,
         [Event::ExpandAll, initial.event(), Event::QuitAccept],
     );
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     let state = recorder.run()?;
 
     insta::assert_display_snapshot!(initial, @r###"
@@ -908,6 +931,14 @@ fn test_record_binary_file_noop() -> eyre::Result<()> {
     assert_debug_snapshot!(state, @r###"
     RecordState {
         is_read_only: false,
+        commits: [
+            Commit {
+                message: None,
+            },
+            Commit {
+                message: None,
+            },
+        ],
         files: [
             File {
                 old_path: None,
@@ -995,7 +1026,7 @@ fn test_mouse_support() -> eyre::Result<()> {
     let initial = TestingScreenshot::default();
     let first_click = TestingScreenshot::default();
     let click_scrolled_item = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         80,
         7,
         [
@@ -1010,7 +1041,7 @@ fn test_mouse_support() -> eyre::Result<()> {
             Event::QuitAccept,
         ],
     );
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     recorder.run()?;
 
     insta::assert_display_snapshot!(initial, @r###"
@@ -1047,6 +1078,7 @@ fn test_mouse_support() -> eyre::Result<()> {
 fn test_mouse_click_checkbox() -> eyre::Result<()> {
     let state = RecordState {
         is_read_only: false,
+        commits: Default::default(),
         files: vec![
             File {
                 old_path: None,
@@ -1070,7 +1102,7 @@ fn test_mouse_click_checkbox() -> eyre::Result<()> {
     let initial = TestingScreenshot::default();
     let click_unselected_checkbox = TestingScreenshot::default();
     let click_selected_checkbox = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         80,
         4,
         [
@@ -1083,7 +1115,7 @@ fn test_mouse_click_checkbox() -> eyre::Result<()> {
             Event::QuitAccept,
         ],
     );
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     recorder.run()?;
 
     insta::assert_display_snapshot!(initial, @r###"
@@ -1112,6 +1144,7 @@ fn test_mouse_click_checkbox() -> eyre::Result<()> {
 fn test_mouse_click_wide_line() -> eyre::Result<()> {
     let state = RecordState {
         is_read_only: false,
+        commits: Default::default(),
         files: vec![File {
             old_path: None,
             path: Cow::Borrowed(Path::new("foo")),
@@ -1138,7 +1171,7 @@ fn test_mouse_click_wide_line() -> eyre::Result<()> {
     let click_line_section = TestingScreenshot::default();
     let click_file_mode_section = TestingScreenshot::default();
     let click_file = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         80,
         5,
         [
@@ -1155,7 +1188,7 @@ fn test_mouse_click_wide_line() -> eyre::Result<()> {
             Event::QuitAccept,
         ],
     );
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     recorder.run()?;
 
     insta::assert_display_snapshot!(initial, @r###"
@@ -1201,6 +1234,7 @@ fn test_mouse_click_wide_line() -> eyre::Result<()> {
 fn test_mouse_click_dialog_buttons() -> eyre::Result<()> {
     let state = RecordState {
         is_read_only: false,
+        commits: Default::default(),
         files: vec![File {
             old_path: None,
             path: Cow::Borrowed(Path::new("foo")),
@@ -1226,8 +1260,8 @@ fn test_mouse_click_dialog_buttons() -> eyre::Result<()> {
         Event::Click { row: 3, column: 65 },
         click_go_back.event(),
     ];
-    let event_source = EventSource::testing(80, 6, events);
-    let recorder = Recorder::new(state, event_source);
+    let mut input = TestingInput::new(80, 6, events);
+    let recorder = Recorder::new(state, &mut input);
     let result = recorder.run();
     insta::assert_debug_snapshot!(result, @r###"
     Err(
@@ -1252,6 +1286,7 @@ fn test_mouse_click_dialog_buttons() -> eyre::Result<()> {
 fn test_render_old_path() -> eyre::Result<()> {
     let state = RecordState {
         is_read_only: false,
+        commits: Default::default(),
         files: vec![File {
             old_path: Some(Cow::Borrowed(Path::new("foo"))),
             path: Cow::Borrowed(Path::new("bar")),
@@ -1260,12 +1295,12 @@ fn test_render_old_path() -> eyre::Result<()> {
         }],
     };
     let screenshot = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         80,
         6,
         [Event::ExpandAll, screenshot.event(), Event::QuitAccept],
     );
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     recorder.run()?;
 
     insta::assert_display_snapshot!(screenshot, @r###"
@@ -1287,7 +1322,7 @@ fn test_expand() -> eyre::Result<()> {
     let after_expand = TestingScreenshot::default();
     let after_collapse = TestingScreenshot::default();
     let after_expand_mouse = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         80,
         7,
         [
@@ -1302,7 +1337,7 @@ fn test_expand() -> eyre::Result<()> {
             Event::QuitAccept,
         ],
     );
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     recorder.run()?;
 
     insta::assert_display_snapshot!(initial, @r###"
@@ -1350,7 +1385,7 @@ fn test_expand_line_noop() -> eyre::Result<()> {
     let state = example_contents();
     let after_select = TestingScreenshot::default();
     let after_expand_noop = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         80,
         7,
         [
@@ -1363,7 +1398,7 @@ fn test_expand_line_noop() -> eyre::Result<()> {
             Event::QuitAccept,
         ],
     );
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     recorder.run()?;
 
     insta::assert_display_snapshot!(after_select, @r###"
@@ -1393,7 +1428,7 @@ fn test_expand_scroll_into_view() -> eyre::Result<()> {
     let state = example_contents();
     let before_expand = TestingScreenshot::default();
     let after_expand = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         80,
         7,
         [
@@ -1404,7 +1439,7 @@ fn test_expand_scroll_into_view() -> eyre::Result<()> {
             Event::QuitAccept,
         ],
     );
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     recorder.run()?;
 
     insta::assert_display_snapshot!(before_expand, @r###"
@@ -1434,7 +1469,7 @@ fn test_collapse_select_ancestor() -> eyre::Result<()> {
     let state = example_contents();
     let before_collapse = TestingScreenshot::default();
     let after_collapse = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         80,
         7,
         [
@@ -1446,7 +1481,7 @@ fn test_collapse_select_ancestor() -> eyre::Result<()> {
             Event::QuitAccept,
         ],
     );
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     recorder.run()?;
 
     insta::assert_display_snapshot!(before_collapse, @r###"
@@ -1478,7 +1513,7 @@ fn test_focus_inner() -> eyre::Result<()> {
     let inner1 = TestingScreenshot::default();
     let inner2 = TestingScreenshot::default();
     let inner3 = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         80,
         7,
         [
@@ -1492,7 +1527,7 @@ fn test_focus_inner() -> eyre::Result<()> {
             Event::QuitAccept,
         ],
     );
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     recorder.run()?;
 
     insta::assert_display_snapshot!(initial, @r###"
@@ -1543,7 +1578,7 @@ fn test_focus_outer() -> eyre::Result<()> {
     let outer2 = TestingScreenshot::default();
     let outer3 = TestingScreenshot::default();
     let outer4 = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         80,
         7,
         [
@@ -1564,7 +1599,7 @@ fn test_focus_outer() -> eyre::Result<()> {
             Event::QuitAccept,
         ],
     );
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     recorder.run()?;
 
     insta::assert_display_snapshot!(initial, @r###"
@@ -1625,7 +1660,7 @@ fn test_sticky_header_scroll() -> eyre::Result<()> {
     let scroll3 = TestingScreenshot::default();
     let scroll4 = TestingScreenshot::default();
     let scroll5 = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         80,
         7,
         [
@@ -1644,7 +1679,7 @@ fn test_sticky_header_scroll() -> eyre::Result<()> {
             Event::QuitAccept,
         ],
     );
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     recorder.run()?;
 
     insta::assert_display_snapshot!(initial, @r###"
@@ -1712,7 +1747,7 @@ fn test_sticky_header_click_expand() -> eyre::Result<()> {
     let after_scroll = TestingScreenshot::default();
     let after_click1 = TestingScreenshot::default();
     let after_click2 = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         80,
         7,
         [
@@ -1728,7 +1763,7 @@ fn test_sticky_header_click_expand() -> eyre::Result<()> {
             Event::QuitAccept,
         ],
     );
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     recorder.run()?;
 
     insta::assert_display_snapshot!(initial, @r###"
@@ -1776,7 +1811,7 @@ fn test_scroll_click_no_jump() -> eyre::Result<()> {
     let state = example_contents();
     let initial = TestingScreenshot::default();
     let after_click = TestingScreenshot::default();
-    let event_source = EventSource::testing(
+    let mut input = TestingInput::new(
         80,
         7,
         [
@@ -1787,7 +1822,7 @@ fn test_scroll_click_no_jump() -> eyre::Result<()> {
             Event::QuitAccept,
         ],
     );
-    let recorder = Recorder::new(state, event_source);
+    let recorder = Recorder::new(state, &mut input);
     recorder.run()?;
 
     insta::assert_display_snapshot!(initial, @r###"
@@ -1818,21 +1853,19 @@ fn test_menu_bar_scroll_into_view() -> eyre::Result<()> {
     let initial = TestingScreenshot::default();
     let after_scroll1 = TestingScreenshot::default();
     let after_scroll2 = TestingScreenshot::default();
-    let recorder = Recorder::new(
-        state,
-        EventSource::testing(
-            80,
-            6,
-            [
-                initial.event(),
-                Event::ScrollDown,
-                after_scroll1.event(),
-                Event::ScrollDown,
-                after_scroll2.event(),
-                Event::QuitAccept,
-            ],
-        ),
+    let mut input = TestingInput::new(
+        80,
+        6,
+        [
+            initial.event(),
+            Event::ScrollDown,
+            after_scroll1.event(),
+            Event::ScrollDown,
+            after_scroll2.event(),
+            Event::QuitAccept,
+        ],
     );
+    let recorder = Recorder::new(state, &mut input);
     recorder.run()?;
 
     insta::assert_display_snapshot!(initial, @r###"
@@ -1871,25 +1904,23 @@ fn test_expand_menu() -> eyre::Result<()> {
     let after_click_different = TestingScreenshot::default();
     let after_click_same = TestingScreenshot::default();
     let after_click_menu_bar = TestingScreenshot::default();
-    let recorder = Recorder::new(
-        state,
-        EventSource::testing(
-            80,
-            6,
-            [
-                initial.event(),
-                Event::Click { row: 0, column: 8 },
-                after_click.event(),
-                Event::Click { row: 0, column: 0 },
-                after_click_different.event(),
-                Event::Click { row: 0, column: 0 },
-                after_click_same.event(),
-                Event::Click { row: 0, column: 79 },
-                after_click_menu_bar.event(),
-                Event::QuitAccept,
-            ],
-        ),
+    let mut input = TestingInput::new(
+        80,
+        6,
+        [
+            initial.event(),
+            Event::Click { row: 0, column: 8 },
+            after_click.event(),
+            Event::Click { row: 0, column: 0 },
+            after_click_different.event(),
+            Event::Click { row: 0, column: 0 },
+            after_click_same.event(),
+            Event::Click { row: 0, column: 79 },
+            after_click_menu_bar.event(),
+            Event::QuitAccept,
+        ],
     );
+    let recorder = Recorder::new(state, &mut input);
     recorder.run()?;
 
     insta::assert_display_snapshot!(initial, @r###"
@@ -1902,11 +1933,11 @@ fn test_expand_menu() -> eyre::Result<()> {
     "###);
     insta::assert_display_snapshot!(after_click, @r###"
     "[File] [Edit] [Select] [View]                                                   "
-    "(~) foo[Toggle current (space)]                                              (+)"
-    "[×] baz[Toggle current and advance (enter)]                                  [+]"
+    "(~) foo[Edit message (e)]                                                    (+)"
+    "[×] baz[Toggle current (space)]                                              [+]"
+    "       [Toggle current and advance (enter)]                                     "
     "       [Invert all items (a)]                                                   "
     "       [Invert all items uniformly (A)]                                         "
-    "                                                                                "
     "###);
     insta::assert_display_snapshot!(after_click_different, @r###"
     "[File] [Edit] [Select] [View]                                                   "
@@ -1945,22 +1976,20 @@ fn test_read_only() -> eyre::Result<()> {
     let initial = TestingScreenshot::default();
     let after_toggle_all_ignored = TestingScreenshot::default();
     let after_toggle_all_uniform_ignored = TestingScreenshot::default();
-    let recorder = Recorder::new(
-        state,
-        EventSource::testing(
-            80,
-            23,
-            [
-                Event::ExpandAll,
-                initial.event(),
-                Event::ToggleAll,
-                after_toggle_all_ignored.event(),
-                Event::ToggleAllUniform,
-                after_toggle_all_uniform_ignored.event(),
-                Event::QuitAccept,
-            ],
-        ),
+    let mut input = TestingInput::new(
+        80,
+        23,
+        [
+            Event::ExpandAll,
+            initial.event(),
+            Event::ToggleAll,
+            after_toggle_all_ignored.event(),
+            Event::ToggleAllUniform,
+            after_toggle_all_uniform_ignored.event(),
+            Event::QuitAccept,
+        ],
     );
+    let recorder = Recorder::new(state, &mut input);
     let state = recorder.run()?;
 
     insta::assert_display_snapshot!(initial, @r###"
@@ -2042,6 +2071,14 @@ fn test_read_only() -> eyre::Result<()> {
     insta::assert_debug_snapshot!(state, @r###"
     RecordState {
         is_read_only: true,
+        commits: [
+            Commit {
+                message: None,
+            },
+            Commit {
+                message: None,
+            },
+        ],
         files: [
             File {
                 old_path: None,
@@ -2157,21 +2194,19 @@ fn test_toggle_unchanged_line() -> eyre::Result<()> {
     let state = example_contents();
     let initial = TestingScreenshot::default();
     let after_toggle = TestingScreenshot::default();
-    let recorder = Recorder::new(
-        state,
-        EventSource::testing(
-            80,
-            6,
-            [
-                Event::ExpandAll,
-                initial.event(),
-                Event::Click { row: 4, column: 10 },
-                Event::ToggleItem, // should not crash
-                after_toggle.event(),
-                Event::QuitAccept,
-            ],
-        ),
+    let mut input = TestingInput::new(
+        80,
+        6,
+        [
+            Event::ExpandAll,
+            initial.event(),
+            Event::Click { row: 4, column: 10 },
+            Event::ToggleItem, // should not crash
+            after_toggle.event(),
+            Event::QuitAccept,
+        ],
     );
+    let recorder = Recorder::new(state, &mut input);
     let state = recorder.run()?;
 
     insta::assert_display_snapshot!(initial, @r###"
@@ -2186,6 +2221,14 @@ fn test_toggle_unchanged_line() -> eyre::Result<()> {
     insta::assert_debug_snapshot!(state, @r###"
     RecordState {
         is_read_only: false,
+        commits: [
+            Commit {
+                message: None,
+            },
+            Commit {
+                message: None,
+            },
+        ],
         files: [
             File {
                 old_path: None,
@@ -2291,6 +2334,302 @@ fn test_toggle_unchanged_line() -> eyre::Result<()> {
             },
         ],
     }
+    "###);
+
+    Ok(())
+}
+
+#[test]
+fn test_max_file_view_width() -> eyre::Result<()> {
+    let state = RecordState {
+        is_read_only: false,
+        commits: Default::default(),
+        files: vec![File {
+            old_path: None,
+            path: Cow::Owned("very/".repeat(100).into()),
+            file_mode: None,
+            sections: vec![
+                Section::Unchanged {
+                    lines: vec![Cow::Owned("very ".repeat(100))],
+                },
+                Section::Changed {
+                    lines: vec![SectionChangedLine {
+                        is_checked: false,
+                        change_type: ChangeType::Added,
+                        line: Cow::Owned("very ".repeat(100)),
+                    }],
+                },
+            ],
+        }],
+    };
+    let initial_wide = TestingScreenshot::default();
+    let mut input = TestingInput::new(
+        250,
+        6,
+        [
+            Event::ExpandAll,
+            Event::ToggleCommitViewMode,
+            initial_wide.event(),
+            Event::QuitAccept,
+        ],
+    );
+    let recorder = Recorder::new(state.clone(), &mut input);
+    recorder.run()?;
+
+    insta::assert_display_snapshot!(initial_wide, @r###"
+    "[File] [Edit] [Select] [View]                                                                                                                                                                                                                             "
+    "( ) very/very/very/very/very/very/very/very/very/very/very/very/very/very/very/very/very/very/very/very/very/very/ve…(-) [ ] very/very/very/very/very/very/very/very/very/very/very/very/very/very/very/very/very/very/very/very/very/very/ve…[+]         "
+    "        1 very very very very very very very very very very very very very very very very very very very very very very…                                                                                                                                  "
+    "  [ ] Section 1/1                                                                                                    [-]                                                                                                                                  "
+    "    [ ] + very very very very very very very very very very very very very very very very very very very very very very…                                                                                                                                  "
+    "                                                                                                                                                                                                                                                          "
+    "###);
+
+    let initial_narrow = TestingScreenshot::default();
+    let mut input = TestingInput::new(
+        15,
+        6,
+        [Event::ExpandAll, initial_narrow.event(), Event::QuitAccept],
+    );
+    let recorder = Recorder::new(state, &mut input);
+    recorder.run()?;
+
+    insta::assert_display_snapshot!(initial_narrow, @r###"
+    "[File] [Edit] ["
+    "( ) very/ve…(-)"
+    "        1 very…"
+    "  [ ] Secti…[-]"
+    "    [ ] + very…"
+    "               "
+    "###);
+
+    Ok(())
+}
+
+#[test]
+fn test_commit_message_view() -> eyre::Result<()> {
+    let mut state = example_contents();
+    state.commits = vec![Commit {
+        message: Some("".to_string()),
+    }];
+
+    let initial = TestingScreenshot::default();
+    let after_edit = TestingScreenshot::default();
+    let after_scroll1 = TestingScreenshot::default();
+    let after_scroll2 = TestingScreenshot::default();
+    let mut input = TestingInput {
+        width: 80,
+        height: 24,
+        events: Box::new(
+            [
+                Event::ExpandAll,
+                initial.event(),
+                Event::EditCommitMessage,
+                after_edit.event(),
+                Event::ScrollDown,
+                after_scroll1.event(),
+                Event::ScrollDown,
+                Event::ScrollDown,
+                Event::ScrollDown,
+                after_scroll2.event(),
+                Event::QuitAccept,
+            ]
+            .into_iter(),
+        ),
+        commit_messages: ["Hello, world!".to_string()].into_iter().collect(),
+    };
+    let recorder = Recorder::new(state, &mut input);
+    recorder.run()?;
+
+    insta::assert_display_snapshot!(initial, @r###"
+    "[File] [Edit] [Select] [View]                                                   "
+    "                                                                                "
+    "[Edit message]  •  (no message)                                                 "
+    "                                                                                "
+    "(~) foo/bar                                                                  (-)"
+    "        ⋮                                                                       "
+    "       18 this is some text⏎                                                    "
+    "       19 this is some text⏎                                                    "
+    "       20 this is some text⏎                                                    "
+    "  [~] Section 1/1                                                            [-]"
+    "    [×] - before text 1⏎                                                        "
+    "    [×] - before text 2⏎                                                        "
+    "    [×] + after text 1⏎                                                         "
+    "    [ ] + after text 2⏎                                                         "
+    "       23 this is some trailing text⏎                                           "
+    "[×] baz                                                                      [-]"
+    "        1 Some leading text 1⏎                                                  "
+    "        2 Some leading text 2⏎                                                  "
+    "  [×] Section 1/1                                                            [-]"
+    "    [×] - before text 1⏎                                                        "
+    "    [×] - before text 2⏎                                                        "
+    "    [×] + after text 1⏎                                                         "
+    "    [×] + after text 2⏎                                                         "
+    "        5 this is some trailing text⏎                                           "
+    "###);
+    insta::assert_display_snapshot!(after_edit, @r###"
+    "[File] [Edit] [Select] [View]                                                   "
+    "                                                                                "
+    "[Edit message]  •  Hello, world!                                                "
+    "                                                                                "
+    "(~) foo/bar                                                                  (-)"
+    "        ⋮                                                                       "
+    "       18 this is some text⏎                                                    "
+    "       19 this is some text⏎                                                    "
+    "       20 this is some text⏎                                                    "
+    "  [~] Section 1/1                                                            [-]"
+    "    [×] - before text 1⏎                                                        "
+    "    [×] - before text 2⏎                                                        "
+    "    [×] + after text 1⏎                                                         "
+    "    [ ] + after text 2⏎                                                         "
+    "       23 this is some trailing text⏎                                           "
+    "[×] baz                                                                      [-]"
+    "        1 Some leading text 1⏎                                                  "
+    "        2 Some leading text 2⏎                                                  "
+    "  [×] Section 1/1                                                            [-]"
+    "    [×] - before text 1⏎                                                        "
+    "    [×] - before text 2⏎                                                        "
+    "    [×] + after text 1⏎                                                         "
+    "    [×] + after text 2⏎                                                         "
+    "        5 this is some trailing text⏎                                           "
+    "###);
+    insta::assert_display_snapshot!(after_scroll1, @r###"
+    "[File] [Edit] [Select] [View]                                                   "
+    "[Edit message]  •  Hello, world!                                                "
+    "                                                                                "
+    "(~) foo/bar                                                                  (-)"
+    "        ⋮                                                                       "
+    "       18 this is some text⏎                                                    "
+    "       19 this is some text⏎                                                    "
+    "       20 this is some text⏎                                                    "
+    "  [~] Section 1/1                                                            [-]"
+    "    [×] - before text 1⏎                                                        "
+    "    [×] - before text 2⏎                                                        "
+    "    [×] + after text 1⏎                                                         "
+    "    [ ] + after text 2⏎                                                         "
+    "       23 this is some trailing text⏎                                           "
+    "[×] baz                                                                      [-]"
+    "        1 Some leading text 1⏎                                                  "
+    "        2 Some leading text 2⏎                                                  "
+    "  [×] Section 1/1                                                            [-]"
+    "    [×] - before text 1⏎                                                        "
+    "    [×] - before text 2⏎                                                        "
+    "    [×] + after text 1⏎                                                         "
+    "    [×] + after text 2⏎                                                         "
+    "        5 this is some trailing text⏎                                           "
+    "                                                                                "
+    "###);
+    insta::assert_display_snapshot!(after_scroll2, @r###"
+    "[File] [Edit] [Select] [View]                                                   "
+    "(~) foo/bar                                                                  (-)"
+    "       18 this is some text⏎                                                    "
+    "       19 this is some text⏎                                                    "
+    "       20 this is some text⏎                                                    "
+    "  [~] Section 1/1                                                            [-]"
+    "    [×] - before text 1⏎                                                        "
+    "    [×] - before text 2⏎                                                        "
+    "    [×] + after text 1⏎                                                         "
+    "    [ ] + after text 2⏎                                                         "
+    "       23 this is some trailing text⏎                                           "
+    "[×] baz                                                                      [-]"
+    "        1 Some leading text 1⏎                                                  "
+    "        2 Some leading text 2⏎                                                  "
+    "  [×] Section 1/1                                                            [-]"
+    "    [×] - before text 1⏎                                                        "
+    "    [×] - before text 2⏎                                                        "
+    "    [×] + after text 1⏎                                                         "
+    "    [×] + after text 2⏎                                                         "
+    "        5 this is some trailing text⏎                                           "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "###);
+
+    Ok(())
+}
+
+#[test]
+fn test_quit_dialog_when_commit_message_provided() -> eyre::Result<()> {
+    let mut state = example_contents();
+    state.commits = vec![Commit {
+        message: Some("hello".to_string()),
+    }];
+
+    let changed_message_and_files = TestingScreenshot::default();
+    let changed_message_only = TestingScreenshot::default();
+    let mut input = TestingInput {
+        width: 80,
+        height: 24,
+        events: Box::new(
+            [
+                Event::QuitInterrupt,
+                changed_message_and_files.event(),
+                Event::QuitCancel,
+                Event::ToggleAllUniform, // toggle all
+                Event::ToggleAllUniform, // toggle none
+                Event::QuitInterrupt,
+                changed_message_only.event(),
+                Event::QuitInterrupt,
+            ]
+            .into_iter(),
+        ),
+        commit_messages: [].into_iter().collect(),
+    };
+    let recorder = Recorder::new(state, &mut input);
+    assert_matches!(recorder.run(), Err(RecordError::Cancelled));
+
+    insta::assert_display_snapshot!(changed_message_and_files, @r###"
+    "[File] [Edit] [Select] [View]                                                   "
+    "                                                                                "
+    "[Edit message]  •  hello                                                        "
+    "                                                                                "
+    "(~) foo/bar                                                                  (+)"
+    "[×] baz                                                                      [+]"
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "  ┌Quit─────────────────────────────────────────────────────────────────────┐   "
+    "  │You have changes to 1 message and 2 files. Are you sure you want to quit?│   "
+    "  │                                                                         │   "
+    "  └─────────────────────────────────────────────────────────[Go Back]─(Quit)┘   "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "###);
+    insta::assert_display_snapshot!(changed_message_only, @r###"
+    "[File] [Edit] [Select] [View]                                                   "
+    "                                                                                "
+    "[Edit message]  •  hello                                                        "
+    "                                                                                "
+    "( ) foo/bar                                                                  (+)"
+    "[ ] baz                                                                      [+]"
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "        ┌Quit─────────────────────────────────────────────────────────┐         "
+    "        │You have changes to 1 message. Are you sure you want to quit?│         "
+    "        │                                                             │         "
+    "        └─────────────────────────────────────────────[Go Back]─(Quit)┘         "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
+    "                                                                                "
     "###);
 
     Ok(())

@@ -17,10 +17,10 @@ mod util;
 pub mod consts;
 pub mod helpers;
 pub use types::{
-    ChangeType, File, FileMode, RecordError, RecordState, Section, SectionChangedLine,
+    ChangeType, Commit, File, FileMode, RecordError, RecordState, Section, SectionChangedLine,
     SelectedContents,
 };
-pub use ui::{Event, EventSource, Recorder, TestingScreenshot};
+pub use ui::{Event, RecordInput, Recorder, TerminalKind, TestingScreenshot};
 
 #[cfg(feature = "scm-diff-editor")]
 pub mod scm_diff_editor;

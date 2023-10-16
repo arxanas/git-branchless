@@ -13,6 +13,7 @@ eden_dag = { workspace = true }
 eyre = { workspace = true }
 git-branchless-invoke = { workspace = true }
 git-branchless-opts = { workspace = true }
+git-branchless-reword = { workspace = true }
 itertools = { workspace = true }
 lib = { workspace = true }
 rayon = { workspace = true }

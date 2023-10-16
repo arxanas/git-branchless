@@ -22,7 +22,8 @@ use clap::Parser;
 use sha1::Digest;
 use walkdir::WalkDir;
 
-use crate::{EventSource, File, FileMode, RecordError, RecordState, Recorder, SelectedContents};
+use crate::helpers::CrosstermInput;
+use crate::{File, FileMode, RecordError, RecordState, Recorder, SelectedContents};
 
 #[allow(missing_docs)]
 #[derive(Debug)]
@@ -812,6 +813,7 @@ mod render {
 fn print_dry_run(write_root: &Path, state: RecordState) {
     let RecordState {
         is_read_only: _,
+        commits: _,
         files,
     } = state;
     for file in files {
@@ -849,6 +851,7 @@ fn apply_changes(
 ) -> Result<()> {
     let RecordState {
         is_read_only,
+        commits: _,
         files,
     } = state;
     if is_read_only {
@@ -1026,10 +1029,11 @@ pub fn scm_diff_editor_main(opts: Opts) -> Result<()> {
     let (files, write_root) = process_opts(&filesystem, &opts)?;
     let state = RecordState {
         is_read_only: opts.read_only,
+        commits: Default::default(),
         files,
     };
-    let event_source = EventSource::Crossterm;
-    let recorder = Recorder::new(state, event_source);
+    let mut input = CrosstermInput;
+    let recorder = Recorder::new(state, &mut input);
     match recorder.run() {
         Ok(state) => {
             if opts.dry_run {
@@ -1233,6 +1237,7 @@ qux2
             &write_root,
             RecordState {
                 is_read_only: false,
+                commits: Default::default(),
                 files,
             },
         )?;
@@ -1303,6 +1308,7 @@ qux2
             &write_root,
             RecordState {
                 is_read_only: false,
+                commits: Default::default(),
                 files,
             },
         )?;
@@ -1385,6 +1391,7 @@ qux2
             &write_root,
             RecordState {
                 is_read_only: false,
+                commits: Default::default(),
                 files,
             },
         )?;
@@ -1457,6 +1464,7 @@ qux2
             &write_root,
             RecordState {
                 is_read_only: false,
+                commits: Default::default(),
                 files,
             },
         )?;
@@ -1541,6 +1549,7 @@ qux2
             &write_root,
             RecordState {
                 is_read_only: false,
+                commits: Default::default(),
                 files,
             },
         )?;
@@ -1604,6 +1613,7 @@ qux2
             &write_root,
             RecordState {
                 is_read_only: false,
+                commits: Default::default(),
                 files,
             },
         )?;
@@ -1730,6 +1740,7 @@ Hello world 4
             &write_root,
             RecordState {
                 is_read_only: false,
+                commits: Default::default(),
                 files,
             },
         )?;
@@ -1843,6 +1854,7 @@ Hello world 2
             &write_root,
             RecordState {
                 is_read_only: false,
+                commits: Default::default(),
                 files: files.clone(),
             },
         )?;
@@ -1862,6 +1874,7 @@ Hello world 2
             &write_root,
             RecordState {
                 is_read_only: false,
+                commits: Default::default(),
                 files: files.clone(),
             },
         )?;
@@ -1895,6 +1908,7 @@ Hello world 2
             &write_root,
             RecordState {
                 is_read_only: false,
+                commits: Default::default(),
                 files: files.clone(),
             },
         )?;

@@ -3,7 +3,7 @@
 
 use std::fs::File;
 
-use scm_record::{EventSource, RecordError, RecordState, Recorder, SelectedContents};
+use scm_record::{helpers::CrosstermInput, RecordError, RecordState, Recorder, SelectedContents};
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -12,12 +12,14 @@ fn main() {
     let record_state: RecordState =
         serde_json::from_reader(json_file).expect("deserializing state");
 
-    let recorder = Recorder::new(record_state, EventSource::Crossterm);
+    let mut input = CrosstermInput;
+    let recorder = Recorder::new(record_state, &mut input);
     let result = recorder.run();
     match result {
         Ok(result) => {
             let RecordState {
                 is_read_only: _,
+                commits: _,
                 files,
             } = result;
             for file in files {

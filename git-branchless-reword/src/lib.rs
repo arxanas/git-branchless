@@ -58,6 +58,22 @@ pub enum InitialCommitMessages {
     Messages(Vec<String>),
 }
 
+/// Open the user's configured commit editor seeded with the provided message.
+#[instrument]
+pub fn edit_message(git_run_info: &GitRunInfo, repo: &Repo, message: &str) -> eyre::Result<String> {
+    let mut editor = Editor::new();
+    let (editor, editor_program) = match get_editor(git_run_info, repo)? {
+        Some(editor_program) => (editor.executable(&editor_program), editor_program),
+        None => (&mut editor, "<default>".into()),
+    };
+    let result = editor
+        .require_save(false)
+        .edit(message)
+        .with_context(|| format!("Invoking editor: '{}'", editor_program.to_string_lossy()))?
+        .expect("`Editor::edit` should not return `None` when `require_save` is `false`");
+    Ok(result)
+}
+
 /// Reword a commit and restack its descendants.
 #[instrument]
 pub fn reword(
@@ -152,25 +168,7 @@ pub fn reword(
         }
     };
 
-    #[instrument]
-    fn edit_message_fn_inner(
-        git_run_info: &GitRunInfo,
-        repo: &Repo,
-        message: &str,
-    ) -> eyre::Result<String> {
-        let mut editor = Editor::new();
-        let (editor, editor_program) = match get_editor(git_run_info, repo)? {
-            Some(editor_program) => (editor.executable(&editor_program), editor_program),
-            None => (&mut editor, "<default>".into()),
-        };
-        let result = editor
-            .require_save(false)
-            .edit(message)
-            .with_context(|| format!("Invoking editor: '{}'", editor_program.to_string_lossy()))?
-            .expect("`Editor::edit` should not return `None` when `require_save` is `false`");
-        Ok(result)
-    }
-    let edit_message_fn = |message: &str| edit_message_fn_inner(git_run_info, &repo, message);
+    let edit_message_fn = |message: &str| edit_message(git_run_info, &repo, message);
 
     let messages = match prepare_messages(&repo, messages, &commits, edit_message_fn)? {
         PrepareMessagesResult::Succeeded { messages } => messages,

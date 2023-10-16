@@ -10,8 +10,7 @@ use std::fmt::{Debug, Display};
 use std::hash::Hash;
 use std::path::Path;
 use std::rc::Rc;
-use std::time::Duration;
-use std::{fs, io, mem, panic};
+use std::{fs, io, iter, mem, panic};
 
 use crossterm::event::{
     DisableMouseCapture, EnableMouseCapture, KeyCode, KeyEvent, KeyEventKind, KeyModifiers,
@@ -31,26 +30,31 @@ use tracing::warn;
 use unicode_width::UnicodeWidthStr;
 
 use crate::consts::{DUMP_UI_STATE_FILENAME, ENV_VAR_DEBUG_UI, ENV_VAR_DUMP_UI_STATE};
-use crate::render::{centered_rect, Component, DrawnRect, DrawnRects, Rect, RectSize, Viewport};
-use crate::types::{ChangeType, RecordError, RecordState, Tristate};
-use crate::util::UsizeExt;
+use crate::render::{
+    centered_rect, Component, DrawnRect, DrawnRects, Mask, Rect, RectSize, Viewport,
+};
+use crate::types::{ChangeType, Commit, RecordError, RecordState, Tristate};
+use crate::util::{IsizeExt, UsizeExt};
 use crate::{File, Section, SectionChangedLine};
 
 const NUM_CONTEXT_LINES: usize = 3;
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 struct FileKey {
+    commit_idx: usize,
     file_idx: usize,
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 struct SectionKey {
+    commit_idx: usize,
     file_idx: usize,
     section_idx: usize,
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 struct LineKey {
+    commit_idx: usize,
     file_idx: usize,
     section_idx: usize,
     line_idx: usize,
@@ -112,6 +116,7 @@ pub enum Event {
     QuitCancel,
     QuitInterrupt,
     TakeScreenshot(TestingScreenshot),
+    Redraw,
     EnsureSelectionInViewport,
     ScrollUp,
     ScrollDown,
@@ -130,6 +135,8 @@ pub enum Event {
     ExpandItem,
     ExpandAll,
     Click { row: usize, column: usize },
+    ToggleCommitViewMode, // no key binding currently
+    EditCommitMessage,
 }
 
 impl From<crossterm::event::Event> for Event {
@@ -290,6 +297,13 @@ impl From<crossterm::event::Event> for Event {
                 state: _,
             }) => Self::ExpandAll,
 
+            Event::Key(KeyEvent {
+                code: KeyCode::Char('e'),
+                modifiers: KeyModifiers::NONE,
+                kind: KeyEventKind::Press,
+                state: _event,
+            }) => Self::EditCommitMessage,
+
             Event::Mouse(MouseEvent {
                 kind: MouseEventKind::Down(MouseButton::Left),
                 column,
@@ -305,60 +319,35 @@ impl From<crossterm::event::Event> for Event {
     }
 }
 
-/// The source to read user events from.
-pub enum EventSource {
-    /// Read from the terminal with `crossterm`.
+/// The terminal backend to use.
+pub enum TerminalKind {
+    /// Use the `CrosstermBackend` backend.
     Crossterm,
 
-    /// Read from the provided sequence of events.
+    /// Use the `TestingBackend` backend.
     Testing {
-        /// The width of the virtual terminal in columns.
+        /// The width of the virtual terminal.
         width: usize,
 
-        /// The height of the virtual terminal in columns.
+        /// The height of the virtual terminal.
         height: usize,
-
-        /// The sequence of events to emit.
-        events: Box<dyn Iterator<Item = Event>>,
     },
 }
 
-impl EventSource {
-    /// Helper function to construct an `EventSource::Testing`.
-    pub fn testing(
-        width: usize,
-        height: usize,
-        events: impl IntoIterator<Item = Event> + 'static,
-    ) -> Self {
-        Self::Testing {
-            width,
-            height,
-            events: Box::new(events.into_iter()),
-        }
-    }
+/// Get user input.
+pub trait RecordInput {
+    /// Return the kind of terminal to use.
+    fn terminal_kind(&self) -> TerminalKind;
 
-    fn next_events(&mut self) -> Result<Vec<Event>, RecordError> {
-        match self {
-            EventSource::Crossterm => {
-                // Ensure we block for at least one event.
-                let first_event = crossterm::event::read().map_err(RecordError::ReadInput)?;
-                let mut events = vec![first_event.into()];
-                // Some events, like scrolling, are generated more quickly than
-                // we can render the UI. In those cases, batch up all available
-                // events and process them before the next render.
-                while crossterm::event::poll(Duration::ZERO).map_err(RecordError::ReadInput)? {
-                    let event = crossterm::event::read().map_err(RecordError::ReadInput)?;
-                    events.push(event.into());
-                }
-                Ok(events)
-            }
-            EventSource::Testing {
-                width: _,
-                height: _,
-                events,
-            } => Ok(vec![events.next().unwrap_or(Event::None)]),
-        }
-    }
+    /// Get all available user events. This should block until there is at least
+    /// one available event.
+    fn next_events(&mut self) -> Result<Vec<Event>, RecordError>;
+
+    /// Open a commit editor and interactively edit the given message.
+    ///
+    /// This function will only be invoked if one of the provided `Commit`s had
+    /// a non-`None` commit message.
+    fn edit_commit_message(&mut self, message: &str) -> Result<String, RecordError>;
 }
 
 /// Copied from internal implementation of `tui`.
@@ -398,6 +387,7 @@ enum StateUpdate {
     QuitAccept,
     QuitCancel,
     TakeScreenshot(TestingScreenshot),
+    Redraw,
     EnsureSelectionInViewport,
     ScrollTo(isize),
     SelectItem {
@@ -416,32 +406,54 @@ enum StateUpdate {
         menu_idx: usize,
     },
     ClickMenuItem(Event),
+    ToggleCommitViewMode,
+    EditCommitMessage {
+        commit_idx: usize,
+    },
+}
+
+#[derive(Clone, Copy, Debug)]
+enum CommitViewMode {
+    Inline,
+    Adjacent,
 }
 
 /// UI component to record the user's changes.
-pub struct Recorder<'a> {
-    state: RecordState<'a>,
-    event_source: EventSource,
+pub struct Recorder<'state, 'input> {
+    state: RecordState<'state>,
+    input: &'input mut dyn RecordInput,
     pending_events: Vec<Event>,
     use_unicode: bool,
+    commit_view_mode: CommitViewMode,
     expanded_items: HashSet<SelectionKey>,
     expanded_menu_idx: Option<usize>,
     selection_key: SelectionKey,
+    focused_commit_idx: usize,
     quit_dialog: Option<QuitDialog>,
     scroll_offset_y: isize,
 }
 
-impl<'a> Recorder<'a> {
+impl<'state, 'input> Recorder<'state, 'input> {
     /// Constructor.
-    pub fn new(state: RecordState<'a>, event_source: EventSource) -> Self {
+    pub fn new(mut state: RecordState<'state>, input: &'input mut dyn RecordInput) -> Self {
+        // Ensure that there are at least two commits.
+        state.commits.extend(
+            iter::repeat_with(Commit::default).take(2_usize.saturating_sub(state.commits.len())),
+        );
+        if state.commits.len() > 2 {
+            unimplemented!("more than two commits");
+        }
+
         let mut recorder = Self {
             state,
-            event_source,
+            input,
             pending_events: Default::default(),
             use_unicode: true,
+            commit_view_mode: CommitViewMode::Inline,
             expanded_items: Default::default(),
             expanded_menu_idx: Default::default(),
             selection_key: SelectionKey::None,
+            focused_commit_idx: 0,
             quit_dialog: None,
             scroll_offset_y: 0,
         };
@@ -451,7 +463,7 @@ impl<'a> Recorder<'a> {
 
     /// Run the terminal user interface and have the user interactively select
     /// changes.
-    pub fn run(self) -> Result<RecordState<'a>, RecordError> {
+    pub fn run(self) -> Result<RecordState<'state>, RecordError> {
         #[cfg(feature = "debug")]
         if std::env::var_os(ENV_VAR_DUMP_UI_STATE).is_some() {
             let ui_state =
@@ -459,29 +471,20 @@ impl<'a> Recorder<'a> {
             fs::write(DUMP_UI_STATE_FILENAME, ui_state).map_err(RecordError::WriteFile)?;
         }
 
-        match self.event_source {
-            EventSource::Crossterm => self.run_crossterm(),
-            EventSource::Testing {
-                width,
-                height,
-                events: _,
-            } => self.run_testing(width, height),
+        match self.input.terminal_kind() {
+            TerminalKind::Crossterm => self.run_crossterm(),
+            TerminalKind::Testing { width, height } => self.run_testing(width, height),
         }
     }
 
     /// Run the recorder UI using `crossterm` as the backend connected to stdout.
-    fn run_crossterm(self) -> Result<RecordState<'a>, RecordError> {
-        let mut stdout = io::stdout();
-        if !is_raw_mode_enabled().map_err(RecordError::SetUpTerminal)? {
-            enable_raw_mode().map_err(RecordError::SetUpTerminal)?;
-            crossterm::execute!(stdout, EnterAlternateScreen, EnableMouseCapture)
-                .map_err(RecordError::SetUpTerminal)?;
-        }
+    fn run_crossterm(self) -> Result<RecordState<'state>, RecordError> {
+        Self::set_up_crossterm()?;
         Self::install_panic_hook();
-        let backend = CrosstermBackend::new(stdout);
+        let backend = CrosstermBackend::new(io::stdout());
         let mut term = Terminal::new(backend).map_err(RecordError::SetUpTerminal)?;
         let result = self.run_inner(&mut term);
-        Self::clean_up_crossterm().map_err(RecordError::CleanUpTerminal)?;
+        Self::clean_up_crossterm()?;
         result
     }
 
@@ -503,15 +506,25 @@ impl<'a> Recorder<'a> {
         }));
     }
 
-    fn clean_up_crossterm() -> io::Result<()> {
-        if is_raw_mode_enabled()? {
-            disable_raw_mode()?;
-            crossterm::execute!(io::stdout(), LeaveAlternateScreen, DisableMouseCapture)?;
+    fn set_up_crossterm() -> Result<(), RecordError> {
+        if !is_raw_mode_enabled().map_err(RecordError::SetUpTerminal)? {
+            enable_raw_mode().map_err(RecordError::SetUpTerminal)?;
+            crossterm::execute!(io::stdout(), EnterAlternateScreen, EnableMouseCapture)
+                .map_err(RecordError::SetUpTerminal)?;
         }
         Ok(())
     }
 
-    fn run_testing(self, width: usize, height: usize) -> Result<RecordState<'a>, RecordError> {
+    fn clean_up_crossterm() -> Result<(), RecordError> {
+        if is_raw_mode_enabled().map_err(RecordError::CleanUpTerminal)? {
+            disable_raw_mode().map_err(RecordError::CleanUpTerminal)?;
+            crossterm::execute!(io::stdout(), LeaveAlternateScreen, DisableMouseCapture)
+                .map_err(RecordError::CleanUpTerminal)?;
+        }
+        Ok(())
+    }
+
+    fn run_testing(self, width: usize, height: usize) -> Result<RecordState<'state>, RecordError> {
         let backend = TestBackend::new(width.clamp_into_u16(), height.clamp_into_u16());
         let mut term = Terminal::new(backend).map_err(RecordError::SetUpTerminal)?;
         self.run_inner(&mut term)
@@ -520,7 +533,7 @@ impl<'a> Recorder<'a> {
     fn run_inner(
         mut self,
         term: &mut Terminal<impl Backend + Any>,
-    ) -> Result<RecordState<'a>, RecordError> {
+    ) -> Result<RecordState<'state>, RecordError> {
         self.selection_key = self.first_selection_key();
         let debug = if cfg!(feature = "debug") {
             std::env::var_os(ENV_VAR_DEBUG_UI).is_some()
@@ -553,12 +566,6 @@ impl<'a> Recorder<'a> {
                     scroll_offset_y: self.scroll_offset_y,
                     selection_key: self.selection_key,
                     selection_key_y: self.selection_key_y(&drawn_rects, self.selection_key),
-                    app_drawn_vs_expected_height: {
-                        let DrawnRect { rect, timestamp: _ } = drawn_rects[&ComponentId::App];
-                        let drawn_height = rect.height;
-                        let expected_height = app.height();
-                        (drawn_height, expected_height)
-                    },
                     drawn_rects: drawn_rects.clone().into_iter().collect(),
                 };
                 let debug_app = AppView {
@@ -577,7 +584,7 @@ impl<'a> Recorder<'a> {
             }
 
             let events = if self.pending_events.is_empty() {
-                self.event_source.next_events()?
+                self.input.next_events()?
             } else {
                 // FIXME: the pending events should be applied without redrawing
                 // the screen, as otherwise there may be a flash of content
@@ -598,6 +605,9 @@ impl<'a> Recorder<'a> {
                             .downcast_ref::<TestBackend>()
                             .expect("TakeScreenshot event generated for non-testing backend");
                         screenshot.set(buffer_view(test_backend.buffer()));
+                    }
+                    StateUpdate::Redraw => {
+                        term.clear().map_err(RecordError::RenderFrame)?;
                     }
                     StateUpdate::EnsureSelectionInViewport => {
                         self.scroll_offset_y =
@@ -654,6 +664,16 @@ impl<'a> Recorder<'a> {
                     StateUpdate::ClickMenuItem(event) => {
                         self.click_menu_item(event);
                     }
+                    StateUpdate::ToggleCommitViewMode => {
+                        self.commit_view_mode = match self.commit_view_mode {
+                            CommitViewMode::Inline => CommitViewMode::Adjacent,
+                            CommitViewMode::Adjacent => CommitViewMode::Inline,
+                        };
+                    }
+                    StateUpdate::EditCommitMessage { commit_idx } => {
+                        self.pending_events.push(Event::Redraw);
+                        self.edit_commit_message(commit_idx)?;
+                    }
                 }
             }
         }
@@ -680,6 +700,10 @@ impl<'a> Recorder<'a> {
                 Menu {
                     label: Cow::Borrowed("Edit"),
                     items: vec![
+                        MenuItem {
+                            label: Cow::Borrowed("Edit message (e)"),
+                            event: Event::EditCommitMessage,
+                        },
                         MenuItem {
                             label: Cow::Borrowed("Toggle current (space)"),
                             event: Event::ToggleItem,
@@ -762,19 +786,66 @@ impl<'a> Recorder<'a> {
     }
 
     fn make_app(
-        &'a self,
+        &'state self,
         menu_bar: MenuBar<'static>,
         debug_info: Option<AppDebugInfo>,
-    ) -> AppView<'a> {
+    ) -> AppView<'state> {
         let RecordState {
             is_read_only,
+            commits,
             files,
         } = &self.state;
-        let file_views: Vec<FileView> = files
+        let commit_views = match self.commit_view_mode {
+            CommitViewMode::Inline => {
+                vec![CommitView {
+                    debug_info: None,
+                    commit_message_view: CommitMessageView {
+                        commit_idx: self.focused_commit_idx,
+                        commit: &commits[self.focused_commit_idx],
+                    },
+                    file_views: self.make_file_views(
+                        self.focused_commit_idx,
+                        files,
+                        &debug_info,
+                        *is_read_only,
+                    ),
+                }]
+            }
+
+            CommitViewMode::Adjacent => commits
+                .iter()
+                .enumerate()
+                .map(|(commit_idx, commit)| CommitView {
+                    debug_info: None,
+                    commit_message_view: CommitMessageView { commit_idx, commit },
+                    file_views: self.make_file_views(commit_idx, files, &debug_info, *is_read_only),
+                })
+                .collect(),
+        };
+        AppView {
+            debug_info: None,
+            menu_bar,
+            commit_view_mode: self.commit_view_mode,
+            commit_views,
+            quit_dialog: self.quit_dialog.clone(),
+        }
+    }
+
+    fn make_file_views(
+        &'state self,
+        commit_idx: usize,
+        files: &'state [File<'state>],
+        debug_info: &Option<AppDebugInfo>,
+        is_read_only: bool,
+    ) -> Vec<FileView<'state>> {
+        files
             .iter()
             .enumerate()
             .map(|(file_idx, file)| {
-                let file_key = FileKey { file_idx };
+                let file_key = FileKey {
+                    commit_idx,
+                    file_idx,
+                };
                 let file_toggled = self.file_tristate(file_key).unwrap();
                 let file_expanded = self.file_expanded(file_key);
                 let is_focused = match self.selection_key {
@@ -790,7 +861,7 @@ impl<'a> Recorder<'a> {
                         icon_style: TristateIconStyle::Check,
                         tristate: file_toggled,
                         is_focused,
-                        is_read_only: *is_read_only,
+                        is_read_only,
                     },
                     expand_box: TristateBox {
                         use_unicode: self.use_unicode,
@@ -816,6 +887,7 @@ impl<'a> Recorder<'a> {
                         let mut editable_section_num = 0;
                         for (section_idx, section) in file.sections.iter().enumerate() {
                             let section_key = SectionKey {
+                                commit_idx,
                                 file_idx,
                                 section_idx,
                             };
@@ -837,11 +909,11 @@ impl<'a> Recorder<'a> {
                             }
                             section_views.push(SectionView {
                                 use_unicode: self.use_unicode,
-                                is_read_only: *is_read_only,
+                                is_read_only,
                                 section_key,
                                 toggle_box: TristateBox {
                                     use_unicode: self.use_unicode,
-                                    is_read_only: *is_read_only,
+                                    is_read_only,
                                     id: ComponentId::ToggleBox(SelectionKey::Section(section_key)),
                                     tristate: section_toggled,
                                     icon_style: TristateIconStyle::Check,
@@ -865,11 +937,13 @@ impl<'a> Recorder<'a> {
                                         }
                                     }
                                     SelectionKey::Line(LineKey {
+                                        commit_idx,
                                         file_idx,
                                         section_idx,
                                         line_idx,
                                     }) => {
                                         let selected_section_key = SectionKey {
+                                            commit_idx,
                                             file_idx,
                                             section_idx,
                                         };
@@ -903,13 +977,7 @@ impl<'a> Recorder<'a> {
                     },
                 }
             })
-            .collect();
-        AppView {
-            debug_info: None,
-            menu_bar,
-            file_views,
-            quit_dialog: self.quit_dialog.clone(),
-        }
+            .collect()
     }
 
     fn handle_event(
@@ -921,6 +989,7 @@ impl<'a> Recorder<'a> {
     ) -> Result<StateUpdate, RecordError> {
         let state_update = match (&self.quit_dialog, event) {
             (_, Event::None) => StateUpdate::None,
+            (_, Event::Redraw) => StateUpdate::Redraw,
             (_, Event::EnsureSelectionInViewport) => StateUpdate::EnsureSelectionInViewport,
 
             // Confirm the changes.
@@ -930,9 +999,11 @@ impl<'a> Recorder<'a> {
 
             // Render quit dialog if the user made changes.
             (None, Event::QuitCancel | Event::QuitInterrupt) => {
+                let num_commit_messages = self.num_user_commit_messages()?;
                 let num_changed_files = self.num_user_file_changes()?;
-                if num_changed_files > 0 {
+                if num_commit_messages > 0 || num_changed_files > 0 {
                     StateUpdate::SetQuitDialog(Some(QuitDialog {
+                        num_commit_messages,
                         num_changed_files,
                         focused_button: QuitDialogButtonId::Quit,
                     }))
@@ -961,6 +1032,7 @@ impl<'a> Recorder<'a> {
             // Press the appropriate dialog button.
             (Some(quit_dialog), Event::ToggleItem | Event::ToggleItemAndAdvance) => {
                 let QuitDialog {
+                    num_commit_messages: _,
                     num_changed_files: _,
                     focused_button,
                 } = quit_dialog;
@@ -984,7 +1056,8 @@ impl<'a> Recorder<'a> {
                 | Event::ToggleAll
                 | Event::ToggleAllUniform
                 | Event::ExpandItem
-                | Event::ExpandAll,
+                | Event::ExpandAll
+                | Event::EditCommitMessage,
             ) => StateUpdate::None,
 
             (Some(_) | None, Event::TakeScreenshot(screenshot)) => {
@@ -1051,30 +1124,59 @@ impl<'a> Recorder<'a> {
             (None, Event::ToggleAllUniform) => StateUpdate::ToggleAllUniform,
             (None, Event::ExpandItem) => StateUpdate::ToggleExpandItem(self.selection_key),
             (None, Event::ExpandAll) => StateUpdate::ToggleExpandAll,
+            (None, Event::EditCommitMessage) => StateUpdate::EditCommitMessage {
+                commit_idx: self.focused_commit_idx,
+            },
 
             (_, Event::Click { row, column }) => {
                 let component_id = self.find_component_at(drawn_rects, row, column);
                 self.click_component(menu_bar, component_id)
             }
+            (_, Event::ToggleCommitViewMode) => StateUpdate::ToggleCommitViewMode,
         };
         Ok(state_update)
     }
 
     fn first_selection_key(&self) -> SelectionKey {
         match self.state.files.iter().enumerate().next() {
-            Some((file_idx, _)) => SelectionKey::File(FileKey { file_idx }),
+            Some((file_idx, _)) => SelectionKey::File(FileKey {
+                commit_idx: self.focused_commit_idx,
+                file_idx,
+            }),
             None => SelectionKey::None,
         }
+    }
+
+    fn num_user_commit_messages(&self) -> Result<usize, RecordError> {
+        let RecordState {
+            files: _,
+            commits,
+            is_read_only: _,
+        } = &self.state;
+        Ok(commits
+            .iter()
+            .map(|commit| {
+                let Commit { message } = commit;
+                match message {
+                    Some(message) if !message.is_empty() => 1,
+                    _ => 0,
+                }
+            })
+            .sum())
     }
 
     fn num_user_file_changes(&self) -> Result<usize, RecordError> {
         let RecordState {
             files,
+            commits: _,
             is_read_only: _,
         } = &self.state;
         let mut result = 0;
         for (file_idx, _file) in files.iter().enumerate() {
-            match self.file_tristate(FileKey { file_idx })? {
+            match self.file_tristate(FileKey {
+                commit_idx: self.focused_commit_idx,
+                file_idx,
+            })? {
                 Tristate::False => {}
                 Tristate::Partial | Tristate::True => {
                     result += 1;
@@ -1086,34 +1188,46 @@ impl<'a> Recorder<'a> {
 
     fn all_selection_keys(&self) -> Vec<SelectionKey> {
         let mut result = Vec::new();
-        for (file_idx, file) in self.state.files.iter().enumerate() {
-            result.push(SelectionKey::File(FileKey { file_idx }));
-            for (section_idx, section) in file.sections.iter().enumerate() {
-                match section {
-                    Section::Unchanged { .. } => {}
-                    Section::Changed { lines } => {
-                        result.push(SelectionKey::Section(SectionKey {
-                            file_idx,
-                            section_idx,
-                        }));
-                        for (line_idx, _line) in lines.iter().enumerate() {
-                            result.push(SelectionKey::Line(LineKey {
+        for (commit_idx, _) in self.state.commits.iter().enumerate() {
+            if commit_idx > 0 {
+                // TODO: implement adjacent `CommitView s.
+                continue;
+            }
+            for (file_idx, file) in self.state.files.iter().enumerate() {
+                result.push(SelectionKey::File(FileKey {
+                    commit_idx,
+                    file_idx,
+                }));
+                for (section_idx, section) in file.sections.iter().enumerate() {
+                    match section {
+                        Section::Unchanged { .. } => {}
+                        Section::Changed { lines } => {
+                            result.push(SelectionKey::Section(SectionKey {
+                                commit_idx,
                                 file_idx,
                                 section_idx,
-                                line_idx,
+                            }));
+                            for (line_idx, _line) in lines.iter().enumerate() {
+                                result.push(SelectionKey::Line(LineKey {
+                                    commit_idx,
+                                    file_idx,
+                                    section_idx,
+                                    line_idx,
+                                }));
+                            }
+                        }
+                        Section::FileMode {
+                            is_checked: _,
+                            before: _,
+                            after: _,
+                        }
+                        | Section::Binary { .. } => {
+                            result.push(SelectionKey::Section(SectionKey {
+                                commit_idx,
+                                file_idx,
+                                section_idx,
                             }));
                         }
-                    }
-                    Section::FileMode {
-                        is_checked: _,
-                        before: _,
-                        after: _,
-                    }
-                    | Section::Binary { .. } => {
-                        result.push(SelectionKey::Section(SectionKey {
-                            file_idx,
-                            section_idx,
-                        }));
                     }
                 }
             }
@@ -1132,6 +1246,7 @@ impl<'a> Recorder<'a> {
                 SelectionKey::File(_) => true,
                 SelectionKey::Section(section_key) => {
                     let file_key = FileKey {
+                        commit_idx: section_key.commit_idx,
                         file_idx: section_key.file_idx,
                     };
                     match self.file_expanded(file_key) {
@@ -1141,9 +1256,11 @@ impl<'a> Recorder<'a> {
                 }
                 SelectionKey::Line(line_key) => {
                     let file_key = FileKey {
+                        commit_idx: line_key.commit_idx,
                         file_idx: line_key.file_idx,
                     };
                     let section_key = SectionKey {
+                        commit_idx: line_key.commit_idx,
                         file_idx: line_key.file_idx,
                         section_idx: line_key.section_idx,
                     };
@@ -1169,7 +1286,10 @@ impl<'a> Recorder<'a> {
             None => self.first_selection_key(),
             Some(index) => match index.checked_sub(1) {
                 Some(index) => keys[index],
-                None => *keys.last().unwrap(),
+                None => {
+                    // TODO: this behavior will be wrong if we have keys for each `Commit` (which currently isn't the case).
+                    *keys.last().unwrap()
+                }
             },
         }
     }
@@ -1259,18 +1379,24 @@ impl<'a> Recorder<'a> {
                 StateUpdate::SetExpandItem(selection_key, false)
             }
             SelectionKey::Section(SectionKey {
+                commit_idx,
                 file_idx,
                 section_idx: _,
             }) => StateUpdate::SelectItem {
-                selection_key: SelectionKey::File(FileKey { file_idx }),
+                selection_key: SelectionKey::File(FileKey {
+                    commit_idx,
+                    file_idx,
+                }),
                 ensure_in_viewport: true,
             },
             SelectionKey::Line(LineKey {
+                commit_idx,
                 file_idx,
                 section_idx,
                 line_idx: _,
             }) => StateUpdate::SelectItem {
                 selection_key: SelectionKey::Section(SectionKey {
+                    commit_idx,
                     file_idx,
                     section_idx,
                 }),
@@ -1404,10 +1530,14 @@ impl<'a> Recorder<'a> {
                 let DrawnRect { rect, timestamp: _ } = drawn_rect;
                 rect.contains_point(x, y)
                     && match id {
-                        ComponentId::App | ComponentId::AppFiles | ComponentId::MenuHeader => false,
+                        ComponentId::App
+                        | ComponentId::AppFiles
+                        | ComponentId::MenuHeader
+                        | ComponentId::CommitMessageView => false,
                         ComponentId::MenuBar
                         | ComponentId::MenuItem(_)
                         | ComponentId::Menu(_)
+                        | ComponentId::CommitEditMessageButton(_)
                         | ComponentId::FileViewHeader(_)
                         | ComponentId::SelectableItem(_)
                         | ComponentId::ToggleBox(_)
@@ -1429,6 +1559,7 @@ impl<'a> Recorder<'a> {
             ComponentId::App
             | ComponentId::AppFiles
             | ComponentId::MenuHeader
+            | ComponentId::CommitMessageView
             | ComponentId::QuitDialog => StateUpdate::None,
             ComponentId::MenuBar => StateUpdate::UnfocusMenuBar,
             ComponentId::Menu(section_idx) => StateUpdate::ClickMenu {
@@ -1436,6 +1567,9 @@ impl<'a> Recorder<'a> {
             },
             ComponentId::MenuItem(item_idx) => {
                 StateUpdate::ClickMenuItem(self.get_menu_item_event(menu_bar, item_idx))
+            }
+            ComponentId::CommitEditMessageButton(commit_idx) => {
+                StateUpdate::EditCommitMessage { commit_idx }
             }
             ComponentId::FileViewHeader(file_key) => StateUpdate::SelectItem {
                 selection_key: SelectionKey::File(file_key),
@@ -1582,21 +1716,28 @@ impl<'a> Recorder<'a> {
         match selection {
             SelectionKey::None | SelectionKey::File(_) => {}
             SelectionKey::Section(SectionKey {
+                commit_idx,
                 file_idx,
                 section_idx: _,
             }) => {
-                self.expanded_items
-                    .insert(SelectionKey::File(FileKey { file_idx }));
+                self.expanded_items.insert(SelectionKey::File(FileKey {
+                    commit_idx,
+                    file_idx,
+                }));
             }
             SelectionKey::Line(LineKey {
+                commit_idx,
                 file_idx,
                 section_idx,
                 line_idx: _,
             }) => {
-                self.expanded_items
-                    .insert(SelectionKey::File(FileKey { file_idx }));
+                self.expanded_items.insert(SelectionKey::File(FileKey {
+                    commit_idx,
+                    file_idx,
+                }));
                 self.expanded_items
                     .insert(SelectionKey::Section(SectionKey {
+                        commit_idx,
                         file_idx,
                         section_idx,
                     }));
@@ -1654,14 +1795,19 @@ impl<'a> Recorder<'a> {
             self.selection_key = match self.selection_key {
                 selection_key @ (SelectionKey::None | SelectionKey::File(_)) => selection_key,
                 SelectionKey::Section(SectionKey {
+                    commit_idx,
                     file_idx,
                     section_idx: _,
                 })
                 | SelectionKey::Line(LineKey {
+                    commit_idx,
                     file_idx,
                     section_idx: _,
                     line_idx: _,
-                }) => SelectionKey::File(FileKey { file_idx }),
+                }) => SelectionKey::File(FileKey {
+                    commit_idx,
+                    file_idx,
+                }),
             };
             Default::default()
         } else {
@@ -1688,8 +1834,37 @@ impl<'a> Recorder<'a> {
         self.pending_events.push(event);
     }
 
+    fn edit_commit_message(&mut self, commit_idx: usize) -> Result<(), RecordError> {
+        let message = &mut self.state.commits[commit_idx].message;
+        let message_str = match message.as_ref() {
+            Some(message) => message,
+            None => return Ok(()),
+        };
+        let new_message = {
+            match self.input.terminal_kind() {
+                TerminalKind::Testing { .. } => {}
+                TerminalKind::Crossterm => {
+                    Self::clean_up_crossterm()?;
+                }
+            }
+            let result = self.input.edit_commit_message(message_str);
+            match self.input.terminal_kind() {
+                TerminalKind::Testing { .. } => {}
+                TerminalKind::Crossterm => {
+                    Self::set_up_crossterm()?;
+                }
+            }
+            result?
+        };
+        *message = Some(new_message);
+        Ok(())
+    }
+
     fn file(&self, file_key: FileKey) -> Result<&File, RecordError> {
-        let FileKey { file_idx } = file_key;
+        let FileKey {
+            commit_idx: _,
+            file_idx,
+        } = file_key;
         match self.state.files.get(file_idx) {
             Some(file) => Ok(file),
             None => Err(RecordError::Bug(format!(
@@ -1700,10 +1875,14 @@ impl<'a> Recorder<'a> {
 
     fn section(&self, section_key: SectionKey) -> Result<&Section, RecordError> {
         let SectionKey {
+            commit_idx,
             file_idx,
             section_idx,
         } = section_key;
-        let file = self.file(FileKey { file_idx })?;
+        let file = self.file(FileKey {
+            commit_idx,
+            file_idx,
+        })?;
         match file.sections.get(section_idx) {
             Some(section) => Ok(section),
             None => Err(RecordError::Bug(format!(
@@ -1717,7 +1896,10 @@ impl<'a> Recorder<'a> {
         file_key: FileKey,
         f: impl Fn(&mut File) -> T,
     ) -> Result<T, RecordError> {
-        let FileKey { file_idx } = file_key;
+        let FileKey {
+            commit_idx: _,
+            file_idx,
+        } = file_key;
         match self.state.files.get_mut(file_idx) {
             Some(file) => Ok(f(file)),
             None => Err(RecordError::Bug(format!(
@@ -1752,6 +1934,7 @@ impl<'a> Recorder<'a> {
                         }
                         Section::Changed { .. } => {
                             let section_key = SectionKey {
+                                commit_idx: file_key.commit_idx,
                                 file_idx: file_key.file_idx,
                                 section_idx,
                             };
@@ -1775,6 +1958,7 @@ impl<'a> Recorder<'a> {
         f: impl Fn(&mut Section) -> T,
     ) -> Result<T, RecordError> {
         let SectionKey {
+            commit_idx: _,
             file_idx,
             section_idx,
         } = section_key;
@@ -1805,6 +1989,7 @@ impl<'a> Recorder<'a> {
         f: impl FnOnce(&mut SectionChangedLine),
     ) -> Result<(), RecordError> {
         let LineKey {
+            commit_idx: _,
             file_idx,
             section_idx,
             line_idx,
@@ -1832,6 +2017,8 @@ enum ComponentId {
     MenuHeader,
     Menu(usize),
     MenuItem(usize),
+    CommitMessageView,
+    CommitEditMessageButton(usize),
     FileViewHeader(FileKey),
     SelectableItem(SelectionKey),
     ToggleBox(SelectionKey),
@@ -1896,10 +2083,7 @@ impl<Id: Clone + Debug + Eq + Hash> Component for TristateBox<Id> {
 
     fn draw(&self, viewport: &mut Viewport<Self::Id>, x: isize, y: isize) {
         let style = if self.is_read_only {
-            Style::default()
-                .fg(Color::Gray)
-                // .bg(Color::DarkGray)
-                .add_modifier(Modifier::DIM)
+            Style::default().fg(Color::Gray).add_modifier(Modifier::DIM)
         } else {
             Style::default().add_modifier(Modifier::BOLD)
         };
@@ -1915,7 +2099,6 @@ struct AppDebugInfo {
     scroll_offset_y: isize,
     selection_key: SelectionKey,
     selection_key_y: isize,
-    app_drawn_vs_expected_height: (usize, usize),
     drawn_rects: BTreeMap<ComponentId, DrawnRect>, // sorted for determinism
 }
 
@@ -1923,20 +2106,9 @@ struct AppDebugInfo {
 struct AppView<'a> {
     debug_info: Option<AppDebugInfo>,
     menu_bar: MenuBar<'a>,
-    file_views: Vec<FileView<'a>>,
+    commit_view_mode: CommitViewMode,
+    commit_views: Vec<CommitView<'a>>,
     quit_dialog: Option<QuitDialog>,
-}
-
-impl AppView<'_> {
-    fn height(&self) -> usize {
-        let Self {
-            debug_info: _,
-            menu_bar: _,
-            file_views,
-            quit_dialog: _,
-        } = self;
-        file_views.iter().map(|file_view| file_view.height()).sum()
-    }
 }
 
 impl Component for AppView<'_> {
@@ -1950,7 +2122,8 @@ impl Component for AppView<'_> {
         let Self {
             debug_info,
             menu_bar,
-            file_views,
+            commit_view_mode,
+            commit_views,
             quit_dialog,
         } = self;
 
@@ -1958,21 +2131,43 @@ impl Component for AppView<'_> {
             viewport.debug(format!("app debug info: {debug_info:#?}"));
         }
 
-        let viewport_rect = viewport.rect();
+        let viewport_rect = viewport.mask_rect();
 
         let menu_bar_height = 1usize;
-        let app_files_view_mask = Rect {
+        let commit_view_width = match commit_view_mode {
+            CommitViewMode::Inline => viewport.rect().width,
+            CommitViewMode::Adjacent => {
+                const MAX_COMMIT_VIEW_WIDTH: usize = 120;
+                MAX_COMMIT_VIEW_WIDTH
+                    .min(viewport.rect().width.saturating_sub(CommitView::MARGIN) / 2)
+            }
+        };
+        let commit_views_mask = Mask {
             x: viewport_rect.x,
             y: viewport_rect.y + menu_bar_height.unwrap_isize(),
-            width: viewport_rect.width,
-            height: viewport_rect.height.saturating_sub(menu_bar_height),
+            width: Some(viewport_rect.width),
+            height: None,
         };
-        viewport.with_mask(app_files_view_mask, |viewport| {
-            let app_files = AppFilesView {
-                debug_info: self.debug_info.as_ref(),
-                file_views: file_views.clone(),
-            };
-            viewport.draw_component(x, menu_bar_height.unwrap_isize(), &app_files);
+        viewport.with_mask(commit_views_mask, |viewport| {
+            let mut commit_view_x = 0;
+            for commit_view in commit_views {
+                let commit_view_mask = Mask {
+                    x: commit_views_mask.x + commit_view_x,
+                    y: commit_views_mask.y,
+                    width: Some(commit_view_width),
+                    height: None,
+                };
+                let commit_view_rect = viewport.with_mask(commit_view_mask, |viewport| {
+                    viewport.draw_component(
+                        commit_view_x,
+                        menu_bar_height.unwrap_isize(),
+                        commit_view,
+                    )
+                });
+                commit_view_x += (CommitView::MARGIN
+                    + commit_view_mask.apply(commit_view_rect).width)
+                    .unwrap_isize();
+            }
         });
 
         viewport.draw_component(x, viewport_rect.y, menu_bar);
@@ -1983,12 +2178,91 @@ impl Component for AppView<'_> {
     }
 }
 
-struct AppFilesView<'a> {
+#[derive(Clone, Debug)]
+struct CommitMessageView<'a> {
+    commit_idx: usize,
+    commit: &'a Commit,
+}
+
+impl<'a> Component for CommitMessageView<'a> {
+    type Id = ComponentId;
+
+    fn id(&self) -> Self::Id {
+        ComponentId::CommitMessageView
+    }
+
+    fn draw(&self, viewport: &mut Viewport<Self::Id>, x: isize, y: isize) {
+        let Self { commit_idx, commit } = self;
+        match commit {
+            Commit { message: None } => {}
+            Commit {
+                message: Some(message),
+            } => {
+                viewport.draw_blank(Rect {
+                    x,
+                    y,
+                    width: viewport.mask_rect().width,
+                    height: 1,
+                });
+                let y = y + 1;
+
+                let style = Style::default();
+                let button_rect = viewport.draw_component(
+                    x,
+                    y,
+                    &Button {
+                        id: ComponentId::CommitEditMessageButton(*commit_idx),
+                        label: Cow::Borrowed("Edit message"),
+                        style,
+                        is_focused: false,
+                    },
+                );
+                let divider_rect =
+                    viewport.draw_span(button_rect.end_x() + 1, y, &Span::raw(" • "));
+                viewport.draw_text(
+                    divider_rect.end_x() + 1,
+                    y,
+                    &Span::styled(
+                        Cow::Borrowed({
+                            let first_line = match message.split_once('\n') {
+                                Some((before, _after)) => before,
+                                None => message,
+                            };
+                            let first_line = first_line.trim();
+                            if first_line.is_empty() {
+                                "(no message)"
+                            } else {
+                                first_line
+                            }
+                        }),
+                        style.add_modifier(Modifier::UNDERLINED),
+                    ),
+                );
+                let y = y + 1;
+
+                viewport.draw_blank(Rect {
+                    x,
+                    y,
+                    width: viewport.mask_rect().width,
+                    height: 1,
+                });
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct CommitView<'a> {
     debug_info: Option<&'a AppDebugInfo>,
+    commit_message_view: CommitMessageView<'a>,
     file_views: Vec<FileView<'a>>,
 }
 
-impl Component for AppFilesView<'_> {
+impl<'a> CommitView<'a> {
+    const MARGIN: usize = 1;
+}
+
+impl Component for CommitView<'_> {
     type Id = ComponentId;
 
     fn id(&self) -> Self::Id {
@@ -1998,31 +2272,53 @@ impl Component for AppFilesView<'_> {
     fn draw(&self, viewport: &mut Viewport<Self::Id>, x: isize, y: isize) {
         let Self {
             debug_info,
+            commit_message_view,
             file_views,
         } = self;
 
         let mut y = y;
+        let commit_message_view_rect = viewport.draw_component(x, y, commit_message_view);
+        y += commit_message_view_rect.height.unwrap_isize();
         for file_view in file_views {
-            let file_view_rect = viewport.draw_component(x, y, file_view);
+            let file_view_rect = {
+                let file_view_mask = Mask {
+                    x,
+                    y,
+                    width: viewport.mask().width,
+                    height: None,
+                };
+                viewport.with_mask(file_view_mask, |viewport| {
+                    viewport.draw_component(x, y, file_view)
+                })
+            };
 
             // Render a sticky header if necessary.
-            if let Some(mask) = viewport.mask() {
-                if file_view_rect.y < mask.y
-                    && mask.y < file_view_rect.y + file_view_rect.height.unwrap_isize()
-                {
-                    viewport.draw_component(
+            let mask = viewport.mask();
+            if file_view_rect.y < mask.y
+                && mask.y < file_view_rect.y + file_view_rect.height.unwrap_isize()
+            {
+                viewport.with_mask(
+                    Mask {
                         x,
-                        mask.y,
-                        &FileViewHeader {
-                            file_key: file_view.file_key,
-                            path: file_view.path,
-                            old_path: file_view.old_path,
-                            is_selected: file_view.is_header_selected,
-                            toggle_box: file_view.toggle_box.clone(),
-                            expand_box: file_view.expand_box.clone(),
-                        },
-                    );
-                }
+                        y: mask.y,
+                        width: Some(viewport.mask_rect().width),
+                        height: Some(1),
+                    },
+                    |viewport| {
+                        viewport.draw_component(
+                            x,
+                            mask.y,
+                            &FileViewHeader {
+                                file_key: file_view.file_key,
+                                path: file_view.path,
+                                old_path: file_view.old_path,
+                                is_selected: file_view.is_header_selected,
+                                toggle_box: file_view.toggle_box.clone(),
+                                expand_box: file_view.expand_box.clone(),
+                            },
+                        );
+                    },
+                );
             }
 
             y += file_view_rect.height.unwrap_isize();
@@ -2065,6 +2361,7 @@ impl Component for Menu<'_> {
             .map(|(i, item)| Button {
                 id: ComponentId::MenuItem(i),
                 label: Cow::Borrowed(&item.label),
+                style: Style::default(),
                 is_focused: false,
             })
             .collect::<Vec<_>>();
@@ -2108,13 +2405,14 @@ impl Component for MenuBar<'_> {
             expanded_menu_idx,
         } = self;
 
-        viewport.fill_rest_of_line(x, viewport.rect().y);
-        highlight_line(viewport, viewport.rect().y);
+        viewport.draw_blank(viewport.rect().top_row());
+        highlight_rect(viewport, viewport.rect().top_row());
         let mut x = x;
         for (i, menu) in menus.iter().enumerate() {
             let menu_header = Button {
                 id: ComponentId::Menu(i),
                 label: Cow::Borrowed(&menu.label),
+                style: Style::default(),
                 is_focused: false,
             };
             let rect = viewport.draw_component(x, y, &menu_header);
@@ -2139,17 +2437,6 @@ struct FileView<'a> {
 }
 
 impl FileView<'_> {
-    pub fn height(&self) -> usize {
-        1 + if self.is_expanded() {
-            self.section_views
-                .iter()
-                .map(|section_view| section_view.height())
-                .sum::<usize>()
-        } else {
-            0
-        }
-    }
-
     fn is_expanded(&self) -> bool {
         match self.expand_box.tristate {
             Tristate::False => false,
@@ -2238,38 +2525,61 @@ impl Component for FileViewHeader<'_> {
             expand_box,
         } = self;
 
-        viewport.fill_rest_of_line(x, y);
-        let toggle_box_rect = viewport.draw_component(x, y, toggle_box);
-        viewport.draw_span(
-            x + toggle_box_rect.width.unwrap_isize() + 1,
-            y,
-            &Span::styled(
-                format!(
-                    "{}{}",
-                    match old_path {
-                        Some(old_path) => format!("{} => ", old_path.to_string_lossy()),
-                        None => String::new(),
-                    },
-                    path.to_string_lossy(),
-                ),
-                if *is_selected {
-                    Style::default().fg(Color::Blue)
-                } else {
-                    Style::default()
-                },
-            ),
-        );
-
         // Draw expand box at end of line.
         let expand_box_width = expand_box.text().width().unwrap_isize();
-        viewport.draw_component(
-            viewport.rect().width.unwrap_isize() - expand_box_width,
+        let expand_box_rect = viewport.draw_component(
+            viewport.mask_rect().end_x() - expand_box_width,
             y,
             expand_box,
         );
 
+        viewport.with_mask(
+            Mask {
+                x,
+                y,
+                width: Some((expand_box_rect.x - x).clamp_into_usize()),
+                height: Some(1),
+            },
+            |viewport| {
+                viewport.draw_blank(Rect {
+                    x,
+                    y,
+                    width: viewport.mask_rect().width,
+                    height: 1,
+                });
+                let toggle_box_rect = viewport.draw_component(x, y, toggle_box);
+                viewport.draw_text(
+                    x + toggle_box_rect.width.unwrap_isize() + 1,
+                    y,
+                    &Span::styled(
+                        format!(
+                            "{}{}",
+                            match old_path {
+                                Some(old_path) => format!("{} => ", old_path.to_string_lossy()),
+                                None => String::new(),
+                            },
+                            path.to_string_lossy(),
+                        ),
+                        if *is_selected {
+                            Style::default().fg(Color::Blue)
+                        } else {
+                            Style::default()
+                        },
+                    ),
+                );
+            },
+        );
+
         if *is_selected {
-            highlight_line(viewport, y);
+            highlight_rect(
+                viewport,
+                Rect {
+                    x: viewport.mask_rect().x,
+                    y,
+                    width: viewport.mask_rect().width,
+                    height: 1,
+                },
+            );
         }
     }
 }
@@ -2296,14 +2606,6 @@ struct SectionView<'a> {
 }
 
 impl SectionView<'_> {
-    pub fn height(&self) -> usize {
-        match self.section {
-            Section::Unchanged { lines } => lines.len().min(NUM_CONTEXT_LINES * 2 + 1),
-            Section::Changed { lines } => 1 + if self.is_expanded() { lines.len() } else { 0 },
-            Section::FileMode { .. } | Section::Binary { .. } => 1,
-        }
-    }
-
     fn is_expanded(&self) -> bool {
         match self.expand_box.tristate {
             Tristate::False => false,
@@ -2337,9 +2639,15 @@ impl Component for SectionView<'_> {
             section,
             line_start_num,
         } = self;
-        viewport.fill_rest_of_line(x, y);
+        viewport.draw_blank(Rect {
+            x,
+            y,
+            width: viewport.mask_rect().width,
+            height: 1,
+        });
 
         let SectionKey {
+            commit_idx,
             file_idx,
             section_idx,
         } = *section_key;
@@ -2375,6 +2683,7 @@ impl Component for SectionView<'_> {
                         for (dy, (line_idx, line)) in overlapped_lines.iter().enumerate() {
                             let line_view = SectionLineView {
                                 line_key: LineKey {
+                                    commit_idx,
                                     file_idx,
                                     section_idx,
                                     line_idx: *line_idx,
@@ -2396,6 +2705,7 @@ impl Component for SectionView<'_> {
                     for (line_idx, line) in before_ellipsis_lines {
                         let line_view = SectionLineView {
                             line_key: LineKey {
+                                commit_idx,
                                 file_idx,
                                 section_idx,
                                 line_idx: *line_idx,
@@ -2429,6 +2739,7 @@ impl Component for SectionView<'_> {
                     for (line_idx, line) in after_ellipsis_lines {
                         let line_view = SectionLineView {
                             line_key: LineKey {
+                                commit_idx,
                                 file_idx,
                                 section_idx,
                                 line_idx: *line_idx,
@@ -2445,27 +2756,49 @@ impl Component for SectionView<'_> {
             }
 
             Section::Changed { lines } => {
-                // Draw section header.
-                let toggle_box_rect = viewport.draw_component(x, y, toggle_box);
-                viewport.draw_span(
-                    x + toggle_box_rect.width.unwrap_isize() + 1,
-                    y,
-                    &Span::styled(
-                        format!("Section {editable_section_num}/{total_num_editable_sections}"),
-                        Style::default(),
-                    ),
-                );
-
                 // Draw expand box at end of line.
                 let expand_box_width = expand_box.text().width().unwrap_isize();
-                viewport.draw_component(
-                    viewport.rect().width.unwrap_isize() - expand_box_width,
+                let expand_box_rect = viewport.draw_component(
+                    viewport.mask_rect().width.unwrap_isize() - expand_box_width,
                     y,
                     expand_box,
                 );
 
+                // Draw section header.
+                viewport.with_mask(
+                    Mask {
+                        x,
+                        y,
+                        width: Some((expand_box_rect.x - x).clamp_into_usize()),
+                        height: Some(1),
+                    },
+                    |viewport| {
+                        let toggle_box_rect = viewport.draw_component(x, y, toggle_box);
+                        viewport.draw_text(
+                            x + toggle_box_rect.width.unwrap_isize() + 1,
+                            y,
+                            &Span::styled(
+                                format!(
+                                    "Section {editable_section_num}/{total_num_editable_sections}"
+                                ),
+                                Style::default(),
+                            ),
+                        )
+                    },
+                );
+
                 match selection {
-                    Some(SectionSelection::SectionHeader) => highlight_line(viewport, y),
+                    Some(SectionSelection::SectionHeader) => {
+                        highlight_rect(
+                            viewport,
+                            Rect {
+                                x: viewport.mask_rect().x,
+                                y,
+                                width: viewport.mask_rect().width,
+                                height: 1,
+                            },
+                        );
+                    }
                     Some(SectionSelection::ChangedLine(_)) | None => {}
                 }
 
@@ -2485,6 +2818,7 @@ impl Component for SectionView<'_> {
                             Some(SectionSelection::SectionHeader) | None => false,
                         };
                         let line_key = LineKey {
+                            commit_idx,
                             file_idx,
                             section_idx,
                             line_idx,
@@ -2508,7 +2842,15 @@ impl Component for SectionView<'_> {
                         let y = y + line_idx.unwrap_isize();
                         viewport.draw_component(x + 2, y, &line_view);
                         if is_focused {
-                            highlight_line(viewport, y);
+                            highlight_rect(
+                                viewport,
+                                Rect {
+                                    x: viewport.mask_rect().x,
+                                    y,
+                                    width: viewport.mask_rect().width,
+                                    height: 1,
+                                },
+                            );
                         }
                     }
                 }
@@ -2524,6 +2866,7 @@ impl Component for SectionView<'_> {
                     Some(SectionSelection::ChangedLine(_)) | None => false,
                 };
                 let section_key = SectionKey {
+                    commit_idx,
                     file_idx,
                     section_idx,
                 };
@@ -2539,9 +2882,17 @@ impl Component for SectionView<'_> {
                 let toggle_box_rect = viewport.draw_component(x, y, &toggle_box);
                 let x = x + toggle_box_rect.width.unwrap_isize() + 1;
                 let text = format!("File mode changed from {before} to {after}");
-                viewport.draw_span(x, y, &Span::styled(text, Style::default().fg(Color::Blue)));
+                viewport.draw_text(x, y, &Span::styled(text, Style::default().fg(Color::Blue)));
                 if is_focused {
-                    highlight_line(viewport, y);
+                    highlight_rect(
+                        viewport,
+                        Rect {
+                            x: viewport.mask_rect().x,
+                            y,
+                            width: viewport.mask_rect().width,
+                            height: 1,
+                        },
+                    );
                 }
             }
 
@@ -2555,6 +2906,7 @@ impl Component for SectionView<'_> {
                     Some(SectionSelection::ChangedLine(_)) | None => false,
                 };
                 let section_key = SectionKey {
+                    commit_idx,
                     file_idx,
                     section_idx,
                 };
@@ -2586,10 +2938,18 @@ impl Component for SectionView<'_> {
                     result.push(description.join(" -> "));
                     format!("({})", result.join(" "))
                 };
-                viewport.draw_span(x, y, &Span::styled(text, Style::default().fg(Color::Blue)));
+                viewport.draw_text(x, y, &Span::styled(text, Style::default().fg(Color::Blue)));
 
                 if is_focused {
-                    highlight_line(viewport, y);
+                    highlight_rect(
+                        viewport,
+                        Rect {
+                            x: viewport.mask_rect().x,
+                            y,
+                            width: viewport.mask_rect().width,
+                            height: 1,
+                        },
+                    );
                 }
             }
         }
@@ -2625,7 +2985,12 @@ impl Component for SectionLineView<'_> {
     fn draw(&self, viewport: &mut Viewport<Self::Id>, x: isize, y: isize) {
         const NEWLINE_ICON: &str = "⏎";
         let Self { line_key: _, inner } = self;
-        viewport.fill_rest_of_line(x, y);
+        viewport.draw_blank(Rect {
+            x: viewport.mask_rect().x,
+            y,
+            width: viewport.mask_rect().width,
+            height: 1,
+        });
         match inner {
             SectionLineViewInner::Unchanged { line, line_num } => {
                 let style = Style::default().add_modifier(Modifier::DIM);
@@ -2644,7 +3009,7 @@ impl Component for SectionLineView<'_> {
                     ),
                     None => (Span::styled(*line, style), None),
                 };
-                let line_rect = viewport.draw_span(
+                let line_rect = viewport.draw_text(
                     line_num_rect.x + line_num_rect.width.unwrap_isize(),
                     line_num_rect.y,
                     &line,
@@ -2678,7 +3043,7 @@ impl Component for SectionLineView<'_> {
                     ),
                     None => (Span::styled(*line, style), None),
                 };
-                let line_rect = viewport.draw_span(x, y, &line);
+                let line_rect = viewport.draw_text(x, y, &line);
                 if let Some(line_end) = line_end {
                     viewport.draw_span(line_rect.x + line_rect.width.unwrap_isize(), y, &line_end);
                 }
@@ -2689,6 +3054,7 @@ impl Component for SectionLineView<'_> {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct QuitDialog {
+    num_commit_messages: usize,
     num_changed_files: usize,
     focused_button: QuitDialogButtonId,
 }
@@ -2702,22 +3068,47 @@ impl Component for QuitDialog {
 
     fn draw(&self, viewport: &mut Viewport<Self::Id>, _x: isize, _y: isize) {
         let Self {
+            num_commit_messages,
             num_changed_files,
             focused_button,
         } = self;
         let title = "Quit";
-        let body = format!(
-            "You have changes to {num_changed_files} {}. Are you sure you want to quit?",
-            if *num_changed_files == 1 {
-                "file"
-            } else {
-                "files"
+        let alert_items = {
+            let mut result = Vec::new();
+            if *num_commit_messages > 0 {
+                result.push(format!(
+                    "{num_commit_messages} {}",
+                    if *num_commit_messages == 1 {
+                        "message"
+                    } else {
+                        "messages"
+                    }
+                ));
             }
-        );
+            if *num_changed_files > 0 {
+                result.push(format!(
+                    "{num_changed_files} {}",
+                    if *num_changed_files == 1 {
+                        "file"
+                    } else {
+                        "files"
+                    }
+                ));
+            }
+            result
+        };
+        let alert = if alert_items.is_empty() {
+            // Shouldn't happen.
+            "".to_string()
+        } else {
+            format!("You have changes to {}. ", alert_items.join(" and "))
+        };
+        let body = format!("{alert}Are you sure you want to quit?",);
 
         let quit_button = Button {
             id: ComponentId::QuitDialogButton(QuitDialogButtonId::Quit),
             label: Cow::Borrowed("Quit"),
+            style: Style::default(),
             is_focused: match focused_button {
                 QuitDialogButtonId::Quit => true,
                 QuitDialogButtonId::GoBack => false,
@@ -2726,6 +3117,7 @@ impl Component for QuitDialog {
         let go_back_button = Button {
             id: ComponentId::QuitDialogButton(QuitDialogButtonId::GoBack),
             label: Cow::Borrowed("Go Back"),
+            style: Style::default(),
             is_focused: match focused_button {
                 QuitDialogButtonId::GoBack => true,
                 QuitDialogButtonId::Quit => false,
@@ -2746,6 +3138,7 @@ impl Component for QuitDialog {
 struct Button<'a, Id> {
     id: Id,
     label: Cow<'a, str>,
+    style: Style,
     is_focused: bool,
 }
 
@@ -2754,15 +3147,13 @@ impl<'a, Id> Button<'a, Id> {
         let Self {
             id: _,
             label,
+            style,
             is_focused,
         } = self;
         if *is_focused {
-            Span::styled(
-                format!("({label})"),
-                Style::default().add_modifier(Modifier::REVERSED),
-            )
+            Span::styled(format!("({label})"), style.add_modifier(Modifier::REVERSED))
         } else {
-            Span::styled(format!("[{label}]"), Style::default())
+            Span::styled(format!("[{label}]"), *style)
         }
     }
 
@@ -2841,21 +3232,15 @@ impl<Id: Clone + Debug + Eq + Hash> Component for Dialog<'_, Id> {
     }
 }
 
-fn highlight_line<Id: Clone + Debug + Eq + Hash>(viewport: &mut Viewport<Id>, y: isize) {
-    viewport.set_style(
-        Rect {
-            x: 0,
-            y,
-            width: viewport.size().width,
-            height: 1,
-        },
-        Style::default().add_modifier(Modifier::REVERSED),
-    );
+fn highlight_rect<Id: Clone + Debug + Eq + Hash>(viewport: &mut Viewport<Id>, rect: Rect) {
+    viewport.set_style(rect, Style::default().add_modifier(Modifier::REVERSED));
 }
 
 #[cfg(test)]
 mod tests {
     use std::borrow::Cow;
+
+    use crate::helpers::TestingInput;
 
     use super::*;
 
@@ -2863,7 +3248,7 @@ mod tests {
 
     #[test]
     fn test_event_source_testing() {
-        let mut event_source = EventSource::testing(80, 24, [Event::QuitCancel]);
+        let mut event_source = TestingInput::new(80, 24, [Event::QuitCancel]);
         assert_matches!(
             event_source.next_events().unwrap().as_slice(),
             &[Event::QuitCancel]
@@ -2877,12 +3262,13 @@ mod tests {
     #[test]
     fn test_quit_returns_error() {
         let state = RecordState::default();
-        let event_source = EventSource::testing(80, 24, [Event::QuitCancel]);
-        let recorder = Recorder::new(state, event_source);
+        let mut input = TestingInput::new(80, 24, [Event::QuitCancel]);
+        let recorder = Recorder::new(state, &mut input);
         assert_matches!(recorder.run(), Err(RecordError::Cancelled));
 
         let state = RecordState {
             is_read_only: false,
+            commits: vec![Commit::default(), Commit::default()],
             files: vec![File {
                 old_path: None,
                 path: Cow::Borrowed(Path::new("foo/bar")),
@@ -2890,8 +3276,8 @@ mod tests {
                 sections: Default::default(),
             }],
         };
-        let event_source = EventSource::testing(80, 24, [Event::QuitAccept]);
-        let recorder = Recorder::new(state.clone(), event_source);
+        let mut input = TestingInput::new(80, 24, [Event::QuitAccept]);
+        let recorder = Recorder::new(state.clone(), &mut input);
         assert_eq!(recorder.run().unwrap(), state);
     }
 }

@@ -69,6 +69,27 @@ impl From<ratatui::layout::Rect> for Rect {
 }
 
 impl Rect {
+    pub fn end_x(self) -> isize {
+        self.x + self.width.unwrap_isize()
+    }
+
+    pub fn end_y(self) -> isize {
+        self.y + self.height.unwrap_isize()
+    }
+
+    pub fn iter_ys(self) -> impl Iterator<Item = isize> {
+        self.y..self.end_y()
+    }
+
+    pub fn top_row(self) -> Rect {
+        Rect {
+            x: self.x,
+            y: self.y,
+            width: self.width,
+            height: 1,
+        }
+    }
+
     /// The (x, y) coordinate of the top-left corner of this `Rect`.
     fn top_left(self) -> (isize, isize) {
         (self.x, self.y)
@@ -76,10 +97,7 @@ impl Rect {
 
     /// The (x, y) coordinate of the bottom-right corner of this `Rect`.
     fn bottom_right(self) -> (isize, isize) {
-        (
-            self.x + self.width.unwrap_isize(),
-            self.y + self.height.unwrap_isize(),
-        )
+        (self.end_x(), self.end_y())
     }
 
     /// Whether or not this `Rect` contains the given point.
@@ -222,6 +240,61 @@ pub(crate) fn centered_rect(
     }
 }
 
+/// A "half-open" `Rect` used to to restrict drawing to a certain portion of the screen.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
+pub(crate) struct Mask {
+    pub x: isize,
+    pub y: isize,
+
+    /// If `None`, the mask is unrestricted on the x-axis past the `x` value.
+    pub width: Option<usize>,
+
+    /// If `None`, the mask is unrestricted on the y-axis past the `y` value.
+    pub height: Option<usize>,
+}
+
+impl Mask {
+    /// Restrict the `Rect` size to be only the portion that is inside the mask.
+    pub fn apply(self, rect: Rect) -> Rect {
+        let end_x = self.end_x().unwrap_or_else(|| rect.end_x());
+        let end_y = self.end_y().unwrap_or_else(|| rect.end_y());
+        let width = (end_x - self.x).clamp_into_usize();
+        let height = (end_y - self.y).clamp_into_usize();
+        let mask_rect = Rect {
+            x: self.x,
+            y: self.y,
+            width,
+            height,
+        };
+        mask_rect.intersect(rect)
+    }
+
+    pub fn end_x(self) -> Option<isize> {
+        self.width.map(|width| self.x + width.unwrap_isize())
+    }
+
+    pub fn end_y(self) -> Option<isize> {
+        self.height.map(|height| self.y + height.unwrap_isize())
+    }
+}
+
+impl From<Rect> for Mask {
+    fn from(rect: Rect) -> Self {
+        let Rect {
+            x,
+            y,
+            width,
+            height,
+        } = rect;
+        Self {
+            x,
+            y,
+            width: Some(width),
+            height: Some(height),
+        }
+    }
+}
+
 /// Recording of where the component with a certain ID drew on the virtual
 /// canvas.
 #[derive(Debug)]
@@ -287,7 +360,7 @@ pub(crate) type DrawnRects<C> = HashMap<C, DrawnRect>;
 pub(crate) struct Viewport<'a, ComponentId> {
     buf: &'a mut Buffer,
     rect: Rect,
-    mask: Option<Rect>,
+    mask: Option<Mask>,
     timestamp: usize,
     trace: Vec<DrawTrace<ComponentId>>,
     debug_messages: Vec<String>,
@@ -311,19 +384,22 @@ impl<'a, ComponentId: Clone + Debug + Eq + Hash> Viewport<'a, ComponentId> {
         self.rect
     }
 
-    /// The mask used for rendering. If this is `Some`, then calls to
-    /// `draw_span` will only render inside the mask area. This can be used to
-    /// overlay one component on top of another in a fixed area.
-    pub fn mask(&self) -> Option<Rect> {
-        self.mask
+    /// The mask used for rendering. Calls to `draw_span` will only render
+    /// inside the mask area. This can be used to overlay one component on top
+    /// of another in a fixed area.
+    ///
+    /// This can be set with `Viewport::with_mask`. If no mask has been set in
+    /// the current call stack, then the returned value defaults to
+    /// `Viewport::rect`, i.e. the area representing the entire terminal.
+    pub fn mask(&self) -> Mask {
+        self.mask.unwrap_or_else(|| self.rect().into())
     }
 
-    /// The size of the viewport.
-    pub fn size(&self) -> RectSize {
-        RectSize {
-            width: self.buf.area().width.into(),
-            height: self.buf.area().height.into(),
-        }
+    /// Get the masked area restricted to the portion that is viewable in the
+    /// viewport. This lets us return a `Rect` instead of a `Mask`, which could
+    /// otherwise have `None` `width` or `height` fields.
+    pub fn mask_rect(&self) -> Rect {
+        self.mask().apply(self.rect())
     }
 
     /// Render the provided component using the given `Frame`. Returns a mapping
@@ -360,7 +436,7 @@ impl<'a, ComponentId: Clone + Debug + Eq + Hash> Viewport<'a, ComponentId> {
     }
 
     /// Set a mask to be used for rendering inside `f`.
-    pub fn with_mask<T>(&mut self, mask: Rect, f: impl FnOnce(&mut Self) -> T) -> T {
+    pub fn with_mask<T>(&mut self, mask: Mask, f: impl FnOnce(&mut Self) -> T) -> T {
         let mut mask = Some(mask);
         mem::swap(&mut self.mask, &mut mask);
         let result = f(self);
@@ -417,7 +493,7 @@ impl<'a, ComponentId: Clone + Debug + Eq + Hash> Viewport<'a, ComponentId> {
 
         let draw_rect = self.rect.intersect(span_rect);
         let draw_rect = match self.mask {
-            Some(mask) => draw_rect.intersect(mask),
+            Some(mask) => mask.apply(draw_rect),
             None => draw_rect,
         };
         if !draw_rect.is_empty() {
@@ -448,33 +524,28 @@ impl<'a, ComponentId: Clone + Debug + Eq + Hash> Viewport<'a, ComponentId> {
         span_rect
     }
 
+    /// Draw the given text. If the text would overflow the current mask, then
+    /// it is truncated with an ellipsis.
+    pub fn draw_text(&mut self, x: isize, y: isize, span: &Span) -> Rect {
+        let span_rect = self.draw_span(x, y, span);
+        let mask_rect = self.mask_rect();
+        if span_rect.end_x() > mask_rect.end_x() {
+            self.draw_span(mask_rect.end_x() - 1, span_rect.y, &Span::raw("…"));
+        }
+        span_rect
+    }
+
     pub fn draw_widget(&mut self, rect: ratatui::layout::Rect, widget: impl Widget) {
         self.current_trace_mut().merge_rect(rect.into());
         widget.render(rect, self.buf);
     }
 
-    pub fn fill_rest_of_line(&mut self, x: isize, y: isize) {
-        let line_width = self.rect.width.unwrap_isize() - x;
-        let line_width: usize = match line_width.try_into() {
-            Ok(0) | Err(_) => return,
-            Ok(line_width) => line_width,
-        };
-
-        let line_rect = Rect {
-            x,
-            y,
-            width: line_width,
-            height: 1,
-        };
-        self.current_trace_mut().merge_rect(line_rect);
-        let draw_rect = self.rect.intersect(line_rect);
-        if !draw_rect.is_empty() {
-            let buf_rect = self.translate_rect(draw_rect);
-            self.buf.set_span(
-                buf_rect.x,
-                buf_rect.y,
-                &Span::styled(" ".repeat(line_width), Style::reset()),
-                buf_rect.width,
+    pub fn draw_blank(&mut self, rect: Rect) {
+        for y in rect.iter_ys() {
+            self.draw_span(
+                rect.x,
+                y,
+                &Span::styled(" ".repeat(rect.width), Style::reset()),
             );
         }
     }
