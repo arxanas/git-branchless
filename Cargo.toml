@@ -34,7 +34,7 @@ tag = false
 [workspace.dependencies]
 anyhow = "1.0.75"
 async-trait = "0.1.74"
-bstr = "1.6.2"
+bstr = "1.7.0"
 bugreport = "0.5.0"
 chashmap = "2.2.2"
 chrono = "0.4.31"
