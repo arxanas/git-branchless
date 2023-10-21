@@ -567,7 +567,12 @@ impl Repo {
 
     /// Get the directory where all repo-specific git-branchless state is stored.
     pub fn get_branchless_dir(&self) -> Result<PathBuf> {
-        let dir = self.get_path().join("branchless");
+        let maybe_worktree_parent_repo = self.open_worktree_parent_repo()?;
+        let repo = match maybe_worktree_parent_repo.as_ref() {
+            Some(repo) => repo,
+            None => self,
+        };
+        let dir = repo.get_path().join("branchless");
         std::fs::create_dir_all(&dir).map_err(|err| Error::CreateBranchlessDir {
             source: err,
             path: dir.clone(),
