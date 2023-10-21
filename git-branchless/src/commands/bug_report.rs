@@ -8,7 +8,7 @@ use bugreport::collector::{CollectionError, Collector};
 use bugreport::format::Markdown;
 use bugreport::report::ReportEntry;
 use itertools::Itertools;
-use lib::core::config::get_hooks_dir;
+use lib::core::config::get_main_worktree_hooks_dir;
 use lib::core::repo_ext::{RepoExt, RepoReferencesSnapshot};
 use lib::util::EyreExitOr;
 
@@ -242,7 +242,7 @@ struct HookCollector {
 
 fn collect_hooks(git_run_info: &GitRunInfo) -> eyre::Result<ReportEntry> {
     let repo = Repo::from_current_dir()?;
-    let hooks_dir = get_hooks_dir(git_run_info, &repo, None)?;
+    let hooks_dir = get_main_worktree_hooks_dir(git_run_info, &repo, None)?;
     let hook_contents = {
         let mut result = Vec::new();
         for (hook_type, _content) in ALL_HOOKS {

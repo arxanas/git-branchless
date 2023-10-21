@@ -1,6 +1,7 @@
 use lib::testing::{
-    extract_hint_command, make_git, make_git_with_remote_repo, remove_rebase_lines, GitInitOptions,
-    GitRunOptions, GitWrapperWithRemoteRepo,
+    extract_hint_command, make_git, make_git_with_remote_repo, make_git_worktree,
+    remove_rebase_lines, GitInitOptions, GitRunOptions, GitWorktreeWrapper,
+    GitWrapperWithRemoteRepo,
 };
 
 #[test]
@@ -6234,6 +6235,88 @@ fn test_move_fixup_added_files() -> eyre::Result<()> {
     test1.txt
     test2.txt
     "###);
+
+    Ok(())
+}
+
+#[test]
+fn test_worktree_rebase_in_memory() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    git.commit_file("test1", 1)?;
+    git.detach_head()?;
+    git.commit_file("test2", 2)?;
+    git.commit_file("test3", 3)?;
+
+    let GitWorktreeWrapper {
+        temp_dir: _temp_dir,
+        worktree,
+    } = make_git_worktree(&git, "new-worktree")?;
+    git.run(&["checkout", "master"])?;
+    {
+        let stdout = worktree.smartlog()?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d (master) create test1.txt
+        |
+        o 96d1c37 create test2.txt
+        |
+        @ 70deb1e create test3.txt
+        "###);
+    }
+
+    {
+        let (stdout, stderr) = worktree.branchless("move", &["-s", "@", "-d", "master"])?;
+        insta::assert_snapshot!(stderr, @r###"
+        branchless: creating working copy snapshot
+        Previous HEAD position was 70deb1e create test3.txt
+        branchless: processing 1 update: ref HEAD
+        HEAD is now at 4838e49 create test3.txt
+        branchless: processing checkout
+        "###);
+        insta::assert_snapshot!(stdout, @r###"
+        Attempting rebase in-memory...
+        [1/1] Committed as: 4838e49 create test3.txt
+        branchless: processing 1 rewritten commit
+        branchless: running command: <git-executable> checkout 4838e49b08954becdd17c0900c1179c2c654c627
+        :
+        O 62fc20d (master) create test1.txt
+        |\
+        | o 96d1c37 create test2.txt
+        |
+        @ 4838e49 create test3.txt
+        In-memory rebase succeeded.
+        "###);
+    }
+
+    {
+        let stdout = worktree.smartlog()?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d (master) create test1.txt
+        |\
+        | o 96d1c37 create test2.txt
+        |
+        @ 4838e49 create test3.txt
+        "###);
+    }
+
+    {
+        let stdout = git.smartlog()?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        @ 62fc20d (> master) create test1.txt
+        |\
+        | o 96d1c37 create test2.txt
+        |
+        o 4838e49 create test3.txt
+        "###);
+    }
 
     Ok(())
 }
