@@ -1,8 +1,10 @@
+use std::path::PathBuf;
+
 use branchless::git::{
-    AmendFastOptions, BranchType, CherryPickFastOptions, FileMode, FileStatus, GitVersion,
+    AmendFastOptions, BranchType, CherryPickFastOptions, FileMode, FileStatus, GitVersion, Repo,
     StatusEntry,
 };
-use branchless::testing::make_git;
+use branchless::testing::{make_git, make_git_worktree, GitWorktreeWrapper};
 
 #[test]
 fn test_parse_git_version_output() {
@@ -259,6 +261,45 @@ fn test_branch_debug() -> eyre::Result<()> {
     let repo = git.get_repo()?;
     let branch = repo.find_branch("master", BranchType::Local)?.unwrap();
     insta::assert_debug_snapshot!(branch, @r###"<Branch name="master">"###);
+
+    Ok(())
+}
+
+#[test]
+fn test_worktree_working_copy_path() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+    git.commit_file("test1", 1)?;
+
+    let GitWorktreeWrapper { temp_dir, worktree } = make_git_worktree(&git, "new-worktree")?;
+    {
+        let stdout = worktree.smartlog()?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        @ 62fc20d (master) create test1.txt
+        "###);
+    }
+
+    fn canonicalize(path: Option<PathBuf>) -> PathBuf {
+        match path {
+            None => PathBuf::from("<none>"),
+            Some(path) => {
+                // On macOS, it looks like the temporary directory has to be
+                // canonicalized as it may be `/var` vs. `/private/var`.
+                std::fs::canonicalize(path).unwrap_or_else(|err| format!("<error: {err}>").into())
+            }
+        }
+    }
+    let worktree_repo = worktree.get_repo()?;
+    assert_eq!(
+        canonicalize(worktree_repo.get_working_copy_path()),
+        canonicalize(Some(temp_dir.path().join("new-worktree")))
+    );
+    let directly_opened_worktree_repo = Repo::from_dir(&temp_dir.path().join("new-worktree"))?;
+    assert_eq!(
+        canonicalize(directly_opened_worktree_repo.get_working_copy_path()),
+        canonicalize(worktree_repo.get_working_copy_path())
+    );
 
     Ok(())
 }

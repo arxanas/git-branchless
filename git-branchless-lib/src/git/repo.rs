@@ -516,8 +516,42 @@ impl Repo {
 
     /// Get the path to the working copy for this repository. If the repository
     /// is bare (has no working copy), returns `None`.
-    pub fn get_working_copy_path(&self) -> Option<&Path> {
-        self.inner.workdir()
+    pub fn get_working_copy_path(&self) -> Option<PathBuf> {
+        let workdir = self.inner.workdir()?;
+        if !self.inner.is_worktree() {
+            return Some(workdir.to_owned());
+        }
+
+        // Under some circumstances (not sure exactly when),
+        // `git2::Repository::workdir` on a worktree returns a path like
+        // `/path/to/repo/.git/worktrees/worktree-name/` instead of
+        // `/path/to/worktree/`.
+        let gitdir_file = workdir.join("gitdir");
+        let gitdir = match std::fs::read_to_string(&gitdir_file) {
+            Ok(gitdir) => gitdir,
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                return Some(workdir.to_path_buf());
+            }
+            Err(err) => {
+                warn!(
+                    ?workdir,
+                    ?gitdir_file,
+                    ?err,
+                    "gitdir file for worktree could not be read; cannot get workdir path"
+                );
+                return None;
+            }
+        };
+        let gitdir = match gitdir.strip_suffix('\n') {
+            Some(gitdir) => gitdir,
+            None => gitdir.as_str(),
+        };
+        let gitdir = PathBuf::from(gitdir);
+        let workdir = gitdir.parent()?; // remove `.git` suffix
+        std::fs::canonicalize(workdir).ok().or_else(|| {
+            warn!(?workdir, "Failed to canonicalize workdir");
+            None
+        })
     }
 
     /// Get the index file for this repository.
@@ -1469,17 +1503,18 @@ impl Repo {
         let repo_path = self
             .get_working_copy_path()
             .ok_or(Error::NoWorkingCopyPath)?;
+        let repo_path = &repo_path;
         let new_tree_entries: HashMap<PathBuf, Option<(NonZeroOid, FileMode)>> = match opts {
             AmendFastOptions::FromWorkingCopy { status_entries } => status_entries
                 .iter()
                 .flat_map(|entry| {
                     entry.paths().into_iter().map(
                         move |path| -> Result<(PathBuf, Option<(NonZeroOid, FileMode)>)> {
-                            let file_path = &repo_path.join(&path);
+                            let file_path = repo_path.join(&path);
                             // Try to create a new blob OID based on the current on-disk
                             // contents of the file in the working copy.
                             let entry = self
-                                .create_blob_from_path(file_path)?
+                                .create_blob_from_path(&file_path)?
                                 .map(|oid| (oid, entry.working_copy_file_mode));
                             Ok((path, entry))
                         },
