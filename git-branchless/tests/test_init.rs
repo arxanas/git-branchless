@@ -628,7 +628,7 @@ fn test_init_worktree() -> eyre::Result<()> {
         let stdout = worktree.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
-        @ 96d1c37 (> new-worktree, master) create test2.txt
+        @ 96d1c37 (master) create test2.txt
         "###);
     }
 

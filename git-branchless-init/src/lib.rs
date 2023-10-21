@@ -426,7 +426,7 @@ fn install_man_pages(effects: &Effects, repo: &Repo, config: &mut Config) -> eyr
         return Ok(());
     }
 
-    let man_dir = repo.get_man_dir();
+    let man_dir = repo.get_man_dir()?;
     let man_dir_relative = {
         let man_dir_relative = man_dir.strip_prefix(repo.get_path()).wrap_err_with(|| {
             format!(
@@ -534,7 +534,7 @@ fn create_isolated_config(
     repo: &Repo,
     mut parent_config: Config,
 ) -> eyre::Result<Config> {
-    let config_path = repo.get_config_path();
+    let config_path = repo.get_config_path()?;
     let config_dir = config_path
         .parent()
         .ok_or_else(|| eyre::eyre!("Could not get parent config directory"))?;
@@ -575,13 +575,14 @@ fn delete_isolated_config(
     repo: &Repo,
     mut parent_config: Config,
 ) -> eyre::Result<()> {
+    let config_path = repo.get_config_path()?;
     writeln!(
         effects.get_output_stream(),
         "Removing config file: {}",
-        repo.get_config_path().to_string_lossy()
+        config_path.to_string_lossy()
     )?;
     parent_config.remove_multivar("include.path", INCLUDE_PATH_REGEX)?;
-    let result = match std::fs::remove_file(repo.get_config_path()) {
+    let result = match std::fs::remove_file(config_path) {
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
             writeln!(
                 effects.get_output_stream(),

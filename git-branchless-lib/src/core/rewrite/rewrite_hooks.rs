@@ -505,7 +505,7 @@ pub fn hook_drop_commit_if_empty(
         save_updated_head_oid(&repo, only_parent_oid)?;
     }
     add_rewritten_list_entries(
-        &repo.get_tempfile_dir(),
+        &repo.get_tempfile_dir()?,
         &repo.get_rebase_state_dir_path().join("rewritten-list"),
         &[
             (old_commit_oid, MaybeZeroOid::Zero),
@@ -544,7 +544,7 @@ pub fn hook_skip_upstream_applied_commit(
         }
     }
     add_rewritten_list_entries(
-        &repo.get_tempfile_dir(),
+        &repo.get_tempfile_dir()?,
         &repo.get_rebase_state_dir_path().join("rewritten-list"),
         &[(commit_oid, MaybeZeroOid::Zero)],
     )?;
