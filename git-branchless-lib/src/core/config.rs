@@ -18,13 +18,24 @@ use super::eventlog::EventTransactionId;
 /// Get the expected hooks dir inside `.git`, assuming that the user has not
 /// overridden it.
 #[instrument]
-pub fn get_default_hooks_dir(repo: &Repo) -> PathBuf {
-    repo.get_path().join("hooks")
+pub fn get_default_hooks_dir(repo: &Repo) -> eyre::Result<PathBuf> {
+    let parent_repo = repo.open_worktree_parent_repo()?;
+    let repo = parent_repo.as_ref().unwrap_or(repo);
+    Ok(repo.get_path().join("hooks"))
 }
 
-/// Get the path where Git hooks are stored on disk.
+/// Get the path where the main worktree's Git hooks are stored on disk.
+///
+/// Git hooks live at `$GIT_DIR/hooks` by default, which means that they will be
+/// different per wortkree. Most people, when creating a new worktree, will not
+/// also reinstall hooks or reinitialize git-branchless in that worktree, so we
+/// instead look up hooks for the main worktree, which is most likely to have them
+/// installed.
+///
+/// This could in theory cause problems for users who have different
+/// per-worktree hooks.
 #[instrument]
-pub fn get_hooks_dir(
+pub fn get_main_worktree_hooks_dir(
     git_run_info: &GitRunInfo,
     repo: &Repo,
     event_tx_id: Option<EventTransactionId>,
@@ -45,7 +56,7 @@ pub fn get_hooks_dir(
             .context("Decoding git config output for hooks path")?;
         PathBuf::from(path.strip_suffix('\n').unwrap_or(&path))
     } else {
-        get_default_hooks_dir(repo)
+        get_default_hooks_dir(repo)?
     };
     Ok(hooks_path)
 }

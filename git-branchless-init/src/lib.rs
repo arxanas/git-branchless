@@ -23,7 +23,9 @@ use path_slash::PathExt;
 use tracing::{instrument, warn};
 
 use git_branchless_opts::{write_man_pages, InitArgs, InstallManPagesArgs};
-use lib::core::config::{get_default_branch_name, get_default_hooks_dir, get_hooks_dir};
+use lib::core::config::{
+    get_default_branch_name, get_default_hooks_dir, get_main_worktree_hooks_dir,
+};
 use lib::core::dag::Dag;
 use lib::core::effects::Effects;
 use lib::core::eventlog::{EventLogDb, EventReplayer};
@@ -249,12 +251,12 @@ fn install_hooks(effects: &Effects, git_run_info: &GitRunInfo, repo: &Repo) -> e
             .map(|(hook_type, _hook_script)| hook_type)
             .join(", ")
     )?;
-    let hooks_dir = get_hooks_dir(git_run_info, repo, None)?;
+    let hooks_dir = get_main_worktree_hooks_dir(git_run_info, repo, None)?;
     for (hook_type, hook_script) in ALL_HOOKS {
         install_hook(repo, &hooks_dir, hook_type, hook_script)?;
     }
 
-    let default_hooks_dir = get_default_hooks_dir(repo);
+    let default_hooks_dir = get_default_hooks_dir(repo)?;
     if hooks_dir != default_hooks_dir {
         writeln!(
             effects.get_output_stream(),
@@ -281,7 +283,7 @@ fn uninstall_hooks(effects: &Effects, git_run_info: &GitRunInfo, repo: &Repo) ->
             .map(|(hook_type, _hook_script)| hook_type)
             .join(", ")
     )?;
-    let hooks_dir = get_hooks_dir(git_run_info, repo, None)?;
+    let hooks_dir = get_main_worktree_hooks_dir(git_run_info, repo, None)?;
     for (hook_type, _hook_script) in ALL_HOOKS {
         install_hook(
             repo,

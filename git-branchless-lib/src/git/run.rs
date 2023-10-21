@@ -11,9 +11,9 @@ use std::thread::{self, JoinHandle};
 use bstr::BString;
 use eyre::{eyre, Context};
 use itertools::Itertools;
-use tracing::instrument;
+use tracing::{instrument, warn};
 
-use crate::core::config::get_hooks_dir;
+use crate::core::config::get_main_worktree_hooks_dir;
 use crate::core::effects::{Effects, OperationType};
 use crate::core::eventlog::{EventTransactionId, BRANCHLESS_TRANSACTION_ID_ENV_VAR};
 use crate::git::repo::Repo;
@@ -394,8 +394,13 @@ impl GitRunInfo {
         args: &[&str],
         stdin: Option<BString>,
     ) -> eyre::Result<()> {
-        let hook_dir = get_hooks_dir(self, repo, Some(event_tx_id))?;
+        let hook_dir = get_main_worktree_hooks_dir(self, repo, Some(event_tx_id))?;
         if !hook_dir.exists() {
+            warn!(
+                ?hook_dir,
+                ?hook_name,
+                "Git hooks dir did not exist, so could not invoke hook"
+            );
             return Ok(());
         }
 

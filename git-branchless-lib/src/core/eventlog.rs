@@ -471,7 +471,7 @@ pub struct EventLogDb<'conn> {
 
 impl std::fmt::Debug for EventLogDb<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "<EventLogDb>")
+        write!(f, "<EventLogDb path={:?}>", self.conn.path())
     }
 }
 
