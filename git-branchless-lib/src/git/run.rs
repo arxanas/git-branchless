@@ -3,7 +3,7 @@ use std::convert::TryInto;
 use std::ffi::{OsStr, OsString};
 use std::fmt::Write;
 use std::io::{BufRead, BufReader, Read, Write as WriteIo};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::{Command, ExitStatus, Stdio};
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
@@ -256,7 +256,7 @@ impl GitRunInfo {
     ///
     /// This contains additional logic for symlinked `.git` directories to work
     /// around an upstream `libgit2` issue.
-    fn working_directory<'a>(&'a self, repo: &'a Repo) -> &'a Path {
+    fn working_directory<'a>(&'a self, repo: &'a Repo) -> PathBuf {
         repo.get_working_copy_path()
             // `libgit2` returns the working copy path as the parent of the
             // `.git` directory. However, if the `.git` directory is a symlink,
@@ -274,13 +274,13 @@ impl GitRunInfo {
             // root of the working tree.
             .map(|working_copy| {
                 // Both paths are already "canonicalized".
-                if !self.working_directory.starts_with(working_copy) {
-                    &self.working_directory
+                if !self.working_directory.starts_with(&working_copy) {
+                    self.working_directory.clone()
                 } else {
                     working_copy
                 }
             })
-            .unwrap_or_else(|| repo.get_path())
+            .unwrap_or_else(|| repo.get_path().to_owned())
     }
 
     fn run_silent_inner(

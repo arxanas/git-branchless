@@ -38,7 +38,7 @@ use git_branchless_opts::{
 };
 use git_branchless_revset::resolve_commits;
 use phabricator::PhabricatorForge;
-use tracing::{debug, warn};
+use tracing::{debug, info, instrument, warn};
 
 lazy_static! {
     /// The style for branches which were successfully submitted.
@@ -473,6 +473,7 @@ create and push them, retry this operation with the --create option."
     Ok(Ok(()))
 }
 
+#[instrument]
 fn select_forge<'a>(
     effects: &'a Effects,
     git_run_info: &'a GitRunInfo,
@@ -484,10 +485,20 @@ fn select_forge<'a>(
     forge: Option<ForgeKind>,
 ) -> Box<dyn Forge + 'a> {
     let forge_kind = match forge {
-        Some(forge_kind) => forge_kind,
+        Some(forge_kind) => {
+            info!(?forge_kind, "Forge kind was explicitly set");
+            forge_kind
+        }
         None => {
             let use_phabricator = if let Some(working_copy_path) = repo.get_working_copy_path() {
-                working_copy_path.join(".arcconfig").is_file()
+                let arcconfig_path = &working_copy_path.join(".arcconfig");
+                let arcconfig_present = arcconfig_path.is_file();
+                debug!(
+                    ?arcconfig_path,
+                    ?arcconfig_present,
+                    "Checking arcconfig path to decide whether to use Phabricator"
+                );
+                arcconfig_present
             } else {
                 false
             };
@@ -499,6 +510,7 @@ fn select_forge<'a>(
         }
     };
 
+    info!(?forge_kind, "Selected forge kind");
     match forge_kind {
         ForgeKind::Branch => Box::new(BranchForge {
             effects,
