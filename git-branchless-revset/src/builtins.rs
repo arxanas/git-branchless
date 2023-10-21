@@ -514,7 +514,7 @@ fn fn_current(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
 }
 
 fn read_all_test_results(repo: &Repo, commit: &Commit) -> Option<Vec<SerializedTestResult>> {
-    let commit_test_dir = get_test_tree_dir(repo, commit);
+    let commit_test_dir = get_test_tree_dir(repo, commit).ok()?;
     let mut all_results = Vec::new();
     for dir in std::fs::read_dir(commit_test_dir).ok()? {
         let dir = dir.ok()?;
@@ -529,7 +529,7 @@ fn read_all_test_results(repo: &Repo, commit: &Commit) -> Option<Vec<SerializedT
 }
 
 fn read_latest_test_command(repo: &Repo) -> Option<String> {
-    let latest_command_path = get_latest_test_command_path(repo);
+    let latest_command_path = get_latest_test_command_path(repo).ok()?;
     let latest_command = std::fs::read_to_string(latest_command_path).ok()?;
     Some(latest_command)
 }

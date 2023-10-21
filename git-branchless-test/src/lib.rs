@@ -1325,7 +1325,7 @@ fn run_tests_inner<'a>(
         Some(TestSearchStrategy::Binary) => Some(search::Strategy::Binary),
     };
 
-    let latest_test_command_path = get_latest_test_command_path(repo);
+    let latest_test_command_path = get_latest_test_command_path(repo)?;
     if let Some(parent) = latest_test_command_path.parent() {
         if let Err(err) = std::fs::create_dir_all(parent) {
             warn!(
@@ -2351,7 +2351,7 @@ fn make_test_files(
         }));
     }
 
-    let tree_dir = get_test_tree_dir(repo, commit);
+    let tree_dir = get_test_tree_dir(repo, commit)?;
     std::fs::create_dir_all(&tree_dir)
         .wrap_err_with(|| format!("Creating tree directory {tree_dir:?}"))?;
 
@@ -2487,7 +2487,7 @@ fn prepare_working_directory(
     strategy: TestExecutionStrategy,
     worker_id: WorkerId,
 ) -> eyre::Result<Result<PreparedWorkingDirectory, PrepareWorkingDirectoryError>> {
-    let test_lock_dir_path = get_test_locks_dir(repo);
+    let test_lock_dir_path = get_test_locks_dir(repo)?;
     std::fs::create_dir_all(&test_lock_dir_path)
         .wrap_err_with(|| format!("Creating test lock dir path: {test_lock_dir_path:?}"))?;
 
@@ -2536,7 +2536,7 @@ fn prepare_working_directory(
         }
 
         TestExecutionStrategy::Worktree => {
-            let parent_dir = get_test_worktrees_dir(repo);
+            let parent_dir = get_test_worktrees_dir(repo)?;
             std::fs::create_dir_all(&parent_dir)
                 .wrap_err_with(|| format!("Creating worktree parent dir at {parent_dir:?}"))?;
 
@@ -2924,7 +2924,7 @@ pub fn subcommand_clean(
 
     let mut num_cleaned_commits = 0;
     for commit in sorted_commit_set(&repo, &dag, &commit_set)? {
-        let tree_dir = get_test_tree_dir(&repo, &commit);
+        let tree_dir = get_test_tree_dir(&repo, &commit)?;
         if tree_dir.exists() {
             writeln!(
                 effects.get_output_stream(),

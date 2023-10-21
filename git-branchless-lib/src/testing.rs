@@ -754,7 +754,12 @@ pub struct GitWorktreeWrapper {
 pub fn make_git_worktree(git: &Git, worktree_name: &str) -> eyre::Result<GitWorktreeWrapper> {
     let temp_dir = tempfile::tempdir()?;
     let worktree_path = temp_dir.path().join(worktree_name);
-    git.run(&["worktree", "add", worktree_path.to_str().unwrap()])?;
+    git.run(&[
+        "worktree",
+        "add",
+        "--detach",
+        worktree_path.to_str().unwrap(),
+    ])?;
     let worktree = Git {
         repo_path: worktree_path,
         ..git.clone()

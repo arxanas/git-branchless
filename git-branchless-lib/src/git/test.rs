@@ -9,7 +9,7 @@ use std::{fmt::Display, path::PathBuf};
 
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 
-use super::{Commit, NonZeroOid, Repo};
+use super::{Commit, NonZeroOid, Repo, RepoError};
 
 /// The exit status to use when a test command succeeds.
 pub const TEST_SUCCESS_EXIT_CODE: i32 = 0;
@@ -104,8 +104,8 @@ pub struct SerializedTestResult {
 }
 
 /// Get the directory where the results of running tests are stored.
-fn get_test_dir(repo: &Repo) -> PathBuf {
-    repo.get_path().join("branchless").join("test")
+fn get_test_dir(repo: &Repo) -> Result<PathBuf, RepoError> {
+    Ok(repo.get_branchless_dir()?.join("test"))
 }
 
 /// Get the directory where the result of tests for a particular commit are
@@ -113,21 +113,21 @@ fn get_test_dir(repo: &Repo) -> PathBuf {
 /// cached based on the contents of the commit, rather than its specific commit
 /// hash. This means that we can cache the results of tests for commits that
 /// have been amended or rebased.
-pub fn get_test_tree_dir(repo: &Repo, commit: &Commit) -> PathBuf {
-    get_test_dir(repo).join(commit.get_tree_oid().to_string())
+pub fn get_test_tree_dir(repo: &Repo, commit: &Commit) -> Result<PathBuf, RepoError> {
+    Ok(get_test_dir(repo)?.join(commit.get_tree_oid().to_string()))
 }
 
 /// Get the directory where the locks for running tests are stored.
-pub fn get_test_locks_dir(repo: &Repo) -> PathBuf {
-    get_test_dir(repo).join("locks")
+pub fn get_test_locks_dir(repo: &Repo) -> Result<PathBuf, RepoError> {
+    Ok(get_test_dir(repo)?.join("locks"))
 }
 
 /// Get the directory where the worktrees for running tests are stored.
-pub fn get_test_worktrees_dir(repo: &Repo) -> PathBuf {
-    get_test_dir(repo).join("worktrees")
+pub fn get_test_worktrees_dir(repo: &Repo) -> Result<PathBuf, RepoError> {
+    Ok(get_test_dir(repo)?.join("worktrees"))
 }
 
 /// Get the path to the file where the latest test command is stored.
-pub fn get_latest_test_command_path(repo: &Repo) -> PathBuf {
-    get_test_dir(repo).join("latest-command")
+pub fn get_latest_test_command_path(repo: &Repo) -> Result<PathBuf, RepoError> {
+    Ok(get_test_dir(repo)?.join("latest-command"))
 }

@@ -256,7 +256,7 @@ impl Dag {
 
     #[instrument]
     fn open_inner_dag(repo: &Repo) -> eyre::Result<eden_dag::Dag> {
-        let dag_dir = repo.get_dag_dir();
+        let dag_dir = repo.get_dag_dir()?;
         std::fs::create_dir_all(&dag_dir).wrap_err("Creating .git/branchless/dag dir")?;
         let dag = eden_dag::Dag::open(&dag_dir)
             .wrap_err_with(|| format!("Opening DAG directory at: {:?}", &dag_dir))?;

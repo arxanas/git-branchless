@@ -565,26 +565,36 @@ impl Repo {
         Ok(Config::from(config))
     }
 
+    /// Get the directory where all repo-specific git-branchless state is stored.
+    pub fn get_branchless_dir(&self) -> Result<PathBuf> {
+        let dir = self.get_path().join("branchless");
+        std::fs::create_dir_all(&dir).map_err(|err| Error::CreateBranchlessDir {
+            source: err,
+            path: dir.clone(),
+        })?;
+        Ok(dir)
+    }
+
     /// Get the file where git-branchless-specific Git configuration is stored.
     #[instrument]
-    pub fn get_config_path(&self) -> PathBuf {
-        self.get_path().join("branchless").join("config")
+    pub fn get_config_path(&self) -> Result<PathBuf> {
+        Ok(self.get_branchless_dir()?.join("config"))
     }
 
     /// Get the directory where the DAG for the repository is stored.
     #[instrument]
-    pub fn get_dag_dir(&self) -> PathBuf {
+    pub fn get_dag_dir(&self) -> Result<PathBuf> {
         // Updated from `dag` to `dag2` for `esl01-dag==0.3.0`, since it may
         // not be backwards-compatible.
-        self.get_path().join("branchless").join("dag2")
+        Ok(self.get_branchless_dir()?.join("dag2"))
     }
 
     /// Get the directory to store man-pages. Note that this is the `man`
     /// directory, and not a subsection thereof. `git-branchless` man-pages must
     /// go into the `man/man1` directory to be found by `man`.
     #[instrument]
-    pub fn get_man_dir(&self) -> PathBuf {
-        self.get_path().join("branchless").join("man")
+    pub fn get_man_dir(&self) -> Result<PathBuf> {
+        Ok(self.get_branchless_dir()?.join("man"))
     }
 
     /// Get a directory suitable for storing temporary files.
@@ -594,18 +604,14 @@ impl Repo {
     /// atomically. See
     /// <https://github.com/arxanas/git-branchless/discussions/120>.
     #[instrument]
-    pub fn get_tempfile_dir(&self) -> PathBuf {
-        self.get_path().join("branchless").join("tmp")
+    pub fn get_tempfile_dir(&self) -> Result<PathBuf> {
+        Ok(self.get_branchless_dir()?.join("tmp"))
     }
 
     /// Get the connection to the SQLite database for this repository.
     #[instrument]
     pub fn get_db_conn(&self) -> Result<rusqlite::Connection> {
-        let dir = self.get_path().join("branchless");
-        std::fs::create_dir_all(&dir).map_err(|err| Error::CreateBranchlessDir {
-            source: err,
-            path: dir.clone(),
-        })?;
+        let dir = self.get_branchless_dir()?;
         let path = dir.join("db.sqlite3");
         let conn = rusqlite::Connection::open(&path).map_err(|err| Error::OpenDatabase {
             source: err,
