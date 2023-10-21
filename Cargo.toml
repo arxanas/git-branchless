@@ -25,6 +25,7 @@ members = [
     "scm-bisect",
     "scm-record",
 ]
+resolver = "2"
 
 [workspace.metadata.release]
 consolidate-commits = true
