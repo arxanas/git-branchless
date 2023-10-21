@@ -829,13 +829,6 @@ trait WriteProgress {
     fn drop(&mut self) {
         let buffer = self.get_buffer();
         if !buffer.is_empty() {
-            // In practice, we're expecting that every sequence of `write` calls
-            // will shortly end with a `write` call that ends with a newline, in
-            // such a way that only full lines are written to the output stream.
-            // This assumption might be wrong, in which case we should revisit
-            // this warning and the behavior on `Drop`.
-            warn!(?buffer, "WriteProgress dropped while buffer was not empty");
-
             // NB: this only flushes completely-written lines, which is not
             // correct. We should flush the entire buffer contents, and possibly
             // force a newline at the end in the case of a progress meter being
