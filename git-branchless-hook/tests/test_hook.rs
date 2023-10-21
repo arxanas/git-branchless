@@ -1,4 +1,4 @@
-use lib::testing::{make_git, GitRunOptions};
+use lib::testing::{make_git, make_git_worktree, GitRunOptions, GitWorktreeWrapper};
 
 #[test]
 fn test_is_rebase_underway() -> eyre::Result<()> {
@@ -144,6 +144,89 @@ fn test_rebase_no_process_new_commits_until_conclusion() -> eyre::Result<()> {
             hint: disable this hint by running: git config --global branchless.hint.smartlogFixAbandoned false
             "###);
         }
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_hooks_in_worktree() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    git.commit_file("test1", 1)?;
+    git.detach_head()?;
+
+    let GitWorktreeWrapper {
+        temp_dir: _temp_dir,
+        worktree,
+    } = make_git_worktree(&git, "new-worktree")?;
+
+    {
+        let (stdout, stderr) =
+            worktree.run(&["commit", "--allow-empty", "-m", "new empty commit"])?;
+        insta::assert_snapshot!(stderr, @r###"
+        branchless: processing 1 update: ref HEAD
+        branchless: processed commit: 1bed0d8 new empty commit
+        "###);
+        insta::assert_snapshot!(stdout, @r###"
+        [detached HEAD 1bed0d8] new empty commit
+        "###);
+    }
+
+    {
+        let stdout = git.smartlog()?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        @ 62fc20d (master) create test1.txt
+        |
+        o 1bed0d8 new empty commit
+        "###);
+    }
+    {
+        let stdout = worktree.smartlog()?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d (master) create test1.txt
+        |
+        @ 1bed0d8 new empty commit
+        "###);
+    }
+
+    {
+        let (stdout, stderr) =
+            worktree.run(&["commit", "--amend", "--allow-empty", "--message", "amended"])?;
+        insta::assert_snapshot!(stderr, @r###"
+        branchless: processing 1 update: ref HEAD
+        branchless: processed commit: cc4313e amended
+        branchless: processing 1 rewritten commit
+        "###);
+        insta::assert_snapshot!(stdout, @r###"
+        [detached HEAD cc4313e] amended
+         Date: Thu Oct 29 12:34:56 2020 +0000
+        "###);
+    }
+    {
+        let stdout = git.smartlog()?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        @ 62fc20d (master) create test1.txt
+        |
+        o cc4313e amended
+        "###);
+    }
+    {
+        let stdout = worktree.smartlog()?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d (master) create test1.txt
+        |
+        @ cc4313e amended
+        "###);
     }
 
     Ok(())
