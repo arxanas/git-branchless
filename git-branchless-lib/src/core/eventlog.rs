@@ -54,12 +54,20 @@ struct Row {
 /// Unlike in a database, there is no specific guarantee that an event
 /// transaction is an atomic unit of work.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct EventTransactionId(isize);
+pub enum EventTransactionId {
+    /// A normal transaction ID.
+    Id(isize),
+
+    /// A value indicating that the no events should actually be added for this transaction.
+    Suppressed,
+}
 
 impl ToString for EventTransactionId {
     fn to_string(&self) -> String {
-        let EventTransactionId(event_id) = self;
-        event_id.to_string()
+        match self {
+            EventTransactionId::Id(event_id) => event_id.to_string(),
+            EventTransactionId::Suppressed => "SUPPRESSED".to_string(),
+        }
     }
 }
 
@@ -67,8 +75,12 @@ impl FromStr for EventTransactionId {
     type Err = <isize as FromStr>::Err;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let event_id = s.parse()?;
-        Ok(EventTransactionId(event_id))
+        if s == "SUPPRESSED" {
+            Ok(EventTransactionId::Suppressed)
+        } else {
+            let event_id = s.parse()?;
+            Ok(EventTransactionId::Id(event_id))
+        }
     }
 }
 
@@ -215,12 +227,39 @@ impl Event {
     }
 }
 
-impl From<Event> for Row {
-    fn from(event: Event) -> Row {
-        match event {
+impl TryFrom<Event> for Row {
+    type Error = ();
+
+    fn try_from(event: Event) -> Result<Self, Self::Error> {
+        let row = match event {
+            Event::RewriteEvent {
+                event_tx_id: EventTransactionId::Suppressed,
+                ..
+            }
+            | Event::RefUpdateEvent {
+                event_tx_id: EventTransactionId::Suppressed,
+                ..
+            }
+            | Event::CommitEvent {
+                event_tx_id: EventTransactionId::Suppressed,
+                ..
+            }
+            | Event::ObsoleteEvent {
+                event_tx_id: EventTransactionId::Suppressed,
+                ..
+            }
+            | Event::UnobsoleteEvent {
+                event_tx_id: EventTransactionId::Suppressed,
+                ..
+            }
+            | Event::WorkingCopySnapshot {
+                event_tx_id: EventTransactionId::Suppressed,
+                ..
+            } => return Err(()),
+
             Event::RewriteEvent {
                 timestamp,
-                event_tx_id: EventTransactionId(event_tx_id),
+                event_tx_id: EventTransactionId::Id(event_tx_id),
                 old_commit_oid,
                 new_commit_oid,
             } => Row {
@@ -235,7 +274,7 @@ impl From<Event> for Row {
 
             Event::RefUpdateEvent {
                 timestamp,
-                event_tx_id: EventTransactionId(event_tx_id),
+                event_tx_id: EventTransactionId::Id(event_tx_id),
                 ref_name,
                 old_oid,
                 new_oid,
@@ -252,7 +291,7 @@ impl From<Event> for Row {
 
             Event::CommitEvent {
                 timestamp,
-                event_tx_id: EventTransactionId(event_tx_id),
+                event_tx_id: EventTransactionId::Id(event_tx_id),
                 commit_oid,
             } => Row {
                 timestamp,
@@ -266,7 +305,7 @@ impl From<Event> for Row {
 
             Event::ObsoleteEvent {
                 timestamp,
-                event_tx_id: EventTransactionId(event_tx_id),
+                event_tx_id: EventTransactionId::Id(event_tx_id),
                 commit_oid,
             } => Row {
                 timestamp,
@@ -280,7 +319,7 @@ impl From<Event> for Row {
 
             Event::UnobsoleteEvent {
                 timestamp,
-                event_tx_id: EventTransactionId(event_tx_id),
+                event_tx_id: EventTransactionId::Id(event_tx_id),
                 commit_oid,
             } => Row {
                 timestamp,
@@ -294,7 +333,7 @@ impl From<Event> for Row {
 
             Event::WorkingCopySnapshot {
                 timestamp,
-                event_tx_id: EventTransactionId(event_tx_id),
+                event_tx_id: EventTransactionId::Id(event_tx_id),
                 head_oid,
                 commit_oid,
                 ref_name,
@@ -307,7 +346,8 @@ impl From<Event> for Row {
                 ref_name,
                 message: None,
             },
-        }
+        };
+        Ok(row)
     }
 }
 
@@ -322,7 +362,7 @@ fn try_from_row_helper(row: &Row) -> Result<Event, eyre::Error> {
         ref2,
         message,
     } = row;
-    let event_tx_id = EventTransactionId(event_tx_id);
+    let event_tx_id = EventTransactionId::Id(event_tx_id);
 
     let get_oid =
         |reference_name: &Option<ReferenceName>, oid_name: &str| -> eyre::Result<MaybeZeroOid> {
@@ -490,6 +530,10 @@ impl<'conn> EventLogDb<'conn> {
     pub fn add_events(&self, events: Vec<Event>) -> eyre::Result<()> {
         let tx = self.conn.unchecked_transaction()?;
         for event in events {
+            let row = match Row::try_from(event) {
+                Ok(row) => row,
+                Err(()) => continue,
+            };
             let Row {
                 timestamp,
                 type_,
@@ -498,7 +542,7 @@ impl<'conn> EventLogDb<'conn> {
                 ref2,
                 ref_name,
                 message,
-            } = Row::from(event);
+            } = row;
 
             let ref1 = ref1.as_ref().map(|x| x.as_str());
             let ref2 = ref2.as_ref().map(|x| x.as_str());
@@ -608,7 +652,7 @@ ORDER BY rowid ASC
         // SQLite connection.
         let event_tx_id: isize = self.conn.last_insert_rowid().try_into()?;
         tx.commit()?;
-        Ok(EventTransactionId(event_tx_id))
+        Ok(EventTransactionId::Id(event_tx_id))
     }
 
     /// Create a new event transaction ID to be used to insert subsequent
@@ -623,7 +667,12 @@ ORDER BY rowid ASC
 
     /// Get the message associated with the given transaction.
     pub fn get_transaction_message(&self, event_tx_id: EventTransactionId) -> eyre::Result<String> {
-        let EventTransactionId(event_tx_id) = event_tx_id;
+        let event_tx_id = match event_tx_id {
+            EventTransactionId::Id(event_tx_id) => event_tx_id,
+            EventTransactionId::Suppressed => {
+                eyre::bail!("No message available for suppressed transaction ID")
+            }
+        };
         let mut stmt = self.conn.prepare(
             "
 SELECT message
@@ -1352,7 +1401,7 @@ pub mod testing {
 
     /// Create a new transaction ID, for testing.
     pub fn new_event_transaction_id(id: isize) -> EventTransactionId {
-        EventTransactionId(id)
+        EventTransactionId::Id(id)
     }
 
     /// Create a new event cursor, for testing.

@@ -34,7 +34,7 @@ fn test_git_v2_31_events() -> eyre::Result<()> {
     [
         RefUpdateEvent {
             timestamp: 0.0,
-            event_tx_id: EventTransactionId(
+            event_tx_id: Id(
                 1,
             ),
             ref_name: ReferenceName(
@@ -46,7 +46,7 @@ fn test_git_v2_31_events() -> eyre::Result<()> {
         },
         RefUpdateEvent {
             timestamp: 0.0,
-            event_tx_id: EventTransactionId(
+            event_tx_id: Id(
                 2,
             ),
             ref_name: ReferenceName(
@@ -58,7 +58,7 @@ fn test_git_v2_31_events() -> eyre::Result<()> {
         },
         RefUpdateEvent {
             timestamp: 0.0,
-            event_tx_id: EventTransactionId(
+            event_tx_id: Id(
                 3,
             ),
             ref_name: ReferenceName(
@@ -70,7 +70,7 @@ fn test_git_v2_31_events() -> eyre::Result<()> {
         },
         RefUpdateEvent {
             timestamp: 0.0,
-            event_tx_id: EventTransactionId(
+            event_tx_id: Id(
                 3,
             ),
             ref_name: ReferenceName(
@@ -82,14 +82,14 @@ fn test_git_v2_31_events() -> eyre::Result<()> {
         },
         CommitEvent {
             timestamp: 0.0,
-            event_tx_id: EventTransactionId(
+            event_tx_id: Id(
                 4,
             ),
             commit_oid: NonZeroOid(62fc20d2a290daea0d52bdc2ed2ad4be6491010e),
         },
         RefUpdateEvent {
             timestamp: 0.0,
-            event_tx_id: EventTransactionId(
+            event_tx_id: Id(
                 5,
             ),
             ref_name: ReferenceName(
@@ -101,7 +101,7 @@ fn test_git_v2_31_events() -> eyre::Result<()> {
         },
         RefUpdateEvent {
             timestamp: 0.0,
-            event_tx_id: EventTransactionId(
+            event_tx_id: Id(
                 6,
             ),
             ref_name: ReferenceName(
@@ -113,7 +113,7 @@ fn test_git_v2_31_events() -> eyre::Result<()> {
         },
         RefUpdateEvent {
             timestamp: 0.0,
-            event_tx_id: EventTransactionId(
+            event_tx_id: Id(
                 7,
             ),
             ref_name: ReferenceName(
@@ -125,21 +125,21 @@ fn test_git_v2_31_events() -> eyre::Result<()> {
         },
         CommitEvent {
             timestamp: 0.0,
-            event_tx_id: EventTransactionId(
+            event_tx_id: Id(
                 8,
             ),
             commit_oid: NonZeroOid(fe65c1fe15584744e649b2c79d4cf9b0d878f92e),
         },
         ObsoleteEvent {
             timestamp: 0.0,
-            event_tx_id: EventTransactionId(
+            event_tx_id: Id(
                 9,
             ),
             commit_oid: NonZeroOid(62fc20d2a290daea0d52bdc2ed2ad4be6491010e),
         },
         RefUpdateEvent {
             timestamp: 0.0,
-            event_tx_id: EventTransactionId(
+            event_tx_id: Id(
                 10,
             ),
             ref_name: ReferenceName(

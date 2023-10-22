@@ -246,7 +246,7 @@ fn test_merge_commit_recorded() -> eyre::Result<()> {
     [
         RefUpdateEvent {
             timestamp: 0.0,
-            event_tx_id: EventTransactionId(
+            event_tx_id: Id(
                 1,
             ),
             ref_name: ReferenceName(
@@ -258,7 +258,7 @@ fn test_merge_commit_recorded() -> eyre::Result<()> {
         },
         RefUpdateEvent {
             timestamp: 0.0,
-            event_tx_id: EventTransactionId(
+            event_tx_id: Id(
                 1,
             ),
             ref_name: ReferenceName(
@@ -270,14 +270,14 @@ fn test_merge_commit_recorded() -> eyre::Result<()> {
         },
         CommitEvent {
             timestamp: 0.0,
-            event_tx_id: EventTransactionId(
+            event_tx_id: Id(
                 2,
             ),
             commit_oid: NonZeroOid(62fc20d2a290daea0d52bdc2ed2ad4be6491010e),
         },
         RefUpdateEvent {
             timestamp: 0.0,
-            event_tx_id: EventTransactionId(
+            event_tx_id: Id(
                 3,
             ),
             ref_name: ReferenceName(
@@ -289,7 +289,7 @@ fn test_merge_commit_recorded() -> eyre::Result<()> {
         },
         RefUpdateEvent {
             timestamp: 0.0,
-            event_tx_id: EventTransactionId(
+            event_tx_id: Id(
                 4,
             ),
             ref_name: ReferenceName(
@@ -301,7 +301,7 @@ fn test_merge_commit_recorded() -> eyre::Result<()> {
         },
         RefUpdateEvent {
             timestamp: 0.0,
-            event_tx_id: EventTransactionId(
+            event_tx_id: Id(
                 5,
             ),
             ref_name: ReferenceName(
@@ -313,14 +313,14 @@ fn test_merge_commit_recorded() -> eyre::Result<()> {
         },
         CommitEvent {
             timestamp: 0.0,
-            event_tx_id: EventTransactionId(
+            event_tx_id: Id(
                 6,
             ),
             commit_oid: NonZeroOid(fe65c1fe15584744e649b2c79d4cf9b0d878f92e),
         },
         RefUpdateEvent {
             timestamp: 0.0,
-            event_tx_id: EventTransactionId(
+            event_tx_id: Id(
                 8,
             ),
             ref_name: ReferenceName(
@@ -332,7 +332,7 @@ fn test_merge_commit_recorded() -> eyre::Result<()> {
         },
         CommitEvent {
             timestamp: 0.0,
-            event_tx_id: EventTransactionId(
+            event_tx_id: Id(
                 9,
             ),
             commit_oid: NonZeroOid(91a5ccb4feefba38b0ffa4911c5c3f6c225f662e),
