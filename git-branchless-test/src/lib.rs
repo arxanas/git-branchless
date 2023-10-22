@@ -41,7 +41,9 @@ use lib::core::config::{
 };
 use lib::core::dag::{sorted_commit_set, CommitSet, Dag};
 use lib::core::effects::{icons, Effects, OperationIcon, OperationType};
-use lib::core::eventlog::{EventLogDb, EventReplayer, EventTransactionId};
+use lib::core::eventlog::{
+    EventLogDb, EventReplayer, EventTransactionId, BRANCHLESS_TRANSACTION_ID_ENV_VAR,
+};
 use lib::core::formatting::{Glyphs, Pluralize, StyledStringBuilder};
 use lib::core::repo_ext::RepoExt;
 use lib::core::rewrite::{
@@ -619,7 +621,6 @@ fn subcommand_run(
         &dag,
         &repo,
         &event_log_db,
-        event_tx_id,
         &revset,
         &commits,
         &options,
@@ -1207,11 +1208,11 @@ pub fn run_tests<'a>(
     dag: &Dag,
     repo: &Repo,
     event_log_db: &EventLogDb,
-    event_tx_id: EventTransactionId,
     revset: &Revset,
     commits: &[Commit],
     options: &ResolvedTestOptions,
 ) -> EyreExitOr<TestResults> {
+    let event_tx_id = EventTransactionId::Suppressed;
     let abort_trap = match set_abort_trap(
         now,
         effects,
@@ -2626,6 +2627,7 @@ fn test_commit(
         .arg("-c")
         .arg(options.command.to_string())
         .current_dir(working_directory)
+        .env(BRANCHLESS_TRANSACTION_ID_ENV_VAR, event_tx_id.to_string())
         .env("BRANCHLESS_TEST_COMMIT", commit.get_oid().to_string())
         .env("BRANCHLESS_TEST_COMMAND", options.command.to_string());
 

@@ -126,30 +126,30 @@ fn test_bug_report() -> eyre::Result<()> {
 
         ##### Event ID: 6, transaction ID: 4 (message: post-commit)
 
-        1. `CommitEvent { timestamp: <redacted for test>, event_tx_id: EventTransactionId(4), commit_oid: NonZeroOid(96d1c37a3d4363611c49f7e52186e189a04c531f) }`
+        1. `CommitEvent { timestamp: <redacted for test>, event_tx_id: Id(4), commit_oid: NonZeroOid(96d1c37a3d4363611c49f7e52186e189a04c531f) }`
         ```
         :
         @ 96d1c37 (> master) xxxxxx xxxxxxxxx
         ```
         ##### Event ID: 4, transaction ID: 3 (message: reference-transaction)
 
-        1. `RefUpdateEvent { timestamp: <redacted for test>, event_tx_id: EventTransactionId(3), ref_name: ReferenceName("HEAD"), old_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e, new_oid: 96d1c37a3d4363611c49f7e52186e189a04c531f, message: None }`
-        1. `RefUpdateEvent { timestamp: <redacted for test>, event_tx_id: EventTransactionId(3), ref_name: ReferenceName("refs/heads/master"), old_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e, new_oid: 96d1c37a3d4363611c49f7e52186e189a04c531f, message: None }`
+        1. `RefUpdateEvent { timestamp: <redacted for test>, event_tx_id: Id(3), ref_name: ReferenceName("HEAD"), old_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e, new_oid: 96d1c37a3d4363611c49f7e52186e189a04c531f, message: None }`
+        1. `RefUpdateEvent { timestamp: <redacted for test>, event_tx_id: Id(3), ref_name: ReferenceName("refs/heads/master"), old_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e, new_oid: 96d1c37a3d4363611c49f7e52186e189a04c531f, message: None }`
         ```
         :
         @ 96d1c37 (> master) xxxxxx xxxxxxxxx
         ```
         ##### Event ID: 3, transaction ID: 2 (message: post-commit)
 
-        1. `CommitEvent { timestamp: <redacted for test>, event_tx_id: EventTransactionId(2), commit_oid: NonZeroOid(62fc20d2a290daea0d52bdc2ed2ad4be6491010e) }`
+        1. `CommitEvent { timestamp: <redacted for test>, event_tx_id: Id(2), commit_oid: NonZeroOid(62fc20d2a290daea0d52bdc2ed2ad4be6491010e) }`
         ```
         :
         @ 96d1c37 (> master) xxxxxx xxxxxxxxx
         ```
         ##### Event ID: 1, transaction ID: 1 (message: reference-transaction)
 
-        1. `RefUpdateEvent { timestamp: <redacted for test>, event_tx_id: EventTransactionId(1), ref_name: ReferenceName("HEAD"), old_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24, new_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e, message: None }`
-        1. `RefUpdateEvent { timestamp: <redacted for test>, event_tx_id: EventTransactionId(1), ref_name: ReferenceName("refs/heads/master"), old_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24, new_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e, message: None }`
+        1. `RefUpdateEvent { timestamp: <redacted for test>, event_tx_id: Id(1), ref_name: ReferenceName("HEAD"), old_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24, new_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e, message: None }`
+        1. `RefUpdateEvent { timestamp: <redacted for test>, event_tx_id: Id(1), ref_name: ReferenceName("refs/heads/master"), old_oid: f777ecc9b0db5ed372b2615695191a8a17f79f24, new_oid: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e, message: None }`
         ```
         :
         @ 96d1c37 (> master) xxxxxx xxxxxxxxx

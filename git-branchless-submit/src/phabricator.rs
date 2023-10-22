@@ -389,7 +389,6 @@ Differential Revision: https://phabricator.example.com/D000$(git rev-list --coun
             self.dag,
             self.repo,
             self.event_log_db,
-            event_tx_id,
             self.revset,
             &commits,
             &ResolvedTestOptions {
@@ -644,7 +643,6 @@ Differential Revision: https://phabricator.example.com/D000$(git rev-list --coun
             self.dag,
             self.repo,
             self.event_log_db,
-            event_tx_id,
             self.revset,
             &commits,
             &test_options,

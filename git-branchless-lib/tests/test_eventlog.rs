@@ -58,32 +58,32 @@ fn test_different_event_transaction_ids() -> eyre::Result<()> {
         events.iter().map(|event| event.get_event_tx_id()).collect();
     if git.supports_reference_transactions()? {
         insta::assert_debug_snapshot!(event_tx_ids, @r###"
-                [
-                    EventTransactionId(
-                        1,
-                    ),
-                    EventTransactionId(
-                        1,
-                    ),
-                    EventTransactionId(
-                        2,
-                    ),
-                    EventTransactionId(
-                        3,
-                    ),
-                ]
-                "###);
+        [
+            Id(
+                1,
+            ),
+            Id(
+                1,
+            ),
+            Id(
+                2,
+            ),
+            Id(
+                3,
+            ),
+        ]
+        "###);
     } else {
         insta::assert_debug_snapshot!(event_tx_ids, @r###"
-                [
-                    EventTransactionId(
-                        1,
-                    ),
-                    EventTransactionId(
-                        2,
-                    ),
-                ]
-                "###);
+        [
+            Id(
+                1,
+            ),
+            Id(
+                2,
+            ),
+        ]
+        "###);
     }
     Ok(())
 }

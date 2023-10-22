@@ -38,7 +38,7 @@ fn test_wrap_rebase_in_transaction() -> eyre::Result<()> {
         [
             RefUpdateEvent {
                 timestamp: 0.0,
-                event_tx_id: EventTransactionId(
+                event_tx_id: Id(
                     1,
                 ),
                 ref_name: ReferenceName(
@@ -50,7 +50,7 @@ fn test_wrap_rebase_in_transaction() -> eyre::Result<()> {
             },
             RefUpdateEvent {
                 timestamp: 0.0,
-                event_tx_id: EventTransactionId(
+                event_tx_id: Id(
                     2,
                 ),
                 ref_name: ReferenceName(
@@ -62,7 +62,7 @@ fn test_wrap_rebase_in_transaction() -> eyre::Result<()> {
             },
             RefUpdateEvent {
                 timestamp: 0.0,
-                event_tx_id: EventTransactionId(
+                event_tx_id: Id(
                     3,
                 ),
                 ref_name: ReferenceName(
@@ -74,7 +74,7 @@ fn test_wrap_rebase_in_transaction() -> eyre::Result<()> {
             },
             RefUpdateEvent {
                 timestamp: 0.0,
-                event_tx_id: EventTransactionId(
+                event_tx_id: Id(
                     3,
                 ),
                 ref_name: ReferenceName(
@@ -86,14 +86,14 @@ fn test_wrap_rebase_in_transaction() -> eyre::Result<()> {
             },
             CommitEvent {
                 timestamp: 0.0,
-                event_tx_id: EventTransactionId(
+                event_tx_id: Id(
                     4,
                 ),
                 commit_oid: NonZeroOid(62fc20d2a290daea0d52bdc2ed2ad4be6491010e),
             },
             RefUpdateEvent {
                 timestamp: 0.0,
-                event_tx_id: EventTransactionId(
+                event_tx_id: Id(
                     5,
                 ),
                 ref_name: ReferenceName(
@@ -105,7 +105,7 @@ fn test_wrap_rebase_in_transaction() -> eyre::Result<()> {
             },
             RefUpdateEvent {
                 timestamp: 0.0,
-                event_tx_id: EventTransactionId(
+                event_tx_id: Id(
                     5,
                 ),
                 ref_name: ReferenceName(
@@ -117,14 +117,14 @@ fn test_wrap_rebase_in_transaction() -> eyre::Result<()> {
             },
             CommitEvent {
                 timestamp: 0.0,
-                event_tx_id: EventTransactionId(
+                event_tx_id: Id(
                     6,
                 ),
                 commit_oid: NonZeroOid(96d1c37a3d4363611c49f7e52186e189a04c531f),
             },
             RefUpdateEvent {
                 timestamp: 0.0,
-                event_tx_id: EventTransactionId(
+                event_tx_id: Id(
                     7,
                 ),
                 ref_name: ReferenceName(
@@ -136,7 +136,7 @@ fn test_wrap_rebase_in_transaction() -> eyre::Result<()> {
             },
             RefUpdateEvent {
                 timestamp: 0.0,
-                event_tx_id: EventTransactionId(
+                event_tx_id: Id(
                     8,
                 ),
                 ref_name: ReferenceName(
@@ -148,7 +148,7 @@ fn test_wrap_rebase_in_transaction() -> eyre::Result<()> {
             },
             RefUpdateEvent {
                 timestamp: 0.0,
-                event_tx_id: EventTransactionId(
+                event_tx_id: Id(
                     8,
                 ),
                 ref_name: ReferenceName(
@@ -160,7 +160,7 @@ fn test_wrap_rebase_in_transaction() -> eyre::Result<()> {
             },
             RefUpdateEvent {
                 timestamp: 0.0,
-                event_tx_id: EventTransactionId(
+                event_tx_id: Id(
                     8,
                 ),
                 ref_name: ReferenceName(
@@ -177,7 +177,7 @@ fn test_wrap_rebase_in_transaction() -> eyre::Result<()> {
         [
             RefUpdateEvent {
                 timestamp: 0.0,
-                event_tx_id: EventTransactionId(
+                event_tx_id: Id(
                     1,
                 ),
                 ref_name: ReferenceName(
@@ -189,7 +189,7 @@ fn test_wrap_rebase_in_transaction() -> eyre::Result<()> {
             },
             RefUpdateEvent {
                 timestamp: 0.0,
-                event_tx_id: EventTransactionId(
+                event_tx_id: Id(
                     2,
                 ),
                 ref_name: ReferenceName(
@@ -201,7 +201,7 @@ fn test_wrap_rebase_in_transaction() -> eyre::Result<()> {
             },
             RefUpdateEvent {
                 timestamp: 0.0,
-                event_tx_id: EventTransactionId(
+                event_tx_id: Id(
                     3,
                 ),
                 ref_name: ReferenceName(
@@ -213,7 +213,7 @@ fn test_wrap_rebase_in_transaction() -> eyre::Result<()> {
             },
             RefUpdateEvent {
                 timestamp: 0.0,
-                event_tx_id: EventTransactionId(
+                event_tx_id: Id(
                     3,
                 ),
                 ref_name: ReferenceName(
@@ -225,14 +225,14 @@ fn test_wrap_rebase_in_transaction() -> eyre::Result<()> {
             },
             CommitEvent {
                 timestamp: 0.0,
-                event_tx_id: EventTransactionId(
+                event_tx_id: Id(
                     4,
                 ),
                 commit_oid: NonZeroOid(62fc20d2a290daea0d52bdc2ed2ad4be6491010e),
             },
             RefUpdateEvent {
                 timestamp: 0.0,
-                event_tx_id: EventTransactionId(
+                event_tx_id: Id(
                     5,
                 ),
                 ref_name: ReferenceName(
@@ -244,7 +244,7 @@ fn test_wrap_rebase_in_transaction() -> eyre::Result<()> {
             },
             RefUpdateEvent {
                 timestamp: 0.0,
-                event_tx_id: EventTransactionId(
+                event_tx_id: Id(
                     5,
                 ),
                 ref_name: ReferenceName(
@@ -256,14 +256,14 @@ fn test_wrap_rebase_in_transaction() -> eyre::Result<()> {
             },
             CommitEvent {
                 timestamp: 0.0,
-                event_tx_id: EventTransactionId(
+                event_tx_id: Id(
                     6,
                 ),
                 commit_oid: NonZeroOid(96d1c37a3d4363611c49f7e52186e189a04c531f),
             },
             RefUpdateEvent {
                 timestamp: 0.0,
-                event_tx_id: EventTransactionId(
+                event_tx_id: Id(
                     7,
                 ),
                 ref_name: ReferenceName(
@@ -275,7 +275,7 @@ fn test_wrap_rebase_in_transaction() -> eyre::Result<()> {
             },
             RefUpdateEvent {
                 timestamp: 0.0,
-                event_tx_id: EventTransactionId(
+                event_tx_id: Id(
                     8,
                 ),
                 ref_name: ReferenceName(
@@ -287,7 +287,7 @@ fn test_wrap_rebase_in_transaction() -> eyre::Result<()> {
             },
             RefUpdateEvent {
                 timestamp: 0.0,
-                event_tx_id: EventTransactionId(
+                event_tx_id: Id(
                     8,
                 ),
                 ref_name: ReferenceName(
@@ -299,7 +299,7 @@ fn test_wrap_rebase_in_transaction() -> eyre::Result<()> {
             },
             RefUpdateEvent {
                 timestamp: 0.0,
-                event_tx_id: EventTransactionId(
+                event_tx_id: Id(
                     8,
                 ),
                 ref_name: ReferenceName(
