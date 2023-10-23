@@ -7,7 +7,6 @@ use std::mem;
 
 use cassowary::{Solver, Variable};
 use num_traits::cast;
-use ratatui::backend::Backend;
 use ratatui::buffer::Buffer;
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::Span;
@@ -405,7 +404,7 @@ impl<'a, ComponentId: Clone + Debug + Eq + Hash> Viewport<'a, ComponentId> {
     /// Render the provided component using the given `Frame`. Returns a mapping
     /// indicating where each component was drawn on the screen.
     pub fn render_top_level<C: Component>(
-        frame: &mut Frame<impl Backend>,
+        frame: &mut Frame,
         x: isize,
         y: isize,
         component: &C,

@@ -23,7 +23,7 @@ serde = { version = "1.0", features = ["serde_derive"], optional = true }
 serde_json = { version = "1.0", optional = true }
 thiserror = "1.0"
 tracing = "0.1"
-ratatui = "0.23.0"
+ratatui = "0.24.0"
 unicode-width = "0.1"
 
 clap = { version = "4.3", features = ["derive"], optional = true }
