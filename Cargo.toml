@@ -53,7 +53,7 @@ cursive_core = "0.3.7"
 eden_dag = { package = "esl01-dag", version = "0.3.0" }
 eyre = "0.6.8"
 fslock = "0.2.1"
-futures = "0.3.28"
+futures = "0.3.29"
 git-branchless-hook = { version = "0.8.0", path = "git-branchless-hook" }
 git-branchless-init = { version = "0.8.0", path = "git-branchless-init" }
 git-branchless-invoke = { version = "0.8.0", path = "git-branchless-invoke" }
