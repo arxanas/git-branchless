@@ -65,6 +65,24 @@ fn test_submit() -> eyre::Result<()> {
     }
 
     {
+        let (stdout, stderr) = cloned_repo.run(&["submit", "--dry-run"])?;
+        insta::assert_snapshot!(stderr, @"");
+        insta::assert_snapshot!(stdout, @r###"
+        Would skip 2 branches (not yet on remote): bar, qux
+        These branches would be skipped because they are not already associated with a remote repository. To
+        create and push them, retry this operation with the --create option.
+        "###);
+    }
+
+    {
+        let (stdout, stderr) = cloned_repo.run(&["submit", "--create", "--dry-run"])?;
+        insta::assert_snapshot!(stderr, @"");
+        insta::assert_snapshot!(stdout, @r###"
+        Would create 2 branches: bar, qux
+        "###);
+    }
+
+    {
         let (stdout, stderr) = cloned_repo.run(&["submit", "--create"])?;
         let stderr = redact_remotes(stderr);
         insta::assert_snapshot!(stderr, @r###"
