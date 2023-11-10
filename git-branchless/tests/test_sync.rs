@@ -193,7 +193,7 @@ fn test_sync_pull() -> eyre::Result<()> {
 }
 
 #[test]
-fn test_sync_specific_commit() -> eyre::Result<()> {
+fn test_sync_stack_from_commit() -> eyre::Result<()> {
     let git = make_git()?;
 
     if !git.supports_reference_transactions()? {
@@ -205,6 +205,7 @@ fn test_sync_specific_commit() -> eyre::Result<()> {
     git.commit_file("test2", 2)?;
     git.run(&["checkout", "-b", "foo"])?;
     git.commit_file("test3", 3)?;
+    git.commit_file("test3-1", 3)?;
     git.run(&["checkout", "-b", "bar", "master"])?;
     git.commit_file("test4", 4)?;
     git.run(&["checkout", "master"])?;
@@ -216,7 +217,9 @@ fn test_sync_specific_commit() -> eyre::Result<()> {
         :
         O 96d1c37 create test2.txt
         |\
-        | o 70deb1e (foo) create test3.txt
+        | o 70deb1e create test3.txt
+        | |
+        | o 10523fe (foo) create test3-1.txt
         |\
         | o f57e36f (bar) create test4.txt
         |
@@ -228,9 +231,10 @@ fn test_sync_specific_commit() -> eyre::Result<()> {
         let (stdout, _stderr) = git.branchless("sync", &["foo"])?;
         insta::assert_snapshot!(stdout, @r###"
         Attempting rebase in-memory...
-        [1/1] Committed as: 8e521a1 create test3.txt
+        [1/2] Committed as: 8e521a1 create test3.txt
+        [2/2] Committed as: 11bfd99 create test3-1.txt
         branchless: processing 1 update: branch foo
-        branchless: processing 1 rewritten commit
+        branchless: processing 2 rewritten commits
         branchless: running command: <git-executable> checkout master
         In-memory rebase succeeded.
         Synced 70deb1e create test3.txt
@@ -247,7 +251,9 @@ fn test_sync_specific_commit() -> eyre::Result<()> {
         |
         @ d2e18e3 (> master) create test5.txt
         |
-        o 8e521a1 (foo) create test3.txt
+        o 8e521a1 create test3.txt
+        |
+        o 11bfd99 (foo) create test3-1.txt
         "###);
     }
 
