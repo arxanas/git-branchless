@@ -158,6 +158,7 @@ pub fn command_main(ctx: CommandContext, args: SubmitArgs) -> EyreExitOr<()> {
         resolve_revset_options,
         forge,
         message,
+        dry_run,
     } = args;
     submit(
         &effects,
@@ -169,6 +170,7 @@ pub fn command_main(ctx: CommandContext, args: SubmitArgs) -> EyreExitOr<()> {
         strategy,
         forge,
         message,
+        dry_run,
     )
 }
 
@@ -182,6 +184,7 @@ fn submit(
     execution_strategy: Option<TestExecutionStrategy>,
     forge_kind: Option<ForgeKind>,
     message: Option<String>,
+    dry_run: bool,
 ) -> EyreExitOr<()> {
     let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
@@ -329,6 +332,8 @@ fn submit(
             .collect();
         if unsubmitted_commits.is_empty() {
             Default::default()
+        } else if create && dry_run {
+            (unsubmitted_branches, Default::default())
         } else if create {
             let create_statuses =
                 try_exit_code!(forge.create(unsubmitted_commits, &submit_options)?);
@@ -371,14 +376,17 @@ fn submit(
             .flat_map(|(_commit_oid, commit_status)| commit_status.local_branch_name.clone())
             .collect();
 
-        try_exit_code!(forge.update(commits_to_update, &submit_options)?);
+        if !dry_run {
+            try_exit_code!(forge.update(commits_to_update, &submit_options)?);
+        }
         (updated_branch_names, skipped_branch_names)
     };
 
     if !created_branches.is_empty() {
         writeln!(
             effects.get_output_stream(),
-            "Created {}: {}",
+            "{} {}: {}",
+            if dry_run { "Would create" } else { "Created" },
             Pluralize {
                 determiner: None,
                 amount: created_branches.len(),
@@ -400,7 +408,8 @@ fn submit(
     if !updated_branch_names.is_empty() {
         writeln!(
             effects.get_output_stream(),
-            "Pushed {}: {}",
+            "{} {}: {}",
+            if dry_run { "Would push" } else { "Pushed" },
             Pluralize {
                 determiner: None,
                 amount: updated_branch_names.len(),
@@ -422,7 +431,8 @@ fn submit(
     if !skipped_branch_names.is_empty() {
         writeln!(
             effects.get_output_stream(),
-            "Skipped {} (already up-to-date): {}",
+            "{} {} (already up-to-date): {}",
+            if dry_run { "Would skip" } else { "Skipped" },
             Pluralize {
                 determiner: None,
                 amount: skipped_branch_names.len(),
@@ -444,7 +454,8 @@ fn submit(
     if !uncreated_branches.is_empty() {
         writeln!(
             effects.get_output_stream(),
-            "Skipped {} (not yet on remote): {}",
+            "{} {} (not yet on remote): {}",
+            if dry_run { "Would skip" } else { "Skipped" },
             Pluralize {
                 determiner: None,
                 amount: uncreated_branches.len(),
@@ -465,8 +476,10 @@ fn submit(
         writeln!(
             effects.get_output_stream(),
             "\
-These branches were skipped because they were not already associated with a remote repository. To
-create and push them, retry this operation with the --create option."
+These branches {} skipped because they {} not already associated with a remote repository. To
+create and push them, retry this operation with the --create option.",
+            if dry_run { "would be" } else { "were" },
+            if dry_run { "are" } else { "were" },
         )?;
     }
 

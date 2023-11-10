@@ -396,6 +396,11 @@ pub struct SubmitArgs {
     /// An optional message to include with the create or update operation.
     #[clap(short = 'm', long = "message")]
     pub message: Option<String>,
+
+    /// Don't push or create anything. Instead, report what would be pushed or
+    /// created. (Still triggers a fetch.)
+    #[clap(short = 'n', long = "dry-run")]
+    pub dry_run: bool,
 }
 
 /// Run a command on each commit in a given set and aggregate the results.

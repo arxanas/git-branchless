@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - ReleaseDate
 
+### Added
+
+- (#1129) Added a `--dry-run` option to `git submit` to report what would be submitted without actually doing so.
+
 ## [v0.8.0] - 2023-08-27
 
 ### Added
