@@ -28,14 +28,21 @@ use lib::git::{
     CategorizedReferenceName, Commit, GitRunInfo, NonZeroOid, Repo, ResolvedReferenceInfo,
 };
 
-fn get_stack_roots(dag: &Dag) -> eyre::Result<CommitSet> {
+fn get_stack_roots(dag: &Dag, commit_sets: Vec<CommitSet>) -> eyre::Result<CommitSet> {
     let draft_commits = dag.query_draft_commits()?;
 
     // FIXME: if two draft roots are ancestors of a single commit (due to a
     // merge commit), then the entire unit should be treated as one stack and
     // moved together, rather than attempting two separate rebases.
     let draft_roots = dag.query_roots(draft_commits.clone())?;
-    Ok(draft_roots)
+
+    if commit_sets.is_empty() {
+        return Ok(draft_roots);
+    }
+
+    let stack_ancestors = dag.query_range(draft_roots, union_all(&commit_sets))?;
+    dag.query_roots(stack_ancestors)
+        .map_err(|err| eyre::eyre!("Could not query DAG for stack roots: {err}"))
 }
 
 /// Move all commit stacks on top of the main branch.
@@ -318,12 +325,7 @@ fn execute_sync_plans(
             }
         };
     let main_branch_oid = repo.get_main_branch_oid()?;
-    let root_commit_oids = if commit_sets.is_empty() {
-        get_stack_roots(&dag)?
-    } else {
-        dag.query_roots(union_all(&commit_sets))?
-    };
-
+    let root_commit_oids = get_stack_roots(&dag, commit_sets)?;
     let root_commits = sorted_commit_set(repo, &dag, &root_commit_oids)?;
     let permissions =
         match RebasePlanPermissions::verify_rewrite_set(&dag, build_options, &root_commit_oids)? {
