@@ -183,18 +183,6 @@ impl<'a> CategorizedReferenceName<'a> {
         }
     }
 
-    /// Remove the prefix from the reference name. May raise an error if the
-    /// result couldn't be encoded as an `String` (shouldn't happen).
-    #[instrument]
-    pub fn remove_prefix(&self) -> Result<String> {
-        let (name, prefix): (_, &'static str) = match self {
-            Self::LocalBranch { name, prefix } => (name, prefix),
-            Self::RemoteBranch { name, prefix } => (name, prefix),
-            Self::OtherRef { name } => (name, ""),
-        };
-        Ok(name.strip_prefix(prefix).unwrap_or(name).to_owned())
-    }
-
     /// Render the full name of the reference, including its prefix, lossily as
     /// a `String`.
     pub fn render_full(&self) -> String {

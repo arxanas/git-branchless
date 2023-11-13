@@ -754,7 +754,7 @@ fn extract_checkout_target(
                         additional_args: match ref_name {
                             Some(ref_name) => {
                                 let branch_name = CategorizedReferenceName::new(ref_name);
-                                vec!["-B".into(), branch_name.remove_prefix()?.into()]
+                                vec!["-B".into(), branch_name.render_suffix().into()]
                             }
                             None => Default::default(),
                         },
