@@ -130,7 +130,7 @@ https://github.com/arxanas/git-branchless/discussions/595 for more details.",
         match CategorizedReferenceName::new(&main_branch_name) {
             name @ CategorizedReferenceName::LocalBranch { .. } => {
                 if let Some(main_branch) =
-                    self.find_branch(&name.remove_prefix()?, BranchType::Local)?
+                    self.find_branch(&name.render_suffix(), BranchType::Local)?
                 {
                     if let Some(remote_name) = main_branch.get_push_remote_name()? {
                         return Ok(Some(remote_name));
@@ -139,7 +139,7 @@ https://github.com/arxanas/git-branchless/discussions/595 for more details.",
             }
 
             name @ CategorizedReferenceName::RemoteBranch { .. } => {
-                let name = name.remove_prefix()?;
+                let name = name.render_suffix();
                 if let Some((remote_name, _reference_name)) = name.split_once('/') {
                     return Ok(Some(remote_name.to_owned()));
                 }

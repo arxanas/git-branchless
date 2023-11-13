@@ -188,8 +188,7 @@ fn record(
                     ],
                 )?),
                 [parent_commit] => {
-                    let branch_name =
-                        CategorizedReferenceName::new(reference_name).remove_prefix()?;
+                    let branch_name = CategorizedReferenceName::new(reference_name).render_suffix();
                     repo.detach_head(&head_info)?;
                     try_exit_code!(git_run_info.run(
                         effects,

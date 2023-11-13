@@ -92,7 +92,7 @@ fn maybe_get_branch_name(
                 Ok(branch_name) => {
                     // To remove the `refs/heads/` prefix
                     let name = CategorizedReferenceName::new(branch_name);
-                    Ok(Some(name.remove_prefix()?))
+                    Ok(Some(name.render_suffix()))
                 }
                 Err(_) => Ok(current_target),
             },
@@ -124,7 +124,7 @@ pub fn check_out_commit(
         None => (None, None),
         Some(CheckoutTarget::Reference(reference_name)) => {
             let categorized_target = CategorizedReferenceName::new(&reference_name);
-            (Some(categorized_target.remove_prefix()?), None)
+            (Some(categorized_target.render_suffix()), None)
         }
         Some(CheckoutTarget::Oid(oid)) => (Some(oid.to_string()), Some(oid)),
         Some(CheckoutTarget::Unknown(target)) => (Some(target), None),

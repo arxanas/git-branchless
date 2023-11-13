@@ -118,7 +118,7 @@ pub fn move_branches<'a>(
                                 warn!(?reference_name, "Not deleting non-local-branch reference");
                             }
                             CategorizedReferenceName::LocalBranch { .. } => {
-                                let branch_name = branch_name.remove_prefix()?;
+                                let branch_name = branch_name.render_suffix();
                                 match repo.find_branch(&branch_name, BranchType::Local) {
                                     Ok(Some(mut branch)) => {
                                         if let Err(err) = branch.delete() {

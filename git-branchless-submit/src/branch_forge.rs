@@ -57,7 +57,7 @@ impl Forge for BranchForge<'_> {
             let mut branch_infos = HashMap::new();
             for branch_reference_name in branch_reference_names {
                 let branch_name = match CategorizedReferenceName::new(&branch_reference_name) {
-                    name @ CategorizedReferenceName::LocalBranch { .. } => name.remove_prefix()?,
+                    name @ CategorizedReferenceName::LocalBranch { .. } => name.render_suffix(),
                     CategorizedReferenceName::RemoteBranch { .. }
                     | CategorizedReferenceName::OtherRef { .. } => continue,
                 };
