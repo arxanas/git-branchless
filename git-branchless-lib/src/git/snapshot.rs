@@ -304,7 +304,6 @@ branchless: automated working copy snapshot
     ) -> eyre::Result<NonZeroOid> {
         let changed_paths: Vec<_> = status_entries
             .iter()
-            .cloned()
             .filter(|entry| {
                 // The working copy status is reported with respect to the
                 // staged changes, not to the `HEAD` commit. That means that if
@@ -326,7 +325,7 @@ branchless: automated working copy snapshot
                 entry
                     .paths()
                     .into_iter()
-                    .map(move |path| (path, entry.working_copy_file_mode))
+                    .map(|path| (path, entry.working_copy_file_mode))
             })
             .collect();
         let num_changes = changed_paths.len();
