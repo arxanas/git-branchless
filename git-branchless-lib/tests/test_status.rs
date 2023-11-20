@@ -22,12 +22,38 @@ fn test_parse_status_line() {
 
     assert_eq!(
             StatusEntry::try_from(
+                "1 .M N... 100644 100644 100644 51fcbe2362663a19d132767b69c2c7829023f3da 51fcbe2362663a19d132767b69c2c7829023f3da filename with spaces.rs".as_bytes(),
+            ).unwrap(),
+            StatusEntry {
+                index_status: FileStatus::Unmodified,
+                working_copy_status: FileStatus::Modified,
+                path: "filename with spaces.rs".into(),
+                orig_path: None,
+                working_copy_file_mode: FileMode::Blob,
+            }
+        );
+
+    assert_eq!(
+            StatusEntry::try_from(
                 "1 A. N... 100755 100755 100755 51fcbe2362663a19d132767b69c2c7829023f3da 51fcbe2362663a19d132767b69c2c7829023f3da repo.rs".as_bytes(),
             ).unwrap(),
             StatusEntry {
                 index_status: FileStatus::Added,
                 working_copy_status: FileStatus::Unmodified,
                 path: "repo.rs".into(),
+                orig_path: None,
+                working_copy_file_mode: FileMode::BlobExecutable,
+            }
+        );
+
+    assert_eq!(
+            StatusEntry::try_from(
+                "1 A. N... 100755 100755 100755 51fcbe2362663a19d132767b69c2c7829023f3da 51fcbe2362663a19d132767b69c2c7829023f3da filename with spaces.rs".as_bytes(),
+            ).unwrap(),
+            StatusEntry {
+                index_status: FileStatus::Added,
+                working_copy_status: FileStatus::Unmodified,
+                path: "filename with spaces.rs".into(),
                 orig_path: None,
                 working_copy_file_mode: FileMode::BlobExecutable,
             }
@@ -59,6 +85,19 @@ fn test_parse_status_line() {
                 index_status: FileStatus::Unmerged,
                 working_copy_status: FileStatus::Unmodified,
                 path: "repo.rs".into(),
+                orig_path: None,
+                working_copy_file_mode: FileMode::BlobExecutable,
+            }
+        );
+
+    assert_eq!(
+            StatusEntry::try_from(
+                "u A. N... 100755 100755 100755 100755 51fcbe2362663a19d132767b69c2c7829023f3da 51fcbe2362663a19d132767b69c2c7829023f3da 9daeafb9864cf43055ae93beb0afd6c7d144bfa4 filename with spaces.rs".as_bytes(),
+            ).unwrap(),
+            StatusEntry {
+                index_status: FileStatus::Unmerged,
+                working_copy_status: FileStatus::Unmodified,
+                path: "filename with spaces.rs".into(),
                 orig_path: None,
                 working_copy_file_mode: FileMode::BlobExecutable,
             }
