@@ -413,6 +413,39 @@ fn test_amend_head() -> eyre::Result<()> {
 }
 
 #[test]
+fn test_amend_head_with_file_with_space() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_committer_date_is_author_date()? {
+        return Ok(());
+    }
+
+    git.init_repo()?;
+    git.detach_head()?;
+    git.commit_file("test file with space", 1)?;
+    git.write_file_txt("test file with space", "updated contents")?;
+
+    {
+        let (stdout, _stderr) = git.branchless("amend", &[])?;
+        insta::assert_snapshot!(stdout, @r###"
+        branchless: running command: <git-executable> reset 5ccdda3c1e0dca9aa58634b37cfa9cac09e3975b
+        Amended with 1 uncommitted change.
+        "###);
+    }
+
+    {
+        let stdout = git.smartlog()?;
+        insta::assert_snapshot!(stdout, @r###"
+        O f777ecc (master) create initial.txt
+        |
+        @ 5ccdda3 create test file with space.txt
+        "###);
+    }
+
+    Ok(())
+}
+
+#[test]
 #[cfg(unix)]
 fn test_amend_executable() -> eyre::Result<()> {
     use std::{fs, os::unix::prelude::PermissionsExt};

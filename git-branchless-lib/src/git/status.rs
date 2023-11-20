@@ -200,7 +200,8 @@ impl TryFrom<&[u8]> for StatusEntry {
                 r#"[\w.]+ "#,                                                // Submodule state.
                 r#"(\d{6} ){2,3}(?P<working_copy_filemode>\d{6}) "#,         // HEAD, Index, and Working Copy file modes;
                                                                              // or stage1, stage2, stage3, and working copy file modes.
-                r#"([\w\d]+ ){2,3}"#,                                        // HEAD and Index object IDs, and optionally the rename/copy score.
+                r#"([a-f\d]+ ){2,3}([CR]\d{1,3} )?"#,                        // HEAD and Index object IDs, and optionally the rename/copy score;
+                                                                             // or stage1, stage2, and stage3 object IDs.
                 r#"(?P<path>[^\x00]+)(\x00(?P<orig_path>[^\x00]+))?$"#       // Path and original path (for renames/copies).
             ))
             .expect("porcelain v2 status line regex");

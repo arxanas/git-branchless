@@ -18,6 +18,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - BREAKING (#1128) Arguments/revsets passed to `git sync` are now resolved to their respective stacks.
   - This allows `git sync my-branch` to work as expected, instead of needing to use `git sync 'stack(my-branch)'`. The behavior of `git sync` when called without arguments is not affected by this change. If you rely on the previous behavior, please use `git move -x <commit(s)/revset> -d 'main()'` instead.
 
+### Fixed
+
+- (#1127) Improved support for files with spaces in their name.
+
 
 ## [v0.8.0] - 2023-08-27
 
