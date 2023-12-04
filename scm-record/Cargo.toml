@@ -26,7 +26,7 @@ tracing = "0.1"
 ratatui = "0.23.0"
 unicode-width = "0.1"
 
-clap = { version = "4.3", features = ["derive"], optional = true }
+clap = { version = "4.4", features = ["derive"], optional = true }
 diffy = { version = "0.3", optional = true }
 sha1 = { version = "0.10", optional = true }
 walkdir = { version = "2.4", optional = true }
