@@ -18,7 +18,7 @@ use git_branchless_invoke::CommandContext;
 use git_branchless_opts::RecordArgs;
 use git_branchless_reword::edit_message;
 use itertools::Itertools;
-use lib::core::check_out::{check_out_commit, CheckOutCommitOptions};
+use lib::core::check_out::{check_out_commit, CheckOutCommitOptions, CheckoutTarget};
 use lib::core::config::{get_commit_template, get_restack_preserve_timestamps};
 use lib::core::dag::{CommitSet, Dag};
 use lib::core::effects::{Effects, OperationType};
@@ -57,6 +57,7 @@ pub fn command_main(ctx: CommandContext, args: RecordArgs) -> EyreExitOr<()> {
         create,
         detach,
         insert,
+        stash,
     } = args;
     record(
         &effects,
@@ -66,6 +67,7 @@ pub fn command_main(ctx: CommandContext, args: RecordArgs) -> EyreExitOr<()> {
         create,
         detach,
         insert,
+        stash,
     )
 }
 
@@ -78,6 +80,7 @@ fn record(
     branch_name: Option<String>,
     detach: bool,
     insert: bool,
+    stash: bool,
 ) -> EyreExitOr<()> {
     let now = SystemTime::now();
     let repo = Repo::from_dir(&git_run_info.working_directory)?;
@@ -167,7 +170,7 @@ fn record(
         try_exit_code!(git_run_info.run_direct_no_wrapping(Some(event_tx_id), &args)?);
     }
 
-    if detach {
+    if detach || stash {
         let head_info = repo.get_head_info()?;
         if let ResolvedReferenceInfo {
             oid: Some(oid),
@@ -175,8 +178,8 @@ fn record(
         } = &head_info
         {
             let head_commit = repo.find_commit_or_fail(*oid)?;
-            return match head_commit.get_parents().as_slice() {
-                [] => git_run_info.run(
+            match head_commit.get_parents().as_slice() {
+                [] => try_exit_code!(git_run_info.run(
                     effects,
                     Some(event_tx_id),
                     &[
@@ -185,12 +188,12 @@ fn record(
                         reference_name.as_str(),
                         &oid.to_string(),
                     ],
-                ),
+                )?),
                 [parent_commit] => {
                     let branch_name =
                         CategorizedReferenceName::new(reference_name).remove_prefix()?;
                     repo.detach_head(&head_info)?;
-                    git_run_info.run(
+                    try_exit_code!(git_run_info.run(
                         effects,
                         Some(event_tx_id),
                         &[
@@ -199,12 +202,38 @@ fn record(
                             &branch_name,
                             &parent_commit.get_oid().to_string(),
                         ],
-                    )
+                    )?);
                 }
                 parent_commits => {
                     eyre::bail!("git-branchless record --detach called on a merge commit, but it should only be capable of creating zero- or one-parent commits. Parents: {parent_commits:?}");
                 }
-            };
+            }
+        }
+        let checkout_target = match head_info {
+            ResolvedReferenceInfo {
+                oid: _,
+                reference_name: Some(reference_name),
+            } => Some(CheckoutTarget::Reference(reference_name.clone())),
+            ResolvedReferenceInfo {
+                oid: Some(oid),
+                reference_name: _,
+            } => Some(CheckoutTarget::Oid(oid)),
+            _ => None,
+        };
+        if stash && checkout_target.is_some() {
+            try_exit_code!(check_out_commit(
+                effects,
+                git_run_info,
+                &repo,
+                &event_log_db,
+                event_tx_id,
+                checkout_target,
+                &CheckOutCommitOptions {
+                    additional_args: vec![],
+                    reset: false,
+                    render_smartlog: false,
+                },
+            )?);
         }
     }
 

@@ -320,6 +320,10 @@ pub struct RecordArgs {
     /// if any.
     #[clap(action, short = 'I', long = "insert")]
     pub insert: bool,
+
+    /// After making the new commit, switch back to the previous commit.
+    #[clap(action, short = 's', long = "stash", conflicts_with_all(&["create", "detach"]))]
+    pub stash: bool,
 }
 
 /// Display a nice graph of the commits you've recently worked on.
