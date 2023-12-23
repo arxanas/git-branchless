@@ -69,14 +69,14 @@ fn command_main(ctx: CommandContext, opts: Opts) -> EyreExitOr<()> {
         Command::Hide {
             revsets,
             resolve_revset_options,
-            delete_branches,
+            no_delete_branches,
             recursive,
         } => hide::hide(
             &effects,
             &git_run_info,
             revsets,
             &resolve_revset_options,
-            delete_branches,
+            no_delete_branches,
             recursive,
         )?,
 

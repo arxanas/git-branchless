@@ -173,7 +173,7 @@ fn test_branches_always_visible() -> eyre::Result<()> {
     git.run(&["branch", "test"])?;
     git.run(&["checkout", "master"])?;
 
-    let (stdout, _stderr) = git.branchless("hide", &["test", "test^"])?;
+    let (stdout, _stderr) = git.branchless("hide", &["--no-delete-branches", "test", "test^"])?;
     insta::assert_snapshot!(stdout, @r###"
     Hid commit: 62fc20d create test1.txt
     Hid commit: 96d1c37 create test2.txt
@@ -213,7 +213,7 @@ fn test_hide_delete_branches() -> eyre::Result<()> {
     git.run(&["branch", "test"])?;
     git.run(&["checkout", "master"])?;
 
-    let (stdout, _stderr) = git.branchless("hide", &["--delete-branches", "test", "test^"])?;
+    let (stdout, _stderr) = git.branchless("hide", &["test", "test^"])?;
     insta::assert_snapshot!(stdout, @r###"
     Hid commit: 62fc20d create test1.txt
     Hid commit: 96d1c37 create test2.txt
@@ -278,14 +278,8 @@ fn test_hide_delete_multiple_branches() -> eyre::Result<()> {
         "###);
     }
 
-    let (stdout, _stderr) = git.branchless(
-        "hide",
-        &[
-            "--delete-branches",
-            &test1_oid.to_string(),
-            &test2_oid.to_string(),
-        ],
-    )?;
+    let (stdout, _stderr) =
+        git.branchless("hide", &[&test1_oid.to_string(), &test2_oid.to_string()])?;
     insta::assert_snapshot!(stdout, @r###"
     Hid commit: 62fc20d create test1.txt
     Hid commit: fe65c1f create test2.txt
@@ -313,7 +307,7 @@ fn test_hide_delete_checked_out_branch() -> eyre::Result<()> {
     git.commit_file("test1", 1)?;
     git.commit_file("test2", 2)?;
 
-    let (stdout, _stderr) = git.branchless("hide", &["--delete-branches", "test"])?;
+    let (stdout, _stderr) = git.branchless("hide", &["test"])?;
     insta::assert_snapshot!(stdout, @r###"
     Hid commit: 96d1c37 create test2.txt
     branchless: processing 1 update: branch test
@@ -551,7 +545,7 @@ fn test_smartlog_show_only_branches() -> eyre::Result<()> {
 
     git.run(&["branch", "branch-2", &test2_oid.to_string()])?;
     git.run(&["branch", "branch-4", &test4_oid.to_string()])?;
-    git.branchless("hide", &[&test4_oid.to_string()])?;
+    git.branchless("hide", &["--no-delete-branches", &test4_oid.to_string()])?;
     git.branchless("hide", &[&test6_oid.to_string()])?;
 
     // confirm our baseline:

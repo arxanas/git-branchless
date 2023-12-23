@@ -48,7 +48,7 @@ fn test_different_event_transaction_ids() -> eyre::Result<()> {
 
     git.init_repo()?;
     git.commit_file("test1", 1)?;
-    git.branchless("hide", &["HEAD"])?;
+    git.branchless("hide", &["--no-delete-branches", "HEAD"])?;
 
     let repo = git.get_repo()?;
     let conn = repo.get_db_conn()?;

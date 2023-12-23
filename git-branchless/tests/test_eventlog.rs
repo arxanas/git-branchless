@@ -18,7 +18,6 @@ fn test_git_v2_31_events() -> eyre::Result<()> {
     git.run(&["checkout", "HEAD^"])?;
     git.commit_file("test2", 2)?;
     git.branchless("hide", &["test1"])?;
-    git.run(&["branch", "-D", "test1"])?;
 
     let effects = Effects::new_suppress_for_test(Glyphs::text());
     let repo = git.get_repo()?;
@@ -140,7 +139,7 @@ fn test_git_v2_31_events() -> eyre::Result<()> {
         RefUpdateEvent {
             timestamp: 0.0,
             event_tx_id: Id(
-                10,
+                9,
             ),
             ref_name: ReferenceName(
                 "refs/heads/test1",

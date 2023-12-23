@@ -185,7 +185,7 @@ fn test_query_hidden_commits() -> eyre::Result<()> {
     let test2_oid = git.commit_file("test2", 2)?;
     git.commit_file("test3", 3)?;
 
-    git.branchless("hide", &["HEAD"])?;
+    git.branchless("hide", &["--no-delete-branches", "HEAD"])?;
     git.run(&["checkout", &test2_oid.to_string()])?;
 
     {
