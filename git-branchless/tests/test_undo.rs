@@ -660,6 +660,11 @@ fn test_git_bisect_produces_empty_event() -> eyre::Result<()> {
     if !git.supports_reference_transactions()? {
         return Ok(());
     }
+    if git.get_version()? >= GitVersion(2, 42, 0) {
+        // Later versions of Git write `BISECT_EXPECTED_REV` to the filesystem
+        // as well, causing the below test to fail.
+        return Ok(());
+    }
     git.init_repo()?;
 
     git.commit_file("test1", 1)?;
