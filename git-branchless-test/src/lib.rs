@@ -1164,7 +1164,7 @@ struct SearchGraph<'a> {
     commit_set: CommitSet,
 }
 
-impl<'a> search::SearchGraph for SearchGraph<'a> {
+impl<'a> search::Graph for SearchGraph<'a> {
     type Node = NonZeroOid;
     type Error = SearchGraphError;
 
