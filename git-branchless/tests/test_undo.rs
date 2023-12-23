@@ -317,7 +317,6 @@ fn test_undo_hide() -> eyre::Result<()> {
     git.run(&["checkout", "HEAD^"])?;
     git.commit_file("test2", 2)?;
     git.branchless("hide", &["test1"])?;
-    git.run(&["branch", "-D", "test1"])?;
 
     {
         let (stdout, stderr) = git.run(&["smartlog"])?;
@@ -332,7 +331,6 @@ fn test_undo_hide() -> eyre::Result<()> {
     let event_cursor = run_select_past_event(
         &git.get_repo()?,
         vec![
-            CursiveTestingEvent::Event('p'.into()),
             CursiveTestingEvent::Event('p'.into()),
             CursiveTestingEvent::Event(Key::Enter.into()),
             CursiveTestingEvent::Event('y'.into()),
@@ -436,6 +434,7 @@ fn test_historical_smartlog_visibility() -> eyre::Result<()> {
     let git = make_git()?;
 
     git.init_repo()?;
+    git.detach_head()?;
     git.commit_file("test1", 1)?;
     git.branchless("hide", &["HEAD"])?;
 
@@ -454,9 +453,9 @@ fn test_historical_smartlog_visibility() -> eyre::Result<()> {
     if git.supports_reference_transactions()? {
         insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
         ┌───────────────────────────────────────────────────┤ Commit graph ├───────────────────────────────────────────────────┐
-        │:                                                                                                                     │
-        │% 62fc20d (manually hidden) (master) create test1.txt                                                                 │
-        │                                                                                                                      │
+        │O f777ecc (master) create initial.txt                                                                                 │
+        │|                                                                                                                     │
+        │% 62fc20d (manually hidden) create test1.txt                                                                          │
         │                                                                                                                      │
         │                                                                                                                      │
         │                                                                                                                      │
@@ -473,16 +472,16 @@ fn test_historical_smartlog_visibility() -> eyre::Result<()> {
         │                                                                                                                      │
         └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
         ┌──────────────────────────────────────────────────────┤ Events ├──────────────────────────────────────────────────────┐
-        │Repo after transaction 3 (event 4). Press 'h' for help, 'q' to quit.                                                  │
+        │Repo after transaction 5 (event 5). Press 'h' for help, 'q' to quit.                                                  │
         │1. Hide commit 62fc20d create test1.txt                                                                               │
         │                                                                                                                      │
         └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
         "###);
         insta::assert_snapshot!(screen_to_string(&screenshot2), @r###"
         ┌───────────────────────────────────────────────────┤ Commit graph ├───────────────────────────────────────────────────┐
-        │:                                                                                                                     │
-        │@ 62fc20d (master) create test1.txt                                                                                   │
-        │                                                                                                                      │
+        │O f777ecc (master) create initial.txt                                                                                 │
+        │|                                                                                                                     │
+        │@ 62fc20d create test1.txt                                                                                            │
         │                                                                                                                      │
         │                                                                                                                      │
         │                                                                                                                      │
@@ -499,7 +498,7 @@ fn test_historical_smartlog_visibility() -> eyre::Result<()> {
         │                                                                                                                      │
         └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
         ┌──────────────────────────────────────────────────────┤ Events ├──────────────────────────────────────────────────────┐
-        │Repo after transaction 2 (event 3). Press 'h' for help, 'q' to quit.                                                  │
+        │Repo after transaction 4 (event 4). Press 'h' for help, 'q' to quit.                                                  │
         │1. Commit 62fc20d create test1.txt                                                                                    │
         │                                                                                                                      │
         └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
@@ -507,9 +506,35 @@ fn test_historical_smartlog_visibility() -> eyre::Result<()> {
     } else {
         insta::assert_snapshot!(screen_to_string(&screenshot1), @r###"
         ┌───────────────────────────────────────────────────┤ Commit graph ├───────────────────────────────────────────────────┐
-        │:                                                                                                                     │
-        │% 62fc20d (manually hidden) (master) create test1.txt                                                                 │
+        │O f777ecc (master) create initial.txt                                                                                 │
+        │|                                                                                                                     │
+        │% 62fc20d (manually hidden) create test1.txt                                                                          │
         │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        │                                                                                                                      │
+        └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+        ┌──────────────────────────────────────────────────────┤ Events ├──────────────────────────────────────────────────────┐
+        │Repo after transaction 3 (event 3). Press 'h' for help, 'q' to quit.                                                  │
+        │1. Hide commit 62fc20d create test1.txt                                                                               │
+        │                                                                                                                      │
+        └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+        "###);
+        insta::assert_snapshot!(screen_to_string(&screenshot2), @r###"
+        ┌───────────────────────────────────────────────────┤ Commit graph ├───────────────────────────────────────────────────┐
+        │O f777ecc (master) create initial.txt                                                                                 │
+        │|                                                                                                                     │
+        │@ 62fc20d create test1.txt                                                                                            │
         │                                                                                                                      │
         │                                                                                                                      │
         │                                                                                                                      │
@@ -527,32 +552,6 @@ fn test_historical_smartlog_visibility() -> eyre::Result<()> {
         └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
         ┌──────────────────────────────────────────────────────┤ Events ├──────────────────────────────────────────────────────┐
         │Repo after transaction 2 (event 2). Press 'h' for help, 'q' to quit.                                                  │
-        │1. Hide commit 62fc20d create test1.txt                                                                               │
-        │                                                                                                                      │
-        └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-        "###);
-        insta::assert_snapshot!(screen_to_string(&screenshot2), @r###"
-        ┌───────────────────────────────────────────────────┤ Commit graph ├───────────────────────────────────────────────────┐
-        │:                                                                                                                     │
-        │@ 62fc20d (master) create test1.txt                                                                                   │
-        │                                                                                                                      │
-        │                                                                                                                      │
-        │                                                                                                                      │
-        │                                                                                                                      │
-        │                                                                                                                      │
-        │                                                                                                                      │
-        │                                                                                                                      │
-        │                                                                                                                      │
-        │                                                                                                                      │
-        │                                                                                                                      │
-        │                                                                                                                      │
-        │                                                                                                                      │
-        │                                                                                                                      │
-        │                                                                                                                      │
-        │                                                                                                                      │
-        └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
-        ┌──────────────────────────────────────────────────────┤ Events ├──────────────────────────────────────────────────────┐
-        │Repo after transaction 1 (event 1). Press 'h' for help, 'q' to quit.                                                  │
         │1. Commit 62fc20d create test1.txt                                                                                    │
         │                                                                                                                      │
         └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘

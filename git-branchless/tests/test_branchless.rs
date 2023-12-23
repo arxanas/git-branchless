@@ -9,28 +9,31 @@ fn test_commands() -> eyre::Result<()> {
 
     git.init_repo()?;
     git.commit_file("test", 1)?;
+    git.detach_head()?;
+    git.commit_file("test2", 2)?;
 
     {
         let stdout = git.smartlog()?;
         insta::assert_snapshot!(stdout, @r###"
         :
-        @ 3df4b93 (> master) create test.txt
+        O 3df4b93 (master) create test.txt
+        |
+        @ 73b746c create test2.txt
         "###);
     }
 
     {
-        let (stdout, _stderr) = git.branchless("hide", &["3df4b935"])?;
+        let (stdout, _stderr) = git.branchless("hide", &["HEAD"])?;
         insta::assert_snapshot!(stdout, @r###"
-        Hid commit: 3df4b93 create test.txt
-        Abandoned 1 branch: master
+        Hid commit: 73b746c create test2.txt
         To unhide this 1 commit, run: git undo
         "###);
     }
 
     {
-        let (stdout, _stderr) = git.branchless("unhide", &["3df4b935"])?;
+        let (stdout, _stderr) = git.branchless("unhide", &["HEAD"])?;
         insta::assert_snapshot!(stdout, @r###"
-        Unhid commit: 3df4b93 create test.txt
+        Unhid commit: 73b746c create test2.txt
         To hide this 1 commit, run: git undo
         "###);
     }
@@ -38,19 +41,22 @@ fn test_commands() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.branchless("prev", &[])?;
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> checkout f777ecc9b0db5ed372b2615695191a8a17f79f24
-        @ f777ecc create initial.txt
+        branchless: running command: <git-executable> checkout master
+        :
+        @ 3df4b93 (> master) create test.txt
         |
-        O 3df4b93 (master) create test.txt
+        o 73b746c create test2.txt
         "###);
     }
 
     {
         let (stdout, _stderr) = git.branchless("next", &[])?;
         insta::assert_snapshot!(stdout, @r###"
-        branchless: running command: <git-executable> checkout master
+        branchless: running command: <git-executable> checkout 73b746ca864a21fc0c3dedbc937eaa9e279b73eb
         :
-        @ 3df4b93 (> master) create test.txt
+        O 3df4b93 (master) create test.txt
+        |
+        @ 73b746c create test2.txt
         "###);
     }
 

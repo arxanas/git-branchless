@@ -448,9 +448,10 @@ pub enum Command {
         #[clap(flatten)]
         resolve_revset_options: ResolveRevsetOptions,
 
-        /// Also delete any branches that are abandoned as a result of this hide.
-        #[clap(action, short = 'D', long = "delete-branches")]
-        delete_branches: bool,
+        /// Don't delete branches that point to commits that would be hidden.
+        /// (Those commits will remain visible as a result.)
+        #[clap(action, long = "no-delete-branches")]
+        no_delete_branches: bool,
 
         /// Also recursively hide all visible children commits of the provided
         /// commits.

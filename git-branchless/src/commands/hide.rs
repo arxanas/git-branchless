@@ -26,7 +26,7 @@ pub fn hide(
     git_run_info: &GitRunInfo,
     revsets: Vec<Revset>,
     resolve_revset_options: &ResolveRevsetOptions,
-    delete_branches: bool,
+    no_delete_branches: bool,
     recursive: bool,
 ) -> EyreExitOr<()> {
     let now = SystemTime::now();
@@ -44,6 +44,7 @@ pub fn hide(
         event_cursor,
         &references_snapshot,
     )?;
+    let delete_branches = !no_delete_branches;
 
     let commit_sets =
         match resolve_commits(effects, &repo, &mut dag, &revsets, resolve_revset_options) {
@@ -155,16 +156,17 @@ pub fn hide(
     // This message will look like either of these:
     // To unhide these X commits, run: git undo
     // To unhide these X commits and restore X branches, run: git undo
-    let delete_branches_message = match delete_branches {
-        true => format!(
+    let delete_branches_message = if delete_branches && !abandoned_branches.is_empty() {
+        format!(
             " and restore {}",
             Pluralize {
                 determiner: None,
                 amount: abandoned_branches.len(),
                 unit: ("branch", "branches"),
             }
-        ),
-        false => String::new(),
+        )
+    } else {
+        String::new()
     };
     writeln!(
         effects.get_output_stream(),
