@@ -185,6 +185,7 @@ impl Git {
             .collect()
     }
 
+    #[track_caller]
     #[instrument]
     fn run_with_options_inner(
         &self,
@@ -274,6 +275,7 @@ stderr:
     }
 
     /// Run a Git command.
+    #[track_caller]
     pub fn run_with_options<S: AsRef<str> + std::fmt::Debug>(
         &self,
         args: &[S],
@@ -286,6 +288,7 @@ stderr:
     }
 
     /// Run a Git command.
+    #[track_caller]
     pub fn run<S: AsRef<str> + std::fmt::Debug>(
         &self,
         args: &[S],
@@ -310,6 +313,7 @@ stderr:
 
     /// Convenience method to call `branchless_with_options` with the default
     /// options.
+    #[track_caller]
     #[instrument]
     pub fn branchless(&self, subcommand: &str, args: &[&str]) -> eyre::Result<(String, String)> {
         self.branchless_with_options(subcommand, args, &Default::default())
@@ -318,6 +322,7 @@ stderr:
     /// Locate the git-branchless binary and run a git-branchless subcommand
     /// with the provided `GitRunOptions`. These subcommands are located using
     /// `should_use_separate_command_binary`.
+    #[track_caller]
     #[instrument]
     pub fn branchless_with_options(
         &self,
