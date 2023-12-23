@@ -11,7 +11,7 @@ use thiserror::Error;
 use tracing::instrument;
 
 /// The set of nodes compromising a directed acyclic graph to be searched.
-pub trait SearchGraph: Debug {
+pub trait Graph: Debug {
     /// The type of nodes in the graph. This should be cheap to clone.
     type Node: Clone + Debug + Hash + Eq;
 
@@ -272,16 +272,16 @@ pub enum Error2<Node, Error> {
 }
 
 /// The error type for the search.
-pub type Error<G> = Error2<<G as SearchGraph>::Node, <G as SearchGraph>::Error>;
+pub type Error<G> = Error2<<G as Graph>::Node, <G as Graph>::Error>;
 
 /// The search algorithm.
 #[derive(Clone, Debug)]
-pub struct Search<G: SearchGraph> {
+pub struct Search<G: Graph> {
     graph: G,
     nodes: IndexMap<G::Node, Status>,
 }
 
-impl<G: SearchGraph> Search<G> {
+impl<G: Graph> Search<G> {
     /// Construct a new search.
     pub fn new(graph: G, nodes: impl IntoIterator<Item = G::Node>) -> Self {
         let nodes = nodes
@@ -451,7 +451,7 @@ mod tests {
         max: usize,
     }
 
-    impl SearchGraph for UsizeGraph {
+    impl Graph for UsizeGraph {
         type Node = usize;
         type Error = Infallible;
 
@@ -602,7 +602,7 @@ mod tests {
         nodes: HashMap<char, HashSet<char>>,
     }
 
-    impl SearchGraph for TestGraph {
+    impl Graph for TestGraph {
         type Node = char;
         type Error = Infallible;
 
