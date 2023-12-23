@@ -49,7 +49,7 @@ pub trait Graph: Debug {
     /// Filter `nodes` to only include nodes that are not ancestors of any other
     /// node in `nodes`.
     #[instrument]
-    fn ancestors_heads(
+    fn simplify_success_bounds(
         &self,
         nodes: HashSet<Self::Node>,
     ) -> Result<HashSet<Self::Node>, Self::Error> {
@@ -95,7 +95,7 @@ pub trait Graph: Debug {
     /// Filter `nodes` to only include nodes that are not descendants of any
     /// other node in `nodes`.
     #[instrument]
-    fn descendants_roots(
+    fn simplify_failure_bounds(
         &self,
         nodes: HashSet<Self::Node>,
     ) -> Result<HashSet<Self::Node>, Self::Error> {
@@ -282,9 +282,16 @@ pub struct Search<G: Graph> {
 }
 
 impl<G: Graph> Search<G> {
-    /// Construct a new search.
-    pub fn new(graph: G, nodes: impl IntoIterator<Item = G::Node>) -> Self {
-        let nodes = nodes
+    /// Construct a new search. The provided `graph` represents the universe of
+    /// all nodes, and `nodes` represents a subset of that universe to search
+    /// in. Only elements from `nodes` will be returned by `success_bounds` and
+    /// `failure_bounds`.
+    ///
+    /// For example, `graph` might correspond to the entire source control
+    /// directed acyclic graph, and `nodes` might correspond to a recent range
+    /// of commits where the first one is passing and the last one is failing.
+    pub fn new(graph: G, search_nodes: impl IntoIterator<Item = G::Node>) -> Self {
+        let nodes = search_nodes
             .into_iter()
             .map(|node| (node, Status::Untested))
             .collect();
@@ -304,7 +311,7 @@ impl<G: Graph> Search<G> {
                 Status::Untested | Status::Failure | Status::Indeterminate => None,
             })
             .collect::<HashSet<_>>();
-        let success_bounds = self.graph.ancestors_heads(success_nodes)?;
+        let success_bounds = self.graph.simplify_success_bounds(success_nodes)?;
         Ok(success_bounds)
     }
 
@@ -321,7 +328,7 @@ impl<G: Graph> Search<G> {
                 Status::Untested | Status::Success | Status::Indeterminate => None,
             })
             .collect::<HashSet<_>>();
-        let failure_bounds = self.graph.descendants_roots(failure_nodes)?;
+        let failure_bounds = self.graph.simplify_failure_bounds(failure_nodes)?;
         Ok(failure_bounds)
     }
 
