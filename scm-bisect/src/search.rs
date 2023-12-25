@@ -1,12 +1,12 @@
 //! A search algorithm for directed acyclic graphs to find the nodes which
 //! "flip" from passing to failing a predicate.
 
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 use std::fmt::Debug;
 use std::hash::Hash;
 
 use indexmap::IndexMap;
-use tracing::instrument;
+use tracing::{debug, instrument};
 
 /// The set of nodes compromising a directed acyclic graph to be searched.
 pub trait Graph: Debug {
@@ -93,26 +93,28 @@ pub trait Strategy<G: Graph>: Debug {
     /// An error type.
     type Error: std::error::Error;
 
-    /// Return "midpoints" for the search. Such a midpoint lies between the
+    /// Return a "midpoint" for the search. Such a midpoint lies between the
     /// success bounds and failure bounds, for some meaning of "lie between",
     /// which depends on the strategy details.
     ///
-    /// For example, linear search would return the node(s) immediately "after"
+    /// If `None` is returned, then the search exits.
+    ///
+    /// For example, linear search would return a node immediately "after"
     /// the node(s) in `success_bounds`, while binary search would return the
-    /// node(s) in the middle of `success_bounds` and `failure_bounds`.`
-    fn midpoints(
+    /// node in the middle of `success_bounds` and `failure_bounds`.`
+    fn midpoint(
         &self,
         graph: &G,
         success_bounds: &HashSet<G::Node>,
         failure_bounds: &HashSet<G::Node>,
         statuses: &IndexMap<G::Node, Status>,
-    ) -> Result<Box<dyn Iterator<Item = G::Node>>, Self::Error>;
+    ) -> Result<Option<G::Node>, Self::Error>;
 }
 
 /// The results of the search so far. The search is complete if `next_to_search` is empty.
-pub struct LazySolution<'a, Node: Debug + Eq + Hash + 'a> {
+pub struct LazySolution<'a, TNode: Debug + Eq + Hash + 'a, TError> {
     /// The bounds of the search so far.
-    pub bounds: Bounds<Node>,
+    pub bounds: Bounds<TNode>,
 
     /// The next nodes to search in a suggested order. Normally, you would only
     /// consume the first node in this iterator and then call `Search::notify`
@@ -121,13 +123,20 @@ pub struct LazySolution<'a, Node: Debug + Eq + Hash + 'a> {
     ///
     /// This will be empty when the bounds are as tight as possible, i.e. the
     /// search is complete.
-    pub next_to_search: Box<dyn Iterator<Item = Node> + 'a>,
+    pub next_to_search: Box<dyn Iterator<Item = Result<TNode, TError>> + 'a>,
 }
 
-impl<'a, Node: Debug + Eq + Hash + 'a> LazySolution<'a, Node> {
+impl<'a, TNode: Debug + Eq + Hash + 'a, TError> LazySolution<'a, TNode, TError> {
     /// Convenience function to call `EagerSolution::from` on this `LazySolution`.
-    pub fn into_eager(self) -> EagerSolution<Node> {
-        EagerSolution::from(self)
+    pub fn into_eager(self) -> Result<EagerSolution<TNode>, TError> {
+        let LazySolution {
+            bounds,
+            next_to_search,
+        } = self;
+        Ok(EagerSolution {
+            bounds,
+            next_to_search: next_to_search.collect::<Result<Vec<_>, TError>>()?,
+        })
     }
 }
 
@@ -137,19 +146,6 @@ impl<'a, Node: Debug + Eq + Hash + 'a> LazySolution<'a, Node> {
 pub struct EagerSolution<Node: Debug + Hash + Eq> {
     pub(crate) bounds: Bounds<Node>,
     pub(crate) next_to_search: Vec<Node>,
-}
-
-impl<Node: Debug + Hash + Eq> From<LazySolution<'_, Node>> for EagerSolution<Node> {
-    fn from(solution: LazySolution<Node>) -> Self {
-        let LazySolution {
-            bounds,
-            next_to_search,
-        } = solution;
-        Self {
-            bounds,
-            next_to_search: next_to_search.collect(),
-        }
-    }
 }
 
 #[allow(missing_docs)]
@@ -247,21 +243,115 @@ impl<G: Graph> Search<G> {
     /// search. The caller is responsible for calling `notify` with the result.
     #[instrument]
     #[allow(clippy::type_complexity)]
-    pub fn search<S: Strategy<G>>(
-        &self,
-        strategy: &S,
-    ) -> Result<LazySolution<G::Node>, SearchError<G::Error, S::Error>> {
+    pub fn search<'a, S: Strategy<G>>(
+        &'a self,
+        strategy: &'a S,
+    ) -> Result<
+        LazySolution<G::Node, SearchError<G::Error, S::Error>>,
+        SearchError<G::Error, S::Error>,
+    > {
         let success_bounds = self.success_bounds().map_err(SearchError::Graph)?;
         let failure_bounds = self.failure_bounds().map_err(SearchError::Graph)?;
-        let next_to_search = strategy
-            .midpoints(&self.graph, &success_bounds, &failure_bounds, &self.nodes)
-            .map_err(SearchError::Strategy)?;
+
+        #[derive(Debug)]
+        struct State<G: Graph> {
+            success_bounds: HashSet<G::Node>,
+            failure_bounds: HashSet<G::Node>,
+            statuses: IndexMap<G::Node, Status>,
+        }
+
+        struct Iter<'a, G: Graph, S: Strategy<G>> {
+            graph: &'a G,
+            strategy: &'a S,
+            seen: HashSet<G::Node>,
+            states: VecDeque<State<G>>,
+        }
+
+        impl<'a, G: Graph, S: Strategy<G>> Iterator for Iter<'a, G, S> {
+            type Item = Result<G::Node, SearchError<G::Error, S::Error>>;
+
+            fn next(&mut self) -> Option<Self::Item> {
+                while let Some(state) = self.states.pop_front() {
+                    debug!(?state, "Popped speculation state");
+                    let State {
+                        success_bounds,
+                        failure_bounds,
+                        statuses,
+                    } = state;
+
+                    let node = match self.strategy.midpoint(
+                        self.graph,
+                        &success_bounds,
+                        &failure_bounds,
+                        &statuses,
+                    ) {
+                        Ok(Some(node)) => node,
+                        Ok(None) => continue,
+                        Err(err) => return Some(Err(SearchError::Strategy(err))),
+                    };
+
+                    // Speculate failure:
+                    self.states.push_back(State {
+                        success_bounds: success_bounds.clone(),
+                        failure_bounds: {
+                            let mut failure_bounds = failure_bounds.clone();
+                            failure_bounds.insert(node.clone());
+                            match self.graph.simplify_failure_bounds(failure_bounds) {
+                                Ok(bounds) => bounds,
+                                Err(err) => return Some(Err(SearchError::Graph(err))),
+                            }
+                        },
+                        statuses: {
+                            let mut statuses = statuses.clone();
+                            statuses.insert(node.clone(), Status::Failure);
+                            statuses
+                        },
+                    });
+
+                    // Speculate success:
+                    self.states.push_back(State {
+                        success_bounds: {
+                            let mut success_bounds = success_bounds.clone();
+                            success_bounds.insert(node.clone());
+                            match self.graph.simplify_success_bounds(success_bounds) {
+                                Ok(bounds) => bounds,
+                                Err(err) => return Some(Err(SearchError::Graph(err))),
+                            }
+                        },
+                        failure_bounds: failure_bounds.clone(),
+                        statuses: {
+                            let mut statuses = statuses.clone();
+                            statuses.insert(node.clone(), Status::Success);
+                            statuses
+                        },
+                    });
+
+                    if self.seen.insert(node.clone()) {
+                        return Some(Ok(node));
+                    }
+                }
+                None
+            }
+        }
+
+        let initial_state = State {
+            success_bounds: success_bounds.clone(),
+            failure_bounds: failure_bounds.clone(),
+            statuses: self.nodes.clone(),
+        };
+        let iter = Iter {
+            graph: &self.graph,
+            strategy,
+            seen: Default::default(),
+            states: [initial_state].into_iter().collect(),
+        };
+
         Ok(LazySolution {
             bounds: Bounds {
                 success: success_bounds,
                 failure: failure_bounds,
             },
-            next_to_search,
+            next_to_search: Box::new(iter),
         })
     }
 
