@@ -59,7 +59,8 @@ use lib::git::{
 use lib::try_exit_code;
 use lib::util::{get_sh, ExitCode, EyreExitOr};
 use rayon::ThreadPoolBuilder;
-use scm_bisect::search::{self, BasicStrategy};
+use scm_bisect::basic::{BasicSourceControlGraph, BasicStrategy, BasicStrategyKind};
+use scm_bisect::search;
 use tempfile::TempDir;
 use thiserror::Error;
 use tracing::{debug, info, instrument, warn};
@@ -1164,7 +1165,7 @@ struct SearchGraph<'a> {
     commit_set: CommitSet,
 }
 
-impl<'a> search::BasicSourceControlGraph for SearchGraph<'a> {
+impl<'a> BasicSourceControlGraph for SearchGraph<'a> {
     type Node = NonZeroOid;
     type Error = SearchGraphError;
 
@@ -1321,9 +1322,9 @@ fn run_tests_inner<'a>(
     }
     let search_strategy = match search_strategy {
         None => None,
-        Some(TestSearchStrategy::Linear) => Some(search::BasicStrategyKind::Linear),
-        Some(TestSearchStrategy::Reverse) => Some(search::BasicStrategyKind::LinearReverse),
-        Some(TestSearchStrategy::Binary) => Some(search::BasicStrategyKind::Binary),
+        Some(TestSearchStrategy::Linear) => Some(BasicStrategyKind::Linear),
+        Some(TestSearchStrategy::Reverse) => Some(BasicStrategyKind::LinearReverse),
+        Some(TestSearchStrategy::Binary) => Some(BasicStrategyKind::Binary),
     };
     let search_strategy = search_strategy.map(BasicStrategy::new);
 
@@ -1511,7 +1512,7 @@ struct EventLoopOutput<'a> {
 fn event_loop(
     commit_jobs: IndexMap<NonZeroOid, TestJob>,
     mut search: search::Search<SearchGraph>,
-    search_strategy: Option<search::BasicStrategy>,
+    search_strategy: Option<BasicStrategy>,
     num_jobs: usize,
     work_queue: WorkQueue<TestJob>,
     result_rx: Receiver<JobResult<TestJob, TestOutput>>,
