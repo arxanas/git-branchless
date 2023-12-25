@@ -635,3 +635,46 @@ fn test_record_binary_contents() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_record_interactive_commit_message_template() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+    git.init_repo()?;
+
+    git.write_file("commit-template.txt", "This is a commit template!\n")?;
+    git.run(&["config", "commit.template", "commit-template.txt"])?;
+
+    git.commit_file("test1", 1)?;
+    git.detach_head()?;
+    git.write_file_txt("test1", "updated contents\n")?;
+    {
+        let exit_status = run_in_pty(
+            &git,
+            "record",
+            &["-i"],
+            &[
+                PtyAction::WaitUntilContains("test1"),
+                PtyAction::Write(" "),
+                PtyAction::Write("e"),
+                PtyAction::Write("c"),
+            ],
+        )?;
+        assert!(exit_status.success());
+    }
+
+    {
+        let stdout = git.smartlog()?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 4ab51ca (master) create test1.txt
+        |
+        @ 88e5a87 This is a commit template!
+        "###);
+    }
+
+    Ok(())
+}

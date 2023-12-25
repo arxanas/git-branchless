@@ -66,6 +66,10 @@ pub fn edit_message(git_run_info: &GitRunInfo, repo: &Repo, message: &str) -> ey
         Some(editor_program) => (editor.executable(&editor_program), editor_program),
         None => (&mut editor, "<default>".into()),
     };
+    if editor_program == ":" {
+        // Special case in Git: treat `:` as a no-op editor.
+        return Ok(message.to_string());
+    }
     let result = editor
         .require_save(false)
         .edit(message)
