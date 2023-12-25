@@ -5,7 +5,6 @@ use std::fmt::Debug;
 use std::hash::Hash;
 
 use indexmap::IndexMap;
-use itertools::{EitherOrBoth, Itertools};
 use tracing::instrument;
 
 use crate::search;
@@ -196,14 +195,14 @@ impl BasicStrategy {
 impl<G: BasicSourceControlGraph> search::Strategy<G> for BasicStrategy {
     type Error = G::Error;
 
-    fn midpoints(
+    fn midpoint(
         &self,
         graph: &G,
         success_bounds: &HashSet<G::Node>,
         failure_bounds: &HashSet<G::Node>,
         statuses: &IndexMap<G::Node, search::Status>,
-    ) -> Result<Box<dyn Iterator<Item = G::Node>>, Self::Error> {
-        let nodes_to_search = {
+    ) -> Result<Option<G::Node>, G::Error> {
+        let mut nodes_to_search = {
             let implied_success_nodes = graph.ancestors_all(success_bounds.clone())?;
             let implied_failure_nodes = graph.descendants_all(failure_bounds.clone())?;
             statuses
@@ -219,36 +218,20 @@ impl<G: BasicSourceControlGraph> search::Strategy<G> for BasicStrategy {
                 })
                 .collect::<Vec<_>>()
         };
-        let next_to_search: Box<dyn Iterator<Item = G::Node>> = match self.strategy {
-            BasicStrategyKind::Linear => Box::new(nodes_to_search.into_iter()),
-            BasicStrategyKind::LinearReverse => Box::new(nodes_to_search.into_iter().rev()),
-            BasicStrategyKind::Binary => Box::new(make_binary_search_iter(&nodes_to_search)),
+        let next_to_search: Option<G::Node> = match self.strategy {
+            BasicStrategyKind::Linear => nodes_to_search.into_iter().next(),
+            BasicStrategyKind::LinearReverse => nodes_to_search.into_iter().next_back(),
+            BasicStrategyKind::Binary => {
+                let middle_index = nodes_to_search.len() / 2;
+                if middle_index < nodes_to_search.len() {
+                    Some(nodes_to_search.swap_remove(middle_index))
+                } else {
+                    None
+                }
+            }
         };
         Ok(next_to_search)
     }
-}
-
-fn make_binary_search_iter<T: Clone>(nodes: &[T]) -> impl Iterator<Item = T> {
-    // FIXME: O(n^2) complexity.
-    let mut result = vec![];
-    let middle_index = nodes.len() / 2;
-    if let Some(middle_node) = nodes.get(middle_index) {
-        result.push(middle_node.clone());
-        let left = make_binary_search_iter(&nodes[0..middle_index]);
-        let right = make_binary_search_iter(&nodes[middle_index + 1..]);
-        for item in left.zip_longest(right) {
-            match item {
-                EitherOrBoth::Both(lhs, rhs) => {
-                    result.push(lhs);
-                    result.push(rhs);
-                }
-                EitherOrBoth::Left(item) | EitherOrBoth::Right(item) => {
-                    result.push(item);
-                }
-            }
-        }
-    }
-    result.into_iter()
 }
 
 #[cfg(test)]
@@ -309,7 +292,11 @@ mod tests {
         // let mut binary_search = Search::new(graph.clone(), binary_strategy, nodes.clone());
 
         assert_eq!(
-            search.search(&linear_strategy).unwrap().into_eager(),
+            search
+                .search(&linear_strategy)
+                .unwrap()
+                .into_eager()
+                .unwrap(),
             EagerSolution {
                 bounds: Default::default(),
                 next_to_search: vec![0, 1, 2, 3, 4, 5, 6],
@@ -319,23 +306,41 @@ mod tests {
             search
                 .search(&linear_reverse_strategy)
                 .unwrap()
-                .into_eager(),
+                .into_eager()
+                .unwrap(),
             EagerSolution {
                 bounds: Default::default(),
                 next_to_search: vec![6, 5, 4, 3, 2, 1, 0],
             }
         );
         assert_eq!(
-            search.search(&binary_strategy).unwrap().into_eager(),
+            search
+                .search(&binary_strategy)
+                .unwrap()
+                .into_eager()
+                .unwrap(),
             EagerSolution {
                 bounds: Default::default(),
-                next_to_search: vec![3, 1, 5, 0, 4, 2, 6],
+                // Breadth-first search:
+                // 0 1 2 3 4 5 6
+                //       ^
+                //   ^
+                //           ^
+                // ^
+                //     ^
+                //         ^
+                //             ^
+                next_to_search: vec![3, 1, 5, 0, 2, 4, 6],
             }
         );
 
         search.notify(2, Status::Success).unwrap();
         assert_eq!(
-            search.search(&linear_strategy).unwrap().into_eager(),
+            search
+                .search(&linear_strategy)
+                .unwrap()
+                .into_eager()
+                .unwrap(),
             EagerSolution {
                 bounds: Bounds {
                     success: hashset! {2},
@@ -345,7 +350,11 @@ mod tests {
             }
         );
         assert_eq!(
-            search.search(&binary_strategy).unwrap().into_eager(),
+            search
+                .search(&binary_strategy)
+                .unwrap()
+                .into_eager()
+                .unwrap(),
             EagerSolution {
                 bounds: Bounds {
                     success: hashset! {2},
@@ -357,7 +366,11 @@ mod tests {
 
         search.notify(5, Status::Failure).unwrap();
         assert_eq!(
-            search.search(&linear_strategy).unwrap().into_eager(),
+            search
+                .search(&linear_strategy)
+                .unwrap()
+                .into_eager()
+                .unwrap(),
             EagerSolution {
                 bounds: Bounds {
                     success: hashset! {2},
@@ -367,7 +380,11 @@ mod tests {
             }
         );
         assert_eq!(
-            search.search(&binary_strategy).unwrap().into_eager(),
+            search
+                .search(&binary_strategy)
+                .unwrap()
+                .into_eager()
+                .unwrap(),
             EagerSolution {
                 bounds: Bounds {
                     success: hashset! {2},
@@ -379,7 +396,11 @@ mod tests {
 
         search.notify(3, Status::Indeterminate).unwrap();
         assert_eq!(
-            search.search(&binary_strategy).unwrap().into_eager(),
+            search
+                .search(&binary_strategy)
+                .unwrap()
+                .into_eager()
+                .unwrap(),
             EagerSolution {
                 bounds: Bounds {
                     success: hashset! {2},
@@ -462,6 +483,8 @@ mod tests {
     #[test]
     fn test_search_dag() {
         let graph = TestGraph {
+            // a -> b -> e -> f -> g
+            // c -> d ->   -> h
             nodes: hashmap! {
                 'a' => hashset! {'b'},
                 'b' => hashset! {'e'},
@@ -481,17 +504,27 @@ mod tests {
 
         let mut search = Search::new(graph, 'a'..='h');
         assert_eq!(
-            search.search(&linear_strategy).unwrap().into_eager(),
+            search
+                .search(&linear_strategy)
+                .unwrap()
+                .into_eager()
+                .unwrap(),
             EagerSolution {
                 bounds: Default::default(),
-                next_to_search: vec!['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'],
+                // Breadth-first search: we start from the roots of the graph in
+                // parallel and proceed to the heads of the graph.
+                next_to_search: vec!['a', 'c', 'b', 'd', 'e', 'f', 'h', 'g'],
             }
         );
 
         search.notify('b', Status::Success).unwrap();
         search.notify('g', Status::Failure).unwrap();
         assert_eq!(
-            search.search(&linear_strategy).unwrap().into_eager(),
+            search
+                .search(&linear_strategy)
+                .unwrap()
+                .into_eager()
+                .unwrap(),
             EagerSolution {
                 bounds: Bounds {
                     success: hashset! {'b'},
@@ -503,7 +536,11 @@ mod tests {
 
         search.notify('e', Status::Success).unwrap();
         assert_eq!(
-            search.search(&linear_strategy).unwrap().into_eager(),
+            search
+                .search(&linear_strategy)
+                .unwrap()
+                .into_eager()
+                .unwrap(),
             EagerSolution {
                 bounds: Bounds {
                     success: hashset! {'e'},
@@ -515,7 +552,11 @@ mod tests {
 
         search.notify('f', Status::Success).unwrap();
         assert_eq!(
-            search.search(&linear_strategy).unwrap().into_eager(),
+            search
+                .search(&linear_strategy)
+                .unwrap()
+                .into_eager()
+                .unwrap(),
             EagerSolution {
                 bounds: Bounds {
                     success: hashset! {'f'},
@@ -527,7 +568,11 @@ mod tests {
 
         search.notify('h', Status::Success).unwrap();
         assert_eq!(
-            search.search(&linear_strategy).unwrap().into_eager(),
+            search
+                .search(&linear_strategy)
+                .unwrap()
+                .into_eager()
+                .unwrap(),
             EagerSolution {
                 bounds: Bounds {
                     success: hashset! {'f', 'h'},
@@ -593,7 +638,7 @@ mod tests {
             let failure_nodes = graph.descendants_all(failure_nodes.into_iter().collect()).unwrap();
 
             let solution = loop {
-                let solution = search.search(&strategy).unwrap().into_eager();
+                let solution = search.search(&strategy).unwrap().into_eager().unwrap();
                 let Bounds { success, failure } = &solution.bounds;
                 for success_node in success {
                     assert!(!failure_nodes.contains(success_node))

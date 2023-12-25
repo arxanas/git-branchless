@@ -1556,21 +1556,33 @@ fn event_loop(
                 .collect();
 
             let solution = search.search(search_strategy)?;
-            let next_to_search = solution
+            let next_to_search: Vec<_> = solution
                 .next_to_search
                 .filter(|commit_oid| {
-                    // At this point, `scheduled_jobs` should only contain completed jobs.
+                    let commit_oid = match commit_oid {
+                        Ok(commit_oid) => commit_oid,
+                        Err(_) => {
+                            // Collect `Err` below.
+                            return true;
+                        }
+                    };
+
+                    // At this point, `scheduled_jobs` should only contain
+                    // completed jobs.
                     match scheduled_jobs.get(commit_oid) {
                         Some(ScheduledJob::Complete(_)) => false,
                         Some(ScheduledJob::Scheduled(_)) => {
-                            warn!(?commit_oid, "Left-over scheduled job; this should have already been filtered out.");
+                            warn!(
+                                ?commit_oid,
+                                "Left-over scheduled job; this should have already been filtered out."
+                            );
                             true
                         }
-                        None => true
+                        None => true,
                     }
                 })
                 .take(num_jobs)
-                .collect_vec();
+                .try_collect()?;
             if next_to_search.is_empty() {
                 debug!("Search completed, exiting.");
                 break;
