@@ -11,4 +11,5 @@
 )]
 #![allow(clippy::too_many_arguments, clippy::blocks_in_if_conditions)]
 
+pub mod basic;
 pub mod search;
