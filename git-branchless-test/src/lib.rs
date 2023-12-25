@@ -59,7 +59,7 @@ use lib::git::{
 use lib::try_exit_code;
 use lib::util::{get_sh, ExitCode, EyreExitOr};
 use rayon::ThreadPoolBuilder;
-use scm_bisect::search;
+use scm_bisect::search::{self, BasicStrategy};
 use tempfile::TempDir;
 use thiserror::Error;
 use tracing::{debug, info, instrument, warn};
@@ -1164,7 +1164,7 @@ struct SearchGraph<'a> {
     commit_set: CommitSet,
 }
 
-impl<'a> search::Graph for SearchGraph<'a> {
+impl<'a> search::BasicSourceControlGraph for SearchGraph<'a> {
     type Node = NonZeroOid;
     type Error = SearchGraphError;
 
@@ -1321,10 +1321,11 @@ fn run_tests_inner<'a>(
     }
     let search_strategy = match search_strategy {
         None => None,
-        Some(TestSearchStrategy::Linear) => Some(search::Strategy::Linear),
-        Some(TestSearchStrategy::Reverse) => Some(search::Strategy::LinearReverse),
-        Some(TestSearchStrategy::Binary) => Some(search::Strategy::Binary),
+        Some(TestSearchStrategy::Linear) => Some(search::BasicStrategyKind::Linear),
+        Some(TestSearchStrategy::Reverse) => Some(search::BasicStrategyKind::LinearReverse),
+        Some(TestSearchStrategy::Binary) => Some(search::BasicStrategyKind::Binary),
     };
+    let search_strategy = search_strategy.map(BasicStrategy::new);
 
     let latest_test_command_path = get_latest_test_command_path(repo)?;
     if let Some(parent) = latest_test_command_path.parent() {
@@ -1438,7 +1439,7 @@ fn run_tests_inner<'a>(
             let test_results = event_loop(
                 commit_jobs,
                 search,
-                search_strategy,
+                search_strategy.clone(),
                 *num_jobs,
                 work_queue.clone(),
                 result_rx,
@@ -1494,7 +1495,7 @@ fn run_tests_inner<'a>(
     Ok(Ok(TestResults {
         search_bounds: match search_strategy {
             None => Default::default(),
-            Some(search_strategy) => search.search(search_strategy)?.bounds,
+            Some(search_strategy) => search.search(&search_strategy)?.bounds,
         },
         test_outputs: test_outputs_ordered,
         testing_aborted_error,
@@ -1510,7 +1511,7 @@ struct EventLoopOutput<'a> {
 fn event_loop(
     commit_jobs: IndexMap<NonZeroOid, TestJob>,
     mut search: search::Search<SearchGraph>,
-    search_strategy: Option<search::Strategy>,
+    search_strategy: Option<search::BasicStrategy>,
     num_jobs: usize,
     work_queue: WorkQueue<TestJob>,
     result_rx: Receiver<JobResult<TestJob, TestOutput>>,
@@ -1544,7 +1545,7 @@ fn event_loop(
             break;
         }
 
-        if let Some(search_strategy) = search_strategy {
+        if let Some(search_strategy) = &search_strategy {
             scheduled_jobs = scheduled_jobs
                 .into_iter()
                 .filter_map(|(commit_oid, scheduled_job)| match scheduled_job {
