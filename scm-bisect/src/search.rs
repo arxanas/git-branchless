@@ -7,7 +7,6 @@ use std::hash::Hash;
 
 use indexmap::IndexMap;
 use itertools::{EitherOrBoth, Itertools};
-use thiserror::Error;
 use tracing::instrument;
 
 /// The set of nodes compromising a directed acyclic graph to be searched.
@@ -16,109 +15,35 @@ pub trait Graph: Debug {
     type Node: Clone + Debug + Hash + Eq;
 
     /// An error type.
-    type Error: Debug;
+    type Error: std::error::Error;
 
     /// Return whether or not `node` is an ancestor of `descendant`.
-    #[instrument]
     fn is_ancestor(
         &self,
         ancestor: Self::Node,
         descendant: Self::Node,
-    ) -> Result<bool, Self::Error> {
-        let ancestors = self.ancestors(descendant)?;
-        Ok(ancestors.contains(&ancestor))
-    }
-
-    /// Get every node `X` in the graph such that `X == node` or there exists a
-    /// child of `X` that is an ancestor of `node`.
-    fn ancestors(&self, node: Self::Node) -> Result<HashSet<Self::Node>, Self::Error>;
-
-    /// Get the union of `ancestors(node)` for every node in `nodes`.
-    #[instrument]
-    fn ancestors_all(
-        &self,
-        nodes: HashSet<Self::Node>,
-    ) -> Result<HashSet<Self::Node>, Self::Error> {
-        let mut ancestors = HashSet::new();
-        for node in nodes {
-            ancestors.extend(self.ancestors(node)?);
-        }
-        Ok(ancestors)
-    }
+    ) -> Result<bool, Self::Error>;
 
     /// Filter `nodes` to only include nodes that are not ancestors of any other
-    /// node in `nodes`.
+    /// node in `nodes`. This is not strictly necessary, but it makes the
+    /// intermediate results more sensible.
     #[instrument]
     fn simplify_success_bounds(
         &self,
         nodes: HashSet<Self::Node>,
     ) -> Result<HashSet<Self::Node>, Self::Error> {
-        let node_to_ancestors: HashMap<Self::Node, HashSet<Self::Node>> = nodes
-            .iter()
-            .map(|node| Ok((node.clone(), self.ancestors(node.clone())?)))
-            .collect::<Result<_, _>>()?;
-        let heads: HashSet<Self::Node> = nodes
-            .into_iter()
-            .filter(|node| {
-                node_to_ancestors
-                    .iter()
-                    .filter_map(|(other_node, ancestors)| {
-                        if node == other_node {
-                            None
-                        } else {
-                            Some(ancestors)
-                        }
-                    })
-                    .all(|ancestors| !ancestors.contains(node))
-            })
-            .collect();
-        Ok(heads)
-    }
-
-    /// Get every node `X` in the graph such that `X == node` or there exists a
-    /// parent of `X` that is a descendant of `node`.
-    fn descendants(&self, node: Self::Node) -> Result<HashSet<Self::Node>, Self::Error>;
-
-    /// Get the union of `descendants(node)` for every node in `nodes`.
-    #[instrument]
-    fn descendants_all(
-        &self,
-        nodes: HashSet<Self::Node>,
-    ) -> Result<HashSet<Self::Node>, Self::Error> {
-        let mut descendants = HashSet::new();
-        for node in nodes {
-            descendants.extend(self.descendants(node)?);
-        }
-        Ok(descendants)
+        Ok(nodes)
     }
 
     /// Filter `nodes` to only include nodes that are not descendants of any
-    /// other node in `nodes`.
+    /// other node in `nodes`. This is not strictly necessary, but it makes the
+    /// intermediate results more sensible.
     #[instrument]
     fn simplify_failure_bounds(
         &self,
         nodes: HashSet<Self::Node>,
     ) -> Result<HashSet<Self::Node>, Self::Error> {
-        let node_to_descendants: HashMap<Self::Node, HashSet<Self::Node>> = nodes
-            .iter()
-            .map(|node| Ok((node.clone(), self.descendants(node.clone())?)))
-            .collect::<Result<_, _>>()?;
-        let roots: HashSet<Self::Node> = nodes
-            .into_iter()
-            .filter(|node| {
-                node_to_descendants
-                    .iter()
-                    .filter_map(|(other_node, descendants)| {
-                        if node == other_node {
-                            None
-                        } else {
-                            Some(descendants)
-                        }
-                    })
-                    .all(|descendants| !descendants.contains(node))
-            })
-            .collect();
-        Ok(roots)
+        Ok(nodes)
     }
 }
 
@@ -164,6 +89,27 @@ impl<Node: Debug + Eq + Hash> Default for Bounds<Node> {
     }
 }
 
+/// A search strategy to select the next node to search in the graph.
+pub trait Strategy<G: Graph>: Debug {
+    /// An error type.
+    type Error: std::error::Error;
+
+    /// Return "midpoints" for the search. Such a midpoint lies between the
+    /// success bounds and failure bounds, for some meaning of "lie between",
+    /// which depends on the strategy details.
+    ///
+    /// For example, linear search would return the node(s) immediately "after"
+    /// the node(s) in `success_bounds`, while binary search would return the
+    /// node(s) in the middle of `success_bounds` and `failure_bounds`.`
+    fn midpoints(
+        &self,
+        graph: &G,
+        success_bounds: &HashSet<G::Node>,
+        failure_bounds: &HashSet<G::Node>,
+        statuses: &IndexMap<G::Node, Status>,
+    ) -> Result<Box<dyn Iterator<Item = G::Node>>, Self::Error>;
+}
+
 /// The results of the search so far. The search is complete if `next_to_search` is empty.
 pub struct LazySolution<'a, Node: Debug + Eq + Hash + 'a> {
     /// The bounds of the search so far.
@@ -190,8 +136,8 @@ impl<'a, Node: Debug + Eq + Hash + 'a> LazySolution<'a, Node> {
 /// for debugging.
 #[derive(Debug, Eq, PartialEq)]
 pub struct EagerSolution<Node: Debug + Hash + Eq> {
-    bounds: Bounds<Node>,
-    next_to_search: Vec<Node>,
+    pub(crate) bounds: Bounds<Node>,
+    pub(crate) next_to_search: Vec<Node>,
 }
 
 impl<Node: Debug + Hash + Eq> From<LazySolution<'_, Node>> for EagerSolution<Node> {
@@ -207,9 +153,315 @@ impl<Node: Debug + Hash + Eq> From<LazySolution<'_, Node>> for EagerSolution<Nod
     }
 }
 
+#[allow(missing_docs)]
+#[derive(Debug, thiserror::Error)]
+pub enum SearchError<TGraphError, TStrategyError> {
+    #[error(transparent)]
+    Graph(TGraphError),
+
+    #[error(transparent)]
+    Strategy(TStrategyError),
+}
+
+/// The error type for the search.
+#[allow(missing_docs)]
+#[derive(Debug, thiserror::Error)]
+pub enum NotifyError<TNode, TGraphError> {
+    #[error("inconsistent state transition: {ancestor_node:?} ({ancestor_status:?}) was marked as an ancestor of {descendant_node:?} ({descendant_status:?}")]
+    InconsistentStateTransition {
+        ancestor_node: TNode,
+        ancestor_status: Status,
+        descendant_node: TNode,
+        descendant_status: Status,
+    },
+
+    #[error("illegal state transition for {node:?}: {from:?} -> {to:?}")]
+    IllegalStateTransition {
+        node: TNode,
+        from: Status,
+        to: Status,
+    },
+
+    #[error(transparent)]
+    Graph(TGraphError),
+}
+
+/// The search algorithm.
+#[derive(Clone, Debug)]
+pub struct Search<G: Graph> {
+    graph: G,
+    nodes: IndexMap<G::Node, Status>,
+}
+
+impl<G: Graph> Search<G> {
+    /// Construct a new search. The provided `graph` represents the universe of
+    /// all nodes, and `nodes` represents a subset of that universe to search
+    /// in. Only elements from `nodes` will be returned by `success_bounds` and
+    /// `failure_bounds`.
+    ///
+    /// For example, `graph` might correspond to the entire source control
+    /// directed acyclic graph, and `nodes` might correspond to a recent range
+    /// of commits where the first one is passing and the last one is failing.
+    pub fn new(graph: G, search_nodes: impl IntoIterator<Item = G::Node>) -> Self {
+        let nodes = search_nodes
+            .into_iter()
+            .map(|node| (node, Status::Untested))
+            .collect();
+        Self { graph, nodes }
+    }
+
+    /// Get the currently known bounds on the success nodes.
+    ///
+    /// FIXME: O(n) complexity.
+    #[instrument]
+    pub fn success_bounds(&self) -> Result<HashSet<G::Node>, G::Error> {
+        let success_nodes = self
+            .nodes
+            .iter()
+            .filter_map(|(node, status)| match status {
+                Status::Success => Some(node.clone()),
+                Status::Untested | Status::Failure | Status::Indeterminate => None,
+            })
+            .collect::<HashSet<_>>();
+        let success_bounds = self.graph.simplify_success_bounds(success_nodes)?;
+        Ok(success_bounds)
+    }
+
+    /// Get the currently known bounds on the failure nodes.
+    ///
+    /// FIXME: O(n) complexity.
+    #[instrument]
+    pub fn failure_bounds(&self) -> Result<HashSet<G::Node>, G::Error> {
+        let failure_nodes = self
+            .nodes
+            .iter()
+            .filter_map(|(node, status)| match status {
+                Status::Failure => Some(node.clone()),
+                Status::Untested | Status::Success | Status::Indeterminate => None,
+            })
+            .collect::<HashSet<_>>();
+        let failure_bounds = self.graph.simplify_failure_bounds(failure_nodes)?;
+        Ok(failure_bounds)
+    }
+
+    /// Summarize the current search progress and suggest the next node(s) to
+    /// search. The caller is responsible for calling `notify` with the result.
+    #[instrument]
+    #[allow(clippy::type_complexity)]
+    pub fn search<S: Strategy<G>>(
+        &self,
+        strategy: &S,
+    ) -> Result<LazySolution<G::Node>, SearchError<G::Error, S::Error>> {
+        let success_bounds = self.success_bounds().map_err(SearchError::Graph)?;
+        let failure_bounds = self.failure_bounds().map_err(SearchError::Graph)?;
+        let next_to_search = strategy
+            .midpoints(&self.graph, &success_bounds, &failure_bounds, &self.nodes)
+            .map_err(SearchError::Strategy)?;
+        Ok(LazySolution {
+            bounds: Bounds {
+                success: success_bounds,
+                failure: failure_bounds,
+            },
+            next_to_search,
+        })
+    }
+
+    /// Update the search state with the result of a search.
+    #[instrument]
+    pub fn notify(
+        &mut self,
+        node: G::Node,
+        status: Status,
+    ) -> Result<(), NotifyError<G::Node, G::Error>> {
+        match self.nodes.get(&node) {
+            Some(existing_status @ (Status::Success | Status::Failure))
+                if existing_status != &status =>
+            {
+                return Err(NotifyError::IllegalStateTransition {
+                    node,
+                    from: *existing_status,
+                    to: status,
+                })
+            }
+            _ => {}
+        }
+
+        match status {
+            Status::Untested | Status::Indeterminate => {}
+
+            Status::Success => {
+                for failure_node in self.failure_bounds().map_err(NotifyError::Graph)? {
+                    if self
+                        .graph
+                        .is_ancestor(failure_node.clone(), node.clone())
+                        .map_err(NotifyError::Graph)?
+                    {
+                        return Err(NotifyError::InconsistentStateTransition {
+                            ancestor_node: failure_node,
+                            ancestor_status: Status::Failure,
+                            descendant_node: node,
+                            descendant_status: Status::Success,
+                        });
+                    }
+                }
+            }
+
+            Status::Failure => {
+                for success_node in self.success_bounds().map_err(NotifyError::Graph)? {
+                    if self
+                        .graph
+                        .is_ancestor(node.clone(), success_node.clone())
+                        .map_err(NotifyError::Graph)?
+                    {
+                        return Err(NotifyError::InconsistentStateTransition {
+                            ancestor_node: node,
+                            ancestor_status: Status::Failure,
+                            descendant_node: success_node,
+                            descendant_status: Status::Success,
+                        });
+                    }
+                }
+            }
+        }
+
+        self.nodes.insert(node, status);
+        Ok(())
+    }
+}
+
+/// Implementation of `Graph` that represents the common case of a directed
+/// acyclic graph in source control. You can implement this trait instead of
+/// `Graph` (as there is a blanket implementation for `Graph`) and also make use
+/// of `BasicStrategy`.
+pub trait BasicSourceControlGraph: Debug {
+    /// The type of nodes in the graph. This should be cheap to clone.
+    type Node: Clone + Debug + Hash + Eq + 'static;
+
+    /// An error type.
+    type Error: Debug + std::error::Error + 'static;
+
+    /// Get every node `X` in the graph such that `X == node` or there exists a
+    /// child of `X` that is an ancestor of `node`.
+    fn ancestors(&self, node: Self::Node) -> Result<HashSet<Self::Node>, Self::Error>;
+
+    /// Get the union of `ancestors(node)` for every node in `nodes`.
+    #[instrument]
+    fn ancestors_all(
+        &self,
+        nodes: HashSet<Self::Node>,
+    ) -> Result<HashSet<Self::Node>, Self::Error> {
+        let mut ancestors = HashSet::new();
+        for node in nodes {
+            ancestors.extend(self.ancestors(node)?);
+        }
+        Ok(ancestors)
+    }
+
+    /// Filter `nodes` to only include nodes that are not ancestors of any other
+    /// node in `nodes`.
+    fn ancestor_heads(
+        &self,
+        nodes: HashSet<Self::Node>,
+    ) -> Result<HashSet<Self::Node>, Self::Error> {
+        let node_to_ancestors: HashMap<Self::Node, HashSet<Self::Node>> = nodes
+            .iter()
+            .map(|node| Ok((node.clone(), self.ancestors(node.clone())?)))
+            .collect::<Result<_, _>>()?;
+        let heads: HashSet<Self::Node> = nodes
+            .into_iter()
+            .filter(|node| {
+                node_to_ancestors
+                    .iter()
+                    .filter_map(|(other_node, ancestors)| {
+                        if node == other_node {
+                            None
+                        } else {
+                            Some(ancestors)
+                        }
+                    })
+                    .all(|ancestors| !ancestors.contains(node))
+            })
+            .collect();
+        Ok(heads)
+    }
+
+    /// Get every node `X` in the graph such that `X == node` or there exists a
+    /// parent of `X` that is a descendant of `node`.
+    fn descendants(&self, node: Self::Node) -> Result<HashSet<Self::Node>, Self::Error>;
+
+    /// Filter `nodes` to only include nodes that are not descendants of any
+    /// other node in `nodes`.
+    fn descendant_roots(
+        &self,
+        nodes: HashSet<Self::Node>,
+    ) -> Result<HashSet<Self::Node>, Self::Error> {
+        let node_to_descendants: HashMap<Self::Node, HashSet<Self::Node>> = nodes
+            .iter()
+            .map(|node| Ok((node.clone(), self.descendants(node.clone())?)))
+            .collect::<Result<_, _>>()?;
+        let roots: HashSet<Self::Node> = nodes
+            .into_iter()
+            .filter(|node| {
+                node_to_descendants
+                    .iter()
+                    .filter_map(|(other_node, descendants)| {
+                        if node == other_node {
+                            None
+                        } else {
+                            Some(descendants)
+                        }
+                    })
+                    .all(|descendants| !descendants.contains(node))
+            })
+            .collect();
+        Ok(roots)
+    }
+
+    /// Get the union of `descendants(node)` for every node in `nodes`.
+    #[instrument]
+    fn descendants_all(
+        &self,
+        nodes: HashSet<Self::Node>,
+    ) -> Result<HashSet<Self::Node>, Self::Error> {
+        let mut descendants = HashSet::new();
+        for node in nodes {
+            descendants.extend(self.descendants(node)?);
+        }
+        Ok(descendants)
+    }
+}
+
+impl<T: BasicSourceControlGraph> Graph for T {
+    type Node = <Self as BasicSourceControlGraph>::Node;
+    type Error = <Self as BasicSourceControlGraph>::Error;
+
+    fn is_ancestor(
+        &self,
+        ancestor: Self::Node,
+        descendant: Self::Node,
+    ) -> Result<bool, Self::Error> {
+        let ancestors = self.ancestors(descendant)?;
+        Ok(ancestors.contains(&ancestor))
+    }
+
+    fn simplify_success_bounds(
+        &self,
+        nodes: HashSet<Self::Node>,
+    ) -> Result<HashSet<Self::Node>, Self::Error> {
+        self.ancestor_heads(nodes)
+    }
+
+    fn simplify_failure_bounds(
+        &self,
+        nodes: HashSet<Self::Node>,
+    ) -> Result<HashSet<Self::Node>, Self::Error> {
+        self.descendant_roots(nodes)
+    }
+}
+
 /// The possible strategies for searching the graph.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub enum Strategy {
+pub enum BasicStrategyKind {
     /// Search the nodes in the order that they were provided.
     Linear,
 
@@ -247,101 +499,33 @@ pub enum Strategy {
     Binary,
 }
 
-/// The error type for the search.
-#[allow(missing_docs)]
-#[derive(Debug, Error)]
-pub enum Error2<Node, Error> {
-    #[error("inconsistent state transition: {ancestor_node} ({ancestor_status:?}) was marked as an ancestor of {descendant_node} ({descendant_status:?}")]
-    InconsistentStateTransition {
-        ancestor_node: Node,
-        ancestor_status: Status,
-        descendant_node: Node,
-        descendant_status: Status,
-    },
-
-    #[error("illegal state transition for {node}: {from:?} -> {to:?}")]
-    IllegalStateTransition {
-        node: Node,
-        from: Status,
-        to: Status,
-    },
-
-    /// Returned when the caller's trait implementation returns an error.
-    #[error(transparent)]
-    Underlying(#[from] Error),
-}
-
-/// The error type for the search.
-pub type Error<G> = Error2<<G as Graph>::Node, <G as Graph>::Error>;
-
-/// The search algorithm.
+/// A set of basic search strategies defined by `BasicStrategyKind`.
 #[derive(Clone, Debug)]
-pub struct Search<G: Graph> {
-    graph: G,
-    nodes: IndexMap<G::Node, Status>,
+pub struct BasicStrategy {
+    strategy: BasicStrategyKind,
 }
 
-impl<G: Graph> Search<G> {
-    /// Construct a new search. The provided `graph` represents the universe of
-    /// all nodes, and `nodes` represents a subset of that universe to search
-    /// in. Only elements from `nodes` will be returned by `success_bounds` and
-    /// `failure_bounds`.
-    ///
-    /// For example, `graph` might correspond to the entire source control
-    /// directed acyclic graph, and `nodes` might correspond to a recent range
-    /// of commits where the first one is passing and the last one is failing.
-    pub fn new(graph: G, search_nodes: impl IntoIterator<Item = G::Node>) -> Self {
-        let nodes = search_nodes
-            .into_iter()
-            .map(|node| (node, Status::Untested))
-            .collect();
-        Self { graph, nodes }
+impl BasicStrategy {
+    /// Constructor.
+    pub fn new(strategy: BasicStrategyKind) -> Self {
+        Self { strategy }
     }
+}
 
-    /// Get the currently known bounds on the success nodes.
-    ///
-    /// FIXME: O(n) complexity.
-    #[instrument]
-    pub fn success_bounds(&self) -> Result<HashSet<G::Node>, Error<G>> {
-        let success_nodes = self
-            .nodes
-            .iter()
-            .filter_map(|(node, status)| match status {
-                Status::Success => Some(node.clone()),
-                Status::Untested | Status::Failure | Status::Indeterminate => None,
-            })
-            .collect::<HashSet<_>>();
-        let success_bounds = self.graph.simplify_success_bounds(success_nodes)?;
-        Ok(success_bounds)
-    }
+impl<G: BasicSourceControlGraph> Strategy<G> for BasicStrategy {
+    type Error = G::Error;
 
-    /// Get the currently known bounds on the failure nodes.
-    ///
-    /// FIXME: O(n) complexity.
-    #[instrument]
-    pub fn failure_bounds(&self) -> Result<HashSet<G::Node>, Error<G>> {
-        let failure_nodes = self
-            .nodes
-            .iter()
-            .filter_map(|(node, status)| match status {
-                Status::Failure => Some(node.clone()),
-                Status::Untested | Status::Success | Status::Indeterminate => None,
-            })
-            .collect::<HashSet<_>>();
-        let failure_bounds = self.graph.simplify_failure_bounds(failure_nodes)?;
-        Ok(failure_bounds)
-    }
-
-    /// Summarize the current search progress and suggest the next node(s) to
-    /// search. The caller is responsible for calling `notify` with the result.
-    #[instrument]
-    pub fn search(&self, strategy: Strategy) -> Result<LazySolution<G::Node>, Error<G>> {
-        let success_bounds = self.success_bounds()?;
-        let failure_bounds = self.failure_bounds()?;
+    fn midpoints(
+        &self,
+        graph: &G,
+        success_bounds: &HashSet<G::Node>,
+        failure_bounds: &HashSet<G::Node>,
+        statuses: &IndexMap<G::Node, Status>,
+    ) -> Result<Box<dyn Iterator<Item = G::Node>>, Self::Error> {
         let nodes_to_search = {
-            let implied_success_nodes = self.graph.ancestors_all(success_bounds.clone())?;
-            let implied_failure_nodes = self.graph.descendants_all(failure_bounds.clone())?;
-            self.nodes
+            let implied_success_nodes = graph.ancestors_all(success_bounds.clone())?;
+            let implied_failure_nodes = graph.descendants_all(failure_bounds.clone())?;
+            statuses
                 .iter()
                 .filter_map(|(node, status)| match status {
                     Status::Untested => Some(node.clone()),
@@ -352,69 +536,12 @@ impl<G: Graph> Search<G> {
                 })
                 .collect::<Vec<_>>()
         };
-        let next_to_search: Box<dyn Iterator<Item = G::Node>> = match strategy {
-            Strategy::Linear => Box::new(nodes_to_search.into_iter()),
-            Strategy::LinearReverse => Box::new(nodes_to_search.into_iter().rev()),
-            Strategy::Binary => Box::new(make_binary_search_iter(&nodes_to_search)),
+        let next_to_search: Box<dyn Iterator<Item = G::Node>> = match self.strategy {
+            BasicStrategyKind::Linear => Box::new(nodes_to_search.into_iter()),
+            BasicStrategyKind::LinearReverse => Box::new(nodes_to_search.into_iter().rev()),
+            BasicStrategyKind::Binary => Box::new(make_binary_search_iter(&nodes_to_search)),
         };
-
-        Ok(LazySolution {
-            bounds: Bounds {
-                success: success_bounds,
-                failure: failure_bounds,
-            },
-            next_to_search: Box::new(next_to_search),
-        })
-    }
-
-    /// Update the search state with the result of a search.
-    #[instrument]
-    pub fn notify(&mut self, node: G::Node, status: Status) -> Result<(), Error<G>> {
-        match self.nodes.get(&node) {
-            Some(existing_status @ (Status::Success | Status::Failure))
-                if existing_status != &status =>
-            {
-                return Err(Error::<G>::IllegalStateTransition {
-                    node,
-                    from: *existing_status,
-                    to: status,
-                })
-            }
-            _ => {}
-        }
-
-        match status {
-            Status::Untested | Status::Indeterminate => {}
-
-            Status::Success => {
-                for failure_node in self.failure_bounds()? {
-                    if self.graph.is_ancestor(failure_node.clone(), node.clone())? {
-                        return Err(Error::<G>::InconsistentStateTransition {
-                            ancestor_node: failure_node,
-                            ancestor_status: Status::Failure,
-                            descendant_node: node,
-                            descendant_status: Status::Success,
-                        });
-                    }
-                }
-            }
-
-            Status::Failure => {
-                for success_node in self.success_bounds()? {
-                    if self.graph.is_ancestor(node.clone(), success_node.clone())? {
-                        return Err(Error::<G>::InconsistentStateTransition {
-                            ancestor_node: node,
-                            ancestor_status: Status::Failure,
-                            descendant_node: success_node,
-                            descendant_status: Status::Success,
-                        });
-                    }
-                }
-            }
-        }
-
-        self.nodes.insert(node, status);
-        Ok(())
+        Ok(next_to_search)
     }
 }
 
@@ -445,20 +572,25 @@ fn make_binary_search_iter<T: Clone>(nodes: &[T]) -> impl Iterator<Item = T> {
 mod tests {
     use std::convert::Infallible;
 
+    use itertools::Itertools;
     use maplit::{hashmap, hashset};
     use proptest::prelude::Strategy as ProptestStrategy;
     use proptest::prelude::*;
     use proptest::proptest;
 
-    use super::Strategy;
+    use crate::search::Bounds;
+    use crate::search::EagerSolution;
+    use crate::search::Search;
+
+    use super::BasicStrategyKind;
     use super::*;
 
-    #[derive(Debug)]
+    #[derive(Clone, Debug)]
     struct UsizeGraph {
         max: usize,
     }
 
-    impl Graph for UsizeGraph {
+    impl BasicSourceControlGraph for UsizeGraph {
         type Node = usize;
         type Error = Infallible;
 
@@ -474,37 +606,52 @@ mod tests {
     }
 
     #[test]
-    fn test_search_stick() -> Result<(), Error<UsizeGraph>> {
+    fn test_search_stick() {
         let graph = UsizeGraph { max: 7 };
         let nodes = 0..graph.max;
-        let mut search = Search::new(graph, nodes);
+        let linear_strategy = BasicStrategy {
+            strategy: BasicStrategyKind::Linear,
+        };
+        let linear_reverse_strategy = BasicStrategy {
+            strategy: BasicStrategyKind::LinearReverse,
+        };
+        let binary_strategy = BasicStrategy {
+            strategy: BasicStrategyKind::Binary,
+        };
+        let mut search = Search::new(graph.clone(), nodes.clone());
+        // let mut linear_search = Search::new(graph.clone(), linear_strategy, nodes.clone());
+        // let mut linear_reverse_search =
+        //     Search::new(graph.clone(), linear_reverse_strategy, nodes.clone());
+        // let mut binary_search = Search::new(graph.clone(), binary_strategy, nodes.clone());
 
         assert_eq!(
-            search.search(Strategy::Linear)?.into_eager(),
+            search.search(&linear_strategy).unwrap().into_eager(),
             EagerSolution {
                 bounds: Default::default(),
                 next_to_search: vec![0, 1, 2, 3, 4, 5, 6],
             }
         );
         assert_eq!(
-            search.search(Strategy::LinearReverse)?.into_eager(),
+            search
+                .search(&linear_reverse_strategy)
+                .unwrap()
+                .into_eager(),
             EagerSolution {
                 bounds: Default::default(),
                 next_to_search: vec![6, 5, 4, 3, 2, 1, 0],
             }
         );
-
         assert_eq!(
-            search.search(Strategy::Binary)?.into_eager(),
+            search.search(&binary_strategy).unwrap().into_eager(),
             EagerSolution {
                 bounds: Default::default(),
                 next_to_search: vec![3, 1, 5, 0, 4, 2, 6],
             }
         );
 
-        search.notify(2, Status::Success)?;
+        search.notify(2, Status::Success).unwrap();
         assert_eq!(
-            search.search(Strategy::Linear)?.into_eager(),
+            search.search(&linear_strategy).unwrap().into_eager(),
             EagerSolution {
                 bounds: Bounds {
                     success: hashset! {2},
@@ -514,7 +661,7 @@ mod tests {
             }
         );
         assert_eq!(
-            search.search(Strategy::Binary)?.into_eager(),
+            search.search(&binary_strategy).unwrap().into_eager(),
             EagerSolution {
                 bounds: Bounds {
                     success: hashset! {2},
@@ -524,9 +671,9 @@ mod tests {
             }
         );
 
-        search.notify(5, Status::Failure)?;
+        search.notify(5, Status::Failure).unwrap();
         assert_eq!(
-            search.search(Strategy::Linear)?.into_eager(),
+            search.search(&linear_strategy).unwrap().into_eager(),
             EagerSolution {
                 bounds: Bounds {
                     success: hashset! {2},
@@ -536,7 +683,7 @@ mod tests {
             }
         );
         assert_eq!(
-            search.search(Strategy::Binary)?.into_eager(),
+            search.search(&binary_strategy).unwrap().into_eager(),
             EagerSolution {
                 bounds: Bounds {
                     success: hashset! {2},
@@ -546,9 +693,9 @@ mod tests {
             }
         );
 
-        search.notify(3, Status::Indeterminate)?;
+        search.notify(3, Status::Indeterminate).unwrap();
         assert_eq!(
-            search.search(Strategy::Binary)?.into_eager(),
+            search.search(&binary_strategy).unwrap().into_eager(),
             EagerSolution {
                 bounds: Bounds {
                     success: hashset! {2},
@@ -557,17 +704,15 @@ mod tests {
                 next_to_search: vec![4],
             }
         );
-
-        Ok(())
     }
 
     #[test]
-    fn test_search_inconsistent_notify() -> Result<(), Error<UsizeGraph>> {
+    fn test_search_inconsistent_notify() {
         let graph = UsizeGraph { max: 7 };
         let nodes = 0..graph.max;
         let mut search = Search::new(graph, nodes);
 
-        search.notify(4, Status::Success)?;
+        search.notify(4, Status::Success).unwrap();
         insta::assert_debug_snapshot!(search.notify(3, Status::Failure), @r###"
         Err(
             InconsistentStateTransition {
@@ -589,7 +734,7 @@ mod tests {
         )
         "###);
 
-        search.notify(5, Status::Failure)?;
+        search.notify(5, Status::Failure).unwrap();
         insta::assert_debug_snapshot!(search.notify(6, Status::Success), @r###"
         Err(
             InconsistentStateTransition {
@@ -600,8 +745,6 @@ mod tests {
             },
         )
         "###);
-
-        Ok(())
     }
 
     #[derive(Clone, Debug)]
@@ -609,7 +752,7 @@ mod tests {
         nodes: HashMap<char, HashSet<char>>,
     }
 
-    impl Graph for TestGraph {
+    impl BasicSourceControlGraph for TestGraph {
         type Node = char;
         type Error = Infallible;
 
@@ -633,7 +776,7 @@ mod tests {
     }
 
     #[test]
-    fn test_search_dag() -> Result<(), Error<TestGraph>> {
+    fn test_search_dag() {
         let graph = TestGraph {
             nodes: hashmap! {
                 'a' => hashset! {'b'},
@@ -646,22 +789,25 @@ mod tests {
                 'h' => hashset! {},
             },
         };
+        let linear_strategy = BasicStrategy {
+            strategy: BasicStrategyKind::Linear,
+        };
         assert_eq!(graph.descendants('e'), Ok(hashset! {'e', 'f', 'g', 'h'}));
         assert_eq!(graph.ancestors('e'), Ok(hashset! {'a', 'b', 'c', 'd', 'e'}));
 
         let mut search = Search::new(graph, 'a'..='h');
         assert_eq!(
-            search.search(Strategy::Linear)?.into_eager(),
+            search.search(&linear_strategy).unwrap().into_eager(),
             EagerSolution {
                 bounds: Default::default(),
                 next_to_search: vec!['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'],
             }
         );
 
-        search.notify('b', Status::Success)?;
-        search.notify('g', Status::Failure)?;
+        search.notify('b', Status::Success).unwrap();
+        search.notify('g', Status::Failure).unwrap();
         assert_eq!(
-            search.search(Strategy::Linear)?.into_eager(),
+            search.search(&linear_strategy).unwrap().into_eager(),
             EagerSolution {
                 bounds: Bounds {
                     success: hashset! {'b'},
@@ -671,9 +817,9 @@ mod tests {
             }
         );
 
-        search.notify('e', Status::Success)?;
+        search.notify('e', Status::Success).unwrap();
         assert_eq!(
-            search.search(Strategy::Linear)?.into_eager(),
+            search.search(&linear_strategy).unwrap().into_eager(),
             EagerSolution {
                 bounds: Bounds {
                     success: hashset! {'e'},
@@ -683,9 +829,9 @@ mod tests {
             }
         );
 
-        search.notify('f', Status::Success)?;
+        search.notify('f', Status::Success).unwrap();
         assert_eq!(
-            search.search(Strategy::Linear)?.into_eager(),
+            search.search(&linear_strategy).unwrap().into_eager(),
             EagerSolution {
                 bounds: Bounds {
                     success: hashset! {'f'},
@@ -695,9 +841,9 @@ mod tests {
             }
         );
 
-        search.notify('h', Status::Success)?;
+        search.notify('h', Status::Success).unwrap();
         assert_eq!(
-            search.search(Strategy::Linear)?.into_eager(),
+            search.search(&linear_strategy).unwrap().into_eager(),
             EagerSolution {
                 bounds: Bounds {
                     success: hashset! {'f', 'h'},
@@ -706,15 +852,13 @@ mod tests {
                 next_to_search: vec![],
             }
         );
-
-        Ok(())
     }
 
-    fn arb_strategy() -> impl ProptestStrategy<Value = Strategy> {
+    fn arb_strategy() -> impl ProptestStrategy<Value = BasicStrategyKind> {
         prop_oneof![
-            Just(Strategy::Linear),
-            Just(Strategy::LinearReverse),
-            Just(Strategy::Binary),
+            Just(BasicStrategyKind::Linear),
+            Just(BasicStrategyKind::LinearReverse),
+            Just(BasicStrategyKind::Binary),
         ]
     }
 
@@ -758,11 +902,14 @@ mod tests {
         #[test]
         fn test_search_dag_proptest(strategy in arb_strategy(), (graph, failure_nodes) in arb_test_graph_and_nodes()) {
             let nodes = graph.nodes.keys().sorted().copied().collect::<Vec<_>>();
+            let strategy = BasicStrategy {
+                strategy,
+            };
             let mut search = Search::new(graph.clone(), nodes);
             let failure_nodes = graph.descendants_all(failure_nodes.into_iter().collect()).unwrap();
 
             let solution = loop {
-                let solution = search.search(strategy).unwrap().into_eager();
+                let solution = search.search(&strategy).unwrap().into_eager();
                 let Bounds { success, failure } = &solution.bounds;
                 for success_node in success {
                     assert!(!failure_nodes.contains(success_node))
