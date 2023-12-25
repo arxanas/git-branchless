@@ -19,7 +19,7 @@ use git_branchless_opts::RecordArgs;
 use git_branchless_reword::edit_message;
 use itertools::Itertools;
 use lib::core::check_out::{check_out_commit, CheckOutCommitOptions};
-use lib::core::config::get_restack_preserve_timestamps;
+use lib::core::config::{get_commit_template, get_restack_preserve_timestamps};
 use lib::core::dag::{CommitSet, Dag};
 use lib::core::effects::{Effects, OperationType};
 use lib::core::eventlog::{EventLogDb, EventReplayer, EventTransactionId};
@@ -268,6 +268,14 @@ fn record_interactive(
 
         fn edit_commit_message(&mut self, message: &str) -> Result<String, RecordError> {
             let Self { git_run_info, repo } = self;
+            let commit_template = get_commit_template(repo).map_err(|err| {
+                RecordError::Other(format!("Could not read commit message template: {err}",))
+            })?;
+            let message = if message.is_empty() {
+                commit_template.as_deref().unwrap_or("")
+            } else {
+                message
+            };
             edit_message(git_run_info, repo, message)
                 .map_err(|err| RecordError::Other(err.to_string()))
         }
