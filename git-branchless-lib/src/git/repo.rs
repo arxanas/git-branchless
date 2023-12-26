@@ -277,6 +277,8 @@ pub enum Error {
 /// Result type.
 pub type Result<T> = std::result::Result<T, Error>;
 
+pub use git2::ErrorCode as GitErrorCode;
+
 /// Convert a `git2::Error` into an `eyre::Error` with an auto-generated message.
 pub(super) fn wrap_git_error(error: git2::Error) -> eyre::Error {
     eyre::eyre!("Git error {:?}: {}", error.code(), error.message())
