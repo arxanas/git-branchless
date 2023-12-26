@@ -13,7 +13,7 @@ mod branch_forge;
 pub mod github;
 pub mod phabricator;
 
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap};
 use std::fmt::{Debug, Write};
 use std::time::SystemTime;
 
@@ -29,7 +29,7 @@ use lib::core::effects::Effects;
 use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::formatting::{Pluralize, StyledStringBuilder};
 use lib::core::repo_ext::{RepoExt, RepoReferencesSnapshot};
-use lib::git::{GitRunInfo, NonZeroOid, ReferenceName, Repo};
+use lib::git::{GitRunInfo, NonZeroOid, Repo};
 use lib::try_exit_code;
 use lib::util::{ExitCode, EyreExitOr};
 
@@ -75,11 +75,37 @@ pub enum SubmitStatus {
 /// Information about each commit.
 #[derive(Clone, Debug)]
 pub struct CommitStatus {
+    /// The status of this commit, indicating whether it needs to be updated.
     submit_status: SubmitStatus,
+
+    /// The Git remote associated with this commit, if any.
     remote_name: Option<String>,
-    local_branch_name: Option<String>,
+
+    /// An identifier corresponding to the commit in the local repository. This
+    /// may be a branch name, a change ID, the commit summary, etc.
+    ///
+    /// This does not necessarily correspond to the commit's name/identifier in
+    /// the forge (e.g. not a code review link); see `remote_commit_name`
+    /// instead.
+    ///
+    /// The calling code will only use this for display purposes, but an
+    /// individual forge implementation can return this from
+    /// `Forge::query_status` and it will be passed back to
+    /// `Forge::create`/`Forge::update`.
+    local_commit_name: Option<String>,
+
+    /// An identifier corresponding to the commit in the remote repository. This
+    /// may be a branch name, a change ID, a code review link, etc.
+    ///
+    /// This does not necessarily correspond to the commit's name/identifier in
+    /// the local repository; see `local_commit_name` instead.
+    ///
+    /// The calling code will only use this for display purposes, but an
+    /// individual forge implementation can return this from
+    /// `Forge::query_status` and it will be passed back to
+    /// `Forge::create`/`Forge::update`.
     #[allow(dead_code)]
-    remote_branch_name: Option<String>,
+    remote_commit_name: Option<String>,
 }
 
 /// Options for submitting commits to the forge.
@@ -120,9 +146,12 @@ pub struct CreateStatus {
     /// (e.g. to include a change ID).
     pub final_commit_oid: NonZeroOid,
 
-    /// The local branch name to use. The caller will try to create the branch
-    /// pointing to that commit (assuming that it doesn't already exist).
-    pub local_branch_name: String,
+    /// An identifier corresponding to the commit, for display purposes only.
+    /// This may be a branch name, a change ID, the commit summary, etc.
+    ///
+    /// This does not necessarily correspond to the commit's name/identifier in
+    /// the forge (e.g. not a code review link).
+    pub local_commit_name: String,
 }
 
 /// "Forge" refers to a Git hosting provider, such as GitHub, GitLab, etc.
@@ -291,8 +320,8 @@ fn submit(
             CommitStatus {
                 submit_status: SubmitStatus::Local,
                 remote_name: _,
-                local_branch_name: _,
-                remote_branch_name: _,
+                local_commit_name: _,
+                remote_commit_name: _,
             } => {
                 local.insert(commit_oid, commit_status);
             }
@@ -300,8 +329,8 @@ fn submit(
             CommitStatus {
                 submit_status: SubmitStatus::Unsubmitted,
                 remote_name: _,
-                local_branch_name: _,
-                remote_branch_name: _,
+                local_commit_name: _,
+                remote_commit_name: _,
             } => {
                 unsubmitted.insert(commit_oid, commit_status);
             }
@@ -309,8 +338,8 @@ fn submit(
             CommitStatus {
                 submit_status: SubmitStatus::NeedsUpdate,
                 remote_name: _,
-                local_branch_name: _,
-                remote_branch_name: _,
+                local_commit_name: _,
+                remote_commit_name: _,
             } => {
                 to_update.insert(commit_oid, commit_status);
             }
@@ -318,8 +347,8 @@ fn submit(
             CommitStatus {
                 submit_status: SubmitStatus::UpToDate,
                 remote_name: _,
-                local_branch_name: Some(_),
-                remote_branch_name: _,
+                local_commit_name: Some(_),
+                remote_commit_name: _,
             } => {
                 to_skip.insert(commit_oid, commit_status);
             }
@@ -328,87 +357,96 @@ fn submit(
             CommitStatus {
                 submit_status: SubmitStatus::Unknown,
                 remote_name: _,
-                local_branch_name: _,
-                remote_branch_name: _,
+                local_commit_name: _,
+                remote_commit_name: _,
             }
             | CommitStatus {
                 submit_status: SubmitStatus::UpToDate,
                 remote_name: _,
-                local_branch_name: None,
-                remote_branch_name: _,
+                local_commit_name: None,
+                remote_commit_name: _,
             } => {}
         }
         (local, unsubmitted, to_update, to_skip)
     });
 
-    let (created_branches, uncreated_branches): (BTreeSet<String>, BTreeSet<String>) = {
-        let unsubmitted_branches = unsubmitted_commits
+    let (submitted_commit_names, unsubmitted_commit_names): (BTreeSet<String>, BTreeSet<String>) = {
+        let unsubmitted_commit_names: BTreeSet<String> = unsubmitted_commits
             .values()
-            .flat_map(|commit_status| commit_status.local_branch_name.clone())
+            .flat_map(|commit_status| commit_status.local_commit_name.clone())
             .collect();
-        if unsubmitted_commits.is_empty() {
-            Default::default()
-        } else if create && dry_run {
-            (unsubmitted_branches, Default::default())
-        } else if create {
-            let create_statuses =
-                try_exit_code!(forge.create(unsubmitted_commits, &submit_options)?);
-            let all_branches: HashSet<_> = references_snapshot
-                .branch_oid_to_names
-                .values()
-                .flatten()
-                .collect();
-            let mut created_branches = BTreeSet::new();
-            for (_commit_oid, create_status) in create_statuses {
-                let CreateStatus {
-                    final_commit_oid,
-                    local_branch_name,
-                } = create_status;
-                let branch_reference_name =
-                    ReferenceName::from(format!("refs/heads/{local_branch_name}"));
-                created_branches.insert(local_branch_name);
-                if !all_branches.contains(&branch_reference_name) {
-                    repo.create_reference(
-                        &branch_reference_name,
-                        final_commit_oid,
-                        false,
-                        "submit",
-                    )?;
-                }
-            }
-            (created_branches, Default::default())
+        if create {
+            let created_commit_names = if dry_run {
+                unsubmitted_commit_names.clone()
+            } else {
+                let create_statuses =
+                    try_exit_code!(forge.create(unsubmitted_commits, &submit_options)?);
+                create_statuses
+                    .into_values()
+                    .map(
+                        |CreateStatus {
+                             final_commit_oid: _,
+                             local_commit_name,
+                         }| local_commit_name,
+                    )
+                    .collect()
+            };
+            (created_commit_names, Default::default())
         } else {
-            (Default::default(), unsubmitted_branches)
+            (Default::default(), unsubmitted_commit_names)
         }
     };
 
-    let (updated_branch_names, skipped_branch_names): (BTreeSet<String>, BTreeSet<String>) = {
-        let updated_branch_names = commits_to_update
+    let (updated_commit_names, skipped_commit_names): (BTreeSet<String>, BTreeSet<String>) = {
+        let updated_commit_names = commits_to_update
             .iter()
-            .flat_map(|(_commit_oid, commit_status)| commit_status.local_branch_name.clone())
+            .flat_map(|(_commit_oid, commit_status)| commit_status.local_commit_name.clone())
             .collect();
-        let skipped_branch_names = commits_to_skip
+        let skipped_commit_names = commits_to_skip
             .iter()
-            .flat_map(|(_commit_oid, commit_status)| commit_status.local_branch_name.clone())
+            .flat_map(|(_commit_oid, commit_status)| commit_status.local_commit_name.clone())
             .collect();
 
         if !dry_run {
             try_exit_code!(forge.update(commits_to_update, &submit_options)?);
         }
-        (updated_branch_names, skipped_branch_names)
+        (updated_commit_names, skipped_commit_names)
     };
 
-    if !created_branches.is_empty() {
+    if !submitted_commit_names.is_empty() {
         writeln!(
             effects.get_output_stream(),
             "{} {}: {}",
-            if dry_run { "Would create" } else { "Created" },
+            if dry_run { "Would submit" } else { "Submitted" },
             Pluralize {
                 determiner: None,
-                amount: created_branches.len(),
-                unit: ("branch", "branches")
+                amount: submitted_commit_names.len(),
+                unit: ("commit", "commits"),
             },
-            created_branches
+            submitted_commit_names
+                .into_iter()
+                .map(|commit_name| effects
+                    .get_glyphs()
+                    .render(
+                        StyledStringBuilder::new()
+                            .append_styled(commit_name, *STYLE_PUSHED)
+                            .build(),
+                    )
+                    .expect("Rendering commit name"))
+                .join(", ")
+        )?;
+    }
+    if !updated_commit_names.is_empty() {
+        writeln!(
+            effects.get_output_stream(),
+            "{} {}: {}",
+            if dry_run { "Would update" } else { "Updated" },
+            Pluralize {
+                determiner: None,
+                amount: updated_commit_names.len(),
+                unit: ("commit", "commits"),
+            },
+            updated_commit_names
                 .into_iter()
                 .map(|branch_name| effects
                     .get_glyphs()
@@ -417,83 +455,60 @@ fn submit(
                             .append_styled(branch_name, *STYLE_PUSHED)
                             .build(),
                     )
-                    .expect("Rendering branch name"))
+                    .expect("Rendering commit name"))
                 .join(", ")
         )?;
     }
-    if !updated_branch_names.is_empty() {
-        writeln!(
-            effects.get_output_stream(),
-            "{} {}: {}",
-            if dry_run { "Would push" } else { "Pushed" },
-            Pluralize {
-                determiner: None,
-                amount: updated_branch_names.len(),
-                unit: ("branch", "branches")
-            },
-            updated_branch_names
-                .into_iter()
-                .map(|branch_name| effects
-                    .get_glyphs()
-                    .render(
-                        StyledStringBuilder::new()
-                            .append_styled(branch_name, *STYLE_PUSHED)
-                            .build(),
-                    )
-                    .expect("Rendering branch name"))
-                .join(", ")
-        )?;
-    }
-    if !skipped_branch_names.is_empty() {
+    if !skipped_commit_names.is_empty() {
         writeln!(
             effects.get_output_stream(),
             "{} {} (already up-to-date): {}",
             if dry_run { "Would skip" } else { "Skipped" },
             Pluralize {
                 determiner: None,
-                amount: skipped_branch_names.len(),
-                unit: ("branch", "branches")
+                amount: skipped_commit_names.len(),
+                unit: ("commit", "commits"),
             },
-            skipped_branch_names
+            skipped_commit_names
                 .into_iter()
-                .map(|branch_name| effects
+                .map(|commit_name| effects
                     .get_glyphs()
                     .render(
                         StyledStringBuilder::new()
-                            .append_styled(branch_name, *STYLE_SKIPPED)
+                            .append_styled(commit_name, *STYLE_SKIPPED)
                             .build(),
                     )
-                    .expect("Rendering branch name"))
+                    .expect("Rendering commit name"))
                 .join(", ")
         )?;
     }
-    if !uncreated_branches.is_empty() {
+    if !unsubmitted_commit_names.is_empty() {
         writeln!(
             effects.get_output_stream(),
             "{} {} (not yet on remote): {}",
             if dry_run { "Would skip" } else { "Skipped" },
             Pluralize {
                 determiner: None,
-                amount: uncreated_branches.len(),
-                unit: ("branch", "branches")
+                amount: unsubmitted_commit_names.len(),
+                unit: ("commit", "commits")
             },
-            uncreated_branches
+            unsubmitted_commit_names
                 .into_iter()
-                .map(|branch_name| effects
+                .map(|commit_name| effects
                     .get_glyphs()
                     .render(
                         StyledStringBuilder::new()
-                            .append_styled(branch_name, *STYLE_SKIPPED)
+                            .append_styled(commit_name, *STYLE_SKIPPED)
                             .build(),
                     )
-                    .expect("Rendering branch name"))
+                    .expect("Rendering commit name"))
                 .join(", ")
         )?;
         writeln!(
             effects.get_output_stream(),
             "\
-These branches {} skipped because they {} not already associated with a remote repository. To
-create and push them, retry this operation with the --create option.",
+These commits {} skipped because they {} not already associated with a remote
+repository. To submit them, retry this operation with the --create option.",
             if dry_run { "would be" } else { "were" },
             if dry_run { "are" } else { "were" },
         )?;
