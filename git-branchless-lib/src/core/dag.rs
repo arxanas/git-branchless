@@ -527,6 +527,30 @@ impl Dag {
         })
     }
 
+    /// Determine the connected components among draft commits (commit "stacks")
+    /// that intersect with the provided set.
+    #[instrument]
+    pub fn query_stack_commits(&self, commit_set: CommitSet) -> eyre::Result<CommitSet> {
+        let draft_commits = self.query_draft_commits()?;
+        let stack_roots = self.query_roots(draft_commits.clone())?;
+        let stack_ancestors = self.query_range(stack_roots, commit_set)?;
+        let stack = self
+            // Note that for a graph like
+            //
+            // ```
+            // O
+            // |
+            // o A
+            // | \
+            // |  o B
+            // |
+            // @ C
+            // ```
+            // this will return `{A, B, C}`, not just `{A, C}`.
+            .query_range(stack_ancestors, draft_commits.clone())?;
+        Ok(stack)
+    }
+
     /// Wrapper around DAG method.
     #[instrument]
     pub fn query_all(&self) -> eyre::Result<CommitSet> {

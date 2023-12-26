@@ -290,28 +290,9 @@ fn fn_draft(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
 #[instrument]
 fn fn_stack(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
     let arg = eval0_or_1(ctx, name, args)?.unwrap_or_else(|| ctx.dag.head_commit.clone());
-    let draft_commits = ctx
-        .dag
-        .query_draft_commits()
-        .map_err(EvalError::OtherError)?;
-    let stack_roots = ctx.dag.query_roots(draft_commits.clone())?;
-    let stack_ancestors = ctx.dag.query_range(stack_roots, arg)?;
-    let stack = ctx
-        .dag
-        // Note that for a graph like
-        //
-        // ```
-        // O
-        // |
-        // o A
-        // | \
-        // |  o B
-        // |
-        // @ C
-        // ```
-        // this will return `{A, B, C}`, not just `{A, C}`.
-        .query_range(stack_ancestors, draft_commits.clone())?;
-    Ok(stack)
+    ctx.dag
+        .query_stack_commits(arg)
+        .map_err(EvalError::OtherError)
 }
 
 type MatcherFn = dyn Fn(&Repo, &Commit) -> Result<bool, PatternError> + Sync + Send;
