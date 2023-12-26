@@ -75,7 +75,7 @@ fn test_submit_phabricator_strategy_working_copy() -> eyre::Result<()> {
         branchless: running command: <git-executable> rebase --continue
         Using command execution strategy: working-copy
         branchless: running command: <git-executable> rebase --abort
-        Created 2 branches: D0002, D0003
+        Submitted 2 commits: D0002, D0003
         "###);
     }
 
@@ -84,9 +84,9 @@ fn test_submit_phabricator_strategy_working_copy() -> eyre::Result<()> {
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
-        o 55af3db (D0002) D0002 create test1.txt
+        o 55af3db D0002 create test1.txt
         |
-        @ ccb7fd5 (D0003) D0003 create test2.txt
+        @ ccb7fd5 D0003 create test2.txt
         "###);
     }
 
@@ -149,7 +149,7 @@ fn test_submit_phabricator_strategy_worktree() -> eyre::Result<()> {
         Setting D0002 as stack root (no dependencies)
         Stacking D0003 on top of D0002
         Using command execution strategy: worktree
-        Created 2 branches: D0002, D0003
+        Submitted 2 commits: D0002, D0003
         "###);
     }
 
@@ -158,9 +158,9 @@ fn test_submit_phabricator_strategy_worktree() -> eyre::Result<()> {
         insta::assert_snapshot!(stdout, @r###"
         O f777ecc (master) create initial.txt
         |
-        o 55af3db (D0002) D0002 create test1.txt
+        o 55af3db D0002 create test1.txt
         |
-        @ ccb7fd5 (D0003) D0003 create test2.txt
+        @ ccb7fd5 D0003 create test2.txt
         "###);
     }
 
@@ -204,7 +204,7 @@ fn test_submit_phabricator_update() -> eyre::Result<()> {
         branchless: running command: <git-executable> rebase --continue
         Using command execution strategy: working-copy
         branchless: running command: <git-executable> rebase --abort
-        Created 2 branches: D0002, D0003
+        Submitted 2 commits: D0002, D0003
         "###);
     }
 

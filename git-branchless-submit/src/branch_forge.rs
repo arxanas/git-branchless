@@ -144,8 +144,8 @@ impl Forge for BranchForge<'_> {
                 [] => CommitStatus {
                     submit_status: SubmitStatus::Local,
                     remote_name: None,
-                    local_branch_name: None,
-                    remote_branch_name: None,
+                    local_commit_name: None,
+                    remote_commit_name: None,
                 },
 
                 [BranchInfo {
@@ -156,8 +156,8 @@ impl Forge for BranchForge<'_> {
                     None => CommitStatus {
                         submit_status: SubmitStatus::Unsubmitted,
                         remote_name: None,
-                        local_branch_name: Some(branch_name.clone()),
-                        remote_branch_name: None,
+                        local_commit_name: Some(branch_name.clone()),
+                        remote_commit_name: None,
                     },
 
                     Some(upstream_branch) => CommitStatus {
@@ -167,16 +167,16 @@ impl Forge for BranchForge<'_> {
                             SubmitStatus::NeedsUpdate
                         },
                         remote_name: remote_name.clone(),
-                        local_branch_name: Some(branch_name.clone()),
-                        remote_branch_name: Some(upstream_branch.get_name()?.to_owned()),
+                        local_commit_name: Some(branch_name.clone()),
+                        remote_commit_name: Some(upstream_branch.get_name()?.to_owned()),
                     },
                 },
 
                 _branch_infos => CommitStatus {
                     submit_status: SubmitStatus::Unknown,
                     remote_name: None,
-                    local_branch_name: None,
-                    remote_branch_name: None,
+                    local_commit_name: None,
+                    remote_commit_name: None,
                 },
             };
             commit_statuses.insert(*commit_oid, commit_status);
@@ -196,10 +196,10 @@ impl Forge for BranchForge<'_> {
                 let CommitStatus {
                     submit_status: _,
                     remote_name: _,
-                    local_branch_name,
-                    remote_branch_name: _,
+                    local_commit_name,
+                    remote_commit_name: _,
                 } = commit_status;
-                local_branch_name.clone()
+                local_commit_name.clone()
             })
             .sorted()
             .collect_vec();
@@ -244,12 +244,12 @@ These remotes are available: {}",
             Ok(Ok(commits
                 .into_iter()
                 .filter_map(|(commit_oid, commit_status)| {
-                    commit_status.local_branch_name.map(|local_branch_name| {
+                    commit_status.local_commit_name.map(|local_commit_name| {
                         (
                             commit_oid,
                             CreateStatus {
                                 final_commit_oid: commit_oid,
-                                local_branch_name,
+                                local_commit_name,
                             },
                         )
                     })
@@ -269,9 +269,9 @@ These remotes are available: {}",
                 CommitStatus {
                     submit_status: _,
                     remote_name: Some(remote_name),
-                    local_branch_name: Some(local_branch_name),
-                    remote_branch_name: _,
-                } => Some((remote_name, local_branch_name)),
+                    local_commit_name: Some(local_commit_name),
+                    remote_commit_name: _,
+                } => Some((remote_name, local_commit_name)),
                 commit_status => {
                     warn!(
                         ?commit_status,

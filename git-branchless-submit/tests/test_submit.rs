@@ -58,9 +58,9 @@ fn test_submit() -> eyre::Result<()> {
         let (stdout, stderr) = cloned_repo.run(&["submit"])?;
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
-        Skipped 2 branches (not yet on remote): bar, qux
-        These branches were skipped because they were not already associated with a remote repository. To
-        create and push them, retry this operation with the --create option.
+        Skipped 2 commits (not yet on remote): bar, qux
+        These commits were skipped because they were not already associated with a remote
+        repository. To submit them, retry this operation with the --create option.
         "###);
     }
 
@@ -68,9 +68,9 @@ fn test_submit() -> eyre::Result<()> {
         let (stdout, stderr) = cloned_repo.run(&["submit", "--dry-run"])?;
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
-        Would skip 2 branches (not yet on remote): bar, qux
-        These branches would be skipped because they are not already associated with a remote repository. To
-        create and push them, retry this operation with the --create option.
+        Would skip 2 commits (not yet on remote): bar, qux
+        These commits would be skipped because they are not already associated with a remote
+        repository. To submit them, retry this operation with the --create option.
         "###);
     }
 
@@ -78,7 +78,7 @@ fn test_submit() -> eyre::Result<()> {
         let (stdout, stderr) = cloned_repo.run(&["submit", "--create", "--dry-run"])?;
         insta::assert_snapshot!(stderr, @"");
         insta::assert_snapshot!(stdout, @r###"
-        Would create 2 branches: bar, qux
+        Would submit 2 commits: bar, qux
         "###);
     }
 
@@ -98,7 +98,7 @@ fn test_submit() -> eyre::Result<()> {
         branchless: running command: <git-executable> push --set-upstream origin bar qux
         branch 'bar' set up to track 'origin/bar'.
         branch 'qux' set up to track 'origin/qux'.
-        Created 2 branches: bar, qux
+        Submitted 2 commits: bar, qux
         "###);
     }
 
@@ -128,8 +128,8 @@ fn test_submit() -> eyre::Result<()> {
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> fetch origin refs/heads/bar refs/heads/qux
         branchless: running command: <git-executable> push --force-with-lease origin qux
-        Pushed 1 branch: qux
-        Skipped 1 branch (already up-to-date): bar
+        Updated 1 commit: qux
+        Skipped 1 commit (already up-to-date): bar
         "###);
     }
 
@@ -144,7 +144,7 @@ fn test_submit() -> eyre::Result<()> {
         "###);
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> fetch origin refs/heads/bar refs/heads/qux
-        Skipped 2 branches (already up-to-date): bar, qux
+        Skipped 2 commits (already up-to-date): bar, qux
         "###);
     }
 
@@ -301,7 +301,7 @@ fn test_submit_up_to_date_branch() -> eyre::Result<()> {
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> push --set-upstream origin feature
         branch 'feature' set up to track 'origin/feature'.
-        Created 1 branch: feature
+        Submitted 1 commit: feature
         "###);
     }
 
@@ -315,7 +315,7 @@ fn test_submit_up_to_date_branch() -> eyre::Result<()> {
         "###);
         insta::assert_snapshot!(stdout, @r###"
         branchless: running command: <git-executable> fetch origin refs/heads/feature
-        Skipped 1 branch (already up-to-date): feature
+        Skipped 1 commit (already up-to-date): feature
         "###);
     }
 

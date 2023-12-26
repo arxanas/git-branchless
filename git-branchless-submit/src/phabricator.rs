@@ -307,8 +307,8 @@ impl Forge for PhabricatorForge<'_> {
                         None => SubmitStatus::Unsubmitted,
                     },
                     remote_name: None,
-                    local_branch_name: None,
-                    remote_branch_name: None,
+                    local_commit_name: None,
+                    remote_commit_name: None,
                 };
                 (commit_oid, status)
             })
@@ -535,7 +535,7 @@ Differential Revision: https://phabricator.example.com/D000$(git rev-list --coun
                 commit_oid,
                 CreateStatus {
                     final_commit_oid,
-                    local_branch_name,
+                    local_commit_name: local_branch_name,
                 },
             );
         }
@@ -545,7 +545,7 @@ Differential Revision: https://phabricator.example.com/D000$(git rev-list --coun
             .map(|create_status| {
                 let CreateStatus {
                     final_commit_oid,
-                    local_branch_name: _,
+                    local_commit_name: _,
                 } = create_status;
                 *final_commit_oid
             })
