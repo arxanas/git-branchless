@@ -167,6 +167,12 @@ pub enum Error {
         name: ReferenceName,
     },
 
+    #[error("could not rename branch to '{new_name}': {source}")]
+    RenameBranch {
+        source: git2::Error,
+        new_name: String,
+    },
+
     #[error("could not delete branch: {0}")]
     DeleteBranch(#[source] git2::Error),
 
