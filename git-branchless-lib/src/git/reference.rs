@@ -332,6 +332,18 @@ impl<'repo> Branch<'repo> {
         }
     }
 
+    /// Rename the branch. The new name should not start with `refs/heads`.
+    #[instrument]
+    pub fn rename(&mut self, new_name: &str, force: bool) -> Result<()> {
+        self.inner
+            .rename(new_name, force)
+            .map_err(|err| Error::RenameBranch {
+                source: err,
+                new_name: new_name.to_owned(),
+            })?;
+        Ok(())
+    }
+
     /// Delete the branch.
     #[instrument]
     pub fn delete(&mut self) -> Result<()> {
