@@ -467,6 +467,18 @@ then you can only run tests in the main `git-branchless` and \
         };
 
         let (_stdout, _stderr) = self.run(args.as_slice())?;
+
+        // Configuration options are not inherited from the original repo, so
+        // set them in the cloned repo.
+        let new_repo = Git {
+            repo_path: target.repo_path.clone(),
+            ..self.clone()
+        };
+        new_repo.init_repo_with_options(&GitInitOptions {
+            make_initial_commit: false,
+            run_branchless_init: false,
+        })?;
+
         Ok(())
     }
 
