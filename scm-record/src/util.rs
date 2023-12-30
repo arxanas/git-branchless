@@ -9,7 +9,7 @@ impl UsizeExt for usize {
     }
 
     fn clamp_into_u16(self) -> u16 {
-        if self > u16::MAX.try_into().unwrap() {
+        if self > usize::from(u16::MAX) {
             u16::MAX
         } else {
             self.try_into().unwrap()
