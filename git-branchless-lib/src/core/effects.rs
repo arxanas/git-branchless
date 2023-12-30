@@ -762,7 +762,7 @@ trait WriteProgress {
         // `ProgressBar` is included in a `MultiProgress`, it doesn't matter
         // which of them we call `println` on. The output will be printed above
         // the `MultiProgress` regardless.
-        let operation = root_operation.children.get(0);
+        let operation = root_operation.children.first();
         match operation {
             None => {
                 // There's no progress meters, so we can write directly to

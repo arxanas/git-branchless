@@ -84,7 +84,7 @@ impl Index {
                     // `libgit2` uses u32 for file modes in index entries, but
                     // i32 for file modes in tree entries for some reason.
                     let mode = i32::try_from(entry.mode).unwrap();
-                    FileMode::try_from(mode).unwrap()
+                    FileMode::from(mode)
                 },
             })
     }

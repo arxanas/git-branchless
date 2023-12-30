@@ -92,7 +92,7 @@ fn test_different_event_transaction_ids() -> eyre::Result<()> {
 fn test_advance_cursor_by_transaction() -> eyre::Result<()> {
     let mut event_replayer = new_event_replayer("refs/heads/master".into());
     for (timestamp, event_tx_id) in (0..).zip(&[1, 1, 2, 2, 3, 4]) {
-        let timestamp: f64 = timestamp.try_into()?;
+        let timestamp = f64::from(timestamp);
         event_replayer.process_event(&Event::UnobsoleteEvent {
             timestamp,
             event_tx_id: new_event_transaction_id(*event_tx_id),
