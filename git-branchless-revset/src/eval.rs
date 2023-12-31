@@ -1189,6 +1189,86 @@ mod tests {
     }
 
     #[test]
+    fn test_eval_merges() -> eyre::Result<()> {
+        let git = make_git()?;
+        git.init_repo()?;
+
+        git.detach_head()?;
+        let test1_oid = git.commit_file("test1", 1)?;
+        let test2_oid = git.commit_file("test2", 2)?;
+        git.run(&["checkout", "HEAD~2"])?;
+        git.run(&["merge", "--no-ff", &test1_oid.to_string()])?;
+        git.run(&["merge", "--no-ff", &test2_oid.to_string()])?;
+
+        let effects = Effects::new_suppress_for_test(Glyphs::text());
+        let repo = git.get_repo()?;
+        let conn = repo.get_db_conn()?;
+        let event_log_db = EventLogDb::new(&conn)?;
+        let event_replayer = EventReplayer::from_event_log_db(&effects, &repo, &event_log_db)?;
+        let event_cursor = event_replayer.make_default_cursor();
+        let references_snapshot = repo.get_references_snapshot()?;
+        let mut dag = Dag::open_and_sync(
+            &effects,
+            &repo,
+            &event_replayer,
+            event_cursor,
+            &references_snapshot,
+        )?;
+
+        {
+            let expr = Expr::FunctionCall(Cow::Borrowed("merges"), vec![]);
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            Ok(
+                [
+                    Commit {
+                        inner: Commit {
+                            id: f486a8b756cd3a928241576aa87827284f3e14d1,
+                            summary: "Merge commit '62fc20d2a290daea0d52bdc2ed2ad4be6491010e' into HEAD",
+                        },
+                    },
+                    Commit {
+                        inner: Commit {
+                            id: 0b75bdca271fdc188e68bca6e054013bbc2a373c,
+                            summary: "Merge commit '96d1c37a3d4363611c49f7e52186e189a04c531f' into HEAD",
+                        },
+                    },
+                ],
+            )
+            "###);
+
+            let expr = Expr::FunctionCall(
+                Cow::Borrowed("not"),
+                vec![Expr::FunctionCall(Cow::Borrowed("merges"), vec![])],
+            );
+            insta::assert_debug_snapshot!(eval_and_sort(&effects, &repo, &mut dag, &expr), @r###"
+            Ok(
+                [
+                    Commit {
+                        inner: Commit {
+                            id: f777ecc9b0db5ed372b2615695191a8a17f79f24,
+                            summary: "create initial.txt",
+                        },
+                    },
+                    Commit {
+                        inner: Commit {
+                            id: 62fc20d2a290daea0d52bdc2ed2ad4be6491010e,
+                            summary: "create test1.txt",
+                        },
+                    },
+                    Commit {
+                        inner: Commit {
+                            id: 96d1c37a3d4363611c49f7e52186e189a04c531f,
+                            summary: "create test2.txt",
+                        },
+                    },
+                ],
+            )
+            "###);
+        }
+        Ok(())
+    }
+
+    #[test]
     fn test_eval_aliases() -> eyre::Result<()> {
         let git = make_git()?;
         git.init_repo()?;
