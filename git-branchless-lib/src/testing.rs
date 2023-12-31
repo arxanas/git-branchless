@@ -129,6 +129,25 @@ impl Git {
             })
             .into_owned();
 
+        lazy_static! {
+            // Convert non-empty, blank lines to empty, blank lines to make the
+            // command output easier to use in snapshot assertions.
+            //
+            // Some git output includes lines made up of only whitespace, which
+            // is hard to work with as inline snapshots because editors often
+            // trim such trailing whitespace automatically. In particular,
+            // `git show` prints 4 spaces instead of just an empty line for the
+            // lines between commit message paragraphs. (ie "    \n" instead of
+            // just "\n".)
+            //
+            // This regex targets the output of `git show`, but it could be
+            // generalized in the future if other cases come up.
+            static ref WHITESPACE_ONLY_LINE_RE: Regex = Regex::new(r"(?m)^ {4}$").unwrap();
+        }
+        let output = WHITESPACE_ONLY_LINE_RE
+            .replace_all(&output, "")
+            .into_owned();
+
         Ok(output)
     }
 
