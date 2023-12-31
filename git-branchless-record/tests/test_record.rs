@@ -13,9 +13,9 @@ fn test_record_unstaged_changes() -> eyre::Result<()> {
     git.commit_file("test1", 1)?;
     git.write_file_txt("test1", "contents1\n")?;
     {
-        let (stdout, _stderr) = git.branchless("record", &["-m", "foo"])?;
+        let (stdout, _stderr) = git.branchless("record", &["-m", "foo", "-m", "bar"])?;
         insta::assert_snapshot!(stdout, @r###"
-        [master 914812a] foo
+        [master 872eae1] foo
          1 file changed, 1 insertion(+), 1 deletion(-)
         "###);
     }
@@ -23,11 +23,13 @@ fn test_record_unstaged_changes() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = git.run(&["show"])?;
         insta::assert_snapshot!(stdout, @r###"
-        commit 914812ae3220add483f11d851dc59f0b5dbdeaa0
+        commit 872eae10daf1e94d0c346540f6d655027c60e7ae
         Author: Testy McTestface <test@example.com>
         Date:   Thu Oct 29 12:34:56 2020 +0000
 
             foo
+
+            bar
 
         diff --git a/test1.txt b/test1.txt
         index 7432a8f..a024003 100644

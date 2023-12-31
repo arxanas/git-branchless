@@ -52,7 +52,7 @@ pub fn command_main(ctx: CommandContext, args: RecordArgs) -> EyreExitOr<()> {
         git_run_info,
     } = ctx;
     let RecordArgs {
-        message,
+        messages,
         interactive,
         create,
         detach,
@@ -62,7 +62,7 @@ pub fn command_main(ctx: CommandContext, args: RecordArgs) -> EyreExitOr<()> {
     record(
         &effects,
         &git_run_info,
-        message,
+        messages,
         interactive,
         create,
         detach,
@@ -75,7 +75,7 @@ pub fn command_main(ctx: CommandContext, args: RecordArgs) -> EyreExitOr<()> {
 fn record(
     effects: &Effects,
     git_run_info: &GitRunInfo,
-    message: Option<String>,
+    messages: Vec<String>,
     interactive: bool,
     branch_name: Option<String>,
     detach: bool,
@@ -153,15 +153,13 @@ fn record(
                 &repo,
                 &snapshot,
                 event_tx_id,
-                message.as_deref(),
+                messages,
             )?);
         }
     } else {
         let args = {
             let mut args = vec!["commit"];
-            if let Some(message) = &message {
-                args.extend(["--message", message]);
-            }
+            args.extend(messages.iter().flat_map(|message| ["--message", message]));
             if working_copy_changes_type == WorkingCopyChangesType::Unstaged {
                 args.push("--all");
             }
@@ -256,7 +254,7 @@ fn record_interactive(
     repo: &Repo,
     snapshot: &WorkingCopySnapshot,
     event_tx_id: EventTransactionId,
-    message: Option<&str>,
+    messages: Vec<String>,
 ) -> EyreExitOr<()> {
     let old_tree = snapshot.commit_stage0.get_tree()?;
     let new_tree = snapshot.commit_unstaged.get_tree()?;
@@ -275,7 +273,7 @@ fn record_interactive(
         is_read_only: false,
         commits: vec![
             Commit {
-                message: Some(message.map(|s| s.to_owned()).unwrap_or_default()),
+                message: Some(messages.iter().join("\n\n")),
             },
             Commit { message: None },
         ],
