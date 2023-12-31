@@ -3,11 +3,12 @@ use eden_dag::nameset::hints::Hints;
 
 use lib::core::dag::CommitSet;
 use lib::core::eventlog::{EventLogDb, EventReplayer};
+use lib::core::repo_ext::RepoExt;
 use lib::core::rewrite::find_rewrite_target;
 use lib::git::{
-    get_latest_test_command_path, get_test_tree_dir, Commit, MaybeZeroOid, Repo,
-    SerializedNonZeroOid, SerializedTestResult, TEST_ABORT_EXIT_CODE, TEST_INDETERMINATE_EXIT_CODE,
-    TEST_SUCCESS_EXIT_CODE,
+    get_latest_test_command_path, get_test_tree_dir, CategorizedReferenceName, Commit,
+    MaybeZeroOid, Repo, SerializedNonZeroOid, SerializedTestResult, TEST_ABORT_EXIT_CODE,
+    TEST_INDETERMINATE_EXIT_CODE, TEST_SUCCESS_EXIT_CODE,
 };
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -179,8 +180,48 @@ fn fn_heads(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
 
 #[instrument]
 fn fn_branches(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
-    eval0(ctx, name, args)?;
-    Ok(ctx.dag.branch_commits.clone())
+    let pattern = match eval0_or_1_pattern(ctx, name, args)? {
+        Some(pattern) => pattern,
+        None => return Ok(ctx.dag.branch_commits.clone()),
+    };
+
+    let branch_oid_to_names = ctx
+        .repo
+        .get_references_snapshot()
+        .wrap_err("Could not get references snapshot for repo")
+        .map_err(EvalError::OtherError)?
+        .branch_oid_to_names;
+
+    let branch_commits = make_pattern_matcher_for_set(
+        ctx,
+        name,
+        args,
+        Box::new(move |_repo, commit| {
+            let branches_at_commit = match branch_oid_to_names.get(&commit.get_oid()) {
+                Some(branches) => branches,
+                None => return Ok(false),
+            };
+
+            let result = branches_at_commit
+                .iter()
+                .filter_map(
+                    |branch_name| match CategorizedReferenceName::new(branch_name) {
+                        name @ CategorizedReferenceName::LocalBranch { .. } => {
+                            Some(name.render_suffix())
+                        }
+                        // we only care about local branches
+                        CategorizedReferenceName::RemoteBranch { .. }
+                        | CategorizedReferenceName::OtherRef { .. } => None,
+                    },
+                )
+                .any(|branch_name| pattern.matches_text(branch_name.as_str()));
+
+            Ok(result)
+        }),
+        Some(ctx.dag.branch_commits.clone()),
+    )?;
+
+    Ok(branch_commits)
 }
 
 #[instrument]
@@ -275,12 +316,24 @@ fn fn_stack(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
 
 type MatcherFn = dyn Fn(&Repo, &Commit) -> Result<bool, PatternError> + Sync + Send;
 
-#[instrument(skip(f))]
+/// Make a pattern matcher that operates on all visible commits.
 fn make_pattern_matcher(
     ctx: &mut Context,
     name: &str,
     args: &[Expr],
     f: Box<MatcherFn>,
+) -> Result<CommitSet, EvalError> {
+    make_pattern_matcher_for_set(ctx, name, args, f, None)
+}
+
+/// Make a pattern matcher that operates only on the given set of commits.
+#[instrument(skip(f))]
+fn make_pattern_matcher_for_set(
+    ctx: &mut Context,
+    name: &str,
+    args: &[Expr],
+    f: Box<MatcherFn>,
+    commits_to_match: Option<CommitSet>,
 ) -> Result<CommitSet, EvalError> {
     struct Matcher {
         expr: String,
@@ -301,7 +354,7 @@ fn make_pattern_matcher(
         expr: Expr::FunctionCall(Cow::Borrowed(name), args.to_vec()).to_string(),
         f,
     };
-    let matcher = make_pattern_matcher_set(ctx, ctx.repo, Box::new(matcher))?;
+    let matcher = make_pattern_matcher_set(ctx, ctx.repo, Box::new(matcher), commits_to_match)?;
     Ok(matcher)
 }
 

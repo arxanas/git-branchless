@@ -135,12 +135,13 @@ pub(super) fn make_pattern_matcher_set(
     ctx: &mut Context,
     repo: &Repo,
     matcher: Box<dyn PatternMatcher>,
+    commits_to_match: Option<CommitSet>,
 ) -> Result<CommitSet, PatternError> {
     struct MatcherNameSetQuery {
         effects: Effects,
         matcher: Box<dyn PatternMatcher>,
         repo: Arc<Mutex<Repo>>,
-        visible_commits: CommitSet,
+        commits_to_match: CommitSet,
     }
 
     impl MatcherNameSetQuery {
@@ -152,10 +153,10 @@ pub(super) fn make_pattern_matcher_set(
                     )));
             let _effects = effects;
 
-            let len = self.visible_commits.count().await?;
+            let len = self.commits_to_match.count().await?;
             progress.notify_progress(0, len);
 
-            let stream = self.visible_commits.iter().await?;
+            let stream = self.commits_to_match.iter().await?;
             let commit_oids = stream.collect::<Vec<_>>().await;
             let repo = self.repo.lock().unwrap();
             let repo_pool = RepoResource::new_pool(&repo).map_err(make_dag_backend_error)?;
@@ -191,7 +192,7 @@ pub(super) fn make_pattern_matcher_set(
         }
 
         async fn contains(&self, name: &CommitVertex) -> eden_dag::Result<bool> {
-            if !self.visible_commits.contains(name).await? {
+            if !self.commits_to_match.contains(name).await? {
                 return Ok(false);
             }
 
@@ -209,18 +210,21 @@ pub(super) fn make_pattern_matcher_set(
     }
 
     let repo = repo.try_clone().map_err(PatternError::Repo)?;
-    let visible_commits = ctx
-        .dag
-        .query_visible_commits_slow()
-        .map_err(EvalError::OtherError)
-        .map_err(Box::new)?
-        .clone();
+    let commits_to_match = match commits_to_match {
+        Some(commits) => commits,
+        None => ctx
+            .dag
+            .query_visible_commits_slow()
+            .map_err(EvalError::OtherError)
+            .map_err(Box::new)?
+            .clone(),
+    };
 
     let matcher = Arc::new(MatcherNameSetQuery {
         effects: ctx.effects.clone(),
         matcher,
         repo: Arc::new(Mutex::new(repo)),
-        visible_commits,
+        commits_to_match,
     });
     Ok(CommitSet::from_async_evaluate_contains(
         {
