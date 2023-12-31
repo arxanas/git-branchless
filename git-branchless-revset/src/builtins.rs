@@ -61,6 +61,7 @@ lazy_static! {
             ("committer.date", &fn_committer_date),
             ("exactly", &fn_exactly),
             ("current", &fn_current),
+            ("merges", &fn_merges),
             ("tests.passed", &fn_tests_passed),
             ("tests.failed", &fn_tests_failed),
             ("tests.fixable", &fn_tests_fixable),
@@ -511,6 +512,19 @@ fn fn_current(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
         }
     }
     Ok(result.into_iter().collect::<CommitSet>())
+}
+
+#[instrument]
+fn fn_merges(ctx: &mut Context, name: &str, args: &[Expr]) -> EvalResult {
+    eval0(ctx, name, args)?;
+    // Use a "pattern matcher" that – instead of testing for a pattern –
+    // examines the parent count of each commit to find merges.
+    make_pattern_matcher(
+        ctx,
+        name,
+        args,
+        Box::new(move |_repo, commit| Ok(commit.get_parent_count() > 1)),
+    )
 }
 
 fn read_all_test_results(repo: &Repo, commit: &Commit) -> Option<Vec<SerializedTestResult>> {

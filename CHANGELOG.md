@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - (#1129) Added a `--dry-run` option to `git submit` to report what would be submitted without actually doing so.
+- (#1130) Added `merges()` revset function.
 
 ### Changed
 
