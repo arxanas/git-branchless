@@ -419,8 +419,13 @@ impl Dag {
 
     /// Wrapper around DAG method.
     #[instrument]
-    pub fn query_is_ancestor(&self, lhs: NonZeroOid, rhs: NonZeroOid) -> eden_dag::Result<bool> {
-        let result = self.run_blocking(self.inner.is_ancestor(lhs.into(), rhs.into()))?;
+    pub fn query_is_ancestor(
+        &self,
+        ancestor: NonZeroOid,
+        descendant: NonZeroOid,
+    ) -> eden_dag::Result<bool> {
+        let result =
+            self.run_blocking(self.inner.is_ancestor(ancestor.into(), descendant.into()))?;
         Ok(result)
     }
 
@@ -630,15 +635,19 @@ impl Dag {
 
     /// Wrapper around DAG method.
     #[instrument]
-    pub fn query_only(&self, from: CommitSet, to: CommitSet) -> eden_dag::Result<CommitSet> {
-        let result = self.run_blocking(self.inner.only(from, to))?;
+    pub fn query_only(
+        &self,
+        reachable: CommitSet,
+        unreachable: CommitSet,
+    ) -> eden_dag::Result<CommitSet> {
+        let result = self.run_blocking(self.inner.only(reachable, unreachable))?;
         Ok(result)
     }
 
     /// Wrapper around DAG method.
     #[instrument]
-    pub fn query_range(&self, from: CommitSet, to: CommitSet) -> eden_dag::Result<CommitSet> {
-        let result = self.run_blocking(self.inner.range(from, to))?;
+    pub fn query_range(&self, roots: CommitSet, heads: CommitSet) -> eden_dag::Result<CommitSet> {
+        let result = self.run_blocking(self.inner.range(roots, heads))?;
         Ok(result)
     }
 
