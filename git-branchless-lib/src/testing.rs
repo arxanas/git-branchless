@@ -185,7 +185,7 @@ impl Git {
         let git_editor = OsString::from(":");
 
         let new_path = self.get_path_for_env();
-        let envs = vec![
+        let mut envs = vec![
             ("GIT_CONFIG_NOSYSTEM", OsString::from("1")),
             ("GIT_AUTHOR_DATE", date.clone()),
             ("GIT_COMMITTER_DATE", date),
@@ -193,11 +193,18 @@ impl Git {
             ("GIT_EXEC_PATH", self.git_exec_path.as_os_str().into()),
             ("PATH", new_path),
             (TEST_GIT, self.path_to_git.as_os_str().into()),
-            (
-                TEST_SEPARATE_COMMAND_BINARIES,
-                std::env::var_os(TEST_SEPARATE_COMMAND_BINARIES).unwrap_or_default(),
-            ),
         ];
+        if let Some(test_separate_command_binaries) =
+            std::env::var_os(TEST_SEPARATE_COMMAND_BINARIES)
+        {
+            envs.push((
+                TEST_SEPARATE_COMMAND_BINARIES,
+                test_separate_command_binaries,
+            ));
+        }
+        if let Some(rust_log) = std::env::var_os("RUST_LOG") {
+            envs.push(("RUST_LOG", rust_log));
+        }
 
         envs.into_iter()
             .map(|(key, value)| (OsString::from(key), value))
