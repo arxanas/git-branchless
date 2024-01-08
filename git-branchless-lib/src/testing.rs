@@ -533,6 +533,7 @@ then you can only run tests in the main `git-branchless` and \
     /// Commit a file with given contents and message. The `time` argument is
     /// used to set the commit timestamp, which is factored into the commit
     /// hash. The filename is always appended to the message prefix.
+    #[track_caller]
     #[instrument]
     pub fn commit_file_with_contents_and_message(
         &self,
@@ -563,6 +564,7 @@ then you can only run tests in the main `git-branchless` and \
     /// Commit a file with given contents and a default message. The `time`
     /// argument is used to set the commit timestamp, which is factored into the
     /// commit hash.
+    #[track_caller]
     #[instrument]
     pub fn commit_file_with_contents(
         &self,
@@ -575,6 +577,8 @@ then you can only run tests in the main `git-branchless` and \
 
     /// Commit a file with default contents. The `time` argument is used to set
     /// the commit timestamp, which is factored into the commit hash.
+    #[track_caller]
+    #[instrument]
     pub fn commit_file(&self, name: &str, time: isize) -> eyre::Result<NonZeroOid> {
         self.commit_file_with_contents(name, time, &format!("{name} contents\n"))
     }

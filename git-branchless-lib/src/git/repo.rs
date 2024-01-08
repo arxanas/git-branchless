@@ -1035,6 +1035,31 @@ impl Repo {
         Ok((snapshot, statuses))
     }
 
+    /// Create a new branch or update an existing one. The provided name should
+    /// be a branch name and not a reference name, i.e. it should not start with
+    /// `refs/heads/`.
+    #[instrument]
+    pub fn create_branch(&self, branch_name: &str, commit: &Commit, force: bool) -> Result<Branch> {
+        if branch_name.starts_with("refs/heads/") {
+            warn!(
+                ?branch_name,
+                "Branch name starts with refs/heads/; this is probably not what you intended."
+            );
+        }
+
+        let branch = self
+            .inner
+            .branch(branch_name, &commit.inner, force)
+            .map_err(|err| Error::CreateBranch {
+                source: err,
+                name: branch_name.to_owned(),
+            })?;
+        Ok(Branch {
+            repo: self,
+            inner: branch,
+        })
+    }
+
     /// Create a new reference or update an existing one.
     #[instrument]
     pub fn create_reference(

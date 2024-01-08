@@ -3,7 +3,7 @@ use std::ffi::OsStr;
 use std::string::FromUtf8Error;
 
 use thiserror::Error;
-use tracing::instrument;
+use tracing::{instrument, warn};
 
 use crate::git::config::ConfigRead;
 use crate::git::oid::make_non_zero_oid;
@@ -304,6 +304,37 @@ impl<'repo> Branch<'repo> {
         };
         let target_oid = upstream_branch.get_oid()?;
         Ok(target_oid)
+    }
+
+    /// If this branch tracks a remote ("upstream") branch, return the name of
+    /// that branch without the leading remote name. For example, if the
+    /// upstream branch is `origin/main`, this will return `main`. (Usually,
+    /// this is the same as the name of the local branch, but not always.)
+    pub fn get_upstream_branch_name_without_push_remote_name(
+        &self,
+    ) -> eyre::Result<Option<String>> {
+        let push_remote_name = match self.get_push_remote_name()? {
+            Some(stack_remote_name) => stack_remote_name,
+            None => return Ok(None),
+        };
+        let upstream_branch = match self.get_upstream_branch()? {
+            Some(upstream_branch) => upstream_branch,
+            None => return Ok(None),
+        };
+        let upstream_branch_name = upstream_branch.get_name()?;
+        let upstream_branch_name_without_remote =
+            match upstream_branch_name.strip_prefix(&format!("{push_remote_name}/")) {
+                Some(upstream_branch_name_without_remote) => upstream_branch_name_without_remote,
+                None => {
+                    warn!(
+                        ?push_remote_name,
+                        ?upstream_branch,
+                        "Upstream branch name did not start with push remote name"
+                    );
+                    upstream_branch_name
+                }
+            };
+        Ok(Some(upstream_branch_name_without_remote.to_owned()))
     }
 
     /// Get the associated remote to push to for this branch. If there is no
