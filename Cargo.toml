@@ -92,7 +92,7 @@ serde = { version = "1.0.193", features = ["derive"] }
 serde_json = "1.0.108"
 shell-words = "1.1.0"
 skim = "0.10.4"
-tempfile = "3.8.1"
+tempfile = "3.9.0"
 textwrap = "0.16.0"
 thiserror = "1.0.51"
 tracing = "0.1.40"
