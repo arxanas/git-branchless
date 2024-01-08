@@ -13,3 +13,6 @@
 
 pub mod basic;
 pub mod search;
+
+#[cfg(test)]
+pub mod testing;
