@@ -46,7 +46,7 @@ pub fn make_test_command_slug(command: String) -> String {
 /// A version of `NonZeroOid` that can be serialized and deserialized. This
 /// exists in case we want to move this type (back) into a separate module which
 /// has a `serde` dependency in the interest of improving build times.
-#[derive(Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SerializedNonZeroOid(pub NonZeroOid);
 
 impl Serialize for SerializedNonZeroOid {

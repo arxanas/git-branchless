@@ -40,6 +40,8 @@ use git_branchless_revset::resolve_commits;
 use phabricator::PhabricatorForge;
 use tracing::{debug, info, instrument, warn};
 
+use crate::github::github_push_remote;
+
 lazy_static! {
     /// The style for branches which were successfully submitted.
     pub static ref STYLE_PUSHED: Style =
@@ -104,7 +106,6 @@ pub struct CommitStatus {
     /// individual forge implementation can return this from
     /// `Forge::query_status` and it will be passed back to
     /// `Forge::create`/`Forge::update`.
-    #[allow(dead_code)]
     remote_commit_name: Option<String>,
 }
 
@@ -299,7 +300,7 @@ fn submit(
         &references_snapshot,
         &unioned_revset,
         forge_kind,
-    );
+    )?;
     let statuses = try_exit_code!(forge.query_status(commit_set)?);
     debug!(?statuses, "Commit statuses");
 
@@ -522,13 +523,20 @@ fn select_forge<'a>(
     event_log_db: &'a EventLogDb,
     references_snapshot: &'a RepoReferencesSnapshot,
     revset: &'a Revset,
-    forge: Option<ForgeKind>,
-) -> Box<dyn Forge + 'a> {
-    let forge_kind = match forge {
+    forge_kind: Option<ForgeKind>,
+) -> eyre::Result<Box<dyn Forge + 'a>> {
+    // Check if explicitly set:
+    let forge_kind = match forge_kind {
         Some(forge_kind) => {
             info!(?forge_kind, "Forge kind was explicitly set");
-            forge_kind
+            Some(forge_kind)
         }
+        None => None,
+    };
+
+    // Check Phabricator:
+    let forge_kind = match forge_kind {
+        Some(forge_kind) => Some(forge_kind),
         None => {
             let use_phabricator = if let Some(working_copy_path) = repo.get_working_copy_path() {
                 let arcconfig_path = &working_copy_path.join(".arcconfig");
@@ -542,16 +550,21 @@ fn select_forge<'a>(
             } else {
                 false
             };
-            if use_phabricator {
-                ForgeKind::Phabricator
-            } else {
-                ForgeKind::Branch
-            }
+            use_phabricator.then_some(ForgeKind::Phabricator)
         }
     };
 
+    // Check Github:
+    let forge_kind = match forge_kind {
+        Some(forge_kind) => Some(forge_kind),
+        None => github_push_remote(repo)?.map(|_| ForgeKind::Github),
+    };
+
+    // Default:
+    let forge_kind = forge_kind.unwrap_or(ForgeKind::Branch);
+
     info!(?forge_kind, "Selected forge kind");
-    match forge_kind {
+    let forge: Box<dyn Forge> = match forge_kind {
         ForgeKind::Branch => Box::new(BranchForge {
             effects,
             git_run_info,
@@ -567,6 +580,7 @@ fn select_forge<'a>(
             repo,
             dag,
             event_log_db,
+            client: GithubForge::client(git_run_info.clone()),
         }),
 
         ForgeKind::Phabricator => Box::new(PhabricatorForge {
@@ -577,5 +591,6 @@ fn select_forge<'a>(
             event_log_db,
             revset,
         }),
-    }
+    };
+    Ok(forge)
 }
