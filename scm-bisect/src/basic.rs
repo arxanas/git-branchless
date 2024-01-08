@@ -239,41 +239,20 @@ impl<G: BasicSourceControlGraph> search::Strategy<G> for BasicStrategy {
 
 #[cfg(test)]
 mod tests {
-    use std::convert::Infallible;
-
-    use itertools::Itertools;
-    use maplit::{hashmap, hashset};
-    use proptest::prelude::Strategy as ProptestStrategy;
-    use proptest::prelude::*;
-    use proptest::proptest;
+    use super::*;
 
     use crate::search::Bounds;
     use crate::search::EagerSolution;
     use crate::search::Search;
     use crate::search::Status;
+    use crate::testing::arb_strategy;
+    use crate::testing::arb_test_graph_and_nodes;
+    use crate::testing::TestGraph;
+    use crate::testing::UsizeGraph;
 
-    use super::BasicStrategyKind;
-    use super::*;
-
-    #[derive(Clone, Debug)]
-    struct UsizeGraph {
-        max: usize,
-    }
-
-    impl BasicSourceControlGraph for UsizeGraph {
-        type Node = usize;
-        type Error = Infallible;
-
-        fn ancestors(&self, node: Self::Node) -> Result<HashSet<Self::Node>, Infallible> {
-            assert!(node < self.max);
-            Ok((0..=node).collect())
-        }
-
-        fn descendants(&self, node: Self::Node) -> Result<HashSet<Self::Node>, Infallible> {
-            assert!(node < self.max);
-            Ok((node..self.max).collect())
-        }
-    }
+    use itertools::Itertools;
+    use maplit::hashmap;
+    use maplit::hashset;
 
     #[test]
     fn test_search_stick() {
@@ -289,10 +268,6 @@ mod tests {
             strategy: BasicStrategyKind::Binary,
         };
         let mut search = Search::new(graph.clone(), nodes.clone());
-        // let mut linear_search = Search::new(graph.clone(), linear_strategy, nodes.clone());
-        // let mut linear_reverse_search =
-        //     Search::new(graph.clone(), linear_reverse_strategy, nodes.clone());
-        // let mut binary_search = Search::new(graph.clone(), binary_strategy, nodes.clone());
 
         assert_eq!(
             search
@@ -455,34 +430,6 @@ mod tests {
         "###);
     }
 
-    #[derive(Clone, Debug)]
-    struct TestGraph {
-        nodes: HashMap<char, HashSet<char>>,
-    }
-
-    impl BasicSourceControlGraph for TestGraph {
-        type Node = char;
-        type Error = Infallible;
-
-        fn ancestors(&self, node: Self::Node) -> Result<HashSet<Self::Node>, Infallible> {
-            let mut result = hashset! {node};
-            let parents: HashSet<char> = self
-                .nodes
-                .iter()
-                .filter_map(|(k, v)| if v.contains(&node) { Some(*k) } else { None })
-                .collect();
-            result.extend(self.ancestors_all(parents)?);
-            Ok(result)
-        }
-
-        fn descendants(&self, node: Self::Node) -> Result<HashSet<Self::Node>, Infallible> {
-            let mut result = hashset! {node};
-            let children: HashSet<char> = self.nodes[&node].clone();
-            result.extend(self.descendants_all(children)?);
-            Ok(result)
-        }
-    }
-
     #[test]
     fn test_search_dag() {
         let graph = TestGraph {
@@ -586,51 +533,7 @@ mod tests {
         );
     }
 
-    fn arb_strategy() -> impl ProptestStrategy<Value = BasicStrategyKind> {
-        prop_oneof![
-            Just(BasicStrategyKind::Linear),
-            Just(BasicStrategyKind::LinearReverse),
-            Just(BasicStrategyKind::Binary),
-        ]
-    }
-
-    fn arb_test_graph_and_nodes() -> impl ProptestStrategy<Value = (TestGraph, Vec<char>)> {
-        let nodes = prop::collection::hash_set(
-            prop::sample::select(vec!['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']),
-            1..=8,
-        );
-        nodes
-            .prop_flat_map(|nodes| {
-                let num_nodes = nodes.len();
-                let nodes_kv = nodes
-                    .iter()
-                    .copied()
-                    .map(|node| (node, HashSet::new()))
-                    .collect();
-                let graph = TestGraph { nodes: nodes_kv };
-                let lineages = prop::collection::vec(
-                    prop::sample::subsequence(nodes.into_iter().collect_vec(), 0..num_nodes),
-                    0..num_nodes,
-                );
-                (Just(graph), lineages)
-            })
-            .prop_map(|(mut graph, lineages)| {
-                for lineage in lineages {
-                    for (parent, child) in lineage.into_iter().tuple_windows() {
-                        graph.nodes.get_mut(&parent).unwrap().insert(child);
-                    }
-                }
-                graph
-            })
-            .prop_flat_map(|graph| {
-                let nodes = graph.nodes.keys().copied().collect::<Vec<_>>();
-                let num_nodes = nodes.len();
-                let failure_nodes = prop::sample::subsequence(nodes, 0..num_nodes);
-                (Just(graph), failure_nodes)
-            })
-    }
-
-    proptest! {
+    proptest::proptest! {
         #[test]
         fn test_search_dag_proptest(strategy in arb_strategy(), (graph, failure_nodes) in arb_test_graph_and_nodes()) {
             let nodes = graph.nodes.keys().sorted().copied().collect::<Vec<_>>();
