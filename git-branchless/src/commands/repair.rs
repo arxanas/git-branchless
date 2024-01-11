@@ -2,6 +2,7 @@ use std::fmt::Write;
 use std::{collections::HashSet, time::SystemTime};
 
 use itertools::Itertools;
+use lib::core::effects::WithProgress;
 use lib::git::{CategorizedReferenceName, MaybeZeroOid};
 use lib::util::EyreExitOr;
 use lib::{
@@ -24,13 +25,11 @@ pub fn repair(effects: &Effects, dry_run: bool) -> EyreExitOr<()> {
         let (effects, progress) = effects.start_operation(OperationType::RepairCommits);
         let _effects = effects;
         let cursor_oids = event_replayer.get_cursor_oids(event_cursor);
-        progress.notify_progress(0, cursor_oids.len());
         let mut result = HashSet::new();
-        for oid in cursor_oids {
+        for oid in cursor_oids.into_iter().with_progress(progress) {
             if repo.find_commit(oid)?.is_none() {
                 result.insert(oid);
             }
-            progress.notify_progress_inc(1);
         }
         result
     };
@@ -48,13 +47,11 @@ pub fn repair(effects: &Effects, dry_run: bool) -> EyreExitOr<()> {
                     .map(move |reference_name| (oid, reference_name))
             })
             .collect_vec();
-        progress.notify_progress(0, branch_names.len());
         let mut result = HashSet::new();
-        for (oid, reference_name) in branch_names {
+        for (oid, reference_name) in branch_names.into_iter().with_progress(progress) {
             if repo.find_reference(&reference_name)?.is_none() {
                 result.insert((oid, reference_name));
             }
-            progress.notify_progress_inc(1);
         }
         result
     };

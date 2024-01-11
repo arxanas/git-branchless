@@ -1000,7 +1000,7 @@ impl Drop for ProgressHandle<'_> {
     }
 }
 
-impl ProgressHandle<'_> {
+impl<'a> ProgressHandle<'a> {
     /// Notify the progress meter that the current operation has `total`
     /// discrete units of work, and it's currently `current` units of the way
     /// through the operation.
@@ -1022,6 +1022,46 @@ impl ProgressHandle<'_> {
         let message = message.into();
         self.effects
             .on_set_message(&self.operation_key, icon, message);
+    }
+}
+
+/// A wrapper around an iterator that reports progress as it iterates.
+pub struct ProgressIter<'a, TItem, TInner: Iterator<Item = TItem>> {
+    index: usize,
+    inner: TInner,
+    progress: ProgressHandle<'a>,
+}
+
+impl<TItem, TInner: Iterator<Item = TItem>> Iterator for ProgressIter<'_, TItem, TInner> {
+    type Item = TItem;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let (lower, upper) = self.inner.size_hint();
+        let size_guess = upper.unwrap_or(lower);
+        self.progress.notify_progress(self.index, size_guess);
+        self.index += 1;
+        self.inner.next()
+    }
+}
+
+/// Extension trait for iterators that adds a `with_progress` method.
+pub trait WithProgress<'a, TItem>: Iterator<Item = TItem> {
+    /// The type of the iterator returned by `with_progress`.
+    type Iter: Iterator<Item = TItem> + 'a;
+
+    /// Wrap the iterator into an iterator that reports progress as it consumes items.
+    fn with_progress(self, progress: ProgressHandle<'a>) -> Self::Iter;
+}
+
+impl<'a, TItem: 'a, TIter: Iterator<Item = TItem> + 'a> WithProgress<'a, TItem> for TIter {
+    type Iter = ProgressIter<'a, TItem, TIter>;
+
+    fn with_progress(self, progress: ProgressHandle<'a>) -> Self::Iter {
+        ProgressIter {
+            index: 0,
+            inner: self,
+            progress,
+        }
     }
 }
 

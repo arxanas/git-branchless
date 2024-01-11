@@ -11,7 +11,7 @@ use rayon::{prelude::*, ThreadPool};
 use tracing::{instrument, warn};
 
 use crate::core::dag::{sorted_commit_set, union_all, CommitSet, Dag};
-use crate::core::effects::{Effects, OperationType};
+use crate::core::effects::{Effects, OperationType, WithProgress};
 use crate::core::formatting::Pluralize;
 use crate::core::rewrite::{RepoPool, RepoResource};
 use crate::core::task::ResourcePool;
@@ -1368,12 +1368,15 @@ impl<'a> RebasePlanBuilder<'a> {
             let path: Vec<CacheLookupResult<Option<NonZeroOid>, NonZeroOid>> = {
                 let (effects, progress) = effects.start_operation(OperationType::ReadingFromCache);
                 let _effects = effects;
-                progress.notify_progress(0, path.len());
                 if touched_paths_cache.is_empty() {
                     // Fast path for when the cache hasn't been populated.
-                    path.into_iter().map(CacheLookupResult::NotCached).collect()
+                    path.into_iter()
+                        .with_progress(progress)
+                        .map(CacheLookupResult::NotCached)
+                        .collect()
                 } else {
                     path.into_iter()
+                        .with_progress(progress)
                         .map(|commit_oid| match touched_paths_cache.get(&commit_oid) {
                             Some(upstream_touched_paths) => {
                                 if Self::should_check_patch_id(
@@ -1387,15 +1390,14 @@ impl<'a> RebasePlanBuilder<'a> {
                             }
                             None => CacheLookupResult::NotCached(commit_oid),
                         })
-                        .inspect(|_| progress.notify_progress_inc(1))
                         .collect()
                 }
             };
 
-            let (_effects, progress) = effects.start_operation(OperationType::FilterByTouchedPaths);
-            progress.notify_progress(0, path.len());
-
+            let (effects, progress) = effects.start_operation(OperationType::FilterByTouchedPaths);
+            let _effects = effects;
             pool.install(|| {
+                progress.notify_progress(0, path.len());
                 path.into_par_iter()
                     .map(|commit_oid| {
                         let commit_oid = match commit_oid {
