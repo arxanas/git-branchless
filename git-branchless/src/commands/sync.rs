@@ -15,7 +15,7 @@ use git_branchless_opts::{MoveOptions, ResolveRevsetOptions, Revset};
 use git_branchless_revset::{check_revset_syntax, resolve_commits};
 use lib::core::config::get_restack_preserve_timestamps;
 use lib::core::dag::{sorted_commit_set, union_all, CommitSet, Dag};
-use lib::core::effects::{Effects, OperationType};
+use lib::core::effects::{Effects, OperationType, WithProgress};
 use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::formatting::{Pluralize, StyledStringBuilder};
 use lib::core::rewrite::{
@@ -403,9 +403,9 @@ fn execute_plans(
         let mut skipped_commits: Vec<Commit> = Vec::new();
 
         let (effects, progress) = effects.start_operation(OperationType::SyncCommits);
-        progress.notify_progress(0, root_commit_and_plans.len());
-
-        for (root_commit_oid, rebase_plan) in root_commit_and_plans {
+        for (root_commit_oid, rebase_plan) in
+            root_commit_and_plans.into_iter().with_progress(progress)
+        {
             let root_commit = repo.find_commit_or_fail(root_commit_oid)?;
             let rebase_plan = match rebase_plan {
                 Some(rebase_plan) => rebase_plan,
@@ -423,7 +423,6 @@ fn execute_plans(
                 &rebase_plan,
                 execute_options,
             )?;
-            progress.notify_progress_inc(1);
             match result {
                 ExecuteRebasePlanResult::Succeeded { rewritten_oids: _ } => {
                     success_commits.push(root_commit);

@@ -19,7 +19,7 @@ use itertools::Itertools;
 use lazy_static::lazy_static;
 use lib::core::check_out::CheckOutCommitOptions;
 use lib::core::dag::{CommitSet, Dag};
-use lib::core::effects::{Effects, OperationType};
+use lib::core::effects::{Effects, OperationType, WithProgress};
 use lib::core::eventlog::EventLogDb;
 use lib::core::formatting::StyledStringBuilder;
 use lib::core::rewrite::{
@@ -882,8 +882,7 @@ impl PhabricatorForge<'_> {
         // Newly-created commits won't have been observed by the DAG, so add them in manually here.
         let draft_commits = self.dag.query_draft_commits()?.union(newly_created_commits);
 
-        progress.notify_progress(0, commit_oids.len());
-        for commit_oid in commit_oids {
+        for commit_oid in commit_oids.into_iter().with_progress(progress) {
             let id = match self.get_revision_id(commit_oid)? {
                 Some(id) => id,
                 None => {
@@ -929,7 +928,6 @@ impl PhabricatorForge<'_> {
                 Ok(()) => {}
                 Err(exit_code) => return Ok(Err(exit_code)),
             }
-            progress.notify_progress_inc(1);
         }
         Ok(Ok(()))
     }
