@@ -198,10 +198,13 @@ impl<G: BasicSourceControlGraph> search::Strategy<G> for BasicStrategy {
     fn midpoint(
         &self,
         graph: &G,
-        success_bounds: &HashSet<G::Node>,
-        failure_bounds: &HashSet<G::Node>,
+        bounds: &search::Bounds<G::Node>,
         statuses: &IndexMap<G::Node, search::Status>,
     ) -> Result<Option<G::Node>, G::Error> {
+        let search::Bounds {
+            success: success_bounds,
+            failure: failure_bounds,
+        } = bounds;
         let mut nodes_to_search = {
             let implied_success_nodes = graph.ancestors_all(success_bounds.clone())?;
             let implied_failure_nodes = graph.descendants_all(failure_bounds.clone())?;
