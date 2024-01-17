@@ -121,8 +121,7 @@ pub trait Strategy<G: Graph>: Debug {
     fn midpoint(
         &self,
         graph: &G,
-        success_bounds: &HashSet<G::Node>,
-        failure_bounds: &HashSet<G::Node>,
+        bounds: &Bounds<G::Node>,
         statuses: &IndexMap<G::Node, Status>,
     ) -> Result<Option<G::Node>, Self::Error>;
 }
@@ -274,8 +273,7 @@ impl<G: Graph> Search<G> {
 
         #[derive(Debug)]
         struct State<G: Graph> {
-            success_bounds: HashSet<G::Node>,
-            failure_bounds: HashSet<G::Node>,
+            bounds: Bounds<G::Node>,
             statuses: IndexMap<G::Node, Status>,
         }
 
@@ -292,24 +290,16 @@ impl<G: Graph> Search<G> {
             fn next(&mut self) -> Option<Self::Item> {
                 while let Some(state) = self.states.pop_front() {
                     debug!(?state, "Popped speculation state");
-                    let State {
-                        success_bounds,
-                        failure_bounds,
-                        statuses,
-                    } = state;
+                    let State { bounds, statuses } = state;
 
-                    let node = match self.strategy.midpoint(
-                        self.graph,
-                        &success_bounds,
-                        &failure_bounds,
-                        &statuses,
-                    ) {
+                    let node = match self.strategy.midpoint(self.graph, &bounds, &statuses) {
                         Ok(Some(node)) => node,
                         Ok(None) => continue,
                         Err(err) => return Some(Err(SearchError::Strategy(err))),
                     };
 
-                    for success_node in success_bounds.iter() {
+                    let Bounds { success, failure } = bounds;
+                    for success_node in success.iter() {
                         match self.graph.is_ancestor(node.clone(), success_node.clone()) {
                             Ok(true) => {
                                 return Some(Err(SearchError::AlreadySearchedMidpoint {
@@ -321,7 +311,7 @@ impl<G: Graph> Search<G> {
                             Err(err) => return Some(Err(SearchError::Graph(err))),
                         }
                     }
-                    for failure_node in failure_bounds.iter() {
+                    for failure_node in failure.iter() {
                         match self.graph.is_ancestor(failure_node.clone(), node.clone()) {
                             Ok(true) => {
                                 return Some(Err(SearchError::AlreadySearchedMidpoint {
@@ -336,14 +326,16 @@ impl<G: Graph> Search<G> {
 
                     // Speculate failure:
                     self.states.push_back(State {
-                        success_bounds: success_bounds.clone(),
-                        failure_bounds: {
-                            let mut failure_bounds = failure_bounds.clone();
-                            failure_bounds.insert(node.clone());
-                            match self.graph.simplify_failure_bounds(failure_bounds) {
-                                Ok(bounds) => bounds,
-                                Err(err) => return Some(Err(SearchError::Graph(err))),
-                            }
+                        bounds: Bounds {
+                            success: success.clone(),
+                            failure: {
+                                let mut failure_bounds = failure.clone();
+                                failure_bounds.insert(node.clone());
+                                match self.graph.simplify_failure_bounds(failure_bounds) {
+                                    Ok(bounds) => bounds,
+                                    Err(err) => return Some(Err(SearchError::Graph(err))),
+                                }
+                            },
                         },
                         statuses: {
                             let mut statuses = statuses.clone();
@@ -354,15 +346,17 @@ impl<G: Graph> Search<G> {
 
                     // Speculate success:
                     self.states.push_back(State {
-                        success_bounds: {
-                            let mut success_bounds = success_bounds.clone();
-                            success_bounds.insert(node.clone());
-                            match self.graph.simplify_success_bounds(success_bounds) {
-                                Ok(bounds) => bounds,
-                                Err(err) => return Some(Err(SearchError::Graph(err))),
-                            }
+                        bounds: Bounds {
+                            success: {
+                                let mut success_bounds = success.clone();
+                                success_bounds.insert(node.clone());
+                                match self.graph.simplify_success_bounds(success_bounds) {
+                                    Ok(bounds) => bounds,
+                                    Err(err) => return Some(Err(SearchError::Graph(err))),
+                                }
+                            },
+                            failure: failure.clone(),
                         },
-                        failure_bounds: failure_bounds.clone(),
                         statuses: {
                             let mut statuses = statuses.clone();
                             statuses.insert(node.clone(), Status::Success);
@@ -379,8 +373,10 @@ impl<G: Graph> Search<G> {
         }
 
         let initial_state = State {
-            success_bounds: success_bounds.clone(),
-            failure_bounds: failure_bounds.clone(),
+            bounds: Bounds {
+                success: success_bounds.clone(),
+                failure: failure_bounds.clone(),
+            },
             statuses: self.nodes.clone(),
         };
         let iter = Iter {
