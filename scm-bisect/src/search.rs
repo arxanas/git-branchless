@@ -16,7 +16,13 @@ pub trait Graph: Debug {
     /// An error type.
     type Error: std::error::Error;
 
-    /// Return whether or not `node` is an ancestor of `descendant`.
+    /// Return whether or not `node` is an ancestor of `descendant`. A node `X``
+    /// is said to be an "ancestor" of node `Y` if one of the following is true:
+    ///
+    /// - `X == Y`
+    /// - `X` is an immediate parent of `Y`.
+    /// - `X` is an ancestor of an immediate parent of `Y` (defined
+    /// recursively).
     fn is_ancestor(
         &self,
         ancestor: Self::Node,
@@ -24,8 +30,11 @@ pub trait Graph: Debug {
     ) -> Result<bool, Self::Error>;
 
     /// Filter `nodes` to only include nodes that are not ancestors of any other
-    /// node in `nodes`. This is not strictly necessary, but it makes the
-    /// intermediate results more sensible.
+    /// node in `nodes`. This is not strictly necessary, but it improves
+    /// performance as some operations are linear in the size of the success
+    /// bounds, and it can make the intermediate results more sensible.
+    ///
+    /// This operation is called `heads` in e.g. Mercurial.
     #[instrument]
     fn simplify_success_bounds(
         &self,
@@ -35,8 +44,11 @@ pub trait Graph: Debug {
     }
 
     /// Filter `nodes` to only include nodes that are not descendants of any
-    /// other node in `nodes`. This is not strictly necessary, but it makes the
-    /// intermediate results more sensible.
+    /// other node in `nodes`. This is not strictly necessary, but it improves
+    /// performance as some operations are linear in the size of the failure
+    /// bounds, and it can make the intermediate results more sensible.
+    ///
+    /// This operation is called `roots` in e.g. Mercurial.
     #[instrument]
     fn simplify_failure_bounds(
         &self,
@@ -102,6 +114,10 @@ pub trait Strategy<G: Graph>: Debug {
     /// For example, linear search would return a node immediately "after"
     /// the node(s) in `success_bounds`, while binary search would return the
     /// node in the middle of `success_bounds` and `failure_bounds`.`
+    ///
+    /// NOTE: This must not return a value that has already been included in the
+    /// success or failure bounds, since then you would search it again in a
+    /// loop indefinitely. In that case, you must return `None` instead.
     fn midpoint(
         &self,
         graph: &G,
@@ -150,7 +166,10 @@ pub struct EagerSolution<Node: Debug + Hash + Eq> {
 
 #[allow(missing_docs)]
 #[derive(Debug, thiserror::Error)]
-pub enum SearchError<TGraphError, TStrategyError> {
+pub enum SearchError<TNode, TGraphError, TStrategyError> {
+    #[error("node {node:?} has already been classified as a {status:?} node, but was returned as a new midpoint to search; this would loop indefinitely")]
+    AlreadySearchedMidpoint { node: TNode, status: Status },
+
     #[error(transparent)]
     Graph(TGraphError),
 
@@ -247,8 +266,8 @@ impl<G: Graph> Search<G> {
         &'a self,
         strategy: &'a S,
     ) -> Result<
-        LazySolution<G::Node, SearchError<G::Error, S::Error>>,
-        SearchError<G::Error, S::Error>,
+        LazySolution<G::Node, SearchError<G::Node, G::Error, S::Error>>,
+        SearchError<G::Node, G::Error, S::Error>,
     > {
         let success_bounds = self.success_bounds().map_err(SearchError::Graph)?;
         let failure_bounds = self.failure_bounds().map_err(SearchError::Graph)?;
@@ -268,7 +287,7 @@ impl<G: Graph> Search<G> {
         }
 
         impl<'a, G: Graph, S: Strategy<G>> Iterator for Iter<'a, G, S> {
-            type Item = Result<G::Node, SearchError<G::Error, S::Error>>;
+            type Item = Result<G::Node, SearchError<G::Node, G::Error, S::Error>>;
 
             fn next(&mut self) -> Option<Self::Item> {
                 while let Some(state) = self.states.pop_front() {
@@ -289,6 +308,31 @@ impl<G: Graph> Search<G> {
                         Ok(None) => continue,
                         Err(err) => return Some(Err(SearchError::Strategy(err))),
                     };
+
+                    for success_node in success_bounds.iter() {
+                        match self.graph.is_ancestor(node.clone(), success_node.clone()) {
+                            Ok(true) => {
+                                return Some(Err(SearchError::AlreadySearchedMidpoint {
+                                    node,
+                                    status: Status::Success,
+                                }));
+                            }
+                            Ok(false) => (),
+                            Err(err) => return Some(Err(SearchError::Graph(err))),
+                        }
+                    }
+                    for failure_node in failure_bounds.iter() {
+                        match self.graph.is_ancestor(failure_node.clone(), node.clone()) {
+                            Ok(true) => {
+                                return Some(Err(SearchError::AlreadySearchedMidpoint {
+                                    node,
+                                    status: Status::Failure,
+                                }));
+                            }
+                            Ok(false) => (),
+                            Err(err) => return Some(Err(SearchError::Graph(err))),
+                        }
+                    }
 
                     // Speculate failure:
                     self.states.push_back(State {
