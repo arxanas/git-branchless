@@ -1,5 +1,4 @@
 use std::cmp::Ordering;
-use std::collections::HashSet;
 use std::convert::Infallible;
 use std::io;
 use std::ops::RangeInclusive;
@@ -38,10 +37,13 @@ impl search::Strategy<Graph> for Strategy {
     fn midpoint(
         &self,
         _graph: &Graph,
-        success_bounds: &HashSet<Node>,
-        failure_bounds: &HashSet<Node>,
+        bounds: &search::Bounds<Node>,
         _statuses: &IndexMap<Node, search::Status>,
     ) -> Result<Option<Node>, Self::Error> {
+        let search::Bounds {
+            success: success_bounds,
+            failure: failure_bounds,
+        } = bounds;
         let lower_bound = success_bounds
             .iter()
             .max()
