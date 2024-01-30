@@ -61,10 +61,13 @@ pub enum InitialCommitMessages {
 /// Open the user's configured commit editor seeded with the provided message.
 #[instrument]
 pub fn edit_message(git_run_info: &GitRunInfo, repo: &Repo, message: &str) -> eyre::Result<String> {
-    let mut editor = Editor::new();
-    let (editor, editor_program) = match get_editor(git_run_info, repo)? {
-        Some(editor_program) => (editor.executable(&editor_program), editor_program),
-        None => (&mut editor, "<default>".into()),
+    let (mut editor, editor_program) = match get_editor(git_run_info, repo)? {
+        Some(editor_program) => {
+            let mut editor = Editor::new();
+            editor.executable(&editor_program);
+            (editor, editor_program)
+        }
+        None => (Editor::new(), "<default>".into()),
     };
     if editor_program == ":" {
         // Special case in Git: treat `:` as a no-op editor.
