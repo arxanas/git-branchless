@@ -464,8 +464,9 @@ fn prepare_messages(
     message.push_str(
         format!(
             "\
-                {} Rewording: Please enter the commit {} to apply to {}. Lines\n\
-                {} starting with '{}' will be ignored, and an empty message aborts rewording.",
+                {} Rewording: Please enter the commit {} to apply to {}.\n\
+                {} Lines starting with '{}' will be ignored, and an empty message aborts\n\
+                {} rewording.",
             comment_char,
             match commits.len() {
                 1 => "message",
@@ -476,6 +477,7 @@ fn prepare_messages(
                 amount: commits.len(),
                 unit: ("commit", "commits"),
             },
+            comment_char,
             comment_char,
             comment_char,
         )
@@ -721,12 +723,12 @@ mod tests {
                 &[head_commit.clone()],
                 |message| {
                     insta::assert_snapshot!(message.trim(), @r###"
-
                     # Original message:
                     # create test1.txt
 
-                    # Rewording: Please enter the commit message to apply to this 1 commit. Lines
-                    # starting with '#' will be ignored, and an empty message aborts rewording.
+                    # Rewording: Please enter the commit message to apply to this 1 commit.
+                    # Lines starting with '#' will be ignored, and an empty message aborts
+                    # rewording.
                     "###);
                     Ok(message.to_string())
                 },
@@ -754,8 +756,9 @@ This is a template!
                     # Original message:
                     # create test1.txt
 
-                    # Rewording: Please enter the commit message to apply to this 1 commit. Lines
-                    # starting with '#' will be ignored, and an empty message aborts rewording.
+                    # Rewording: Please enter the commit message to apply to this 1 commit.
+                    # Lines starting with '#' will be ignored, and an empty message aborts
+                    # rewording.
                     "###);
                     Ok(message.to_string())
                 },
@@ -790,8 +793,9 @@ This is a template!
                     ++ reword 96d1c37
                     create test2.txt
 
-                    # Rewording: Please enter the commit messages to apply to these 2 commits. Lines
-                    # starting with '#' will be ignored, and an empty message aborts rewording.
+                    # Rewording: Please enter the commit messages to apply to these 2 commits.
+                    # Lines starting with '#' will be ignored, and an empty message aborts
+                    # rewording.
                     "###);
                     Ok(message.to_string())
                 },
