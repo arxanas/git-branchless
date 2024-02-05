@@ -1404,7 +1404,7 @@ dependencies = [
  "git-branchless-test",
  "git-branchless-undo",
  "insta",
- "itertools 0.12.0",
+ "itertools 0.12.1",
  "lazy_static",
  "man",
  "num_cpus",
@@ -1431,7 +1431,7 @@ dependencies = [
  "git-branchless-lib",
  "git-branchless-opts",
  "insta",
- "itertools 0.12.0",
+ "itertools 0.12.1",
  "lazy_static",
  "regex",
  "tracing",
@@ -1447,7 +1447,7 @@ dependencies = [
  "git-branchless-invoke",
  "git-branchless-lib",
  "git-branchless-opts",
- "itertools 0.12.0",
+ "itertools 0.12.1",
  "path-slash",
  "tracing",
 ]
@@ -1491,7 +1491,7 @@ dependencies = [
  "git2",
  "indicatif",
  "insta",
- "itertools 0.12.0",
+ "itertools 0.12.1",
  "lazy_static",
  "once_cell",
  "portable-pty",
@@ -1536,7 +1536,7 @@ dependencies = [
  "git-branchless-opts",
  "git-branchless-revset",
  "git-branchless-smartlog",
- "itertools 0.12.0",
+ "itertools 0.12.1",
  "skim",
  "tracing",
 ]
@@ -1548,7 +1548,7 @@ dependencies = [
  "clap 4.3.23",
  "clap_mangen",
  "git-branchless-lib",
- "itertools 0.12.0",
+ "itertools 0.12.1",
  "scm-record",
 ]
 
@@ -1563,7 +1563,7 @@ dependencies = [
  "git-branchless-opts",
  "git-branchless-revset",
  "insta",
- "itertools 0.12.0",
+ "itertools 0.12.1",
  "tracing",
 ]
 
@@ -1580,7 +1580,7 @@ dependencies = [
  "git-branchless-opts",
  "git-branchless-reword",
  "insta",
- "itertools 0.12.0",
+ "itertools 0.12.1",
  "rayon",
  "scm-record",
  "tracing",
@@ -1601,7 +1601,7 @@ dependencies = [
  "git-branchless-opts",
  "glob",
  "insta",
- "itertools 0.12.0",
+ "itertools 0.12.1",
  "lalrpop",
  "lalrpop-util",
  "lazy_static",
@@ -1659,7 +1659,7 @@ dependencies = [
  "git-branchless-revset",
  "git-branchless-test",
  "insta",
- "itertools 0.12.0",
+ "itertools 0.12.1",
  "lazy_static",
  "rayon",
  "regex",
@@ -1687,7 +1687,7 @@ dependencies = [
  "git-branchless-revset",
  "indexmap 2.2.1",
  "insta",
- "itertools 0.12.0",
+ "itertools 0.12.1",
  "lazy_static",
  "maplit",
  "num_cpus",
@@ -1967,9 +1967,9 @@ dependencies = [
 
 [[package]]
 name = "itertools"
-version = "0.12.0"
+version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25db6b064527c5d482d0423354fcd07a89a2dfe07b67892e62411946db7f07b0"
+checksum = "ba291022dbbd398a455acf126c1e341954079855bc60dfdda641363bd6922569"
 dependencies = [
  "either",
 ]
@@ -2941,7 +2941,7 @@ version = "0.1.0"
 dependencies = [
  "indexmap 2.2.1",
  "insta",
- "itertools 0.12.0",
+ "itertools 0.12.1",
  "maplit",
  "proptest",
  "thiserror",
