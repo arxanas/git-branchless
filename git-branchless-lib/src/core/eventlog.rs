@@ -710,7 +710,15 @@ pub fn should_ignore_ref_updates(reference_name: &ReferenceName) -> bool {
 
     matches!(
         reference_name.as_str(),
-        "ORIG_HEAD" | "CHERRY_PICK" | "REBASE_HEAD" | "CHERRY_PICK_HEAD" | "FETCH_HEAD"
+        "ORIG_HEAD"
+            | "CHERRY_PICK"
+            | "REBASE_HEAD"
+            | "CHERRY_PICK_HEAD"
+            // From Git's `is_special_ref` in `refs.c`:
+            | "AUTO_MERGE"
+            // | "BISECT_EXPECTED_REV"
+            | "FETCH_HEAD" // | "MERGE_AUTOSTASH"
+                           // | "MERGE_HEAD"
     )
 }
 
@@ -1430,6 +1438,38 @@ pub mod testing {
             | Event::WorkingCopySnapshot {
                 ref mut timestamp, ..
             } => *timestamp = 0.0,
+        }
+        event
+    }
+
+    pub fn redact_event_id(mut event: Event) -> Event {
+        match event {
+            Event::RewriteEvent {
+                ref mut event_tx_id,
+                ..
+            }
+            | Event::RefUpdateEvent {
+                ref mut event_tx_id,
+                ..
+            }
+            | Event::CommitEvent {
+                ref mut event_tx_id,
+                ..
+            }
+            | Event::ObsoleteEvent {
+                ref mut event_tx_id,
+                ..
+            }
+            | Event::UnobsoleteEvent {
+                ref mut event_tx_id,
+                ..
+            }
+            | Event::WorkingCopySnapshot {
+                ref mut event_tx_id,
+                ..
+            } => {
+                *event_tx_id = EventTransactionId::Id(0);
+            }
         }
         event
     }

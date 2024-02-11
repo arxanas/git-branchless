@@ -1,6 +1,8 @@
 use eyre::{eyre, Context};
 use lib::core::effects::Effects;
-use lib::core::eventlog::testing::{get_event_replayer_events, redact_event_timestamp};
+use lib::core::eventlog::testing::{
+    get_event_replayer_events, redact_event_id, redact_event_timestamp,
+};
 use lib::core::eventlog::{Event, EventLogDb, EventReplayer};
 use lib::core::formatting::Glyphs;
 use lib::git::GitVersion;
@@ -241,6 +243,7 @@ fn test_merge_commit_recorded() -> eyre::Result<()> {
         .iter()
         .cloned()
         .map(redact_event_timestamp)
+        .map(redact_event_id)
         .collect();
     insta::assert_debug_snapshot!(events, @r###"
     [
