@@ -202,7 +202,7 @@ impl Glyphs {
             commit_visible_head: "●",
             commit_obsolete: "✕",
             commit_obsolete_head: "⦻",
-            commit_omitted: "⊘",
+            commit_omitted: "◌",
             commit_merge: "↓",
             commit_main: "◇",
             commit_main_head: "◆",
