@@ -64,6 +64,28 @@ fn test_submit() -> eyre::Result<()> {
         "###);
     }
 
+    // test handling of revset argument (should be identical to above)
+    {
+        let (stdout, stderr) = cloned_repo.run(&["submit", "bar+qux"])?;
+        insta::assert_snapshot!(stderr, @"");
+        insta::assert_snapshot!(stdout, @r###"
+        Skipped 2 commits (not yet on remote): bar, qux
+        These commits were skipped because they were not already associated with a remote
+        repository. To submit them, retry this operation with the --create option.
+        "###);
+    }
+
+    // test handling of multiple revset arguments (should be identical to above)
+    {
+        let (stdout, stderr) = cloned_repo.run(&["submit", "bar", "qux"])?;
+        insta::assert_snapshot!(stderr, @"");
+        insta::assert_snapshot!(stdout, @r###"
+        Skipped 2 commits (not yet on remote): bar, qux
+        These commits were skipped because they were not already associated with a remote
+        repository. To submit them, retry this operation with the --create option.
+        "###);
+    }
+
     {
         let (stdout, stderr) = cloned_repo.run(&["submit", "--dry-run"])?;
         insta::assert_snapshot!(stderr, @"");
