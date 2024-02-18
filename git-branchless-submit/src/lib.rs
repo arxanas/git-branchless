@@ -24,7 +24,7 @@ use git_branchless_test::{RawTestOptions, ResolvedTestOptions, Verbosity};
 use github::GithubForge;
 use itertools::Itertools;
 use lazy_static::lazy_static;
-use lib::core::dag::{CommitSet, Dag};
+use lib::core::dag::{union_all, CommitSet, Dag};
 use lib::core::effects::Effects;
 use lib::core::eventlog::{EventLogDb, EventReplayer};
 use lib::core::formatting::{Pluralize, StyledStringBuilder};
@@ -188,7 +188,7 @@ pub fn command_main(ctx: CommandContext, args: SubmitArgs) -> EyreExitOr<()> {
         create,
         draft,
         strategy,
-        revset,
+        revsets,
         resolve_revset_options,
         forge,
         message,
@@ -197,7 +197,7 @@ pub fn command_main(ctx: CommandContext, args: SubmitArgs) -> EyreExitOr<()> {
     submit(
         &effects,
         &git_run_info,
-        revset,
+        revsets,
         &resolve_revset_options,
         create,
         draft,
@@ -211,7 +211,7 @@ pub fn command_main(ctx: CommandContext, args: SubmitArgs) -> EyreExitOr<()> {
 fn submit(
     effects: &Effects,
     git_run_info: &GitRunInfo,
-    revset: Revset,
+    revsets: Vec<Revset>,
     resolve_revset_options: &ResolveRevsetOptions,
     create: bool,
     draft: bool,
@@ -234,19 +234,14 @@ fn submit(
         &references_snapshot,
     )?;
 
-    let commit_set = match resolve_commits(
-        effects,
-        &repo,
-        &mut dag,
-        &[revset.clone()],
-        resolve_revset_options,
-    ) {
-        Ok(mut commit_sets) => commit_sets.pop().unwrap(),
-        Err(err) => {
-            err.describe(effects)?;
-            return Ok(Err(ExitCode(1)));
-        }
-    };
+    let commit_set =
+        match resolve_commits(effects, &repo, &mut dag, &revsets, resolve_revset_options) {
+            Ok(commit_sets) => union_all(&commit_sets),
+            Err(err) => {
+                err.describe(effects)?;
+                return Ok(Err(ExitCode(1)));
+            }
+        };
 
     let raw_test_options = RawTestOptions {
         exec: Some("<dummy>".to_string()),
@@ -294,6 +289,7 @@ fn submit(
         message,
     };
 
+    let unioned_revset = Revset(revsets.iter().map(|Revset(inner)| inner).join(" + "));
     let mut forge = select_forge(
         effects,
         git_run_info,
@@ -301,7 +297,7 @@ fn submit(
         &mut dag,
         &event_log_db,
         &references_snapshot,
-        &revset,
+        &unioned_revset,
         forge_kind,
     );
     let statuses = try_exit_code!(forge.query_status(commit_set)?);

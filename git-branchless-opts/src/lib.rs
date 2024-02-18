@@ -387,7 +387,7 @@ pub struct SubmitArgs {
     /// The commits to push. All branches attached to those commits will be
     /// pushed.
     #[clap(value_parser, default_value = "stack()")]
-    pub revset: Revset,
+    pub revsets: Vec<Revset>,
 
     /// Options for resolving revset expressions.
     #[clap(flatten)]

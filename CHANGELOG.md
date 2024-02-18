@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - This allows `git sync my-branch` to work as expected, instead of needing to use `git sync 'stack(my-branch)'`. The behavior of `git sync` when called without arguments is not affected by this change. If you rely on the previous behavior, please use `git move -x <commit(s)/revset> -d 'main()'` instead.
 - (#1169) `git record` now accepts multible `--message` arguments.
 - (#1130) `branches()` revset function now accepts an optional text pattern argument to limit which branches are matched.
+- (#1244) `git submit` now accepts multiple argements/revsets
 
 ### Fixed
 
