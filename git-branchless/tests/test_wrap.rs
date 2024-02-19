@@ -9,7 +9,7 @@ use lib::testing::{make_git, GitRunOptions};
 fn test_wrap_rebase_in_transaction() -> eyre::Result<()> {
     let git = make_git()?;
 
-    if !git.supports_reference_transactions()? {
+    if !git.supports_reference_transactions()? || git.produces_auto_merge_refs()? {
         return Ok(());
     }
 
@@ -28,7 +28,8 @@ fn test_wrap_rebase_in_transaction() -> eyre::Result<()> {
     let event_replayer = EventReplayer::from_event_log_db(&effects, &repo, &event_log_db)?;
     let events: Vec<Event> = get_event_replayer_events(&event_replayer)
         .iter()
-        .map(|event| redact_event_timestamp(event.clone()))
+        .cloned()
+        .map(redact_event_timestamp)
         .collect();
 
     // Bug fixed in Git v2.35: https://github.com/git/git/commit/4866a64508465938b7661eb31afbde305d83e234

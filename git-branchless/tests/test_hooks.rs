@@ -222,7 +222,7 @@ fn test_pre_auto_gc() -> eyre::Result<()> {
 fn test_merge_commit_recorded() -> eyre::Result<()> {
     let git = make_git()?;
 
-    if !git.supports_reference_transactions()? {
+    if !git.supports_reference_transactions()? || git.produces_auto_merge_refs()? {
         return Ok(());
     }
 
