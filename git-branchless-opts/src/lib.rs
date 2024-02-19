@@ -345,6 +345,11 @@ pub struct SmartlogArgs {
     #[clap(long)]
     pub reverse: bool,
 
+    /// Don't automatically add HEAD and the main branch to the list of commits
+    /// to present. They will still be added if included in the revset.
+    #[clap(long)]
+    pub exact: bool,
+
     /// Options for resolving revset expressions.
     #[clap(flatten)]
     pub resolve_revset_options: ResolveRevsetOptions,

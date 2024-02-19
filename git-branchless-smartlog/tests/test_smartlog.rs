@@ -742,3 +742,73 @@ fn test_default_smartlog_revset() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_exact() -> eyre::Result<()> {
+    let git = make_git()?;
+    git.init_repo()?;
+
+    git.commit_file("test1", 1)?;
+    git.detach_head()?;
+    git.commit_file("test2", 2)?;
+    git.commit_file("test3", 3)?;
+    git.commit_file("test4", 4)?;
+    git.run(&["checkout", "master"])?;
+    git.commit_file("test5", 5)?;
+    git.detach_head()?;
+    git.commit_file("test6", 6)?;
+    git.run(&["checkout", "96d1c37"])?;
+
+    {
+        // Here '--exact' doesn't change anything because draft() covers all these commits
+        let (stdout, _stderr) = git.branchless("smartlog", &["--exact"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d create test1.txt
+        |\
+        | @ 96d1c37 create test2.txt
+        | |
+        | o 70deb1e create test3.txt
+        | |
+        | o 355e173 create test4.txt
+        |
+        O ea7aa06 (master) create test5.txt
+        |
+        o da42aeb create test6.txt
+        "###);
+    }
+
+    {
+        // Show no commits
+        let (stdout, _stderr) = git.branchless("smartlog", &["--exact", "none()"])?;
+        insta::assert_snapshot!(stdout, @"");
+    }
+
+    {
+        // Show one commit - no master or HEAD
+        let (stdout, _stderr) = git.branchless("smartlog", &["--exact", "70deb1e"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        o 70deb1e create test3.txt
+        :
+        # 1 omitted descendant commit
+        "###);
+    }
+
+    {
+        // Show head commits and their common ancestor, which is not main.
+        let (stdout, _stderr) = git.branchless("smartlog", &["--exact", "heads(draft())"])?;
+        insta::assert_snapshot!(stdout, @r###"
+        :
+        O 62fc20d create test1.txt
+        |\
+        : # 2 omitted commits
+        : :
+        : o 355e173 create test4.txt
+        :
+        o da42aeb create test6.txt
+        "###);
+    }
+
+    Ok(())
+}
