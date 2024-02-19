@@ -133,7 +133,15 @@ fn describe_event_cursor(
     let glyphs = Glyphs::text();
     let effects = Effects::new(glyphs.clone());
     let commits = resolve_default_smartlog_commits(&effects, repo, dag)?;
-    let graph = make_smartlog_graph(&effects, repo, dag, event_replayer, event_cursor, &commits)?;
+    let graph = make_smartlog_graph(
+        &effects,
+        repo,
+        dag,
+        event_replayer,
+        event_cursor,
+        &commits,
+        false,
+    )?;
     let graph_lines = render_graph(
         &effects,
         repo,

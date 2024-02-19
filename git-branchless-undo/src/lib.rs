@@ -77,7 +77,15 @@ fn render_cursor_smartlog(
     };
 
     let commits = resolve_default_smartlog_commits(effects, repo, &mut dag)?;
-    let graph = make_smartlog_graph(effects, repo, &dag, event_replayer, event_cursor, &commits)?;
+    let graph = make_smartlog_graph(
+        effects,
+        repo,
+        &dag,
+        event_replayer,
+        event_cursor,
+        &commits,
+        false,
+    )?;
     let result = render_graph(
         effects,
         repo,

@@ -507,6 +507,7 @@ pub fn switch(
         &event_replayer,
         event_cursor,
         &commits,
+        false,
     )?;
 
     let initial_query = match switch_options {

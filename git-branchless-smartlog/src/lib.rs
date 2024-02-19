@@ -163,11 +163,17 @@ mod graph {
         dag: &Dag,
         commits: &CommitSet,
     ) -> eyre::Result<SmartlogGraph<'repo>> {
+        let commits_include_main =
+            !dag.set_is_empty(&dag.main_branch_commit.intersection(commits))?;
         let mut graph: HashMap<NonZeroOid, Node> = {
             let mut result = HashMap::new();
             for vertex in dag.commit_set_to_vec(commits)? {
                 let vertex = CommitSet::from(vertex);
-                let merge_bases = dag.query_gca_all(dag.main_branch_commit.union(&vertex))?;
+                let merge_bases = if commits_include_main {
+                    dag.query_gca_all(dag.main_branch_commit.union(&vertex))?
+                } else {
+                    dag.query_gca_all(commits.union(&vertex))?
+                };
                 let vertices = vertex.union(&merge_bases);
 
                 for oid in dag.commit_set_to_vec(&vertices)? {
@@ -341,16 +347,21 @@ mod graph {
         event_replayer: &EventReplayer,
         event_cursor: EventCursor,
         commits: &CommitSet,
+        exact: bool,
     ) -> eyre::Result<SmartlogGraph<'repo>> {
         let (effects, _progress) = effects.start_operation(OperationType::MakeGraph);
 
         let mut graph = {
             let (effects, _progress) = effects.start_operation(OperationType::WalkCommits);
 
-            // HEAD and main head must be included
-            let commits = commits
-                .union(&dag.head_commit)
-                .union(&dag.main_branch_commit);
+            // HEAD and main head are automatically included unless `exact` is set
+            let commits = if exact {
+                commits.clone()
+            } else {
+                commits
+                    .union(&dag.head_commit)
+                    .union(&dag.main_branch_commit)
+            };
 
             for oid in dag.commit_set_to_vec(&commits)? {
                 mark_commit_reachable(repo, oid)?;
@@ -741,6 +752,9 @@ mod render {
         /// Reverse the ordering of items in the smartlog output, list the most
         /// recent commits first.
         pub reverse: bool,
+
+        /// Normally HEAD and the main branch are included. Set this to exclude them.
+        pub exact: bool,
     }
 }
 
@@ -756,6 +770,7 @@ pub fn smartlog(
         revset,
         resolve_revset_options,
         reverse,
+        exact,
     } = options;
 
     let repo = Repo::from_dir(&git_run_info.working_directory)?;
@@ -809,6 +824,7 @@ pub fn smartlog(
         &event_replayer,
         event_cursor,
         &commits,
+        exact,
     )?;
 
     let mut lines = render_graph(
@@ -901,6 +917,7 @@ pub fn command_main(ctx: CommandContext, args: SmartlogArgs) -> EyreExitOr<()> {
         revset,
         resolve_revset_options,
         reverse,
+        exact,
     } = args;
 
     smartlog(
@@ -911,6 +928,7 @@ pub fn command_main(ctx: CommandContext, args: SmartlogArgs) -> EyreExitOr<()> {
             revset,
             resolve_revset_options,
             reverse,
+            exact,
         },
     )
 }
