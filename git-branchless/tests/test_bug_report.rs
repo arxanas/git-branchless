@@ -16,7 +16,7 @@ fn redact_timestamp(str: String) -> String {
 fn test_bug_report() -> eyre::Result<()> {
     let git = make_git()?;
 
-    if !git.supports_reference_transactions()? {
+    if !git.supports_reference_transactions()? || git.produces_auto_merge_refs()? {
         return Ok(());
     }
     git.init_repo()?;

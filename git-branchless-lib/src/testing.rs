@@ -654,6 +654,13 @@ then you can only run tests in the main `git-branchless` and \
         Ok(version >= GitVersion(2, 27, 0))
     }
 
+    /// Git v2.44 produces `AUTO_MERGE` refs as part of some operations, which
+    /// changes the event log according to the `reference-transaction` hook.
+    pub fn produces_auto_merge_refs(&self) -> eyre::Result<bool> {
+        let version = self.get_version()?;
+        Ok(version >= GitVersion(2, 44, 0))
+    }
+
     /// Resolve a file during a merge or rebase conflict with the provided
     /// contents.
     #[instrument]

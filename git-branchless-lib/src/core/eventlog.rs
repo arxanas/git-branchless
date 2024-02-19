@@ -710,7 +710,13 @@ pub fn should_ignore_ref_updates(reference_name: &ReferenceName) -> bool {
 
     matches!(
         reference_name.as_str(),
-        "ORIG_HEAD" | "CHERRY_PICK" | "REBASE_HEAD" | "CHERRY_PICK_HEAD" | "FETCH_HEAD"
+        "ORIG_HEAD"
+            | "CHERRY_PICK"
+            | "REBASE_HEAD"
+            | "CHERRY_PICK_HEAD"
+            // From Git's `is_special_ref` in `refs.c`:
+            | "AUTO_MERGE"
+            | "FETCH_HEAD"
     )
 }
 

@@ -8,7 +8,7 @@ use lib::testing::make_git;
 fn test_git_v2_31_events() -> eyre::Result<()> {
     let git = make_git()?;
 
-    if !git.supports_reference_transactions()? {
+    if !git.supports_reference_transactions()? || git.produces_auto_merge_refs()? {
         return Ok(());
     }
 

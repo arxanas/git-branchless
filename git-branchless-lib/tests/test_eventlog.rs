@@ -46,6 +46,10 @@ fn test_drop_non_meaningful_events() -> eyre::Result<()> {
 fn test_different_event_transaction_ids() -> eyre::Result<()> {
     let git = make_git()?;
 
+    if git.produces_auto_merge_refs()? {
+        return Ok(());
+    }
+
     git.init_repo()?;
     git.commit_file("test1", 1)?;
     git.branchless("hide", &["--no-delete-branches", "HEAD"])?;
