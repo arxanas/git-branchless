@@ -1685,7 +1685,7 @@ dependencies = [
  "git-branchless-lib",
  "git-branchless-opts",
  "git-branchless-revset",
- "indexmap 2.2.1",
+ "indexmap 2.2.3",
  "insta",
  "itertools 0.12.1",
  "lazy_static",
@@ -1877,9 +1877,9 @@ dependencies = [
 
 [[package]]
 name = "indexmap"
-version = "2.2.1"
+version = "2.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "433de089bd45971eecf4668ee0ee8f4cec17db4f8bd8f7bc3197a6ce37aa7d9b"
+checksum = "233cf39063f058ea2caae4091bf4a3ef70a653afbc026f5c4a4135d114e3c177"
 dependencies = [
  "equivalent",
  "hashbrown 0.14.1",
@@ -2930,7 +2930,7 @@ checksum = "088c5d71572124929ea7549a8ce98e1a6fd33d0a38367b09027b382e67c033db"
 name = "scm-bisect"
 version = "0.1.0"
 dependencies = [
- "indexmap 2.2.1",
+ "indexmap 2.2.3",
  "insta",
  "itertools 0.12.1",
  "maplit",
