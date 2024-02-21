@@ -37,48 +37,22 @@
           };
         });
 
-        scm-diff-editor = final.callPackage
-          (
-            { lib
-            , git
-            , libiconv
-            , ncurses
-            , openssl
-            , pkg-config
-            , rustPlatform
-            , sqlite
-            , stdenv
-            , Security
-            , SystemConfiguration
-            }:
-
-            rustPlatform.buildRustPackage {
-              name = "scm-diff-editor";
-
-              src = self;
-
-              cargoLock = {
-                lockFile = "${self}/Cargo.lock";
-              };
-
-              buildAndTestSubdir = "scm-record";
-              buildFeatures = [ "scm-diff-editor" ];
-              nativeBuildInputs = [ pkg-config ];
-
-              buildInputs = [
-                ncurses
-                openssl
-                sqlite
-              ] ++ lib.optionals stdenv.isDarwin [
-                Security
-                SystemConfiguration
-                libiconv
-              ];
-            }
-          )
-          {
-            inherit (final.darwin.apple_sdk.frameworks) Security SystemConfiguration;
+        # reuse the definition for git-branchless
+        scm-diff-editor = final.git-branchless.overrideAttrs (finalAttrs: prevAttrs: {
+          name = "scm-diff-editor";
+          meta = prevAttrs.meta // {
+            mainProgram = finalAttrs.name;
+            description = "UI to interactively select changes, bundled in git-branchless";
           };
+
+          buildAndTestSubdir = "scm-record";
+          buildFeatures = [ "scm-diff-editor" ];
+
+          # remove the git-branchless specific build commands
+          postInstall = "";
+          preCheck = "";
+          checkFlags = "";
+        });
       });
 
       packages = foreachSystem (system:
