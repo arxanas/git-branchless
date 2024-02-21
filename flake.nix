@@ -15,57 +15,27 @@
     in
     {
       overlays.default = (final: prev: {
-        git-branchless = final.callPackage
-          (
-            { lib
-            , git
-            , libiconv
-            , ncurses
-            , openssl
-            , pkg-config
-            , rustPlatform
-            , sqlite
-            , stdenv
-            , Security
-            , SystemConfiguration
-            }:
 
-            rustPlatform.buildRustPackage {
-              name = "git-branchless";
-
-              src = self;
-
-              cargoLock = {
-                lockFile = "${self}/Cargo.lock";
-              };
-
-              nativeBuildInputs = [ pkg-config ];
-
-              buildInputs = [
-                ncurses
-                openssl
-                sqlite
-              ] ++ lib.optionals stdenv.isDarwin [
-                Security
-                SystemConfiguration
-                libiconv
-              ];
-
-              preCheck = ''
-                export TEST_GIT=${git}/bin/git
-                export TEST_GIT_EXEC_PATH=$(${git}/bin/git --exec-path)
-              '';
-              # FIXME: these tests time out when run in the Nix sandbox
-              checkFlags = [
-                "--skip=test_switch_pty"
-                "--skip=test_next_ambiguous_interactive"
-                "--skip=test_switch_auto_switch_interactive"
-              ];
-            }
-          )
-          {
-            inherit (final.darwin.apple_sdk.frameworks) Security SystemConfiguration;
+        # reuse the definition from nixpkgs git-branchless
+        git-branchless = prev.git-branchless.overrideAttrs ({ meta, ... }: {
+          name = "git-branchless";
+          src = self;
+          cargoDeps = final.rustPlatform.importCargoLock {
+            lockFile = ./Cargo.lock;
           };
+
+          # for `flake.nix` contributors: put additional local overrides here.
+          # if the changes are also applicable to the `git-branchless` package
+          # in nixpkgs, consider first improving the definition there, and then
+          # update the `flake.lock` here.
+
+          # in case local overrides might confuse upstream maintainers,
+          # we do not list them here:
+          meta = (removeAttrs meta [ "maintainers" ]) // {
+            # to correctly generate meta.position for back trace:
+            inherit (meta) description;
+          };
+        });
 
         scm-diff-editor = final.callPackage
           (
