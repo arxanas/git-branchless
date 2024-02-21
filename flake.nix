@@ -11,10 +11,10 @@
         "x86_64-darwin"
         "x86_64-linux"
       ];
-      foreachSystem = f: lib.foldl' (attrs: system: lib.recursiveUpdate attrs (f system)) { } systems;
+      foreachSystem = lib.genAttrs systems;
     in
     {
-      overlay = (final: prev: {
+      overlays.default = (final: prev: {
         git-branchless = final.callPackage
           (
             { lib
@@ -110,27 +110,27 @@
             inherit (final.darwin.apple_sdk.frameworks) Security SystemConfiguration;
           };
       });
-    } //
-    (foreachSystem (system:
-      let
-        pkgs = import nixpkgs {
-          inherit system;
-          overlays = [ self.overlay ];
-        };
-      in
-      {
-        packages.${system} = {
+
+      packages = foreachSystem (system:
+        let
+          pkgs = nixpkgs.legacyPackages.${system}.extend self.overlays.default;
+        in
+        {
           inherit (pkgs)
             git-branchless scm-diff-editor;
-        };
+          default = pkgs.git-branchless;
+        }
+      );
 
-        defaultPackage.${system} = self.packages.${system}.git-branchless;
-        checks.${system}.git-branchless = pkgs.git-branchless.overrideAttrs ({ preCheck, ... }: {
-          cargoBuildType = "debug";
-          cargoCheckType = "debug";
-          preCheck = ''
-            export RUST_BACKTRACE=1
-          '' + preCheck;
-        });
-      }));
+      checks = foreachSystem (system: {
+        git-branchless =
+          self.packages.${system}.git-branchless.overrideAttrs ({ preCheck, ... }: {
+            cargoBuildType = "debug";
+            cargoCheckType = "debug";
+            preCheck = ''
+              export RUST_BACKTRACE=1
+            '' + preCheck;
+          });
+      });
+    };
 }
