@@ -45,7 +45,7 @@ clap_mangen = "0.2.12"
 color-eyre = "0.6.2"
 concolor = { version = "0.1.1", features = ["auto"] }
 console = "0.15.8"
-crossbeam = "0.8.3"
+crossbeam = "0.8.4"
 cursive = { version = "0.20.0", default-features = false, features = [
     "crossterm-backend",
 ] }
