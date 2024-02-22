@@ -171,6 +171,15 @@ pub enum CreateStatus {
     },
 }
 
+/// The result of updating a commit.
+///
+/// TODO: have an `Err` case.
+#[derive(Clone, Debug)]
+pub enum UpdateStatus {
+    /// The commit was successfully updated.
+    Updated,
+}
+
 /// "Forge" refers to a Git hosting provider, such as GitHub, GitLab, etc.
 /// Commits can be pushed for review to a forge.
 pub trait Forge: Debug {
@@ -192,7 +201,7 @@ pub trait Forge: Debug {
         &mut self,
         commits: HashMap<NonZeroOid, CommitStatus>,
         options: &SubmitOptions,
-    ) -> EyreExitOr<()>;
+    ) -> EyreExitOr<HashMap<NonZeroOid, UpdateStatus>>;
 }
 
 /// `submit` command.

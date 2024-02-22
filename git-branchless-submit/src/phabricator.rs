@@ -35,7 +35,9 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::{instrument, warn};
 
-use crate::{CommitStatus, CreateStatus, Forge, SubmitOptions, SubmitStatus, STYLE_PUSHED};
+use crate::{
+    CommitStatus, CreateStatus, Forge, SubmitOptions, SubmitStatus, UpdateStatus, STYLE_PUSHED,
+};
 
 /// Wrapper around the Phabricator "ID" type. (This is *not* a PHID, just a
 /// regular ID).
@@ -614,7 +616,7 @@ fi
         &mut self,
         commits: HashMap<NonZeroOid, crate::CommitStatus>,
         options: &SubmitOptions,
-    ) -> EyreExitOr<()> {
+    ) -> EyreExitOr<HashMap<NonZeroOid, UpdateStatus>> {
         let SubmitOptions {
             create: _,
             draft: _,
@@ -747,12 +749,24 @@ fi
 
         try_exit_code!(self.update_dependencies(
             &success_commits
-                .into_iter()
+                .iter()
                 .map(|(commit_oid, _test_output)| commit_oid)
+                .copied()
                 .collect(),
             &CommitSet::empty()
         )?);
-        Ok(Ok(()))
+        Ok(Ok(success_commits
+            .into_iter()
+            .map(|(commit_oid, _test_output)| (commit_oid, UpdateStatus::Updated))
+            .chain(
+                failure_commits
+                    .into_iter()
+                    .map(|(commit_oid, _test_output)| {
+                        // FIXME: report error
+                        (commit_oid, UpdateStatus::Updated)
+                    }),
+            )
+            .collect()))
     }
 }
 
