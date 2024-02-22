@@ -10,7 +10,7 @@ use std::time::SystemTime;
 
 use cursive_core::theme::Effect;
 use cursive_core::utils::markup::StyledString;
-use git_branchless_opts::Revset;
+use git_branchless_opts::{Revset, TestSearchStrategy};
 use git_branchless_test::{
     run_tests, FixInfo, ResolvedTestOptions, TestOutput, TestResults, TestStatus,
     TestingAbortedError, Verbosity,
@@ -373,10 +373,18 @@ impl Forge for PhabricatorForge<'_> {
             TestCommand::Args(args.into_iter().map(ToString::to_string).collect())
         } else {
             TestCommand::String(
-                r#"git commit --amend --message "$(git show --no-patch --format=%B HEAD)
+                r#"
+echo "Creating $(git rev-parse HEAD)"
+if [[ $(git show) == *BROKEN* ]]; then
+    echo 'Failed to create because the message contained the string BROKEN'
+    exit 1
+else
+    echo 'Amending commit message'
+    git commit --amend --message "$(git show --no-patch --format=%B HEAD)
 
 Differential Revision: https://phabricator.example.com/D000$(git rev-list --count HEAD)
-            "
+    "
+fi
             "#
                 .to_string(),
             )
@@ -394,7 +402,7 @@ Differential Revision: https://phabricator.example.com/D000$(git rev-list --coun
             &ResolvedTestOptions {
                 command,
                 execution_strategy: *execution_strategy,
-                search_strategy: None,
+                search_strategy: Some(TestSearchStrategy::Linear),
                 is_dry_run: false,
                 use_cache: false,
                 is_interactive: false,
@@ -414,6 +422,9 @@ Differential Revision: https://phabricator.example.com/D000$(git rev-list --coun
             testing_aborted_error,
         } = test_results;
         if let Some(testing_aborted_error) = testing_aborted_error {
+            // FIXME: we may still want to process any commits that succeeded;
+            // instead, we should probably update `test_outputs` in place and
+            // continue.
             let TestingAbortedError {
                 commit_oid,
                 exit_code,
@@ -429,10 +440,23 @@ Differential Revision: https://phabricator.example.com/D000$(git rev-list --coun
             return Ok(Err(ExitCode(1)));
         }
 
-        let rebase_plan = {
+        enum ErrorReason {
+            NotTested,
+            TestFailed,
+        }
+        let (maybe_rebase_plan, error_commits) = {
             let mut builder = RebasePlanBuilder::new(self.dag, permissions);
-            for (commit_oid, test_output) in test_outputs {
-                let head_commit_oid = match test_output.test_status {
+            let mut error_commits = HashMap::new();
+            for commit_oid in commit_oids.iter().copied() {
+                let test_output = match test_outputs.get(&commit_oid) {
+                    Some(test_output) => test_output,
+                    None => {
+                        // Testing was aborted due to a previous commit failing.
+                        error_commits.insert(commit_oid, ErrorReason::NotTested);
+                        continue;
+                    }
+                };
+                match test_output.test_status {
                     TestStatus::CheckoutFailed
                     | TestStatus::SpawnTestFailed(_)
                     | TestStatus::TerminatedBySignal
@@ -441,8 +465,8 @@ Differential Revision: https://phabricator.example.com/D000$(git rev-list --coun
                     | TestStatus::Indeterminate { .. }
                     | TestStatus::Abort { .. }
                     | TestStatus::Failed { .. } => {
-                        self.render_failed_test(commit_oid, &test_output)?;
-                        return Ok(Err(ExitCode(1)));
+                        self.render_failed_test(commit_oid, test_output)?;
+                        error_commits.insert(commit_oid, ErrorReason::TestFailed);
                     }
                     TestStatus::Passed {
                         cached: _,
@@ -452,66 +476,86 @@ Differential Revision: https://phabricator.example.com/D000$(git rev-list --coun
                                 snapshot_tree_oid: _,
                             },
                         interactive: _,
-                    } => head_commit_oid,
-                };
-
-                let commit = self.repo.find_commit_or_fail(commit_oid)?;
-                builder.move_subtree(commit.get_oid(), commit.get_parent_oids())?;
-                builder.replace_commit(commit.get_oid(), head_commit_oid.unwrap_or(commit_oid))?;
+                    } => {
+                        let commit = self.repo.find_commit_or_fail(commit_oid)?;
+                        builder.move_subtree(commit.get_oid(), commit.get_parent_oids())?;
+                        builder.replace_commit(
+                            commit.get_oid(),
+                            head_commit_oid.unwrap_or(commit_oid),
+                        )?;
+                    }
+                }
             }
 
             let pool = ThreadPoolBuilder::new().build()?;
             let repo_pool = RepoResource::new_pool(self.repo)?;
-            match builder.build(self.effects, &pool, &repo_pool)? {
-                Ok(Some(rebase_plan)) => rebase_plan,
-                Ok(None) => return Ok(Ok(Default::default())),
+            let maybe_rebase_plan = match builder.build(self.effects, &pool, &repo_pool)? {
+                Ok(maybe_rebase_plan) => maybe_rebase_plan,
                 Err(err) => {
                     err.describe(self.effects, self.repo, self.dag)?;
                     return Ok(Err(ExitCode(1)));
                 }
-            }
+            };
+            (maybe_rebase_plan, error_commits)
         };
 
-        let rewritten_oids = match execute_rebase_plan(
-            self.effects,
-            self.git_run_info,
-            self.repo,
-            self.event_log_db,
-            &rebase_plan,
-            &execute_options,
-        )? {
-            ExecuteRebasePlanResult::Succeeded {
-                rewritten_oids: Some(rewritten_oids),
-            } => rewritten_oids,
-            ExecuteRebasePlanResult::Succeeded {
-                rewritten_oids: None,
-            } => {
-                warn!("No rewritten commit OIDs were produced by rebase plan execution");
-                Default::default()
-            }
-            ExecuteRebasePlanResult::DeclinedToMerge {
-                failed_merge_info: _,
-            } => {
-                writeln!(
-                    self.effects.get_error_stream(),
-                    "BUG: Merge failed, but rewording shouldn't cause any merge failures."
-                )?;
-                return Ok(Err(ExitCode(1)));
-            }
-            ExecuteRebasePlanResult::Failed { exit_code } => {
-                return Ok(Err(exit_code));
-            }
+        let rewritten_oids = match maybe_rebase_plan {
+            None => Default::default(),
+            Some(rebase_plan) => match execute_rebase_plan(
+                self.effects,
+                self.git_run_info,
+                self.repo,
+                self.event_log_db,
+                &rebase_plan,
+                &execute_options,
+            )? {
+                ExecuteRebasePlanResult::Succeeded {
+                    rewritten_oids: Some(rewritten_oids),
+                } => rewritten_oids,
+                ExecuteRebasePlanResult::Succeeded {
+                    rewritten_oids: None,
+                } => {
+                    warn!("No rewritten commit OIDs were produced by rebase plan execution");
+                    Default::default()
+                }
+                ExecuteRebasePlanResult::DeclinedToMerge {
+                    failed_merge_info: _,
+                } => {
+                    writeln!(
+                        self.effects.get_error_stream(),
+                        "BUG: Merge failed, but rewording shouldn't cause any merge failures."
+                    )?;
+                    return Ok(Err(ExitCode(1)));
+                }
+                ExecuteRebasePlanResult::Failed { exit_code } => {
+                    return Ok(Err(exit_code));
+                }
+            },
         };
 
         let mut create_statuses = HashMap::new();
         for commit_oid in commit_oids {
+            if let Some(error_reason) = error_commits.get(&commit_oid) {
+                create_statuses.insert(
+                    commit_oid,
+                    match error_reason {
+                        ErrorReason::NotTested => CreateStatus::Skipped { commit_oid },
+                        ErrorReason::TestFailed => CreateStatus::Err { commit_oid },
+                    },
+                );
+                continue;
+            }
+
             let final_commit_oid = match rewritten_oids.get(&commit_oid) {
                 Some(MaybeZeroOid::NonZero(commit_oid)) => *commit_oid,
                 Some(MaybeZeroOid::Zero) => {
                     warn!(?commit_oid, "Commit was rewritten to the zero OID",);
                     commit_oid
                 }
-                None => commit_oid,
+                None => {
+                    create_statuses.insert(commit_oid, CreateStatus::Skipped { commit_oid });
+                    continue;
+                }
             };
             let local_branch_name = {
                 match self.get_revision_id(final_commit_oid)? {
@@ -527,13 +571,14 @@ Differential Revision: https://phabricator.example.com/D000$(git rev-list --coun
                                 )?
                             )?,
                         )?;
-                        return Ok(Err(ExitCode(1)));
+                        create_statuses.insert(commit_oid, CreateStatus::Err { commit_oid });
+                        continue;
                     }
                 }
             };
             create_statuses.insert(
                 commit_oid,
-                CreateStatus {
+                CreateStatus::Created {
                     final_commit_oid,
                     local_commit_name: local_branch_name,
                 },
@@ -542,12 +587,12 @@ Differential Revision: https://phabricator.example.com/D000$(git rev-list --coun
 
         let final_commit_oids: CommitSet = create_statuses
             .values()
-            .map(|create_status| {
-                let CreateStatus {
+            .filter_map(|create_status| match create_status {
+                CreateStatus::Created {
                     final_commit_oid,
                     local_commit_name: _,
-                } = create_status;
-                *final_commit_oid
+                } => Some(*final_commit_oid),
+                CreateStatus::Skipped { .. } | CreateStatus::Err { .. } => None,
             })
             .collect();
         self.dag.sync_from_oids(
