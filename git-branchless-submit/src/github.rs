@@ -298,7 +298,7 @@ impl Forge for GithubForge<'_> {
             .copied()
             .map(|(commit_oid, commit_status)| {
                 let commit_status = match created_branches.get(&commit_oid) {
-                    Some(CreateStatus {
+                    Some(CreateStatus::Created {
                         final_commit_oid: _,
                         local_commit_name,
                     }) => CommitStatus {
@@ -309,7 +309,9 @@ impl Forge for GithubForge<'_> {
                         // Expecting this to be the same as the local branch name (for now):
                         remote_commit_name: Some(local_commit_name.clone()),
                     },
-                    None => commit_status.clone(),
+                    Some(CreateStatus::Skipped { .. } | CreateStatus::Err { .. }) | None => {
+                        commit_status.clone()
+                    }
                 };
                 (commit_oid, commit_status)
             })

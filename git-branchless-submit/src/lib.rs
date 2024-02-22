@@ -141,18 +141,34 @@ pub struct SubmitOptions {
 
 /// The result of creating a commit.
 #[derive(Clone, Debug)]
-pub struct CreateStatus {
-    /// The commit OID after carrying out the creation process. Usually, this
-    /// will be the same as the original commit OID, unless the forge amends it
-    /// (e.g. to include a change ID).
-    pub final_commit_oid: NonZeroOid,
+pub enum CreateStatus {
+    /// The commit was successfully created.
+    Created {
+        /// The commit OID after carrying out the creation process. Usually, this
+        /// will be the same as the original commit OID, unless the forge amends it
+        /// (e.g. to include a change ID).
+        final_commit_oid: NonZeroOid,
 
-    /// An identifier corresponding to the commit, for display purposes only.
-    /// This may be a branch name, a change ID, the commit summary, etc.
-    ///
-    /// This does not necessarily correspond to the commit's name/identifier in
-    /// the forge (e.g. not a code review link).
-    pub local_commit_name: String,
+        /// An identifier corresponding to the commit, for display purposes only.
+        /// This may be a branch name, a change ID, the commit summary, etc.
+        ///
+        /// This does not necessarily correspond to the commit's name/identifier in
+        /// the forge (e.g. not a code review link).
+        local_commit_name: String,
+    },
+
+    /// The commit was skipped. This could happen if a previous commit could not
+    /// be created due to an error.
+    Skipped {
+        /// The commit which was skipped.
+        commit_oid: NonZeroOid,
+    },
+
+    /// The commit could not be created due to an error.
+    Err {
+        /// The commit which produced an error.
+        commit_oid: NonZeroOid,
+    },
 }
 
 /// "Forge" refers to a Git hosting provider, such as GitHub, GitLab, etc.
@@ -370,30 +386,49 @@ fn submit(
         (local, unsubmitted, to_update, to_skip)
     });
 
-    let (submitted_commit_names, unsubmitted_commit_names): (BTreeSet<String>, BTreeSet<String>) = {
+    let (submitted_commit_names, unsubmitted_commit_names, create_error_commits): (
+        BTreeSet<String>,
+        BTreeSet<String>,
+        BTreeSet<NonZeroOid>,
+    ) = {
         let unsubmitted_commit_names: BTreeSet<String> = unsubmitted_commits
             .values()
             .flat_map(|commit_status| commit_status.local_commit_name.clone())
             .collect();
         if create {
-            let created_commit_names = if dry_run {
-                unsubmitted_commit_names.clone()
+            let (created_commit_names, error_commits) = if dry_run {
+                (unsubmitted_commit_names.clone(), Default::default())
             } else {
                 let create_statuses =
                     try_exit_code!(forge.create(unsubmitted_commits, &submit_options)?);
-                create_statuses
-                    .into_values()
-                    .map(
-                        |CreateStatus {
-                             final_commit_oid: _,
-                             local_commit_name,
-                         }| local_commit_name,
-                    )
-                    .collect()
+                let mut created_commit_names = BTreeSet::new();
+                let mut error_commits = BTreeSet::new();
+                for (_commit_oid, create_status) in create_statuses {
+                    match create_status {
+                        CreateStatus::Created {
+                            final_commit_oid: _,
+                            local_commit_name,
+                        } => {
+                            created_commit_names.insert(local_commit_name);
+                        }
+                        // For now, treat `Skipped` the same as `Err` as it would be
+                        // a lot of work to render it differently in the output, and
+                        // we may want to rethink the data structures before doing
+                        // that.
+                        CreateStatus::Skipped { commit_oid } | CreateStatus::Err { commit_oid } => {
+                            error_commits.insert(commit_oid);
+                        }
+                    }
+                }
+                (created_commit_names, error_commits)
             };
-            (created_commit_names, Default::default())
+            (created_commit_names, Default::default(), error_commits)
         } else {
-            (Default::default(), unsubmitted_commit_names)
+            (
+                Default::default(),
+                unsubmitted_commit_names,
+                Default::default(),
+            )
         }
     };
 
@@ -513,8 +548,30 @@ repository. To submit them, retry this operation with the --create option.",
             if dry_run { "are" } else { "were" },
         )?;
     }
-
-    Ok(Ok(()))
+    if !create_error_commits.is_empty() {
+        writeln!(
+            effects.get_output_stream(),
+            "Failed to create {}:",
+            Pluralize {
+                determiner: None,
+                amount: create_error_commits.len(),
+                unit: ("commit", "commits")
+            },
+        )?;
+        for error_commit_oid in &create_error_commits {
+            let error_commit = repo.find_commit_or_fail(*error_commit_oid)?;
+            writeln!(
+                effects.get_output_stream(),
+                "{}",
+                effects
+                    .get_glyphs()
+                    .render(error_commit.friendly_describe(effects.get_glyphs())?)?
+            )?;
+        }
+        Ok(Err(ExitCode(1)))
+    } else {
+        Ok(Ok(()))
+    }
 }
 
 #[instrument]
