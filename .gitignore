@@ -6,3 +6,7 @@
 # Jetbrains products to develop git-branchless! File an issue and I will apply
 # on your behalf.
 .idea
+
+# Direnv: https://github.com/direnv/direnv
+/.direnv/
+/.envrc
