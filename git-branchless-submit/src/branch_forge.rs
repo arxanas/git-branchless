@@ -247,7 +247,7 @@ These remotes are available: {}",
                     commit_status.local_commit_name.map(|local_commit_name| {
                         (
                             commit_oid,
-                            CreateStatus {
+                            CreateStatus::Created {
                                 final_commit_oid: commit_oid,
                                 local_commit_name,
                             },
