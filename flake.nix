@@ -11,7 +11,11 @@
         "x86_64-darwin"
         "x86_64-linux"
       ];
-      foreachSystem = lib.genAttrs systems;
+      foreachSystem = f: lib.genAttrs systems (system: f {
+        pkgs = nixpkgs.legacyPackages.${system};
+        /** final packages set (of a given system) provided in this flake */
+        final = self.packages.${system};
+      });
     in
     {
       overlays.default = (final: prev: {
@@ -20,6 +24,7 @@
         git-branchless = prev.git-branchless.overrideAttrs ({ meta, ... }: {
           name = "git-branchless";
           src = self;
+          patches = [ ];
           cargoDeps = final.rustPlatform.importCargoLock {
             lockFile = ./Cargo.lock;
           };
@@ -55,20 +60,38 @@
         });
       });
 
-      packages = foreachSystem (system:
+      packages = foreachSystem ({ pkgs, ... }:
         let
-          pkgs = nixpkgs.legacyPackages.${system}.extend self.overlays.default;
+          final = pkgs.extend self.overlays.default;
         in
         {
-          inherit (pkgs)
+          inherit (final)
             git-branchless scm-diff-editor;
-          default = pkgs.git-branchless;
+          default = final.git-branchless;
         }
       );
 
-      checks = foreachSystem (system: {
+      devShells = foreachSystem ({ pkgs, final }: {
+        default = final.git-branchless.overrideAttrs ({ nativeBuildInputs, ... }: {
+
+          nativeBuildInputs = with pkgs.buildPackages; [
+            cargo # with shell completions, instead of cargo-auditable
+            git # for testing
+          ] ++ nativeBuildInputs;
+
+          env = with pkgs.buildPackages; {
+            # for developments, e.g. symbol lookup in std library
+            RUST_SRC_PATH = "${rustPlatform.rustLibSrc}";
+            # for testing
+            TEST_GIT = "${git}/bin/git";
+            TEST_GIT_EXEC_PATH = "${git}/libexec/git-core";
+          };
+        });
+      });
+
+      checks = foreachSystem ({ pkgs, final }: {
         git-branchless =
-          self.packages.${system}.git-branchless.overrideAttrs ({ preCheck, ... }: {
+          final.git-branchless.overrideAttrs ({ preCheck, ... }: {
             cargoBuildType = "debug";
             cargoCheckType = "debug";
             preCheck = ''
