@@ -636,14 +636,6 @@ impl Repo {
         Ok(self.get_branchless_dir()?.join("dag2"))
     }
 
-    /// Get the directory to store man-pages. Note that this is the `man`
-    /// directory, and not a subsection thereof. `git-branchless` man-pages must
-    /// go into the `man/man1` directory to be found by `man`.
-    #[instrument]
-    pub fn get_man_dir(&self) -> Result<PathBuf> {
-        Ok(self.get_branchless_dir()?.join("man"))
-    }
-
     /// Get a directory suitable for storing temporary files.
     ///
     /// In particular, this directory is guaranteed to be on the same filesystem
