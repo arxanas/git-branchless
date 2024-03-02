@@ -311,7 +311,7 @@ fn uninstall_hooks(effects: &Effects, git_run_info: &GitRunInfo, repo: &Repo) ->
 /// subcommand is included in the `man` invocation, so it can show more specific
 /// help.
 fn should_use_wrapped_command_alias() -> bool {
-    cfg!(feature = "man-pages")
+    cfg!(feature = "separate-binaries") // unimplemented
 }
 
 #[instrument]
@@ -694,7 +694,7 @@ contents 3
 
     #[test]
     fn test_all_alias_binaries_exist() {
-        let all_alias_binaries_installed = cfg!(feature = "man-pages");
+        let all_alias_binaries_installed = cfg!(feature = "separate-binaries"); // unimplemented
         if !all_alias_binaries_installed {
             return;
         }
