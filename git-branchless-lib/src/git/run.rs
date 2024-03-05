@@ -418,6 +418,11 @@ impl GitRunInfo {
             if let Some(path) = env.get(OsStr::new("PATH")) {
                 path_components.extend(std::env::split_paths(path));
             }
+            // On windows, PATH's name defaults to "Path".
+            #[cfg(target_os = "windows")]
+            if let Some(path) = env.get(OsStr::new("Path")) {
+                path_components.extend(std::env::split_paths(path));
+            }
             std::env::join_paths(path_components).wrap_err("Joining path components")?
         };
 
