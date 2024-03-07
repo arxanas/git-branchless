@@ -193,11 +193,11 @@ impl Glyphs {
     pub fn pretty() -> Self {
         Glyphs {
             should_write_ansi_escape_codes: true,
-            line: "┃",
-            line_with_offshoot: "┣",
+            line: "│",
+            line_with_offshoot: "├",
             vertical_ellipsis: "⋮",
-            split: "━┓",
-            merge: "━┛",
+            split: "─╮",
+            merge: "─╯",
             commit_visible: "◯",
             commit_visible_head: "●",
             commit_obsolete: "✕",
