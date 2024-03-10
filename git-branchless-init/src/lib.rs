@@ -311,7 +311,7 @@ fn uninstall_hooks(effects: &Effects, git_run_info: &GitRunInfo, repo: &Repo) ->
 /// subcommand is included in the `man` invocation, so it can show more specific
 /// help.
 fn should_use_wrapped_command_alias() -> bool {
-    cfg!(feature = "man-pages")
+    cfg!(feature = "separate-binaries") // unimplemented
 }
 
 #[instrument]
@@ -418,46 +418,6 @@ the branchless workflow will work properly.
         )?;
     }
 
-    Ok(())
-}
-
-#[instrument]
-fn install_man_pages(effects: &Effects, repo: &Repo, config: &mut Config) -> eyre::Result<()> {
-    let should_install = cfg!(feature = "man-pages");
-    if !should_install {
-        return Ok(());
-    }
-
-    let man_dir = repo.get_man_dir()?;
-    let man_dir_relative = {
-        let man_dir_relative = man_dir.strip_prefix(repo.get_path()).wrap_err_with(|| {
-            format!(
-                "Getting relative path for {:?} with respect to {:?}",
-                &man_dir,
-                repo.get_path()
-            )
-        })?;
-        &man_dir_relative.to_str().ok_or_else(|| {
-            eyre::eyre!(
-                "Could not convert man dir to UTF-8 string: {:?}",
-                &man_dir_relative
-            )
-        })?
-    };
-    config.set(
-        "man.branchless.cmd",
-        format!(
-            // FIXME: the path to the man directory is not shell-escaped.
-            //
-            // NB: the trailing `:` at the end of `MANPATH` indicates to `man`
-            // that it should try its normal lookup paths if the requested
-            // `man`-page cannot be found in the provided `MANPATH`.
-            "env MANPATH=.git/{man_dir_relative}: man"
-        ),
-    )?;
-    config.set("man.viewer", "branchless")?;
-
-    write_man_pages(&man_dir).wrap_err_with(|| format!("Writing man-pages to: {:?}", &man_dir))?;
     Ok(())
 }
 
@@ -622,7 +582,6 @@ fn command_init(
         &default_config,
         git_run_info,
     )?;
-    install_man_pages(effects, &repo, &mut config)?;
 
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
@@ -735,7 +694,7 @@ contents 3
 
     #[test]
     fn test_all_alias_binaries_exist() {
-        let all_alias_binaries_installed = cfg!(feature = "man-pages");
+        let all_alias_binaries_installed = cfg!(feature = "separate-binaries"); // unimplemented
         if !all_alias_binaries_installed {
             return;
         }
