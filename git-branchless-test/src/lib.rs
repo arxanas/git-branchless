@@ -2485,6 +2485,7 @@ struct PreparedWorkingDirectory {
     path: PathBuf,
 }
 
+#[allow(dead_code)] // fields are not read except by `Debug` implementation`
 #[derive(Debug)]
 enum PrepareWorkingDirectoryError {
     LockFailed(PathBuf),
