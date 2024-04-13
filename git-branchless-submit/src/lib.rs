@@ -555,9 +555,14 @@ fn select_forge<'a>(
     };
 
     // Check Github:
-    let forge_kind = match forge_kind {
-        Some(forge_kind) => Some(forge_kind),
-        None => github_push_remote(repo)?.map(|_| ForgeKind::Github),
+    let is_github_forge_reliable_enough_for_opt_out_usage = false; // as of 2024-04-06 it's too buggy; see https://github.com/arxanas/git-branchless/discussions/1259
+    let forge_kind = match (
+        forge_kind,
+        is_github_forge_reliable_enough_for_opt_out_usage,
+    ) {
+        (Some(forge_kind), _) => Some(forge_kind),
+        (None, true) => github_push_remote(repo)?.map(|_| ForgeKind::Github),
+        (None, false) => None,
     };
 
     // Default:
