@@ -1,3 +1,5 @@
+//! Testing utilities.
+
 use std::collections::{HashMap, HashSet};
 use std::convert::Infallible;
 
@@ -5,7 +7,7 @@ use itertools::Itertools;
 use proptest::prelude::Strategy as ProptestStrategy;
 use proptest::prelude::*;
 
-use crate::basic::{BasicSourceControlGraph, BasicStrategyKind};
+use crate::basic_search::{BasicSourceControlGraph, BasicStrategyKind};
 
 #[derive(Clone, Debug)]
 pub struct UsizeGraph {

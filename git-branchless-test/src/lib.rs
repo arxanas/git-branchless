@@ -58,7 +58,7 @@ use lib::git::{
 use lib::try_exit_code;
 use lib::util::{get_sh, ExitCode, EyreExitOr};
 use rayon::ThreadPoolBuilder;
-use scm_bisect::basic::{BasicSourceControlGraph, BasicStrategy, BasicStrategyKind};
+use scm_bisect::basic_search::{BasicSourceControlGraph, BasicStrategy, BasicStrategyKind};
 use scm_bisect::search;
 use tempfile::TempDir;
 use thiserror::Error;
