@@ -1,8 +1,5 @@
-use std::{
-    collections::HashMap,
-    convert::TryInto,
-    path::{Path, PathBuf},
-};
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 
 use branchless::git::{dehydrate_tree, get_changed_paths_between_trees, hydrate_tree, FileMode};
 use branchless::testing::make_git;

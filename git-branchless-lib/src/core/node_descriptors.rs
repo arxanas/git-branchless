@@ -4,7 +4,6 @@
 //! commit message.
 
 use std::collections::{HashMap, HashSet};
-use std::convert::TryInto;
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 

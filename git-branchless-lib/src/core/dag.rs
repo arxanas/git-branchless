@@ -3,10 +3,8 @@
 
 use std::cmp::Ordering;
 use std::collections::HashMap;
-use std::convert::TryFrom;
 use std::fmt::Debug;
 use std::future::Future;
-use std::iter::FromIterator;
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;

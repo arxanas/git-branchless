@@ -1,7 +1,6 @@
 //! Wrap a user-provided Git command, so that `git-branchless` can do special
 //! processing.
 
-use std::convert::TryInto;
 use std::process::Command;
 use std::time::SystemTime;
 

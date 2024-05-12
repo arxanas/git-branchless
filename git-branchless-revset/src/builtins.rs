@@ -12,7 +12,6 @@ use lib::git::{
 };
 use std::borrow::Cow;
 use std::collections::HashMap;
-use std::convert::TryFrom;
 use tracing::{instrument, warn};
 
 use eyre::Context as EyreContext;
