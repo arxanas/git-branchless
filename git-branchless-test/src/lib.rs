@@ -14,7 +14,6 @@
 mod worker;
 
 use std::collections::{HashMap, HashSet};
-use std::convert::TryFrom;
 use std::fmt::Write as _;
 use std::fs::File;
 use std::path::{Path, PathBuf};

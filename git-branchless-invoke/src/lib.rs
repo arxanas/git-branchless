@@ -15,7 +15,6 @@
 
 use std::any::Any;
 use std::collections::HashMap;
-use std::convert::TryInto;
 use std::ffi::OsString;
 use std::fmt::Write;
 use std::path::PathBuf;

@@ -1,7 +1,5 @@
 use std::collections::{HashMap, HashSet};
-use std::convert::TryFrom;
 use std::fmt::Debug;
-use std::iter::FromIterator;
 use std::path::{Path, PathBuf};
 
 use bstr::ByteVec;

@@ -45,7 +45,6 @@ use git_branchless_revset::resolve_commits;
 
 mod graph {
     use std::collections::HashMap;
-    use std::convert::TryFrom;
 
     use lib::core::gc::mark_commit_reachable;
     use tracing::instrument;
@@ -377,7 +376,6 @@ mod graph {
 mod render {
     use std::cmp::Ordering;
     use std::collections::HashSet;
-    use std::convert::TryFrom;
 
     use cursive_core::theme::{BaseColor, Effect};
     use cursive_core::utils::markup::StyledString;

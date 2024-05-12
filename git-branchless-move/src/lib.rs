@@ -13,7 +13,6 @@
 #![allow(clippy::too_many_arguments, clippy::blocks_in_if_conditions)]
 
 use std::collections::HashMap;
-use std::convert::TryFrom;
 use std::fmt::Write;
 use std::time::SystemTime;
 

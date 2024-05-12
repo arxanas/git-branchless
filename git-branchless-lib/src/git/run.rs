@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::convert::TryInto;
 use std::ffi::{OsStr, OsString};
 use std::fmt::Write;
 use std::io::{BufRead, BufReader, Read, Write as WriteIo};

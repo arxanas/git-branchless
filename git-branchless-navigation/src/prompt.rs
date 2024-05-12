@@ -29,7 +29,6 @@ pub fn prompt_select_commit(
 mod skim {
     use eyre::eyre;
     use std::borrow::Cow;
-    use std::convert::TryFrom;
     use std::sync::Arc;
 
     use itertools::Itertools;
