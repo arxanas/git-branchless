@@ -57,7 +57,7 @@ impl Backend for CursiveTestingBackend {
         match self.events.get(event_index)?.to_owned() {
             CursiveTestingEvent::TakeScreenshot(screen_target) => {
                 let mut screen_target = (*screen_target).borrow_mut();
-                *screen_target = self.screen.borrow().clone();
+                screen_target.clone_from(&self.screen.borrow());
                 self.poll_event()
             }
             CursiveTestingEvent::Event(event) => {

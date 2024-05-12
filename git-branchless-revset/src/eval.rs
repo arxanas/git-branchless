@@ -350,7 +350,6 @@ pub(super) fn eval_number_rhs(
 mod tests {
     use std::borrow::Cow;
 
-    use lib::core::effects::Effects;
     use lib::core::eventlog::{EventLogDb, EventReplayer};
     use lib::core::formatting::Glyphs;
     use lib::core::repo_ext::RepoExt;
@@ -358,7 +357,6 @@ mod tests {
     use lib::testing::{make_git, GitRunOptions};
 
     use super::*;
-    use crate::Expr;
 
     fn eval_and_sort<'a>(
         effects: &Effects,

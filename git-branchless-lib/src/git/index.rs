@@ -141,7 +141,6 @@ pub fn update_index(
                     write!(
                         &mut buf,
                         "{mode} {sha1} {stage}\t{path}\0",
-                        mode = mode.to_string(),
                         sha1 = oid,
                         stage = i32::from(*stage),
                         path = path.display(),

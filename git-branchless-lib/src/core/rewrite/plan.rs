@@ -125,20 +125,10 @@ pub enum RebaseCommand {
     },
 }
 
-/// Represents a sequence of commands that can be executed to carry out a rebase
-/// operation.
-#[derive(Debug)]
-pub struct RebasePlan {
-    /// The first commit OID that will be checked out. This is necessary to
-    /// support on-disk rebases.
-    pub first_dest_oid: NonZeroOid,
-
-    /// The commands to run.
-    pub commands: Vec<RebaseCommand>,
-}
-
-impl ToString for RebaseCommand {
-    fn to_string(&self) -> String {
+impl RebaseCommand {
+    /// Convert the command to a string that's used in the `git rebase` plan
+    /// format.
+    pub fn to_rebase_command(&self) -> String {
         match self {
             RebaseCommand::CreateLabel { label_name } => format!("label {label_name}"),
             RebaseCommand::Reset { target } => format!("reset {target}"),
@@ -193,6 +183,18 @@ impl ToString for RebaseCommand {
             }
         }
     }
+}
+
+/// Represents a sequence of commands that can be executed to carry out a rebase
+/// operation.
+#[derive(Debug)]
+pub struct RebasePlan {
+    /// The first commit OID that will be checked out. This is necessary to
+    /// support on-disk rebases.
+    pub first_dest_oid: NonZeroOid,
+
+    /// The commands to run.
+    pub commands: Vec<RebaseCommand>,
 }
 
 /// A token representing that the rebase plan has been checked for validity.

@@ -24,7 +24,7 @@ pub use resolve::{check_revset_syntax, resolve_commits, resolve_default_smartlog
 
 use lalrpop_util::lalrpop_mod;
 lalrpop_mod!(
-    #[allow(clippy::all, clippy::as_conversions)]
+    #[allow(clippy::all, clippy::as_conversions, dead_code)]
     grammar,
     "/grammar.rs"
 );

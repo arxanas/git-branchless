@@ -1,3 +1,4 @@
+use std::fmt::Display;
 use std::path::PathBuf;
 use std::str::FromStr;
 
@@ -146,16 +147,16 @@ impl FromStr for FileMode {
     }
 }
 
-impl ToString for FileMode {
-    fn to_string(&self) -> String {
+impl Display for FileMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            FileMode::Unreadable => "000000".to_string(),
-            FileMode::Tree => "040000".to_string(),
-            FileMode::Blob => "100644".to_string(),
-            FileMode::BlobExecutable => "100755".to_string(),
-            FileMode::BlobGroupWritable => "100664".to_string(),
-            FileMode::Link => "120000".to_string(),
-            FileMode::Commit => "160000".to_string(),
+            FileMode::Unreadable => write!(f, "000000"),
+            FileMode::Tree => write!(f, "040000"),
+            FileMode::Blob => write!(f, "100644"),
+            FileMode::BlobExecutable => write!(f, "100755"),
+            FileMode::BlobGroupWritable => write!(f, "100664"),
+            FileMode::Link => write!(f, "120000"),
+            FileMode::Commit => write!(f, "160000"),
         }
     }
 }
