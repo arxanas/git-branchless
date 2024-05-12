@@ -13,12 +13,13 @@ mod branch_forge;
 pub mod github;
 pub mod phabricator;
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::HashMap;
 use std::fmt::{Debug, Write};
 use std::time::SystemTime;
 
 use branch_forge::BranchForge;
 use cursive_core::theme::{BaseColor, Effect, Style};
+use cursive_core::utils::markup::StyledString;
 use git_branchless_invoke::CommandContext;
 use git_branchless_test::{RawTestOptions, ResolvedTestOptions, Verbosity};
 use github::GithubForge;
@@ -27,7 +28,6 @@ use lazy_static::lazy_static;
 use lib::core::dag::{union_all, CommitSet, Dag};
 use lib::core::effects::Effects;
 use lib::core::eventlog::{EventLogDb, EventReplayer};
-use lib::core::formatting::{Pluralize, StyledStringBuilder};
 use lib::core::repo_ext::{RepoExt, RepoReferencesSnapshot};
 use lib::git::{GitRunInfo, NonZeroOid, Repo};
 use lib::try_exit_code;
@@ -43,13 +43,20 @@ use tracing::{debug, info, instrument, warn};
 use crate::github::github_push_remote;
 
 lazy_static! {
-    /// The style for branches which were successfully submitted.
-    pub static ref STYLE_PUSHED: Style =
+    /// The style for commits which were successfully submitted.
+    pub static ref STYLE_SUCCESS: Style =
         Style::merge(&[BaseColor::Green.light().into(), Effect::Bold.into()]);
 
-    /// The style for branches which were not submitted.
+    /// The style for commits which were not submitted.
     pub static ref STYLE_SKIPPED: Style =
         Style::merge(&[BaseColor::Yellow.light().into(), Effect::Bold.into()]);
+
+    /// The style for commits which failed to be submitted.
+    pub static ref STYLE_FAILED: Style =
+        Style::merge(&[BaseColor::Red.light().into(), Effect::Bold.into()]);
+
+    /// The style for informational text.
+    pub static ref STYLE_INFO: Style = Effect::Dim.into();
 }
 
 /// The status of a commit, indicating whether it needs to be updated remotely.
@@ -157,17 +164,14 @@ pub enum CreateStatus {
         local_commit_name: String,
     },
 
-    /// The commit was skipped. This could happen if a previous commit could not
-    /// be created due to an error.
-    Skipped {
-        /// The commit which was skipped.
-        commit_oid: NonZeroOid,
-    },
+    /// The commit was skipped because it didn't already exist on the remote and
+    /// `--create` was not passed.
+    Skipped,
 
     /// The commit could not be created due to an error.
     Err {
-        /// The commit which produced an error.
-        commit_oid: NonZeroOid,
+        /// The error message to display to the user.
+        message: String,
     },
 }
 
@@ -177,7 +181,14 @@ pub enum CreateStatus {
 #[derive(Clone, Debug)]
 pub enum UpdateStatus {
     /// The commit was successfully updated.
-    Updated,
+    Updated {
+        /// An identifier corresponding to the commit, for display purposes only.
+        /// This may be a branch name, a change ID, the commit summary, etc.
+        ///
+        /// This does not necessarily correspond to the commit's name/identifier in
+        /// the forge (e.g. not a code review link).
+        local_commit_name: String,
+    },
 }
 
 /// "Forge" refers to a Git hosting provider, such as GitHub, GitLab, etc.
@@ -319,6 +330,7 @@ fn submit(
     };
 
     let unioned_revset = Revset(revsets.iter().map(|Revset(inner)| inner).join(" + "));
+    let commit_oids = dag.sort(&commit_set)?;
     let mut forge = select_forge(
         effects,
         git_run_info,
@@ -329,254 +341,219 @@ fn submit(
         &unioned_revset,
         forge_kind,
     )?;
-    let statuses = try_exit_code!(forge.query_status(commit_set)?);
-    debug!(?statuses, "Commit statuses");
+    let current_statuses = try_exit_code!(forge.query_status(commit_set)?);
+    debug!(?current_statuses, "Commit statuses");
 
-    #[allow(clippy::type_complexity)]
-    let (_local_commits, unsubmitted_commits, commits_to_update, commits_to_skip): (
-        HashMap<NonZeroOid, CommitStatus>,
-        HashMap<NonZeroOid, CommitStatus>,
-        HashMap<NonZeroOid, CommitStatus>,
-        HashMap<NonZeroOid, CommitStatus>,
-    ) = statuses.into_iter().fold(Default::default(), |acc, elem| {
-        let (mut local, mut unsubmitted, mut to_update, mut to_skip) = acc;
-        let (commit_oid, commit_status) = elem;
-        match commit_status {
-            CommitStatus {
-                submit_status: SubmitStatus::Local,
-                remote_name: _,
-                local_commit_name: _,
-                remote_commit_name: _,
-            } => {
-                local.insert(commit_oid, commit_status);
-            }
-
-            CommitStatus {
-                submit_status: SubmitStatus::Unsubmitted,
-                remote_name: _,
-                local_commit_name: _,
-                remote_commit_name: _,
-            } => {
-                unsubmitted.insert(commit_oid, commit_status);
-            }
-
-            CommitStatus {
-                submit_status: SubmitStatus::NeedsUpdate,
-                remote_name: _,
-                local_commit_name: _,
-                remote_commit_name: _,
-            } => {
-                to_update.insert(commit_oid, commit_status);
-            }
-
-            CommitStatus {
-                submit_status: SubmitStatus::UpToDate,
-                remote_name: _,
-                local_commit_name: Some(_),
-                remote_commit_name: _,
-            } => {
-                to_skip.insert(commit_oid, commit_status);
-            }
-
-            // Don't know what to do in these cases 🙃.
-            CommitStatus {
-                submit_status: SubmitStatus::Unknown,
-                remote_name: _,
-                local_commit_name: _,
-                remote_commit_name: _,
-            }
-            | CommitStatus {
-                submit_status: SubmitStatus::UpToDate,
-                remote_name: _,
-                local_commit_name: None,
-                remote_commit_name: _,
-            } => {}
-        }
-        (local, unsubmitted, to_update, to_skip)
-    });
-
-    let (submitted_commit_names, unsubmitted_commit_names, create_error_commits): (
-        BTreeSet<String>,
-        BTreeSet<String>,
-        BTreeSet<NonZeroOid>,
-    ) = {
-        let unsubmitted_commit_names: BTreeSet<String> = unsubmitted_commits
-            .values()
-            .flat_map(|commit_status| commit_status.local_commit_name.clone())
+    let create_statuses: HashMap<NonZeroOid, CreateStatus> = {
+        let unsubmitted_commits: HashMap<NonZeroOid, CommitStatus> = current_statuses
+            .iter()
+            .filter(|(_commit_oid, commit_status)| match commit_status {
+                CommitStatus {
+                    submit_status: SubmitStatus::Unsubmitted,
+                    ..
+                } => true,
+                CommitStatus {
+                    submit_status:
+                        SubmitStatus::Local
+                        | SubmitStatus::NeedsUpdate
+                        | SubmitStatus::Unknown
+                        | SubmitStatus::UpToDate,
+                    ..
+                } => false,
+            })
+            .map(|(commit_oid, create_status)| (*commit_oid, create_status.clone()))
             .collect();
-        if create {
-            let (created_commit_names, error_commits) = if dry_run {
-                (unsubmitted_commit_names.clone(), Default::default())
-            } else {
-                let create_statuses =
-                    try_exit_code!(forge.create(unsubmitted_commits, &submit_options)?);
-                let mut created_commit_names = BTreeSet::new();
-                let mut error_commits = BTreeSet::new();
-                for (_commit_oid, create_status) in create_statuses {
-                    match create_status {
+        match (create, dry_run) {
+            (false, _) => unsubmitted_commits
+                .into_keys()
+                .map(|commit_oid| (commit_oid, CreateStatus::Skipped))
+                .collect(),
+
+            (true, true) => unsubmitted_commits
+                .into_iter()
+                .map(|(commit_oid, commit_status)| {
+                    (
+                        commit_oid,
                         CreateStatus::Created {
-                            final_commit_oid: _,
-                            local_commit_name,
-                        } => {
-                            created_commit_names.insert(local_commit_name);
-                        }
-                        // For now, treat `Skipped` the same as `Err` as it would be
-                        // a lot of work to render it differently in the output, and
-                        // we may want to rethink the data structures before doing
-                        // that.
-                        CreateStatus::Skipped { commit_oid } | CreateStatus::Err { commit_oid } => {
-                            error_commits.insert(commit_oid);
-                        }
-                    }
-                }
-                (created_commit_names, error_commits)
-            };
-            (created_commit_names, Default::default(), error_commits)
+                            final_commit_oid: commit_oid,
+                            local_commit_name: commit_status
+                                .local_commit_name
+                                .unwrap_or_else(|| "<unknown>".to_string()),
+                        },
+                    )
+                })
+                .collect(),
+
+            (true, false) => try_exit_code!(forge.create(unsubmitted_commits, &submit_options)?),
+        }
+    };
+
+    let update_statuses: HashMap<NonZeroOid, UpdateStatus> = {
+        let commits_to_update: HashMap<NonZeroOid, CommitStatus> = current_statuses
+            .iter()
+            .filter(|(_commit_oid, commit_status)| match commit_status {
+                CommitStatus {
+                    submit_status: SubmitStatus::NeedsUpdate,
+                    ..
+                } => true,
+                CommitStatus {
+                    submit_status:
+                        SubmitStatus::Local
+                        | SubmitStatus::Unsubmitted
+                        | SubmitStatus::Unknown
+                        | SubmitStatus::UpToDate,
+                    ..
+                } => false,
+            })
+            .map(|(commit_oid, commit_status)| (*commit_oid, commit_status.clone()))
+            .collect();
+        if dry_run {
+            commits_to_update
+                .into_iter()
+                .map(|(commit_oid, commit_status)| {
+                    (
+                        commit_oid,
+                        UpdateStatus::Updated {
+                            local_commit_name: commit_status
+                                .local_commit_name
+                                .unwrap_or_else(|| "<unknown>".to_string()),
+                        },
+                    )
+                })
+                .collect()
         } else {
-            (
-                Default::default(),
-                unsubmitted_commit_names,
-                Default::default(),
-            )
+            try_exit_code!(forge.update(commits_to_update, &submit_options)?)
         }
     };
 
-    let (updated_commit_names, skipped_commit_names): (BTreeSet<String>, BTreeSet<String>) = {
-        let updated_commit_names = commits_to_update
-            .iter()
-            .flat_map(|(_commit_oid, commit_status)| commit_status.local_commit_name.clone())
-            .collect();
-        let skipped_commit_names = commits_to_skip
-            .iter()
-            .flat_map(|(_commit_oid, commit_status)| commit_status.local_commit_name.clone())
-            .collect();
-
-        if !dry_run {
-            try_exit_code!(forge.update(commits_to_update, &submit_options)?);
-        }
-        (updated_commit_names, skipped_commit_names)
+    let styled = |style: Style, text: &str| {
+        effects
+            .get_glyphs()
+            .render(StyledString::styled(text, style))
     };
+    let mut had_errors = false;
+    for commit_oid in commit_oids {
+        let current_status = match current_statuses.get(&commit_oid) {
+            Some(status) => status,
+            None => {
+                warn!(?commit_oid, "Could not find commit status");
+                continue;
+            }
+        };
 
-    if !submitted_commit_names.is_empty() {
-        writeln!(
-            effects.get_output_stream(),
-            "{} {}: {}",
-            if dry_run { "Would submit" } else { "Submitted" },
-            Pluralize {
-                determiner: None,
-                amount: submitted_commit_names.len(),
-                unit: ("commit", "commits"),
+        let commit = repo.find_commit_or_fail(commit_oid)?;
+        let commit = effects
+            .get_glyphs()
+            .render(commit.friendly_describe(effects.get_glyphs())?)?;
+
+        match current_status.submit_status {
+            SubmitStatus::Local => continue,
+            SubmitStatus::Unknown => {
+                warn!(
+                    ?commit_oid,
+                    "Commit status is unknown; reporting info not implemented."
+                );
+                continue;
+            }
+            SubmitStatus::UpToDate => {
+                writeln!(
+                    effects.get_output_stream(),
+                    "{action} {commit} {info}",
+                    action = styled(
+                        *STYLE_SKIPPED,
+                        if dry_run { "Would skip" } else { "Skipped" }
+                    )?,
+                    info = styled(*STYLE_INFO, "(already up-to-date)")?,
+                )?;
+            }
+
+            SubmitStatus::Unsubmitted => match create_statuses.get(&commit_oid) {
+                Some(CreateStatus::Created {
+                    final_commit_oid: _,
+                    local_commit_name,
+                }) => {
+                    writeln!(
+                        effects.get_output_stream(),
+                        "{action} {commit} {info}",
+                        action = styled(
+                            *STYLE_SUCCESS,
+                            if dry_run { "Would submit" } else { "Submitted" },
+                        )?,
+                        info = styled(*STYLE_INFO, &format!("(as {local_commit_name})"))?,
+                    )?;
+                }
+
+                Some(CreateStatus::Skipped) => {
+                    writeln!(
+                        effects.get_output_stream(),
+                        "{action} {commit} {info}",
+                        action = styled(
+                            *STYLE_SKIPPED,
+                            if dry_run { "Would skip" } else { "Skipped" },
+                        )?,
+                        info = styled(*STYLE_INFO, "(pass --create to submit)")?,
+                    )?;
+                }
+
+                Some(CreateStatus::Err { message }) => {
+                    had_errors = true;
+                    writeln!(
+                        effects.get_output_stream(),
+                        "{action} {commit} {info}",
+                        action = styled(
+                            *STYLE_FAILED,
+                            if dry_run {
+                                "Would fail to create"
+                            } else {
+                                "Failed to create"
+                            },
+                        )?,
+                        info = styled(*STYLE_INFO, &format!("({message})"))?,
+                    )?;
+                }
+
+                None => {
+                    writeln!(
+                        effects.get_output_stream(),
+                        "{action} {commit} {info}",
+                        action = styled(
+                            *STYLE_SKIPPED,
+                            if dry_run { "Would skip" } else { "Skipped" },
+                        )?,
+                        info = styled(*STYLE_INFO, "(unknown reason, bug?)")?,
+                    )?;
+                }
             },
-            submitted_commit_names
-                .into_iter()
-                .map(|commit_name| effects
-                    .get_glyphs()
-                    .render(
-                        StyledStringBuilder::new()
-                            .append_styled(commit_name, *STYLE_PUSHED)
-                            .build(),
-                    )
-                    .expect("Rendering commit name"))
-                .join(", ")
-        )?;
+
+            SubmitStatus::NeedsUpdate => match update_statuses.get(&commit_oid) {
+                Some(UpdateStatus::Updated { local_commit_name }) => {
+                    writeln!(
+                        effects.get_output_stream(),
+                        "{action} {commit} {info}",
+                        action = styled(
+                            *STYLE_SUCCESS,
+                            if dry_run { "Would update" } else { "Updated" },
+                        )?,
+                        info = styled(*STYLE_INFO, &format!("(as {local_commit_name})"))?,
+                    )?;
+                }
+
+                None => {
+                    writeln!(
+                        effects.get_output_stream(),
+                        "{action} {commit} {info}",
+                        action = styled(
+                            *STYLE_SKIPPED,
+                            if dry_run { "Would skip" } else { "Skipped" },
+                        )?,
+                        info = styled(*STYLE_INFO, "(unknown reason, bug?)")?,
+                    )?;
+                }
+            },
+        };
     }
-    if !updated_commit_names.is_empty() {
-        writeln!(
-            effects.get_output_stream(),
-            "{} {}: {}",
-            if dry_run { "Would update" } else { "Updated" },
-            Pluralize {
-                determiner: None,
-                amount: updated_commit_names.len(),
-                unit: ("commit", "commits"),
-            },
-            updated_commit_names
-                .into_iter()
-                .map(|branch_name| effects
-                    .get_glyphs()
-                    .render(
-                        StyledStringBuilder::new()
-                            .append_styled(branch_name, *STYLE_PUSHED)
-                            .build(),
-                    )
-                    .expect("Rendering commit name"))
-                .join(", ")
-        )?;
-    }
-    if !skipped_commit_names.is_empty() {
-        writeln!(
-            effects.get_output_stream(),
-            "{} {} (already up-to-date): {}",
-            if dry_run { "Would skip" } else { "Skipped" },
-            Pluralize {
-                determiner: None,
-                amount: skipped_commit_names.len(),
-                unit: ("commit", "commits"),
-            },
-            skipped_commit_names
-                .into_iter()
-                .map(|commit_name| effects
-                    .get_glyphs()
-                    .render(
-                        StyledStringBuilder::new()
-                            .append_styled(commit_name, *STYLE_SKIPPED)
-                            .build(),
-                    )
-                    .expect("Rendering commit name"))
-                .join(", ")
-        )?;
-    }
-    if !unsubmitted_commit_names.is_empty() {
-        writeln!(
-            effects.get_output_stream(),
-            "{} {} (not yet on remote): {}",
-            if dry_run { "Would skip" } else { "Skipped" },
-            Pluralize {
-                determiner: None,
-                amount: unsubmitted_commit_names.len(),
-                unit: ("commit", "commits")
-            },
-            unsubmitted_commit_names
-                .into_iter()
-                .map(|commit_name| effects
-                    .get_glyphs()
-                    .render(
-                        StyledStringBuilder::new()
-                            .append_styled(commit_name, *STYLE_SKIPPED)
-                            .build(),
-                    )
-                    .expect("Rendering commit name"))
-                .join(", ")
-        )?;
-        writeln!(
-            effects.get_output_stream(),
-            "\
-These commits {} skipped because they {} not already associated with a remote
-repository. To submit them, retry this operation with the --create option.",
-            if dry_run { "would be" } else { "were" },
-            if dry_run { "are" } else { "were" },
-        )?;
-    }
-    if !create_error_commits.is_empty() {
-        writeln!(
-            effects.get_output_stream(),
-            "Failed to create {}:",
-            Pluralize {
-                determiner: None,
-                amount: create_error_commits.len(),
-                unit: ("commit", "commits")
-            },
-        )?;
-        for error_commit_oid in &create_error_commits {
-            let error_commit = repo.find_commit_or_fail(*error_commit_oid)?;
-            writeln!(
-                effects.get_output_stream(),
-                "{}",
-                effects
-                    .get_glyphs()
-                    .render(error_commit.friendly_describe(effects.get_glyphs())?)?
-            )?;
-        }
+
+    if had_errors {
         Ok(Err(ExitCode(1)))
     } else {
         Ok(Ok(()))

@@ -491,7 +491,15 @@ impl Forge for GithubForge<'_> {
                 progress.notify_progress_inc(1);
 
                 // FIXME: report push/update errors
-                result.insert(commit_oid, UpdateStatus::Updated);
+                result.insert(
+                    commit_oid,
+                    UpdateStatus::Updated {
+                        local_commit_name: commit_status
+                            .local_commit_name
+                            .clone()
+                            .unwrap_or_else(|| commit_oid.to_string()),
+                    },
+                );
             }
         }
 

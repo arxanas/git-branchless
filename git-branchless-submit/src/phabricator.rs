@@ -36,7 +36,7 @@ use thiserror::Error;
 use tracing::{instrument, warn};
 
 use crate::{
-    CommitStatus, CreateStatus, Forge, SubmitOptions, SubmitStatus, UpdateStatus, STYLE_PUSHED,
+    CommitStatus, CreateStatus, Forge, SubmitOptions, SubmitStatus, UpdateStatus, STYLE_SUCCESS,
 };
 
 /// Wrapper around the Phabricator "ID" type. (This is *not* a PHID, just a
@@ -540,9 +540,12 @@ fi
             if let Some(error_reason) = error_commits.get(&commit_oid) {
                 create_statuses.insert(
                     commit_oid,
-                    match error_reason {
-                        ErrorReason::NotTested => CreateStatus::Skipped { commit_oid },
-                        ErrorReason::TestFailed => CreateStatus::Err { commit_oid },
+                    CreateStatus::Err {
+                        message: match error_reason {
+                            ErrorReason::TestFailed => "arc diff failed",
+                            ErrorReason::NotTested => "dependency could not be submitted",
+                        }
+                        .to_string(),
                     },
                 );
                 continue;
@@ -555,7 +558,12 @@ fi
                     commit_oid
                 }
                 None => {
-                    create_statuses.insert(commit_oid, CreateStatus::Skipped { commit_oid });
+                    create_statuses.insert(
+                        commit_oid,
+                        CreateStatus::Err {
+                            message: "could not find rewritten commit".to_string(),
+                        },
+                    );
                     continue;
                 }
             };
@@ -563,17 +571,14 @@ fi
                 match self.get_revision_id(final_commit_oid)? {
                     Some(Id(id)) => format!("D{id}"),
                     None => {
-                        writeln!(
-                            self.effects.get_output_stream(),
-                            "Failed to upload (link to newly-created revision not found in commit message): {}",
-                            self.effects.get_glyphs().render(
-                                self.repo.friendly_describe_commit_from_oid(
-                                    self.effects.get_glyphs(),
-                                    final_commit_oid
-                                )?
-                            )?,
-                        )?;
-                        create_statuses.insert(commit_oid, CreateStatus::Err { commit_oid });
+                        create_statuses.insert(
+                            commit_oid,
+                            CreateStatus::Err {
+                                message:
+                                    "could not find link to newly-created revision in updated commit message"
+                                        .to_string(),
+                            },
+                        );
                         continue;
                     }
                 }
@@ -755,18 +760,21 @@ fi
                 .collect(),
             &CommitSet::empty()
         )?);
-        Ok(Ok(success_commits
-            .into_iter()
-            .map(|(commit_oid, _test_output)| (commit_oid, UpdateStatus::Updated))
-            .chain(
-                failure_commits
-                    .into_iter()
-                    .map(|(commit_oid, _test_output)| {
-                        // FIXME: report error
-                        (commit_oid, UpdateStatus::Updated)
-                    }),
-            )
-            .collect()))
+
+        let mut update_statuses = HashMap::new();
+        for (commit_oid, _test_output) in success_commits.into_iter() {
+            let revision_id = self.get_revision_id(commit_oid)?;
+            let local_commit_name = match revision_id {
+                Some(Id(id)) => format!("D{id}"),
+                None => "<unknown>".to_string(),
+            };
+            update_statuses.insert(commit_oid, UpdateStatus::Updated { local_commit_name });
+        }
+        for (commit_oid, _test_output) in failure_commits.into_iter() {
+            let local_commit_name = commit_oid.to_string();
+            update_statuses.insert(commit_oid, UpdateStatus::Updated { local_commit_name });
+        }
+        Ok(Ok(update_statuses))
     }
 }
 
@@ -1000,7 +1008,7 @@ impl PhabricatorForge<'_> {
 
     fn render_id(id: &Id) -> StyledString {
         StyledStringBuilder::new()
-            .append_styled(id.to_string(), *STYLE_PUSHED)
+            .append_styled(id.to_string(), *STYLE_SUCCESS)
             .build()
     }
 

@@ -76,7 +76,8 @@ fn test_submit_phabricator_strategy_working_copy() -> eyre::Result<()> {
         branchless: running command: <git-executable> rebase --continue
         Using command execution strategy: working-copy
         branchless: running command: <git-executable> rebase --abort
-        Submitted 2 commits: D0002, D0003
+        Submitted 62fc20d create test1.txt (as D0002)
+        Submitted 96d1c37 create test2.txt (as D0003)
         "###);
     }
 
@@ -151,7 +152,8 @@ fn test_submit_phabricator_strategy_worktree() -> eyre::Result<()> {
         Setting D0002 as stack root (no dependencies)
         Stacking D0003 on top of D0002
         Using command execution strategy: worktree
-        Submitted 2 commits: D0002, D0003
+        Submitted 62fc20d create test1.txt (as D0002)
+        Submitted 96d1c37 create test2.txt (as D0003)
         "###);
     }
 
@@ -207,7 +209,8 @@ fn test_submit_phabricator_update() -> eyre::Result<()> {
         branchless: running command: <git-executable> rebase --continue
         Using command execution strategy: working-copy
         branchless: running command: <git-executable> rebase --abort
-        Submitted 2 commits: D0002, D0003
+        Submitted 62fc20d create test1.txt (as D0002)
+        Submitted 96d1c37 create test2.txt (as D0003)
         "###);
     }
 
@@ -228,6 +231,8 @@ fn test_submit_phabricator_update() -> eyre::Result<()> {
         branchless: running command: <git-executable> rebase --abort
         Setting D0002 as stack root (no dependencies)
         Stacking D0003 on top of D0002
+        Updated 55af3db create test1.txt (as D0002)
+        Updated ccb7fd5 create test2.txt (as D0003)
         "###);
     }
 
@@ -290,10 +295,9 @@ fn test_submit_phabricator_failure_commit() -> eyre::Result<()> {
         branchless: running command: <git-executable> rebase --continue
         Using command execution strategy: working-copy
         branchless: running command: <git-executable> rebase --abort
-        Submitted 1 commit: D0002
-        Failed to create 2 commits:
-        5b9de4b BROKEN: test2.txt
-        e9d3664 create test3.txt
+        Submitted 62fc20d create test1.txt (as D0002)
+        Failed to create 5b9de4b BROKEN: test2.txt (arc diff failed)
+        Failed to create e9d3664 create test3.txt (dependency could not be submitted)
         "###);
     }
 

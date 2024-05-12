@@ -325,11 +325,14 @@ These remotes are available: {}",
             progress.notify_progress_inc(branch_names.len());
 
             // FIXME: report push errors
-            result.extend(
-                branch_names
-                    .iter()
-                    .map(|(_branch, commit_oid)| (*commit_oid, UpdateStatus::Updated)),
-            );
+            result.extend(branch_names.iter().map(|(branch, commit_oid)| {
+                (
+                    *commit_oid,
+                    UpdateStatus::Updated {
+                        local_commit_name: branch.to_owned(),
+                    },
+                )
+            }));
         }
 
         Ok(Ok(result))
