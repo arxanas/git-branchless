@@ -1103,7 +1103,7 @@ mod on_disk {
             rebase_plan
                 .commands
                 .iter()
-                .map(|command| format!("{}\n", command.to_string()))
+                .map(|command| format!("{}\n", command.to_rebase_command()))
                 .collect::<String>(),
         )
         .wrap_err_with(|| {

@@ -447,7 +447,7 @@ fn test_github_forge_no_include_unsubmitted_commits_in_stack() -> eyre::Result<(
     {
         let (stdout, _stderr) = local_repo.branchless_with_options(
             "submit",
-            &[&"--forge", "github", "--create", "HEAD^^"],
+            &["--forge", "github", "--create", "HEAD^^"],
             &GitRunOptions {
                 env: mock_env(&remote_repo),
                 ..Default::default()
@@ -537,7 +537,7 @@ fn test_github_forge_multiple_commits_in_pull_request() -> eyre::Result<()> {
     {
         let (stdout, _stderr) = local_repo.branchless_with_options(
             "submit",
-            &[&"--forge", "github", "--create", "HEAD"],
+            &["--forge", "github", "--create", "HEAD"],
             &GitRunOptions {
                 env: mock_env(&remote_repo),
                 ..Default::default()

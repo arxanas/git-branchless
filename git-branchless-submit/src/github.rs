@@ -826,6 +826,7 @@ mod client {
 
     #[derive(Debug)]
     pub struct RealGithubClient {
+        #[allow(dead_code)] // FIXME: destructure and use in `run_gh`?
         pub gh_run_info: GitRunInfo,
     }
 
@@ -996,7 +997,7 @@ mod client {
                     "--title",
                     &title,
                     "--body-file",
-                    &body_file.path().to_str().unwrap(),
+                    (body_file.path().to_str().unwrap()),
                 ],
             )?);
             Ok(Ok(()))

@@ -1,8 +1,7 @@
 //! Wrappers around various side effects.
 
 use bstr::ByteSlice;
-use std::convert::TryInto;
-use std::fmt::{Debug, Write};
+use std::fmt::{Debug, Display, Write};
 use std::io::{stderr, stdout, Stderr, Stdout, Write as WriteIo};
 use std::mem::take;
 use std::sync::{Arc, Mutex, RwLock};
@@ -51,45 +50,46 @@ pub enum OperationType {
     WalkCommits,
 }
 
-impl ToString for OperationType {
-    fn to_string(&self) -> String {
-        let s = match self {
-            OperationType::BuildRebasePlan => "Building rebase plan",
-            OperationType::CalculateDiff => "Computing diffs",
-            OperationType::CalculatePatchId => "Hashing commit contents",
-            OperationType::CheckForCycles => "Checking for cycles",
-            OperationType::ConstrainCommits => "Creating commit constraints",
-            OperationType::DetectDuplicateCommits => "Checking for duplicate commits",
+impl Display for OperationType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            OperationType::BuildRebasePlan => write!(f, "Building rebase plan"),
+            OperationType::CalculateDiff => write!(f, "Computing diffs"),
+            OperationType::CalculatePatchId => write!(f, "Hashing commit contents"),
+            OperationType::CheckForCycles => write!(f, "Checking for cycles"),
+            OperationType::ConstrainCommits => write!(f, "Creating commit constraints"),
+            OperationType::DetectDuplicateCommits => write!(f, "Checking for duplicate commits"),
             OperationType::EvaluateRevset(revset) => {
-                return format!("Evaluating revset: {revset}");
+                write!(f, "Evaluating revset: {revset}")
             }
-            OperationType::FilterByTouchedPaths => "Filtering upstream commits by touched paths",
-            OperationType::FilterCommits => "Filtering commits",
-            OperationType::FindPathToMergeBase => "Finding path to merge-base",
-            OperationType::GetMergeBase => "Calculating merge-bases",
-            OperationType::GetTouchedPaths => "Getting touched paths",
-            OperationType::GetUpstreamPatchIds => "Enumerating patch IDs",
-            OperationType::InitializeRebase => "Initializing rebase",
-            OperationType::MakeGraph => "Examining local history",
-            OperationType::PushCommits => "Pushing branches",
-            OperationType::ProcessEvents => "Processing events",
-            OperationType::QueryWorkingCopy => "Querying the working copy",
-            OperationType::ReadingFromCache => "Reading from cache",
-            OperationType::RebaseCommits => "Rebasing commits",
-            OperationType::RepairBranches => "Checking for broken branches",
-            OperationType::RepairCommits => "Checking for broken commits",
+            OperationType::FilterByTouchedPaths => {
+                write!(f, "Filtering upstream commits by touched paths")
+            }
+            OperationType::FilterCommits => write!(f, "Filtering commits"),
+            OperationType::FindPathToMergeBase => write!(f, "Finding path to merge-base"),
+            OperationType::GetMergeBase => write!(f, "Calculating merge-bases"),
+            OperationType::GetTouchedPaths => write!(f, "Getting touched paths"),
+            OperationType::GetUpstreamPatchIds => write!(f, "Enumerating patch IDs"),
+            OperationType::InitializeRebase => write!(f, "Initializing rebase"),
+            OperationType::MakeGraph => write!(f, "Examining local history"),
+            OperationType::PushCommits => write!(f, "Pushing branches"),
+            OperationType::ProcessEvents => write!(f, "Processing events"),
+            OperationType::QueryWorkingCopy => write!(f, "Querying the working copy"),
+            OperationType::ReadingFromCache => write!(f, "Reading from cache"),
+            OperationType::RebaseCommits => write!(f, "Rebasing commits"),
+            OperationType::RepairBranches => write!(f, "Checking for broken branches"),
+            OperationType::RepairCommits => write!(f, "Checking for broken commits"),
             OperationType::RunGitCommand(command) => {
-                return format!("Running Git command: {}", &command)
+                write!(f, "Running Git command: {}", &command)
             }
-            OperationType::RunTests(command) => return format!("Running command: {command}"),
-            OperationType::RunTestOnCommit(commit) => return format!("Waiting to run on {commit}"),
-            OperationType::SortCommits => "Sorting commits",
-            OperationType::SyncCommits => "Syncing commit stacks",
-            OperationType::UpdateCommits => "Updating commits",
-            OperationType::UpdateCommitGraph => "Updating commit graph",
-            OperationType::WalkCommits => "Walking commits",
-        };
-        s.to_string()
+            OperationType::RunTests(command) => write!(f, "Running command: {command}"),
+            OperationType::RunTestOnCommit(commit) => write!(f, "Waiting to run on {commit}"),
+            OperationType::SortCommits => write!(f, "Sorting commits"),
+            OperationType::SyncCommits => write!(f, "Syncing commit stacks"),
+            OperationType::UpdateCommits => write!(f, "Updating commits"),
+            OperationType::UpdateCommitGraph => write!(f, "Updating commit graph"),
+            OperationType::WalkCommits => write!(f, "Walking commits"),
+        }
     }
 }
 
