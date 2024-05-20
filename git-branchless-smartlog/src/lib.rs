@@ -19,7 +19,7 @@ use std::time::SystemTime;
 use git_branchless_invoke::CommandContext;
 use git_branchless_opts::{Revset, SmartlogArgs};
 use lib::core::config::{
-    Hint, get_hint_enabled, get_hint_string, get_smartlog_default_revset,
+    Hint, get_hint_enabled, get_hint_string, get_smartlog_default_revset, get_smartlog_reverse,
     print_hint_suppression_notice,
 };
 use lib::core::repo_ext::RepoExt;
@@ -746,10 +746,6 @@ mod render {
         /// The options to use when resolving the revset.
         pub resolve_revset_options: ResolveRevsetOptions,
 
-        /// Reverse the ordering of items in the smartlog output, list the most
-        /// recent commits first.
-        pub reverse: bool,
-
         /// Normally HEAD and the main branch are included. Set this to exclude them.
         pub exact: bool,
     }
@@ -766,7 +762,6 @@ pub fn smartlog(
         event_id,
         revset,
         resolve_revset_options,
-        reverse,
         exact,
     } = options;
 
@@ -824,6 +819,7 @@ pub fn smartlog(
         exact,
     )?;
 
+    let reverse = get_smartlog_reverse(&repo)?;
     let mut lines = render_graph(
         &effects.reverse_order(reverse),
         &repo,
@@ -913,7 +909,6 @@ pub fn command_main(ctx: CommandContext, args: SmartlogArgs) -> EyreExitOr<()> {
         event_id,
         revset,
         resolve_revset_options,
-        reverse,
         exact,
     } = args;
 
@@ -924,7 +919,6 @@ pub fn command_main(ctx: CommandContext, args: SmartlogArgs) -> EyreExitOr<()> {
             event_id,
             revset,
             resolve_revset_options,
-            reverse,
             exact,
         },
     )

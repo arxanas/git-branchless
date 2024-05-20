@@ -108,6 +108,13 @@ pub fn get_smartlog_default_revset(repo: &Repo) -> eyre::Result<String> {
         })
 }
 
+/// Whether to reverse the smartlog direction by default
+#[instrument]
+pub fn get_smartlog_reverse(repo: &Repo) -> eyre::Result<bool> {
+    repo.get_readonly_config()?
+        .get_or("branchless.smartlog.reverse", false)
+}
+
 /// Get the default comment character.
 #[instrument]
 pub fn get_comment_char(repo: &Repo) -> eyre::Result<char> {
