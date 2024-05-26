@@ -9,23 +9,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - ReleaseDate
 
+See also the release notes for [`scm-record` v0.3.0](https://github.com/arxanas/scm-record/releases/tag/v0.3.0).
+
 ### Added
 
 - (#1129) Added a `--dry-run` option to `git submit` to report what would be submitted without actually doing so.
 - (#1130) Added `merges()` revset function.
+- (#1130) The `branches()` revset function now accepts an optional text pattern argument to limit which branches are matched.
+- (#1150) The `git record` command now accepts `-s`/`--stash` to return to the previous commit immediately after committing.
+- (#1167) The commit message for a new commit can now be written/edited during `git record --interactive`.
+- (#1169) `git record` now accepts multiple `--message` arguments.
+- (#1184) An initial Github forge was implemented as `git submit --forge github`, but it's [too buggy for general use](https://github.com/arxanas/git-branchless/discussions/1259).
+- (#1241) `git smartlog` now accepts `--exact` to skip rendering `HEAD` and the main branch.
+- (#1244) `git submit` now accepts multiple arguments/revsets.
 
 ### Changed
 
 - BREAKING (#1128) Arguments/revsets passed to `git sync` are now resolved to their respective stacks.
   - This allows `git sync my-branch` to work as expected, instead of needing to use `git sync 'stack(my-branch)'`. The behavior of `git sync` when called without arguments is not affected by this change. If you rely on the previous behavior, please use `git move -x <commit(s)/revset> -d 'main()'` instead.
-- (#1169) `git record` now accepts multible `--message` arguments.
-- (#1130) `branches()` revset function now accepts an optional text pattern argument to limit which branches are matched.
-- (#1244) `git submit` now accepts multiple argements/revsets
+- BREAKING (#1152) Previously, `git hide` would not delete branches pointing to the hidden commits unless `-D`/`--delete-branches` was passed. Now, deleting branches is the default behavior. Pass `--no-delete-branches` to restore the old behavior.
+- BREAKING (#1292): The minimum supported Rust version (MSRV) is now 1.74.
+- (#1204) The default instructions for `git reword` are now wrapped to 72 characters.
+- (#1230) The icon for omitted commits in the smartlog was changed from `⊘` to `◌`.
 
 ### Fixed
 
+- (#1071) The Apache and MIT licenses are now distributed with each constituent crate, not just the top-level `git-branchless` crate.
+- (#1072) The current branch is no longer detached during `git amend` when the current commit has descendants.
+- (#1073) Merge commits can now be amended with `git amend`.
+- (#1095) The event log is now shared between all worktrees. Before, commits that were made in one worktree wouldn't be visible in other worktrees, etc.
+- (#1095) `git submit` now runs in worktree that you invoked it in.
+- (#1095) `git submit --forge phabricator` no longer records spurious commits when `arc diff`ing.
 - (#1127) Improved support for files with spaces in their name.
-
+- (#1267) The correct "path" variable is now used on Windows, which fixes some cases of `git-branchless` failing on native Windows.
 
 ## [v0.8.0] - 2023-08-27
 
