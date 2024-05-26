@@ -651,7 +651,7 @@ fn test_install_man_pages() -> eyre::Result<()> {
     insta::assert_snapshot!(man_page_contents, @r###"
     .ie \n(.g .ds Aq \(aq
     .el .ds Aq '
-    .TH git-branchless 1  "git-branchless 0.8.0" 
+    .TH git-branchless 1  "git-branchless 0.9.0" 
     .SH NAME
     git\-branchless \- Branchless workflow for Git
     .SH SYNOPSIS
@@ -759,7 +759,7 @@ fn test_install_man_pages() -> eyre::Result<()> {
     git\-branchless\-help(1)
     Print this message or the help of the given subcommand(s)
     .SH VERSION
-    v0.8.0
+    v0.9.0
     .SH AUTHORS
     Waleed Khan <me@waleedkhan.name>
     "###);
