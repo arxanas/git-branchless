@@ -169,14 +169,12 @@ pub fn do_main_and_drop_locals<T: Parser>(
     f: impl Fn(CommandContext, T) -> EyreExitOr<()>,
     args: Vec<OsString>,
 ) -> eyre::Result<i32> {
-    let command = GlobalArgs::command();
-    let command_args = T::parse_from(&args);
-    let matches = command.ignore_errors(true).get_matches_from(&args);
-    let GlobalArgs {
-        working_directory,
-        color,
-    } = GlobalArgs::from_arg_matches(&matches)
-        .map_err(|err| eyre::eyre!("Could not parse global arguments: {err}"))?;
+    let command = T::command();
+    let command_matches = command.try_get_matches()?;
+    let command_args = T::from_arg_matches(&command_matches)?;
+
+    let working_directory: Option<&PathBuf> = command_matches.get_one("working_directory");
+    let color: Option<&ColorSetting> = command_matches.get_one("color");
 
     if let Some(working_directory) = working_directory {
         std::env::set_current_dir(&working_directory).wrap_err_with(|| {
