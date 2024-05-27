@@ -36,6 +36,8 @@ fn test_bug_report() -> eyre::Result<()> {
         let stdout = stdout.trim();
 
         insta::assert_snapshot!(stdout, @r###"
+        Hooks directory: `<repo-path>/.git/hooks`
+
         <details>
         <summary>Show 7 hooks</summary>
 

@@ -291,14 +291,16 @@ fn collect_hooks(git_run_info: &GitRunInfo) -> eyre::Result<ReportEntry> {
 
     Ok(ReportEntry::Text(format!(
         "
-<details>
-<summary>Show {} hooks</summary>
+Hooks directory: `{hooks_dir}`
 
-{}
+<details>
+<summary>Show {num_hooks} hooks</summary>
+
+{hook_lines}
 
 </details>",
-        num_hooks,
-        hook_lines.join("\n")
+        hooks_dir = hooks_dir.display(),
+        hook_lines = hook_lines.join("\n")
     )))
 }
 
