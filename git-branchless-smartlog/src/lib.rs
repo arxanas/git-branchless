@@ -747,6 +747,11 @@ mod render {
         /// The options to use when resolving the revset.
         pub resolve_revset_options: ResolveRevsetOptions,
 
+        /// Deprecated
+        /// Reverse the ordering of items in the smartlog output, list the most
+        /// recent commits first.
+        pub reverse: bool,
+
         /// Normally HEAD and the main branch are included. Set this to exclude them.
         pub exact: bool,
     }
@@ -763,6 +768,7 @@ pub fn smartlog(
         event_id,
         revset,
         resolve_revset_options,
+        reverse,
         exact,
     } = options;
 
@@ -820,9 +826,22 @@ pub fn smartlog(
         exact,
     )?;
 
-    let reverse = get_smartlog_reverse(&repo)?;
+    if reverse {
+        print!(
+            "\
+branchless: WARNING: The `--reverse` flag is deprecated.
+branchless: Please use the `branchless.smartlog.reverse` configuration option.
+"
+        );
+    }
+    let reverse_cfg = get_smartlog_reverse(&repo)?;
+    let reverse_value = match (reverse_cfg, reverse) {
+        (.., true) => true,
+        _ => reverse_cfg,
+    };
+
     let mut lines = render_graph(
-        &effects.reverse_order(reverse),
+        &effects.reverse_order(reverse_value),
         &repo,
         &dag,
         &graph,
@@ -845,7 +864,7 @@ pub fn smartlog(
         ],
     )?
     .into_iter();
-    while let Some(line) = if reverse {
+    while let Some(line) = if reverse_value {
         lines.next_back()
     } else {
         lines.next()
@@ -910,6 +929,7 @@ pub fn command_main(ctx: CommandContext, args: SmartlogArgs) -> EyreExitOr<()> {
         event_id,
         revset,
         resolve_revset_options,
+        reverse,
         exact,
     } = args;
 
@@ -920,6 +940,7 @@ pub fn command_main(ctx: CommandContext, args: SmartlogArgs) -> EyreExitOr<()> {
             event_id,
             revset,
             resolve_revset_options,
+            reverse,
             exact,
         },
     )

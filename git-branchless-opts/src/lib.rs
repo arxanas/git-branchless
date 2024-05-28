@@ -340,6 +340,12 @@ pub struct SmartlogArgs {
     #[clap(value_parser)]
     pub revset: Option<Revset>,
 
+    /// (Deprecated)
+    /// Print the smartlog in the opposite of the usual order, with the latest
+    /// commits first. Can be configured via `branchless.smartlog.reverse`.
+    #[clap(long)]
+    pub reverse: bool,
+
     /// Don't automatically add HEAD and the main branch to the list of commits
     /// to present. They will still be added if included in the revset.
     #[clap(long)]
