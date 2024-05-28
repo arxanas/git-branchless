@@ -66,7 +66,7 @@ impl search::Strategy<Graph> for Strategy {
 
 fn play<E>(mut read_input: impl FnMut(isize) -> Result<Ordering, E>) -> Result<Option<isize>, E> {
     let search_range = 0..=100;
-    let mut search = search::Search::new(Graph, search_range.clone());
+    let mut search = search::Search::new_with_nodes(Graph, search_range.clone());
     let strategy = Strategy {
         range: search_range,
     };

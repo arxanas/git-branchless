@@ -268,7 +268,7 @@ mod tests {
         let binary_strategy = BasicStrategy {
             strategy: BasicStrategyKind::Binary,
         };
-        let mut search = Search::new(graph.clone(), nodes.clone());
+        let mut search = Search::new_with_nodes(graph.clone(), nodes.clone());
 
         assert_eq!(
             search
@@ -394,7 +394,7 @@ mod tests {
     fn test_search_inconsistent_notify() {
         let graph = UsizeGraph { max: 7 };
         let nodes = 0..graph.max;
-        let mut search = Search::new(graph, nodes);
+        let mut search = Search::new_with_nodes(graph, nodes);
 
         search.notify(4, Status::Success).unwrap();
         insta::assert_debug_snapshot!(search.notify(3, Status::Failure), @r###"
@@ -453,7 +453,7 @@ mod tests {
         assert_eq!(graph.descendants('e'), Ok(hashset! {'e', 'f', 'g', 'h'}));
         assert_eq!(graph.ancestors('e'), Ok(hashset! {'a', 'b', 'c', 'd', 'e'}));
 
-        let mut search = Search::new(graph, 'a'..='h');
+        let mut search = Search::new_with_nodes(graph, 'a'..='h');
         assert_eq!(
             search
                 .search(&linear_strategy)
@@ -541,7 +541,7 @@ mod tests {
             let strategy = BasicStrategy {
                 strategy,
             };
-            let mut search = Search::new(graph.clone(), nodes);
+            let mut search = Search::new_with_nodes(graph.clone(), nodes);
             let failure_nodes = graph.descendants_all(failure_nodes.into_iter().collect()).unwrap();
 
             let solution = loop {
