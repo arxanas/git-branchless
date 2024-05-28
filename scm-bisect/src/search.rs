@@ -212,15 +212,19 @@ pub struct Search<G: Graph> {
 
 impl<G: Graph> Search<G> {
     /// Construct a new search. The provided `graph` represents the universe of
-    /// all nodes, and `nodes` represents a subset of that universe to search
-    /// in. Only elements from `nodes` will be returned by `success_bounds` and
-    /// `failure_bounds`.
+    /// all nodes, and `initial_nodes` represents a subset of that universe to
+    /// start the search in.
     ///
     /// For example, `graph` might correspond to the entire source control
     /// directed acyclic graph, and `nodes` might correspond to a recent range
     /// of commits where the first one is passing and the last one is failing.
-    pub fn new(graph: G, search_nodes: impl IntoIterator<Item = G::Node>) -> Self {
-        let nodes = search_nodes
+    ///
+    /// The provided `initial_nodes` set is just a convenience parameter
+    /// equivalent to calling `Search::notify(node, Status::Untested)` for each
+    /// `node` in the set. It's oftentimes easier to implement
+    /// `Strategy::midpoint` if the input set of `statuses` is non-empty.
+    pub fn new(graph: G, initial_nodes: impl IntoIterator<Item = G::Node>) -> Self {
+        let nodes = initial_nodes
             .into_iter()
             .map(|node| (node, Status::Untested))
             .collect();
