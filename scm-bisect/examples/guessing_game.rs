@@ -34,12 +34,12 @@ struct Strategy {
 impl search::Strategy<Graph> for Strategy {
     type Error = Infallible;
 
-    fn midpoint(
+    fn midpoints(
         &self,
         _graph: &Graph,
         bounds: &search::Bounds<Node>,
         _statuses: &IndexMap<Node, search::Status>,
-    ) -> Result<Option<Node>, Self::Error> {
+    ) -> Result<Vec<Node>, Self::Error> {
         let search::Bounds {
             success: success_bounds,
             failure: failure_bounds,
@@ -57,10 +57,10 @@ impl search::Strategy<Graph> for Strategy {
         let midpoint = if lower_bound < upper_bound - 1 {
             (lower_bound + upper_bound) / 2
         } else {
-            return Ok(None);
+            return Ok(Vec::new());
         };
         assert!(self.range.contains(&midpoint));
-        Ok(Some(midpoint))
+        Ok(vec![midpoint])
     }
 }
 

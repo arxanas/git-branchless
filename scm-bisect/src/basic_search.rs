@@ -195,12 +195,12 @@ impl BasicStrategy {
 impl<G: BasicSourceControlGraph> search::Strategy<G> for BasicStrategy {
     type Error = G::Error;
 
-    fn midpoint(
+    fn midpoints(
         &self,
         graph: &G,
         bounds: &search::Bounds<G::Node>,
         statuses: &IndexMap<G::Node, search::Status>,
-    ) -> Result<Option<G::Node>, G::Error> {
+    ) -> Result<Vec<G::Node>, G::Error> {
         let search::Bounds {
             success: success_bounds,
             failure: failure_bounds,
@@ -233,7 +233,7 @@ impl<G: BasicSourceControlGraph> search::Strategy<G> for BasicStrategy {
                 }
             }
         };
-        Ok(next_to_search)
+        Ok(next_to_search.into_iter().collect())
     }
 }
 
