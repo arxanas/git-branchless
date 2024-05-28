@@ -227,9 +227,14 @@ pub struct EagerSolution<Node: Debug + Hash + Eq> {
 /// The error type returned by [`Search::search`].
 #[allow(missing_docs)]
 #[derive(Debug, thiserror::Error)]
-pub enum SearchError<TNode, TGraphError, TStrategyError> {
-    #[error("node {node:?} has already been classified as a {status:?} node, but was returned as a new midpoint to search; this would loop indefinitely")]
-    AlreadySearchedMidpoint { node: TNode, status: Status },
+pub enum SearchError<TNode: Debug + Eq + Hash, TGraphError, TStrategyError> {
+    #[error("node {node:?} has already been bounded as {bound:?} by {bound_node:?} in (potentially-speculative) bounds {bounds:?}, but it was returned as a new midpoint to search by the search strategy; this would loop indefinitely")]
+    AlreadySearchedMidpoint {
+        node: TNode,
+        bound_node: TNode,
+        bound: Status,
+        bounds: Bounds<TNode>,
+    },
 
     #[error(transparent)]
     Graph(TGraphError),
@@ -483,7 +488,9 @@ impl<'a, G: Graph, S: Strategy<G>> SearchIter<'a, G, S> {
                 Ok(true) => {
                     return Err(SearchError::AlreadySearchedMidpoint {
                         node: node.clone(),
-                        status: Status::Success,
+                        bound_node: success_node.clone(),
+                        bound: Status::Success,
+                        bounds: bounds.clone(),
                     });
                 }
                 Err(err) => return Err(SearchError::Graph(err)),
@@ -495,7 +502,9 @@ impl<'a, G: Graph, S: Strategy<G>> SearchIter<'a, G, S> {
                 Ok(true) => {
                     return Err(SearchError::AlreadySearchedMidpoint {
                         node: node.clone(),
-                        status: Status::Failure,
+                        bound_node: failure_node.clone(),
+                        bound: Status::Failure,
+                        bounds: bounds.clone(),
                     });
                 }
                 Err(err) => return Err(SearchError::Graph(err)),
