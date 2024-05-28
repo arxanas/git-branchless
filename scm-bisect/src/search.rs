@@ -109,13 +109,17 @@ pub trait Strategy<G: Graph>: Debug {
     /// success bounds and failure bounds, for some meaning of "lie between",
     /// which depends on the strategy details.
     ///
-    /// If `None` is returned, then the search exits.
-    ///
     /// For example, linear search would return a node immediately "after"
     /// the node(s) in `success_bounds`, while binary search would return the
     /// node in the middle of `success_bounds` and `failure_bounds`.`
     ///
-    /// NOTE: This must not return a value that has already been included in the
+    /// If `None` is returned, then the search exits. You should arrange for
+    /// this to happen when the bounds are maximally tight; that is, when no
+    /// choice of return value could change the bounds after being tested.
+    ///
+    /// NOTE: The returned value does not need to be present in `statuses`.
+    ///
+    /// NOTE: This must not return a value that has already been excluded by the
     /// success or failure bounds, since then you would search it again in a
     /// loop indefinitely. In that case, you must return `None` instead.
     fn midpoint(
