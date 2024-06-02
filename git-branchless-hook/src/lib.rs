@@ -460,7 +460,14 @@ fn hook_reference_transaction(effects: &Effects, transaction_state: &str) -> eyr
                  ref_name,
                  old_oid: _,
                  new_oid: _,
-             }| !should_ignore_ref_updates(ref_name),
+             }| {
+                !should_ignore_ref_updates(ref_name)
+                    && match CategorizedReferenceName::new(ref_name) {
+                        CategorizedReferenceName::RemoteBranch { .. } => false,
+                        CategorizedReferenceName::OtherRef { .. } => false,
+                        CategorizedReferenceName::LocalBranch { .. } => true,
+                    }
+            },
         )
         .map(|parsed_line| fix_packed_reference_oid(&repo, &packed_references, parsed_line))
         .collect();
