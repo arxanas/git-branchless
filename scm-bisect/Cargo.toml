@@ -16,6 +16,11 @@ thiserror = "2"
 tracing = "0.1"
 
 [dev-dependencies]
+criterion = "0.5"
 insta = "1"
 maplit = "1"
 proptest = "1.6.0"
+
+[[bench]]
+name = "bench_minimize"
+harness = false
