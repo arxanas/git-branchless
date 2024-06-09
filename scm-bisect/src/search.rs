@@ -337,115 +337,14 @@ impl<G: Graph> Search<G> {
         let success_bounds = self.success_bounds().map_err(SearchError::Graph)?;
         let failure_bounds = self.failure_bounds().map_err(SearchError::Graph)?;
 
-        #[derive(Debug)]
-        struct State<G: Graph> {
-            bounds: Bounds<G::Node>,
-            statuses: IndexMap<G::Node, Status>,
-        }
-
-        struct Iter<'a, G: Graph, S: Strategy<G>> {
-            graph: &'a G,
-            strategy: &'a S,
-            seen: HashSet<G::Node>,
-            states: VecDeque<State<G>>,
-        }
-
-        impl<G: Graph, S: Strategy<G>> Iterator for Iter<'_, G, S> {
-            type Item = Result<G::Node, SearchError<G::Node, G::Error, S::Error>>;
-
-            fn next(&mut self) -> Option<Self::Item> {
-                while let Some(state) = self.states.pop_front() {
-                    debug!(?state, "Popped speculation state");
-                    let State { bounds, statuses } = state;
-
-                    let node = match self.strategy.midpoint(self.graph, &bounds, &statuses) {
-                        Ok(Some(node)) => node,
-                        Ok(None) => continue,
-                        Err(err) => return Some(Err(SearchError::Strategy(err))),
-                    };
-
-                    let Bounds { success, failure } = bounds;
-                    for success_node in success.iter() {
-                        match self.graph.is_ancestor(node.clone(), success_node.clone()) {
-                            Ok(true) => {
-                                return Some(Err(SearchError::AlreadySearchedMidpoint {
-                                    node,
-                                    status: Status::Success,
-                                }));
-                            }
-                            Ok(false) => (),
-                            Err(err) => return Some(Err(SearchError::Graph(err))),
-                        }
-                    }
-                    for failure_node in failure.iter() {
-                        match self.graph.is_ancestor(failure_node.clone(), node.clone()) {
-                            Ok(true) => {
-                                return Some(Err(SearchError::AlreadySearchedMidpoint {
-                                    node,
-                                    status: Status::Failure,
-                                }));
-                            }
-                            Ok(false) => (),
-                            Err(err) => return Some(Err(SearchError::Graph(err))),
-                        }
-                    }
-
-                    // Speculate failure:
-                    self.states.push_back(State {
-                        bounds: Bounds {
-                            success: success.clone(),
-                            failure: {
-                                let mut failure_bounds = failure.clone();
-                                failure_bounds.insert(node.clone());
-                                match self.graph.simplify_failure_bounds(failure_bounds) {
-                                    Ok(bounds) => bounds,
-                                    Err(err) => return Some(Err(SearchError::Graph(err))),
-                                }
-                            },
-                        },
-                        statuses: {
-                            let mut statuses = statuses.clone();
-                            statuses.insert(node.clone(), Status::Failure);
-                            statuses
-                        },
-                    });
-
-                    // Speculate success:
-                    self.states.push_back(State {
-                        bounds: Bounds {
-                            success: {
-                                let mut success_bounds = success.clone();
-                                success_bounds.insert(node.clone());
-                                match self.graph.simplify_success_bounds(success_bounds) {
-                                    Ok(bounds) => bounds,
-                                    Err(err) => return Some(Err(SearchError::Graph(err))),
-                                }
-                            },
-                            failure: failure.clone(),
-                        },
-                        statuses: {
-                            let mut statuses = statuses.clone();
-                            statuses.insert(node.clone(), Status::Success);
-                            statuses
-                        },
-                    });
-
-                    if self.seen.insert(node.clone()) {
-                        return Some(Ok(node));
-                    }
-                }
-                None
-            }
-        }
-
-        let initial_state = State {
+        let initial_state = SearchState {
             bounds: Bounds {
                 success: success_bounds.clone(),
                 failure: failure_bounds.clone(),
             },
             statuses: self.nodes.clone(),
         };
-        let iter = Iter {
+        let iter = SearchIter {
             graph: &self.graph,
             strategy,
             seen: Default::default(),
@@ -521,5 +420,158 @@ impl<G: Graph> Search<G> {
 
         self.nodes.insert(node, status);
         Ok(())
+    }
+}
+
+/// An intermediate search state for [`SearchIter`]. This may correspond to the
+/// actual state of the search, or a speculative state of the search supposing
+/// that the test for a given node passed/failed.
+#[derive(Debug)]
+struct SearchState<G: Graph> {
+    /// The bounds at this point in the search.
+    bounds: Bounds<G::Node>,
+
+    /// The results of testing so far.
+    statuses: IndexMap<G::Node, Status>,
+}
+
+/// An iterator that yields the proposed next nodes to search. This starts with
+/// the current midpoints of the success and failure bounds, and then starts
+/// *speculating*: it yields the next nodes to search in the hypothetical cases
+/// that a previously-yielded node succeeded/failed.
+struct SearchIter<'a, G: Graph, S: Strategy<G>> {
+    graph: &'a G,
+    strategy: &'a S,
+
+    /// The set of already-yielded nodes. These won't be yielded again.
+    seen: HashSet<G::Node>,
+
+    /// The set of [`SearchState`]s in the queue, used to yield the nxt nodes.
+    states: VecDeque<SearchState<G>>,
+}
+
+impl<G: Graph, S: Strategy<G>> SearchIter<'_, G, S> {
+    /// Returns [`Err`] if the provided node has already been searched. This
+    /// should only happen if the caller's [`Strategy::midpoint`] yields a node
+    /// that's already in `statuses`, which it shouldn't do.
+    #[allow(clippy::type_complexity)]
+    fn check_node_not_searched(
+        &self,
+        node: &G::Node,
+        bounds: &Bounds<G::Node>,
+    ) -> Result<(), SearchError<G::Node, G::Error, S::Error>> {
+        let Bounds { success, failure } = bounds;
+        for success_node in success.iter() {
+            match self.graph.is_ancestor(node.clone(), success_node.clone()) {
+                Ok(false) => {}
+                Ok(true) => {
+                    return Err(SearchError::AlreadySearchedMidpoint {
+                        node: node.clone(),
+                        status: Status::Success,
+                    });
+                }
+                Err(err) => return Err(SearchError::Graph(err)),
+            }
+        }
+        for failure_node in failure.iter() {
+            match self.graph.is_ancestor(failure_node.clone(), node.clone()) {
+                Ok(false) => {}
+                Ok(true) => {
+                    return Err(SearchError::AlreadySearchedMidpoint {
+                        node: node.clone(),
+                        status: Status::Failure,
+                    });
+                }
+                Err(err) => return Err(SearchError::Graph(err)),
+            }
+        }
+        Ok(())
+    }
+
+    /// Return a set of speculative states corresponding to the situations where
+    /// the `node`` passed and failed.
+    #[allow(clippy::type_complexity)]
+    fn speculate_node(
+        &mut self,
+        node: &G::Node,
+        bounds: &Bounds<G::Node>,
+        statuses: &IndexMap<G::Node, Status>,
+    ) -> Result<[SearchState<G>; 2], SearchError<G::Node, G::Error, S::Error>> {
+        let Bounds { success, failure } = bounds;
+
+        let speculate_failure_state = SearchState {
+            bounds: Bounds {
+                success: success.clone(),
+                failure: {
+                    let mut failure_bounds = failure.clone();
+                    failure_bounds.insert(node.clone());
+                    match self.graph.simplify_failure_bounds(failure_bounds) {
+                        Ok(bounds) => bounds,
+                        Err(err) => return Err(SearchError::Graph(err)),
+                    }
+                },
+            },
+            statuses: {
+                let mut statuses = statuses.clone();
+                statuses.insert(node.clone(), Status::Failure);
+                statuses
+            },
+        };
+
+        let speculate_success_state = SearchState {
+            bounds: Bounds {
+                success: {
+                    let mut success_bounds = success.clone();
+                    success_bounds.insert(node.clone());
+                    match self.graph.simplify_success_bounds(success_bounds) {
+                        Ok(bounds) => bounds,
+                        Err(err) => return Err(SearchError::Graph(err)),
+                    }
+                },
+                failure: failure.clone(),
+            },
+            statuses: {
+                let mut statuses = statuses.clone();
+                statuses.insert(node.clone(), Status::Success);
+                statuses
+            },
+        };
+
+        Ok([speculate_failure_state, speculate_success_state])
+    }
+}
+
+impl<G: Graph, S: Strategy<G>> Iterator for SearchIter<'_, G, S> {
+    type Item = Result<G::Node, SearchError<G::Node, G::Error, S::Error>>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while let Some(state) = self.states.pop_front() {
+            debug!(?state, "Popped speculation state");
+            let SearchState { bounds, statuses } = state;
+
+            let next_node = match self.strategy.midpoint(self.graph, &bounds, &statuses) {
+                Ok(Some(node)) => node,
+                Ok(None) => continue,
+                Err(err) => return Some(Err(SearchError::Strategy(err))),
+            };
+
+            match self.check_node_not_searched(&next_node, &bounds) {
+                Ok(()) => {}
+                Err(err) => return Some(Err(err)),
+            }
+            match self.speculate_node(&next_node, &bounds, &statuses) {
+                Ok(states) => {
+                    self.states.extend(states);
+                }
+                Err(err) => {
+                    return Some(Err(err));
+                }
+            }
+
+            if self.seen.insert(next_node.clone()) {
+                return Some(Ok(next_node));
+            }
+        }
+        None
     }
 }
