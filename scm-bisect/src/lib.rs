@@ -129,6 +129,4 @@
 
 pub mod basic_search;
 pub mod search;
-
-#[cfg(test)]
 pub mod testing;
