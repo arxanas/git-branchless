@@ -535,7 +535,7 @@ mod tests {
 
     proptest::proptest! {
         #[test]
-        fn test_search_dag_proptest(strategy in arb_strategy(), (graph, failure_nodes) in arb_test_graph_and_nodes()) {
+        fn test_search_dag_proptest(strategy in arb_strategy(), (graph, failure_nodes) in arb_test_graph_and_nodes(8)) {
             let nodes = graph.nodes.keys().sorted().copied().collect::<Vec<_>>();
             let strategy = BasicStrategy {
                 strategy,
