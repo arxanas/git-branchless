@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 56e66cd7c2b691c44ff1847c5a41d9149f9834931a3dd6dba38726c1592dfc70 # shrinks to (graph, failure_nodes) = (TestGraph { nodes: {'a': {}} }, [])

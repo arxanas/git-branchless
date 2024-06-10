@@ -44,8 +44,12 @@
 //!
 //! ## Example
 //!
-//! The basic approach is to implement [`search::Graph`] and
+//! The general approach is to implement [`search::Graph`] and
 //! [`search::Strategy`], then use a [`search::Search`] with them in a loop.
+//!
+//! In this case, to make the example simpler, we implement
+//! [`basic_search::BasicSourceControlGraph`], which implements
+//! [`search::Graph`] for us.
 //!
 //! ```
 //! # use std::collections::HashSet;
@@ -128,5 +132,6 @@
 #![allow(clippy::too_many_arguments, clippy::blocks_in_if_conditions)]
 
 pub mod basic_search;
+pub mod minimize;
 pub mod search;
 pub mod testing;

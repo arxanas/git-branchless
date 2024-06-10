@@ -14,10 +14,10 @@ use crate::search::NodeSetExt;
 
 /// Directed acyclic graph commonly used in source control.
 ///
-/// Implementation of `Graph` that represents the common case of a directed
-/// acyclic graph in source control. You can implement this trait instead of
-/// `Graph` (as there is a blanket implementation for `Graph`) and also make use
-/// of `BasicStrategy`.
+/// Implementation of [`search::Graph`] that represents the common case of a
+/// directed acyclic graph in source control. You can implement this trait
+/// instead of [`search::Graph`] (as there is a blanket implementation). This
+/// trait allows you to make use of [`BasicStrategy`].
 pub trait BasicSourceControlGraph: Debug {
     /// The type of nodes in the graph. This should be cheap to clone.
     type Node: Clone + Debug + Hash + Eq + 'static;
@@ -87,7 +87,7 @@ pub trait BasicSourceControlGraph: Debug {
     /// `node`.
     fn ancestors(&self, node: &Self::Node) -> Result<search::NodeSet<Self::Node>, Self::Error>;
 
-    /// Get the union of `ancestors(node)` for every node in `nodes`.
+    /// Get the union of [`Self::ancestors`] for every node in `nodes`.
     #[instrument]
     fn ancestors_all(
         &self,
@@ -163,7 +163,7 @@ pub trait BasicSourceControlGraph: Debug {
         Ok(roots)
     }
 
-    /// Get the union of `descendants(node)` for every node in `nodes`.
+    /// Get the union of [`Self::descendants`] for every node in `nodes`.
     #[instrument]
     fn descendants_all(
         &self,
@@ -235,7 +235,7 @@ pub enum BasicStrategyKind {
     /// discusses a metric to find the best partition for the subgraph which
     /// remains to be tested.
     ///
-    /// See also `git-bisect`'s skip algorithm:
+    /// See also `git bisect`'s skip algorithm:
     /// <https://git-scm.com/docs/git-bisect-lk2009#_skip_algorithm>. We do
     /// *not* use the same skip algorithm, and instead uses a deterministic
     /// approach. In order to solve the following problem:
@@ -255,7 +255,7 @@ pub enum BasicStrategyKind {
     Binary,
 }
 
-/// A set of basic search strategies defined by `BasicStrategyKind`.
+/// A [`search::Strategy`] implementation defined by the provided [`BasicStrategyKind`].
 #[derive(Clone, Debug)]
 pub struct BasicStrategy {
     strategy: BasicStrategyKind,
