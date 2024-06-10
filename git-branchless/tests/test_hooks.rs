@@ -385,3 +385,31 @@ fn test_git_am_recorded() -> eyre::Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn test_symbolic_transaction_ref() -> eyre::Result<()> {
+    let git = make_git()?;
+
+    if !git.supports_reference_transactions()? {
+        return Ok(());
+    }
+
+    git.init_repo()?;
+    git.detach_head()?;
+    git.commit_file("test1", 1)?;
+
+    {
+        let (_stdout, stderr) = git.run(&["checkout", "-b", "newbranch"])?;
+
+        // Ensure that stderr doesn't contain any additional error messages.
+        // An upcoming version post-2.45.x introduces symbolic transaction refs;
+        // before the commit that introduces the fix along with this test,
+        // they were not properly handled.
+        insta::assert_snapshot!(stderr, @r###"
+        branchless: processing 1 update: branch newbranch
+        Switched to a new branch 'newbranch'
+        branchless: processing checkout
+        "###);
+    }
+    Ok(())
+}
