@@ -5,3 +5,4 @@
 # It is recommended to check this file in to source control so that
 # everyone who runs the test benefits from these saved cases.
 cc 56e66cd7c2b691c44ff1847c5a41d9149f9834931a3dd6dba38726c1592dfc70 # shrinks to (graph, failure_nodes) = (TestGraph { nodes: {'a': {}} }, [])
+cc 8dae84bcac963aaf2a4e8021ce758f4586c55456eab3ef3ae5ec90680c7b9581 # shrinks to (graph, failure_nodes) = (TestGraph { nodes: {'d': {}, 'c': {}} }, ['d'])

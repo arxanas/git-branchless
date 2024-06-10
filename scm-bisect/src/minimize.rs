@@ -304,6 +304,7 @@ where
 
     /// Summarize the current search progress and suggest the next node(s) to
     /// search. The caller is responsible for calling `notify` with the result.
+    /// @nocommit comment about how speculation can be expensive?
     #[instrument]
     pub fn search<'a>(
         &'a self,
@@ -431,50 +432,47 @@ mod tests {
         let base_graph_nodes: Subset<_> = graph.nodes.keys().sorted().copied().collect();
         let minimal_failing_subset: Subset<_> = minimal_failing_base_nodes.into_iter().collect();
         let mut minimize =
-            // TODO: remove manual type annotation after merging `Graph` and `Strategy`?
+            // TODO: @nocommit: remove manual type annotation after merging `Graph` and `Strategy`?
             Minimize::<TestGraph>::new_with_nodes(base_graph_nodes.clone().into_iter());
 
         let mut all_searched_nodes = Vec::new();
         let bounds = loop {
-            let search::EagerSolution {
-                bounds: search::Bounds { success, failure },
-                next_to_search,
-            } = minimize
-                // TODO: also test `Strategy::Remove`
-                .search(&Strategy::Add)
-                .map_err(|err| err.to_string())
-                .unwrap()
-                .into_eager()
-                .map_err(|err| err.to_string())
-                .unwrap();
+            let search_node = {
+                let search::LazySolution {
+                    bounds,
+                    mut next_to_search,
+                } = minimize
+                    // TODO: also test `Strategy::Remove`
+                    .search(&Strategy::Add)
+                    .map_err(|err| err.to_string())
+                    .unwrap();
 
-            for success_node in success.iter() {
-                assert!(!minimal_failing_subset.is_subset(success_node));
-            }
-            for failure_node in failure.iter() {
-                assert!(minimal_failing_subset.is_subset(failure_node));
-            }
+                for success_node in bounds.success.iter() {
+                    assert!(!minimal_failing_subset.is_subset(success_node));
+                }
+                for failure_node in bounds.failure.iter() {
+                    assert!(minimal_failing_subset.is_subset(failure_node));
+                }
 
-            if next_to_search.is_empty() {
-                break search::Bounds { success, failure };
+                match next_to_search.next() {
+                    Some(search_node) => search_node.unwrap(),
+                    None => break bounds.clone(),
+                }
             };
 
-            for search_node in next_to_search {
-                assert!(
-                    !all_searched_nodes.contains(&search_node),
-                    "searched node twice: {search_node:?}"
-                );
-                all_searched_nodes.push(search_node.clone());
-                assert!(all_searched_nodes.len() <= 1 << base_graph_nodes.len());
+            assert!(
+                !all_searched_nodes.contains(&search_node),
+                "searched node twice: {search_node:?}"
+            );
+            all_searched_nodes.push(search_node.clone());
+            assert!(all_searched_nodes.len() <= 1 << base_graph_nodes.len());
 
-                let status = if minimal_failing_subset.is_subset(&search_node) {
-                    search::Status::Failure
-                } else {
-                    search::Status::Success
-                };
-
-                minimize.notify(search_node.clone(), status).unwrap();
-            }
+            let status = if minimal_failing_subset.is_subset(&search_node) {
+                search::Status::Failure
+            } else {
+                search::Status::Success
+            };
+            minimize.notify(search_node, status).unwrap();
         };
 
         assert!(
@@ -512,9 +510,8 @@ mod tests {
     }
 
     proptest! {
-        // TODO: increase graph size
         #[test]
-        fn test_minimize_dag_proptest((graph, failure_nodes) in arb_test_graph_and_nodes(5)) {
+        fn test_minimize_dag_proptest((graph, failure_nodes) in arb_test_graph_and_nodes(16)) {
             test_minimize_dag_proptest_impl(graph, failure_nodes);
         }
     }
