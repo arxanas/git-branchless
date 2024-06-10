@@ -56,10 +56,19 @@ fn bench_minimize_per_graph_size(c: &mut Criterion) {
 
 // @nocommit: fix slow speculation
 fn bench_minimize_per_speculation_size(c: &mut Criterion) {
-    for speculation_size in [1, 4, 8] {
+    let graph_size = 32;
+    for speculation_size in [1, 4, 8, 32, 128] {
         c.bench_function(
             &format!("bench_minimize_speculation_size_{speculation_size}"),
-            |b| b.iter(|| black_box(bench_minimize(minimize::Strategy::Add, 8, speculation_size))),
+            |b| {
+                b.iter(|| {
+                    black_box(bench_minimize(
+                        minimize::Strategy::Add,
+                        graph_size,
+                        speculation_size,
+                    ))
+                })
+            },
         );
     }
 }
