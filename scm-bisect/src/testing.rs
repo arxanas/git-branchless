@@ -83,7 +83,7 @@ pub fn arb_test_graph_and_nodes(
     assert!(max_num_nodes <= possible_nodes.try_len().unwrap());
     let possible_nodes = possible_nodes.take(max_num_nodes).collect_vec();
 
-    let nodes = prop::collection::hash_set(prop::sample::select(possible_nodes), 1..=max_num_nodes);
+    let nodes = prop::collection::hash_set(prop::sample::select(possible_nodes), 0..=max_num_nodes);
     nodes
         .prop_flat_map(|nodes| {
             let num_nodes = nodes.len();
@@ -94,8 +94,8 @@ pub fn arb_test_graph_and_nodes(
                 .collect();
             let graph = TestGraph { nodes: nodes_kv };
             let lineages = prop::collection::vec(
-                prop::sample::subsequence(nodes.into_iter().collect_vec(), 0..num_nodes),
-                0..num_nodes,
+                prop::sample::subsequence(nodes.into_iter().collect_vec(), 0..=num_nodes),
+                0..=num_nodes,
             );
             (Just(graph), lineages)
         })
@@ -110,7 +110,7 @@ pub fn arb_test_graph_and_nodes(
         .prop_flat_map(|graph| {
             let nodes = graph.nodes.keys().copied().collect::<Vec<_>>();
             let num_nodes = nodes.len();
-            let failure_nodes = prop::sample::subsequence(nodes, 0..num_nodes);
+            let failure_nodes = prop::sample::subsequence(nodes, 0..=num_nodes);
             (Just(graph), failure_nodes)
         })
 }
