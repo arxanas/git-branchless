@@ -197,6 +197,56 @@ mod reference_transaction {
 
     use lib::git::{MaybeZeroOid, ReferenceName, Repo};
 
+    /// A reference target parsed from a reference line.
+    #[derive(Clone, Debug, PartialEq, Eq)]
+    pub enum ReferenceTarget {
+        /// A reference target that was in the transaction line as a normal commit hash.
+        Direct { oid: MaybeZeroOid },
+
+        /// A reference target that was in the transaction line as a symbolic
+        /// reference: `ref:<refname>`.
+        Symbolic { name: ReferenceName },
+    }
+
+    impl ReferenceTarget {
+        /// Attempt to convert the provided reference target into an OID hash value.
+        ///
+        /// For [ReferenceTarget::Direct] types, this always succeeds, and just
+        /// returns the wrapped OID.
+        ///
+        /// For [ReferenceTarget::Symbolic] types, this attempts to convert the
+        /// provided symbolic ref name into an OID hash using the provided
+        /// [Repo].
+        #[instrument]
+        pub fn as_oid(&self, repo: &Repo) -> eyre::Result<MaybeZeroOid> {
+            match self {
+                ReferenceTarget::Direct { oid } => Ok(*oid),
+                ReferenceTarget::Symbolic { name } => Ok(repo.reference_name_to_oid(name)?),
+            }
+        }
+    }
+
+    impl FromStr for ReferenceTarget {
+        type Err = eyre::ErrReport;
+
+        /// Attempts to parse a string as a [ReferenceTarget].
+        /// The string is expected to be one field from a reference transaction
+        /// line, which can be one of the following values:
+        ///
+        /// ref:<symbolic ref name>
+        /// <commit hash>
+        fn from_str(value: &str) -> Result<Self, Self::Err> {
+            match value.strip_prefix("ref:") {
+                Some(refname) => Ok(ReferenceTarget::Symbolic {
+                    name: ReferenceName::from(refname),
+                }),
+                None => Ok(ReferenceTarget::Direct {
+                    oid: value.parse()?,
+                }),
+            }
+        }
+    }
+
     #[instrument]
     fn parse_packed_refs_line(line: &str) -> Option<(ReferenceName, MaybeZeroOid)> {
         if line.is_empty() {
@@ -282,8 +332,8 @@ mod reference_transaction {
     #[derive(Debug, PartialEq, Eq)]
     pub struct ParsedReferenceTransactionLine {
         pub ref_name: ReferenceName,
-        pub old_oid: MaybeZeroOid,
-        pub new_oid: MaybeZeroOid,
+        pub old_value: ReferenceTarget,
+        pub new_value: ReferenceTarget,
     }
 
     #[instrument]
@@ -294,8 +344,8 @@ mod reference_transaction {
         match fields.as_slice() {
             [old_value, new_value, ref_name] => Ok(ParsedReferenceTransactionLine {
                 ref_name: ReferenceName::from(*ref_name),
-                old_oid: MaybeZeroOid::from_str(old_value)?,
-                new_oid: MaybeZeroOid::from_str(new_value)?,
+                old_value: ReferenceTarget::from_str(old_value)?,
+                new_value: ReferenceTarget::from_str(new_value)?,
             }),
             _ => {
                 eyre::bail!(
@@ -309,30 +359,51 @@ mod reference_transaction {
     #[cfg(test)]
     #[test]
     fn test_parse_reference_transaction_line() -> eyre::Result<()> {
-        use lib::core::eventlog::should_ignore_ref_updates;
+        use lib::{core::eventlog::should_ignore_ref_updates, testing::make_git};
 
-        let line = "123abc 456def refs/heads/mybranch";
+        let git = make_git()?;
+        git.init_repo()?;
+        let oid1 = git.commit_file("README", 1)?;
+        let oid2 = git.commit_file("README2", 2)?;
+
+        let zero = "0000000000000000000000000000000000000000";
+        let branch_ref = "refs/heads/mybranch";
+        let orig_head_ref = "ORIG_HEAD";
+        let master_tx_ref = "ref:refs/heads/master";
+        let master_ref = "refs/heads/master";
+        let head_ref = "HEAD";
+
+        let line = format!("{oid1} {oid2} {branch_ref}");
         assert_eq!(
-            parse_reference_transaction_line(line)?,
+            parse_reference_transaction_line(&line)?,
             ParsedReferenceTransactionLine {
-                old_oid: "123abc".parse()?,
-                new_oid: {
-                    let oid: MaybeZeroOid = "456def".parse()?;
-                    oid
+                old_value: ReferenceTarget::Direct { oid: oid1.into() },
+                new_value: ReferenceTarget::Direct { oid: oid2.into() },
+                ref_name: ReferenceName::from(branch_ref),
+            }
+        );
+
+        let line = format!("{zero} {master_tx_ref} HEAD");
+        assert_eq!(
+            parse_reference_transaction_line(&line)?,
+            ParsedReferenceTransactionLine {
+                old_value: ReferenceTarget::Direct { oid: zero.parse()? },
+                new_value: ReferenceTarget::Symbolic {
+                    name: ReferenceName::from(master_ref)
                 },
-                ref_name: ReferenceName::from("refs/heads/mybranch"),
+                ref_name: ReferenceName::from(head_ref)
             }
         );
 
         {
-            let line = "123abc 456def ORIG_HEAD";
+            let line = &format!("{oid1} {oid2} ORIG_HEAD");
             let parsed_line = parse_reference_transaction_line(line)?;
             assert_eq!(
                 parsed_line,
                 ParsedReferenceTransactionLine {
-                    old_oid: "123abc".parse()?,
-                    new_oid: "456def".parse()?,
-                    ref_name: ReferenceName::from("ORIG_HEAD"),
+                    old_value: ReferenceTarget::Direct { oid: oid1.into() },
+                    new_value: ReferenceTarget::Direct { oid: oid2.into() },
+                    ref_name: ReferenceName::from(orig_head_ref)
                 }
             );
             assert!(should_ignore_ref_updates(&parsed_line.ref_name));
@@ -344,6 +415,16 @@ mod reference_transaction {
         Ok(())
     }
 
+    fn reftarget_matches_refname(
+        reftarget: &ReferenceTarget,
+        refname: &ReferenceName,
+        packed_references: &HashMap<ReferenceName, MaybeZeroOid>,
+    ) -> bool {
+        match reftarget {
+            ReferenceTarget::Direct { oid } => packed_references.get(refname) == Some(oid),
+            ReferenceTarget::Symbolic { name } => name == refname,
+        }
+    }
     /// As per the discussion at
     /// https://public-inbox.org/git/CAKjfCeBcuYC3OXRVtxxDGWRGOxC38Fb7CNuSh_dMmxpGVip_9Q@mail.gmail.com/,
     /// the OIDs passed to the reference transaction can't actually be trusted
@@ -377,31 +458,37 @@ mod reference_transaction {
         match parsed_line {
             ParsedReferenceTransactionLine {
                 ref_name,
-                old_oid: MaybeZeroOid::Zero,
-                new_oid,
-            } if packed_references.get(&ref_name) == Some(&new_oid) => {
+                old_value:
+                    ReferenceTarget::Direct {
+                        oid: MaybeZeroOid::Zero,
+                    },
+                new_value,
+            } if reftarget_matches_refname(&new_value, &ref_name, packed_references) => {
                 // The reference claims to have been created, but it appears to
                 // already be in the `packed-refs` file with that OID. Most
                 // likely it was being packed in this operation.
                 ParsedReferenceTransactionLine {
                     ref_name,
-                    old_oid: new_oid,
-                    new_oid,
+                    old_value: new_value.clone(),
+                    new_value: new_value.clone(),
                 }
             }
 
             ParsedReferenceTransactionLine {
                 ref_name,
-                old_oid,
-                new_oid: MaybeZeroOid::Zero,
-            } if packed_references.get(&ref_name) == Some(&old_oid) => {
+                old_value,
+                new_value:
+                    ReferenceTarget::Direct {
+                        oid: MaybeZeroOid::Zero,
+                    },
+            } if reftarget_matches_refname(&old_value, &ref_name, packed_references) => {
                 // The reference claims to have been deleted, but it's still in
                 // the `packed-refs` file with that OID. Most likely it was
                 // being packed in this operation.
                 ParsedReferenceTransactionLine {
                     ref_name,
-                    old_oid,
-                    new_oid: old_oid,
+                    old_value: old_value.clone(),
+                    new_value: old_value.clone(),
                 }
             }
 
@@ -458,8 +545,8 @@ fn hook_reference_transaction(effects: &Effects, transaction_state: &str) -> eyr
         .filter(
             |ParsedReferenceTransactionLine {
                  ref_name,
-                 old_oid: _,
-                 new_oid: _,
+                 old_value: _,
+                 new_value: _,
              }| !should_ignore_ref_updates(ref_name),
         )
         .map(|parsed_line| fix_packed_reference_oid(&repo, &packed_references, parsed_line))
@@ -482,8 +569,8 @@ fn hook_reference_transaction(effects: &Effects, transaction_state: &str) -> eyr
             .map(
                 |ParsedReferenceTransactionLine {
                      ref_name,
-                     old_oid: _,
-                     new_oid: _,
+                     old_value: _,
+                     new_value: _,
                  }| { CategorizedReferenceName::new(ref_name).friendly_describe() }
             )
             .map(|description| format!("{}", console::style(description).green()))
@@ -496,26 +583,28 @@ fn hook_reference_transaction(effects: &Effects, transaction_state: &str) -> eyr
         .duration_since(SystemTime::UNIX_EPOCH)
         .wrap_err("Calculating timestamp")?
         .as_secs_f64();
-    let events = parsed_lines
+    let events: eyre::Result<Vec<Event>> = parsed_lines
         .into_iter()
         .map(
             |ParsedReferenceTransactionLine {
                  ref_name,
-                 old_oid,
-                 new_oid,
+                 old_value,
+                 new_value,
              }| {
-                Event::RefUpdateEvent {
+                let old_oid = old_value.as_oid(&repo)?;
+                let new_oid = new_value.as_oid(&repo)?;
+                Ok(Event::RefUpdateEvent {
                     timestamp,
                     event_tx_id,
                     ref_name,
                     old_oid,
                     new_oid,
                     message: None,
-                }
+                })
             },
         )
-        .collect::<Vec<Event>>();
-    event_log_db.add_events(events)?;
+        .collect();
+    event_log_db.add_events(events?)?;
 
     Ok(())
 }

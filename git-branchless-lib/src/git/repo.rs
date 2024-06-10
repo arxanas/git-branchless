@@ -698,6 +698,18 @@ impl Repo {
         }
     }
 
+    /// Get the OID for a given [ReferenceName] if it exists.
+    #[instrument]
+    pub fn reference_name_to_oid(&self, name: &ReferenceName) -> Result<MaybeZeroOid> {
+        match self.inner.refname_to_id(name.as_str()) {
+            Ok(git2_oid) => Ok(MaybeZeroOid::from(git2_oid)),
+            Err(source) => Err(Error::FindReference {
+                source,
+                name: name.clone(),
+            }),
+        }
+    }
+
     /// Set the `HEAD` reference directly to the provided `oid`. Does not touch
     /// the working copy.
     #[instrument]
