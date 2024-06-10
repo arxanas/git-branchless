@@ -514,7 +514,7 @@ mod tests {
     proptest! {
         // TODO: increase graph size
         #[test]
-        fn test_minimize_dag_proptest((graph, failure_nodes) in arb_test_graph_and_nodes(3)) {
+        fn test_minimize_dag_proptest((graph, failure_nodes) in arb_test_graph_and_nodes(5)) {
             test_minimize_dag_proptest_impl(graph, failure_nodes);
         }
     }
