@@ -11,6 +11,7 @@ version = "0.2.0"
 [dependencies]
 indexmap = "2"
 itertools = "0.13"
+rpds = "~1.0"  # 1.1 produces: `use of unstable library feature 'pointer_byte_offsets'`
 thiserror = "1"
 tracing = "0.1"
 

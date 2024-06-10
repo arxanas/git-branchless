@@ -8,6 +8,30 @@ use std::hash::Hash;
 use indexmap::IndexMap;
 use tracing::{debug, instrument};
 
+/// A set of nodes.
+pub type NodeSet<Node> = rpds::HashTrieSetSync<Node>;
+
+/// Extension methods for [`NodeSet`].
+pub trait NodeSetExt {
+    /// Return the union of this set with the `other` set.
+    fn union(self, other: Self) -> Self;
+}
+
+impl<Node: Clone + Eq + Hash> NodeSetExt for NodeSet<Node> {
+    fn union(mut self, other: Self) -> Self {
+        if self.is_empty() {
+            other
+        } else if other.is_empty() {
+            self
+        } else {
+            for node in other.into_iter() {
+                self.insert_mut(node.clone());
+            }
+            self
+        }
+    }
+}
+
 /// The set of nodes compromising a directed acyclic graph to be searched.
 pub trait Graph: Debug {
     /// The type of nodes in the graph. This should be cheap to clone.
@@ -25,8 +49,8 @@ pub trait Graph: Debug {
     /// recursively).
     fn is_ancestor(
         &self,
-        ancestor: Self::Node,
-        descendant: Self::Node,
+        ancestor: &Self::Node,
+        descendant: &Self::Node,
     ) -> Result<bool, Self::Error>;
 
     /// Filter `nodes` to only include nodes that are not ancestors of any other
@@ -34,13 +58,14 @@ pub trait Graph: Debug {
     /// performance as some operations are linear in the size of the success
     /// bounds, and it can make the intermediate results more sensible.
     ///
-    /// This operation is called `heads` in e.g. Mercurial.
+    /// This operation is called `heads` in e.g. Mercurial. @nocommit no longer accurate
     #[instrument]
-    fn simplify_success_bounds(
+    fn add_success_bound(
         &self,
-        nodes: HashSet<Self::Node>,
-    ) -> Result<HashSet<Self::Node>, Self::Error> {
-        Ok(nodes)
+        nodes: NodeSet<Self::Node>,
+        node: &Self::Node,
+    ) -> Result<NodeSet<Self::Node>, Self::Error> {
+        Ok(nodes.insert(node.clone()))
     }
 
     /// Filter `nodes` to only include nodes that are not descendants of any
@@ -48,13 +73,14 @@ pub trait Graph: Debug {
     /// performance as some operations are linear in the size of the failure
     /// bounds, and it can make the intermediate results more sensible.
     ///
-    /// This operation is called `roots` in e.g. Mercurial.
+    /// This operation is called `roots` in e.g. Mercurial. @nocommit no longer accurate
     #[instrument]
-    fn simplify_failure_bounds(
+    fn add_failure_bound(
         &self,
-        nodes: HashSet<Self::Node>,
-    ) -> Result<HashSet<Self::Node>, Self::Error> {
-        Ok(nodes)
+        nodes: NodeSet<Self::Node>,
+        node: &Self::Node,
+    ) -> Result<NodeSet<Self::Node>, Self::Error> {
+        Ok(nodes.insert(node.clone()))
     }
 }
 
@@ -84,11 +110,11 @@ pub enum Status {
 pub struct Bounds<Node: Debug + Eq + Hash> {
     /// The upper bounds of the search. The ancestors of this set have (or are
     /// assumed to have) `Status::Success`.
-    pub success: HashSet<Node>,
+    pub success: NodeSet<Node>,
 
     /// The lower bounds of the search. The ancestors of this set have (or are
     /// assumed to have) `Status::Failure`.
-    pub failure: HashSet<Node>,
+    pub failure: NodeSet<Node>,
 }
 
 impl<Node: Debug + Eq + Hash> Default for Bounds<Node> {
@@ -307,16 +333,17 @@ impl<G: Graph> Search<G> {
     ///
     /// FIXME: O(n) complexity.
     #[instrument]
-    pub fn success_bounds(&self) -> Result<HashSet<G::Node>, G::Error> {
-        let success_nodes = self
+    pub fn success_bounds(&self) -> Result<NodeSet<G::Node>, G::Error> {
+        let success_bounds = self
             .nodes
             .iter()
             .filter_map(|(node, status)| match status {
                 Status::Success => Some(node.clone()),
                 Status::Untested | Status::Failure | Status::Indeterminate => None,
             })
-            .collect::<HashSet<_>>();
-        let success_bounds = self.graph.simplify_success_bounds(success_nodes)?;
+            .try_fold(NodeSet::default(), |acc, node| {
+                self.graph.add_success_bound(acc, &node)
+            })?;
         Ok(success_bounds)
     }
 
@@ -324,16 +351,17 @@ impl<G: Graph> Search<G> {
     ///
     /// FIXME: O(n) complexity.
     #[instrument]
-    pub fn failure_bounds(&self) -> Result<HashSet<G::Node>, G::Error> {
-        let failure_nodes = self
+    pub fn failure_bounds(&self) -> Result<NodeSet<G::Node>, G::Error> {
+        let failure_bounds = self
             .nodes
             .iter()
             .filter_map(|(node, status)| match status {
                 Status::Failure => Some(node.clone()),
                 Status::Untested | Status::Success | Status::Indeterminate => None,
             })
-            .collect::<HashSet<_>>();
-        let failure_bounds = self.graph.simplify_failure_bounds(failure_nodes)?;
+            .try_fold(NodeSet::default(), |acc, node| {
+                self.graph.add_failure_bound(acc, &node)
+            })?;
         Ok(failure_bounds)
     }
 
@@ -399,14 +427,18 @@ impl<G: Graph> Search<G> {
             Status::Untested | Status::Indeterminate => {}
 
             Status::Success => {
-                for failure_node in self.failure_bounds().map_err(NotifyError::Graph)? {
+                for failure_node in self
+                    .failure_bounds()
+                    .map_err(NotifyError::Graph)?
+                    .into_iter()
+                {
                     if self
                         .graph
-                        .is_ancestor(failure_node.clone(), node.clone())
+                        .is_ancestor(failure_node, &node)
                         .map_err(NotifyError::Graph)?
                     {
                         return Err(NotifyError::InconsistentStateTransition {
-                            ancestor_node: failure_node,
+                            ancestor_node: failure_node.clone(),
                             ancestor_status: Status::Failure,
                             descendant_node: node,
                             descendant_status: Status::Success,
@@ -416,16 +448,20 @@ impl<G: Graph> Search<G> {
             }
 
             Status::Failure => {
-                for success_node in self.success_bounds().map_err(NotifyError::Graph)? {
+                for success_node in self
+                    .success_bounds()
+                    .map_err(NotifyError::Graph)?
+                    .into_iter()
+                {
                     if self
                         .graph
-                        .is_ancestor(node.clone(), success_node.clone())
+                        .is_ancestor(&node, success_node)
                         .map_err(NotifyError::Graph)?
                     {
                         return Err(NotifyError::InconsistentStateTransition {
                             ancestor_node: node,
                             ancestor_status: Status::Failure,
-                            descendant_node: success_node,
+                            descendant_node: success_node.clone(),
                             descendant_status: Status::Success,
                         });
                     }
@@ -483,7 +519,7 @@ impl<'a, G: Graph, S: Strategy<G>> SearchIter<'a, G, S> {
     ) -> Result<(), SearchError<G::Node, G::Error, S::Error>> {
         let Bounds { success, failure } = bounds;
         for success_node in success.iter() {
-            match self.graph.is_ancestor(node.clone(), success_node.clone()) {
+            match self.graph.is_ancestor(node, success_node) {
                 Ok(false) => {}
                 Ok(true) => {
                     return Err(SearchError::AlreadySearchedMidpoint {
@@ -497,7 +533,7 @@ impl<'a, G: Graph, S: Strategy<G>> SearchIter<'a, G, S> {
             }
         }
         for failure_node in failure.iter() {
-            match self.graph.is_ancestor(failure_node.clone(), node.clone()) {
+            match self.graph.is_ancestor(failure_node, node) {
                 Ok(false) => {}
                 Ok(true) => {
                     return Err(SearchError::AlreadySearchedMidpoint {
@@ -528,14 +564,10 @@ impl<'a, G: Graph, S: Strategy<G>> SearchIter<'a, G, S> {
             next_node: None,
             bounds: Bounds {
                 success: success.clone(),
-                failure: {
-                    let mut failure_bounds = failure.clone();
-                    failure_bounds.insert(node.clone());
-                    match self.graph.simplify_failure_bounds(failure_bounds) {
-                        Ok(bounds) => bounds,
-                        Err(err) => return Err(SearchError::Graph(err)),
-                    }
-                },
+                failure: self
+                    .graph
+                    .add_failure_bound(failure.clone(), node)
+                    .map_err(SearchError::Graph)?,
             },
             statuses: {
                 let mut statuses = statuses.clone();
@@ -547,14 +579,10 @@ impl<'a, G: Graph, S: Strategy<G>> SearchIter<'a, G, S> {
         let speculate_success_state = SearchState {
             next_node: None,
             bounds: Bounds {
-                success: {
-                    let mut success_bounds = success.clone();
-                    success_bounds.insert(node.clone());
-                    match self.graph.simplify_success_bounds(success_bounds) {
-                        Ok(bounds) => bounds,
-                        Err(err) => return Err(SearchError::Graph(err)),
-                    }
-                },
+                success: self
+                    .graph
+                    .add_success_bound(success.clone(), node)
+                    .map_err(SearchError::Graph)?,
                 failure: failure.clone(),
             },
             statuses: {

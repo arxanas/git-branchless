@@ -79,11 +79,11 @@
 //! impl basic_search::BasicSourceControlGraph for Graph {
 //!     type Node = isize;
 //!     type Error = std::convert::Infallible;
-//!     fn ancestors(&self, node: isize) -> Result<HashSet<isize>, Self::Error> {
-//!         Ok((self.min..=node).collect())
+//!     fn ancestors(&self, node: &isize) -> Result<search::NodeSet<isize>, Self::Error> {
+//!         Ok((self.min..=*node).collect())
 //!     }
-//!     fn descendants(&self, node: isize) -> Result<HashSet<isize>, Self::Error> {
-//!         Ok((node..=self.max).collect())
+//!     fn descendants(&self, node: &isize) -> Result<search::NodeSet<isize>, Self::Error> {
+//!         Ok((*node..=self.max).collect())
 //!     }
 //! }
 //!
@@ -113,8 +113,8 @@
 //! };
 //!
 //! // Confirm results:
-//! assert_eq!(bounds.success, HashSet::from_iter([6]));
-//! assert_eq!(bounds.failure, HashSet::from_iter([7]));
+//! assert_eq!(bounds.success, search::NodeSet::from_iter([6]));
+//! assert_eq!(bounds.failure, search::NodeSet::from_iter([7]));
 //! # }
 //! ```
 
