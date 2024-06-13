@@ -310,6 +310,13 @@ impl GitRunInfo {
         })?;
 
         let args = {
+            if args.contains(&"-C") {
+                warn!(
+                    ?args,
+                    ?repo_path,
+                    "BUG: Args contains -C even though it's about to be overridden with `repo_path`"
+                );
+            }
             let mut result = vec!["-C", repo_path];
             result.extend(args);
             result

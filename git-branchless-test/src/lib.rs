@@ -2246,10 +2246,7 @@ fn run_test(
                         test_status: TestStatus::CheckoutFailed,
                     }
                 }
-                Ok(PreparedWorkingDirectory {
-                    lock_file: mut working_directory_lock_file,
-                    path,
-                }) => {
+                Ok(prepared_working_directory) => {
                     progress.notify_status(
                         OperationIcon::InProgress,
                         format!(
@@ -2262,18 +2259,22 @@ fn run_test(
 
                     let result = test_commit(
                         &effects,
-                        git_run_info,
-                        repo,
+                        &prepared_working_directory,
                         event_tx_id,
                         test_files,
-                        &path,
                         shell_path,
                         options,
                         commit,
                     )?;
+
+                    let PreparedWorkingDirectory {
+                        lock_file: mut working_directory_lock_file,
+                        git_run_info: _,
+                        repo: _,
+                    } = prepared_working_directory;
                     working_directory_lock_file
                         .unlock()
-                        .wrap_err_with(|| format!("Unlocking working directory at {path:?}"))?;
+                        .wrap_err_with(|| format!("Unlocking working directory at {repo:?}"))?;
                     drop(working_directory_lock_file);
                     result
                 }
@@ -2481,7 +2482,14 @@ fn make_test_files(
 #[derive(Debug)]
 struct PreparedWorkingDirectory {
     lock_file: LockFile,
-    path: PathBuf,
+
+    /// For now, the `GitRunInfo` working directory always corresponds to the
+    /// worktree path, but in the future, it might make sense to have it mirror
+    /// the relative path within the worktree that `git test` was invoked in.
+    git_run_info: GitRunInfo,
+
+    /// The repository corresponding to the worktree to run in.
+    repo: Repo,
 }
 
 #[allow(dead_code)] // fields are not read except by `Debug` implementation`
@@ -2524,9 +2532,19 @@ fn prepare_working_directory(
 
     match strategy {
         TestExecutionStrategy::WorkingCopy => {
-            let working_copy_path = match repo.get_working_copy_path() {
+            let GitRunInfo {
+                path_to_git,
+                working_directory: _,
+                env,
+            } = git_run_info;
+            let working_directory = match repo.get_working_copy_path() {
                 None => return Ok(Err(PrepareWorkingDirectoryError::NoWorkingCopy)),
                 Some(working_copy_path) => working_copy_path.to_owned(),
+            };
+            let git_run_info = GitRunInfo {
+                path_to_git: path_to_git.clone(),
+                working_directory,
+                env: env.clone(),
             };
 
             let GitRunResult { exit_code, stdout: _, stderr: _ } =
@@ -2539,9 +2557,11 @@ fn prepare_working_directory(
                     Default::default()
                 ).context("Checking out commit to prepare working directory")?;
             if exit_code.is_success() {
+                let repo = repo.try_clone()?;
                 Ok(Ok(PreparedWorkingDirectory {
                     lock_file,
-                    path: working_copy_path,
+                    git_run_info: git_run_info.clone(),
+                    repo,
                 }))
             } else {
                 Ok(Err(PrepareWorkingDirectoryError::CheckoutFailed(
@@ -2583,21 +2603,27 @@ fn prepare_working_directory(
                     )));
                 }
             }
+            let GitRunInfo {
+                path_to_git,
+                working_directory: _,
+                env,
+            } = git_run_info;
+            let git_run_info = GitRunInfo {
+                path_to_git: path_to_git.clone(),
+                working_directory: worktree_dir,
+                env: env.clone(),
+            };
 
+            let repo =
+                Repo::from_dir(&git_run_info.working_directory).context("opening worktree repo")?;
             let GitRunResult {
                 exit_code,
                 stdout: _,
                 stderr: _,
             } = git_run_info.run_silent(
-                repo,
+                &repo,
                 Some(event_tx_id),
-                &[
-                    "-C",
-                    worktree_dir_str,
-                    "checkout",
-                    "--force",
-                    &commit.get_oid().to_string(),
-                ],
+                &["checkout", "--force", &commit.get_oid().to_string()],
                 Default::default(),
             )?;
             if !exit_code.is_success() {
@@ -2607,7 +2633,8 @@ fn prepare_working_directory(
             }
             Ok(Ok(PreparedWorkingDirectory {
                 lock_file,
-                path: worktree_dir,
+                git_run_info: git_run_info.clone(),
+                repo,
             }))
         }
     }
@@ -2616,15 +2643,18 @@ fn prepare_working_directory(
 #[instrument]
 fn test_commit(
     effects: &Effects,
-    git_run_info: &GitRunInfo,
-    repo: &Repo,
+    prepared_working_directory: &PreparedWorkingDirectory,
     event_tx_id: EventTransactionId,
     test_files: TestFiles,
-    working_directory: &Path,
     shell_path: &Path,
     options: &ResolvedTestOptions,
     commit: &Commit,
 ) -> eyre::Result<TestOutput> {
+    let PreparedWorkingDirectory {
+        lock_file: _,
+        git_run_info,
+        repo,
+    } = prepared_working_directory;
     let TestFiles {
         temp_dir,
         lock_file: _lock_file, // Make sure not to drop lock.
@@ -2640,7 +2670,7 @@ fn test_commit(
     command
         .arg("-c")
         .arg(options.command.to_string())
-        .current_dir(working_directory)
+        .current_dir(&git_run_info.working_directory)
         .env(BRANCHLESS_TRANSACTION_ID_ENV_VAR, event_tx_id.to_string())
         .env("BRANCHLESS_TEST_COMMIT", commit.get_oid().to_string())
         .env("BRANCHLESS_TEST_COMMAND", options.command.to_string());
@@ -2724,7 +2754,6 @@ To abort testing entirely, run:      {exit127}",
     let test_status = match exit_code {
         TEST_SUCCESS_EXIT_CODE => {
             let fix_info = {
-                let repo = Repo::from_dir(working_directory)?;
                 let (head_commit_oid, snapshot) = {
                     let index = repo.get_index()?;
                     let head_info = repo.get_head_info()?;
