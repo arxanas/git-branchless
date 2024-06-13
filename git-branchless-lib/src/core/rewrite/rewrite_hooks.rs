@@ -130,15 +130,10 @@ fn add_rewritten_list_entries(
 ///
 /// See the man-page for `githooks(5)`.
 #[instrument]
-pub fn hook_post_rewrite(
-    effects: &Effects,
-    git_run_info: &GitRunInfo,
-    rewrite_type: &str,
-) -> eyre::Result<()> {
+pub fn hook_post_rewrite(effects: &Effects, repo: &Repo, rewrite_type: &str) -> eyre::Result<()> {
     let now = SystemTime::now();
     let timestamp = now.duration_since(SystemTime::UNIX_EPOCH)?.as_secs_f64();
 
-    let repo = Repo::from_current_dir()?;
     let is_spurious_event = rewrite_type == "amend" && repo.is_rebase_underway()?;
     if is_spurious_event {
         return Ok(());
@@ -198,12 +193,18 @@ pub fn hook_post_rewrite(
         // Make sure to resolve `ORIG_HEAD` before we potentially delete the
         // branch it points to, so that we can get the original OID of `HEAD`.
         let previous_head_info = load_original_head_info(&repo)?;
-        move_branches(effects, git_run_info, &repo, event_tx_id, &rewritten_oids)?;
+        move_branches(
+            effects,
+            repo.get_git_run_info(),
+            &repo,
+            event_tx_id,
+            &rewritten_oids,
+        )?;
 
         let skipped_head_updated_oid = load_updated_head_oid(&repo)?;
         match check_out_updated_head(
             effects,
-            git_run_info,
+            repo.get_git_run_info(),
             &repo,
             &event_log_db,
             event_tx_id,
@@ -436,8 +437,7 @@ fn load_updated_head_oid(repo: &Repo) -> eyre::Result<Option<NonZeroOid>> {
 /// rebase finishes and calls the post-rewrite hook. We don't want to change the
 /// behavior of `git rebase` itself, except when called via `git-branchless`, so
 /// that the user's expectations aren't unexpectedly subverted.
-pub fn hook_register_extra_post_rewrite_hook() -> eyre::Result<()> {
-    let repo = Repo::from_current_dir()?;
+pub fn hook_register_extra_post_rewrite_hook(repo: &Repo) -> eyre::Result<()> {
     let file_name = repo
         .get_rebase_state_dir_path()
         .join(EXTRA_POST_REWRITE_FILE_NAME);
@@ -465,9 +465,9 @@ pub fn hook_register_extra_post_rewrite_hook() -> eyre::Result<()> {
 /// passed to the `post-rewrite` hook.
 pub fn hook_drop_commit_if_empty(
     effects: &Effects,
+    repo: &Repo,
     old_commit_oid: NonZeroOid,
 ) -> eyre::Result<()> {
-    let repo = Repo::from_current_dir()?;
     let head_info = repo.get_head_info()?;
     let head_oid = match head_info.oid {
         Some(head_oid) => head_oid,
@@ -520,9 +520,9 @@ pub fn hook_drop_commit_if_empty(
 /// without attempting to apply it.
 pub fn hook_skip_upstream_applied_commit(
     effects: &Effects,
+    repo: &Repo,
     commit_oid: NonZeroOid,
 ) -> eyre::Result<()> {
-    let repo = Repo::from_current_dir()?;
     let commit = repo.find_commit_or_fail(commit_oid)?;
     writeln!(
         effects.get_output_stream(),

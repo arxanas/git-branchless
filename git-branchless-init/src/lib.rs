@@ -602,11 +602,11 @@ fn delete_isolated_config(
 #[instrument]
 fn command_init(
     effects: &Effects,
-    git_run_info: &GitRunInfo,
+    git_run_info: GitRunInfo,
     main_branch_name: Option<&str>,
 ) -> EyreExitOr<()> {
     let mut in_ = BufReader::new(stdin());
-    let repo = Repo::from_current_dir()?;
+    let repo = Repo::from_current_dir(git_run_info)?;
     let mut repo = repo.open_worktree_parent_repo()?.unwrap_or(repo);
 
     let default_config = Config::open_default()?;

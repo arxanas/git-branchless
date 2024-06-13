@@ -127,8 +127,11 @@ fn install_libgit2_tracing() {
 }
 
 #[instrument]
-fn check_unsupported_config_options(effects: &Effects) -> eyre::Result<Option<ExitCode>> {
-    let _repo = match Repo::from_current_dir() {
+fn check_unsupported_config_options(
+    effects: &Effects,
+    git_run_info: GitRunInfo,
+) -> eyre::Result<Option<ExitCode>> {
+    let _repo = match Repo::from_current_dir(git_run_info) {
         Ok(repo) => repo,
         Err(RepoError::UnsupportedExtensionWorktreeConfig(_)) => {
             writeln!(
@@ -212,15 +215,17 @@ pub fn do_main_and_drop_locals<T: Parser>(
     let _tracing_guard = install_tracing(effects.clone());
     install_libgit2_tracing();
 
-    if let Some(ExitCode(exit_code)) = check_unsupported_config_options(&effects)? {
-        let exit_code: i32 = exit_code.try_into()?;
-        return Ok(exit_code);
-    }
-
     let ctx = CommandContext {
         effects,
         git_run_info,
     };
+    if let Some(ExitCode(exit_code)) =
+        check_unsupported_config_options(&ctx.effects, ctx.git_run_info.clone())?
+    {
+        let exit_code: i32 = exit_code.try_into()?;
+        return Ok(exit_code);
+    }
+
     let exit_code = match f(ctx, command_args)? {
         Ok(()) => 0,
         Err(ExitCode(exit_code)) => {

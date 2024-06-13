@@ -98,8 +98,7 @@ pub fn mark_commit_reachable(repo: &Repo, commit_oid: NonZeroOid) -> eyre::Resul
 ///
 /// Frees any references to commits which are no longer visible in the smartlog.
 #[instrument]
-pub fn gc(effects: &Effects) -> eyre::Result<()> {
-    let repo = Repo::from_current_dir()?;
+pub fn gc(effects: &Effects, repo: &Repo) -> eyre::Result<()> {
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
     let event_replayer = EventReplayer::from_event_log_db(effects, &repo, &event_log_db)?;

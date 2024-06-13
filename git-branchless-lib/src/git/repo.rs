@@ -463,6 +463,7 @@ impl<'repo> AmendFastOptions<'repo> {
 /// Wrapper around `git2::Repository`.
 pub struct Repo {
     pub(super) inner: git2::Repository,
+    git_run_info: Option<GitRunInfo>,
 }
 
 impl std::fmt::Debug for Repo {
@@ -487,22 +488,40 @@ impl Repo {
             }
             Err(err) => return Err(Error::OpenRepo(err)),
         };
-        Ok(Repo { inner: repo })
+        Ok(Repo {
+            inner: repo,
+            git_run_info: None,
+        })
     }
 
     /// Get the Git repository associated with the current directory.
     #[instrument]
-    pub fn from_current_dir() -> Result<Self> {
-        let path = std::env::current_dir().map_err(Error::Io)?;
-        Repo::from_dir(&path)
+    pub fn from_current_dir(git_run_info: GitRunInfo) -> Result<Self> {
+        let working_directory = std::env::current_dir().map_err(Error::Io)?;
+        let Repo {
+            inner,
+            git_run_info: _,
+        } = Repo::from_dir(&working_directory)?;
+        let repo = Repo {
+            inner,
+            git_run_info: Some(git_run_info), // TODO: pass `git_run_info` to `Repo::from_dir` directly
+        };
+        Ok(repo)
     }
 
     /// Open a new copy of the repository.
     #[instrument]
     pub fn try_clone(&self) -> Result<Self> {
+        let Self {
+            inner: _,
+            git_run_info,
+        } = self;
         let path = self.get_path();
         let repo = git2::Repository::open(path).map_err(Error::OpenRepo)?;
-        Ok(Repo { inner: repo })
+        Ok(Repo {
+            inner: repo,
+            git_run_info: git_run_info.clone(),
+        })
     }
 
     /// Get the path to the `.git` directory for the repository.
@@ -519,6 +538,13 @@ impl Repo {
     /// state used for the current rebase (if any).
     pub fn get_rebase_state_dir_path(&self) -> PathBuf {
         self.inner.path().join("rebase-merge")
+    }
+
+    /// Get a `GitRunInfo` for this repository's working copy.
+    pub fn get_git_run_info(&self) -> &GitRunInfo {
+        self.git_run_info
+            .as_ref()
+            .expect("TODO: `GitRunInfo` should be mandatory for construction of `Repo` soon")
     }
 
     /// Get the path to the working copy for this repository. If the repository

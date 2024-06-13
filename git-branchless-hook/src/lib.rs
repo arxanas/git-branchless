@@ -48,6 +48,7 @@ pub use lib::core::rewrite::rewrite_hooks::{
 #[instrument]
 fn hook_post_checkout(
     effects: &Effects,
+    repo: &Repo,
     previous_head_oid: &str,
     current_head_oid: &str,
     is_branch_checkout: isize,
@@ -63,7 +64,6 @@ fn hook_post_checkout(
         "branchless: processing checkout"
     )?;
 
-    let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
     let event_tx_id = event_log_db.make_transaction_id(now, "hook-post-checkout")?;
@@ -81,10 +81,9 @@ fn hook_post_checkout(
     Ok(())
 }
 
-fn hook_post_commit_common(effects: &Effects, hook_name: &str) -> eyre::Result<()> {
+fn hook_post_commit_common(effects: &Effects, repo: &Repo, hook_name: &str) -> eyre::Result<()> {
     let now = SystemTime::now();
     let glyphs = Glyphs::detect();
-    let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
 
@@ -162,8 +161,8 @@ fn hook_post_commit_common(effects: &Effects, hook_name: &str) -> eyre::Result<(
 ///
 /// See the man-page for `githooks(5)`.
 #[instrument]
-fn hook_post_commit(effects: &Effects) -> eyre::Result<()> {
-    hook_post_commit_common(effects, "post-commit")
+fn hook_post_commit(effects: &Effects, repo: &Repo) -> eyre::Result<()> {
+    hook_post_commit_common(effects, repo, "post-commit")
 }
 
 /// Handle Git's `post-merge` hook. It seems that Git doesn't invoke the
@@ -172,16 +171,16 @@ fn hook_post_commit(effects: &Effects) -> eyre::Result<()> {
 ///
 /// See the man-page for `githooks(5)`.
 #[instrument]
-fn hook_post_merge(effects: &Effects, _is_squash_merge: isize) -> eyre::Result<()> {
-    hook_post_commit_common(effects, "post-merge")
+fn hook_post_merge(effects: &Effects, repo: &Repo, _is_squash_merge: isize) -> eyre::Result<()> {
+    hook_post_commit_common(effects, repo, "post-merge")
 }
 
 /// Handle Git's `post-applypatch` hook.
 ///
 /// See the man-page for `githooks(5)`.
 #[instrument]
-fn hook_post_applypatch(effects: &Effects) -> eyre::Result<()> {
-    hook_post_commit_common(effects, "post-applypatch")
+fn hook_post_applypatch(effects: &Effects, repo: &Repo) -> eyre::Result<()> {
+    hook_post_commit_common(effects, repo, "post-applypatch")
 }
 
 mod reference_transaction {
@@ -501,7 +500,11 @@ mod reference_transaction {
 ///
 /// See the man-page for `githooks(5)`.
 #[instrument]
-fn hook_reference_transaction(effects: &Effects, transaction_state: &str) -> eyre::Result<()> {
+fn hook_reference_transaction(
+    effects: &Effects,
+    repo: &Repo,
+    transaction_state: &str,
+) -> eyre::Result<()> {
     use reference_transaction::{
         fix_packed_reference_oid, parse_reference_transaction_line, read_packed_refs_file,
         ParsedReferenceTransactionLine,
@@ -512,7 +515,6 @@ fn hook_reference_transaction(effects: &Effects, transaction_state: &str) -> eyr
     }
     let now = SystemTime::now();
 
-    let repo = Repo::from_current_dir()?;
     let conn = repo.get_db_conn()?;
     let event_log_db = EventLogDb::new(&conn)?;
     let event_tx_id = event_log_db.make_transaction_id(now, "reference-transaction")?;
@@ -618,18 +620,19 @@ pub fn command_main(ctx: CommandContext, args: HookArgs) -> EyreExitOr<()> {
     } = ctx;
     let HookArgs { subcommand } = args;
 
+    let repo = Repo::from_current_dir(git_run_info)?;
     match subcommand {
         HookSubcommand::DetectEmptyCommit { old_commit_oid } => {
             let old_commit_oid: NonZeroOid = old_commit_oid.parse()?;
-            hook_drop_commit_if_empty(&effects, old_commit_oid)?;
+            hook_drop_commit_if_empty(&effects, &repo, old_commit_oid)?;
         }
 
         HookSubcommand::PreAutoGc => {
-            gc(&effects)?;
+            gc(&effects, &repo)?;
         }
 
         HookSubcommand::PostApplypatch => {
-            hook_post_applypatch(&effects)?;
+            hook_post_applypatch(&effects, &repo)?;
         }
 
         HookSubcommand::PostCheckout {
@@ -639,6 +642,7 @@ pub fn command_main(ctx: CommandContext, args: HookArgs) -> EyreExitOr<()> {
         } => {
             hook_post_checkout(
                 &effects,
+                &repo,
                 &previous_commit,
                 &current_commit,
                 is_branch_checkout,
@@ -646,28 +650,28 @@ pub fn command_main(ctx: CommandContext, args: HookArgs) -> EyreExitOr<()> {
         }
 
         HookSubcommand::PostCommit => {
-            hook_post_commit(&effects)?;
+            hook_post_commit(&effects, &repo)?;
         }
 
         HookSubcommand::PostMerge { is_squash_merge } => {
-            hook_post_merge(&effects, is_squash_merge)?;
+            hook_post_merge(&effects, &repo, is_squash_merge)?;
         }
 
         HookSubcommand::PostRewrite { rewrite_type } => {
-            hook_post_rewrite(&effects, &git_run_info, &rewrite_type)?;
+            hook_post_rewrite(&effects, &repo, &rewrite_type)?;
         }
 
         HookSubcommand::ReferenceTransaction { transaction_state } => {
-            hook_reference_transaction(&effects, &transaction_state)?;
+            hook_reference_transaction(&effects, &repo, &transaction_state)?;
         }
 
         HookSubcommand::RegisterExtraPostRewriteHook => {
-            hook_register_extra_post_rewrite_hook()?;
+            hook_register_extra_post_rewrite_hook(&repo)?;
         }
 
         HookSubcommand::SkipUpstreamAppliedCommit { commit_oid } => {
             let commit_oid: NonZeroOid = commit_oid.parse()?;
-            hook_skip_upstream_applied_commit(&effects, commit_oid)?;
+            hook_skip_upstream_applied_commit(&effects, &repo, commit_oid)?;
         }
     }
 
